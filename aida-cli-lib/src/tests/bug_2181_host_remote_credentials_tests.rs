@@ -204,3 +204,123 @@ fn an_unrouted_remote_call_leaks_the_token_into_transport_argv() {
         fx.argv()
     );
 }
+
+/// TASK-2001: the host git builders in `src` (1-based lines) that contact a
+/// remote (`fetch`, `pull`, `push` or `ls-remote` as the subcommand) with no
+/// credential routing (`remote_credentials`, `host_remote_git_command`) later
+/// in the same function (at most 25 lines), and no `remote-creds-ok(TASK-2001): <why>` comment in the
+/// three lines above. A builder is `host_git_command(`, any
+/// `<Type>::new("git")`, or a `git(dir, &["fetch", ...])` style helper call.
+/// Inline `#[cfg(test)] mod name { ... }` blocks are skipped.
+// trace:TASK-1952 | trace:TASK-2001 | ai:claude
+fn task_2001_unrouted_remote_calls(src: &str) -> Vec<usize> {
+    let builder = regex::Regex::new(r#"host_git_command\(|\b\w+::new\("git"\)"#).unwrap();
+    let verb = regex::Regex::new(
+        r#"\.args?\(\s*&?\[?\s*"(fetch|pull|push|ls-remote)"|\bgit\(\s*[^,()]+,\s*&\[\s*"(fetch|pull|push|ls-remote)""#,
+    )
+    .unwrap();
+    let routed = regex::Regex::new(r"remote_credentials|host_remote_git_command").unwrap();
+    let module = regex::Regex::new(r"^\s*(pub(\(crate\))? )?mod \w+\s*\{").unwrap();
+    let next_fn = regex::Regex::new(r"^\s*(pub(\([^)]*\))? )?(async )?fn \w+").unwrap();
+    let lines: Vec<&str> = src.lines().collect();
+    let mut tests = std::collections::HashSet::new();
+    let mut i = 0;
+    while i < lines.len() {
+        if lines[i].trim() == "#[cfg(test)]" && lines.get(i + 1).is_some_and(|l| module.is_match(l))
+        {
+            let mut j = i + 1;
+            while j < lines.len() && lines[j] != "}" {
+                tests.insert(j);
+                j += 1;
+            }
+            i = j;
+        }
+        i += 1;
+    }
+    let mut found = Vec::new();
+    for (i, line) in lines.iter().enumerate() {
+        if tests.contains(&i) || line.trim_start().starts_with("//") {
+            continue;
+        }
+        let helper_call = verb.captures(line).is_some_and(|c| c.get(2).is_some());
+        if !builder.is_match(line) && !helper_call {
+            continue;
+        }
+        let window = lines[i..lines.len().min(i + 14)].join("\n");
+        let statements = if line.contains("let mut ") { 3 } else { 1 };
+        let chain: Vec<&str> = window.split(';').take(statements).collect();
+        if !verb.is_match(&chain.join(";")) {
+            continue;
+        }
+        // The routing must sit in the same function, before the next `fn`.
+        let end = (i + 1..lines.len().min(i + 25))
+            .find(|&j| next_fn.is_match(lines[j]))
+            .unwrap_or(lines.len().min(i + 25));
+        let after = lines[i..end].join("\n");
+        let justified = lines[i.saturating_sub(3)..i]
+            .iter()
+            .any(|l| l.contains("remote-creds-ok(TASK-2001):"));
+        if !routed.is_match(&after) && !justified {
+            found.push(i + 1);
+        }
+    }
+    found
+}
+
+// TASK-2001 ratchet: a later refactor that drops the credential routing from
+// any host remote call fails here, not silently in production. Scans the
+// non-test source of every workspace crate.
+// trace:TASK-1952 | trace:TASK-2001 | ai:claude
+#[test]
+fn task_2001_every_host_remote_call_routes_its_credentials() {
+    let sample = "fn a(d: &Path) {\n    let _ = Command::new(\"git\")\n        .arg(\"-C\")\n        \
+                  .arg(d)\n        .args([\"fetch\", \"origin\"])\n        .output();\n}\n\
+                  fn b(d: &Path) {\n    let _ = host_git_command(d)\n        .args([\"push\", \"origin\", \"x\"])\n        \
+                  .remote_credentials(d, \"origin\")\n        .output();\n}\n\
+                  fn c(d: &Path) {\n    let mut cmd = host_git_command(d);\n    cmd.args([\"ls-remote\", \"origin\"]);\n    \
+                  configure_remote_credentials(&mut cmd, d, \"origin\");\n}\n\
+                  fn e(d: &Path) { let _ = PCmd::new(\"git\").arg(\"pull\").output(); }\n\
+                  fn f(d: &Path) { let _ = git(d, &[\"fetch\", \"origin\"]); }\n\
+                  fn g(d: &Path) { let _ = Command::new(\"git\").args([\"stash\", \"push\"]).output(); }\n\
+                  fn h(d: &Path) {\n    // remote-creds-ok(TASK-2001): a local path remote.\n    \
+                  let _ = Command::new(\"git\").args([\"fetch\", \"../x\"]).output();\n}\n\
+                  #[cfg(test)]\nmod t {\n    fn z(d: &Path) { Command::new(\"git\").args([\"push\"]); }\n}\n";
+    assert_eq!(task_2001_unrouted_remote_calls(sample), vec![2, 19, 20]);
+
+    let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let mut offenders = Vec::new();
+    let mut stack: Vec<PathBuf> = fs::read_dir(workspace)
+        .unwrap()
+        .flatten()
+        .map(|e| e.path().join("src"))
+        .filter(|src| src.is_dir() && src.parent().unwrap().join("Cargo.toml").is_file())
+        .collect();
+    assert!(stack.contains(&workspace.join("aida-core").join("src")));
+    while let Some(dir) = stack.pop() {
+        for entry in fs::read_dir(&dir).unwrap().flatten() {
+            let path = entry.path();
+            let name = entry.file_name().to_string_lossy().to_string();
+            if path.is_dir() {
+                if name != "tests" {
+                    stack.push(path);
+                }
+                continue;
+            }
+            if !name.ends_with(".rs") || name.ends_with("_tests.rs") || name == "tests.rs" {
+                continue;
+            }
+            let src = fs::read_to_string(&path).unwrap();
+            for line in task_2001_unrouted_remote_calls(&src) {
+                let rel = path.strip_prefix(workspace).unwrap_or(&path);
+                offenders.push(format!("{}:{line}", rel.display()));
+            }
+        }
+    }
+    offenders.sort();
+    assert!(
+        offenders.is_empty(),
+        "a host git call contacts a remote without credential routing; add \
+         `.remote_credentials(dir, remote)` (or `configure_remote_credentials`), or justify \
+         it with `// remote-creds-ok(TASK-2001): <why>`: {offenders:?}"
+    );
+}

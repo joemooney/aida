@@ -545,9 +545,11 @@ fi
 # Any assignment (`=`, `+=`, `export`, `env`) is blocked where it can run:
 # - the command with quoted text and heredoc bodies removed (SCAN_COMMAND);
 # - anywhere, when the command runs an unquoted shell or eval (`bash -c
-#   "..."`, `sh -c '...'`, `eval "..."`, `bash <<EOF`, `| sh`);
+#   "..."`, `sh -c '...'`, `eval "..."`, `bash <<EOF`, `| sh`, `fish -c`),
+#   runs `env -S` / `--split-string`, or sources a file (`source`, `.`);
 # - inside a command or process substitution (`$(...)`, backticks, `<(...)`);
-# - a quoted assignment word after env/export/declare/typeset/local/readonly.
+# - a quoted assignment word, or a quoted name before `=`, after
+#   env/export/declare/typeset/local/readonly/make/gmake.
 # Quoted text nothing executes is prose, not an assignment (TASK-1643): an
 # `rg`/`grep` pattern, a `git commit -m` message, an `aida comment add` or
 # mailbox body. Unsetting it (`env -u`, `unset`) has no `=` and stays allowed.
@@ -557,26 +559,40 @@ fi
 # trace:TASK-1952 | trace:TASK-1643 | ai:claude
 NO_SLOT_SET='AIDA_CARGO_NO_SLOT\+?='
 # A shell by name or by path (`bash`, `/bin/bash`, `/usr/bin/env bash`).
-NO_SLOT_SHELL='(^|[^A-Za-z0-9_.-])([^[:space:]'"'"'"]*/)?(bash|sh|zsh|dash|ksh)'
+# TASK-2139: fish too; a name continued by `-` or `.` (`scripts/sh-helper`,
+# `sh.txt`) is not a shell.
+# trace:TASK-1952 | trace:TASK-2139 | ai:claude
+NO_SLOT_SHELL='(^|[^A-Za-z0-9_.-])([^[:space:]'"'"'"]*/)?(bash|sh|zsh|dash|ksh|fish)'
+NO_SLOT_SHELL_END='([^A-Za-z0-9_.-]|$)'
 NO_SLOT_WORD_END='([^A-Za-z0-9_]|$)'
+# A command word at the start of a command: after a separator or the start.
+NO_SLOT_CMD_START='(^|[;&|(]|\{)[[:space:]]*'
 no_slot_set() {
     printf '%s' "$SCAN_COMMAND" | grep -qE "(^|[^A-Za-z0-9_])$NO_SLOT_SET" && return 0
     # An unquoted shell or eval runs quoted text (`-c` payloads, `eval`
     # strings, heredocs or pipes fed to it), separators inside it included,
     # so the whole command is scanned. A shell named only inside quoted prose
-    # runs nothing (TASK-2123).
+    # runs nothing (TASK-2123). TASK-2139: so do `env -S` / `--split-string`
+    # (env runs its string) and `source` / `.` (a file this command may just
+    # have written).
     if printf '%s' "$SCAN_COMMAND" | grep -qE \
-        "$NO_SLOT_SHELL$NO_SLOT_WORD_END|(^|[^A-Za-z0-9_])eval$NO_SLOT_WORD_END"; then
+        "$NO_SLOT_SHELL$NO_SLOT_SHELL_END|(^|[^A-Za-z0-9_])eval$NO_SLOT_WORD_END|(^|[^A-Za-z0-9_])env([[:space:]]+[^[:space:];&|]+)*[[:space:]]+(-[A-Za-z]*S|--split-string)|$NO_SLOT_CMD_START(source|\\.)[[:space:]]"; then
         printf '%s' "$COMMAND" | grep -qE "(^|[^A-Za-z0-9_])$NO_SLOT_SET" && return 0
     fi
     # Command and process substitutions run even inside double quotes.
     printf '%s' "$COMMAND" | grep -qE "(\\\$\\(|<\\(|>\\(|\`)[^)\`]*$NO_SLOT_SET" && return 0
     # A quoted argument to an unquoted env/export/declare/typeset/local/
-    # readonly is still an assignment word (`env "X=1"`, `export 'X=1'`).
-    NO_SLOT_ASSIGNER='(env|export|declare|typeset|local|readonly)'
+    # readonly is still an assignment word (`env "X=1"`, `export 'X=1'`), and
+    # make/gmake export a quoted `X=1` argument to recipes (TASK-2139). The
+    # name itself may be quoted, or followed by empty quotes, before an
+    # unquoted `=` (`export "X"=1`, `export X""=1`): quote removal joins them
+    # into one assignment word (TASK-2140).
+    # trace:TASK-1952 | trace:TASK-2140 | ai:claude
+    NO_SLOT_ASSIGNER='(env|export|declare|typeset|local|readonly|make|gmake)'
+    NO_SLOT_QUOTED_SET='AIDA_CARGO_NO_SLOT['"'"'"]*\+?='
     if printf '%s' "$SCAN_COMMAND" | grep -qE "(^|[^A-Za-z0-9_])$NO_SLOT_ASSIGNER$NO_SLOT_WORD_END"; then
         printf '%s' "$COMMAND" | grep -qE \
-            "(^|[^A-Za-z0-9_])$NO_SLOT_ASSIGNER([[:space:]]+[^[:space:];&|]+)*[[:space:]]+['\"]$NO_SLOT_SET" \
+            "(^|[^A-Za-z0-9_])$NO_SLOT_ASSIGNER([[:space:]]+[^[:space:];&|]+)*[[:space:]]+['\"]?$NO_SLOT_QUOTED_SET" \
             && return 0
     fi
     return 1

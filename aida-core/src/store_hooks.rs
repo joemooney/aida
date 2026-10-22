@@ -49,11 +49,53 @@ pub(crate) fn only_owner_may_write(
     mode & 0o002 == 0 && (mode & 0o020 == 0 || (owner == uid && private_gid == Some(group)))
 }
 
-/// Whether a group is a user-private group of `user`: named after the user
-/// and with no supplementary members.
+/// Whether a group is a user-private group of `user`: named after the user,
+/// with no supplementary members, and no other account's primary group.
+/// `primary_of` names every account whose primary gid is the group
+/// (TASK-2125: such an account never appears in `gr_mem`, yet its files and
+/// processes carry the group, so it could write a g+w directory).
 // trace:TASK-1952 | trace:TASK-1759 | ai:claude
-pub(crate) fn is_user_private_group(user: &str, group: &str, members: &[String]) -> bool {
-    !user.is_empty() && user == group && members.is_empty()
+// trace:TASK-1952 | trace:TASK-2125 | ai:claude
+pub(crate) fn is_user_private_group(
+    user: &str,
+    group: &str,
+    members: &[String],
+    primary_of: &[String],
+) -> bool {
+    !user.is_empty()
+        && user == group
+        && members.is_empty()
+        && primary_of.iter().all(|name| name == user)
+}
+
+/// The names of every account in the password database whose primary gid is
+/// `gid`. `getpwent` keeps process-global state, so the walk is serialised.
+// trace:TASK-1952 | trace:TASK-2125 | ai:claude
+#[cfg(unix)]
+fn accounts_with_primary_gid(gid: u32) -> Vec<String> {
+    static PWENT: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let _guard = PWENT.lock().unwrap_or_else(|e| e.into_inner());
+    let mut names = Vec::new();
+    // SAFETY: setpwent/getpwent/endpwent run under PWENT; each returned
+    // entry is read before the next getpwent call and a null ends the walk.
+    unsafe {
+        libc::setpwent();
+        loop {
+            let entry = libc::getpwent();
+            if entry.is_null() {
+                break;
+            }
+            if (*entry).pw_gid == gid && !(*entry).pw_name.is_null() {
+                names.push(
+                    std::ffi::CStr::from_ptr((*entry).pw_name)
+                        .to_string_lossy()
+                        .into_owned(),
+                );
+            }
+        }
+        libc::endpwent();
+    }
+    names
 }
 
 /// `gid` when it is the user-private group of `uid` (see
@@ -91,7 +133,8 @@ pub(crate) fn private_primary_gid(uid: u32, gid: u32) -> Option<u32> {
             members.push(CStr::from_ptr(*mem).to_string_lossy().into_owned());
             mem = mem.add(1);
         }
-        is_user_private_group(&user, &group, &members).then_some(gid)
+        is_user_private_group(&user, &group, &members, &accounts_with_primary_gid(gid))
+            .then_some(gid)
     }
 }
 

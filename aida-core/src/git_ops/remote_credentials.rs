@@ -89,15 +89,23 @@ pub fn configure_remote_credentials_with(
     } else {
         Vec::new()
     };
+    // TASK-1924: each stored token is paired with its OWN URL's host scope,
+    // so a url on host A and a credentialed pushurl on host B never offer
+    // B's token to A, and B keeps its token. The first token per host wins.
+    // trace:TASK-1952 | trace:TASK-1924 | ai:claude
     let mut clean_stored: Option<String> = None;
-    let mut stored_creds = None;
+    let mut scoped: Vec<(String, (String, String))> = Vec::new();
     for stored in &stored_urls {
         let (clean, creds) = split_http_url_userinfo(stored);
-        if creds.is_some() {
+        if let Some(creds) = creds {
             // Only a credentialed URL is rewritten: a clean stored URL needs
             // no override, and appending one would duplicate the push target.
             append_git_config_env(cmd, &format!("url.{clean}.insteadOf"), stored);
-            stored_creds = stored_creds.or(creds);
+            if let Some(scope) = http_credential_scope(&clean) {
+                if !scoped.iter().any(|(s, _)| *s == scope) {
+                    scoped.push((scope, creds));
+                }
+            }
         }
         clean_stored.get_or_insert(clean);
     }
@@ -105,27 +113,70 @@ pub fn configure_remote_credentials_with(
         .map(split_http_url_userinfo)
         .unwrap_or_else(|| (String::new(), None));
     let clean_url = clean_stored.unwrap_or(clean_hint);
-    let Some(scope) = http_credential_scope(&clean_url) else {
-        return;
-    };
+    let primary = http_credential_scope(&clean_url);
 
     // A token from the URL is the one git used before argv was cleaned, so
-    // it keeps precedence: the empty value resets helpers for this host so
-    // ours answers first, as the URL credential did.
-    let url_creds = hint_creds.or(stored_creds);
-    let reset_operator_helpers = url_creds.is_some();
-    let creds = url_creds.or_else(|| fallback.and_then(|f| f(dir, &clean_url)));
-    if let Some((user, token)) = creds {
-        cmd.env("AIDA_GIT_CREDENTIAL_USER", user);
-        cmd.env("AIDA_GIT_CREDENTIAL_TOKEN", token);
+    // it keeps precedence: the empty value resets helpers for that host so
+    // ours answers first, as the URL credential did. The hint's token
+    // belongs to the primary (first stored, else hinted) URL's host.
+    let mut helpers: Vec<(String, (String, String), bool)> = Vec::new();
+    if let Some(scope) = &primary {
+        let from_url = hint_creds.or_else(|| {
+            scoped
+                .iter()
+                .find(|(s, _)| s == scope)
+                .map(|(_, c)| c.clone())
+        });
+        match from_url {
+            Some(creds) => helpers.push((scope.clone(), creds, true)),
+            None => {
+                if let Some(creds) = fallback.and_then(|f| f(dir, &clean_url)) {
+                    helpers.push((scope.clone(), creds, false));
+                }
+            }
+        }
+    }
+    for (scope, creds) in scoped {
+        if !helpers.iter().any(|(s, _, _)| *s == scope) {
+            helpers.push((scope, creds, true));
+        }
+    }
+    for (index, (scope, (user, token), reset_operator_helpers)) in helpers.into_iter().enumerate() {
+        // Each host reads its own pair of variables; the first keeps the
+        // unsuffixed names.
+        let suffix = if index == 0 {
+            String::new()
+        } else {
+            format!("_{index}")
+        };
+        cmd.env(format!("AIDA_GIT_CREDENTIAL_USER{suffix}"), user);
+        cmd.env(format!("AIDA_GIT_CREDENTIAL_TOKEN{suffix}"), token);
         // Scoped to this host only: a redirect or any other credential
         // request in the same git run never sees the token.
         let key = format!("credential.{scope}.helper");
         if reset_operator_helpers {
             append_git_config_env(cmd, &key, "");
         }
-        append_git_config_env(cmd, &key, GIT_CREDENTIAL_HELPER_SCRIPT);
+        append_git_config_env(cmd, &key, &credential_helper_script(&suffix));
     }
+}
+
+/// [`GIT_CREDENTIAL_HELPER_SCRIPT`] reading the variables named with
+/// `suffix` (`""` is the unsuffixed pair).
+// trace:TASK-1952 | trace:TASK-1924 | ai:claude
+fn credential_helper_script(suffix: &str) -> String {
+    if suffix.is_empty() {
+        return GIT_CREDENTIAL_HELPER_SCRIPT.to_string();
+    }
+    GIT_CREDENTIAL_HELPER_SCRIPT
+        .replace(
+            "AIDA_GIT_CREDENTIAL_USER:",
+            &format!("AIDA_GIT_CREDENTIAL_USER{suffix}:"),
+        )
+        .replace(
+            "$AIDA_GIT_CREDENTIAL_TOKEN\"",
+            &format!("$AIDA_GIT_CREDENTIAL_TOKEN{suffix}\""),
+        )
 }
 
 /// The remote the current branch pulls from (`branch.<name>.remote`), for a
@@ -298,3 +349,7 @@ fn regex_escape(s: &str) -> String {
         })
         .collect()
 }
+
+#[cfg(test)]
+#[path = "tests/remote_credentials_tests.rs"]
+mod remote_credentials_tests;

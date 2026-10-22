@@ -166,6 +166,71 @@ fn is_env_read(code: &str) -> bool {
         && (code.contains("GRANT_ENV") || code.contains(GRANT_LITERAL))
 }
 
+/// TASK-1976: the reads [`is_env_read`] misses, found in one file's
+/// production text with its whitespace collapsed: a call rustfmt split over
+/// lines, a read through an alias (`use ...GRANT_ENV as G;`,
+/// `let k = ...GRANT_ENV;`) and a scan of `env::vars()` that names the
+/// variable or an alias in the same statement. Returns each offending
+/// statement.
+// trace:TASK-1952 | trace:TASK-1976 | ai:claude
+fn split_or_aliased_env_reads(production: &str) -> Vec<String> {
+    let text = production.split_whitespace().collect::<Vec<_>>().join(" ");
+    let mut names = vec!["GRANT_ENV".to_string(), GRANT_LITERAL.to_string()];
+    let alias =
+        regex::Regex::new(r"\bGRANT_ENV as (\w+)|\blet (\w+)\b[^=;]*= &?[\w:]*\bGRANT_ENV ?;")
+            .unwrap();
+    for capture in alias.captures_iter(&text) {
+        let name = capture.get(1).or(capture.get(2)).unwrap().as_str();
+        names.push(name.to_string());
+    }
+    let names = names
+        .iter()
+        .map(|n| regex::escape(n))
+        .collect::<Vec<_>>()
+        .join("|");
+    let read = regex::Regex::new(&format!(
+        r"env::var(?:_os)? ?\( ?&? ?(?:[\w:]*::)?(?:{names})\b[^;]*"
+    ))
+    .unwrap();
+    let scan = regex::Regex::new(&format!(
+        r"env::vars(?:_os)? ?\( ?\)[^;]*\b(?:{names})\b[^;]*"
+    ))
+    .unwrap();
+    read.find_iter(&text)
+        .chain(scan.find_iter(&text))
+        .map(|m| m.as_str().to_string())
+        .collect()
+}
+
+/// TASK-1977: the `tests` directories the scan skips hold test code only if
+/// every module declaration that reaches into one is `#[cfg(test)]`. Returns
+/// each production `mod` declaration (`mod tests;`, or `#[path = "...tests/..."]`)
+/// that lacks that attribute, as `(line number, declaration)`.
+// trace:TASK-1952 | trace:TASK-1977 | ai:claude
+fn ungated_test_dir_modules(lines: &[(usize, &str)]) -> Vec<(usize, String)> {
+    let module = regex::Regex::new(r"^(pub(\([^)]*\))? )?mod (\w+);").unwrap();
+    let mut found = Vec::new();
+    for (at, (line, text)) in lines.iter().enumerate() {
+        let Some(capture) = module.captures(text.trim()) else {
+            continue;
+        };
+        let attrs: Vec<&str> = lines[..at]
+            .iter()
+            .rev()
+            .map(|(_, l)| l.trim())
+            .take_while(|l| l.starts_with("#[") || l.starts_with("//"))
+            .collect();
+        let into_tests = &capture[3] == "tests"
+            || attrs
+                .iter()
+                .any(|a| a.starts_with("#[path") && a.contains("tests/"));
+        if into_tests && !attrs.iter().any(|a| a.starts_with("#[cfg(test)]")) {
+            found.push((*line, text.trim().to_string()));
+        }
+    }
+    found
+}
+
 #[test]
 fn only_seat_authority_names_or_reads_the_grant_env_var() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -189,6 +254,18 @@ fn only_seat_authority_names_or_reads_the_grant_env_var() {
         }
         let source = std::fs::read_to_string(file).expect("read source");
         let lines = production_lines(&source).unwrap_or_else(|e| panic!("{}: {e}", rel.display()));
+        // trace:TASK-1952 | trace:TASK-1976 | ai:claude
+        let production = lines.iter().map(|(_, t)| *t).collect::<Vec<_>>().join("\n");
+        for read in split_or_aliased_env_reads(&production) {
+            offenders.push(format!("{}: reads the grant env: {read}", rel.display()));
+        }
+        // trace:TASK-1952 | trace:TASK-1977 | ai:claude
+        for (line, decl) in ungated_test_dir_modules(&lines) {
+            offenders.push(format!(
+                "{}:{line}: `{decl}` reaches a skipped tests/ directory without #[cfg(test)]",
+                rel.display()
+            ));
+        }
         for (line, text) in lines {
             let code = text.trim();
             if is_env_read(code) {
@@ -253,4 +330,55 @@ fn b() {}
 fn scan_fails_closed_on_an_unclosed_test_module() {
     let source = "#[cfg(test)]\nmod tests {\n    fn t() {}\n";
     assert!(production_lines(source).is_err());
+}
+
+// TASK-1976: the split, aliased and vars() reads the line check misses.
+// trace:TASK-1952 | trace:TASK-1976 | ai:claude
+#[test]
+fn scan_catches_split_aliased_and_iterated_reads() {
+    for source in [
+        "fn a() {\n    let _ = std::env::var(\n        crate::seat_authority::GRANT_ENV,\n    );\n}\n",
+        "use crate::seat_authority::GRANT_ENV as G;\nfn a() { let _ = std::env::var(G); }\n",
+        "fn a() {\n    let k = seat_authority::GRANT_ENV;\n    let _ = std::env::var_os(k);\n}\n",
+        "fn a() { let _ = std::env::vars().find(|(k, _)| k == GRANT_ENV); }\n",
+    ] {
+        assert_eq!(
+            split_or_aliased_env_reads(source).len(),
+            1,
+            "missed: {source}"
+        );
+    }
+    for allowed in [
+        "fn a(c: &mut Command) { c.env(crate::seat_authority::GRANT_ENV, \"x\"); }\n",
+        "fn a() { let n = crate::seat_authority::GRANT_ENV; println!(\"{n}\"); }\n",
+        "fn a() { let _ = std::env::var(\"AIDA_SESSION_ID\"); }\n",
+    ] {
+        assert!(
+            split_or_aliased_env_reads(allowed).is_empty(),
+            "flagged: {allowed}"
+        );
+    }
+}
+
+// TASK-1977: a module reaching a skipped tests/ directory must be cfg(test).
+// trace:TASK-1952 | trace:TASK-1977 | ai:claude
+#[test]
+fn scan_requires_cfg_test_on_modules_in_skipped_test_dirs() {
+    let source = "\
+#[cfg(test)]
+#[path = \"tests/a_tests.rs\"]
+mod a_tests;
+#[path = \"tests/b.rs\"]
+mod b;
+#[cfg(test)]
+mod tests;
+pub(crate) mod tests;
+mod plain;
+";
+    let lines = production_lines(source).unwrap();
+    let found: Vec<usize> = ungated_test_dir_modules(&lines)
+        .into_iter()
+        .map(|(n, _)| n)
+        .collect();
+    assert_eq!(found, vec![5, 8]);
 }

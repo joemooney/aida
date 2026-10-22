@@ -919,10 +919,18 @@ fn bug_1929_test_lines(lines: &[&str]) -> std::collections::HashSet<usize> {
 /// chain, up to its first `;` and at most 12 lines, names a store path, and
 /// that carry no `raw-git-ok(BUG-1929): <why>` comment in the three lines
 /// above. With `any_raw`, every raw site counts, store-named or not.
+///
+/// BUG-1992: a builder is any `<Type>::new("git")` (an aliased `Command`),
+/// and a store path is a store-ish name or a variable the enclosing function
+/// bound from a call to a `*store*` function
+/// (`let dir = detect_distributed_store().unwrap();`).
+// trace:TASK-1952 | trace:BUG-1992 | ai:claude
 fn bug_1929_raw_store_git(src: &str, any_raw: bool) -> Vec<usize> {
-    let raw = regex::Regex::new(r#"Command::new\("git"\)"#).unwrap();
-    let store = regex::Regex::new(
-        r"\b(store|store_path|store_root|store_dir|store_worktree|store_full|aida_repo)\b|\.aida-store",
+    let raw = regex::Regex::new(r#"\b\w+::new\("git"\)"#).unwrap();
+    let store_names = r"store|store_path|store_root|store_dir|store_worktree|store_full|aida_repo";
+    let func = regex::Regex::new(r"\bfn\s+\w+\s*[<(]").unwrap();
+    let bound = regex::Regex::new(
+        r"\blet\s+(?:Some\(\s*)?(?:mut\s+)?(\w+)\b[^=;]*=[^;]*\b(?:\w+_)?store(?:_\w+)?\s*\(",
     )
     .unwrap();
     let lines: Vec<&str> = src.lines().collect();
@@ -932,6 +940,16 @@ fn bug_1929_raw_store_git(src: &str, any_raw: bool) -> Vec<usize> {
         if tests.contains(&i) || line.trim_start().starts_with("//") || !raw.is_match(line) {
             continue;
         }
+        let fn_start = (0..=i)
+            .rev()
+            .find(|&j| func.is_match(lines[j]))
+            .unwrap_or(0);
+        let mut names = store_names.to_string();
+        for capture in bound.captures_iter(&lines[fn_start..=i].join("\n")) {
+            names.push('|');
+            names.push_str(&regex::escape(&capture[1]));
+        }
+        let store = regex::Regex::new(&format!(r"\b({names})\b|\.aida-store")).unwrap();
         let chain = lines[i..lines.len().min(i + 12)].join(" ");
         let chain = chain.split(';').next().unwrap_or_default();
         let justified = lines[i.saturating_sub(3)..i]
@@ -944,15 +962,29 @@ fn bug_1929_raw_store_git(src: &str, any_raw: bool) -> Vec<usize> {
     found
 }
 
+/// BUG-1992: the store-owning modules, where every raw git builder is an
+/// offender whatever it names (`self.root`, a helper's `dir` argument).
+// trace:TASK-1952 | trace:BUG-1992 | ai:claude
+const BUG_1992_STORE_OWNING: &[&str] = &[
+    "aida-core/src/db/git_backend.rs",
+    "aida-core/src/db/cached_git_backend.rs",
+    "aida-core/src/store_locate.rs",
+    "aida-cli-lib/src/store_sync.rs",
+    "aida-cli-lib/src/store_cmd.rs",
+    "aida-cli-lib/src/store_push_pull.rs",
+];
+
 // F1 guard: every host git command over the store starts at
 // `aida_core::git_ops::host_git_command`, which carries the hardening
 // (`fetch.recurseSubmodules=false`, `submodule.recurse=false`, ...). Scans the
-// non-test source of aida-core and aida-cli-lib for a raw `Command::new("git")`
-// whose builder names a store path; `store_push_pull.rs`, which runs both the
-// code and the store legs through shared helpers, may hold no raw git call at
-// all. A read-only call that names a store ref but runs in the code checkout
-// may stay raw with a `raw-git-ok(BUG-1929): <why>` comment just above it.
+// non-test source of every workspace crate for a raw `<Type>::new("git")`
+// whose builder names a store path (see [`bug_1929_raw_store_git`]); the
+// store-owning modules ([`BUG_1992_STORE_OWNING`]) may hold no raw git call
+// at all. A read-only call that names a store ref but runs in the code
+// checkout may stay raw with a `raw-git-ok(BUG-1929): <why>` comment just
+// above it.
 // trace:BUG-1929 | ai:claude
+// trace:TASK-1952 | trace:BUG-1992 | ai:claude
 #[test]
 fn bug_1929_store_git_guard() {
     // The scanner itself: a raw store call is caught, a justified one is not,
@@ -963,31 +995,54 @@ fn bug_1929_store_git_guard() {
                   let _ = Command::new(\"git\").arg(store_path).output();\n}\n\
                   #[cfg(test)]\nmod t {\n    fn c(store: &Path) { Command::new(\"git\").arg(store); }\n}\n";
     assert_eq!(bug_1929_raw_store_git(sample, false), vec![2]);
+    // BUG-1992 shapes, one per case.
+    // A variable bound from a store-locating call.
+    let detected = "fn d() {\n    let dir = detect_distributed_store().unwrap();\n    \
+                    let _ = Command::new(\"git\").arg(\"-C\").arg(&dir).output();\n}\n\
+                    fn e(dir: &Path) { let _ = Command::new(\"git\").arg(dir).output(); }\n";
+    assert_eq!(bug_1929_raw_store_git(detected, false), vec![3]);
+    let let_else =
+        "fn d() {\n    let Some(found) = detect_distributed_store_from(cwd) else { return };\n    \
+                    let _ = Command::new(\"git\").arg(&found).output();\n}\n";
+    assert_eq!(bug_1929_raw_store_git(let_else, false), vec![3]);
+    // An aliased builder.
+    let aliased = "use std::process::Command as PCmd;\n\
+                   fn f(store_path: &Path) { let _ = PCmd::new(\"git\").arg(store_path).output(); }\n";
+    assert_eq!(bug_1929_raw_store_git(aliased, false), vec![2]);
+    // `self.root` and helper indirection: caught only as a store-owning module.
+    let owning = "impl B {\n    fn g(&self) { let _ = Command::new(\"git\").arg(&self.root).output(); }\n}\n\
+                  fn helper(dir: &Path, args: &[&str]) { let _ = Command::new(\"git\").arg(dir).args(args).output(); }\n";
+    assert!(bug_1929_raw_store_git(owning, false).is_empty());
+    assert_eq!(bug_1929_raw_store_git(owning, true), vec![2, 4]);
 
     let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    for module in BUG_1992_STORE_OWNING {
+        assert!(
+            workspace.join(module).is_file(),
+            "store-owning module moved; update the list: {module}"
+        );
+    }
+    // Every workspace crate, not only aida-core and aida-cli-lib.
+    let mut crate_srcs: Vec<PathBuf> = std::fs::read_dir(workspace)
+        .unwrap()
+        .flatten()
+        .map(|e| e.path().join("src"))
+        .filter(|src| src.is_dir() && src.parent().unwrap().join("Cargo.toml").is_file())
+        .collect();
+    crate_srcs.sort();
+    for required in ["aida-core", "aida-cli-lib", "aida-cli", "aida-server"] {
+        assert!(
+            crate_srcs.contains(&workspace.join(required).join("src")),
+            "the guard must scan {required}: {crate_srcs:?}"
+        );
+    }
     let mut offenders = Vec::new();
-    for crate_src in ["aida-core/src", "aida-cli-lib/src"] {
-        let mut stack = vec![workspace.join(crate_src)];
-        while let Some(dir) = stack.pop() {
-            for entry in std::fs::read_dir(&dir).unwrap().flatten() {
-                let path = entry.path();
-                let name = entry.file_name().to_string_lossy().to_string();
-                if path.is_dir() {
-                    if name != "tests" {
-                        stack.push(path);
-                    }
-                    continue;
-                }
-                if !name.ends_with(".rs") || name.ends_with("_tests.rs") {
-                    continue;
-                }
-                let src = std::fs::read_to_string(&path).unwrap();
-                // trace:TASK-1775 | ai:claude
-                let any_raw = matches!(name.as_str(), "store_push_pull.rs" | "git_backend.rs");
-                for line in bug_1929_raw_store_git(&src, any_raw) {
-                    let rel = path.strip_prefix(workspace).unwrap_or(&path);
-                    offenders.push(format!("{}:{line}", rel.display()));
-                }
+    for crate_src in &crate_srcs {
+        for (path, src) in bug_1985_sources(crate_src) {
+            let rel = path.strip_prefix(workspace).unwrap_or(&path).to_path_buf();
+            let any_raw = BUG_1992_STORE_OWNING.iter().any(|m| rel == Path::new(m));
+            for line in bug_1929_raw_store_git(&src, any_raw) {
+                offenders.push(format!("{}:{line}", rel.display()));
             }
         }
     }
@@ -1203,12 +1258,24 @@ fn bug_1985_host_status_guard() {
         PathBuf::from("caller.rs"),
         "fn g(d: &Path) { capture(d, &[\"status\"]); probe(d, &[\"status\"]); }\n".to_string(),
     );
-    let offenders = bug_1985_status_wrapper_offenders(&[own, exported, caller]);
+    // TASK-2147: an aliased builder is a wrapper too, bound or chained.
+    // trace:TASK-1952 | trace:TASK-2147 | ai:claude
+    let aliased_wrappers = (
+        PathBuf::from("aliased.rs"),
+        "use std::process::Command as PCmd;\n\
+         fn bound(args: &[&str]) {\n    let mut c = PCmd::new(\"git\");\n    c.args(args);\n}\n\
+         fn chained(args: &[&str]) { let _ = PCmd::new(\"git\").args(args).output(); }\n\
+         fn h(d: &Path) { bound(&[\"status\"]); chained(&[\"status\"]); }\n"
+            .to_string(),
+    );
+    let offenders = bug_1985_status_wrapper_offenders(&[own, exported, caller, aliased_wrappers]);
     assert_eq!(
         offenders,
         vec![
             (PathBuf::from("own.rs"), 2),
-            (PathBuf::from("exported.rs"), 2)
+            (PathBuf::from("exported.rs"), 2),
+            (PathBuf::from("aliased.rs"), 3),
+            (PathBuf::from("aliased.rs"), 6),
         ]
     );
 
@@ -1376,11 +1443,15 @@ fn bug_1929_f1_store_fetch_never_runs_a_planted_uploadpack() {
 
     // `aida fetch` / `aida pull`: the store fetch leg.
     let (store, marker, tip) = bug_1929_f1_fixture(&base.join("fetch"));
-    crate::store_push_pull::fetch_branch(&store, "aida-store", true).unwrap();
+    // BUG-1992 item 4: the marker is asserted before the fetch result, so a
+    // regression reports the planted uploadpack, not a fetch error.
+    // trace:TASK-1952 | trace:BUG-1992 | ai:claude
+    let fetched = crate::store_push_pull::fetch_branch(&store, "aida-store", true);
     assert!(
         !marker.exists(),
         "the store fetch leg ran the planted uploadpack on the host"
     );
+    fetched.unwrap();
     assert_eq!(
         bug_1929_git(&store, &["rev-parse", "origin/aida-store"]),
         tip

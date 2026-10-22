@@ -92,6 +92,28 @@ assert_exit "declare -x with a quoted assignment word is blocked" 2 "$(run '{"to
 assert_exit "a process substitution is blocked" 2 "$(run '{"tool_input":{"command":"source <(echo \"AIDA_CARGO_NO_SLOT=1\")"}}')"
 assert_exit "a quoted export in a commit message is allowed" 0 "$(run '{"tool_input":{"command":"git commit -m \"docs: never export AIDA_CARGO_NO_SLOT=1\""}}')"
 assert_exit "a similarly named variable is allowed" 0 "$(run '{"tool_input":{"command":"MY_AIDA_CARGO_NO_SLOT=1 true"}}')"
+# TASK-2139: make reads a quoted VAR=1 argument as a variable it exports to
+# recipes; fish runs a -c payload; env -S / --split-string runs its string;
+# a file written then sourced runs its body.
+# trace:TASK-1952 | trace:TASK-2139 | ai:claude
+assert_exit "make with a quoted assignment argument is blocked" 2 "$(run '{"tool_input":{"command":"make check '"'"'AIDA_CARGO_NO_SLOT=1'"'"'"}}')"
+assert_exit "gmake with a quoted assignment argument is blocked" 2 "$(run '{"tool_input":{"command":"gmake \"AIDA_CARGO_NO_SLOT=1\" check"}}')"
+assert_exit "a fish -c payload is blocked" 2 "$(run '{"tool_input":{"command":"fish -c '"'"'AIDA_CARGO_NO_SLOT=1 make'"'"'"}}')"
+assert_exit "env --split-string= is blocked" 2 "$(run '{"tool_input":{"command":"env --split-string='"'"'AIDA_CARGO_NO_SLOT=1 make'"'"'"}}')"
+assert_exit "env -S is blocked" 2 "$(run '{"tool_input":{"command":"env -S \"AIDA_CARGO_NO_SLOT=1 make check\""}}')"
+assert_exit "write then source is blocked" 2 "$(run '{"tool_input":{"command":"printf '"'"'AIDA_CARGO_NO_SLOT=1 make'"'"' > x.sh && source x.sh"}}')"
+assert_exit "write then dot-source is blocked" 2 "$(run '{"tool_input":{"command":"printf '"'"'AIDA_CARGO_NO_SLOT=1 make'"'"' > x.sh; . ./x.sh"}}')"
+assert_exit "a path containing sh- is not a shell" 0 "$(run '{"tool_input":{"command":"ls scripts/sh-helper; rg '"'"'AIDA_CARGO_NO_SLOT=1'"'"'"}}')"
+assert_exit "a dot argument is not a dot-source" 0 "$(run '{"tool_input":{"command":"ls . && rg '"'"'AIDA_CARGO_NO_SLOT=1'"'"' ."}}')"
+assert_exit "make named in a commit message is allowed" 0 "$(run '{"tool_input":{"command":"git commit -m \"docs: never make check AIDA_CARGO_NO_SLOT=1\""}}')"
+# TASK-2140: a quoted name with an unquoted = is still one assignment word
+# after quote removal.
+# trace:TASK-1952 | trace:TASK-2140 | ai:claude
+assert_exit "export with a quoted name is blocked" 2 "$(run '{"tool_input":{"command":"export \"AIDA_CARGO_NO_SLOT\"=1"}}')"
+assert_exit "env with a single-quoted name is blocked" 2 "$(run '{"tool_input":{"command":"env '"'"'AIDA_CARGO_NO_SLOT'"'"'=1 make check"}}')"
+assert_exit "declare -x with a quoted name is blocked" 2 "$(run '{"tool_input":{"command":"declare -x \"AIDA_CARGO_NO_SLOT\"=1"}}')"
+assert_exit "export with an empty quote after the name is blocked" 2 "$(run '{"tool_input":{"command":"export AIDA_CARGO_NO_SLOT\"\"=1"}}')"
+assert_exit "make with a quoted name is blocked" 2 "$(run '{"tool_input":{"command":"make \"AIDA_CARGO_NO_SLOT\"=1 check"}}')"
 rm -rf "$TMP"
 [ "$fail" -eq 0 ] || exit 1
 echo "GIT GUARDRAILS PARSE: all checks passed"
