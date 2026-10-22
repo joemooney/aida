@@ -57,7 +57,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T16:03:34.769123409Z
-modified_at: 2026-10-22T00:49:31.063845746Z
+modified_at: 2026-10-22T04:32:45.337366410Z
 req_type: Task
 tags:
 - launch
@@ -587,6 +587,12 @@ comments:
   content: 'ADVISOR 17:54: folded TASK-2129 (cargo-timeout hook: lower-case dot targets like .venv: read as suffix rules). Slice 7, with TASK-2128.'
   created_at: 2026-10-22T00:49:31.063845746Z
   modified_at: 2026-10-22T00:49:31.063845746Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a161e2-0719-7002-8421-65ed0b6e65aa
+  author: joe
+  content: 'ADVISOR 21:27 (bug note for the sweep): a reviewer launch refused at child-seat delegation (''no valid parent seat grant is active'', or ''grant does not delegate reviewer'') still leaves a reviewer lease on PR-N whose owning session is dead and whose worktree is gone. The next `aida queue work PR-N --role reviewer` then refuses until --force-claim. Seen on PR-2806 and PR-2820 at 21:07. Fix: check the grant before acquiring the lease, or release the lease on any refusal after it. Add a test: a refused delegation leaves no lease.'
+  created_at: 2026-10-22T04:32:45.337366410Z
+  modified_at: 2026-10-22T04:32:45.337366410Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a154e7-9a9e-7f53-9dba-5dc0d8e33566
