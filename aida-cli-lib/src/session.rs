@@ -672,10 +672,13 @@ pub(crate) fn build_contained_resume_command(
     }
     // trace:BUG-2131 | ai:claude
     aida_core::git_ops::ensure_git_supports_contained()?;
-    let worktree = target
-        .worktree
-        .clone()
-        .filter(|p| p.is_dir())
+    // TASK-2031: a session minted by a lease resumes in that lease's tree
+    // (cwd and write boundary both), not in the main checkout whose store
+    // listed it: a cwd of main would leave main inside Claude Code's own
+    // working-directory permissions.
+    // trace:TASK-1952 | trace:TASK-2031 | ai:claude
+    let worktree = resume_lease_tree(target)
+        .or_else(|| target.worktree.clone().filter(|p| p.is_dir()))
         .unwrap_or_else(|| launcher_cwd.to_path_buf());
     let mut cmd = std::process::Command::new("claude");
     cmd.args(["--resume", &target.id]);
@@ -2835,6 +2838,8 @@ pub(crate) fn claude_contained_settings_json(write_roots: &[PathBuf]) -> Result<
     let store_paths = match write_roots.first() {
         Some(worktree) => {
             let main = crate::main_worktree_root_from(worktree);
+            // trace:TASK-1952 | trace:BUG-2016 | ai:claude
+            verify_linked_worktree_main(worktree, &main)?;
             // Review round 1 F3: every spelling, from every write root (the
             // as-given and canonical roots may resolve to differently spelled
             // mains). trace:BUG-1982 | ai:claude
@@ -2868,17 +2873,7 @@ pub(crate) fn claude_contained_settings_json(write_roots: &[PathBuf]) -> Result<
             // the marker (not the empty grant) is what keeps host git off it.
             // trace:BUG-2131 | ai:claude
             // trace:TASK-1775 | ai:claude
-            if store.is_dir() {
-                if let Err(error) = aida_core::git_ops::mark_store_contained(&store) {
-                    eprintln!("{error:#}");
-                }
-            }
-            if let Err(error) = aida_core::git_ops::ensure_git_supports_contained() {
-                eprintln!("{error:#}");
-                Vec::new()
-            } else {
-                crate::contained_boundary::contained_store_write_paths(&main)
-            }
+            contained_store_grant(&main, &store, aida_core::git_ops::mark_store_contained)
         }
         None => Vec::new(),
     };
@@ -2935,6 +2930,81 @@ pub(crate) fn claude_contained_settings_json(write_roots: &[PathBuf]) -> Result<
         .collect();
     settings["env"] = serde_json::Value::Object(env);
     Ok(settings.to_string())
+}
+
+/// The store write paths a contained launch grants for `main`. `mark` writes
+/// the contained-store marker first (BUG-2131); when it fails the launch
+/// grants NO store write path, so host store git on an older git is never left
+/// to contained config alone (BUG-2154). A git without contained support also
+/// grants none.
+// trace:TASK-1952 | trace:BUG-2154 | ai:claude
+pub(crate) fn contained_store_grant(
+    main: &Path,
+    store: &Path,
+    mark: impl FnOnce(&Path) -> Result<()>,
+) -> Vec<PathBuf> {
+    if store.is_dir() {
+        if let Err(error) = mark(store) {
+            eprintln!("{error:#}");
+            eprintln!("contained launch: the store is not marked, so no store write is granted");
+            return Vec::new();
+        }
+    }
+    if let Err(error) = aida_core::git_ops::ensure_git_supports_contained() {
+        eprintln!("{error:#}");
+        Vec::new()
+    } else {
+        crate::contained_boundary::contained_store_write_paths(main)
+    }
+}
+
+/// BUG-2016: `main` was resolved through `worktree/.git`, a pointer file inside
+/// the granted write root. Accept it only when the host-owned side agrees:
+/// the pointer names a linked-worktree gitdir directly under `main`'s common
+/// git directory (`<common>/worktrees/<name>` with a `commondir` back to it),
+/// and that gitdir's own `gitdir` file names this worktree's `.git`. Both live
+/// in `main`'s git directory, which the sandbox cannot write. A rewritten
+/// pointer therefore refuses the launch instead of granting another
+/// repository's store and cache. A tree whose `.git` is not a file (a main
+/// checkout, a seat clone) resolved its main without a pointer.
+// trace:TASK-1952 | trace:BUG-2016 | ai:claude
+pub(crate) fn verify_linked_worktree_main(worktree: &Path, main: &Path) -> Result<()> {
+    let git_entry = worktree.join(".git");
+    let canon = |p: &Path| std::fs::canonicalize(p).ok();
+    if !git_entry.is_file() || canon(worktree) == canon(main) {
+        return Ok(());
+    }
+    let refuse = || {
+        anyhow::anyhow!(
+            "contained launch refused: {} does not point at a worktree of {} \
+             (its .git pointer may have been rewritten); repair it with \
+             `git worktree repair` from the main checkout",
+            worktree.display(),
+            main.display()
+        )
+    };
+    let gitdir = aida_core::git_ops::worktree_gitdir_path(worktree)
+        .map(|raw| crate::contained_boundary::normalize_lexical(&raw))
+        .ok_or_else(refuse)?;
+    let main_common = if main.join(".git").is_dir() {
+        Some(main.join(".git"))
+    } else {
+        aida_core::git_ops::worktree_gitdir_path(main)
+    };
+    let common_ok = crate::contained_boundary::is_linked_worktree_gitdir(&gitdir)
+        && canon(&gitdir).and_then(|g| g.parent().and_then(Path::parent).map(Path::to_path_buf))
+            == main_common.as_deref().and_then(canon);
+    // `worktree.useRelativePaths` (git 2.48+) writes the back-pointer
+    // relative to the gitdir itself.
+    let back_ok = std::fs::read_to_string(gitdir.join("gitdir"))
+        .ok()
+        .and_then(|body| canon(&gitdir.join(body.trim())))
+        == canon(&git_entry);
+    if common_ok && back_ok {
+        Ok(())
+    } else {
+        Err(refuse())
+    }
 }
 
 /// Every spelling of `<main>/.git` a tool or sandbox path may resolve to: the
@@ -3171,14 +3241,22 @@ pub(crate) fn contained_settings_json_with_boundary(
     extra_deny: &[PathBuf],
 ) -> String {
     // trace:BUG-1982 | ai:claude
+    // TASK-2037: the main-checkout `.git` denies computed from `write_roots`
+    // must be expressible too; an unexpressible one would otherwise be
+    // dropped from both layers while the write roots stay granted.
+    // trace:TASK-1952 | trace:TASK-2037 | ai:claude
+    let main_git_deny =
+        crate::contained_boundary::contained_main_checkout_git_deny_paths(write_roots);
     let deny_expressible = extra_deny
         .iter()
+        .chain(&main_git_deny)
         .all(|path| crate::contained_boundary::root_rule_path(path).is_some());
-    let (write_roots, store_write_paths): (&[PathBuf], &[PathBuf]) = if deny_expressible {
-        (write_roots, store_write_paths)
-    } else {
-        (&[], &[])
-    };
+    let (write_roots, store_write_paths, main_git_deny): (&[PathBuf], &[PathBuf], &[PathBuf]) =
+        if deny_expressible {
+            (write_roots, store_write_paths, &main_git_deny)
+        } else {
+            (&[], &[], &[])
+        };
     let mut deny_paths =
         crate::contained_boundary::contained_store_deny_write_paths(store_write_paths);
     for path in extra_deny {
@@ -3217,9 +3295,9 @@ pub(crate) fn contained_settings_json_with_boundary(
         // not only `permissions.deny` via Claude Code's implicit merge.
         // trace:TASK-1952 | trace:TASK-2007 | ai:antigravity
         let mut layer_deny = extra_deny.to_vec();
-        for path in crate::contained_boundary::contained_main_checkout_git_deny_paths(write_roots) {
-            if !layer_deny.contains(&path) {
-                layer_deny.push(path);
+        for path in main_git_deny {
+            if !layer_deny.contains(path) {
+                layer_deny.push(path.clone());
             }
         }
         crate::contained_boundary::sandbox_allow_write_entries(&layer_deny)
@@ -3251,9 +3329,9 @@ pub(crate) fn contained_settings_json_with_boundary(
         .into_iter()
         .map(str::to_owned)
         .collect();
-    for path in crate::contained_boundary::contained_main_checkout_git_deny_paths(write_roots) {
-        if !deny_paths.contains(&path) {
-            deny_paths.push(path);
+    for path in main_git_deny {
+        if !deny_paths.contains(path) {
+            deny_paths.push(path.clone());
         }
     }
     for path in &deny_paths {
@@ -5850,18 +5928,32 @@ pub fn exec_claude_resume(
     grant_id: Option<&str>,
 ) -> Result<()> {
     let mut cmd = build_claude_resume_exec_command(id, permission_mode, contained, grant_id)?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::process::CommandExt;
-        let err = cmd.exec();
-        // exec only returns on failure
-        anyhow::bail!("failed to exec claude: {}", err);
+    exec_or_spawn_claude(&mut cmd)
+}
+
+/// TASK-2031: the tree a contained `aida session resume` is bounded to: the
+/// worktree of the lease that minted the Claude session `target.id`, when the
+/// host lease names one that belongs to the same main checkout (a linked
+/// worktree of it or a host-recorded seat clone of it). A lease naming any
+/// other tree is ignored, so a forged lease can never widen the boundary to
+/// another repository. `None` keeps the process-cwd boundary.
+// trace:TASK-1952 | trace:TASK-2031 | ai:claude
+pub(crate) fn resume_lease_tree(target: &ResumeTarget) -> Option<PathBuf> {
+    let main = target
+        .worktree
+        .clone()
+        .or_else(|| crate::find_main_worktree_root().ok())?;
+    let main = crate::main_worktree_root_from(&main);
+    let (_, _, tree, _) = crate::orchestrator_leases::find_orchestrated_lease(&main, &target.id)?;
+    if !tree.is_dir() {
+        return None;
     }
-    #[cfg(not(unix))]
-    {
-        let status = cmd.status().context("failed to spawn claude")?;
-        std::process::exit(status.code().unwrap_or(1));
-    }
+    let canon = |p: &Path| std::fs::canonicalize(p).ok();
+    let tree_main = match crate::seat_clone::host_recorded_clone(&tree) {
+        Some(clone) => clone.main,
+        None => crate::main_worktree_root_from(&tree),
+    };
+    (canon(&tree_main).is_some() && canon(&tree_main) == canon(&main)).then_some(tree)
 }
 
 #[cfg(test)]

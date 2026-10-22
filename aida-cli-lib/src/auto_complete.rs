@@ -5212,6 +5212,38 @@ fn apply_batch_result(
     None
 }
 
+/// A member whose terminal result arrives after another member's halt has
+/// latched: the first halt keeps `stopped_at`, so a held, inconclusive or
+/// un-shelvable result would otherwise appear in no summary list. Mismatched
+/// and shelved results already recorded their member.
+// trace:TASK-1951 trace:TASK-1617 | ai:claude
+fn record_result_after_latched_halt(
+    done: &BatchDrainResult,
+    shelved: &[String],
+    skipped: &mut Vec<(String, String)>,
+) {
+    let Some(head) = done.stopped_at.as_ref() else {
+        return;
+    };
+    let reason = match &done.outcome {
+        BatchDrainOutcome::Held => "held after the drain halted — PR left open".to_string(),
+        BatchDrainOutcome::Inconclusive => {
+            "inconclusive after the drain halted — left for retry".to_string()
+        }
+        BatchDrainOutcome::Failed(phase) => {
+            format!("{phase:?} failed after the drain halted — not shelved")
+        }
+        BatchDrainOutcome::EnvironmentBlocked { cause } => {
+            format!("environment blocked ({cause}) after the drain halted")
+        }
+        _ => return,
+    };
+    if shelved.contains(head) || skipped.iter().any(|(spec, _)| spec == head) {
+        return;
+    }
+    skipped.push((head.clone(), reason));
+}
+
 /// Bounded pipeline scheduler: start later implementer/CI children while the
 /// parent serializes each ready member's review/merge/pull/build leg.
 // trace:STORY-1091 trace:ADR-28 | ai:codex
@@ -5247,8 +5279,14 @@ pub(crate) fn drain_batch_pipelined_with_caps(
         stopped_at: Option<String>,
         outcome: BatchDrainOutcome,
         exit_code: i32,
-        serial_leg_broken: bool,
+        /// Why members still in flight skip their serial finish leg, or None
+        /// when they finish normally. A stalled queue is labelled as a stall,
+        /// not as a broken serial leg.
+        // trace:TASK-1951 trace:TASK-1615 | ai:claude
+        skip_in_flight: Option<&'static str>,
     }
+    const SERIAL_LEG_BROKEN: &str = "serial leg broken — PR left open";
+    const QUEUE_STALLED: &str = "drain stalled (queue re-offered a shipped spec) — PR left open";
     let mut halted: Option<LatchedHalt> = None;
 
     loop {
@@ -5301,7 +5339,7 @@ pub(crate) fn drain_batch_pipelined_with_caps(
                     stopped_at: Some(head),
                     outcome: BatchDrainOutcome::Stalled,
                     exit_code: 1,
-                    serial_leg_broken: true,
+                    skip_in_flight: Some(QUEUE_STALLED),
                 });
                 break;
             }
@@ -5393,16 +5431,20 @@ pub(crate) fn drain_batch_pipelined_with_caps(
                 &mut shelve_events,
                 env_halt,
             ) {
-                halted.get_or_insert(LatchedHalt {
-                    stopped_at: done.stopped_at,
-                    outcome: done.outcome,
-                    exit_code: done.exit_code,
-                    serial_leg_broken: false,
-                });
+                if halted.is_some() {
+                    record_result_after_latched_halt(&done, &shelved, &mut skipped);
+                } else {
+                    halted = Some(LatchedHalt {
+                        stopped_at: done.stopped_at,
+                        outcome: done.outcome,
+                        exit_code: done.exit_code,
+                        skip_in_flight: None,
+                    });
+                }
             }
             continue;
         }
-        if halted.as_ref().is_some_and(|h| h.serial_leg_broken) {
+        if let Some(reason) = halted.as_ref().and_then(|h| h.skip_in_flight) {
             forget_batch_disposition(
                 &member.spec,
                 &mut shipped,
@@ -5411,7 +5453,7 @@ pub(crate) fn drain_batch_pipelined_with_caps(
                 &mut shelved,
                 &mut skipped,
             );
-            skipped.push((member.spec, "serial leg broken — PR left open".to_string()));
+            skipped.push((member.spec, reason.to_string()));
             continue;
         }
         let final_result = driver.finish_spec_after_ci(&member.spec);
@@ -5431,15 +5473,16 @@ pub(crate) fn drain_batch_pipelined_with_caps(
             env_halt,
         ) {
             if let Some(existing) = halted.as_mut() {
+                record_result_after_latched_halt(&done, &shelved, &mut skipped);
                 if serial_unshelved_fail {
-                    existing.serial_leg_broken = true;
+                    existing.skip_in_flight = Some(SERIAL_LEG_BROKEN);
                 }
             } else {
                 halted = Some(LatchedHalt {
                     stopped_at: done.stopped_at,
                     outcome: done.outcome,
                     exit_code: done.exit_code,
-                    serial_leg_broken: serial_unshelved_fail,
+                    skip_in_flight: serial_unshelved_fail.then_some(SERIAL_LEG_BROKEN),
                 });
             }
         }
@@ -12968,11 +13011,12 @@ mod tests {
         assert_eq!(stalled_result.exit_code, 1);
         assert_eq!(stalled_result.stopped_at, Some("A".to_string()));
         assert!(stalled_result.shipped.is_empty());
+        // trace:TASK-1951 trace:TASK-1615 | ai:claude
         assert_eq!(
             stalled_result.skipped,
             vec![(
                 "B".to_string(),
-                "serial leg broken — PR left open".to_string()
+                "drain stalled (queue re-offered a shipped spec) — PR left open".to_string()
             )]
         );
         assert_eq!(
@@ -13034,6 +13078,48 @@ mod tests {
             vec!["start:A", "start:B", "wait:1", "wait:2", "finish:B"]
         );
         assert_eq!(mismatch_driver.heads, vec!["C"]);
+    }
+
+    /// TASK-1617: after A's un-shelvable finish latches the halt, in-flight
+    /// members whose own results are held or inconclusive are recorded in
+    /// `skipped` instead of vanishing from every summary list.
+    // trace:TASK-1951 trace:TASK-1617 | ai:claude
+    #[test]
+    fn drain_batch_pipelined_records_held_and_inconclusive_members_after_a_latched_halt() {
+        let mut driver = MockPipelinedBatchDriver::new(&["A", "B", "C", "D"], 3)
+            .failing_finish("A", Phase::Merge);
+        let mut held = ok_result();
+        held.held_reason = Some("held for smoke".to_string());
+        driver.through_ci_by_spec.insert("B".to_string(), held);
+        let mut inconclusive = ok_result();
+        inconclusive.inconclusive_reason = Some("gh api unreachable".to_string());
+        driver
+            .through_ci_by_spec
+            .insert("C".to_string(), inconclusive);
+        let result = drain_batch_pipelined_with_caps(
+            &mut driver,
+            None,
+            None,
+            &crate::drain_caps::DrainCaps::default(),
+            std::time::Instant::now(),
+            &mut None,
+        );
+        assert_eq!(result.outcome, BatchDrainOutcome::Failed(Phase::Merge));
+        assert_eq!(result.stopped_at, Some("A".to_string()));
+        assert_eq!(
+            result.skipped,
+            vec![
+                (
+                    "B".to_string(),
+                    "held after the drain halted — PR left open".to_string()
+                ),
+                (
+                    "C".to_string(),
+                    "inconclusive after the drain halted — left for retry".to_string()
+                ),
+            ]
+        );
+        assert_eq!(driver.heads, vec!["D"]);
     }
 
     /// BUG-1930: resource exhaustion travels the same pipelined path (its

@@ -907,7 +907,11 @@ pub(crate) fn archive_phantom_inboxes(store_root: &std::path::Path) -> Result<Ph
         let unknown_mention =
             msg.body.starts_with("You were mentioned on ") && known_spelling.is_none();
         let padded = r != trimmed;
-        if !(padded || junk || unknown_mention) {
+        // Mail stored to a known id in another spelling (`ADVISOR`, as MCP
+        // send_message wrote before TASK-1928) reaches no inbox: `addressed_to`
+        // is exact. trace:TASK-1955 | ai:claude (TASK-2085)
+        let misspelled = known_spelling.as_deref().is_some_and(|k| k != trimmed);
+        if !(padded || misspelled || junk || unknown_mention) {
             continue;
         }
         let readdress_to =
@@ -2153,6 +2157,37 @@ mod tests {
         assert!(aida_core::mailbox::unread_inbox("stranger", &merged, None).is_empty());
     }
 
+    /// TASK-2085: unpadded mail to a known id in the wrong case is
+    /// re-addressed to the stored spelling, so `ADVISOR` mail reaches advisor.
+    // trace:TASK-1955 | ai:claude (TASK-2085)
+    #[test]
+    fn archive_phantom_inboxes_readdresses_a_case_mismatched_known_recipient() {
+        let (project, store) = store_with_person_joe();
+        let mut m = message("upper", "thread-upper");
+        m.to = aida_core::mailbox::Recipient::Agent("ADVISOR".into());
+        m.body = "direct hi".into();
+        mailbox_store::write_message(project.path(), &m).unwrap();
+
+        let report = archive_phantom_inboxes(&store).unwrap();
+        assert_eq!(
+            (report.archived, report.readdressed),
+            (0, 1),
+            "{:?}",
+            report.lines
+        );
+        let merged = aida_core::mailbox::merge_dedup(
+            &mailbox_store::read_local_messages(project.path()).unwrap(),
+            &mailbox_store::read_canonical_messages(&store).unwrap(),
+        );
+        assert_eq!(
+            aida_core::mailbox::unread_inbox("advisor", &merged, None).len(),
+            1
+        );
+        // Idempotent: the stored-spelling copy is left alone.
+        let again = archive_phantom_inboxes(&store).unwrap();
+        assert_eq!((again.archived, again.readdressed), (0, 0));
+    }
+
     // F1: a human's existing mention mail is never archived as a phantom.
     // trace:TASK-1766 | ai:claude
     #[test]
@@ -2163,10 +2198,19 @@ mod tests {
         m.body = "You were mentioned on TASK-1 by alice: @joe please look".into();
         mailbox_store::write_message(project.path(), &m).unwrap();
 
+        // Never archived as a phantom; since TASK-2085 the lower-case copy is
+        // re-addressed to the roster spelling `Joe`, whose inbox reads it.
+        // trace:TASK-1955 | ai:claude (TASK-2085)
         let report = archive_phantom_inboxes(&store).unwrap();
-        assert_eq!((report.archived, report.readdressed), (0, 0));
-        let local = mailbox_store::read_local_messages(project.path()).unwrap();
-        assert!(local.iter().all(|m| !m.archived));
+        assert_eq!((report.archived, report.readdressed), (0, 1));
+        let merged = aida_core::mailbox::merge_dedup(
+            &mailbox_store::read_local_messages(project.path()).unwrap(),
+            &mailbox_store::read_canonical_messages(&store).unwrap(),
+        );
+        assert_eq!(
+            aida_core::mailbox::unread_inbox("Joe", &merged, None).len(),
+            1
+        );
     }
 
     // F2: `--to` delivers a known identity under its stored spelling, the same
