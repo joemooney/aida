@@ -47,7 +47,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T15:57:44.849505155Z
-modified_at: 2026-10-22T08:37:55.100459511Z
+modified_at: 2026-10-22T14:26:13.871643933Z
 req_type: Task
 tags:
 - contained
@@ -355,6 +355,43 @@ comments:
   created_at: 2026-10-22T08:37:55.100459511Z
   modified_at: 2026-10-22T08:37:55.100459511Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a16401-5eef-7742-8d2f-13dd1172bb2e
+  author: joe
+  content: |
+    REMAINING (TASK-1952) — implementer 2026-10-22 07:40, checked against origin/main 6d3b5d1591.
+
+    DONE
+    - S1 #2790 (88430e08c6): TASK-2004, 2005, 2006, 2007.
+    - S2 #2813 (5b7b93e3a4): TASK-1989, 2036, 2037, 2031, 2034, 2107, BUG-2016, BUG-2154 (incl. yaml_backend rev-parse).
+    - S3 #2818 (ba9a6dd935): TASK-1652, 2009, 1759, 1643, 2123, 2126, BUG-2117.
+    - S4 #2827 (b63474e3eb): TASK-1942, 1943 (items 1-3), 1926.
+    - BUG-1992 items 2 and 3 are already met on main: git_backend.rs auto_commit_paths uses host_git_command (TASK-1775), and worktree_dirty_entries goes through git_ops::worktree_status_porcelain_lines (BUG-1985).
+    - TASK-1642: no code change. The wrong test name was only in an old PR body; reason goes in the final PR body.
+
+    REMAINING — S5 (git, guard and hook hardening; no launcher change)
+    - BUG-1992 items 1 and 4: store-git guard covers store-owning modules, \w+::new("git") aliases, and each bypass shape with a test; F1 test asserts the marker first.
+    - TASK-1924: per-host credential helper scope (url on host A, pushurl on host B), with a test.
+    - TASK-2001: argv/ratchet coverage for the remaining routed remote sites.
+    - TASK-1976 / TASK-1977: grant-env guard reads split, aliased and vars() forms; tests/ exemption by name.
+    - TASK-2125: private-group check also scans passwd for another uid whose primary gid is the group.
+    - TASK-2127: aida-store-pair falls back to the main worktree for submodule/separate-git-dir layouts, or documents it.
+    - TASK-2139 / TASK-2140 + the sh-helper cosmetic: NO_SLOT guard forms.
+    - TASK-2146 / 2147 / 2148 / 2149: S4 nits.
+    - TASK-2113: the yaml_backend exact-count grep becomes a no-raw-builder assertion.
+
+    REMAINING — S6 (launcher / gate code; SKETCH first, then wait for advisor signoff)
+    - TASK-2111: verify_linked_worktree_main fails open on a .git dir or symlink.
+    - TASK-2112: contained resume cwd vs the transcript's project store.
+    - TASK-1781: posture check allowlist, --no-default-flags, --cwd write root, picker before refusal.
+    - TASK-1761: dead env branch in the uncontained builders; --sandbox / per-tool --settings tests; error-string indentation.
+    - TASK-1770: bwrap-wrap CI-fix/advisor children of an uncontained os_wrap drain; argv-level CI guard for the bwrap test.
+    - TASK-1798: stamp CI-fix and quiet-burndown child grants on the lease.
+
+    OPERATOR
+    - TASK-1641: needs an operator real-claude run. I will mail the advisor the command and an evidence template; it is not faked.
+  created_at: 2026-10-22T14:26:13.871643933Z
+  modified_at: 2026-10-22T14:26:13.871643933Z
+  session_id: ca53c5e3-5950-45d1-b677-6e96eddf719f
 history:
 - id: 01a154e2-43c6-7962-8a7c-8c6c68d81e7d
   author: joe
