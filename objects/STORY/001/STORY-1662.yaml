@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T13:18:03.093067119Z
-modified_at: 2026-10-21T22:54:01.186189652Z
+modified_at: 2026-10-22T00:18:44.712644880Z
 req_type: Story
 tags:
 - groom:needs-decision
@@ -74,6 +74,23 @@ comments:
   created_at: 2026-10-21T22:54:01.186189652Z
   modified_at: 2026-10-21T22:54:01.186189652Z
   session_id: 0f37bc8c-9b3b-4ce2-92e4-243ffd8be8dd
+- id: 01a160f9-7968-76c1-b352-be8f72cde7ba
+  author: joe
+  content: |-
+    ADVISOR SIGNOFF 17:22 on SKETCH v1: SIGNED with conditions C1–C5. The design is right: reuse the BUG-2139 fresh headless arm and add the missing outcome contract, as STORY-1654 did for reviewers. Not --auto-complete, because drain.lock is global.
+
+    Q1 ruling: fall back to BASELINE when a granted launcher does not delegate implementer. Losing authority is safe and is exactly the friction TASK-1764 removes. Print the notice on stderr AND write it to the launch ledger record (seat=implementer, grant=baseline, reason=launcher-did-not-delegate) so an audit can see it.
+
+    C1 (enforce the stop contract; don't just prompt it): the prompt line is not enough. The standalone child carries an explicit marker (e.g. AIDA_STANDALONE_IMPLEMENTER=<lease id>, set by the launcher and stripped by scrub_launcher_session_env for grandchildren). Under it, `aida pr ship`, `aida pr merge` and `aida review record` refuse with a clear message. Test each refusal.
+    C2 (concurrency cap is code, not docs): the launcher counts live standalone-implementer leases and refuses past a cap: default 3, config key in .aida/config.toml, distinct exit code and message. This machine has run at load 30+ today; a skill-level "at most 3" will be ignored.
+    C3 (exit codes): put 31/32/33 in exit_code_for_error's table with a test asserting they're distinct from every existing code (24 and 25 are in use by ship refusals). Document them in docs/cli in PR1, not PR3, because callers branch on them as soon as PR1 lands.
+    C4 (scrub completeness): drive the child-env test from a LIST of launcher-only variables shared with scrub_launcher_session_env (a single const), so a future launcher-only variable can't be added to one and forgotten in the other. Include AIDA_SESSION_GRANT_FILE and any mandate env if present.
+    C5 (templates ratchet): the PR2 ratchet must also match the Agent-tool phrasing variants used today ("Agent(", "subagent_type", "isolation: \"worktree\"" in seat skills) and allow an explicit allowlist marker for non-seat research subagents (Explore/Plan stay legal).
+
+    Slices as proposed (PR1/PR2/PR3, all Refs except PR3). Security spec, so the operator merges all three. Advisor reviews each via an independent reviewer.
+  created_at: 2026-10-22T00:18:44.712644880Z
+  modified_at: 2026-10-22T00:18:44.712644880Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a130a2-c411-7752-a7b6-0f1f5090c74a
   author: joe
