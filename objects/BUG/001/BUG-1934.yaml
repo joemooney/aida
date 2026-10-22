@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T00:51:06.094986066Z
-modified_at: 2026-10-22T04:51:35.946435976Z
+modified_at: 2026-10-22T05:19:18.647932951Z
 req_type: Bug
 tags:
 - batch:2026-10-11
@@ -150,6 +150,25 @@ comments:
   created_at: 2026-10-22T04:51:35.946435976Z
   modified_at: 2026-10-22T04:51:35.946435976Z
   session_id: c3518a40-709a-4db7-a0ef-4d0ce06b7434
+- id: 01a1620c-a677-7981-b8b3-c4e382cea473
+  author: joe
+  content: |-
+    ADVISOR SIGNOFF 22:25 on SKETCH v1 (BUG-1934, bind seat grants to the presenting process tree): SIGNED with conditions C1–C6. Correct threat model, honest out-of-scope (a same-user forger who edits grant files needs signed receipts later), binding uses process tokens only (never copyable session/lease tokens), live check on the presenter path, and enforcement again at ship through the attestation.
+
+    Q1: APPROVE `aida role enter <seat> --bind-pid <pid>` as the sanctioned replacement for hand-carried grants. It requires a human at a TTY and binds a named live harness. Verify: same uid, the target is alive, the target is an agent harness (claude, codex or agy) or a shell, and refuse pid 1 and the caller's own init/session-manager ancestors. Show the harness pid in `aida role status` so the operator can find it. The hand-carry practice ENDS when this merges, and the doc says so.
+    Q2: ACCEPT binding the issuing shell's session leader. #2485's author-overlap check still blocks self-approval, and parent-only breaks real shells. Document the breadth in the role-enter help: "any process in this terminal session can use this grant".
+    Q3a: YES, binding uses exact/strict start-identity matching only. A scheme mismatch REFUSES here, because a match grants authority.
+    Q3b: YES, the turn-clock stamp records the matched binding token, and advisor_live requires it to intersect.
+
+    C1 (rollout, no surprise lockout): when this lands, every outstanding grant becomes Unbound and refuses. The refusal sentence names the exact fix (`eval "$(aida role enter <seat>)"`, or `--bind-pid <pid>` for a background session). Doctor shows it. Add a test asserting the sentence. The PR body has an operator rollout checklist: re-enter roles after deploy, and re-issue the mandate grant with --bind-pid for the advisor session.
+    C2 (call-site census): the implementation PR body lists all issue_child / issue_headless_child call sites with spawn style and binding, as promised. Any site that can't bind fails closed with a named reason, and a test covers one detached and one exec launch.
+    C3 (stored-id audit): every grant_check_for / validated_grant caller is listed in the PR body, showing the stored id passed a live grant_check_at when stored. A caller that can't show that is converted, not documented away.
+    C4 (race): the detached-child bind stamp uses the existing atomic rename with a re-read and retry on concurrent stamps, so two launches stamping one parent grant can't lose a pid. One test with two interleaved stamps.
+    C5 (no field removal): session_id stays (dead) in this PR, as proposed.
+    C6 (one PR): one PR, not the 1a/1b split, because 1a alone leaves the ship gap open. seat_authority.rs and review_authority are gate code, so the operator merges. Refs → completes BUG-1934.
+  created_at: 2026-10-22T05:19:18.647932951Z
+  modified_at: 2026-10-22T05:19:18.647932951Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a12b8d-6820-7292-ac96-3f451518bfcd
   author: joe
