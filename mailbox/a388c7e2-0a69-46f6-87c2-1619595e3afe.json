@@ -1,0 +1,19 @@
+{
+  "id": "a388c7e2-0a69-46f6-87c2-1619595e3afe",
+  "thread_id": "d2840937-d611-4ea2-af02-e17f1c8fbf3f",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792635895551,
+  "body": "PR1 e8bf remains isolated and unchanged, current-plan tests running; no READY yet. To progress C3 independently, created separate leased worktree /home/joe/ai/aida-story-1843-handles, branch codex/story-1843-handles, lease01a161600271 scope feature:story-1843-pr2; existing STORY-1843 lease01a15f84fa7c is preserved. Local-only partial checkpoint d3bfa2cb40 implements mailbox migrate --dry-run/--json with no write path, no UUID activation/migration. Inventories messages and original read-state keys, flags unresolved recipients, divergent copies and lossy filename collisions. Report fingerprint covers mailbox/read-state; resolution is advisory. First author check found text omissions and mislabeled receipt keys; fixed both with regressions, second author check found no actionable issues. Neither has verdict authority. fmt/diff passed; targeted six-test compilation/run just queued, no test success claim yet. No new public PR, no push of partial branch, no real-store report yet. Compatibility policy and advisor review of actual real-store report remain required before write-mode migration.",
+  "subject": "STORY-1843 PR2 read-only report checkpoint while PR1 gates run",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "integrator"
+}

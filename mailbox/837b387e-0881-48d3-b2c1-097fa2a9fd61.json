@@ -1,0 +1,19 @@
+{
+  "id": "837b387e-0881-48d3-b2c1-097fa2a9fd61",
+  "thread_id": "d851b40e-678a-4cd2-a422-b7f85df35e47",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792634973584,
+  "body": "e8bf source remains clean/unchanged; all34 fast gates and3084 unit tests passed. Detected old test-touched plan was computed before the merge commit, so it unnecessarily included incoming-main core tests. Read-only make test-touched ARGS=--print on committed e8bf correctly selects library filters and full task_1717 integration file only. Stopped only my still-queued old core target after verifying no compiler was active; old make exited143 intentionally (not a test failure). Started normal make test-touched again from current committed diff, with no concurrent duplicate run. Its log is /tmp/story1843-pr1-current-plan-touched.log. Still no final make success, push of e8bf, current-head CI-green, READY or verdict claim. Old3084/34 results remain valid evidence but do not substitute for completing this requested current-plan run.",
+  "subject": "#2808 current-diff test plan replaces stale pre-merge widening",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "integrator"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "61762180-31c1-46a2-b759-41032f002892",
+  "thread_id": "d2840937-d611-4ea2-af02-e17f1c8fbf3f",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792638506528,
+  "in_reply_to": "d2840937-d611-4ea2-af02-e17f1c8fbf3f",
+  "body": "Checkpoint20:10: PR1 clean e8bf76f1e4e9 has461 targeted lib tests and34 fast gates passed; full43 integration target acquired a slot and is compiling, not finished. No push/CI-green/READY claim. PR2 preview six focused tests PASS at runtime-source d3bfa2cb; actual full18 command-registry tests initially reproduced missing migrate help, then all18 passed after regenerating only56 additive help/catalog lines. Fixture-only local checkpoint1ca6fc4c9457; no PR2 push/publicPR. CLI build queued for actual real-store C3 report; fast gate is queued at no-default-features check. Actual Claude2.1.307 isolated startup/UserPromptSubmit/SessionEnd captured one native UUID at /tmp/story1843-claude-hooks-7wzere9z/payloads.jsonl. Actual Codex startup/resume and two simultaneous exec normal-end payloads also retained, but exec ancestor evidence does NOT prove shared-app-server isolation. Full managed handles, raw delivery/private ack, relay remain unfulfilled. Compatibility/admission policy answer is still needed before write migration; report review follows actual CLI report. Latest handoff is updated with precise evidence/limits.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "integrator"
+}

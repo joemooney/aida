@@ -1,0 +1,19 @@
+{
+  "id": "dbbad80a-3951-4f18-8870-81cf437081f5",
+  "thread_id": "d2840937-d611-4ea2-af02-e17f1c8fbf3f",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792639196338,
+  "in_reply_to": "d2840937-d611-4ea2-af02-e17f1c8fbf3f",
+  "body": "DECISION REQUEST: PR2 old-writer compatibility policy remains unanswered (original0aaa9eea). Recommend archiving legacy local/canonical mailbox dirs, installing manifest FILES at old paths so unsupported binaries refuse, keeping the same hybrid model under fixed versioned paths, and an explicit per-clone upgrade/admission barrier before enabling UUID delivery. Alternative is an operator-confirmed fleet upgrade plus enable marker, with weaker physical refusal. Please choose/approve policy in principle or state required changes; I will not activate/write-migrate before BOTH your policy decision and C3 actual-real-store report review. Pinned4361fbd456 disposable proof already shows old CLI send/inbox-ack/notice/sync nonzero and MCP send/read-mark_seen isError with path fences, but does not prove REST, in-flight writers, atomic conversion or non-admitted clones. Those remain implementation/review obligations, not green claims. Actual preview CLI build is queued; six preview tests+18 registry tests pass. Separately PR1 normal append push is remote-verified OPEN/MERGEABLE at e8bf76f1e4e9c9232e6c254f48740f284f4ac454; actual CI39715768124 is running, so this is NOT READY yet.",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "integrator"
+}
