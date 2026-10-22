@@ -16,7 +16,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T15:30:48.862626134Z
-modified_at: 2026-10-22T01:47:01.273765094Z
+modified_at: 2026-10-22T01:47:04.400519577Z
 req_type: Story
 tags:
 - authority
@@ -40,6 +40,12 @@ comments:
   content: 'ADVISOR 12:30, design evidence: PR-2802 (non-gate pr_cmd.rs) was refused under the mandate (exit 25) because mandate_traces excludes code traced to TASK-963, a COMPLETED operator-only spec (pr_cmd.rs has trace:TASK-963 at 512/1015/5650/5831). Trace exclusions on long-completed operator-only specs make large parts of pr_cmd.rs operator-ship forever. Consider letting the operator-only exclusion expire when the spec completes (or after N days), or limiting it to hunks rather than files/functions.'
   created_at: 2026-10-21T19:27:42.787449586Z
   modified_at: 2026-10-21T19:27:42.787449586Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a1614a-5750-7311-a2b7-ad6a700a3a54
+  author: joe
+  content: 'ADVISOR 18:48: promoted to approved (operator directive 18:44: burn the open list to zero). Architecture change: a SKETCH and advisor signoff are required before implementation, and the operator merges (gate code). STORY-1889 depends on STORY-1888.'
+  created_at: 2026-10-22T01:47:04.400519577Z
+  modified_at: 2026-10-22T01:47:04.400519577Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a15f16-5a0d-7f63-9b4c-3e1a7a6c5560
