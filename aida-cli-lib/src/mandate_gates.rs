@@ -356,6 +356,8 @@ pub(crate) const GATE_PROTECTED_PATHS: &[&str] = &[
     "aida-cli-lib/src/seat_authority.rs",
     "aida-cli-lib/src/pr_ship.rs",
     "aida-cli-lib/src/merge_hold.rs",
+    // STORY-1887: the batch that drives human-gated merges. trace:STORY-1887 | ai:claude
+    "aida-cli-lib/src/pr_ship_batch.rs",
 ];
 
 /// The first protected path in `paths`, if any.
