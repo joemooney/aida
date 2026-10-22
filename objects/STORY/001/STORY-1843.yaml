@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-22T03:36:36.110969263Z
+modified_at: 2026-10-22T03:43:52.160469803Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -212,6 +212,11 @@ comments:
   content: 'C3 actual real-store dry-run completed, NOT migration approval/fullPR2: new CLI source1ca6fc4c9457da0dbebca3a2946f60202c682dbf/version1ca6fc4c94, binarySHA256ebdb5af84ae22dc09eda8790755c8875697cf8cba2fe1431fd97bf3cfc9af1b3, mailbox migrate --dry-run --json from main cwd, exit0. Private evidence /tmp/story1843-real-preview-gknm01z0/report.json and metadata.json; reportSHA256564a5343a4ea9a4cb709836fe3b7caf7a4e3d53d8d872a5ffd2d867dc05dceec. Sourcefingerprint960074f68719c7e318bda1f5a07697127c1b65ac947ed87e5af95d34d750b10e. StoreHEAD unchanged f3b20101d671942af758f1a71a465f0514ca86db. 2582local+2584canonical->2587merged;28divergentIDs;95recipients(3human,5explicit-cohort groups,87unresolved preserve-history);2447 read-state records including2387receipts each one current candidate but advisory, not historical private ownership. No bodies/write path/UUID assignment. Six preview+18 registry tests and34fast gates passed; CLI build finished. Report submitted internally to advisor for required C3 review; old-writer policy also pending. PR1 branch506527 preserved but path/lease removed externally; affected checks not started, coordination requested. Full four-PR task remains active, parent In Progress.'
   created_at: 2026-10-22T03:36:36.110969263Z
   modified_at: 2026-10-22T03:36:36.110969263Z
+- id: 01a161b5-4560-7012-9b92-29febe7670e4
+  author: ai:codex:joe
+  content: 'State correction and rework routing: canonical parent is currently NeedsAttention (reviewer request-changes punt03:29), not InProgress as my earlier progress note presumed before reading it. Advisor552631f2 explicitly triaged PR1 rework2133/2134 plus warning wording. Normal session claim refused NeedsAttention; normal edit --status in-progress refused advisor-only authority and expired integrator grant. No forced claim/status change or hold clearance. Advisor requested to perform normal triage/status reset; after that ordinary source session can reacquire preserved branch506527. Real-store C3 preview/report is complete and submitted; full four-PR implementation remains unfinished. Recent CLI progress comments inherited author joe; this note records AI Codex authorship explicitly and none of those progress notes asserts an independent review verdict.'
+  created_at: 2026-10-22T03:43:52.160469803Z
+  modified_at: 2026-10-22T03:43:52.160469803Z
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
   author: joe
