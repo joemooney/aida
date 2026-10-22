@@ -222,7 +222,10 @@ fi
             .env("AIDA_TEST_GH_BINARY", self.bin.join("gh"))
             .env("AIDA_TELEMETRY", "0")
             .env("NO_COLOR", "1")
-            .env("AIDA_PR_SHIP_ALLOW_IN_DRIVE", "1");
+            .env("AIDA_PR_SHIP_ALLOW_IN_DRIVE", "1")
+            // A standalone implementer child refuses `pr ship`.
+            // trace:STORY-1662 | ai:claude
+            .env_remove("AIDA_STANDALONE_IMPLEMENTER");
         cmd
     }
 

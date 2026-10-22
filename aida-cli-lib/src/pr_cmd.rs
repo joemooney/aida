@@ -50,6 +50,8 @@ pub(crate) fn handle_pr_command(cmd: &PrCommand) -> Result<()> {
             merge_method,
             final_slice,
         } => {
+            // trace:STORY-1662 | ai:claude
+            crate::standalone_implementer::refuse_under_marker("pr ship")?;
             let resolved_method =
                 pr_ship::validate_ship_merge_method(*rebase, *merge_method, *final_slice)
                     .map_err(anyhow::Error::msg)?;
