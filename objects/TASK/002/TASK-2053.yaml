@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T09:53:13.924066900Z
-modified_at: 2026-10-22T18:57:09.598198191Z
+modified_at: 2026-10-22T18:58:19.574373571Z
 req_type: Task
 relationships:
 - rel_type: References
@@ -102,6 +102,21 @@ comments:
     Conditions: C1, TASK-2161 is the first commit, and the PR body quotes the CI log lines proving each task_2053_bwrap_ test ran. C2, S4a/S4b/S4c each carry Refs and the LAST one carries '(TASK-2053)'. C3, S4c changes a default, so the OPERATOR merges it after an independent PASS; S4a and S4b may ship normally. C4, never re-declare a block without checking live PR state (gh pr view) first.
   created_at: 2026-10-22T16:20:34.672484510Z
   modified_at: 2026-10-22T16:20:34.672484510Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a164fa-7b36-7131-a136-b279f70de6cb
+  author: joe
+  content: |-
+    ADVISOR REWORK BRIEF 12:00, PR #2833 (S4a) round 1, CHANGES REQUESTED at 3809e1de12. Verdict: .aida/review-verdicts/PR-2833.json. Fix all of these on the same branch, then push and report the head. Round 2 is the last under the cap.
+    1. CI red: 'Test time budget' (lib-0). Find the new test over 10 s (likely task_2143_no_new_raw_git_* walking the source tree). Make it fast: scan once, cache the file list, and skip target/. Only if it truly can't go under 10 s, add a justified entry to scripts/test-time-budget.toml.
+    2. C1: quote the live-bwrap gate's 'N of N ran ok' line and the per-test ok lines from CI run 39831988344 in the PR body.
+    3. Strict tier: add tests for the fail-closed paths. (a) preflight_agent_launch_lease with a clone lease whose probe is Unknown or HasSubmodules bails. (b) salvage_worktree_patch on an Unknown or HasSubmodules clone errors, and that error propagates.
+    4. TASK-2162: also assert that the clone's cargo target dir under target/worktrees/ is released.
+    5. Ratchet fail-open: make test_module_lines brace-balanced, so it handles a one-line '#[cfg(test)] mod t { }' and nested indented cfg(test) modules, with tests for both layouts.
+    6. Doc: 157 builders across 22 files (match RAW_GIT_ALLOWLIST), or derive the number.
+    7. Cosmetic: the stray blank line at worktree_gc.rs:615.
+    Gates: targeted tests, make check-ci-fast, make test-touched. Never the full suite. Commit (Refs TASK-2053).
+  created_at: 2026-10-22T18:58:19.574373571Z
+  modified_at: 2026-10-22T18:58:19.574373571Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a15de1-409d-7c42-b18e-94acbd5eb19d
