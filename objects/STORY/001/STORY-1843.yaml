@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-22T02:26:10.245740054Z
+modified_at: 2026-10-22T03:15:46.144778486Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -183,6 +183,11 @@ comments:
   created_at: 2026-10-22T02:26:10.245740054Z
   modified_at: 2026-10-22T02:26:10.245740054Z
   session_id: 01a161600271
+- id: 01a1619b-8b60-7153-8b89-9ac92eed6512
+  author: joe
+  content: PR1 normal append push, remote and OPEN/MERGEABLE verified at e8bf76f1e4e9c9232e6c254f48740f284f4ac454. Current-plan make test-touched completed exit0:461 targeted unit plus all43 task_1717 integration tests passed (full43 finished322.30s). All34 fast gates passed at unchanged source; tree clean. PR2808 body and validation trail updated with exact SHA/results and complete changed-test expectation inventory. Actual-head CI39715768124 is IN PROGRESS; no green/approval/READY claim. Fresh independent attested verdict required per advisor d851b40e. Parent remains In Progress throughPR1-3. PartialPR2 clean1ca6fc4c9457 has six preview tests plus18 registry tests passing; actual CLI build and fast no-default check pending. No real-store report or write migration yet; fullPR2-4 acceptance remains active.
+  created_at: 2026-10-22T03:15:46.144778486Z
+  modified_at: 2026-10-22T03:15:46.144778486Z
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
   author: joe
