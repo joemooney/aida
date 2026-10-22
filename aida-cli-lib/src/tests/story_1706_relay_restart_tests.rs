@@ -109,8 +109,7 @@ impl Fixture {
         std::fs::create_dir_all(&run_dir).unwrap();
         std::fs::create_dir_all(root_path.join("bin")).unwrap();
         let relay_sh = root_path.join("bin/relay.sh");
-        std::fs::write(&relay_sh, "#!/bin/sh\nexit 0\n").unwrap();
-        std::fs::set_permissions(&relay_sh, std::fs::Permissions::from_mode(0o755)).unwrap();
+        crate::test_exec::write_executable(&relay_sh, "#!/bin/sh\nexit 0\n");
         std::fs::write(run_dir.join("handoff.md"), "carry on with TASK-77\n").unwrap();
         let root_s = root_path.display().to_string();
         let record = BTreeMap::from([
@@ -790,7 +789,9 @@ fn an_unwritable_lineage_means_no_exec() {
     let run_dir = fx.run_dir.clone();
     let hook = |n: usize| {
         if n == 1 {
-            std::fs::set_permissions(&run_dir, std::fs::Permissions::from_mode(0o500)).unwrap();
+            let mut p = std::fs::metadata(&run_dir).unwrap().permissions();
+            p.set_readonly(true);
+            std::fs::set_permissions(&run_dir, p).unwrap();
         }
     };
     let hooks = TickHooks {
@@ -799,7 +800,10 @@ fn an_unwritable_lineage_means_no_exec() {
     };
     let mut fake = Fake::default();
     run_tick(&fx.inputs(&root, &clock), &hooks, &mut fake);
-    std::fs::set_permissions(&run_dir, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let mut p = std::fs::metadata(&run_dir).unwrap().permissions();
+    #[allow(clippy::permissions_set_readonly_false)]
+    p.set_readonly(false);
+    std::fs::set_permissions(&run_dir, p).unwrap();
     assert!(fake.restarts.is_empty());
     assert!(fake.restart_rows().iter().any(|r| r
         .why
@@ -857,7 +861,7 @@ fn the_live_spawn_scrubs_the_environment_and_detaches() {
     let root = fx.root();
     let out = root.join("spawned.txt");
     let stub = root.join("bin/relay.sh");
-    std::fs::write(
+    crate::test_exec::write_executable(
         &stub,
         format!(
             "#!/bin/sh\n{{ echo \"pwd=$(pwd)\"; echo \"pgid=$(ps -o pgid= -p $$ | tr -d ' ') pid=$$\"; for a in \"$@\"; do echo \"arg=$a\"; done; env | grep -E '^(AIDA_|CLAUDE)' | sort; }} > {}.tmp && mv {}.tmp {}\n",
@@ -865,9 +869,7 @@ fn the_live_spawn_scrubs_the_environment_and_detaches() {
             out.display(),
             out.display()
         ),
-    )
-    .unwrap();
-    std::fs::set_permissions(&stub, std::fs::Permissions::from_mode(0o755)).unwrap();
+    );
     let _env = crate::test_env::EnvVarsGuard::set(&[
         ("AIDA_SESSION_GRANT", "g-secret"),
         ("AIDA_SESSION_ROLE", "advisor"),
