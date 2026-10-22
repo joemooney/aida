@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-22T04:34:25.828895356Z
+modified_at: 2026-10-22T04:57:15.786444566Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -248,6 +248,11 @@ comments:
   created_at: 2026-10-22T04:34:25.828895356Z
   modified_at: 2026-10-22T04:34:25.828895356Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a161f8-770a-7661-aab1-ab973e57b3ad
+  author: ai:codex:joe
+  content: 'PR1 validation correction and fresh result at 61888258f63bd932982cbb4ebcc3552f318bb1b5: prior 21:06/21:08 jobs were lost at session exit and count as no passes. Fresh attached make check-ci-fast exited 0: all 34 gates passed (log /tmp/story1843-pr1-6188825-fast-rerun.log). Fresh attached make test-touched remains active; no test pass claimed yet. PR2 paused until PR1 merges. No ship/merge/approval/hold clearance authorized. Future handoff requires no owned running jobs and recorded results.'
+  created_at: 2026-10-22T04:57:15.786444566Z
+  modified_at: 2026-10-22T04:57:15.786444566Z
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
   author: joe
