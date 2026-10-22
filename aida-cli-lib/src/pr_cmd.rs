@@ -3577,8 +3577,9 @@ pub(crate) fn pr_ship_with_method(
                              inspect `gh pr checks {pr_number}`",
                             crate::ci_gate::HOLD_GATE_CHECK
                         );
-                        // trace:TASK-1915 | ai:claude
-                        ledger_mandate_ship_failure(&main_worktree, mandate_release.as_ref(), pr_number, &refusal);
+                        // ledger-exempt: mandate_release is None in this arm (the
+                        // guarded arm above takes every mandate ship), so there is
+                        // no MandateDriveAction row to write. trace:TASK-1915 | ai:claude
                         anyhow::bail!(refusal)
                     }
                     Err(e) => eprintln!(
