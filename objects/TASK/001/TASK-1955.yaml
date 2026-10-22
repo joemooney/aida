@@ -57,7 +57,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T16:03:34.769123409Z
-modified_at: 2026-10-21T23:55:04.639700860Z
+modified_at: 2026-10-22T00:18:31.476714658Z
 req_type: Task
 tags:
 - launch
@@ -552,6 +552,12 @@ comments:
   created_at: 2026-10-21T23:55:04.639700860Z
   modified_at: 2026-10-21T23:55:04.639700860Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a160f9-45b4-7e82-9196-ce0fc1acc285
+  author: joe
+  content: 'Slice 7 also: the optional #2817 r1 advisory. In mailbox_cmd.rs (archive_phantom_inboxes), case-variant re-addressing goes to the first-registered spelling; consider a defined precedence.'
+  created_at: 2026-10-22T00:18:31.476714658Z
+  modified_at: 2026-10-22T00:18:31.476714658Z
+  session_id: b4f9fa57-6efa-415c-9329-ade8b4373c55
 history:
 - id: 01a154e7-9a9e-7f53-9dba-5dc0d8e33566
   author: joe
