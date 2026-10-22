@@ -543,3 +543,14 @@ Owning spec: TASK-2053 (the remaining BUG-2169 slices moved there unchanged).
   the clone is kept with both files. `reap_one_clone` skips a clone with no recorded HEAD, keeps
   an unshipped clone and its lease, and releases the lease only on removal. `read_regular_file`
   refuses a FIFO, a `/dev/zero` symlink and an oversized file.
+
+### S3 review round 6 fixes
+
+- **Submodule work keeps the clone.** The patch and the bundle hold only the superproject, so
+  salvage does not try to capture submodules. The probe's unpushed count adds every commit, on any
+  ref of any nested submodule, that the submodule's remotes lack. A submodule side branch alone
+  therefore reads as unshipped. The salvage fails up front on a submodule status entry or a
+  nonzero submodule count, so destroy keeps the clone and names the submodule.
+- **Directory symlinks keep the clone.** An untracked symlink to a directory fails the salvage
+  (`diff --no-index` follows it), and so does any untracked entry whose diff comes back empty. A
+  symlink to a file, dangling or not, is still recorded as mode 120000.

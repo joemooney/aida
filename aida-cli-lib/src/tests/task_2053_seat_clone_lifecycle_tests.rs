@@ -1000,6 +1000,48 @@ fn task_2053_bwrap_salvage_keeps_clone_with_submodule_work() {
     );
 }
 
+/// Review round 6 follow-up: a submodule commit on a side branch, with the
+/// submodule's HEAD unchanged and the superproject clean and pushed, still
+/// counts as unpushed, so destroy keeps the clone instead of removing it.
+#[cfg(target_os = "linux")]
+#[test]
+fn task_2053_bwrap_submodule_side_branch_keeps_clean_clone() {
+    if !bwrap_live() {
+        return;
+    }
+    let fx = fixture();
+    let upstream = fx.root.join("sub-upstream");
+    std::fs::create_dir_all(&upstream).unwrap();
+    seat_git(&upstream, &["init", "-q"]);
+    std::fs::write(upstream.join("lib.txt"), "v1\n").unwrap();
+    seat_git(&upstream, &["add", "lib.txt"]);
+    seat_git(&upstream, &["commit", "-qm", "v1"]);
+
+    let clone = seat(&fx, "subside", "c0ffee000027");
+    let upstream_url = upstream.display().to_string();
+    seat_git(
+        &clone,
+        &["submodule", "add", "-q", upstream_url.as_str(), "sm"],
+    );
+    seat_git(&clone, &["commit", "-qm", "add submodule"]);
+    // Stand in for a push of the superproject: origin now has its HEAD.
+    seat_git(&clone, &["update-ref", "refs/remotes/origin/feat", "HEAD"]);
+    let sm = clone.join("sm");
+    seat_git(&sm, &["checkout", "-q", "-b", "side"]);
+    std::fs::write(sm.join("side.txt"), "side work\n").unwrap();
+    seat_git(&sm, &["add", "side.txt"]);
+    seat_git(&sm, &["commit", "-qm", "side"]);
+    seat_git(&sm, &["checkout", "-q", "-"]);
+
+    let facts = known(probe(&fx.main, &clone));
+    assert!(facts.dirty.is_empty(), "{facts:?}");
+    assert_eq!(facts.unpushed, 1, "the submodule side branch: {facts:?}");
+    let kept = destroy(&fx.main, &clone, DestroyMode::SalvageUnshipped, None);
+    assert!(matches!(kept, Ok(Destroyed::Kept { .. })), "{kept:?}");
+    let side = seat_git(&sm, &["log", "-1", "--format=%s", "side"]);
+    assert_eq!(side.trim(), "side");
+}
+
 /// Review round 6, item 2: an untracked symlink to a directory cannot go
 /// into a patch (diff follows it), so the salvage fails and destroy keeps
 /// the clone; a symlink to a file is recorded as a symlink.

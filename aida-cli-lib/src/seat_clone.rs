@@ -1035,12 +1035,18 @@ macro_rules! stash_entries_sh {
 
 /// Inside the probe sandbox: how many commits the clone holds that origin
 /// does not: reachable from ANY ref (every branch, tag, HEAD) or stash entry,
-/// and not from `origin/*` or the pinned base (`$1`, or empty).
+/// and not from `origin/*` or the pinned base (`$1`, or empty), plus every
+/// commit on any ref of any (nested) submodule that its remotes lack, so a
+/// submodule side branch alone still reads as unshipped.
 // trace:TASK-2053 | ai:claude
 const UNPUSHED_COUNT_SCRIPT: &str = concat!(
     "set -u\n",
     stash_entries_sh!(),
-    "git rev-list --count --all $s --not --remotes=origin ${1:+\"$1\"}\n"
+    r##"n=$(git rev-list --count --all $s --not --remotes=origin ${1:+"$1"}) || exit 1
+m=$(git submodule --quiet foreach --recursive 'git rev-list --count --all --not --remotes') || exit 1
+for x in $m; do n=$((n + x)); done
+echo "$n"
+"##
 );
 
 /// Inside the probe sandbox: a git bundle of every commit
