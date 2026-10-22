@@ -34,7 +34,10 @@ fn bug_2130_worktree_gc_owner_is_caller_matches_legacy_lease_and_exact_caller() 
     let me = std::process::id();
     let legacy = aida_core::liveness::process_start_identity_legacy(me).expect("own legacy start");
     let exact = aida_core::liveness::process_start_identity(me).expect("own exact start");
-    assert!(exact.starts_with(aida_core::liveness::NATIVE_EXACT_SCHEME), "{exact}");
+    assert!(
+        exact.starts_with(aida_core::liveness::NATIVE_EXACT_SCHEME),
+        "{exact}"
+    );
     assert_ne!(legacy, exact);
 
     let lease = sample_lease(Some(me), Some(&legacy));
