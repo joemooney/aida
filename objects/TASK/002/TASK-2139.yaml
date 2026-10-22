@@ -13,17 +13,26 @@ description: |
   The verbatim repro commands are in the PR-2818 round-3 verdict findings.
 
   Raised in round-3 review of PR-2818: https://github.com/joemooney/aida/pull/2818
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-22T06:37:00.256684685Z
-modified_at: 2026-10-22T06:37:00.256684685Z
+modified_at: 2026-10-22T06:44:40.845993453Z
 req_type: Task
 tags:
 - from-review:PR-2818
 - hooks
 - severity:minor
+history:
+- id: 01a1625a-cf0d-7ec2-ac73-07497bde9131
+  author: joe
+  timestamp: 2026-10-22T06:44:40.845990170Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 9b9e3f664790dc5ac42f665f52dde9171c7b28cf
   branch: pr-2818
