@@ -573,9 +573,43 @@ pub(crate) fn touch_mcp_agent(
     Ok(entry)
 }
 
+/// The lease an `aida agent new --bg` launch linked to this Claude session
+/// (its manifest records the session id, possibly as a short prefix).
+// trace:TASK-1955 | ai:claude (BUG-2167)
+fn lease_linked_to_session(project_root: &Path, session_id: &str) -> Option<SessionLease> {
+    let session_id = session_id.trim();
+    if session_id.is_empty() {
+        return None;
+    }
+    let linked: Vec<String> = crate::session_manifest::list_all(project_root)
+        .into_iter()
+        .filter(|m| {
+            m.claude_session_id
+                .as_deref()
+                .is_some_and(|sid| !sid.is_empty() && session_id.starts_with(sid))
+        })
+        .map(|m| m.session_id)
+        .collect();
+    crate::leases::list_leases(project_root)
+        .into_iter()
+        .find(|l| linked.contains(&l.id))
+}
+
+/// Record the session a SessionStart hook fires in. `worktree_root` is the
+/// hook's own worktree (not the main checkout `project_root`).
+///
+/// BUG-2167: a `claude --bg` session runs in a spare process the Claude
+/// supervisor pre-forked, so its environment can be an EARLIER launch's
+/// (`AIDA_AGENT_NAME`, `AIDA_SESSION_SCOPE`), and its pid a recycled one.
+/// The lease the launcher linked to this session id is the substrate truth
+/// for spec, role and worktree; when it contradicts the env, the env's name
+/// is not trusted either. A pid entry left by an earlier session never
+/// carries that session's identity over.
 // trace:STORY-994 | ai:codex
+// trace:TASK-1955 | ai:claude (BUG-2167)
 pub(crate) fn touch_session_start_agent(
     project_root: &Path,
+    worktree_root: &Path,
     session_id: Option<&str>,
     binary: &AgentBinaryIdentity,
 ) -> Result<AgentRegistryEntry> {
@@ -585,15 +619,37 @@ pub(crate) fn touch_session_start_agent(
     let pid = session_start_agent_pid(hook_pid, &agent_type).unwrap_or(hook_pid);
     let id = agent_id(&agent_type, pid);
     let path = registry_path(project_root, &id);
+    let session_id = session_id.filter(|s| !s.trim().is_empty());
+    let current_start = crate::process_probe::process_start_identity(pid);
+    let linked = session_id.and_then(|sid| lease_linked_to_session(project_root, sid));
+    let env_scope = env_nonempty("AIDA_SESSION_SCOPE").filter(|s| looks_like_spec_id(s));
+    let env_name = match &linked {
+        Some(lease) if env_scope.as_deref() != Some(lease.scope.as_str()) => None,
+        _ => env_nonempty("AIDA_AGENT_NAME"),
+    };
     let mut entry = std::fs::read_to_string(&path)
         .ok()
         .and_then(|body| toml::from_str::<AgentRegistryEntry>(&body).ok())
+        // A recycled pid's entry belongs to another process: keep it only
+        // while its recorded start identity is this process's. A live
+        // process that starts a new session (`/clear`, a new conversation)
+        // keeps its launcher entry. Without a recorded start, fall back to
+        // the session id. trace:TASK-1955 | ai:claude (BUG-2167)
+        .filter(
+            |old| match (old.pid_start.as_deref(), current_start.as_deref()) {
+                (Some(recorded), Some(current)) => recorded == current,
+                _ => match (session_id, old.claude_session_id.as_deref()) {
+                    (Some(new), Some(old)) => new == old,
+                    _ => true,
+                },
+            },
+        )
         .unwrap_or_else(|| AgentRegistryEntry {
             id: id.clone(),
             agent_type: agent_type.clone(),
             pid,
             pid_start: crate::process_probe::process_start_identity(pid),
-            name: env_nonempty("AIDA_AGENT_NAME"),
+            name: env_name.clone(),
             description: None,
             tty: process_tty(pid).or_else(current_tty),
             terminal: None,
@@ -601,7 +657,7 @@ pub(crate) fn touch_session_start_agent(
             last_active_at: now,
             role: None,
             current_spec: None,
-            worktree_path: project_root.to_path_buf(),
+            worktree_path: worktree_root.to_path_buf(),
             source: "session-start-hook".to_string(),
             binary_version: None,
             build_sha: None,
@@ -623,11 +679,15 @@ pub(crate) fn touch_session_start_agent(
     }
     entry.pid = pid;
     entry.last_active_at = now;
-    entry.role = env_nonempty("AIDA_SESSION_ROLE").or(entry.role);
-    entry.current_spec = env_nonempty("AIDA_SESSION_SCOPE")
-        .filter(|s| looks_like_spec_id(s))
-        .or(entry.current_spec);
-    entry.worktree_path = project_root.to_path_buf();
+    if let Some(lease) = &linked {
+        entry.role = lease.role.clone().or(entry.role);
+        entry.current_spec = Some(lease.scope.clone());
+        entry.worktree_path = lease.worktree_path.clone();
+    } else {
+        entry.role = env_nonempty("AIDA_SESSION_ROLE").or(entry.role);
+        entry.current_spec = env_scope.or(entry.current_spec);
+        entry.worktree_path = worktree_root.to_path_buf();
+    }
     if entry.source != "agent-launcher" {
         entry.source = "session-start-hook".to_string();
     }
@@ -643,6 +703,44 @@ pub(crate) fn touch_session_start_agent(
 
     write_entry(project_root, &entry)?;
     Ok(entry)
+}
+
+/// BUG-2167: after `aida agent new --bg` links its lease to the Claude
+/// session id `sid` (a full id or its short prefix), give any registry entry
+/// that session's SessionStart hook already wrote this launch's identity —
+/// the spare process it runs in may carry an earlier launch's environment.
+/// Returns how many entries were updated.
+// trace:TASK-1955 | ai:claude (BUG-2167)
+pub(crate) fn adopt_bg_session_identity(
+    project_root: &Path,
+    sid: &str,
+    name: &str,
+    spec: Option<&str>,
+    role: Option<&str>,
+    worktree: &Path,
+) -> usize {
+    let sid = sid.trim();
+    if sid.is_empty() {
+        return 0;
+    }
+    let mut updated = 0;
+    for (_, mut entry) in load_entries(project_root) {
+        if !entry
+            .claude_session_id
+            .as_deref()
+            .is_some_and(|own| own.starts_with(sid))
+        {
+            continue;
+        }
+        entry.name = Some(name.to_string());
+        entry.current_spec = spec.map(str::to_string);
+        entry.role = role.map(str::to_string).or(entry.role);
+        entry.worktree_path = worktree.to_path_buf();
+        if write_entry(project_root, &entry).is_ok() {
+            updated += 1;
+        }
+    }
+    updated
 }
 
 /// Register an agent process spawned by `aida agent new ...`.
@@ -2681,7 +2779,8 @@ mod tests {
         ]);
 
         let binary = AgentBinaryIdentity::new("0.14.0".into(), "abc123".into());
-        let entry = touch_session_start_agent(tmp.path(), Some("claude-sid"), &binary).unwrap();
+        let entry =
+            touch_session_start_agent(tmp.path(), tmp.path(), Some("claude-sid"), &binary).unwrap();
 
         assert_eq!(entry.agent_type, "codex");
         assert_eq!(entry.role.as_deref(), Some("advisor"));
@@ -2690,6 +2789,130 @@ mod tests {
         let terminal = entry.terminal.as_ref().expect("terminal block");
         assert_eq!(terminal.emulator.as_deref(), Some("terminator"));
         assert_eq!(terminal.terminator_uuid.as_deref(), Some("term-994"));
+    }
+
+    /// Write lease `id` (scope `scope`, worktree `worktree`) and its
+    /// manifest linking Claude session `sid`, as `agent new --bg` does.
+    // trace:TASK-1955 | ai:claude (BUG-2167)
+    fn bug_2167_linked_lease(root: &Path, id: &str, scope: &str, worktree: &Path, sid: &str) {
+        let dir = root.join(".aida").join("sessions");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join(format!("{id}.toml")),
+            format!(
+                "id = \"{id}\"\nscope = \"{scope}\"\nslug = \"s\"\nowner = \"t\"\nworktree_path = '{}'\nbranch = \"b\"\nstarted_at = \"2026-10-20T00:00:00Z\"\nhostname = \"h\"\nrole = \"implementer\"\n",
+                worktree.display()
+            ),
+        )
+        .unwrap();
+        std::fs::write(
+            dir.join(format!("{id}.manifest.toml")),
+            format!(
+                "session_id = \"{id}\"\nplanned_at = \"2026-10-20T00:00:00Z\"\nplan_source = \"agent new --bg\"\nclaude_session_id = \"{sid}\"\nitems = []\n"
+            ),
+        )
+        .unwrap();
+    }
+
+    /// BUG-2167: a `--bg` session in a recycled spare carrying an earlier
+    /// launch's env is registered from the lease linked to its own session
+    /// id (spec, role, worktree), and the stale env name is not used.
+    // trace:TASK-1955 | ai:claude (BUG-2167)
+    #[test]
+    fn bg_session_start_uses_the_linked_lease_not_the_spares_stale_env() {
+        let tmp = TempDir::new().unwrap();
+        let pool = tmp.path().join("pool-7");
+        bug_2167_linked_lease(tmp.path(), "leaseb00000001", "TASK-2000", &pool, "abcd1234");
+        let _env = crate::test_env::EnvVarsGuard::set(&[
+            ("AIDA_AGENT_TYPE", "claude"),
+            ("AIDA_AGENT_NAME", "fix-task-1784"),
+            ("AIDA_SESSION_SCOPE", "TASK-1784"),
+        ]);
+        let binary = AgentBinaryIdentity::new("0.16.0".into(), "abc".into());
+        let entry = touch_session_start_agent(
+            tmp.path(),
+            tmp.path(),
+            Some("abcd1234-0000-4000-8000-000000000000"),
+            &binary,
+        )
+        .unwrap();
+        assert_eq!(entry.current_spec.as_deref(), Some("TASK-2000"));
+        assert_eq!(entry.worktree_path, pool);
+        assert_eq!(entry.role.as_deref(), Some("implementer"));
+        assert_ne!(entry.name.as_deref(), Some("fix-task-1784"));
+
+        // The launcher then names it from its own plan.
+        let n = adopt_bg_session_identity(
+            tmp.path(),
+            "abcd1234",
+            "rebase-2673",
+            Some("TASK-2000"),
+            Some("implementer"),
+            &pool,
+        );
+        assert_eq!(n, 1);
+        let views: Vec<_> = load_entries(tmp.path())
+            .into_iter()
+            .map(|(_, e)| e)
+            .collect();
+        assert_eq!(views.len(), 1);
+        assert_eq!(views[0].name.as_deref(), Some("rebase-2673"));
+    }
+
+    /// BUG-2167: a pid's entry left by an earlier session never lends its
+    /// name to the next session on that pid; an unlinked hook records its
+    /// own worktree, not the main checkout.
+    // trace:TASK-1955 | ai:claude (BUG-2167)
+    #[test]
+    fn recycled_pid_session_start_does_not_inherit_the_earlier_name() {
+        let tmp = TempDir::new().unwrap();
+        let worktree = tmp.path().join("wt");
+        let binary = AgentBinaryIdentity::new("0.16.0".into(), "abc".into());
+        {
+            let _env = crate::test_env::EnvVarsGuard::set(&[
+                ("AIDA_AGENT_TYPE", "codex"),
+                ("AIDA_AGENT_NAME", "first-seat"),
+            ]);
+            let mut old =
+                touch_session_start_agent(tmp.path(), &worktree, Some("sid-one"), &binary).unwrap();
+            // The entry an earlier process with this pid left behind.
+            old.pid_start = Some("linux-starttime:1".into());
+            write_entry(tmp.path(), &old).unwrap();
+        }
+        let _env = crate::test_env::EnvVarsGuard::set(&[
+            ("AIDA_AGENT_TYPE", "codex"),
+            ("AIDA_AGENT_NAME", "second-seat"),
+        ]);
+        let entry =
+            touch_session_start_agent(tmp.path(), &worktree, Some("sid-two"), &binary).unwrap();
+        assert_eq!(entry.name.as_deref(), Some("second-seat"));
+        assert_eq!(entry.worktree_path, worktree);
+    }
+
+    /// PR-2809 r1: the same live process starting a new session (`/clear`,
+    /// a new conversation) keeps its `agent new` launcher entry.
+    // trace:TASK-1955 | ai:claude (BUG-2167)
+    #[test]
+    fn same_process_new_session_keeps_its_launcher_entry() {
+        let tmp = TempDir::new().unwrap();
+        let worktree = tmp.path().join("wt");
+        let binary = AgentBinaryIdentity::new("0.16.0".into(), "abc".into());
+        let _env = crate::test_env::EnvVarsGuard::set(&[
+            ("AIDA_AGENT_TYPE", "codex"),
+            ("AIDA_AGENT_NAME", "lane-7"),
+        ]);
+        let mut launched =
+            touch_session_start_agent(tmp.path(), &worktree, Some("sid-one"), &binary).unwrap();
+        launched.source = "agent-launcher".into();
+        launched.description = Some("lane seven".into());
+        write_entry(tmp.path(), &launched).unwrap();
+
+        let entry =
+            touch_session_start_agent(tmp.path(), &worktree, Some("sid-two"), &binary).unwrap();
+        assert_eq!(entry.source, "agent-launcher");
+        assert_eq!(entry.name.as_deref(), Some("lane-7"));
+        assert_eq!(entry.description.as_deref(), Some("lane seven"));
+        assert_eq!(entry.claude_session_id.as_deref(), Some("sid-two"));
     }
 
     // trace:STORY-994 | ai:codex

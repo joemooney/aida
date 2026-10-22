@@ -108,6 +108,7 @@ pub(crate) fn tokens_match_with(
                 && (sa.is_empty()
                     || sb.is_empty()
                     || sa == sb
+                    || starts_in_different_schemes(sa, sb)
                     || pa
                         .parse::<u32>()
                         .ok()
@@ -116,6 +117,33 @@ pub(crate) fn tokens_match_with(
         (None, None) => va == vb,
         _ => false,
     }
+}
+
+/// TASK-2049: one start identity recorded in the legacy rfc3339 form (a
+/// pre-upgrade binary) and the other in an exact scheme cannot be compared
+/// once the process has exited, so the same pid with mixed schemes counts as
+/// the same process without probing liveness. Every caller of
+/// [`tokens_match`] is a refusal check (self-approval, approver-is-shipper,
+/// review authorship), so this fails closed: the worst case is a spurious
+/// refusal on a recycled pid that crossed an upgrade, never a missed one.
+/// Same-scheme starts still have to be equal.
+// trace:TASK-1951 trace:TASK-2049 | ai:claude
+fn starts_in_different_schemes(a: &str, b: &str) -> bool {
+    #[derive(PartialEq)]
+    enum Scheme {
+        Legacy,
+        Exact,
+    }
+    let scheme = |s: &str| {
+        if s.starts_with("linux-starttime:") || s.starts_with("sysinfo-start:") {
+            Some(Scheme::Exact)
+        } else if chrono::DateTime::parse_from_rfc3339(s).is_ok() {
+            Some(Scheme::Legacy)
+        } else {
+            None
+        }
+    };
+    matches!((scheme(a), scheme(b)), (Some(x), Some(y)) if x != y)
 }
 
 /// BUG-1918: does `identity` carry an anchor — a session id, a process, or a
