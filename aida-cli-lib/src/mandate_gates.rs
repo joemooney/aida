@@ -389,6 +389,8 @@ pub(crate) const GATE_PROTECTED_PATHS: &[&str] = &[
     "aida-cli-lib/src/seat_authority.rs",
     "aida-cli-lib/src/pr_ship.rs",
     "aida-cli-lib/src/merge_hold.rs",
+    // STORY-1887: the batch that drives human-gated merges. trace:STORY-1887 | ai:claude
+    "aida-cli-lib/src/pr_ship_batch.rs",
     // The drift ratchet that keeps this list complete (STORY-1888 C1).
     "aida-cli-lib/src/tests/story_1888_gate_paths_tests.rs",
 ];
