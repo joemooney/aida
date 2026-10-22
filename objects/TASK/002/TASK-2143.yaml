@@ -6,16 +6,25 @@ description: |
   docs/plans/2026-10-16-bug-2169-contained-clone.md:303 and :364 list a grep gate (flag Command::new("git") with -C <lease.worktree_path> when tree_kind == Clone) as an S3 deliverable. PR-2806 does not add it, and 'S3 as built' does not say it was replaced. Either add the gate, or record with advisor sign-off that the S1 runtime refusal (host_git_command / worktree_dirty_entries via seat_clone_root) replaces it.
 
   Raised in review of PR-2806: https://github.com/joemooney/aida/pull/2806#issuecomment-6335235608
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-22T07:27:01.156863791Z
-modified_at: 2026-10-22T07:27:01.156863791Z
+modified_at: 2026-10-22T07:48:56.186138381Z
 req_type: Task
 tags:
 - from-review:PR-2806
 - severity:minor
+history:
+- id: 01a16295-a2fa-7ab3-b468-7d5f1fd7ffa9
+  author: joe
+  timestamp: 2026-10-22T07:48:56.186133140Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: b0b654a9316526ad7bd866994de02283389154b3
   branch: pr-2806
