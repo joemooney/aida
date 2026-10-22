@@ -16,11 +16,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-22T11:48:02.632271305Z
-modified_at: 2026-10-22T11:48:15.887774448Z
+modified_at: 2026-10-22T11:48:18.696487314Z
 req_type: Task
 tags:
 - authority
 - mandate
+relationships:
+- rel_type: Child
+  target_id: 01a15f16-239e-7060-877d-48dd9806d39b
+  created_at: 2026-10-22T11:48:18.696484430Z
+  created_by: joe
 history:
 - id: 01a16370-bf8f-7b01-bd95-3ef0ad67b238
   author: joe
@@ -30,6 +35,11 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a16370-cda5-7c53-9a95-eca1893f067a
+  author: joe
+  timestamp: 2026-10-22T11:48:19.493762744Z
+  session_id: b0e26e8c-07b4-4b00-80ad-40571d0bfb76
+  changes: []
 filed_at:
   code_sha: e33fec11d936d4cc6ce450719a506a68932915eb
   branch: claude/story-1888
