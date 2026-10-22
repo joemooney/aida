@@ -1039,7 +1039,9 @@ pub(crate) fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<
                             },
                         );
                         ev.seat = events::active_seat();
-                        events::emit(&root, &ev);
+                        // Beside the placement event (TASK-1406).
+                        // trace:TASK-1951 trace:TASK-1406 | ai:claude
+                        events::emit(&merge_hold::hold_store_root(&root), &ev);
                     };
                     if matches!(
                         label_only_forge,
@@ -1056,6 +1058,19 @@ pub(crate) fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<
                             println!(
                                 "No merge-hold on PR #{pr}: no marker, and the forge carries no `aida:merge-hold` label."
                             );
+                            // A cleared label on a PR that was never recorded
+                            // as held fails the merge-hold gate; drop it.
+                            // trace:TASK-1951 | ai:claude
+                            match merge_hold::drop_orphaned_cleared_label(&root, *pr) {
+                                Ok(true) => println!(
+                                    "Removed any orphaned `aida:merge-hold-cleared` label from PR #{pr} (it was never recorded as held)."
+                                ),
+                                Ok(false) => {}
+                                Err(err) => eprintln!(
+                                    "  {} could not check PR #{pr} for an orphaned `aida:merge-hold-cleared` label: {err}",
+                                    crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+                                ),
+                            }
                         }
                         return Ok(());
                     }

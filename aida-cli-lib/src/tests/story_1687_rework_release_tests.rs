@@ -662,6 +662,7 @@ fn auto_release_fixture(change: ReleaseChange) {
                         })
                     },
                     hold_label: true,
+                    recorded_label: true,
                 }))
             },
             read_hold: &|| {
