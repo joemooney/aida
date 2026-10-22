@@ -1061,12 +1061,26 @@ const SALVAGE_BUNDLE_SCRIPT: &str = concat!(
 /// nested git repository (listed as `dir/`) or anything else that is not a
 /// regular file or symlink: `diff --no-index` exits 1 for "Could not access"
 /// just as for "files differ", so such an entry would otherwise vanish with
-/// the clone. `$1` is the pinned base, or empty.
+/// the clone. So does an untracked symlink to a directory (diff follows it)
+/// and any file whose diff comes back empty. A submodule with changes or
+/// with commits its remote lacks fails the salvage up front: the patch and
+/// the bundle hold the superproject only, so the clone must be kept.
+/// `$1` is the pinned base, or empty.
 // trace:TASK-2053 | ai:claude
 const SALVAGE_SCRIPT: &str = concat!(
     "set -u\n",
     stash_entries_sh!(),
-    r##"printf '# AIDA salvage patch (contained seat clone)\n# clone: %s\n' "$PWD"
+    r##"st=$(git status --porcelain=v2 --ignore-submodules=none) || exit 1
+if printf '%s\n' "$st" | grep -q '^[12] .. S'; then
+  printf 'aida: a submodule has changes or commits, which this salvage does not capture\n' >&2
+  exit 1
+fi
+git submodule --quiet foreach --recursive 'n=$(git rev-list --count --all --not --remotes) || exit 1
+if [ "$n" -gt 0 ]; then
+  printf "aida: submodule %s has %s commit(s) its remote lacks, which this salvage does not capture\n" "$displaypath" "$n" >&2
+  exit 1
+fi' || exit 1
+printf '# AIDA salvage patch (contained seat clone)\n# clone: %s\n' "$PWD"
 printf '# Every commit origin lacks, on every ref and stash entry, is in the .bundle beside this patch.\n'
 for c in $s; do printf '# stash entry: %s\n' "$c"; done
 printf '\n# Commits on HEAD not on origin:\n'
@@ -1078,12 +1092,19 @@ git ls-files -z --others --exclude-standard > /tmp/aida-untracked || exit 1
 xargs -0 -r -n 1 sh -c 'case "$1" in */)
   printf "aida: %s is a nested git repository, which a patch cannot hold\n" "$1" >&2; exit 255;;
 esac
+if [ -L "$1" ] && [ -d "$1" ]; then
+  printf "aida: %s is a symlink to a directory, which a patch cannot hold\n" "$1" >&2; exit 255
+fi
 if [ ! -L "$1" ] && [ ! -f "$1" ]; then
   printf "aida: %s is not a regular file or symlink\n" "$1" >&2; exit 255
 fi
 printf "#   %s\n" "$1"
-git diff --no-index --binary --no-ext-diff --no-textconv -- /dev/null "$1"
-[ $? -le 1 ] || exit 255' aida-untracked < /tmp/aida-untracked || exit 1
+git diff --no-index --binary --no-ext-diff --no-textconv -- /dev/null "$1" > /tmp/aida-file-diff
+rc=$?
+if [ $rc -gt 1 ] || [ ! -s /tmp/aida-file-diff ]; then
+  printf "aida: could not record untracked %s\n" "$1" >&2; exit 255
+fi
+cat /tmp/aida-file-diff' aida-untracked < /tmp/aida-untracked || exit 1
 exit 0
 "##
 );

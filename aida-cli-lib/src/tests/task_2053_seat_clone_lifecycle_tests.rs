@@ -938,6 +938,94 @@ fn task_2053_bwrap_salvage_keeps_clone_with_untracked_nested_repo() {
     assert!(sub.join("uncommitted.txt").exists());
 }
 
+/// Test-side git with an identity and no background maintenance.
+fn seat_git(dir: &Path, args: &[&str]) -> String {
+    let mut full = vec![
+        "-c",
+        "user.email=seat@example.com",
+        "-c",
+        "user.name=Seat",
+        "-c",
+        "maintenance.auto=false",
+        "-c",
+        "gc.auto=0",
+        "-c",
+        "protocol.file.allow=always",
+    ];
+    full.extend_from_slice(args);
+    git_ok(dir, &full)
+}
+
+/// Review round 6, item 1: work inside a tracked submodule (an uncommitted
+/// change plus a commit its remote lacks) is outside what the patch and the
+/// bundle hold, so the salvage fails and destroy keeps the clone.
+#[cfg(target_os = "linux")]
+#[test]
+fn task_2053_bwrap_salvage_keeps_clone_with_submodule_work() {
+    if !bwrap_live() {
+        return;
+    }
+    let fx = fixture();
+    let upstream = fx.root.join("sub-upstream");
+    std::fs::create_dir_all(&upstream).unwrap();
+    seat_git(&upstream, &["init", "-q"]);
+    std::fs::write(upstream.join("lib.txt"), "v1\n").unwrap();
+    seat_git(&upstream, &["add", "lib.txt"]);
+    seat_git(&upstream, &["commit", "-qm", "v1"]);
+
+    let clone = seat(&fx, "submodule", "c0ffee000025");
+    let upstream_url = upstream.display().to_string();
+    seat_git(
+        &clone,
+        &["submodule", "add", "-q", upstream_url.as_str(), "sm"],
+    );
+    seat_git(&clone, &["commit", "-qm", "add submodule"]);
+    let sm = clone.join("sm");
+    std::fs::write(sm.join("lib.txt"), "v2\n").unwrap();
+    seat_git(&sm, &["commit", "-qam", "v2"]);
+    std::fs::write(sm.join("lib.txt"), "v3 uncommitted\n").unwrap();
+
+    let facts = known(probe(&fx.main, &clone));
+    assert!(facts.unshipped(), "{facts:?}");
+    let err = format!(
+        "{:#}",
+        salvage(&fx.main, &clone).expect_err("submodule work")
+    );
+    assert!(err.contains("submodule"), "{err}");
+    let kept = destroy(&fx.main, &clone, DestroyMode::SalvageUnshipped, None);
+    assert!(matches!(kept, Ok(Destroyed::Kept { .. })), "{kept:?}");
+    assert_eq!(
+        std::fs::read_to_string(sm.join("lib.txt")).unwrap(),
+        "v3 uncommitted\n"
+    );
+}
+
+/// Review round 6, item 2: an untracked symlink to a directory cannot go
+/// into a patch (diff follows it), so the salvage fails and destroy keeps
+/// the clone; a symlink to a file is recorded as a symlink.
+#[cfg(target_os = "linux")]
+#[test]
+fn task_2053_bwrap_salvage_keeps_clone_with_untracked_dir_symlink() {
+    if !bwrap_live() {
+        return;
+    }
+    let fx = fixture();
+    let clone = seat(&fx, "dirlink", "c0ffee000026");
+    std::fs::write(clone.join("target.txt"), "linked\n").unwrap();
+    std::os::unix::fs::symlink("target.txt", clone.join("file-link")).unwrap();
+    let patch = std::fs::read_to_string(salvage(&fx.main, &clone).unwrap()).unwrap();
+    assert!(patch.contains("new file mode 120000"), "{patch}");
+
+    std::fs::create_dir_all(clone.join("dir")).unwrap();
+    std::fs::write(clone.join("dir").join("inner.txt"), "inner\n").unwrap();
+    std::os::unix::fs::symlink("dir", clone.join("dir-link")).unwrap();
+    let err = format!("{:#}", salvage(&fx.main, &clone).expect_err("dir symlink"));
+    assert!(err.contains("symlink to a directory"), "{err}");
+    let kept = destroy(&fx.main, &clone, DestroyMode::SalvageUnshipped, None);
+    assert!(matches!(kept, Ok(Destroyed::Kept { .. })), "{kept:?}");
+    assert!(std::fs::symlink_metadata(clone.join("dir-link")).is_ok());
+}
+
 /// Review round 2, item 2: commits on a side branch the seat switched away
 /// from, a tag, and every stash entry count as unpushed, and the salvage
 /// bundles them all.
