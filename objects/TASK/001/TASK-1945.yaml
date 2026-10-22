@@ -14,12 +14,12 @@ description: |-
   4. Respect the cargo-slot limiter and a max-concurrent-reviewers setting (default 2). Reviewers run no cargo.
   5. Tests: (a) a review starts on a pending-CI head; (b) a stale head is skipped and mailed once; (c) the ship gate refuses on an SHA mismatch, red CI or a hold; (d) a new head supersedes a running review; (e) a restart is idempotent and launches no duplicate reviewers.
   The 2-round cap and risk-scaled review rules are unchanged.
-status: NeedsAttention
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T15:26:23.898572812Z
-modified_at: 2026-10-22T07:27:35.046095716Z
+modified_at: 2026-10-22T07:49:25.186814805Z
 req_type: Task
 tags:
 - review
@@ -153,6 +153,12 @@ comments:
   created_at: 2026-10-22T02:18:57.517570895Z
   modified_at: 2026-10-22T02:18:57.517570895Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a16296-1442-7d43-b5ba-68b12edbaa82
+  author: joe
+  content: 'Returned from NeedsAttention to In Progress via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: S2 supersede design matches signed sketch + C1-C5 and CI is green, but the C4 hold cause can name a process that already exited, the ps surface is only source-grepped, and two doc claims overstate coverage. No triage reason was given.'
+  created_at: 2026-10-22T07:49:25.186802643Z
+  modified_at: 2026-10-22T07:49:25.186802643Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a154c5-bc62-7222-a58c-3c44e8911cb7
   author: joe
@@ -182,6 +188,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a16296-1442-7d43-b5ba-68a8c62d713d
+  author: joe
+  timestamp: 2026-10-22T07:49:25.186790876Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: InProgress
 filed_at:
   code_sha: 6d590ed914dea5135a126f7dae6abb403adec66d
   branch: main
@@ -190,11 +204,3 @@ filed_at:
   aida_build_sha: a27fe3fc76
   vendor: claude
   session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: S2 supersede design matches signed sketch + C1-C5 and CI is green, but the C4 hold cause can name a process that already exited, the ps surface is only source-grepped, and two doc claims overstate coverage
-  recovery_hint: address the review findings, move TASK-1945 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-22T07:27:35.046095716Z
