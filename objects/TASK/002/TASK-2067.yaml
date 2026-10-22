@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T13:11:27.819459305Z
-modified_at: 2026-10-22T01:11:36.564957888Z
+modified_at: 2026-10-22T01:11:39.674474376Z
 req_type: Task
 relationships:
 - rel_type: References
@@ -29,6 +29,12 @@ comments:
   content: 'ADVISOR 10:40 burndown: folded BUG-2195 TASK-2068 into this spec (full texts: aida show <id>). Each folded item needs a fix and a test, or an evidenced ''no longer reproducible'' in the PR body.'
   created_at: 2026-10-21T17:37:59.794750290Z
   modified_at: 2026-10-21T17:37:59.794750290Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a16129-eb9a-7cc0-a698-6dc3ef90a9fa
+  author: joe
+  content: 'ADVISOR 18:13: promoted to approved and assigned to agy2 (antigravity). Its folded members BUG-2195 (snapshot fingerprints every ref) and TASK-2068 (replay guard not enforced in CI) are in scope. A short plan comment is required before code; it touches mandate trace resolution, so the operator ships it.'
+  created_at: 2026-10-22T01:11:39.674474376Z
+  modified_at: 2026-10-22T01:11:39.674474376Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a15e96-e99e-7123-b5b2-06413f72154e
