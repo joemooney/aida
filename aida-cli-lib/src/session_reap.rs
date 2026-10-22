@@ -1327,7 +1327,11 @@ fn scan_clone_lease(
     let mut branch_tip = None;
     let verdict = classify_clone_reap(
         || {
-            let probe = crate::seat_clone::probe(project_root, &lease.worktree_path);
+            // TASK-2110: a squash-merged PR's head counts as shipped.
+            // trace:TASK-2110 | ai:claude
+            let shipped = crate::seat_clone::merged_pr_heads(project_root, &lease.branch);
+            let probe =
+                crate::seat_clone::probe_with_shipped(project_root, &lease.worktree_path, &shipped);
             if let crate::seat_clone::Probe::Known(facts) = &probe {
                 branch_tip = facts.head.clone();
             }
@@ -1372,11 +1376,14 @@ pub(crate) fn reap_one_clone(
     let Some(tip) = checked_tip else {
         return "skipped — the scan recorded no HEAD for the seat clone".to_string();
     };
-    match crate::seat_clone::destroy(
+    // trace:TASK-2110 | ai:claude
+    let shipped = crate::seat_clone::merged_pr_heads(project_root, &lease.branch);
+    match crate::seat_clone::destroy_with_shipped(
         project_root,
         &lease.worktree_path,
         crate::seat_clone::DestroyMode::KeepUnshipped,
         Some(tip),
+        &shipped,
     ) {
         Ok(crate::seat_clone::Destroyed::Removed { .. }) => {
             release_lease_files(project_root, &lease.id);
