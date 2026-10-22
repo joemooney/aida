@@ -538,6 +538,14 @@ use shell `${VAR:-default}` defaulting.
 | Variable | What it does | Default | Who sets it | Scope |
 | --- | --- | --- | --- | --- |
 | `AIDA_RELEASE_YES` | Auto-confirm `scripts/release.sh` prompts (non-TTY/CI). | `0`. | user | process env |
+| `AIDA_RELEASE_ARTIFACT_TIMEOUT_SECS` | How long `aida dev release` waits for the release tarballs after the tag push (TASK-1721). | `1800`. | user | process env |
+| `AIDA_RELEASE_CHECKS_TIMEOUT_SECS` | How long `scripts/release.sh` waits for the release PR's checks to finish before it stops with the PR open (TASK-1721). | `3600`. | user | process env |
+| `AIDA_RELEASE_CHECKS_APPEAR_SECS` | How long `scripts/release.sh` waits for checks to register on a newly opened release PR (TASK-1721). | `300`. | user | process env |
+| `AIDA_RELEASE_CHECKS_INTERVAL_SECS` | Poll interval for the release PR's checks in `scripts/release.sh` (TASK-1721). | `10`. | user / test harness | process env |
+| `AIDA_RELEASE_LEASE_WAIT_SECS` | How long `scripts/release.sh` waits for the `main` merge-lease before merging the release PR (TASK-1721). | `180`. | user | process env |
+| `AIDA_RELEASE_LEASE_TTL_SECS` | TTL that `scripts/release.sh` records on the `main` merge-lease it holds (TASK-1721). | `3600`. | user | process env |
+| `AIDA_RELEASE_REMOTE` / `AIDA_RELEASE_BASE` | Remote and base branch the release PR targets in `scripts/release.sh`; for the bare-remote test fixture (TASK-1721). | `origin` / `main`. | test harness | process env |
+| `AIDA_RELEASE_TAG_FILE` | File where `scripts/release.sh` writes the tag it pushed; `aida dev release` sets it (TASK-1721). | unset. | aida | process env |
 | `AIDA_CACHE_PATH` | Cache DB path used by `scripts/migrate-tag-namespace.sh`. | `.aida/cache.db`. | user | process env |
 
 ---

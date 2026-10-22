@@ -76,6 +76,13 @@ pub(crate) struct ReapFacts {
     /// `harness-worktree` lease, a PR-review scope, …) is NOT finished — the
     /// pass has no completion signal for it and leaves it alone.
     pub spec_finished: bool,
+    /// BUG-2206: true for an attested-reviewer lease (scope `PR-N`) whose PR
+    /// the forge reports MERGED or CLOSED, and whose review branch holds no
+    /// commit past the recorded PR head (TASK-2095). A PR scope has no spec, so this is
+    /// its completion signal; the review branch is a local copy of the PR
+    /// head, so the merge gate does not apply to it.
+    // trace:TASK-1955 | ai:claude (BUG-2206)
+    pub review_pr_terminal: bool,
     /// True when the session's process is gone: every recorded pid is absent
     /// from the process table, or a normal worktree lease is Dormant with no
     /// recorded pid and no live agent process sits inside the worktree.
@@ -162,6 +169,10 @@ pub(crate) fn classify_session_reap(facts: &ReapFacts) -> ReapVerdict {
         return ReapVerdict::Skip(
             "its process is still running — left untouched (never force-closed)".to_string(),
         );
+    }
+    // trace:TASK-1955 | ai:claude (BUG-2206)
+    if facts.review_pr_terminal {
+        return ReapVerdict::Reap("reviewed PR is merged or closed, process exited".to_string());
     }
     if !facts.spec_finished {
         return ReapVerdict::Skip("its spec is not finished (needs Done or Completed)".to_string());
@@ -850,6 +861,23 @@ pub(crate) fn gather_merge_facts_pinned(
 /// and the process-liveness probe. Nothing is mutated here.
 // trace:TASK-1177 | ai:claude
 pub(crate) fn scan_reapable(project_root: &std::path::Path) -> ReapReport {
+    scan_reapable_with(project_root, |pr| {
+        crate::queue_cmd::review_pr_is_merged_or_closed(
+            project_root,
+            pr,
+            &mut crate::network_retry::NoopSink,
+        )
+    })
+}
+
+/// [`scan_reapable`] with the forge's PR-state lookup injected:
+/// `pr_terminal(n)` is `Some(true)` when PR `n` is merged or closed, `None`
+/// when unknown (never a reap).
+// trace:TASK-1955 | ai:claude (BUG-2206)
+pub(crate) fn scan_reapable_with(
+    project_root: &std::path::Path,
+    pr_terminal: impl Fn(u32) -> Option<bool>,
+) -> ReapReport {
     let leases = list_leases(project_root);
     let mut report = ReapReport::default();
     let summaries = requirement_summaries(project_root);
@@ -955,8 +983,20 @@ pub(crate) fn scan_reapable(project_root: &std::path::Path) -> ReapReport {
             },
         );
 
+        // BUG-2206: a dead attested reviewer's PR is asked about only once its
+        // process is gone. trace:TASK-1955 | ai:claude (BUG-2206)
+        // TASK-2095: and only when the review branch holds nothing past the
+        // PR head the review recorded (an unpushed fix-forward would be lost
+        // with the branch), so the skipped merge gate loses no commit.
+        // trace:TASK-1955 | ai:claude (TASK-2095)
+        let review_pr_terminal = process_exited
+            && review_branch_within_pr_head(project_root, branch_tip.as_deref(), lease)
+            && review_lease_pr(lease)
+                .and_then(|pr| u32::try_from(pr).ok())
+                .is_some_and(|pr| pr_terminal(pr) == Some(true));
         let facts = ReapFacts {
             spec_finished,
+            review_pr_terminal,
             process_exited,
             locked: has_worktree && worktree_is_locked(project_root, &lease.worktree_path),
             head_on_branch: session_head_on_branch(&lease.worktree_path, branch),
@@ -979,7 +1019,7 @@ pub(crate) fn scan_reapable(project_root: &std::path::Path) -> ReapReport {
                 ReapVerdict::Skip(_) => "skip",
             },
             reason: verdict.reason().to_string(),
-            spec_finished,
+            spec_finished: spec_finished || review_pr_terminal,
             branch_tip,
             outcome: None,
         };
@@ -1011,6 +1051,46 @@ pub(crate) fn scan_reapable(project_root: &std::path::Path) -> ReapReport {
     report.skipped.sort_by(|a, b| a.scope.cmp(&b.scope));
     report.notifiable.sort_by(|a, b| a.scope.cmp(&b.scope));
     report
+}
+
+/// BUG-2206: the PR an attested-reviewer lease reviews — a `PR-N`/`MR-N`
+/// scope on a review-verb or reviewer-role lease.
+// trace:TASK-1955 | ai:claude (BUG-2206)
+fn review_lease_pr(lease: &SessionLease) -> Option<u64> {
+    (lease.review_verb || lease.role.as_deref() == Some("reviewer"))
+        .then(|| crate::status_prs::parse_pr_scope(&lease.scope))
+        .flatten()
+}
+
+/// Does the review branch hold nothing the reap would lose? True when its
+/// tip is the recorded PR head or behind it, or when every commit on it is
+/// already on `origin` (a fix-forward the reviewer pushed to the PR, or a
+/// lease that recorded no PR head). An unpushed local commit keeps it.
+// trace:TASK-1955 | ai:claude (TASK-2095, TASK-2108)
+fn review_branch_within_pr_head(
+    project_root: &std::path::Path,
+    branch_tip: Option<&str>,
+    lease: &SessionLease,
+) -> bool {
+    let Some(tip) = branch_tip else {
+        return false;
+    };
+    let within_recorded = lease.pr_head_sha.as_deref().is_some_and(|pr_head| {
+        aida_core::git_ops::is_ancestor(project_root, tip, pr_head).unwrap_or(false)
+    });
+    within_recorded || commits_outside_origin(project_root, tip) == Some(0)
+}
+
+/// How many commits reachable from `tip` are on no `origin` remote-tracking
+/// ref; `None` when git cannot say (never read as zero).
+// trace:TASK-1955 | ai:claude (TASK-2108)
+fn commits_outside_origin(project_root: &std::path::Path, tip: &str) -> Option<u64> {
+    let out = aida_core::git_ops::host_git_command(project_root)
+        .args(["rev-list", "--count", tip, "--not", "--remotes=origin"])
+        .output()
+        .ok()?;
+    out.status.success().then_some(())?;
+    String::from_utf8_lossy(&out.stdout).trim().parse().ok()
 }
 
 /// Execute the reap for ONE session: remove the worktree, delete the lease (and
@@ -1075,6 +1155,19 @@ fn reap_one_with_clear_hooks(
                     .map(|p| format!(" (salvage patch: {})", p.display()))
                     .unwrap_or_default()
             );
+        }
+        // BUG-2176: a reviewer's merge-hold marker lives in its review
+        // worktree; move it to the primary before the tree goes, or keep the
+        // tree. trace:TASK-1955 | ai:claude (BUG-2206)
+        if let Some(pr) = review_lease_pr(lease) {
+            if let Err(e) = crate::merge_hold::adopt_worktree_hold(
+                project_root,
+                &lease.worktree_path,
+                pr,
+                lease.started_at.into(),
+            ) {
+                return format!("skipped — could not adopt the PR-{pr} merge-hold marker ({e})");
+            }
         }
         if let Err(e) = aida_core::worktree_pool_destroy::teardown_worktree_path(
             project_root,

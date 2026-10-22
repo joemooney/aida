@@ -832,6 +832,7 @@ exit 3
             interval: 1,
             max_concurrent: 2,
             vendor: None,
+            release: None,
             launch_reservation: None,
         };
         // The watcher resolves its real cwd through sanitized Git, not the
@@ -1614,8 +1615,13 @@ fn task1993_stale_notice_names_the_base_without_resending_old_notices() {
     assert!(!notice.message.body.contains("default branch"));
     // A notice pending from before the wording change is re-delivered as is.
     let old = change(2, 2, true);
-    let legacy = stale_message_for(&store.repository, "PR-2", &old, None);
-    assert_eq!(legacy.id, stale_message(&store.repository, "PR-2", &old).id);
+    // Recorded before recipients were mapped: addressed to the forge login.
+    // trace:TASK-1955 | ai:claude (TASK-1-410)
+    let legacy = stale_message_for(&store.repository, "PR-2", &old, None, &old.author);
+    assert_eq!(
+        legacy.id,
+        stale_message(&store.repository, "PR-2", &old, "advisor").id
+    );
     for sent in [false, true] {
         store
             .transaction("PR-2", |state| {
@@ -1809,5 +1815,215 @@ fn task1993_queue_work_records_the_reviewer_it_launches() {
         attempt.worker.as_ref(),
         Some(&Identity::current().unwrap()),
         "queue work recorded itself"
+    );
+}
+
+/// TASK-2064: a change keeps a notice only for its current head, so a run
+/// of stale heads can no longer grow to the 256-notice cap.
+// trace:TASK-1955 | ai:claude (TASK-2064)
+#[test]
+fn notices_are_kept_for_the_current_head_only() {
+    let (_temp, store) = fixture();
+    assert!(matches!(
+        select(&store, &change(1, 1, true), None, 2).unwrap(),
+        Action::Notify(_)
+    ));
+    assert!(matches!(
+        select(&store, &change(1, 2, true), None, 2).unwrap(),
+        Action::Notify(_)
+    ));
+    let state = store.load().unwrap();
+    let heads: Vec<_> = state.entries["PR-1"].notices.keys().cloned().collect();
+    assert_eq!(heads, vec![change(1, 2, true).head]);
+}
+
+/// PR-2789 note (b): retained rounds are capped at the two the round cap
+/// needs, so the next read's <=16 check can never fail.
+// trace:TASK-1955 | ai:claude (TASK-2064)
+#[test]
+fn retained_rounds_are_capped_on_write() {
+    let (_temp, store) = fixture();
+    let keys = (1..=20u64).map(|n| {
+        (
+            Some(format!("{n:040x}")),
+            "reviewer seat".to_string(),
+            "request-changes".to_string(),
+            Vec::new(),
+        )
+    });
+    store.retain("PR-1", keys).unwrap();
+    assert_eq!(store.retained("PR-1").unwrap().len(), RETAINED_ROUNDS);
+}
+
+/// TASK-2064: dispatcher logs no recorded attempt names are pruned.
+// trace:TASK-1955 | ai:claude (TASK-2064)
+#[test]
+fn prune_removes_logs_no_attempt_names() {
+    let (_temp, store) = fixture();
+    let c = change(1, 1, false);
+    let attempt = dispatch(select(&store, &c, None, 2).unwrap());
+    let logs = Directory::open(&store.dir.path().join("logs")).unwrap();
+    logs.file(&format!("PR-1-{}.log", attempt.token), true)
+        .unwrap();
+    logs.file("PR-9-00000000-0000-4000-8000-000000000000.log", true)
+        .unwrap();
+    store.prune(&BTreeSet::from(["PR-1".to_string()])).unwrap();
+    let names: Vec<String> = std::fs::read_dir(logs.path())
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    assert_eq!(names, vec![format!("PR-1-{}.log", attempt.token)]);
+}
+
+/// TASK-1-412: `--release` frees an exited head for a retry, and refuses
+/// while a recorded process for the change is alive.
+// trace:TASK-1955 | ai:claude (TASK-1-412)
+#[test]
+fn release_retries_an_exited_head_and_refuses_a_live_one() {
+    let (_temp, store) = fixture();
+    let c = change(1, 1, false);
+    let attempt = dispatch(select(&store, &c, None, 2).unwrap());
+    store
+        .transaction("PR-1", |state| {
+            let a = &mut state.entries.get_mut("PR-1").unwrap().attempts[0];
+            a.phase = Phase::Exited;
+            a.dispatcher = Some(Identity::current()?);
+            Ok(())
+        })
+        .unwrap();
+    let Action::Skip(reason) = select(&store, &c, None, 2).unwrap() else {
+        panic!("an exited head is not relaunched")
+    };
+    assert!(
+        reason.contains("aida review watch --release PR-1"),
+        "{reason}"
+    );
+    assert!(
+        store.release("PR-1").is_err(),
+        "a live recorded process refuses the release"
+    );
+    store
+        .transaction("PR-1", |state| {
+            state.entries.get_mut("PR-1").unwrap().attempts[0].dispatcher = None;
+            Ok(())
+        })
+        .unwrap();
+    assert_eq!(store.release("PR-1").unwrap(), 1);
+    let again = dispatch(select(&store, &c, None, 2).unwrap());
+    assert_ne!(again.token, attempt.token);
+}
+
+/// TASK-1-415: the reviewer launch reuses the launch queue work already
+/// revalidated in this process; no forge or repository is consulted again.
+// trace:TASK-1955 | ai:claude (TASK-1-415)
+#[test]
+fn second_launch_context_reuses_the_first_revalidation() {
+    let temp = tempfile::tempdir().unwrap();
+    let head = format!("{:040x}", 5);
+    let _env = crate::test_env::EnvVarsGuard::apply(&[(WATCH_HEAD, Some(head.as_str()))]);
+    LAUNCH.with(|launch| {
+        *launch.borrow_mut() = Some((
+            temp.path().to_path_buf(),
+            "github:github.com/owner/repo".into(),
+            "PR-5".into(),
+            head.clone(),
+        ))
+    });
+    // The temp dir is no repository: a fresh revalidation would fail.
+    assert!(reviewer_launch_context(temp.path(), 5).unwrap());
+    assert!(reviewer_launch_context(temp.path(), 6).is_err());
+    LAUNCH.with(|launch| *launch.borrow_mut() = None);
+}
+
+/// TASK-1-413: probe refs whose prober is gone are swept; a live prober's
+/// refs are kept.
+// trace:TASK-1955 | ai:claude (TASK-1-413)
+#[test]
+fn leaked_probe_refs_are_swept_and_live_ones_kept() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path();
+    let git = |args: &[&str]| {
+        let out = crate::test_git::git_command()
+            .current_dir(root)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "git {args:?}");
+        String::from_utf8_lossy(&out.stdout).trim().to_string()
+    };
+    git(&["init", "-q", "-b", "main"]);
+    git(&[
+        "-c",
+        "user.name=t",
+        "-c",
+        "user.email=t@t",
+        "commit",
+        "-q",
+        "--allow-empty",
+        "-m",
+        "s",
+    ]);
+    let head = git(&["rev-parse", "HEAD"]);
+    let me = std::process::id();
+    for name in [
+        format!("refs/aida/review-watch/{me}-live/base"),
+        "refs/aida/review-watch/4000000001-dead/base".to_string(),
+        "refs/aida/review-watch/legacy-uuid/head".to_string(),
+    ] {
+        git(&["update-ref", &name, &head]);
+    }
+    assert_eq!(forge::sweep_probe_refs(root), 2);
+    assert_eq!(
+        git(&[
+            "for-each-ref",
+            "--format=%(refname)",
+            "refs/aida/review-watch/"
+        ]),
+        format!("refs/aida/review-watch/{me}-live/base")
+    );
+}
+
+/// TASK-1-410 / TASK-2109: a stale-head notice goes to the AIDA identity the
+/// author's forge login names, in its stored spelling, and a pending notice
+/// survives a roster change before it is sent.
+// trace:TASK-1955 | ai:claude (TASK-2109)
+#[test]
+fn stale_notice_maps_the_forge_login_and_survives_a_roster_change() {
+    let (temp, store) = fixture();
+    let registry = temp.path().join(".aida-store").join("registry");
+    std::fs::create_dir_all(&registry).unwrap();
+    std::fs::write(
+        registry.join("team.toml"),
+        "[members]\nJoe = [\"advisor\"]\n",
+    )
+    .unwrap();
+    let mut c = change(1, 1, true);
+    c.author = "joe".into();
+    let Action::Notify(notice) = select(&store, &c, None, 2).unwrap() else {
+        panic!("missing notice")
+    };
+    assert_eq!(
+        notice.message.to,
+        aida_core::mailbox::Recipient::Agent("Joe".into())
+    );
+
+    // The roster drops Joe before the notice is sent: the pending notice is
+    // still delivered as recorded, not refused as drifted.
+    std::fs::remove_file(registry.join("team.toml")).unwrap();
+    let Action::Notify(retry) = select(&store, &c, None, 2).unwrap() else {
+        panic!("pending notice lost after a roster change")
+    };
+    assert_eq!(retry.message.id, notice.message.id);
+    assert_eq!(retry.message.to, notice.message.to);
+
+    // An unmapped login goes to the advisor.
+    let mut stranger = change(2, 2, true);
+    stranger.author = "octocat".into();
+    let Action::Notify(n) = select(&store, &stranger, None, 2).unwrap() else {
+        panic!("missing notice")
+    };
+    assert_eq!(
+        n.message.to,
+        aida_core::mailbox::Recipient::Agent("advisor".into())
     );
 }

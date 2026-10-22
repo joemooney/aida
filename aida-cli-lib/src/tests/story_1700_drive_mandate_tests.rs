@@ -110,8 +110,11 @@ fn no_spec(_: &str) -> Option<String> {
     None
 }
 
-fn no_signoff(_: &str) -> Option<bool> {
-    None
+/// The tick fixture's store: it knows the lane default `TASK-77` (no
+/// signoff pending) and nothing else.
+// trace:TASK-1955 | ai:claude (TASK-1925)
+fn fixture_signoff(id: &str) -> Option<bool> {
+    (id == "TASK-77").then_some(false)
 }
 
 fn story_9_awaits(id: &str) -> Option<bool> {
@@ -154,7 +157,7 @@ impl Fixture {
             advisor_live: true,
             inherited_session_env: false,
             spec_always_human: &no_spec,
-            spec_signoff: &no_signoff,
+            spec_signoff: &fixture_signoff,
             store_readable: true,
             unowned_specs: Vec::new(),
         }
@@ -242,7 +245,7 @@ fn blocked_due_item_carries_resolving_action_and_no_restart() {
 fn blocked_without_a_spec_asks_for_an_answer() {
     let tmp = tempfile::tempdir().unwrap();
     let l = lane("r", LaneClass::Blocked, tmp.path(), &[("state", "blocked")]);
-    let (action, command, _, spec) = resolving_action(&l, &no_signoff);
+    let (action, command, _, spec) = resolving_action(&l, &fixture_signoff);
     assert_eq!(action, DriveAction::Answer);
     assert!(spec.is_empty());
     assert!(command.contains("answer the question in"));
@@ -1706,7 +1709,7 @@ fn only_a_store_spec_awaiting_signoff_makes_a_blocked_relay_a_sketch_signoff() {
         "BLOCKED_ON_HUMAN: does PR-12 still follow ADR-77?\n",
     )
     .unwrap();
-    let (action, _, _, spec) = resolving_action(&l, &no_signoff);
+    let (action, _, _, spec) = resolving_action(&l, &fixture_signoff);
     assert_eq!((action, spec.is_empty()), (DriveAction::Answer, true));
     std::fs::write(
         &handoff,
@@ -2051,12 +2054,15 @@ fn a_redispatch_or_setup_lane_carries_the_runs_spec_and_fails_closed_without_one
         let fx = Fixture::new();
         drive_mandate(fx.mandates.path(), "joe");
         let l = lane("t", class, &fx.run_dir("t"), &[("ticket", "TASK-9")]);
-        let LaneDecision::Act(p) = plan_relay_lane(&l, &no_signoff) else {
+        // TASK-1925: the store knows TASK-9. trace:TASK-1955 | ai:claude
+        let knows_task_9 = |s: &str| (s == "TASK-9").then_some(false);
+        let LaneDecision::Act(p) = plan_relay_lane(&l, &knows_task_9) else {
             panic!("{class:?} is a lane")
         };
         assert_eq!(p.spec.as_deref(), Some("TASK-9"), "{class:?}");
         let mut inputs = fx.inputs(&now_clock, vec![l], "joe");
         inputs.spec_always_human = &always;
+        inputs.spec_signoff = &knows_task_9;
         let mut fake = Fake::default();
         let report = run_tick(&inputs, &TickHooks::default(), &mut fake);
         assert!(fake.due.is_empty(), "{class:?}");
@@ -2071,7 +2077,7 @@ fn a_redispatch_or_setup_lane_carries_the_runs_spec_and_fails_closed_without_one
         let fx = Fixture::new();
         drive_mandate(fx.mandates.path(), "joe");
         let l = lane("u", class, &fx.run_dir("u"), &[("ticket", "")]);
-        assert_eq!(run_spec(&l), None);
+        assert_eq!(run_spec(&l, &|_| true), None);
         let mut fake = Fake::default();
         let report = run_tick(
             &fx.inputs(&now_clock, vec![l], "joe"),
@@ -2100,7 +2106,7 @@ fn the_json_preview_is_json_with_no_lanes_and_mirrors_withheld_routes() {
     let fx = Fixture::new();
     let decisions = vec![plan_relay_lane(
         &lane("c", LaneClass::Crashed, &fx.run_dir("c"), &[]),
-        &no_signoff,
+        &fixture_signoff,
     )];
     let readable = preview_json(&decisions, true);
     assert_eq!(readable["lanes"][0]["held"], serde_json::Value::Null);
@@ -2122,11 +2128,11 @@ fn the_preview_warns_and_shows_routes_withheld_when_the_store_is_unreadable() {
     let decisions = vec![
         plan_relay_lane(
             &lane("c", LaneClass::Crashed, &fx.run_dir("c"), &[]),
-            &no_signoff,
+            &fixture_signoff,
         ),
         plan_relay_lane(
             &lane("a", LaneClass::TerminalApi, &fx.run_dir("a"), &[]),
-            &no_signoff,
+            &fixture_signoff,
         ),
     ];
     let readable = preview_lines(&decisions, true);
@@ -2552,4 +2558,48 @@ fn a_recheck_failure_before_the_store_check_is_ledgered() {
         Some("mandate stopped mid-tick")
     );
     assert!(fake.notices.is_empty());
+}
+
+/// TASK-1925: a relay run's spec is the first `ticket`/`spec` id the store
+/// knows. A store-known, ungated spec routes per scope; an id the store does
+/// not know (the relay's `ticket=` is its queue-lock path, or a stray token)
+/// never counts, and the lane fails closed with RUN_SPEC_UNKNOWN.
+// trace:TASK-1955 | ai:claude (TASK-1925)
+#[test]
+fn run_spec_keeps_only_store_known_ids() {
+    let fx = Fixture::new();
+    let known = |s: &str| s == "STORY-4";
+    let l = lane(
+        "k",
+        LaneClass::Crashed,
+        &fx.run_dir("k"),
+        &[
+            ("ticket", "/run/relay-ticket-12.lock BUG-404"),
+            ("spec", "STORY-4"),
+        ],
+    );
+    assert_eq!(run_spec(&l, &known).as_deref(), Some("STORY-4"));
+
+    let knows_story_4 = |s: &str| (s == "STORY-4").then_some(false);
+    let LaneDecision::Act(p) = plan_relay_lane(&l, &knows_story_4) else {
+        panic!("a crashed lane is acted on")
+    };
+    assert_eq!(p.spec.as_deref(), Some("STORY-4"));
+    assert_eq!(
+        p.forced_gate, None,
+        "a known, ungated spec is not force-gated"
+    );
+
+    let unknown = lane(
+        "u",
+        LaneClass::Crashed,
+        &fx.run_dir("u"),
+        &[("ticket", "BUG-404")],
+    );
+    assert_eq!(run_spec(&unknown, &known), None);
+    let LaneDecision::Act(p) = plan_relay_lane(&unknown, &knows_story_4) else {
+        panic!("a crashed lane is acted on")
+    };
+    assert_eq!(p.spec, None);
+    assert_eq!(p.forced_gate.as_deref(), Some(RUN_SPEC_UNKNOWN));
 }

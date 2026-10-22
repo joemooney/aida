@@ -3192,14 +3192,21 @@ pub(crate) fn pr_ship_with_method(
         // branch-name fallback or non-final rebase slice never completes a spec
         // silently. Rebase merges produce no squash subject.
         // trace:BUG-1919 trace:STORY-1663 | ai:antigravity
-        let (explicit_squash_subject, completion_trailer) = derive_pr_ship_subject_for_method(
+        let ship_meta = fetch_pr_ship_metadata_via_gh(&project_root, pr_number)?;
+        let (explicit_squash_subject, completion_trailer) = derive_pr_ship_subject_for_method_from(
             &project_root,
-            pr_number,
+            &ship_meta,
             &ship_branch,
             no_complete,
             merge_method,
             final_slice,
         )?;
+        // TASK-1765: the forge's squash body is built from the commits, not
+        // the PR body, so a non-completing declaration would not reach main
+        // and the pull's review-story covers path would complete the covered
+        // specs. trace:TASK-1951 trace:TASK-1765 | ai:claude
+        let declares_non_completing =
+            no_complete || pr_ship::pr_body_declares_non_completing(&ship_meta.body);
         eprintln!(
             "  step 3: {}",
             pr_ship::format_trailer_provenance(&completion_trailer)
@@ -3252,6 +3259,20 @@ pub(crate) fn pr_ship_with_method(
         } else {
             None
         };
+        let sanitized_squash_body =
+            if merge_method == crate::forge::MergeMethod::Squash && declares_non_completing {
+                let body = match sanitized_squash_body {
+                    Some(body) => body,
+                    None => crate::identity_gate::squash_commit_messages_body(
+                        &project_root,
+                        &retarget_base,
+                        head_sha.as_deref().unwrap_or(&ship_branch),
+                    )?,
+                };
+                Some(non_completing_squash_body(&body))
+            } else {
+                sanitized_squash_body
+            };
         let mut merge_opts = crate::forge::MergeOptions {
             method: merge_method,
             squash_subject: explicit_squash_subject.clone(),
@@ -3313,6 +3334,13 @@ pub(crate) fn pr_ship_with_method(
                 Some(pr_number),
                 &refusal,
             );
+            // trace:TASK-1915 | ai:claude
+            ledger_mandate_ship_failure(
+                &main_worktree,
+                mandate_release.as_ref(),
+                pr_number,
+                &refusal,
+            );
             return Err(pr_ship::ShipRefusal::MergeHold.error(refusal));
         }
         // BUG-1532 criterion 4, re-checked HERE under the merge lease against
@@ -3348,6 +3376,13 @@ pub(crate) fn pr_ship_with_method(
                         Some(pr_number),
                         &refusal,
                     );
+                    // trace:TASK-1915 | ai:claude
+                    ledger_mandate_ship_failure(
+                        &main_worktree,
+                        mandate_release.as_ref(),
+                        pr_number,
+                        &refusal,
+                    );
                     return Err(pr_ship::ShipRefusal::MergeHold.error(refusal));
                 }
             },
@@ -3379,6 +3414,13 @@ pub(crate) fn pr_ship_with_method(
                     Some(pr_number),
                     &refusal,
                 );
+                // trace:TASK-1915 | ai:claude
+                ledger_mandate_ship_failure(
+                    &main_worktree,
+                    mandate_release.as_ref(),
+                    pr_number,
+                    &refusal,
+                );
                 return Err(pr_ship::ShipRefusal::MergeHold.error(refusal));
             }
         }
@@ -3394,6 +3436,13 @@ pub(crate) fn pr_ship_with_method(
                 Some(pr_number),
                 &pr_ship::ShipStep::Merge { delete_branch },
                 &pr_ship::StepOutcome::Failed(refusal.clone()),
+            );
+            // trace:TASK-1915 | ai:claude
+            ledger_mandate_ship_failure(
+                &main_worktree,
+                mandate_release.as_ref(),
+                pr_number,
+                &refusal,
             );
             return Err(pr_ship::ShipRefusal::Review.error(refusal));
         }
@@ -3506,17 +3555,32 @@ pub(crate) fn pr_ship_with_method(
                     Ok(true) => {}
                     // STORY-1698: a mandate release never stays released on
                     // a failure. trace:STORY-1698 | ai:claude
-                    Ok(false) if mandate_release.is_some() => anyhow::bail!(
-                        "released the merge-hold on PR-{pr_number} under a mandate, but `{}` has not re-run green within 180s.{}",
-                        crate::ci_gate::HOLD_GATE_CHECK,
-                        rearm_after_mandate_failure(&hold_root, hold_record.as_ref(), pr_number)
-                    ),
-                    Ok(false) => anyhow::bail!(
-                        "released the merge-hold on PR-{pr_number}, but `{}` has not re-run green within \
-                         180s — retry `aida pr ship {pr_number}` shortly (the hold stays released), or \
-                         inspect `gh pr checks {pr_number}`",
-                        crate::ci_gate::HOLD_GATE_CHECK
-                    ),
+                    Ok(false) if mandate_release.is_some() => {
+                        let refusal = format!(
+                            "released the merge-hold on PR-{pr_number} under a mandate, but `{}` has not re-run green within 180s.{}",
+                            crate::ci_gate::HOLD_GATE_CHECK,
+                            rearm_after_mandate_failure(&hold_root, hold_record.as_ref(), pr_number)
+                        );
+                        // trace:TASK-1915 | ai:claude
+                        ledger_mandate_ship_failure(
+                            &main_worktree,
+                            mandate_release.as_ref(),
+                            pr_number,
+                            &refusal,
+                        );
+                        anyhow::bail!(refusal)
+                    }
+                    Ok(false) => {
+                        let refusal = format!(
+                            "released the merge-hold on PR-{pr_number}, but `{}` has not re-run green within \
+                             180s — retry `aida pr ship {pr_number}` shortly (the hold stays released), or \
+                             inspect `gh pr checks {pr_number}`",
+                            crate::ci_gate::HOLD_GATE_CHECK
+                        );
+                        // trace:TASK-1915 | ai:claude
+                        ledger_mandate_ship_failure(&main_worktree, mandate_release.as_ref(), pr_number, &refusal);
+                        anyhow::bail!(refusal)
+                    }
                     Err(e) => eprintln!(
                         "  {} could not confirm `{}` re-ran green ({e:#}) — attempting the merge anyway",
                         crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
@@ -3543,6 +3607,8 @@ pub(crate) fn pr_ship_with_method(
                     Some(pr_number),
                     &refusal,
                 );
+                // trace:TASK-1915 | ai:claude
+                ledger_mandate_ship_failure(&main_worktree, Some(cover), pr_number, &refusal);
                 return Err(pr_ship::ShipRefusal::MergeHold.error(refusal));
             }
         }
@@ -3570,6 +3636,21 @@ pub(crate) fn pr_ship_with_method(
                     crate::events::GATE_STALE_APPROVAL,
                     None,
                     Some(pr_number),
+                    &refusal,
+                );
+                // The hold a mandate released is re-armed and the refusal ledgered,
+                // like every other post-release exit. trace:TASK-1915 | ai:claude
+                let refusal = match (&mandate_release, &marker_reason) {
+                    (Some(_), Some(_)) => format!(
+                        "{refusal}{}",
+                        rearm_after_mandate_failure(&hold_root, hold_record.as_ref(), pr_number)
+                    ),
+                    _ => refusal,
+                };
+                ledger_mandate_ship_failure(
+                    &main_worktree,
+                    mandate_release.as_ref(),
+                    pr_number,
                     &refusal,
                 );
                 return Err(pr_ship::ShipRefusal::Review.error(refusal));
@@ -3624,8 +3705,23 @@ pub(crate) fn pr_ship_with_method(
                 if mandate_release.is_some() && marker_reason.is_some() {
                     let rearm =
                         rearm_after_mandate_failure(&hold_root, hold_record.as_ref(), pr_number);
+                    // trace:TASK-1915 | ai:claude
+                    ledger_mandate_ship_failure(
+                        &main_worktree,
+                        mandate_release.as_ref(),
+                        pr_number,
+                        &format!("`gh pr merge` failed: {stderr_text}.{rearm}"),
+                    );
                     return Err(e.context(format!("`gh pr merge` failed.{rearm}")));
                 }
+                // A mandate ship with no hold to re-arm is still a failed
+                // mandate-driven action. trace:TASK-1915 | ai:claude
+                ledger_mandate_ship_failure(
+                    &main_worktree,
+                    mandate_release.as_ref(),
+                    pr_number,
+                    &format!("`gh pr merge` failed: {stderr_text}"),
+                );
                 return Err(e.context("`gh pr merge` failed"));
             }
         } else {
@@ -4742,6 +4838,20 @@ pub(crate) fn ship_completion_trailer_for_method(
     )
 }
 
+/// TASK-1765: `body` with an `aida: no-complete` declaration line appended,
+/// so the squash commit on main carries the non-completing marker the pull
+/// reads (`commit_declares_non_completing`).
+// trace:TASK-1951 trace:TASK-1765 | ai:claude
+pub(crate) fn non_completing_squash_body(body: &str) -> String {
+    let body = body.trim_end();
+    let marker = pr_ship::NO_COMPLETE_BODY_MARKERS[0];
+    if body.is_empty() {
+        marker.to_string()
+    } else {
+        format!("{body}\n\n{marker}")
+    }
+}
+
 /// STORY-1663: optional slice-stack verifier hook before rebase merge.
 /// Reads `scripts/split-lib/verify_stack.py` from `origin/main` (falling back to
 /// `main_worktree/scripts/split-lib/verify_stack.py` only when `origin/main` is
@@ -5108,21 +5218,8 @@ pub(crate) fn classify_ship_default_branch(
     // Only origin/HEAD is local evidence, never a guess from leftover refs.
     // A stale origin/HEAD still wins over the forge, so refresh it when the
     // remote default changes (git remote set-head origin --auto).
-    let local = std::process::Command::new("git")
-        .arg("-C")
-        .arg(project_root)
-        .args([
-            "symbolic-ref",
-            "--quiet",
-            "--short",
-            "refs/remotes/origin/HEAD",
-        ])
-        .output()
-        .ok()
-        .filter(|out| out.status.success())
-        .and_then(|out| String::from_utf8(out.stdout).ok())
-        .and_then(|name| name.trim().strip_prefix("origin/").map(str::to_owned))
-        .filter(|name| !name.is_empty());
+    // trace:TASK-1951 | ai:claude
+    let local = crate::forge::local_origin_head_branch(project_root);
     match local.or_else(|| crate::forge::probe_default_branch(project_root)) {
         Some(default) if branch == default => ShipDefaultBranchDisposition::OnDefaultBranch,
         Some(_) => ShipDefaultBranchDisposition::FeatureBranch,
@@ -5130,7 +5227,10 @@ pub(crate) fn classify_ship_default_branch(
     }
 }
 
+// Test-only since classify_ship_default_branch replaced it on the ship path.
 // trace:TASK-1795 trace:TASK-1803 | ai:antigravity
+// trace:TASK-1951 trace:TASK-1408 | ai:claude
+#[cfg(test)]
 pub(crate) fn ship_is_default_branch(project_root: &std::path::Path, branch: &str) -> bool {
     !matches!(
         classify_ship_default_branch(project_root, branch),
@@ -5182,6 +5282,32 @@ mod task_140_squash_subject_tests;
 #[cfg(test)]
 #[path = "tests/bug_2203_refs_subject_tests.rs"]
 mod bug_2203_refs_subject_tests;
+
+/// A ship a mandate covered that stops short of its merge is a
+/// mandate-driven action too: ledger its refusal under the mandate. Every
+/// exit between the mandate release decision and the merge calls this (a
+/// source pin keeps it so); a ship no mandate covered writes nothing.
+// trace:TASK-1915 | ai:claude
+pub(crate) fn ledger_mandate_ship_failure(
+    root: &std::path::Path,
+    cover: Option<&MandateCover>,
+    pr: u64,
+    why: &str,
+) {
+    if let Some(cover) = cover {
+        crate::mandate_drive::emit_session_ship(
+            root,
+            &cover.id,
+            pr,
+            crate::mandate_drive::Outcome::Refused,
+            Some(why.to_string()),
+        );
+    }
+}
+
+#[cfg(test)]
+#[path = "tests/task_1915_mandate_ship_failure_ledger_tests.rs"]
+mod task_1915_mandate_ship_failure_ledger_tests;
 
 pub(crate) struct PrShipMetadata {
     pub(crate) title: String,
@@ -7176,6 +7302,33 @@ pub(crate) static SHIP: crate::command_registry::CommandReg = crate::command_reg
 mod story_1663_rebase_ship_tests {
     use super::*;
     use clap::Parser;
+
+    /// TASK-1765: a non-completing squash ship writes the declaration into
+    /// the squash body, rebuilt from the commits when the identity gate left
+    /// it to the forge.
+    // trace:TASK-1951 trace:TASK-1765 | ai:claude
+    #[test]
+    fn task_1951_non_completing_squash_ship_writes_the_marker_into_the_body() {
+        assert_eq!(non_completing_squash_body(""), "aida: no-complete");
+        assert_eq!(
+            non_completing_squash_body("* a\n\n* b\n"),
+            "* a\n\n* b\n\naida: no-complete"
+        );
+        assert!(crate::db_reconcile::commit_declares_non_completing(
+            &format!("fix: x (#9)\n\n{}", non_completing_squash_body("* a"))
+        ));
+        let src = include_str!("pr_cmd.rs");
+        let decl = src
+            .find("no_complete || pr_ship::pr_body_declares_non_completing(&ship_meta.body);")
+            .expect("ship derives the non-completing declaration");
+        let body = src[decl..]
+            .find("Some(non_completing_squash_body(&body))")
+            .expect("the declaration reaches the squash body");
+        let merge = src[decl..]
+            .find("squash_body: sanitized_squash_body,")
+            .expect("merge options carry the body");
+        assert!(body < merge, "the marker is added before the merge options");
+    }
 
     #[test]
     fn cli_parses_rebase_and_merge_method_and_rejects_final_slice_with_squash() {

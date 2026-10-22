@@ -626,12 +626,17 @@ pub(crate) fn route_findings(
         ) {
             // Unconfigured notify reaches no one and a rate-limited notice
             // was not delivered: leave both unrouted so they retry.
-            Ok(outcome) if outcome.configured && outcome.suppressed == 0 => {
+            // trace:TASK-1955 | ai:claude (TASK-2025, TASK-1664)
+            Ok(outcome) if operator_notice_delivered(&outcome) => {
                 for f in &human {
                     routed.entry(f.id.clone()).or_insert(now);
                 }
             }
-            Ok(_) => {}
+            Ok(outcome) => {
+                if let Some(warning) = notify_unreachable_warning(&outcome, human.len()) {
+                    eprintln!("{warning}");
+                }
+            }
             Err(err) => {
                 eprintln!("warning: lane-liveness operator notification failed: {err:#}");
             }
@@ -647,6 +652,30 @@ pub(crate) fn route_findings(
             let _ = aida_core::write_atomic(&path, body.as_bytes());
         }
     }
+}
+
+/// Did the operator notice reach someone? Only a configured notify command
+/// that sent (or queued) it, with nothing rate-limited, counts; anything else
+/// stays unrouted and retries next tick.
+// trace:TASK-1955 | ai:claude (TASK-2025)
+fn operator_notice_delivered(outcome: &crate::notify::DirectNotifyOutcome) -> bool {
+    outcome.configured && outcome.suppressed == 0 && (outcome.sent > 0 || outcome.pending > 0)
+}
+
+/// The warning printed while human-only gate findings reach no one because
+/// `[notify]` is unconfigured; `None` when notify is configured.
+// trace:TASK-1955 | ai:claude (TASK-1664)
+fn notify_unreachable_warning(
+    outcome: &crate::notify::DirectNotifyOutcome,
+    waiting: usize,
+) -> Option<String> {
+    (!outcome.configured).then(|| {
+        format!(
+            "warning: {waiting} merge hold(s) waiting on a human reach no one: no [notify] command \
+             is configured. Set `[notify] command` in .aida/config.toml, or check \
+             `aida doctor check lane-liveness`."
+        )
+    })
 }
 
 /// Read-only scan of `<project_root>` (the `aida doctor check` path).
@@ -854,7 +883,15 @@ pub(crate) fn load_snapshot(
         &mut live_sessions,
         &mut snapshot,
     );
-    load_open_prs(project_root, &leases, now, policy, prs, &mut snapshot);
+    load_open_prs(
+        project_root,
+        &leases,
+        now,
+        policy,
+        prs,
+        &mut live_sessions,
+        &mut snapshot,
+    );
     load_human_holds(project_root, &mut snapshot);
     load_advisor_requests(project_root, &mut snapshot);
     load_orphaned_leases(
@@ -1160,11 +1197,39 @@ fn fetch_open_prs_from_gh(project_root: &Path) -> Result<String, String> {
 /// head has no checks at all (no readiness signal). With `skip_hold_gate`,
 /// the `merge-hold-gate` check, red at every head while a hold's label is on
 /// the PR, is left out.
-fn rollup_green_at(rollup: &[serde_json::Value], skip_hold_gate: bool) -> Option<DateTime<Utc>> {
+///
+/// `required` is the base branch's required status-check set. When it names
+/// checks, only those are the ready signal: each must be present and green,
+/// and a failing optional check no longer blocks pickup forever. An empty or
+/// unknown (`None`) set keeps every check in play.
+// trace:TASK-1955 | ai:claude (TASK-2030)
+fn rollup_green_at(
+    rollup: &[serde_json::Value],
+    skip_hold_gate: bool,
+    required: Option<&[String]>,
+) -> Option<DateTime<Utc>> {
+    let check_name = |check: &serde_json::Value| -> String {
+        check
+            .get("name")
+            .or_else(|| check.get("context"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string()
+    };
+    let required = required.filter(|r| !r.is_empty());
+    if let Some(required) = required {
+        let present: Vec<String> = rollup.iter().map(check_name).collect();
+        if required.iter().any(|r| !present.contains(r)) {
+            return None;
+        }
+    }
     let mut latest: Option<DateTime<Utc>> = None;
     for check in rollup {
         let field = |k: &str| check.get(k).and_then(|v| v.as_str()).unwrap_or("");
         if skip_hold_gate && field("name") == MERGE_HOLD_GATE_CHECK {
+            continue;
+        }
+        if required.is_some_and(|r| !r.contains(&check_name(check))) {
             continue;
         }
         let (green, finished) = if field("__typename") == "StatusContext" {
@@ -1190,19 +1255,47 @@ fn rollup_green_at(rollup: &[serde_json::Value], skip_hold_gate: bool) -> Option
     latest
 }
 
-/// Every `reviewed_sha` on record under `.aida/review-verdicts/`.
-fn recorded_verdict_shas(project_root: &Path) -> Vec<String> {
-    let dir = project_root.join(".aida").join("review-verdicts");
-    let Ok(entries) = std::fs::read_dir(dir) else {
-        return Vec::new();
+/// Has the review this lease records started and not provably ended? Read
+/// with the live-session probe, so a reviewer still in its worktree after
+/// its creator shell exited counts (BUG-2206 reads a dead creator with no
+/// live session as Stale), and with the agent registry, so a Codex or
+/// Antigravity reviewer (no Claude session to probe) registered inside the
+/// worktree counts too. A crashed reviewer, Stale with neither, no longer
+/// suppresses the unpicked-ready-pr check (TASK-1665).
+// trace:TASK-1955 | ai:claude (TASK-2094, TASK-1665)
+fn review_lease_running(
+    project_root: &Path,
+    l: &crate::leases::SessionLease,
+    live_sessions: &mut Option<Vec<crate::process_probe::LiveSession>>,
+    live_agents: &mut Option<Vec<crate::agent_registry::AgentRegistryEntry>>,
+    now: DateTime<Utc>,
+) -> bool {
+    let has_worktree = !l.worktree_path.as_os_str().is_empty();
+    let state = if has_worktree && l.active_pid.is_none() && l.worktree_path.exists() {
+        let live =
+            live_sessions.get_or_insert_with(crate::process_probe::probe_live_claude_sessions);
+        crate::lease_state_for(l, live, now)
+    } else {
+        crate::lease_state_for(l, &[], now)
     };
-    entries
-        .flatten()
-        .map(|e| e.path())
-        .filter(|p| p.extension().is_some_and(|x| x == "json"))
-        .filter_map(|p| std::fs::read_to_string(p).ok())
-        .filter_map(|body| crate::review_verdict::parse_recorded_verdict(&body))
-        .filter_map(|v| v.reviewed_sha)
+    if !matches!(state, crate::LeaseState::Stale) {
+        return true;
+    }
+    has_worktree
+        && live_agents
+            .get_or_insert_with(|| crate::agent_registry::load_live_entries(project_root))
+            .iter()
+            .any(|a| a.worktree_path.starts_with(&l.worktree_path))
+}
+
+/// Every `reviewed_sha` on record under `.aida/review-verdicts/`.
+// Read through the anchored verdict reader, so a symlinked or hard-linked
+// verdict (or a FIFO named `*.json`) never counts as a started review.
+// trace:TASK-1951 trace:TASK-1670 | ai:claude
+fn recorded_verdict_shas(project_root: &Path) -> Vec<String> {
+    crate::review_verdict::list_active_verdicts(project_root)
+        .into_iter()
+        .filter_map(|(_, v)| v.reviewed_sha)
         .collect()
 }
 
@@ -1212,8 +1305,10 @@ fn load_open_prs(
     now: DateTime<Utc>,
     policy: &LaneLivenessPolicy,
     prs: PrSource<'_>,
+    live_sessions: &mut Option<Vec<crate::process_probe::LiveSession>>,
     snapshot: &mut LaneLivenessSnapshot,
 ) {
+    let mut live_agents: Option<Vec<crate::agent_registry::AgentRegistryEntry>> = None;
     let raw = match prs(project_root) {
         Ok(raw) => raw,
         Err(err) => {
@@ -1229,6 +1324,8 @@ fn load_open_prs(
         }
     };
     let mut verdict_shas: Option<Vec<String>> = None;
+    // trace:TASK-1955 | ai:claude (TASK-2030)
+    let required = crate::status_prs::required_status_checks(project_root);
     for pr in list {
         if pr.is_draft || pr.head_ref_oid.is_empty() {
             continue;
@@ -1254,7 +1351,11 @@ fn load_open_prs(
                         .as_deref()
                         .is_some_and(|t| !crate::review_verdict::same_reviewed_sha(t, head))
             });
-        let checks_green_at = rollup_green_at(&pr.status_check_rollup, reworked_past_refusal);
+        let checks_green_at = rollup_green_at(
+            &pr.status_check_rollup,
+            reworked_past_refusal,
+            required.as_deref(),
+        );
         let scope = format!("PR-{}", pr.number);
         // A reviewer session (`aida queue work PR-<n> --role reviewer`) has a
         // worktree and no agent pid, so the canonical state reads it Dormant
@@ -1262,10 +1363,7 @@ fn load_open_prs(
         // Only a Stale lease (worktree gone or past 24h) has not.
         let review_lease = leases.iter().any(|l| {
             l.scope.eq_ignore_ascii_case(&scope)
-                && !matches!(
-                    crate::lease_state_for(l, &[], now),
-                    crate::LeaseState::Stale
-                )
+                && review_lease_running(project_root, l, live_sessions, &mut live_agents, now)
                 && l.pr_head_sha
                     .as_deref()
                     .is_none_or(|sha| crate::review_verdict::same_reviewed_sha(sha, head))

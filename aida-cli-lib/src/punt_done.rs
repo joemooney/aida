@@ -393,12 +393,19 @@ pub(crate) fn resolve_comment_mentions(
     let author_trimmed = comment_author.trim();
     let mut deliverable = Vec::new();
     let mut warnings = Vec::new();
-    for handle in extract_mention_candidates(text) {
+    // The roster is consulted before the shape filters, so a registered agent
+    // named like a SHA (`@cafe1234`) is still a mention.
+    // trace:TASK-1955 | ai:claude (TASK-1918)
+    for handle in extract_raw_mention_tokens(text) {
         let trimmed = handle.trim();
         if trimmed.eq_ignore_ascii_case(author_trimmed) {
             continue;
         }
-        if let Some(canonical) = known.get(&trimmed.to_lowercase()) {
+        let known_spelling = known.get(&trimmed.to_lowercase());
+        if known_spelling.is_none() && !is_mention_candidate(trimmed) {
+            continue;
+        }
+        if let Some(canonical) = known_spelling {
             if !deliverable.contains(canonical) {
                 deliverable.push(canonical.clone());
             }
