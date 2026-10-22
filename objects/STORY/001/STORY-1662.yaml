@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T13:18:03.093067119Z
-modified_at: 2026-10-22T11:20:07.147726121Z
+modified_at: 2026-10-22T11:21:48.888100143Z
 req_type: Story
 tags:
 - groom:needs-decision
@@ -117,6 +117,26 @@ comments:
   created_at: 2026-10-22T11:20:07.147726121Z
   modified_at: 2026-10-22T11:20:07.147726121Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a16358-8858-7780-a3fe-6fb698fb7a10
+  author: joe
+  content: |
+    SKETCH PR2 addendum (fix-story-1662, 2026-10-22): the `claude --bg` path of BUG-2207. No code yet; implementation starts after #2829 merges, once this is signed.
+
+    ROOT CAUSE (observed on this lane): `claude --bg` does not run the session as a child of the launching command. The session runs under the long-lived `claude daemon` → `bg-pty-host` from a pre-spawned "spare" pool, and its env is the daemon's. This lane's process chain is daemon → bg-pty-host → claude, and its env holds AIDA_SESSION_ROLE=advisor, the advisor's AIDA_SESSION_GRANT, and the advisor's AIDA_SESSION_PURPOSE, even though the recipe ran `env -u AIDA_SESSION_GRANT -u AIDA_SESSION_PURPOSE AIDA_SESSION_ROLE=implementer claude --bg`. So every env-keyed surface reads advisor: the cargo-slot WHO column, the claim's lease role (`aida claim` takes the role from env), and `aida ps`. Separately, a --bg lane holds the advisor's grant, against the PR1 rule that a launched implementer never inherits the launcher's grant.
+
+    DESIGN (two parts):
+    (1) Identity from the worktree, not the env. `aida worktree add <SPEC> --role implementer` (new flag; default is unchanged) records the role on the lease the advisor creates when it pre-creates the lane's worktree. `aida claim` from inside a worktree whose lease names a role keeps that role rather than the env's (the BUG-1792 rule enforce_at_commit already uses: lease role beats inherited env).
+    (2) Env correction at session start. The SessionStart hook (aida-session-context.sh, template master) asks `aida internal lane-env` (new, read-only) for the lease covering cwd. If that lease's role differs from AIDA_SESSION_ROLE, the hook appends to $CLAUDE_ENV_FILE, which Claude Code sources before every Bash command: `export AIDA_SESSION_ROLE=<lease role>` and `unset AIDA_SESSION_GRANT AIDA_SESSION_PURPOSE`. If the lease records a child_grant_id, it exports that grant instead of unsetting. After that, cargo (WHO), aida claim/ps, and the advisor guard all see implementer. A cwd with no lease changes nothing. This is a correction for the agent's commands, not an authority boundary: the claude process keeps the daemon env. Authority stays where PR1 put it (grants are validated, the advisor guard keys on role).
+
+    RECIPE: templates (PR2's template work) steer headless lanes to PR1's `aida queue work <SPEC> --role implementer --no-human`, which has none of this problem. The interactive --bg recipe becomes `aida worktree add <SPEC> --role implementer`, then `claude --bg` from inside it, with no env juggling.
+
+    TESTS (fail first): worktree add --role writes lease.role; claim in that worktree under an advisor env keeps implementer; `internal lane-env` outputs the export/unset lines for a lease under an advisor env and nothing outside a lease; a hook-script test with an advisor env and a lease worktree writes the expected CLAUDE_ENV_FILE lines; BUG-2207's (1)–(5) via the claim + ps + WHO-env assertions.
+
+    QUESTIONS: Q-a: is the hook correction acceptable as the --bg fix (we can't change the daemon's env), with PR1's launch as the recommended path? Q-b: should the hook also `unset` an inherited grant whose seat isn't the lease role when the lease has no child grant (recommended: yes)?
+    Plus PR2's already-agreed scope: TASK-2154 (handle_queue_work wiring test, the exit-34 doc claim, one exit-code table, no-grant vs not-delegated reason) and the lib.rs:203 trace move.
+  created_at: 2026-10-22T11:21:48.888100143Z
+  modified_at: 2026-10-22T11:21:48.888100143Z
+  session_id: 83e7c030-9ae9-40b3-85a5-38de9f7fada1
 history:
 - id: 01a130a2-c411-7752-a7b6-0f1f5090c74a
   author: joe
