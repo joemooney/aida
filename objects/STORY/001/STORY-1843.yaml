@@ -17,12 +17,12 @@ description: |-
   - aida agent ls lists live agents of all vendors with the handle, real role, spec and liveness. Dead entries are pruned or marked.
   - aida mailbox send <handle> delivers to that agent's inbox, which its per-turn mailbox notice hook surfaces. A handle that resolves to no live agent is refused with a hint, rather than creating a phantom inbox.
   - A Claude session can address an agy session by handle and the agy session sees the message on its next turn (black-box test with the agy hook shape).
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-22T03:15:46.144778486Z
+modified_at: 2026-10-22T03:30:32.161452384Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -188,6 +188,11 @@ comments:
   content: PR1 normal append push, remote and OPEN/MERGEABLE verified at e8bf76f1e4e9c9232e6c254f48740f284f4ac454. Current-plan make test-touched completed exit0:461 targeted unit plus all43 task_1717 integration tests passed (full43 finished322.30s). All34 fast gates passed at unchanged source; tree clean. PR2808 body and validation trail updated with exact SHA/results and complete changed-test expectation inventory. Actual-head CI39715768124 is IN PROGRESS; no green/approval/READY claim. Fresh independent attested verdict required per advisor d851b40e. Parent remains In Progress throughPR1-3. PartialPR2 clean1ca6fc4c9457 has six preview tests plus18 registry tests passing; actual CLI build and fast no-default check pending. No real-store report or write migration yet; fullPR2-4 acceptance remains active.
   created_at: 2026-10-22T03:15:46.144778486Z
   modified_at: 2026-10-22T03:15:46.144778486Z
+- id: 01a161a9-1061-7193-9ac9-47c29f739c21
+  author: joe
+  content: 'Coordination incident20:27: active PR1 path /home/joe/ai/aida-story-1843-routing disappeared and owning lease01a15f84fa7c is absent from active leases. Local branch codex/story-1843-routing preserves clean committed fixture rework5065274207946b6f0c250c3310fa6f6a910892e2; no make/check process launched after commit because cwd was missing. No forced recovery/reset/deletion attempted. Advisor requestc226da68 records evidence and asks to identify cleanup/recover coherently. PR2808 stillOPEN remotee8bf with completed CI39715768124: six lanes passed, cli1failed only TASK1955 unknown-mention fixture. Read job119617383697 logs and locally reproduced old expectations with actuale8bf CLI. Corrected live-reader/zero-reader behavior proved in independent temporary CLI fixtures; new Rust fixture has NOT compiled/run yet. Production code unchanged in506527; it seeds a kernel-bound live advisor reader, asserts new strict warning and no unknown mailbox, removes reader and asserts zero-reader refusal/no additional mail. PR2 path/feature lease remain; added ordinary non-force worktree lock to preserve active CLI build. Full four-PR task remains active; no completion/CI-green/approval claim.'
+  created_at: 2026-10-22T03:30:32.161452384Z
+  modified_at: 2026-10-22T03:30:32.161452384Z
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
   author: joe
@@ -218,6 +223,15 @@ history:
   timestamp: 2026-10-22T00:49:04.984798764Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
   changes: []
+- id: 01a161a8-5f0b-79c3-933e-f8cfcb43d9fa
+  author: aida-orchestrator
+  timestamp: 2026-10-22T03:29:46.763343784Z
+  session_id: 01a161a63fe4
+  harness_version: 2.1.307 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: ba665aaf98777ed00ac96a782a6d6f51dfd528bd
   branch: main
@@ -226,3 +240,11 @@ filed_at:
   aida_build_sha: 8c4feb441c
   vendor: claude
   session: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Resolver slice is sound and well-tested, but PR CI is red: CI (cli-1) fails because task_1955_comment_unknown_mention (merged in from main) still expects the old mention warning and @advisor delivery with no live reader.'
+  recovery_hint: address the review findings, move STORY-1843 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-10-22T03:29:46.763325603Z
