@@ -1,0 +1,29 @@
+id: 01a16324-bbc4-70e0-a32f-41f0bf61b524
+spec_id: TASK-2163
+agreed_id: TASK-2163
+title: Main guard and mirror-guard-check disagree on slash-containing default branch names
+description: |
+  aida_core::git_ops::default_branch_name (aida-core/src/git_ops.rs:3755) returns only the last '/' segment of refs/remotes/origin/HEAD, while the main guard (aida-core/templates/hooks/aida-main-guard-pre-push.sh) strips just 'origin/'. With origin default 'release/x' the guard flags refs/heads/release/x, but check_mirror_sync_push (aida-cli-lib/src/mirror_guard.rs:177) protects refs/heads/x, judges no ref, and refuses — mirror-sync stays blocked in such repos (fails closed, so not a security issue). Fix: strip the 'origin/' prefix instead of rsplit('/').
+
+  Raised in review of PR-2821: https://github.com/joemooney/aida/pull/2821#issuecomment-6338485525
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-22T10:25:14.180686816Z
+modified_at: 2026-10-22T10:25:14.180686816Z
+req_type: Task
+tags:
+- from-review:PR-2821
+- hooks
+- mirror
+- severity:minor
+filed_at:
+  code_sha: c78d82b2e84cfcfc0b621723ad072e65deabfac0
+  branch: pr-2821
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e33fec11d9
+  vendor: claude
+  session: 01a162fe8880
+  harness_version: 2.1.308 (Claude Code)
