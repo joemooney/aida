@@ -611,3 +611,22 @@ S4c (flip `seat_tree` to `clone`, retire `AIDA_DEV_SEAT_CLONE`, close PR #2694).
   logging `git` first on PATH and requires that no untagged git ran in the clone (negative
   control included); `task_2053_bwrap_bulk_lease_cleanup_destroys_a_seat_clone_salvage_first`
   covers heal/cleanup.
+
+### S4a additions (advisor signoff of SKETCH S4 v1, 2026-10-22)
+
+- **TASK-2161.** `run_path_isolated_test_output` passes `AIDA_REQUIRE_BWRAP_LIVE` into the
+  isolated child and re-emits the child's SKIP lines. The live-bwrap CI step tees its log and
+  fails on any `SKIP (bwrap unavailable)`, or when fewer `... ok` lines appear than there are
+  `bug_2169_bwrap_` / `task_2053_bwrap_` test functions in the source. Other skips are only
+  listed (for example, git too old to migrate refs to reftable).
+  `task_2053_bwrap_isolated_child_inherits_the_live_gate` proves the forwarding under the gate.
+- **TASK-2143 ratchet** (`tests/task_2143_clone_git_ratchet_tests.rs`). The ratchet scans the
+  non-test source of every workspace crate. Any file that names the lease field `worktree_path`
+  gets its raw `<Type>::new("git")` builders counted against a per-file allowlist. A count above
+  its entry fails, and so does a count below it until the allowlist is lowered. A new file that
+  reads `worktree_path` fails as soon as it holds any raw git. The opt-out is
+  `// raw-git-ok(TASK-2053): <why>`. The baseline is 155 builders across 22 files. S4b lowers
+  that baseline as it moves consumers onto `seat_trees`.
+- **TASK-2162.** `task_2162_dismiss_releases_a_hand_removed_seat_clone`.
+- **TASK-2160.** `docs/cli/03-work-autonomy.md` documents the salvage bundle and patch, what is
+  kept, and how to recover a submodule clone.
