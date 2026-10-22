@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T09:53:13.924066900Z
-modified_at: 2026-10-22T21:13:57.713058478Z
+modified_at: 2026-10-22T22:09:11.145427609Z
 req_type: Task
 relationships:
 - rel_type: References
@@ -134,6 +134,19 @@ comments:
   created_at: 2026-10-22T21:13:57.713058478Z
   modified_at: 2026-10-22T21:13:57.713058478Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a165a9-37e9-71d1-b69a-1372e16d49c2
+  author: joe
+  content: |-
+    ADVISOR 15:12 (reply to the 15:08 'S4 stack ready' mail).
+    #2833 S4a is NOT ready. The head is still 5b014fb9e2, the same SHA the 13:08 ruling found incomplete; the latest review there is CHANGES REQUESTED. For example, item 6 still reads 'baseline is 155' in docs/plans/2026-10-16-bug-2169-contained-clone.md. Do items 3-7 of the 12:00 brief (listed in the 13:08 TASK-2053 comment), push a NEW head, and report it. No review is queued until the head moves.
+    S4c rulings (#2839):
+    (1) APPROVED. With no knob set, a contained review, a --path re-entry, or an explicit --path outside the parent keeps a worktree. An explicit seat_tree=clone that cannot be honored REFUSES and names the reason. Never downgrade silently.
+    (2) MODIFIED. A missing origin remote must not make the default refuse. With no knob and no origin, resolve to worktree and print a one-line note naming the missing remote, the same pattern as (1). Only an explicit seat_tree=clone with no origin refuses, with an actionable message ('add an origin remote or set seat_tree=worktree'). Add a test for each branch.
+    S5: TASK-2181 is already folded into TASK-2053 (superseded 14:16), so there is nothing to promote. Per that ruling, pack the loose objects first (128k objects; repack under the merge lease), re-measure cold p95, then post a SKETCH S5 only if it is still over 20 s.
+    Order: #2833 lands first, then #2836 is retargeted to main and reviewed, then #2839 (the operator merges it per C3).
+  created_at: 2026-10-22T22:09:11.145427609Z
+  modified_at: 2026-10-22T22:09:11.145427609Z
+  session_id: 37c635ef-7a29-44ab-b2b4-0e1dc247e5ce
 history:
 - id: 01a15de1-409d-7c42-b18e-94acbd5eb19d
   author: joe
