@@ -166,6 +166,7 @@ pub(crate) fn assemble_worktree_status_rows(
     live: &[process_probe::LiveSession],
     pr_by_branch: &std::collections::HashMap<String, status_cleanup::OpenPrItem>,
     ahead_by_path: &std::collections::HashMap<std::path::PathBuf, u32>,
+    clone_dirty_by_path: &std::collections::HashMap<std::path::PathBuf, usize>,
 ) -> Vec<WorktreeStatusRow> {
     let mut rows = Vec::new();
     for wt in worktrees {
@@ -177,7 +178,13 @@ pub(crate) fn assemble_worktree_status_rows(
             .branch
             .clone()
             .unwrap_or_else(|| "(detached)".to_string());
-        let dirty_count = worktree_dirty_entries(&wt.path).len();
+        // TASK-2053: a seat clone's dirty count comes from its sandboxed
+        // probe; host git never runs there.
+        // trace:TASK-2053 | ai:claude
+        let dirty_count = match clone_dirty_by_path.get(&wt.path) {
+            Some(n) if wt.clone => *n,
+            _ => worktree_dirty_entries(&wt.path).len(),
+        };
         let lease = leases.iter().find(|l| l.worktree_path == wt.path);
         let lease_scope = lease.map(|l| l.scope.clone());
         let has_live = live
@@ -384,7 +391,30 @@ mod task_1943_branch_facts_tests {
 /// by the text section and the `--json` projection so they never drift.
 /// trace:STORY-456 | ai:claude
 pub(crate) fn collect_worktree_status_rows(main_root: &std::path::Path) -> Vec<WorktreeStatusRow> {
-    let worktrees = list_worktrees(main_root);
+    // TASK-2053: seat clones are listed too, with their branch, unpushed
+    // count and dirty count read through the sandboxed probe (a clone's
+    // branch is not in main's refs). An unreadable clone keeps the lease
+    // branch and reads as dirty.
+    // trace:TASK-2053 | ai:claude
+    let mut worktrees = list_worktrees(main_root);
+    let mut clone_ahead = std::collections::HashMap::new();
+    let mut clone_dirty = std::collections::HashMap::new();
+    for mut wt in clone_seat_trees(main_root) {
+        match crate::seat_clone::probe(main_root, &wt.path) {
+            crate::seat_clone::Probe::Known(facts) => {
+                wt.branch = facts.branch.clone().or(wt.branch);
+                clone_ahead.insert(
+                    wt.path.clone(),
+                    u32::try_from(facts.unpushed).unwrap_or(u32::MAX),
+                );
+                clone_dirty.insert(wt.path.clone(), facts.dirty.len());
+            }
+            crate::seat_clone::Probe::Unknown(_) | crate::seat_clone::Probe::HasSubmodules(_) => {
+                clone_dirty.insert(wt.path.clone(), 1);
+            }
+        }
+        worktrees.push(wt);
+    }
     let leases = list_leases(main_root);
     let live = process_probe::probe_live_claude_sessions();
     // One batched gh call for every worktree's PR (never per-row).
@@ -398,9 +428,9 @@ pub(crate) fn collect_worktree_status_rows(main_root: &std::path::Path) -> Vec<W
     // when the git version doesn't support the field — the map comes back
     // empty). trace:TASK-1056 | ai:claude
     let ahead_by_branch = collect_branch_ahead_of(main_root, &default_ref);
-    let mut ahead_by_path = std::collections::HashMap::new();
+    let mut ahead_by_path = clone_ahead;
     for wt in &worktrees {
-        if wt.path == *main_root || wt.branch.as_deref() == Some("aida-store") {
+        if wt.clone || wt.path == *main_root || wt.branch.as_deref() == Some("aida-store") {
             continue;
         }
         if let Some(branch) = wt.branch.as_deref() {
@@ -420,6 +450,7 @@ pub(crate) fn collect_worktree_status_rows(main_root: &std::path::Path) -> Vec<W
         &live,
         &pr_by_branch,
         &ahead_by_path,
+        &clone_dirty,
     )
 }
 

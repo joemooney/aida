@@ -32,10 +32,13 @@ const RAW_GIT_ALLOWLIST: &[(&str, usize)] = &[
     ("aida-cli-lib/src/session_start.rs", 18),
     ("aida-cli-lib/src/status_awaiting.rs", 1),
     ("aida-cli-lib/src/status_cmd.rs", 1),
+    // S4b: status_prs.rs and trace.rs began reading leases (seat_trees);
+    // every raw site in them runs in the main checkout (`git -C project_root`).
+    ("aida-cli-lib/src/status_prs.rs", 12),
     ("aida-cli-lib/src/status_sections.rs", 5),
+    ("aida-cli-lib/src/trace.rs", 13),
     ("aida-cli-lib/src/worktree_dismiss.rs", 4),
     ("aida-cli-lib/src/worktree_gc.rs", 14),
-    ("aida-cli-lib/src/worktree_reclaim.rs", 1),
     ("aida-cli-lib/src/worktree_scope_gate.rs", 1),
     ("aida-core/src/git_ops.rs", 5),
 ];

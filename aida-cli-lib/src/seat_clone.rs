@@ -1534,3 +1534,7 @@ mod s4_host_git_tests;
 #[cfg(test)]
 #[path = "tests/task_2143_clone_git_ratchet_tests.rs"]
 mod clone_git_ratchet_tests;
+
+#[cfg(test)]
+#[path = "tests/task_2053_s4b_seat_trees_tests.rs"]
+mod s4b_seat_trees_tests;

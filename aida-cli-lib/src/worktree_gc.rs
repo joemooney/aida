@@ -3522,23 +3522,32 @@ pub(crate) fn handle_worktree_list(json: bool) -> Result<()> {
     // Pair each worktree with its focus marker + current branch (re-parse the
     // porcelain for the branch line that follows each `worktree` record).
     let branches = parse_worktree_branches(&text);
-    let rows: Vec<(std::path::PathBuf, Option<String>, Option<String>)> = paths
+    let mut rows: Vec<(std::path::PathBuf, Option<String>, Option<String>, bool)> = paths
         .iter()
         .map(|p| {
             let focus = crate::focus::read_focus_marker(p);
             let branch = branches.get(p).cloned();
-            (p.clone(), branch, focus)
+            (p.clone(), branch, focus, false)
         })
         .collect();
+    // TASK-2053: contained seats' private clones, with their lease branch.
+    // Their seat-written focus marker is not read.
+    // trace:TASK-2053 | ai:claude
+    rows.extend(
+        crate::clone_seat_trees(&main_root)
+            .into_iter()
+            .map(|wt| (wt.path, wt.branch, None, true)),
+    );
 
     if json {
         let arr: Vec<serde_json::Value> = rows
             .iter()
-            .map(|(p, b, f)| {
+            .map(|(p, b, f, clone)| {
                 serde_json::json!({
                     "path": p.display().to_string(),
                     "branch": b,
                     "focus": f,
+                    "kind": if *clone { "clone" } else { "worktree" },
                 })
             })
             .collect();
@@ -3551,11 +3560,14 @@ pub(crate) fn handle_worktree_list(json: bool) -> Result<()> {
         return Ok(());
     }
     println!("{}", "AIDA worktrees".bold());
-    for (p, b, f) in &rows {
-        let focus = f
-            .as_deref()
-            .map(|s| s.cyan().bold().to_string())
-            .unwrap_or_else(|| "\u{2014}".dimmed().to_string());
+    for (p, b, f, clone) in &rows {
+        let focus = if *clone {
+            "seat clone".dimmed().to_string()
+        } else {
+            f.as_deref()
+                .map(|s| s.cyan().bold().to_string())
+                .unwrap_or_else(|| "\u{2014}".dimmed().to_string())
+        };
         let branch = b.as_deref().unwrap_or("(detached)");
         println!(
             "  {}  [{}]  focus: {}",
