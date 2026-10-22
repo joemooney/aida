@@ -393,17 +393,33 @@ fn ci_fix_driver(fx: &CiFixFixture, contained: bool) -> RealPhaseDriver {
 }
 
 fn run_ci_fix(fx: &CiFixFixture, vendor: &str, os_wrap: &str, contained: bool) {
+    run_ci_fix_with_path(fx, vendor, os_wrap, contained, None);
+}
+
+/// [`run_ci_fix`] with `PATH` replaced (one env guard, never nested).
+// trace:TASK-1952 | trace:TASK-1770 | ai:claude
+fn run_ci_fix_with_path(
+    fx: &CiFixFixture,
+    vendor: &str,
+    os_wrap: &str,
+    contained: bool,
+    path: Option<&str>,
+) {
     use crate::auto_complete::PhaseDriver;
     let agent = fx.agent.to_string_lossy().into_owned();
     let gh = fx.gh.to_string_lossy().into_owned();
-    let _env = EnvVarsGuard::apply(&[
+    let mut pairs: Vec<(&'static str, Option<&str>)> = vec![
         ("AIDA_HEADLESS_VENDOR", Some(vendor)),
         ("AIDA_AGENT_CMD", Some(&agent)),
         ("AIDA_TEST_GH_BINARY", Some(&gh)),
         ("AIDA_OS_WRAP", Some(os_wrap)),
         ("AIDA_TEE_HEADLESS", Some("0")),
         ("AIDA_CONTAINED", None),
-    ]);
+    ];
+    if let Some(path) = path {
+        pairs.push(("PATH", Some(path)));
+    }
+    let _env = EnvVarsGuard::apply(&pairs);
     let mut driver = ci_fix_driver(fx, contained);
     let failure = crate::auto_complete::PhaseFailure::new("CI red".to_string());
     // No origin, so no push is ever observed: the return is always false.
@@ -542,10 +558,9 @@ fn task_1770_ci_fix_child_argv_is_bwrap_wrapped_without_userns() {
     let fx = ci_fix_fixture();
     let log = fx.worktree.parent().unwrap().join("bwrap-argv.txt");
     let path = fake_bwrap(fx.worktree.parent().unwrap(), &log);
-    let _path = EnvVarsGuard::apply(&[("PATH", Some(&path))]);
     for contained in [true, false] {
         let _ = std::fs::remove_file(&log);
-        run_ci_fix(&fx, "claude", "1", contained);
+        run_ci_fix_with_path(&fx, "claude", "1", contained, Some(&path));
         let argv = std::fs::read_to_string(&log).unwrap_or_else(|_| {
             panic!("contained={contained}: the CI-fix child went through bwrap")
         });
