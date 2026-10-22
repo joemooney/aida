@@ -7230,6 +7230,40 @@ Options:
 
   -h, --help
           Print help (see a summary with '-h')
+===== aida remote mirror-guard-check
+(plumbing) Ask whether a push to the default branch is an attested `aida remote mirror-sync` of
+origin's reviewed tip. A project's pre-push main guard pipes its stdin ref lines here before
+refusing; exit 0 allows the push only when the remote is a registered mirror (never origin), every
+default-branch sha equals origin's tip, and mirror-sync attested exactly that push. Anything else
+exits non-zero with the reason, so the guard keeps refusing. Guard snippet: `printf '%s\n' "$refs" |
+aida remote mirror-guard-check "$1" && exit 0` `--install-guard` installs AIDA's opt-in main guard,
+which already consults this check, chained in front of the existing pre-push hook
+
+Usage: aida remote mirror-guard-check [OPTIONS] [REMOTE]
+
+Arguments:
+  [REMOTE]
+          The remote the push targets (pre-push hook argument $1)
+
+Options:
+      --install-guard
+          Install the main guard and chain it in front of the pre-push hook
+
+      --force
+          With --install-guard: chain in front of a custom pre-push hook too
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+  -h, --help
+          Print help (see a summary with '-h')
 ===== aida remote mirror-sync
 Push origin's tips of the default branch and the spec store to every mirror hub, by sha. The
 pre-push hook only mirrors what this machine pushes; a merge performed on the forge and a store push
@@ -12648,6 +12682,7 @@ Commands:
                      master-signed architecture work, recovery merges)
   train              Land a batch of approved PRs together through a merge train, so two PRs that
                      are each green cannot break main together
+  ship-batch         Ship several PRs that need a human merge, one at a time, in order
   hold               Deliberately HOLD the PR on the current session — push the branch but
                      intentionally do not open the PR yet, pending a manual gate (a smoke test, an
                      out-of-band review, an operator decision)
@@ -12946,6 +12981,46 @@ Options:
 
       --no-pull
           Skip the `aida pull` after a train lands
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida pr ship-batch
+Ship several PRs that need a human merge, one at a time, in order.
+
+For each PR, in the order given, it refreshes the branch from main only when the PR is behind or its
+green predates a CI-definition change, waits for CI on that exact head, waits for an independent
+approval recorded at that head (it queues the PR for review but never records a verdict), then asks
+you to type the PR number before shipping it with every `aida pr ship` gate in force. A merge-hold
+on a confirmed PR is cleared only when you also type `clear`.
+
+Any failure stops the batch without shipping: red or missing CI, a conflict, no approval in time, a
+refused gate, or an unconfirmed prompt. Re-run the same command to continue; merged PRs are skipped.
+Runs only for a human at an interactive terminal, on GitHub.
+
+Usage: aida pr ship-batch [OPTIONS] <PR>...
+
+Arguments:
+  <PR>...
+          PR numbers, shipped in exactly this order (at most 20, no repeats)
+
+Options:
+      --review-timeout <DURATION>
+          How long to wait for an approval at each PR's head, e.g. `45m`, `2h` (a bare number is
+          minutes; default 60m)
+
+      --dry-run
+          Show each PR's state and what the batch would do; change nothing. It does not fetch:
+          staleness is judged against your local `origin/*` refs as they are
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -30891,6 +30966,37 @@ Working on aida itself
     "path": [
       "aida",
       "remote",
+      "mirror-guard-check"
+    ],
+    "about": "(plumbing) Ask whether a push to the default branch is an attested `aida remote mirror-sync` of origin's reviewed tip. A project's pre-push main guard pipes its stdin ref lines here before refusing; exit 0 allows the push only when the remote is a registered mirror (never origin), every default-branch sha equals origin's tip, and mirror-sync attested exactly that push. Anything else exits non-zero with the reason, so the guard keeps refusing. Guard snippet: `printf '%s\\n' \"$refs\" | aida remote mirror-guard-check \"$1\" && exit 0` `--install-guard` installs AIDA's opt-in main guard, which already consults this check, chained in front of the existing pre-push hook",
+    "flags": [
+      {
+        "name": "force",
+        "takes_value": false,
+        "help": "With --install-guard: chain in front of a custom pre-push hook too"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "install-guard",
+        "takes_value": false,
+        "help": "Install the main guard and chain it in front of the pre-push hook"
+      }
+    ],
+    "hidden": true
+  },
+  {
+    "path": [
+      "aida",
+      "remote",
       "mirror-sync"
     ],
     "about": "Push origin's tips of the default branch and the spec store to every mirror hub, by sha. The pre-push hook only mirrors what this machine pushes; a merge performed on the forge and a store push from another clone never fire it, so mirrors drift. `aida pull` runs this after a successful pull; run it by hand when `aida remote status` shows a hub behind. Never force-pushes: a diverged hub is reported and exits non-zero",
@@ -36415,6 +36521,37 @@ Working on aida itself
         "name": "no-pull",
         "takes_value": false,
         "help": "Skip the `aida pull` after a train lands"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "pr",
+      "ship-batch"
+    ],
+    "about": "Ship several PRs that need a human merge, one at a time, in order",
+    "flags": [
+      {
+        "name": "dry-run",
+        "takes_value": false,
+        "help": "Show each PR's state and what the batch would do; change nothing. It does not fetch: staleness is judged against your local `origin/*` refs as they are"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "review-timeout",
+        "takes_value": true,
+        "help": "How long to wait for an approval at each PR's head, e.g. `45m`, `2h` (a bare number is minutes; default 60m)"
       }
     ],
     "hidden": false

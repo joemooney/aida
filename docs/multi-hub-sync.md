@@ -89,6 +89,38 @@ manual reconcile (code) to the operator. `aida pull` runs the same sync best-eff
 successful pull (silent unless a hub fails, and never failing the pull), so every drain phase 5, `aida pr ship` and operator catch-up levels the
 hubs; the hub-drift guard's finding points at it.
 
+#### With a pre-push main guard
+
+A repo without server-side branch protection may guard its default branch with a pre-push
+hook that refuses every push to it. That guard would also refuse mirror-sync's push, so
+mirror-sync labels each push it makes (`AIDA_MIRROR_SYNC_ATTEST`). A guard can ask
+`aida remote mirror-guard-check <remote>` before refusing. The check allows the push only
+when all of these hold:
+
+- the remote is a registered mirror, and not `origin`;
+- no ref is a deletion;
+- every default-branch sha equals origin's live tip;
+- mirror-sync labelled exactly that push.
+
+The label alone allows nothing. A local-only `main` commit, a direct push to origin, or a
+stale tip is still refused.
+
+- **AIDA's opt-in guard:** run `aida remote mirror-guard-check --install-guard` once per
+  clone. It writes the guard to `hooks/aida-main-guard` and chains it in front of
+  `pre-push`, handing the ref lines back on stdin, so the mirror fan-out hook that
+  `aida remote mirror` installs still runs (and a later `aida remote mirror` refresh
+  keeps the chain). A custom pre-push hook is left alone unless you add `--force`.
+  The guard protects **origin's** default branch (`refs/remotes/origin/HEAD`), whatever
+  remote you push to; when that is unset it refuses every push until you run
+  `git remote set-head origin --auto`.
+- **Your own guard:** save the ref lines (`refs=$(cat)`) before reading them. Then, just
+  before refusing, add:
+  `printf '%s\n' "$refs" | aida remote mirror-guard-check "$1" && exit 0`
+
+On the default branch, `aida remote mirror` does not commit its `.aida/config.toml` change.
+It leaves the change in the working tree and prints how to land it on a branch through a
+PR.
+
 ### 3. Code fan-out
 
 The code leg is pushed by plain `git`, which AIDA doesn't wrap, so pick one:

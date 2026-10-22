@@ -296,6 +296,37 @@ pub enum PrCommand {
         no_pull: bool,
     },
 
+    /// Ship several PRs that need a human merge, one at a time, in order.
+    ///
+    /// For each PR, in the order given, it refreshes the branch from main only
+    /// when the PR is behind or its green predates a CI-definition change,
+    /// waits for CI on that exact head, waits for an independent approval
+    /// recorded at that head (it queues the PR for review but never records
+    /// a verdict), then
+    /// asks you to type the PR number before shipping it with every
+    /// `aida pr ship` gate in force. A merge-hold on a confirmed PR is
+    /// cleared only when you also type `clear`.
+    ///
+    /// Any failure stops the batch without shipping: red or missing CI, a
+    /// conflict, no approval in time, a refused gate, or an unconfirmed
+    /// prompt. Re-run the same command to continue; merged PRs are skipped.
+    /// Runs only for a human at an interactive terminal, on GitHub.
+    // trace:STORY-1887 | ai:claude
+    ShipBatch {
+        /// PR numbers, shipped in exactly this order (at most 20, no repeats).
+        #[clap(required = true, value_name = "PR")]
+        prs: Vec<u64>,
+        /// How long to wait for an approval at each PR's head, e.g. `45m`,
+        /// `2h` (a bare number is minutes; default 60m).
+        #[clap(long, value_name = "DURATION", value_parser = parse_review_timeout_secs)]
+        review_timeout: Option<u64>,
+        /// Show each PR's state and what the batch would do; change nothing.
+        /// It does not fetch: staleness is judged against your local
+        /// `origin/*` refs as they are.
+        #[clap(long)]
+        dry_run: bool,
+    },
+
     /// Deliberately HOLD the PR on the current session — push the branch but
     /// intentionally do not open the PR yet, pending a manual gate (a smoke
     /// test, an out-of-band review, an operator decision).
@@ -339,4 +370,13 @@ pub enum PrCommand {
         #[clap(long)]
         dry_run: bool,
     },
+}
+
+/// `--review-timeout` for `aida pr ship-batch`, in seconds.
+// trace:STORY-1887 | ai:claude
+fn parse_review_timeout_secs(raw: &str) -> Result<u64, String> {
+    crate::drain_caps::parse_duration(raw)
+        .map(|d| d.as_secs())
+        .filter(|secs| *secs > 0)
+        .ok_or_else(|| format!("`{raw}` is not a duration like `45m` or `2h`"))
 }
