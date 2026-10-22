@@ -1508,3 +1508,80 @@ fn operator_notice_is_routed_only_when_delivered_and_warns_when_notify_is_missin
     assert!(warning.contains("[notify] command"), "{warning}");
     assert_eq!(notify_unreachable_warning(&outcome(true, 0, 1, 0), 2), None);
 }
+
+/// TASK-1406: a human hold placed from a linked worktree and loaded from that
+/// worktree takes its waiting time from the PRIMARY checkout's event log,
+/// where the placement is recorded beside the marker.
+// trace:TASK-1951 trace:TASK-1406 | ai:claude
+#[test]
+fn linked_worktree_hold_waits_from_the_primary_placement_event() {
+    let tmp = tempfile::tempdir().unwrap();
+    let base = tmp.path().canonicalize().unwrap();
+    let primary = base.join("aida");
+    let linked = base.join("aida-pr-2712");
+    std::fs::create_dir_all(&primary).unwrap();
+    let git = |dir: &Path, args: &[&str]| {
+        let out = crate::test_git::git_command()
+            .arg("-C")
+            .arg(dir)
+            .args([
+                "-c",
+                "commit.gpgsign=false",
+                "-c",
+                "core.hooksPath=/dev/null",
+            ])
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "git {args:?}");
+    };
+    git(&primary, &["init", "-q", "--initial-branch=main"]);
+    git(&primary, &["config", "user.email", "t@example.com"]);
+    git(&primary, &["config", "user.name", "Test"]);
+    std::fs::write(primary.join("README.md"), "x\n").unwrap();
+    git(&primary, &["add", "."]);
+    git(&primary, &["commit", "-q", "-m", "init"]);
+    git(
+        &primary,
+        &[
+            "worktree",
+            "add",
+            "-q",
+            "-b",
+            "pr-2712",
+            linked.to_str().unwrap(),
+        ],
+    );
+
+    let now = Utc::now();
+    let placed_at = now - Duration::hours(2);
+    let mut early = crate::events::Event::new(
+        None,
+        "",
+        crate::events::EventKind::MergeHoldChanged {
+            pr: 2712,
+            placed: true,
+            reason: Some("supervised spec needs a human".into()),
+        },
+    );
+    early.ts = placed_at;
+    crate::events::emit(&primary, &early);
+    crate::merge_hold::write_typed_hold(
+        &linked,
+        &crate::merge_hold::typed_hold(
+            2712,
+            crate::merge_hold::HoldReasonKind::Supervision,
+            "supervised spec needs a human",
+            Some(HEAD_A.into()),
+        ),
+    )
+    .unwrap();
+
+    let snapshot = load_snapshot(&linked, now, &LaneLivenessPolicy::default(), &no_prs);
+    let hold = snapshot
+        .human_holds
+        .iter()
+        .find(|h| h.pr == 2712)
+        .expect("the linked worktree sees the primary's hold");
+    assert_eq!(hold.waiting_since, placed_at);
+}

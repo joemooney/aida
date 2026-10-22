@@ -576,6 +576,24 @@ pub(crate) struct AuthorshipRecord {
     #[serde(default)]
     pub(crate) tokens: Vec<String>,
     pub(crate) recorded_at: String,
+    /// STORY-1662: the authority a launcher started this lease's worker
+    /// with, when the launch path records it. Absent on ordinary records.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) launch: Option<LaunchAuthority>,
+}
+
+/// STORY-1662: the seat and grant a launched worker ran with, and why. An
+/// audit reads it to see that a granted launcher's implementer child ran
+/// at baseline (`grant = "baseline"`) rather than under a delegated grant.
+// trace:STORY-1662 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub(crate) struct LaunchAuthority {
+    pub(crate) seat: String,
+    /// The child grant id, or `baseline` for an ungranted child.
+    pub(crate) grant: String,
+    pub(crate) reason: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) detail: Option<String>,
 }
 
 fn ledger_path(project_root: &Path) -> PathBuf {
@@ -603,6 +621,7 @@ pub(crate) fn record_authoring_lease(project_root: &Path, lease: &SessionLease) 
             lease,
             IdentitySource::live().launched_worker_tokens(),
             false,
+            None,
         );
     } else {
         append_authorship(project_root, lease, IdentitySource::live().claimer_tokens());
@@ -692,11 +711,31 @@ pub(crate) fn record_lease_identity(project_root: &Path, lease_id: &str, extra: 
     // A stamp names the worker, never the lease's creating shell: on a
     // launch path that shell is the launcher's. A claim from the worker's
     // own shell already recorded it at claim time.
-    append_authorship_as(project_root, &lease, extra.to_vec(), false);
+    append_authorship_as(project_root, &lease, extra.to_vec(), false, None);
+}
+
+/// STORY-1662: append a record for lease `lease_id` noting the authority its
+/// launched worker runs with. Like [`record_lease_identity`] it names the
+/// lease's own tokens and never the launcher's shell, so it adds no author.
+// trace:STORY-1662 | ai:claude
+pub(crate) fn record_launch_authority(
+    project_root: &Path,
+    lease_id: &str,
+    launch: LaunchAuthority,
+) {
+    let main = crate::main_worktree_root_from(project_root);
+    let Some(lease) = crate::list_leases(project_root)
+        .into_iter()
+        .chain(crate::list_leases(&main))
+        .find(|l| l.id == lease_id)
+    else {
+        return;
+    };
+    append_authorship_as(project_root, &lease, Vec::new(), false, Some(launch));
 }
 
 fn append_authorship(project_root: &Path, lease: &SessionLease, extra: Vec<String>) {
-    append_authorship_as(project_root, lease, extra, true);
+    append_authorship_as(project_root, lease, extra, true, None);
 }
 
 /// `with_creator_shell`: whether the lease's creating shell is part of the
@@ -706,6 +745,7 @@ fn append_authorship_as(
     lease: &SessionLease,
     extra: Vec<String>,
     with_creator_shell: bool,
+    launch: Option<LaunchAuthority>,
 ) {
     // Harness leases are recorded too: their branch still names an author.
     // trace:BUG-2199 | ai:claude
@@ -727,6 +767,7 @@ fn append_authorship_as(
         branch: lease.branch.clone(),
         tokens,
         recorded_at: chrono::Utc::now().to_rfc3339(),
+        launch,
     };
     let path = ledger_path(project_root);
     if let Err(e) = append_record(&path, &record) {

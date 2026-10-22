@@ -59,6 +59,9 @@ impl Fixture {
             "AIDA_CONTAINED",
             "AIDA_SESSION_GRANT",
             "AIDA_SESSION_PURPOSE",
+            // A standalone implementer child refuses `review record`.
+            // trace:STORY-1662 | ai:claude
+            "AIDA_STANDALONE_IMPLEMENTER",
             "AIDA_SESSION_ROLE",
             "AIDA_SESSION_PROJECT",
             "AIDA_DRIVE_ROOT",

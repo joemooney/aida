@@ -3516,7 +3516,7 @@ pub(crate) fn bwrap_confinement_args(worktree: &Path, rw_paths: &[PathBuf]) -> V
 /// `/etc/claude-code` managed-settings drop the TASK-809 path mounts over) and
 /// TLS roots under `/etc`. `/dev`, `/proc`, `/tmp` are provided separately by
 /// the bwrap `--dev`/`--proc`/`--tmpfs` flags. trace:STORY-617 | ai:claude
-fn strict_read_essential_paths() -> &'static [&'static str] {
+pub(crate) fn strict_read_essential_paths() -> &'static [&'static str] {
     &[
         "/usr", "/bin", "/sbin", "/lib", "/lib64", "/lib32", "/etc", "/opt", "/nix", "/run", "/var",
     ]
@@ -3990,6 +3990,7 @@ pub(crate) fn exec_vendor_headless(
         lease_id,
         seat,
         child_grant.env_value(),
+        &HeadlessChildHooks::default(),
     );
     // BUG-2139: the child's grant dies with the child — on a normal or
     // nonzero exit and on a spawn failure alike. A failed revoke only warns:
@@ -4086,9 +4087,60 @@ fn apply_headless_harness_version(
 }
 
 /// BUG-2139: strip the launcher-session env a child must not inherit.
+///
+/// STORY-1662: the standalone-implementer marker is stripped too, so it
+/// binds only the child its launcher set it on, never a grandchild that
+/// child launches through AIDA.
 // trace:BUG-2139 | ai:claude
 pub(crate) fn scrub_launcher_session_env(cmd: &mut std::process::Command) {
     cmd.env_remove("AIDA_SESSION_PURPOSE");
+    // trace:STORY-1662 | ai:claude
+    cmd.env_remove(crate::standalone_implementer::MARKER_ENV);
+}
+
+/// STORY-1662: per-launch additions to a headless child. `customize` runs on
+/// the fully built command after the seat env (so it can add to or override
+/// it); `on_spawn` receives the spawned child's pid.
+// trace:STORY-1662 | ai:claude
+#[derive(Default)]
+pub(crate) struct HeadlessChildHooks<'a> {
+    pub(crate) customize: Option<&'a dyn Fn(&mut std::process::Command)>,
+    pub(crate) on_spawn: Option<&'a dyn Fn(u32)>,
+}
+
+/// STORY-1662: run a standalone implementer's headless child and wait for
+/// it. Unlike [`exec_vendor_headless`] this returns the exit status, so the
+/// launcher can classify the outcome. The child's grant is revoked when the
+/// child exits, as on the exec path.
+// trace:STORY-1662 | ai:claude
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn run_standalone_implementer_child(
+    vendor: HeadlessVendor,
+    prompt: &str,
+    session_id: &str,
+    log_path: &Path,
+    tee_opts: &crate::headless_tee::TeeOptions,
+    contained: bool,
+    lease_id: &str,
+    child_grant: &crate::seat_authority::HeadlessChildGrant,
+    hooks: &HeadlessChildHooks<'_>,
+) -> Result<std::process::ExitStatus> {
+    let result = run_vendor_headless_child(
+        vendor,
+        prompt,
+        session_id,
+        log_path,
+        tee_opts,
+        contained,
+        Some(lease_id),
+        "implementer",
+        child_grant.env_value(),
+        hooks,
+    );
+    if let Some(id) = child_grant.id() {
+        revoke_headless_child_grant(id);
+    }
+    result
 }
 
 // trace:BUG-2139 | ai:claude
@@ -4103,6 +4155,7 @@ fn run_vendor_headless_child(
     lease_id: Option<&str>,
     seat: &str,
     grant_env: &str,
+    hooks: &HeadlessChildHooks<'_>,
 ) -> Result<std::process::ExitStatus> {
     use std::process::Stdio;
     // BUG-2144: refuse before the log file and tee exist. trace:BUG-2144 | ai:claude
@@ -4141,10 +4194,17 @@ fn run_vendor_headless_child(
         seat,
         grant_env,
     )?;
+    // trace:STORY-1662 | ai:claude
+    if let Some(customize) = hooks.customize {
+        customize(&mut child_cmd);
+    }
     let mut child = child_cmd
         .stdout(Stdio::from(log))
         .spawn_retrying_etxtbsy()
         .with_context(|| format!("failed to spawn {}", vendor.program()))?;
+    if let Some(on_spawn) = hooks.on_spawn {
+        on_spawn(child.id());
+    }
     if vendor != HeadlessVendor::Claude {
         if let Some(id) = lease_id {
             if let Err(e) = stamp_lease_active_pid(id, child.id()) {
@@ -4238,7 +4298,11 @@ pub(crate) fn revoke_lease_child_grant(lease_file: &Path) {
 }
 
 // trace:BUG-741 | ai:codex
-fn stamp_lease_active_pid_at(project_root: &Path, lease_id: &str, pid: u32) -> Result<()> {
+pub(crate) fn stamp_lease_active_pid_at(
+    project_root: &Path,
+    lease_id: &str,
+    pid: u32,
+) -> Result<()> {
     use toml_edit::{value, DocumentMut};
 
     let path = project_root
