@@ -2033,13 +2033,39 @@ fn short_id(id: &str) -> &str {
 /// an exited process); the worktree-gc predicate is unchanged.
 // trace:STORY-1218 | ai:claude
 pub(crate) fn reap_quiet(project_root: &std::path::Path) -> usize {
-    let _ = agent_registry::gc_dead_agents(project_root, false, None);
+    reap_quiet_outcomes(project_root)
+        .leases
+        .iter()
+        .filter(|(_, outcome)| outcome.starts_with("reaped"))
+        .count()
+}
+
+/// What one quiet reap did: the agent-registry GC (removed count, or why it
+/// failed) and every reapable lease's `(session, outcome)` line — `reaped
+/// …`, `skipped …` or `failed …`, exactly as `reap_one` reports it.
+// trace:TASK-1915 | ai:claude
+#[derive(Debug)]
+pub(crate) struct QuietReap {
+    pub(crate) agent_gc: Result<usize, String>,
+    pub(crate) leases: Vec<(String, String)>,
+}
+
+/// [`reap_quiet`] with every outcome kept, so the drive tick can ledger
+/// what the reap did beyond releasing leases (TASK-1915 F4).
+// trace:TASK-1915 | ai:claude
+pub(crate) fn reap_quiet_outcomes(project_root: &std::path::Path) -> QuietReap {
+    let agent_gc = agent_registry::gc_dead_agents(project_root, false, None)
+        .map(|r| r.removed_count())
+        .map_err(|e| format!("{e:#}"));
     let report = scan_reapable(project_root);
     if report.reapable.is_empty() {
-        return 0;
+        return QuietReap {
+            agent_gc,
+            leases: Vec::new(),
+        };
     }
     let leases = list_leases(project_root);
-    report
+    let leases = report
         .reapable
         .iter()
         .filter_map(|row| {
@@ -2048,9 +2074,9 @@ pub(crate) fn reap_quiet(project_root: &std::path::Path) -> usize {
                 .find(|l| l.id == row.session)
                 .map(|lease| (lease, row.branch_tip.as_deref()))
         })
-        .map(|(lease, tip)| reap_one(project_root, lease, tip))
-        .filter(|outcome| outcome.starts_with("reaped"))
-        .count()
+        .map(|(lease, tip)| (lease.id.clone(), reap_one(project_root, lease, tip)))
+        .collect();
+    QuietReap { agent_gc, leases }
 }
 
 // The reapable-predicate matrix + the process-exited derivation.

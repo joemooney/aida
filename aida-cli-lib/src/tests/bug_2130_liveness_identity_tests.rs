@@ -197,9 +197,27 @@ fn bug_2130_review_authority_tokens_match_across_legacy_and_exact() {
         }
     ));
 
-    // 2. Dead pid (strict_match returns false) -> false when strings differ.
-    assert!(!crate::review_authority::tokens_match_with(
+    // 2. TASK-2049: a dead pid still matches across schemes, since a refusal
+    // check must not depend on the author process staying alive; within one
+    // scheme different starts stay distinct (a recycled pid).
+    // trace:TASK-1951 trace:TASK-2049 | ai:claude
+    assert!(crate::review_authority::tokens_match_with(
         legacy_tok,
+        exact_tok,
+        |_, _| false,
+    ));
+    assert!(!crate::review_authority::tokens_match_with(
+        "proc:42@linux-starttime:1",
+        "shell:42@linux-starttime:2",
+        |_, _| false,
+    ));
+    assert!(!crate::review_authority::tokens_match_with(
+        "proc:42@2026-10-18T00:00:00+00:00",
+        "proc:42@2026-10-19T00:00:00+00:00",
+        |_, _| false,
+    ));
+    assert!(!crate::review_authority::tokens_match_with(
+        "proc:42@garbage",
         exact_tok,
         |_, _| false,
     ));

@@ -67,6 +67,8 @@ struct Fake {
     notices: Vec<(String, String)>,
     rows: Vec<(String, ActionRow)>,
     reaped: usize,
+    /// Further reap rows (skips, failures) the next reap returns.
+    reap: Vec<ReapRow>,
     fail_due_for: Option<String>,
     /// Fail this many operator notices before delivering.
     fail_notices: usize,
@@ -88,8 +90,16 @@ impl DriveEffects for Fake {
         self.notices.push((title.into(), body.into()));
         Ok("sent".into())
     }
-    fn reap_dead_leases(&mut self) -> Result<usize> {
-        Ok(std::mem::take(&mut self.reaped))
+    fn reap_dead_leases(&mut self) -> Vec<ReapRow> {
+        let mut rows: Vec<ReapRow> = (0..std::mem::take(&mut self.reaped))
+            .map(|i| ReapRow {
+                subject: format!("session s{i}"),
+                outcome: Outcome::Done,
+                why: "reaped — lease released".into(),
+            })
+            .collect();
+        rows.append(&mut self.reap);
+        rows
     }
     fn ledger(&mut self, mandate_id: &str, row: &ActionRow) {
         self.rows.push((mandate_id.into(), row.clone()));
@@ -279,6 +289,7 @@ fn concurrent_ticks_one_acts_other_skips() {
                 &fx.inputs(&now_clock, lanes(), "joe"),
                 &TickHooks {
                     before_action: Some(&hook),
+                    ..Default::default()
                 },
                 &mut fake,
             );
@@ -315,7 +326,7 @@ fn concurrent_ticks_one_acts_other_skips() {
         ]
     );
     // The state is shared: a third tick neither re-routes a nor retries b yet.
-    let state = load_state(fx.root.path());
+    let state = load_state(fx.root.path()).unwrap();
     let per = state.mandates.values().next().unwrap();
     assert_eq!(per.emitted.len(), 1);
     assert_eq!(per.backoff.values().next().unwrap().attempts, 1);
@@ -420,6 +431,7 @@ fn mandate_stopped_mid_tick_refuses_remaining() {
         &fx.inputs(&now_clock, three_lanes(&fx), "joe"),
         &TickHooks {
             before_action: Some(&hook),
+            ..Default::default()
         },
         &mut fake,
     );
@@ -459,6 +471,7 @@ fn mandate_expired_mid_tick_refuses_remaining() {
         &fx.inputs(&clock, three_lanes(&fx), "joe"),
         &TickHooks {
             before_action: Some(&hook),
+            ..Default::default()
         },
         &mut fake,
     );
@@ -1340,6 +1353,7 @@ fn unowned(id: &str) -> UnownedSpec {
         live_claim: false,
         branch: false,
         open_pr: Some(false),
+        epoch: 0,
     }
 }
 
@@ -2189,6 +2203,408 @@ fn the_preview_warns_and_shows_routes_withheld_when_the_store_is_unreadable() {
         1,
         "the warning shows even with no lanes"
     );
+}
+
+// ── TASK-1915: STORY-1700 hardening follow-ups (PR #2725 F3-F8) ─────────────
+
+fn stop_before(fx: &Fixture, at: usize, advisor_live: bool) -> (TickReport, Fake) {
+    drive_mandate(fx.mandates.path(), "joe");
+    let dir = fx.mandates.path().to_path_buf();
+    let hook = move |n: usize| {
+        if n == at {
+            crate::mandate::stop(&dir, &ok_human, "joe", now_clock()).unwrap();
+        }
+    };
+    let mut inputs = fx.inputs(&now_clock, Vec::new(), "joe");
+    inputs.advisor_live = advisor_live;
+    let mut fake = Fake::default();
+    let report = run_tick(
+        &inputs,
+        &TickHooks {
+            before_action: Some(&hook),
+            ..Default::default()
+        },
+        &mut fake,
+    );
+    (report, fake)
+}
+
+// F3: a failed recheck before the reap or the escalation is a ledgered
+// refusal, not a silent end. trace:TASK-1915 | ai:claude
+#[test]
+fn a_recheck_failure_before_the_reap_or_the_escalation_is_ledgered() {
+    let (report, fake) = stop_before(&Fixture::new(), 0, true);
+    assert_eq!(outcomes(&report), vec![("leases".into(), Outcome::Refused)]);
+    assert_eq!(
+        report.rows[0].why.as_deref(),
+        Some("mandate stopped mid-tick")
+    );
+    assert_eq!(fake.rows.len(), 1);
+
+    let (report, fake) = stop_before(&Fixture::new(), 1, false);
+    assert_eq!(
+        outcomes(&report),
+        vec![("advisor".into(), Outcome::Refused)]
+    );
+    assert_eq!(report.rows[0].action, "escalate");
+    assert!(fake.notices.is_empty());
+}
+
+// F4: every reap outcome is a row — teardown, branch deletion, GC, skips
+// and failures — not one "leases released" count. trace:TASK-1915 | ai:claude
+#[test]
+fn every_reap_outcome_is_ledgered() {
+    let rows = reap_rows(crate::session_reap::QuietReap {
+        agent_gc: Ok(2),
+        leases: vec![
+            (
+                "s1".into(),
+                "reaped — worktree removed, lease released, branch `x` deleted".into(),
+            ),
+            (
+                "s2".into(),
+                "skipped — worktree became dirty since the scan".into(),
+            ),
+            ("s3".into(), "failed — could not remove worktree /w".into()),
+        ],
+    });
+    let kinds: Vec<_> = rows
+        .iter()
+        .map(|r| (r.subject.as_str(), r.outcome))
+        .collect();
+    assert_eq!(
+        kinds,
+        vec![
+            ("agent registry", Outcome::Done),
+            ("session s1", Outcome::Done),
+            ("session s2", Outcome::Skipped),
+            ("session s3", Outcome::Refused),
+        ]
+    );
+    assert!(rows[1].why.contains("branch `x` deleted"));
+    let failed = reap_rows(crate::session_reap::QuietReap {
+        agent_gc: Err("registry locked".into()),
+        leases: Vec::new(),
+    });
+    assert_eq!(failed[0].outcome, Outcome::Refused);
+    assert!(failed[0].why.contains("registry locked"));
+
+    // The tick ledgers each; a reap skipped for the same reason next tick
+    // is not ledgered again (F7).
+    let fx = Fixture::new();
+    drive_mandate(fx.mandates.path(), "joe");
+    let mut fake = Fake {
+        reap: rows.clone(),
+        ..Default::default()
+    };
+    let report = run_tick(
+        &fx.inputs(&now_clock, Vec::new(), "joe"),
+        &TickHooks::default(),
+        &mut fake,
+    );
+    assert_eq!(report.rows.len(), 4, "{report:?}");
+    assert!(report
+        .rows
+        .iter()
+        .all(|r| r.lane == "leases" && r.action == "reap"));
+    fake.reap = rows
+        .into_iter()
+        .filter(|r| r.outcome == Outcome::Skipped)
+        .collect();
+    let again = run_tick(
+        &fx.inputs(&now_clock, Vec::new(), "joe"),
+        &TickHooks::default(),
+        &mut fake,
+    );
+    assert!(again.rows.is_empty(), "{again:?}");
+}
+
+// F5: a mail failure retries the mail only; the due event is written once.
+// trace:TASK-1915 | ai:claude
+#[test]
+fn a_mail_failure_retry_does_not_duplicate_the_due_event() {
+    let root = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(root.path().join(".aida")).unwrap();
+    let LaneDecision::Act(item) = plan_unowned_spec(&unowned("TASK-1")) else {
+        panic!("an unowned spec is a dispatch");
+    };
+    let fail = |_: &Path, _: &aida_core::mailbox::Message| -> Result<()> {
+        anyhow::bail!("mailbox is read-only")
+    };
+    assert!(emit_due_with(root.path(), "m-1", &item, &fail).is_err());
+    let sent = Cell::new(0usize);
+    let ok = |_: &Path, _: &aida_core::mailbox::Message| -> Result<()> {
+        sent.set(sent.get() + 1);
+        Ok(())
+    };
+    emit_due_with(root.path(), "m-1", &item, &ok).unwrap();
+    let due = crate::events::read_all(root.path())
+        .into_iter()
+        .filter(|ev| {
+            matches!(&ev.kind, crate::events::EventKind::MandateDriveDue { key, .. }
+                if *key == item.key())
+        })
+        .count();
+    assert_eq!(due, 1);
+    assert_eq!(sent.get(), 1);
+}
+
+// F6: a corrupt state file fails closed instead of resetting dedup.
+// trace:TASK-1915 | ai:claude
+#[test]
+fn a_corrupt_drive_state_fails_closed() {
+    let fx = Fixture::new();
+    assert_eq!(load_state(fx.root.path()).unwrap(), DriveState::default());
+    drive_mandate(fx.mandates.path(), "joe");
+    let path = state_path(fx.root.path());
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(&path, "{not json").unwrap();
+    assert!(load_state(fx.root.path()).is_err());
+    let mut fake = Fake::default();
+    let report = run_tick(
+        &fx.inputs(&now_clock, three_lanes(&fx), "joe"),
+        &TickHooks::default(),
+        &mut fake,
+    );
+    assert!(fake.due.is_empty());
+    assert_eq!(report.rows.len(), 1);
+    assert_eq!(report.rows[0].action, "state-check");
+    assert_eq!(report.rows[0].outcome, Outcome::Refused);
+    assert_eq!(fake.rows.len(), 1, "the refusal is ledgered");
+    assert!(report.idle.is_some());
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), "{not json");
+    assert_eq!(fake.notices.len(), 1, "the operator is told once");
+    // The same corrupt state is not re-ledgered or re-notified every tick...
+    let again = run_tick(
+        &fx.inputs(&now_clock, three_lanes(&fx), "joe"),
+        &TickHooks::default(),
+        &mut fake,
+    );
+    assert!(again.rows.is_empty(), "{again:?}");
+    assert!(again.idle.is_some(), "it still refuses");
+    assert_eq!((fake.rows.len(), fake.notices.len()), (1, 1));
+    // ...but a differently corrupt one is.
+    std::fs::write(&path, "[still not a state]").unwrap();
+    let changed = run_tick(
+        &fx.inputs(&now_clock, three_lanes(&fx), "joe"),
+        &TickHooks::default(),
+        &mut fake,
+    );
+    assert_eq!(changed.rows.len(), 1);
+    assert!(fake.due.is_empty());
+
+    // With no own active mandate, nothing is ledgered under an empty id.
+    let other = Fixture::new();
+    drive_mandate(other.mandates.path(), "a");
+    let path = state_path(other.root.path());
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(&path, "{not json").unwrap();
+    let mut fake = Fake::default();
+    let report = run_tick(
+        &other.inputs(&now_clock, Vec::new(), "b"),
+        &TickHooks::default(),
+        &mut fake,
+    );
+    assert!(fake.rows.is_empty(), "{:?}", fake.rows);
+    assert!(report.idle.is_some());
+}
+
+// F6: the mismatch notice is marked sent only once it is sent.
+// trace:TASK-1915 | ai:claude
+#[test]
+fn a_failed_mismatch_notice_is_retried() {
+    let fx = Fixture::new();
+    drive_mandate(fx.mandates.path(), "a");
+    let tick = |fake: &mut Fake| {
+        run_tick(
+            &fx.inputs(&now_clock, Vec::new(), "b"),
+            &TickHooks::default(),
+            fake,
+        )
+    };
+    let mut fake = Fake {
+        fail_notices: 1,
+        ..Default::default()
+    };
+    let first = tick(&mut fake);
+    assert!(fake.notices.is_empty());
+    assert!(first.rows[0]
+        .why
+        .as_deref()
+        .unwrap()
+        .contains("notify failed"));
+    let second = tick(&mut fake);
+    assert_eq!(fake.notices.len(), 1, "the failed notice is retried");
+    assert_eq!(second.rows.len(), 1);
+    assert!(tick(&mut fake).rows.is_empty(), "then once per mandate");
+}
+
+// F7: a skip row is ledgered once per (item, reason), not every tick.
+// trace:TASK-1915 | ai:claude
+#[test]
+fn skip_rows_are_ledgered_once_per_item_and_reason() {
+    let fx = Fixture::new();
+    drive_mandate(fx.mandates.path(), "joe");
+    let tick = |fake: &mut Fake| {
+        let mut inputs = fx.inputs(&now_clock, three_lanes(&fx), "joe");
+        inputs.gates = Ok(HumanGates {
+            max_actions_per_tick: Some(1),
+            ..Default::default()
+        });
+        run_tick(&inputs, &TickHooks::default(), fake)
+    };
+    let mut fake = Fake::default();
+    let first = tick(&mut fake);
+    assert_eq!(
+        outcomes(&first),
+        vec![
+            ("relay:a".into(), Outcome::Routed),
+            ("relay:b".into(), Outcome::Skipped),
+            ("relay:c".into(), Outcome::Skipped),
+        ]
+    );
+    // b acts now; c is skipped for the same budget reason: no second row.
+    let second = tick(&mut fake);
+    assert_eq!(outcomes(&second), vec![("relay:b".into(), Outcome::Routed)]);
+}
+
+// F8: a spec whose fixer took it and died, or never showed up, is routed
+// again under a new dispatch epoch. trace:TASK-1915 | ai:claude
+#[test]
+fn a_dead_fixers_spec_is_routed_again() {
+    let fx = Fixture::new();
+    drive_mandate(fx.mandates.path(), "joe");
+    let tick = |spec: UnownedSpec, clock: &dyn Fn() -> DateTime<Utc>, fake: &mut Fake| {
+        let mut inputs = fx.inputs(clock, Vec::new(), "joe");
+        inputs.unowned_specs = vec![spec];
+        run_tick(&inputs, &TickHooks::default(), fake)
+    };
+    let mut fake = Fake::default();
+    tick(unowned("TASK-1"), &now_clock, &mut fake);
+    assert_eq!(fake.due.len(), 1);
+    let mut claimed = unowned("TASK-1");
+    claimed.live_claim = true;
+    assert!(tick(claimed, &now_clock, &mut fake).rows.is_empty());
+    // The fixer is gone: the spec is unowned again, a new item.
+    tick(unowned("TASK-1"), &now_clock, &mut fake);
+    assert_eq!(fake.due.len(), 2);
+    assert_eq!(fake.due[1].1.head, "approved#1");
+    // Not again while the new epoch is young...
+    let soon = || now_clock() + Duration::minutes(30);
+    assert!(tick(unowned("TASK-1"), &soon, &mut fake).rows.is_empty());
+    // ...but a dispatch nobody took up within the window is re-routed.
+    let late = || now_clock() + Duration::hours(2) + Duration::minutes(1);
+    tick(unowned("TASK-1"), &late, &mut fake);
+    assert_eq!(fake.due.len(), 3);
+    assert_eq!(fake.due[2].1.head, "approved#2");
+}
+
+// F8: a spec in a fresh work-queue entry or a live drain's spec set is
+// owned; a stale queue entry is not.
+// trace:TASK-1915 | ai:claude
+#[test]
+fn queue_entries_and_a_live_drain_own_their_specs() {
+    let root = tempfile::tempdir().unwrap();
+    let mut queued = aida_core::Requirement::new("queued".into(), String::new());
+    queued.spec_id = Some("TASK-1".into());
+    let mut free = aida_core::Requirement::new("free".into(), String::new());
+    free.spec_id = Some("TASK-3".into());
+    let queues = root.path().join(".aida-store/registry/queues");
+    std::fs::create_dir_all(&queues).unwrap();
+    let entry = |id: uuid::Uuid, added_at: DateTime<Utc>| aida_core::QueueEntry {
+        user_id: "joe".into(),
+        requirement_id: id,
+        position: 0,
+        added_by: "joe".into(),
+        note: None,
+        added_at,
+        for_role: Some("implementer".into()),
+        for_scope: None,
+        for_session: None,
+        added_by_machine: None,
+    };
+    std::fs::write(
+        queues.join("joe.yaml"),
+        serde_yaml::to_string(&vec![entry(queued.id, now_clock())]).unwrap(),
+    )
+    .unwrap();
+    // An abandoned queue (an entry months old) owns nothing.
+    std::fs::write(
+        queues.join("codex.yaml"),
+        serde_yaml::to_string(&vec![entry(free.id, now_clock() - Duration::days(90))]).unwrap(),
+    )
+    .unwrap();
+    std::fs::create_dir_all(root.path().join(".aida")).unwrap();
+    std::fs::write(
+        crate::drain_lock::drain_lock_path(root.path()),
+        serde_json::json!({
+            "pid": std::process::id(),
+            "started_at_utc": "2026-10-21T00:00:00Z",
+            "command": "drain",
+            "host": "h",
+            "specs": ["task-2"],
+        })
+        .to_string(),
+    )
+    .unwrap();
+    let held = queue_and_drain_claims(root.path(), &[queued, free], now_clock());
+    assert!(held.contains("TASK-1"), "{held:?}");
+    assert!(held.contains("TASK-2"), "{held:?}");
+    assert!(!held.contains("TASK-3"), "{held:?}");
+}
+
+// F6: a state that cannot be saved on the principal-mismatch path is
+// reported, not swallowed. trace:TASK-1915 | ai:claude
+#[test]
+fn a_failed_save_on_the_mismatch_path_is_reported() {
+    let fx = Fixture::new();
+    drive_mandate(fx.mandates.path(), "a");
+    let fail = |_: &Path, _: &DriveState| -> Result<()> { anyhow::bail!("disk full") };
+    let mut fake = Fake::default();
+    let report = run_tick(
+        &fx.inputs(&now_clock, Vec::new(), "b"),
+        &TickHooks {
+            save: Some(&fail),
+            ..Default::default()
+        },
+        &mut fake,
+    );
+    let idle = report.idle.as_deref().unwrap_or_default();
+    assert!(idle.contains("could not save the drive state"), "{idle}");
+    assert!(idle.contains("disk full"), "{idle}");
+}
+
+// F3: a failed recheck before the store check is a ledgered refusal.
+// trace:TASK-1915 | ai:claude
+#[test]
+fn a_recheck_failure_before_the_store_check_is_ledgered() {
+    let fx = Fixture::new();
+    drive_mandate(fx.mandates.path(), "joe");
+    let dir = fx.mandates.path().to_path_buf();
+    // Side effects: 0 = the reap, 1 = the store check.
+    let hook = move |n: usize| {
+        if n == 1 {
+            crate::mandate::stop(&dir, &ok_human, "joe", now_clock()).unwrap();
+        }
+    };
+    let mut inputs = fx.inputs(&now_clock, Vec::new(), "joe");
+    inputs.store_readable = false;
+    let mut fake = Fake::default();
+    let report = run_tick(
+        &inputs,
+        &TickHooks {
+            before_action: Some(&hook),
+            ..Default::default()
+        },
+        &mut fake,
+    );
+    assert_eq!(outcomes(&report), vec![("store".into(), Outcome::Refused)]);
+    assert_eq!(report.rows[0].action, "store-check");
+    assert_eq!(
+        report.rows[0].why.as_deref(),
+        Some("mandate stopped mid-tick")
+    );
+    assert!(fake.notices.is_empty());
 }
 
 /// TASK-1925: a relay run's spec is the first `ticket`/`spec` id the store
