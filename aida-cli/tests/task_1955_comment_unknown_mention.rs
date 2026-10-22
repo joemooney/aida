@@ -96,7 +96,7 @@ fn comment_add_with_an_unknown_mention_warns_and_opens_no_mailbox() {
             "name": "advisor-mention-reader",
             "role": "advisor",
             "started_at": "2026-10-21T00:00:00Z",
-            "last_active_at": "2026-10-21T00:00:00Z",
+            "last_active_at": chrono::Utc::now().to_rfc3339(),
             "worktree_path": repo.to_string_lossy(),
             "source": "agent-launcher"
         }))

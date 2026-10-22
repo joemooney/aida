@@ -418,7 +418,7 @@ pub(crate) fn resolve_comment_mentions(
         {
             continue;
         }
-        match directory.resolve(trimmed) {
+        match directory.resolve_mention(trimmed) {
             Ok(resolved) => {
                 if let Some(note) = resolved.reader_notice {
                     warnings.push(note);

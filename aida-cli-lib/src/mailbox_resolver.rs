@@ -21,7 +21,10 @@ pub(crate) struct ResolvedRecipient {
     pub(crate) reader_notice: Option<String>,
 }
 
-const MAIL_ESCAPE: &str = "mail the operator (--to joe) or use aida comment add <SPEC>";
+// Unknown liveness is usable only while its heartbeat remains recent.
+// trace:STORY-1843 | ai:codex
+const UNKNOWN_READER_TTL_SECONDS: i64 = 24 * 60 * 60;
+const MAX_NOTICE_READERS: usize = 5;
 
 // Legacy entries have no namespace stamp. A non-host observer cannot prove
 // those PIDs dead, even if its private /proc exposes only one NSpid level.
@@ -38,7 +41,16 @@ fn reader_liveness(
     match (entry.pid_namespace, namespace) {
         (Some(recorded), Some(current)) if recorded == current => {}
         (None, Some(0xEFFF_FFFC)) => {} // Linux initial PID namespace inode.
-        _ => return None,
+        _ => {
+            let age = chrono::Utc::now().signed_duration_since(entry.last_active_at);
+            return if age >= chrono::Duration::zero()
+                && age <= chrono::Duration::seconds(UNKNOWN_READER_TTL_SECONDS)
+            {
+                None
+            } else {
+                Some(false)
+            };
+        }
     }
     Some(agent_registry::registry_entry_is_live(project, entry))
 }
@@ -134,7 +146,40 @@ impl RecipientDirectory {
         self.live_ids.contains(&entry.id) || self.unknown_ids.contains(&entry.id)
     }
 
+    // Qualifying the person keeps the escape resolvable even when their name
+    // also names a role. Environment text alone never invents a recipient.
+    // trace:STORY-1843 | ai:codex
+    fn refusal_hint(&self, mention: bool) -> String {
+        let usable = |person: &&String| {
+            !person.chars().any(char::is_whitespace)
+                && aida_core::mailbox::recipient_id_rejection(person).is_none()
+        };
+        let preferred = std::env::var("AIDA_USER")
+            .ok()
+            .and_then(|name| self.people.get(&name.trim().to_lowercase()))
+            .filter(usable);
+        let operator = preferred.or_else(|| self.people.values().filter(usable).min());
+        let hint = match operator {
+            Some(person) => format!("mail the operator (--to person:{person})"),
+            None => "contact the operator".to_string(),
+        };
+        if mention {
+            hint
+        } else {
+            format!("{hint} or use aida comment add <SPEC>")
+        }
+    }
+
     pub(crate) fn resolve(&self, target: &str) -> Result<ResolvedRecipient> {
+        self.resolve_with_context(target, false)
+    }
+
+    pub(crate) fn resolve_mention(&self, target: &str) -> Result<ResolvedRecipient> {
+        self.resolve_with_context(target, true)
+    }
+
+    fn resolve_with_context(&self, target: &str, mention: bool) -> Result<ResolvedRecipient> {
+        let escape = self.refusal_hint(mention);
         let target = target.trim();
         if let Some(why) = aida_core::mailbox::recipient_id_rejection(target) {
             bail!("send refused: recipient {why}");
@@ -148,9 +193,7 @@ impl RecipientDirectory {
                     address: person.clone(),
                     reader_notice: None,
                 })
-                .ok_or_else(|| {
-                    anyhow::anyhow!("send refused: unknown person '{name}'; {MAIL_ESCAPE}")
-                });
+                .ok_or_else(|| anyhow::anyhow!("send refused: unknown person '{name}'; {escape}"));
         }
         let role = self.roles.get(&key);
         let vendor = match key.as_str() {
@@ -184,7 +227,7 @@ impl RecipientDirectory {
             + named.iter().any(|a| self.reader_may_exist(a)) as u8)
             > 1
         {
-            bail!("send refused: ambiguous recipient '{target}' names more than one recipient kind; {MAIL_ESCAPE}");
+            bail!("send refused: ambiguous recipient '{target}' names more than one recipient kind; {escape}");
         }
         if let Some(person) = person {
             return Ok(ResolvedRecipient {
@@ -193,7 +236,7 @@ impl RecipientDirectory {
             });
         }
         if role.is_some() || vendor.is_some() {
-            let readers: BTreeSet<_> = self
+            let readers: BTreeMap<_, _> = self
                 .agents
                 .iter()
                 .filter(|a| self.reader_may_exist(a))
@@ -207,53 +250,55 @@ impl RecipientDirectory {
                     }
                 })
                 .map(|a| {
-                    a.name
+                    let label = a
+                        .name
                         .as_deref()
                         .map(|name| format!("{name} ({})", a.id))
-                        .unwrap_or_else(|| a.id.clone())
+                        .unwrap_or_else(|| a.id.clone());
+                    (label, !self.unknown_ids.contains(&a.id))
                 })
                 .collect();
             let address = role.cloned().unwrap_or_else(|| vendor.unwrap().to_string());
-            let unknown = self
-                .agents
-                .iter()
-                .filter(|a| self.unknown_ids.contains(&a.id))
-                .filter(|a| {
-                    if let Some(role) = role {
-                        a.role
-                            .as_deref()
-                            .is_some_and(|r| r.eq_ignore_ascii_case(role))
-                    } else {
-                        a.agent_type == vendor.unwrap()
-                    }
-                })
-                .map(|a| {
-                    a.name
-                        .as_deref()
-                        .map(|name| format!("{name} ({})", a.id))
-                        .unwrap_or_else(|| a.id.clone())
-                })
-                .collect::<BTreeSet<_>>()
-                .len();
             if readers.is_empty() {
-                bail!("send refused: '{address}' has 0 live readers; {MAIL_ESCAPE}");
+                bail!("send refused: '{address}' has 0 live readers; {escape}");
+            }
+            let live_count = readers.values().filter(|live| **live).count();
+            let unknown = readers.len() - live_count;
+            let mut live_labels = Vec::new();
+            let mut unverified_labels = Vec::new();
+            for (label, live) in readers.iter().take(MAX_NOTICE_READERS) {
+                if *live {
+                    live_labels.push(label.as_str());
+                } else {
+                    unverified_labels.push(label.as_str());
+                }
+            }
+            let mut lists = Vec::new();
+            if !live_labels.is_empty() {
+                lists.push(format!("live: {}", live_labels.join(", ")));
+            }
+            if !unverified_labels.is_empty() {
+                lists.push(format!("unverified: {}", unverified_labels.join(", ")));
+            }
+            if readers.len() > MAX_NOTICE_READERS {
+                lists.push(format!("and {} more", readers.len() - MAX_NOTICE_READERS));
+            }
+            if unknown > 0 {
+                lists.push(
+                    "unverified readers have unknown liveness; delivering to durable inbox"
+                        .to_string(),
+                );
             }
             let warning = if readers.len() > 1 || unknown > 0 {
                 "warning: "
             } else {
                 ""
             };
-            let live_count = readers.len() - unknown;
-            let uncertainty = if unknown > 0 {
-                format!("; {unknown} reader(s) with unknown liveness (PID namespace unobservable); delivering to durable inbox")
-            } else {
-                String::new()
-            };
             return Ok(ResolvedRecipient {
                 address,
                 reader_notice: Some(format!(
-                    "{warning}{live_count} live reader(s): {}{uncertainty}",
-                    readers.into_iter().collect::<Vec<_>>().join(", ")
+                    "{warning}{live_count} live, {unknown} unverified: {}",
+                    lists.join("; ")
                 )),
             });
         }
@@ -286,16 +331,16 @@ impl RecipientDirectory {
                         "claude" | "codex" | "antigravity" | "agy" | "web"
                     )
                 {
-                    bail!("send refused: ambiguous inbox '{name}' for '{target}'; {MAIL_ESCAPE}");
+                    bail!("send refused: ambiguous inbox '{name}' for '{target}'; {escape}");
                 }
                 Ok(ResolvedRecipient { address: name.to_string(), reader_notice: self.unknown_ids.contains(&agent.id).then(||
                     "warning: reader liveness unknown (PID namespace unobservable); delivering to durable inbox".to_string()) })
             }
             [] if !named.is_empty() => {
-                bail!("send refused: '{target}' has no live agent; {MAIL_ESCAPE}")
+                bail!("send refused: '{target}' has no live agent; {escape}")
             }
-            [] => bail!("send refused: unknown recipient '{target}'; {MAIL_ESCAPE}"),
-            _ => bail!("send refused: ambiguous live recipient '{target}'; {MAIL_ESCAPE}"),
+            [] => bail!("send refused: unknown recipient '{target}'; {escape}"),
+            _ => bail!("send refused: ambiguous live recipient '{target}'; {escape}"),
         }
     }
 }
@@ -324,6 +369,213 @@ mod tests {
         }
     }
 
+    // Build the same directory classification a foreign PID namespace observes.
+    // trace:STORY-1843 | ai:codex
+    fn observed_from(project: &Path, namespace: u64) -> RecipientDirectory {
+        let mut directory =
+            RecipientDirectory::load(project, &project.join(".aida-store")).unwrap();
+        directory.live_ids.clear();
+        directory.unknown_ids.clear();
+        for entry in &directory.agents {
+            match reader_liveness(project, entry, Some(namespace)) {
+                Some(true) => {
+                    directory.live_ids.insert(entry.id.clone());
+                }
+                None => {
+                    directory.unknown_ids.insert(entry.id.clone());
+                }
+                Some(false) => {}
+            }
+        }
+        directory
+    }
+
+    // trace:STORY-1843 | ai:codex
+    #[test]
+    fn round2_stale_unknown_readers_refuse_role_and_named_delivery_without_rewriting() {
+        for namespace in [None, Some(42)] {
+            let tmp = tempfile::tempdir().unwrap();
+            registry(tmp.path(), "legacy", "legacy-worker", "advisor", false);
+            let mut entry = agent_registry::load_entries(tmp.path()).remove(0).1;
+            entry.pid = u32::MAX;
+            entry.pid_namespace = namespace;
+            entry.last_active_at = chrono::Utc::now() - chrono::Duration::hours(25);
+            agent_registry::write_entry(tmp.path(), &entry).unwrap();
+            let path = agent_registry::agents_dir(tmp.path()).join("legacy.toml");
+            let before = std::fs::read(&path).unwrap();
+            let directory = observed_from(tmp.path(), 43);
+            for target in ["advisor", "legacy-worker", "legacy"] {
+                assert!(
+                    directory.resolve(target).is_err(),
+                    "stale {target} must refuse"
+                );
+            }
+            assert_eq!(std::fs::read(path).unwrap(), before);
+        }
+    }
+
+    // trace:STORY-1843 | ai:codex
+    #[test]
+    fn round2_fresh_unknown_readers_deliver_and_are_labeled_unverified() {
+        for namespace in [None, Some(42)] {
+            let tmp = tempfile::tempdir().unwrap();
+            registry(tmp.path(), "foreign", "foreign-worker", "advisor", false);
+            let mut entry = agent_registry::load_entries(tmp.path()).remove(0).1;
+            entry.pid = u32::MAX;
+            entry.pid_namespace = namespace;
+            entry.last_active_at = chrono::Utc::now();
+            agent_registry::write_entry(tmp.path(), &entry).unwrap();
+            let directory = observed_from(tmp.path(), 43);
+            let role = directory.resolve("advisor").unwrap();
+            assert_eq!(role.address, "advisor");
+            let notice = role.reader_notice.unwrap();
+            assert!(notice.contains("0 live, 1 unverified:"), "{notice}");
+            assert!(
+                notice.contains("unverified: foreign-worker (foreign)"),
+                "{notice}"
+            );
+            assert!(!notice.contains("live: foreign-worker"), "{notice}");
+            assert!(notice.contains("unknown liveness"), "{notice}");
+            assert_eq!(
+                directory.resolve("foreign-worker").unwrap().address,
+                "foreign-worker"
+            );
+        }
+    }
+
+    // trace:STORY-1843 | ai:codex
+    #[test]
+    fn round2_missing_heartbeat_is_not_a_reader_and_record_is_unchanged() {
+        let tmp = tempfile::tempdir().unwrap();
+        registry(tmp.path(), "missing", "missing-worker", "advisor", false);
+        let path = agent_registry::agents_dir(tmp.path()).join("missing.toml");
+        let body = std::fs::read_to_string(&path)
+            .unwrap()
+            .lines()
+            .filter(|l| !l.starts_with("last_active_at") && !l.starts_with("pid_namespace"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        std::fs::write(&path, &body).unwrap();
+        let directory = observed_from(tmp.path(), 43);
+        assert!(directory.resolve("advisor").is_err());
+        assert!(directory.resolve("missing-worker").is_err());
+        assert_eq!(std::fs::read_to_string(path).unwrap(), body);
+    }
+
+    // trace:STORY-1843 | ai:codex
+    #[test]
+    fn round2_group_notice_caps_twenty_readers_at_five() {
+        let tmp = tempfile::tempdir().unwrap();
+        for i in 0..20 {
+            registry(
+                tmp.path(),
+                &format!("id-{i:02}"),
+                &format!("worker-{i:02}"),
+                "advisor",
+                false,
+            );
+        }
+        let directory =
+            RecipientDirectory::load(tmp.path(), &tmp.path().join(".aida-store")).unwrap();
+        let notice = directory.resolve("advisor").unwrap().reader_notice.unwrap();
+        assert!(notice.contains("20 live, 0 unverified:"), "{notice}");
+        assert!(notice.contains("and 15 more"), "{notice}");
+        for i in 0..20 {
+            assert_eq!(
+                notice.contains(&format!("worker-{i:02}")),
+                i < 5,
+                "{notice}"
+            );
+        }
+    }
+
+    // trace:STORY-1843 | ai:codex
+    #[test]
+    fn round2_mixed_notice_keeps_unverified_names_out_of_live_list() {
+        let tmp = tempfile::tempdir().unwrap();
+        for i in 0..20 {
+            let id = format!("id-{i:02}");
+            registry(tmp.path(), &id, &format!("worker-{i:02}"), "advisor", false);
+            if i % 2 == 1 {
+                let path = agent_registry::agents_dir(tmp.path()).join(format!("{id}.toml"));
+                let mut entry: AgentRegistryEntry =
+                    toml::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+                entry.pid_namespace = Some(agent_registry::current_pid_namespace().unwrap() ^ 1);
+                entry.last_active_at = chrono::Utc::now();
+                agent_registry::write_entry(tmp.path(), &entry).unwrap();
+            }
+        }
+        let directory =
+            RecipientDirectory::load(tmp.path(), &tmp.path().join(".aida-store")).unwrap();
+        let notice = directory.resolve("advisor").unwrap().reader_notice.unwrap();
+        assert!(notice.contains("10 live, 10 unverified:"), "{notice}");
+        let live_list = notice
+            .split(": live: ")
+            .nth(1)
+            .unwrap()
+            .split(';')
+            .next()
+            .unwrap();
+        let unknown_list = notice
+            .split("; unverified: ")
+            .nth(1)
+            .unwrap()
+            .split(';')
+            .next()
+            .unwrap();
+        for i in 0..20 {
+            let name = format!("worker-{i:02}");
+            assert_eq!(notice.contains(&name), i < 5, "{notice}");
+            assert_eq!(live_list.contains(&name), i < 5 && i % 2 == 0, "{notice}");
+            assert_eq!(
+                unknown_list.contains(&name),
+                i < 5 && i % 2 == 1,
+                "{notice}"
+            );
+        }
+        assert!(notice.contains("and 15 more"), "{notice}");
+    }
+
+    // trace:STORY-1843 | ai:codex
+    #[test]
+    fn round2_escape_hint_names_only_a_resolvable_person_or_no_recipient() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = tmp.path().join(".aida-store");
+        std::fs::create_dir_all(store.join("registry")).unwrap();
+        let directory = RecipientDirectory::load(tmp.path(), &store).unwrap();
+        let error = directory.resolve("missing").unwrap_err().to_string();
+        assert!(!error.contains("--to "), "{error}");
+        std::fs::write(
+            store.join("registry/team.toml"),
+            "[members]\nZara = []\nAdvisor = []\n",
+        )
+        .unwrap();
+        let directory = RecipientDirectory::load(tmp.path(), &store).unwrap();
+        let error = directory.resolve("missing").unwrap_err().to_string();
+        let hint = error
+            .split("--to ")
+            .nth(1)
+            .expect("catalog supplies an operator escape");
+        let target = hint.split(')').next().unwrap();
+        assert!(directory.resolve(target).is_ok(), "{error}");
+    }
+
+    // trace:STORY-1843 | ai:codex
+    #[test]
+    fn round2_mention_drop_hint_never_suggests_comment_add() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = tmp.path().join(".aida-store");
+        std::fs::create_dir_all(&store).unwrap();
+        let (recipients, warnings) =
+            crate::punt_done::resolve_comment_mentions(&store, "author", "@missing-worker");
+        assert!(recipients.is_empty());
+        let warning = warnings
+            .iter()
+            .find(|w| w.contains("mention dropped"))
+            .unwrap();
+        assert!(!warning.contains("aida comment add"), "{warning}");
+    }
+
     // trace:STORY-1843 | ai:codex
     #[test]
     fn namespace_mismatch_is_unknown_even_when_pid_probe_says_dead() {
@@ -332,6 +584,7 @@ mod tests {
         let mut entry = agent_registry::load_entries(tmp.path()).remove(0).1;
         entry.pid = u32::MAX;
         entry.pid_namespace = Some(42);
+        entry.last_active_at = chrono::Utc::now();
         assert!(!agent_registry::registry_entry_is_live(tmp.path(), &entry));
         assert_eq!(reader_liveness(tmp.path(), &entry, Some(43)), None);
         assert_eq!(reader_liveness(tmp.path(), &entry, None), None);
@@ -361,7 +614,7 @@ mod tests {
         ] {
             let error = d.resolve(name).unwrap_err().to_string();
             if name != "--include" {
-                assert!(error.contains("--to joe"), "{error}");
+                assert!(!error.contains("--to "), "{error}");
                 assert!(error.contains("aida comment add <SPEC>"), "{error}");
                 assert!(!error.contains("handle"), "{error}");
             }
@@ -501,7 +754,7 @@ mod tests {
         let d = RecipientDirectory::load(tmp.path(), &tmp.path().join(".aida-store")).unwrap();
         assert!(d.resolve("shell-one").is_err());
         let note = d.resolve("advisor").unwrap().reader_notice.unwrap();
-        assert!(note.starts_with("1 live reader"), "{note}");
+        assert!(note.starts_with("1 live, 0 unverified:"), "{note}");
         assert!(note.contains("real-reader") && !note.contains("role:advisor"));
     }
 
@@ -645,7 +898,10 @@ mod tests {
             "worker-one"
         );
         let group = directory.resolve("implementer").unwrap();
-        assert!(group.reader_notice.unwrap().starts_with("1 live reader"));
+        assert!(group
+            .reader_notice
+            .unwrap()
+            .starts_with("1 live, 0 unverified:"));
         assert!(directory.resolve("unknown").is_err());
         assert!(!tmp.path().join(".aida/mailbox").exists());
     }
