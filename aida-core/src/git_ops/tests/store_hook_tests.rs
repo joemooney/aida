@@ -997,3 +997,87 @@ fn bug_2192_recently_changed_store_is_never_memoised() {
     assert_eq!(spawns(), 2);
     assert_eq!(spawns(), 2, "a just-written store is looked up every time");
 }
+
+// TASK-1942: host git over a linked worktree (a contained-writable tree)
+// memoises its `.gitmodules` lookup, the file case included: an unchanged
+// tree spawns no lookup git, and an edited `.gitmodules` is re-read so its
+// new submodule still gets its override.
+// trace:TASK-1952 | trace:TASK-1942 | ai:claude
+#[cfg(unix)]
+#[test]
+fn task_1942_linked_worktree_gitmodules_lookup_is_memoised() {
+    let dir = tempfile::tempdir().unwrap();
+    let (main, _store) = bug_1929_main_with_store(dir.path());
+    let wt = dir.path().join("wt");
+    run_git(
+        &main,
+        &["worktree", "add", "-q", "-b", "wt", wt.to_str().unwrap()],
+    );
+    assert!(is_contained_writable_tree(&wt));
+    let args = |cmd: &Command| -> Vec<String> {
+        cmd.get_args()
+            .map(|a| a.to_string_lossy().into_owned())
+            .collect()
+    };
+
+    // No `.gitmodules`: the index/HEAD blob probes run once.
+    let (_, first) = bug_2192_settled_spawns(|| host_git_command(&wt));
+    assert!(first >= 1, "first command probes .gitmodules");
+    let (_, second) = bug_2192_settled_spawns(|| host_git_command(&wt));
+    assert_eq!(second, 0, "an unchanged worktree reuses the probe");
+
+    // A `.gitmodules` file: one read, then memoised.
+    std::fs::write(
+        wt.join(".gitmodules"),
+        "[submodule \"one\"]\n\tpath = one\n\turl = ./x\n",
+    )
+    .unwrap();
+    let (_, file_first) = bug_2192_settled_spawns(|| host_git_command(&wt));
+    assert_eq!(file_first, 1);
+    let (cmd, file_second) = bug_2192_settled_spawns(|| host_git_command(&wt));
+    assert_eq!(file_second, 0, "an unchanged .gitmodules is not re-read");
+    assert!(args(&cmd).contains(&"submodule.one.ignore=dirty".to_string()));
+
+    // Replacing it (new inode) re-reads it.
+    std::fs::remove_file(wt.join(".gitmodules")).unwrap();
+    std::fs::write(
+        wt.join(".gitmodules"),
+        "[submodule \"two\"]\n\tpath = two\n\turl = ./x\n",
+    )
+    .unwrap();
+    let (cmd, after) = bug_2192_settled_spawns(|| host_git_command(&wt));
+    assert_eq!(after, 1);
+    assert!(args(&cmd).contains(&"submodule.two.ignore=dirty".to_string()));
+}
+
+// TASK-1943: an edited submodule whose path git C-quotes in porcelain v1 is
+// listed once, and the added line is quoted exactly as git quotes it.
+// trace:TASK-1952 | trace:TASK-1943 | ai:claude
+#[cfg(unix)]
+#[test]
+fn task_1943_quoted_porcelain_path_is_listed_once() {
+    let dir = tempfile::tempdir().unwrap();
+    let repo = dir.path().join("r");
+    init(&repo).unwrap();
+    let name = "sub d\u{ef}r\t\"x\"";
+    std::fs::write(repo.join(name), "x").unwrap();
+    let git_line = run_git(&repo, &["status", "--porcelain"]);
+    let git_line = git_line.lines().next().unwrap().to_string();
+    assert!(git_line.starts_with("?? \""), "git quotes it: {git_line}");
+    assert_eq!(porcelain_quote(name), git_line[3..], "quoted like git");
+    assert_eq!(porcelain_unquote(&git_line[3..]), name);
+
+    let mut porcelain = format!("{git_line}\n");
+    note_edited_submodule(&mut porcelain, name);
+    assert_eq!(
+        porcelain,
+        format!("{git_line}\n"),
+        "already listed: no second line"
+    );
+    let mut empty = String::new();
+    note_edited_submodule(&mut empty, name);
+    assert_eq!(empty, format!(" M {}\n", &git_line[3..]));
+    let mut plain = String::new();
+    note_edited_submodule(&mut plain, "plain/sub");
+    assert_eq!(plain, " M plain/sub\n");
+}

@@ -221,8 +221,11 @@ fn gitmodules_submodule_names(cwd: &Path) -> Result<Vec<String>> {
     };
     let file = top.join(".gitmodules");
     if std::fs::symlink_metadata(&file).is_ok() {
-        let source = vec!["--file".into(), file.to_string_lossy().into_owned()];
-        return gitmodules_names_from(top, vec![source]);
+        // trace:TASK-1952 | trace:TASK-1942 | ai:claude
+        return crate::host_git_cache::gitmodules_file_names(&file, || {
+            let source = vec!["--file".into(), file.to_string_lossy().into_owned()];
+            gitmodules_names_from(top, vec![source])
+        });
     }
     // BUG-2192: the index and HEAD registries change only when the index or
     // HEAD does, so the probe's answer is memoised per process on them.
@@ -3882,16 +3885,106 @@ fn contained_safety_scan(tree: &Path) -> Result<(String, Vec<String>)> {
             continue;
         };
         if submodule_has_changes(&top.join(&link.path), git_dir, 1)? {
-            if !porcelain
-                .lines()
-                .any(|l| l.get(3..) == Some(link.path.as_str()))
-            {
-                porcelain.push_str(&format!(" M {}\n", link.path));
-            }
+            note_edited_submodule(&mut porcelain, &link.path);
             edited.push(link.path);
         }
     }
     Ok((porcelain, edited))
+}
+
+/// Add a ` M <path>` line for the edited submodule at `path` unless the
+/// porcelain already lists it. TASK-1943: porcelain v1 C-quotes a path that
+/// holds special or non-ASCII bytes (`core.quotePath`), so lines are compared
+/// unquoted and the added line is quoted the way git would quote it.
+// trace:TASK-1952 | trace:TASK-1943 | ai:claude
+fn note_edited_submodule(porcelain: &mut String, path: &str) {
+    if !porcelain
+        .lines()
+        .any(|l| l.get(3..).map(porcelain_unquote).as_deref() == Some(path))
+    {
+        porcelain.push_str(&format!(" M {}\n", porcelain_quote(path)));
+    }
+}
+
+/// A porcelain v1 path field with git's C-style quoting removed.
+// trace:TASK-1952 | trace:TASK-1943 | ai:claude
+fn porcelain_unquote(field: &str) -> String {
+    let Some(inner) = field
+        .strip_prefix('"')
+        .and_then(|rest| rest.strip_suffix('"'))
+    else {
+        return field.to_string();
+    };
+    let bytes = inner.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        let b = bytes[i];
+        if b != b'\\' || i + 1 >= bytes.len() {
+            out.push(b);
+            i += 1;
+            continue;
+        }
+        let e = bytes[i + 1];
+        let simple = match e {
+            b'a' => Some(7),
+            b'b' => Some(8),
+            b'f' => Some(12),
+            b'n' => Some(b'\n'),
+            b'r' => Some(b'\r'),
+            b't' => Some(b'\t'),
+            b'v' => Some(11),
+            b'"' | b'\\' => Some(e),
+            _ => None,
+        };
+        if let Some(c) = simple {
+            out.push(c);
+            i += 2;
+        } else if i + 3 < bytes.len()
+            && bytes[i + 1..i + 4]
+                .iter()
+                .all(|d| (b'0'..=b'7').contains(d))
+        {
+            let v = bytes[i + 1..i + 4]
+                .iter()
+                .fold(0u32, |acc, d| acc * 8 + u32::from(d - b'0'));
+            out.push(u8::try_from(v).unwrap_or(b'?'));
+            i += 4;
+        } else {
+            out.push(b);
+            i += 1;
+        }
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+/// `path` quoted as porcelain v1 prints it under the default
+/// `core.quotePath=true`: bare unless it holds a control byte, `"`, `\\` or
+/// a non-ASCII byte.
+// trace:TASK-1952 | trace:TASK-1943 | ai:claude
+fn porcelain_quote(path: &str) -> String {
+    let needs = |b: u8| b < 0x20 || b == 0x7f || b == b'"' || b == b'\\' || b >= 0x80;
+    if !path.bytes().any(needs) {
+        return path.to_string();
+    }
+    let mut out = String::from("\"");
+    for b in path.bytes() {
+        match b {
+            7 => out.push_str("\\a"),
+            8 => out.push_str("\\b"),
+            b'\t' => out.push_str("\\t"),
+            b'\n' => out.push_str("\\n"),
+            11 => out.push_str("\\v"),
+            12 => out.push_str("\\f"),
+            b'\r' => out.push_str("\\r"),
+            b'"' => out.push_str("\\\""),
+            b'\\' => out.push_str("\\\\"),
+            b if needs(b) => out.push_str(&format!("\\{b:03o}")),
+            b => out.push(char::from(b)),
+        }
+    }
+    out.push('"');
+    out
 }
 
 /// Does the submodule work tree `work_tree`, whose validated git directory is

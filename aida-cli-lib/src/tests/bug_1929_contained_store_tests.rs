@@ -1005,7 +1005,7 @@ fn bug_1929_store_git_guard() {
 /// carry no `raw-git-ok(BUG-1985): <why>` comment in the three lines above.
 // trace:BUG-1985 | ai:claude
 fn bug_1985_raw_status_git(src: &str) -> Vec<usize> {
-    let raw = regex::Regex::new(r#"Command::new\("git"\)"#).unwrap();
+    let raw = regex::Regex::new(r#"\b\w+::new\("git"\)"#).unwrap();
     let lines: Vec<&str> = src.lines().collect();
     let tests = bug_1929_test_lines(&lines);
     let mut found = Vec::new();
@@ -1040,9 +1040,9 @@ struct Bug1985Wrapper {
 /// no `raw-git-ok(BUG-1985): <why>` comment in the three lines above.
 // trace:BUG-1985 | ai:claude
 fn bug_1985_raw_git_wrappers(src: &str) -> Vec<Bug1985Wrapper> {
-    let raw = regex::Regex::new(r#"Command::new\("git"\)"#).unwrap();
+    let raw = regex::Regex::new(r#"\b\w+::new\("git"\)"#).unwrap();
     let bound =
-        regex::Regex::new(r#"let\s+mut\s+\w+\s*=\s*(std::process::)?Command::new\("git"\)\s*;"#)
+        regex::Regex::new(r#"let\s+mut\s+\w+\s*=\s*(std::process::)?\w+::new\("git"\)\s*;"#)
             .unwrap();
     let args_var = regex::Regex::new(r"\.args\(\s*&?[a-z_][a-z0-9_]*\s*\)").unwrap();
     let func = regex::Regex::new(r"\bfn\s+(\w+)\s*[<(]").unwrap();
@@ -1154,12 +1154,18 @@ fn bug_1985_status_wrapper_offenders(sources: &[(PathBuf, String)]) -> Vec<(Path
 
 // BUG-1985 guard: every host `git status` starts at
 // `aida_core::git_ops::host_git_command`, which keeps it out of a planted
-// embedded repository in a tree a contained session may have written. Scans
-// the non-test source of aida-core and aida-cli-lib for a raw
-// `Command::new("git")` whose builder runs `status`, and for a raw-git
-// wrapper (`.args(args)`) that some caller runs `status` through.
+// embedded repository in a tree a contained session may have written.
+//
+// Exact scope (TASK-1926): the non-test source (`src/`, minus `#[cfg(test)]`
+// modules) of EVERY workspace crate with a `src/` directory. It flags a raw
+// builder spelled with the literal program `"git"` (`Command::new("git")`,
+// any `<Type>::new("git")` alias), and a raw-git wrapper (`.args(args)`) that
+// some caller in the same crate runs `status` through. NOT covered: a git
+// binary passed as a variable or constant (`Command::new(git_bin)`), and a
+// wrapper called from another crate. Those need review.
 // trace:BUG-1985.acb27baf | ai:claude
 // trace:BUG-1985 | ai:claude
+// trace:TASK-1952 | trace:TASK-1926 | ai:claude
 #[test]
 fn bug_1985_host_status_guard() {
     let sample = "fn a(wt: &Path) {\n    let _ = std::process::Command::new(\"git\")\n        \
@@ -1170,6 +1176,10 @@ fn bug_1985_host_status_guard() {
                   fn c(wt: &Path) { let _ = Command::new(\"git\").args([\"log\"]).output(); }\n\
                   #[cfg(test)]\nmod t {\n    fn d(w: &Path) { Command::new(\"git\").args([\"status\"]); }\n}\n";
     assert_eq!(bug_1985_raw_status_git(sample), vec![2]);
+    // TASK-1926: an aliased builder is a raw builder too.
+    let aliased = "use std::process::Command as PCmd;\nfn e(wt: &Path) {\n    \
+                   let _ = PCmd::new(\"git\").arg(wt).args([\"status\"]).output();\n}\n";
+    assert_eq!(bug_1985_raw_status_git(aliased), vec![3]);
 
     // The wrapper scanner: a private wrapper called with status in its own
     // file, a pub one called from another file, a bound `let mut cmd` form,
@@ -1203,9 +1213,28 @@ fn bug_1985_host_status_guard() {
     );
 
     let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let mut crate_srcs: Vec<PathBuf> = std::fs::read_dir(workspace)
+        .unwrap()
+        .flatten()
+        .map(|e| e.path().join("src"))
+        .filter(|src| src.is_dir() && src.parent().unwrap().join("Cargo.toml").is_file())
+        .collect();
+    crate_srcs.sort();
+    for required in [
+        "aida-core",
+        "aida-cli-lib",
+        "aida-cli",
+        "aida-server",
+        "aida-tui",
+    ] {
+        assert!(
+            crate_srcs.contains(&workspace.join(required).join("src")),
+            "the guard must scan {required}: {crate_srcs:?}"
+        );
+    }
     let mut offenders = Vec::new();
-    for crate_src in ["aida-core/src", "aida-cli-lib/src"] {
-        let sources = bug_1985_sources(&workspace.join(crate_src));
+    for crate_src in &crate_srcs {
+        let sources = bug_1985_sources(crate_src);
         for (path, src) in &sources {
             for line in bug_1985_raw_status_git(src) {
                 let rel = path.strip_prefix(workspace).unwrap_or(path);
