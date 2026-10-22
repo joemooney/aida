@@ -2132,6 +2132,16 @@ pub(crate) fn session_start_with_receipt(
         };
         if explicit_path.is_none() {
             worktree_path = crate::seat_clone::clone_path(&project_root, &slug)?;
+        } else if !crate::seat_clone::is_seat_clone_location(&project_root, &worktree_path) {
+            // Only where `seat_clone::destroy` can remove it again: a clone
+            // elsewhere could never be torn down by session end, reap or
+            // dismiss. trace:TASK-2053 | ai:claude
+            anyhow::bail!(
+                "a contained seat's private clone must be an `{}*` directory directly in the \
+                 worktree parent; {} is not one. Drop --path to let aida place it.",
+                crate::seat_clone::CLONE_DIR_PREFIX,
+                worktree_path.display()
+            );
         }
         let created =
             crate::seat_clone::create(&project_root, &worktree_path, &branch_name, &base_ref)?;

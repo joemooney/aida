@@ -484,8 +484,9 @@ mod task_1244_drain_merge_lease_tests {
         let wave_start = src
             .find(concat!("fn merge_wave_pr", "(project_root"))
             .expect("wave fn");
-        // Window widened for BUG-1562's typed spec on the wave hold.
-        let wave_body = &src[wave_start..wave_start + 5000];
+        // Window widened for BUG-1562's typed spec on the wave hold, and
+        // for STORY-1662's standalone-implementer refusal at its top.
+        let wave_body = &src[wave_start..wave_start + 6000];
         let acquire = concat!("merge_lock::", "acquire(");
         let merge_call = concat!(".merge_change(", "&change_ref");
         let a = wave_body
@@ -1518,6 +1519,11 @@ pub(crate) fn handle_release(
     after_pr: Option<u64>,
     skip_xplat_check: bool,
 ) -> Result<()> {
+    // A release merges; a standalone implementer stops at an open PR.
+    // trace:STORY-1662 | ai:claude
+    if !check {
+        crate::standalone_implementer::refuse_under_marker("release")?;
+    }
     let bump = resolve_release_bump(patch, minor, major).map_err(|e| anyhow::anyhow!(e))?;
 
     if check {

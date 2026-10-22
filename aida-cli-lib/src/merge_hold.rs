@@ -596,6 +596,10 @@ fn write_marker(
     // ([`adopt_worktree_hold`]). Any other failure stays an error.
     // trace:BUG-2176 | ai:claude
     let store = hold_store_root(project_root);
+    // TASK-1406: the placement event goes to the events log beside the
+    // marker, so the primary's tampering check sees holds placed from a
+    // linked worktree. trace:TASK-1951 trace:TASK-1406 | ai:claude
+    let mut event_root = store.clone();
     if let Err(error) = write_marker_files(&store, record.pr, &body) {
         // Compare canonical spellings: a primary reached through a symlink
         // must not "fall back" to the very directory that just refused.
@@ -604,6 +608,7 @@ fn write_marker(
             return Err(error);
         }
         write_marker_files(project_root, record.pr, &body)?;
+        event_root = project_root.to_path_buf();
         eprintln!(
             "  warning: could not write PR-{pr}'s merge-hold marker in the primary checkout \
              ({error}); it was written to {local} instead — the review launcher adopts it, \
@@ -631,7 +636,7 @@ fn write_marker(
         },
     );
     event.seat = crate::events::active_seat();
-    crate::events::emit(project_root, &event);
+    crate::events::emit(&event_root, &event);
     Ok(())
 }
 
@@ -1240,7 +1245,8 @@ fn local_clearance_path(root: &Path, pr: u64) -> PathBuf {
 pub(crate) fn unrecorded_marker_removals(project_root: &Path) -> Vec<u64> {
     use crate::events::EventKind;
     let mut latest = std::collections::BTreeMap::<u32, bool>::new();
-    for event in crate::events::read_all_with_archive(project_root) {
+    // trace:TASK-1951 trace:TASK-1406 | ai:claude
+    for event in crate::events::read_all_with_archive(&hold_store_root(project_root)) {
         if let EventKind::MergeHoldChanged { pr, placed, .. } = event.kind {
             latest.insert(pr, placed);
         }
@@ -1837,6 +1843,12 @@ pub(crate) struct PinnedChange {
     pub state: ChangeState,
     pub head_sha: Option<String>,
     pub hold_label: bool,
+    /// The forge carries `aida:merge-hold-recorded`: the PR was really held.
+    // trace:TASK-1951 | ai:claude
+    pub recorded_label: bool,
+    /// The forge carries `aida:merge-hold-cleared`.
+    // trace:TASK-1951 | ai:claude
+    pub cleared_label: bool,
 }
 
 /// BUG-1541: the forge's lifecycle state for a change. `Unknown` (a missing
@@ -1996,11 +2008,15 @@ fn parse_pinned_change(pin: &PinnedRepo, pr: u64, json: &str) -> Result<PinnedCh
         .filter(|s| !s.is_empty())
         .map(str::to_string);
     let hold_label = labels_json_contains(json, HOLD_LABEL)?;
+    let recorded_label = labels_json_contains(json, HOLD_RECORDED_LABEL)?;
+    let cleared_label = labels_json_contains(json, HOLD_CLEARED_LABEL)?;
     Ok(PinnedChange {
         merged,
         state,
         head_sha,
         hold_label,
+        recorded_label,
+        cleared_label,
     })
 }
 
@@ -2623,7 +2639,22 @@ fn classify_label_sync_failure(stderr: &str, candidates: &[&str]) -> LabelSyncEr
 }
 
 pub(crate) fn sync_label(project_root: &Path, pr: u64, held: bool) -> Result<(), LabelSyncError> {
-    sync_label_with(project_root, pr, held, run_forge_cli)
+    sync_label_via(project_root, pr, held, run_forge_cli, run_forge_cli_stdout)
+}
+
+/// [`sync_label`] with both forge calls injected: `runner` writes labels and
+/// `read` is the pinned change read that answers whether a hold was recorded.
+// trace:TASK-1951 | ai:claude
+pub(crate) fn sync_label_via(
+    project_root: &Path,
+    pr: u64,
+    held: bool,
+    runner: impl Fn(&Path, &str, &[String]) -> Result<(bool, String), String>,
+    read: impl Fn(&Path, &str, &[String]) -> Result<(bool, String), String>,
+) -> Result<(), LabelSyncError> {
+    sync_label_with_probe(project_root, pr, held, runner, |pin| {
+        fetch_pinned_change_with(project_root, pin, pr, read).map(|c| c.recorded_label)
+    })
 }
 
 /// BUG-1236: the real sync loop with the forge CLI injected. Retries once on
@@ -2633,11 +2664,30 @@ pub(crate) fn sync_label(project_root: &Path, pr: u64, held: bool) -> Result<(),
 /// and `--fix` re-syncs it. Before this the label silently never landed on
 /// three supervised PRs while the required merge-hold-gate check read pass.
 // trace:BUG-1236 | ai:claude
+#[cfg(test)]
 pub(crate) fn sync_label_with(
     project_root: &Path,
     pr: u64,
     held: bool,
     runner: impl Fn(&Path, &str, &[String]) -> Result<(bool, String), String>,
+) -> Result<(), LabelSyncError> {
+    sync_label_with_probe(project_root, pr, held, runner, |_| Ok(true))
+}
+
+/// [`sync_label_with`] plus `recorded_probe`, which reads whether the forge
+/// carries `aida:merge-hold-recorded`. An unhold adds the cleared label only
+/// for a recorded hold: a cleared label without a recorded one fails the
+/// merge-hold gate. A never-recorded PR instead has any orphaned cleared label
+/// removed. An unreadable probe changes no label at all and returns an error
+/// naming the forge failure, so the caller reports it and the operator
+/// retries; dropping the hold label alone would strand the PR.
+// trace:TASK-1951 | ai:claude
+pub(crate) fn sync_label_with_probe(
+    project_root: &Path,
+    pr: u64,
+    held: bool,
+    runner: impl Fn(&Path, &str, &[String]) -> Result<(bool, String), String>,
+    recorded_probe: impl FnOnce(&PinnedRepo) -> Result<bool, String>,
 ) -> Result<(), LabelSyncError> {
     let kind = crate::forge::resolve_forge_kind(project_root);
     // TASK-1455: pin the repo; an unresolvable one refuses (and is recorded
@@ -2653,7 +2703,21 @@ pub(crate) fn sync_label_with(
             return Err(LabelSyncError::Other(err));
         }
     };
-    let Some((cli, args)) = sync_label_command(&pin, pr, held) else {
+    let cleared = if held {
+        ClearedLabel::Remove
+    } else {
+        match recorded_probe(&pin) {
+            Ok(true) => ClearedLabel::Add,
+            Ok(false) => ClearedLabel::Remove,
+            Err(err) => {
+                return Err(LabelSyncError::Other(format!(
+                    "could not read PR #{pr}'s labels from the forge ({err}); no label was \
+                     changed — re-run `aida merge-hold clear {pr}`"
+                )))
+            }
+        }
+    };
+    let Some((cli, args)) = sync_label_command(&pin, pr, held, cleared) else {
         return Ok(());
     };
     let mut last_err = String::new();
@@ -2738,10 +2802,19 @@ fn run_forge_cli_stdout(
 /// (pure-git).
 // trace:STORY-1165 | ai:claude
 // trace:TASK-1455 | ai:claude
+/// What a label sync does with `aida:merge-hold-cleared`.
+// trace:TASK-1951 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ClearedLabel {
+    Add,
+    Remove,
+}
+
 fn sync_label_command(
     pin: &PinnedRepo,
     pr: u64,
     held: bool,
+    cleared: ClearedLabel,
 ) -> Option<(&'static str, Vec<String>)> {
     use crate::forge::ForgeKind;
     match pin.kind {
@@ -2760,14 +2833,15 @@ fn sync_label_command(
                 flag.into(),
                 label,
             ];
-            if held {
-                // Both partial-failure interleavings fail closed: {hold, recorded,
-                // cleared} fails gate rule 1; {recorded} fails rule 2. No
-                // interleaving yields a passing gate.
-                // trace:BUG-1693 | ai:codex
-                args.extend(["--remove-label".into(), HOLD_CLEARED_LABEL.into()]);
-            } else {
-                args.extend(["--add-label".into(), HOLD_CLEARED_LABEL.into()]);
+            // Both partial-failure interleavings fail closed: {hold, recorded,
+            // cleared} fails gate rule 1; {recorded} fails rule 2. No
+            // interleaving yields a passing gate.
+            // trace:BUG-1693 | ai:codex
+            match cleared {
+                ClearedLabel::Add => args.extend(["--add-label".into(), HOLD_CLEARED_LABEL.into()]),
+                ClearedLabel::Remove => {
+                    args.extend(["--remove-label".into(), HOLD_CLEARED_LABEL.into()])
+                }
             }
             Some(("gh", args))
         }
@@ -2786,19 +2860,47 @@ fn sync_label_command(
                 flag.into(),
                 label,
             ];
-            if held {
-                // Both partial-failure interleavings fail closed: {hold, recorded,
-                // cleared} fails gate rule 1; {recorded} fails rule 2. No
-                // interleaving yields a passing gate.
-                // trace:BUG-1693 | ai:codex
-                args.extend(["--unlabel".into(), HOLD_CLEARED_LABEL.into()]);
-            } else {
-                args.extend(["--label".into(), HOLD_CLEARED_LABEL.into()]);
+            // trace:BUG-1693 | ai:codex
+            match cleared {
+                ClearedLabel::Add => args.extend(["--label".into(), HOLD_CLEARED_LABEL.into()]),
+                ClearedLabel::Remove => {
+                    args.extend(["--unlabel".into(), HOLD_CLEARED_LABEL.into()])
+                }
             }
             Some(("glab", args))
         }
         ForgeKind::None => None,
     }
+}
+
+/// A PR the forge shows was never recorded as held (no
+/// `aida:merge-hold-recorded`) must not carry `aida:merge-hold-cleared`: the
+/// gate fails on that pair. Removes the cleared label (and any hold label)
+/// only when the forge read succeeds and shows a cleared label with no
+/// recorded hold. Returns whether it wrote anything.
+// trace:TASK-1951 | ai:claude
+pub(crate) fn drop_orphaned_cleared_label(project_root: &Path, pr: u64) -> Result<bool, String> {
+    drop_orphaned_cleared_label_with(project_root, pr, run_forge_cli_stdout, run_forge_cli)
+}
+
+// trace:TASK-1951 | ai:claude
+pub(crate) fn drop_orphaned_cleared_label_with(
+    project_root: &Path,
+    pr: u64,
+    read: impl Fn(&Path, &str, &[String]) -> Result<(bool, String), String>,
+    runner: impl Fn(&Path, &str, &[String]) -> Result<(bool, String), String>,
+) -> Result<bool, String> {
+    let kind = crate::forge::resolve_forge_kind(project_root);
+    let Some(pin) = resolve_pinned_repo(project_root, kind)? else {
+        return Ok(false);
+    };
+    let change = fetch_pinned_change_with(project_root, &pin, pr, read)?;
+    if change.recorded_label || !change.cleared_label {
+        return Ok(false);
+    }
+    sync_label_with_probe(project_root, pr, false, runner, |_| Ok(false))
+        .map_err(|e| e.to_string())?;
+    Ok(true)
 }
 
 // ── BUG-1774: the corpus-derived half of the merge chokepoint ───────────────
@@ -3421,7 +3523,7 @@ mod tests {
     fn sync_label_command_routes_per_forge() {
         use crate::forge::ForgeKind;
         let gh = pin(ForgeKind::GitHub, "git@github.com:o/r.git");
-        let (cli, args) = sync_label_command(&gh, 42, true).unwrap();
+        let (cli, args) = sync_label_command(&gh, 42, true, ClearedLabel::Remove).unwrap();
         assert_eq!(cli, "gh");
         assert!(
             args.contains(&"--add-label".to_string())
@@ -3436,7 +3538,7 @@ mod tests {
         );
 
         let gl = pin(ForgeKind::GitLab, "https://gitlab.com/g/sub/p.git");
-        let (cli, args) = sync_label_command(&gl, 42, true).unwrap();
+        let (cli, args) = sync_label_command(&gl, 42, true, ClearedLabel::Remove).unwrap();
         assert_eq!(cli, "glab");
         assert!(args.contains(&"mr".to_string()) && args.contains(&"update".to_string()));
         assert!(
@@ -3451,7 +3553,7 @@ mod tests {
             "{args:?}"
         );
 
-        let (_, args) = sync_label_command(&gl, 42, false).unwrap();
+        let (_, args) = sync_label_command(&gl, 42, false, ClearedLabel::Add).unwrap();
         assert!(
             args.contains(&"--unlabel".to_string()),
             "unheld → remove the label"
@@ -3466,7 +3568,7 @@ mod tests {
             path: "o/r".into(),
         };
         assert!(
-            sync_label_command(&none, 42, true).is_none(),
+            sync_label_command(&none, 42, true, ClearedLabel::Remove).is_none(),
             "pure-git has no forge to label"
         );
     }
@@ -3475,7 +3577,7 @@ mod tests {
     #[test]
     fn held_github_label_update_is_one_atomic_comma_list() {
         let repo = pin(crate::forge::ForgeKind::GitHub, "git@github.com:o/r.git");
-        let (_, args) = sync_label_command(&repo, 9, true).unwrap();
+        let (_, args) = sync_label_command(&repo, 9, true, ClearedLabel::Remove).unwrap();
         // An undefined member of the comma list exits 1 and applies neither label,
         // so provisioning must cover all three definitions before any hold is placed.
         assert_eq!(
@@ -3718,7 +3820,14 @@ mod tests {
             let repo = pin(kind, repo_origin);
             let mut labels = BTreeSet::new();
             for held in [true, false, true] {
-                let (_, args) = sync_label_command(&repo, 42, held).unwrap();
+                let cleared = if held {
+                    ClearedLabel::Remove
+                } else if labels.contains(HOLD_RECORDED_LABEL) {
+                    ClearedLabel::Add
+                } else {
+                    ClearedLabel::Remove
+                };
+                let (_, args) = sync_label_command(&repo, 42, held, cleared).unwrap();
                 apply_label_args(&mut labels, &args);
             }
             labels.remove(HOLD_LABEL);
@@ -3809,7 +3918,9 @@ mod tests {
                 merged: false,
                 state: ChangeState::Open,
                 head_sha: Some("abc".into()),
-                hold_label: true
+                hold_label: true,
+                recorded_label: false,
+                cleared_label: false,
             }
         );
         let (cli, args) = seen.borrow()[0].clone();
@@ -3875,6 +3986,116 @@ mod tests {
         assert!(matches!(read_label_state(root, 5), LabelState::Unsynced(_)));
     }
 
+    /// TASK-1951: an unhold adds `aida:merge-hold-cleared` only when the forge
+    /// shows a recorded hold. A never-recorded PR has an orphaned cleared label
+    /// removed, and an unreadable forge gets neither: the gate fails on a
+    /// cleared label with no recorded one.
+    // trace:TASK-1951 | ai:claude
+    #[test]
+    fn unhold_adds_the_cleared_label_only_for_a_recorded_hold() {
+        let dir = tempfile::tempdir().unwrap();
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(dir.path())
+            .args(["init", "-q"])
+            .status()
+            .unwrap();
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(dir.path())
+            .args(["remote", "add", "origin", "git@github.com:o/r.git"])
+            .status()
+            .unwrap();
+        std::fs::create_dir_all(dir.path().join(".aida")).unwrap();
+        std::fs::write(
+            dir.path().join(".aida/config.toml"),
+            "[forge]\nprovider = \"github\"\n",
+        )
+        .unwrap();
+        let view = |labels: &'static str| {
+            move |_: &Path, _: &str, _: &[String]| {
+                Ok((
+                    true,
+                    format!(
+                        r#"{{"url":"https://github.com/o/r/pull/42","state":"OPEN","headRefOid":"abc","labels":[{labels}]}}"#
+                    ),
+                ))
+            }
+        };
+        // The production path: `sync_label_via` reads the pinned change with
+        // the injected reader, then writes with the injected runner.
+        let cleared_ops =
+            |read: &dyn Fn(&Path, &str, &[String]) -> Result<(bool, String), String>| {
+                let writes = std::cell::RefCell::new(Vec::<Vec<String>>::new());
+                let result = sync_label_via(
+                    dir.path(),
+                    42,
+                    false,
+                    |_, _, args| {
+                        writes.borrow_mut().push(args.to_vec());
+                        Ok((true, String::new()))
+                    },
+                    read,
+                );
+                let ops: Vec<String> = writes
+                    .borrow()
+                    .iter()
+                    .flat_map(|args| {
+                        args.windows(2)
+                            .filter(|w| w[1] == HOLD_CLEARED_LABEL)
+                            .map(|w| w[0].clone())
+                            .collect::<Vec<_>>()
+                    })
+                    .collect();
+                let count = writes.borrow().len();
+                (result, count, ops)
+            };
+        let (ok, _, ops) = cleared_ops(&view(r#"{"name":"aida:merge-hold-recorded"}"#));
+        assert!(ok.is_ok());
+        assert_eq!(ops, ["--add-label"]);
+        let (ok, _, ops) = cleared_ops(&view(r#"{"name":"aida:merge-hold-cleared"}"#));
+        assert!(ok.is_ok());
+        assert_eq!(ops, ["--remove-label"]);
+        // An unreadable forge changes no label and reports the failure.
+        let (err, writes, _) = cleared_ops(&|_, _, _| Err("HTTP 502".into()));
+        let err = err.unwrap_err().to_string();
+        assert!(
+            err.contains("HTTP 502") && err.contains("aida merge-hold clear 42"),
+            "{err}"
+        );
+        assert_eq!(writes, 0, "an unknown probe must not touch labels");
+
+        let removed = std::cell::RefCell::new(Vec::new());
+        let runner = |_: &Path, _: &str, args: &[String]| {
+            removed.borrow_mut().push(args.to_vec());
+            Ok((true, String::new()))
+        };
+        assert!(drop_orphaned_cleared_label_with(
+            dir.path(),
+            42,
+            view(r#"{"name":"aida:merge-hold-cleared"}"#),
+            runner
+        )
+        .unwrap());
+        assert!(removed.borrow()[0]
+            .windows(2)
+            .any(|w| w[0] == "--remove-label" && w[1] == HOLD_CLEARED_LABEL));
+        let untouched = |_: &Path, _: &str, _: &[String]| -> Result<(bool, String), String> {
+            panic!("no label write expected")
+        };
+        assert!(!drop_orphaned_cleared_label_with(
+            dir.path(),
+            42,
+            view(r#"{"name":"aida:merge-hold-recorded"},{"name":"aida:merge-hold-cleared"}"#),
+            untouched,
+        )
+        .unwrap());
+        assert!(
+            !drop_orphaned_cleared_label_with(dir.path(), 42, view(""), untouched).unwrap(),
+            "a never-held PR without the label gets no write"
+        );
+    }
+
     // TASK-189: the forge label is its own state; an unreadable forge is
     // divergence-UNKNOWN, never agreement and never the marker's claim.
     #[test]
@@ -3885,6 +4106,8 @@ mod tests {
                 state: ChangeState::Open,
                 head_sha: None,
                 hold_label,
+                recorded_label: false,
+                cleared_label: false,
             }))
         };
         assert_eq!(ForgeLabel::from_fetch(&change(true)), ForgeLabel::Present);

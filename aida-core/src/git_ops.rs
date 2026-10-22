@@ -221,8 +221,11 @@ fn gitmodules_submodule_names(cwd: &Path) -> Result<Vec<String>> {
     };
     let file = top.join(".gitmodules");
     if std::fs::symlink_metadata(&file).is_ok() {
-        let source = vec!["--file".into(), file.to_string_lossy().into_owned()];
-        return gitmodules_names_from(top, vec![source]);
+        // trace:TASK-1952 | trace:TASK-1942 | ai:claude
+        return crate::host_git_cache::gitmodules_file_names(&file, || {
+            let source = vec!["--file".into(), file.to_string_lossy().into_owned()];
+            gitmodules_names_from(top, vec![source])
+        });
     }
     // BUG-2192: the index and HEAD registries change only when the index or
     // HEAD does, so the probe's answer is memoised per process on them.
@@ -3882,16 +3885,106 @@ fn contained_safety_scan(tree: &Path) -> Result<(String, Vec<String>)> {
             continue;
         };
         if submodule_has_changes(&top.join(&link.path), git_dir, 1)? {
-            if !porcelain
-                .lines()
-                .any(|l| l.get(3..) == Some(link.path.as_str()))
-            {
-                porcelain.push_str(&format!(" M {}\n", link.path));
-            }
+            note_edited_submodule(&mut porcelain, &link.path);
             edited.push(link.path);
         }
     }
     Ok((porcelain, edited))
+}
+
+/// Add a ` M <path>` line for the edited submodule at `path` unless the
+/// porcelain already lists it. TASK-1943: porcelain v1 C-quotes a path that
+/// holds special or non-ASCII bytes (`core.quotePath`), so lines are compared
+/// unquoted and the added line is quoted the way git would quote it.
+// trace:TASK-1952 | trace:TASK-1943 | ai:claude
+fn note_edited_submodule(porcelain: &mut String, path: &str) {
+    if !porcelain
+        .lines()
+        .any(|l| l.get(3..).map(porcelain_unquote).as_deref() == Some(path))
+    {
+        porcelain.push_str(&format!(" M {}\n", porcelain_quote(path)));
+    }
+}
+
+/// A porcelain v1 path field with git's C-style quoting removed.
+// trace:TASK-1952 | trace:TASK-1943 | ai:claude
+fn porcelain_unquote(field: &str) -> String {
+    let Some(inner) = field
+        .strip_prefix('"')
+        .and_then(|rest| rest.strip_suffix('"'))
+    else {
+        return field.to_string();
+    };
+    let bytes = inner.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        let b = bytes[i];
+        if b != b'\\' || i + 1 >= bytes.len() {
+            out.push(b);
+            i += 1;
+            continue;
+        }
+        let e = bytes[i + 1];
+        let simple = match e {
+            b'a' => Some(7),
+            b'b' => Some(8),
+            b'f' => Some(12),
+            b'n' => Some(b'\n'),
+            b'r' => Some(b'\r'),
+            b't' => Some(b'\t'),
+            b'v' => Some(11),
+            b'"' | b'\\' => Some(e),
+            _ => None,
+        };
+        if let Some(c) = simple {
+            out.push(c);
+            i += 2;
+        } else if i + 3 < bytes.len()
+            && bytes[i + 1..i + 4]
+                .iter()
+                .all(|d| (b'0'..=b'7').contains(d))
+        {
+            let v = bytes[i + 1..i + 4]
+                .iter()
+                .fold(0u32, |acc, d| acc * 8 + u32::from(d - b'0'));
+            out.push(u8::try_from(v).unwrap_or(b'?'));
+            i += 4;
+        } else {
+            out.push(b);
+            i += 1;
+        }
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+/// `path` quoted as porcelain v1 prints it under the default
+/// `core.quotePath=true`: bare unless it holds a control byte, `"`, `\\` or
+/// a non-ASCII byte.
+// trace:TASK-1952 | trace:TASK-1943 | ai:claude
+fn porcelain_quote(path: &str) -> String {
+    let needs = |b: u8| b < 0x20 || b == 0x7f || b == b'"' || b == b'\\' || b >= 0x80;
+    if !path.bytes().any(needs) {
+        return path.to_string();
+    }
+    let mut out = String::from("\"");
+    for b in path.bytes() {
+        match b {
+            7 => out.push_str("\\a"),
+            8 => out.push_str("\\b"),
+            b'\t' => out.push_str("\\t"),
+            b'\n' => out.push_str("\\n"),
+            11 => out.push_str("\\v"),
+            12 => out.push_str("\\f"),
+            b'\r' => out.push_str("\\r"),
+            b'"' => out.push_str("\\\""),
+            b'\\' => out.push_str("\\\\"),
+            b if needs(b) => out.push_str(&format!("\\{b:03o}")),
+            b => out.push(char::from(b)),
+        }
+    }
+    out.push('"');
+    out
 }
 
 /// Does the submodule work tree `work_tree`, whose validated git directory is
@@ -10015,6 +10108,99 @@ mod tests {
         ] {
             assert!(!is_literal_config_line(bad), "should refuse {bad:?}");
         }
+    }
+
+    /// BUG-2117: a hand commit on a DETACHED store HEAD (no aida guard, not
+    /// on the `aida-store` branch) still skips a planted commit-config, and a
+    /// planted nested `.aida-store/.git` inside the store cannot forge an
+    /// `Aida-Store:` trailer on a store commit.
+    // trace:TASK-1952 | trace:BUG-2117 | ai:claude
+    #[cfg(unix)]
+    #[test]
+    fn bug_2117_store_toplevel_skips_commit_config_and_trailer() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let main = dir.path().join("main");
+        init(&main).unwrap();
+        configure_user(&main, "Test", "test@example.com").unwrap();
+        std::fs::write(main.join("README.md"), "hi").unwrap();
+        add(&main, &["README.md"]).unwrap();
+        commit(&main, "chore: init").unwrap();
+        let store = create_store_worktree(&main, ".aida-store", "aida-store").unwrap();
+        let executable = |path: &Path, body: &str| {
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, body).unwrap();
+            std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        };
+        for (hook, name) in [
+            ("commit-msg", "hooks/aida-commit-msg"),
+            ("prepare-commit-msg", "hooks/aida-store-pair.sh"),
+        ] {
+            let installed = crate::scaffolding::wrap_with_aida_header(
+                Path::new(&format!(".git/hooks/{hook}")),
+                crate::templates::EMBEDDED_TEMPLATES[name],
+            );
+            executable(&hooks_dir(&main).unwrap().join(hook), &installed);
+        }
+        crate::db::with_store_write_lock(&store, || {
+            std::fs::write(store.join("notes.txt"), "one\n")?;
+            add(&store, &["notes.txt"])?;
+            commit_paths(&store, "chore: store write", &["notes.txt"])
+        })
+        .expect("first store commit");
+        // (i) A planted commit-config that would record that it ran.
+        let marker = dir.path().join("SOURCED-ON-HOST");
+        let config = store.join(".aida").join("commit-config");
+        std::fs::create_dir_all(config.parent().unwrap()).unwrap();
+        std::fs::write(&config, format!("touch '{}'\n", marker.display())).unwrap();
+        // (ii) A planted nested store with its own history.
+        let planted = store.join(".aida-store");
+        init(&planted).unwrap();
+        configure_user(&planted, "Evil", "evil@example.com").unwrap();
+        std::fs::write(planted.join("x"), "x").unwrap();
+        add(&planted, &["x"]).unwrap();
+        commit(&planted, "planted").unwrap();
+        let forged = git(&planted, &["rev-parse", "HEAD"]).unwrap().stdout;
+
+        assert!(
+            git(&store, &["checkout", "-q", "--detach"])
+                .unwrap()
+                .success
+        );
+        let own_head = git(&store, &["rev-parse", "HEAD"]).unwrap().stdout;
+        std::fs::write(store.join("notes.txt"), "by hand\n").unwrap();
+        let out = host_git_command(&store)
+            .env_remove("AIDA_STORE_WRITE_GUARD")
+            .args(["add", "notes.txt"])
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "{out:?}");
+        let out = host_git_command(&store)
+            .env_remove("AIDA_STORE_WRITE_GUARD")
+            .args([
+                "commit",
+                "-q",
+                "-m",
+                "chore: detached by hand",
+                "--",
+                "notes.txt",
+            ])
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "{out:?}");
+        assert!(
+            !marker.exists(),
+            "a hand commit on a detached store HEAD sourced the planted commit-config"
+        );
+        let body = git(&store, &["log", "-1", "--format=%B"]).unwrap().stdout;
+        assert!(
+            !body.contains(forged.trim()),
+            "the planted nested store forged the trailer: {body}"
+        );
+        assert!(
+            body.contains(&format!("Aida-Store: {}", own_head.trim())),
+            "a store commit pins the store's own head: {body}"
+        );
     }
 
     /// A store commit never runs `.aida/commit-config`. The store's tree is

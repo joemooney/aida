@@ -1066,6 +1066,12 @@ fn implementer_claim_via_worktree_add_cannot_self_approve_from_main() {
         !body.contains("as_launcher("),
         "worktree add/enter must record the implementer's own identity"
     );
+    // TASK-1772: and it is a self-claim, so a lane working it is attributed.
+    // trace:TASK-1955 | ai:claude (TASK-1772)
+    assert!(
+        body.contains("/* self_claim: the caller works it (BUG-2010) */ true,"),
+        "worktree add/enter/do-guided must pass self_claim=true"
+    );
 
     let root = tempfile::tempdir().unwrap();
     let l = lease("aaaabbbb6666", SPEC, root.path().join("wt"));
@@ -1318,6 +1324,7 @@ fn concurrent_ledger_appends_keep_every_line_parseable() {
                         branch: format!("claude/task-{t}"),
                         tokens: (0..8).map(|k| format!("session:{t}-{i}-{k}")).collect(),
                         recorded_at: "2026-10-19T00:00:00Z".to_string(),
+                        launch: None,
                     };
                     append_record(path, &record).unwrap();
                 }

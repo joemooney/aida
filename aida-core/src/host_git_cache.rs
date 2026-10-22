@@ -43,6 +43,30 @@ pub(crate) type Stamp = Option<[i64; 9]>;
 
 // Test seam: treat every file as settled, so a test can see a memo hit on a
 // fixture it just made.
+
+/// The submodule names `lookup` reads from the regular file `file` (a
+/// repository's `.gitmodules`), memoised while the file is unchanged.
+/// TASK-1942: every host git call over a linked worktree with a `.gitmodules`
+/// re-read it with a `git config` spawn. A symlink, whose target the stamp
+/// cannot see, is never memoised.
+// trace:TASK-1952 | trace:TASK-1942 | ai:claude
+pub(crate) fn gitmodules_file_names(
+    file: &Path,
+    lookup: impl FnOnce() -> anyhow::Result<Vec<String>>,
+) -> anyhow::Result<Vec<String>> {
+    static MEMO: std::sync::OnceLock<Memo<Vec<String>>> = std::sync::OnceLock::new();
+    let at = std::path::absolute(file).unwrap_or_else(|_| file.to_path_buf());
+    memoised(&MEMO, &at, gitmodules_file_key, lookup)
+}
+
+/// The stamp of a regular `.gitmodules` file; `None` for anything else.
+fn gitmodules_file_key(file: &Path) -> Option<Vec<Stamp>> {
+    if !std::fs::symlink_metadata(file).ok()?.file_type().is_file() {
+        return None;
+    }
+    Some(vec![stamp(file)?])
+}
+
 #[cfg(test)]
 thread_local! { pub(crate) static ALWAYS_SETTLED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) }; }
 

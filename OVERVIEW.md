@@ -461,12 +461,17 @@ checked-out submodule themselves instead: policy B again over that
 submodule's own index, then its status through the git directory validated a
 moment earlier (`--git-dir`, never re-reading the `.git` pointer), nested
 submodules likewise. So uncommitted edits there still keep the tree. A
-submodule with no `.git` is skipped. The non-destructive `aida ps` probe
+submodule with no `.git` is skipped (a deliberate choice: re-reading a
+pointer would reopen the swap window), and the toplevel status never lists
+files inside a gitlink path, so edits left in a checked-out submodule whose
+`.git` was removed are invisible to the destructive gates. Only a session
+tampering with its own submodule can reach that state. The non-destructive `aida ps` probe
 never looks inside a submodule. Salvage refuses edits inside a submodule, because a patch cannot
 hold them. Other checkouts keep git's submodule handling. Every host
 `git status` goes through `git_ops::host_git_command`, directly or via a
 wrapper; a guard test enforces it.
 <!-- trace:BUG-1985 | ai:claude -->
+<!-- trace:TASK-1952 | trace:TASK-1943 | ai:claude -->
 
 ### Distributed identity (EPIC-1-052)
 

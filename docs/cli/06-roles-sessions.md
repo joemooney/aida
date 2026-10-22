@@ -371,7 +371,8 @@ exited) only once the dispatcher, queue work and the reviewer are all gone. If
 either process was being spawned but never recorded, the attempt stays held
 and the capacity refusal names it with the recovery step: confirm no `queue
 work` or reviewer process for that change remains, then record the attempt as
-exited while no watcher runs. The watcher never signals a process. Terminal receipts
+exited while no watcher runs. The watcher signals a process only to supersede
+a review (below). Terminal receipts
 retry through lock contention for the same window as the claim. The capacity refusal names each
 holder's change, head and token. A missing/corrupt/unsafe state file refuses
 reinitialization; inspect the state, dispatcher logs in `review-watch/logs/`,
@@ -399,10 +400,54 @@ current verdict, including legacy rounds without an archive. Canonical history
 uses ordinary writer permissions; watcher state and locks require mode 0600. History is
 rechecked before queue work and at the final vendor boundary; unreadable or
 unidentifiable history refuses dispatch. The round prompt comes from that
-combined count. Ordinary queue-work risk and review authority checks still apply. New heads wait
-while an earlier review is active or ambiguous. Review instructions forbid local
+combined count. Ordinary queue-work risk and review authority checks still apply. Review instructions forbid local
 Cargo, tests/builds, merge, and branch updates. The watcher adds no verdict
-authority, process termination, ship-ready report, or merge action.
+authority, ship-ready report, or merge action.
+
+### Superseding a review when the head changes
+<!-- trace:TASK-1945 | ai:claude -->
+
+When discovery sees an open, non-draft change at a new head while a review of
+an earlier head is reserved or running, the watcher re-reads the head from the
+forge once and then supersedes the earlier review. A closed or draft change is
+never a trigger. First it records a durable supersede receipt in the attempt
+(the new head and the time). From then on the attempt can record no new queue
+work or reviewer process, so a dispatcher that has not spawned yet spawns
+nothing. The attempt keeps its capacity slot until every one of its processes
+is confirmed gone.
+
+It then asks the review's processes to terminate (SIGTERM) and kills them
+(SIGKILL) if they are still running 20 seconds later. Each signal is claimed in
+the receipt before it is sent, so two watchers, or a restarted one, never
+signal twice. Every signal goes through a pidfd, and the process it pins must
+still match the recorded identity (kernel start time and boot ID), be owned by
+the same user, and sit in the dispatcher's recorded process group. A reused PID
+is treated as gone and is never signalled. Other members of that group (the
+vendor's own children, say) are signalled only when their parent chain reaches
+a recorded process that is still running. A member that cannot be proved to
+belong to the review is never signalled. A process that left the group is not
+covered by group signalling: Claude Code's Bash tool, for example, runs each
+command under `setsid`, so those commands sit in a session and group of their
+own. Recorded processes are signalled leaf first: reviewer, queue work, then
+dispatcher. The watcher never signals a
+whole process group, and it never touches session leases, worktrees, verdict
+files or merge-hold markers; `aida session reap` handles those as usual.
+
+The new head is admitted only after the earlier review's recorded processes,
+its process group and any process it was still spawning are all confirmed
+gone. A superseded review that was stopped before it recorded a verdict uses
+no review round; one that had already recorded a verdict counts toward the
+round history like any other review. The slot
+stays held, and nothing is signalled blind, when signalling is unsafe or
+fails: no pidfd support (ENOSYS) or a platform other than Linux, a permission
+error, an identity in an unexpected process group, a process that survives
+SIGKILL, or a group member that cannot be proved ours. Each pass reports the
+cause, and the capacity refusal and `aida ps` (a "Review-watch slots held"
+section; `review_watch_held` in `--json`) show it. Once you have stopped the
+remaining processes yourself, `aida review watch --release PR-N` clears the
+attempt. It stays refused while any recorded process is still running. An
+attempt recorded before process groups were kept gets per-process signals
+only, with no group sweep.
 <!-- trace:TASK-1993 | ai:codex -->
 
 Launch setup keeps invocation receipts before Git allocation. Fresh worktrees

@@ -253,3 +253,16 @@ fn the_standalone_reviewer_adopts_its_marker_after_collecting_the_verdict() {
         "adoption must run after collection and before the exit-code early return"
     );
 }
+
+/// TASK-1406: a hold placed from a linked worktree records its placement
+/// event in the primary's events log, so deleting the primary's marker by
+/// hand is detected there as an unrecorded removal (BUG-1693).
+// trace:TASK-1951 trace:TASK-1406 | ai:claude
+#[test]
+fn a_linked_worktree_placement_is_audited_from_the_primary_checkout() {
+    let (_tmp, primary, linked) = primary_with_linked();
+    write_typed_hold(&linked, &rework(2727)).unwrap();
+    std::fs::remove_file(local_hold_path(&primary, 2727)).unwrap();
+    assert_eq!(unrecorded_marker_removals(&primary), vec![2727]);
+    assert_eq!(unrecorded_marker_removals(&linked), vec![2727]);
+}
