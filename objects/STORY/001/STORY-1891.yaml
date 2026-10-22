@@ -1,0 +1,20 @@
+id: 01a16354-066c-7f61-b9db-5d656f0508cf
+spec_id: STORY-1891
+agreed_id: STORY-1891
+title: 'Review PR-2826: TASK-1955 slice 7 (Refs-only slice; advisor-filed review story)'
+description: 'Advisor-filed: auto-queue-review skips Refs-only slice PRs and the BUG-2150 fallback finds TASK-1955 plus BUG-2130 ambiguous. See BUG filed alongside.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-22T11:16:53.484776562Z
+modified_at: 2026-10-22T11:16:53.484776562Z
+req_type: Story
+filed_at:
+  code_sha: e33fec11d936d4cc6ce450719a506a68932915eb
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e33fec11d9
+  vendor: claude
+  session: 7d71bfbf-a609-42bd-a714-a7d52d81db81
