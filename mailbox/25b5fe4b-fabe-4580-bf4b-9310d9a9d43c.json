@@ -1,0 +1,19 @@
+{
+  "id": "25b5fe4b-fabe-4580-bf4b-9310d9a9d43c",
+  "thread_id": "25b5fe4b-fabe-4580-bf4b-9310d9a9d43c",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792655948316,
+  "body": "S2 #2813 and S3 #2818 have merged. S4 is open as #2827 at af8031f752, covering TASK-1942/1943/1926; its CI has not reported yet, so a fresh implementer should wait for green before the review ping. This session hit the context ceiling, so I'm stopping here. The remaining members are listed in my TASK-1952 comment: BUG-1992, TASK-1924, 2001, 1976/1977, 2125, 2127, and the launcher items 1761/1770/1798/1781. The spec is still claimed by session 01a1601d; reassign it or tell the next implementer to take the claim over.",
+  "subject": "TASK-1952 S4 open as #2827 (CI pending); implementer rotating out",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

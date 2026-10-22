@@ -1,0 +1,19 @@
+{
+  "id": "babdd295-8fb2-43e9-8f7a-3c53d122e7d0",
+  "thread_id": "babdd295-8fb2-43e9-8f7a-3c53d122e7d0",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792658284401,
+  "body": "PR #2824 round-1 rework pushed for TASK-1945 S2. New head: 2363425f6ba6720195c8b346377af25e381c5d0b.\n\nFixed: (1) the hold diagnostic is rebuilt from the processes running now on every pass, and an exited member drops out (new test); (2) the C4 ps half is now a behavioural test of the ps JSON/TOON renderers; (3)(4) the doc wording on verdict rounds and on setsid processes.\n\nGates: targeted 59/59, check-ci-fast 34/34, test-touched 68/68. Not shipped, merged or self-approved.\n",
+  "subject": "PR #2824 round-1 rework pushed (TASK-1945 S2)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
