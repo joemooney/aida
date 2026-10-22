@@ -121,6 +121,57 @@ pub(crate) fn tree_kind_for_launch(project_root: &Path, contained_seat: bool) ->
     seat_tree_knob(project_root)
 }
 
+/// What a contained launch asks of its tree, for [`default_clone_fallback`].
+// trace:TASK-2053 | ai:claude
+pub(crate) struct CloneLaunch {
+    pub(crate) review: bool,
+    pub(crate) reentry: bool,
+    pub(crate) path_outside_parent: bool,
+    pub(crate) has_origin: bool,
+}
+
+/// The tree a contained launch gets once the default is `clone`, plus a
+/// one-line note when it falls back. With the knob unset, a launch a clone
+/// cannot serve keeps a worktree and says why; never silently. With an
+/// explicit `seat_tree = "clone"` a missing origin refuses here, and the
+/// other cases refuse later in session start with their own reasons.
+// trace:TASK-2053 | ai:claude
+pub(crate) fn default_clone_fallback(
+    kind: TreeKind,
+    explicit: bool,
+    launch: &CloneLaunch,
+) -> Result<(TreeKind, Option<String>)> {
+    if kind != TreeKind::Clone {
+        return Ok((kind, None));
+    }
+    if explicit {
+        if !launch.has_origin {
+            anyhow::bail!(
+                "[contained] seat_tree = \"clone\" needs an `origin` remote to clone from, and \
+                 this checkout has none: add an origin remote or set seat_tree = \"worktree\""
+            );
+        }
+        return Ok((kind, None));
+    }
+    let why = if !launch.has_origin {
+        "this checkout has no `origin` remote to clone from"
+    } else if launch.review {
+        "a review session runs in a worktree"
+    } else if launch.reentry {
+        "it re-enters an existing worktree"
+    } else if launch.path_outside_parent {
+        "its --path is outside the worktree parent"
+    } else {
+        return Ok((kind, None));
+    };
+    Ok((
+        TreeKind::Worktree,
+        Some(format!(
+            "this contained seat gets a linked worktree, not a private clone: {why}"
+        )),
+    ))
+}
+
 /// A fresh directory for a seat clone of `project_root` working `slug`:
 /// `aida-seat-<project>-<slug>[-N]` under `[worktree_pool] worktree_parent`
 /// (or beside the project), the first name that does not exist yet.

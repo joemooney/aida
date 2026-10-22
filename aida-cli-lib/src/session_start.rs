@@ -1836,21 +1836,28 @@ pub(crate) fn session_start_with_receipt(
             })
             .unwrap_or(false);
     // TASK-2053 S4c: the default flipped to `clone`, but a clone cannot yet
-    // host a review session, re-enter an existing --path, or live at an
-    // explicit --path outside the worktree parent. With no explicit knob
-    // those launches keep the worktree they had before the flip; an explicit
-    // `seat_tree = "clone"` still refuses them below.
+    // host a review session, re-enter an existing --path, live at an
+    // explicit --path outside the worktree parent, or be made without an
+    // `origin` remote to clone from. With no explicit knob those launches
+    // keep a worktree and say why; an explicit `seat_tree = "clone"` refuses
+    // them (below, or here for a missing origin).
     // trace:TASK-2053 | ai:claude
-    let tree_kind = if tree_kind == crate::seat_clone::TreeKind::Clone
-        && !crate::seat_clone::seat_tree_is_explicit(&project_root)
-        && (review_target.is_some()
-            || reuse_existing_worktree_path
-            || (explicit_path.is_some()
-                && !crate::seat_clone::is_seat_clone_location(&project_root, &worktree_path)))
-    {
-        crate::seat_clone::TreeKind::Worktree
-    } else {
-        tree_kind
+    let tree_kind = match crate::seat_clone::default_clone_fallback(
+        tree_kind,
+        crate::seat_clone::seat_tree_is_explicit(&project_root),
+        &crate::seat_clone::CloneLaunch {
+            review: review_target.is_some(),
+            reentry: reuse_existing_worktree_path,
+            path_outside_parent: explicit_path.is_some()
+                && !crate::seat_clone::is_seat_clone_location(&project_root, &worktree_path),
+            has_origin: aida_core::git_ops::has_remote(&project_root, "origin"),
+        },
+    )? {
+        (kind, Some(note)) => {
+            eprintln!("note: {note}");
+            kind
+        }
+        (kind, None) => kind,
     };
     if worktree_path.exists() && !reuse_existing_worktree_path {
         anyhow::bail!(
