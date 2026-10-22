@@ -10637,8 +10637,9 @@ Commands:
             (missing, malformed, or revoked). No grant at all, or an implementer grant, is never
             refused
   status    Show this session's seat grant (seat, expiry, the processes it is bound to, and whether
-            this process may present it) and the pids `aida role enter <seat> --bind-pid` accepts
-            for this session: its agent harness and its shell. Read-only; always exits 0
+            and how this process may present it: by its session key or by process) and this
+            session's agent harness pid for `aida role enter <seat> --bind-pid`. Read-only; always
+            exits 0
   end       Deactivate the current role (state preserved). Outputs shell code: `eval "$(aida role
             end)"`
   delete    Delete a role's state file permanently. Confirms before deleting unless --yes is passed
@@ -10703,7 +10704,9 @@ Options:
           Bind the grant to another running session instead of this terminal: the pid of that
           session's agent harness (claude, codex, agy) or shell, owned by you (`aida role status`
           shows a session's harness pid). Prints the grant id for that session to export and leaves
-          this shell's role unchanged
+          this shell's role unchanged. Binds the process only: that session's hooks and MCP server
+          can present the grant, but not its sandboxed tool calls, which need a session started from
+          a role shell
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -10888,9 +10891,9 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 ===== aida role status
-Show this session's seat grant (seat, expiry, the processes it is bound to, and whether this process
-may present it) and the pids `aida role enter <seat> --bind-pid` accepts for this session: its agent
-harness and its shell. Read-only; always exits 0
+Show this session's seat grant (seat, expiry, the processes it is bound to, and whether and how this
+process may present it: by its session key or by process) and this session's agent harness pid for
+`aida role enter <seat> --bind-pid`. Read-only; always exits 0
 
 Usage: aida role status [OPTIONS]
 
@@ -10898,6 +10901,29 @@ Options:
       --json
           Emit JSON instead of text
 
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida role adopt-key
+Install a seat grant's session key into the calling shell's session keyring. Run by the `aida role
+enter` eval text with the secret on stdin; not for direct use
+
+Usage: aida role adopt-key [OPTIONS] <ID>
+
+Arguments:
+  <ID>
+          The grant id
+
+Options:
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -34212,7 +34238,7 @@ Working on aida itself
       {
         "name": "bind-pid",
         "takes_value": true,
-        "help": "Bind the grant to another running session instead of this terminal: the pid of that session's agent harness (claude, codex, agy) or shell, owned by you (`aida role status` shows a session's harness pid). Prints the grant id for that session to export and leaves this shell's role unchanged"
+        "help": "Bind the grant to another running session instead of this terminal: the pid of that session's agent harness (claude, codex, agy) or shell, owned by you (`aida role status` shows a session's harness pid). Prints the grant id for that session to export and leaves this shell's role unchanged. Binds the process only: that session's hooks and MCP server can present the grant, but not its sandboxed tool calls, which need a session started from a role shell"
       },
       {
         "name": "cd",
@@ -34430,7 +34456,7 @@ Working on aida itself
       "role",
       "status"
     ],
-    "about": "Show this session's seat grant (seat, expiry, the processes it is bound to, and whether this process may present it) and the pids `aida role enter <seat> --bind-pid` accepts for this session: its agent harness and its shell. Read-only; always exits 0",
+    "about": "Show this session's seat grant (seat, expiry, the processes it is bound to, and whether and how this process may present it: by its session key or by process) and this session's agent harness pid for `aida role enter <seat> --bind-pid`. Read-only; always exits 0",
     "flags": [
       {
         "name": "format",
@@ -34449,6 +34475,27 @@ Working on aida itself
       }
     ],
     "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "role",
+      "adopt-key"
+    ],
+    "about": "Install a seat grant's session key into the calling shell's session keyring. Run by the `aida role enter` eval text with the secret on stdin; not for direct use",
+    "flags": [
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": true
   },
   {
     "path": [

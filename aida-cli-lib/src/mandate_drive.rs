@@ -1692,7 +1692,7 @@ pub(crate) fn stamp_grant_turn(grant: Option<&str>, now: DateTime<Utc>) {
             .map(|record| {
                 crate::seat_authority::matched_binding(
                     &record,
-                    &crate::seat_authority::presenter_tokens(),
+                    &crate::seat_authority::presenter_tokens_for(&record),
                 )
             })
             .unwrap_or_default();

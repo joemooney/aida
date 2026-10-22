@@ -653,6 +653,10 @@ fn harness_agent_claim_in_one_shell_then_approve_in_another_is_refused() {
 /// leader, shared by all of its shell calls.
 #[test]
 fn unrecognised_agent_is_bound_by_its_session_leader() {
+    // Sibling tests export AIDA_SESSION_ID (under the env lock); hold the
+    // lock with it unset so it cannot join both identities.
+    // trace:BUG-1934 | ai:claude
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_SESSION_ID", None)]);
     let root = tempfile::tempdir().unwrap();
     let l = lease("aaaabbbb2222", SPEC, root.path().join("wt"));
     let tool = proc(60, "my-agent", &["/usr/bin/my-agent"], "t0");

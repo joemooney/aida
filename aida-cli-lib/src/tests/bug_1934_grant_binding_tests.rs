@@ -155,7 +155,11 @@ fn legacy_grant_without_binding_is_refused_and_names_the_fix() {
         "{sentence}"
     );
     // doctor reports the reason instead of a silent "no role".
-    let findings = doctor_scan(root);
+    // (A host with yama ptrace_scope 0 adds its own finding; ignore it.)
+    let findings: Vec<_> = doctor_scan(root)
+        .into_iter()
+        .filter(|f| !f.id.ends_with(":ptrace-scope"))
+        .collect();
     assert_eq!(findings.len(), 1, "{findings:?}");
     assert_eq!(findings[0].category, DOCTOR_CATEGORY);
     assert_eq!(findings[0].summary, sentence);
@@ -173,10 +177,13 @@ fn doctor_and_status_are_silent_or_valid_for_a_bound_grant() {
     let mut env = pinned_env();
     let id = test_support::mint_grant_for(root, SUBJECT, "reviewer", &[]);
     env.set_key(GRANT_ENV, &id);
-    assert!(doctor_scan(root).is_empty());
+    assert!(doctor_scan(root)
+        .iter()
+        .all(|f| f.id.ends_with(":ptrace-scope")));
     let status = serde_json::to_value(grant_status(root)).unwrap();
     assert_eq!(status["grant"]["valid"], true);
     assert_eq!(status["grant"]["binding_ok"], true);
+    assert_eq!(status["grant"]["via"], "proc");
     assert_eq!(
         status["grant"]["binding"],
         serde_json::json!([own_process_token().unwrap()])
@@ -184,7 +191,9 @@ fn doctor_and_status_are_silent_or_valid_for_a_bound_grant() {
     with_identity_source(presenter_source(), || {
         let status = serde_json::to_value(grant_status(root)).unwrap();
         assert_eq!(status["harness_pid"], 4300);
-        assert_eq!(status["shell_pid"], 4300, "the parent of this command");
+        // TASK-2159: the transient shell a command runs in is never offered
+        // for --bind-pid. trace:TASK-2159 | ai:claude
+        assert!(status.get("shell_pid").is_none(), "{status}");
     });
 }
 
@@ -228,7 +237,15 @@ fn child_grant_bound_to_launcher_and_detached_worker_after_stamp() {
     let advisor = test_support::mint_grant_for(root, SUBJECT, "advisor", &["reviewer"]);
     env.set_key(GRANT_ENV, &advisor);
     let child = issue_child(root, "reviewer", SUBJECT).unwrap();
-    assert_eq!(child.binding, vec![own_process_token().unwrap()]);
+    // The launcher's process, then (where the keyring works, SKETCH v2) the
+    // key the launcher holds for its worker.
+    assert_eq!(child.binding[0], own_process_token().unwrap());
+    assert!(
+        child.binding[1..].iter().all(|b| b.starts_with("key:")),
+        "{:?}",
+        child.binding
+    );
+    let minted = child.binding.len();
 
     // Exec launch: the worker IS the minting process.
     env.set_key(GRANT_ENV, &child.id);
@@ -247,7 +264,7 @@ fn child_grant_bound_to_launcher_and_detached_worker_after_stamp() {
     assert_eq!(matched_binding(&record, &worker), worker);
     // Stamping is idempotent.
     bind_grant_token(&child.id, &worker[0]).unwrap();
-    assert_eq!(read_grant(&child.id).unwrap().binding.len(), 2);
+    assert_eq!(read_grant(&child.id).unwrap().binding.len(), minted + 1);
     // A pid with no readable start identity cannot be stamped.
     bind_grant_to_pid(&child.id, u32::MAX - 1).expect_err("no such process");
 }
@@ -446,4 +463,46 @@ fn bg_launch_refuses_a_seat_it_cannot_bind() {
     );
     assert!(err.contains("--bind-pid"), "{err}");
     crate::agent_launch::bg_seat_refusal("implementer").unwrap();
+}
+
+/// TASK-2158: `aida review record` driven end to end with an exported grant
+/// whose binding names another process tree: refused with the binding
+/// sentence, and no verdict file is written.
+// trace:TASK-2158 | ai:claude
+#[test]
+fn review_record_refuses_a_presenter_not_bound_grant() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let mut env = pinned_env();
+    let id = test_support::mint_grant_for(root, SUBJECT, "reviewer", &[]);
+    set_binding(&id, &[FOREIGN]);
+    env.set_key(GRANT_ENV, &id);
+    let err = crate::handle_review_record_at(
+        root.to_path_buf(),
+        "BUG-1",
+        "approved",
+        Some("0123456789abcdef0123456789abcdef01234567"),
+        Some("some-branch"),
+        None,
+        &[],
+        &[],
+        None,
+    )
+    .expect_err("a grant presented outside its process tree must not record a verdict");
+    let message = format!("{err:#}");
+    assert!(message.starts_with("refused: review record."), "{message}");
+    assert!(
+        message.contains(&id[..8]) && !message.contains(&id),
+        "{message}"
+    );
+    assert!(
+        message.contains("it is bound to process 999999, and this process does not run under it"),
+        "{message}"
+    );
+    assert!(message.contains("aida role enter reviewer"), "{message}");
+    let verdicts = root.join(".aida").join("review-verdicts");
+    let written: Vec<_> = std::fs::read_dir(&verdicts)
+        .map(|d| d.flatten().map(|e| e.path()).collect())
+        .unwrap_or_default();
+    assert!(written.is_empty(), "no verdict may be written: {written:?}");
 }

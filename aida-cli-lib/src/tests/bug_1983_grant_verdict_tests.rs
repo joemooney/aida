@@ -341,6 +341,8 @@ fn same_check(reason: &GrantRejection) -> String {
         }
         GrantRejection::Unbound => "Unbound".into(),
         GrantRejection::PresenterNotBound { .. } => "PresenterNotBound".into(),
+        GrantRejection::ForeignNamespace { .. } => "ForeignNamespace".into(),
+        GrantRejection::KeyringUnavailable { .. } => "KeyringUnavailable".into(),
     }
 }
 

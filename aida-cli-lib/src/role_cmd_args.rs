@@ -50,7 +50,10 @@ pub enum RoleCommand {
         /// terminal: the pid of that session's agent harness (claude, codex,
         /// agy) or shell, owned by you (`aida role status` shows a session's
         /// harness pid). Prints the grant id for that session to export and
-        /// leaves this shell's role unchanged.
+        /// leaves this shell's role unchanged. Binds the process only: that
+        /// session's hooks and MCP server can present the grant, but not its
+        /// sandboxed tool calls, which need a session started from a role
+        /// shell.
         // trace:BUG-1934 | ai:claude
         #[clap(long = "bind-pid", value_name = "PID")]
         bind_pid: Option<u32>,
@@ -126,14 +129,25 @@ pub enum RoleCommand {
     },
 
     /// Show this session's seat grant (seat, expiry, the processes it is
-    /// bound to, and whether this process may present it) and the pids
-    /// `aida role enter <seat> --bind-pid` accepts for this session: its
-    /// agent harness and its shell. Read-only; always exits 0.
+    /// bound to, and whether and how this process may present it: by its
+    /// session key or by process) and this session's agent harness pid for
+    /// `aida role enter <seat> --bind-pid`. Read-only; always exits 0.
     // trace:BUG-1934 | ai:claude
+    // trace:TASK-2159 | ai:claude
     Status {
         /// Emit JSON instead of text.
         #[clap(long)]
         json: bool,
+    },
+
+    /// Install a seat grant's session key into the calling shell's session
+    /// keyring. Run by the `aida role enter` eval text with the secret on
+    /// stdin; not for direct use.
+    // trace:BUG-1934 | ai:claude
+    #[clap(hide = true)]
+    AdoptKey {
+        /// The grant id.
+        id: String,
     },
 
     /// Emit a deduplicated informational tool-hook expiry notice.

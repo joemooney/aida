@@ -167,8 +167,15 @@ pub(crate) fn identities_overlap(a: &[String], b: &[String]) -> bool {
 /// is also an ancestor is one process). Unlike [`tokens_match`], which backs
 /// refusals, both sides must carry a start identity and the two must be
 /// equal: a missing start or a scheme mismatch refuses, never matches.
+///
+/// A `key:<sha256>` token (possession of the grant's session-keyring secret,
+/// SKETCH v2) matches only the identical token, and only with a full
+/// 64-hex-digit digest.
 // trace:BUG-1934 | ai:claude
 pub(crate) fn binding_tokens_match(a: &str, b: &str) -> bool {
+    if let (Some(x), Some(y)) = (a.strip_prefix("key:"), b.strip_prefix("key:")) {
+        return x.len() == 64 && x.bytes().all(|c| c.is_ascii_hexdigit()) && x == y;
+    }
     fn process_part(token: &str) -> Option<(&str, &str)> {
         let (kind, value) = token.split_once(':')?;
         if !matches!(kind, "proc" | "shell" | "sid") {

@@ -62,6 +62,7 @@ pub(crate) fn handle_role_command(cmd: &RoleCommand) -> Result<()> {
             refuse_within,
         } => handle_role_expiry(warn_within, refuse_within.as_deref()),
         RoleCommand::Status { json } => handle_role_status(&project_root, *json),
+        RoleCommand::AdoptKey { id } => handle_role_adopt_key(id),
         RoleCommand::ExpiryNotice { .. } => unreachable!("notice dispatches before role setup"),
         RoleCommand::End => handle_role_end(),
         RoleCommand::Delete { name, yes } => handle_role_delete(&project_root, name, *yes),
@@ -233,7 +234,12 @@ fn handle_role_enter(
             return Ok(());
         }
         crate::seat_authority::revoke_current()?;
-        emit_persona_enter_eval(project_root, persona, &grant.id);
+        emit_persona_enter_eval(
+            project_root,
+            persona,
+            &grant.id,
+            grant.key_secret.as_deref(),
+        );
         return Ok(());
     }
 
@@ -269,7 +275,12 @@ fn handle_role_enter(
                                 return Ok(());
                             }
                             crate::seat_authority::revoke_current()?;
-                            emit_persona_enter_eval(project_root, persona, &grant.id);
+                            emit_persona_enter_eval(
+                                project_root,
+                                persona,
+                                &grant.id,
+                                grant.key_secret.as_deref(),
+                            );
                             return Ok(());
                         }
                         chosen
@@ -397,6 +408,7 @@ Include it in the TTY-issued delegation set?";
         no_title,
         Some(&registry_entry),
         Some(&grant.id),
+        grant.key_secret.as_deref(),
     );
     Ok(())
 }
@@ -444,7 +456,12 @@ fn eval_comment_text(value: &str) -> String {
     value.replace(['\n', '\r'], " ")
 }
 
-fn emit_persona_enter_eval(project_root: &std::path::Path, persona: &str, grant_id: &str) {
+fn emit_persona_enter_eval(
+    project_root: &std::path::Path,
+    persona: &str,
+    grant_id: &str,
+    key_secret: Option<&str>,
+) {
     let _eval = crate::shell_eval::EvalBlock::open();
     // Every value is quoted: this block is eval'd by the caller's shell.
     // trace:BUG-1624 | ai:claude
@@ -459,6 +476,10 @@ fn emit_persona_enter_eval(project_root: &std::path::Path, persona: &str, grant_
         crate::seat_authority::GRANT_ENV,
         sh_single_quote(grant_id)
     );
+    // trace:BUG-1934 | ai:claude
+    for line in adopt_key_eval_lines(grant_id, key_secret) {
+        println!("{line}");
+    }
     println!("unset AIDA_SESSION_PURPOSE");
     println!(
         "export AIDA_SESSION_PROJECT='{}'",
@@ -614,9 +635,9 @@ fn handle_role_add(
         None,
         None,
     ) {
-        Ok(grant) => {
+        Ok(issued) => {
             crate::seat_authority::revoke_current()?;
-            Some(grant.id)
+            Some(issued)
         }
         Err(reason) => {
             eprintln!("note: no seat grant issued ({reason}); the role is a label without authority. Enter it at an interactive TTY to establish the seat.");
@@ -633,7 +654,8 @@ fn handle_role_add(
         None,
         /* no_title */ false,
         None,
-        grant_id.as_deref(),
+        grant_id.as_ref().map(|g| g.id.as_str()),
+        grant_id.as_ref().and_then(|g| g.key_secret.as_deref()),
     );
     Ok(())
 }
@@ -706,6 +728,7 @@ fn emit_role_enter_eval(
     no_title: bool,
     registry_entry: Option<&crate::agent_registry::AgentRegistryEntry>,
     grant_id: Option<&str>,
+    key_secret: Option<&str>,
 ) {
     // Emit shell code for eval. The `aida()` shell wrapper installed by
     // `aida dev shell-init --install` automatically eval's our stdout for
@@ -757,11 +780,17 @@ fn emit_role_enter_eval(
     // the new label. trace:STORY-1473 | ai:claude
     match grant_id {
         // trace:TASK-1752 | ai:claude
-        Some(grant_id) => println!(
-            "export {}='{}'",
-            crate::seat_authority::GRANT_ENV,
-            sh_single_quote(grant_id)
-        ),
+        Some(grant_id) => {
+            println!(
+                "export {}='{}'",
+                crate::seat_authority::GRANT_ENV,
+                sh_single_quote(grant_id)
+            );
+            // trace:BUG-1934 | ai:claude
+            for line in adopt_key_eval_lines(grant_id, key_secret) {
+                println!("{line}");
+            }
+        }
         None => println!("unset {}", crate::seat_authority::GRANT_ENV),
     }
     if let Some(p) = &state.purpose {
@@ -1017,6 +1046,45 @@ fn handle_role_expiry(warn_within: &str, refuse_within: Option<&str>) -> Result<
     Ok(())
 }
 
+/// BUG-1934 (SKETCH v2): `aida role adopt-key <id>` with the secret on stdin.
+// trace:BUG-1934 | ai:claude
+fn handle_role_adopt_key(id: &str) -> Result<()> {
+    let mut secret = String::new();
+    let mut input = std::io::Read::take(std::io::stdin(), 4096);
+    std::io::Read::read_to_string(&mut input, &mut secret)?;
+    crate::seat_authority::adopt_key(id, &secret).map_err(|why| {
+        anyhow::anyhow!(
+            "the grant was entered, but its session key was not installed ({why:#}); sandboxed tool calls from this terminal will be refused"
+        )
+    })
+}
+
+/// BUG-1934 (SKETCH v2): the eval lines that hand a new grant's secret to
+/// `aida role adopt-key`, run by the eval'ing shell itself so the key lands
+/// in THAT shell's session keyring. xtrace is switched off first and the
+/// secret travels only in a quoted heredoc: never argv, env, a file or
+/// history (eval'd text is not recorded). v2 C3. Empty without a secret.
+// trace:BUG-1934 | ai:claude
+pub(crate) fn adopt_key_eval_lines(grant_id: &str, secret: Option<&str>) -> Vec<String> {
+    let Some(secret) = secret else {
+        return Vec::new();
+    };
+    let exe = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.to_str().map(str::to_string))
+        .unwrap_or_else(|| "aida".to_string());
+    vec![
+        "{ set +x; } 2>/dev/null".to_string(),
+        format!(
+            "'{}' role adopt-key '{}' <<'AIDA_GRANT_KEY'",
+            sh_single_quote(&exe),
+            sh_single_quote(grant_id)
+        ),
+        secret.to_string(),
+        "AIDA_GRANT_KEY".to_string(),
+    ]
+}
+
 /// BUG-1934: `aida role status [--json]`.
 // trace:BUG-1934 | ai:claude
 fn handle_role_status(project_root: &std::path::Path, json: bool) -> Result<()> {
@@ -1043,12 +1111,16 @@ fn handle_role_status(project_root: &std::path::Path, json: bool) -> Result<()> 
             }
         }
     }
-    let pid = |p: Option<u32>| p.map_or_else(|| "unknown".to_string(), |p| p.to_string());
-    println!(
-        "this session: harness pid {}, shell pid {} (for `aida role enter <seat> --bind-pid <pid>`)",
-        pid(status.harness_pid),
-        pid(status.shell_pid)
-    );
+    // TASK-2159: only the harness is offered for --bind-pid, never the
+    // transient shell this command runs in. trace:TASK-2159 | ai:claude
+    match status.harness_pid {
+        Some(pid) => println!(
+            "this session: harness pid {pid} (for `aida role enter <seat> --bind-pid {pid}`)"
+        ),
+        None => println!(
+            "this session: no stable harness pid (no agent harness above this command, or it runs in a sandbox); start the agent from a role shell instead of using --bind-pid"
+        ),
+    }
     Ok(())
 }
 

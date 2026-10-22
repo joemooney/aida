@@ -33,7 +33,9 @@ pub(crate) struct SeatGrant {
     /// one of them (an ancestor, itself, or its POSIX session leader) may use
     /// the grant. Empty on a record minted before binding, which is refused.
     /// (`session_id` above is the old, never-checked binding; kept so older
-    /// records still parse.)
+    /// records still parse.) SKETCH v2: a `key:<sha256>` token binds the
+    /// grant to whoever possesses its secret in a session keyring
+    /// ([`crate::grant_keyring`]), which survives a sandbox's PID namespace.
     // trace:BUG-1934 | ai:claude
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub binding: Vec<String>,
@@ -265,6 +267,18 @@ pub(crate) enum GrantRejection {
     PresenterNotBound {
         bound_to: String,
     },
+    /// BUG-1934 (SKETCH v2): this process runs in another PID namespace (an
+    /// agent sandbox) than the one the grant's processes live in, and it does
+    /// not hold the grant's session key.
+    ForeignNamespace {
+        bound_to: String,
+    },
+    /// BUG-1934 (SKETCH v2): the kernel refused the session keyring, so key
+    /// possession cannot be shown, and no bound process is an ancestor. Never
+    /// a reason to allow.
+    KeyringUnavailable {
+        bound_to: String,
+    },
 }
 
 impl std::fmt::Display for GrantRejection {
@@ -307,6 +321,14 @@ impl std::fmt::Display for GrantRejection {
                 f,
                 "it is bound to {bound_to}, and this process does not run under it"
             ),
+            Self::ForeignNamespace { bound_to } => write!(
+                f,
+                "this command runs in a sandboxed process namespace and does not hold the grant's session key (it is bound to {bound_to})"
+            ),
+            Self::KeyringUnavailable { bound_to } => write!(
+                f,
+                "the session keyring is unavailable to this process, so it cannot show it holds the grant's key, and it does not run under {bound_to}"
+            ),
         }
     }
 }
@@ -346,14 +368,16 @@ impl GrantCheck {
         let prefix: String = id.chars().take(8).collect();
         let seat_label = seat.as_deref().unwrap_or("unknown seat");
         let recovery = match (seat.as_deref(), reason) {
-            // BUG-1934 C1: a binding refusal names both sanctioned fixes.
-            // trace:BUG-1934 | ai:claude
+            // BUG-1934 C1 (v2 C6): a binding refusal names how to re-enter
+            // for a foreground session and for a background or relay one,
+            // and what --bind-pid can still serve. trace:BUG-1934 | ai:claude
             (
                 Some(seat),
-                GrantRejection::Unbound | GrantRejection::PresenterNotBound { .. },
-            ) => format!(
-                "Re-enter it in the terminal that runs this session: `eval \"$(aida role enter {seat})\"`; for a background session, bind it from a terminal with `aida role enter {seat} --bind-pid <harness pid>`"
-            ),
+                GrantRejection::Unbound
+                | GrantRejection::PresenterNotBound { .. }
+                | GrantRejection::ForeignNamespace { .. }
+                | GrantRejection::KeyringUnavailable { .. },
+            ) => rebind_recovery(seat),
             (Some(seat), _) => format!("Re-enter it at a terminal: `aida role enter {seat}`"),
             (None, _) => "Re-enter your role at a terminal: `aida role enter <role>`".to_string(),
         };
@@ -361,6 +385,14 @@ impl GrantCheck {
             "Session grant {prefix}… ({seat_label}) was rejected: {reason}. {recovery}"
         ))
     }
+}
+
+/// BUG-1934 C1 / v2 C6: how to re-establish a seat after a binding refusal.
+// trace:BUG-1934 | ai:claude
+pub(crate) fn rebind_recovery(seat: &str) -> String {
+    format!(
+        "Re-enter it at a terminal with `eval \"$(aida role enter {seat})\"`, then start this session from that same terminal: a foreground agent directly, a background or relay agent by launching it there (`aida agent new` without --bg, or `nohup <agent> &`). A session the agent daemon (`--bg`) or a tmux server starts does not descend from that terminal and never holds the grant's key. `aida role enter {seat} --bind-pid <harness pid>` binds an already-running session, but only for its unsandboxed hooks and MCP server, not its sandboxed tool calls"
+    )
 }
 
 fn check_lifetime(grant: &SeatGrant, now: DateTime<Utc>) -> Result<(), GrantRejection> {
@@ -479,6 +511,92 @@ pub(crate) fn grant_check_at(project_root: &Path, now: DateTime<Utc>) -> GrantCh
     )
 }
 
+/// BUG-1934 (SKETCH v2): a fresh grant secret: 32 random bytes, hex encoded
+/// (the session-key payload). Held in memory and in the keyring only.
+// trace:BUG-1934 | ai:claude
+pub(crate) fn new_key_secret() -> String {
+    let mut hex = String::with_capacity(64);
+    for b in Uuid::new_v4()
+        .as_bytes()
+        .iter()
+        .chain(Uuid::new_v4().as_bytes())
+    {
+        hex.push_str(&format!("{b:02x}"));
+    }
+    hex
+}
+
+/// BUG-1934 (SKETCH v2): the `key:<sha256>` binding token for a secret.
+// trace:BUG-1934 | ai:claude
+pub(crate) fn key_token(secret: &[u8]) -> String {
+    use sha2::{Digest, Sha256};
+    let digest = Sha256::digest(secret);
+    let mut hex = String::with_capacity(64);
+    for b in digest.iter() {
+        hex.push_str(&format!("{b:02x}"));
+    }
+    format!("key:{hex}")
+}
+
+fn has_key_binding(grant: &SeatGrant) -> bool {
+    grant.binding.iter().any(|b| b.starts_with("key:"))
+}
+
+/// BUG-1934 (SKETCH v2): the `key:` token this process can show for `grant`:
+/// `Some` only when it possesses the grant's session key and the key's
+/// digest is in the grant's binding.
+// trace:BUG-1934 | ai:claude
+pub(crate) fn possession_token(grant: &SeatGrant) -> Option<String> {
+    if !has_key_binding(grant) {
+        return None;
+    }
+    match crate::grant_keyring::read(&grant.id) {
+        crate::grant_keyring::KeyRead::Held(secret) => {
+            let token = key_token(&secret);
+            grant.binding.contains(&token).then_some(token)
+        }
+        _ => None,
+    }
+}
+
+/// BUG-1934: everything this process presents for `grant`: its process
+/// tokens plus, when it holds the grant's session key, the `key:` token.
+// trace:BUG-1934 | ai:claude
+pub(crate) fn presenter_tokens_for(grant: &SeatGrant) -> Vec<String> {
+    let mut out = presenter_tokens();
+    out.extend(possession_token(grant));
+    out
+}
+
+/// BUG-1934 (SKETCH v2): does this process run in a PID namespace other than
+/// the host's (an agent sandbox, a container)? Its POSIX session leader is
+/// then outside the namespace (`getsid` = 0), or its pid 1 is not the host
+/// init. Only picks the refusal sentence; the check fails closed either way.
+// trace:BUG-1934 | ai:claude
+fn in_foreign_pid_namespace() -> bool {
+    #[cfg(test)]
+    if let Some(forced) = test_support::FOREIGN_NAMESPACE.with(|f| f.get()) {
+        return forced;
+    }
+    #[cfg(target_os = "linux")]
+    {
+        // SAFETY: getsid(0) only reads the calling process's session id.
+        let sid = unsafe { libc::getsid(0) };
+        let init = std::fs::read_to_string("/proc/1/comm").unwrap_or_default();
+        foreign_namespace_from(sid, init.trim())
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        false
+    }
+}
+
+/// Pure core of [`in_foreign_pid_namespace`].
+// trace:BUG-1934 | ai:claude
+pub(crate) fn foreign_namespace_from(sid: i32, init_comm: &str) -> bool {
+    sid == 0 || !matches!(init_comm, "systemd" | "init" | "launchd")
+}
+
 /// BUG-1934: the identity tokens of THIS process as a grant presenter: its
 /// whole ancestry plus its POSIX session leader.
 // trace:BUG-1934 | ai:claude
@@ -571,12 +689,21 @@ pub(crate) fn describe_binding(binding: &[String]) -> String {
         .iter()
         .filter_map(|t| {
             let (kind, value) = t.split_once(':')?;
+            if kind == "key" {
+                return None;
+            }
             let pid = value.split('@').next().filter(|p| !p.is_empty())?;
             Some(match kind {
                 "sid" => format!("terminal session {pid}"),
                 _ => format!("process {pid}"),
             })
         })
+        .chain(
+            binding
+                .iter()
+                .any(|t| t.starts_with("key:"))
+                .then(|| "the session key of the shell or launcher that holds it".to_string()),
+        )
         .collect();
     if parts.is_empty() {
         "no process".to_string()
@@ -585,13 +712,48 @@ pub(crate) fn describe_binding(binding: &[String]) -> String {
     }
 }
 
-/// Apply the presenter check to an otherwise-valid verdict.
+/// BUG-1934 v2: name a `PresenterNotBound` refusal more exactly: the
+/// keyring was unavailable for a key-bound grant, or the presenter runs in a
+/// foreign PID namespace. It maps a refusal to a refusal only (C5: an
+/// unavailable keyring never fails open).
+// trace:BUG-1934 | ai:claude
+pub(crate) fn classify_refusal(
+    reason: GrantRejection,
+    key_bound: bool,
+    keyring_available: bool,
+    foreign_namespace: bool,
+) -> GrantRejection {
+    match reason {
+        GrantRejection::PresenterNotBound { bound_to } if key_bound && !keyring_available => {
+            GrantRejection::KeyringUnavailable { bound_to }
+        }
+        GrantRejection::PresenterNotBound { bound_to } if foreign_namespace => {
+            GrantRejection::ForeignNamespace { bound_to }
+        }
+        other => other,
+    }
+}
+
+/// Apply the presenter check to an otherwise-valid verdict. `presenter` is
+/// this process's process tokens; its `key:` token, when it holds the
+/// grant's session key, is added here. A `PresenterNotBound` is named more
+/// exactly when the keyring is unavailable or the process is sandboxed.
 // trace:BUG-1934 | ai:claude
 fn with_presenter(check: GrantCheck, presenter: &[String]) -> GrantCheck {
     let GrantCheck::Valid(grant) = check else {
         return check;
     };
-    match presenter_rejection(&grant, presenter) {
+    let mut presenter = presenter.to_vec();
+    presenter.extend(possession_token(&grant));
+    let rejection = presenter_rejection(&grant, &presenter).map(|reason| {
+        classify_refusal(
+            reason,
+            has_key_binding(&grant),
+            crate::grant_keyring::available(),
+            in_foreign_pid_namespace(),
+        )
+    });
+    match rejection {
         None => GrantCheck::Valid(grant),
         Some(reason) => GrantCheck::Rejected {
             id: grant.id.clone(),
@@ -1205,6 +1367,36 @@ fn issuance_roster_store(project_root: &Path, principal: &str, seat: &str) -> Re
     Ok(store)
 }
 
+/// BUG-1934 (SKETCH v2): a directly issued grant plus, unless it was bound
+/// with `--bind-pid`, the one-time secret whose digest its binding carries.
+/// The secret is never serialized: the `aida role enter` eval text hands it
+/// to `aida role adopt-key`, which puts it in the shell's session keyring.
+// trace:BUG-1934 | ai:claude
+pub(crate) struct IssuedGrant {
+    pub grant: SeatGrant,
+    pub key_secret: Option<String>,
+}
+
+/// Never prints the secret.
+impl std::fmt::Debug for IssuedGrant {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("IssuedGrant")
+            .field("grant", &self.grant)
+            .field(
+                "key_secret",
+                &self.key_secret.as_ref().map(|_| "<redacted>"),
+            )
+            .finish()
+    }
+}
+
+impl std::ops::Deref for IssuedGrant {
+    type Target = SeatGrant;
+    fn deref(&self) -> &SeatGrant {
+        &self.grant
+    }
+}
+
 // trace:STORY-1473, TASK-1592 | ai:antigravity
 // trace:TASK-1787 | ai:antigravity
 pub(crate) fn issue_direct(
@@ -1213,12 +1405,15 @@ pub(crate) fn issue_direct(
     delegable_seats: Vec<String>,
     ttl: Option<Duration>,
     bind_pid: Option<u32>,
-) -> Result<SeatGrant> {
+) -> Result<IssuedGrant> {
     require_direct_human()?;
     // BUG-1934: bind before anything is written; an unbindable grant is
     // never minted. trace:BUG-1934 | ai:claude
     let caller = presenter_source();
-    let binding = match bind_pid {
+    // SKETCH v2: a grant for THIS terminal is also bound to a session-key
+    // secret; `--bind-pid` stays pid-only (Q4). trace:BUG-1934 | ai:claude
+    let key_secret = bind_pid.is_none().then(new_key_secret);
+    let mut binding = match bind_pid {
         None => direct_issue_binding(&caller)?,
         Some(pid) => vec![check_bind_target(
             pid,
@@ -1260,10 +1455,43 @@ pub(crate) fn issue_direct(
         issued_at: now,
         expires_at: now + lifetime,
         revoked_at: None,
-        binding,
+        binding: {
+            binding.extend(key_secret.as_deref().map(|k| key_token(k.as_bytes())));
+            binding
+        },
     };
     write_grant(&grant)?;
-    Ok(grant)
+    Ok(IssuedGrant { grant, key_secret })
+}
+
+/// BUG-1934 (SKETCH v2): `aida role adopt-key <id>`: install grant `id`'s
+/// secret (read from stdin by the caller) into a fresh session keyring and
+/// hand that keyring to the PARENT process, the shell that eval'd `aida role
+/// enter`. Only a secret whose digest the grant's binding carries is
+/// accepted, and only for a live grant of this user; the key expires with
+/// the grant.
+// trace:BUG-1934 | ai:claude
+pub(crate) fn adopt_key(id: &str, secret: &str) -> Result<()> {
+    let secret = secret.trim();
+    let grant = read_grant(id)?;
+    if grant.subject != crate::current_user_id(None) {
+        bail!(
+            "session grant {} was not issued to this user",
+            &id[..8.min(id.len())]
+        );
+    }
+    check_lifetime(&grant, Utc::now())
+        .map_err(|why| anyhow::anyhow!("cannot adopt the key: {why}"))?;
+    if secret.is_empty() || !grant.binding.contains(&key_token(secret.as_bytes())) {
+        bail!(
+            "that secret does not belong to session grant {}",
+            &id[..8.min(id.len())]
+        );
+    }
+    let ttl = (grant.expires_at - Utc::now())
+        .num_seconds()
+        .clamp(1, u32::MAX as i64) as u32;
+    crate::grant_keyring::install_to_parent(id, secret.as_bytes(), ttl)
 }
 
 /// BUG-1934: what `aida role enter` binds a grant to: the shell that ran it
@@ -1453,8 +1681,22 @@ pub(crate) fn issue_child(
         "cannot bind the child grant: this launcher's process start identity could not be read",
     )?;
     let now = Utc::now();
+    let id = Uuid::new_v4().to_string();
+    // SKETCH v2: the launcher joins a fresh session keyring holding the
+    // child's key before it spawns or execs the worker, so the worker and
+    // its sandboxed tool calls inherit it. When the keyring is unavailable
+    // the grant keeps only its process binding (a sandboxed worker is then
+    // refused, never allowed: C5). trace:BUG-1934 | ai:claude
+    let secret = new_key_secret();
+    let ttl = (parent.expires_at - now)
+        .num_seconds()
+        .clamp(1, u32::MAX as i64) as u32;
+    let mut binding = vec![launcher];
+    if crate::grant_keyring::install(&id, secret.as_bytes(), ttl).is_ok() {
+        binding.push(key_token(secret.as_bytes()));
+    }
     let grant = SeatGrant {
-        id: Uuid::new_v4().to_string(),
+        id,
         principal: parent.principal,
         subject: child_subject.to_string(),
         session_id: Uuid::new_v4().to_string(),
@@ -1465,7 +1707,7 @@ pub(crate) fn issue_child(
         issued_at: now,
         expires_at: parent.expires_at,
         revoked_at: None,
-        binding: vec![launcher],
+        binding,
     };
     write_grant(&grant)?;
     Ok(grant)
@@ -1585,6 +1827,10 @@ pub(crate) fn revoke_by_id(id: &str) -> Result<bool> {
     if read_grant(id).is_err() {
         return Ok(false);
     }
+    // BUG-1934 v2 C2: a revoked grant's session key is invalidated too,
+    // wherever this process can reach it (the role shell re-entering or
+    // exiting, a launcher ending its worker). trace:BUG-1934 | ai:claude
+    crate::grant_keyring::invalidate(id);
     // BUG-1934: under the record lock, so a concurrent pid stamp cannot
     // write back a pre-revocation copy. trace:BUG-1934 | ai:claude
     update_grant(
@@ -1691,6 +1937,10 @@ pub(crate) struct GrantStatusGrant {
     /// Whether this process may present the grant: `None` when its record
     /// cannot be read.
     pub binding_ok: Option<bool>,
+    /// SKETCH v2: how this process satisfies the binding: `key` (it holds
+    /// the grant's session key), `proc` (a bound process is an ancestor) or
+    /// `none`. `None` when the record cannot be read.
+    pub via: Option<&'static str>,
     pub rejection: Option<String>,
 }
 
@@ -1700,16 +1950,17 @@ pub(crate) struct GrantStatusGrant {
 pub(crate) struct GrantStatus {
     pub grant: Option<GrantStatusGrant>,
     /// This session's agent harness: the pid `--bind-pid` should name.
+    /// `None` when there is no stable one: no harness above this command, or
+    /// the walk ends in a sandbox's PID namespace. TASK-2159: the transient
+    /// shell a tool call runs in is never offered.
+    // trace:TASK-2159 | ai:claude
     pub harness_pid: Option<u32>,
-    /// The shell that ran this command.
-    pub shell_pid: Option<u32>,
 }
 
 // trace:BUG-1934 | ai:claude
 pub(crate) fn grant_status(project_root: &Path) -> GrantStatus {
     let source = crate::review_authority::IdentitySource::live();
-    let harness_pid = source.agent_root().map(|p| p.pid);
-    let shell_pid = source.chain.get(1).map(|p| p.pid).filter(|p| *p > 1);
+    let harness_pid = source.agent_root().map(|p| p.pid).filter(|p| *p > 1);
     let check = grant_check(project_root);
     let grant = current_grant_id().map(|id| {
         let record = read_grant(&id).ok();
@@ -1725,16 +1976,22 @@ pub(crate) fn grant_status(project_root: &Path) -> GrantStatus {
             bound_to: describe_binding(&binding),
             binding_ok: record
                 .as_ref()
-                .map(|g| presenter_rejection(g, &presenter_tokens()).is_none()),
+                .map(|g| presenter_rejection(g, &presenter_tokens_for(g)).is_none()),
+            via: record.as_ref().map(|g| {
+                if possession_token(g).is_some() {
+                    "key"
+                } else if crate::review_authority::binding_overlaps(&g.binding, &presenter_tokens())
+                {
+                    "proc"
+                } else {
+                    "none"
+                }
+            }),
             binding,
             rejection: check.rejection_sentence(),
         }
     });
-    GrantStatus {
-        grant,
-        harness_pid,
-        shell_pid,
-    }
+    GrantStatus { grant, harness_pid }
 }
 
 /// BUG-1934: the `seat-grant` doctor category.
@@ -1745,21 +2002,47 @@ pub(crate) const DOCTOR_CATEGORY: &str = "seat-grant";
 /// tree, ...) instead of leaving a silent "no role". Silent otherwise.
 // trace:BUG-1934 | ai:claude
 pub(crate) fn doctor_scan(project_root: &Path) -> Vec<crate::DoctorFinding> {
+    let mut findings: Vec<crate::DoctorFinding> = ptrace_scope_finding(
+        current_grant_id().is_some(),
+        std::fs::read_to_string("/proc/sys/kernel/yama/ptrace_scope")
+            .ok()
+            .as_deref(),
+    )
+    .into_iter()
+    .collect();
     let check = grant_check(project_root);
     let Some(sentence) = check.rejection_sentence() else {
-        return Vec::new();
+        return findings;
     };
     let GrantCheck::Rejected { id, .. } = &check else {
-        return Vec::new();
+        return findings;
     };
     let prefix: String = id.chars().take(8).collect();
-    vec![crate::DoctorFinding {
+    findings.push(crate::DoctorFinding {
         category: DOCTOR_CATEGORY.into(),
         id: format!("{DOCTOR_CATEGORY}:{prefix}"),
         summary: sentence,
         action: "re-enter the role as the refusal says; `aida role status` shows this session's harness pid for --bind-pid".into(),
         safe_heal: false,
-    }]
+    });
+    findings
+}
+
+/// BUG-1934 (SKETCH v2): with yama `ptrace_scope` 0, any same-user process
+/// may ptrace a key holder and read the grant's session key. Warned only
+/// while this session holds a grant; scope 1 or higher (or no yama) is silent.
+// trace:BUG-1934 | ai:claude
+pub(crate) fn ptrace_scope_finding(
+    holds_grant: bool,
+    ptrace_scope: Option<&str>,
+) -> Option<crate::DoctorFinding> {
+    (holds_grant && ptrace_scope.map(str::trim) == Some("0")).then(|| crate::DoctorFinding {
+        category: DOCTOR_CATEGORY.into(),
+        id: format!("{DOCTOR_CATEGORY}:ptrace-scope"),
+        summary: "kernel.yama.ptrace_scope is 0: any process of yours can read a seat grant's session key by tracing the shell that holds it".into(),
+        action: "set kernel.yama.ptrace_scope to 1 (`sudo sysctl kernel.yama.ptrace_scope=1`, and persist it under /etc/sysctl.d/)".into(),
+        safe_heal: false,
+    })
 }
 
 pub(crate) fn grant_id(grant: &SeatGrant) -> &str {
@@ -1780,6 +2063,14 @@ pub(crate) fn grant_id(grant: &SeatGrant) -> &str {
 #[cfg(test)]
 pub(crate) mod test_support {
     use super::*;
+
+    thread_local! {
+        /// BUG-1934: force [`in_foreign_pid_namespace`] for this test thread
+        /// (`None` = probe for real). Unit tests default to "not foreign" so
+        /// a test suite run inside a sandbox keeps its expected sentences.
+        pub(crate) static FOREIGN_NAMESPACE: std::cell::Cell<Option<bool>> =
+            const { std::cell::Cell::new(Some(false)) };
+    }
 
     /// Write the store plumbing (`.aida/config.toml`, `objects/`) plus a
     /// roster ceiling allowing `seat` ∪ `delegable` for `subject`, then mint
@@ -2456,3 +2747,8 @@ mod bug_2200_roster_store_tests;
 #[cfg(test)]
 #[path = "tests/bug_1934_grant_binding_tests.rs"]
 mod bug_1934_grant_binding_tests;
+
+// trace:BUG-1934 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_1934_keyring_tests.rs"]
+mod bug_1934_keyring_tests;

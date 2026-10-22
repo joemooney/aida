@@ -3097,7 +3097,7 @@ pub(crate) fn handle_review_record_at(
             .map(|g| {
                 crate::seat_authority::matched_binding(
                     g,
-                    &crate::seat_authority::presenter_tokens(),
+                    &crate::seat_authority::presenter_tokens_for(g),
                 )
             })
             .unwrap_or_default(),
