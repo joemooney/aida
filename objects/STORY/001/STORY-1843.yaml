@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-22T01:09:41.037372316Z
+modified_at: 2026-10-22T01:26:18.110982247Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -170,6 +170,12 @@ comments:
   content: 'Resumed saved integrator handoff. PR1 #2808 normal append-pushed and remote/OPEN verified at b10d20aa7667f92358d93514f4be7b68e7ff5ebb. Fixture-only commit seeds known bob roster entry; original unknown-recipient CI failure was reproduced locally. Completed saved current-source evidence: full task_1717 suite 43 passed; make test-touched 454 unit plus 43 integration tests passed; make check-ci-fast 33 gates passed. PR body updated with exact SHA and evidence. Current-head CI is newly registering and independent attested review is pending; no approval or completion claim. Advisor compatibility ruling for PR2 requested in thread d2840937 (message f2d0d369). Parent remains In Progress through PR1–3.'
   created_at: 2026-10-22T01:09:41.037372316Z
   modified_at: 2026-10-22T01:09:41.037372316Z
+  session_id: 01a15f84fa7c
+- id: 01a16137-52fe-78a0-96bd-8237f9d6568d
+  author: ai:codex:joe
+  content: 'Integration checkpoint: remote PR2808 b10d20aa remains OPEN; GitHub reports merge conflicts, so CI has not registered at that head. Local clean e8bf76f1e4e9c9232e6c254f48740f284f4ac454 merges main f9890cf67d and preserves main TASK-1955 mailbox fixes with the shared strict resolver. Mention routing keeps roster-before-SHA token handling; imported MCP/mention fixtures now have real live readers. Author merge checker found no actionable issues, without verdict authority. fmt/diff checks passed; make test-touched and make check-ci-fast are still running after long shared-slot waits. No push/CI-green/review approval claim for e8bf. Advisor messages beb2e823 and d32b5d8a record overlap/evidence. Separately, disposable-project compatibility experiment pinned installed binary4361fbd456 (sha2566fb17f808464d676855b64ae76e8425d8045b04fdd6c53e1cabe27d9aacfbf48): replacing archived legacy mailbox dir paths with manifest files caused old CLI send/inbox/notice/sync to return nonzero. Evidence /tmp/story1843-legacy-fence-5ey5467y/pinned-fence-results.json. This proves those paths only, not migration atomicity, in-flight writers, other transports or multi-clone admission. No real mailbox migration or PR2 source change; compatibility ruling and C3 dry-run review remain gates.'
+  created_at: 2026-10-22T01:26:18.110982247Z
+  modified_at: 2026-10-22T01:26:18.110982247Z
   session_id: 01a15f84fa7c
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
