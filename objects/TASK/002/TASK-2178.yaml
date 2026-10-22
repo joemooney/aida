@@ -1,0 +1,28 @@
+id: 01a164c0-9407-74b3-973c-7d9293aebe8a
+spec_id: TASK-2178
+agreed_id: TASK-2178
+title: 'Mailbox reader notice: list live readers before unverified ones under the five-name cap'
+description: |
+  mailbox_resolver.rs:269-275 takes the first five labels from one label-sorted map, so live readers can be hidden behind alphabetically earlier unverified readers ('1 live, 9 unverified: unverified: a, b, c, d, e; and 5 more'). Show live readers first.
+
+  Raised in review of PR-2808: https://github.com/joemooney/aida/pull/2808#issuecomment-6347529888
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-22T17:55:04.839971594Z
+modified_at: 2026-10-22T17:55:04.839971594Z
+req_type: Task
+tags:
+- from-review:PR-2808
+- mailbox
+- severity:cosmetic
+filed_at:
+  code_sha: 3a637d0feb64597a261df10f55a4ef22244ff806
+  branch: pr-2808
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 7ffa46a9d0
+  vendor: claude
+  session: 01a164b45493
+  harness_version: 2.1.308 (Claude Code)

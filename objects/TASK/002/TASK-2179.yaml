@@ -1,0 +1,28 @@
+id: 01a164c0-aa39-78e2-9040-de2c3261b7e1
+spec_id: TASK-2179
+agreed_id: TASK-2179
+title: Mailbox refusal hint names an arbitrary catalog person as 'the operator'
+description: |
+  mailbox_resolver.rs:161-164: when AIDA_USER is unset or does not resolve, the hint picks the lexicographically smallest people-catalog entry and calls that person 'the operator'. Use wording such as 'mail a known person (--to person:X)', or pick from an explicit operator setting.
+
+  Raised in review of PR-2808: https://github.com/joemooney/aida/pull/2808#issuecomment-6347529888
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-22T17:55:10.521422233Z
+modified_at: 2026-10-22T17:55:10.521422233Z
+req_type: Task
+tags:
+- from-review:PR-2808
+- mailbox
+- severity:cosmetic
+filed_at:
+  code_sha: 3a637d0feb64597a261df10f55a4ef22244ff806
+  branch: pr-2808
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 7ffa46a9d0
+  vendor: claude
+  session: 01a164b45493
+  harness_version: 2.1.308 (Claude Code)

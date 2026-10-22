@@ -1,0 +1,28 @@
+id: 01a164c0-79c1-7c80-a47e-344e24cd8da7
+spec_id: TASK-2177
+agreed_id: TASK-2177
+title: 'Mailbox resolver: from a sandboxed CLI, 24h-heartbeat unverified readers keep zero-reader refusal from firing for active roles'
+description: |
+  mailbox_resolver.rs:44-53: each sandboxed CLI command runs in its own PID namespace, so every registry record is foreign and liveness reduces to 'last_active_at within 24h'. In the real store on 2026-10-22, 73 reviewer, 29 advisor, 9 integrator and 15 implementer unended records count as unverified readers, mostly finished headless sessions. So role sends from agents rarely refuse, and notices report many unverified readers. This is the accepted cost of the TTL; STORY-1843 PR2 session bindings or ended-record reconciliation should give real liveness.
+
+  Raised in review of PR-2808: https://github.com/joemooney/aida/pull/2808#issuecomment-6347529888
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-22T17:54:58.113876819Z
+modified_at: 2026-10-22T17:54:58.113876819Z
+req_type: Task
+tags:
+- from-review:PR-2808
+- mailbox
+- severity:minor
+filed_at:
+  code_sha: 3a637d0feb64597a261df10f55a4ef22244ff806
+  branch: pr-2808
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 7ffa46a9d0
+  vendor: claude
+  session: 01a164b45493
+  harness_version: 2.1.308 (Claude Code)
