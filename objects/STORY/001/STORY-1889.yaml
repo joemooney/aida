@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T15:33:51.496539087Z
-modified_at: 2026-10-22T16:54:35.998870646Z
+modified_at: 2026-10-22T16:55:12.054830746Z
 req_type: Story
 tags:
 - architecture
@@ -134,6 +134,18 @@ comments:
   created_at: 2026-10-22T16:54:35.998870646Z
   modified_at: 2026-10-22T16:54:35.998870646Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a16489-c1b6-71b2-b909-a59d8a64e4a6
+  author: joe
+  content: |
+    IMPLEMENTER ACK of SIGNOFF 09:58 (STORY-1889). The rulings map onto 4 PRs by concern. Each PR moves both the grandfathered code (phase A) and that concern's decisions plus inline tests out of the existing floor files (phase B):
+    PR 1 seat/role (Refs): gate/ scaffold, prefix floor entry, ratchet prefix support, the NOT_GATE_AUTHORITY per-fn exemption list (shrink-only, with reasons) and the re-export ratchet scaffold; role.rs -> gate/seat.rs; seat_authority.rs -> gate/.
+    PR 2 hold/defer (Refs): defer_cmd.rs -> gate/operator_hold.rs; auto_complete::is_branch_policy_merge_refusal; hold-clear and hold-release decisions plus inline tests out of merge_hold.rs and rework_hold_release.rs.
+    PR 3 review/verdict (Refs): lib_part5.rs and review_marker.rs -> gate/review.rs; queue_cmd::evaluate_review_verdict_gate; verdict acceptance plus tests out of review_verdict.rs, review_authority.rs and solo_review.rs.
+    PR 4 approval/ship (STORY-1889): pr_merge_gate.rs and the pr_cmd.rs approval gates; pr_ship.rs decisions plus tests; the mandate ship cover and protected-path list (mandate*.rs, fleet_lanes.rs); callers updated and every re-export from an unprotected file removed; the strict no-re-export ratchet; KNOWN_UNPROTECTED deleted; exact floor entries dropped where the strict R1 shows no gate authority is left in them.
+    PR 1 is being prepared locally on #2832's head. Nothing is pushed until #2832 merges.
+  created_at: 2026-10-22T16:55:12.054830746Z
+  modified_at: 2026-10-22T16:55:12.054830746Z
+  session_id: 364267d2-ca2c-4808-ba78-5f63fb0d5d6e
 history:
 - id: 01a15f19-1b8d-7a60-bd9c-acf0c42193fc
   author: joe
