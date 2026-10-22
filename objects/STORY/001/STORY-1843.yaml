@@ -17,12 +17,12 @@ description: |-
   - aida agent ls lists live agents of all vendors with the handle, real role, spec and liveness. Dead entries are pruned or marked.
   - aida mailbox send <handle> delivers to that agent's inbox, which its per-turn mailbox notice hook surfaces. A handle that resolves to no live agent is refused with a hint, rather than creating a phantom inbox.
   - A Claude session can address an agy session by handle and the agy session sees the message on its next turn (black-box test with the agy hook shape).
-status: NeedsAttention
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-22T15:43:49.813018496Z
+modified_at: 2026-10-22T15:48:40.372999510Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -319,6 +319,12 @@ comments:
   content: 'Merge e2e1f1d85bd82270196df3e896f8c8e9f0ea72d0 pushed normally. GitHub confirms PR #2808 OPEN and MERGEABLE; exact-head CI registered as run 39800576951 and is in progress. Advisor new-head notification d74b3803-9bdf-4308-8b6f-0bd6b3cc3355 sent with local gate evidence; no READY/green-CI claim. Quiet point reached: all owned compile/test/push/mail/inspection jobs exited; source worktree clean. Existing locks/leases/holds retained; no PR merge/ship/clearance.'
   created_at: 2026-10-22T15:00:09.909090333Z
   modified_at: 2026-10-22T15:00:09.909090333Z
+- id: 01a1644c-d934-72b3-b759-50131d8e59ed
+  author: joe
+  content: 'Returned from NeedsAttention to In Progress via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: PR1 resolver is well-scoped, CI green, and all prior rework rulings are implemented with tests, but from the default sandboxed CLI the 1268 unended legacy registry records (no pid_namespace) all count as unknown-liveness readers, so zero-reader/dead refusal never fires there and every group notice lists hundreds of names. No triage reason was given.'
+  created_at: 2026-10-22T15:48:40.372988159Z
+  modified_at: 2026-10-22T15:48:40.372988159Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
   author: joe
@@ -416,6 +422,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1644c-d934-72b3-b759-5002afb17798
+  author: joe
+  timestamp: 2026-10-22T15:48:40.372978162Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: InProgress
 filed_at:
   code_sha: ba665aaf98777ed00ac96a782a6d6f51dfd528bd
   branch: main
@@ -424,11 +438,3 @@ filed_at:
   aida_build_sha: 8c4feb441c
   vendor: claude
   session: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: PR1 resolver is well-scoped, CI green, and all prior rework rulings are implemented with tests, but from the default sandboxed CLI the 1268 unended legacy registry records (no pid_namespace) all count as unknown-liveness readers, so zero-reader/dead refusal never fires there and every group notice lists hundreds of names
-  recovery_hint: address the review findings, move STORY-1843 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-22T15:43:49.813018496Z
