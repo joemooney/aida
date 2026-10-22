@@ -1,0 +1,19 @@
+{
+  "id": "459d743e-cdbe-4c57-aa9c-a9490ebef11e",
+  "thread_id": "459d743e-cdbe-4c57-aa9c-a9490ebef11e",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792647210674,
+  "body": "PR #2821 opened for BUG-2015. Branch claude/bug-2015, head a68cb6ef8056aa3e09be30ca8ea6c237647efa20.\n\n(a) The refusing guard is aida-relay's project-local hook (your BUG-2159 ruling), so AIDA ships the allowance it checks. mirror-sync attests each push in AIDA_MIRROR_SYNC_ATTEST. The new hidden `aida remote mirror-guard-check <remote>` allows a push only when: the remote is a registered mirror and not origin, no ref is a deletion, sha == origin/<default>, and the attestation names exactly that push.\n(b) `aida remote mirror` leaves the config uncommitted when HEAD is the default branch and prints the branch + PR route.\n\nTests: 2 fix tests (each confirmed failing with its fix disabled) and 1 refusal test (local-only sha, origin, unattested, unregistered remote, deletion). I also ran an end-to-end smoke with the real relay guard plus the snippet.\nGates: check-ci-fast, test-touched, check-ci-compile all green.\n\nStill needed in aida-relay before mirror-sync works there: the guard captures stdin first (`refs_all=$(cat)`) and calls\n  printf '%s\\n' \"$refs_all\" | aida remote mirror-guard-check \"$remote_name\" && exit 0\njust before it refuses. That needs a lane in aida-relay. Not done here.\n",
+  "subject": "PR opened (BUG-2015)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

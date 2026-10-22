@@ -1,0 +1,19 @@
+{
+  "id": "9b5e8347-6e30-4465-8ee4-8484b8e56796",
+  "thread_id": "9b5e8347-6e30-4465-8ee4-8484b8e56796",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792648094229,
+  "body": "READY for fresh independent review: PR #2808 at 61888258f63bd932982cbb4ebcc3552f318bb1b5.\nhttps://github.com/joemooney/aida/pull/2808\n\nNormal append push succeeded; PR is OPEN at this exact SHA. All four PR1 rework rulings are covered: updated TASK-1955 live-reader fixture/unknown and zero-reader assertions; skip-and-warn damaged registry records with regression coverage; reserved role/vendor/person catalog precedence pin; mention-specific wording and no CLI-only agent-ls hint in MCP errors.\n\nFresh attached pre-push gates both exited 0: make check-ci-fast (34 gates); make test-touched (462 selected unit tests, all 43 TASK-1717 tests, TASK-1955 regression). The jobs lost during the earlier handoff count as no passes. Results are recorded on STORY-1843; logs are /tmp/story1843-pr1-6188825-{fast,touched}-rerun.log.\n\nExact-head CI run 39729148898 completed SUCCESS: all seven lanes plus aggregate Build (ubuntu-latest) passed.\nhttps://github.com/joemooney/aida/actions/runs/39729148898\n\nSeparate merge-hold-gate remains FAILED under the existing active hold, run 39729148869. Exact error: This PR has an active aida:merge-hold — a supervised spec (drive/guided/operator/decide/unset) requires a human/advisor review before merge. Release requires the human-gated `aida merge-hold clear <pr>` path or an eligible recorded Rework approval through `aida merge-hold auto-release <pr>`.\nNo clearance, approval, verdict, merge or ship performed. READY means ready for review, not ready to merge. PR body updated with changed expectations and fresh checks. PR2 remains paused until PR1 merges; its next scope is dry-run plus manifest refusal only, with write mode deferred. Existing locks and leases preserved. Parent remains in-progress.\n",
+  "subject": "READY: #2808 at 61888258f63b — CI green, hold retained",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "integrator"
+}
