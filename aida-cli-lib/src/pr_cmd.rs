@@ -5146,11 +5146,14 @@ pub(crate) fn record_non_completing_rebase_slice(
             candidate_specs.insert(id);
         }
     }
-    if candidate_specs.is_empty() {
-        return Ok(());
-    }
+    // An unreadable range is a failure even when no spec id was found yet:
+    // the missing subjects are where the ids would have come from.
+    // trace:TASK-1951 trace:TASK-1622 | ai:claude
     if range_subjects.is_empty() {
         anyhow::bail!("could not read the commit subjects of `{head_ref}`");
+    }
+    if candidate_specs.is_empty() {
+        return Ok(());
     }
 
     let store_path = main_worktree.join(".aida-store");
@@ -5173,8 +5176,8 @@ pub(crate) fn record_non_completing_rebase_slice(
     if let Some(sha) = merged_head_sha.filter(|s| !s.trim().is_empty()) {
         comment_lines.push(format!("head: {}", sha.trim()));
     }
-    for subj in &range_subjects {
-        match landed.get(subj) {
+    for (subj, landed_sha) in range_subjects.iter().zip(&landed) {
+        match landed_sha {
             Some(sha) => comment_lines.push(format!("landed: {sha}")),
             None => comment_lines.push(format!("subject: {subj}")),
         }
@@ -5216,22 +5219,24 @@ pub(crate) fn record_non_completing_rebase_slice(
     Ok(())
 }
 
-/// TASK-1620: the sha each subject landed as on `base_branch`: the remote
-/// tracking ref after a best-effort fetch first, then the local branch,
-/// searched in the recent first-parent history the merge just extended.
+/// TASK-1620: the sha each range commit landed as on `base_branch`, aligned
+/// with `subjects` (both newest first): the remote tracking ref after a
+/// best-effort fetch first, then the local branch, searched in the recent
+/// first-parent history the merge just extended. Commits are matched one to
+/// one, so two slice commits sharing a subject map to two landed commits.
 // trace:TASK-1951 trace:TASK-1620 | ai:claude
 fn landed_commits_for_subjects(
     project_root: &std::path::Path,
     base_branch: &str,
     subjects: &[String],
-) -> std::collections::BTreeMap<String, String> {
+) -> Vec<Option<String>> {
     let _ = std::process::Command::new("git")
         .current_dir(project_root)
         .args(["fetch", "--quiet", "origin", base_branch])
         // trace:BUG-2181 | ai:claude
         .remote_credentials(project_root, "origin")
         .output();
-    let mut landed = std::collections::BTreeMap::new();
+    let mut landed: Vec<Option<String>> = vec![None; subjects.len()];
     for base in [format!("origin/{base_branch}"), base_branch.to_string()] {
         let Some(out) = std::process::Command::new("git")
             .current_dir(project_root)
@@ -5249,15 +5254,32 @@ fn landed_commits_for_subjects(
         else {
             continue;
         };
-        for line in String::from_utf8_lossy(&out.stdout).lines() {
-            let Some((sha, subject)) = line.split_once('\t') else {
-                continue;
-            };
-            if subjects.iter().any(|s| s == subject.trim()) {
-                landed
-                    .entry(subject.trim().to_owned())
-                    .or_insert_with(|| sha.to_owned());
+        // Newest-first landed shas per subject, consumed in range order.
+        let mut by_subject: std::collections::BTreeMap<&str, std::collections::VecDeque<&str>> =
+            std::collections::BTreeMap::new();
+        let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+        for line in stdout.lines() {
+            if let Some((sha, subject)) = line.split_once('\t') {
+                by_subject.entry(subject.trim()).or_default().push_back(sha);
             }
+        }
+        let mut complete = true;
+        let mut found: Vec<Option<String>> = Vec::with_capacity(subjects.len());
+        for subject in subjects {
+            let sha = by_subject
+                .get_mut(subject.as_str())
+                .and_then(|shas| shas.pop_front())
+                .map(str::to_owned);
+            complete &= sha.is_some();
+            found.push(sha);
+        }
+        if found.iter().filter(|s| s.is_some()).count()
+            > landed.iter().filter(|s| s.is_some()).count()
+        {
+            landed = found;
+        }
+        if complete {
+            break;
         }
     }
     landed
@@ -7527,6 +7549,66 @@ mod story_1663_rebase_ship_tests {
         git(&["update-ref", "refs/remotes/origin/bare", &bare]);
         run_optional_slice_stack_verifier(root, root, 7, "origin/bare", "HEAD")
             .expect("a base without verify_stack.py has no verifier");
+    }
+
+    /// TASK-1620 round 2: two slice commits sharing a subject both land
+    /// under their own shas and both are marked. TASK-1622: an unreadable
+    /// range is an error even when no spec id was found.
+    // trace:TASK-1951 trace:TASK-1620 trace:TASK-1622 | ai:claude
+    #[test]
+    fn task_1951_duplicate_subject_slices_are_each_marked_and_unreadable_ranges_fail() {
+        let (tmp, git) = task_1951_repo();
+        let root = tmp.path();
+        let store_dir = root.join(".aida-store");
+        let backend = aida_core::db::GitBackend::new(&store_dir).unwrap();
+        use aida_core::db::DatabaseBackend;
+        let mut req = aida_core::Requirement::new("Slice parent".into(), String::new());
+        req.spec_id = Some("STORY-78".to_string());
+        req.status = aida_core::RequirementStatus::InProgress;
+        backend.add_requirement(req).unwrap();
+
+        git(&["switch", "-q", "-c", "claude/story-78-part1"]);
+        for n in ["one", "two"] {
+            std::fs::write(root.join(format!("{n}.txt")), "x\n").unwrap();
+            git(&["add", &format!("{n}.txt")]);
+            git(&["commit", "-q", "-m", "refactor: move code (STORY-78)"]);
+        }
+        let pr_head = git(&["rev-parse", "HEAD"]);
+        git(&["switch", "-q", "main"]);
+        git(&["update-ref", "refs/remotes/origin/main", "HEAD"]);
+        git(&["cherry-pick", "main..claude/story-78-part1"]);
+        let landed = [git(&["rev-parse", "HEAD"]), git(&["rev-parse", "HEAD~1"])];
+
+        record_non_completing_rebase_slice(
+            root,
+            root,
+            78,
+            "main",
+            Some(&pr_head),
+            "claude/story-78-part1",
+        )
+        .expect("marker recorded");
+        let stored = backend
+            .get_requirement_unambiguous("STORY-78")
+            .unwrap()
+            .unwrap();
+        for sha in &landed {
+            assert!(
+                crate::db_reconcile::spec_ignores_non_completing_rebase_commit(root, &stored, sha),
+                "landed {sha} is marked"
+            );
+        }
+
+        let err = record_non_completing_rebase_slice(
+            root,
+            root,
+            79,
+            "main",
+            Some("0123456789abcdef0123456789abcdef01234567"),
+            "no-spec-branch",
+        )
+        .expect_err("an unreadable range fails before the empty-candidates return");
+        assert!(err.to_string().contains("commit subjects"), "{err:#}");
     }
 
     /// TASK-1620: the marker names the commit as it landed on the base after
