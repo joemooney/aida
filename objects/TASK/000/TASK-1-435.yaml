@@ -6,18 +6,27 @@ description: |-
 
   cosmetic, aida-cli-lib/src/events.rs:10: the ShipBatchStep doc says 'A dry run records nothing', but run_batch records 'refused' for a non-human dry run (pr_ship_batch.rs:175).
   Reviewed sha: 0b38f5304b2ea63d63010ccc825488cb0f67edbd
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-22T15:54:04.209105955Z
-modified_at: 2026-10-22T15:54:04.209105955Z
+modified_at: 2026-10-22T16:19:22.289123949Z
 req_type: Task
 tags:
 - carried-from:STORY-1887
 - finding-hash:064020b5
 - from-review:STORY-1887
 - kind:carried-forward
+history:
+- id: 01a16468-f431-7290-b2ab-1d2b59d0b70d
+  author: joe
+  timestamp: 2026-10-22T16:19:22.289118090Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 7ffa46a9d0dff57c2e76d77a001e94dec1cb8009
   branch: main
