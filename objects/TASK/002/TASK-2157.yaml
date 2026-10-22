@@ -6,16 +6,25 @@ description: |
   plan_pr -> GitHubPorts::stale_definition_files runs 'git fetch --quiet origin', which updates remote-tracking refs, but --dry-run is documented as 'change nothing'. Document it or skip the fetch in dry-run.
 
   Raised in review of PR-2828: https://github.com/joemooney/aida/pull/2828#issuecomment-6337989557
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-22T09:58:28.728006159Z
-modified_at: 2026-10-22T09:58:28.728006159Z
+modified_at: 2026-10-22T10:12:34.128599464Z
 req_type: Task
 tags:
 - from-review:PR-2828
 - severity:cosmetic
+history:
+- id: 01a16319-22d0-7ad2-ae13-1d4f39ff7301
+  author: joe
+  timestamp: 2026-10-22T10:12:34.128587197Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 2d09343748fa40918904ca838f6799c171e5a3dd
   branch: pr-2828
