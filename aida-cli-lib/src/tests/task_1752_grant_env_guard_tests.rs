@@ -224,7 +224,16 @@ fn ungated_test_dir_modules(lines: &[(usize, &str)]) -> Vec<(usize, String)> {
             || attrs
                 .iter()
                 .any(|a| a.starts_with("#[path") && a.contains("tests/"));
-        if into_tests && !attrs.iter().any(|a| a.starts_with("#[cfg(test)]")) {
+        // `cfg(test)` or `cfg(all(test, ...))`; never `any(...)`, which also
+        // compiles without test.
+        let test_only = |a: &&str| {
+            a.starts_with("#[cfg(test)]")
+                || (a.starts_with("#[cfg(all(")
+                    && regex::Regex::new(r"[(,]\s*test\s*[,)]")
+                        .unwrap()
+                        .is_match(a))
+        };
+        if into_tests && !attrs.iter().any(test_only) {
             found.push((*line, text.trim().to_string()));
         }
     }
@@ -374,11 +383,17 @@ mod b;
 mod tests;
 pub(crate) mod tests;
 mod plain;
+#[cfg(all(test, feature = \"native\"))]
+#[path = \"tests/c.rs\"]
+mod c;
+#[cfg(any(test, feature = \"x\"))]
+#[path = \"tests/d.rs\"]
+mod d;
 ";
     let lines = production_lines(source).unwrap();
     let found: Vec<usize> = ungated_test_dir_modules(&lines)
         .into_iter()
         .map(|(n, _)| n)
         .collect();
-    assert_eq!(found, vec![5, 8]);
+    assert_eq!(found, vec![5, 8, 15]);
 }

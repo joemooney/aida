@@ -272,10 +272,10 @@ fn store_status() -> Result<()> {
     let project_root = find_project_root()?;
     let store_path = project_root.join(".aida-store");
 
-    // Current code HEAD.
-    let code_head = std::process::Command::new("git")
-        .arg("-C")
-        .arg(&project_root)
+    // Current code HEAD. BUG-1992: store_cmd is a store-owning module, so
+    // even its code-checkout reads use the hardened builder.
+    // trace:TASK-1952 | trace:BUG-1992 | ai:claude
+    let code_head = aida_core::git_ops::host_git_command(&project_root)
         .args(["rev-parse", "HEAD"])
         .output()
         .ok()
@@ -292,15 +292,11 @@ fn store_status() -> Result<()> {
     };
 
     // Paired store SHA — read the Aida-Store trailer from HEAD's message.
-    let head_msg = std::process::Command::new("git")
-        .arg("-C")
-        .arg(&project_root)
+    let head_msg = aida_core::git_ops::host_git_command(&project_root)
         .args(["log", "-1", "--format=%B"])
         .output()?;
     let head_msg = String::from_utf8_lossy(&head_msg.stdout).to_string();
-    let trailers = std::process::Command::new("git")
-        .arg("-C")
-        .arg(&project_root)
+    let trailers = aida_core::git_ops::host_git_command(&project_root)
         .args(["interpret-trailers", "--parse"])
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
