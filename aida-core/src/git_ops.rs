@@ -10230,7 +10230,23 @@ mod tests {
         add(&main, &["README.md"]).unwrap();
         commit(&main, "chore: init").unwrap();
         let store = create_store_worktree(&main, ".aida-store", "aida-store").unwrap();
+        // The store branch starts unborn: give it a head to pin.
+        assert!(crate::test_git::git_command()
+            .current_dir(&store)
+            .args(["-c", "user.name=t", "-c", "user.email=t@example.com"])
+            .args([
+                "commit",
+                "-q",
+                "--allow-empty",
+                "--no-verify",
+                "-m",
+                "store"
+            ])
+            .status()
+            .unwrap()
+            .success());
         let store_head = git(&store, &["rev-parse", "HEAD"]).unwrap().stdout;
+        assert!(!store_head.trim().is_empty());
         let hook = dir.path().join("prepare-commit-msg");
         std::fs::write(
             &hook,
