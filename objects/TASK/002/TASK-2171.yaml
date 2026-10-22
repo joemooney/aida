@@ -11,12 +11,17 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-22T12:08:28.224525041Z
-modified_at: 2026-10-22T15:18:17.433717591Z
+modified_at: 2026-10-22T15:18:48.152702150Z
 req_type: Task
 tags:
 - from-review:PR-2831
 - roster
 - severity:cosmetic
+relationships:
+- rel_type: Supersedes
+  target_id: 01a1642a-3454-7a03-bcc3-b1e7e018df46
+  created_at: 2026-10-22T15:18:48.152698053Z
+  created_by: joe
 history:
 - id: 01a16384-2fe6-73e1-ab0b-51903db124ba
   author: joe
@@ -34,6 +39,11 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a16431-8770-7340-ac4d-e219502cba56
+  author: joe
+  timestamp: 2026-10-22T15:18:49.968038345Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
 filed_at:
   code_sha: 06f8be4827790b478907bef54ac92f96050ffb38
   branch: pr-2831
