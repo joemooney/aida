@@ -64,7 +64,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T15:55:48.750553278Z
-modified_at: 2026-10-22T00:57:27.499896949Z
+modified_at: 2026-10-22T01:24:40.572964294Z
 req_type: Task
 tags:
 - reconcile
@@ -573,6 +573,11 @@ history:
   timestamp: 2026-10-22T00:20:54.608440899Z
   session_id: 01a160f890b7
   changes: []
+- id: 01a16135-d751-7823-bea5-1b38f520d670
+  author: joe
+  timestamp: 2026-10-22T01:24:40.913169112Z
+  session_id: 01a16133be12
+  changes: []
 filed_at:
   code_sha: 6d590ed914dea5135a126f7dae6abb403adec66d
   branch: main
@@ -585,7 +590,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'TASK-1619 passes; TASK-1620/1621/1622 partial: landed-sha lookup keyed by subject leaves duplicate-subject slice commits unmarked (regression vs subject: lines), final-slice re-run arm uses checkout-derived inputs, and unreadable subjects still fail open when the branch names no spec'
+  detail: 'Round 3 (slice 4: TASK-1619..1622): 1619/1620/1622 pass and the round-2 duplicate-subject and empty-candidate fixes are correct; TASK-1621 is still partial because the --final-slice arm on an already-merged re-run takes its spec ids from the current checkout. That gap is deferred only in a spec comment, not in the PR body. CI is green.'
   recovery_hint: address the review findings, move TASK-1951 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-10-22T00:20:54.462994306Z
+  shelved_at: 2026-10-22T01:24:40.572964294Z
