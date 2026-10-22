@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T09:53:13.924066900Z
-modified_at: 2026-10-22T10:19:39.632054382Z
+modified_at: 2026-10-22T10:19:43.392310572Z
 req_type: Task
 relationships:
 - rel_type: References
@@ -52,6 +52,12 @@ comments:
   created_at: 2026-10-22T08:02:51.257976406Z
   modified_at: 2026-10-22T08:02:51.257976406Z
   session_id: 1055c49a-076d-4e70-b14a-c59dc9e8118b
+- id: 01a1631f-afa0-72e0-8cf0-68960d9e0571
+  author: joe
+  content: 'ADVISOR 03:24: PR-2806 (S3) PASSED round 8 at a204185e22. The operator ships it (merge hold). Folded its notes for S4: TASK-2160 (document submodule clone handling plus the salvage bundle in 03-work-autonomy.md); TASK-2161 PRIORITY (run_path_isolated_test_output env_clear()s the child and drops AIDA_REQUIRE_BWRAP_LIVE, so the 7 isolated task_2053_bwrap_ tests can SKIP SILENTLY even where the live gate demands them. Fix this first in S4 and confirm the live-bwrap CI job actually executes them); TASK-2162 (test dismiss on a hand-removed clone that still holds a lease, the recovery path session end now prescribes).'
+  created_at: 2026-10-22T10:19:43.392310572Z
+  modified_at: 2026-10-22T10:19:43.392310572Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a15de1-409d-7c42-b18e-94acbd5eb19d
   author: joe
