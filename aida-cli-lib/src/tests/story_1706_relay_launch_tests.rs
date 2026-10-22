@@ -47,13 +47,13 @@ fn with(key: &str, value: Option<&str>) -> String {
 
 #[test]
 fn a_record_parses_with_its_args_in_order() {
-    let r = parse(body(&["arg=do%20it%0Anow%25", "orig_arg=--label"]).as_bytes()).unwrap();
+    let r = parse(body(&["arg=do it%0Anow%25", "orig_arg=--label"]).as_bytes()).unwrap();
     assert_eq!(r.run, "r1");
     assert_eq!(r.principal, "joe");
     assert!(r.launched_from_tty && !r.force_seat);
     assert_eq!((r.max_sessions, r.start_session), (10, 1));
     assert_eq!(r.profile_file, None);
-    assert_eq!(r.args, ["--run", "r1", "do%20it\nnow%"].map(String::from));
+    assert_eq!(r.args, ["--run", "r1", "do it\nnow%"].map(String::from));
     assert_eq!(r.sha256.len(), 64);
 }
 

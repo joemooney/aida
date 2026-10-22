@@ -1269,8 +1269,9 @@ fn restart_crashed(
                 notes.insert(key.clone(), None);
                 continue;
             }
+            // No row of its own: the reason rides on the lane's advisor
+            // item, which is routed as before.
             RestartVerdict::No(why) => {
-                skip(tick, per, why.clone());
                 notes.insert(key.clone(), Some(why));
                 continue;
             }

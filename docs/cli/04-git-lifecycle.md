@@ -487,13 +487,15 @@ blocked or finished), and only when all of these hold:
   that it belongs to the mandate's principal, and that its profile is unchanged;
 - it is not an advisor-seat or `--force-seat` run, and no `bin/relay.sh
   --no-restart <run>` marker is present;
+- no agent session of the run is still alive (a `kill -9` of the relay alone
+  leaves its session running; stop it first);
 - it has been restarted fewer than 3 times, after waiting 1, 2 and then 4 ticks;
 - sessions are left in its budget and the mandate has at least 30 minutes left;
 - the mandate was started with the `relay-restart` scope (`--drive` adds it;
   a drive mandate started before it existed does not cover it).
 
-The restart re-runs the arguments from the record with `--max-sessions` set
-to the sessions left. It uses no grant and no session role. Any other crashed
+The restart runs the record's resume arguments (the same run, its existing
+handoff, no initial prompt) with `--max-sessions` set to the sessions left. It uses no grant and no session role. Any other crashed
 run goes to the advisor as before. After the third restart you get one
 crash-loop notice.
 
