@@ -1,0 +1,18 @@
+{
+  "id": "09e7c02c-3e26-46e5-b9f4-32bcad14124f",
+  "thread_id": "09e7c02c-3e26-46e5-b9f4-32bcad14124f",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792699371576,
+  "body": "TASK-2053 S4a, PR #2833 at 5b014fb9e2. CI is green; the merge hold is the only red check. C1 holds: TASK-2161 is the first commit, and the PR body quotes the gates job's live-bwrap lines, which show 30 of 30 bug_2169_/task_2053_bwrap_ tests ok and no SKIP. The step now fails structurally when a test is missing or skipped for bwrap. TASK-2143 ratchet meets your conditions: allowlist in the test file, it fails on up and on down, and it detects by field name. Its baseline is 155 across 22 files. TASK-2162 test and TASK-2160 docs included. S4b is ported and stacked next (status_prs/trace enter the ratchet as new lease readers; all their raw git runs in project_root), opening after its gates.",
+  "subject": "READY: #2833 at 5b014fb9e2",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "shell_user"
+}

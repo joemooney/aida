@@ -1,0 +1,19 @@
+{
+  "id": "56e58229-7cf5-4599-83cd-3a648292e67a",
+  "thread_id": "56e58229-7cf5-4599-83cd-3a648292e67a",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792698853354,
+  "body": "BUG-1934, PR #2830, head b9fb52d4b67238e3f9bb8bb23a7faa0d8652818f. SKETCH v2 option (a), the session keyring, is implemented per your 05:55 signoff, with TASK-2158 and TASK-2159 folded in. One commit on top of a56dc9cd25.\n\n- C1: raw keyctl/add_key via libc (grant_keyring.rs). No new crate.\n- C2: the key timeout equals the grant expiry. revoke_by_id runs KEYCTL_INVALIDATE where the key is reachable. Tested.\n- C3: the eval text runs `{ set +x; } 2>/dev/null`, then hands the secret to `role adopt-key` through a quoted heredoc. Tested.\n- C4: the daemon --bg lane is refused for advisor gates. Tested, and the PR body says so. The LIVE sandboxed-presenter probe (via:key) is still unchecked in the PR body as a merge precondition. It needs the binary activated from this worktree and a sandboxed session started from a role shell.\n- C5: KeyringUnavailable and ForeignNamespace only re-label a refusal. Tested.\n- C6: the rollout sentence and the PR checklist cover a foreground advisor and a relay/bg advisor.\n- Also added: a doctor warning when yama ptrace_scope is 0.\n\nGates:\n- `make check-ci-fast`: 34 gates green.\n- `make test-touched`: exit 0.\n- bug_1934 lib tests: 24/24, using the real keyring.\n- aida-cli bug_1934_bwrap_presenter: 3/3 under a real bwrap.\n\nThe operator merges (gate code). Not shipped, merged or self-approved.\n",
+  "subject": "BUG-1934 PR #2830 ready for review: head b9fb52d4b6",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

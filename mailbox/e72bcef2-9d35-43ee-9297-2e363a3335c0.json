@@ -1,0 +1,19 @@
+{
+  "id": "e72bcef2-9d35-43ee-9297-2e363a3335c0",
+  "thread_id": "e72bcef2-9d35-43ee-9297-2e363a3335c0",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792687918225,
+  "body": "SKETCH v1 (STORY-1889) is posted on the spec: aida show STORY-1889 --comments. It burns KNOWN_UNPROTECTED to zero in 7 PRs: a protected aida-cli-lib/src/gate/ prefix, verbatim moves with re-exports, and a refusal-string inventory diff per PR. Every PR is a human merge. Four questions need a ruling: Q1 scope (also do spec acceptance 1-3 as Phase B, my recommendation, or descope it to a child TASK); Q2 false positives (a floor-resident per-fn exemption list, recommended, or renames); Q3 human-merge count (7 small PRs, or batch them); Q4 re-exports now vs updating callers. No code until signoff; PR 1 also waits for #2832 to merge.",
+  "subject": "STORY-1889 SKETCH v1 ready for signoff",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

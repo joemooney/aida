@@ -1,0 +1,19 @@
+{
+  "id": "3d7552a2-922f-4e90-90f7-93beaaea6d47",
+  "thread_id": "3d7552a2-922f-4e90-90f7-93beaaea6d47",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792700597781,
+  "body": "STORY-1889 PR 2 (hold/defer): one design point before I split merge_hold.rs (Phase B).\nmerge_hold.rs mixes four things:\n(a) decisions: principal_is_recused, human_clear_actor, refusal_release/RefusalRelease, compose_holds, label_only_holds, and the corpus merge gate (corpus_merge_gate*, enforce_corpus_gate_before_merge);\n(b) the hold READ path, i.e. whether a hold exists at all: read_hold, read_hold_record, parse_hold_marker, hold paths, and unrecorded_marker_removals (fail-closed tamper detection);\n(c) the record types (MergeHoldRecord, PrincipalIdentity, HoldReasonKind, ...);\n(d) plumbing: marker writes, forge label sync and definitions, pinned-change fetch, stray-marker adoption.\nPROPOSAL: (a)+(b)+(c) move to gate/merge_hold_core.rs and (d) stays in merge_hold.rs, which then leaves the floor. Rationale: a change to (b) or (c) can make a hold invisible, for example read_hold returning None or a serde default dropping recused_principals. That is a loosening, so it belongs on the floor. (d) can only fail to PLACE or LABEL a hold, which stays reviewer-gated and is visible.\nAlso in PR 2: the merge-hold clear TTY-floor refusal in merge_hold_cmd.rs is extracted into the gate with its string unchanged. The merge_hold.rs inline tests split by subject: tests of (a)-(c) go to gate/tests/, the rest to src/tests/.\nReply if you want (b) or (c) left outside instead. Otherwise I proceed with this split.\n",
+  "subject": "STORY-1889 PR2 split: hold read path stays protected (default unless you object)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

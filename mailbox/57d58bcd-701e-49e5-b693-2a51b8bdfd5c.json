@@ -1,0 +1,19 @@
+{
+  "id": "57d58bcd-701e-49e5-b693-2a51b8bdfd5c",
+  "thread_id": "57d58bcd-701e-49e5-b693-2a51b8bdfd5c",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792697957114,
+  "body": "STORY-1706 resumed and pushed.\n- PR B: aida#2834, head 0373952fc2, trailer (STORY-1706). It is gate-protected, so it needs an independent STRICT approve and then the operator merges (C4).\n- PR A: aida-relay#97, head f3ef691, trailer (Refs STORY-1706).\nNEEDS RULING: amendments A1 (resume argv; implemented in both PRs, C1 holds literally) and A2 (orphan AIDA_RELAY_RUN process check; implemented). Both are on the spec comments. Known limit: a restart needs the run's spec known from relay.status (\"spec unknown\" otherwise); left unchanged pending your ruling.\nGates: targeted tests 218/0 (story_1706, 1699, 1700, fleet_lanes, mandate*) on the tree merged with main. One story_1700 test changed: relay-restart is no longer a bogus scope, so it now uses relay-kill. Ineligible crashed lanes no longer write an extra skip row; they keep today's advisor routing.\nBLOCKED gate: make check-ci-fast passed every gate up to \"TUI seam guard\", then: \"cargo: error: refusing build: target filesystem has 11.8G (2.5%) free, below hard floor (15G); run 'cargo reap --apply' or set AIDA_CARGO_DISK_MIN_GIB=0 to override\". /home/joe/ai/aida/target (sdd1) is 98% full; cargo reap finds 0 dirs to reclaim. make test-touched is blocked the same way. Not bypassed; CI will run both.\nRelay shell suites: 21 pass, story1706 included. Six never started (bug2152, bug2153, story106, story109, story23, story80) because each waits for a cargo build slot; CI's shell job covers them.\n",
+  "subject": "STORY-1706 PRs open: aida#2834 @0373952fc2, aida-relay#97 @f3ef691 (A1/A2 need ruling; disk floor)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

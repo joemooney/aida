@@ -1,0 +1,19 @@
+{
+  "id": "299cf8d4-4398-4cfb-843b-9ce814964f9e",
+  "thread_id": "299cf8d4-4398-4cfb-843b-9ce814964f9e",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792686234119,
+  "body": "PR #2832, head 5d2a30175d: make test-touched passed (718 passed, 0 failed, 1 ignored). Every local gate is now green. The PR is ready for an independent review and a human merge.",
+  "subject": "STORY-1888 #2832: test-touched green",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

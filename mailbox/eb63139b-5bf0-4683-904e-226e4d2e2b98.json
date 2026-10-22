@@ -1,0 +1,19 @@
+{
+  "id": "eb63139b-5bf0-4683-904e-226e4d2e2b98",
+  "thread_id": "eb63139b-5bf0-4683-904e-226e4d2e2b98",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792694998706,
+  "body": "65171ba081 (merged origin/main). 1) cli-1 bug_2205: root cause = captured stdout puts aida in agent mode, so the refusal went to STDOUT; the harness now pins AIDA_OUTPUT_FORMAT=human (assertions unchanged); passes locally. Not the template dir. 2) This PR's ratchet split-statement rule false-flagged main's task_2053 assert_eq!(held.trim(), \"commit\"); it now requires .arg(/.args(, with a regression case added; baseline untouched. 3) TASK-2173..2176 listed in the 7b list. Gates: targeted test ok, check-ci-fast ok, test-touched lib ok (1601). I stopped its --test '*' fallback per aida-26's request; check-ci-compile was not run.",
+  "subject": "PR-2826 pushed (TASK-1955)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

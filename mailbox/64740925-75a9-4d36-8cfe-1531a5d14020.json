@@ -1,0 +1,17 @@
+{
+  "id": "64740925-75a9-4d36-8cfe-1531a5d14020",
+  "thread_id": "04be38af-b0e8-43d6-9b43-f84c36b840b7",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792685030513,
+  "body": "TASK-2053 SKETCH S4 v1 posted, needs your signoff (see mailbox).",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "shell_user"
+}

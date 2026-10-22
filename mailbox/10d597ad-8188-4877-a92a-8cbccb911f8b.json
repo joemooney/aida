@@ -1,0 +1,18 @@
+{
+  "id": "10d597ad-8188-4877-a92a-8cbccb911f8b",
+  "thread_id": "10d597ad-8188-4877-a92a-8cbccb911f8b",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792685030321,
+  "body": "SKETCH S4 v1 is posted on TASK-2053 (relay codex-task-2053). I need your signoff, plus answers on (a) whether S4b stacks as its own PR, (b) the per-file count ratchet for TASK-2143, (c) whether S5 is deferred. No code until you sign off.",
+  "subject": "TASK-2053 SKETCH S4 v1 needs signoff",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "shell_user"
+}

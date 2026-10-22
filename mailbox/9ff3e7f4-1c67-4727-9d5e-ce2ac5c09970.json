@@ -1,0 +1,19 @@
+{
+  "id": "9ff3e7f4-1c67-4727-9d5e-ce2ac5c09970",
+  "thread_id": "9ff3e7f4-1c67-4727-9d5e-ce2ac5c09970",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792688768812,
+  "body": "PR #2808 final round-2 rework pushed normally to the SAME branch: f478609a65ae6584da992ea0e100b6ba387db16e.\nhttps://github.com/joemooney/aida/pull/2808\nBase reviewed head: d82c615affadcb1101de20d9c60a25c5bae5ec8e.\nExact requested commit: [AI:codex] fix(mailbox): bound unknown reader liveness; cap and label reader notice (Refs STORY-1843)\n\nOnly the five listed findings addressed:\n1. Named 24h UNKNOWN_READER_TTL_SECONDS bounds unobservable liveness; stale/missing-heartbeat legacy/foreign entries do not count for role/private delivery. No registry rewrite/delete. Fresh unverified delivery still works with notice.\n2. First five names, then and K more.\n3. Separate N live, M unverified counts and correctly labeled name lists, including mixed 20-reader regression.\n4. Operator hint chooses a resolvable catalog person, preferring catalog-resolvable AIDA_USER; person qualification prevents role collisions; no hardcoded name and no recipient hint when none resolves. Docs updated.\n5. Mention-drop uses its own hint and never suggests aida comment add.\n\nFail-first proof: six tests before implementation, five expected failures + missing-heartbeat test already passing (/tmp/story1843-pr1-round2-red.log). Final targeted resolver tests 20 passed, including seven new regressions. Requested gates both EXIT 0: make check-ci-fast 34 gates; make test-touched 791 selected unit tests, all 43 TASK-1717 integration tests, TASK-1955. Logs /tmp/story1843-pr1-round2-targeted.log, /tmp/story1843-pr1-f478609a65-fast.log, /tmp/story1843-pr1-f478609a65-touched.log. TASK-1955 fixture now has a current heartbeat for TTL eligibility.\n\nPR body updated; evidence recorded on STORY-1843. CI settlement is not claimed. No new PR, merge, ship, approval, verdict or hold clearance. Existing worktree locks/leases retained; PR2 paused. All owned validation/push jobs finished; source worktree clean.\n",
+  "subject": "PR-2808 final round-2 pushed: f478609a65 — requested local gates passed",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "integrator"
+}
