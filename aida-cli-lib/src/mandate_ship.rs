@@ -44,30 +44,56 @@ pub(crate) fn mandate_exclusion_specs(
 /// a concurrent writer changes the store mid-collection, before refusing.
 const MANDATE_COLLECT_ATTEMPTS: u32 = 3;
 
-/// BUG-2179: run `collect` until the store `snapshot` taken before it equals
-/// the one taken after it, so all current/history evidence comes from one
-/// observed store version. A concurrent write discards that attempt and the
+/// TASK-2019: the pause before the next attempt after a dirty or moving store,
+/// so an in-flight store write can commit.
+// trace:TASK-2067 | ai:antigravity
+const MANDATE_COLLECT_BACKOFF: std::time::Duration = std::time::Duration::from_millis(500);
+
+/// BUG-2179: run `collect` until the store `snapshot` taken before it and the
+/// one taken after it are `stable`, so all current/history evidence comes from
+/// one observed store version. A concurrent write discards that attempt and the
 /// next builds fresh facts; after `MANDATE_COLLECT_ATTEMPTS` it refuses.
+///
+/// TASK-2019: `snapshot` returns `Ok(None)` for a dirty store (uncommitted
+/// evidence). That attempt is retried within the same bound, after `backoff`,
+/// instead of refusing at once; a store still dirty on the last attempt
+/// refuses. BUG-2195: `stable` decides whether two snapshots are the same
+/// store version for the exclusion reader, so an unrelated ref move does not
+/// count as a change.
 // trace:BUG-2179 | ai:claude
-fn collect_on_stable_store<S: PartialEq, T>(
-    mut snapshot: impl FnMut() -> std::result::Result<S, crate::mandate::MandateRefusal>,
+// trace:TASK-2067 | ai:antigravity
+fn collect_on_stable_store<S, T>(
+    mut snapshot: impl FnMut() -> std::result::Result<Option<S>, crate::mandate::MandateRefusal>,
+    mut stable: impl FnMut(&S, &S) -> bool,
     mut collect: impl FnMut() -> T,
+    backoff: std::time::Duration,
 ) -> std::result::Result<T, crate::mandate::MandateRefusal> {
     let mut attempt = 0;
     loop {
         attempt += 1;
-        let before = snapshot()?;
-        let collected = collect();
-        if snapshot()? == before {
-            return Ok(collected);
-        }
+        let dirty = match snapshot()? {
+            None => true,
+            Some(before) => {
+                let collected = collect();
+                match snapshot()? {
+                    Some(after) if stable(&before, &after) => return Ok(collected),
+                    Some(_) => false,
+                    None => true,
+                }
+            }
+        };
         if attempt >= MANDATE_COLLECT_ATTEMPTS {
             return Err(crate::mandate::MandateRefusal::TraceEvidenceUnreadable(
-                format!(
-                    "the store changed while collecting exclusions ({attempt} attempts); retry"
-                ),
+                if dirty {
+                    format!("{} ({attempt} attempts)", crate::mandate_traces::StoreDirty)
+                } else {
+                    format!(
+                        "the store changed while collecting exclusions ({attempt} attempts); retry"
+                    )
+                },
             ));
         }
+        std::thread::sleep(backoff);
     }
 }
 
@@ -151,147 +177,163 @@ pub(crate) fn mandate_ship_cover(
     // gathered. Rebuild every fact from a fresh snapshot a bounded number of
     // times; after the last attempt the change still refuses (fail closed).
     // trace:BUG-2179 | ai:claude
-    let snapshot = || crate::mandate_traces::store_snapshot(&store_root).map_err(&unreadable);
-    let (specs, ledger) = collect_on_stable_store(snapshot, || {
-        let store = load_store_for_lookup(project_root);
-        let mut history_keys_of: Vec<Vec<String>> = Vec::new();
-        let mut specs =
-            mandate_exclusion_specs(&ids, trace_evidence.ids.clone(), |id, is_named| {
-                let req = store.as_ref().and_then(|store| {
-                    store
-                        .requirements
-                        .iter()
-                        .find(|r| {
-                            r.spec_id
-                                .as_deref()
-                                .is_some_and(|s| s.eq_ignore_ascii_case(id))
-                                || r.agreed_id
+    // BUG-2195 / TASK-2019: a dirty store is retried within the bound, and
+    // two snapshots are compared by the exclusion reader's stability rule.
+    // trace:TASK-2067 | ai:antigravity
+    let snapshot = || match crate::mandate_traces::store_snapshot(&store_root) {
+        Ok(snap) => Ok(Some(snap)),
+        Err(e) if e.is::<crate::mandate_traces::StoreDirty>() => Ok(None),
+        Err(e) => Err(unreadable(e)),
+    };
+    let stable = |before: &crate::mandate_traces::StoreSnapshot,
+                  after: &crate::mandate_traces::StoreSnapshot| {
+        crate::mandate_traces::store_snapshot_stable(&store_root, before, after)
+    };
+    let (specs, ledger) = collect_on_stable_store(
+        snapshot,
+        stable,
+        || {
+            let store = load_store_for_lookup(project_root);
+            let mut history_keys_of: Vec<Vec<String>> = Vec::new();
+            let mut specs =
+                mandate_exclusion_specs(&ids, trace_evidence.ids.clone(), |id, is_named| {
+                    let req = store.as_ref().and_then(|store| {
+                        store
+                            .requirements
+                            .iter()
+                            .find(|r| {
+                                r.spec_id
                                     .as_deref()
                                     .is_some_and(|s| s.eq_ignore_ascii_case(id))
-                        })
-                        .cloned()
-                });
-                // TASK-1800: collect any recorded aliases (both spec_id and agreed_id)
-                // so that an agreed_id resolves to its stored spec_id object path for
-                // history, and the ledger check / note_exclusions cover both keys.
-                let mut aliases = Vec::new();
-                let mut history_keys = vec![id.to_owned()];
-                if let Some(ref r) = req {
-                    for candidate in [r.spec_id.as_deref(), r.agreed_id.as_deref()]
-                        .into_iter()
-                        .flatten()
-                    {
-                        let upper = candidate.trim().to_ascii_uppercase();
-                        if !upper.is_empty() && !upper.eq_ignore_ascii_case(id) {
-                            if !aliases
-                                .iter()
-                                .any(|a: &String| a.eq_ignore_ascii_case(&upper))
-                            {
-                                aliases.push(upper.clone());
-                            }
-                            if !history_keys
-                                .iter()
-                                .any(|k: &String| k.eq_ignore_ascii_case(&upper))
-                            {
-                                history_keys.push(upper);
+                                    || r.agreed_id
+                                        .as_deref()
+                                        .is_some_and(|s| s.eq_ignore_ascii_case(id))
+                            })
+                            .cloned()
+                    });
+                    // TASK-1800: collect any recorded aliases (both spec_id and agreed_id)
+                    // so that an agreed_id resolves to its stored spec_id object path for
+                    // history, and the ledger check / note_exclusions cover both keys.
+                    let mut aliases = Vec::new();
+                    let mut history_keys = vec![id.to_owned()];
+                    if let Some(ref r) = req {
+                        for candidate in [r.spec_id.as_deref(), r.agreed_id.as_deref()]
+                            .into_iter()
+                            .flatten()
+                        {
+                            let upper = candidate.trim().to_ascii_uppercase();
+                            if !upper.is_empty() && !upper.eq_ignore_ascii_case(id) {
+                                if !aliases
+                                    .iter()
+                                    .any(|a: &String| a.eq_ignore_ascii_case(&upper))
+                                {
+                                    aliases.push(upper.clone());
+                                }
+                                if !history_keys
+                                    .iter()
+                                    .any(|k: &String| k.eq_ignore_ascii_case(&upper))
+                                {
+                                    history_keys.push(upper);
+                                }
                             }
                         }
                     }
+                    // History is read in one batch below, once every spec is resolved.
+                    // trace:BUG-2179 | ai:claude
+                    history_keys_of.push(history_keys);
+                    crate::mandate::ShipSpec {
+                        id: id.to_owned(),
+                        aliases,
+                        named: is_named,
+                        current: req,
+                        history: Ok(Vec::new()),
+                    }
+                });
+            // trace:TASK-1800 | ai:claude
+            // A deleted spec has no current record to name its aliases, so find every
+            // object that ever carried its ID in store history. A history that cannot
+            // be searched refuses below; it never makes the ID dangling.
+            // BUG-2179: one search serves every deleted spec, and one walk plus one
+            // object read serves every spec's history, instead of a full-history
+            // `git log --all` per spec.
+            let deleted: Vec<String> = specs
+                .iter()
+                .filter(|spec| spec.current.is_none())
+                .map(|spec| spec.id.clone())
+                .collect();
+            let alias_search = crate::mandate::store_history_alias_map(&store_root, &deleted);
+            for (spec, keys) in specs.iter_mut().zip(history_keys_of.iter_mut()) {
+                if spec.current.is_some() {
+                    continue;
                 }
-                // History is read in one batch below, once every spec is resolved.
-                // trace:BUG-2179 | ai:claude
-                history_keys_of.push(history_keys);
-                crate::mandate::ShipSpec {
-                    id: id.to_owned(),
-                    aliases,
-                    named: is_named,
-                    current: req,
-                    history: Ok(Vec::new()),
+                let found = match &alias_search {
+                    Ok(map) => map
+                        .get(&spec.id.to_ascii_uppercase())
+                        .cloned()
+                        .unwrap_or_default(),
+                    Err(_) => Vec::new(),
+                };
+                for alias in found {
+                    if !spec.aliases.iter().any(|a| a.eq_ignore_ascii_case(&alias)) {
+                        spec.aliases.push(alias.clone());
+                    }
+                    if !keys.iter().any(|k| k.eq_ignore_ascii_case(&alias)) {
+                        keys.push(alias);
+                    }
                 }
-            });
-        // trace:TASK-1800 | ai:claude
-        // A deleted spec has no current record to name its aliases, so find every
-        // object that ever carried its ID in store history. A history that cannot
-        // be searched refuses below; it never makes the ID dangling.
-        // BUG-2179: one search serves every deleted spec, and one walk plus one
-        // object read serves every spec's history, instead of a full-history
-        // `git log --all` per spec.
-        let deleted: Vec<String> = specs
-            .iter()
-            .filter(|spec| spec.current.is_none())
-            .map(|spec| spec.id.clone())
-            .collect();
-        let alias_search = crate::mandate::store_history_alias_map(&store_root, &deleted);
-        for (spec, keys) in specs.iter_mut().zip(history_keys_of.iter_mut()) {
-            if spec.current.is_some() {
-                continue;
             }
-            let found = match &alias_search {
-                Ok(map) => map
-                    .get(&spec.id.to_ascii_uppercase())
-                    .cloned()
-                    .unwrap_or_default(),
-                Err(_) => Vec::new(),
+            let all_keys: Vec<String> = history_keys_of.iter().flatten().cloned().collect();
+            let batch = crate::mandate::StoreHistoryBatch::read(&store_root, &all_keys);
+            for (spec, keys) in specs.iter_mut().zip(&history_keys_of) {
+                // STORY-1698 / TASK-1800: sticky exclusion reads every stored version
+                // across the ID and any resolved alias object path.
+                spec.history = (|| -> std::result::Result<Vec<aida_core::Requirement>, String> {
+                    if spec.current.is_none() {
+                        alias_search.as_ref().map_err(String::clone)?;
+                    }
+                    let batch = batch.as_ref().map_err(String::clone)?;
+                    let mut all_versions = Vec::new();
+                    for key in keys {
+                        all_versions.extend(batch.versions(key)?);
+                    }
+                    if spec.named && all_versions.is_empty() {
+                        return Err(format!("no version of {} in the store's history", spec.id));
+                    }
+                    Ok(all_versions)
+                })();
+            }
+            // STORY-1698: every excluded class seen in any version goes into the
+            // append-only ledger first, then the ledger is read back as the first
+            // source of exclusion. trace:STORY-1698 | ai:claude
+            let mandate_dir = crate::mandate::mandate_dir();
+            if let Ok(dir) = &mandate_dir {
+                for spec in &specs {
+                    let changes = spec
+                        .current
+                        .as_ref()
+                        .map(crate::mandate::field_change_versions)
+                        .unwrap_or_default();
+                    let history: &[aida_core::Requirement] = spec.history.as_deref().unwrap_or(&[]);
+                    for key in std::iter::once(&spec.id).chain(spec.aliases.iter()) {
+                        crate::mandate::note_exclusions(
+                            dir,
+                            key,
+                            spec.current
+                                .iter()
+                                .chain(changes.iter())
+                                .chain(history.iter()),
+                        );
+                    }
+                }
+            }
+            let ledger = match &mandate_dir {
+                Ok(dir) => crate::mandate::read_exclusions(dir),
+                Err(e) => Err(format!("{e:#}")),
             };
-            for alias in found {
-                if !spec.aliases.iter().any(|a| a.eq_ignore_ascii_case(&alias)) {
-                    spec.aliases.push(alias.clone());
-                }
-                if !keys.iter().any(|k| k.eq_ignore_ascii_case(&alias)) {
-                    keys.push(alias);
-                }
-            }
-        }
-        let all_keys: Vec<String> = history_keys_of.iter().flatten().cloned().collect();
-        let batch = crate::mandate::StoreHistoryBatch::read(&store_root, &all_keys);
-        for (spec, keys) in specs.iter_mut().zip(&history_keys_of) {
-            // STORY-1698 / TASK-1800: sticky exclusion reads every stored version
-            // across the ID and any resolved alias object path.
-            spec.history = (|| -> std::result::Result<Vec<aida_core::Requirement>, String> {
-                if spec.current.is_none() {
-                    alias_search.as_ref().map_err(String::clone)?;
-                }
-                let batch = batch.as_ref().map_err(String::clone)?;
-                let mut all_versions = Vec::new();
-                for key in keys {
-                    all_versions.extend(batch.versions(key)?);
-                }
-                if spec.named && all_versions.is_empty() {
-                    return Err(format!("no version of {} in the store's history", spec.id));
-                }
-                Ok(all_versions)
-            })();
-        }
-        // STORY-1698: every excluded class seen in any version goes into the
-        // append-only ledger first, then the ledger is read back as the first
-        // source of exclusion. trace:STORY-1698 | ai:claude
-        let mandate_dir = crate::mandate::mandate_dir();
-        if let Ok(dir) = &mandate_dir {
-            for spec in &specs {
-                let changes = spec
-                    .current
-                    .as_ref()
-                    .map(crate::mandate::field_change_versions)
-                    .unwrap_or_default();
-                let history: &[aida_core::Requirement] = spec.history.as_deref().unwrap_or(&[]);
-                for key in std::iter::once(&spec.id).chain(spec.aliases.iter()) {
-                    crate::mandate::note_exclusions(
-                        dir,
-                        key,
-                        spec.current
-                            .iter()
-                            .chain(changes.iter())
-                            .chain(history.iter()),
-                    );
-                }
-            }
-        }
-        let ledger = match &mandate_dir {
-            Ok(dir) => crate::mandate::read_exclusions(dir),
-            Err(e) => Err(format!("{e:#}")),
-        };
-        (specs, ledger)
-    })?;
+            (specs, ledger)
+        },
+        MANDATE_COLLECT_BACKOFF,
+    )?;
     let hold_record = crate::merge_hold::read_hold_record(hold_root, pr);
     let hold_reason = crate::merge_hold::read_hold(hold_root, pr);
     let hold = HoldFacts::of(hold_record.as_ref(), hold_reason.as_deref());
