@@ -20,17 +20,26 @@ description: |
   - tests for each skip reason (dirty, off-main, unchanged, CI red, CI pending, non-ff) and for the promote path with a fake forge;
   - a schedule job entry plus a route job;
   - docs in the dev-build section of the repository guide.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T12:00:26.553324153Z
-modified_at: 2026-10-14T12:00:26.553324153Z
+modified_at: 2026-10-22T01:46:04.715823902Z
 req_type: Story
 tags:
 - dev-build
 - schedule
 - throughput
+history:
+- id: 01a16149-6e2b-7cc0-9c50-a8547ec8a529
+  author: joe
+  timestamp: 2026-10-22T01:46:04.715812875Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 71d04b3609f89ac607471a35013a0ad9962708f6
   branch: main
