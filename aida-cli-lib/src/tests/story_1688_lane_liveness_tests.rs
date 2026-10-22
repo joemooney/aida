@@ -1327,3 +1327,133 @@ fn routed_seat_job_is_due_for_its_seat_and_cleared_by_schedule_done() {
     crate::maintenance_schedule::done(root, "lane-liveness-reviewer", None).unwrap();
     assert!(!due("reviewer").contains(&"lane-liveness-reviewer".to_string()));
 }
+
+/// TASK-1670: a verdict reached through a symlink is not evidence that a
+/// review started, so the ready PR is still reported.
+// trace:TASK-1951 trace:TASK-1670 | ai:claude
+#[test]
+fn linked_verdict_does_not_count_as_review_started() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let now = Utc::now();
+    let green = Some(now - Duration::minutes(40));
+    let outside = tempfile::tempdir().unwrap();
+    record_verdict(outside.path(), "TASK-2801", HEAD_A);
+    let real = crate::review_verdict::verdict_path(outside.path(), "TASK-2801");
+    let linked = crate::review_verdict::verdict_path(root, "TASK-2801");
+    std::fs::create_dir_all(linked.parent().unwrap()).unwrap();
+    std::os::unix::fs::symlink(&real, &linked).unwrap();
+
+    let feed = prs_json(vec![gh_pr(2801, HEAD_A, green, false)]);
+    let prs = move |_: &Path| Ok(feed.clone());
+    assert_eq!(
+        ids(&findings_at(root, now, &prs)),
+        [format!(
+            "lane-liveness:unpicked-ready-pr:PR-2801@{}",
+            &HEAD_A[..8]
+        )]
+    );
+}
+
+/// TASK-2094 / TASK-1665: an attested reviewer whose creator shell exited is
+/// read with the live probes. A crashed reviewer (nothing live in its
+/// worktree) no longer suppresses unpicked-ready-pr; a Codex-style reviewer
+/// registered inside its worktree still counts as the review started.
+// trace:TASK-1955 | ai:claude (TASK-2094, TASK-1665)
+#[test]
+fn reviewer_lease_with_a_dead_creator_is_read_with_live_probes() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().canonicalize().unwrap();
+    let now = Utc::now();
+    let worktree = root.join("aida-pr-2730");
+    std::fs::create_dir_all(&worktree).unwrap();
+    let mut review = lease("rv30", "PR-2730", &dead_pid(), now);
+    review.role = Some("reviewer".into());
+    review.review_verb = true;
+    review.claim_verb = false;
+    review.worktree_path = worktree.clone();
+    review.active_pid = None;
+    review.active_pid_start_time = None;
+    let creator = dead_pid();
+    review.creator_pid = Some(creator.0);
+    review.creator_pid_start_time = creator.1;
+    review.pr_head_sha = Some(HEAD_A.into());
+    write_lease(&root, &review);
+    let feed = prs_json(vec![gh_pr(
+        2730,
+        HEAD_A,
+        Some(now - Duration::minutes(40)),
+        false,
+    )]);
+    let prs = move |_: &Path| Ok(feed.clone());
+
+    assert_eq!(
+        ids(&findings_at(&root, now, &prs)),
+        ["lane-liveness:unpicked-ready-pr:PR-2730@a1b2c3d4"],
+        "a crashed reviewer does not hold the PR"
+    );
+
+    // A Codex reviewer's SessionStart registration: this live process,
+    // inside the review worktree.
+    let me = std::process::id();
+    crate::agent_registry::write_entry(
+        &root,
+        &crate::agent_registry::AgentRegistryEntry {
+            id: format!("codex-{me}"),
+            agent_type: "codex".into(),
+            pid: me,
+            pid_start: crate::process_probe::process_start_identity(me),
+            name: Some("codex-reviewer".into()),
+            description: None,
+            tty: None,
+            terminal: None,
+            started_at: now,
+            last_active_at: now,
+            role: Some("reviewer".into()),
+            current_spec: None,
+            worktree_path: worktree.clone(),
+            source: "session-start-hook".into(),
+            binary_version: None,
+            build_sha: None,
+            availability: crate::agent_registry::Availability::Available,
+            paused_since: None,
+            paused_reason: None,
+            expected_back: None,
+            native_session_id: None,
+            claude_session_id: None,
+            ended_at: None,
+            spec_status_at_end: None,
+            resumed_from: None,
+        },
+    )
+    .unwrap();
+    assert!(
+        ids(&findings_at(&root, now, &prs)).is_empty(),
+        "a live registered reviewer in the worktree has started the review"
+    );
+}
+
+/// TASK-2025 / TASK-1664: an operator notice counts as delivered only when a
+/// configured notify command sent or queued it; with `[notify]` unconfigured
+/// the finding stays unrouted and the tick warns that it reaches no one.
+// trace:TASK-1955 | ai:claude (TASK-2025, TASK-1664)
+#[test]
+fn operator_notice_is_routed_only_when_delivered_and_warns_when_notify_is_missing() {
+    use crate::notify::DirectNotifyOutcome;
+    let outcome = |configured, sent, suppressed, pending| DirectNotifyOutcome {
+        configured,
+        sent,
+        suppressed,
+        pending,
+    };
+    assert!(operator_notice_delivered(&outcome(true, 1, 0, 0)));
+    assert!(operator_notice_delivered(&outcome(true, 0, 0, 1)));
+    assert!(!operator_notice_delivered(&outcome(true, 0, 0, 0)));
+    assert!(!operator_notice_delivered(&outcome(true, 1, 1, 0)));
+    assert!(!operator_notice_delivered(&outcome(false, 0, 0, 0)));
+
+    let warning = notify_unreachable_warning(&outcome(false, 0, 0, 0), 2).unwrap();
+    assert!(warning.contains("2 merge hold(s)"), "{warning}");
+    assert!(warning.contains("[notify] command"), "{warning}");
+    assert_eq!(notify_unreachable_warning(&outcome(true, 0, 1, 0), 2), None);
+}
