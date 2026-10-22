@@ -1324,6 +1324,7 @@ fn concurrent_ledger_appends_keep_every_line_parseable() {
                         branch: format!("claude/task-{t}"),
                         tokens: (0..8).map(|k| format!("session:{t}-{i}-{k}")).collect(),
                         recorded_at: "2026-10-19T00:00:00Z".to_string(),
+                        launch: None,
                     };
                     append_record(path, &record).unwrap();
                 }

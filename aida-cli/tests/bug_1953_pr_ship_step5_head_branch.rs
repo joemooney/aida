@@ -191,6 +191,9 @@ fn ship_by_number_from_main_matches_the_lease_on_the_pr_head_branch() {
         .env("AIDA_TELEMETRY", "0")
         .env("NO_COLOR", "1")
         .env("AIDA_PR_SHIP_ALLOW_IN_DRIVE", "1")
+        // A standalone implementer child refuses `pr ship`.
+        // trace:STORY-1662 | ai:claude
+        .env_remove("AIDA_STANDALONE_IMPLEMENTER")
         .output()
         .unwrap();
     let text = format!(
