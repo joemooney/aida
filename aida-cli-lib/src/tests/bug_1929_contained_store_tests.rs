@@ -897,7 +897,10 @@ fn real_claude_contained_session_claims_and_comments() {
 /// Line indexes of `src` that are test code: every line of an inline
 /// `#[cfg(test)] mod name {` block, up to its closing `}` in column 0.
 fn bug_1929_test_lines(lines: &[&str]) -> std::collections::HashSet<usize> {
-    let module = regex::Regex::new(r"^\s*(pub(\(crate\))? )?mod \w+\s*\{").unwrap();
+    static MODULE: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+        regex::Regex::new(r"^\s*(pub(\(crate\))? )?mod \w+\s*\{").unwrap()
+    });
+    let module = &*MODULE;
     let mut skip = std::collections::HashSet::new();
     let mut i = 0;
     while i < lines.len() {
@@ -926,13 +929,24 @@ fn bug_1929_test_lines(lines: &[&str]) -> std::collections::HashSet<usize> {
 /// (`let dir = detect_distributed_store().unwrap();`).
 // trace:TASK-1952 | trace:BUG-1992 | ai:claude
 fn bug_1929_raw_store_git(src: &str, any_raw: bool) -> Vec<usize> {
-    let raw = regex::Regex::new(r#"\b\w+::new\("git"\)"#).unwrap();
-    let store_names = r"store|store_path|store_root|store_dir|store_worktree|store_full|aida_repo";
-    let func = regex::Regex::new(r"\bfn\s+\w+\s*[<(]").unwrap();
-    let bound = regex::Regex::new(
-        r"\blet\s+(?:Some\(\s*)?(?:mut\s+)?(\w+)\b[^=;]*=[^;]*\b(?:\w+_)?store(?:_\w+)?\s*\(",
-    )
-    .unwrap();
+    use std::sync::LazyLock;
+    const STORE_NAMES: &str =
+        "store|store_path|store_root|store_dir|store_worktree|store_full|aida_repo";
+    // Compiled once per process: the guard scans every workspace source.
+    static RAW: LazyLock<regex::Regex> =
+        LazyLock::new(|| regex::Regex::new(r#"\b\w+::new\("git"\)"#).unwrap());
+    static BASE_STORE: LazyLock<regex::Regex> =
+        LazyLock::new(|| regex::Regex::new(&format!(r"\b({STORE_NAMES})\b|\.aida-store")).unwrap());
+    static FUNC: LazyLock<regex::Regex> =
+        LazyLock::new(|| regex::Regex::new(r"\bfn\s+\w+\s*[<(]").unwrap());
+    static BOUND: LazyLock<regex::Regex> = LazyLock::new(|| {
+        regex::Regex::new(
+            r"\blet\s+(?:Some\(\s*)?(?:mut\s+)?(\w+)\b[^=;]*=[^;]*\b(?:\w+_)?store(?:_\w+)?\s*\(",
+        )
+        .unwrap()
+    });
+    let (raw, base_store, func, bound) = (&*RAW, &*BASE_STORE, &*FUNC, &*BOUND);
+    let store_names = STORE_NAMES;
     let lines: Vec<&str> = src.lines().collect();
     let tests = bug_1929_test_lines(&lines);
     let mut found = Vec::new();
@@ -940,16 +954,24 @@ fn bug_1929_raw_store_git(src: &str, any_raw: bool) -> Vec<usize> {
         if tests.contains(&i) || line.trim_start().starts_with("//") || !raw.is_match(line) {
             continue;
         }
+        // The guard's time budget: a per-site pattern only when the
+        // enclosing function binds a store variable.
         let fn_start = (0..=i)
             .rev()
             .find(|&j| func.is_match(lines[j]))
             .unwrap_or(0);
-        let mut names = store_names.to_string();
-        for capture in bound.captures_iter(&lines[fn_start..=i].join("\n")) {
-            names.push('|');
-            names.push_str(&regex::escape(&capture[1]));
-        }
-        let store = regex::Regex::new(&format!(r"\b({names})\b|\.aida-store")).unwrap();
+        let extra: Vec<String> = bound
+            .captures_iter(&lines[fn_start..=i].join("\n"))
+            .map(|c| regex::escape(&c[1]))
+            .collect();
+        let local_store = (!extra.is_empty()).then(|| {
+            regex::Regex::new(&format!(
+                r"\b({}|{store_names})\b|\.aida-store",
+                extra.join("|")
+            ))
+            .unwrap()
+        });
+        let store = local_store.as_ref().unwrap_or(base_store);
         let chain = lines[i..lines.len().min(i + 12)].join(" ");
         let chain = chain.split(';').next().unwrap_or_default();
         let justified = lines[i.saturating_sub(3)..i]
