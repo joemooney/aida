@@ -1,0 +1,26 @@
+id: 01a160ed-4d8f-78f2-ba4c-82b30ac71d5d
+spec_id: TASK-2125
+agreed_id: TASK-2125
+title: 'TASK-1759: private-group check misses users whose primary gid is the group'
+description: |
+  aida-core/src/store_hooks.rs private_primary_gid/is_user_private_group checks only gr_mem. Another local user whose primary gid is this group never appears there, so g+w still passes. Scan passwd for another uid with pw_gid == gid, or document the limit.
+
+  Raised in review of PR-2818: https://github.com/joemooney/aida/pull/2818#issuecomment-6329345831
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-22T00:05:27.055544748Z
+modified_at: 2026-10-22T00:05:27.055544748Z
+req_type: Task
+tags:
+- from-review:PR-2818
+- severity:minor
+filed_at:
+  code_sha: 8ce86a1ca097c57f545618af141e1200ffe3b2c2
+  branch: pr-2818
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 612d9b792d
+  vendor: claude
+  session: 01a160e568f6

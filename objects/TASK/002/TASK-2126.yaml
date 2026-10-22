@@ -1,0 +1,26 @@
+id: 01a160ed-6780-74b1-9065-a78065e37752
+spec_id: TASK-2126
+agreed_id: TASK-2126
+title: known_to_git treats any ls-tree HEAD failure as an unborn HEAD
+description: |
+  aida-cli-lib/src/child_store_commit.rs known_to_git: must_succeed=false makes any ls-tree HEAD failure return no HEAD paths, so a deleted tracked path is silently dropped and its deletion is never committed. Check for an unborn HEAD with rev-parse --verify -q HEAD and propagate other errors.
+
+  Raised in review of PR-2818: https://github.com/joemooney/aida/pull/2818#issuecomment-6329345831
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-22T00:05:33.696716578Z
+modified_at: 2026-10-22T00:05:33.696716578Z
+req_type: Task
+tags:
+- from-review:PR-2818
+- severity:minor
+filed_at:
+  code_sha: 8ce86a1ca097c57f545618af141e1200ffe3b2c2
+  branch: pr-2818
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 612d9b792d
+  vendor: claude
+  session: 01a160e568f6

@@ -47,7 +47,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T15:57:44.849505155Z
-modified_at: 2026-10-21T23:04:53.017413971Z
+modified_at: 2026-10-22T00:04:38.048441664Z
 req_type: Task
 tags:
 - contained
@@ -466,6 +466,11 @@ history:
   timestamp: 2026-10-21T23:04:49.848920891Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
   changes: []
+- id: 01a160ec-8e85-7bb0-9c9c-879bc38ea306
+  author: joe
+  timestamp: 2026-10-22T00:04:38.149693551Z
+  session_id: 01a160e568f6
+  changes: []
 processing_record:
 - id: 01a15cd6-7d71-7962-8b84-e2ae16b3e1d0
   timestamp: 2026-10-21T05:02:03.121912504Z
@@ -488,7 +493,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: TASK-1989/2036/2037, BUG-2016 and BUG-2154 (store grant) pass, CI green. But the TASK-2031/2034 resume scoping is unreachable in production, and BUG-2154's yaml_backend raw rev-parse bullet is not handled.
+  detail: 'CI red (cli-0) from this PR: store-pair now skips store commits, breaking task_1717 template_hook_profile; plus an absolute-path-shell NO_SLOT guard bypass regression. Other slice items verified.'
   recovery_hint: address the review findings, move TASK-1952 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-10-21T21:45:33.769949559Z
+  shelved_at: 2026-10-22T00:04:38.048441664Z

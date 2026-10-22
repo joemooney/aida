@@ -1,0 +1,26 @@
+id: 01a160ed-3c13-7450-aea7-22336997d231
+spec_id: TASK-2123
+agreed_id: TASK-2123
+title: NO_SLOT guard still blocks prose naming a shell (commit -m with 'bash', heredoc table rows)
+description: |
+  aida-core/templates/hooks/aida-git-guardrails.sh (PR-2818, TASK-1643): the shell regex's ([[:space:]]+[^;&|]*)? span crosses quotes, and the stdin-shell regex is line-anchored. A git commit -m message containing the word bash plus the NO_SLOT assignment is blocked (exit 2), and so is a mailbox heredoc with a '| tool | bash |' row. Mask quoted bodies except the matched shell -c/eval payload, or document and pin the residual false positives.
+
+  Raised in review of PR-2818: https://github.com/joemooney/aida/pull/2818#issuecomment-6329345831
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-22T00:05:22.579496352Z
+modified_at: 2026-10-22T00:05:22.579496352Z
+req_type: Task
+tags:
+- from-review:PR-2818
+- severity:minor
+filed_at:
+  code_sha: 8ce86a1ca097c57f545618af141e1200ffe3b2c2
+  branch: pr-2818
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 612d9b792d
+  vendor: claude
+  session: 01a160e568f6
