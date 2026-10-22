@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T09:53:13.924066900Z
-modified_at: 2026-10-22T00:13:12.759068082Z
+modified_at: 2026-10-22T04:16:27.232164842Z
 req_type: Task
 relationships:
 - rel_type: References
@@ -58,6 +58,12 @@ history:
   timestamp: 2026-10-22T00:13:12.886943754Z
   session_id: 01a160f189e5
   changes: []
+- id: 01a161d3-1ade-7950-8e39-a9082b962a9b
+  author: joe
+  timestamp: 2026-10-22T04:16:27.358541112Z
+  session_id: 01a161ce935a
+  harness_version: 2.1.307 (Claude Code)
+  changes: []
 filed_at:
   code_sha: b66e4d93b8fefe25b2af3139fe725fa1801e1981
   branch: main
@@ -70,7 +76,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: S3 lifecycle unchanged since round 4 and CI green at 7ac6aaa5 (incl. live bwrap gate), but salvage silently drops an untracked nested git repository and then removes the clone (data loss on session end --force / dismiss).
+  detail: 'Round 6 at f86eb603: round-5 fixes verified and CI green incl. live-bwrap gate, but salvage still drops a tracked submodule''s commits and work before destroy removes the clone (data loss); an untracked dir symlink is silently dropped.'
   recovery_hint: address the review findings, move TASK-2053 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-10-22T00:13:12.759068082Z
+  shelved_at: 2026-10-22T04:16:27.232164842Z
