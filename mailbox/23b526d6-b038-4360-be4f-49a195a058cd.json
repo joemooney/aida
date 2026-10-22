@@ -1,0 +1,19 @@
+{
+  "id": "23b526d6-b038-4360-be4f-49a195a058cd",
+  "thread_id": "23b526d6-b038-4360-be4f-49a195a058cd",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "joe"
+  },
+  "timestamp": 1792628061746,
+  "body": "PR-2806 round 5 (fresh review after update-branch to 7ac6aaa515): CHANGES REQUESTED, one data-loss MAJOR. Round 5 is allowed under the data-loss exception to the two-round cap.\n\n* MAJOR data loss: SALVAGE_SCRIPT (aida-cli-lib/src/seat_clone.rs, untracked loop) accepts 'git diff --no-index' exit <=1 as success, but git also exits 1 for 'Could not access'. An untracked nested git repo (seat ran git init/clone in a subdir) is listed by 'ls-files --others' as 'sub/'; diff tries 'sub/null', prints 'Could not access', rc=1; the script exits 0; destroy(SalvageUnshipped) removes the clone and everything in sub/ (files and its commits) is gone, although the probe flagged '? sub/' dirty and session end promised '--force ... save this work as a salvage patch'. Reproduced on host git 2.43 with the exact loop: script_rc=0, content absent. Fix: treat directory entries (trailing '/') and any 'Could not access' as a salvage failure (keep the clone), or capture them losslessly (e.g. tar the directory into the salvage dir); add a bwrap test with an untracked nested repo holding a committed and an uncommitted file asserting the clone is kept or the content is salvaged. \n\n* MINOR (carried from round 4, unfixed): clone_ref_storage reads the seat-written <clone>/.git/config via aida_core::seat_clone_detect::read_regular_file, which lstat()s then reopens by name (aida-core/src/seat_clone_detect.rs:26-32). A live seat can swap in a FIFO or a symlink to /dev/zero between the calls, hanging or OOMing the host; session end probes before its holder check, so it reaches this. Fix: open with O_NOFOLLOW|O_NONBLOCK, fstat the fd, bounded read. \n\n* MINOR test gap (carried from round 4): reap_one_clone (aida-cli-lib/src/session_reap.rs:1366: dispatch, lease released only on Removed, skip when the scan recorded no HEAD) has no test. \n\n* COSMETIC (carried from round 4): when destroy keeps the clone at session end, the CC project-dir step still prints 'orphaned (cwd gone)' and --purge-cc purges that dir (session_end.rs ~1929-1958). \n\n* COSMETIC (carried from round 4): the PR body says the probe uses '--ro-bind / /' unconditionally; as built it narrows to [contained] read_allowlist when set (the plan doc is correct). \n\nFix the MAJOR: salvage must treat a nested untracked git repository (and any other 'diff --no-index' exit 1 that is not 'files differ') as unsalvageable, keep the clone and report it, and add a test with a nested repo. Fix the two carried MINORs as well, since this is a round anyway: read .git/config with O_NOFOLLOW and a size cap, and add a reap_one_clone test. Push a new commit and send READY.\n",
+  "subject": "PR-2806 round 5: salvage drops a nested git repo (data loss)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
