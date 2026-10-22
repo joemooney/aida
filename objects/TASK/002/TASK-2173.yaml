@@ -1,0 +1,28 @@
+id: 01a163f2-1bfe-7641-a57b-892044a26a29
+spec_id: TASK-2173
+agreed_id: TASK-2173
+title: 'Cargo-timeout hook: $(shell ...) and != assignments run cargo at make parse time but read as safe'
+description: |
+  aida-core/templates/hooks/aida-cargo-timeout-guard.sh make_targets_skip_cargo skips any assignment line, so a Makefile with 'X := $(shell cargo build)' or 'X != cargo build' plus 'hello:' / '@echo hi' makes 'timeout 1h make hello' silent, though make runs cargo while parsing. Reproduced on PR-2826 head 4077e142f3 and on origin/main (pre-existing). Treat $(shell / != in an assignment (immediate := ::= !=, and recursive = expanded in a prerequisite) as unresolvable.
+
+  Raised in review of PR-2826: https://github.com/joemooney/aida/pull/2826#issuecomment-6342821731
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-22T14:09:33.694884568Z
+modified_at: 2026-10-22T14:09:33.694884568Z
+req_type: Task
+tags:
+- from-review:PR-2826
+- hooks
+- severity:minor
+filed_at:
+  code_sha: 4077e142f3f18ce70d4936f49b9ab33cd7ddb808
+  branch: pr-2826
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e33fec11d9
+  vendor: claude
+  session: 01a163dc3063
+  harness_version: 2.1.308 (Claude Code)

@@ -1,0 +1,28 @@
+id: 01a163f2-3a41-7621-b286-ae9c89571673
+spec_id: TASK-2175
+agreed_id: TASK-2175
+title: 'test_git template-dir repair: concurrent readers can see the dir missing mid-repair'
+description: |
+  ensure_template_dir (aida-cli/tests/support/test_git.rs and the aida-cli-lib / aida-core copies) repairs a partial dir by renaming it aside, then renaming staging into place. Between the two renames a concurrent process may find the dir missing: a git init --template run fails, or a rename-race loser's assert(template_dir_trusted && complete) panics. Only reachable while a partial dir is being repaired.
+
+  Raised in review of PR-2826: https://github.com/joemooney/aida/pull/2826#issuecomment-6342821731
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-22T14:09:41.441341117Z
+modified_at: 2026-10-22T14:09:41.441341117Z
+req_type: Task
+tags:
+- from-review:PR-2826
+- severity:minor
+- tests
+filed_at:
+  code_sha: 4077e142f3f18ce70d4936f49b9ab33cd7ddb808
+  branch: pr-2826
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e33fec11d9
+  vendor: claude
+  session: 01a163dc3063
+  harness_version: 2.1.308 (Claude Code)
