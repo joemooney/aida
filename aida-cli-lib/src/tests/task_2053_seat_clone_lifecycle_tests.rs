@@ -83,7 +83,27 @@ fn known(probe: Probe) -> ProbeFacts {
     match probe {
         Probe::Known(facts) => facts,
         Probe::Unknown(why) => panic!("probe had no answer: {why}"),
+        Probe::HasSubmodules(why) => panic!("probe found submodules: {why}"),
     }
+}
+
+/// The probe found submodule evidence; returns the reason.
+fn has_submodules(probe: Probe) -> String {
+    match probe {
+        Probe::HasSubmodules(reason) => reason,
+        other => panic!("expected submodule evidence, got {other:?}"),
+    }
+}
+
+/// A one-commit repository to use as a submodule's upstream.
+fn submodule_upstream(fx: &Fixture) -> PathBuf {
+    let upstream = fx.root.join("sub-upstream");
+    std::fs::create_dir_all(&upstream).unwrap();
+    seat_git(&upstream, &["init", "-q"]);
+    std::fs::write(upstream.join("lib.txt"), "v1\n").unwrap();
+    seat_git(&upstream, &["add", "lib.txt"]);
+    seat_git(&upstream, &["commit", "-qm", "v1"]);
+    upstream
 }
 
 fn target_dir(fx: &Fixture, clone: &Path) -> PathBuf {
@@ -194,6 +214,15 @@ fn clone_reap_verdicts_keep_anything_unreadable_unshipped_or_unmerged() {
     skip(
         verdict(&Probe::Unknown("no bwrap".into()), true, true, true),
         "could not be read",
+    );
+    skip(
+        verdict(
+            &Probe::HasSubmodules("the clone has submodules (x)".into()),
+            true,
+            true,
+            true,
+        ),
+        "has submodules",
     );
     let dirty = ProbeFacts {
         dirty: vec!["? x".into()],
@@ -966,12 +995,7 @@ fn task_2053_bwrap_salvage_keeps_clone_with_submodule_work() {
         return;
     }
     let fx = fixture();
-    let upstream = fx.root.join("sub-upstream");
-    std::fs::create_dir_all(&upstream).unwrap();
-    seat_git(&upstream, &["init", "-q"]);
-    std::fs::write(upstream.join("lib.txt"), "v1\n").unwrap();
-    seat_git(&upstream, &["add", "lib.txt"]);
-    seat_git(&upstream, &["commit", "-qm", "v1"]);
+    let upstream = submodule_upstream(&fx);
 
     let clone = seat(&fx, "submodule", "c0ffee000025");
     let upstream_url = upstream.display().to_string();
@@ -985,8 +1009,10 @@ fn task_2053_bwrap_salvage_keeps_clone_with_submodule_work() {
     seat_git(&sm, &["commit", "-qam", "v2"]);
     std::fs::write(sm.join("lib.txt"), "v3 uncommitted\n").unwrap();
 
-    let facts = known(probe(&fx.main, &clone));
-    assert!(facts.unshipped(), "{facts:?}");
+    let reason = has_submodules(probe(&fx.main, &clone));
+    assert!(reason.contains("inspect"), "{reason}");
+    // The salvage's own guard still refuses, should a submodule appear
+    // after the probe.
     let err = format!(
         "{:#}",
         salvage(&fx.main, &clone).expect_err("submodule work")
@@ -1001,8 +1027,8 @@ fn task_2053_bwrap_salvage_keeps_clone_with_submodule_work() {
 }
 
 /// Review round 6 follow-up: a submodule commit on a side branch, with the
-/// submodule's HEAD unchanged and the superproject clean and pushed, still
-/// counts as unpushed, so destroy keeps the clone instead of removing it.
+/// submodule's HEAD unchanged and the superproject clean and pushed, keeps
+/// the clone: any submodule does (review round 7).
 #[cfg(target_os = "linux")]
 #[test]
 fn task_2053_bwrap_submodule_side_branch_keeps_clean_clone() {
@@ -1010,12 +1036,7 @@ fn task_2053_bwrap_submodule_side_branch_keeps_clean_clone() {
         return;
     }
     let fx = fixture();
-    let upstream = fx.root.join("sub-upstream");
-    std::fs::create_dir_all(&upstream).unwrap();
-    seat_git(&upstream, &["init", "-q"]);
-    std::fs::write(upstream.join("lib.txt"), "v1\n").unwrap();
-    seat_git(&upstream, &["add", "lib.txt"]);
-    seat_git(&upstream, &["commit", "-qm", "v1"]);
+    let upstream = submodule_upstream(&fx);
 
     let clone = seat(&fx, "subside", "c0ffee000027");
     let upstream_url = upstream.display().to_string();
@@ -1033,13 +1054,100 @@ fn task_2053_bwrap_submodule_side_branch_keeps_clean_clone() {
     seat_git(&sm, &["commit", "-qm", "side"]);
     seat_git(&sm, &["checkout", "-q", "-"]);
 
-    let facts = known(probe(&fx.main, &clone));
-    assert!(facts.dirty.is_empty(), "{facts:?}");
-    assert_eq!(facts.unpushed, 1, "the submodule side branch: {facts:?}");
+    has_submodules(probe(&fx.main, &clone));
     let kept = destroy(&fx.main, &clone, DestroyMode::SalvageUnshipped, None);
     assert!(matches!(kept, Ok(Destroyed::Kept { .. })), "{kept:?}");
     let side = seat_git(&sm, &["log", "-1", "--format=%s", "side"]);
     assert_eq!(side.trim(), "side");
+}
+
+/// Review round 7, item 1: `.gitmodules` `ignore = dirty` hides submodule
+/// work from a plain `git status`, but the clone still has a submodule, so
+/// the probe says so and session end, dismiss and reap all keep it.
+#[cfg(target_os = "linux")]
+#[test]
+fn task_2053_bwrap_submodule_ignore_dirty_keeps_the_clone() {
+    if !bwrap_live() {
+        return;
+    }
+    let fx = fixture();
+    let upstream = submodule_upstream(&fx);
+    let clone = seat(&fx, "subignore", "c0ffee000028");
+    let upstream_url = upstream.display().to_string();
+    seat_git(
+        &clone,
+        &["submodule", "add", "-q", upstream_url.as_str(), "sm"],
+    );
+    seat_git(
+        &clone,
+        &[
+            "config",
+            "-f",
+            ".gitmodules",
+            "submodule.sm.ignore",
+            "dirty",
+        ],
+    );
+    seat_git(&clone, &["add", ".gitmodules"]);
+    seat_git(&clone, &["commit", "-qm", "add submodule, ignore dirty"]);
+    seat_git(&clone, &["update-ref", "refs/remotes/origin/feat", "HEAD"]);
+    let sm = clone.join("sm");
+    std::fs::write(sm.join("lib.txt"), "edited\n").unwrap();
+    std::fs::write(sm.join("untracked.txt"), "new\n").unwrap();
+    assert_eq!(seat_git(&clone, &["status", "--porcelain"]).trim(), "");
+
+    has_submodules(probe(&fx.main, &clone));
+    for mode in [DestroyMode::SalvageUnshipped, DestroyMode::KeepUnshipped] {
+        let kept = destroy(&fx.main, &clone, mode, None);
+        assert!(
+            matches!(&kept, Ok(Destroyed::Kept { reason, .. }) if reason.contains("submodules")),
+            "{kept:?}"
+        );
+    }
+    assert_eq!(
+        std::fs::read_to_string(sm.join("lib.txt")).unwrap(),
+        "edited\n"
+    );
+    assert!(sm.join("untracked.txt").exists());
+}
+
+/// Review round 7, item 2: a deinit'd and removed submodule keeps the seat's
+/// commits in `.git/modules/<name>` only; no status, ref or `foreach` shows
+/// them, so the probe keys on `.git/modules` and the clone is kept.
+#[cfg(target_os = "linux")]
+#[test]
+fn task_2053_bwrap_deinit_submodule_commits_keep_the_clone() {
+    if !bwrap_live() {
+        return;
+    }
+    let fx = fixture();
+    let upstream = submodule_upstream(&fx);
+    let clone = seat(&fx, "subdeinit", "c0ffee000029");
+    let upstream_url = upstream.display().to_string();
+    seat_git(
+        &clone,
+        &["submodule", "add", "-q", upstream_url.as_str(), "sm"],
+    );
+    seat_git(&clone, &["commit", "-qm", "add submodule"]);
+    let sm = clone.join("sm");
+    std::fs::write(sm.join("work.txt"), "seat work\n").unwrap();
+    seat_git(&sm, &["add", "work.txt"]);
+    seat_git(&sm, &["commit", "-qm", "seat work"]);
+    let work = seat_git(&sm, &["rev-parse", "HEAD"]);
+    seat_git(&clone, &["submodule", "--quiet", "deinit", "-f", "sm"]);
+    seat_git(&clone, &["rm", "-q", "sm"]);
+    seat_git(&clone, &["rm", "-qf", ".gitmodules"]);
+    seat_git(&clone, &["commit", "-qm", "drop submodule"]);
+    seat_git(&clone, &["update-ref", "refs/remotes/origin/feat", "HEAD"]);
+    assert_eq!(seat_git(&clone, &["status", "--porcelain"]).trim(), "");
+
+    let reason = has_submodules(probe(&fx.main, &clone));
+    assert!(reason.contains(".git/modules"), "{reason}");
+    let kept = destroy(&fx.main, &clone, DestroyMode::SalvageUnshipped, None);
+    assert!(matches!(kept, Ok(Destroyed::Kept { .. })), "{kept:?}");
+    let modules = clone.join(".git").join("modules").join("sm");
+    let held = git_ok(&modules, &["--git-dir", ".", "cat-file", "-t", work.trim()]);
+    assert_eq!(held.trim(), "commit");
 }
 
 /// Review round 6, item 2: an untracked symlink to a directory cannot go

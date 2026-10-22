@@ -554,3 +554,20 @@ Owning spec: TASK-2053 (the remaining BUG-2169 slices moved there unchanged).
 - **Directory symlinks keep the clone.** An untracked symlink to a directory fails the salvage
   (`diff --no-index` follows it), and so does any untracked entry whose diff comes back empty. A
   symlink to a file, dangling or not, is still recorded as mode 120000.
+
+### S3 review round 7 fixes
+
+- **Any submodule keeps the clone.** Round 7 found two more ways submodule work escaped the count:
+  a `.gitmodules` `ignore = dirty` setting, and the commits a deinit'd or removed submodule leaves
+  in `.git/modules/<name>`. The advisor ruled to close the whole class instead of handling each
+  case. Before any other git runs, the probe looks for submodule evidence: a `.gitmodules` in the
+  worktree or at HEAD, a gitlink in the index or in HEAD's tree, or any entry under
+  `.git/modules`. It runs nothing inside a submodule. If it finds evidence, it returns
+  `Probe::HasSubmodules`. Destroy keeps the clone in every mode, and so does reap, with the
+  reason "the clone has submodules (...); automatic salvage does not cover them, so it is kept:
+  inspect <path> and remove it by hand".
+- The submodule `foreach` count has been removed from the unpushed count. The salvage guard
+  stays, for a submodule that appears after the probe. The probe's `git status` passes
+  `--ignore-submodules=none`.
+- The doc comments now state what does run: git inside a submodule reads that submodule's own
+  seat-written config, and its drivers run, but only inside the sandbox.

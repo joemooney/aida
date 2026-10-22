@@ -1275,6 +1275,7 @@ pub(crate) fn classify_clone_reap(
         crate::seat_clone::Probe::Unknown(why) => {
             return ReapVerdict::Skip(format!("seat clone state could not be read ({why}) — kept"))
         }
+        crate::seat_clone::Probe::HasSubmodules(reason) => return ReapVerdict::Skip(reason),
         crate::seat_clone::Probe::Known(facts) => facts,
     };
     if !facts.dirty.is_empty() {

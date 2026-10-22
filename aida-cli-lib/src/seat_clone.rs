@@ -686,6 +686,10 @@ pub(crate) enum Probe {
     /// No answer (no bwrap, a timeout, a git failure). Every caller treats
     /// the clone as holding unshipped work and keeps it: fail closed.
     Unknown(String),
+    /// The clone has submodules: work in them is neither counted nor
+    /// salvaged, so every caller keeps the clone for the operator. The text
+    /// is the full reason.
+    HasSubmodules(String),
 }
 
 /// A seat clone's state, parsed from the output of git run inside the probe
@@ -726,12 +730,17 @@ const SALVAGE_OUTPUT_CAP: u64 = 64 * 1024 * 1024;
 /// The repository config git reads inside the probe sandbox, bound read-only
 /// over the clone's own `.git/config`. It defines no filter, diff, textconv
 /// or fsmonitor driver and no include, so attributes a seat plants in its
-/// clone name drivers that do not exist and run nothing. The object format
-/// comes from MAIN (the clone borrows main's objects). The one other
-/// repository extension a clone can be made with, `refStorage` (a user's
-/// `init.defaultRefFormat`), is carried over from the clone's config only
-/// as an allowlisted value, `reftable`; anything else is left out, which
-/// can only make the probe fail and the host keep the clone.
+/// clone name drivers that do not exist and run nothing in the clone itself.
+/// It does not replace a submodule's own `.git/modules/<name>/config`: git
+/// run in a submodule reads that seat-written config, and its drivers run,
+/// inside the sandbox only (hooks and fsmonitor stay off). [`probe`] keeps
+/// any clone with submodules before running anything that recurses into
+/// one, so only a submodule that appears after the probe is reached. The
+/// object format comes from MAIN (the clone borrows main's objects). The
+/// one other repository extension a clone can be made with, `refStorage` (a
+/// user's `init.defaultRefFormat`), is carried over from the clone's config
+/// only as an allowlisted value, `reftable`; anything else is left out,
+/// which can only make the probe fail and the host keep the clone.
 // trace:TASK-2053 | ai:claude
 fn probe_repo_config(main: &Path, clone: &Path) -> String {
     let mut cmd = git(main);
@@ -954,8 +963,10 @@ fn pinned_base(main: &Path, clone: &Path) -> Option<String> {
 }
 
 /// Read a seat clone's state for the host. Git runs only inside the probe
-/// sandbox ([`probe_sandbox_args`]); a seat-planted hook, fsmonitor or filter
-/// that still runs there can read but not write, and has no network.
+/// sandbox ([`probe_sandbox_args`]); a seat-planted filter or driver that
+/// runs there (see [`probe_repo_config`]) can read but not write, and has no
+/// network. A clone with any submodule evidence ([`SUBMODULE_EVIDENCE_SCRIPT`])
+/// reads as [`Probe::HasSubmodules`] before any other git runs.
 /// `main` is the main checkout from the LEASE, never from the clone's marker.
 // trace:TASK-2053 | ai:claude
 pub(crate) fn probe(main: &Path, clone: &Path) -> Probe {
@@ -965,6 +976,26 @@ pub(crate) fn probe(main: &Path, clone: &Path) -> Probe {
             clone.display()
         ));
     }
+    match probe_run(
+        clone,
+        main,
+        &["-c".as_ref(), SUBMODULE_EVIDENCE_SCRIPT.as_ref()],
+        "sh",
+    ) {
+        Ok(found) if found.trim().is_empty() => {}
+        Ok(found) => {
+            return Probe::HasSubmodules(format!(
+                "the clone has submodules ({}); automatic salvage does not cover them, so it is \
+                 kept: inspect {} and remove it by hand",
+                found.trim(),
+                clone.display()
+            ))
+        }
+        Err(why) => return Probe::Unknown(why),
+    }
+    // `--ignore-submodules=none`: a seat's `.gitmodules` `ignore = dirty`
+    // must not hide anything, should a submodule appear after the check.
+    // trace:TASK-2053 | ai:claude
     let status = match probe_run(
         clone,
         main,
@@ -973,6 +1004,7 @@ pub(crate) fn probe(main: &Path, clone: &Path) -> Probe {
             "--porcelain=v2".as_ref(),
             "--branch".as_ref(),
             "--untracked-files=all".as_ref(),
+            "--ignore-submodules=none".as_ref(),
         ],
         "git",
     ) {
@@ -1033,19 +1065,40 @@ macro_rules! stash_entries_sh {
     };
 }
 
+/// Inside the probe sandbox: what shows the clone has, or had, a submodule,
+/// on stdout (nothing when there is none): a `.gitmodules` in the worktree
+/// or at HEAD, a gitlink in the index or in HEAD's tree, or anything under
+/// `.git/modules` (a deinit'd or removed submodule keeps its commits there).
+/// Submodule work is outside what the salvage captures, so the clone is
+/// kept whatever the submodules hold; nothing here enters a submodule.
+// trace:TASK-2053 | ai:claude
+const SUBMODULE_EVIDENCE_SCRIPT: &str = r##"set -u
+if [ -e .gitmodules ] || [ -L .gitmodules ]; then echo '.gitmodules in the worktree'; exit 0; fi
+if git rev-parse -q --verify HEAD^{commit} >/dev/null; then
+  if git cat-file -e HEAD:.gitmodules 2>/dev/null; then echo '.gitmodules at HEAD'; exit 0; fi
+  t=$(git ls-tree -r --full-tree HEAD) || exit 1
+  if printf '%s\n' "$t" | grep -q '^160000 '; then echo 'a gitlink in HEAD'; exit 0; fi
+fi
+i=$(git ls-files -s) || exit 1
+if printf '%s\n' "$i" | grep -q '^160000 '; then echo 'a gitlink in the index'; exit 0; fi
+d="$GIT_DIR/modules"
+if [ -L "$d" ] || { [ -e "$d" ] && [ ! -d "$d" ]; }; then echo '.git/modules is not a directory'; exit 0; fi
+if [ -d "$d" ]; then
+  l=$(ls -A "$d") || exit 1
+  if [ -n "$l" ]; then echo 'repositories in .git/modules'; exit 0; fi
+fi
+exit 0
+"##;
+
 /// Inside the probe sandbox: how many commits the clone holds that origin
 /// does not: reachable from ANY ref (every branch, tag, HEAD) or stash entry,
-/// and not from `origin/*` or the pinned base (`$1`, or empty), plus every
-/// commit on any ref of any (nested) submodule that its remotes lack, so a
-/// submodule side branch alone still reads as unshipped.
+/// and not from `origin/*` or the pinned base (`$1`, or empty). Submodules
+/// are not counted: [`probe`] keeps any clone that has one.
 // trace:TASK-2053 | ai:claude
 const UNPUSHED_COUNT_SCRIPT: &str = concat!(
     "set -u\n",
     stash_entries_sh!(),
-    r##"n=$(git rev-list --count --all $s --not --remotes=origin ${1:+"$1"}) || exit 1
-m=$(git submodule --quiet foreach --recursive 'git rev-list --count --all --not --remotes') || exit 1
-for x in $m; do n=$((n + x)); done
-echo "$n"
+    r##"git rev-list --count --all $s --not --remotes=origin ${1:+"$1"}
 "##
 );
 
@@ -1070,7 +1123,9 @@ const SALVAGE_BUNDLE_SCRIPT: &str = concat!(
 /// the clone. So does an untracked symlink to a directory (diff follows it)
 /// and any file whose diff comes back empty. A submodule with changes or
 /// with commits its remote lacks fails the salvage up front: the patch and
-/// the bundle hold the superproject only, so the clone must be kept.
+/// the bundle hold the superproject only, so the clone must be kept. (The
+/// probe already keeps a clone with submodules; this catches one that
+/// appeared since.)
 /// `$1` is the pinned base, or empty.
 // trace:TASK-2053 | ai:claude
 const SALVAGE_SCRIPT: &str = concat!(
@@ -1267,8 +1322,8 @@ pub(crate) enum Destroyed {
 /// Tear down the seat clone at `clone` of the main checkout `main`:
 ///
 /// 1. refuse unless `clone` is at a seat-clone location of `main`;
-/// 2. [`probe`] it: unknown keeps it (fail closed), and so does a HEAD other
-///    than `expect_head` when the caller pinned one;
+/// 2. [`probe`] it: unknown, or any submodule, keeps it (fail closed), and
+///    so does a HEAD other than `expect_head` when the caller pinned one;
 /// 3. salvage unpushed or uncommitted work, then keep or go on per `mode`;
 /// 4. `remove_dir_all` the clone (it does not follow symlinks);
 /// 5. remove `<main>/target/worktrees/<clone dir>`;
@@ -1298,6 +1353,12 @@ pub(crate) fn destroy(
             Probe::Unknown(why) => {
                 return Ok(Destroyed::Kept {
                     reason: format!("its state could not be read ({why}), so it is kept"),
+                    salvage: None,
+                })
+            }
+            Probe::HasSubmodules(reason) => {
+                return Ok(Destroyed::Kept {
+                    reason,
                     salvage: None,
                 })
             }
