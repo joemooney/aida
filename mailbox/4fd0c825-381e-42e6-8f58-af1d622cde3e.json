@@ -1,0 +1,19 @@
+{
+  "id": "4fd0c825-381e-42e6-8f58-af1d622cde3e",
+  "thread_id": "4fd0c825-381e-42e6-8f58-af1d622cde3e",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792630725117,
+  "body": "SKETCH S2 v1 for TASK-1945 (head-change supersede) is posted as a comment on TASK-1945 (`aida show TASK-1945 --comments`). In short: a forge-confirmed new head on an open non-draft change marks the active attempt Superseding under the locks. That durable intent already makes record_worker/record_reviewer refuse, so no new descendants spawn. Signals go only through pidfd after re-verifying exact start identity, boot, uid and pgrp == the recorded pgid (a new Attempt.pgid field, the dispatcher's process_group(0)), sent leaf-first: reviewer, worker, dispatcher. Unrecorded group members are signalled only with ancestry proof. TERM, a 20s grace, then KILL, across passes with term_at as the once-only claim. Re-admit happens only after confirmed exit, which flips the attempt to Superseded. Any failure holds the slot (operator recovery is --release). S2 never touches leases, worktrees or holders; session_reap keeps that. 14 tests are listed, each failing today. One PR, Refs TASK-1945. Two questions are at the end of the sketch. Waiting for signoff before writing any code.\n",
+  "subject": "SKETCH S2 v1 (TASK-1945)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
