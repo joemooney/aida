@@ -265,6 +265,11 @@ An invalid or unreadable individual agent record produces a warning while other 
 
 **Gotchas.** Reading an `inbox` *marks it seen* — that's a side effect, so use `inbox --all` (read-only, operator view) when you want to peek without clearing unread state. And the local-vs-synced split surprises people: a message is durable and cross-clone only *after* `aida mailbox sync`.
 
+`aida mailbox migrate --dry-run` previews legacy mailbox reconciliation. Add `--json` for the versioned report. It inventories local and canonical messages, original read-state filenames and timestamps, unresolved recipients, divergent copies of message IDs, and read-state filename collisions. Message bodies are omitted. Malformed or unsupported inputs and observed mailbox changes refuse the preview rather than silently skipping evidence.
+
+The report's fingerprint covers mailbox and read-state content; recipient liveness is sampled advisory information. Historical shared group watermarks cannot reconstruct private acknowledgements. The command does not assign recipient UUIDs, acknowledge mail, rewrite messages or enable a new layout. Write-mode migration is unavailable pending advisor review of the real-store report and compatibility policy.
+<!-- trace:STORY-1843 | ai:codex -->
+
 **Chains with** — agents launched via `aida agent new` coordinate over the mailbox; the advisor's `watch` loop runs a mailbox-triage pass; briefs route *assignments*, the mailbox carries the *conversation* around them.
 
 ---

@@ -343,7 +343,8 @@ pub(crate) fn read_all_watermarks(
 
 /// Keep a message id safe as a filename component (ids are uuid/HLC strings, but
 /// be defensive against path separators / traversal in a hand-set id).
-fn sanitize_id(id: &str) -> String {
+// trace:STORY-1843 | ai:codex
+pub(crate) fn sanitize_id(id: &str) -> String {
     id.chars()
         .map(|c| {
             if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
