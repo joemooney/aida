@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T12:00:43.205703912Z
-modified_at: 2026-10-19T19:51:39.077118511Z
+modified_at: 2026-10-22T14:23:16.535177837Z
 req_type: Story
 tags:
 - ci
@@ -117,6 +117,22 @@ comments:
   created_at: 2026-10-19T19:51:39.077118511Z
   modified_at: 2026-10-19T19:51:39.077118511Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+- id: 01a163fe-aa37-7320-afd3-9ce44fb02bad
+  author: joe
+  content: |-
+    REMAINING (STORY-1690) — 2026-10-22 implementer audit vs signed sketch (option b, advisor signoff 2026-10-19):
+    - S1 patch-id attestation carry-over (TASK-1960, closes BUG-2177): DONE — f801433bcd (#2758).
+    - S2 train builder + dry-run + regression demo (two green PRs, train red): REMAINING (no code on main; S2-S5 were never filed as tasks).
+    - Folded TASK-1378 (train refuses/skips DRAFT members with a stated reason, never waits on a Build a draft never runs): REMAINING (lands with S2).
+    - S3 merge-hold-gate train mode (train/* PR passes only if every listed member is hold-clear) + fixtures: REMAINING.
+    - S4 land (rebase-merge pinned --match-head-commit) + per-member bookkeeping (completion trailers, close-with-pointer): REMAINING.
+    - S5 bisect + docs (two-seat-protocol.md, git-sync-and-review.md template masters, fire step 5) + retire serial-ship.sh: REMAINING.
+    - Acceptance 'aida pr ship honours it' / merge-seat brief: REMAINING (docs + fire skill).
+    - strict:true backstop: OFF per signoff (3); not in scope.
+    Plan: implement S2-S5 in this worktree as one story, slice PRs carry (Refs STORY-1690), final PR (STORY-1690).
+  created_at: 2026-10-22T14:23:16.535177837Z
+  modified_at: 2026-10-22T14:23:16.535177837Z
+  session_id: 4d679734-3be0-4ab2-8b88-dcf00e4a75d1
 history:
 - id: 01a152ec-52a2-7801-ad7c-7dd74bedcf59
   author: joe
