@@ -12680,6 +12680,7 @@ Commands:
                      --auto-complete` (which drives the full reviewer pipeline) — use this for
                      human-pre-approved work where no orchestrator review phase is needed (docs PRs,
                      master-signed architecture work, recovery merges)
+  ship-batch         Ship several PRs that need a human merge, one at a time, in order
   hold               Deliberately HOLD the PR on the current session — push the branch but
                      intentionally do not open the PR yet, pending a manual gate (a smoke test, an
                      out-of-band review, an operator decision)
@@ -12934,6 +12935,46 @@ Options:
 Exit codes: 0 merged (or already merged; dry-run previews); 1 other error; 20 CI red; 21
 ownership/CI wait timed out; 22 needs rebase/not mergeable; 23 needs review/approval at head; 24
 stale CI definition; 25 merge-hold present.
+===== aida pr ship-batch
+Ship several PRs that need a human merge, one at a time, in order.
+
+For each PR, in the order given, it refreshes the branch from main only when the PR is behind or its
+green predates a CI-definition change, waits for CI on that exact head, waits for an independent
+approval recorded at that head (it queues the PR for review but never records a verdict), then asks
+you to type the PR number before shipping it with every `aida pr ship` gate in force. A merge-hold
+on a confirmed PR is cleared only when you also type `clear`.
+
+Any failure stops the batch without shipping: red or missing CI, a conflict, no approval in time, a
+refused gate, or an unconfirmed prompt. Re-run the same command to continue; merged PRs are skipped.
+Runs only for a human at an interactive terminal, on GitHub.
+
+Usage: aida pr ship-batch [OPTIONS] <PR>...
+
+Arguments:
+  <PR>...
+          PR numbers, shipped in exactly this order (at most 20, no repeats)
+
+Options:
+      --review-timeout <DURATION>
+          How long to wait for an approval at each PR's head, e.g. `45m`, `2h` (a bare number is
+          minutes; default 60m)
+
+      --dry-run
+          Show each PR's state and what the batch would do; change nothing. It does not fetch:
+          staleness is judged against your local `origin/*` refs as they are
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+  -h, --help
+          Print help (see a summary with '-h')
 ===== aida pr hold
 Deliberately HOLD the PR on the current session — push the branch but intentionally do not open the
 PR yet, pending a manual gate (a smoke test, an out-of-band review, an operator decision).
@@ -36375,6 +36416,37 @@ Working on aida itself
         "name": "wait",
         "takes_value": true,
         "help": "Bound drive ownership plus CI registration/settlement wait in seconds. Bare --wait uses 300 seconds; omitted leaves CI unbounded and refuses drive-owned PRs immediately. Drive seats always refuse immediately. Exit codes: 20 CI red, 21 CI timeout, 22 not mergeable, 23 review, 24 stale CI definition, 25 merge hold (0 merged/already merged)"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "pr",
+      "ship-batch"
+    ],
+    "about": "Ship several PRs that need a human merge, one at a time, in order",
+    "flags": [
+      {
+        "name": "dry-run",
+        "takes_value": false,
+        "help": "Show each PR's state and what the batch would do; change nothing. It does not fetch: staleness is judged against your local `origin/*` refs as they are"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "review-timeout",
+        "takes_value": true,
+        "help": "How long to wait for an approval at each PR's head, e.g. `45m`, `2h` (a bare number is minutes; default 60m)"
       }
     ],
     "hidden": false

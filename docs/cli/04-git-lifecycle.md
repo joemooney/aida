@@ -499,7 +499,8 @@ ops = ["ship"]   # any of: ship, sketch-signoff, dispatch, hold-clear
   (`mandate.rs`, `mandate_gates.rs`, `mandate_drive.rs`, `mandate_ship.rs`,
   `mandate_traces.rs`, `rework_hold_release.rs`, `review_authority.rs`,
   `solo_review.rs`, `review_verdict.rs`,
-  `fleet_lanes.rs`, `seat_authority.rs`, `pr_ship.rs`, `merge_hold.rs`) never
+  `fleet_lanes.rs`, `seat_authority.rs`, `pr_ship.rs`, `merge_hold.rs`,
+  `pr_ship_batch.rs`) never
   ships under a mandate, and a mandate never releases its rework hold either.
   Listing `ship` or `hold-clear` stops mandate rework releases too.
 - `[mandate.drive] max_actions_per_tick` (default 10) is honoured from
@@ -530,3 +531,46 @@ ops = ["ship"]   # any of: ship, sketch-signoff, dispatch, hold-clear
 route, and changes nothing. `aida fleet drive --json` prints that preview as
 JSON.
 <!-- trace:STORY-1700 | ai:claude -->
+
+### `aida pr ship-batch`
+
+**One line** — ship several PRs that need a human merge, one at a time, in your
+order, while you only confirm each ship.
+
+**Mental model.** A PR that changes the mandate or merge-gate code, or carries
+an operator-only spec, needs a human to ship it. Each such merge moves main,
+so the next one goes stale: it needs a refresh from main, a new CI run and a
+new independent review before `aida pr ship` accepts it. `aida pr ship-batch
+2792 2798` does that waiting for you. For each PR, in the order given:
+
+1. A merged PR is skipped. A closed, draft or conflicting PR stops the batch.
+2. The branch is refreshed from main (GitHub's update-branch, pinned to the
+   head it read) only when GitHub reports it behind, or when its green
+   predates a CI-definition change on main (the check `aida pr ship` refuses).
+3. It waits for CI on that exact head. Checks from an earlier head never count.
+4. It queues the PR for review and waits for an independent approval recorded
+   at that exact head, printing once a minute that a reviewer has to act. It
+   never records a verdict, and an approval from an earlier head does not count.
+5. It asks you to type the PR number. If the PR has a merge-hold, it then asks
+   you to type `clear`, and clears it with `aida merge-hold clear`.
+6. It ships with `aida pr ship`, every gate in force and no override.
+
+**Options.** `--review-timeout` sets how long to wait for each approval
+(default `60m`). `--dry-run` reads each PR and reports what the batch would
+do, changing nothing. It does not run `git fetch`, so the stale-definition
+check reads your local `origin/*` refs as they are; fetch first for a current
+answer.
+
+**Record.** The start, each PR's outcome and the stop are written to the
+events feed; `aida history events --kind ship-batch-step` shows the run.
+
+**Stopping.** Any failure stops the batch and ships nothing further: red CI,
+CI or review timeout, a negative verdict, a head that keeps moving, an
+unconfirmed prompt, end of input, or a refused ship gate. Run the same command
+again to continue; merged PRs are skipped. The command first prints the order
+and waits for `go`; it refuses duplicate PR numbers and more than 20 PRs.
+
+**Who can run it.** Only a human at an interactive terminal, on a GitHub
+project. Each batch, PR outcome and stop is logged to
+`.aida/advisor-activity.jsonl`.
+<!-- trace:STORY-1887 | ai:claude -->

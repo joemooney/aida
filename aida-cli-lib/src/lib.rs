@@ -466,6 +466,7 @@ mod pending_approval;
 mod plan_cmd;
 mod pr_rebase;
 mod pr_ship;
+mod pr_ship_batch;
 mod presence;
 mod presence_cmd;
 mod process_probe;
