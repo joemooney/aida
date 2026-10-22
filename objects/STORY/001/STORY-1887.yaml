@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T15:03:49.211949451Z
-modified_at: 2026-10-22T01:46:28.644861346Z
+modified_at: 2026-10-22T04:50:22.552460891Z
 req_type: Story
 tags:
 - mandate
@@ -21,6 +21,60 @@ comments:
   created_at: 2026-10-22T01:46:28.644861346Z
   modified_at: 2026-10-22T01:46:28.644861346Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a161f2-28d8-7c03-9c7f-975da1236f07
+  author: joe
+  content: |-
+    SKETCH v1 (STORY-1887): operator batch-ship for human-gated PRs
+
+    PROBLEM (observed 2026-10-21). PRs that touch GATE_PROTECTED_PATHS (mandate_gates.rs:343: mandate*.rs, pr_ship.rs, merge_hold.rs, review_verdict.rs, seat_authority.rs, ...) or carry an operator-only spec are refused by the mandate cover (mandate_ship.rs mandate_ship_cover), so a human has to ship each one at a TTY. Every gated merge moves main, and the other gated PRs then fail the stale-definition gate or go CONFLICTING. Each one then needs: gh pr update-branch, a CI rerun, a fresh independent review (approvals never carry over to a new head), and another operator round-trip. #2792 and #2798 each went through that twice. The operator is the bottleneck because they have to be present for the whole hour, not just for the decisions.
+
+    DESIGN. One new subcommand: `aida pr ship-batch <N> [<N>...] [--review-timeout <dur>] [--dry-run]`.
+    - Files: new module aida-cli-lib/src/pr_ship_batch.rs (orchestration plus pure step logic), a `ShipBatch` variant in pr_cmd_args.rs (the PrCommand subcommand enum, not the legacy Command enum), a dispatch arm in pr_cmd.rs, and a regenerated golden help snapshot. pr_ship_batch.rs is ADDED to GATE_PROTECTED_PATHS, because it drives human-gated merges (see Q1).
+    - Entry gate: has_integrity_floor_authority() (role.rs:1560, the same floor as `merge-hold clear`). It is checked once at start and again before every ship. An agent, headless or non-TTY caller is refused before any forge call.
+    - Loop, strictly in the order given. For each PR N:
+      1. Read the forge state. MERGED: skip with a note, so re-running after an interruption is idempotent and needs no resume file. CLOSED: stop.
+      2. Refresh only when needed: if the PR is BEHIND main, or the stale-definition gate (ship_stale_definition_gate) would refuse, run the forge update-branch through the forge layer (a small new forge method for GitHub, `gh pr update-branch N`; other forges refuse it as unsupported). A CONFLICTING PR stops the batch: a human resolves the conflict and re-runs.
+      3. Wait for CI with ci_probe::wait_for_ci_terminal on the PR branch. Red, timeout or unknown stops the batch.
+      4. Wait for a fresh review: run the existing idempotent auto-queue-review path for the new head, then poll the merge-gate verdict candidates (the same reader ship uses: merge_gate_verdict_candidates / approved_match_head) until an approval exists at EXACTLY the current head SHA. Polling uses the same function the ship gate calls, so "the wait said ready" cannot drift from "ship accepts it". Rejected or changes-requested stops the batch. Timeout (default 60m) stops it and prints the PR and head that still need a reviewer. The batch never records, requests in its own name, or carries over a review.
+      5. Re-read the head. If it moved during the wait, go back to step 3 (bounded to 2 loops, then stop).
+      6. TTY confirmation: print the PR, title, head SHA, approval (reviewer, tier, sha), CI run, the spec IDs that will complete (BUG-2203 trailer preview), and any merge-hold with its release condition. The operator must type the PR number. Anything else, EOF or Ctrl-C stops the batch without shipping. If a merge-hold is present, the prompt asks a separate explicit "clear hold on #N? [type 'clear']", and the clear runs through the existing merge-hold clear path in-process (that path re-checks the floor and records human:<user>). See Q2.
+      7. Ship in-process through the existing pr_ship_with_method, with no override flags ever (override_stale_check=false, override_stale_approval=false). Every existing preflight gate (approval at head, corpus gate, review marker, hold, stale definition) runs unchanged, so the batch adds no bypass. A ship refusal stops the batch with the gate's own message.
+      8. Next PR: its step 2 now sees the moved main.
+    - Output: one status line per phase per PR, plus a final summary table (shipped / skipped-merged / stopped-at with reason). Events: reuse events.jsonl, one record per batch start, per-PR outcome and stop reason, so `aida history` shows the run.
+
+    FAILURE MODES (each fails CLOSED, meaning stop and do not ship):
+    - non-human or non-TTY caller: refused at start and refused again before each ship
+    - forge read fails, update-branch fails, or the forge is unsupported: stop
+    - CONFLICTING: stop with a hint to resolve and re-run
+    - CI red, timed out or unknown: stop
+    - no approval at exact head before the timeout, or a negative verdict: stop
+    - head moves after approval: re-wait, then stop once the bound is hit
+    - confirmation not typed exactly, EOF or a signal: stop, nothing shipped
+    - any ship gate refuses: stop and surface the refusal verbatim
+    - interruption anywhere: nothing partial. A merged PR is detected on re-run, and an unmerged one is just re-checked from step 1.
+
+    OUT OF SCOPE: parallel or speculative refresh of later PRs; reordering or auto-dependency ordering (operator order is authoritative); launching reviewers (review watch / advisor routing owns that, and we only enqueue and wait); any agent or mandate path to run it (an operator-only surface); a persisted resume file (idempotent re-run replaces it); non-GitHub update-branch; changes to the existing gate semantics.
+
+    TEST PLAN (each fails before the change):
+    - T1 parse/registry: `aida pr ship-batch 1 2` parses to the variant, and golden help includes it. Fails today: unknown subcommand.
+    - T2 floor: a non-TTY or AIDA_AGENT_TYPE caller is refused before any forge call (fake forge records zero calls).
+    - T3 order and stop: a pure step machine over a fake forge/CI/verdict source. PR1 ships; PR2 BEHIND leads to update-branch, then waits for CI, then waits for review. A verdict at the OLD head is not accepted; one at the NEW head is. The run confirms and ships. PR3 CI red stops the batch, and PR4 is never touched.
+    - T4 confirmation: a wrong token, an empty line or EOF means zero ship calls. Only the exact PR number ships.
+    - T5 no-bypass: the ship call is always made with both override flags false (asserted on the fake).
+    - T6 MERGED skip / CLOSED stop / CONFLICTING stop.
+    - T7 head moved after approval: re-waits, then stops after 2 loops.
+    - T8 GATE_PROTECTED_PATHS contains pr_ship_batch.rs, so touches_gates on that path returns Some.
+    The orchestration takes trait-injected forge/CI/verdict/prompt/ship ports so T3–T7 are unit tests with no network.
+
+    PR SPLIT: one PR (about 600 to 800 lines including tests): the module, the args variant, the forge update-branch method, the gate-path entry, the help snapshot, and an FAQ-59 update ("use `aida pr ship-batch`"). Because it adds itself to GATE_PROTECTED_PATHS and touches mandate_gates.rs, it is itself human-gated.
+
+    QUESTIONS FOR ADVISOR:
+    Q1. Should pr_ship_batch.rs join GATE_PROTECTED_PATHS? I propose yes: it orchestrates the human-gated merges, so an agent should not be able to edit it under the mandate. The cost is that this PR, and every later change to the file, needs a human merge.
+    Q2. Should hold-clear be folded into the confirmation (a separate typed 'clear', run through the existing clear path, which re-checks the floor), or must holds be cleared beforehand with `aida merge-hold clear N`? I propose folding it in. Otherwise the operator still has to be present before every ship, which defeats the purpose.
+    Q3. On review-wait timeout, should the batch stop (as proposed), or skip that PR and continue with the rest? Skipping breaks the operator's stated order, and a later PR may depend on the skipped one, so I propose stop.
+  created_at: 2026-10-22T04:50:22.552460891Z
+  modified_at: 2026-10-22T04:50:22.552460891Z
+  session_id: 7a71b0f4-ebdf-4711-b086-1ba29a8aeead
 history:
 - id: 01a16149-ba64-7710-ba41-1cba72846b5c
   author: joe
