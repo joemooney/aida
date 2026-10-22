@@ -892,6 +892,52 @@ fn task_2053_bwrap_salvage_keeps_quoted_untracked_names_and_fails_on_unreadable(
     }
 }
 
+/// Review round 5: an untracked nested git repository (listed as `sub/`)
+/// holding a committed and an uncommitted file cannot go into a patch, so
+/// the salvage fails and destroy keeps the clone with both files.
+#[cfg(target_os = "linux")]
+#[test]
+fn task_2053_bwrap_salvage_keeps_clone_with_untracked_nested_repo() {
+    if !bwrap_live() {
+        return;
+    }
+    let fx = fixture();
+    let clone = seat(&fx, "nested", "c0ffee000023");
+    let sub = clone.join("sub");
+    std::fs::create_dir_all(&sub).unwrap();
+    git_ok(&sub, &["init", "-q"]);
+    std::fs::write(sub.join("committed.txt"), "nested commit\n").unwrap();
+    git_ok(&sub, &["add", "committed.txt"]);
+    git_ok(
+        &sub,
+        &[
+            "-c",
+            "user.email=seat@example.com",
+            "-c",
+            "user.name=Seat",
+            "-c",
+            "maintenance.auto=false",
+            "-c",
+            "gc.auto=0",
+            "commit",
+            "-q",
+            "-m",
+            "nested",
+        ],
+    );
+    std::fs::write(sub.join("uncommitted.txt"), "nested work\n").unwrap();
+
+    let facts = known(probe(&fx.main, &clone));
+    assert!(facts.unshipped(), "the nested repo reads dirty: {facts:?}");
+    let failed = salvage(&fx.main, &clone);
+    let err = format!("{:#}", failed.expect_err("a nested repo fails the salvage"));
+    assert!(err.contains("nested git repository"), "{err}");
+    let kept = destroy(&fx.main, &clone, DestroyMode::SalvageUnshipped, None);
+    assert!(matches!(kept, Ok(Destroyed::Kept { .. })), "{kept:?}");
+    assert!(sub.join("committed.txt").exists());
+    assert!(sub.join("uncommitted.txt").exists());
+}
+
 /// Review round 2, item 2: commits on a side branch the seat switched away
 /// from, a tag, and every stash entry count as unpushed, and the salvage
 /// bundles them all.
@@ -1188,4 +1234,43 @@ fn task_2053_bwrap_probe_reads_a_reftable_clone() {
     let facts = known(probe(&fx.main, &clone));
     assert_eq!(facts.branch.as_deref(), Some("feat"));
     assert!(facts.unpushed >= 1, "{facts:?}");
+}
+
+/// Review round 5 (carried MINOR): reap's per-clone step skips a clone the
+/// scan recorded no HEAD for, keeps an unshipped clone and its lease, and
+/// releases the lease only once the clone is removed.
+#[cfg(target_os = "linux")]
+#[test]
+fn task_2053_bwrap_reap_one_clone_releases_the_lease_only_on_removal() {
+    if !bwrap_live() {
+        return;
+    }
+    let fx = fixture();
+    let clone = seat(&fx, "reap", "c0ffee000024");
+    let lease = || {
+        crate::list_leases(&fx.main)
+            .into_iter()
+            .find(|l| l.id == "c0ffee000024")
+    };
+    let reap = |tip: Option<&str>| {
+        crate::session_reap::reap_one_clone(&fx.main, &lease().expect("lease"), tip)
+    };
+
+    let row = reap(None);
+    assert!(
+        row.starts_with("skipped — the scan recorded no HEAD"),
+        "{row}"
+    );
+    assert!(clone.exists() && lease().is_some());
+
+    std::fs::write(clone.join("work.txt"), "unshipped\n").unwrap();
+    let tip = known(probe(&fx.main, &clone)).head.unwrap();
+    let row = reap(Some(&tip));
+    assert!(row.starts_with("skipped — seat clone kept"), "{row}");
+    assert!(clone.exists() && lease().is_some());
+
+    std::fs::remove_file(clone.join("work.txt")).unwrap();
+    let row = reap(Some(&tip));
+    assert!(row.starts_with("reaped"), "{row}");
+    assert!(!clone.exists() && lease().is_none());
 }

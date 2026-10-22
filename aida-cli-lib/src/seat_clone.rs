@@ -1057,8 +1057,11 @@ const SALVAGE_BUNDLE_SCRIPT: &str = concat!(
 /// ref), the stash entries' commits, the uncommitted changes and every
 /// untracked file's content (as new-file diffs), all on stdout. Untracked
 /// names travel NUL-separated, so no name is quoted or dropped, and a file
-/// that cannot be diffed fails the whole salvage. `$1` is the pinned base,
-/// or empty.
+/// that cannot be diffed fails the whole salvage. So does an untracked
+/// nested git repository (listed as `dir/`) or anything else that is not a
+/// regular file or symlink: `diff --no-index` exits 1 for "Could not access"
+/// just as for "files differ", so such an entry would otherwise vanish with
+/// the clone. `$1` is the pinned base, or empty.
 // trace:TASK-2053 | ai:claude
 const SALVAGE_SCRIPT: &str = concat!(
     "set -u\n",
@@ -1072,7 +1075,13 @@ printf '\n# Uncommitted changes:\n'
 git diff --binary --no-ext-diff --no-textconv HEAD || exit 1
 printf '\n# Untracked files:\n'
 git ls-files -z --others --exclude-standard > /tmp/aida-untracked || exit 1
-xargs -0 -r -n 1 sh -c 'printf "#   %s\n" "$1"
+xargs -0 -r -n 1 sh -c 'case "$1" in */)
+  printf "aida: %s is a nested git repository, which a patch cannot hold\n" "$1" >&2; exit 255;;
+esac
+if [ ! -L "$1" ] && [ ! -f "$1" ]; then
+  printf "aida: %s is not a regular file or symlink\n" "$1" >&2; exit 255
+fi
+printf "#   %s\n" "$1"
 git diff --no-index --binary --no-ext-diff --no-textconv -- /dev/null "$1"
 [ $? -le 1 ] || exit 255' aida-untracked < /tmp/aida-untracked || exit 1
 exit 0

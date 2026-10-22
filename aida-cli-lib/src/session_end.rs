@@ -1717,6 +1717,8 @@ pub(crate) fn session_end(
     // idle) instead of deleting it. The directory persists so the next acquire
     // reuses it warm. trace:STORY-714 | ai:claude
     let mut returned_to_pool = false;
+    // trace:TASK-2053 | ai:claude
+    let mut clone_kept = false;
     if !has_worktree {
         // BUG-734: worktree-less lease — the record is gone; nothing on disk
         // to remove or return. trace:BUG-734 | ai:claude
@@ -1761,16 +1763,22 @@ pub(crate) fn session_end(
                     crate::glyph(crate::glyphs::Glyph::Check).green()
                 );
             }
-            Ok(crate::seat_clone::Destroyed::Kept { reason, .. }) => eprintln!(
-                "{} seat clone {} left in place: {reason}; {dismiss_hint}",
-                "Warning:".yellow().bold(),
-                target.worktree_path.display()
-            ),
-            Err(error) => eprintln!(
-                "{} seat clone {} left in place: {error:#}; {dismiss_hint}",
-                "Warning:".yellow().bold(),
-                target.worktree_path.display()
-            ),
+            Ok(crate::seat_clone::Destroyed::Kept { reason, .. }) => {
+                clone_kept = true;
+                eprintln!(
+                    "{} seat clone {} left in place: {reason}; {dismiss_hint}",
+                    "Warning:".yellow().bold(),
+                    target.worktree_path.display()
+                )
+            }
+            Err(error) => {
+                clone_kept = true;
+                eprintln!(
+                    "{} seat clone {} left in place: {error:#}; {dismiss_hint}",
+                    "Warning:".yellow().bold(),
+                    target.worktree_path.display()
+                )
+            }
         }
     } else if !remove
         && aida_core::worktree_pool::is_pool_worktree(&project_root, &target.worktree_path)
@@ -1933,8 +1941,10 @@ pub(crate) fn session_end(
     // the directory persists, so its cwd is not orphaned.
     // BUG-734: no worktree was ever created, so no Claude Code project dir
     // can have been orphaned by its removal. trace:BUG-734 | ai:claude
+    // A seat clone that destroy kept still stands, so its cwd is not gone
+    // either. trace:TASK-2053 | ai:claude
     // trace:TASK-70 BUG-483 STORY-714 | ai:claude
-    if has_worktree && shared_peer.is_none() && !returned_to_pool {
+    if has_worktree && shared_peer.is_none() && !returned_to_pool && !clone_kept {
         if let Ok(cc_dir) = session::claude_project_dir(&canonical_worktree) {
             if cc_dir.is_dir() {
                 if purge_cc {

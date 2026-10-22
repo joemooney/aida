@@ -525,3 +525,21 @@ Owning spec: TASK-2053 (the remaining BUG-2169 slices moved there unchanged).
   quoted-names salvage test adds a newline in a name.
 - **Folded to TASK-2110 (S4):** squash-merged branches whose origin ref was pruned read as
   unpushed.
+
+### S3 review round 5 fixes
+
+- **A nested repository keeps the clone.** `git diff --no-index` exits 1 for "Could not access"
+  just as for "files differ", so an untracked nested git repository (`ls-files --others` lists it
+  as `sub/`) used to pass salvage with no content. The salvage now fails on any untracked entry
+  that ends in `/` or is not a regular file or symlink, and names it on stderr. Destroy then
+  keeps the clone and session end reports why.
+- **Seat-written config is read on one handle.** `seat_clone_detect::read_regular_file` opens with
+  `O_NOFOLLOW | O_NONBLOCK`, checks the opened handle is a regular file within 64 KiB, and stops
+  reading one byte past the cap. A FIFO or a `/dev/zero` symlink swapped in after a stat by name
+  can no longer hang or exhaust the host.
+- **A kept clone is not "orphaned".** When destroy keeps the clone, session end skips the Claude
+  Code project-dir step, so it neither calls that dir orphaned nor purges it under `--purge-cc`.
+- **Tests.** A nested repo holding one committed and one uncommitted file fails the salvage, and
+  the clone is kept with both files. `reap_one_clone` skips a clone with no recorded HEAD, keeps
+  an unshipped clone and its lease, and releases the lease only on removal. `read_regular_file`
+  refuses a FIFO, a `/dev/zero` symlink and an oversized file.

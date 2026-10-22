@@ -1363,7 +1363,7 @@ fn scan_clone_lease(
 /// otherwise removes the clone, its cargo target directory and its base pin.
 /// The lease goes only once the clone is gone.
 // trace:TASK-2053 | ai:claude
-fn reap_one_clone(
+pub(crate) fn reap_one_clone(
     project_root: &std::path::Path,
     lease: &SessionLease,
     checked_tip: Option<&str>,
