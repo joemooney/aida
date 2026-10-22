@@ -6,16 +6,25 @@ description: |
   mailbox_resolver.rs RecipientDirectory::load returns Err on any unreadable or unparsable .aida/agents/*.toml. agent_registry::load_entries skips such records. One torn or old-schema record blocks every direct send, including person inboxes, and drops all comment mentions (punt_done.rs). Skip and warn instead, or resolve people before the registry scan, and add a corrupt-record test.
 
   Raised in review of PR-2808: https://github.com/joemooney/aida/pull/2808#issuecomment-6331976477
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-22T03:30:17.659880255Z
-modified_at: 2026-10-22T03:30:17.659880255Z
+modified_at: 2026-10-22T03:31:45.105042090Z
 req_type: Task
 tags:
 - from-review:PR-2808
 - severity:minor
+history:
+- id: 01a161aa-2d51-7992-8d2f-abbe8f577c51
+  author: joe
+  timestamp: 2026-10-22T03:31:45.105036053Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: c540b90955548e997aad6d2e117be9d1bf85d2b5
   branch: main
