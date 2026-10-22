@@ -1,0 +1,43 @@
+id: 01a1612d-566b-7401-81b3-91a29ec9827a
+spec_id: BUG-2207
+agreed_id: BUG-2207
+title: 'Advisor-launched implementer lanes are attributed to the advisor seat: claims never show live and specs stay Approved'
+description: |-
+  Implementer lanes launched by the advisor with `env -u AIDA_SESSION_GRANT -u AIDA_SESSION_PURPOSE AIDA_SESSION_ROLE=implementer claude --bg -n <lane> "<brief>"` from a pre-created sibling worktree are still attributed to the ADVISOR seat. Their spec claims don't show up as live implementer sessions.
+
+  Observed 2026-10-21 18:12 MST, with six active lanes (fix-task-1951, fix-task-1952, impl-task-1955-s7, take-2804, impl-story-1662, relay task-2053-s3), all producing PRs:
+  - the cargo-slot queue's WHO column shows every lane as "<SPEC> advisor";
+  - `aida ps` lists no running session for TASK-1951/1952/1955/1915 or STORY-1662. The only entry is TASK-2053 with role=advisor, live=stale (6h);
+  - `aida status TASK-1952` reports "no active session (status: Approved)";
+  - all six specs stay Approved with an empty owner, though each brief tells the lane to claim its spec from its worktree.
+
+  Impact: the board reads as if nothing is in flight (specs Approved, no sessions). The advisor seat is billed for lane CPU in the slot queue. Stale advisor-role leases pile up. Liveness, reap and stall detection can't see the lanes.
+
+  Likely cause: seat identity is resolved from the launching session (inherited seat state or a parent-process chain) instead of the child's AIDA_SESSION_ROLE. Claims made "as advisor" then attach to the advisor seat and go stale.
+
+  Acceptance:
+  (1) A lane launched by the documented advisor recipe, or by STORY-1662's standalone-implementer path, shows in `aida ps` as role=implementer, live, with its spec.
+  (2) Its claim sets the owner and moves the spec to In Progress.
+  (3) The cargo-slot WHO column shows it as implementer.
+  (4) No advisor-role lease is created for a lane's spec.
+  (5) A regression test drives a launch from an advisor environment and asserts (1)–(4).
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-22T01:15:23.627006662Z
+modified_at: 2026-10-22T01:15:23.627006662Z
+req_type: Bug
+tags:
+- attribution
+- leases
+- relay
+- seats
+filed_at:
+  code_sha: f9890cf67dc856c97b55fded65a6f5e9b1bddf12
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 4361fbd456
+  vendor: claude
+  session: 7d71bfbf-a609-42bd-a714-a7d52d81db81
