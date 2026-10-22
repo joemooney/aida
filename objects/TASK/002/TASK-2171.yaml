@@ -6,12 +6,12 @@ description: |
   aida-cli-lib/src/seat_authority.rs roster_check calls store_sync::aida_store_override before the roster is checked, including on the allow path. An unusable AIDA_STORE makes every seat issuance or child delegation print the 'unusable' warning again, on top of the dispatcher's. Resolve the override lazily, only when building a refusal note.
 
   Raised in review of PR-2831: https://github.com/joemooney/aida/pull/2831#issuecomment-6340353942
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-22T12:08:28.224525041Z
-modified_at: 2026-10-22T12:09:29.830502112Z
+modified_at: 2026-10-22T15:18:17.433717591Z
 req_type: Task
 tags:
 - from-review:PR-2831
@@ -26,6 +26,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a16431-0859-7041-b8db-275808a9f0bc
+  author: joe
+  timestamp: 2026-10-22T15:18:17.433711891Z
+  session_id: 4a469e4d-c76c-4fb8-b66f-fb3004258007
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 06f8be4827790b478907bef54ac92f96050ffb38
   branch: pr-2831
