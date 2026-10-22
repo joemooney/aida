@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T00:51:06.094986066Z
-modified_at: 2026-10-22T10:16:29.303006300Z
+modified_at: 2026-10-22T10:16:33.575292437Z
 req_type: Bug
 tags:
 - batch:2026-10-11
@@ -178,6 +178,28 @@ comments:
     C6 (one PR): one PR, not the 1a/1b split, because 1a alone leaves the ship gap open. seat_authority.rs and review_authority are gate code, so the operator merges. Refs → completes BUG-1934.
   created_at: 2026-10-22T05:19:18.647932951Z
   modified_at: 2026-10-22T05:19:18.647932951Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a1631c-ca27-7271-b5d7-f9f2ea3798e7
+  author: joe
+  content: |-
+    ADVISOR 03:20, PR-2830 round 1 (BUG-1934): CHANGES REQUESTED, and the design needs an addendum before more code.
+
+    BLOCKER (CI red on 3 lanes, deterministic): the Python and shell grant fixtures (tests/test_history_templates.sh, tests/test_mcp_stdio.sh, plus a lib-0 Rust test) mint UNBOUND grants. Fix the fixtures to mint bound grants through the same test seam. Never relax the check for tests.
+
+    MAJOR (design gap, a merge blocker): Claude Code's Bash sandbox (bubblewrap) runs each tool call in its OWN PID namespace. Observed: NSpid=3, ancestry ends at in-namespace pid 1, getsid=0. Presenter ancestry can never reach the bound harness or shell, so after merge every sandboxed agent's `aida review record`, advisor edits and commit authority are refused. That stalls the whole review pipeline. Not acceptable to merge as is.
+
+    Post SKETCH v2 (addendum) on BUG-1934 before implementing a fix. Evaluate and recommend one:
+     (a) Linux session keyring: at issue, add a key holding the grant secret to the issuing session's keyring. A presenter proves possession by reading it. Keyrings are inherited across PID namespaces and are not exposed through env or files. Check whether bwrap or Claude Code creates a new session keyring per call (if so, this fails).
+     (b) An inherited file descriptor or anonymous socket from the harness (cannot be copied through env). Likely infeasible, since the harness is not ours.
+     (c) NSpid mapping: from inside the namespace, /proc/<pid>/status cannot see host pids. Probably infeasible; confirm.
+     (d) Require aida to run outside the sandbox (excludedCommands / a sandbox config template) and refuse grant-gated calls from inside a foreign PID namespace with a clear message. Weigh what this does to containment.
+    Fail-closed either way. For each option say what a same-user process can or cannot forge. The test plan must include a real bwrap-namespaced presenter (skipped when bwrap is absent).
+
+    MINOR (folded as TASK-2158): the end-to-end `review record` refusal test the sketch promised. MINOR (TASK-2159): role status must not offer a transient tool-shell pid for --bind-pid. Walk up to the harness, or say there is no stable pid.
+
+    Do the CI fixture fix now. Then mail the advisor when SKETCH v2 is posted, and wait for signoff before implementing the namespace answer.
+  created_at: 2026-10-22T10:16:33.575292437Z
+  modified_at: 2026-10-22T10:16:33.575292437Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a12b8d-6820-7292-ac96-3f451518bfcd
