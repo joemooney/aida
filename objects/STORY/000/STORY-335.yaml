@@ -68,13 +68,12 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-19T16:33:08.323277210Z
-modified_at: 2026-06-08T06:23:26.028919784Z
+modified_at: 2026-10-22T16:42:41.495924376Z
 req_type: Story
 tags:
 - autonomous-drain
 - batch
 - blocked
-- deferred:post-stability
 - from-user-request
 - integrate-pass
 - rebase
@@ -139,4 +138,10 @@ comments:
   content: 'Closing Completed (advisor, 2026-06-07): all four children are Completed — TASK-688 (dry-run forecast), TASK-689 (--rebase step), TASK-690 (--strategy per-item|one-branch|stacked selector), TASK-691 (config default). The per-item integrate-pass MVP this STORY scoped is fully delivered; one-branch/stacked remain separate follow-ups as designed.'
   created_at: 2026-06-08T06:23:22.526594497Z
   modified_at: 2026-06-08T06:23:22.526594497Z
+history:
+- id: 01a1647e-549a-7461-8899-77018af8c54b
+  author: joe
+  timestamp: 2026-10-22T16:42:43.226778171Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
 human_only: true
