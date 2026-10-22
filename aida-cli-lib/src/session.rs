@@ -6957,6 +6957,7 @@ mod tests {
             plan_source: "test".to_string(),
             claude_session_id: None,
             batch_name: None,
+            agent_name: None,
             plan: None,
             items: items
                 .iter()
@@ -9669,6 +9670,83 @@ mod tests {
             env_of(&build()),
             Some(None),
             "a mocked vendor is not probed"
+        );
+    }
+
+    /// TASK-2103: the two spawn paths that do not go through
+    /// `build_exec_vendor_headless_command` stamp the child's own vendor
+    /// version too. A fake vendor prints the `AIDA_HARNESS_VERSION` it was
+    /// launched with into the session log; deleting either call leaves the
+    /// launcher's value there.
+    // trace:TASK-1955 | ai:claude (TASK-2103)
+    #[cfg(unix)]
+    #[test]
+    fn spawn_and_resume_children_carry_their_own_vendor_harness_version() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        let root = tempfile::tempdir().unwrap();
+        let bin = tempfile::tempdir().unwrap();
+        for vendor in ["claude", "codex"] {
+            crate::test_exec::write_executable(
+                &bin.path().join(vendor),
+                format!(
+                    "#!/bin/sh\n[ \"$1\" = --version ] && {{ echo '{vendor} 9.9.9'; exit 0; }}\nprintf 'HV=%s\\n' \"${{AIDA_HARNESS_VERSION-unset}}\"\n"
+                ),
+            );
+        }
+        let path = format!(
+            "{}:{}",
+            bin.path().display(),
+            std::env::var("PATH").unwrap_or_default()
+        );
+        let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+            root.path(),
+            "advisor",
+            &["implementer"],
+            &[
+                ("PATH", Some(path.as_str())),
+                ("AIDA_CONTAINED", None),
+                ("AIDA_OS_WRAP", None),
+                ("AIDA_AGENT_CMD", None),
+                ("AIDA_HARNESS_VERSION", Some("launcher-version")),
+            ],
+        );
+        let tee = crate::headless_tee::TeeOptions {
+            enabled: false,
+            label: None,
+        };
+        let spawn_log = root.path().join("spawn.log");
+        let (status, _) = spawn_vendor_headless_with_seat_granted(
+            HeadlessVendor::Codex,
+            aida_core::agents_config::AgentSeat::Implementer,
+            "prompt",
+            "sid",
+            &spawn_log,
+            &tee,
+            false,
+        )
+        .unwrap();
+        assert!(status.success());
+        assert_eq!(
+            std::fs::read_to_string(&spawn_log).unwrap().trim(),
+            "HV=codex 9.9.9"
+        );
+        let resume_log = root.path().join("resume.log");
+        let (status, _) = spawn_claude_headless_resume_granted(
+            "prompt",
+            "sid",
+            &resume_log,
+            root.path(),
+            &tee,
+            false,
+            "implementer",
+        )
+        .unwrap();
+        assert!(status.success());
+        assert_eq!(
+            std::fs::read_to_string(&resume_log).unwrap().trim(),
+            "HV=claude 9.9.9"
         );
     }
 

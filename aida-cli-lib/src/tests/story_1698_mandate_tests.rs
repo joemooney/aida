@@ -1028,7 +1028,7 @@ fn every_failure_after_a_mandate_release_re_arms_the_hold() {
     let after = &handler[release..];
     let merged = after.find("merged_this_run = true;").unwrap();
     let window = &after[..merged + 2000];
-    assert!(window.contains("Ok(false) if mandate_release.is_some()"));
+    assert!(window.contains("if mandate_release.is_some() {"));
     assert!(window.contains("ended before the merge"));
     assert!(window.contains("re-arm a mandate-released hold on a failed merge"));
     assert_eq!(
@@ -1036,9 +1036,31 @@ fn every_failure_after_a_mandate_release_re_arms_the_hold() {
         4,
         "gate timeout, lapse, a moved base and merge failure each re-arm"
     );
-    // TASK-1915: the moved-base (TASK-1960) refusal re-arms too.
+    // TASK-1915: the moved-base (TASK-1960) refusal re-arms too, through the
+    // decision `refusal_with_mandate_rearm_*` tests pin behaviourally.
     // trace:TASK-1915 | ai:claude
-    assert!(window.contains("like every other post-release exit"));
+    // trace:TASK-1955 | ai:claude (TASK-2088)
+    assert!(window.contains(concat!("refusal_with_mandate_", "rearm(")));
+}
+
+/// TASK-2088: the moved-base exit re-arms exactly when this ship's mandate
+/// released a hold, and never otherwise.
+// trace:TASK-1955 | ai:claude (TASK-2088)
+#[test]
+fn refusal_with_mandate_rearm_re_arms_only_a_mandate_released_hold() {
+    use crate::pr_cmd::refusal_with_mandate_rearm;
+    let rearmed = refusal_with_mandate_rearm("base moved.".into(), true, true, || {
+        " The hold is re-armed.".into()
+    });
+    assert_eq!(rearmed, "base moved. The hold is re-armed.");
+    for (mandate, held) in [(true, false), (false, true), (false, false)] {
+        assert_eq!(
+            refusal_with_mandate_rearm("base moved.".into(), mandate, held, || {
+                panic!("({mandate}, {held}) must not re-arm")
+            }),
+            "base moved."
+        );
+    }
 }
 
 // ── Review B5: decide mode is always human ─────────────────────────────────

@@ -24,28 +24,66 @@ pub fn git_command() -> std::process::Command {
     command
 }
 
+/// The template's `config`: automatic maintenance off, for both the local
+/// side and a bare remote's `receive-pack`.
+#[allow(dead_code)]
+const TEMPLATE_CONFIG: &str =
+    "[receive]\n\tautogc = false\n[gc]\n\tauto = 0\n[maintenance]\n\tauto = false\n";
+#[allow(dead_code)]
+const TEMPLATE_DESCRIPTION: &str = "test fixture\n";
+
 /// A git template directory: the default layout (`hooks/`, `info/exclude`,
-/// `description`) plus a `config` with automatic maintenance off. Created
-/// once per test process.
+/// `description`) plus a `config` with automatic maintenance off. It lives at
+/// a stable path under the system temp dir, named by a hash of its contents,
+/// so every test process shares one directory instead of leaking its own (a
+/// `static` `TempDir` is never dropped). Resolved once per process.
+// trace:TASK-1955 | ai:claude (TASK-2017)
 #[allow(dead_code)]
 fn template_dir() -> &'static std::path::Path {
-    static DIR: std::sync::OnceLock<tempfile::TempDir> = std::sync::OnceLock::new();
-    DIR.get_or_init(|| {
-        let dir = tempfile::Builder::new()
-            .prefix("aida-test-git-template-")
-            .tempdir()
-            .expect("create git template dir");
-        let root = dir.path();
-        std::fs::create_dir_all(root.join("hooks")).unwrap();
-        std::fs::create_dir_all(root.join("info")).unwrap();
-        std::fs::write(root.join("info/exclude"), "").unwrap();
-        std::fs::write(root.join("description"), "test fixture\n").unwrap();
-        std::fs::write(
-            root.join("config"),
-            "[receive]\n\tautogc = false\n[gc]\n\tauto = 0\n[maintenance]\n\tauto = false\n",
-        )
-        .unwrap();
-        dir
-    })
-    .path()
+    static DIR: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
+    DIR.get_or_init(|| ensure_template_dir(&std::env::temp_dir()))
+}
+
+/// Create (idempotently) the content-addressed template dir under `parent`
+/// and return its path. Concurrent processes race safely: each builds a
+/// private sibling and renames it into place; a loser whose rename finds the
+/// directory already there discards its copy and uses the winner's.
+// trace:TASK-1955 | ai:claude (TASK-2017)
+#[allow(dead_code)]
+fn ensure_template_dir(parent: &std::path::Path) -> std::path::PathBuf {
+    // FNV-1a: stable across Rust releases and processes, unlike DefaultHasher.
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    for byte in TEMPLATE_CONFIG.bytes().chain(TEMPLATE_DESCRIPTION.bytes()) {
+        hash = (hash ^ u64::from(byte)).wrapping_mul(0x0100_0000_01b3);
+    }
+    let dir = parent.join(format!("aida-test-git-template-{hash:016x}"));
+    let complete = |dir: &std::path::Path| {
+        std::fs::read_to_string(dir.join("config")).is_ok_and(|c| c == TEMPLATE_CONFIG)
+            && dir.join("info/exclude").is_file()
+            && dir.join("hooks").is_dir()
+    };
+    if complete(&dir) {
+        return dir;
+    }
+    std::fs::create_dir_all(parent).expect("create git template parent dir");
+    let staging = tempfile::Builder::new()
+        .prefix(".aida-test-git-template-staging-")
+        .tempdir_in(parent)
+        .expect("create git template staging dir");
+    let root = staging.path();
+    std::fs::create_dir_all(root.join("hooks")).unwrap();
+    std::fs::create_dir_all(root.join("info")).unwrap();
+    std::fs::write(root.join("info/exclude"), "").unwrap();
+    std::fs::write(root.join("description"), TEMPLATE_DESCRIPTION).unwrap();
+    std::fs::write(root.join("config"), TEMPLATE_CONFIG).unwrap();
+    if std::fs::rename(root, &dir).is_err() && !complete(&dir) {
+        // Not a lost race: a stale or partial directory (say, half-removed by
+        // a temp cleaner). Replace it.
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::rename(root, &dir).expect("install git template dir");
+    }
+    // The staging TempDir is now gone (renamed) or a loser's copy; dropping it
+    // removes whatever is left.
+    drop(staging);
+    dir
 }

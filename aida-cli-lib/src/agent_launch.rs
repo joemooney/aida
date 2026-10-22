@@ -3058,11 +3058,15 @@ pub(crate) fn link_bg_session(plan: &AgentLaunchPlan, lease_id: &str, sid: &str)
             plan_source: "agent new --bg".to_string(),
             claude_session_id: None,
             batch_name: None,
+            agent_name: None,
             plan: None,
             items: Vec::new(),
         }
     });
     manifest.claude_session_id = Some(sid.to_string());
+    // A hook that fires after this save names the row from it (TASK-2102).
+    // trace:TASK-1955 | ai:claude (TASK-2102)
+    manifest.agent_name = Some(plan.name.clone()).filter(|n| !n.trim().is_empty());
     session_manifest::save(&manifest_path, &manifest)?;
     agent_registry::adopt_bg_session_identity(
         &plan.project_root,

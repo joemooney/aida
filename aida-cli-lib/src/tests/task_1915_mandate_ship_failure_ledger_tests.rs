@@ -80,7 +80,62 @@ fn every_exit_between_the_mandate_release_and_the_merge_ledgers_a_refusal() {
         }
     }
     // The release floor, the refusal hold, the refusal pin, the rebase pin,
-    // both hold-gate timeouts, the mandate ending, the proven base, and the
-    // merge failure with and without a hold to re-arm.
-    assert_eq!(exits.len(), 10, "{exits:#?}");
+    // the hold-gate timeout (one exit for both arms since TASK-2086), the
+    // mandate ending, the proven base, and the merge failure with and without
+    // a hold to re-arm.
+    assert_eq!(exits.len(), 9, "{exits:#?}");
+}
+
+// TASK-2087: a `?` propagation in the same window would skip the ledger
+// without being a `return Err(` / `bail!(` exit, so the window holds none.
+// trace:TASK-1955 | ai:claude (TASK-2087)
+#[test]
+fn no_question_mark_exit_between_the_mandate_release_and_the_merge() {
+    let src = include_str!("../pr_cmd.rs");
+    let body = &src[src
+        .find(concat!("pub(crate) fn pr_ship_", "with_method("))
+        .expect("pr_ship_with_method exists")..];
+    let start = body
+        .find(concat!("let mandate_release = (!floor_", "authority)"))
+        .expect("the mandate release decision");
+    let end = body
+        .find(concat!(
+            "STORY-1700: a ship under a mandate is a ",
+            "mandate-driven action"
+        ))
+        .expect("the post-merge success ledger");
+    let strip_strings = |line: &str| {
+        let mut out = String::new();
+        let mut in_str = false;
+        let mut escaped = false;
+        for ch in line.chars() {
+            if in_str {
+                if escaped {
+                    escaped = false;
+                } else if ch == '\\' {
+                    escaped = true;
+                } else if ch == '"' {
+                    in_str = false;
+                }
+            } else if ch == '"' {
+                in_str = true;
+            } else {
+                out.push(ch);
+            }
+        }
+        out
+    };
+    let offenders: Vec<&str> = body[start..end]
+        .lines()
+        .filter(|l| !l.trim_start().starts_with("//"))
+        .filter(|l| {
+            let code = strip_strings(l);
+            let code = code.split("//").next().unwrap_or_default();
+            code.contains('?')
+        })
+        .collect();
+    assert!(
+        offenders.is_empty(),
+        "a `?` here skips the MandateDriveAction ledger: {offenders:#?}"
+    );
 }

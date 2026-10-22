@@ -162,6 +162,7 @@ fn mint_lease(root: &std::path::Path, lease_id: &str, branch: &str, claude_id: O
         plan_source: "queue work".to_string(),
         claude_session_id: claude_id.map(str::to_string),
         batch_name: None,
+        agent_name: None,
         plan: None,
         items: vec![],
     };
