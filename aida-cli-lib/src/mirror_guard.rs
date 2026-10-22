@@ -17,7 +17,7 @@
 //! never allows anything, so a hand-set variable cannot widen the guard.
 // trace:BUG-2015 | ai:claude
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use std::path::Path;
 
 /// Environment variable `aida remote mirror-sync` sets on each mirror push:
@@ -31,11 +31,96 @@ pub(crate) fn mirror_sync_attestation(mirror: &str, sha: &str, branch: &str) -> 
     format!("{mirror} {sha} refs/heads/{branch}")
 }
 
-/// AIDA's opt-in main-guard pre-push hook (`--print-guard`): refuses any
-/// push to the default branch unless [`check_mirror_sync_push`] allows it.
+/// AIDA's opt-in main-guard pre-push hook: refuses any push to the default
+/// branch unless [`check_mirror_sync_push`] allows it.
 // trace:BUG-2015 | ai:claude
 pub(crate) fn main_guard_hook_script() -> &'static str {
     aida_core::templates::EMBEDDED_TEMPLATES["hooks/aida-main-guard-pre-push.sh"]
+}
+
+/// The guard's own file in the hooks directory. Not a git hook name, so git
+/// only runs it through the chain block in `pre-push`.
+// trace:BUG-2015 | ai:claude
+pub(crate) const GUARD_FILE: &str = "aida-main-guard";
+
+/// First line of the chain block; marks a pre-push hook that runs the guard.
+// trace:BUG-2015 | ai:claude
+pub(crate) const GUARD_CHAIN_MARKER: &str =
+    "# aida main guard — chained by `aida remote mirror-guard-check --install-guard`.";
+
+/// The block placed right after a pre-push hook's shebang: run the guard on
+/// the ref lines, stop the push when it refuses, then hand the same ref
+/// lines back on stdin so the rest of the hook (the mirror fan-out, or the
+/// operator's own checks) still sees them.
+// trace:BUG-2015 | ai:claude
+fn guard_chain_block() -> String {
+    format!(
+        "{GUARD_CHAIN_MARKER}\n\
+         aida_guard_refs=$(cat)\n\
+         printf '%s\\n' \"$aida_guard_refs\" | \"$(dirname \"$0\")/{GUARD_FILE}\" \"$@\" || exit 1\n\
+         exec 0<<AIDA_GUARD_REFS\n\
+         $aida_guard_refs\n\
+         AIDA_GUARD_REFS\n\
+         # end aida main guard\n"
+    )
+}
+
+/// `hook` with the guard chained in front of it (idempotent).
+// trace:BUG-2015 | ai:claude
+pub(crate) fn chain_guard_into(hook: &str) -> String {
+    if hook.contains(GUARD_CHAIN_MARKER) {
+        return hook.to_string();
+    }
+    match hook.split_once('\n') {
+        Some((first, rest)) if first.starts_with("#!") => {
+            format!("{first}\n{}{rest}", guard_chain_block())
+        }
+        _ => format!("#!/bin/sh\n{}{hook}", guard_chain_block()),
+    }
+}
+
+/// Write `body` to `path` as an executable hook.
+fn write_hook(path: &Path, body: &str) -> Result<()> {
+    std::fs::write(path, body).with_context(|| format!("failed to write {}", path.display()))?;
+    aida_core::git_ops::set_hook_mode(path)
+        .with_context(|| format!("failed to make {} executable", path.display()))
+}
+
+/// `aida remote mirror-guard-check --install-guard [--force]`: install the
+/// guard as its own file and chain it in front of `pre-push`. A missing hook
+/// gets a pre-push that runs only the guard; AIDA's mirror fan-out hook is
+/// chained into; a foreign hook is left alone unless `force`. Idempotent.
+// trace:BUG-2015 | ai:claude
+pub fn install_main_guard(project_root: &Path, force: bool) -> Result<()> {
+    let check = crate::glyph(crate::glyphs::Glyph::Check);
+    let hooks_dir = crate::remote_create::repo_hooks_dir(project_root);
+    std::fs::create_dir_all(&hooks_dir)
+        .with_context(|| format!("failed to create {}", hooks_dir.display()))?;
+    let pre_push = hooks_dir.join("pre-push");
+    let existing = std::fs::read_to_string(&pre_push).ok();
+    let chained = match existing.as_deref() {
+        None => chain_guard_into("#!/bin/sh\nexit 0\n"),
+        Some(body) if body.contains(GUARD_CHAIN_MARKER) => body.to_string(),
+        Some(body) if body.contains(crate::remote_create::MIRROR_HOOK_HEADER) || force => {
+            chain_guard_into(body)
+        }
+        Some(_) => anyhow::bail!(
+            "a custom pre-push hook exists at {} — not changing it. Re-run with --force to \
+             chain the main guard in front of it, or add the guard call to it yourself \
+             (docs/multi-hub-sync.md)",
+            pre_push.display()
+        ),
+    };
+    write_hook(&hooks_dir.join(GUARD_FILE), main_guard_hook_script())?;
+    if existing.as_deref() != Some(chained.as_str()) {
+        write_hook(&pre_push, &chained)?;
+    }
+    println!(
+        "{check} main guard installed: {} runs {} first",
+        pre_push.display(),
+        GUARD_FILE
+    );
+    Ok(())
 }
 
 /// Decide whether a push of `ref_lines` (the pre-push hook's stdin) to

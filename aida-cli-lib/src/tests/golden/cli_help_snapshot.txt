@@ -7236,8 +7236,8 @@ origin's reviewed tip. A project's pre-push main guard pipes its stdin ref lines
 refusing; exit 0 allows the push only when the remote is a registered mirror (never origin), every
 default-branch sha equals origin's tip, and mirror-sync attested exactly that push. Anything else
 exits non-zero with the reason, so the guard keeps refusing. Guard snippet: `printf '%s\n' "$refs" |
-aida remote mirror-guard-check "$1" && exit 0` `--print-guard` prints AIDA's opt-in main-guard
-pre-push hook, which already consults this check
+aida remote mirror-guard-check "$1" && exit 0` `--install-guard` installs AIDA's opt-in main guard,
+which already consults this check, chained in front of the existing pre-push hook
 
 Usage: aida remote mirror-guard-check [OPTIONS] [REMOTE]
 
@@ -7246,8 +7246,11 @@ Arguments:
           The remote the push targets (pre-push hook argument $1)
 
 Options:
-      --print-guard
-          Print the opt-in main-guard pre-push hook and exit
+      --install-guard
+          Install the main guard and chain it in front of the pre-push hook
+
+      --force
+          With --install-guard: chain in front of a custom pre-push hook too
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -30865,8 +30868,13 @@ Working on aida itself
       "remote",
       "mirror-guard-check"
     ],
-    "about": "(plumbing) Ask whether a push to the default branch is an attested `aida remote mirror-sync` of origin's reviewed tip. A project's pre-push main guard pipes its stdin ref lines here before refusing; exit 0 allows the push only when the remote is a registered mirror (never origin), every default-branch sha equals origin's tip, and mirror-sync attested exactly that push. Anything else exits non-zero with the reason, so the guard keeps refusing. Guard snippet: `printf '%s\\n' \"$refs\" | aida remote mirror-guard-check \"$1\" && exit 0` `--print-guard` prints AIDA's opt-in main-guard pre-push hook, which already consults this check",
+    "about": "(plumbing) Ask whether a push to the default branch is an attested `aida remote mirror-sync` of origin's reviewed tip. A project's pre-push main guard pipes its stdin ref lines here before refusing; exit 0 allows the push only when the remote is a registered mirror (never origin), every default-branch sha equals origin's tip, and mirror-sync attested exactly that push. Anything else exits non-zero with the reason, so the guard keeps refusing. Guard snippet: `printf '%s\\n' \"$refs\" | aida remote mirror-guard-check \"$1\" && exit 0` `--install-guard` installs AIDA's opt-in main guard, which already consults this check, chained in front of the existing pre-push hook",
     "flags": [
+      {
+        "name": "force",
+        "takes_value": false,
+        "help": "With --install-guard: chain in front of a custom pre-push hook too"
+      },
       {
         "name": "format",
         "takes_value": true,
@@ -30878,9 +30886,9 @@ Working on aida itself
         "help": "Print help (see more with '--help')"
       },
       {
-        "name": "print-guard",
+        "name": "install-guard",
         "takes_value": false,
-        "help": "Print the opt-in main-guard pre-push hook and exit"
+        "help": "Install the main guard and chain it in front of the pre-push hook"
       }
     ],
     "hidden": true

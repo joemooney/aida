@@ -2098,6 +2098,13 @@ fn install_mirror_pre_push_hook(project_root: &Path) -> Result<()> {
     if target.exists() {
         let existing = std::fs::read_to_string(&target).unwrap_or_default();
         if existing.contains(MIRROR_HOOK_MARKER) {
+            // Keep a chained main guard across the refresh.
+            // trace:BUG-2015 | ai:claude
+            let script = if existing.contains(crate::mirror_guard::GUARD_CHAIN_MARKER) {
+                crate::mirror_guard::chain_guard_into(&script)
+            } else {
+                script
+            };
             if !aida_core::scaffolding::generated_text_matches(&existing, &script) {
                 std::fs::write(&target, &script)
                     .with_context(|| format!("failed to refresh {}", target.display()))?;
@@ -2247,6 +2254,12 @@ pub(crate) fn run_remote_mirror(
 
     // 2. Store-leg fan-out config.
     let config_was_clean = crate::config_commit::config_is_clean(project_root);
+    // trace:BUG-2015 | ai:claude
+    let prior_config = match config_was_clean {
+        Some(true) => PriorConfig::Clean,
+        _ if crate::config_commit::config_is_tracked(project_root) => PriorConfig::Edited,
+        _ => PriorConfig::Untracked,
+    };
     if add_mirror_remote_to_config(project_root, name)? {
         println!(
             "{check} listed `{name}` in [store.sync] mirror_remotes — store pushes now fan out"
@@ -2285,7 +2298,7 @@ pub(crate) fn run_remote_mirror(
     {
         println!(
             "{}",
-            mirror_default_branch_note(name, &default_branch, config_was_clean == Some(true))
+            mirror_default_branch_note(name, &default_branch, prior_config)
         );
     }
 
@@ -2297,24 +2310,40 @@ pub(crate) fn run_remote_mirror(
     Ok(outcome)
 }
 
+/// The config's state before `aida remote mirror` touched it.
+// trace:BUG-2015 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PriorConfig {
+    /// Tracked, with no uncommitted change.
+    Clean,
+    /// Tracked, with the operator's own uncommitted edits.
+    Edited,
+    /// New or untracked: nothing committed to protect.
+    Untracked,
+}
+
 /// Printed when `aida remote mirror` left its config change uncommitted
 /// because HEAD is the default branch: land it on a branch through a PR.
-/// A config that already held other edits (`was_clean` false) gets a
-/// warning instead of a commit recipe that would sweep those edits in.
+/// A config that already held other edits gets a warning instead of a
+/// commit recipe that would sweep those edits in.
 // trace:BUG-2015 | ai:claude
-fn mirror_default_branch_note(name: &str, default_branch: &str, was_clean: bool) -> String {
-    if !was_clean {
-        return format!(
+fn mirror_default_branch_note(name: &str, default_branch: &str, prior: PriorConfig) -> String {
+    let route = |add: &str| {
+        format!(
+            "  not committed on `{default_branch}` — the default branch advances only through a PR:\n    \
+             git switch -c chore/mirror-{name} && {add}git commit -m \"chore(remote): list {name} as a store mirror\" -- .aida/config.toml\n    \
+             git push -u origin HEAD    # then open a PR"
+        )
+    };
+    match prior {
+        PriorConfig::Clean => route(""),
+        PriorConfig::Untracked => route("git add .aida/config.toml && "),
+        PriorConfig::Edited => format!(
             "  not committed on `{default_branch}`: .aida/config.toml already had uncommitted \
              edits before this run — review `git diff .aida/config.toml`, then land only the \
              `{name}` mirror entry on a branch through a PR"
-        );
+        ),
     }
-    format!(
-        "  not committed on `{default_branch}` — the default branch advances only through a PR:\n    \
-         git switch -c chore/mirror-{name} && git commit -m \"chore(remote): list {name} as a store mirror\" -- .aida/config.toml\n    \
-         git push -u origin HEAD    # then open a PR"
-    )
 }
 
 /// The block every `aida remote mirror` run ends with: the first push skips
@@ -4482,7 +4511,7 @@ host = \"should.not.count\"
         assert_eq!(git_out(&project, &["rev-parse", "HEAD"]).unwrap(), head);
         let body = std::fs::read_to_string(project.join(".aida/config.toml")).unwrap();
         assert!(body.contains("mirror"), "{body}");
-        let note = mirror_default_branch_note("mirror", "main", true);
+        let note = mirror_default_branch_note("mirror", "main", PriorConfig::Clean);
         assert!(note.contains("git switch -c chore/mirror-mirror"), "{note}");
         assert!(note.contains("open a PR"), "{note}");
     }
@@ -4495,9 +4524,17 @@ host = \"should.not.count\"
     #[test]
     fn bug_2015_dirty_config_on_main_warns_and_init_never_commits() {
         use crate::config_commit::{CommitMode, ConfigChangeOutcome};
-        let note = mirror_default_branch_note("mirror", "main", false);
+        let note = mirror_default_branch_note("mirror", "main", PriorConfig::Edited);
         assert!(note.contains("already had uncommitted edits"), "{note}");
         assert!(!note.contains("git commit"), "{note}");
+        // A new or untracked config is not "edited": it gets the route, with
+        // the `git add` it needs.
+        let note = mirror_default_branch_note("mirror", "main", PriorConfig::Untracked);
+        assert!(!note.contains("already had"), "{note}");
+        assert!(
+            note.contains("git add .aida/config.toml && git commit"),
+            "{note}"
+        );
 
         let tmp = tempfile::tempdir().unwrap();
         let project = tmp.path().join("project");

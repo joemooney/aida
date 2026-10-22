@@ -105,9 +105,14 @@ when all of these hold:
 The label alone allows nothing. A local-only `main` commit, a direct push to origin, or a
 stale tip is still refused.
 
-- **AIDA's opt-in guard:** install it per clone with
-  `aida remote mirror-guard-check --print-guard > "$(git rev-parse --git-common-dir)/hooks/pre-push"`,
-  then `chmod 755` the file. It already runs the check.
+- **AIDA's opt-in guard:** run `aida remote mirror-guard-check --install-guard` once per
+  clone. It writes the guard to `hooks/aida-main-guard` and chains it in front of
+  `pre-push`, handing the ref lines back on stdin, so the mirror fan-out hook that
+  `aida remote mirror` installs still runs (and a later `aida remote mirror` refresh
+  keeps the chain). A custom pre-push hook is left alone unless you add `--force`.
+  The guard protects **origin's** default branch (`refs/remotes/origin/HEAD`), whatever
+  remote you push to; when that is unset it refuses every push until you run
+  `git remote set-head origin --auto`.
 - **Your own guard:** save the ref lines (`refs=$(cat)`) before reading them. Then, just
   before refusing, add:
   `printf '%s\n' "$refs" | aida remote mirror-guard-check "$1" && exit 0`

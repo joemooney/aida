@@ -3,11 +3,10 @@
 #
 # For repos with no server-side branch protection, where the default branch
 # must advance only through a reviewed PR (`aida pr ship`). Opt-in, never
-# scaffolded. Install per clone:
+# scaffolded. Install per clone (chains in front of any existing pre-push
+# hook, such as the mirror fan-out hook `aida remote mirror` installs):
 #
-#     aida remote mirror-guard-check --print-guard \
-#         > "$(git rev-parse --git-common-dir)/hooks/pre-push"
-#     chmod 755 "$(git rev-parse --git-common-dir)/hooks/pre-push"
+#     aida remote mirror-guard-check --install-guard
 #
 # The one exception: `aida remote mirror-sync` pushing origin's reviewed
 # default-branch tip to a registered mirror hub. Before refusing, the guard
@@ -26,11 +25,18 @@
 
 remote="${1:-origin}"
 
-# Resolve the default branch locally (no network): origin's HEAD symref,
-# else `main`.
-default_branch=$(git symbolic-ref --quiet --short "refs/remotes/$remote/HEAD" 2>/dev/null)
-default_branch="${default_branch#"$remote/"}"
-[ -n "$default_branch" ] || default_branch=main
+# The protected branch is ORIGIN's default branch, whatever remote this push
+# targets: a mirror hub usually has no HEAD symref of its own. Resolved
+# locally (no network). When it cannot be determined, refuse rather than
+# guard a guessed branch.
+default_branch=$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null)
+default_branch="${default_branch#origin/}"
+if [ -z "$default_branch" ]; then
+    printf '\npre-push: REFUSING: cannot tell origin'"'"'s default branch (refs/remotes/origin/HEAD is unset).\n' >&2
+    printf 'pre-push: set it once, then push again:\n' >&2
+    printf 'pre-push:     git remote set-head origin --auto\n\n' >&2
+    exit 1
+fi
 protected="refs/heads/$default_branch"
 
 refs=$(cat)

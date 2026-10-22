@@ -62,13 +62,11 @@ fn run_remote(
         // trace:BUG-2015 | ai:claude
         crate::cli::RemoteCommand::MirrorGuardCheck {
             remote,
-            print_guard,
-        } => match remote.as_deref().filter(|_| !*print_guard) {
+            install_guard,
+            force,
+        } => match remote.as_deref().filter(|_| !*install_guard) {
             Some(remote) => mirror_guard::handle_mirror_guard_check(&project_root, remote),
-            None => {
-                print!("{}", mirror_guard::main_guard_hook_script());
-                Ok(())
-            }
+            None => mirror_guard::install_main_guard(&project_root, *force),
         },
         // trace:BUG-1676 | ai:claude
         crate::cli::RemoteCommand::MirrorSync { json } => {
