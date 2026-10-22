@@ -1526,3 +1526,7 @@ mod lifecycle_tests;
 #[cfg(test)]
 #[path = "tests/bug_2169_contained_clone_bwrap_tests.rs"]
 mod bwrap_tests;
+
+#[cfg(test)]
+#[path = "tests/task_2053_s4_host_git_tests.rs"]
+mod s4_host_git_tests;

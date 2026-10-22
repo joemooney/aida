@@ -530,6 +530,26 @@ pub(crate) fn salvage_worktree_patch(
     agent: Option<&str>,
     worktree: &std::path::Path,
 ) -> Result<Option<std::path::PathBuf>> {
+    // BUG-2169: a seat clone is salvaged by its sandboxed accessor; host git
+    // never runs in it. An unreadable clone is an error, so the caller keeps
+    // it rather than tear down work it could not capture.
+    // trace:TASK-2053 | ai:claude
+    if let Some(clone) = aida_core::seat_clone_detect::seat_clone_root(worktree) {
+        return match crate::seat_clone::probe(project_root, &clone) {
+            crate::seat_clone::Probe::Known(facts) if !facts.unshipped() => Ok(None),
+            crate::seat_clone::Probe::Known(_) => {
+                crate::seat_clone::salvage(project_root, &clone).map(Some)
+            }
+            crate::seat_clone::Probe::Unknown(why) => anyhow::bail!(
+                "could not read the seat clone {} ({why}); nothing was salvaged or removed",
+                clone.display()
+            ),
+            crate::seat_clone::Probe::HasSubmodules(why) => anyhow::bail!(
+                "the seat clone {} has submodules ({why}); nothing was salvaged or removed",
+                clone.display()
+            ),
+        };
+    }
     if !worktree.exists() || worktree_dirty_entries(worktree).is_empty() {
         return Ok(None);
     }
@@ -592,10 +612,11 @@ pub(crate) fn salvage_worktree_patch(
     Ok(Some(path))
 }
 
+/// Refuses a seat clone (empty output; BUG-2169).
+
+// trace:TASK-2053 | ai:claude
 pub(crate) fn git_output_lossy(worktree: &std::path::Path, args: &[&str]) -> String {
-    let out = std::process::Command::new("git")
-        .arg("-C")
-        .arg(worktree)
+    let out = aida_core::git_ops::host_git_command(worktree)
         .args(args)
         .output();
     match out {
@@ -798,10 +819,11 @@ pub(crate) fn find_main_worktree_root() -> Result<std::path::PathBuf> {
 ///    Returns None if no reasonable default is detectable (e.g. no remotes,
 ///    no main/master locally).
 pub(crate) fn detect_default_branch_ref(project_root: &std::path::Path) -> Option<String> {
+    // Through the host git builder: callers pass a session's tree too, and a
+    // contained seat's private clone is refused rather than run (BUG-2169).
+    // trace:TASK-2053 | ai:claude
     let try_cmd = |args: &[&str]| -> Option<String> {
-        let o = std::process::Command::new("git")
-            .arg("-C")
-            .arg(project_root)
+        let o = aida_core::git_ops::host_git_command(project_root)
             .args(args)
             .output()
             .ok()?;
@@ -863,10 +885,10 @@ pub(crate) fn forecast_rebase_onto(
 
 /// Return the branch name currently checked out at `path` (its HEAD).
 /// `None` if detached or git fails. trace:BUG-76 | ai:claude
+/// Refuses a seat clone (no git runs there; BUG-2169).
+// trace:TASK-2053 | ai:claude
 pub(crate) fn current_branch_at(path: &std::path::Path) -> Option<String> {
-    let o = std::process::Command::new("git")
-        .arg("-C")
-        .arg(path)
+    let o = aida_core::git_ops::host_git_command(path)
         .args(["symbolic-ref", "--short", "HEAD"])
         .output()
         .ok()?;
