@@ -6,18 +6,27 @@ description: |
   aida_core::git_ops::default_branch_name (aida-core/src/git_ops.rs:3755) returns only the last '/' segment of refs/remotes/origin/HEAD, while the main guard (aida-core/templates/hooks/aida-main-guard-pre-push.sh) strips just 'origin/'. With origin default 'release/x' the guard flags refs/heads/release/x, but check_mirror_sync_push (aida-cli-lib/src/mirror_guard.rs:177) protects refs/heads/x, judges no ref, and refuses — mirror-sync stays blocked in such repos (fails closed, so not a security issue). Fix: strip the 'origin/' prefix instead of rsplit('/').
 
   Raised in review of PR-2821: https://github.com/joemooney/aida/pull/2821#issuecomment-6338485525
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-22T10:25:14.180686816Z
-modified_at: 2026-10-22T10:25:14.180686816Z
+modified_at: 2026-10-22T10:26:24.553102736Z
 req_type: Task
 tags:
 - from-review:PR-2821
 - hooks
 - mirror
 - severity:minor
+history:
+- id: 01a16325-cea9-7120-81ca-2a7b90cf48ee
+  author: joe
+  timestamp: 2026-10-22T10:26:24.553091043Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: c78d82b2e84cfcfc0b621723ad072e65deabfac0
   branch: pr-2821
