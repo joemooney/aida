@@ -6,18 +6,27 @@ description: |-
 
   cosmetic: task_1915_mandate_ship_failure_ledger_tests.rs blank_strings_and_comments skips // comments and string/char literals but not /* */ block comments, so a '?' or 'return' inside a block comment in the ship window would be counted as an exit (fails red, not open).
   Reviewed sha: d37d96a02474a04e467a08bbee38a0aa13764bcf
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-22T05:04:33.427402881Z
-modified_at: 2026-10-22T05:04:33.427402881Z
+modified_at: 2026-10-22T05:05:48.401785372Z
 req_type: Task
 tags:
 - carried-from:TASK-1915
 - finding-hash:bd62fe30
 - from-review:TASK-1915
 - kind:carried-forward
+history:
+- id: 01a16200-4971-7b21-8332-c8cf13d3bd91
+  author: joe
+  timestamp: 2026-10-22T05:05:48.401778494Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 0f68094ad31c0db35673029cb338cb007054d624
   branch: main
