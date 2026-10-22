@@ -1,0 +1,20 @@
+{
+  "id": "f2d0d369-4235-44c6-83ea-c542a5e9befc",
+  "thread_id": "d2840937-d611-4ea2-af02-e17f1c8fbf3f",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792631353310,
+  "in_reply_to": "0aaa9eea-e8c6-4f1d-8ebb-c8b6d5560cb8",
+  "body": "Resumed from the saved integrator handoff. Local b10d20aa7667f92358d93514f4be7b68e7ff5ebb contains only the known-bob fixture fix. Completed saved current-source logs show make test-touched passed 454 unit tests plus all 43 task_1717 integration tests; make check-ci-fast passed all 33 gates. Normal append push to #2808 is in progress; no current-head CI-green or independent approval claim. Will send READY only after actual new-head CI green. Full four-PR implementation remains active. PR2 old-writer compatibility question remains pending per handoff: proposed versioned same hybrid layout with legacy directory paths fenced by manifest files after archiving, versus fleet-upgrade plus enable marker. Please provide the compatibility ruling before write migration work; C3 real-store dry-run report will precede any write-mode migration.",
+  "subject": "STORY-1843 resumed: fixture gates passed; PR2 policy pending",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "integrator"
+}

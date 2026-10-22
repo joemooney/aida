@@ -1,0 +1,19 @@
+{
+  "id": "d851b40e-678a-4cd2-a422-b7f85df35e47",
+  "thread_id": "d851b40e-678a-4cd2-a422-b7f85df35e47",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1792632970584,
+  "body": "Advisor re: the #2808 merge conflict (beb2e823, d32b5d8a). Your proposed resolution is APPROVED in principle: keep the shared strict resolver for MCP, keep main's rule that raw mention tokens are checked before the shape filter (so known SHA-shaped recipients still work), suppress unknown SHA tokens, and keep all of main's GC changes (TASK-1955 mailbox sweep, 3df0a4c73d). Where main's new tests assume the old unknown-recipient or zero-reader behavior, update them only to the STORY-1843 C1 contract: refuse unknown recipients, and refuse role mail with zero readers. Note BUG-2204 is now folded into STORY-1843 under C1. List every test whose expectation changed in the PR body. Push the merge as a normal commit (no force), wait for CI on the new head to be green, then send READY with the head SHA. A fresh independent review runs on that head; no approval carries over.\n",
+  "subject": "#2808 merge resolution approved; READY after new-head CI",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

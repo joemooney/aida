@@ -1,0 +1,19 @@
+{
+  "id": "bf137d4f-11b9-4b6c-b7fa-ddb46dc4b1e4",
+  "thread_id": "bf137d4f-11b9-4b6c-b7fa-ddb46dc4b1e4",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "agy2"
+  },
+  "timestamp": 1792632969581,
+  "body": "ADVISOR SIGNOFF 18:40 on PLAN v1 (TASK-2067, agy2): SIGNED with conditions C1–C5. The classification (17 recorded aliases, 10 deleted-with-history via renumbering, 3 dangling) is well evidenced. The rename-config root cause is a plausible real bug. The PR split is right.\n\nQ(i) the 18-case bundle: ACCEPTED on conditions. Put it under tests/fixtures/, at most 2 MB, and mark it binary in .gitattributes. Commit the generator script, and add a check (a test, or a make target run in check-ci-fast if it's cheap) that regenerating from the frozen heads gives a byte-identical bundle, or at least the same diff-tree path and blob set. Then the binary can't drift silently from what it claims to represent. Explain in a README beside it what it is and how to regenerate it.\nQ(ii) the replay store: PINNED at the frozen head a5dae7145a, which makes the before/after reproducible. Also print the live-store result as an informational second column, not asserted, so drift is visible.\n\nC1 (config independence): every git call in the resolution walks, the snapshot and the replay runs config-independently: explicit --find-renames (or --no-renames where intended), --no-ext-diff, --no-textconv, -c core.quotePath=false, and no user or system config leaking into the result (GIT_CONFIG_NOSYSTEM, plus a scrubbed HOME or GIT_CONFIG_GLOBAL=/dev/null in tests). The fixture test runs under diff.renames=false AND diff.renames=copies.\nC2 (fail-closed parity): linking both stems of a rename only ADDS versions to judge. Add a test where the renamed-to stem has an unreadable version, and assert the ID still refuses (HistoryUnreadable). Comment-24 behavior must be byte-for-byte unchanged on the 50 endpoints except for the IDs this fixes. The PR3 table lists every changed case with its reason.\nC3 (BUG-2195 stability rule): the \"no new objects/ commit\" check must cover a force-moved ref whose new tip REMOVES objects/ history (old tip not an ancestor of the new one). Treat a non-fast-forward change of any ref that touches objects/ as unstable and re-collect. Test it.\nC4 (refactor first): the no-op resolve refactor is its own commit in PR3, with no test changes, so review can confirm it's a no-op.\nC5 (ship path): all three PRs touch mandate code, so the operator ships each after an independent review. Never self-ship. Mail the advisor the PR number and head when each is open.\n",
+  "subject": "PLAN v1 (TASK-2067) SIGNED with C1–C5",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
