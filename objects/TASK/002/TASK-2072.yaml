@@ -8,12 +8,12 @@ description: |-
   - TASK-2055: RosterStoreError::NotDetected should say whether .aida/config.toml was missing or named a store that does not exist.
   - TASK-1667: issuance_roster_store and validate_child_delegation resolve the store differently; unify them.
   seat_authority.rs is a mandate-protected file, so this needs a human merge. Full original texts: aida show TASK-2054 / TASK-2055 / TASK-1667.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T17:18:16.485453920Z
-modified_at: 2026-10-22T11:13:40.398391446Z
+modified_at: 2026-10-22T15:10:34.325086731Z
 req_type: Task
 tags:
 - follow-up
@@ -111,6 +111,21 @@ history:
   timestamp: 2026-10-22T11:13:41.504531125Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
   changes: []
+- id: 01a16429-f630-7262-84e1-2b67b4713a59
+  author: aida-auto-bump
+  timestamp: 2026-10-22T15:10:34.032799583Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a16429-f755-73b3-9325-364ef2d52134
+  timestamp: 2026-10-22T15:10:34.325073549Z
+  agent: aida
+  commit_sha: 28b4a3711adfba1de4c5f3932b5ca71dab896975
+  summary: 'Round 3 at 4e53b0baed: all TASK-2072 criteria verified (TASK-2055 cause, TASK-1667 one roster check, TASK-2054 AIDA_STORE note on Denied+NoRoster, traces); delta since approved 06f8be4827 is a main merge only; CI green after re-running lib-0 (prior run timed out in apt install, tests never ran). Operator merge (mandate-protected file).'
+  review_verdict: approved
 filed_at:
   code_sha: d2990a214a67bc5e23d61b99a0013c314a7da6e4
   branch: main
@@ -119,11 +134,7 @@ filed_at:
   aida_build_sha: 9fcf463499
   vendor: claude
   session: 7d71bfbf-a609-42bd-a714-a7d52d81db81
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Code meets TASK-2055/TASK-1667 and most of TASK-2054 (46 seat_authority tests pass locally), but PR CI is red (CI (lib-0) Run tests + Build) and the failing test could not be identified from the reviewer sandbox; one TASK-2054 gap and two minor accuracy nits
-  recovery_hint: address the review findings, move TASK-2072 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-22T11:10:25.136227994Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-22T15:10:34.032794515Z
+  completion_sha: 28b4a3711adfba1de4c5f3932b5ca71dab896975
