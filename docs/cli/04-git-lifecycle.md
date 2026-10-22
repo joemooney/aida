@@ -499,15 +499,16 @@ ops = ["ship"]   # any of: ship, sketch-signoff, dispatch, hold-clear
   (`mandate.rs`, `mandate_gates.rs`, `mandate_drive.rs`, `mandate_ship.rs`,
   `mandate_traces.rs`, `rework_hold_release.rs`, `review_authority.rs`,
   `solo_review.rs`, `review_verdict.rs`,
-  `fleet_lanes.rs`, `seat_authority.rs`, `pr_ship.rs`, `merge_hold.rs`) never
-  ships under a mandate, and a mandate never releases its rework hold either.
+  `fleet_lanes.rs`, `pr_ship.rs`, `merge_hold.rs`, and everything under
+  `aida-cli-lib/src/gate/`) never ships under a mandate, and a mandate never
+  releases its rework hold either.
   Listing `ship` or `hold-clear` stops mandate rework releases too.
 - You can protect more paths. Entries are exact paths, or directory prefixes
   that end in `/` (`gate/` matches `gate/x.rs`, never `gateway/x.rs`):
 
   ```toml
   [mandate.human_gates]
-  protected_paths = ["aida-cli-lib/src/role.rs", "aida-cli-lib/src/gate/"]
+  protected_paths = ["aida-cli-lib/src/pr_cmd.rs", "scripts/release/"]
   ```
 
   The same two layers apply. Each layer can only add paths: neither can remove

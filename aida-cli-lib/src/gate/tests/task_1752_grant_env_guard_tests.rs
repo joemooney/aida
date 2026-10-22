@@ -19,7 +19,7 @@ const CRATES: &[&str] = &[
 const GRANT_LITERAL: &str = "AIDA_SESSION_GRANT";
 
 /// The one production file that may name the variable or read it.
-const OWNER: &str = "aida-cli-lib/src/seat_authority.rs";
+const OWNER: &str = "aida-cli-lib/src/gate/seat_authority.rs";
 
 /// (path suffix, exact line text, why) — the only other production lines
 /// allowed to name the variable. Matched per line, so nothing else in the

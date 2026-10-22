@@ -5,7 +5,7 @@
 # `aida role enter` would at a human TTY: a roster ceiling in the project
 # store plus a grant record under the gate's isolated HOME, exported to the
 # invoked command via AIDA_SESSION_GRANT. This mirrors
-# aida-cli-lib/src/seat_authority.rs::test_support::mint_grant_for exactly; a
+# aida-cli-lib/src/gate/seat_authority.rs::test_support::mint_grant_for exactly; a
 # drifting field fails these gates closed, never open. No production bypass.
 # trace:STORY-1473 | ai:claude
 

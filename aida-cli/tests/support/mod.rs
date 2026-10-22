@@ -9,7 +9,7 @@
 //! `AIDA_SESSION_GRANT`. This writes exactly the records production
 //! validates; nothing here opens a production bypass.
 //!
-//! The record shape mirrors `aida-cli-lib/src/seat_authority.rs`'s
+//! The record shape mirrors `aida-cli-lib/src/gate/seat_authority.rs`'s
 //! `SeatGrant`; a drifting field fails these tests closed (the grant stops
 //! validating), never open.
 // trace:STORY-1473 | ai:claude

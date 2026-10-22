@@ -309,7 +309,7 @@ sites = 1
 
 # Resolves max_grant_hours cap from global (~/.aida) and worktree (.aida).
 # Worktree policy may only lower the cap. trace:TASK-1787 | ai:antigravity
-[readers."aida-cli-lib/src/seat_authority.rs"]
+[readers."aida-cli-lib/src/gate/seat_authority.rs"]
 channels = ["home", "worktree"]
 sites = 2
 

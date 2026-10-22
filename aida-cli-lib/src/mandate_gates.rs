@@ -386,9 +386,10 @@ pub(crate) const GATE_PROTECTED_PATHS: &[&str] = &[
     "aida-cli-lib/src/solo_review.rs",
     "aida-cli-lib/src/review_verdict.rs",
     "aida-cli-lib/src/fleet_lanes.rs",
-    "aida-cli-lib/src/seat_authority.rs",
     "aida-cli-lib/src/pr_ship.rs",
     "aida-cli-lib/src/merge_hold.rs",
+    // Gate authority, code and its tests together (STORY-1889).
+    "aida-cli-lib/src/gate/",
     // The drift ratchet that keeps this list complete (STORY-1888 C1).
     "aida-cli-lib/src/tests/story_1888_gate_paths_tests.rs",
 ];
@@ -407,15 +408,55 @@ pub(crate) const KNOWN_UNPROTECTED: &[&str] = &[
     "aida-cli-lib/src/pr_merge_gate.rs",
     "aida-cli-lib/src/queue_cmd.rs",
     "aida-cli-lib/src/review_marker.rs",
-    "aida-cli-lib/src/role.rs",
-    "aida-core/src/git_ops.rs",
-    // Name matches that read forge or lease state rather than decide;
-    // STORY-1889 confirms each before it moves or renames anything.
-    "aida-cli-lib/src/human.rs",
-    "aida-cli-lib/src/leases.rs",
-    "aida-cli-lib/src/session_start.rs",
-    "aida-cli-lib/src/status_prs.rs",
 ];
+
+/// STORY-1889: functions whose NAME reads as gate authority but which decide
+/// no ship, merge, hold, verdict or seat outcome: `(path, fn, reason)`. The
+/// drift ratchet skips exactly these functions, so a new matching function
+/// in the same file is still caught. Shrink-only: an entry whose function no
+/// longer exists, or no longer matches, fails the ratchet. Growing it needs
+/// a human merge (this file is on the floor).
+// trace:STORY-1889 | ai:claude
+pub(crate) const NOT_GATE_AUTHORITY: &[(&str, &str, &str)] = &[
+    (
+        "aida-core/src/git_ops.rs",
+        "merge_gate",
+        "assigns agreed store ids on merge; no ship or merge authority",
+    ),
+    (
+        "aida-cli-lib/src/human.rs",
+        "pr_review_decision",
+        "classifies a PR's review state for the awaiting view; display only",
+    ),
+    (
+        "aida-cli-lib/src/status_prs.rs",
+        "detect_pr_review_decision",
+        "probes the forge's review decision for display",
+    ),
+    (
+        "aida-cli-lib/src/leases.rs",
+        "review_source_branch_conflict_decision",
+        "lease coexistence on reviewer pickup; reviewer independence is decided by identity in review_authority.rs",
+    ),
+    (
+        "aida-cli-lib/src/session_start.rs",
+        "review_pickup_conflict_decision",
+        "lease coexistence on reviewer pickup; reviewer independence is decided by identity in review_authority.rs",
+    ),
+    (
+        "aida-cli-lib/src/pr_cmd.rs",
+        "pr_head_sha_for_merge_gate",
+        "reads the PR head sha from the forge; the gate that uses it lives in gate/",
+    ),
+];
+
+/// STORY-1889: unprotected files that may re-export `crate::gate` items while
+/// the STORY-1889 moves land. A re-export outside the floor could later be
+/// repointed at a non-gate function, so the ratchet refuses any other, and
+/// this list only shrinks; the final STORY-1889 PR empties it.
+// trace:STORY-1889 | ai:claude
+pub(crate) const TRANSITIONAL_GATE_REEXPORTS: &[&str] =
+    &["aida-cli-lib/src/lib.rs", "aida-cli-lib/src/role.rs"];
 
 /// Where a protected path comes from, strongest first.
 // trace:STORY-1888 | ai:claude
