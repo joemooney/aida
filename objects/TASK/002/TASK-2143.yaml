@@ -1,0 +1,27 @@
+id: 01a16281-9224-76a3-90e7-f05be01430ad
+spec_id: TASK-2143
+agreed_id: TASK-2143
+title: Deliver or formally replace the S3 'grep gate against host git in clones'
+description: |
+  docs/plans/2026-10-16-bug-2169-contained-clone.md:303 and :364 list a grep gate (flag Command::new("git") with -C <lease.worktree_path> when tree_kind == Clone) as an S3 deliverable. PR-2806 does not add it, and 'S3 as built' does not say it was replaced. Either add the gate, or record with advisor sign-off that the S1 runtime refusal (host_git_command / worktree_dirty_entries via seat_clone_root) replaces it.
+
+  Raised in review of PR-2806: https://github.com/joemooney/aida/pull/2806#issuecomment-6335235608
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-22T07:27:01.156863791Z
+modified_at: 2026-10-22T07:27:01.156863791Z
+req_type: Task
+tags:
+- from-review:PR-2806
+- severity:minor
+filed_at:
+  code_sha: b0b654a9316526ad7bd866994de02283389154b3
+  branch: pr-2806
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 0f68094ad3
+  vendor: claude
+  session: 01a1627bd1b9
+  harness_version: 2.1.308 (Claude Code)

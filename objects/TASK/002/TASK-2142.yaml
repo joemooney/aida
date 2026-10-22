@@ -1,0 +1,27 @@
+id: 01a16281-7b19-7f30-87b8-9c17792341a7
+spec_id: TASK-2142
+agreed_id: TASK-2142
+title: Add session-end and reap tests for a seat clone with submodules (PR-2806 round 7 coverage gap)
+description: |
+  The doc comment on task_2053_bwrap_submodule_ignore_dirty_keeps_the_clone (aida-cli-lib/src/tests/task_2053_seat_clone_lifecycle_tests.rs) says session end, dismiss and reap all keep a clone with submodules, but the test calls only probe and destroy. A session-end test would have caught the non-exhaustive Probe match at session_end.rs:1052 (E0004) that broke b0b654a. Add: session end on a clone with submodules keeps the clone, lease and pin and runs no host git; classify_clone_reap given a real HasSubmodules probe returns Skip.
+
+  Raised in review of PR-2806: https://github.com/joemooney/aida/pull/2806#issuecomment-6335235608
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-22T07:26:55.257642945Z
+modified_at: 2026-10-22T07:26:55.257642945Z
+req_type: Task
+tags:
+- from-review:PR-2806
+- severity:minor
+filed_at:
+  code_sha: b0b654a9316526ad7bd866994de02283389154b3
+  branch: pr-2806
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 0f68094ad3
+  vendor: claude
+  session: 01a1627bd1b9
+  harness_version: 2.1.308 (Claude Code)
