@@ -21,12 +21,12 @@ description: |-
   (3) The cargo-slot WHO column shows it as implementer.
   (4) No advisor-role lease is created for a lane's spec.
   (5) A regression test drives a launch from an advisor environment and asserts (1)–(4).
-status: Approved
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-22T01:15:23.627006662Z
-modified_at: 2026-10-22T01:16:26.617420810Z
+modified_at: 2026-10-22T03:57:27.101841174Z
 req_type: Bug
 tags:
 - attribution
@@ -44,6 +44,14 @@ history:
   timestamp: 2026-10-22T01:16:28.096593339Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
   changes: []
+- id: 01a161c1-b4bd-7852-a08c-125de5a7f23a
+  author: joe
+  timestamp: 2026-10-22T03:57:27.101836010Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Superseded
 filed_at:
   code_sha: f9890cf67dc856c97b55fded65a6f5e9b1bddf12
   branch: main
