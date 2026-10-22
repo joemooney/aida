@@ -2652,3 +2652,62 @@ fn task1801_archived_recordings_enumerates_every_entry_once() {
     }
     assert_eq!(archived_recordings(&file).unwrap().len(), 5);
 }
+
+// TASK-1671: a refused archive entry fails the merge close before anything
+// is written, so a re-run (once the entry is readable) closes both files.
+// trace:TASK-1951 trace:TASK-1671 | ai:claude
+#[test]
+fn task_1951_merge_close_writes_nothing_when_the_archive_entry_is_refused() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+    let sha = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    let file = record_verdict(
+        root,
+        "STORY-9",
+        Some("request-changes"),
+        Some(sha),
+        None,
+        Some("blocking"),
+        &[],
+        "reviewer-a",
+    )
+    .unwrap();
+    let archive = archived_verdict_file_for_sha(&file, sha).unwrap();
+    let current_before = std::fs::read(&file).unwrap();
+    let link = tmp.path().join("archive-link");
+    std::fs::hard_link(&archive, &link).unwrap();
+
+    close_verdict_on_merge(root, "STORY-9", "cccccccccccc").unwrap_err();
+    assert_eq!(
+        std::fs::read(&file).unwrap(),
+        current_before,
+        "the current file stays open when the archive is refused"
+    );
+
+    std::fs::remove_file(&link).unwrap();
+    assert!(close_verdict_on_merge(root, "STORY-9", "cccccccccccc").unwrap());
+    let closed = |path: &std::path::Path| {
+        let v: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+        v["closed_by_merge"] == "cccccccccccc"
+    };
+    assert!(closed(&file));
+    assert!(closed(&archive), "the re-run closes the archive too");
+}
+
+// TASK-1814(3): the mtime probe validates the handle without reading the
+// body, so a body that is not UTF-8 still has an mtime, while a linked file
+// still has none.
+// trace:TASK-1951 trace:TASK-1814 | ai:claude
+#[test]
+fn task_1951_verdict_mtime_reads_metadata_only() {
+    let tmp = TempDir::new().unwrap();
+    let dir = tmp.path().join(".aida/review-verdicts");
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = dir.join("PR-5.json");
+    std::fs::write(&file, [0xff_u8, 0xfe, 0x00]).unwrap();
+    assert!(read_verdict_body(&file).is_err());
+    assert!(verdict_file_modified(&file).is_some());
+    std::fs::hard_link(&file, tmp.path().join("other-link")).unwrap();
+    assert!(verdict_file_modified(&file).is_none());
+}
