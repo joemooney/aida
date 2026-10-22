@@ -2743,6 +2743,7 @@ impl<'a> McpServer<'a> {
             .unwrap_or(false);
         // Same canonical address and liveness refusal as the CLI.
         // trace:STORY-1843 | ai:codex
+        let mut routing_warnings = Vec::new();
         let resolution = if broadcast {
             None
         } else {
@@ -2750,15 +2751,19 @@ impl<'a> McpServer<'a> {
                 .get("to")
                 .and_then(|v| v.as_str())
                 .ok_or("specify `to` (an agent) or `broadcast: true`")?;
-            Some(
-                crate::mailbox_resolver::RecipientDirectory::load(
-                    &self.project_root,
-                    &self.mailbox_store_root(),
-                )
-                .map_err(|e| e.to_string())?
-                .resolve(target)
-                .map_err(|e| e.to_string())?,
+            let directory = crate::mailbox_resolver::RecipientDirectory::load(
+                &self.project_root,
+                &self.mailbox_store_root(),
             )
+            .map_err(|e| e.to_string())?;
+            routing_warnings = directory.warnings().to_vec();
+            Some(directory.resolve(target).map_err(|error| {
+                if routing_warnings.is_empty() {
+                    error.to_string()
+                } else {
+                    format!("{error}\n{}", routing_warnings.join("\n"))
+                }
+            })?)
         };
         let recipient = resolution
             .as_ref()
@@ -2860,10 +2865,14 @@ impl<'a> McpServer<'a> {
             relayed_from,
         };
         crate::mailbox_store::write_message(&self.project_root, &msg).map_err(|e| e.to_string())?;
-        let notice = resolution
-            .and_then(|r| r.reader_notice)
-            .map(|n| format!("\n{n}"))
-            .unwrap_or_default();
+        if let Some(note) = resolution.and_then(|r| r.reader_notice) {
+            routing_warnings.push(note);
+        }
+        let notice = if routing_warnings.is_empty() {
+            String::new()
+        } else {
+            format!("\n{}", routing_warnings.join("\n"))
+        };
         Ok(format!("Message sent: {id} (thread {thread_id}){notice}"))
     }
 
@@ -10684,9 +10693,10 @@ mod tests {
         let dir = tempdir().unwrap();
         let server = mk_server(dir.path());
         for target in ["absent-worker", "implementer", "claude"] {
-            assert!(server
+            let error = server
                 .tool_send_message(&json!({"to":target,"body":"routing probe"}))
-                .is_err());
+                .unwrap_err();
+            assert!(!error.contains("aida agent ls"), "{error}");
         }
         assert!(crate::mailbox_store::read_local_messages(dir.path())
             .unwrap()
@@ -10702,9 +10712,21 @@ mod tests {
             None,
         )
         .unwrap();
-        server
+        // One damaged record must be reported without preventing valid delivery.
+        // trace:STORY-1843 | ai:codex
+        std::fs::write(
+            crate::agent_registry::agents_dir(dir.path()).join("broken.toml"),
+            "invalid toml [",
+        )
+        .unwrap();
+        let sent = server
             .tool_send_message(&json!({"to":" case-worker ","body":"routing probe"}))
             .unwrap();
+        assert!(
+            sent.contains("skipping invalid agent registry record"),
+            "{sent}"
+        );
+        assert!(sent.contains("broken.toml"), "{sent}");
         let messages = crate::mailbox_store::read_local_messages(dir.path()).unwrap();
         assert_eq!(messages.len(), 1);
         assert_eq!(
@@ -10713,9 +10735,12 @@ mod tests {
         );
         entry.ended_at = Some(chrono::Utc::now());
         crate::agent_registry::write_entry(dir.path(), &entry).unwrap();
-        assert!(server
+        let error = server
             .tool_send_message(&json!({"to":"Case-Worker","body":"late probe"}))
-            .is_err());
+            .unwrap_err();
+        assert!(error.contains("no live agent"), "{error}");
+        assert!(error.contains("broken.toml"), "{error}");
+        assert!(!error.contains("aida agent ls"), "{error}");
         assert_eq!(
             crate::mailbox_store::read_local_messages(dir.path())
                 .unwrap()

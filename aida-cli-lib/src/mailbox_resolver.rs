@@ -11,6 +11,7 @@ pub(crate) struct RecipientDirectory {
     roles: BTreeMap<String, String>,
     people: HashMap<String, String>,
     live_ids: BTreeSet<String>,
+    warnings: Vec<String>,
 }
 
 #[derive(Debug)]
@@ -22,7 +23,9 @@ pub(crate) struct ResolvedRecipient {
 impl RecipientDirectory {
     pub(crate) fn load(project: &Path, store: &Path) -> Result<Self> {
         let mut agents = Vec::new();
-        // A failed scan cannot establish that an address is unique or has readers.
+        let mut warnings = Vec::new();
+        // Refuse a failed directory scan, but a damaged individual record is
+        // not a reader and must not disable unrelated human or agent inboxes.
         let entries = match std::fs::read_dir(agent_registry::agents_dir(project)) {
             Ok(entries) => Some(entries),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
@@ -30,15 +33,38 @@ impl RecipientDirectory {
         };
         if let Some(entries) = entries {
             for entry in entries {
-                let path = entry?.path();
+                let path = match entry {
+                    Ok(entry) => entry.path(),
+                    Err(error) => {
+                        warnings.push(format!(
+                            "warning: skipping unreadable agent registry entry: {error}"
+                        ));
+                        continue;
+                    }
+                };
                 if path.extension().and_then(|s| s.to_str()) != Some("toml") {
                     continue;
                 }
-                let record: AgentRegistryEntry =
-                    toml::from_str(&std::fs::read_to_string(&path).with_context(|| {
-                        format!("reading mailbox recipient {}", path.display())
-                    })?)
-                    .with_context(|| format!("invalid mailbox recipient {}", path.display()))?;
+                let body = match std::fs::read_to_string(&path) {
+                    Ok(body) => body,
+                    Err(error) => {
+                        warnings.push(format!(
+                            "warning: skipping unreadable agent registry record {}: {error}",
+                            path.display()
+                        ));
+                        continue;
+                    }
+                };
+                let record: AgentRegistryEntry = match toml::from_str(&body) {
+                    Ok(record) => record,
+                    Err(_) => {
+                        warnings.push(format!(
+                            "warning: skipping invalid agent registry record {}",
+                            path.display()
+                        ));
+                        continue;
+                    }
+                };
                 agents.push(record);
             }
         }
@@ -56,12 +82,21 @@ impl RecipientDirectory {
         for role in crate::list_roles(project)? {
             roles.insert(role.name.to_lowercase(), role.name);
         }
+        warnings.sort();
         Ok(Self {
             agents,
             roles,
             people: crate::known_mailbox_people(store),
             live_ids,
+            warnings,
         })
+    }
+
+    // These diagnostics are distinct from a group's reader notice: a skipped
+    // record never establishes a recipient kind or contributes a live reader.
+    // trace:STORY-1843 | ai:codex
+    pub(crate) fn warnings(&self) -> &[String] {
+        &self.warnings
     }
 
     pub(crate) fn resolve(&self, target: &str) -> Result<ResolvedRecipient> {
@@ -76,17 +111,23 @@ impl RecipientDirectory {
             "agy" => Some("antigravity"),
             _ => None,
         };
+        let person = self.people.get(&key);
+        // Existing launches may borrow a reserved alias until PR2 reserves
+        // names. Such a record must not poison that catalog address. Looking
+        // it up by ID still goes through the private-inbox collision guard.
+        // trace:STORY-1843 | ai:codex
+        let catalog_address = role.is_some() || vendor.is_some() || person.is_some();
         let named: Vec<_> = self
             .agents
             .iter()
             .filter(|a| {
-                a.id.eq_ignore_ascii_case(target)
-                    || a.name
-                        .as_deref()
-                        .is_some_and(|n| n.trim().eq_ignore_ascii_case(target))
+                !catalog_address
+                    && (a.id.eq_ignore_ascii_case(target)
+                        || a.name
+                            .as_deref()
+                            .is_some_and(|n| n.trim().eq_ignore_ascii_case(target)))
             })
             .collect();
-        let person = self.people.get(&key);
         if (role.is_some() as u8
             + vendor.is_some() as u8
             + person.is_some() as u8
@@ -124,7 +165,7 @@ impl RecipientDirectory {
                 .collect();
             let address = role.cloned().unwrap_or_else(|| vendor.unwrap().to_string());
             if readers.is_empty() {
-                bail!("send refused: '{address}' has 0 live readers; name a live handle from `aida agent ls`");
+                bail!("send refused: '{address}' has 0 live readers; name a live agent handle");
             }
             let warning = if readers.len() > 1 { "warning: " } else { "" };
             return Ok(ResolvedRecipient {
@@ -158,9 +199,9 @@ impl RecipientDirectory {
                 }
                 Ok(ResolvedRecipient { address: name.to_string(), reader_notice: None })
             },
-            [] if !named.is_empty() => bail!("send refused: '{target}' has no live agent; choose a live handle from `aida agent ls`"),
-            [] => bail!("send refused: unknown recipient '{target}'; choose a live handle from `aida agent ls` or a known person"),
-            _ => bail!("send refused: ambiguous live recipient '{target}'; choose a unique name from `aida agent ls`"),
+            [] if !named.is_empty() => bail!("send refused: '{target}' has no live agent; choose a live agent handle"),
+            [] => bail!("send refused: unknown recipient '{target}'; choose a live agent handle or a known person"),
+            _ => bail!("send refused: ambiguous live recipient '{target}'; choose a unique private name"),
         }
     }
 }
@@ -394,7 +435,7 @@ mod tests {
     }
 
     #[test]
-    fn historical_catalog_preserves_precedence_while_live_sends_refuse_ambiguity() {
+    fn historical_catalog_preserves_precedence_while_live_catalog_addresses_win() {
         let tmp = tempfile::tempdir().unwrap();
         let store = tmp.path().join(".aida-store");
         std::fs::create_dir_all(store.join("registry")).unwrap();
@@ -414,11 +455,13 @@ mod tests {
             "role spelling keeps its original precedence"
         );
         let live = RecipientDirectory::load(tmp.path(), &store).unwrap();
-        assert!(live.resolve("joe").is_err());
+        assert_eq!(live.resolve("joe").unwrap().address, "Joe");
+        assert!(live.resolve("codex-one").is_err());
     }
 
+    // trace:STORY-1843 | ai:codex
     #[test]
-    fn humans_remain_addressable_and_registry_corruption_refuses() {
+    fn bad_records_warn_without_disabling_humans_or_valid_readers() {
         let tmp = tempfile::tempdir().unwrap();
         let store = tmp.path().join(".aida-store");
         std::fs::create_dir_all(store.join("registry")).unwrap();
@@ -432,6 +475,57 @@ mod tests {
         let dir = agent_registry::agents_dir(tmp.path());
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("broken.toml"), "invalid toml [").unwrap();
-        assert!(RecipientDirectory::load(tmp.path(), &store).is_err());
+        // A directory cannot be read as a registry file, even under a root test runner.
+        std::fs::create_dir(dir.join("unreadable.toml")).unwrap();
+        registry(
+            tmp.path(),
+            "codex-worker",
+            "worker-one",
+            "implementer",
+            false,
+        );
+        let directory = RecipientDirectory::load(tmp.path(), &store).unwrap();
+        assert_eq!(directory.warnings().len(), 2);
+        assert!(directory
+            .warnings()
+            .iter()
+            .any(|w| w.contains("broken.toml")));
+        assert!(directory
+            .warnings()
+            .iter()
+            .any(|w| w.contains("unreadable.toml")));
+        let human = directory.resolve("joe").unwrap();
+        assert_eq!(human.address, "Joe");
+        assert!(human.reader_notice.is_none());
+        assert_eq!(
+            directory.resolve("worker-one").unwrap().address,
+            "worker-one"
+        );
+        let group = directory.resolve("implementer").unwrap();
+        assert!(group.reader_notice.unwrap().starts_with("1 live reader"));
+        assert!(directory.resolve("unknown").is_err());
+        assert!(!tmp.path().join(".aida/mailbox").exists());
+    }
+
+    // trace:STORY-1843 | ai:codex
+    #[test]
+    fn reserved_catalog_addresses_are_not_poisoned_by_agent_names() {
+        for (borrowed, canonical, group) in [
+            ("advisor", "advisor", true),
+            ("codex", "codex", true),
+            ("joe", "Joe", false),
+        ] {
+            let tmp = tempfile::tempdir().unwrap();
+            let store = tmp.path().join(".aida-store");
+            std::fs::create_dir_all(store.join("registry")).unwrap();
+            std::fs::write(store.join("registry/team.toml"), "[members]\nJoe = []\n").unwrap();
+            registry(tmp.path(), "codex-reserved", borrowed, "advisor", false);
+            let directory = RecipientDirectory::load(tmp.path(), &store).unwrap();
+            let resolved = directory.resolve(borrowed).unwrap();
+            assert_eq!(resolved.address, canonical);
+            assert_eq!(resolved.reader_notice.is_some(), group);
+            // The ID must not bypass the same reserved-inbox protection.
+            assert!(directory.resolve("codex-reserved").is_err());
+        }
     }
 }

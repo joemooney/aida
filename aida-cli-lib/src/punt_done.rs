@@ -410,7 +410,7 @@ pub(crate) fn resolve_comment_mentions(
         };
     let author_trimmed = comment_author.trim();
     let mut deliverable = Vec::new();
-    let mut warnings = Vec::new();
+    let mut warnings = directory.warnings().to_vec();
     for handle in candidates {
         let trimmed = handle.trim();
         if trimmed.eq_ignore_ascii_case(author_trimmed)
@@ -427,7 +427,13 @@ pub(crate) fn resolve_comment_mentions(
                     deliverable.push(resolved.address);
                 }
             }
-            Err(error) => warnings.push(format!("@{trimmed}: {error}; mention dropped")),
+            Err(error) => {
+                // Presentation only: a comment mention is not an explicit send.
+                // trace:STORY-1843 | ai:codex
+                let message = error.to_string();
+                let detail = message.strip_prefix("send refused: ").unwrap_or(&message);
+                warnings.push(format!("@{trimmed}: {detail}; mention dropped"));
+            }
         }
     }
     (deliverable, warnings)

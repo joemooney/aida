@@ -246,6 +246,9 @@ So registration is what turns "a stranger handles the punt" into "your advisor, 
 **Reach for it when** — agents coordinating directly: `aida mailbox send "..." --to codex` (or `--broadcast`), `aida mailbox inbox` to read (which marks it seen), `aida mailbox thread` to see a full conversation. The operator's `aida mailbox list` for "who has mail waiting, who has unread/urgent."
 
 Explicit sends and comment mentions resolve against live named agents, role/vendor readers, and known people. Unknown or dead agent recipients refuse before creating mail. Role/vendor sends report the current live readers and warn when several can read the shared inbox; zero-reader sends refuse. Human inboxes remain addressable without a running agent. Historical inbox inspection remains available after an agent ends.
+
+An invalid or unreadable individual agent record produces a warning while other inboxes remain available. Role, vendor, and person catalog names retain their meaning when an older agent uses the same name; addressing that agent by ID does not grant it the reserved inbox.
+<!-- trace:STORY-1843 | ai:codex -->
 <!-- trace:STORY-1843 | ai:codex -->
 
 **Don't reach for it when** — you're *assigning* work rather than discussing it — that's `aida brief` (one-directional, with `aida brief --notify` for urgency). And don't expect a message to survive a fresh clone until you `aida mailbox sync` — the local layer is per-clone until digested into the store.

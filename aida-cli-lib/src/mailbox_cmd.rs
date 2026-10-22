@@ -145,10 +145,12 @@ pub(crate) fn handle_mailbox_command(
                 let target = to
                     .as_deref()
                     .ok_or_else(|| anyhow::anyhow!("specify --to <agent> or --broadcast"))?;
-                Some(
-                    crate::mailbox_resolver::RecipientDirectory::load(project_root, store_root)?
-                        .resolve(target)?,
-                )
+                let directory =
+                    crate::mailbox_resolver::RecipientDirectory::load(project_root, store_root)?;
+                for warning in directory.warnings() {
+                    eprintln!("{warning}");
+                }
+                Some(directory.resolve(target)?)
             };
             let recipient = resolution
                 .as_ref()

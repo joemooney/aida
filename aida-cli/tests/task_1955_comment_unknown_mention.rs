@@ -103,6 +103,7 @@ fn comment_add_with_an_unknown_mention_warns_and_opens_no_mailbox() {
         .unwrap(),
     )
     .unwrap();
+    std::fs::write(agents.join("broken.toml"), "invalid toml [").unwrap();
 
     let out = run(
         &repo,
@@ -112,11 +113,16 @@ fn comment_add_with_an_unknown_mention_warns_and_opens_no_mailbox() {
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(out.status.success(), "{stderr}");
     assert!(
-        stderr.contains("@nobody-here-1955: send refused: unknown recipient 'nobody-here-1955'"),
+        stderr.contains("@nobody-here-1955: unknown recipient 'nobody-here-1955'"),
         "{stderr}"
     );
     assert!(stderr.contains("mention dropped"), "{stderr}");
     assert!(stderr.contains("advisor-mention-reader"), "{stderr}");
+    assert!(
+        stderr.contains("skipping invalid agent registry record"),
+        "{stderr}"
+    );
+    assert!(stderr.contains("broken.toml"), "{stderr}");
 
     let files = message_files(&repo.join(".aida").join("mailbox"));
     assert!(
@@ -138,7 +144,7 @@ fn comment_add_with_an_unknown_mention_warns_and_opens_no_mailbox() {
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(out.status.success(), "{stderr}");
     assert!(
-        stderr.contains("@advisor: send refused: 'advisor' has 0 live readers"),
+        stderr.contains("@advisor: 'advisor' has 0 live readers"),
         "{stderr}"
     );
     let mut before = files;
