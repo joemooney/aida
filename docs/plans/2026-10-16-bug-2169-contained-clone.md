@@ -625,7 +625,7 @@ S4c (flip `seat_tree` to `clone`, retire `AIDA_DEV_SEAT_CLONE`, close PR #2694).
   gets its raw `<Type>::new("git")` builders counted against a per-file allowlist. A count above
   its entry fails, and so does a count below it until the allowlist is lowered. A new file that
   reads `worktree_path` fails as soon as it holds any raw git. The opt-out is
-  `// raw-git-ok(TASK-2053): <why>`. The baseline is 155 builders across 22 files. S4b lowers
+  `// raw-git-ok(TASK-2053): <why>`. The baseline is 157 builders across 22 files. S4b lowers
   that baseline as it moves consumers onto `seat_trees`.
 - **TASK-2162.** `task_2162_dismiss_releases_a_hand_removed_seat_clone`.
 - **TASK-2160.** `docs/cli/03-work-autonomy.md` documents the salvage bundle and patch, what is

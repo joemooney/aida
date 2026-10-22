@@ -3452,7 +3452,7 @@ fn preflight_agent_new_delegation(
 /// An explicit owning cwd is read-only re-entry, never a claim or forced takeover.
 /// Both launch paths call this before prompts, and plan creation checks it again.
 // trace:BUG-2002 | ai:codex
-fn preflight_agent_launch_lease(
+pub(crate) fn preflight_agent_launch_lease(
     project_root: &std::path::Path,
     role: Option<&str>,
     spec: Option<&str>,
