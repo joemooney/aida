@@ -237,7 +237,7 @@ make_targets_skip_cargo() {
     # and $(eval ...) change what a recipe or rule is. None is resolved here.
     # trace:TASK-1955 | ai:claude (TASK-2075, TASK-2077)
     /^[ \t]*(ifeq|ifneq|ifdef|ifndef)([ \t(]|$)/ { unresolvable = 1; exit }
-    /^[ \t]*\.RECIPEPREFIX[ \t:+?]*=/ { unresolvable = 1; exit }
+    /^[ \t]*((override|export|private)[ \t]+)*\.RECIPEPREFIX[ \t:+?!]*=/ { unresolvable = 1; exit }
     /\$[({]eval[ \t]/ { unresolvable = 1; exit }
     {
         line = $0

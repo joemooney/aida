@@ -156,11 +156,11 @@ expect_silent "only inert recipe commands" 'timeout 1h make hello'
 mk_case cond 'hello:' $'\t@echo hi' 'ifeq ($(CI),1)' $'\tcargo test' 'endif'
 expect_warn "recipe inside a conditional fails closed" 'timeout 1h make hello' 'AIDA_CARGO_TIMEOUT=1h make'
 mk_case ifdef 'ifdef FAST' 'hello:' $'\t@echo hi' 'endif'
+expect_warn "ifdef fails closed" 'timeout 1h make hello' 'AIDA_CARGO_TIMEOUT=1h make'
 # An unresolvable line after a safe target used to fall through awk's END.
 mk_case lateincl 'hello:' $'\t@echo hi' 'include extra.mk'
 printf '%s\n' 'hello: lint' 'lint:' $'\tcargo clippy' >"$MK/lateincl/extra.mk"
 expect_warn "include after a safe target fails closed" 'timeout 1h make hello' 'AIDA_CARGO_TIMEOUT=1h make'
-expect_warn "ifdef fails closed" 'timeout 1h make hello' 'AIDA_CARGO_TIMEOUT=1h make'
 # TASK-2076: a pattern or suffix rule may build an unknown prerequisite.
 mk_case pattern 'hello: page.html' $'\t@echo hi' '%.html: %.md' $'\tcargo run --bin render $<'
 expect_warn "pattern rule may build a prerequisite" 'timeout 1h make hello' 'AIDA_CARGO_TIMEOUT=1h make'
@@ -176,6 +176,10 @@ for recipe in "awk 'BEGIN{system(\"cargo build\")}'" "sed -n '1e cargo build' x"
 done
 mk_case prefix '.RECIPEPREFIX = >' 'hello:' '>cargo test'
 expect_warn ".RECIPEPREFIX fails closed" 'timeout 1h make hello' 'AIDA_CARGO_TIMEOUT=1h make'
+for directive in 'override' 'export' 'private' 'override export'; do
+    mk_case prefix "$directive .RECIPEPREFIX = >" 'hello:' '>cargo test'
+    expect_warn "$directive .RECIPEPREFIX fails closed" 'timeout 1h make hello' 'AIDA_CARGO_TIMEOUT=1h make'
+done
 mk_case evalrule '$(eval hello: ; cargo test)' 'other:' $'\t@echo hi'
 expect_warn "\$(eval) rule generation fails closed" 'timeout 1h make hello' 'AIDA_CARGO_TIMEOUT=1h make'
 RUN_DIR="$ROOT"
