@@ -1310,6 +1310,56 @@ mod tests {
         );
     }
 
+    // A foreign namespace makes kill(pid, 0) uninformative, not proof of death.
+    // trace:STORY-1843 | ai:codex
+    #[test]
+    fn mailbox_send_delivers_when_reader_pid_namespace_is_unobservable() {
+        let project = tempfile::tempdir().unwrap();
+        let store = project.path().join(".aida-store");
+        std::fs::create_dir_all(&store).unwrap();
+        let mut entry = crate::agent_registry::register_existing_agent(
+            project.path(),
+            "codex",
+            std::process::id(),
+            "advisor".into(),
+            None,
+            project.path().to_path_buf(),
+            Some("foreign-reader".into()),
+            None,
+        )
+        .unwrap();
+        let namespace = entry
+            .pid_namespace
+            .expect("Linux exposes the PID namespace");
+        entry.pid = u32::MAX; // Cannot be observed by the local PID probe.
+        entry.pid_namespace = Some(namespace ^ 1);
+        crate::agent_registry::write_entry(project.path(), &entry).unwrap();
+        let directory =
+            crate::mailbox_resolver::RecipientDirectory::load(project.path(), &store).unwrap();
+        for target in ["advisor", "codex", "foreign-reader"] {
+            let resolution = directory.resolve(target).unwrap();
+            assert!(resolution.reader_notice.unwrap().contains("unknown"));
+            handle_mailbox_command(&plain_send(target), &store).unwrap();
+        }
+        let messages = mailbox_store::read_local_messages(project.path()).unwrap();
+        assert_eq!(messages.len(), 3);
+        assert!(messages
+            .iter()
+            .any(|m| m.recipient == aida_core::mailbox::Recipient::Agent("advisor".into())));
+        assert!(messages
+            .iter()
+            .any(|m| m.recipient == aida_core::mailbox::Recipient::Agent("foreign-reader".into())));
+        entry.ended_at = Some(chrono::Utc::now());
+        crate::agent_registry::write_entry(project.path(), &entry).unwrap();
+        assert!(handle_mailbox_command(&plain_send("advisor"), &store).is_err());
+        assert_eq!(
+            mailbox_store::read_local_messages(project.path())
+                .unwrap()
+                .len(),
+            3
+        );
+    }
+
     // trace:BUG-1297 | ai:codex
     #[test]
     fn mailbox_reply_to_unknown_message_refuses_without_writing() {

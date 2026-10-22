@@ -11,6 +11,7 @@ pub(crate) struct RecipientDirectory {
     roles: BTreeMap<String, String>,
     people: HashMap<String, String>,
     live_ids: BTreeSet<String>,
+    unknown_ids: BTreeSet<String>,
     warnings: Vec<String>,
 }
 
@@ -18,6 +19,28 @@ pub(crate) struct RecipientDirectory {
 pub(crate) struct ResolvedRecipient {
     pub(crate) address: String,
     pub(crate) reader_notice: Option<String>,
+}
+
+const MAIL_ESCAPE: &str = "mail the operator (--to joe) or use aida comment add <SPEC>";
+
+// Legacy entries have no namespace stamp. A non-host observer cannot prove
+// those PIDs dead, even if its private /proc exposes only one NSpid level.
+// This is delivery information only, never lifecycle/lease authority.
+// trace:STORY-1843 | ai:codex
+fn reader_liveness(
+    project: &Path,
+    entry: &AgentRegistryEntry,
+    namespace: Option<u64>,
+) -> Option<bool> {
+    if entry.ended_at.is_some() || entry.source == "role-enter" {
+        return Some(false);
+    }
+    match (entry.pid_namespace, namespace) {
+        (Some(recorded), Some(current)) if recorded == current => {}
+        (None, Some(0xEFFF_FFFC)) => {} // Linux initial PID namespace inode.
+        _ => return None,
+    }
+    Some(agent_registry::registry_entry_is_live(project, entry))
 }
 
 impl RecipientDirectory {
@@ -68,13 +91,20 @@ impl RecipientDirectory {
                 agents.push(record);
             }
         }
-        let live_ids = agents
-            .iter()
-            .filter(|a| {
-                a.source != "role-enter" && agent_registry::registry_entry_is_live(project, a)
-            })
-            .map(|a| a.id.clone())
-            .collect();
+        let namespace = agent_registry::current_pid_namespace();
+        let mut live_ids = BTreeSet::new();
+        let mut unknown_ids = BTreeSet::new();
+        for agent in &agents {
+            match reader_liveness(project, agent, namespace) {
+                Some(true) => {
+                    live_ids.insert(agent.id.clone());
+                }
+                None => {
+                    unknown_ids.insert(agent.id.clone());
+                }
+                Some(false) => {}
+            }
+        }
         let mut roles: BTreeMap<_, _> = crate::AGENT_ROLES
             .iter()
             .map(|r| (r.to_lowercase(), r.to_string()))
@@ -88,6 +118,7 @@ impl RecipientDirectory {
             roles,
             people: crate::known_mailbox_people(store),
             live_ids,
+            unknown_ids,
             warnings,
         })
     }
@@ -99,19 +130,38 @@ impl RecipientDirectory {
         &self.warnings
     }
 
+    fn reader_may_exist(&self, entry: &AgentRegistryEntry) -> bool {
+        self.live_ids.contains(&entry.id) || self.unknown_ids.contains(&entry.id)
+    }
+
     pub(crate) fn resolve(&self, target: &str) -> Result<ResolvedRecipient> {
         let target = target.trim();
         if let Some(why) = aida_core::mailbox::recipient_id_rejection(target) {
             bail!("send refused: recipient {why}");
         }
         let key = target.to_lowercase();
+        if let Some(name) = key.strip_prefix("person:") {
+            return self
+                .people
+                .get(name)
+                .map(|person| ResolvedRecipient {
+                    address: person.clone(),
+                    reader_notice: None,
+                })
+                .ok_or_else(|| {
+                    anyhow::anyhow!("send refused: unknown person '{name}'; {MAIL_ESCAPE}")
+                });
+        }
         let role = self.roles.get(&key);
         let vendor = match key.as_str() {
             "claude" | "codex" | "antigravity" | "web" => Some(key.as_str()),
             "agy" => Some("antigravity"),
             _ => None,
         };
-        let person = self.people.get(&key);
+        let person = self
+            .people
+            .get(&key)
+            .filter(|_| role.is_none() && vendor.is_none());
         // Existing launches may borrow a reserved alias until PR2 reserves
         // names. Such a record must not poison that catalog address. Looking
         // it up by ID still goes through the private-inbox collision guard.
@@ -131,10 +181,10 @@ impl RecipientDirectory {
         if (role.is_some() as u8
             + vendor.is_some() as u8
             + person.is_some() as u8
-            + named.iter().any(|a| self.live_ids.contains(&a.id)) as u8)
+            + named.iter().any(|a| self.reader_may_exist(a)) as u8)
             > 1
         {
-            bail!("send refused: ambiguous recipient '{target}' names more than one recipient kind; use an unambiguous live agent name");
+            bail!("send refused: ambiguous recipient '{target}' names more than one recipient kind; {MAIL_ESCAPE}");
         }
         if let Some(person) = person {
             return Ok(ResolvedRecipient {
@@ -146,7 +196,7 @@ impl RecipientDirectory {
             let readers: BTreeSet<_> = self
                 .agents
                 .iter()
-                .filter(|a| self.live_ids.contains(&a.id))
+                .filter(|a| self.reader_may_exist(a))
                 .filter(|a| {
                     if let Some(role) = role {
                         a.role
@@ -164,23 +214,50 @@ impl RecipientDirectory {
                 })
                 .collect();
             let address = role.cloned().unwrap_or_else(|| vendor.unwrap().to_string());
+            let unknown = self
+                .agents
+                .iter()
+                .filter(|a| self.unknown_ids.contains(&a.id))
+                .filter(|a| {
+                    if let Some(role) = role {
+                        a.role
+                            .as_deref()
+                            .is_some_and(|r| r.eq_ignore_ascii_case(role))
+                    } else {
+                        a.agent_type == vendor.unwrap()
+                    }
+                })
+                .map(|a| {
+                    a.name
+                        .as_deref()
+                        .map(|name| format!("{name} ({})", a.id))
+                        .unwrap_or_else(|| a.id.clone())
+                })
+                .collect::<BTreeSet<_>>()
+                .len();
             if readers.is_empty() {
-                bail!("send refused: '{address}' has 0 live readers; name a live agent handle");
+                bail!("send refused: '{address}' has 0 live readers; {MAIL_ESCAPE}");
             }
-            let warning = if readers.len() > 1 { "warning: " } else { "" };
+            let warning = if readers.len() > 1 || unknown > 0 {
+                "warning: "
+            } else {
+                ""
+            };
+            let live_count = readers.len() - unknown;
+            let uncertainty = if unknown > 0 {
+                format!("; {unknown} reader(s) with unknown liveness (PID namespace unobservable); delivering to durable inbox")
+            } else {
+                String::new()
+            };
             return Ok(ResolvedRecipient {
                 address,
                 reader_notice: Some(format!(
-                    "{warning}{} live reader(s): {}",
-                    readers.len(),
+                    "{warning}{live_count} live reader(s): {}{uncertainty}",
                     readers.into_iter().collect::<Vec<_>>().join(", ")
                 )),
             });
         }
-        let live: Vec<_> = named
-            .iter()
-            .filter(|a| self.live_ids.contains(&a.id))
-            .collect();
+        let live: Vec<_> = named.iter().filter(|a| self.reader_may_exist(a)).collect();
         match live.as_slice() {
             [agent] => {
                 let Some(name) = agent.name.as_deref().filter(|n| !n.trim().is_empty()) else {
@@ -191,17 +268,34 @@ impl RecipientDirectory {
                 if let Some(why) = aida_core::mailbox::recipient_id_rejection(name) {
                     bail!("send refused: inbox name for '{target}' {why}; register a valid private name");
                 }
-                let owners = self.agents.iter().filter(|a| self.live_ids.contains(&a.id))
-                    .filter(|a| a.name.as_deref().is_some_and(|n| n.trim().eq_ignore_ascii_case(name))).count();
-                if owners != 1 || self.roles.contains_key(&name.to_lowercase()) || self.people.contains_key(&name.to_lowercase())
-                    || matches!(name.to_ascii_lowercase().as_str(), "claude" | "codex" | "antigravity" | "agy" | "web") {
-                    bail!("send refused: ambiguous inbox '{name}' for '{target}'; choose a unique private name");
+                let owners = self
+                    .agents
+                    .iter()
+                    .filter(|a| self.reader_may_exist(a))
+                    .filter(|a| {
+                        a.name
+                            .as_deref()
+                            .is_some_and(|n| n.trim().eq_ignore_ascii_case(name))
+                    })
+                    .count();
+                if owners != 1
+                    || self.roles.contains_key(&name.to_lowercase())
+                    || self.people.contains_key(&name.to_lowercase())
+                    || matches!(
+                        name.to_ascii_lowercase().as_str(),
+                        "claude" | "codex" | "antigravity" | "agy" | "web"
+                    )
+                {
+                    bail!("send refused: ambiguous inbox '{name}' for '{target}'; {MAIL_ESCAPE}");
                 }
-                Ok(ResolvedRecipient { address: name.to_string(), reader_notice: None })
-            },
-            [] if !named.is_empty() => bail!("send refused: '{target}' has no live agent; choose a live agent handle"),
-            [] => bail!("send refused: unknown recipient '{target}'; choose a live agent handle or a known person"),
-            _ => bail!("send refused: ambiguous live recipient '{target}'; choose a unique private name"),
+                Ok(ResolvedRecipient { address: name.to_string(), reader_notice: self.unknown_ids.contains(&agent.id).then(||
+                    "warning: reader liveness unknown (PID namespace unobservable); delivering to durable inbox".to_string()) })
+            }
+            [] if !named.is_empty() => {
+                bail!("send refused: '{target}' has no live agent; {MAIL_ESCAPE}")
+            }
+            [] => bail!("send refused: unknown recipient '{target}'; {MAIL_ESCAPE}"),
+            _ => bail!("send refused: ambiguous live recipient '{target}'; {MAIL_ESCAPE}"),
         }
     }
 }
@@ -220,6 +314,33 @@ mod tests {
         };
         std::fs::write(dir.join(format!("{id}.toml")), format!(
             "id = '{id}'\nagent_type = 'codex'\npid = {}\nname = '{name}'\nrole = '{role}'\nstarted_at = '2026-10-20T00:00:00Z'\nlast_active_at = '2026-10-20T00:00:00Z'\nworktree_path = '{}'\nsource = 'agent-launcher'\n{end}", std::process::id(), project.display())).unwrap();
+        let path = dir.join(format!("{id}.toml"));
+        let mut entry: AgentRegistryEntry =
+            toml::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        entry.pid_namespace = agent_registry::current_pid_namespace();
+        agent_registry::write_entry(project, &entry).unwrap();
+    }
+
+    // trace:STORY-1843 | ai:codex
+    #[test]
+    fn namespace_mismatch_is_unknown_even_when_pid_probe_says_dead() {
+        let tmp = tempfile::tempdir().unwrap();
+        registry(tmp.path(), "foreign", "foreign-reader", "advisor", false);
+        let mut entry = agent_registry::load_entries(tmp.path()).remove(0).1;
+        entry.pid = u32::MAX;
+        entry.pid_namespace = Some(42);
+        assert!(!agent_registry::registry_entry_is_live(tmp.path(), &entry));
+        assert_eq!(reader_liveness(tmp.path(), &entry, Some(43)), None);
+        assert_eq!(reader_liveness(tmp.path(), &entry, None), None);
+        assert_eq!(reader_liveness(tmp.path(), &entry, Some(42)), Some(false));
+        entry.pid_namespace = None;
+        assert_eq!(reader_liveness(tmp.path(), &entry, Some(43)), None);
+        assert_eq!(
+            reader_liveness(tmp.path(), &entry, Some(0xEFFF_FFFC)),
+            Some(false)
+        );
+        entry.ended_at = Some(chrono::Utc::now());
+        assert_eq!(reader_liveness(tmp.path(), &entry, Some(43)), Some(false));
     }
 
     #[test]
@@ -235,7 +356,12 @@ mod tests {
             "codex",
             "--include",
         ] {
-            assert!(d.resolve(name).is_err(), "{name} must refuse");
+            let error = d.resolve(name).unwrap_err().to_string();
+            if name != "--include" {
+                assert!(error.contains("--to joe"), "{error}");
+                assert!(error.contains("aida comment add <SPEC>"), "{error}");
+                assert!(!error.contains("handle"), "{error}");
+            }
         }
         assert!(!tmp.path().join(".aida/mailbox").exists());
     }
@@ -445,6 +571,13 @@ mod tests {
         )
         .unwrap();
         registry(tmp.path(), "codex-one", "joe", "implementer", false);
+        registry(
+            tmp.path(),
+            "codex-advisor",
+            "advisor-reader",
+            "advisor",
+            false,
+        );
         let historical = crate::known_mailbox_recipients(&store);
         assert_eq!(
             historical["joe"], "joe",
@@ -456,6 +589,13 @@ mod tests {
         );
         let live = RecipientDirectory::load(tmp.path(), &store).unwrap();
         assert_eq!(live.resolve("joe").unwrap().address, "Joe");
+        let role = live.resolve("advisor").unwrap();
+        assert_eq!(role.address, "advisor");
+        assert!(role.reader_notice.unwrap().contains("advisor-reader"));
+        let person = live.resolve("person:Advisor").unwrap();
+        assert_eq!(person.address, "Advisor");
+        assert!(person.reader_notice.is_none());
+        assert!(live.resolve("person:missing").is_err());
         assert!(live.resolve("codex-one").is_err());
     }
 

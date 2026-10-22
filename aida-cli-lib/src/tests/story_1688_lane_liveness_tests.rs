@@ -1403,6 +1403,7 @@ fn reviewer_lease_with_a_dead_creator_is_read_with_live_probes() {
             agent_type: "codex".into(),
             pid: me,
             pid_start: crate::process_probe::process_start_identity(me),
+            pid_namespace: crate::agent_registry::current_pid_namespace(),
             name: Some("codex-reviewer".into()),
             description: None,
             tty: None,
