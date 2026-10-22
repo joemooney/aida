@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T15:33:51.496539087Z
-modified_at: 2026-10-22T20:22:58.646468213Z
+modified_at: 2026-10-22T20:49:05.944782823Z
 req_type: Story
 tags:
 - architecture
@@ -161,6 +161,12 @@ comments:
   created_at: 2026-10-22T20:22:58.646468213Z
   modified_at: 2026-10-22T20:22:58.646468213Z
   session_id: 364267d2-ca2c-4808-ba78-5f63fb0d5d6e
+- id: 01a1655f-e598-7b21-8bd0-f7d6c1598292
+  author: joe
+  content: 'ADVISOR 13:52, PR2 split: (a) decisions, (b) the hold read path, (c) record types AND the marker write path go to gate/merge_hold_core.rs. A failed or no-op write leaves a PR unheld, which is a loosening. Label sync, pinned fetch and stray adoption stay outside the floor.'
+  created_at: 2026-10-22T20:49:05.944782823Z
+  modified_at: 2026-10-22T20:49:05.944782823Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a15f19-1b8d-7a60-bd9c-acf0c42193fc
   author: joe
