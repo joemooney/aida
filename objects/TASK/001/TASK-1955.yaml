@@ -57,7 +57,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T16:03:34.769123409Z
-modified_at: 2026-10-22T05:05:54.377462653Z
+modified_at: 2026-10-22T05:06:00.660836321Z
 req_type: Task
 tags:
 - launch
@@ -613,6 +613,12 @@ comments:
   content: 'ADVISOR 21:27 (bug note for the sweep): a reviewer launch refused at child-seat delegation (''no valid parent seat grant is active'', or ''grant does not delegate reviewer'') still leaves a reviewer lease on PR-N whose owning session is dead and whose worktree is gone. The next `aida queue work PR-N --role reviewer` then refuses until --force-claim. Seen on PR-2806 and PR-2820 at 21:07. Fix: check the grant before acquiring the lease, or release the lease on any refusal after it. Add a test: a refused delegation leaves no lease.'
   created_at: 2026-10-22T04:32:45.337366410Z
   modified_at: 2026-10-22T04:32:45.337366410Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a16200-7954-7ab1-bf64-393d2cfc6702
+  author: joe
+  content: 'ADVISOR 22:06: folded the PR-2804 (TASK-1915, merged) non-blocking review notes on mandate_drive.rs. TASK-1-424 (MAJOR): dispatch_epoch measures DISPATCH_STALE from routed_at, the advisor due-mail time, not a fixer dispatch, so a deliberately unqueued approved spec is re-routed every 2h. TASK-1-425: reap failures and registry-GC errors are re-ledgered Refused every 15m tick (skip_once dedups only Skipped). TASK-1-426: PerMandate.dispatch and per.emitted are never pruned, so mandate-drive-state.json grows without bound. TASK-1-427: emit_due_with scans the whole event log per emit. TASK-1-428: the ship-window test scanner ignores /* */ comments. mandate_drive.rs is gate code, so the operator merges.'
+  created_at: 2026-10-22T05:06:00.660836321Z
+  modified_at: 2026-10-22T05:06:00.660836321Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a154e7-9a9e-7f53-9dba-5dc0d8e33566
