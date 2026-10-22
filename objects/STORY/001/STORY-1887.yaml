@@ -3,17 +3,26 @@ spec_id: STORY-1887
 agreed_id: STORY-1887
 title: 'Operator batch-ship for human-gated PRs: refresh, re-review and ship in sequence'
 description: 'On 2026-10-21 every operator-gated merge (PRs touching mandate.rs, pr_ship.rs, merge_hold.rs or operator-only specs) made the other gated PRs stale. Each then needed gh pr update-branch, a CI rerun, a fresh independent review and another operator round-trip (#2792, #2798 twice each). Idea: an operator command that takes a list of approved gated PRs and, in order, ships one, refreshes the next, waits for CI and a fresh attested review, then asks the operator to confirm the ship at a TTY. The human gate is kept while the operator only has to be there for confirmations.'
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T15:03:49.211949451Z
-modified_at: 2026-10-21T15:03:49.211949451Z
+modified_at: 2026-10-22T01:46:24.228815248Z
 req_type: Story
 tags:
 - mandate
 - operator
 - ship
+history:
+- id: 01a16149-ba64-7710-ba41-1cba72846b5c
+  author: joe
+  timestamp: 2026-10-22T01:46:24.228805946Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 7be4321436b8f93b2daba2bd71b649046818e35f
   branch: main
