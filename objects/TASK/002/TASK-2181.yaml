@@ -1,0 +1,33 @@
+id: 01a1656c-5230-7202-baae-60916df1c01a
+spec_id: TASK-2181
+agreed_id: TASK-2181
+title: 'BUG-2169 S5: cold seat-clone creation p95 is 35.7 s; host clone pool, or pack main''s loose objects first'
+description: |
+  BUG-2169 slice S5, filed under the advisor's S4 signoff rule: p95 clone creation over 20 s files S5 approved with the numbers.
+
+  Measured 2026-10-22 on the dev host (load average 14). The run replicates seat_clone::create: git clone --no-checkout --no-hardlinks --reference <main> <origin>, then the checkout, five runs each.
+  - Cold, with main's objects evicted from the page cache by posix_fadvise(DONTNEED): 34.5-35.7 s, p50 34.8 s, p95 35.7 s.
+  - Warm: 1.5-2.6 s, p50 1.7 s, p95 2.6 s.
+
+  Cold time is spent reading main's object store: 2.0 GiB, with 128k loose objects. The packs are only 237 MiB. The clone borrows through alternates and copies almost nothing.
+
+  Scope, if S5 stays: a host-provisioned clone pool, refilled by the uncontained heartbeat. Pool reset passes SHAs, not ref names (plan section 8).
+
+  Rule first on the cheaper alternative: pack main's loose objects (git maintenance / gc on the main checkout, mindful of the refs/aida/seats/* pins). If that brings the cold p95 to 20 s or under, reject S5.
+
+  Acceptance: cold and warm p95 of a fresh contained seat's clone are 20 s or under on this host, measured by the same method.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-22T21:02:40.176273476Z
+modified_at: 2026-10-22T21:02:40.176273476Z
+req_type: Task
+filed_at:
+  code_sha: 519bdccd6ea180fd65fb2313aa0bb1641f257f28
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 7ffa46a9d0
+  vendor: claude
+  session: 97692cb0-aaab-43f2-8620-eabef6bf9732
