@@ -22,7 +22,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T14:45:02.441681831Z
-modified_at: 2026-09-16T17:54:17.777058478Z
+modified_at: 2026-10-22T16:40:58.045366589Z
 req_type: Task
 tags:
 - ci
@@ -84,6 +84,11 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a1647c-beea-7611-bec5-b278e70f5c3c
+  author: joe
+  timestamp: 2026-10-22T16:40:59.370762562Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
 processing_record:
 - id: 01a0ab5a-4316-7070-8d0c-90689a04dba3
   timestamp: 2026-09-16T17:53:34.486854041Z
@@ -92,9 +97,6 @@ processing_record:
   summary: Completed via merge 9d709244
   punted:
   - 'punted: CI is red on PR-1749: Build (ubuntu-latest)'
-deferred: true
-deferred_at: 2026-09-12T06:08:53.126196602Z
-deferred_until: guided session with operator — headless drain repeatedly ci-reds; needs a supervised fix, not headless retry (2026-09-11)
 execution_mode: guided
 implementation_info:
   implemented: true
