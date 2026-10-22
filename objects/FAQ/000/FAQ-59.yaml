@@ -3,12 +3,15 @@ spec_id: FAQ-59
 agreed_id: FAQ-59
 title: Why can't the advisor ship a PR that changes the mandate or merge-gate code?
 description: |
-  **Because the mandate excludes its own gate files: a PR that changes `mandate.rs`, `pr_ship.rs`, `merge_hold.rs` (or an operator-only spec) must be shipped by a human, even with an active ship-held mandate.**
+  **Because the mandate excludes its own gate files: a PR that changes `mandate.rs`, `pr_ship.rs`, `merge_hold.rs`, `pr_ship_batch.rs` (or an operator-only spec) must be shipped by a human, even with an active ship-held mandate.**
 
   ## Why
   The mandate is what lets the advisor ship approved, green PRs while the operator is away. If it also covered changes to its own rules, an agent could merge edits to the gates that constrain what it may merge. So `aida pr ship` refuses with `mandate does not cover this ship: it changes <file>, part of the mandate and its human gates; a human must merge it` (or `<SPEC> is operator-only; it always needs a human merge`). A supervised merge-hold on such a PR also needs a human at an interactive terminal to clear.
 
   ## How
+  For several gated PRs, the operator runs `aida pr ship-batch N1 N2 ...` at a terminal (once it is on the operator's binary). In the given order it refreshes each PR from main only when needed, waits for CI and an independent approval at the new head, then asks the operator to type the PR number (and `clear` for a held PR) before shipping with every gate in force. Any failure stops the batch; re-running skips merged PRs. The advisor's part is unchanged: get each refreshed head reviewed.
+
+  By hand, one PR at a time:
   1. The advisor gets an independent attested PASS and green CI on the same head.
   2. The operator runs `aida merge-hold clear N && aida pr ship N` at a terminal.
   3. If ship refuses with "green check completed before a CI definition file changed on main", do NOT use `--override-stale-check`. The advisor runs `gh pr update-branch N`, waits for CI, gets a fresh review (approvals never carry over), and the operator then runs `aida pr ship N` again (the hold is already cleared).
@@ -21,12 +24,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T15:04:10.380102032Z
-modified_at: 2026-10-21T15:04:10.380102032Z
+modified_at: 2026-10-22T06:10:11.155977549Z
 req_type: Faq
 tags:
 - audience:dev
 - topic:mandate
 - topic:ship
+history:
+- id: 01a1623b-3fa3-72d1-a8ea-93241e3859d2
+  author: joe
+  timestamp: 2026-10-22T06:10:12.515268169Z
+  session_id: 7a71b0f4-ebdf-4711-b086-1ba29a8aeead
+  changes: []
 filed_at:
   code_sha: 7be4321436b8f93b2daba2bd71b649046818e35f
   branch: main
