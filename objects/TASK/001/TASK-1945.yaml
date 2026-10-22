@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T15:26:23.898572812Z
-modified_at: 2026-10-20T07:24:46.381598236Z
+modified_at: 2026-10-22T00:58:42.123003263Z
 req_type: Task
 tags:
 - review
@@ -58,6 +58,83 @@ comments:
   created_at: 2026-10-20T05:08:07.916366262Z
   modified_at: 2026-10-20T05:08:07.916366262Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+- id: 01a1611e-0e4b-7742-ac21-207bc43c8ad8
+  author: joe
+  content: |
+    SKETCH S2 v1 (TASK-1945, head-change supersede). This is the only slice that signals processes. Nothing is implemented until advisor signoff. Builds on S1 (TASK-1993, 98d19dceb3) and the TASK-1955 sweep (376a46ecd1).
+
+    GROUND TRUTH FROM S1 (relied on below)
+    - Each admitted review runs as dispatcher -> `queue work PR-N --role reviewer` -> vendor reviewer. The watcher spawns the dispatcher with `process_group(0)`, so pgid == dispatcher pid. Neither queue work nor session.rs (`reviewer_status`) changes the group, so all three share the dispatcher's group.
+    - An Attempt already records identities as {pid, exact kernel start, boot_id}: `identity` (the dispatcher's claim), `dispatcher`, `worker` (queue work) and `reviewer`, plus the `spawning`/`reviewer_spawning` intent flags that are set before each spawn. `Identity::alive()` treats a zombie, a reused PID or a different boot as gone.
+    - Today select() returns Skip("prior head still active or ambiguous; S1 waits without signalling processes"), so a new head waits until the old review finishes on its own.
+
+    (a) DETECTION AND TARGET
+    - Trigger: a successful, complete discovery pass lists change K as open and non-draft at head H2, and K's entry holds an active attempt (Reserved or Running) at H1 != H2. Only that attempt is superseded; at most one can be active per entry.
+    - The check runs in watch_change BEFORE probe_unneeded and the base probe. An obsolete head is superseded whether or not the new head is stale or overlapping; the notice path for H2 then runs as it does today.
+    - Before writing any intent, re-read the change with `repo.change(root, id)` (one forge read, no lock held) and require head == H2 != H1. A refused or failed read means no supersede on this pass.
+    - Under the existing admission and per-change locks: re-check that the attempt is still active at H1, then set phase = Superseding and record `supersede = {by: H2, requested_at, term_at: None, kill_at: None, diagnostic}`. That durable receipt is the intent. No signal is sent while a lock is held.
+    - Superseding counts as active(): it keeps its capacity slot, so a second watcher cannot admit H2 or anything else over the cap.
+    - The intent also stops new descendants. record_worker and record_reviewer already require phase == Running, so once the attempt is Superseding a dispatcher that has not yet spawned queue work fails its "mark spawning first" write and spawns nothing. Likewise reviewer_status fails before spawning the reviewer. That closes the race between supersede and spawn without signals. Queue work's own head recheck (reviewer_launch_context) remains a second guard.
+    - The dispatcher's terminal writes on a Superseding attempt (Completed or Exited when queue work dies of our SIGTERM) keep it Superseding and store only the diagnostic. They never free the slot. The watcher's confirmation step owns the move to terminal.
+
+    (b) PROCESS-IDENTITY CHECK BEFORE ANY SIGNAL
+    - New optional field Attempt.pgid: the watcher writes child.id() beside `dispatcher` at admission, since it created that group with process_group(0). It is serde-defaulted, so S1 state loads. An attempt with no recorded pgid gets per-process signals only and no group sweep.
+    - No raw kill(pid) or kill(-pgid). Each signal goes through pidfd: pidfd_open(pid), and only AFTER the fd pins the process re-verify through /proc/<pid>: the exact start identity equals the recorded one (process_start_identity_exact), boot_id is equal, the state is not Z, uid == our euid, and the pgrp field equals the recorded pgid. Only then pidfd_send_signal. A reused PID can never pass, because the fd is opened first and the start identity is checked against the pinned process.
+    - Recorded processes are signalled leaf-first: reviewer, worker, then dispatcher.
+    - Group members that were never recorded (the vendor's own children, or a worker that is spawning but unrecorded): scan /proc for pgrp == recorded pgid. Signal a member only if, after pidfd pinning, it is ours (uid), started no earlier than the recorded dispatcher, and its ppid chain reaches a recorded identity that is alive and matches exactly. A member we cannot prove is ours is never signalled; it is reported, and confirmation (c) treats it as a survivor.
+    - Hard floors, asserted on every signal path: pid > 1; never our own pid or pgid; never a pgid <= 1; never a process outside the recorded group.
+
+    (c) REAP-BEFORE-RE-ADMIT ORDERING (a per-pass state machine; the watcher never blocks)
+    1. Intent written under lock (a).
+    2. Same pass, outside the lock: send SIGTERM by (b), then record term_at under lock. The token is the claim: a pass sends a signal only after it has written term_at itself (check-and-set under the per-change lock), so two watchers never double-signal.
+    3. Later passes, while Superseding: if any target survives past a 20s grace (fixed in S2), send SIGKILL to the same verified set and record kill_at.
+    4. Confirmation, under lock: every recorded identity is !alive(); no unrecorded intent (spawning with worker None, or reviewer_spawning with reviewer None) unless the recorded group has no live member; no group member from the scan survives. Then phase = Superseded, which is terminal, frees the slot, and keeps the diagnostic.
+    5. Only after Superseded does ordinary select() admit H2, on the same pass or the next. The existing per-entry rule of at most 2 attempts with distinct heads holds: the H1 receipt is kept as history until the next clear.
+    Reap failure: no re-admit, and the slot stays held. That covers ENOSYS (pidfd unavailable), EPERM, a failed identity, pgrp or uid check on a recorded live process, a survivor after SIGKILL plus grace (D-state), or an unprovable group member. Each pass reports the exact cause on stderr, and capacity_holders names it. Operator recovery is the existing `aida review watch --release PR-N`, which stays refused while any recorded process is alive.
+
+    (d) INTERACTION WITH REVIEW-WATCH AND THE TASK-1955 REVIEWER-LEASE REAP
+    - Ownership split, to avoid reaping twice: S2 owns PROCESSES only. It never deletes or edits a session lease, worktree, branch, review-verdict file or merge-hold marker.
+    - Everything on the filesystem stays with session_reap::reap_one. Once the reviewer's creator PID is dead, reap_one already refuses unpushed commits (TASK-2095/2108), salvages dirty trees, adopts the PR-N hold marker (BUG-2176), and skips a tree a live process still holds (WorktreeInUse). S2 makes the lease's process dead and leaves the rest alone.
+    - Re-admitting H2 goes through the ordinary `queue work PR-N --role reviewer` path. Its acquire_review_lease already releases a dead-PID review lease (BUG-511). If a test shows a dead-PID reviewer lease still refuses the headless relaunch, the fix belongs on that queue-work path; the watcher will not delete the lease. I will flag it before widening scope.
+    - prune: a Superseding attempt is active, so prune keeps it even if the change closed meanwhile. Closing or drafting a change does NOT trigger supersede in S2; a head change on an open, non-draft change is the only trigger.
+    - reconcile_lost_dispatchers skips Superseding attempts. Supersede confirmation is the only path out of them, so an attempt cannot be both Exited and Superseded.
+
+    (e) REFUSAL AND FAIL-CLOSED CASES
+    - Discovery refused or incomplete, or the re-read head is unknown, invalid or equal to H1: no intent, no signal.
+    - State unusable: GlobalState stops the watcher, as today.
+    - A recorded identity from an earlier boot is gone by definition and is never signalled.
+    - A recorded PID that is now a different process (start mismatch) is treated as gone and is never signalled.
+    - A recorded identity that matches but is in a different pgrp than recorded: not signalled, held with a diagnostic.
+    - pidfd missing (ENOSYS), EPERM, /proc unreadable, a group member that cannot be proved ours: held, never signalled blind.
+    - Old state with no pgid: per-identity signals only, no group sweep. Confirmation then also requires every unrecorded intent to be absent.
+    - A crash or restart at any edge resumes from the receipt: intent without term_at sends SIGTERM once; term_at without confirmation waits out the grace, then SIGKILL. No step relaunches H1 or admits H2 early.
+    - The 2-round cap and risk-scaled rules are unchanged. A superseded review never wrote a verdict, so it consumes no round. If it did write one before dying, the history read counts it as today.
+
+    (f) TESTS (each fails on main today, where select returns the "S1 waits" Skip or the field or phase does not exist)
+    Fixtures are real `sleep` children placed in their own test-made process group, with recorded Identity and pgid. No LLM, no cargo inside the test.
+    1. supersede_signals_recorded_group_and_admits_new_head: Running at H1 with live dispatcher, worker and reviewer, and discovery at H2. All three receive SIGTERM and exit, the attempt becomes Superseded, and H2 is Reserved. (Fails today: Skip, nothing signalled.)
+    2. reused_pid_never_signalled: the recorded start identity does not match a live PID. That process survives, and the attempt still confirms.
+    3. pgrp_mismatch_holds_without_signal: an exact identity whose pgrp differs from the recorded pgid. It survives, the attempt stays Superseding, and H2 is not admitted.
+    4. term_ignoring_child_gets_kill_after_grace: a fixture that traps TERM. There is no re-admit before the grace expires; SIGKILL follows, and H2 is admitted only after the exit is confirmed. The grace is shortened under cfg(test).
+    5. superseding_blocks_new_descendants: once the intent is written, record_worker and record_reviewer refuse, and reviewer_status spawns nothing.
+    6. unrecorded_descendant_holds_while_group_live: spawning with worker None and a live member in the group means held; with the group empty, Superseded.
+    7. restart_after_intent_is_idempotent: the store is reloaded at each edge (after intent, after term_at). Exactly one SIGTERM is sent to the fixture, and exactly one H2 reservation is made.
+    8. concurrent_watchers_signal_once: two passes race on the same change. A single term_at is recorded and a single signal sent, verified by a counting TERM trap.
+    9. dispatcher_terminal_write_keeps_superseding: a Completed or Exited write on a Superseding attempt neither frees capacity nor marks it terminal.
+    10. superseding_holds_capacity: with max 1, a Superseding attempt on PR-A blocks admission of PR-B.
+    11. release_refused_while_superseding_process_alive: then allowed once the process is gone.
+    12. supersede_touches_no_lease_or_worktree: the fixture lease file, worktree dir and merge-hold marker are byte-identical afterwards.
+    13. legacy_state_without_pgid_loads: per-identity signals only; no /proc group sweep runs.
+    14. unprovable_group_member_not_signalled: a member in the pgid whose ancestry cannot be proved survives, and the attempt is held.
+    Gates: targeted cargo test of the task_1993/1945 review-watch tests, make check-ci-fast, make test-touched, make check-ci-compile. Never the full suite.
+
+    (g) PR SIZE AND TRAILER
+    One PR. About 350 to 450 production lines: review_watch.rs (phase, receipt and state machine) plus a small review_watch_signal.rs submodule holding the pidfd verify-and-signal code and the /proc group scan. About 700 test lines in tests/task_1945_review_watch_supersede_tests.rs. Doc touch: docs/cli/06-roles-sessions.md (supersede behaviour and the --release note). No CLI flag changes; the help snapshot is unchanged.
+    Commit: `[AI:claude] feat(review): supersede a running review when the PR head changes (Refs TASK-1945)`. TASK-1945 stays InProgress; S3 is still outstanding.
+    Questions for signoff: (1) Is a 20s fixed TERM->KILL grace acceptable, or should it be configurable? (2) Is per-member pidfd signalling with ancestry proof, instead of kill(-pgid), the strictness you want? Its cost is that orphaned unprovable members hold the slot until the operator runs --release.
+  created_at: 2026-10-22T00:58:42.123003263Z
+  modified_at: 2026-10-22T00:58:42.123003263Z
+  session_id: 7624beda-2707-43da-a220-03c5a48c4382
 history:
 - id: 01a154c5-bc62-7222-a58c-3c44e8911cb7
   author: joe
