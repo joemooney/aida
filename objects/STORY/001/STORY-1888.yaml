@@ -16,7 +16,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T15:30:48.862626134Z
-modified_at: 2026-10-22T09:50:39.533293756Z
+modified_at: 2026-10-22T11:19:45.066571516Z
 req_type: Story
 tags:
 - authority
@@ -108,6 +108,12 @@ comments:
   created_at: 2026-10-22T09:50:39.533293756Z
   modified_at: 2026-10-22T09:50:39.533293756Z
   session_id: b0e26e8c-07b4-4b00-80ad-40571d0bfb76
+- id: 01a16356-a4aa-7f41-8f05-2d450899f862
+  author: joe
+  content: 'ADVISOR SIGNOFF 04:30 on SKETCH v1 (STORY-1888): SIGNED. Q1 YES, as a separate PR 2: an agent-seat ship of a PR touching the effective protected set refuses unless a human hold-clear (TTY-verified, the same test as merge-hold clear) is recorded AT THAT HEAD. A head move voids it. Q2 YES, the grandfather list KNOWN_UNPROTECTED in mandate_gates.rs; STORY-1889 burns it to zero. Q3 YES, marker OR the authority-name regex, tests excluded. Conditions: C1 the ratchet test file and KNOWN_UNPROTECTED are on the floor in PR 1 itself. C2 prefix entries must end in ''/'' and match only on a path-component boundary (test that foo/ does not match foobar/x.rs, already planned). C3 the trace-exclusion expiry (comment 1): file it as a TASK child of STORY-1888 and deliver it in PR 2 (no new open stories). C4 mandate status --json protected_paths is added to docs/cli-format-json-audit.md. C5 every refusal message names the matched entry and its source. PR 1 is a human merge. Proceed.'
+  created_at: 2026-10-22T11:19:45.066571516Z
+  modified_at: 2026-10-22T11:19:45.066571516Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a15f16-5a0d-7f63-9b4c-3e1a7a6c5560
   author: joe
