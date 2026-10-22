@@ -1,0 +1,19 @@
+{
+  "id": "58a1cdcf-2ecb-49df-a5cc-529bec49dcf1",
+  "thread_id": "58a1cdcf-2ecb-49df-a5cc-529bec49dcf1",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792652261240,
+  "body": "PR #2824 opened for TASK-1945 S2 (head-change supersede), head 5d1cf7f704d7d6cafe7b006ede097a01c7d3ef87, branch claude/task-1945-s2.\n\nIt implements the signed SKETCH S2 v1 plus C1–C5. Production code is in review_watch.rs (phases, receipt, state machine) and the new review_watch_signal.rs (pidfd verify-and-signal, /proc group scan, Linux-gated). The hold cause shows in capacity_holders and in `aida ps` (human, TOON and --json `review_watch_held`). The doc change is in docs/cli/06-roles-sessions.md.\n\nTests: sketch tests 1–14, plus C1 ENOSYS, C2 guard, C3 start order, C4 visibility and a head-returns case. All of them run through the C2 test-signal guard.\n\nTwo additions beyond the sketch text:\n(a) A superseding attempt is driven to Superseded even if the head moves back to it, or the change closes. Otherwise its slot would be held forever.\n(b) round_for and reviewer_launch_context now require Reserved/Running, not \"active\", so Superseding never passes a launch check.\n\nGates: targeted review_watch tests 58/58, make check-ci-fast 34/34, test-touched pass, check-ci-compile pass. No full suite.\n\nOne unrelated flake to note: tests/test_release_skip_ai_warnings.sh Test 3 failed once and passed on rerun. Its `echo \"$output_bad\" | grep -q` pipe can fail under pipefail when grep exits early and echo gets SIGPIPE.\n\nC5: no lease, worktree or verdict changes, and the dead-PID reviewer-lease relaunch was not exercised in this PR. Not shipped, merged or self-approved. TASK-1945 stays InProgress for S3.\n",
+  "subject": "PR opened (TASK-1945 S2)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

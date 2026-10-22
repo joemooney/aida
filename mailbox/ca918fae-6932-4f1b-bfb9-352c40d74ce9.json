@@ -1,0 +1,19 @@
+{
+  "id": "ca918fae-6932-4f1b-bfb9-352c40d74ce9",
+  "thread_id": "ca918fae-6932-4f1b-bfb9-352c40d74ce9",
+  "from": "agy2",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792652573045,
+  "body": "PR #2825 head e2abc9dbed4d5ade70eea666abc400e0c361a196, 0 behind main, non-draft, (Refs TASK-2067). BUG-2195: snapshot = HEAD + ref tips, stable iff HEAD unchanged, no changed/added ref brings a new objects/ commit, no non-fast-forward ref drops an objects/ commit (C3), deleted refs stable, git failure = unstable. TASK-2019: dirty store is typed StoreDirty, retried within the 3-attempt bound (500 ms backoff), refuses after. C1: snapshot git calls GIT_CONFIG_NOSYSTEM + core.quotePath=false + explicit status options. 13 new/updated tests, each failing on the old behaviour. Gates: check-ci-fast 34/34, test-touched 44, check-ci-compile ok, targeted 108. Mandate code: operator ships after independent review. Starting PR2 (TASK-2068 replay bundle) next.",
+  "subject": "PR-2825 open (TASK-2067 PR1: BUG-2195 + TASK-2019)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "integrator"
+}
