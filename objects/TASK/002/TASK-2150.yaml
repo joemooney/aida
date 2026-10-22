@@ -6,17 +6,26 @@ description: |
   aida-cli-lib/src/review_watch.rs:1929-1930 and 1968-1971. Suppose a concurrent watcher supersedes a Reserved attempt after select returns Dispatch but before this watcher records the spawned dispatcher. Two paths then record nothing: an immediate dispatcher exit (mark_unclaimed_exit filters phase == Reserved) and a spawn failure (ensure phase == Reserved returns an error instead). The Superseding attempt is left with no identity, dispatcher or pgid. confirm() then holds the slot as "a review process was being spawned but never recorded", though nothing runs, until an operator runs `aida review watch --release`. It fails closed and is rare, but it holds a capacity slot needlessly. Fix: on those paths, record the attempt as Superseded when the phase is Superseding (the child is provably reaped or was never spawned).
 
   Raised in review of PR-2824: https://github.com/joemooney/aida/pull/2824#issuecomment-6336798246
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-22T08:55:01.158036663Z
-modified_at: 2026-10-22T08:55:01.158036663Z
+modified_at: 2026-10-22T09:03:04.333598337Z
 req_type: Task
 tags:
 - from-review:PR-2824
 - review-watch
 - severity:minor
+history:
+- id: 01a162d9-828d-7761-a815-48ac6714285e
+  author: joe
+  timestamp: 2026-10-22T09:03:04.333590667Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 2363425f6ba6720195c8b346377af25e381c5d0b
   branch: pr-2824
