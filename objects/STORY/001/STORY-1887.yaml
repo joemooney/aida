@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T15:03:49.211949451Z
-modified_at: 2026-10-22T10:12:30.819903530Z
+modified_at: 2026-10-22T10:12:38.803737682Z
 req_type: Story
 tags:
 - mandate
@@ -22,6 +22,10 @@ relationships:
 - rel_type: Supersedes
   target_id: 01a1630c-2837-7ed3-9c35-5c50d488db8f
   created_at: 2026-10-22T10:12:30.819899090Z
+  created_by: joe
+- rel_type: Supersedes
+  target_id: 01a1630c-3c78-7141-aeed-9006ce57d2fa
+  created_at: 2026-10-22T10:12:38.803733728Z
   created_by: joe
 comments:
 - id: 01a16149-cba4-71c0-95e3-7916f6dabfe0
@@ -132,6 +136,11 @@ history:
 - id: 01a16319-1b7b-7f71-83bb-88cee28aa12b
   author: joe
   timestamp: 2026-10-22T10:12:32.251875288Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
+- id: 01a16319-3af4-71a0-8cb9-6ff87cb2fbdd
+  author: joe
+  timestamp: 2026-10-22T10:12:40.308705337Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
   changes: []
 filed_at:
