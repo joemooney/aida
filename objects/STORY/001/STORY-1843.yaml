@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-22T15:48:43.007711167Z
+modified_at: 2026-10-22T17:05:33.306479884Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -331,6 +331,11 @@ comments:
   created_at: 2026-10-22T15:48:43.007711167Z
   modified_at: 2026-10-22T15:48:43.007711167Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a16493-3c7a-7493-b2b4-e485aa983782
+  author: ai:codex:joe
+  content: 'PR-2808 final round-2 rework on reviewed base d82c615aff: implemented exactly five findings in f478609a65. Unknown liveness eligibility uses named 24h UNKNOWN_READER_TTL_SECONDS; stale/missing-heartbeat records do not count, with no record rewrite/delete. Group notices cap first five names plus and K more and separate live/unverified labels. Operator hint resolves through people catalog (preferring resolvable AIDA_USER), omits absent recipient, and qualifies person addresses; docs updated. Mention-drop uses own hint without comment-add advice. Fail-first run /tmp/story1843-pr1-round2-red.log: five expected failures and one existing pass. Final targeted resolver run: 20 passed including seven new round2 tests (stale legacy/foreign role+name refusal, fresh delivery notice, missing-heartbeat preservation, 20-reader cap, mixed labels, resolvable hints, mention hint). make check-ci-fast exit 0: 34 gates. make test-touched exit 0: 791 selected unit tests plus all 43 TASK-1717 and TASK-1955. Logs /tmp/story1843-pr1-round2-targeted.log, /tmp/story1843-pr1-f478609a65-fast.log, /tmp/story1843-pr1-f478609a65-touched.log. Only four files changed; integration fixture heartbeat uses current time for TTL eligibility. All owned validation jobs finished; normal push next. No PR merge/ship/approval/hold clearance or new PR.'
+  created_at: 2026-10-22T17:05:33.306479884Z
+  modified_at: 2026-10-22T17:05:33.306479884Z
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
   author: joe
