@@ -1,4 +1,5 @@
-//! Review discovery and dispatch; supersession and readiness are later slices.
+//! Review discovery, dispatch and head-change supersede; readiness is a
+//! later slice.
 // trace:TASK-1945 trace:TASK-1993 | ai:codex
 use anyhow::{Context, Result};
 use clap::Args;
@@ -14,6 +15,10 @@ use std::process::{Child, Command, Stdio};
 
 #[path = "review_watch_forge.rs"]
 mod forge;
+// Every process signal lives here, behind pidfd identity checks.
+// trace:TASK-1945 | ai:claude
+#[path = "review_watch_signal.rs"]
+mod signal;
 
 #[derive(Args, Debug)]
 pub struct ReviewWatchArgs {
@@ -52,6 +57,13 @@ const CLAIM_DEADLINE: std::time::Duration = if cfg!(test) {
 const DIAGNOSTIC_LIMIT: usize = 512;
 // Blocking rounds retained per change: the two-round cap.
 const RETAINED_ROUNDS: usize = 2;
+// How long a superseded review has to exit after its terminate request
+// before it is killed. Tests shorten it. trace:TASK-1945 | ai:claude
+const SUPERSEDE_GRACE: std::time::Duration = if cfg!(test) {
+    std::time::Duration::from_millis(300)
+} else {
+    std::time::Duration::from_secs(20)
+};
 
 /// Marks a failure of the whole watcher state (missing, corrupt, unsafe), the
 /// only error that stops a continuous watcher; per-change errors are logged.
@@ -132,6 +144,29 @@ enum Phase {
     // frees capacity and lets a later head dispatch, but never relaunches
     // this head. trace:TASK-1993 | ai:claude
     Exited,
+    // A newer head made this review obsolete: its processes are being
+    // stopped. Still active, so it keeps its capacity slot, and no new
+    // descendant may be recorded. trace:TASK-1945 | ai:claude
+    Superseding,
+    // Every process of the superseded review is confirmed gone. Terminal.
+    Superseded,
+}
+
+/// The durable supersede receipt: written before any signal, and each signal
+/// is claimed here (under the per-change lock) before it is sent, so two
+/// watchers never signal twice.
+// trace:TASK-1945 | ai:claude
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+struct Supersede {
+    by: String,
+    requested_at: chrono::DateTime<chrono::Utc>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    term_at: Option<chrono::DateTime<chrono::Utc>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    kill_at: Option<chrono::DateTime<chrono::Utc>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    diagnostic: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -163,8 +198,34 @@ struct Attempt {
     reviewer_spawning: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     reviewer: Option<Identity>,
+    // The dispatcher's process group (it leads it), recorded by the watcher
+    // that spawned it. Absent in older state: no group sweep then.
+    // trace:TASK-1945 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pgid: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    supersede: Option<Supersede>,
 }
 impl Attempt {
+    /// Recorded processes, leaf first: reviewer, queue work, dispatcher.
+    // trace:TASK-1945 | ai:claude
+    fn recorded(&self) -> Vec<&Identity> {
+        let mut out: Vec<&Identity> = Vec::new();
+        for process in [
+            &self.reviewer,
+            &self.worker,
+            &self.identity,
+            &self.dispatcher,
+        ]
+        .into_iter()
+        .flatten()
+        {
+            if !out.contains(&process) {
+                out.push(process);
+            }
+        }
+        out
+    }
     /// Queue work and the reviewer it launched are both provably gone, or
     /// were never started. A process marked spawning but never recorded
     /// counts as possibly alive.
@@ -642,7 +703,7 @@ impl Store {
                 entry
                     .attempts
                     .iter()
-                    .any(|a| a.token == attempt.token && a.head == attempt.head && active(a)),
+                    .any(|a| a.token == attempt.token && a.head == attempt.head && admitted(a)),
                 "review reservation changed before queue work"
             );
             let history = self.history(key)?;
@@ -726,6 +787,18 @@ impl Store {
                 .get_mut(key)
                 .and_then(|e| e.attempts.iter_mut().find(|a| a.token == token))
                 .context("unknown review-watch reservation; no review started")?;
+            // A superseded dispatcher's own outcome never frees the slot: only
+            // confirmation that every process is gone does. Keep the reason.
+            // trace:TASK-1945 | ai:claude
+            if attempt.phase == Phase::Superseding
+                && phase != Phase::Running
+                && attempt.identity.as_ref() == Some(&me)
+            {
+                if let Some(d) = diagnostic {
+                    attempt.diagnostic = Some(bounded_diagnostic(&d));
+                }
+                return Ok(attempt.clone());
+            }
             if phase == Phase::Running {
                 anyhow::ensure!(
                     attempt.phase == Phase::Reserved && attempt.identity.is_none(),
@@ -814,6 +887,22 @@ fn valid_recording_key(key: &crate::review_verdict::RecordingKey) -> bool {
             != crate::review_verdict::VerdictKind::Unknown
 }
 
+impl State {
+    /// (change, token) of every superseding attempt.
+    // trace:TASK-1945 | ai:claude
+    fn superseding(&self) -> Vec<(String, String)> {
+        self.entries
+            .iter()
+            .flat_map(|(key, e)| {
+                e.attempts
+                    .iter()
+                    .filter(|a| a.phase == Phase::Superseding)
+                    .map(move |a| (key.clone(), a.token.clone()))
+            })
+            .collect()
+    }
+}
+
 fn validate_state(state: &State, repository: &str) -> Result<()> {
     anyhow::ensure!(
         state.version == 1
@@ -855,6 +944,15 @@ fn validate_state(state: &State, repository: &str) -> Result<()> {
                     // An unclaimed reservation whose dispatcher died exits
                     // without a receipt identity. trace:TASK-1993 | ai:claude
                     Phase::Failed | Phase::Exited => true,
+                    // Either an unclaimed or a claimed review can be
+                    // superseded; the receipt is what matters.
+                    // trace:TASK-1945 | ai:claude
+                    Phase::Superseding | Phase::Superseded =>
+                        attempt.supersede.as_ref().is_some_and(|s| valid_sha(&s.by)
+                            && s.by != attempt.head
+                            && s.diagnostic
+                                .as_ref()
+                                .is_none_or(|d| d.len() <= DIAGNOSTIC_LIMIT)),
                 },
                 "invalid review-watch process receipt"
             );
@@ -902,7 +1000,13 @@ fn parse_key(key: &str) -> Result<u64> {
     );
     Ok(id)
 }
+/// Holds a capacity slot: admitted, or superseded but not yet confirmed gone.
 fn active(attempt: &Attempt) -> bool {
+    admitted(attempt) || attempt.phase == Phase::Superseding
+}
+/// May still start or carry the review of its own head.
+// trace:TASK-1945 | ai:claude
+fn admitted(attempt: &Attempt) -> bool {
     matches!(attempt.phase, Phase::Reserved | Phase::Running)
 }
 
@@ -967,16 +1071,19 @@ fn select(
             // trace:TASK-1993 | ai:claude
             return Ok(Action::Skip(format!("review of this head exited without completing ({}); not relaunched: push a new head, route it to the advisor, or retry with `aida review watch --release {key}`", attempt.diagnostic.as_deref().unwrap_or("no diagnostic"))));
         }
-        if let Some(attempt) = entry.attempts.iter().find(|a| a.head == change.head && a.phase != Phase::Failed) {
+        // A superseded review of this head never finished: it may be reviewed
+        // again. trace:TASK-1945 | ai:claude
+        if let Some(attempt) = entry.attempts.iter().find(|a| a.head == change.head && !matches!(a.phase, Phase::Failed | Phase::Superseded)) {
             return Ok(Action::Skip(format!("head already reserved ({:?}); inspect .aida/review-watch/state.json and `aida session leases --all` for unfinished attempts", attempt.phase)));
         }
         if entry.attempts.iter().any(active) {
-            return Ok(Action::Skip("prior head still active or ambiguous; S1 waits without signalling processes".into()));
+            // trace:TASK-1945 | ai:claude
+            return Ok(Action::Skip(format!("a review of an earlier head still holds this change ({holders}); it is superseded once the change is seen at a new head")));
         }
         if history.contains(&change.head) { return Ok(Action::Skip("head already has a recorded review".into())); }
         if history.blocking() >= 2 { return Ok(Action::Skip("two-round review cap reached; route further work to the advisor".into())); }
         if total >= usize::from(max) { return Ok(Action::Skip(format!("global reviewer capacity ({max}) is held by {holders}; a running review frees its slot when it exits, and an ambiguous one (dispatcher lost) stays reserved until an operator confirms it ended: check its log in .aida/review-watch/logs/ and `aida session leases --all`"))); }
-        let attempt = Attempt { head: change.head.clone(), token: uuid::Uuid::new_v4().to_string(), vendor, phase: Phase::Reserved, identity: None, diagnostic: None, dispatcher: None, spawning: false, worker: None, reviewer_spawning: false, reviewer: None };
+        let attempt = Attempt { head: change.head.clone(), token: uuid::Uuid::new_v4().to_string(), vendor, phase: Phase::Reserved, identity: None, diagnostic: None, dispatcher: None, spawning: false, worker: None, reviewer_spawning: false, reviewer: None, pgid: None, supersede: None };
         // Nothing is active here, so earlier terminal attempts are history only:
         // durable verdicts carry the rounds. trace:TASK-1993 | ai:claude
         entry.attempts.clear();
@@ -1045,7 +1152,10 @@ fn capacity_holders(state: &State) -> String {
                 &a.head[..12],
                 a.phase,
                 a.token,
-                if a.phase == Phase::Running && a.unrecorded_descendant() {
+                if a.phase == Phase::Superseding {
+                    // trace:TASK-1945 | ai:claude
+                    format!("; {}", hold_cause(key, a))
+                } else if a.phase == Phase::Running && a.unrecorded_descendant() {
                     // trace:TASK-1993 | ai:claude
                     format!("; ambiguous: its queue-work or reviewer process was never recorded, so it is held until an operator confirms no `queue work {key}` or reviewer process for it remains and then runs `aida review watch --release {key}`")
                 } else {
@@ -1055,6 +1165,220 @@ fn capacity_holders(state: &State) -> String {
         })
         .collect();
     holders.join(", ")
+}
+
+/// Why a superseding attempt still holds its slot.
+// trace:TASK-1945 | ai:claude
+fn hold_cause(key: &str, attempt: &Attempt) -> String {
+    let receipt = attempt.supersede.as_ref();
+    format!(
+        "superseded for head {}, held until its processes are confirmed gone: {}; if this persists, stop them and run `aida review watch --release {key}`",
+        receipt.map_or("unknown", |s| s.by.get(..12).unwrap_or(&s.by)),
+        receipt
+            .and_then(|s| s.diagnostic.as_deref())
+            .unwrap_or("waiting for them to exit")
+    )
+}
+
+/// Each change whose slot a superseded review still holds, with the cause,
+/// read without creating or changing any watcher state (`aida ps`).
+// trace:TASK-1945 | ai:claude
+pub(crate) fn held_slots(root: &Path) -> Vec<(String, String)> {
+    let root = forge::main_root(root).unwrap_or_else(|_| root.to_path_buf());
+    let state = (|| {
+        let runtime = Directory::existing(&root.join(".aida")).ok()??;
+        let dir = Directory::existing(&runtime.path().join("review-watch")).ok()??;
+        serde_json::from_slice::<State>(&dir.read(STATE).ok()??).ok()
+    })();
+    let Some(state) = state else {
+        return Vec::new();
+    };
+    state
+        .entries
+        .iter()
+        .flat_map(|(key, entry)| {
+            entry
+                .attempts
+                .iter()
+                .filter(|a| a.phase == Phase::Superseding)
+                .map(move |a| (key.clone(), hold_cause(key, a)))
+        })
+        .collect()
+}
+
+/// Supersede the change's active attempt at an obsolete head. `Some(cause)`
+/// while that attempt still holds the change: no head of it is admitted
+/// until every recorded process is confirmed gone. `reread` is one
+/// authoritative forge read of the head, taken with no lock held before the
+/// intent is written. Signals are claimed under the per-change lock and sent
+/// outside it; the watcher never blocks on an exit.
+// trace:TASK-1945 | ai:claude
+fn supersede(
+    store: &Store,
+    change: &forge::Change,
+    reread: impl FnOnce() -> Result<String>,
+) -> Result<Option<String>> {
+    let key = change.key();
+    let head = change.head.as_str();
+    // A supersede in progress is driven to the end even if the change has
+    // moved back to that attempt's head.
+    let found = store.transaction(&key, |state| {
+        Ok(state.entries.get(&key).and_then(|e| {
+            e.attempts
+                .iter()
+                .find(|a| active(a) && (a.head != head || a.phase == Phase::Superseding))
+                .map(|a| (a.token.clone(), a.phase.clone()))
+        }))
+    })?;
+    let Some((token, phase)) = found else {
+        return Ok(None);
+    };
+    if phase != Phase::Superseding {
+        match reread() {
+            Ok(current) if current == head => {}
+            Ok(_) => {
+                return Ok(Some(
+                    "head moved again before the earlier review could be superseded; retrying next pass".into(),
+                ))
+            }
+            Err(error) => {
+                return Ok(Some(format!(
+                    "head re-read refused; the earlier review is not superseded: {error:#}"
+                )))
+            }
+        }
+        let phase = store.transaction(&key, |state| {
+            let Some(a) = attempt_mut(state, &key, &token) else {
+                return Ok(None);
+            };
+            if admitted(a) && a.head != head {
+                a.phase = Phase::Superseding;
+                a.supersede = Some(Supersede {
+                    by: head.to_string(),
+                    requested_at: chrono::Utc::now(),
+                    term_at: None,
+                    kill_at: None,
+                    diagnostic: None,
+                });
+            }
+            Ok(Some(a.phase.clone()))
+        })?;
+        if phase != Some(Phase::Superseding) {
+            // It ended on its own meanwhile.
+            return Ok(None);
+        }
+        eprintln!("{key}: superseding the review of an earlier head for {head}");
+    }
+    advance(store, &key, &token)
+}
+
+/// One step of a superseding attempt: confirm it gone, or claim and send its
+/// next signal. `Some(cause)` while it still holds its slot.
+// trace:TASK-1945 | ai:claude
+fn advance(store: &Store, key: &str, token: &str) -> Result<Option<String>> {
+    let key = key.to_string();
+    // Confirm, or claim the next signal; never signal under the lock.
+    let claim = store.transaction(&key, |state| {
+        let Some(a) = attempt_mut(state, &key, token).filter(|a| a.phase == Phase::Superseding)
+        else {
+            return Ok(None);
+        };
+        let cause = match confirm(a) {
+            Ok(()) => {
+                a.phase = Phase::Superseded;
+                return Ok(None);
+            }
+            Err(cause) => cause,
+        };
+        let receipt = a
+            .supersede
+            .as_mut()
+            .context("superseding attempt has no receipt")?;
+        let now = chrono::Utc::now();
+        let elapsed = |at: chrono::DateTime<chrono::Utc>| {
+            (now - at).to_std().unwrap_or_default() >= SUPERSEDE_GRACE
+        };
+        let killed = receipt.kill_at.is_some_and(elapsed);
+        let signal = match (receipt.term_at, receipt.kill_at) {
+            (None, _) => {
+                receipt.term_at = Some(now);
+                Some(signal::Signal::Term)
+            }
+            (Some(term), None) if elapsed(term) => {
+                receipt.kill_at = Some(now);
+                Some(signal::Signal::Kill)
+            }
+            _ => None,
+        };
+        Ok(Some((signal, cause, killed, a.clone())))
+    })?;
+    let Some((signal, cause, killed, attempt)) = claim else {
+        return Ok(None);
+    };
+    // Every holding pass rebuilds the cause from the processes running now,
+    // so it never names one that has since exited.
+    let anchor = attempt.dispatcher.as_ref().or(attempt.identity.as_ref());
+    let held = signal::signal_attempt(&attempt.recorded(), attempt.pgid, anchor, signal);
+    let mut diagnostic = std::iter::once(cause)
+        .chain(held)
+        .collect::<Vec<_>>()
+        .join("; ");
+    if killed {
+        diagnostic.push_str(" after SIGKILL and its grace");
+    }
+    let diagnostic = bounded_diagnostic(&diagnostic);
+    store.transaction(&key, |state| {
+        if let Some(receipt) = attempt_mut(state, &key, token)
+            .filter(|a| a.phase == Phase::Superseding)
+            .and_then(|a| a.supersede.as_mut())
+        {
+            receipt.diagnostic = Some(diagnostic.clone());
+        }
+        Ok(())
+    })?;
+    let state = store.load()?;
+    Ok(state
+        .entries
+        .get(&key)
+        .and_then(|e| e.attempts.iter().find(|a| a.token == token))
+        .filter(|a| a.phase == Phase::Superseding)
+        .map(|a| hold_cause(&key, a)))
+}
+
+fn attempt_mut<'a>(state: &'a mut State, key: &str, token: &str) -> Option<&'a mut Attempt> {
+    state
+        .entries
+        .get_mut(key)
+        .and_then(|e| e.attempts.iter_mut().find(|a| a.token == token))
+}
+
+/// Every process of a superseded attempt is provably gone: each recorded
+/// identity, every member of its recorded group, and any process that was
+/// being spawned but never recorded.
+// trace:TASK-1945 | ai:claude
+fn confirm(attempt: &Attempt) -> std::result::Result<(), String> {
+    if !cfg!(target_os = "linux") {
+        return Err(signal::UNSUPPORTED.into());
+    }
+    if let Some(process) = attempt.recorded().into_iter().find(|p| p.alive()) {
+        return Err(format!("recorded process {} is still running", process.pid));
+    }
+    let unrecorded = attempt.unrecorded_descendant()
+        || (attempt.identity.is_none() && attempt.dispatcher.is_none());
+    match attempt.pgid {
+        Some(pgid) => {
+            if let Some(pid) = signal::group_members(pgid)?.first() {
+                return Err(format!(
+                    "process {pid} in the review's process group {pgid} is still running"
+                ));
+            }
+        }
+        None if unrecorded => {
+            return Err("a review process was being spawned but never recorded, and no process group was recorded to prove it gone".into())
+        }
+        None => {}
+    }
+    Ok(())
 }
 
 fn stale_message(
@@ -1346,7 +1670,12 @@ pub(crate) fn reviewer_launch_context(root: &Path, id: u64) -> Result<bool> {
     let attempt = state
         .entries
         .get(&key)
-        .and_then(|entry| entry.attempts.iter().find(|a| active(a) && a.head == head))
+        .and_then(|entry| {
+            entry
+                .attempts
+                .iter()
+                .find(|a| admitted(a) && a.head == head)
+        })
         .context("missing watcher reservation at reviewer launch")?;
     store.round_for(&key, attempt)?;
     LAUNCH.with(|launch| {
@@ -1444,6 +1773,21 @@ pub(crate) fn run(args: &ReviewWatchArgs) -> Result<()> {
             Err(error) if is_busy(&error) => eprintln!("review-watch prune deferred: busy"),
             Err(error) => return Err(error),
         }
+        // A change that closed or went draft mid-supersede is no longer
+        // discovered; its superseding attempt still has to finish.
+        // trace:TASK-1945 | ai:claude
+        for (key, token) in store.load()?.superseding() {
+            if open.contains(&key) {
+                continue;
+            }
+            match advance(&store, &key, &token) {
+                Ok(Some(cause)) => eprintln!("{key}: {cause}"),
+                Ok(None) => {}
+                Err(error) if is_busy(&error) => eprintln!("{key}: watcher admission is busy"),
+                Err(error) if stops_watcher(&error, false) => return Err(error),
+                Err(error) => eprintln!("{key}: refused: {error:#}"),
+            }
+        }
         for change in changes {
             let key = change.key();
             match watch_change(&root, &repo, &store, args, &mut children, change) {
@@ -1514,6 +1858,12 @@ fn watch_change(
     mut change: forge::Change,
 ) -> Result<()> {
     let key = change.key();
+    // An obsolete head is superseded before anything else, whether or not
+    // the new head is stale or overlapping. trace:TASK-1945 | ai:claude
+    if let Some(reason) = supersede(store, &change, || Ok(repo.change(root, change.id)?.head))? {
+        eprintln!("{key}: {reason}");
+        return Ok(());
+    }
     // trace:TASK-1955 | ai:claude (TASK-2064, TASK-1-411)
     if let Some(reason) = probe_unneeded(store, &change)? {
         eprintln!("{key}: {reason}");
@@ -1570,7 +1920,8 @@ fn watch_change(
                 Ok(mut child) => {
                     // trace:TASK-1993 | ai:claude
                     let exited = child.try_wait().ok().flatten();
-                    let identity = Identity::of(child.id()).ok();
+                    let pid = child.id();
+                    let identity = Identity::of(pid).ok();
                     let token = attempt.token.clone();
                     children.push(Dispatcher {
                         child,
@@ -1582,13 +1933,28 @@ fn watch_change(
                             mark_unclaimed_exit(store, &key, &token, &status.to_string())?
                         }
                         None => store.transaction(&key, |state| {
-                            if let Some(a) = state
+                            let Some(a) = state
                                 .entries
                                 .get_mut(&key)
                                 .and_then(|e| e.attempts.iter_mut().find(|a| a.token == token))
-                                .filter(|a| a.phase == Phase::Reserved && a.identity.is_none())
+                            else {
+                                return Ok(());
+                            };
+                            // A reservation superseded before this record
+                            // still needs its dispatcher pinned.
+                            // trace:TASK-1945 | ai:claude
+                            if matches!(a.phase, Phase::Reserved | Phase::Superseding)
+                                && a.identity.is_none()
                             {
                                 a.dispatcher = identity;
+                            }
+                            // The dispatcher may have claimed first; the group
+                            // it leads is still the one spawned here.
+                            if active(a)
+                                && a.pgid.is_none()
+                                && a.identity.as_ref().is_none_or(|i| i.pid == pid)
+                            {
+                                a.pgid = Some(pid);
                             }
                             Ok(())
                         })?,
@@ -1620,3 +1986,8 @@ fn watch_change(
 #[cfg(test)]
 #[path = "tests/task_1993_review_watch_tests.rs"]
 mod tests;
+
+// Real process fixtures: Linux only. trace:TASK-1945 | ai:claude
+#[cfg(all(test, target_os = "linux"))]
+#[path = "tests/task_1945_review_watch_supersede_tests.rs"]
+mod supersede_tests;

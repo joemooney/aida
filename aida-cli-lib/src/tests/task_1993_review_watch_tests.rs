@@ -1186,6 +1186,8 @@ fn task1993_state_stays_bounded_far_past_one_thousand_changes() {
                             worker: None,
                             reviewer_spawning: false,
                             reviewer: None,
+                            pgid: None,
+                            supersede: None,
                         }],
                         ..Default::default()
                     },
