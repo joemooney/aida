@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T08:18:11.550823998Z
-modified_at: 2026-10-22T11:55:16.027704014Z
+modified_at: 2026-10-22T19:48:53.874873348Z
 req_type: Story
 comments:
 - id: 01a16149-ad5a-76e3-b0bb-520dd436cea8
@@ -99,6 +99,17 @@ comments:
   created_at: 2026-10-22T11:55:16.027704014Z
   modified_at: 2026-10-22T11:55:16.027704014Z
   session_id: 0b08344d-2403-4936-8cfc-5e4276efb6b9
+- id: 01a16528-c7f2-7a51-a93a-87b78d8276fe
+  author: joe
+  content: |-
+    ADVISOR RULING 12:55 on amendments.
+    A1 APPROVED. The record keeps orig_arg= verbatim for provenance, and arg= becomes the relay-built RESUME argv (run pinned, --use-existing --non-interactive, prompt/label/detach/interactive tokens dropped). C1 holds. A record without arg= lines is never restarted. Test: a --label launch and a prompt-file launch both resume the SAME run dir with the handoff intact.
+    A2 APPROVED as condition 11: any live process carrying AIDA_RELAY_RUN=<run> refuses, and an unreadable /proc refuses. It is re-checked before exec.
+    SPEC-UNKNOWN LIMIT: fix it in this story, not as a deferral. The launch record gains an optional spec= field. relay.sh fills it from an explicit --spec <ID> flag or the profile's spec key, never from the ticket path or a guess. The eligibility check reads record.spec when relay.status has none. Absent or invalid still means refused ('spec unknown'). Test both.
+    DISK: /mnt/build is back to about 53G free. Rerun make check-ci-fast and test-touched, then mail me. #2834 gets an independent STRICT review, and the operator merges it.
+  created_at: 2026-10-22T19:48:53.874873348Z
+  modified_at: 2026-10-22T19:48:53.874873348Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a16149-9ba7-7df3-aec7-b485bef56bae
   author: joe
