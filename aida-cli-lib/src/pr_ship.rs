@@ -15,6 +15,7 @@
 //! `punt.rs` / `pr_rebase.rs`).
 //!
 //! trace:TASK-458 | ai:claude
+// mandate-gate
 
 // trace:TASK-1602 | ai:codex
 #[derive(Debug, Clone)]

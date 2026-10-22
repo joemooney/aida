@@ -1,6 +1,7 @@
 //! Session-bound role grants. `AIDA_SESSION_ROLE` is retained for display and
 //! routing only; authorization comes from a validated local grant record.
 // trace:STORY-1473 | ai:codex
+// mandate-gate
 
 use anyhow::{bail, Context, Result};
 use chrono::{DateTime, Duration, Utc};

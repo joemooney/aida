@@ -17,6 +17,7 @@
 //!
 //! This is a separate durable key, not the TTL presence `aida solo` sets.
 // trace:STORY-1655 | ai:claude
+// mandate-gate
 
 use colored::Colorize;
 use std::io::{BufRead, Write};

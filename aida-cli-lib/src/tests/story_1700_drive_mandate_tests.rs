@@ -680,6 +680,7 @@ fn ship_check<'a>(
         hold,
         carry_over: None,
         changed_paths,
+        protected: crate::mandate_gates::ProtectedPaths::floor_ref(),
         ship_gate: None,
         hold_clear_gate: None,
     }
@@ -707,12 +708,21 @@ fn pr_touching_gate_paths_is_gated() {
         let c = ship_check(&state, &policy, &ledger, &hold, Some(&paths));
         assert_eq!(
             crate::mandate::ship_decision(&c),
-            Err(MandateRefusal::TouchesGates { path: path.into() })
+            Err(MandateRefusal::TouchesGates(
+                crate::mandate_gates::GateMatch {
+                    path: path.into(),
+                    entry: path.into(),
+                    source: crate::mandate_gates::PathSource::BuiltIn,
+                }
+            ))
         );
     }
     // pr_cmd.rs is NOT protected as a whole (condition C1).
     assert_eq!(
-        crate::mandate_gates::touches_gates(&["aida-cli-lib/src/pr_cmd.rs".into()]),
+        crate::mandate_gates::touches_gates(
+            &["aida-cli-lib/src/pr_cmd.rs".into()],
+            crate::mandate_gates::ProtectedPaths::floor_ref()
+        ),
         None
     );
     // `ship` listed as a human gate refuses every mandate ship.
@@ -732,7 +742,8 @@ fn pr_touching_gate_paths_is_gated() {
         approved_at_head: true,
         changed_paths: Some(vec![".aida/config.toml".into()]),
     };
-    let LaneDecision::Act(p) = plan_held_pr(&pr) else {
+    let LaneDecision::Act(p) = plan_held_pr(&pr, crate::mandate_gates::ProtectedPaths::floor_ref())
+    else {
         panic!("an approved held PR is a lane")
     };
     assert!(p.forced_gate.unwrap().contains(".aida/config.toml"));
@@ -759,17 +770,24 @@ fn unresolved_changed_paths_refuses() {
         approved_at_head: true,
         changed_paths: None,
     };
-    let LaneDecision::Act(p) = plan_held_pr(&pr) else {
+    let LaneDecision::Act(p) = plan_held_pr(&pr, crate::mandate_gates::ProtectedPaths::floor_ref())
+    else {
         panic!("an approved held PR is a lane")
     };
     assert!(p.forced_gate.unwrap().contains("could not be resolved"));
     // An unapproved or non-releasable hold is not a drive lane at all.
     let mut quiet = pr.clone();
     quiet.approved_at_head = false;
-    assert_eq!(plan_held_pr(&quiet), LaneDecision::None);
+    assert_eq!(
+        plan_held_pr(&quiet, crate::mandate_gates::ProtectedPaths::floor_ref()),
+        LaneDecision::None
+    );
     quiet.approved_at_head = true;
     quiet.releasable = false;
-    assert_eq!(plan_held_pr(&quiet), LaneDecision::None);
+    assert_eq!(
+        plan_held_pr(&quiet, crate::mandate_gates::ProtectedPaths::floor_ref()),
+        LaneDecision::None
+    );
 }
 
 // trace:STORY-1700.ace038d6 | ai:claude
@@ -1468,7 +1486,13 @@ fn a_mandate_cannot_release_a_rework_hold_on_a_pr_touching_the_gates() {
         let c = ship_check(&state, &policy, &ledger, &hold, Some(&paths));
         assert_eq!(
             crate::mandate::rework_release_decision(&c),
-            Err(MandateRefusal::TouchesGates { path: path.into() })
+            Err(MandateRefusal::TouchesGates(
+                crate::mandate_gates::GateMatch {
+                    path: path.into(),
+                    entry: path.into(),
+                    source: crate::mandate_gates::PathSource::BuiltIn,
+                }
+            ))
         );
     }
     let c = ship_check(&state, &policy, &ledger, &hold, None);

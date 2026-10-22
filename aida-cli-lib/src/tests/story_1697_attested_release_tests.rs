@@ -213,6 +213,7 @@ impl Case {
                         hold: &HoldFacts::of(hold.as_ref(), None),
                         carry_over: None,
                         changed_paths: Some(&[]),
+                        protected: crate::mandate_gates::ProtectedPaths::floor_ref(),
                         ship_gate: None,
                         hold_clear_gate: None,
                     })

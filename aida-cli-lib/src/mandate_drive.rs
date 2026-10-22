@@ -19,6 +19,7 @@
 //! restarts a relay (STORY-1706) and never clears a hold. Every decision is
 //! a `MandateDriveAction` row in `.aida/events.jsonl`.
 // trace:STORY-1700 | ai:claude
+// mandate-gate
 
 use crate::fleet_lanes::{Lane, LaneClass, SeatKind};
 use crate::mandate::{Mandate, MandateRefusal, MandateState, Scope};
@@ -488,14 +489,22 @@ pub(crate) struct HeldPr {
 /// the advisor; a PR that touches the gates, or whose files cannot be
 /// resolved, is gated (R1). Anything else is not a drive lane.
 // trace:STORY-1700 | ai:claude
-pub(crate) fn plan_held_pr(pr: &HeldPr) -> LaneDecision {
+// trace:STORY-1888 | ai:claude
+pub(crate) fn plan_held_pr(
+    pr: &HeldPr,
+    protected: &crate::mandate_gates::ProtectedPaths,
+) -> LaneDecision {
     let (true, true, Some(head)) = (pr.releasable, pr.approved_at_head, pr.head.as_ref()) else {
         return LaneDecision::None;
     };
     let forced_gate = match &pr.changed_paths {
         None => Some("the files it changes could not be resolved".to_string()),
-        Some(paths) => crate::mandate_gates::touches_gates(paths)
-            .map(|p| format!("it changes `{p}`, part of the mandate and its gates")),
+        Some(paths) => crate::mandate_gates::touches_gates(paths, protected).map(|hit| {
+            format!(
+                "it changes {}, part of the mandate and its gates",
+                hit.describe()
+            )
+        }),
     };
     LaneDecision::Act(Planned {
         lane: format!("pr:{}", pr.pr),
@@ -1199,7 +1208,8 @@ pub(crate) fn run_tick(
         .iter()
         .map(|l| plan_relay_lane(l, inp.spec_signoff))
         .collect();
-    decisions.extend(inp.held_prs.iter().map(plan_held_pr));
+    let protected = crate::mandate_gates::ProtectedPaths::of(&inp.gates);
+    decisions.extend(inp.held_prs.iter().map(|pr| plan_held_pr(pr, &protected)));
     // Each unowned spec carries its dispatch epoch, so a dead fixer's spec
     // is routed again. trace:TASK-1915 | ai:claude
     decisions.extend(inp.unowned_specs.iter().map(|s| {
@@ -2373,7 +2383,14 @@ pub(crate) fn handle_fleet(action: &crate::cli::FleetAction) -> Result<()> {
                 .iter()
                 .map(|l| plan_relay_lane(l, &signoff))
                 .collect();
-            decisions.extend(collect_held_prs(&root).iter().map(plan_held_pr));
+            let protected = crate::mandate_gates::ProtectedPaths::of(
+                &crate::mandate_gates::load_human_gates(&root),
+            );
+            decisions.extend(
+                collect_held_prs(&root)
+                    .iter()
+                    .map(|pr| plan_held_pr(pr, &protected)),
+            );
             decisions.extend(
                 collect_unowned_specs(&root, &reqs)
                     .iter()

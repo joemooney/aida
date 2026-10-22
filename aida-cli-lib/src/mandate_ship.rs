@@ -5,6 +5,7 @@
 //! PR's changed paths, the human gates, and the ship / hold-clear gate
 //! reasons.
 // trace:STORY-1700 | ai:claude
+// mandate-gate
 
 use crate::pr_cmd::{
     fetch_change_info_via_resolved_forge, normalized_spec_ids, pr_gate_subject,
@@ -362,6 +363,8 @@ pub(crate) fn mandate_ship_cover(
             })
             .flatten(),
         changed_paths: Some(&changed_paths),
+        // trace:STORY-1888 | ai:claude
+        protected: &crate::mandate_gates::ProtectedPaths::of(&gates),
         ship_gate: crate::mandate_gates::gate_reason(&gates, crate::mandate_gates::GateOp::Ship),
         hold_clear_gate: crate::mandate_gates::gate_reason(
             &gates,

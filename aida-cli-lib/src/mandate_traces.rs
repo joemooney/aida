@@ -1,6 +1,7 @@
 //! Committed trace evidence for mandate EXCLUSIONS only. No completion or
 //! author/reviewer authority may be derived from this module.
 // trace:TASK-1790 | ai:codex
+// mandate-gate
 
 use anyhow::{ensure, Context, Result};
 use std::{collections::BTreeSet, path::Path};
