@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T13:11:27.819459305Z
-modified_at: 2026-10-22T01:11:39.674474376Z
+modified_at: 2026-10-22T01:30:50.974111015Z
 req_type: Task
 relationships:
 - rel_type: References
@@ -36,6 +36,38 @@ comments:
   created_at: 2026-10-22T01:11:39.674474376Z
   modified_at: 2026-10-22T01:11:39.674474376Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a1613b-7cde-7f93-88cc-643389ccb326
+  author: joe
+  content: |
+    PLAN v1 (TASK-2067, agy2/antigravity). Covers TASK-2067 plus its folded members BUG-2195 (with TASK-2019, folded into it) and TASK-2068. No code yet.
+
+    1. CLASSIFICATION of the 30 unresolved scoped IDs (audit json; 37 full / 30 scoped pairs)
+    Sources: the live store at the current HEAD across all refs, read in three ways: (a) current objects/ whose spec_id or agreed_id equals the ID; (b) `git log --all` on the ID's canonical object path; (c) one `-G '^(spec_id|agreed_id): <ID>'` walk over objects/ (the production alias walk), with each hit checked against its stem's canonical path. The "alias registry" here means spec_id/agreed_id records. aida-core/src/alias.rs is the people-alias registry and has no spec IDs. Preliminary result from git evidence:
+    - RECORDED ALIAS (17): TASK-123, -1327, -1328, -1331, -1335, -1338, -1363..1366, -140, -141, -142, -152, -153, -176 and CR-8. Each is the agreed_id of a current object (TASK-1-096, -219, -220, -223, -226, -229, -294..297, -115, -117, -118, -128, -129, -152; CR-1-173). The frozen census (session4 all-id-policy-classes.json, Oct 16) classed them "history unreadable: no version of X": it predates the TASK-1800 ruling code that resolves an agreed_id to its stored spec_id path.
+    - DELETED-WITH-HISTORY (10): BUG-1-040, BUG-1-051, BUG-1-069, EPIC-1-001, EPIC-1-052, FR-0259, FR-1-002, FR-1-043, FR-1-044, FR-1-071. Each has 3 to 79 commits at its own canonical path and no current record. All were renumbered: the -G walk shows the spec_id line leaving the old file during a rename (BUG-1-040 -> BUG-26, BUG-1-051 -> BUG-21, BUG-1-069 -> BUG-22, EPIC-1-001 -> EPIC-16, EPIC-1-052 -> EPIC-11, FR-0259 -> FR-237, FR-1-002 -> FR-272, FR-1-043 -> FR-276, FR-1-044 -> FR-279, FR-1-071 -> FR-259). Every hit is at a canonical path, so comment-24 does not fire. The census classed them "unresolved trace/spec id".
+    - DANGLING (3): FR-0042 (the AGENTS.md commit-format example), FR-1-052 (an OVERVIEW.md example) and FR-1-074. They have no current record, no canonical-path history and no -G hit. They are trace-derived only (never named), so the existing ruling drops them unless the exclusion ledger names them.
+    PR3 makes this table definitive by running the production resolution, not shell git. The table goes into docs/testing/task-1800-trace-exclusions.md and onto this spec.
+
+    2. RESOLUTION-PATH FIXES (only where history or an alias exists but is not found; comment-24 kept)
+    First I refactor, with no behaviour change, the per-ID resolve closure in mandate_ship_cover into a function that the cover and the replay share. Then the replay gets a live-resolution mode that judges each scoped ID on the store pinned at the frozen head a5dae7145a. That is a --shared temp clone with exactly one ref, so --all cannot see later versions. It uses the frozen ledger and the same per-spec rules decide() applies. Any ID it still refuses for a RESOLUTION reason (history or alias search Err, "no version") is root-caused and fixed with a test that fails first. Candidates I expect:
+    (a) The -G alias walk and the history name walk depend on the user's diff.renames config. On a rename, the removed `spec_id: OLD` line is parsed against the b/ (new) path. With renames off, the renumbered stem (for example BUG-26 for BUG-1-040) is never found. Fix: pass --find-renames explicitly in both walks, attribute -/+ lines to the a/ and b/ paths, and link both stems of a rename as aliases. Linking only adds versions to judge, so it fails closed. Test: a renumbered-object fixture under diff.renames=false.
+    (b) Any other found-but-unread path the replay reveals, handled the same way.
+    Not changing: named IDs (current or history still required); decide() fail-closed handling; a history hit that cannot be read still refuses (HistoryUnreadable); a hit outside a canonical object path still refuses; dangling still means no current, no history on any ref, no alias hit and no ledger entry.
+
+    3. BUG-2195 (+ TASK-2019): narrow the snapshot fingerprint
+    store_snapshot becomes a struct {HEAD, clean, ref -> tip}, not raw show-ref bytes. collect_on_stable_store treats the attempt as stable iff HEAD is unchanged, the store is still clean, and every changed or added ref brings no new objects/ commit (`git rev-list -1 <changed/added new tips> --not <all old tips> -- objects/` is empty). A deleted ref only removes versions, so the evidence already gathered stays a superset. An unrelated code push or fetch therefore no longer discards the attempt, while a real store write still does. TASK-2019: a dirty-store snapshot becomes a retryable outcome inside the same bound (MANDATE_COLLECT_ATTEMPTS, with a short backoff) rather than an immediate refusal. After the bound it refuses (fail closed). Tests, each failing first: an unrelated ref move is stable; a changed ref adding an objects/ version is unstable; a HEAD move is unstable; a deleted ref is stable; dirty then clean succeeds; dirty for every attempt refuses.
+
+    4. TASK-2068: make the replay guard run in CI
+    Measured: the 50 endpoints change 753 blobs (72.6 MB raw, 5.5 MB packed). The 18 audited cases change 150 blobs (1.4 MB packed). The pinned PR heads aren't in CI's clone, and fetching about 100 depth-1 snapshots per run would be the slow job we want to avoid. Proposal: vendor a git bundle (about 1.4 MB) of synthetic base/head commits for the 18 audited cases. Each commit's tree holds only the changed paths, so diff-tree yields the same paths and blobs. A non-ignored test fetches the bundle into a tempdir (about 1 s) and runs the production ChangedItems collector on the 18 cases. It asserts the scoped digest, the fallback set and the zero-loss gate (no true-touch or unresolved pair lost). A generator script rebuilds the bundle from the pinned SHAs, and `--check` proves byte-identical object IDs. The full 50-case #[ignore] replay stays as the local before/after tool. Alternatives, if you prefer: the 50-case bundle (5.5 MB, adds drift coverage for all 50), or no fixture plus a review-checklist rule requiring replay output for mandate_traces.rs changes. I recommend the 18-case bundle.
+
+    5. PR SPLIT (all STRICT, operator ships)
+    - PR1 `(Refs TASK-2067)`: BUG-2195 + TASK-2019 snapshot narrowing and dirty retry (mandate_traces.rs, mandate_ship.rs, tests).
+    - PR2 `(Refs TASK-2067)`: TASK-2068 CI replay fixture (bundle, generator, CI test, doc).
+    - PR3 `(TASK-2067)`: no-op resolve refactor, live-resolution replay mode, resolution fixes, the classification table, and the before/after case-level refusals on the 50 endpoints (before = frozen classes, 49/50).
+    Gates per PR: targeted cargo test, check-ci-fast, test-touched, check-ci-compile, and make task-1800-replay with POLICY set to the frozen classes.
+    Questions: (i) is the 18-case bundle (about 1.4 MB binary fixture) acceptable for TASK-2068? (ii) Should the replay judge on the store pinned at the frozen head a5dae7145a (my proposal) or on the live store?
+  created_at: 2026-10-22T01:30:50.974111015Z
+  modified_at: 2026-10-22T01:30:50.974111015Z
 history:
 - id: 01a15e96-e99e-7123-b5b2-06413f72154e
   author: joe
