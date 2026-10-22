@@ -1,0 +1,28 @@
+id: 01a162f4-63ab-7171-aacd-c2fbfd5904cf
+spec_id: TASK-2152
+agreed_id: TASK-2152
+title: merge-hold clear claims the label was dropped when the unhold sync failed (marker-existed branch)
+description: |
+  merge_hold_cmd.rs:1119-1125: when the marker existed and sync_label(held=false) returns Err, which now also happens when the new recorded-label probe cannot read the forge, `aida merge-hold clear N` warns but still prints "Cleared merge-hold on PR #N (marker removed, `aida:merge-hold` label dropped)." and exits 0. The forge hold label stays and merge-hold-gate keeps failing. This is the same false-claim family that round 3 fixed for the no-marker branch (unread_label_clear_outcome).
+
+  Raised in review of PR-2822: https://github.com/joemooney/aida/pull/2822#issuecomment-6337514011
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-22T09:32:25.899421348Z
+modified_at: 2026-10-22T09:32:25.899421348Z
+req_type: Task
+tags:
+- from-review:PR-2822
+- merge-hold
+- severity:minor
+filed_at:
+  code_sha: 8c7342e5637db22c32c1da1a803485c5ab2b8c99
+  branch: pr-2822
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 4b75e34688
+  vendor: claude
+  session: 01a162e5a884
+  harness_version: 2.1.308 (Claude Code)

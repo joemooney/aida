@@ -1,0 +1,28 @@
+id: 01a162f4-776c-7872-89fb-b1994fc9042e
+spec_id: TASK-2153
+agreed_id: TASK-2153
+title: Adopted fallback merge-hold markers lose their placement event (TASK-1406 follow-up)
+description: |
+  On the contained-writer fallback in merge_hold.rs write_marker, the marker and its MergeHoldChanged placement event are written to the worktree. BUG-2176 adoption later moves the marker to the primary but not the event. Since unrecorded_marker_removals and lane-liveness now read only the primary's log, a hand-deleted adopted marker is not detected as tampering, and lane-liveness falls back to the marker mtime. The PR-2822 body acknowledges this. It pairs with TASK-2138.
+
+  Raised in review of PR-2822: https://github.com/joemooney/aida/pull/2822#issuecomment-6337514011
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-22T09:32:30.956514307Z
+modified_at: 2026-10-22T09:32:30.956514307Z
+req_type: Task
+tags:
+- from-review:PR-2822
+- merge-hold
+- severity:minor
+filed_at:
+  code_sha: 8c7342e5637db22c32c1da1a803485c5ab2b8c99
+  branch: pr-2822
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 4b75e34688
+  vendor: claude
+  session: 01a162e5a884
+  harness_version: 2.1.308 (Claude Code)
