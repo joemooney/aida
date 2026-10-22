@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-22T14:59:03.483310842Z
+modified_at: 2026-10-22T15:00:09.909090333Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -314,6 +314,11 @@ comments:
   content: 'PR1 merge e2e1f1d85bd82270196df3e896f8c8e9f0ea72d0 joins 1ea24c57de and origin/main 6d3b5d15916c87b0825a381ef5914256c637644e. Conflict resolved by preserving main lease-linked env_name selection plus PID namespace stamp; main new agent-launch fixture adds optional namespace field. Sandbox unknown-liveness delivery, role/person precedence, operator/spec-comment hints and single docs trace preserved. cargo check -p aida-cli-lib --tests --profile agent exit 0; make check-ci-fast exit 0 (34 gates); scoped make test-touched exit 0 (784 unit tests + all 43 TASK-1717 + TASK-1955). Initial uncommitted-merge planner widened to imported main inputs: stopped owned run before tests, committed merge, restarted narrow planner. A subsequent link failure in cached aida-core artifacts was recovered by package-only worktree cargo clean and same-gate rerun. Final logs /tmp/story1843-pr1-main-6d3b5d1-check-tests.log, /tmp/story1843-pr1-main-6d3b5d1-fast.log, /tmp/story1843-pr1-e2e1f1d85b-touched-clean.log. All owned local jobs finished. No PR merge/ship/approval/hold clearance.'
   created_at: 2026-10-22T14:59:03.483310842Z
   modified_at: 2026-10-22T14:59:03.483310842Z
+- id: 01a16420-7035-7901-8e2f-45724850c00c
+  author: ai:codex:joe
+  content: 'Merge e2e1f1d85bd82270196df3e896f8c8e9f0ea72d0 pushed normally. GitHub confirms PR #2808 OPEN and MERGEABLE; exact-head CI registered as run 39800576951 and is in progress. Advisor new-head notification d74b3803-9bdf-4308-8b6f-0bd6b3cc3355 sent with local gate evidence; no READY/green-CI claim. Quiet point reached: all owned compile/test/push/mail/inspection jobs exited; source worktree clean. Existing locks/leases/holds retained; no PR merge/ship/clearance.'
+  created_at: 2026-10-22T15:00:09.909090333Z
+  modified_at: 2026-10-22T15:00:09.909090333Z
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
   author: joe
