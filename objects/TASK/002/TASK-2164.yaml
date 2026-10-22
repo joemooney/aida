@@ -6,17 +6,26 @@ description: |
   mirror_guard::chain_guard_into (aida-cli-lib/src/mirror_guard.rs ~L113) inserts a POSIX-sh chain block right after ANY shebang. With --force on a foreign pre-push hook written in python/node/etc. the result is a syntax error and every push fails. Refuse non-sh shebangs (sh/bash/dash/zsh) or chain via a sh wrapper that execs the original hook.
 
   Raised in review of PR-2821: https://github.com/joemooney/aida/pull/2821#issuecomment-6338485525
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-22T10:25:20.125545148Z
-modified_at: 2026-10-22T10:25:20.125545148Z
+modified_at: 2026-10-22T10:26:26.615471242Z
 req_type: Task
 tags:
 - from-review:PR-2821
 - hooks
 - severity:minor
+history:
+- id: 01a16325-d6b7-7ec2-8ff6-737fc78dd044
+  author: joe
+  timestamp: 2026-10-22T10:26:26.615468086Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: c78d82b2e84cfcfc0b621723ad072e65deabfac0
   branch: pr-2821
