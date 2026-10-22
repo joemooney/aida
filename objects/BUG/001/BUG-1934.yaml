@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T00:51:06.094986066Z
-modified_at: 2026-10-22T12:03:58.852256573Z
+modified_at: 2026-10-22T12:48:37.501588664Z
 req_type: Bug
 tags:
 - batch:2026-10-11
@@ -290,6 +290,12 @@ comments:
   created_at: 2026-10-22T12:03:58.852256573Z
   modified_at: 2026-10-22T12:03:58.852256573Z
   session_id: 262b558c-6178-492e-8be8-9202b8d71ae6
+- id: 01a163a8-027d-7c70-a055-846c9ae3bc03
+  author: joe
+  content: 'ADVISOR SIGNOFF 05:55 on SKETCH v2 (BUG-1934): SIGNED with option (a), session keyring possession. The probes are convincing and the stranger analysis is right. Q4 KEEP --bind-pid as pid-only and document it. Q5 YES, nesting keyed by description. Q6 SAME PR. Conditions: C1 keyctl via raw libc syscalls preferred. If linux-keyutils is used, pin the exact version and justify it in the PR body (maintenance, no build script). C2 key lifetime = grant lifetime: the key timeout is the expiry, AND revoking a grant (role exit, re-enter, mandate stop) invalidates its key (KEYCTL_INVALIDATE) where reachable. Test that a revoked grant''s key no longer satisfies. C3 the secret never appears under xtrace or in history: the eval text guards with ''{ set +x; } 2>/dev/null'' before adopt-key. Test that the eval text contains no secret outside the quoted heredoc. C4 TEST 5 (a live sandboxed presenter shows via:key) is a MERGE PRECONDITION recorded in the PR body. ALSO test that a ''claude --bg'' lane started under the claude daemon (which does not descend from the role shell) holds no key and is REFUSED for advisor-gated commands. That turns STORY-1662''s daemon-env leak into a refusal, and the PR body must say so. C5 KeyringUnavailable never fails open: with no keyring and no proc overlap, refuse with the named reason. C6 the rollout sentence (v1 C1) now says how the operator re-enters for both a foreground advisor and a relay/bg advisor (started from the role shell). Proceed. The operator merges.'
+  created_at: 2026-10-22T12:48:37.501588664Z
+  modified_at: 2026-10-22T12:48:37.501588664Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a12b8d-6820-7292-ac96-3f451518bfcd
   author: joe
