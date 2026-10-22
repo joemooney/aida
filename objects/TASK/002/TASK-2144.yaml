@@ -6,17 +6,26 @@ description: |
   store_snapshot (aida-cli-lib/src/mandate_traces.rs:91-125) records for-each-ref tips plus this worktree's HEAD. The exclusion readers (StoreHistoryBatch, store_history_alias_map) run 'git log --all', which also walks other worktrees' HEADs (I checked this in a fixture). So store_snapshot_stable cannot see an objects/ commit made on a detached HEAD in another worktree during collection, although its doc comment claims no ref change can alter the --all history. This gap already existed (show-ref --head had it too). Fix: add the other worktrees' HEADs (git worktree list --porcelain) to StoreSnapshot.refs.
 
   Raised in review of PR-2825: https://github.com/joemooney/aida/pull/2825#issuecomment-6335244221
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-22T07:27:34.129143277Z
-modified_at: 2026-10-22T07:27:34.129143277Z
+modified_at: 2026-10-22T07:49:06.046325519Z
 req_type: Task
 tags:
 - from-review:PR-2825
 - mandate
 - severity:minor
+history:
+- id: 01a16295-c97e-7862-95d6-9a400a55d78d
+  author: joe
+  timestamp: 2026-10-22T07:49:06.046323143Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: e2abc9dbed4d5ade70eea666abc400e0c361a196
   branch: pr-2825
