@@ -544,9 +544,10 @@ fi
 # two slotted builds on a 6-core host (fix-2725: `make check` took 1h20m).
 # Any assignment (`=`, `+=`, `export`, `env`) is blocked where it can run:
 # - the command with quoted text and heredoc bodies removed (SCAN_COMMAND);
-# - a quoted payload a shell will run: `bash -c "..."`, `sh -c '...'`,
-#   `eval "..."`, or a command substitution (`$(...)`, backticks);
-# - anywhere, when the command feeds a shell on stdin (`bash <<EOF`, `| sh`).
+# - anywhere, when the command runs an unquoted shell or eval (`bash -c
+#   "..."`, `sh -c '...'`, `eval "..."`, `bash <<EOF`, `| sh`);
+# - inside a command or process substitution (`$(...)`, backticks, `<(...)`);
+# - a quoted assignment word after env/export/declare/typeset/local/readonly.
 # Quoted text nothing executes is prose, not an assignment (TASK-1643): an
 # `rg`/`grep` pattern, a `git commit -m` message, an `aida comment add` or
 # mailbox body. Unsetting it (`env -u`, `unset`) has no `=` and stays allowed.
@@ -557,21 +558,26 @@ fi
 NO_SLOT_SET='AIDA_CARGO_NO_SLOT\+?='
 # A shell by name or by path (`bash`, `/bin/bash`, `/usr/bin/env bash`).
 NO_SLOT_SHELL='(^|[^A-Za-z0-9_.-])([^[:space:]'"'"'"]*/)?(bash|sh|zsh|dash|ksh)'
+NO_SLOT_WORD_END='([^A-Za-z0-9_]|$)'
 no_slot_set() {
     printf '%s' "$SCAN_COMMAND" | grep -qE "(^|[^A-Za-z0-9_])$NO_SLOT_SET" && return 0
-    # A quoted payload counts only when the shell (or eval) that runs it is
-    # itself unquoted: a shell named inside prose runs nothing (TASK-2123).
-    if printf '%s' "$SCAN_COMMAND" | grep -qE "$NO_SLOT_SHELL([^A-Za-z0-9_]|\$)|(^|[^A-Za-z0-9_])eval([^A-Za-z0-9_]|\$)"; then
-        printf '%s' "$COMMAND" | grep -qE \
-            "($NO_SLOT_SHELL|(^|[^A-Za-z0-9_])eval)([[:space:]]+[^;&|]*)?[^A-Za-z0-9_]$NO_SLOT_SET" \
-            && return 0
-    fi
-    printf '%s' "$COMMAND" | grep -qE "(\\\$\\(|\`)[^)\`]*$NO_SLOT_SET" && return 0
-    # A shell fed on stdin, judged on the unquoted, heredoc-free text so a
-    # heredoc body or a quoted line ending in a shell name is not one.
+    # An unquoted shell or eval runs quoted text (`-c` payloads, `eval`
+    # strings, heredocs or pipes fed to it), separators inside it included,
+    # so the whole command is scanned. A shell named only inside quoted prose
+    # runs nothing (TASK-2123).
     if printf '%s' "$SCAN_COMMAND" | grep -qE \
-        "$NO_SLOT_SHELL([[:space:]]+-[A-Za-z]+)*[[:space:]]*(<|\$)|\\|[[:space:]]*([^[:space:]]*/)?(env[[:space:]]+)?(bash|sh|zsh|dash|ksh)([^A-Za-z0-9_]|\$)"; then
+        "$NO_SLOT_SHELL$NO_SLOT_WORD_END|(^|[^A-Za-z0-9_])eval$NO_SLOT_WORD_END"; then
         printf '%s' "$COMMAND" | grep -qE "(^|[^A-Za-z0-9_])$NO_SLOT_SET" && return 0
+    fi
+    # Command and process substitutions run even inside double quotes.
+    printf '%s' "$COMMAND" | grep -qE "(\\\$\\(|<\\(|>\\(|\`)[^)\`]*$NO_SLOT_SET" && return 0
+    # A quoted argument to an unquoted env/export/declare/typeset/local/
+    # readonly is still an assignment word (`env "X=1"`, `export 'X=1'`).
+    NO_SLOT_ASSIGNER='(env|export|declare|typeset|local|readonly)'
+    if printf '%s' "$SCAN_COMMAND" | grep -qE "(^|[^A-Za-z0-9_])$NO_SLOT_ASSIGNER$NO_SLOT_WORD_END"; then
+        printf '%s' "$COMMAND" | grep -qE \
+            "(^|[^A-Za-z0-9_])$NO_SLOT_ASSIGNER([[:space:]]+[^[:space:];&|]+)*[[:space:]]+['\"]$NO_SLOT_SET" \
+            && return 0
     fi
     return 1
 }

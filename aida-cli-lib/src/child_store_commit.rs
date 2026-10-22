@@ -464,6 +464,36 @@ mod tests {
             "the child's other write is committed: {}",
             porcelain(&store)
         );
+        let head = aida_core::git_ops::host_git_command(&store)
+            .args(["ls-tree", "-r", "--name-only", "HEAD"])
+            .output()
+            .unwrap();
+        let head = String::from_utf8(head.stdout).unwrap();
+        assert!(head.contains("objects/new.yaml"), "{head}");
+        assert!(
+            !head.contains("objects/old.yaml"),
+            "the rename's source deletion is committed: {head}"
+        );
+        assert!(!head.contains("objects/staged.yaml"), "{head}");
+    }
+
+    /// An unborn store HEAD has no paths; the index alone decides.
+    // trace:TASK-1952 | trace:TASK-2126 | ai:claude
+    #[test]
+    fn task_2126_known_to_git_on_an_unborn_store() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = tmp.path().join(".aida-store");
+        std::fs::create_dir_all(store.join("objects")).unwrap();
+        aida_core::git_ops::init(&store).unwrap();
+        std::fs::write(store.join("objects/a.yaml"), "a: 1\n").unwrap();
+        git(&store, &["add", "objects/a.yaml"]);
+        let paths = vec![
+            "objects/a.yaml".to_string(),
+            "objects/gone.yaml".to_string(),
+        ];
+        let known = known_to_git(&store, &paths).expect("unborn HEAD is not an error");
+        assert!(known.contains("objects/a.yaml"));
+        assert!(!known.contains("objects/gone.yaml"));
     }
 
     // trace:BUG-2180 trace:BUG-2185 | ai:claude
