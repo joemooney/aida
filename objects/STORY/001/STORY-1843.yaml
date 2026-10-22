@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-22T17:05:33.306479884Z
+modified_at: 2026-10-22T17:06:23.607875055Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -336,6 +336,11 @@ comments:
   content: 'PR-2808 final round-2 rework on reviewed base d82c615aff: implemented exactly five findings in f478609a65. Unknown liveness eligibility uses named 24h UNKNOWN_READER_TTL_SECONDS; stale/missing-heartbeat records do not count, with no record rewrite/delete. Group notices cap first five names plus and K more and separate live/unverified labels. Operator hint resolves through people catalog (preferring resolvable AIDA_USER), omits absent recipient, and qualifies person addresses; docs updated. Mention-drop uses own hint without comment-add advice. Fail-first run /tmp/story1843-pr1-round2-red.log: five expected failures and one existing pass. Final targeted resolver run: 20 passed including seven new round2 tests (stale legacy/foreign role+name refusal, fresh delivery notice, missing-heartbeat preservation, 20-reader cap, mixed labels, resolvable hints, mention hint). make check-ci-fast exit 0: 34 gates. make test-touched exit 0: 791 selected unit tests plus all 43 TASK-1717 and TASK-1955. Logs /tmp/story1843-pr1-round2-targeted.log, /tmp/story1843-pr1-f478609a65-fast.log, /tmp/story1843-pr1-f478609a65-touched.log. Only four files changed; integration fixture heartbeat uses current time for TTL eligibility. All owned validation jobs finished; normal push next. No PR merge/ship/approval/hold clearance or new PR.'
   created_at: 2026-10-22T17:05:33.306479884Z
   modified_at: 2026-10-22T17:05:33.306479884Z
+- id: 01a16494-00f7-7db1-a92f-e1a7dc76b6d8
+  author: ai:codex:joe
+  content: 'Final round-2 commit f478609a65ae6584da992ea0e100b6ba387db16e pushed normally to existing PR #2808 / codex/story-1843-routing. GitHub confirms exact head OPEN; seven CI lanes are in progress, separate merge-hold-gate remains failed under the retained hold. No CI-green/approval claim. Advisor head/evidence notification sent as 9ff3e7f4-1c67-4727-9d5e-ce2ac5c09970. Quiet point reached: all owned tests, push, mail and inspection commands finished; source clean. Worktree locks/leases/holds preserved. No merge, ship, approval or new PR.'
+  created_at: 2026-10-22T17:06:23.607875055Z
+  modified_at: 2026-10-22T17:06:23.607875055Z
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
   author: joe
