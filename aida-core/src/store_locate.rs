@@ -281,16 +281,57 @@ fn detect_distributed_store_from_with_roots(
     start: &Path,
     temp_roots: &[PathBuf],
 ) -> Option<PathBuf> {
+    locate_distributed_store_from_with_roots(start, temp_roots).ok()
+}
+
+/// Why [`locate_distributed_store_from`] found no store, from the same walk
+/// that resolves one: the nearest config that named store directories (none
+/// of which resolved, at the config's directory or the main worktree), else
+/// the nearest config that names none, else where the walk stopped.
+// trace:TASK-2072, TASK-2055 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StoreMiss {
+    /// No `.aida/config.toml` exists at or above the start directory.
+    NoConfig,
+    /// The walk reached a system temp directory before any config.
+    TempRoot { root: PathBuf },
+    /// The nearest config naming a store lists `stores`; none exists.
+    StoreMissing {
+        config: PathBuf,
+        stores: Vec<PathBuf>,
+    },
+    /// The nearest config names no `store_path` at all.
+    NoStorePath { config: PathBuf },
+}
+
+/// [`detect_distributed_store_from`], but on a miss says why. One walk serves
+/// both, so the diagnosis can never disagree with the resolver.
+// trace:TASK-2072, TASK-2055 | ai:claude
+pub fn locate_distributed_store_from(start: &Path) -> Result<PathBuf, StoreMiss> {
+    locate_distributed_store_from_with_roots(start, &real_temp_roots())
+}
+
+// trace:BUG-1598 trace:TASK-2072 | ai:claude
+fn locate_distributed_store_from_with_roots(
+    start: &Path,
+    temp_roots: &[PathBuf],
+) -> Result<PathBuf, StoreMiss> {
     // Canonicalize the root set ONCE, before the loop — not on every
     // ancestor level (`is_in_canonical_roots` below only canonicalizes the
     // per-level `current`, which can't be hoisted out of the loop).
     let canonical_roots = canonicalize_roots(temp_roots);
+    let mut named: Option<StoreMiss> = None;
+    let mut bare: Option<StoreMiss> = None;
     let mut current = start;
-    loop {
+    let stopped = loop {
         // BUG-1598: never walk INTO a temp root and adopt whatever
         // `.aida/config.toml` some unrelated process left sitting there.
         if is_in_canonical_roots(current, &canonical_roots) {
-            return None;
+            break StoreMiss::TempRoot {
+                root: current
+                    .canonicalize()
+                    .unwrap_or_else(|_| current.to_path_buf()),
+            };
         }
         let config_path = current.join(".aida").join("config.toml");
         if let Ok(content) = std::fs::read_to_string(&config_path) {
@@ -300,21 +341,33 @@ fn detect_distributed_store_from_with_roots(
             // Try every candidate in order; the first that resolves wins.
             // An empty value joins to `current` itself, as it always has.
             // trace:BUG-1650 | ai:claude
-            for val in store_path_candidates(&content) {
-                let store_path = current.join(&val);
+            let candidates = store_path_candidates(&content);
+            for val in &candidates {
+                let store_path = current.join(val);
                 if store_path.exists() && store_path.is_dir() {
-                    return Some(store_path);
+                    return Ok(store_path);
                 }
-                if let Some(main_store) = main_worktree_store(current, &val) {
-                    return Some(main_store);
+                if let Some(main_store) = main_worktree_store(current, val) {
+                    return Ok(main_store);
                 }
+            }
+            if candidates.is_empty() {
+                bare.get_or_insert(StoreMiss::NoStorePath {
+                    config: config_path,
+                });
+            } else {
+                named.get_or_insert(StoreMiss::StoreMissing {
+                    stores: candidates.iter().map(|val| current.join(val)).collect(),
+                    config: config_path,
+                });
             }
         }
         match current.parent() {
             Some(p) => current = p,
-            None => return None,
+            None => break StoreMiss::NoConfig,
         }
-    }
+    };
+    Err(named.or(bare).unwrap_or(stopped))
 }
 
 /// The `store_path` candidates in a `.aida/config.toml` body, in the order a
@@ -860,6 +913,69 @@ mod tests {
         assert_eq!(
             detect_distributed_store_from_with_roots(&proj, &[]),
             Some(proj.join(rel))
+        );
+    }
+
+    /// A miss names every candidate of the nearest config that named a store,
+    /// walking past a config with no `store_path` exactly as the resolver does.
+    // trace:TASK-2072, TASK-2055 | ai:claude
+    #[test]
+    fn task_2072_miss_names_every_candidate_of_the_nearest_naming_config() {
+        let tmp = TempDir::new().unwrap();
+        // Parsed `[deployment].store_path` plus a legacy line elsewhere: two
+        // candidates, neither present.
+        let outer = project(
+            tmp.path(),
+            "outer",
+            "[deployment]\nstore_path = \"one\"\n[other]\nstore_path = \"two\"\n",
+        );
+        // A nested config that names no store: the walk continues past it.
+        let inner = project(
+            &outer,
+            "inner",
+            "[id_format]\npolicy = \"node-aware-only\"\n",
+        );
+        assert_eq!(
+            locate_distributed_store_from_with_roots(&inner, &[]),
+            Err(StoreMiss::StoreMissing {
+                config: outer.join(".aida/config.toml"),
+                stores: vec![outer.join("one"), outer.join("two")],
+            })
+        );
+
+        // Once the second candidate exists, the same walk resolves it.
+        std::fs::create_dir_all(outer.join("two")).unwrap();
+        assert_eq!(
+            locate_distributed_store_from_with_roots(&inner, &[]),
+            Ok(outer.join("two"))
+        );
+    }
+
+    // trace:TASK-2072, TASK-2055 | ai:claude
+    #[test]
+    fn task_2072_miss_without_a_naming_config_says_where_the_walk_stopped() {
+        let tmp = TempDir::new().unwrap();
+        let start = tmp.path().join("work");
+        std::fs::create_dir_all(&start).unwrap();
+        let roots = vec![tmp.path().to_path_buf()];
+        assert_eq!(
+            locate_distributed_store_from_with_roots(&start, &roots),
+            Err(StoreMiss::TempRoot {
+                root: tmp.path().canonicalize().unwrap()
+            })
+        );
+
+        // A config naming no store is reported over the stop point.
+        let bare = project(
+            tmp.path(),
+            "work",
+            "[id_format]\npolicy = \"node-aware-only\"\n",
+        );
+        assert_eq!(
+            locate_distributed_store_from_with_roots(&bare, &roots),
+            Err(StoreMiss::NoStorePath {
+                config: bare.join(".aida/config.toml")
+            })
         );
     }
 }
