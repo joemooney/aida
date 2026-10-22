@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T00:51:06.094986066Z
-modified_at: 2026-10-14T01:34:04.981093571Z
+modified_at: 2026-10-22T04:51:35.946435976Z
 req_type: Bug
 tags:
 - batch:2026-10-11
@@ -79,6 +79,77 @@ comments:
   created_at: 2026-10-12T05:47:52.744967530Z
   modified_at: 2026-10-12T05:47:52.744967530Z
   session_id: 3f49f639-6fab-4c96-9189-7758c393f5b6
+- id: 01a161f3-478a-7570-98a7-3a32279d8e5e
+  author: joe
+  content: |-
+    SKETCH v1 (BUG-1934): bind seat grants to the process tree that was issued them
+
+    PROBLEM (verified on main @ 5918695808, after #2485 merged as 0c69debffe)
+    - `SeatGrant.session_id` is a random UUID minted at issue (seat_authority.rs issue_direct / issue_child) and never read. `grant_check_for_at` checks handle, revoked, expiry, `subject == current_user_id()`, roster, and parent. Nothing checks WHO presents the id.
+    - So any process of the same OS user that learns a grant id (from `~/.aida/session-grants/*.json`, a log, or env) can `export AIDA_SESSION_GRANT=<id>` and act as reviewer/advisor. `review record`, advisor-gated edits, commit authority trailers, mandate `advisor_live` and ship all accept it.
+    - At ship, `grant_authorized_at` re-reads the grant (seat, validity window, roster, parent) but has no binding to compare against the attestation's recorder.
+    - #2485's author-overlap check refuses the implementer's OWN session. A third same-user process with no authoring lease still passes.
+    - Current practice that this fix BREAKS (see Q1): the advisor seat is told to pass a renewed grant by hand, `AIDA_SESSION_GRANT=<newest file in ~/.aida/session-grants>`, into a session that does not descend from the operator's shell. That is exactly the presenter this bug forbids.
+
+    DESIGN
+    1. Binding data (seat_authority.rs)
+       - New field `SeatGrant.binding: Vec<String>` (`#[serde(default)]`), using review_authority process tokens (`proc:<pid>@<start>`; `shell` and `proc` are one match class).
+       - The binding is ONLY process tokens. A `session:`/`lease:` token comes from env or a readable lease file. It is as copyable as the grant id, so it never satisfies a binding.
+       - `session_id` stays as a dead field so old records still parse. Not removed in this PR.
+    2. Binding at issue
+       - `issue_direct` (`aida role enter`, human at a TTY): bind the parent of the `aida` process (the shell that eval'd it) plus the POSIX session leader (`getsid`), both as pid@start. A start identity that cannot be read fails issuance with an error. We never mint an unbindable grant.
+       - `issue_child` (launchers): bind the minting `aida` process itself. This covers `exec` launches (same pid and start) and spawn-and-wait launches (the launcher is an ancestor).
+       - Detached launches (setsid/nohup/tmux, e.g. `agent new` bg) do not keep the launcher as an ancestor. After spawn, a new `seat_authority::bind_grant_to_pid(id, pid)` appends the child's `proc:pid@start`, using a read-modify-write under the existing atomic rename. A tmux pane whose pid the launcher cannot learn stays unbound and fails closed with a named reason. The implementation PR lists every `issue_child` / `issue_headless_child` call site (13 today) with its spawn style and binding.
+    3. Presenter check (live, current process only)
+       - New `IdentitySource::presenter_ancestry()` returns every `proc` token of the full ancestor chain plus the `sid:` leader. It is NOT cut at the agent harness the way `recorder_tokens` is, because the issuing shell sits above `claude`.
+       - `grant_check_at` (the env-presented path behind `current_grant`, `grant_check`, `role status`, `doctor`, `review record`, `resolve_commit_authority`) gains one more check after subject and roster: the presenter's ancestry must intersect `grant.binding`. For a child grant, the CHILD's binding is checked. The parent was bound-checked live when it delegated.
+       - New `GrantRejection` variants, each with a sentence through the existing `rejection_sentence`, so doctor, role status and refusals name the reason instead of a silent None:
+         - `Unbound`: a legacy grant with no binding. "it predates presenter binding; re-enter the role".
+         - `PresenterNotBound`: "it was issued to another process tree (shell pid N); this process does not descend from it".
+       - `grant_check_for` / `validated_grant` revalidate a STORED grant id for a requester that is not the current process (rework holds, takeover requesters, session.rs:9547). They keep today's checks, no live binding. The implementation PR checks that each such id was stored after a live `grant_check_at`. Any caller that stores an unchecked id is converted to check at store time.
+    4. Record and ship
+       - `aida review record`, when it attests a grant, stamps the matched presenter tokens into a new `RecorderAttestation.grant_binding: Vec<String>` (`#[serde(default, skip_serializing_if = "Vec::is_empty")]`). This is kept separate from `identity` so author-overlap semantics do not change.
+       - `grant_authorized_at` becomes `grant_authorized_for(project_root, id, seat, at, presented_by: &[String])`. It also requires `grant.binding` to be non-empty and to intersect `presented_by`. `verified_authority_keys` passes `att.grant_binding`. `mandate_drive::advisor_live`, which has no attestation, passes the turn-clock stamp's binding the same way (see Q3).
+    5. role status --json / doctor
+       - `role status --json` adds `binding` (tokens) and `binding_ok: bool | null`.
+       - `doctor` reports a `PresenterNotBound` / `Unbound` rejection as a failing finding with the rejection sentence.
+
+    FAILURE MODES (each fails closed)
+    - Unreadable process start identity at issue: issuance errors, and no grant is written.
+    - Unreadable ancestry at check: no intersection, so the grant is refused with `PresenterNotBound`.
+    - Legacy grant with no binding: refused (`Unbound`). The 24h max age (168h ceiling) retires these on their own.
+    - Legacy attestation without `grant_binding`: refused at ship. The approval must be re-recorded under a bound grant.
+    - Detached child whose pid stamp has not landed yet: refused until it lands. Workers take seconds to start before their first aida call.
+    - Pid reuse: start identity compared strictly (`tokens_match`). A mixed legacy/exact scheme counts as a match. That is the BUG-1918 TASK-2049 behavior, and here it fails OPEN (see Q3).
+    - tmux / nohup re-parenting away from the issuing shell: refused. This is the stated #2485 out-of-scope stance.
+
+    OUT OF SCOPE
+    - A same-user forger who edits `~/.aida/session-grants/*.json` to add its own pid, hand-writes attestations, or ptraces. Closing that needs signed receipts or a separate trust domain (the follow-up named in review_authority.rs).
+    - Roster and ceiling rules, ADR-66 delegation semantics, and child-grant expiry.
+    - Removing the `session_id` field.
+
+    TEST PLAN (each fails on main before the change)
+    - seat_authority::grant_refused_when_presenter_identity_does_not_overlap_binding: grant bound to proc:A, injected IdentitySource chain without A, so `grant_check` is `Rejected(PresenterNotBound)` and `current_grant` is None.
+    - seat_authority::grant_accepted_for_bound_session: a chain containing A (issuing shell above an injected `claude` harness) resolves Valid.
+    - seat_authority::legacy_grant_without_binding_is_refused: `Unbound`, plus its rejection sentence.
+    - seat_authority::child_grant_bound_to_launcher_and_stamped_pid: minting proc accepted, stamped detached pid accepted, unrelated proc refused.
+    - seat_authority::issue_direct_binds_parent_shell_and_session_leader: via the test seam, no TTY needed (issuance core split from `require_direct_human`).
+    - bug_1918_review_authority_tests::ship_refuses_grant_attestation_whose_binding_does_not_overlap: valid grant, attestation `grant_binding` disjoint or empty, so the key is not verified; the overlapping case still verifies.
+    - review record refusal test: an exported unbound-presenter grant gives "refused: review record. Session grant … was rejected: it was issued to another process tree".
+    - role status --json shows `binding`; doctor finding test for `PresenterNotBound`.
+    - Existing grant tests: `test_support::mint_grant_for` binds the test's injected identity, so every current test still passes without per-test edits.
+
+    PR SPLIT
+    - PR 1 (this spec): field, issue-time binding, live presenter check, rejections, role status/doctor, record-time `grant_binding`, ship-time check, launch-path stamping, tests. About 600-900 LOC including tests.
+    - If the advisor prefers a smaller first PR, the split is: PR 1a binding, live check, rejections and launcher stamping; PR 1b record and ship. Between the two, ship still accepts unbound attestations. Recommendation: one PR, because 1a alone leaves the ship gap open.
+
+    QUESTIONS FOR THE ADVISOR
+    Q1. Hand-carried grants. The documented advisor practice (copy the newest grant id into a background session) is refused after this change. Proposed sanctioned replacement, in this PR: `aida role enter <seat> --bind-pid <pid>`. A human at a TTY names the target session's harness pid. Issuance binds that process's pid@start and verifies it is a live agent harness of the same user. The background seat's statusline shows its harness pid. Approve this, or should the hand-carry practice simply end (the seat runs only in a session the operator starts from the role shell)?
+    Q2. Session-leader breadth. Binding the issuing shell's POSIX session leader lets any process in that terminal session present the grant, including an implementer `claude` started in the same tab. #2485's author-overlap check still refuses its self-approval. Accept that, or bind the parent shell only? Parent-only breaks `eval "$(aida role enter …)"` in shells that fork an extra subshell.
+    Q3. Fail-open edge cases. (a) Strict start-identity matching: should binding reject the TASK-2049 mixed-scheme leniency (refuse on a scheme mismatch), since here a match GRANTS authority instead of refusing it? Recommendation: yes, binding uses exact or strict match only. (b) `advisor_live` at ship has no attestation. Recommendation: the turn-clock stamp also records the presenter's matched binding token, and `advisor_live` requires it to intersect the grant's binding.
+  created_at: 2026-10-22T04:51:35.946435976Z
+  modified_at: 2026-10-22T04:51:35.946435976Z
+  session_id: c3518a40-709a-4db7-a0ef-4d0ce06b7434
 history:
 - id: 01a12b8d-6820-7292-ac96-3f451518bfcd
   author: joe
