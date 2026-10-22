@@ -9,5 +9,10 @@
 pub(crate) mod branch_policy;
 pub(crate) mod merge_hold_core;
 pub(crate) mod operator_hold;
+pub(crate) mod review_author;
+pub(crate) mod review_authority;
+pub(crate) mod review_marker;
+pub(crate) mod review_verdict;
 pub(crate) mod role_authority;
 pub(crate) mod seat_authority;
+pub(crate) mod solo_review;

@@ -4330,7 +4330,7 @@ mod bug_1572_binary_lineage_tests {
 /// one aggregate finding so a large legacy corpus does not drown the report.
 // trace:BUG-1505 | ai:claude
 fn scan_review_verdicts(project_root: &std::path::Path) -> Vec<DoctorFinding> {
-    let rows = crate::review_verdict::audit_verdict_dir(project_root);
+    let rows = crate::review_verdict_display::audit_verdict_dir(project_root);
     let mut out = Vec::new();
     let mut drifted = Vec::new();
     for row in &rows {

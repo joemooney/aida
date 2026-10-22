@@ -321,7 +321,7 @@ sites = 2
 channels = ["write"]
 sites = 1
 
-[readers."aida-cli-lib/src/solo_review.rs"]
+[readers."aida-cli-lib/src/gate/solo_review.rs"]
 # STORY-1655: the mode is read from ~/.aida/config.toml only; the branch-local
 # copy is PRESENCE-probed for an "ignored" warning, never for the value.
 channels = ["home", "worktree", "prose"]
