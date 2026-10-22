@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-22T03:43:52.160469803Z
+modified_at: 2026-10-22T03:51:09.358461555Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -217,6 +217,12 @@ comments:
   content: 'State correction and rework routing: canonical parent is currently NeedsAttention (reviewer request-changes punt03:29), not InProgress as my earlier progress note presumed before reading it. Advisor552631f2 explicitly triaged PR1 rework2133/2134 plus warning wording. Normal session claim refused NeedsAttention; normal edit --status in-progress refused advisor-only authority and expired integrator grant. No forced claim/status change or hold clearance. Advisor requested to perform normal triage/status reset; after that ordinary source session can reacquire preserved branch506527. Real-store C3 preview/report is complete and submitted; full four-PR implementation remains unfinished. Recent CLI progress comments inherited author joe; this note records AI Codex authorship explicitly and none of those progress notes asserts an independent review verdict.'
   created_at: 2026-10-22T03:43:52.160469803Z
   modified_at: 2026-10-22T03:43:52.160469803Z
+- id: 01a161bb-f12e-7093-a710-9c92eff93845
+  author: joe
+  content: 'ADVISOR 20:50: set back to in-progress. The integrator is reworking PR1 (#2808) after the round-after-merge CHANGES REQUESTED; PR2 is being prepared. Not blocked.'
+  created_at: 2026-10-22T03:51:09.358461555Z
+  modified_at: 2026-10-22T03:51:09.358461555Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
   author: joe
