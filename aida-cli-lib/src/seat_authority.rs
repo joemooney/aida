@@ -2,6 +2,7 @@
 //! routing only; authorization comes from a validated local grant record.
 // trace:STORY-1473 | ai:codex
 
+use aida_core::store_locate::StoreMiss;
 use anyhow::{bail, Context, Result};
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
@@ -92,29 +93,11 @@ fn write_grant(grant: &SeatGrant) -> Result<()> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum RosterStoreError {
     /// No `.aida/config.toml` at or above `probed` names an existing store;
-    /// `cause` says which way the walk-up failed.
+    /// `cause` is the resolver's own account of why.
     // trace:TASK-2072, TASK-2055 | ai:claude
-    NotDetected {
-        probed: PathBuf,
-        cause: UndetectedCause,
-    },
+    NotDetected { probed: PathBuf, cause: StoreMiss },
     /// The store resolved but holds no `registry/team.toml`.
     NoRoster { store: PathBuf },
-}
-
-/// Why the store walk-up from a probed directory found nothing, so the
-/// refusal names the config it read and the store path it pointed at.
-// trace:TASK-2072, TASK-2055 | ai:claude
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum UndetectedCause {
-    /// No `.aida/config.toml` exists at or above the probed directory.
-    NoConfig,
-    /// The walk-up reached a system temp directory before any config.
-    TempRoot { root: PathBuf },
-    /// The nearest config names `store`, which is not an existing directory.
-    StoreMissing { config: PathBuf, store: PathBuf },
-    /// The nearest config names no `store_path` at all.
-    NoStorePath { config: PathBuf },
 }
 
 impl std::fmt::Display for RosterStoreError {
@@ -123,21 +106,25 @@ impl std::fmt::Display for RosterStoreError {
             Self::NotDetected { probed, cause } => {
                 write!(f, "no AIDA store was found from `{}`: ", probed.display())?;
                 match cause {
-                    UndetectedCause::NoConfig => {
+                    StoreMiss::NoConfig => {
                         write!(f, "no `.aida/config.toml` exists at or above it")?
                     }
-                    UndetectedCause::TempRoot { root } => write!(
+                    StoreMiss::TempRoot { root } => write!(
                         f,
                         "the search stopped at the system temp directory `{}` before finding a `.aida/config.toml`",
                         root.display()
                     )?,
-                    UndetectedCause::StoreMissing { config, store } => write!(
+                    StoreMiss::StoreMissing { config, stores } => write!(
                         f,
-                        "`{}` names the store directory `{}`, which does not exist",
+                        "`{}` names the store directory {}, which does not exist",
                         config.display(),
-                        store.display()
+                        stores
+                            .iter()
+                            .map(|store| format!("`{}`", store.display()))
+                            .collect::<Vec<_>>()
+                            .join(" or ")
                     )?,
-                    UndetectedCause::NoStorePath { config } => write!(
+                    StoreMiss::NoStorePath { config } => write!(
                         f,
                         "`{}` names no store directory (`store_path`)",
                         config.display()
@@ -165,56 +152,25 @@ fn roster_path(store: &Path) -> PathBuf {
     store.join("registry").join("team.toml")
 }
 
-/// Diagnose a failed store walk-up from `probed`, mirroring the resolver's
-/// own walk (and its temp-root guard). Only called once detection failed,
-/// so it never runs on the allow path.
-// trace:TASK-2072, TASK-2055 | ai:claude
-pub(crate) fn undetected_cause(probed: &Path, temp_roots: &[PathBuf]) -> UndetectedCause {
-    use aida_core::store_locate::{
-        canonicalize_roots, is_in_canonical_roots, store_path_candidates,
-    };
-    let canonical_roots = canonicalize_roots(temp_roots);
-    let mut current = probed;
-    loop {
-        if is_in_canonical_roots(current, &canonical_roots) {
-            return UndetectedCause::TempRoot {
-                root: current
-                    .canonicalize()
-                    .unwrap_or_else(|_| current.to_path_buf()),
-            };
-        }
-        let config = current.join(".aida").join("config.toml");
-        if let Ok(content) = std::fs::read_to_string(&config) {
-            return match store_path_candidates(&content).first() {
-                Some(val) => UndetectedCause::StoreMissing {
-                    store: current.join(val),
-                    config,
-                },
-                None => UndetectedCause::NoStorePath { config },
-            };
-        }
-        match current.parent() {
-            Some(parent) => current = parent,
-            None => return UndetectedCause::NoConfig,
-        }
-    }
-}
-
 /// The store whose `registry/team.toml` is the seat authority for
-/// `project_root`. Resolves through `detect_distributed_store_from`, the same
-/// cwd walk-up the command dispatcher uses to hand `aida team` its store, so
-/// the two always read one roster. The roster file itself is the authority:
-/// a fresh solo store with no `objects/` yet is still a valid roster source.
-/// `AIDA_STORE` is deliberately not honored here — an environment variable
-/// must not be able to redirect the seat authority to another roster.
+/// `project_root`. Resolves through the same cwd walk-up
+/// (`store_locate::locate_distributed_store_from`) the command dispatcher
+/// uses to hand `aida team` its store, so the two always read one roster, and
+/// a miss carries that walk's own account of why. The roster file itself is
+/// the authority: a fresh solo store with no `objects/` yet is still a valid
+/// roster source. `AIDA_STORE` is deliberately not honored here — an
+/// environment variable must not be able to redirect the seat authority to
+/// another roster.
 // trace:BUG-2200 | ai:claude
+// trace:TASK-2072, TASK-2055 | ai:claude
 pub(crate) fn roster_store(project_root: &Path) -> std::result::Result<PathBuf, RosterStoreError> {
-    let store = crate::detect_distributed_store_from(project_root).ok_or_else(|| {
-        RosterStoreError::NotDetected {
-            probed: project_root.to_path_buf(),
-            cause: undetected_cause(project_root, &aida_core::store_locate::real_temp_roots()),
-        }
-    })?;
+    let store =
+        aida_core::store_locate::locate_distributed_store_from(project_root).map_err(|cause| {
+            RosterStoreError::NotDetected {
+                probed: project_root.to_path_buf(),
+                cause,
+            }
+        })?;
     if !roster_path(&store).is_file() {
         return Err(RosterStoreError::NoRoster { store });
     }
@@ -238,15 +194,18 @@ fn store_allows(store: &Path, principal: &str, seat: &str) -> bool {
         })
 }
 
-/// Why [`roster_check`] refused a seat.
+/// Why [`roster_check`] refused a seat. `note`, when set, names an
+/// `AIDA_STORE` that resolves to another store than the one checked: `aida
+/// team` reads that store's roster instead, so the two can disagree.
 // trace:TASK-2072, TASK-1667, TASK-2054 | ai:claude
 #[derive(Debug)]
 pub(crate) enum RosterRefusal {
     /// No roster could be read at all.
-    Unreachable(RosterStoreError),
-    /// The roster at `roster` was read and does not list the seat. `note`
-    /// names an `AIDA_STORE` that resolves to another store, which `aida team`
-    /// would read instead.
+    Unreachable {
+        why: RosterStoreError,
+        note: Option<String>,
+    },
+    /// The roster at `roster` was read and does not list the seat.
     Denied {
         roster: PathBuf,
         note: Option<String>,
@@ -254,18 +213,20 @@ pub(crate) enum RosterRefusal {
 }
 
 impl RosterRefusal {
-    /// The refusal for a caller whose own wording of the denial is `denied`.
+    /// The refusal for a caller whose own wording of the denial is `denied`
+    /// (unused for an unreachable roster, which explains itself).
     pub(crate) fn describe(&self, denied: &str) -> String {
-        match self {
-            Self::Unreachable(why) => why.to_string(),
-            Self::Denied { roster, note } => {
-                let mut msg = format!("{denied} by the team roster (`{}`)", roster.display());
-                if let Some(note) = note {
-                    msg.push_str(&format!(" ({note})"));
-                }
-                msg
-            }
+        let (mut msg, note) = match self {
+            Self::Unreachable { why, note } => (why.to_string(), note),
+            Self::Denied { roster, note } => (
+                format!("{denied} by the team roster (`{}`)", roster.display()),
+                note,
+            ),
+        };
+        if let Some(note) = note {
+            msg.push_str(&format!(" ({note})"));
         }
+        msg
     }
 }
 
@@ -277,11 +238,12 @@ pub(crate) fn roster_check(
     principal: &str,
     seat: &str,
 ) -> std::result::Result<PathBuf, RosterRefusal> {
-    let raw = std::env::var_os("AIDA_STORE").filter(|v| !v.is_empty());
-    roster_check_with_override(project_root, principal, seat, raw.as_deref().map(Path::new))
+    let aida_store = crate::store_sync::aida_store_override();
+    roster_check_with_override(project_root, principal, seat, aida_store.as_deref())
 }
 
-/// [`roster_check`] with the `AIDA_STORE` value passed in, so a test never
+/// [`roster_check`] with the `AIDA_STORE` store (as
+/// `store_sync::aida_store_override` resolves it) passed in, so a test never
 /// mutates the process environment.
 // trace:TASK-2072, TASK-2054, TASK-1666 | ai:claude
 pub(crate) fn roster_check_with_override(
@@ -290,24 +252,31 @@ pub(crate) fn roster_check_with_override(
     seat: &str,
     aida_store: Option<&Path>,
 ) -> std::result::Result<PathBuf, RosterRefusal> {
-    let store = roster_store(project_root).map_err(RosterRefusal::Unreachable)?;
+    let divergence = |store: &Path| {
+        let canonical = |p: &Path| p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
+        aida_store
+            .filter(|other| canonical(store) != canonical(other))
+            .map(|other| {
+                format!(
+                    "AIDA_STORE points at `{}`, so `aida team` reads that store's roster; seat checks always read the project's own store",
+                    other.display()
+                )
+            })
+    };
+    let store = roster_store(project_root).map_err(|why| {
+        let note = match &why {
+            RosterStoreError::NoRoster { store } => divergence(store),
+            // The NotDetected text already names a set AIDA_STORE.
+            RosterStoreError::NotDetected { .. } => None,
+        };
+        RosterRefusal::Unreachable { why, note }
+    })?;
     if store_allows(&store, principal, seat) {
         return Ok(store);
     }
-    let note = aida_store.and_then(|raw| match aida_core::store_locate::classify_store_path(raw) {
-        aida_core::store_locate::StoreOverride::Usable(other)
-            if store.canonicalize().map_or(true, |own| own != other) =>
-        {
-            Some(format!(
-                "AIDA_STORE points at `{}`, so `aida team` reads that store's roster; seat checks always read the project's own store",
-                other.display()
-            ))
-        }
-        _ => None,
-    });
     Err(RosterRefusal::Denied {
         roster: roster_path(&store),
-        note,
+        note: divergence(&store),
     })
 }
 
@@ -1133,9 +1102,10 @@ pub(crate) fn format_ttl(ttl: Duration) -> String {
 // trace:TASK-2072, TASK-1667 | ai:claude
 fn issuance_roster_store(project_root: &Path, principal: &str, seat: &str) -> Result<PathBuf> {
     roster_check(project_root, principal, seat).map_err(|refusal| match refusal {
-        RosterRefusal::Unreachable(why) => {
-            anyhow::anyhow!("cannot check seat `{seat}` for `{principal}`: {why}")
-        }
+        unreachable @ RosterRefusal::Unreachable { .. } => anyhow::anyhow!(
+            "cannot check seat `{seat}` for `{principal}`: {}",
+            unreachable.describe("")
+        ),
         denied => anyhow::anyhow!(
             "{}; an interactive human must update the roster with `aida team allow-seat`",
             denied.describe(&format!("seat `{seat}` for `{principal}` is not allowed"))
@@ -1215,9 +1185,10 @@ pub(crate) fn validate_child_delegation(
     // trace:TASK-2072, TASK-1667 | ai:claude
     roster_check(project_root, &parent.principal, requested_seat).map_err(
         |refusal| match refusal {
-            RosterRefusal::Unreachable(why) => {
-                anyhow::anyhow!("cannot check child seat `{requested_seat}`: {why}")
-            }
+            unreachable @ RosterRefusal::Unreachable { .. } => anyhow::anyhow!(
+                "cannot check child seat `{requested_seat}`: {}",
+                unreachable.describe("")
+            ),
             denied => anyhow::anyhow!(
                 "{}",
                 denied.describe(&format!(
