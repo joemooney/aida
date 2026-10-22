@@ -31,6 +31,10 @@ use std::sync::{Mutex, MutexGuard};
 /// PATH readers in production code do not take ENV_LOCK. Run a PATH-changing
 /// test as one exact test in its own process, before constructing any fixture.
 /// Returns true in the parent after the child passed, so the caller returns.
+/// Set by the live-bwrap CI gate: a test that cannot get bwrap fails rather
+/// than skipping.
+pub(crate) const REQUIRE_BWRAP_LIVE_ENV: &str = "AIDA_REQUIRE_BWRAP_LIVE";
+
 // trace:BUG-1994 | ai:codex
 pub(crate) fn run_path_isolated_test() -> bool {
     run_path_isolated_test_output().is_some()
@@ -71,8 +75,21 @@ pub(crate) fn run_path_isolated_test_output() -> Option<std::process::Output> {
     if let Some(path) = std::env::var_os("LD_LIBRARY_PATH") {
         command.env("LD_LIBRARY_PATH", path);
     }
+    // The live-bwrap CI gate turns a bwrap skip into a failure; the child must
+    // see it too, or an isolated live test skips silently under the gate.
+    // trace:TASK-2161 | ai:claude
+    if let Some(live) = std::env::var_os(REQUIRE_BWRAP_LIVE_ENV) {
+        command.env(REQUIRE_BWRAP_LIVE_ENV, live);
+    }
     let output = command.output().expect("spawn isolated test");
     let stdout = String::from_utf8_lossy(&output.stdout);
+    // The child's output is captured, so re-emit its skip notices.
+    for line in String::from_utf8_lossy(&output.stderr)
+        .lines()
+        .filter(|line| line.starts_with("SKIP"))
+    {
+        eprintln!("{line}");
+    }
     assert!(
         output.status.success(),
         "isolated test {name} failed:\n{stdout}\n{}",

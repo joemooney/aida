@@ -345,6 +345,25 @@ fn a_stale_pin_lock_refuses_the_clone_with_no_fallback() {
     assert_eq!(worktrees.matches("worktree ").count(), 1, "{worktrees}");
 }
 
+/// Under the live gate, an isolated child must inherit the gate, or its
+/// `bwrap_live()` skips silently (TASK-2161).
+// trace:TASK-2161 | ai:claude
+#[test]
+fn task_2053_bwrap_isolated_child_inherits_the_live_gate() {
+    let gate = crate::test_env::REQUIRE_BWRAP_LIVE_ENV;
+    if !crate::test_env::is_path_isolated_process() && std::env::var_os(gate).is_none() {
+        eprintln!("SKIP (not under the live-bwrap gate)");
+        return;
+    }
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    assert!(
+        std::env::var_os(gate).is_some(),
+        "the isolated child lost {gate}"
+    );
+}
+
 #[cfg(target_os = "linux")]
 #[test]
 fn task_2053_bwrap_probe_reads_clean_dirty_and_unpushed() {
