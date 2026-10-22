@@ -478,7 +478,7 @@ fn refusals_each_condition() {
         ),
         (
             "unknown spec",
-            |f| f.write_status(&[("ticket", "/tmp/slot-ticket")]),
+            |f| f.write_status(&[("ticket", "slot-queue/ticket-1")]),
             "could not be determined",
         ),
         (
@@ -520,7 +520,7 @@ fn refusals_each_condition() {
 fn the_record_spec_names_the_run_when_the_status_does_not() {
     let mut fx = Fixture::new();
     let m = fx.mandate();
-    fx.write_status(&[("ticket", "/tmp/slot-ticket")]);
+    fx.write_status(&[("ticket", "slot-queue/ticket-1")]);
     fx.set("spec", "TASK-77");
     match fx.verdict(&m, now()) {
         Some(RestartVerdict::Restart(_)) => {}

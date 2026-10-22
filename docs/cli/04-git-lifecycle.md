@@ -485,10 +485,10 @@ blocked or finished), and only when all of these hold:
 
 - the run's `relay.launch` record shows that you started it at a terminal,
   that it belongs to the mandate's principal, and that its profile is unchanged;
-- it is not an advisor-seat or `--force-seat` run, and no `bin/relay.sh
-  --no-restart <run>` marker is present;
-- the run's spec is known: from its status, or from the `--spec <ID>` (or
-  profile `spec` key) it was launched with, and not an operator-only spec;
+- it is not an advisor-seat or forced-seat run, and no `relay.norestart` marker
+  is present (the relay's no-restart option writes one);
+- the run's spec is known: from its status, or from the spec named at
+  launch (the relay's spec option or the profile's `spec` key), and not an operator-only spec;
 - no agent session of the run is still alive (a `kill -9` of the relay alone
   leaves its session running; stop it first);
 - it has been restarted fewer than 3 times, after waiting 1, 2 and then 4 ticks;
@@ -497,8 +497,9 @@ blocked or finished), and only when all of these hold:
   a drive mandate started before it existed does not cover it).
 
 The restart runs the record's resume arguments (the same run, its existing
-handoff, no initial prompt) with `--max-sessions` set to the sessions left. It uses no grant and no session role. Any other crashed
-run goes to the advisor as before. After the third restart you get one
+handoff, no initial prompt), with its session limit set to the sessions
+left. It uses no grant and no session role. Any other crashed run
+goes to the advisor as before. After the third restart you get one
 crash-loop notice.
 
 **No advisor.** If no advisor seat has been active in the last 30 minutes, you
