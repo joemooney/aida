@@ -1452,10 +1452,13 @@ mod tests {
     // trace:STORY-1887 | ai:claude
     #[test]
     fn t8_ship_batch_is_gate_protected() {
-        assert_eq!(
-            crate::mandate_gates::touches_gates(&["aida-cli-lib/src/pr_ship_batch.rs".to_string()]),
-            Some("aida-cli-lib/src/pr_ship_batch.rs".to_string())
-        );
+        // trace:STORY-1888 | ai:claude
+        let hit = crate::mandate_gates::touches_gates(
+            &["aida-cli-lib/src/pr_ship_batch.rs".to_string()],
+            crate::mandate_gates::ProtectedPaths::floor_ref(),
+        )
+        .map(|m| m.path);
+        assert_eq!(hit, Some("aida-cli-lib/src/pr_ship_batch.rs".to_string()));
     }
 
     // TASK-2155: the start, each PR's outcome and the stop are recorded, and
