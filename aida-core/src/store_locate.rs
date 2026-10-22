@@ -224,6 +224,10 @@ pub fn is_store_attached(project_root: &Path) -> bool {
 /// resolution.
 // trace:BUG-331 | ai:claude
 fn main_worktree_store(current: &Path, rel_store: &str) -> Option<PathBuf> {
+    // raw-git-ok(BUG-1929): a read-only rev-parse in the code checkout that
+    // locates the store; the hardened builder's own store lookup reaches this
+    // path, so routing it through host_git_command would recurse.
+    // trace:TASK-1952 | trace:BUG-1992 | ai:claude
     let out = std::process::Command::new("git")
         .arg("-C")
         .arg(current)
