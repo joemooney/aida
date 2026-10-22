@@ -3,13 +3,22 @@ spec_id: BUG-2208
 agreed_id: BUG-2208
 title: 'Refs-only slice PRs cannot get a reviewer: auto-queue-review skips them and the BUG-2150 fallback bails ambiguous'
 description: 'PR-2826 (TASK-1955 slice 7, commits ''(Refs TASK-1955)''): ''aida pr auto-queue-review'' files nothing (review_gates.rs:1076-1099 counts delivered IDs only, BUG-85/BUG-776). ''aida queue work PR-N --role reviewer'' then relies on the BUG-2150 fallback resolve_pr_to_spec, which sees referenced TASK-1955 plus BUG-2130 (a commit headline mentions a spec already superseded into TASK-1955) and bails ambiguous, silently. So no CLI path queues a review for a multi-PR sweep''s intermediate slice. Fix: (1) auto-queue-review files a review story for Refs-only PRs that covers the referenced spec (never completing it). (2) reduce_to_most_specific_specs drops a referenced spec superseded by another candidate. (3) The BUG-2150 fallback surfaces its resolve error instead of the generic ''no queued review story''. Workaround used: a hand-filed ''Review PR-2826:'' story with covers -> TASK-1955 (STORY-1891).'
-status: Approved
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-22T11:17:10.929765528Z
-modified_at: 2026-10-22T11:17:10.929765528Z
+modified_at: 2026-10-22T11:17:28.159613110Z
 req_type: Bug
+history:
+- id: 01a16354-8ddf-75d1-8c6c-131b3056fa8c
+  author: joe
+  timestamp: 2026-10-22T11:17:28.159607884Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Superseded
 filed_at:
   code_sha: e33fec11d936d4cc6ce450719a506a68932915eb
   branch: main
