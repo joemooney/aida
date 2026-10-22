@@ -1,0 +1,33 @@
+id: 01a16253-e18e-77c1-8052-abfe0c94a584
+spec_id: TASK-2140
+agreed_id: TASK-2140
+title: 'NO_SLOT guard: a quoted variable name with an unquoted = passes (export "<VAR>"=1)'
+description: |
+  These forms pass both the main-branch guard and the PR-2818 guard (head 9b9e3f6647). <VAR> is the cargo slot-bypass variable.
+    export "<VAR>"=1
+    env '<VAR>'=1 make check
+    declare -x "<VAR>"=1
+    export <VAR>""=1
+  The round-3 assigner regex in aida-git-guardrails.sh needs the opening quote to sit directly before the whole NAME= token. Suggested fix: join the adjacent quoted and unquoted segments of a shell word before matching, or match NAME followed by optional quotes before \+?=.
+
+  Raised in round-3 review of PR-2818: https://github.com/joemooney/aida/pull/2818
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-22T06:37:06.830697918Z
+modified_at: 2026-10-22T06:37:06.830697918Z
+req_type: Task
+tags:
+- from-review:PR-2818
+- hooks
+- severity:minor
+filed_at:
+  code_sha: 9b9e3f664790dc5ac42f665f52dde9171c7b28cf
+  branch: pr-2818
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 0f68094ad3
+  vendor: claude
+  session: 01a1625135f1
+  harness_version: 2.1.308 (Claude Code)

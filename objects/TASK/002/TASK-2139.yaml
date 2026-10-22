@@ -1,0 +1,35 @@
+id: 01a16253-c7e0-7f90-8218-6d152843a8f9
+spec_id: TASK-2139
+agreed_id: TASK-2139
+title: 'NO_SLOT guard: quoted assignment words passed to make/fish/env --split-string now pass (regression vs main)'
+description: |
+  Under PR-2818 (head 9b9e3f6647), no_slot_set in aida-core/templates/hooks/aida-git-guardrails.sh exits 0 on the forms below. The main-branch guard blocked all of them. <VAR> stands for the cargo slot-bypass variable; the installed hook refuses the literal name even in prose.
+  - make check '<VAR>=1'   (make reads a quoted argument as a command-line variable and exports it to recipes)
+  - fish -c '<VAR>=1 make'
+  - env --split-string='<VAR>=1 make'
+  - printf '<VAR>=1 make' > x.sh && source x.sh   (write then source)
+  Suggested fix: add make/gmake to NO_SLOT_ASSIGNER, fish to NO_SLOT_SHELL, and the --split-string= form to env. Pin write-then-source as out of scope, or cover source and . too.
+  Cosmetic, same area: NO_SLOT_SHELL treats '/' as a word boundary, so scripts/sh-helper counts as a shell. `ls scripts/sh-helper; rg '<VAR>=1'` is blocked (fails closed).
+  The verbatim repro commands are in the PR-2818 round-3 verdict findings.
+
+  Raised in round-3 review of PR-2818: https://github.com/joemooney/aida/pull/2818
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-22T06:37:00.256684685Z
+modified_at: 2026-10-22T06:37:00.256684685Z
+req_type: Task
+tags:
+- from-review:PR-2818
+- hooks
+- severity:minor
+filed_at:
+  code_sha: 9b9e3f664790dc5ac42f665f52dde9171c7b28cf
+  branch: pr-2818
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 0f68094ad3
+  vendor: claude
+  session: 01a1625135f1
+  harness_version: 2.1.308 (Claude Code)
