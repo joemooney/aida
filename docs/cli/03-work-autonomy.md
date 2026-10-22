@@ -88,8 +88,10 @@ launcher never records or accepts a verdict from log text.
 An orchestrator, relay or advisor session launches an implementer as a
 separate process with Bash, not an in-session subagent:
 `aida queue work <SPEC> --role implementer --no-human`. Outside an
-`--auto-complete` drain, this launch waits for its child and prints exactly
-one line on stdout. The caller branches on the exit code:
+`--auto-complete` drain, this launch waits for its child and ends with one
+result line, the last line on stdout, prefixed `implementer:` (setup output
+such as the queue row and the session export comes first). The caller
+branches on the exit code:
 
 | Exit | stdout line | Meaning |
 |---|---|---|

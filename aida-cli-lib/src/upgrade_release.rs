@@ -1518,6 +1518,11 @@ pub(crate) fn handle_release(
     after_pr: Option<u64>,
     skip_xplat_check: bool,
 ) -> Result<()> {
+    // A release merges; a standalone implementer stops at an open PR.
+    // trace:STORY-1662 | ai:claude
+    if !check {
+        crate::standalone_implementer::refuse_under_marker("release")?;
+    }
     let bump = resolve_release_bump(patch, minor, major).map_err(|e| anyhow::anyhow!(e))?;
 
     if check {

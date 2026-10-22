@@ -46,7 +46,7 @@ pub(crate) const LAUNCHER_ONLY_ENV: &[&str] = &[
     crate::punt::HOLD_SIGNAL_FILE_ENV,
     crate::punt::REQUEST_FILE_ENV,
     crate::punt::RESPONSE_FILE_ENV,
-    "AIDA_SESSION_GRANT_FILE",
+    crate::seat_authority::GRANT_FILE_ENV,
     MARKER_ENV,
 ];
 
@@ -466,7 +466,7 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
     let outcome = classify(
         crate::punt::read_signal(&punt_signal),
         crate::punt::read_hold_signal(&hold_signal),
-        || lookup_pr(launch.project_root, launch.branch, launch.spec),
+        || lookup_pr(launch.project_root, launch.branch),
     );
     let (line, code) = report(&outcome, status.code());
     println!("{line}");
@@ -537,27 +537,28 @@ pub(crate) fn is_real_pr(pr: &crate::OpenPrInfo) -> bool {
     pr.number > 0
 }
 
-/// The open PR for the run's branch, else for its spec (the implementer's
-/// branch may have been swapped), with its head commit. A just-created PR
-/// may lag the forge's list queries by seconds, so a branch that reached
-/// origin gets two more looks before the run is called PR-less.
-fn lookup_pr(project_root: &Path, branch: &str, spec: &str) -> Option<(u64, Option<String>)> {
+/// Whether `pr` is THIS run's PR: a real PR whose head is the lease branch.
+/// A PR on any other branch (a sibling slice of the same spec, say) is not
+/// this implementer's outcome.
+pub(crate) fn is_run_pr(pr: &crate::OpenPrInfo, branch: &str) -> bool {
+    is_real_pr(pr) && pr.head_branch.as_deref() == Some(branch)
+}
+
+/// The open PR whose head is the run's branch, with its head commit. A
+/// just-created PR may lag the forge's list queries by seconds, so a branch
+/// that reached origin gets two more looks before the run is called PR-less.
+fn lookup_pr(project_root: &Path, branch: &str) -> Option<(u64, Option<String>)> {
     for attempt in 0..3 {
         if attempt > 0 {
             std::thread::sleep(std::time::Duration::from_secs(3 * attempt));
         }
-        let found = match crate::detect_open_pr_for_branch(project_root, branch) {
-            PrLookup::Found(pr) if is_real_pr(&pr) => Some(pr),
-            _ => match crate::detect_open_pr_for_spec(project_root, spec) {
-                PrLookup::Found(pr) if is_real_pr(&pr) => Some(pr),
-                _ => None,
-            },
-        };
-        if let Some(pr) = found {
-            return Some((
-                pr.number,
-                crate::queue_cmd::standalone_review_pr_head(project_root, pr.number),
-            ));
+        if let PrLookup::Found(pr) = crate::detect_open_pr_for_branch(project_root, branch) {
+            if is_run_pr(&pr, branch) {
+                return Some((
+                    pr.number,
+                    crate::queue_cmd::standalone_review_pr_head(project_root, pr.number),
+                ));
+            }
         }
         if !matches!(
             crate::probe_branch_on_origin(project_root, branch),

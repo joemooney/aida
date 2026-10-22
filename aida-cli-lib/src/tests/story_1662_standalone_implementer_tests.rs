@@ -143,6 +143,27 @@ fn a_pure_git_change_zero_is_not_an_opened_pr() {
 }
 
 #[test]
+fn only_a_pr_on_the_lease_branch_is_this_runs_outcome() {
+    let pr = |number, head: &str| crate::OpenPrInfo {
+        number,
+        title: String::new(),
+        url: String::new(),
+        head_branch: Some(head.into()),
+    };
+    assert!(is_run_pr(&pr(42, "claude/story-9"), "claude/story-9"));
+    assert!(
+        !is_run_pr(&pr(43, "claude/story-9-slice-2"), "claude/story-9"),
+        "a sibling PR of the same spec is not this run's PR"
+    );
+    assert!(!is_run_pr(&pr(0, "claude/story-9"), "claude/story-9"));
+    let headless = crate::OpenPrInfo {
+        head_branch: None,
+        ..pr(44, "x")
+    };
+    assert!(!is_run_pr(&headless, "claude/story-9"));
+}
+
+#[test]
 fn a_signal_wins_over_the_pr_lookup_which_is_then_skipped() {
     let called = std::cell::Cell::new(false);
     let outcome = classify(Some(punt()), Some(hold()), || {
@@ -482,6 +503,72 @@ fn pr_ship_refuses_under_the_marker() {
     let text = format!("{err:#}");
     assert!(text.contains("`aida pr ship` is refused"), "{text}");
     assert!(text.contains(MARKER_ENV), "{text}");
+}
+
+/// The refusal sits in the shared merge path, so every caller of it (the
+/// `aida ship` finish tail included) is covered, not only the CLI arm.
+#[test]
+fn the_shared_ship_path_refuses_under_the_marker() {
+    let _marker = MarkerGuard::set();
+    let err = crate::pr_cmd::pr_ship_with_method(
+        Some(42),
+        true,
+        true,
+        false,
+        false,
+        None,
+        None,
+        true,
+        false,
+        false,
+        None,
+        false,
+        crate::forge::MergeMethod::Squash,
+        false,
+    )
+    .unwrap_err();
+    assert!(format!("{err:#}").contains("is refused"), "{err:#}");
+}
+
+#[test]
+fn top_level_ship_refuses_to_merge_under_the_marker() {
+    let _marker = MarkerGuard::set();
+    let err = crate::pr_cmd::run_human_finish_ceremony(crate::pr_cmd::HumanFinishOptions {
+        spec: Some("STORY-9".into()),
+        message: None,
+        no_merge: false,
+        no_pr: false,
+        keep_worktree: false,
+        dry_run: false,
+        no_trailer_check: false,
+    })
+    .unwrap_err();
+    assert!(
+        format!("{err:#}").contains("`aida ship` is refused"),
+        "{err:#}"
+    );
+}
+
+#[test]
+fn burndown_and_release_merges_refuse_under_the_marker() {
+    let tmp = tempfile::tempdir().unwrap();
+    let _marker = MarkerGuard::set();
+    let pr = crate::burndown::ResidualPr {
+        number: 42,
+        spec: "STORY-9".into(),
+        title: "Widget (STORY-9)".into(),
+        branch: "claude/story-9".into(),
+    };
+    assert!(
+        !crate::burndown_run::merge_wave_pr(tmp.path(), &pr),
+        "a wave merge does not run"
+    );
+    let err =
+        crate::upgrade_release::handle_release(true, false, false, false, None, true).unwrap_err();
+    assert!(
+        format!("{err:#}").contains("`aida release` is refused"),
+        "{err:#}"
+    );
 }
 
 #[test]
