@@ -1,0 +1,28 @@
+id: 01a1631e-3e3c-7cf3-8a8a-2648051c3ef6
+spec_id: TASK-2160
+agreed_id: TASK-2160
+title: Document clone-seat submodule handling and the salvage bundle in docs/cli/03-work-autonomy.md
+description: |
+  docs/cli/03-work-autonomy.md, the clone-seat paragraph: it says session end --force salvages the clone and then removes it. It does not say that a clone with submodules is never removed by session end, reap or dismiss: the operator has to remove it by hand and then run aida worktree dismiss <clone> to release the lease and pin. It also describes the salvage as just a patch, but it is a patch plus a bundle (plan, S3 round 2).
+
+  Raised in review of PR-2806: https://github.com/joemooney/aida/pull/2806#issuecomment-6338355075
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-22T10:18:08.828663647Z
+modified_at: 2026-10-22T10:18:08.828663647Z
+req_type: Task
+tags:
+- docs
+- from-review:PR-2806
+- severity:minor
+filed_at:
+  code_sha: a204185e22041adf77abf39fa0ec7b99dca18268
+  branch: pr-2806
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e33fec11d9
+  vendor: claude
+  session: 01a1631b4e0a
+  harness_version: 2.1.308 (Claude Code)

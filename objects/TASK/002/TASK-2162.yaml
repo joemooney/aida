@@ -1,0 +1,28 @@
+id: 01a1631e-6b93-7ea0-8301-b91c6184e36d
+spec_id: TASK-2162
+agreed_id: TASK-2162
+title: Test worktree dismiss on a hand-removed seat clone (the session-end submodule recovery path)
+description: |
+  session_end.rs:1060 refuses a seat clone with submodules and tells the operator to remove the clone by hand, then run aida worktree dismiss <clone> to release the lease and base pin. No test covers that recovery: dismiss on an already-removed clone directory whose lease and pin still exist. Add a bwrap test that removes the clone, runs handle_dismiss, and asserts the lease, pin and target dir are released.
+
+  Raised in review of PR-2806: https://github.com/joemooney/aida/pull/2806#issuecomment-6338355075
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-22T10:18:20.435573365Z
+modified_at: 2026-10-22T10:18:20.435573365Z
+req_type: Task
+tags:
+- from-review:PR-2806
+- severity:minor
+- tests
+filed_at:
+  code_sha: a204185e22041adf77abf39fa0ec7b99dca18268
+  branch: pr-2806
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e33fec11d9
+  vendor: claude
+  session: 01a1631b4e0a
+  harness_version: 2.1.308 (Claude Code)
