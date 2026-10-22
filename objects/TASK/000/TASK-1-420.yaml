@@ -1,5 +1,6 @@
 id: 01a160e1-f001-7383-8975-fcaf38998bf8
 spec_id: TASK-1-420
+agreed_id: TASK-1688
 title: 'minor: scripts/release.sh retakes the lease after the confirm prompt (~line 642…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-1721, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -35,6 +36,11 @@ history:
 - id: 01a160e3-9c35-7341-bfe8-f9bc9dcd982a
   author: joe
   timestamp: 2026-10-21T23:54:51.829571961Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
+- id: 01a1610d-f686-7ee0-be82-dfa89f324050
+  author: joe
+  timestamp: 2026-10-22T00:41:07.462283486Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
   changes: []
 filed_at:

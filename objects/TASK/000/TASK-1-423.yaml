@@ -1,5 +1,6 @@
 id: 01a160e2-1512-7083-9529-e92d2c7311ea
 spec_id: TASK-1-423
+agreed_id: TASK-1691
 title: 'cosmetic: Tests 4d/4e in tests/test_release_pr_flow.sh grep release.sh source l…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-1721, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -35,6 +36,11 @@ history:
 - id: 01a160e3-bc7f-7fc2-b6e7-397426fcd208
   author: joe
   timestamp: 2026-10-21T23:55:00.095949097Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
+- id: 01a1610d-f6dd-7e81-a420-72ec7da27eea
+  author: joe
+  timestamp: 2026-10-22T00:41:07.549949388Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
   changes: []
 filed_at:

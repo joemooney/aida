@@ -1,5 +1,6 @@
 id: 01a160e1-fc46-7182-a6ac-d2956e497bf9
 spec_id: TASK-1-421
+agreed_id: TASK-1689
 title: 'minor: round-1 finding 1 only half fixed. merge_lock.rs::acquire still creates …'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-1721, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -35,6 +36,11 @@ history:
 - id: 01a160e3-129c-76c1-bc47-c0426057c235
   author: joe
   timestamp: 2026-10-21T23:54:16.604294168Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
+- id: 01a1610d-f6ae-78f3-8987-8e6639cf8755
+  author: joe
+  timestamp: 2026-10-22T00:41:07.502404674Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
   changes: []
 filed_at:
