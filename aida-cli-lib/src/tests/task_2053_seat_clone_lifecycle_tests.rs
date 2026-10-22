@@ -1063,16 +1063,22 @@ fn task_2053_bwrap_submodule_side_branch_keeps_clean_clone() {
 
 /// Review round 7, item 1: `.gitmodules` `ignore = dirty` hides submodule
 /// work from a plain `git status`, but the clone still has a submodule, so
-/// the probe says so and session end, dismiss and reap all keep it.
+/// the probe says so and destroy, session end (with or without `--force`),
+/// dismiss and reap all keep it, with its lease and base pin.
 #[cfg(target_os = "linux")]
 #[test]
 fn task_2053_bwrap_submodule_ignore_dirty_keeps_the_clone() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     if !bwrap_live() {
         return;
     }
     let fx = fixture();
     let upstream = submodule_upstream(&fx);
-    let clone = seat(&fx, "subignore", "c0ffee000028");
+    let id = "c0ffee000028";
+    let clone = seat(&fx, "subignore", id);
+    let pin = pin_ref(&clone).unwrap();
     let upstream_url = upstream.display().to_string();
     seat_git(
         &clone,
@@ -1096,7 +1102,8 @@ fn task_2053_bwrap_submodule_ignore_dirty_keeps_the_clone() {
     std::fs::write(sm.join("untracked.txt"), "new\n").unwrap();
     assert_eq!(seat_git(&clone, &["status", "--porcelain"]).trim(), "");
 
-    has_submodules(probe(&fx.main, &clone));
+    let reason = has_submodules(probe(&fx.main, &clone));
+    assert!(reason.contains("submodules"), "{reason}");
     for mode in [DestroyMode::SalvageUnshipped, DestroyMode::KeepUnshipped] {
         let kept = destroy(&fx.main, &clone, mode, None);
         assert!(
@@ -1104,6 +1111,24 @@ fn task_2053_bwrap_submodule_ignore_dirty_keeps_the_clone() {
             "{kept:?}"
         );
     }
+    let still_held =
+        || clone.exists() && ref_exists(&fx.main, &pin) && crate::lease_path(&fx.main, id).exists();
+    let _ambient = crate::test_env::AmbientGuard::hermetic(&fx.main, None);
+    for force in [false, true] {
+        let refused = format!("{:#}", end_session(id, force).unwrap_err());
+        assert!(refused.contains("submodules"), "{refused}");
+        assert!(still_held());
+    }
+    crate::worktree_dismiss::handle_dismiss(Some(clone.to_str().unwrap()), None).unwrap();
+    assert!(still_held());
+    let lease = crate::list_leases(&fx.main)
+        .into_iter()
+        .find(|l| l.id == id)
+        .expect("lease");
+    let head = seat_git(&clone, &["rev-parse", "HEAD"]);
+    let row = crate::session_reap::reap_one_clone(&fx.main, &lease, Some(head.trim()));
+    assert!(row.contains("submodules"), "{row}");
+    assert!(still_held());
     assert_eq!(
         std::fs::read_to_string(sm.join("lib.txt")).unwrap(),
         "edited\n"

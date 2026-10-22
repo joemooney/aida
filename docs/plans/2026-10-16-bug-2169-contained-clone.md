@@ -571,3 +571,15 @@ Owning spec: TASK-2053 (the remaining BUG-2169 slices moved there unchanged).
   `--ignore-submodules=none`.
 - The doc comments now state what does run: git inside a submodule reads that submodule's own
   seat-written config, and its drivers run, but only inside the sandbox.
+
+### S3 review round 8 fixes
+
+- Session end handles `Probe::HasSubmodules`: it refuses with the reason, and the lease, clone and
+  base pin are unchanged. Once the operator removes the clone by hand, `aida worktree dismiss
+  <clone>` releases them. The `ignore = dirty` test now runs session end (with and without
+  `--force`), dismiss and reap, and asserts that all three keep the clone.
+- **The grep gate against host git in clones (listed under S3 above) moves to S4.** A grep cannot
+  pick out its target: git aimed at a lease's clone path looks the same in source as git aimed at
+  a worktree. S3 enforces the rule at runtime instead. `host_git_command` and `status_sections`
+  refuse any cwd inside a seat clone, and T7 and the logging-shim test check session end and
+  dismiss. S4 adds the ratchet when it moves the `git -C <worktree>` consumers onto `seat_trees`.

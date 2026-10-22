@@ -1057,6 +1057,14 @@ pub(crate) fn session_end(
                 &target.id[..target.id.len().min(8)],
                 target.worktree_path.display(),
             ),
+            crate::seat_clone::Probe::HasSubmodules(reason) => anyhow::bail!(
+                "session {} works in the seat clone {}: {reason}. The session was NOT ended: its \
+                 lease, clone and base pin are unchanged. Once the clone is removed, `aida \
+                 worktree dismiss {}` releases them.",
+                &target.id[..target.id.len().min(8)],
+                target.worktree_path.display(),
+                target.worktree_path.display(),
+            ),
         }
     } else {
         None
