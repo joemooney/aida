@@ -64,7 +64,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T15:55:48.750553278Z
-modified_at: 2026-10-22T00:20:54.462994306Z
+modified_at: 2026-10-22T00:57:27.499896949Z
 req_type: Task
 tags:
 - reconcile
@@ -338,6 +338,12 @@ comments:
   created_at: 2026-10-21T23:55:07.163244920Z
   modified_at: 2026-10-21T23:55:07.163244920Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a1611c-eacb-7802-85be-7fd1dc3d8ca8
+  author: joe
+  content: 'Implementer 2026-10-21: remaining work deferred from the PR-2816 round 2 review (next slice): (a) on an already-merged re-run, the TASK-1621 --final-slice arm still completes pr_merged_spec_ids, which are derived from the checkout and branch rather than from the merged PR''s resolved head branch and title; (b) the include_str source-grep assertions in task_1951_already_merged_rerun_marks_only_the_merged_prs_spec and task_1951_non_completing_squash_ship_writes_the_marker_into_the_body should be replaced with behavioural tests. Status: #2811, #2812 and #2815 merged. #2816 (TASK-1619-1622) is in round 3 at 0d839f00ba. #2819 (TASK-1668, TASK-1670) is open. Still to do: gate slices for review_verdict.rs/review_authority.rs (TASK-1814(3), 1671, 1669, 2049), merge_hold.rs/rework_hold_release.rs (BUG-2123, TASK-1406, TASK-1757) and pr_ship.rs/mandate.rs (TASK-1623, TASK-1618 final-slice squash, TASK-1662 timeout, TASK-1991 test); TASK-1765(1), the held-merge retry; TASK-2003 (the design question is with the advisor).'
+  created_at: 2026-10-22T00:57:27.499896949Z
+  modified_at: 2026-10-22T00:57:27.499896949Z
+  session_id: ff6e8bf8-1dc6-42b0-b4cd-7470b3ef42aa
 history:
 - id: 01a154e0-78cf-7a40-bc67-d8f6e5580d97
   author: joe
