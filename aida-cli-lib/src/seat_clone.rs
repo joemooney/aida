@@ -1530,3 +1530,7 @@ mod bwrap_tests;
 #[cfg(test)]
 #[path = "tests/task_2053_s4_host_git_tests.rs"]
 mod s4_host_git_tests;
+
+#[cfg(test)]
+#[path = "tests/task_2143_clone_git_ratchet_tests.rs"]
+mod clone_git_ratchet_tests;
