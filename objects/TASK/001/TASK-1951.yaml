@@ -64,7 +64,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T15:55:48.750553278Z
-modified_at: 2026-10-22T14:25:46.553468282Z
+modified_at: 2026-10-22T14:29:20.698288359Z
 req_type: Task
 tags:
 - reconcile
@@ -464,6 +464,27 @@ comments:
      Final (completing "(TASK-1951)"): TASK-2003, option A display-only lens per the 2026-10-21 14:04 design fork (no advisor ruling for B received).
   created_at: 2026-10-22T14:25:46.553468282Z
   modified_at: 2026-10-22T14:25:46.553468282Z
+  session_id: d32da6c3-6fcd-4a6d-9999-3f89b70d28bd
+- id: 01a16404-38ba-7a41-8e75-0f483757e795
+  author: joe
+  content: |-
+    SKETCH (TASK-1951 slice S9b: BUG-2123 + TASK-1757; strict tier, merge_hold.rs / rework_hold_release.rs). Waiting for advisor signoff before coding.
+
+    BUG-2123 (composed Rework holds keep every refusal):
+    1. compose_holds (merge_hold.rs:823): today same-kind composition returns incoming.clone(), so Rework(A) then Rework(B) drops A's verdict_ref. Change: when both are Rework and the verdict_ref keys differ, push the existing record (and its Rework shadows) into `absorbed` as AbsorbedHold{kind: Rework, verdict_ref: A}. merge_absorbed dedupes Rework shadows by (kind, verdict_ref.key) instead of kind alone, and the `retain(kind != primary.kind)` keeps Rework shadows whose key differs from the primary's. No serde change (absorbed is already a Vec<AbsorbedHold>); old markers read unchanged.
+    2. auto_release_with: the arming refs are the primary verdict_ref plus every absorbed Rework verdict_ref. `check` runs per key (fresh approval at head, strictly newer than that key's refusals, grant, attestation). Any key unanswered or unreadable keeps the hold, and the error names it ("refusal on TASK-A at <sha8> has no newer approval"). The clearance records the primary verdict as released_by_verdict, plus `also_released_by: [paths]`; the audit comment names every verdict.
+    3. covered_specs also takes absorbed holds' specs and the PR title's trailer ids (forge change title), not only commit headlines + hold.spec.
+    Tests (fail first): A then B refusals composed, only B approved -> held, error names A; both approved -> released; compose keeps both refs; title-only spec is covered.
+
+    TASK-1757:
+    (1) Hold lock: new flock on <hold_store_root>/.aida/merge-holds/PR-N.lock. release_with takes it before the second validate and holds it through labels() + clear_hold; write_typed_hold_context takes it around compose + write_marker. Bounded wait (10 s), then refuse "merge-hold PR-N is busy". Human clear takes it around record_clearance + clear_hold too.
+    (2) Docs: rework_hold_release.rs module doc + docs/ merge-hold page: auto-release order is clearance -> audit comment -> labels -> marker removal (marker stays armed until the forge agrees, because no human is present to retry); human clear is clearance -> marker -> labels (the operator at the TTY sees and retries a label failure).
+    (3) Second-pass refusal after the clearance was recorded: rename the clearance to PR-N.cleared.superseded-<ts>.json (kept for audit, never read as a clearance: today a stale clearance beside a live marker would mask a later hand-deletion in the line-1260 tamper check), and post a best-effort "auto-release authorization withdrawn: <why>" comment.
+    (4) Wiring test: run the production auto_release() against a temp project with a pinned GitHub remote and a fake `gh` on PATH (env-locked), covering forge head, hold read, corpus read and requirement lookup; asserts a refusal reads the real verdict file and the real store.
+    (5) The 10-14 note (approval did not release #2638/#2541): the record-time path now prints "merge-hold remains armed: <why>" (STORY-1697, lib_part5.rs:3268) and `merge-hold auto-release` prints "held — <why>". I will reproduce the seat-grant case in a test and confirm the why names the grant, with no other change.
+    Fork for you: (1) adds a new lock file beside the marker. If you prefer to drop (1) and document the race as accepted, say so.
+  created_at: 2026-10-22T14:29:20.698288359Z
+  modified_at: 2026-10-22T14:29:20.698288359Z
   session_id: d32da6c3-6fcd-4a6d-9999-3f89b70d28bd
 history:
 - id: 01a154e0-78cf-7a40-bc67-d8f6e5580d97
