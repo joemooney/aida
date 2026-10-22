@@ -1651,8 +1651,9 @@ pub(crate) fn pr_ship_approval_gate(
     }
     // STORY-1655: name the mode when a solo-human approval is relied on.
     // trace:STORY-1655 | ai:claude
+    // Same stream as merge_path_approval_gate. trace:TASK-1955 | ai:claude (TASK-1808)
     if let Some(notice) = pr_ship::solo_approval_notice(candidates, policy) {
-        println!("  {notice}");
+        eprintln!("  {notice}");
     }
     let Some(refusal) = pr_ship::approval_head_refusal(candidates, head_sha) else {
         return Ok(pr_ship::approved_match_head(candidates, head_sha));

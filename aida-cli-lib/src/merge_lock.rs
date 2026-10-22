@@ -30,6 +30,11 @@ const POLL: Duration = Duration::from_secs(2);
 /// the holder's pid. A merge is seconds-to-a-minute, so 10m is a generous crash
 /// horizon (matches the drain-lock default).
 const DEFAULT_TTL_SECS: u64 = 600;
+/// A lease file with no complete record (empty or cut short) is a writer
+/// mid-publish — `acquire` before TASK-1-421 created the file, then wrote it.
+/// It reads live for this long after its mtime, and stale after.
+// trace:TASK-1955 | ai:claude (TASK-1-421)
+const PARTIAL_GRACE_SECS: u64 = 30;
 
 fn locks_dir(project_root: &Path) -> PathBuf {
     project_root.join(".aida").join("merge-locks")
@@ -131,6 +136,45 @@ fn holder_alive(h: &Holder) -> bool {
     aida_core::liveness::process_identity_is_alive(h.pid, h.pid_start.as_deref())
 }
 
+/// A record is complete once its last field, `ttl_secs`, is present.
+fn is_complete_record(body: &str) -> bool {
+    body.lines().any(|l| l.starts_with("ttl_secs="))
+}
+
+/// `Some(reason)` if the lease file at `path` is reclaimable. An incomplete
+/// record is live inside [`PARTIAL_GRACE_SECS`] of its mtime: reading it as
+/// `acquired_at=0` would judge a just-created lease TTL-stale and steal it.
+// trace:TASK-1955 | ai:claude (TASK-1-421)
+fn file_stale_reason(path: &Path, our_host: &str) -> Option<String> {
+    let body = std::fs::read_to_string(path).ok()?;
+    if is_complete_record(&body) {
+        return stale_reason(&parse(&body), our_host);
+    }
+    let age = std::fs::metadata(path)
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|t| SystemTime::now().duration_since(t).ok())
+        .map(|d| d.as_secs())?;
+    (age > PARTIAL_GRACE_SECS).then(|| {
+        format!("incomplete lease record aged {age}s past its {PARTIAL_GRACE_SECS}s grace")
+    })
+}
+
+/// The temp file a lease record is written to before it is linked into place.
+/// Dot-prefixed, so `status` skips it and it never names a branch.
+// trace:TASK-1955 | ai:claude (TASK-1-422)
+fn temp_path(path: &Path) -> PathBuf {
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.subsec_nanos())
+        .unwrap_or(0);
+    let name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    path.with_file_name(format!(".{name}.{}.{nanos}.tmp", std::process::id()))
+}
+
 /// `Some(reason)` if a foreign holder is reclaimable: a DEAD pid on our host
 /// (fast, exact), or any holder aged past its TTL (backstop). `None` ⇒ live.
 fn stale_reason(h: &Holder, our_host: &str) -> Option<String> {
@@ -191,28 +235,28 @@ pub(crate) fn acquire(
     let our_host = crate::coordination::hostname();
     let deadline = Instant::now() + wait;
     loop {
-        match std::fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&path)
-        {
-            Ok(mut f) => {
-                let h = Holder {
-                    host: our_host.clone(),
-                    pid: std::process::id(),
-                    pid_start: aida_core::liveness::process_start_identity(std::process::id()),
-                    pr,
-                    note: note.to_string(),
-                    acquired_at: now_secs(),
-                    ttl_secs: DEFAULT_TTL_SECS,
-                };
-                f.write_all(serialize(&h).as_bytes())?;
-                return Ok(MergeLease { path, held: true });
-            }
+        let h = Holder {
+            host: our_host.clone(),
+            pid: std::process::id(),
+            pid_start: aida_core::liveness::process_start_identity(std::process::id()),
+            pr,
+            note: note.to_string(),
+            acquired_at: now_secs(),
+            ttl_secs: DEFAULT_TTL_SECS,
+        };
+        // Write the full record to a temp file, then hard-link it into place:
+        // link(2) fails if the lease exists, so the claim stays atomic and no
+        // reader (release.sh included) sees an empty or partial lease.
+        // trace:TASK-1955 | ai:claude (TASK-1-421)
+        let tmp = temp_path(&path);
+        let linked = std::fs::File::create(&tmp)
+            .and_then(|mut f| f.write_all(serialize(&h).as_bytes()))
+            .and_then(|()| std::fs::hard_link(&tmp, &path));
+        let _ = std::fs::remove_file(&tmp);
+        match linked {
+            Ok(()) => return Ok(MergeLease { path, held: true }),
             Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
-                let reclaimable = std::fs::read_to_string(&path)
-                    .ok()
-                    .and_then(|b| stale_reason(&parse(&b), &our_host));
+                let reclaimable = file_stale_reason(&path, &our_host);
                 if reclaimable.is_some() {
                     // Steal the stale lock and retry immediately.
                     let _ = std::fs::remove_file(&path);
@@ -240,6 +284,10 @@ pub(crate) fn status(project_root: &Path) -> Vec<(String, Holder)> {
     let mut out = Vec::new();
     if let Ok(entries) = std::fs::read_dir(locks_dir(project_root)) {
         for e in entries.flatten() {
+            // Skip in-flight temp records. trace:TASK-1955 | ai:claude (TASK-1-422)
+            if e.file_name().to_string_lossy().starts_with('.') {
+                continue;
+            }
             if let Ok(body) = std::fs::read_to_string(e.path()) {
                 out.push((e.file_name().to_string_lossy().to_string(), parse(&body)));
             }
@@ -448,6 +496,57 @@ mod tests {
         };
         std::fs::write(lock_path(root, "main"), serialize(&h)).unwrap();
         let _ = acquire(root, "main", Some(2), "steal", Duration::from_millis(200)).unwrap();
+    }
+
+    /// An empty, just-created lease (a writer between create and write) is a
+    /// live holder, not a TTL-stale one; once past the grace it is reclaimed.
+    // trace:TASK-1955 | ai:claude (TASK-1-421)
+    #[test]
+    fn task_1_421_empty_fresh_lease_is_live_until_its_grace_passes() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        std::fs::create_dir_all(locks_dir(root)).unwrap();
+        let path = lock_path(root, "main");
+        std::fs::write(&path, "").unwrap();
+        let err = acquire(root, "main", Some(2), "second", Duration::from_millis(100)).unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::WouldBlock);
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "", "never stolen");
+
+        std::fs::write(&path, "host=h\npid=1\n").unwrap();
+        let old = SystemTime::now() - Duration::from_secs(PARTIAL_GRACE_SECS + 5);
+        std::fs::File::options()
+            .write(true)
+            .open(&path)
+            .unwrap()
+            .set_modified(old)
+            .unwrap();
+        let _g = acquire(root, "main", Some(3), "steal", Duration::from_millis(100)).unwrap();
+        assert!(std::fs::read_to_string(&path)
+            .unwrap()
+            .contains("note=steal"));
+    }
+
+    /// The lease is published complete, with no temp file left, and `status`
+    /// never lists a temp record.
+    // trace:TASK-1955 | ai:claude (TASK-1-421) (TASK-1-422)
+    #[test]
+    fn task_1_422_acquire_publishes_complete_and_status_skips_temp_records() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let _g = acquire(root, "main", Some(1), "held", DEFAULT_WAIT).unwrap();
+        let names: Vec<String> = std::fs::read_dir(locks_dir(root))
+            .unwrap()
+            .flatten()
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(names, vec!["main".to_string()]);
+        assert!(is_complete_record(
+            &std::fs::read_to_string(lock_path(root, "main")).unwrap()
+        ));
+        std::fs::write(locks_dir(root).join(".main.abc123"), "host=x\n").unwrap();
+        let st = status(root);
+        assert_eq!(st.len(), 1, "{st:?}");
+        assert_eq!(st[0].0, "main");
     }
 
     #[test]

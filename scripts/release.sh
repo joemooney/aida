@@ -144,6 +144,7 @@ lease_file="$main_root/.aida/merge-locks/${release_base//\//_}"
 lease_host=${AIDA_HOST_OVERRIDE:-$(uname -n)}
 lease_ttl=${AIDA_RELEASE_LEASE_TTL_SECS:-3600}
 lease_held=0
+lease_tmp=
 
 # Field 22 (starttime) of /proc/<pid>/stat as `linux-starttime:<ticks>`, the
 # identity merge_lock.rs records; empty when unreadable.
@@ -165,7 +166,16 @@ lease_field() {
 # is stale, and so is any holder aged past its TTL.
 lease_is_live() {
     [ -f "$lease_file" ] || return 1
-    local host pid start ttl acquired age live_start state
+    local host pid start ttl acquired age live_start state mtime
+    # An empty or cut-short record is a writer mid-publish (merge_lock.rs
+    # before TASK-1-421 created the file, then wrote it): live for a 30s grace
+    # after its mtime, not acquired_at=0 and TTL-stale.
+    # trace:TASK-1955 | ai:claude (TASK-1-421)
+    if ! grep -q '^ttl_secs=' "$lease_file" 2>/dev/null; then
+        mtime=$(stat -c %Y "$lease_file" 2>/dev/null) || return 1
+        [ $(( $(date +%s) - mtime )) -gt 30 ] && return 1
+        return 0
+    fi
     host=$(lease_field host)
     pid=$(lease_field pid)
     start=$(lease_field pid_start)
@@ -205,17 +215,22 @@ lease_acquire() {
         # Write the full record to a temp file in the same directory, then
         # hard-link it into place: link(2) fails if the lease exists, so the
         # claim is atomic and a reader never sees a partial or empty lease.
-        local tmp
-        tmp=$(mktemp "$lease_file.XXXXXX")
+        # The temp name is dot-prefixed, so merge_lock::status skips it, and
+        # the EXIT trap removes it if the script dies before the link.
+        # trace:TASK-1955 | ai:claude (TASK-1-422)
+        lease_tmp=$(mktemp "$(dirname "$lease_file")/.$(basename "$lease_file").XXXXXX")
+        local tmp=$lease_tmp
         printf 'host=%s\npid=%s\npid_start=%s\npr=%s\nnote=%s\nacquired_at=%s\nttl_secs=%s\n' \
             "$lease_host" "$$" "$(lease_pid_start "$$")" "${2:-}" \
             "scripts/release.sh v$new" "$(date +%s)" "$lease_ttl" > "$tmp"
         if ln "$tmp" "$lease_file" 2>/dev/null; then
             rm -f "$tmp"
+            lease_tmp=
             lease_held=1
             return 0
         fi
         rm -f "$tmp"
+        lease_tmp=
         if ! lease_is_live; then
             rm -f "$lease_file"
             continue
@@ -226,6 +241,8 @@ lease_acquire() {
 }
 
 lease_release() {
+    [ -n "$lease_tmp" ] && rm -f "$lease_tmp"
+    lease_tmp=
     if [ "$lease_held" = "1" ] && [ "$(lease_field pid)" = "$$" ]; then
         rm -f "$lease_file"
     fi

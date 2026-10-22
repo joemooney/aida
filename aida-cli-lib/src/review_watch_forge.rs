@@ -302,9 +302,12 @@ impl Repository {
         // The probing process's pid leads the ref name, so a sweep can tell a
         // leaked ref (its prober gone) from one a live watcher is using.
         // trace:TASK-1955 | ai:claude (TASK-1-413)
+        // Its creation time follows, so a sweep keeps a fresh ref whatever
+        // pid namespace its prober runs in. trace:TASK-1955 | ai:claude (TASK-2121)
         let prefix = format!(
-            "{PROBE_REF_PREFIX}{}-{}",
+            "{PROBE_REF_PREFIX}{}-t{}-{}",
             std::process::id(),
+            chrono::Utc::now().timestamp(),
             uuid::Uuid::new_v4()
         );
         let base = format!("{prefix}/base");
@@ -365,10 +368,88 @@ impl Repository {
 
 const PROBE_REF_PREFIX: &str = "refs/aida/review-watch/";
 
+/// A probe ref younger than this is never swept: a probe is bounded by its
+/// 30-second fetch timeout, so one this old has finished or died.
+// trace:TASK-1955 | ai:claude (TASK-2121)
+const PROBE_REF_AGE_FLOOR_SECS: i64 = 600;
+
+/// What a probe ref's `<probe>` name component records about its prober.
+#[derive(Debug, PartialEq, Eq)]
+pub(super) struct ProbeName {
+    pub pid: Option<u32>,
+    /// Creation time (unix seconds), recorded since TASK-2121.
+    pub created: Option<i64>,
+}
+
+/// Parse `<pid>-t<secs>-<uuid>` (current), `<pid>-<uuid>` (TASK-1-413) or a
+/// bare legacy `<uuid>`. Only a component whose remainder is a whole UUID
+/// carries a pid, so a legacy UUID whose first group is all digits is not
+/// read as one.
+// trace:TASK-1955 | ai:claude (TASK-2121)
+pub(super) fn parse_probe_name(probe: &str) -> ProbeName {
+    let none = ProbeName {
+        pid: None,
+        created: None,
+    };
+    let Some((pid, rest)) = probe.split_once('-') else {
+        return none;
+    };
+    let Ok(pid) = pid.parse::<u32>() else {
+        return none;
+    };
+    let (created, uuid) = match rest
+        .strip_prefix('t')
+        .and_then(|r| r.split_once('-'))
+        .and_then(|(secs, uuid)| Some((secs.parse::<i64>().ok()?, uuid)))
+    {
+        Some((secs, uuid)) => (Some(secs), uuid),
+        None => (None, rest),
+    };
+    if uuid::Uuid::try_parse(uuid).is_err() {
+        return none;
+    }
+    ProbeName {
+        pid: Some(pid),
+        created,
+    }
+}
+
+/// Is a probe ref still possibly in use? Anything younger than the age floor
+/// is kept: by its recorded creation time, else by its loose ref file's mtime
+/// (`None` when packed, so old). Past the floor, only a pre-TASK-2121 ref
+/// whose pid is alive is kept; a timestamped ref is judged by age alone, so a
+/// prober in another pid namespace is never swept mid-probe.
+// trace:TASK-1955 | ai:claude (TASK-2121)
+pub(super) fn probe_ref_in_use(
+    name: &ProbeName,
+    now: i64,
+    loose_mtime: Option<i64>,
+    pid_alive: impl Fn(u32) -> bool,
+) -> bool {
+    if name
+        .created
+        .or(loose_mtime)
+        .is_some_and(|t| now - t < PROBE_REF_AGE_FLOOR_SECS)
+    {
+        return true;
+    }
+    name.created.is_none() && name.pid.is_some_and(pid_alive)
+}
+
+/// Unix mtime of a loose ref's file, or `None` (packed or unreadable).
+fn loose_ref_mtime(root: &Path, refname: &str) -> Option<i64> {
+    let path = git(root, &["rev-parse", "--git-path", refname]).ok()?;
+    let mtime = std::fs::metadata(root.join(path.trim()))
+        .ok()?
+        .modified()
+        .ok()?;
+    Some(chrono::DateTime::<chrono::Utc>::from(mtime).timestamp())
+}
+
 /// Delete probe refs left by a watcher killed between its fetch and its
-/// `update-ref -d`: every `refs/aida/review-watch/<pid>-<uuid>/*` whose pid
-/// is not alive, and any older pid-less one. Returns how many were removed.
-// trace:TASK-1955 | ai:claude (TASK-1-413)
+/// `update-ref -d`: every `refs/aida/review-watch/<probe>/*` that
+/// [`probe_ref_in_use`] does not keep. Returns how many were removed.
+// trace:TASK-1955 | ai:claude (TASK-1-413) (TASK-2121)
 pub(super) fn sweep_probe_refs(root: &Path) -> usize {
     let Ok(listing) = git(
         root,
@@ -376,14 +457,20 @@ pub(super) fn sweep_probe_refs(root: &Path) -> usize {
     ) else {
         return 0;
     };
+    let now = chrono::Utc::now().timestamp();
     let mut removed = 0;
     for name in listing.lines().map(str::trim).filter(|l| !l.is_empty()) {
-        let owner = name
-            .strip_prefix(PROBE_REF_PREFIX)
-            .and_then(|rest| rest.split('/').next())
-            .and_then(|probe| probe.split_once('-'))
-            .and_then(|(pid, _)| pid.parse::<u32>().ok());
-        if owner.is_some_and(aida_core::liveness::pid_is_alive) {
+        let probe = parse_probe_name(
+            name.strip_prefix(PROBE_REF_PREFIX)
+                .and_then(|rest| rest.split('/').next())
+                .unwrap_or_default(),
+        );
+        let mtime = probe
+            .created
+            .is_none()
+            .then(|| loose_ref_mtime(root, name))
+            .flatten();
+        if probe_ref_in_use(&probe, now, mtime, aida_core::liveness::pid_is_alive) {
             continue;
         }
         if git(root, &["update-ref", "-d", name]).is_ok() {

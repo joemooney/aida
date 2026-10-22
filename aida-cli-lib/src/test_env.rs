@@ -527,7 +527,17 @@ impl AmbientGuard {
     }
 
     pub(crate) fn hermetic(root: &std::path::Path, role: Option<&str>) -> Self {
-        let env = EnvVarsGuard::apply(&[
+        Self::hermetic_and(root, role, &[])
+    }
+
+    /// [`Self::hermetic`] plus extra env pins under the same guard.
+    // trace:TASK-1955 | ai:claude (TASK-1808)
+    pub(crate) fn hermetic_and(
+        root: &std::path::Path,
+        role: Option<&str>,
+        extra: &[(&'static str, Option<&str>)],
+    ) -> Self {
+        let mut pairs: Vec<(&'static str, Option<&str>)> = vec![
             ("AIDA_SESSION_ROLE", role),
             // ADR-66: a seat grant is ambient authority too — a hermetic
             // context must shed any leased grant along with the role env.
@@ -537,7 +547,9 @@ impl AmbientGuard {
             ("AIDA_ROLE_INSTANCE", None),
             ("AIDA_AUTO_COMPLETE", None),
             ("AIDA_AUTO_COMPLETE_TOKEN", None),
-        ]);
+        ];
+        pairs.extend_from_slice(extra);
+        let env = EnvVarsGuard::apply(&pairs);
         let prev = crate::test_ambient::replace(Some(crate::test_ambient::Ambient {
             project_root: root.to_path_buf(),
             stdin_is_terminal: false,
