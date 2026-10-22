@@ -7230,6 +7230,40 @@ Options:
 
   -h, --help
           Print help (see a summary with '-h')
+===== aida remote mirror-guard-check
+(plumbing) Ask whether a push to the default branch is an attested `aida remote mirror-sync` of
+origin's reviewed tip. A project's pre-push main guard pipes its stdin ref lines here before
+refusing; exit 0 allows the push only when the remote is a registered mirror (never origin), every
+default-branch sha equals origin's tip, and mirror-sync attested exactly that push. Anything else
+exits non-zero with the reason, so the guard keeps refusing. Guard snippet: `printf '%s\n' "$refs" |
+aida remote mirror-guard-check "$1" && exit 0` `--install-guard` installs AIDA's opt-in main guard,
+which already consults this check, chained in front of the existing pre-push hook
+
+Usage: aida remote mirror-guard-check [OPTIONS] [REMOTE]
+
+Arguments:
+  [REMOTE]
+          The remote the push targets (pre-push hook argument $1)
+
+Options:
+      --install-guard
+          Install the main guard and chain it in front of the pre-push hook
+
+      --force
+          With --install-guard: chain in front of a custom pre-push hook too
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+  -h, --help
+          Print help (see a summary with '-h')
 ===== aida remote mirror-sync
 Push origin's tips of the default branch and the spec store to every mirror hub, by sha. The
 pre-push hook only mirrors what this machine pushes; a merge performed on the forge and a store push
@@ -30865,6 +30899,37 @@ Working on aida itself
         "name": "help",
         "takes_value": false,
         "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": true
+  },
+  {
+    "path": [
+      "aida",
+      "remote",
+      "mirror-guard-check"
+    ],
+    "about": "(plumbing) Ask whether a push to the default branch is an attested `aida remote mirror-sync` of origin's reviewed tip. A project's pre-push main guard pipes its stdin ref lines here before refusing; exit 0 allows the push only when the remote is a registered mirror (never origin), every default-branch sha equals origin's tip, and mirror-sync attested exactly that push. Anything else exits non-zero with the reason, so the guard keeps refusing. Guard snippet: `printf '%s\\n' \"$refs\" | aida remote mirror-guard-check \"$1\" && exit 0` `--install-guard` installs AIDA's opt-in main guard, which already consults this check, chained in front of the existing pre-push hook",
+    "flags": [
+      {
+        "name": "force",
+        "takes_value": false,
+        "help": "With --install-guard: chain in front of a custom pre-push hook too"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "install-guard",
+        "takes_value": false,
+        "help": "Install the main guard and chain it in front of the pre-push hook"
       }
     ],
     "hidden": true
