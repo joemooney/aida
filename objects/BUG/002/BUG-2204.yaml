@@ -3,12 +3,12 @@ spec_id: BUG-2204
 agreed_id: BUG-2204
 title: Relay seat misses advisor mail sent to its role inbox and halts claiming a PR is approved without checking the verdict
 description: 'Seen 2026-10-21 on relay 20261020-063739-codex-task-1981. The codex relay reads only the ''joe'' mailbox identity. The advisor''s 06:05 change request for PR-2796 was sent ''--to implementer'' (thread d7b5f068) and was never seen. The relay then halted at 07:02 with BLOCKED_ON_HUMAN ''PR #2796 is green and approved-ready'', but .aida/review-verdicts/PR-2796.json said request-changes. Acceptance: (1) a relay seat receives mail addressed to its role (implementer) as well as its user identity, or ''aida mailbox send'' warns when the recipient has no reader; (2) a relay never reports a PR approved without reading the recorded verdict for the current head.'
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T15:03:20.534275095Z
-modified_at: 2026-10-21T15:07:07.794573783Z
+modified_at: 2026-10-22T00:48:50.680536729Z
 req_type: Bug
 tags:
 - mailbox
@@ -24,6 +24,14 @@ history:
   timestamp: 2026-10-21T15:07:09.274565129Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
   changes: []
+- id: 01a16115-07f8-73e2-bdfb-a0d41f49ea4b
+  author: joe
+  timestamp: 2026-10-22T00:48:50.680534120Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 7be4321436b8f93b2daba2bd71b649046818e35f
   branch: main
