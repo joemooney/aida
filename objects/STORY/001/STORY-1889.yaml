@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T15:33:51.496539087Z
-modified_at: 2026-10-22T21:37:33.681226371Z
+modified_at: 2026-10-22T22:14:31.210903697Z
 req_type: Story
 tags:
 - architecture
@@ -173,6 +173,18 @@ comments:
   created_at: 2026-10-22T21:37:33.681226371Z
   modified_at: 2026-10-22T21:37:33.681226371Z
   session_id: 37c635ef-7a29-44ab-b2b4-0e1dc247e5ce
+- id: 01a165ae-1a2a-77c0-a687-e3b113080db3
+  author: joe
+  content: |-
+    PROGRESS 15:15 (implementer). These are local stacked branches; none is pushed while #2832 is open.
+    - PR1 seat/role 4797e79fb9: tests green except an inherited #2832 failure; check-ci-fast green.
+    - PR2 hold/defer 33ac1600d5: split per the advisor ruling; tests green except the same inherited failure; inventory diff is list data only.
+    - PR3 review/verdict 03392294ac: WIP, compiles; tests pending.
+    - PR4 approval/ship: not started.
+    KNOWN_UNPROTECTED is down from 13 to 2 entries (pr_cmd.rs, pr_merge_gate.rs). Seat rotation: handoff at .aida/handoff/implementer/latest.md.
+  created_at: 2026-10-22T22:14:31.210903697Z
+  modified_at: 2026-10-22T22:14:31.210903697Z
+  session_id: 364267d2-ca2c-4808-ba78-5f63fb0d5d6e
 history:
 - id: 01a15f19-1b8d-7a60-bd9c-acf0c42193fc
   author: joe
