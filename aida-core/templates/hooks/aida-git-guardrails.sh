@@ -542,13 +542,46 @@ fi
 # An agent may not bypass the host cargo-slot limiter. Setting
 # AIDA_CARGO_NO_SLOT skips the slot queue, so one agent's full suite runs beside
 # two slotted builds on a 6-core host (fix-2725: `make check` took 1h20m).
-# This scans the raw COMMAND, not SCAN_COMMAND: quoted bodies are commands too
-# (`bash -c "AIDA_CARGO_NO_SLOT=1 make check"`), so any assignment (`=`, `+=`,
-# `export`, `env`) anywhere is blocked, a mail body that spells one out included.
-# Unsetting it (`env -u`, `unset`) has no `=` and stays allowed. An indirect
-# name (`X=AIDA_CARGO_NO_SLOT; export "${X}=1"`) is out of scope: that is
-# deliberate evasion, not an accident. trace:TASK-1948 | ai:claude
-if printf '%s' "$COMMAND" | grep -qE '(^|[^A-Za-z0-9_])AIDA_CARGO_NO_SLOT\+?='; then
+# Any assignment (`=`, `+=`, `export`, `env`) is blocked where it can run:
+# - the command with quoted text and heredoc bodies removed (SCAN_COMMAND);
+# - anywhere, when the command runs an unquoted shell or eval (`bash -c
+#   "..."`, `sh -c '...'`, `eval "..."`, `bash <<EOF`, `| sh`);
+# - inside a command or process substitution (`$(...)`, backticks, `<(...)`);
+# - a quoted assignment word after env/export/declare/typeset/local/readonly.
+# Quoted text nothing executes is prose, not an assignment (TASK-1643): an
+# `rg`/`grep` pattern, a `git commit -m` message, an `aida comment add` or
+# mailbox body. Unsetting it (`env -u`, `unset`) has no `=` and stays allowed.
+# An indirect name (`X=AIDA_CARGO_NO_SLOT; export "${X}=1"`) is out of scope:
+# that is deliberate evasion, not an accident.
+# trace:TASK-1948 | ai:claude
+# trace:TASK-1952 | trace:TASK-1643 | ai:claude
+NO_SLOT_SET='AIDA_CARGO_NO_SLOT\+?='
+# A shell by name or by path (`bash`, `/bin/bash`, `/usr/bin/env bash`).
+NO_SLOT_SHELL='(^|[^A-Za-z0-9_.-])([^[:space:]'"'"'"]*/)?(bash|sh|zsh|dash|ksh)'
+NO_SLOT_WORD_END='([^A-Za-z0-9_]|$)'
+no_slot_set() {
+    printf '%s' "$SCAN_COMMAND" | grep -qE "(^|[^A-Za-z0-9_])$NO_SLOT_SET" && return 0
+    # An unquoted shell or eval runs quoted text (`-c` payloads, `eval`
+    # strings, heredocs or pipes fed to it), separators inside it included,
+    # so the whole command is scanned. A shell named only inside quoted prose
+    # runs nothing (TASK-2123).
+    if printf '%s' "$SCAN_COMMAND" | grep -qE \
+        "$NO_SLOT_SHELL$NO_SLOT_WORD_END|(^|[^A-Za-z0-9_])eval$NO_SLOT_WORD_END"; then
+        printf '%s' "$COMMAND" | grep -qE "(^|[^A-Za-z0-9_])$NO_SLOT_SET" && return 0
+    fi
+    # Command and process substitutions run even inside double quotes.
+    printf '%s' "$COMMAND" | grep -qE "(\\\$\\(|<\\(|>\\(|\`)[^)\`]*$NO_SLOT_SET" && return 0
+    # A quoted argument to an unquoted env/export/declare/typeset/local/
+    # readonly is still an assignment word (`env "X=1"`, `export 'X=1'`).
+    NO_SLOT_ASSIGNER='(env|export|declare|typeset|local|readonly)'
+    if printf '%s' "$SCAN_COMMAND" | grep -qE "(^|[^A-Za-z0-9_])$NO_SLOT_ASSIGNER$NO_SLOT_WORD_END"; then
+        printf '%s' "$COMMAND" | grep -qE \
+            "(^|[^A-Za-z0-9_])$NO_SLOT_ASSIGNER([[:space:]]+[^[:space:];&|]+)*[[:space:]]+['\"]$NO_SLOT_SET" \
+            && return 0
+    fi
+    return 1
+}
+if no_slot_set; then
     {
         echo "BLOCKED: AIDA_CARGO_NO_SLOT bypasses the cargo build-slot limiter."
         echo "Agents queue for a slot like everyone else: drop the variable and run long cargo"

@@ -202,7 +202,9 @@ mod session_misc;
 mod session_start;
 mod skill_cmd;
 mod solo_cmd;
+// trace:STORY-1662 | ai:claude
 mod stakeholder_role;
+mod standalone_implementer;
 mod status_awaiting;
 mod status_cmd;
 mod status_prs;

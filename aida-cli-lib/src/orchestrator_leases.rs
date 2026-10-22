@@ -871,6 +871,12 @@ pub(crate) fn exit_code_for_error(err: &anyhow::Error) -> i32 {
     if let Some(exit) = err.downcast_ref::<queue_cmd::ReviewerVendorExit>() {
         return exit.code;
     }
+    // trace:STORY-1662 | ai:claude
+    if let Some(exit) =
+        err.downcast_ref::<crate::standalone_implementer::StandaloneImplementerExit>()
+    {
+        return exit.code;
+    }
     err.downcast_ref::<pr_rebase::RebaseFailureExit>()
         .map(|sig| sig.code)
         .unwrap_or(1)

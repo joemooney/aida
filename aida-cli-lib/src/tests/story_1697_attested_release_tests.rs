@@ -70,6 +70,8 @@ struct Case {
     /// Stop the mandate after its first consultation (eligibility), before
     /// the release-time recheck.
     revoke_mid_release: bool,
+    /// Fail the label removal, the release's last step (TASK-1915).
+    fail_labels: bool,
 }
 
 impl Case {
@@ -127,6 +129,7 @@ impl Case {
             state: MandateState::None,
             seat: ("advisor", "joe"),
             revoke_mid_release: false,
+            fail_labels: false,
         }
     }
 
@@ -165,6 +168,8 @@ impl Case {
                         state: mh::ChangeState::Open,
                         head_sha: Some(HEAD.into()),
                         hold_label: true,
+                        recorded_label: true,
+                        cleared_label: false,
                     }))
                 },
                 read_hold: &|| mh::read_hold_record(root.path(), PR),
@@ -219,10 +224,28 @@ impl Case {
                     comments.borrow_mut().push(body.to_string());
                     Ok(())
                 },
-                labels: &|| Ok(()),
+                labels: &|| {
+                    if self.fail_labels {
+                        anyhow::bail!("release labels failed: gh down")
+                    }
+                    Ok(())
+                },
             },
         );
         let held = mh::hold_path(root.path(), PR).exists();
+        // TASK-1915 F3: a failed mandate-covered release writes a refused
+        // row. trace:TASK-1915 | ai:claude
+        if self.fail_labels {
+            let refused = crate::mandate_drive::ledger_rows(root.path(), MANDATE_ID)
+                .into_iter()
+                .filter(|(_, _, r)| {
+                    r.action == "release-rework-hold"
+                        && r.outcome == crate::mandate_drive::Outcome::Refused
+                        && r.why.as_deref().is_some_and(|w| w.contains("gh down"))
+                })
+                .count();
+            assert_eq!(refused, 1);
+        }
         if result.is_ok() {
             let audit: Value = serde_json::from_slice(
                 &std::fs::read(mh::clearance_path(root.path(), PR)).unwrap(),
@@ -235,6 +258,19 @@ impl Case {
                 audit.get("released_under_mandate").and_then(Value::as_str),
                 under.as_deref()
             );
+            // TASK-1915 F3: a mandate release writes its MandateDriveAction
+            // row; an ordinary one writes none. trace:TASK-1915 | ai:claude
+            let rows = crate::mandate_drive::ledger_rows(root.path(), MANDATE_ID);
+            let released: Vec<_> = rows
+                .iter()
+                .filter(|(_, actor, r)| {
+                    actor == "session"
+                        && r.action == "release-rework-hold"
+                        && r.lane == format!("pr:{PR}")
+                        && r.outcome == crate::mandate_drive::Outcome::Done
+                })
+                .collect();
+            assert_eq!(released.len(), usize::from(under.is_some()), "{rows:?}");
         }
         (result, comments.into_inner(), held)
     }
@@ -490,4 +526,16 @@ fn a_mandate_stopped_mid_release_withholds_the_release() {
     case.state = MandateState::Active(mandate(true));
     case.revoke_mid_release = true;
     case.refused("was stopped");
+}
+
+// TASK-1915 F3: a mandate-covered release that fails is ledgered refused.
+// trace:TASK-1915 | ai:claude
+#[test]
+fn a_failed_mandate_covered_release_is_ledgered_as_refused() {
+    let mut case = Case::ok().sensitive();
+    case.state = MandateState::Active(mandate(true));
+    case.fail_labels = true;
+    let (result, _, held) = case.run();
+    assert!(format!("{:#}", result.unwrap_err()).contains("gh down"));
+    assert!(held, "a failed release keeps the hold");
 }

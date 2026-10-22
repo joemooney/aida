@@ -1953,6 +1953,13 @@ fn list_verdict_directory(dir: &std::fs::File) -> std::io::Result<Vec<std::ffi::
     result.map(|()| names)
 }
 
+// The verdict directory reader needs this thread's errno; there is no
+// portable way to clear it, so a target without an arm below must not build
+// a reader that could report a stale errno as a readdir error.
+// trace:TASK-1951 trace:TASK-1669 | ai:claude
+#[cfg(not(any(target_os = "linux", target_os = "android", target_vendor = "apple")))]
+compile_error!("review_verdict::set_errno_zero needs an errno arm for this target");
+
 /// readdir reports end-of-directory and errors both as NULL; only errno,
 /// cleared beforehand, tells them apart.
 fn set_errno_zero() {
@@ -2003,8 +2010,10 @@ pub(crate) fn read_verdict_body(path: impl AsRef<Path>) -> std::io::Result<Strin
 /// Modification time of a verdict artefact, from the same anchored handle the
 /// body is read through. A linked file or directory has no trustworthy mtime.
 // trace:TASK-1801 | ai:claude
+// The body is never read: the validated handle's metadata is enough.
+// trace:TASK-1951 trace:TASK-1814 | ai:claude
 pub(crate) fn verdict_file_modified(path: impl AsRef<Path>) -> Option<std::time::SystemTime> {
-    read_verdict_file(path.as_ref()).ok()?.1.modified().ok()
+    open_verdict_handle(path.as_ref()).ok()?.1.modified().ok()
 }
 
 fn read_verdict_file(path: &Path) -> std::io::Result<(String, std::fs::Metadata)> {
@@ -2019,6 +2028,23 @@ fn read_verdict_file_with_hook(
     after_validation: impl FnOnce(),
 ) -> std::io::Result<(String, std::fs::Metadata)> {
     use std::io::Read;
+    let (file, meta) = open_verdict_handle(path)?;
+    after_validation();
+    let mut body = String::new();
+    file.take(MAX_COLLECTED_VERDICT_BYTES + 1)
+        .read_to_string(&mut body)?;
+    if body.len() as u64 > MAX_COLLECTED_VERDICT_BYTES {
+        return Err(std::io::Error::other("verdict exceeds size limit"));
+    }
+    Ok((body, meta))
+}
+
+/// The anchored, validated handle every verdict read starts from: opened
+/// through the verdict directory without following links, and refused
+/// unless it is a bounded, singly linked regular file.
+// trace:TASK-1801 | ai:codex
+// trace:TASK-1951 trace:TASK-1814 | ai:claude
+fn open_verdict_handle(path: &Path) -> std::io::Result<(std::fs::File, std::fs::Metadata)> {
     use std::os::unix::fs::MetadataExt;
     let parent = open_verdict_directory(
         path.parent()
@@ -2035,14 +2061,7 @@ fn read_verdict_file_with_hook(
             "verdict must be a bounded, singly linked regular file",
         ));
     }
-    after_validation();
-    let mut body = String::new();
-    file.take(MAX_COLLECTED_VERDICT_BYTES + 1)
-        .read_to_string(&mut body)?;
-    if body.len() as u64 > MAX_COLLECTED_VERDICT_BYTES {
-        return Err(std::io::Error::other("verdict exceeds size limit"));
-    }
-    Ok((body, meta))
+    Ok((file, meta))
 }
 
 /// BUG-2149: a verdict file modified at or after `since` (the reviewer's
@@ -2394,14 +2413,22 @@ pub fn close_verdict_on_merge(
     );
     let pretty = serde_json::to_string_pretty(&serde_json::Value::Object(obj.clone()))
         .unwrap_or_else(|_| "{}".to_string());
-    write_verdict_atomic(&path, &format!("{pretty}\n"))?;
     // TASK-1460: the current round is also archived at its reviewed commit;
     // close it there too, or `verdicts_for_sha` / `read_verdict_for_sha`
     // would still report this refusal as open. The archive's top level is
     // this same recording, so re-archiving replaces it with the closed copy
     // and keeps that commit's earlier recordings in its `rounds`.
     // trace:TASK-1460 | ai:claude
-    archive_round_by_sha(&path, &obj)?;
+    // TASK-1671: prepare the archive entry BEFORE writing the current file,
+    // as write_verdict_object does, so a refused archive entry fails the
+    // close before anything is written. Writing current first left it closed
+    // and the archive open, and a re-run then saw `already_closed`.
+    // trace:TASK-1951 trace:TASK-1671 | ai:claude
+    let archive = prepare_archive_round(&path, &obj)?;
+    write_verdict_atomic(&path, &format!("{pretty}\n"))?;
+    if let Some((archive, body)) = archive {
+        write_verdict_atomic(&archive, &body)?;
+    }
     Ok(true)
 }
 

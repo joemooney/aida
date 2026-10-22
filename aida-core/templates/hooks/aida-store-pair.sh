@@ -27,19 +27,29 @@ COMMON_DIR=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
 MAIN_ROOT=""
 [ -n "$COMMON_DIR" ] && MAIN_ROOT=$(dirname "$COMMON_DIR")
 
-CANDIDATES=("$PROJECT_ROOT/.aida-store" "$PROJECT_ROOT/aida-store")
-[ -n "$MAIN_ROOT" ] && [ "$MAIN_ROOT" != "$PROJECT_ROOT" ] && CANDIDATES+=("$MAIN_ROOT/.aida-store" "$MAIN_ROOT/aida-store")
-
-STORE_PATH=""
-for candidate in "${CANDIDATES[@]}"; do
-    if [ -d "$candidate/.git" ] || [ -f "$candidate/.git" ]; then
-        STORE_PATH="$candidate"
-        break
-    fi
-done
-[ -z "$STORE_PATH" ] && exit 0
-
-STORE_SHA=$(env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE git -C "$STORE_PATH" rev-parse HEAD 2>/dev/null) || exit 0
+# BUG-2117: the store is resolved only from git's own common directory (the
+# main checkout), never from a path under this commit's toplevel, whose tree
+# a sandboxed session may write: a planted nested `.aida-store/.git` would
+# otherwise forge the trailer. A commit in the store itself pins the store's
+# own HEAD, read from the repository git is already committing in.
+# trace:TASK-1952 | trace:BUG-2117 | ai:claude
+[ -z "$MAIN_ROOT" ] && exit 0
+case "$PROJECT_ROOT" in
+    "$MAIN_ROOT/.aida-store"|"$MAIN_ROOT/aida-store"|*/.aida-store)
+        STORE_SHA=$(git rev-parse -q --verify HEAD 2>/dev/null) || exit 0
+        ;;
+    *)
+        STORE_PATH=""
+        for candidate in "$MAIN_ROOT/.aida-store" "$MAIN_ROOT/aida-store"; do
+            if [ -d "$candidate/.git" ] || [ -f "$candidate/.git" ]; then
+                STORE_PATH="$candidate"
+                break
+            fi
+        done
+        [ -z "$STORE_PATH" ] && exit 0
+        STORE_SHA=$(env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE git -C "$STORE_PATH" rev-parse HEAD 2>/dev/null) || exit 0
+        ;;
+esac
 [ -z "$STORE_SHA" ] && exit 0
 
 # Skip if the trailer is already there (handles re-edit of an in-progress

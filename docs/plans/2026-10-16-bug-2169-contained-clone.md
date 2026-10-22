@@ -1,7 +1,7 @@
 # BUG-2169: give each contained seat a private clone (architecture sketch)
 
-Status: APPROVED 2026-10-16 (option A, slices S1-S4). S1 landed in 2177eaad8f. S2 (sandbox
-boundary) is the next slice; see "S2 as built" at the end.
+Status: APPROVED 2026-10-16 (option A, slices S1-S4). S1 landed in 2177eaad8f, S2 in b66e4d93b8.
+S3 (host-safe lifecycle) is tracked on TASK-2053; see "S2 as built" and "S3 as built" at the end.
 Owning spec: BUG-2169. Supersedes the PR #2694 approach, which the round-2 ruling rejected.
 Code references are to `main` at fc39d8f0bc. Paths are relative to `aida-cli-lib/src/` unless they
 start with `aida-core/`.
@@ -429,3 +429,157 @@ slices S1-S4. Most of the change is turning silent-skip paths into explicit clon
   modelled Claude Code sandbox and the os_wrap argv. The attack tests also run against the frozen
   #2694 layout, where the attacks must succeed. The tests join the GitHub live-bwrap gate, where
   `AIDA_REQUIRE_BWRAP_LIVE=1` turns a skip into a failure. T4's probe check and T6/T7 belong to S3.
+
+## S3 as built
+
+Owning spec: TASK-2053 (the remaining BUG-2169 slices moved there unchanged).
+
+- **`seat_clone::probe(main, clone)`.** Two git runs (`status --porcelain=v2 --branch
+  --untracked-files=all`, then `rev-list --count HEAD --not --remotes=origin <base>`) inside
+  `bwrap --unshare-all --die-with-parent --new-session` with a private `/tmp` and no network. The
+  read view is never wider than the seat's own: with `[contained] read_allowlist` (read from
+  MAIN's config) only the essential system paths and the allowlist, otherwise `--ro-bind / /`. The
+  clone and `<main>/.git` are bound read-only after the `/tmp` mount. A host-written repo config
+  (repository format and object format taken from MAIN) is bound over the clone's `.git/config`,
+  and `GIT_DIR`/`GIT_COMMON_DIR` are set, so no seat-defined filter, diff, textconv or fsmonitor
+  driver or include exists in the probe, and a planted `.git/commondir` cannot point at another
+  config. The environment is cleared; `GIT_CONFIG_NOSYSTEM=1`, `GIT_CONFIG_GLOBAL=/dev/null`,
+  `GIT_OPTIONAL_LOCKS=0`, and command-scope `core.hooksPath=/dev/null` and
+  `core.fsmonitor=false`. Each run is killed after 120 s, and its captured output is capped
+  (16 MiB for a probe; the reader kills the run past the cap). `<base>` is the commit the pin in
+  MAIN names, never read from the clone. No bwrap, a timeout, a non-zero exit, a cut-off or an
+  unparsable answer is `Probe::Unknown`, and every caller keeps the clone.
+- **"Unpushed"** means commits reachable from HEAD that no `refs/remotes/origin/*` in the clone
+  holds. Those refs are seat-writable, so a seat can make its own work look pushed; that only
+  loses its own work (no host or cross-seat effect), and session end still requires `--force` for
+  uncommitted files.
+- **`seat_clone::salvage`.** One fixed `sh -c` script in the same sandbox prints `format-patch
+  --stdout --binary HEAD --not --remotes=origin <base>`, `diff --binary HEAD`, and a new-file diff
+  per untracked file (BUG-696 shape). The host writes stdout to
+  `<main>/.aida/salvage/<clone dir>/<UTC stamp>.patch`. No fetch from the clone. A salvage past
+  64 MiB is written cut off with a closing `# TRUNCATED` line and is an error, so `destroy` keeps
+  the clone.
+- **`seat_clone::destroy(main, clone, mode, expect_head)`.** Refuses unless the path is an
+  `aida-seat-*` directory directly in main's worktree parent, neither inside main nor containing it
+  (the lease is seat-writable through the store). Then: probe (unknown keeps; a HEAD other than
+  `expect_head` keeps), salvage when dirty or unpushed (`KeepUnshipped` stops there, for reap;
+  a failed or cut-off salvage keeps the clone in either mode), for reap a fresh live-process
+  check (`check_worktree_removal`, BUG-1947: in use or unverified keeps), `remove_dir_all`, remove `<main>/target/worktrees/<clone dir>`, release the pin. A clone
+  directory that is already gone goes straight to the target and pin steps.
+- **Session end.** Probes first (unknown refuses, nothing changed). Unpushed commits count as dirty
+  entries, so they need `--force` like uncommitted files. Teardown calls
+  `destroy(SalvageUnshipped)` in place of `git worktree remove`; the lease is deleted at the usual
+  point.
+- **Reap.** A `clone` lease is classified by `classify_clone_reap` (process alive and spec not
+  finished first, so a live or unfinished seat is never probed; then probe unknown, dirty, off
+  its branch, unpushed; then no merged PR on the forge: each keeps it). The
+  row's `branch_tip` is the probed HEAD; `reap_one` calls `destroy(KeepUnshipped, Some(tip))` and
+  releases the lease only when the clone is gone. No branch in main is touched.
+- **Orphan pins (condition 4).** `create` claims the empty clone directory before it writes the
+  pin, so a pin never exists without its directory while a launch is in flight (the lease is
+  written after `create`). `seat_clone::orphan_pins` lists `refs/aida/seats/*` that no clone
+  lease names. `aida session reap` (and the quiet night-shift reap) release those whose clone
+  directory is gone and report the ones whose clone still exists.
+- **Placement.** An explicit `--path` for a clone seat must be the seat-clone location (an
+  `aida-seat-*` directory directly in the worktree parent); anything else is refused, so no clone
+  is ever made where `destroy` cannot remove it.
+- **Dismiss.** `aida worktree dismiss <clone>` runs the holder check, `destroy(SalvageUnshipped)`,
+  releases any clone lease naming the directory, and writes a `seat_clone_dismiss` ledger line. The
+  salvage patch is the archive (the clone's commits are not in main, so there is no
+  `refs/archive/*`).
+- **Tests.** `tests/task_2053_seat_clone_lifecycle_tests.rs`. T7 plants `core.fsmonitor`, a clean
+  filter and hooks, runs probe, the reap scan, salvage and destroy with a logging `git` first on
+  PATH, and asserts no canary fired on the host and no untagged git ran in the clone; a negative
+  control shows the plant fires under plain host git. T6 is S1's refusal tests plus a stale
+  pin-lock variant. T4's probe check points the seat's alternates at `/`. The `task_2053_bwrap_`
+  tests join the live-bwrap CI gate.
+- **Still gated.** `seat_tree = "clone"` stays a development switch until S4 moves status and the
+  other listing paths off plain git.
+
+### S3 review round 2 fixes
+
+- **Unpushed means any ref.** The probe counts commits reachable from every branch, tag, HEAD and
+  stash entry (the `refs/stash` reflog) that are not on `origin/*` or the pinned base, so a side
+  branch, a tag or a stash makes the clone unshipped.
+- **Salvage writes a bundle.** Beside the readable patch, salvage writes `<stamp>.bundle` holding
+  every one of those commits with all of the clone's refs (thin against origin; `git fetch` it into
+  a checkout of main). A bundle that cannot be made fails the salvage, and the clone is kept.
+- **Untracked names are NUL-separated** (`ls-files -z` into `xargs -0`), so no quoted name is
+  dropped, and a file that cannot be diffed fails the whole salvage.
+- **Orphan pins are compare-and-delete.** `release_orphan_pin` re-checks that the clone directory
+  is absent and that no clone lease names it, then runs `update-ref -d <pin> <listed oid>`.
+
+### S3 review round 3 fixes
+
+- **No host writes through a seat's `.aida`.** Session end no longer strips the runtime links in
+  `<clone>/.aida` or reads `<clone>/.aida/session-env.sh` for a clone lease: the directory is
+  seat-writable, so a symlink there would aim host unlinks (or the cargo-target removal) outside
+  the clone. `seat_clone::destroy` removes the whole clone without following symlinks.
+- **Reftable clones stay readable.** The probe config carries `extensions.refStorage = reftable`
+  from the clone's config (read as a regular file, parsed from a host-side copy, allowlisted
+  value only) beside main's object format. Any other value is dropped, which can only make the
+  probe fail closed.
+- **Tests.** Session end `--force` and worktree dismiss run under the logging git shim with no
+  untagged git in the clone, and a decoy that `<clone>/.aida` points at keeps its `sessions` link,
+  files and target dir; a reftable clone probes (skipped where git cannot migrate refs); the
+  quoted-names salvage test adds a newline in a name.
+- **Folded to TASK-2110 (S4):** squash-merged branches whose origin ref was pruned read as
+  unpushed.
+
+### S3 review round 5 fixes
+
+- **A nested repository keeps the clone.** `git diff --no-index` exits 1 for "Could not access"
+  just as for "files differ", so an untracked nested git repository (`ls-files --others` lists it
+  as `sub/`) used to pass salvage with no content. The salvage now fails on any untracked entry
+  that ends in `/` or is not a regular file or symlink, and names it on stderr. Destroy then
+  keeps the clone and session end reports why.
+- **Seat-written config is read on one handle.** `seat_clone_detect::read_regular_file` opens with
+  `O_NOFOLLOW | O_NONBLOCK`, checks the opened handle is a regular file within 64 KiB, and stops
+  reading one byte past the cap. A FIFO or a `/dev/zero` symlink swapped in after a stat by name
+  can no longer hang or exhaust the host.
+- **A kept clone is not "orphaned".** When destroy keeps the clone, session end skips the Claude
+  Code project-dir step, so it neither calls that dir orphaned nor purges it under `--purge-cc`.
+- **Tests.** A nested repo holding one committed and one uncommitted file fails the salvage, and
+  the clone is kept with both files. `reap_one_clone` skips a clone with no recorded HEAD, keeps
+  an unshipped clone and its lease, and releases the lease only on removal. `read_regular_file`
+  refuses a FIFO, a `/dev/zero` symlink and an oversized file.
+
+### S3 review round 6 fixes
+
+- **Submodule work keeps the clone.** The patch and the bundle hold only the superproject, so
+  salvage does not try to capture submodules. The probe's unpushed count adds every commit, on any
+  ref of any nested submodule, that the submodule's remotes lack. A submodule side branch alone
+  therefore reads as unshipped. The salvage fails up front on a submodule status entry or a
+  nonzero submodule count, so destroy keeps the clone and names the submodule.
+- **Directory symlinks keep the clone.** An untracked symlink to a directory fails the salvage
+  (`diff --no-index` follows it), and so does any untracked entry whose diff comes back empty. A
+  symlink to a file, dangling or not, is still recorded as mode 120000.
+
+### S3 review round 7 fixes
+
+- **Any submodule keeps the clone.** Round 7 found two more ways submodule work escaped the count:
+  a `.gitmodules` `ignore = dirty` setting, and the commits a deinit'd or removed submodule leaves
+  in `.git/modules/<name>`. The advisor ruled to close the whole class instead of handling each
+  case. Before any other git runs, the probe looks for submodule evidence: a `.gitmodules` in the
+  worktree or at HEAD, a gitlink in the index or in HEAD's tree, or any entry under
+  `.git/modules`. It runs nothing inside a submodule. If it finds evidence, it returns
+  `Probe::HasSubmodules`. Destroy keeps the clone in every mode, and so does reap, with the
+  reason "the clone has submodules (...); automatic salvage does not cover them, so it is kept:
+  inspect <path> and remove it by hand".
+- The submodule `foreach` count has been removed from the unpushed count. The salvage guard
+  stays, for a submodule that appears after the probe. The probe's `git status` passes
+  `--ignore-submodules=none`.
+- The doc comments now state what does run: git inside a submodule reads that submodule's own
+  seat-written config, and its drivers run, but only inside the sandbox.
+
+### S3 review round 8 fixes
+
+- Session end handles `Probe::HasSubmodules`: it refuses with the reason, and the lease, clone and
+  base pin are unchanged. Once the operator removes the clone by hand, `aida worktree dismiss
+  <clone>` releases them. The `ignore = dirty` test now runs session end (with and without
+  `--force`), dismiss and reap, and asserts that all three keep the clone.
+- **The grep gate against host git in clones (listed under S3 above) moves to S4.** A grep cannot
+  pick out its target: git aimed at a lease's clone path looks the same in source as git aimed at
+  a worktree. S3 enforces the rule at runtime instead. `host_git_command` and `status_sections`
+  refuse any cwd inside a seat clone, and T7 and the logging-shim test check session end and
+  dismiss. S4 adds the ratchet when it moves the `git -C <worktree>` consumers onto `seat_trees`.

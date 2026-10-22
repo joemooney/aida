@@ -1,0 +1,187 @@
+//! BUG-2195 (TASK-2067): the mandate store snapshot is compared by what can
+//! change the exclusion reader's `--all` history of `objects/`, not byte for
+//! byte over every ref of the shared code repository. TASK-2019: a dirty store
+//! is a typed, retryable error.
+// trace:TASK-2067 | ai:antigravity
+use super::*;
+
+struct Store(tempfile::TempDir);
+
+impl Store {
+    fn new() -> Self {
+        let s = Self(tempfile::tempdir().unwrap());
+        s.git(&["init", "-q", "-b", "main"]);
+        s.git(&["config", "user.name", "Test"]);
+        s.git(&["config", "user.email", "test@example.invalid"]);
+        s.git(&["config", "core.hooksPath", "/dev/null"]);
+        s.git(&["config", "commit.gpgsign", "false"]);
+        s
+    }
+    fn path(&self) -> &Path {
+        self.0.path()
+    }
+    fn git(&self, args: &[&str]) -> String {
+        let out = crate::test_git::git_command()
+            .current_dir(self.path())
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "git {args:?}: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        String::from_utf8(out.stdout).unwrap().trim().to_owned()
+    }
+    /// Commit `path` = `body` on the current branch; returns the commit.
+    fn commit(&self, path: &str, body: &str) -> String {
+        let file = self.path().join(path);
+        std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+        std::fs::write(file, body).unwrap();
+        self.git(&["add", "-A"]);
+        self.git(&["commit", "-qm", "fixture"]);
+        self.git(&["rev-parse", "HEAD"])
+    }
+    /// Commit `path` = `body` on `branch` (created from `from`) without
+    /// moving the store's HEAD; returns the commit.
+    fn commit_on(&self, branch: &str, from: &str, path: &str, body: &str) -> String {
+        let head = self.git(&["symbolic-ref", "--short", "HEAD"]);
+        self.git(&["checkout", "-q", "-B", branch, from]);
+        let sha = self.commit(path, body);
+        self.git(&["checkout", "-q", &head]);
+        sha
+    }
+    fn snap(&self) -> StoreSnapshot {
+        store_snapshot(self.path()).unwrap()
+    }
+    fn stable(&self, before: &StoreSnapshot) -> bool {
+        store_snapshot_stable(self.path(), before, &self.snap())
+    }
+}
+
+/// A store with one object version on `main` (HEAD) and a code branch whose
+/// history never touches `objects/`.
+fn store() -> (Store, String) {
+    let s = Store::new();
+    let base = s.commit("objects/TASK/000/TASK-1.yaml", "title: one\n");
+    s.commit_on("code", &base, "src/lib.rs", "fn a() {}\n");
+    (s, base)
+}
+
+#[test]
+fn an_unrelated_code_ref_move_is_stable() {
+    let (s, _) = store();
+    let before = s.snap();
+    let code = s.git(&["rev-parse", "code"]);
+    s.commit_on("code", &code, "src/lib.rs", "fn b() {}\n");
+    let after = s.snap();
+    assert_ne!(before, after, "the old byte comparison saw a change here");
+    assert!(store_snapshot_stable(s.path(), &before, &after));
+}
+
+#[test]
+fn a_new_code_ref_without_object_history_is_stable() {
+    let (s, base) = store();
+    let before = s.snap();
+    s.commit_on("feature", &base, "README.md", "x\n");
+    s.git(&["update-ref", "refs/remotes/origin/main", &base]);
+    assert!(s.stable(&before));
+}
+
+#[test]
+fn a_ref_bringing_a_new_object_version_is_unstable() {
+    let (s, base) = store();
+    let before = s.snap();
+    s.commit_on(
+        "sticky",
+        &base,
+        "objects/TASK/000/TASK-1.yaml",
+        "title: two\n",
+    );
+    assert!(!s.stable(&before), "an added ref with a new object version");
+
+    let (s, _) = store();
+    let before = s.snap();
+    let code = s.git(&["rev-parse", "code"]);
+    s.commit_on("code", &code, "objects/TASK/000/TASK-2.yaml", "title: x\n");
+    assert!(
+        !s.stable(&before),
+        "a changed ref with a new object version"
+    );
+}
+
+#[test]
+fn a_head_move_is_unstable_even_without_object_changes() {
+    let (s, _) = store();
+    let before = s.snap();
+    s.commit("notes.txt", "x\n");
+    assert!(!s.stable(&before));
+}
+
+#[test]
+fn a_deleted_ref_is_stable() {
+    let (s, base) = store();
+    s.commit_on(
+        "sticky",
+        &base,
+        "objects/TASK/000/TASK-1.yaml",
+        "title: old\n",
+    );
+    let before = s.snap();
+    s.git(&["update-ref", "-d", "refs/heads/sticky"]);
+    s.git(&["update-ref", "-d", "refs/heads/code"]);
+    assert!(s.stable(&before));
+}
+
+/// Advisor condition C3: a force-moved ref whose new tip drops commits that
+/// touched `objects/` is unstable, even though it brings nothing new.
+#[test]
+fn a_force_move_dropping_object_history_is_unstable() {
+    let (s, base) = store();
+    s.commit_on(
+        "sticky",
+        &base,
+        "objects/TASK/000/TASK-1.yaml",
+        "title: old\n",
+    );
+    let before = s.snap();
+    s.git(&["update-ref", "refs/heads/sticky", &base]);
+    assert!(!s.stable(&before));
+}
+
+#[test]
+fn a_force_move_dropping_only_code_history_is_stable() {
+    let (s, base) = store();
+    let before = s.snap();
+    s.git(&["update-ref", "refs/heads/code", &base]);
+    assert!(s.stable(&before));
+}
+
+/// A git failure is never read as stable: an unknown tip forces a retry.
+#[test]
+fn an_unreadable_ref_range_is_unstable() {
+    let (s, _) = store();
+    let before = s.snap();
+    let mut after = s.snap();
+    after.refs.insert(
+        "refs/heads/ghost".into(),
+        "1111111111111111111111111111111111111111".into(),
+    );
+    assert!(!store_snapshot_stable(s.path(), &before, &after));
+}
+
+/// TASK-2019: a dirty store is the typed, retryable [`StoreDirty`] error, and
+/// the snapshot's own status options win over repository config that would
+/// hide an untracked file (advisor condition C1).
+#[test]
+fn a_dirty_store_is_a_typed_error_whatever_the_status_config() {
+    let (s, _) = store();
+    s.git(&["config", "status.showUntrackedFiles", "no"]);
+    s.git(&["config", "core.quotePath", "true"]);
+    std::fs::write(s.path().join("objects/untracked é.yaml"), "x\n").unwrap();
+    let err = store_snapshot(s.path()).unwrap_err();
+    assert!(err.is::<StoreDirty>(), "{err:#}");
+    assert!(format!("{err:#}").contains("uncommitted evidence"));
+}

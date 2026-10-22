@@ -621,8 +621,24 @@ pub(crate) fn stale_head_after_ci_refusal(
     pre_ci_head: Option<&str>,
     merge_head: Option<&str>,
 ) -> Option<String> {
-    let pre = pre_ci_head.map(str::trim).filter(|s| !s.is_empty())?;
-    let post = merge_head.map(str::trim).filter(|s| !s.is_empty())?;
+    // TASK-1623: an unreadable head at either point cannot prove CI and
+    // review covered the head being merged, so it refuses (fail closed)
+    // instead of skipping the check. trace:TASK-1951 trace:TASK-1623 | ai:claude
+    fn read(head: Option<&str>) -> Option<&str> {
+        head.map(str::trim).filter(|s| !s.is_empty())
+    }
+    let (Some(pre), Some(post)) = (read(pre_ci_head), read(merge_head)) else {
+        let at = if read(pre_ci_head).is_none() {
+            "preflight"
+        } else {
+            "merge"
+        };
+        return Some(format!(
+            "PR-{pr_number}'s head could not be read at {at}, so the merge cannot be \
+             pinned to the head CI and review covered — refusing. Re-run \
+             `aida pr ship {pr_number}` once the forge answers."
+        ));
+    };
     if pre.eq_ignore_ascii_case(post) {
         None
     } else {

@@ -2598,6 +2598,25 @@ pub(crate) fn collapse_salvageable_by_worktree<'a>(
     collapsed
 }
 
+/// The `review_watch_held` field of `aida ps --json`: each change whose
+/// review-watch slot a superseded review still holds, with the cause.
+// trace:TASK-1945 | ai:claude
+pub(crate) fn ps_review_watch_held_json(held: &[(String, String)]) -> serde_json::Value {
+    held.iter()
+        .map(|(change, cause)| serde_json::json!({ "change": change, "cause": cause }))
+        .collect()
+}
+
+/// The agent-mode `review_watch_held` table of `aida ps`.
+// trace:TASK-1945 | ai:claude
+pub(crate) fn ps_review_watch_held_toon(held: &[(String, String)]) -> String {
+    let rows: Vec<Vec<String>> = held
+        .iter()
+        .map(|(change, cause)| vec![change.clone(), cause.clone()])
+        .collect();
+    crate::toon::table_raw("review_watch_held", &["change", "cause"], &rows)
+}
+
 pub(crate) fn handle_ps(json: bool, all: bool) -> Result<()> {
     let project_root =
         find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
@@ -2605,6 +2624,9 @@ pub(crate) fn handle_ps(json: bool, all: bool) -> Result<()> {
     let (rows, orphans) = gather_running_work(&project_root);
     // trace:TASK-1285 | ai:codex
     let live_wave = drain_lock::read_pid_live_lock(&project_root);
+    // A review-watch slot held by a superseded review that cannot yet be
+    // confirmed gone, with the cause. trace:TASK-1945 | ai:claude
+    let watch_held = crate::review_watch::held_slots(&project_root);
 
     // STORY-769: the last-human-input presence oracle — "operator last seen Nm
     // ago" + an active/idle/stale verdict, from the per-turn `aida awaiting
@@ -2747,6 +2769,8 @@ pub(crate) fn handle_ps(json: bool, all: bool) -> Result<()> {
                 "driven": driven,
                 // STORY-769: last-human-input oracle, null when never stamped.
                 "operator": operator,
+                // trace:TASK-1945 | ai:claude
+                "review_watch_held": ps_review_watch_held_json(&watch_held),
                 "wave": live_wave.as_ref().map(|l| serde_json::json!({
                     "id": if l.wave_id.is_empty() { format!("pid-{}", l.pid) } else { l.wave_id.clone() },
                     "pid": l.pid,
@@ -2982,6 +3006,10 @@ pub(crate) fn handle_ps(json: bool, all: bool) -> Result<()> {
                 &salv
             )
         );
+        // trace:TASK-1945 | ai:claude
+        if !watch_held.is_empty() {
+            println!("{}", ps_review_watch_held_toon(&watch_held));
+        }
         return Ok(());
     }
 
@@ -3428,6 +3456,15 @@ pub(crate) fn handle_ps(json: bool, all: bool) -> Result<()> {
              not spec-linked — so their specs read flag-only)"
                 .dimmed()
         );
+    }
+
+    // trace:TASK-1945 | ai:claude
+    if !watch_held.is_empty() {
+        println!();
+        println!("{}", "Review-watch slots held".bold().yellow());
+        for (change, cause) in &watch_held {
+            println!("  {}  {}", change.yellow().bold(), cause.dimmed());
+        }
     }
 
     Ok(())

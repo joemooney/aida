@@ -31,13 +31,68 @@ pub(crate) fn safe_path(store: &Path, path: &std::ffi::OsStr) -> std::ffi::OsStr
 
 /// True when no one but the owner (and root) can write a directory. World-write
 /// always fails. Group-write passes only for a directory this user owns whose
-/// group is this user's own primary group: the user-private-group default
+/// group is `private_gid`, this user's own user-private group: the default
 /// (umask 002, dirs 0775 user:user) grants nobody else write. Refusing that
-/// layout blocked every store write on such hosts.
+/// layout blocked every store write on such hosts. `private_gid` is `None`
+/// when the primary group is shared (TASK-1759: a `users` primary group would
+/// let another local user replace the pinned hooks), so group-write refuses.
 // trace:BUG-1929 | ai:claude
+// trace:TASK-1952 | trace:TASK-1759 | ai:claude
 #[cfg(unix)]
-pub(crate) fn only_owner_may_write(owner: u32, group: u32, mode: u32, uid: u32, gid: u32) -> bool {
-    mode & 0o002 == 0 && (mode & 0o020 == 0 || (owner == uid && group == gid))
+pub(crate) fn only_owner_may_write(
+    owner: u32,
+    group: u32,
+    mode: u32,
+    uid: u32,
+    private_gid: Option<u32>,
+) -> bool {
+    mode & 0o002 == 0 && (mode & 0o020 == 0 || (owner == uid && private_gid == Some(group)))
+}
+
+/// Whether a group is a user-private group of `user`: named after the user
+/// and with no supplementary members.
+// trace:TASK-1952 | trace:TASK-1759 | ai:claude
+pub(crate) fn is_user_private_group(user: &str, group: &str, members: &[String]) -> bool {
+    !user.is_empty() && user == group && members.is_empty()
+}
+
+/// `gid` when it is the user-private group of `uid` (see
+/// [`is_user_private_group`]), else `None`. An unresolvable user or group is
+/// not private.
+// trace:TASK-1952 | trace:TASK-1759 | ai:claude
+#[cfg(unix)]
+pub(crate) fn private_primary_gid(uid: u32, gid: u32) -> Option<u32> {
+    use std::ffi::CStr;
+    let mut buf = vec![0 as libc::c_char; 16 * 1024];
+    // SAFETY: getpwuid_r/getgrgid_r write only into the provided struct and
+    // buffer (sized above); the returned pointers are read only while `buf`
+    // lives, and a null result is checked before any read.
+    unsafe {
+        let mut pw: libc::passwd = std::mem::zeroed();
+        let mut pw_out: *mut libc::passwd = std::ptr::null_mut();
+        if libc::getpwuid_r(uid, &mut pw, buf.as_mut_ptr(), buf.len(), &mut pw_out) != 0
+            || pw_out.is_null()
+        {
+            return None;
+        }
+        let user = CStr::from_ptr(pw.pw_name).to_string_lossy().into_owned();
+        let mut gbuf = vec![0 as libc::c_char; 64 * 1024];
+        let mut gr: libc::group = std::mem::zeroed();
+        let mut gr_out: *mut libc::group = std::ptr::null_mut();
+        if libc::getgrgid_r(gid, &mut gr, gbuf.as_mut_ptr(), gbuf.len(), &mut gr_out) != 0
+            || gr_out.is_null()
+        {
+            return None;
+        }
+        let group = CStr::from_ptr(gr.gr_name).to_string_lossy().into_owned();
+        let mut members = Vec::new();
+        let mut mem = gr.gr_mem;
+        while !mem.is_null() && !(*mem).is_null() {
+            members.push(CStr::from_ptr(*mem).to_string_lossy().into_owned());
+            mem = mem.add(1);
+        }
+        is_user_private_group(&user, &group, &members).then_some(gid)
+    }
 }
 
 /// Whether `/proc/self/uid_map` content is the initial (identity) user
@@ -88,16 +143,16 @@ pub(crate) fn check_ancestor(
     group: u32,
     mode: u32,
     uid: u32,
-    gid: u32,
+    private_gid: Option<u32>,
     namespace_overflow: Option<u32>,
 ) -> std::result::Result<(), String> {
     let sticky = mode & 0o1000 != 0;
     if owner == uid {
-        if only_owner_may_write(owner, group, mode, uid, gid) || (owner == 0 && sticky) {
+        if only_owner_may_write(owner, group, mode, uid, private_gid) || (owner == 0 && sticky) {
             return Ok(());
         }
     } else if owner == 0 || namespace_overflow == Some(owner) {
-        if only_owner_may_write(owner, group, mode, uid, gid) || sticky {
+        if only_owner_may_write(owner, group, mode, uid, private_gid) || sticky {
             return Ok(());
         }
     } else {
@@ -117,6 +172,8 @@ pub(crate) fn establish(common: &Path, store: &Path) -> Result<PathBuf> {
     let result = (|| -> Result<PathBuf> {
         // SAFETY: geteuid/getegid have no arguments or memory-safety preconditions.
         let (uid, gid) = unsafe { (libc::geteuid(), libc::getegid()) };
+        // trace:TASK-1952 | trace:TASK-1759 | ai:claude
+        let private_gid = private_primary_gid(uid, gid);
         // A writable ancestor could replace even a read-only hooks directory.
         // Root-owned sticky temporary roots protect each user-owned child.
         // Inside a non-identity user namespace (bwrap) root-owned ancestors
@@ -135,9 +192,14 @@ pub(crate) fn establish(common: &Path, store: &Path) -> Result<PathBuf> {
                 "store hooks dir ancestor {} is not a real directory",
                 ancestor.display()
             );
-            if let Err(reason) =
-                check_ancestor(meta.uid(), meta.gid(), meta.mode(), uid, gid, overflow)
-            {
+            if let Err(reason) = check_ancestor(
+                meta.uid(),
+                meta.gid(),
+                meta.mode(),
+                uid,
+                private_gid,
+                overflow,
+            ) {
                 anyhow::bail!("store hooks dir ancestor {} {reason}", ancestor.display());
             }
         }
@@ -150,7 +212,7 @@ pub(crate) fn establish(common: &Path, store: &Path) -> Result<PathBuf> {
                     common_meta.gid(),
                     common_meta.mode(),
                     uid,
-                    gid
+                    private_gid
                 ),
             "git common directory {} is not owned exclusively by this user",
             common.display()
