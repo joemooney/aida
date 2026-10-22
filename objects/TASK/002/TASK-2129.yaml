@@ -6,17 +6,26 @@ description: |
   aida-core/templates/hooks/aida-cargo-timeout-guard.sh:267 (TASK-2076). The suffix-rule detector treats any `^\.[^./]+$` target that is not all-caps as a single-suffix rule. A common Python Makefile target like `.venv: requirements.txt` or `.env:` therefore sets `implicit`. Any unrelated unknown plain-file prerequisite elsewhere (`hello: notes.txt`) then fails closed, and `timeout 1h make hello` gets the hint without a cargo path. This is a false positive in an advisory hook, not a fail-open. Option: count a target as a suffix rule only when its suffix appears in a `.SUFFIXES:` list or in GNU make's default suffixes. This pairs with TASK-2128 item 3, which proposes an explicit special-target list.
 
   Raised in review of PR-2817: https://github.com/joemooney/aida/pull/2817#issuecomment-6329927242
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-22T00:48:13.953260877Z
-modified_at: 2026-10-22T00:48:13.953260877Z
+modified_at: 2026-10-22T00:49:22.230167876Z
 req_type: Task
 tags:
 - from-review:PR-2817
 - hooks
 - severity:cosmetic
+history:
+- id: 01a16115-8336-7910-b13d-b4b85902fc4c
+  author: joe
+  timestamp: 2026-10-22T00:49:22.230164309Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: ed810f1c2841bd8fa8f5a8bf80452db4924aa8c4
   branch: pr-2817
