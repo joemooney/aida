@@ -95,7 +95,11 @@ fn prints_mode_line(repo: &Path, home: &Path, args: &[&str]) -> bool {
 }
 
 fn surfaces() -> [&'static [&'static str]; 2] {
-    [&["doctor"], &["awaiting", "--no-ci", "--format", "human"]]
+    // The human surfaces: off a terminal both default to compact agent output.
+    [
+        &["doctor", "--format", "human"],
+        &["awaiting", "--no-ci", "--format", "human"],
+    ]
 }
 
 #[test]
