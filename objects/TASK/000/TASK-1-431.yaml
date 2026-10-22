@@ -1,0 +1,28 @@
+id: 01a1642a-3454-7a03-bcc3-b1e7e018df46
+spec_id: TASK-1-431
+title: 'minor (filed TASK-2171): roster_check calls aida_store_override eagerly, re-pri…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-2072, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  minor (filed TASK-2171): roster_check calls aida_store_override eagerly, re-printing the unusable-AIDA_STORE warning on every seat check including allows (seat_authority.rs:247)
+  Reviewed sha: 4e53b0baede3eacd6476a647b98ac4e8785eb0ce
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-22T15:10:49.940508188Z
+modified_at: 2026-10-22T15:10:49.940508188Z
+req_type: Task
+tags:
+- carried-from:TASK-2072
+- finding-hash:2685a0e5
+- from-review:TASK-2072
+- kind:carried-forward
+filed_at:
+  code_sha: 28b4a3711adfba1de4c5f3932b5ca71dab896975
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6d3b5d1591
+  vendor: claude
+  session: 7d71bfbf-a609-42bd-a714-a7d52d81db81
