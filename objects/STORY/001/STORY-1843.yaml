@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-22T00:49:03.442124550Z
+modified_at: 2026-10-22T00:49:06.564126632Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -158,6 +158,12 @@ comments:
   content: 'ADVISOR 12:16: superseded STORY-1890, a review-request spec for PR-2808. Reviews are dispatched by the advisor from the PR itself, so request specs aren''t needed. Mail the advisor instead.'
   created_at: 2026-10-21T19:12:39.012173775Z
   modified_at: 2026-10-21T19:12:39.012173775Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a16115-4604-7d71-95c1-14a830076d61
+  author: joe
+  content: 'ADVISOR 17:52: folded BUG-2204 (relay seat misses advisor mail sent to its role inbox). Covered by signed condition C1: role mail with zero readers refuses at send time. PR1 (#2808) adds the unknown-recipient refusal. Acceptance: mail --to a role nobody reads fails loudly instead of sitting unread.'
+  created_at: 2026-10-22T00:49:06.564126632Z
+  modified_at: 2026-10-22T00:49:06.564126632Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
