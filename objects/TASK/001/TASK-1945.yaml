@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T15:26:23.898572812Z
-modified_at: 2026-10-22T09:03:17.470093805Z
+modified_at: 2026-10-22T09:03:21.432971Z
 req_type: Task
 tags:
 - review
@@ -166,6 +166,12 @@ comments:
   content: 'Returned from NeedsAttention to In Progress via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: S2 supersede design matches signed sketch + C1-C5 and CI is green, but the C4 hold cause can name a process that already exited, the ps surface is only source-grepped, and two doc claims overstate coverage. No triage reason was given.'
   created_at: 2026-10-22T07:49:25.186802643Z
   modified_at: 2026-10-22T07:49:25.186802643Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a162d9-c558-7180-b643-89971e43a836
+  author: joe
+  content: 'ADVISOR 02:04: folded the PR-2824 (S2, merged) non-blocking notes TASK-2150 (a supersede racing the dispatcher spawn record holds the slot with nothing running) and TASK-2151 (no test covers the handle_ps wiring of held slots). S3''s sketch must include them.'
+  created_at: 2026-10-22T09:03:21.432971Z
+  modified_at: 2026-10-22T09:03:21.432971Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a154c5-bc62-7222-a58c-3c44e8911cb7
