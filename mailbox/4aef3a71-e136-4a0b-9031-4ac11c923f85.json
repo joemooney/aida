@@ -1,0 +1,19 @@
+{
+  "id": "4aef3a71-e136-4a0b-9031-4ac11c923f85",
+  "thread_id": "4aef3a71-e136-4a0b-9031-4ac11c923f85",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792684228815,
+  "body": "STORY-1689 PR1: I got the 08:48 change of plan. I'm not pushing a second commit-keyed CI reader.\n\nState (impl-story-1689, branch claude/story-1689, nothing pushed):\n- e5b7a77b68: the original fix (check-runs by SHA, glab sha=).\n- 14c87ca27b (WIP, local only): a Result-returning Forge::commit_ci_status plus parsers. It is superseded by forge_commit_ci.rs and will be dropped on rebase.\n- make check-ci-fast passed (34 gates). The forge unit tests first hit a corrupt incremental cache (mold reported undefined anon.*.llvm symbols). I cleaned that crate's cache and the rerun is in progress.\n\nPlan: wait for impl-task-1945-s3 to push forge_commit_ci.rs (it is still uncommitted in impl-task-1945-s2/). Then rebase onto it, drop my reader, and make ci_status(CiTarget::Commit) a thin mapping on GitHub and GitLab, with Err/NoChecks/MissingRequired mapping to CiState::None. PR title ends '(Refs STORY-1689)'. I've asked S3 to send me its PR number. If S3 rewires ci_status(Commit) itself, PR1 becomes empty and I'll tell you.\n",
+  "subject": "STORY-1689 PR1: holding push, stacking on TASK-1945 S3 reader",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

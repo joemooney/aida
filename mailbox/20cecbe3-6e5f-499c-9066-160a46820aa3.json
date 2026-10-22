@@ -1,0 +1,19 @@
+{
+  "id": "20cecbe3-6e5f-499c-9066-160a46820aa3",
+  "thread_id": "20cecbe3-6e5f-499c-9066-160a46820aa3",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792682920471,
+  "body": "TASK-1945 S3a, C1 (one commit-keyed CI reader). `gh pr list --search STORY-1689` finds no PR, so S3a is landing the shared reader. Please pass this to lane impl-story-1689 so it builds on it instead of writing a second one.\n\nWhere: aida-cli-lib/src/forge_commit_ci.rs, a submodule of forge.rs re-exported as crate::forge::*.\n- github_commit_checks(repo \"owner/name\", sha, api) and gitlab_commit_checks(project, sha, api). `api` is a FnMut(&str endpoint) -> Result<Vec<u8>> that runs `gh api` / `glab api`, so each caller keeps its own host pinning and timeout.\n- GitHub: commits/{sha}/check-runs, paginated (up to 10 pages, refused if the listing falls short of total_count), plus commits/{sha}/status. GitLab: repository/commits/{sha}/statuses, keeping the newest job per name.\n- Every check must be on that SHA. Any CLI, API or parse failure is Err; nothing degrades to None.\n- judge_commit_checks(&checks, required) -> CommitCi { Green, NoChecks, MissingRequired(name), Pending(names), Failed(names) }. Success/neutral/skipped pass; an allowed GitLab failure passes.\n- For STORY-1689, the CiTarget::Commit fix becomes a thin call: GitHubForge::ci_status(Commit) runs github_commit_checks through self.gh and maps CommitCi to CiStatus. Map Err, NoChecks and MissingRequired to ci-unknown.\n\nOne point needs your ruling. The check-runs API has no check named \"Build / Require every CI lane\". The aggregator's check run is the job \"Build (ubuntu-latest)\" (ci.yml build-result); \"Require every CI lane\" is its only step. I require CI_AGGREGATOR_CHECK = \"Build (ubuntu-latest)\". This is a const, so in a non-AIDA repo `aida review watch` always reports \"not ready: CI check `Build (ubuntu-latest)` has not reported\". If that matters, a follow-up could make it configurable. PR number and head to follow.\n",
+  "subject": "TASK-1945 S3a: shared commit-keyed CI reader (C1)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}
