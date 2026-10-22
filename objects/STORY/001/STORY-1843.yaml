@@ -17,12 +17,12 @@ description: |-
   - aida agent ls lists live agents of all vendors with the handle, real role, spec and liveness. Dead entries are pruned or marked.
   - aida mailbox send <handle> delivers to that agent's inbox, which its per-turn mailbox notice hook surfaces. A handle that resolves to no live agent is refused with a hint, rather than creating a phantom inbox.
   - A Claude session can address an agy session by handle and the agy session sees the message on its next turn (black-box test with the agy hook shape).
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-22T03:55:02.085055136Z
+modified_at: 2026-10-22T03:56:22.640537665Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -293,6 +293,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+- id: 01a161c0-b8f0-72a2-a1df-34bc6aa9502e
+  author: aida-session-start
+  timestamp: 2026-10-22T03:56:22.640537032Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: ba665aaf98777ed00ac96a782a6d6f51dfd528bd
   branch: main
