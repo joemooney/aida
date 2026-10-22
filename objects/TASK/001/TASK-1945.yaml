@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T15:26:23.898572812Z
-modified_at: 2026-10-22T09:03:21.432971Z
+modified_at: 2026-10-22T09:04:38.479053806Z
 req_type: Task
 tags:
 - review
@@ -173,6 +173,100 @@ comments:
   created_at: 2026-10-22T09:03:21.432971Z
   modified_at: 2026-10-22T09:03:21.432971Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a162da-f24f-7860-9ac5-526585f72c91
+  author: joe
+  content: |
+    SKETCH S3 v1 (TASK-1945, ship-ready report, advisor wake and author findings notice). This is the last slice; TASK-1945 completes when it lands. No production code until advisor signoff. It builds on S1 (TASK-1993) and S2 (#2824, e33fec11d9).
+
+    SCOPE: WHAT S3 DELIVERS SO TASK-1945 IS DONE
+    Mapping to the spec's numbered items: item 1 was done by S1 and S2. Item 4 was done by S1 (the cap of 2 and no cargo in reviewers). S3 covers the rest:
+    - Item 2, the ship gate. A REPORT-ONLY readiness verdict per change on every pass, with a once-only advisor wake (a mailbox message plus an actionable event that `aida watch --emit-wakes` turns into a wake line). It never merges and never runs update-branch. That follows the S1 signoff (report-only; C2 carry-over; C3 "ready after update-branch").
+    - Item 3, request-changes. One author mail per blocking verdict identity, naming the findings artifact. S1 sliced this out and nothing implements it today; I checked review_watch.rs for findings or request-changes handling and found none.
+    - The durable two-round cap wake that the S1 sketch promised ("a durable cap refusal/wake rather than infinite redispatch"). Today the cap is only a stderr Skip line. S3 sends one advisor mail per change when the cap is reached.
+    - Item 5's test (c), the ship gate refusing on an SHA mismatch, red CI or a hold, is covered by the tests below.
+
+    DESIGN
+
+    (a) Readiness evaluation, `ready(change) -> Readiness`, run in watch_change after select. It runs for a change whose head already has a recorded verdict, whether dispatch was skipped or a review completed. Every input comes from an existing production reader. Unknown evidence is never read as clean.
+    1. Approval. Use `merge_approval_inputs` (the same candidates and authorship policy pr ship uses), then `approval_authority_refusal` (BUG-1918: no self-approval, no unauthorized seat), then `approval_head_refusal`. When the head moved, take the TASK-1960 carry-over through a QUIET `CarryOverSite`, which records and prints nothing (C2). A changed own diff, a rebase or an edited merge refuses, with the carry-over reason in the report. To share this without side effects, I will extract a pure `approval_decision(...) -> Result<Option<pinned_head>, message>` from `pr_ship_approval_gate` (pr_cmd.rs). The gate keeps its activity log, gate-held events and override handling, and calls the pure function. The ship gate's behaviour is unchanged; its existing tests are the guard.
+    2. Corpus gate (TASK-1968). Use `merge_hold::enforce_corpus_gate_before_merge` with the same carry-over base. I will check it is read-only before relying on it; if it writes, I will extract its pure check the same way.
+    3. Under review. `review_marker::merge_gate`: an UnderReview marker means not ready.
+    4. Hold. `merge_hold::read_hold_record` and `label_present`. ANY hold (marker or label, any kind, or an unreadable one) means not ready, and the report names the hold kind. The watcher never releases or clears a hold (see Q2).
+    5. CI on the SHA. A NEW commit-keyed reader in review_watch_forge.rs, pinned to the same forge identity as discovery.
+       - GitHub: `gh api repos/{owner}/{repo}/commits/{sha}/check-runs` (paginated, bounded) plus `commits/{sha}/status`.
+       - GitLab: `glab api projects/:id/repository/commits/:sha/statuses`.
+       - Success means at least one check, every one terminal, and every one success/neutral/skipped (see Q1). The existing `forge.ci_status(CiTarget::Commit)` is not used. On GitHub it runs `gh pr checks <ref>`, which resolves the PR's current head rather than that SHA, and it maps a CLI failure to `None`. It can neither bind CI to a SHA nor fail closed.
+       - The SHA checked is the CURRENT head, including a carried-over head. A base merge is a new commit with its own CI, so CI on the approved commit never stands in for it.
+    6. Behind. From the probe's private base and head refs (S1), `rev-list --count head..base_tip`.
+       - 0 behind: may be Ready.
+       - Behind with no path overlap: ReadyAfterUpdateBranch (C3). The report says "ready after `gh pr update-branch N`", but the watcher never runs it.
+       - Behind with overlap: the existing S1 stale-head notice path; not ready.
+    7. Re-check before emitting. One `repo.change(root, id)` read with no lock held. If the head moved, nothing is emitted on this pass.
+
+    Readiness is `Ready`, `ReadyAfterUpdateBranch`, or `NotReady(reason)`. The reason is one of: no verdict, request-changes, an authority refusal, a carry-over refusal, the corpus gate, under review, a hold of a named kind, CI pending, CI failed, no CI, CI evidence unknown (with the exact error), behind with overlap, head moved, or the round cap reached.
+
+    (b) Report. Each pass prints one stderr line per change (`PR-N at <sha12>: ready | ready after update-branch | not ready: <reason>`). The last readiness of each change is stored in state, and `aida ps` shows it next to the S2 held slots (`review_watch_ready` in `--json`). No new CLI flag.
+
+    (c) Advisor wake, once only. For Ready and ReadyAfterUpdateBranch only, keyed by (change, head, state, approval recording key, CI SHA):
+    1. Deliver a mailbox message to the advisor with a deterministic ID and no-clobber publication (the S1 `deliver`). The body names the verdict, any carry-over proof, the CI SHA, the behind count and the exact `aida pr ship N` (or `gh pr update-branch N` first) the advisor may run.
+    2. Append an actionable `ReviewWatchReady { pr, head, after_update_branch }` event to `.aida/events.jsonl`, so `aida watch --emit-wakes` emits a WAKE line. This adds one EventKind variant and classifies it actionable.
+    3. Mark the receipt sent, under the per-change lock, only after both succeed.
+    A failure stays retryable. A crash between the event and the receipt can repeat the event once on retry, but never the mail (deterministic ID). A new head, a new verdict or a state change is a new key; a state that drops back to NotReady sends nothing. Receipts are kept for the current head only, as S1 does for notices.
+
+    (d) Author findings notice. When the newest verdict for the current head blocks done (request-changes or rejected; history is read by the S1 anchored reader), mail the change author once per verdict recording key. The recipient comes from S1's `notice_recipient` mapping. The mail names the findings artifact (`.aida/review-verdicts/PR-N.json`, plus the archived round file when present), the round number, and whether this was the last round under the cap. It uses the same deterministic-ID and sent-after-success receipt.
+
+    (e) Cap wake. When `history.blocking() >= 2` and the current head has no verdict, send one advisor mail per (change, cap) instead of the bare Skip line.
+
+    (f) State. A version-1 additive field `wakes: BTreeMap<String, Notice>` per Entry, keyed `<head>:<kind>`, bounded and validated like `notices`. Older state loads unchanged. Readiness itself is never stored as authority: every pass recomputes it from the forge, the verdicts and the holds.
+
+    FAIL-CLOSED MODES
+    - Any reader error (forge, CI API, git, verdict file, hold marker, corpus body, carry-over git): NotReady with the exact error, and no wake.
+    - CI: zero checks, any pending check, or a check on another SHA: not ready.
+    - A corrupt or missing verdict, or a verdict whose recording key cannot be identified: not ready.
+    - An unreadable hold marker: not ready.
+    - A carry-over that cannot prove its base (BaseNotProtected, AmbiguousBase, Unresolvable): not ready, with the reason.
+    - The head moved between evaluation and the re-read: no emission on this pass.
+    - An unusable state file stops the watcher (GlobalState), as today.
+    - A mail or event failure: no sent receipt, retried next pass.
+
+    OUT OF SCOPE
+    Auto-ship and auto update-branch: an active fire-mode consumer acts on the wake through the existing `aida pr ship`, which rechecks every gate and the mandate. S3 also adds no verdict authority, never clears or releases a hold, and sends no process signals (S2 owns those). Beyond the pure-function extraction, it makes no changes to `pr ship` gate behaviour. The watcher never merges, pushes or updates a branch.
+
+    TESTS (each fails before the change: the readiness, wake and findings symbols do not exist)
+    Fakes inject forge, CI and behind snapshots through an `Evidence` seam. The carry-over tests use real git fixtures built with crate::test_git::git_command(). No LLM, no cargo.
+    1. ready_needs_authorized_approval_green_ci_on_head_zero_behind_no_hold: Ready, one advisor mail, one event.
+    2. pending_ci_is_not_ready; failed_ci_is_not_ready; no_checks_is_not_ready.
+    3. ci_on_another_sha_is_not_ready (the evidence SHA differs from the head).
+    4. ci_reader_error_refuses_with_the_error and sends no wake.
+    5. hold_marker_label_or_unreadable_hold_is_not_ready, for each hold kind.
+    6. under_review_marker_is_not_ready.
+    7. stale_non_overlap_reports_ready_after_update_branch, with no update-branch or push command. The S1 forbidden-token test is extended over the new code.
+    8. clean_base_merge_carries_the_approval (git fixture: approve at A, merge main into the branch to make B): ready at B with green CI on B.
+    9. own_diff_change_refuses_carry_over: not ready, and the reason names the TASK-1960 refusal.
+    10. self_or_unauthorized_approval_is_not_ready (the BUG-1918 policy).
+    11. head_moving_before_emit_sends_nothing.
+    12. wake_is_once_only_across_passes_and_restart, including a crash after the mail and before the receipt: one mailbox file.
+    13. failed_delivery_is_retried_and_sent_once (an unwritable mailbox, then a writable one).
+    14. request_changes_mails_the_author_once_per_verdict and names the findings path. A new blocking verdict at a new head mails again; an approval never does.
+    15. round_cap_wakes_the_advisor_once.
+    16. corrupt_verdict_is_not_ready.
+    17. approval_decision_has_no_side_effects (no ship-activity or events lines are written), and the existing pr-ship approval-gate tests pass unchanged.
+    18. ps_renders_last_readiness (a behavioural test of the ps JSON/TOON renderer, as in S2's C4).
+    19. legacy_state_without_wakes_loads.
+    Gates: targeted cargo test of the review-watch, pr-ship-approval and carry-over tests, make check-ci-fast, make test-touched, make check-ci-compile. Never the full suite.
+
+    PR SPLIT
+    Two PRs. Each is Refs TASK-1945 except the last, which closes it.
+    - S3a: readiness, report, advisor wake and the pure approval_decision extraction (items a, b, c, f; tests 1–13, 16–19). About 450 production lines plus the commit-keyed CI reader. It touches pr_cmd.rs (the approval-gate extraction) and events.rs (one EventKind variant).
+    - S3b: the author findings notice and the cap wake (items d, e; tests 14–15). About 150 lines. Its commit uses `(TASK-1945)` so the spec completes at merge.
+
+    QUESTIONS (at most 3)
+    Q1. CI success: every check on the SHA (at least one, all terminal, success/neutral/skipped), or only the base branch's REQUIRED checks? Required checks need the branch-protection API, which can return 403 to a non-admin token, and then we would fail closed forever. I recommend every check on the SHA.
+    Q2. Holds: S3 reports ANY hold as not ready and sends no wake. Should a PR whose only blocker is a supervision or decision hold (which `pr ship` may release under an active mandate) get a distinct "ready except a <kind> hold" wake instead? I recommend no wake in S3: the report names the hold, and the mandate consumer already sees held PRs in `aida awaiting`.
+    Q3. The pure `approval_decision` extraction touches the pr ship approval gate in pr_cmd.rs, with behaviour unchanged and guarded by its existing tests. Do you count that as gate code, so the operator ships S3a? If you would rather S3 not touch pr_cmd.rs, the alternative is to duplicate the four pure calls in review_watch.rs. That is smaller, but it can drift from the gate.
+  created_at: 2026-10-22T09:04:38.479053806Z
+  modified_at: 2026-10-22T09:04:38.479053806Z
+  session_id: 0d6f8344-bca9-4acc-9c8b-2000567e8335
 history:
 - id: 01a154c5-bc62-7222-a58c-3c44e8911cb7
   author: joe
