@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T00:51:06.094986066Z
-modified_at: 2026-10-22T10:16:33.575292437Z
+modified_at: 2026-10-22T12:03:58.852256573Z
 req_type: Bug
 tags:
 - batch:2026-10-11
@@ -201,6 +201,95 @@ comments:
   created_at: 2026-10-22T10:16:33.575292437Z
   modified_at: 2026-10-22T10:16:33.575292437Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a1637f-2304-7343-b4f9-06ca67bae1eb
+  author: joe
+  content: |
+    SKETCH v2 (BUG-1934): presenter binding across a PID namespace (addendum to v1; v1's signed C1–C6/Q1–Q3 stand unless noted)
+
+    PROBLEM (reviewer round 1, confirmed)
+    Claude Code's sandbox runs each Bash tool call under bwrap. Binary inspection of claude 2.1.308 shows the argv: `--new-session --die-with-parent --unshare-user --unshare-pid --unshare-net --unshare-ipc --unshare-uts --unshare-cgroup-try …`. Inside it NSpid has one level, ancestry ends at the in-namespace pid 1, and getsid()=0. v1's `proc:` binding tokens are host pids, so they can never match there. Hooks and the MCP server run outside the sandbox and are unaffected.
+
+    PROBES (run 2026-10-22 on this host: kernel 7.0, bubblewrap 0.9.0, yama ptrace_scope=1; scripts in the job tmp, re-run as the test below)
+    P1. A process runs KEYCTL_JOIN_SESSION_KEYRING(NULL), adds a `user` key `aida-grant:<id>` with perm 0x3f000000 (possessor-only), then execs a shell.
+        - A later child of that shell reads the payload.
+        - A child under `bwrap --unshare-all --new-session --die-with-parent` reads it. That child has NSpid 2 and sid 1, and the user/pid/ipc namespaces are unshared.
+        - A same-uid process outside that tree, even one in the SAME POSIX session (same sid), gets EACCES. Joining by name (`keyctl join _ses`) gives the stranger a fresh keyring, and reading still gets EACCES.
+    P2. KEYCTL_SESSION_TO_PARENT from a direct child of bash installs the new session keyring into that bash. Every later child of the shell, bwrap-namespaced ones included, reads the key.
+    P3. Inside bwrap with --unshare-pid, /proc/self/status NSpid lists only in-namespace pids. No host pid is visible anywhere under the mounted /proc.
+    P4. The claude harness here inherits the login session keyring unchanged (the same keyring id in successive tool calls), so it does not create a keyring per call. The sandbox's seccomp program appears to be sandbox-runtime's AF_UNIX-socket filter; keyctl/add_key are not in it. UNVERIFIED from inside a real sandboxed tool call: this session is unsandboxed. That gets a live probe before merge (see TEST 5).
+
+    OPTIONS. For each: what does a same-user process outside the bound tree (the "stranger") get?
+    (a) Session keyring possession. RECOMMENDED.
+        - Mechanism: at issue, aida generates a 32-byte secret. The grant file stores only `key_digest = sha256(secret)`, never the secret. The secret goes into a fresh anonymous session keyring as a possessor-only `user` key, with a timeout equal to the grant's expiry.
+        - Presenting: the presenter proves possession with KEYCTL_SEARCH on @s for `aida-grant:<id>`, then KEYCTL_READ, then sha256 and a constant-time compare with key_digest.
+        - Namespaces: keyrings are per-credential, not per-namespace, so this survives bwrap (P1).
+        - Stranger cannot: read the payload (EACCES, P1), join the keyring (it is anonymous, and its search perm is withheld from non-possessors), or learn the secret from env, argv, files or logs. That beats v1, which accepted any process in the same POSIX session (Q2): a stranger in the same terminal session but outside the keyring tree is now refused.
+        - Stranger can: VIEW the key description in /proc/keys (this leaks only the grant id, which is no longer a bearer token). Forge the attestation/verdict JSON on disk (this is v1's out-of-scope file-forgery class, unchanged).
+        - Ptrace: with yama ptrace_scope=0, a stranger can ptrace a possessor and read the key. `aida doctor` warns when ptrace_scope=0. Scope ≥1 (this host, and the Ubuntu default) blocks ptrace of non-descendants.
+        - Breadth: every descendant of the keyring holder possesses the key, including an implementer `claude` started from the role shell. That is the same breadth v1 accepted for Q2, and #2485's author-overlap check still refuses that implementer's self-approval.
+    (b) Inherited fd or anonymous socket. REJECT.
+        - The harness is not ours. Claude Code spawns tool shells with stdio only, so an fd opened in the role shell never reaches a tool call.
+        - Forgeable anyway: a same-uid stranger can open `/proc/<harness>/fd/<n>`. That access is PTRACE_MODE_READ, which yama scope 1 does not restrict (yama gates attach only).
+    (c) NSpid mapping. INFEASIBLE (P3).
+        - NSpid lists the process's own and deeper namespaces only. From inside, no interface maps to host pids.
+        - Any host pid handed in through env or a file would be forgeable, the same as the grant id.
+    (d) Exclude aida from the sandbox and refuse from foreign namespaces. REJECT as the primary fix; keep the refusal.
+        - excludedCommands is per-harness config (claude only; codex and agy differ). It is not ours to enforce.
+        - It would also run every aida child (git, gh, cargo via `aida dev build`) unsandboxed, which costs containment for all grant-gated work.
+        - Stranger: no change from v1.
+        - We still keep its refusal: a presenter with no key that is in a foreign PID namespace (getsid()==0, or ancestry ending at an in-namespace pid 1) gets a named reason instead of a generic PresenterNotBound.
+
+    DESIGN (a)
+    1. Data
+       - `SeatGrant.key_digest: Option<String>` (`#[serde(default)]`). v1's `binding` (proc tokens) stays.
+       - A grant is satisfied when the presenter possesses the key, OR (for v1's non-keyring presenters only) its ancestry intersects `binding`.
+       - Unbound means BOTH are absent, as in v1 C1.
+    2. Issue, direct (`aida role enter`)
+       - The eval'd text runs `aida role adopt-key <id>` as a plain command (a direct child of the interactive shell; `role enter` itself runs in the `$(…)` subshell). The secret goes on stdin from a quoted heredoc in the eval text, never in argv, env or a file.
+       - adopt-key checks that sha256(stdin) == key_digest. It then joins a new anonymous session keyring, links the shell's previous session keyring into it (keys the shell already had, such as login keys, stay reachable), adds the key, setperms the key and the keyring to possessor-only, and runs KEYCTL_SESSION_TO_PARENT.
+       - Any failure fails issuance with the reason. A grant whose key was never adopted keeps working only through v1 proc binding, so it is refused in a sandbox, with the foreign-namespace sentence.
+    3. Issue, child (launchers, `issue_child` / `issue_headless_child`)
+       - In the spawn's pre_exec, the launcher runs JOIN_SESSION_KEYRING(NULL), add_key and setperm, so the worker harness and every sandboxed tool call under it possess the key.
+       - This covers exec, spawn-and-wait, setsid and nohup launches. The v1 C4 pid stamp stays for unsandboxed presenters.
+       - A tmux-pane launch (the tmux server spawns the pane) does not inherit, so it stays fail-closed, as in v1.
+    4. --bind-pid (v1 Q1)
+       - It cannot inject a keyring into an already-running process. It stays pid-only, so it serves only that session's unsandboxed presenters (hooks, MCP).
+       - The help says so. A sandboxed session must be started from the role shell, or by an aida launcher.
+       - QUESTION Q4 below.
+    5. Presenter check
+       - `grant_check_at` tries key possession first, then the v1 proc intersection.
+       - New `GrantRejection::ForeignNamespace` sentence: "this command runs in a sandboxed process namespace and does not hold the grant's session key; enter the role (`eval \"$(aida role enter <seat>)\"`) in the shell that starts the agent, or launch the agent with aida".
+       - New `KeyringUnavailable` (keyctl returns ENOSYS/EPERM, e.g. under Docker's default seccomp) names the reason. Both fail closed.
+    6. Record and ship
+       - `review record` stamps `key:<key_digest>` into `RecorderAttestation.grant_binding` when it proved possession, or the matched proc tokens as in v1.
+       - `grant_authorized_for` accepts `key:<d>` iff d == grant.key_digest.
+       - The `advisor_live` turn-clock stamp does the same (v1 Q3b).
+       - A digest in a file is forgeable by a file writer, which is the v1 out-of-scope class, unchanged.
+    7. role status / doctor
+       - `binding_ok` reports `via: key|proc|none`.
+       - Per TASK-2159, `shell_pid` is replaced by `harness_pid`: walk up to the agent harness, or report "no stable pid" when the walk ends in a foreign namespace.
+       - doctor warns when yama ptrace_scope=0.
+
+    TEST PLAN (adds to v1's)
+    1. `seat_authority::key_possession_satisfies_binding_without_proc_overlap`: an injected keyring seam holding the key, and an IdentitySource chain without the bound pid, gives Valid.
+    2. `…stranger_without_key_in_same_session_is_refused`: a real keyring and a forked child that joined a fresh keyring, giving PresenterNotBound.
+    3. `…foreign_namespace_without_key_names_the_fix`: getsid 0 and an in-namespace pid 1 chain give ForeignNamespace plus its sentence (the C1-style sentence test).
+    4. `bug_1934_bwrap_presenter`, the REAL bwrap presenter, skipped when bwrap is absent or user namespaces are disabled.
+       - Mint a key-bound grant through `test_support::mint_grant_for`, which also installs the key into a fresh session keyring for the test.
+       - Then run the built `aida role status --json` under `bwrap --unshare-all --new-session --die-with-parent --ro-bind / / --dev /dev --proc /proc`, and assert that it is valid via key.
+       - The same run without the key (a fresh `_ses`) is refused with ForeignNamespace.
+    5. Pre-merge live probe, recorded in the PR body: from a sandboxed reviewer session, `aida role status --json` shows `via: key`. This closes P4's unverified seccomp point.
+    6. TASK-2158: `handle_review_record_at` with a PresenterNotBound grant refuses with the sentence and writes no verdict file.
+    7. TASK-2159: `role status` never offers a transient tool-shell pid.
+    8. Fixtures: the Rust, Python and shell mints (already bound by proc in this PR's CI fix) also install the key when they mint for a bwrap test. Otherwise the proc binding stays, so the script gates keep running unchanged.
+
+    QUESTIONS FOR THE ADVISOR
+    Q4. --bind-pid after v2: keep it pid-only (it serves unsandboxed presenters, the doc says sandboxed sessions must start from the role shell), or REMOVE it in this PR? The v1 Q1 hand-carry replacement would then be "start the bg advisor from the role shell / `aida agent new` from it". Recommendation: keep it, documented. Removal is a cheap follow-up if it confuses.
+    Q5. Linking the shell's previous session keyring into the new one keeps login keys reachable. It also means a second `role enter` in the same shell nests keyrings. Accept that, with each grant's key found by its description? Recommendation: yes.
+    Q6. Scope: this adds ~300–400 LOC (keyctl via the `linux-keyutils` crate or raw libc syscalls; no new C dependency) to the existing PR. Recommendation: same PR (C6 stands), because v1 alone stalls every sandboxed reviewer.
+  created_at: 2026-10-22T12:03:58.852256573Z
+  modified_at: 2026-10-22T12:03:58.852256573Z
+  session_id: 262b558c-6178-492e-8be8-9202b8d71ae6
 history:
 - id: 01a12b8d-6820-7292-ac96-3f451518bfcd
   author: joe
