@@ -1345,10 +1345,10 @@ mod tests {
         assert_eq!(messages.len(), 3);
         assert!(messages
             .iter()
-            .any(|m| m.recipient == aida_core::mailbox::Recipient::Agent("advisor".into())));
+            .any(|m| m.to == aida_core::mailbox::Recipient::Agent("advisor".into())));
         assert!(messages
             .iter()
-            .any(|m| m.recipient == aida_core::mailbox::Recipient::Agent("foreign-reader".into())));
+            .any(|m| m.to == aida_core::mailbox::Recipient::Agent("foreign-reader".into())));
         entry.ended_at = Some(chrono::Utc::now());
         crate::agent_registry::write_entry(project.path(), &entry).unwrap();
         assert!(handle_mailbox_command(&plain_send("advisor"), &store).is_err());
