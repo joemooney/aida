@@ -1,0 +1,28 @@
+id: 01a161d1-a466-7e81-85a5-4647c4afb99d
+spec_id: TASK-2137
+agreed_id: TASK-2137
+title: Fresh verdict with an unreadable body now fails phase 3 instead of being skipped; untested at the call site
+description: |
+  verdict_file_modified no longer reads the body (TASK-1814(3)), so a fresh verdict file whose body is not UTF-8 now has an mtime. phase_gates.rs:317 and :390 used to skip such a file silently; now it fails with a NoVerdict PhaseFailure ('could not read sibling verdict evidence'). That fails closed, which is acceptable, but no test covers it at the call site and PR-2820 does not mention the change.
+
+  Raised in review of PR-2820: https://github.com/joemooney/aida/pull/2820#issuecomment-6332530277
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-22T04:14:51.494241176Z
+modified_at: 2026-10-22T04:14:51.494241176Z
+req_type: Task
+tags:
+- from-review:PR-2820
+- phase-gates
+- severity:cosmetic
+filed_at:
+  code_sha: 15081ef196bb0d7a347d302cf9a7c69bcd03acdc
+  branch: pr-2820
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c540b90955
+  vendor: claude
+  session: 01a161ce61c5
+  harness_version: 2.1.307 (Claude Code)

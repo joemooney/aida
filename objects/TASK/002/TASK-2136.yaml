@@ -1,0 +1,28 @@
+id: 01a161d1-7e3c-7793-abdb-9e2d6b10872e
+spec_id: TASK-2136
+agreed_id: TASK-2136
+title: starts_in_different_schemes treats linux-starttime and sysinfo-start as one scheme; that cross-exact pair still needs liveness
+description: |
+  review_authority.rs starts_in_different_schemes classes both linux-starttime: and sysinfo-start: as Exact. A pair of tokens split across those two exact schemes, for the same pid, therefore still falls through to strict_match, the liveness probe, so the TASK-2049 residual remains for that pair. Either class them separately (every caller is a refusal check, so this fails closed) or say in the doc comment that the residual is accepted.
+
+  Raised in review of PR-2820: https://github.com/joemooney/aida/pull/2820#issuecomment-6332530277
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-22T04:14:41.724126360Z
+modified_at: 2026-10-22T04:14:41.724126360Z
+req_type: Task
+tags:
+- from-review:PR-2820
+- review-authority
+- severity:cosmetic
+filed_at:
+  code_sha: 15081ef196bb0d7a347d302cf9a7c69bcd03acdc
+  branch: pr-2820
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c540b90955
+  vendor: claude
+  session: 01a161ce61c5
+  harness_version: 2.1.307 (Claude Code)
