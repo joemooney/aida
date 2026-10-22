@@ -6,17 +6,26 @@ description: |
   mailbox_resolver.rs:44-53: each sandboxed CLI command runs in its own PID namespace, so every registry record is foreign and liveness reduces to 'last_active_at within 24h'. In the real store on 2026-10-22, 73 reviewer, 29 advisor, 9 integrator and 15 implementer unended records count as unverified readers, mostly finished headless sessions. So role sends from agents rarely refuse, and notices report many unverified readers. This is the accepted cost of the TTL; STORY-1843 PR2 session bindings or ended-record reconciliation should give real liveness.
 
   Raised in review of PR-2808: https://github.com/joemooney/aida/pull/2808#issuecomment-6347529888
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-22T17:54:58.113876819Z
-modified_at: 2026-10-22T17:54:58.113876819Z
+modified_at: 2026-10-22T18:18:49.881394930Z
 req_type: Task
 tags:
 - from-review:PR-2808
 - mailbox
 - severity:minor
+history:
+- id: 01a164d6-5299-79f3-acbc-0b6b852bea12
+  author: joe
+  timestamp: 2026-10-22T18:18:49.881385634Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 3a637d0feb64597a261df10f55a4ef22244ff806
   branch: pr-2808
