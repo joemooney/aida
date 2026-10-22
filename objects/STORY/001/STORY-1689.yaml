@@ -25,12 +25,19 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T12:00:26.553324153Z
-modified_at: 2026-10-22T01:46:04.715823902Z
+modified_at: 2026-10-22T01:46:08.156151111Z
 req_type: Story
 tags:
 - dev-build
 - schedule
 - throughput
+comments:
+- id: 01a16149-7b9c-7cc1-8bae-1cfec4f68c66
+  author: joe
+  content: 'ADVISOR 18:47: promoted to approved (operator directive 18:44: burn the open list to zero, no deferrals). Implementation needs a SKETCH on this spec and advisor signoff first; the lane posts the sketch before writing code.'
+  created_at: 2026-10-22T01:46:08.156151111Z
+  modified_at: 2026-10-22T01:46:08.156151111Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a16149-6e2b-7cc0-9c50-a8547ec8a529
   author: joe
