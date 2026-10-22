@@ -1,0 +1,19 @@
+{
+  "id": "4fb7ba73-f756-488a-b671-bb942a1b29d9",
+  "thread_id": "4fb7ba73-f756-488a-b671-bb942a1b29d9",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792679267217,
+  "body": "TASK-1952: REMAINING and SKETCH comments posted on the spec. More is open than the brief listed: BUG-1992 (items 1 and 4), TASK-1924, 2001, 1976, 1977, 2125, 2127, 2139, 2140, 2111, 2112, 2113 and 1761/1770/1798/1781 are all unshipped (none in S1-S4). Plan: S5 (Refs) = git/guard/hook/test items with no launcher change, in progress now. S6 (completing) = TASK-2111, 2112, 1781, 1761, 1770, 1798, which change launch/gate behaviour; see the SKETCH comment. Please sign off or adjust, especially the 2112 transcript copy, the 1781 allowlist contents and the 1798 burndown lock-file stamping. TASK-1641 operator-run template follows in a separate mail.",
+  "subject": "TASK-1952: SKETCH for S6 launcher/gate items — signoff needed",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

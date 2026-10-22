@@ -1,0 +1,19 @@
+{
+  "id": "8081d892-835a-4fbc-9a05-18741521a1ef",
+  "thread_id": "8081d892-835a-4fbc-9a05-18741521a1ef",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792679285970,
+  "body": "TASK-1641 (folded into TASK-1952): this needs one OPERATOR run on the live Claude Code. A nested agent session cannot run it, so I have not faked it.\n\nWHERE: a plain terminal, NOT inside any Claude Code session (the test launches `claude -p` twice under the contained settings). Use an up-to-date main checkout or worktree. It costs two small model calls (haiku by default).\n\nCOMMAND (copy as-is):\n  cd ~/ai/aida && git fetch -q origin && git checkout --detach origin/main \\\n   && git rev-parse HEAD && claude --version \\\n   && AIDA_TEST_REAL_CLAUDE=1 cargo test -p aida-cli-lib --lib \\\n        real_claude_contained_session_cannot_redirect_main_git_metadata -- --exact --nocapture 2>&1 | tee ~/tmp-task1641.log\n(Optional: AIDA_TEST_REAL_CLAUDE_MODEL=sonnet, AIDA_TEST_CLAUDE_BIN=/path/to/claude. The fixture is created and removed under ~/.cache/aida-test-bug1982-*.)\nIf `--exact` matches nothing because the path is module-qualified, drop `--exact`.\n\nEVIDENCE TEMPLATE (paste back into a TASK-1952 comment, or reply to this mail):\n  TASK-1641 operator run\n  - date/time:\n  - aida HEAD (git rev-parse HEAD):\n  - claude --version:\n  - model:\n  - result line (\"test result: ok. 1 passed\" / FAILED):\n  - did it print \"skipping:\"? (must be NO, or the run proved nothing)\n  - last ~20 lines of ~/tmp-task1641.log:\n  - if FAILED: the assertion message (which metadata path changed, or \"commit-failed\" missing, or the seat-clone commit failing)\n\nPASS means both halves held: the linked-worktree session could not write commondir, gitdir, config.worktree or <main>/.git/config, and could not commit; the seat-clone session committed while the same probes failed.\n",
+  "subject": "TASK-1641 (TASK-1952): operator real-claude run — command + evidence template",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

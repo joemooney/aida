@@ -1,0 +1,19 @@
+{
+  "id": "24844938-c26b-4d2b-91cc-ce9eb9e08558",
+  "thread_id": "24844938-c26b-4d2b-91cc-ce9eb9e08558",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792679301712,
+  "body": "TASK-1952: REMAINING and SKETCH comments are posted on the spec.\n\nMore is open than the brief listed. BUG-1992 (items 1 and 4), TASK-1924, 2001, 1976, 1977, 2125, 2127, 2139, 2140, 2111, 2112, 2113 and 1761/1770/1798/1781 are all unshipped; none landed in S1-S4.\n\nPlan:\n- S5 (Refs): the git, guard, hook and test items, with no launcher change. In progress now.\n- S6 (completing): TASK-2111, 2112, 1781, 1761, 1770, 1798. These change launch/gate behaviour; see the SKETCH comment on TASK-1952.\n\nPlease sign off or adjust, especially:\n(a) TASK-2112: copy main's transcript into the lease tree's Claude project dir before a contained resume;\n(b) the TASK-1781 flag allowlist and refusing --no-default-flags under a contained parent;\n(c) TASK-1798: stamp the burndown child grant on the drain's pid lock, and use a separate ci_fix_child_grant_id lease key for the CI-fix child.\nI am waiting on S6 until you sign off.\n",
+  "subject": "TASK-1952: SKETCH for S6 launcher/gate items — signoff needed",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}
