@@ -1,0 +1,27 @@
+id: 01a161fe-fb79-7750-8c66-02de60527fb7
+spec_id: TASK-1-426
+title: 'minor: PerMandate.dispatch gets an or_default entry for every approved spec see…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1915, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  minor: PerMandate.dispatch gets an or_default entry for every approved spec seen (even never routed), and skip_once adds a per.emitted key per (item, reason, incl. reap session ids); neither is pruned when a spec leaves Approved or a session is gone, so mandate-drive-state.json grows without bound.
+  Reviewed sha: d37d96a02474a04e467a08bbee38a0aa13764bcf
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-22T05:04:22.905316712Z
+modified_at: 2026-10-22T05:04:22.905316712Z
+req_type: Task
+tags:
+- carried-from:TASK-1915
+- finding-hash:db17dfd1
+- from-review:TASK-1915
+- kind:carried-forward
+filed_at:
+  code_sha: 0f68094ad31c0db35673029cb338cb007054d624
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c540b90955
+  vendor: claude
