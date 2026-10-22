@@ -6,17 +6,26 @@ description: |
   seat_authority.rs roster_check reads AIDA_STORE with var_os and a non-empty filter but no trim. store_sync.rs:328 aida_store_override trims first, so a padded value is honored by 'aida team' but classified Unusable by the seat check, and the divergence note is silently dropped.
 
   Raised in review of PR-2831: https://github.com/joemooney/aida/pull/2831#issuecomment-6339303681
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-22T11:10:54.686076299Z
-modified_at: 2026-10-22T11:10:54.686076299Z
+modified_at: 2026-10-22T11:13:29.965548050Z
 req_type: Task
 tags:
 - from-review:PR-2831
 - roster
 - severity:minor
+history:
+- id: 01a16350-eb6d-72d3-9e0c-0d4f58f04e98
+  author: joe
+  timestamp: 2026-10-22T11:13:29.965545670Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 9ae7354b66041e1f52b17b750ea0693aacf66eb1
   branch: pr-2831
