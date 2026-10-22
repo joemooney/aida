@@ -100,6 +100,16 @@ branch name`, or `none` with the reason it was withheld — and names the ids
 the merge will complete; `--dry-run` prints the same line.
 <!-- trace:BUG-1919 | ai:claude -->
 
+A non-completing squash ship writes the `aida: no-complete` line into the
+squash commit's body, so the pull on every clone reads the declaration from
+main. This works on GitHub (`gh pr merge --body`), GitLab (inside the squash
+commit message, after the MR title) and pure-git (the squash commit's body).
+The cost is on GitHub: an explicit body replaces GitHub's default one, so
+GitHub does not add `Co-authored-by:` trailers for the other commit authors
+on that merge. Trailers already written in commit messages are kept. An
+ordinary squash ship leaves the body to the forge.
+<!-- trace:TASK-1951 trace:TASK-2115 trace:TASK-2116 | ai:claude -->
+
 A title ending in `(Refs SPEC-ID[, …])` is a reference, not a trailer: ship
 appends no completion trailer to it, not even from the branch name, and the
 merge completes nothing. Merge-time completion reads intent from the line

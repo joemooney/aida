@@ -202,9 +202,9 @@ out=$(run_release "$F1" patch --dry-run 2>&1) || fail "dry run exited non-zero: 
 for want in "release/v0.15.1" "git push origin release/v0.15.1" "gh pr create" \
     "gh pr checks" "--squash --match-head-commit" "git tag -a v0.15.1 <merged-sha>" \
     "git push origin v0.15.1"; do
-    printf '%s' "$out" | grep -qF -- "$want" || fail "dry run output lacks '$want': $out"
+    grep -qF -- "$want" <<<"$out" || fail "dry run output lacks '$want': $out"
 done
-if printf '%s' "$out" | grep -qE 'git push origin (HEAD|main)'; then
+if grep -qE 'git push origin (HEAD|main)' <<<"$out"; then
     fail "dry run plans a direct push of main: $out"
 fi
 [ "$before" = "$(remote_refs "$F1")" ] || fail "dry run changed the remote"
@@ -256,7 +256,7 @@ main_before=$(git --git-dir="$F3/remote.git" rev-parse refs/heads/main)
 if out=$(FAKE_GH_CHECKS_FAIL=1 run_release "$F3" patch --yes --skip-docs-check 2>&1); then
     fail "release succeeded despite failing checks"
 fi
-printf '%s' "$out" | grep -q "nothing was tagged" || fail "missing stuck-PR guidance: $out"
+grep -q "nothing was tagged" <<<"$out" || fail "missing stuck-PR guidance: $out"
 [ "$(git --git-dir="$F3/remote.git" rev-parse refs/heads/main)" = "$main_before" ] || fail "main moved"
 [ -z "$(git --git-dir="$F3/remote.git" tag)" ] || fail "a tag was pushed"
 [ -z "$(git -C "$F3/work" tag)" ] || fail "a local tag was created"
@@ -275,8 +275,8 @@ write_lease "$$" "$(date +%s)"
 if out=$(run_release "$F4" patch --yes --skip-docs-check 2>&1); then
     fail "release started while a live ship held the lease"
 fi
-printf '%s' "$out" | grep -q "merge-lease" || fail "refusal does not name the merge-lease: $out"
-printf '%s' "$out" | grep -q "PR #42" || fail "refusal does not name the ship's PR: $out"
+grep -q "merge-lease" <<<"$out" || fail "refusal does not name the merge-lease: $out"
+grep -q "PR #42" <<<"$out" || fail "refusal does not name the ship's PR: $out"
 [ -z "$(git -C "$F4/work" status --porcelain)" ] || fail "refused release modified the tree"
 [ ! -s "$F4/state/calls" ] || fail "refused release called gh"
 grep -q "pid=$$" "$F4/work/.aida/merge-locks/main" || fail "refused release disturbed the ship's lease"
@@ -284,8 +284,8 @@ pass "live ship lease refuses the release before anything changes"
 
 info "Test 4a: --dry-run warns about a live ship lease instead of refusing"
 out=$(run_release "$F4" patch --dry-run 2>&1) || fail "dry run refused under a live lease: $out"
-printf '%s' "$out" | grep -q "would refuse to start" || fail "dry run did not warn about the lease: $out"
-printf '%s' "$out" | grep -qF "gh pr create" || fail "dry run under a lease printed no plan: $out"
+grep -q "would refuse to start" <<<"$out" || fail "dry run did not warn about the lease: $out"
+grep -qF "gh pr create" <<<"$out" || fail "dry run under a lease printed no plan: $out"
 pass "--dry-run warns and still prints the plan"
 
 info "Test 4b: a dead or expired holder does not block"
@@ -320,26 +320,109 @@ grep -q "note=scripts/release.sh v0.15.1" "$F5/state/lease-at-commit" 2>/dev/nul
     || fail "the main merge-lease was not retaken for the release commit"
 pass "release.sh retakes the main merge-lease for the release commit"
 
+# ─── interactive driver: a pty, answering each prompt after a probe ───────
+# Runs release.sh under script(1) so `[ -t 0 ]` holds and the real prompts are
+# read. For each "<prompt text>|<probe>" pair it waits for the prompt, runs the
+# probe (a shell function, given the fixture root), then answers "y".
+# trace:TASK-1951 trace:TASK-1691 | ai:claude
+pty_release() {
+    local root=$1 args=$2; shift 2
+    local fifo="$root/state/stdin" log="$root/state/pty.log"
+    rm -f "$fifo" "$log"; mkfifo "$fifo"
+    (
+        cd "$root/work"
+        PATH="$FAKE_BIN:$PATH" FAKE_GH_REMOTE="$root/remote.git" FAKE_GH_STATE="$root/state" \
+            AIDA_RELEASE_CHECKS_INTERVAL_SECS=0 AIDA_RELEASE_LEASE_WAIT_SECS=0 \
+            script -qfec "bash '$RELEASE' $args --skip-docs-check" "$log" <"$fifo" >/dev/null 2>&1
+        echo $? > "$root/state/pty.rc"
+    ) &
+    local runner=$! step seen=0
+    exec 9>"$fifo"
+    for step in "$@"; do
+        local prompt=${step%%|*} probe=${step#*|} i
+        for i in $(seq 1 600); do
+            [ "$(grep -cF -- "$prompt" "$log" 2>/dev/null || true)" -gt "$seen" ] && break
+            kill -0 "$runner" 2>/dev/null || break
+            sleep 0.1
+        done
+        grep -qF -- "$prompt" "$log" 2>/dev/null || { exec 9>&-; wait "$runner"; fail "prompt '$prompt' never appeared: $(cat "$log")"; }
+        "$probe" "$root"
+        printf 'y\n' >&9
+    done
+    exec 9>&-
+    wait "$runner" || true
+    cat "$root/state/pty.rc"
+}
+
+lease_absent_at_prompt() {
+    if [ -e "$1/work/.aida/merge-locks/main" ]; then
+        echo held >> "$1/state/lease-at-prompt"
+    else
+        echo free >> "$1/state/lease-at-prompt"
+    fi
+}
+
 info "Test 4d: no prompt runs while the lease is held"
-first_acquire=$(grep -n '^if ! lease_acquire 0; then' "$RELEASE" | head -n1 | cut -d: -f1)
-last_eco_prompt=$(grep -n 'read -r -p ".*\[y/N\]: " eco_answer' "$RELEASE" | tail -n1 | cut -d: -f1)
-pre_confirm_release=$(grep -nE '^lease_release( |$)' "$RELEASE" | head -n1 | cut -d: -f1)
-confirm_prompt=$(grep -n 'read -r -p "Open release PR' "$RELEASE" | head -n1 | cut -d: -f1)
-second_acquire=$(grep -n 'lease_acquire "\${AIDA_RELEASE_LEASE_WAIT_SECS:-180}"' "$RELEASE" | head -n1 | cut -d: -f1)
-for v in "$first_acquire" "$last_eco_prompt" "$pre_confirm_release" "$confirm_prompt" "$second_acquire"; do
-    [ -n "$v" ] || fail "could not locate the lease/prompt lines in release.sh"
-done
-[ "$last_eco_prompt" -lt "$first_acquire" ] || fail "lease is taken before the ecosystem-watch prompt"
-[ "$first_acquire" -lt "$pre_confirm_release" ] && [ "$pre_confirm_release" -lt "$confirm_prompt" ] \
-    || fail "lease is not released before the confirmation prompt"
-[ "$confirm_prompt" -lt "$second_acquire" ] || fail "lease is retaken before the confirmation prompt"
-pass "lease is taken after the ecosystem prompt, dropped before confirmation, retaken after"
+F8="$TEST_DIR/f8"; make_fixture "$F8"
+# A minor bump with no ecosystem watch file asks the ecosystem override prompt
+# first, then the confirmation prompt.
+rc=$(pty_release "$F8" minor \
+    "Override and release anyway?|lease_absent_at_prompt" \
+    "Open release PR for v0.16.0|lease_absent_at_prompt")
+[ "$rc" = "0" ] || fail "interactive release failed (rc=$rc): $(cat "$F8/state/pty.log")"
+[ "$(cat "$F8/state/lease-at-prompt")" = "$(printf 'free\nfree')" ] \
+    || fail "a prompt waited on a human while the lease was held: $(cat "$F8/state/lease-at-prompt")"
+git --git-dir="$F8/remote.git" rev-parse -q --verify 'refs/tags/v0.16.0' >/dev/null \
+    || fail "interactive release did not finish"
+pass "neither the ecosystem prompt nor the confirmation prompt runs under the lease"
 
 info "Test 4e: the lease is claimed atomically, never visible empty"
-if grep -n 'noclobber' "$RELEASE"; then fail "lease is still created empty via noclobber"; fi
-grep -q 'ln "\$tmp" "\$lease_file"' "$RELEASE" || fail "lease is not hard-linked into place from a full temp file"
-[ -z "$(ls "$F5/work/.aida/merge-locks/" 2>/dev/null)" ] || fail "lease temp files left behind: $(ls "$F5/work/.aida/merge-locks/")"
-pass "lease is written to a temp file and linked into place; no temp files remain"
+F9="$TEST_DIR/f9"; make_fixture "$F9"
+mkdir -p "$F9/work/.aida/merge-locks"
+(
+    lease="$F9/work/.aida/merge-locks/main"
+    while [ ! -e "$F9/state/stop-watch" ]; do
+        if [ -e "$lease" ] && ! grep -q '^pid=' "$lease" 2>/dev/null; then
+            [ -e "$lease" ] && echo "partial" >> "$F9/state/partial-lease"
+        fi
+    done
+) & watcher=$!
+run_release "$F9" patch --yes --skip-docs-check >/dev/null 2>&1 || fail "release under the lease watcher failed"
+touch "$F9/state/stop-watch"; wait "$watcher"
+[ ! -e "$F9/state/partial-lease" ] || fail "a reader saw an empty or partial lease"
+[ -z "$(ls "$F9/work/.aida/merge-locks/" 2>/dev/null)" ] || fail "lease temp files left behind: $(ls "$F9/work/.aida/merge-locks/")"
+pass "a concurrent reader never sees a partial lease; no temp files remain"
+
+# ─── 4f. the base moves while the confirmation prompt waits (TASK-1688) ───
+info "Test 4f: a base that moved during the confirmation prompt aborts before committing"
+advance_base() {
+    # A ship fast-forwards main on the remote and in this checkout.
+    local root=$1 parent merged
+    parent=$(git --git-dir="$root/remote.git" rev-parse refs/heads/main)
+    merged=$(git --git-dir="$root/remote.git" commit-tree "$parent^{tree}" -p "$parent" -m "feat: shipped meanwhile (#8)")
+    git --git-dir="$root/remote.git" update-ref refs/heads/main "$merged" "$parent"
+    git -C "$root/work" fetch -q origin main
+    git -C "$root/work" merge -q --ff-only FETCH_HEAD
+}
+advance_remote_only() {
+    local root=$1 parent merged
+    parent=$(git --git-dir="$root/remote.git" rev-parse refs/heads/main)
+    merged=$(git --git-dir="$root/remote.git" commit-tree "$parent^{tree}" -p "$parent" -m "feat: shipped meanwhile (#9)")
+    git --git-dir="$root/remote.git" update-ref refs/heads/main "$merged" "$parent"
+}
+for probe in advance_base advance_remote_only; do
+    FM="$TEST_DIR/fm-$probe"; make_fixture "$FM"
+    rc=$(pty_release "$FM" patch "Open release PR for v0.15.1|$probe")
+    [ "$rc" != "0" ] || fail "$probe: release continued on a moved base"
+    grep -q "while the release waited for confirmation" "$FM/state/pty.log" \
+        || fail "$probe: no moved-base refusal: $(cat "$FM/state/pty.log")"
+    grep -qF "git restore" "$FM/state/pty.log" || fail "$probe: refusal lacks the restore hint"
+    [ -z "$(git -C "$FM/work" branch --list 'release/*')" ] || fail "$probe: a release branch was created"
+    [ -z "$(git --git-dir="$FM/remote.git" branch --list 'release/*')" ] || fail "$probe: a release branch was pushed"
+    [ ! -s "$FM/state/calls" ] || fail "$probe: gh was called: $(cat "$FM/state/calls")"
+    [ ! -e "$FM/work/.aida/merge-locks/main" ] || fail "$probe: the lease was left behind"
+done
+pass "a local or remote base move during the prompt aborts with nothing committed or pushed"
 
 # ─── 6. gh pr create fails after the branch push ──────────────────────────
 info "Test 6: a failed gh pr create prints recovery, and a re-run names the leftover branch"
@@ -347,25 +430,25 @@ F7="$TEST_DIR/f7"; make_fixture "$F7"
 if out=$(FAKE_GH_CREATE_FAIL=1 run_release "$F7" patch --yes --skip-docs-check 2>&1); then
     fail "release succeeded although gh pr create failed"
 fi
-printf '%s' "$out" | grep -q "gh pr create failed" || fail "no gh pr create failure message: $out"
-printf '%s' "$out" | grep -qF "gh pr create --base main --head release/v0.15.1" || fail "no manual PR command: $out"
-printf '%s' "$out" | grep -qF "git push origin --delete release/v0.15.1" || fail "no branch-delete command: $out"
+grep -q "gh pr create failed" <<<"$out" || fail "no gh pr create failure message: $out"
+grep -qF "gh pr create --base main --head release/v0.15.1" <<<"$out" || fail "no manual PR command: $out"
+grep -qF "git push origin --delete release/v0.15.1" <<<"$out" || fail "no branch-delete command: $out"
 [ -z "$(git --git-dir="$F7/remote.git" tag)" ] || fail "a tag was pushed"
 [ "$(git -C "$F7/work" symbolic-ref --short HEAD)" = "main" ] || fail "left the checkout off main"
 if out=$(run_release "$F7" patch --yes --skip-docs-check 2>&1); then
     fail "re-run succeeded with the release branch still present"
 fi
-printf '%s' "$out" | grep -q "already exists" || fail "re-run did not refuse on the leftover branch: $out"
-printf '%s' "$out" | grep -qF "git push origin --delete release/v0.15.1" || fail "re-run refusal lacks the delete hint: $out"
+grep -q "already exists" <<<"$out" || fail "re-run did not refuse on the leftover branch: $out"
+grep -qF "git push origin --delete release/v0.15.1" <<<"$out" || fail "re-run refusal lacks the delete hint: $out"
 pass "gh pr create failure and the re-run both print the exact recovery"
 
 # ─── 5. --prepare-only fallback text routes through a PR ──────────────────
 info "Test 5: --prepare-only manual steps open a PR instead of pushing main"
 F6="$TEST_DIR/f6"; make_fixture "$F6"
 out=$(run_release "$F6" patch --prepare-only --skip-docs-check 2>&1) || fail "prepare-only failed: $out"
-printf '%s' "$out" | grep -qF "gh pr create" || fail "prepare-only steps lack gh pr create: $out"
-printf '%s' "$out" | grep -qF -- "--match-head-commit" || fail "prepare-only steps lack --match-head-commit: $out"
-if printf '%s' "$out" | grep -qE 'git push origin (HEAD|main)'; then
+grep -qF "gh pr create" <<<"$out" || fail "prepare-only steps lack gh pr create: $out"
+grep -qF -- "--match-head-commit" <<<"$out" || fail "prepare-only steps lack --match-head-commit: $out"
+if grep -qE 'git push origin (HEAD|main)' <<<"$out"; then
     fail "prepare-only tells the operator to push main: $out"
 fi
 [ ! -s "$F6/state/calls" ] || fail "prepare-only called gh"

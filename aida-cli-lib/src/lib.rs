@@ -436,6 +436,8 @@ mod mandate_traces;
 mod merge_lock;
 mod metrics;
 mod metrics_cmd;
+// trace:TASK-1951 trace:TASK-2003 | ai:claude
+mod needs_attention_lens;
 mod network_retry;
 mod node_cmd;
 mod not_found;

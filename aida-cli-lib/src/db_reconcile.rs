@@ -535,6 +535,61 @@ pub(crate) fn open_pr_withheld_message(
     }
 }
 
+/// TASK-1765 (1): a merge-driven completion the open-PR guard withheld (or
+/// deferred because the lookup was unavailable), kept on the clone's retry
+/// list so a later pull re-checks it after the merge commit has left the
+/// scan window.
+// trace:TASK-1951 trace:TASK-1765 | ai:claude
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub(crate) struct HeldCompletion {
+    pub(crate) spec_id: String,
+    pub(crate) sha: String,
+    /// The open PR that held it; `None` when the lookup was unavailable.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) open_pr: Option<u64>,
+}
+
+impl HeldCompletion {
+    fn of(flip: &AutoBumpFlip, open_pr: Option<u64>) -> Self {
+        Self {
+            spec_id: flip.spec_id.clone(),
+            sha: flip.sha.clone(),
+            open_pr,
+        }
+    }
+}
+
+pub(crate) fn held_completions_path(project_root: &std::path::Path) -> std::path::PathBuf {
+    project_root.join(".aida").join("held-completions.json")
+}
+
+/// The retry list; a missing or unreadable file is an empty list.
+// trace:TASK-1951 trace:TASK-1765 | ai:claude
+pub(crate) fn load_held_completions(project_root: &std::path::Path) -> Vec<HeldCompletion> {
+    std::fs::read(held_completions_path(project_root))
+        .ok()
+        .and_then(|bytes| serde_json::from_slice(&bytes).ok())
+        .unwrap_or_default()
+}
+
+/// Replace the retry list with what this pull still holds. Best-effort: a
+/// failed write only loses the retry, never a completion.
+// trace:TASK-1951 trace:TASK-1765 | ai:claude
+fn save_held_completions(project_root: &std::path::Path, held: &[HeldCompletion]) {
+    let path = held_completions_path(project_root);
+    if held.is_empty() {
+        let _ = std::fs::remove_file(&path);
+        return;
+    }
+    let Ok(body) = serde_json::to_vec_pretty(held) else {
+        return;
+    };
+    if let Some(dir) = path.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    let _ = aida_core::fs_atomic::write_atomic(&path, &body);
+}
+
 /// BUG-2203: which of a commit's trailer ids are `(Refs …)` references rather
 /// than completions. Completion intent comes from the line that carries the
 /// trailer: the subject's Refs groups suppress only the subject's ids, and a
@@ -2153,6 +2208,11 @@ pub(crate) fn auto_bump_done_to_completed_with(
     // covers path below must not complete their covered specs either.
     // trace:TASK-1951 trace:TASK-1765 | ai:claude
     let mut non_completing_prs: std::collections::BTreeSet<u64> = std::collections::BTreeSet::new();
+    // TASK-2114: the ids each merged PR's subject names only as `(Refs …)`;
+    // the covers path below must not complete them either.
+    // trace:TASK-1951 trace:TASK-2114 | ai:claude
+    let mut pr_subject_refs: std::collections::BTreeMap<u64, RefsCompletionFilter> =
+        std::collections::BTreeMap::new();
     for record in log_str.split('\0') {
         let mut parts = record.splitn(2, '\x1f');
         let sha = parts.next().unwrap_or("").trim();
@@ -2226,6 +2286,9 @@ pub(crate) fn auto_bump_done_to_completed_with(
         }
         if let Some(pr_n) = extract_pr_number_from_commit_subject(subject) {
             pr_to_sha.entry(pr_n).or_insert_with(|| sha.to_string());
+            pr_subject_refs
+                .entry(pr_n)
+                .or_insert_with(|| refs_completion_filter(subject, message));
             if commit_declares_non_completing(message)
                 || slice_subject_withholds_completion(subject)
                 || refs_completion_filter(subject, message).subject_only_references(subject)
@@ -2291,11 +2354,15 @@ pub(crate) fn auto_bump_done_to_completed_with(
     // work this pass must still do, so it has to count as a reason to continue
     // past the nothing-to-do guard. trace:BUG-1768 | ai:claude
     let orphaned_finding_pending = has_orphaned_failure_finding(&store);
+    // TASK-1765 (1): merges an open PR held back on an earlier pull.
+    // trace:TASK-1951 trace:TASK-1765 | ai:claude
+    let held_completions = load_held_completions(project_root);
 
     if candidates.is_empty()
         && pr_to_sha.is_empty()
         && stranded_review_pr.is_empty()
         && released_holds.is_empty()
+        && held_completions.is_empty()
         && !orphaned_finding_pending
     {
         return Ok((Vec::new(), true));
@@ -2385,6 +2452,15 @@ pub(crate) fn auto_bump_done_to_completed_with(
                 if flips.iter().any(|f| f.spec_id == spec_id) {
                     continue;
                 }
+                // TASK-2114: `fix: x (Refs A) (B) (#N)` covers A as a
+                // reference, the way the candidate scan reads it (BUG-2203).
+                // trace:TASK-1951 trace:TASK-2114 | ai:claude
+                if pr_subject_refs
+                    .get(pr_n)
+                    .is_some_and(|refs| refs.subject(spec_id))
+                {
+                    continue;
+                }
                 flips.push(AutoBumpFlip::new(
                     spec_id.to_string(),
                     sha.clone(),
@@ -2420,8 +2496,29 @@ pub(crate) fn auto_bump_done_to_completed_with(
     // remainder visible. An unavailable GitHub lookup is ambiguous and also
     // preserves Done; a later pull/reconcile can complete it once the forge is
     // reachable and no open PR remains. trace:BUG-1454 | ai:codex
+    //
+    // TASK-1765 (1): a withheld or deferred merge goes on the clone's retry
+    // list, and every later pull re-offers it here, so the spec completes
+    // once the holder closes or merges even after the merge commit has left
+    // the scan window. trace:TASK-1951 trace:TASK-1765 | ai:claude
+    for held in &held_completions {
+        if flips.iter().any(|f| f.spec_id == held.spec_id) {
+            continue;
+        }
+        let Some(req) = store.get_requirement_by_spec_id(&held.spec_id) else {
+            continue;
+        };
+        if auto_bump_eligible_status(&req.status) {
+            flips.push(AutoBumpFlip::new(
+                held.spec_id.clone(),
+                held.sha.clone(),
+                req.status.clone(),
+            ));
+        }
+    }
     retain_fresh_auto_bump_flips(project_root, &store, &mut flips);
     let candidate_ids = flips.iter().map(|flip| flip.spec_id.clone());
+    let mut still_held: Vec<HeldCompletion> = Vec::new();
     match specs_with_open_prs(project_root, candidate_ids) {
         Some(open) => {
             flips.retain(|flip| {
@@ -2432,6 +2529,7 @@ pub(crate) fn auto_bump_done_to_completed_with(
                     "  {}",
                     open_pr_withheld_message(&flip.spec_id, &flip.prior_status, *pr)
                 );
+                still_held.push(HeldCompletion::of(flip, Some(*pr)));
                 false
             });
         }
@@ -2440,10 +2538,12 @@ pub(crate) fn auto_bump_done_to_completed_with(
                 "  {} auto-bump deferred — could not verify whether candidate specs have open PRs",
                 "↷".yellow()
             );
+            still_held.extend(flips.iter().map(|flip| HeldCompletion::of(flip, None)));
             flips.clear();
         }
         None => {}
     }
+    save_held_completions(project_root, &still_held);
 
     // BUG-1551: BlockedBy gates closure, not just pickup. A spec whose code
     // merged while a BlockedBy predecessor is still unresolved stays at Done

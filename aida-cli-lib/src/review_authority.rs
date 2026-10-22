@@ -126,17 +126,23 @@ pub(crate) fn tokens_match_with(
 /// [`tokens_match`] is a refusal check (self-approval, approver-is-shipper,
 /// review authorship), so this fails closed: the worst case is a spurious
 /// refusal on a recycled pid that crossed an upgrade, never a missed one.
-/// Same-scheme starts still have to be equal.
-// trace:TASK-1951 trace:TASK-2049 | ai:claude
+/// Same-scheme starts still have to be equal. The two exact schemes are
+/// classed apart too (TASK-2136): a `linux-starttime:` and a `sysinfo-start:`
+/// token for one pid cannot be compared either, and treating them as one
+/// scheme left that pair on the liveness probe.
+// trace:TASK-1951 trace:TASK-2049 trace:TASK-2136 | ai:claude
 fn starts_in_different_schemes(a: &str, b: &str) -> bool {
     #[derive(PartialEq)]
     enum Scheme {
         Legacy,
-        Exact,
+        LinuxStarttime,
+        SysinfoStart,
     }
     let scheme = |s: &str| {
-        if s.starts_with("linux-starttime:") || s.starts_with("sysinfo-start:") {
-            Some(Scheme::Exact)
+        if s.starts_with("linux-starttime:") {
+            Some(Scheme::LinuxStarttime)
+        } else if s.starts_with("sysinfo-start:") {
+            Some(Scheme::SysinfoStart)
         } else if chrono::DateTime::parse_from_rfc3339(s).is_ok() {
             Some(Scheme::Legacy)
         } else {

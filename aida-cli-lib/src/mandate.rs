@@ -824,8 +824,11 @@ fn store_git(
         return match crate::command_output_with_timeout_detail(cmd, budget) {
             crate::BoundedCommandOutput::Completed(out) => git_output(out),
             crate::BoundedCommandOutput::SpawnFailed => Err("git failed to run".to_string()),
+            // TASK-2141: name the knob, so a cold-cache walk on a large
+            // store has a way forward. trace:TASK-1951 trace:TASK-2141 | ai:claude
             crate::BoundedCommandOutput::TimedOut => Err(format!(
-                "store history read timed out after {}s",
+                "store history read timed out after {}s; raise {STORE_HISTORY_TIMEOUT_ENV} \
+                 (seconds) for a large or cold store",
                 budget.as_secs()
             )),
         };
@@ -845,15 +848,19 @@ fn store_git(
     git_output(out)
 }
 
+const STORE_HISTORY_TIMEOUT_ENV: &str = "AIDA_STORE_HISTORY_TIMEOUT_SECS";
+
 /// The deadline for one store-history git walk:
-/// `AIDA_STORE_HISTORY_TIMEOUT_SECS`, else 120 s.
-// trace:TASK-1951 trace:TASK-1662 | ai:claude
+/// `AIDA_STORE_HISTORY_TIMEOUT_SECS`, else 600 s. TASK-2141: the default sits
+/// above the measured cold walk of the live store (4m26s, TASK-1662), so a
+/// cold cache does not refuse a ship; the deadline still bounds a hung walk.
+// trace:TASK-1951 trace:TASK-1662 trace:TASK-2141 | ai:claude
 fn store_history_timeout() -> std::time::Duration {
-    let secs = std::env::var("AIDA_STORE_HISTORY_TIMEOUT_SECS")
+    let secs = std::env::var(STORE_HISTORY_TIMEOUT_ENV)
         .ok()
         .and_then(|v| v.trim().parse::<u64>().ok())
         .filter(|&n| n > 0)
-        .unwrap_or(120);
+        .unwrap_or(600);
     std::time::Duration::from_secs(secs)
 }
 

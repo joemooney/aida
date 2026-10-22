@@ -530,7 +530,7 @@ pub(crate) fn write_typed_hold(
     project_root: &Path,
     record: &MergeHoldRecord,
 ) -> std::io::Result<()> {
-    write_typed_hold_context(project_root, record, false)
+    write_typed_hold_context(project_root, record, false, None)
 }
 
 /// The same composition and marker write, with explicit re-arm audit context.
@@ -539,18 +539,22 @@ pub(crate) fn rearm_typed_hold(
     project_root: &Path,
     record: &MergeHoldRecord,
 ) -> std::io::Result<()> {
-    write_typed_hold_context(project_root, record, true)
+    write_typed_hold_context(project_root, record, true, None)
 }
 
 fn write_typed_hold_context(
     project_root: &Path,
     record: &MergeHoldRecord,
     rearmed: bool,
+    adopted: Option<&crate::events::Event>,
 ) -> std::io::Result<()> {
-    match compose_with_existing(project_root, record) {
-        Composed::Placed(r) => write_marker(project_root, &r, true, rearmed),
-        Composed::Preserved(r) => write_marker(project_root, &r, false, rearmed),
-    }
+    // trace:TASK-1951 trace:TASK-1757 | ai:claude
+    with_hold_lock(project_root, record.pr, || {
+        match compose_with_existing(project_root, record) {
+            Composed::Placed(r) => write_marker(project_root, &r, true, rearmed, adopted),
+            Composed::Preserved(r) => write_marker(project_root, &r, false, rearmed, adopted),
+        }
+    })?
 }
 
 /// Replace the marker; reserved for the explicit operator escape hatch.
@@ -559,15 +563,22 @@ fn write_typed_hold_replacing(
     project_root: &Path,
     record: &MergeHoldRecord,
 ) -> std::io::Result<()> {
-    write_marker(project_root, record, true, false)
+    // trace:TASK-1951 trace:TASK-1757 | ai:claude
+    with_hold_lock(project_root, record.pr, || {
+        write_marker(project_root, record, true, false, None)
+    })?
 }
 
 // trace:BUG-1691 | ai:codex
+/// `adopted` is the placement event a contained writer recorded in its own
+/// worktree; adoption re-records it beside the marker at its original time
+/// and seat instead of minting a new placement (TASK-2153).
 fn write_marker(
     project_root: &Path,
     record: &MergeHoldRecord,
     reconcile_route: bool,
     rearmed: bool,
+    adopted: Option<&crate::events::Event>,
 ) -> std::io::Result<()> {
     if record.pr == 0
         || (record.reason_kind == HoldReasonKind::Recusal
@@ -599,6 +610,18 @@ fn write_marker(
     // TASK-1406: the placement event goes to the events log beside the
     // marker, so the primary's tampering check sees holds placed from a
     // linked worktree. trace:TASK-1951 trace:TASK-1406 | ai:claude
+    //
+    // TASK-2138: the readers that decide anything from hold events read
+    // that log: `unrecorded_marker_removals` and lane-liveness's
+    // `load_human_holds`. Three readers stay on the log they were pointed
+    // at, by design: `aida watch` tails one live feed; the history timeline
+    // filters by spec, and hold events carry none, so the root does not
+    // change what it shows; the `aida events` gate tally counts one window
+    // of one log, and `merge-hold clear` writes its floor refusal and its
+    // release to the primary alike. Placements written to a worktree log
+    // before TASK-1406 are not migrated: their markers fall back to the
+    // marker mtime for age, and a hand-deletion of one is not detected.
+    // trace:TASK-1951 trace:TASK-2138 | ai:claude
     let mut event_root = store.clone();
     if let Err(error) = write_marker_files(&store, record.pr, &body) {
         // Compare canonical spellings: a primary reached through a symlink
@@ -636,6 +659,11 @@ fn write_marker(
         },
     );
     event.seat = crate::events::active_seat();
+    // trace:TASK-1951 trace:TASK-2153 | ai:claude
+    if let Some(original) = adopted {
+        event.ts = original.ts;
+        event.seat = original.seat.clone();
+    }
     crate::events::emit(&event_root, &event);
     Ok(())
 }
@@ -680,7 +708,20 @@ pub(crate) fn adopt_worktree_hold(
     let Some(record) = parse_hold_marker(std::fs::read_to_string(&local), pr) else {
         return Ok(false);
     };
-    write_typed_hold(project_root, &record)?;
+    // TASK-2153: carry the worktree's placement event with the marker, so
+    // the primary's tamper check and hold age see the original placement.
+    // trace:TASK-1951 trace:TASK-2153 | ai:claude
+    let placement = crate::events::read_all(worktree)
+        .into_iter()
+        .rev()
+        .find(|e| {
+            matches!(
+                e.kind,
+                crate::events::EventKind::MergeHoldChanged { pr: p, placed: true, .. }
+                    if u64::from(p) == pr
+            )
+        });
+    write_typed_hold_context(project_root, &record, false, placement.as_ref())?;
     std::fs::remove_file(&local)?;
     Ok(true)
 }
@@ -823,7 +864,18 @@ fn compose_with_existing(project_root: &Path, incoming: &MergeHoldRecord) -> Com
 fn compose_holds(existing: &MergeHoldRecord, incoming: &MergeHoldRecord) -> Composed {
     if existing.reason_kind == incoming.reason_kind {
         let mut out = incoming.clone();
-        merge_absorbed(&mut out.absorbed, &existing.absorbed);
+        let mut carried = existing.absorbed.clone();
+        // BUG-2123: a Rework hold armed by a refusal on another verdict keeps
+        // that refusal as a shadow; replacing it would let an approval of
+        // the newer one release a refusal nobody answered.
+        // trace:TASK-1951 trace:BUG-2123 | ai:claude
+        if shadow_key(existing.reason_kind, existing.verdict_ref.as_ref())
+            != shadow_key(incoming.reason_kind, incoming.verdict_ref.as_ref())
+        {
+            carried.push(AbsorbedHold::from_record(existing));
+        }
+        merge_absorbed(&mut out.absorbed, &carried);
+        retain_distinct_shadows(&mut out);
         return Composed::Placed(out);
     }
     let (mut primary, loser, preserved) =
@@ -835,9 +887,7 @@ fn compose_holds(existing: &MergeHoldRecord, incoming: &MergeHoldRecord) -> Comp
     let mut carried = loser.absorbed.clone();
     carried.push(AbsorbedHold::from_record(loser));
     merge_absorbed(&mut primary.absorbed, &carried);
-    primary
-        .absorbed
-        .retain(|a| a.reason_kind != primary.reason_kind);
+    retain_distinct_shadows(&mut primary);
     if preserved {
         Composed::Preserved(primary)
     } else {
@@ -845,11 +895,41 @@ fn compose_holds(existing: &MergeHoldRecord, incoming: &MergeHoldRecord) -> Comp
     }
 }
 
-/// Union absorbed shadows by kind, with the newest entry taking precedence.
+/// What makes two holds the same hold for composition: the kind, and for a
+/// Rework hold also the verdict it stands on (BUG-2123). Other kinds have
+/// one shadow per kind.
+// trace:TASK-1951 trace:BUG-2123 | ai:claude
+fn shadow_key(
+    kind: HoldReasonKind,
+    verdict: Option<&VerdictRef>,
+) -> (HoldReasonKind, Option<&str>) {
+    match kind {
+        HoldReasonKind::Rework => (kind, verdict.map(|v| v.key.as_str())),
+        _ => (kind, None),
+    }
+}
+
+/// Drop shadows that are the primary hold itself.
+// trace:TASK-1951 trace:BUG-2123 | ai:claude
+fn retain_distinct_shadows(primary: &mut MergeHoldRecord) {
+    let own = shadow_key(primary.reason_kind, primary.verdict_ref.as_ref());
+    let own = (own.0, own.1.map(str::to_string));
+    primary.absorbed.retain(|a| {
+        let key = shadow_key(a.reason_kind, a.verdict_ref.as_ref());
+        (key.0, key.1.map(str::to_string)) != own
+    });
+}
+
+/// Union absorbed shadows by [`shadow_key`], with the newest entry taking
+/// precedence.
 // trace:BUG-1691 | ai:codex
 fn merge_absorbed(into: &mut Vec<AbsorbedHold>, extra: &[AbsorbedHold]) {
     for e in extra {
-        if let Some(slot) = into.iter_mut().find(|a| a.reason_kind == e.reason_kind) {
+        let key = shadow_key(e.reason_kind, e.verdict_ref.as_ref());
+        if let Some(slot) = into
+            .iter_mut()
+            .find(|a| shadow_key(a.reason_kind, a.verdict_ref.as_ref()) == key)
+        {
             *slot = e.clone();
         } else {
             into.push(e.clone());
@@ -1233,6 +1313,23 @@ pub(crate) fn clearance_path(project_root: &Path, pr: u64) -> PathBuf {
     local_clearance_path(&hold_store_root(project_root), pr)
 }
 
+/// TASK-1757: where a withdrawn auto-release clearance is kept. Not
+/// `clearance_path`, so no reader treats it as a release.
+// trace:TASK-1951 trace:TASK-1757 | ai:claude
+pub(crate) fn superseded_clearance_path(
+    project_root: &Path,
+    pr: u64,
+    at: chrono::DateTime<chrono::Utc>,
+) -> PathBuf {
+    hold_store_root(project_root)
+        .join(".aida")
+        .join("merge-hold-clearances")
+        .join(format!(
+            "PR-{pr}.superseded-{}.json",
+            at.format("%Y%m%dT%H%M%S%.3fZ")
+        ))
+}
+
 fn local_clearance_path(root: &Path, pr: u64) -> PathBuf {
     root.join(".aida")
         .join("merge-hold-clearances")
@@ -1360,6 +1457,97 @@ pub(crate) fn read_hold(project_root: &Path, pr: u64) -> Option<String> {
 
 /// Clear the hold — an explicit human/advisor review. Idempotent: clearing a
 /// PR with no hold is a no-op success.
+/// How long a hold write or release waits for another one on the same PR.
+// trace:TASK-1951 trace:TASK-1757 | ai:claude
+const HOLD_LOCK_WAIT: std::time::Duration = std::time::Duration::from_secs(10);
+
+#[cfg(test)]
+thread_local! {
+    /// Tests shorten the wait so a contention test does not take 10 s.
+    pub(crate) static HOLD_LOCK_WAIT_OVERRIDE: std::cell::Cell<Option<std::time::Duration>> =
+        const { std::cell::Cell::new(None) };
+}
+
+fn hold_lock_wait() -> std::time::Duration {
+    #[cfg(test)]
+    if let Some(wait) = HOLD_LOCK_WAIT_OVERRIDE.with(|w| w.get()) {
+        return wait;
+    }
+    HOLD_LOCK_WAIT
+}
+
+pub(crate) fn hold_lock_path(project_root: &Path, pr: u64) -> PathBuf {
+    hold_store_root(project_root)
+        .join(".aida")
+        .join("merge-hold-locks")
+        .join(format!("PR-{pr}.lock"))
+}
+
+/// TASK-1757: run `f` holding PR `pr`'s hold lock, so a placement (or
+/// re-arm) cannot interleave with a release's second validation pass and its
+/// marker removal. Every hold write and every release takes it here. After
+/// [`HOLD_LOCK_WAIT`] it refuses with a named reason; it never proceeds
+/// unlocked. A contained writer that cannot create the lock in the primary
+/// locks beside its own fallback marker instead, as [`write_marker`] does.
+// trace:TASK-1951 trace:TASK-1757 | ai:claude
+pub(crate) fn with_hold_lock<T>(
+    project_root: &Path,
+    pr: u64,
+    f: impl FnOnce() -> T,
+) -> std::io::Result<T> {
+    use fs2::FileExt;
+    let open = |path: &Path| -> std::io::Result<std::fs::File> {
+        if let Some(dir) = path.parent() {
+            std::fs::create_dir_all(dir)?;
+        }
+        std::fs::OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .write(true)
+            .open(path)
+    };
+    let mut path = hold_lock_path(project_root, pr);
+    let file = match open(&path) {
+        Ok(file) => file,
+        Err(_) => {
+            path = project_root
+                .join(".aida")
+                .join("merge-hold-locks")
+                .join(format!("PR-{pr}.lock"));
+            open(&path)?
+        }
+    };
+    // Re-entrant per thread: a hold write nested inside a release on the
+    // same thread is not a race, and a second flock on a fresh descriptor
+    // would wait on itself.
+    thread_local! {
+        static HELD: std::cell::RefCell<Vec<PathBuf>> = const { std::cell::RefCell::new(Vec::new()) };
+    }
+    if HELD.with(|held| held.borrow().contains(&path)) {
+        return Ok(f());
+    }
+    let deadline = std::time::Instant::now() + hold_lock_wait();
+    while file.try_lock_exclusive().is_err() {
+        if std::time::Instant::now() >= deadline {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::WouldBlock,
+                format!(
+                    "merge-hold PR-{pr} is busy: another hold placement or release holds {} \
+                     (waited {}s); nothing was changed — re-run once it finishes",
+                    path.display(),
+                    hold_lock_wait().as_secs()
+                ),
+            ));
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    HELD.with(|held| held.borrow_mut().push(path.clone()));
+    let out = f();
+    HELD.with(|held| held.borrow_mut().retain(|p| p != &path));
+    let _ = FileExt::unlock(&file);
+    Ok(out)
+}
+
 pub(crate) fn clear_hold(project_root: &Path, pr: u64) -> std::io::Result<()> {
     match std::fs::remove_file(hold_path(project_root, pr)) {
         Ok(()) => Ok(()),
@@ -2679,8 +2867,8 @@ pub(crate) fn sync_label_with(
 /// for a recorded hold: a cleared label without a recorded one fails the
 /// merge-hold gate. A never-recorded PR instead has any orphaned cleared label
 /// removed. An unreadable probe changes no label at all and returns an error
-/// naming the forge failure, so the caller reports it and the operator
-/// retries; dropping the hold label alone would strand the PR.
+/// naming the forge failure; each caller adds the retry that fits its own
+/// path (TASK-1951). Dropping the hold label alone would strand the PR.
 // trace:TASK-1951 | ai:claude
 pub(crate) fn sync_label_with_probe(
     project_root: &Path,
@@ -2712,7 +2900,7 @@ pub(crate) fn sync_label_with_probe(
             Err(err) => {
                 return Err(LabelSyncError::Other(format!(
                     "could not read PR #{pr}'s labels from the forge ({err}); no label was \
-                     changed — re-run `aida merge-hold clear {pr}`"
+                     changed"
                 )))
             }
         }
@@ -4060,7 +4248,8 @@ mod tests {
         let (err, writes, _) = cleared_ops(&|_, _, _| Err("HTTP 502".into()));
         let err = err.unwrap_err().to_string();
         assert!(
-            err.contains("HTTP 502") && err.contains("aida merge-hold clear 42"),
+            // The caller names the retry (TASK-1951). trace:TASK-1951 | ai:claude
+            err.contains("HTTP 502") && err.contains("no label was changed"),
             "{err}"
         );
         assert_eq!(writes, 0, "an unknown probe must not touch labels");
@@ -4277,8 +4466,10 @@ mod tests {
                  merge_hold::record_clearance(&root, record, actor)?; }",
             )
             .expect("clear must RECORD a clearance for a hold whose marker went missing");
+        // TASK-2152: the no-hold return now lives in `finish_clear`, which
+        // runs after every clearance is recorded. trace:TASK-1951 | ai:claude
         let no_hold = squashed
-            .find("No merge-hold on PR #{pr}")
+            .find("for line in finish_clear(")
             .expect("the no-hold early return must remain inspectable");
         assert!(
             door < no_hold,
@@ -5422,7 +5613,7 @@ mod tests {
         let mut recusal = recused_record();
         recusal.routed_to = vec![PrincipalIdentity::parse("agent:cold-reader")];
         recusal.routing_state = HoldRoutingState::Routed;
-        write_marker(dir.path(), &recusal, false, false).unwrap();
+        write_marker(dir.path(), &recusal, false, false, None).unwrap();
         let expected_route = recusal.routed_to.clone();
         write_typed_hold(
             dir.path(),
@@ -5439,7 +5630,7 @@ mod tests {
     #[test]
     fn preserving_path_still_rejects_invalid_recusal_refresh() {
         let dir = tempfile::tempdir().unwrap();
-        write_marker(dir.path(), &recused_record(), false, false).unwrap();
+        write_marker(dir.path(), &recused_record(), false, false, None).unwrap();
         let mut invalid = recused_record();
         invalid.recused_principals.clear();
         assert!(write_typed_hold(dir.path(), &invalid).is_err());

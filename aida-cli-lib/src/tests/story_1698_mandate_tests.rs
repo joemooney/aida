@@ -2295,5 +2295,10 @@ fn task_1951_store_history_walk_times_out_as_unreadable() {
     let started = std::time::Instant::now();
     let err = store_history_alias_map(store.path(), &["TASK-1".to_string()]).unwrap_err();
     assert!(err.to_string().contains("timed out"), "{err}");
+    // TASK-2141: the refusal names the override. trace:TASK-1951 trace:TASK-2141 | ai:claude
+    assert!(
+        err.to_string().contains("AIDA_STORE_HISTORY_TIMEOUT_SECS"),
+        "{err}"
+    );
     assert!(started.elapsed() < std::time::Duration::from_secs(20));
 }

@@ -726,6 +726,8 @@ pub(crate) const TOON_LIST_KNOWN_FIELDS: &[&str] = &[
     // trace:STORY-1653 | ai:claude — derived driver of an in-progress spec.
     "driver",
     "driver_kind",
+    // trace:TASK-1951 trace:TASK-2003 | ai:claude — NeedsAttention review lens.
+    "review_lens",
 ];
 
 /// Render a numeric weight/score for display: integral values drop the

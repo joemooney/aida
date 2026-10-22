@@ -1587,6 +1587,17 @@ fn pr_head_sha_for_merge_gate(
         .filter(|sha| !sha.is_empty())
 }
 
+/// `aida pr ship` released the marker but could not drop the forge hold
+/// label. The marker is gone, so the label is now a label-only hold: name
+/// the human clear that drops it and the ship re-run, not a bare
+/// `merge-hold clear` retry.
+// trace:TASK-1951 | ai:claude
+pub(crate) fn ship_unlabel_failure(pr: u64, err: &crate::merge_hold::LabelSyncError) -> String {
+    format!(
+        "could not remove the merge-hold label ({err}) — branch protection will keep the merge closed. Drop it with `aida merge-hold clear {pr}` when the forge is reachable, then re-run `aida pr ship {pr}`."
+    )
+}
+
 /// BUG-1532 criterion 4: does a fresh verdict at `head` release this refusal
 /// hold? Verdicts are read under every root (the main clone and the calling
 /// worktree can both hold `.aida/review-verdicts/`); the first root with an
@@ -3268,20 +3279,18 @@ pub(crate) fn pr_ship_with_method(
         } else {
             None
         };
-        let sanitized_squash_body =
-            if merge_method == crate::forge::MergeMethod::Squash && declares_non_completing {
-                let body = match sanitized_squash_body {
-                    Some(body) => body,
-                    None => crate::identity_gate::squash_commit_messages_body(
-                        &project_root,
-                        &retarget_base,
-                        head_sha.as_deref().unwrap_or(&ship_branch),
-                    )?,
-                };
-                Some(non_completing_squash_body(&body))
-            } else {
-                sanitized_squash_body
-            };
+        let sanitized_squash_body = ship_squash_body(
+            merge_method,
+            declares_non_completing,
+            sanitized_squash_body,
+            || {
+                crate::identity_gate::squash_commit_messages_body(
+                    &project_root,
+                    &retarget_base,
+                    head_sha.as_deref().unwrap_or(&ship_branch),
+                )
+            },
+        )?;
         let mut merge_opts = crate::forge::MergeOptions {
             method: merge_method,
             squash_subject: explicit_squash_subject.clone(),
@@ -3546,8 +3555,9 @@ pub(crate) fn pr_ship_with_method(
             crate::events::emit(&hold_root, &hold_event);
             if let Err(err) = crate::merge_hold::sync_label(&hold_root, pr_number, false) {
                 eprintln!(
-                    "  {} could not remove the merge-hold label ({err}) — branch protection will keep the merge closed",
+                    "  {} {}",
                     crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                    ship_unlabel_failure(pr_number, &err),
                 );
             }
             // BUG-1180: removing the label re-runs `merge-hold-gate`; the
@@ -3777,7 +3787,9 @@ pub(crate) fn pr_ship_with_method(
     // orchestrator or this command — same kind, same terminal semantics.
     // Best-effort: emit failures never fail the ship. trace:BUG-1423 | ai:claude
     let mut pr_merged_spec_ids: Vec<String> = Vec::new();
+    let mut pr_title_body: Option<(String, String)> = None;
     if let Ok(pr_meta) = fetch_pr_ship_metadata_via_gh(&project_root, pr_number) {
+        pr_title_body = Some((pr_meta.title.clone(), pr_meta.body.clone()));
         // Use the same store-qualified completion intent as the squash subject
         // — including BUG-1919's non-completing / closure-held suppression, so
         // a slice PR is not credited as a ship of its parent either.
@@ -3844,53 +3856,50 @@ pub(crate) fn pr_ship_with_method(
     // current checkout. Completion and the marker are both idempotent (the
     // marker dedups per PR).
     // trace:TASK-1951 trace:TASK-1621 | ai:claude
-    let mut slice_marker_failed = false;
-    if rebase_slice_bookkeeping_due(merged_this_run, already_merged) {
-        // STORY-1663: rebase merges have no squash subject, so `aida pull`'s
-        // commit-subject auto-bump cannot distinguish a final-slice rebase merge
-        // from an intermediate slice. Explicitly mark the resolved specs Completed
-        // when `--final-slice` (`--complete-spec`) is passed on a rebase merge, or
-        // record a non-completing rebase marker when `--final-slice` is omitted so
-        // `aida pull` and `aida db reconcile-status` leave the owning spec's status
-        // unchanged without suppressing unrelated auto-bumps.
-        // trace:STORY-1663 | ai:antigravity
-        if merge_method == crate::forge::MergeMethod::Rebase {
-            if final_slice {
-                complete_rebase_final_slice_specs(
-                    &main_worktree,
-                    pr_number,
-                    &pr_merged_spec_ids,
-                    merged_head_sha.as_deref(),
-                );
-            } else if let Err(e) = rebase_slice_inputs(
-                already_merged,
+    let mut slice_pull_skip = None;
+    if rebase_slice_bookkeeping_due(merged_this_run, already_merged)
+        && merge_method == crate::forge::MergeMethod::Rebase
+    {
+        let outcome = rebase_slice_bookkeeping(
+            &RebaseSliceRun {
+                main_worktree: &main_worktree,
+                project_root: &project_root,
                 pr_number,
-                &ship_branch,
-                &retarget_base,
-                merged_head_sha.as_deref(),
-                || fetch_merged_pr_refs_via_gh(&project_root, pr_number),
-            )
-            .and_then(|inputs| {
-                record_non_completing_rebase_slice(
-                    &main_worktree,
-                    &project_root,
-                    pr_number,
-                    &inputs.base,
-                    inputs.head_sha.as_deref(),
-                    &inputs.branch,
-                )
-            }) {
-                // TASK-1622: without the marker, the pull below could complete
-                // the spec from a rebased `(SPEC-ID)` subject. Skip it; a re-run
-                // records the marker on the already-merged path.
-                // trace:TASK-1951 trace:TASK-1622 | ai:claude
-                eprintln!(
-                    "  {} could not record the non-completing slice marker for PR-{pr_number}: {e:#}\n    skipping `aida pull` so no spec completes; re-run `aida pr ship {pr_number} --rebase`",
-                    crate::glyph(crate::glyphs::Glyph::Warning).yellow()
-                );
-                slice_marker_failed = true;
-            }
+                final_slice,
+                already_merged,
+                ship_branch: &ship_branch,
+                retarget_base: &retarget_base,
+                merged_head_sha: merged_head_sha.as_deref(),
+            },
+            &pr_merged_spec_ids,
+            |merged_branch: &str| {
+                // TASK-1621 (a): the merged PR's own branch, not the checkout's.
+                let (title, body) = pr_title_body.clone().unwrap_or_default();
+                Storage::new(main_worktree.join(".aida-store"))
+                    .load()
+                    .map(|store| {
+                        ship_completion_trailer_for_method(
+                            &store,
+                            merge_method,
+                            final_slice,
+                            &title,
+                            merged_branch,
+                            &body,
+                            no_complete,
+                        )
+                        .ids
+                    })
+                    .unwrap_or_default()
+            },
+            || fetch_merged_pr_refs(&project_root, pr_number, &ship_branch, &retarget_base),
+        );
+        if let Some(warning) = &outcome.warning {
+            eprintln!(
+                "  {} {warning}",
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+            );
         }
+        slice_pull_skip = outcome.pull_skip;
     }
 
     // ---- Step 4: aida pull (from the main worktree). ----
@@ -3902,7 +3911,7 @@ pub(crate) fn pr_ship_with_method(
             &ShipStep::Pull,
             &StepOutcome::Skipped("--no-pull".into()),
         );
-    } else if let Some(reason) = post_merge_pull_skip_reason(slice_marker_failed) {
+    } else if let Some(reason) = slice_pull_skip {
         eprintln!("  step 4: skipping `aida pull` ({reason})");
         log_ship_activity(
             &main_worktree,
@@ -4898,6 +4907,33 @@ pub(crate) fn non_completing_squash_body(body: &str) -> String {
     }
 }
 
+/// The squash body `aida pr ship` hands the forge. A non-completing squash
+/// ship carries the `aida: no-complete` declaration, appended to the
+/// identity gate's sanitized body or, when the gate left the body to the
+/// forge, to the branch's commit messages (`commit_messages`).
+///
+/// TASK-2116 trade-off: an explicit body replaces the forge's default one,
+/// so GitHub no longer derives `Co-authored-by:` trailers from the other
+/// commit authors for that merge. Trailers already written in commit
+/// messages are kept. A non-completing ship accepts this so the declaration
+/// reaches main; an ordinary ship leaves the body to the forge.
+// trace:TASK-1951 trace:TASK-1765 trace:TASK-2116 trace:TASK-2117 | ai:claude
+pub(crate) fn ship_squash_body(
+    method: crate::forge::MergeMethod,
+    declares_non_completing: bool,
+    sanitized: Option<String>,
+    commit_messages: impl FnOnce() -> Result<String>,
+) -> Result<Option<String>> {
+    if method != crate::forge::MergeMethod::Squash || !declares_non_completing {
+        return Ok(sanitized);
+    }
+    let body = match sanitized {
+        Some(body) => body,
+        None => commit_messages()?,
+    };
+    Ok(Some(non_completing_squash_body(&body)))
+}
+
 /// STORY-1663: optional slice-stack verifier hook before rebase merge.
 /// Reads `scripts/split-lib/verify_stack.py` from `base_ref`, the base the PR
 /// merges into. The `main_worktree` copy is used only when `base_ref` does not
@@ -5068,13 +5104,16 @@ pub(crate) fn post_merge_pull_skip_reason(slice_marker_failed: bool) -> Option<&
     slice_marker_failed.then_some("non-completing slice marker not recorded")
 }
 
-/// The head branch, base and head sha a merged PR was shipped from.
+/// The head branch, base and head sha a merged PR was shipped from, and the
+/// subjects of its commits (newest first) when the forge reported them.
 // trace:TASK-1951 trace:TASK-1621 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct RebaseSliceInputs {
     pub(crate) branch: String,
     pub(crate) base: String,
     pub(crate) head_sha: Option<String>,
+    /// Empty: read them from the local `base..head` range.
+    pub(crate) subjects: Vec<String>,
 }
 
 /// TASK-1621: the slice bookkeeping inputs. A merge made in this run uses the
@@ -5096,6 +5135,7 @@ pub(crate) fn rebase_slice_inputs(
             branch: ship_branch.to_owned(),
             base: retarget_base.to_owned(),
             head_sha: merged_head_sha.map(str::to_owned),
+            subjects: Vec::new(),
         });
     }
     merged_refs().with_context(|| {
@@ -5103,66 +5143,214 @@ pub(crate) fn rebase_slice_inputs(
     })
 }
 
-/// `headRefName`, `baseRefName` and `headRefOid` of a MERGED PR, from
-/// `gh pr view N`.
-// trace:TASK-1951 trace:TASK-1621 | ai:claude
-pub(crate) fn parse_merged_pr_refs(stdout: &[u8]) -> Result<RebaseSliceInputs> {
-    let json: serde_json::Value =
-        serde_json::from_slice(stdout).context("`gh pr view` returned non-JSON output")?;
-    let field = |k: &str| {
-        json.get(k)
-            .and_then(|v| v.as_str())
-            .map(str::trim)
-            .filter(|v| !v.is_empty())
-            .map(str::to_owned)
-    };
-    let state = field("state").unwrap_or_default();
+/// The merged change's refs from the forge-neutral change metadata, plus
+/// its commit subjects. Refuses a change that is not merged, or a branch
+/// name or sha that is unsafe to pass to git.
+// trace:TASK-1951 trace:TASK-1621 trace:TASK-2131 | ai:claude
+pub(crate) fn merged_pr_refs_from_metadata(
+    meta: &crate::forge::ChangeMetadata,
+    headlines: Vec<String>,
+) -> Result<RebaseSliceInputs> {
     anyhow::ensure!(
-        state.eq_ignore_ascii_case("MERGED"),
-        "the PR is not merged (state `{state}`)"
+        meta.state == crate::forge::ChangeState::Merged,
+        "the PR is not merged (state `{:?}`)",
+        meta.state
     );
-    let (Some(branch), Some(base), Some(sha)) = (
-        field("headRefName"),
-        field("baseRefName"),
-        field("headRefOid"),
-    ) else {
-        anyhow::bail!("`gh pr view` lacks headRefName, baseRefName or headRefOid");
-    };
+    let (branch, base, sha) = (
+        meta.head_ref.trim(),
+        meta.base_ref.trim(),
+        meta.head_sha.trim(),
+    );
     anyhow::ensure!(
-        crate::git_arg_guard::is_shell_safe_branch_name(&branch)
-            && crate::git_arg_guard::is_shell_safe_branch_name(&base)
-            && crate::git_arg_guard::is_hex_sha(&sha),
-        "`gh pr view` returned an unsafe branch name or sha"
+        !branch.is_empty() && !base.is_empty() && !sha.is_empty(),
+        "the forge reported no head branch, base or head sha"
     );
+    anyhow::ensure!(
+        crate::git_arg_guard::is_shell_safe_branch_name(branch)
+            && crate::git_arg_guard::is_shell_safe_branch_name(base)
+            && crate::git_arg_guard::is_hex_sha(sha),
+        "the forge returned an unsafe branch name or sha"
+    );
+    let mut subjects: Vec<String> = headlines
+        .into_iter()
+        .map(|s| s.trim().to_owned())
+        .filter(|s| !s.is_empty())
+        .collect();
+    // Forges list a change's commits oldest first; the marker reads newest first.
+    subjects.reverse();
     Ok(RebaseSliceInputs {
-        branch,
-        base,
-        head_sha: Some(sha),
+        branch: branch.to_owned(),
+        base: base.to_owned(),
+        head_sha: Some(sha.to_owned()),
+        subjects,
     })
 }
 
-// trace:TASK-1951 trace:TASK-1621 | ai:claude
-fn fetch_merged_pr_refs_via_gh(
+/// TASK-2131: the merged PR's refs through the forge abstraction, so an
+/// already-merged re-run works on GitLab as on GitHub. Pure-git has no
+/// merged-change record: the slice branch named on the command line is the
+/// record, so the re-run must name it.
+// trace:TASK-1951 trace:TASK-1621 trace:TASK-2131 | ai:claude
+fn fetch_merged_pr_refs(
     project_root: &std::path::Path,
     n: u64,
+    ship_branch: &str,
+    base: &str,
 ) -> Result<RebaseSliceInputs> {
-    let gh = crate::kernel::resolve_gh_binary().context("`gh` not found")?;
-    let mut cmd = std::process::Command::new(gh);
-    cmd.current_dir(project_root).args([
-        "pr",
-        "view",
-        &n.to_string(),
-        "--json",
-        "state,headRefName,baseRefName,headRefOid",
-    ]);
-    let out = crate::command_output_with_timeout(cmd, crate::FORGE_CLI_CALL_TIMEOUT)
-        .context("`gh pr view` failed or timed out")?;
+    let forge = crate::forge::forge_for(project_root);
+    if forge.kind() == crate::forge::ForgeKind::None {
+        anyhow::ensure!(
+            ship_branch != base && crate::git_arg_guard::is_shell_safe_branch_name(ship_branch),
+            "a pure-git project has no merged change record; re-run `aida pr ship --rebase` from the slice branch"
+        );
+        let head = std::process::Command::new("git")
+            .current_dir(project_root)
+            .args(["rev-parse", "--verify", "--quiet", ship_branch])
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_owned());
+        return Ok(RebaseSliceInputs {
+            branch: ship_branch.to_owned(),
+            base: base.to_owned(),
+            head_sha: head,
+            subjects: Vec::new(),
+        });
+    }
+    let mut sink = crate::network_retry::StderrSink;
+    let meta = forge.change_metadata(n, &mut sink)?;
+    let headlines = forge.change_commit_headlines(n, &mut sink)?;
+    merged_pr_refs_from_metadata(&meta, headlines)
+}
+
+/// What a run of `aida pr ship` needs to do the rebase slice bookkeeping.
+// trace:TASK-1951 trace:TASK-1621 | ai:claude
+pub(crate) struct RebaseSliceRun<'a> {
+    pub(crate) main_worktree: &'a std::path::Path,
+    pub(crate) project_root: &'a std::path::Path,
+    pub(crate) pr_number: u64,
+    pub(crate) final_slice: bool,
+    pub(crate) already_merged: bool,
+    pub(crate) ship_branch: &'a str,
+    pub(crate) retarget_base: &'a str,
+    pub(crate) merged_head_sha: Option<&'a str>,
+}
+
+/// The result of the rebase slice bookkeeping: a warning to print, and the
+/// reason step 4 must skip `aida pull`, if any.
+// trace:TASK-1951 trace:TASK-1622 | ai:claude
+#[derive(Debug, Default, PartialEq, Eq)]
+pub(crate) struct SliceBookkeeping {
+    pub(crate) warning: Option<String>,
+    pub(crate) pull_skip: Option<&'static str>,
+}
+
+/// STORY-1663: rebase merges have no squash subject, so `aida pull`'s
+/// commit-subject auto-bump cannot tell a final-slice rebase merge from an
+/// intermediate slice. With `--final-slice` the resolved specs are marked
+/// Completed; without it a non-completing marker is recorded so `aida pull`
+/// leaves the owning spec unchanged.
+///
+/// TASK-1621: it also runs on a re-run that finds the PR already merged, so
+/// a crash between the merge and this step is repaired by re-running
+/// `aida pr ship N --rebase`. That path reads the branch, base, head and
+/// commits from the merged PR, never from the checkout, and the specs a
+/// final slice completes come from the merged branch (`spec_ids_for`).
+/// TASK-2130: it also confirms the PR really was rebase-merged (its commits
+/// sit on the base as one run); a squash or merge-commit merge records and
+/// completes nothing. Without the marker the pull is skipped (TASK-1622).
+// trace:STORY-1663 | ai:antigravity
+// trace:TASK-1951 trace:TASK-1621 trace:TASK-1622 trace:TASK-2130 | ai:claude
+pub(crate) fn rebase_slice_bookkeeping(
+    run: &RebaseSliceRun<'_>,
+    this_run_spec_ids: &[String],
+    spec_ids_for: impl FnOnce(&str) -> Vec<String>,
+    merged_refs: impl FnOnce() -> Result<RebaseSliceInputs>,
+) -> SliceBookkeeping {
+    let pr = run.pr_number;
+    let inputs = rebase_slice_inputs(
+        run.already_merged,
+        pr,
+        run.ship_branch,
+        run.retarget_base,
+        run.merged_head_sha,
+        merged_refs,
+    )
+    .and_then(|inputs| {
+        if run.already_merged {
+            confirm_rebase_merged(run.project_root, pr, &inputs)?;
+        }
+        Ok(inputs)
+    });
+    if run.final_slice {
+        return match inputs {
+            Ok(inputs) => {
+                let ids = if run.already_merged {
+                    spec_ids_for(&inputs.branch)
+                } else {
+                    this_run_spec_ids.to_vec()
+                };
+                complete_rebase_final_slice_specs(
+                    run.main_worktree,
+                    pr,
+                    &ids,
+                    inputs.head_sha.as_deref(),
+                );
+                SliceBookkeeping::default()
+            }
+            Err(e) => SliceBookkeeping {
+                warning: Some(format!(
+                    "--final-slice completed nothing for PR-{pr}: {e:#}"
+                )),
+                pull_skip: None,
+            },
+        };
+    }
+    match inputs.and_then(|inputs| {
+        record_non_completing_rebase_slice(
+            run.main_worktree,
+            run.project_root,
+            pr,
+            &inputs.base,
+            inputs.head_sha.as_deref(),
+            &inputs.branch,
+            &inputs.subjects,
+        )
+    }) {
+        Ok(()) => SliceBookkeeping::default(),
+        Err(e) => SliceBookkeeping {
+            warning: Some(format!(
+                "could not record the non-completing slice marker for PR-{pr}: {e:#}\n    skipping `aida pull` so no spec completes; re-run `aida pr ship {pr} --rebase`"
+            )),
+            pull_skip: post_merge_pull_skip_reason(true),
+        },
+    }
+}
+
+/// TASK-2130: an already-merged re-run takes `--rebase` from the operator,
+/// not from the forge. Confirm the PR was rebase-merged: its commits must sit
+/// on the base as one consecutive run. A squash merge leaves one commit with
+/// another subject, and a merge commit keeps the original commits off the
+/// first-parent line, so neither confirms.
+// trace:TASK-1951 trace:TASK-2130 | ai:claude
+fn confirm_rebase_merged(
+    project_root: &std::path::Path,
+    pr: u64,
+    inputs: &RebaseSliceInputs,
+) -> Result<()> {
     anyhow::ensure!(
-        out.status.success(),
-        "`gh pr view {n}` exited {}",
-        out.status
+        !inputs.subjects.is_empty(),
+        "the forge reported no commits for PR-{pr}, so its rebase merge cannot be confirmed"
     );
-    parse_merged_pr_refs(&out.stdout)
+    let landed = landed_commits_for_subjects(project_root, &inputs.base, &inputs.subjects);
+    anyhow::ensure!(
+        landed.iter().all(Option::is_some),
+        "PR-{pr} was not rebase-merged: its {} commit(s) do not sit on `{}` as one run. \
+         A squash or merge-commit merge has no slice bookkeeping, so nothing was recorded or completed",
+        inputs.subjects.len(),
+        inputs.base
+    );
+    Ok(())
 }
 
 /// STORY-1663: record a `[aida:non-completing-rebase]` marker comment on any
@@ -5184,12 +5372,19 @@ pub(crate) fn record_non_completing_rebase_slice(
     base_branch: &str,
     merged_head_sha: Option<&str>,
     ship_branch: &str,
+    known_subjects: &[String],
 ) -> Result<()> {
     let head_ref = merged_head_sha
         .filter(|s| !s.trim().is_empty())
         .unwrap_or(ship_branch);
-    let mut range_subjects: Vec<String> = Vec::new();
+    // Deferral (b) of #2816: subjects the forge reported for the merged PR
+    // are used as they are, so a clone that never fetched the PR head can
+    // still write the marker. trace:TASK-1951 trace:TASK-1621 | ai:claude
+    let mut range_subjects: Vec<String> = known_subjects.to_vec();
     for base_candidate in [format!("origin/{base_branch}"), base_branch.to_string()] {
+        if !range_subjects.is_empty() {
+            break;
+        }
         let range = format!("{base_candidate}..{head_ref}");
         if let Ok(out) = std::process::Command::new("git")
             .current_dir(project_root)
@@ -5305,23 +5500,35 @@ pub(crate) fn record_non_completing_rebase_slice(
 }
 
 /// TASK-1620: the sha each range commit landed as on `base_branch`, aligned
-/// with `subjects` (both newest first): the remote tracking ref after a
-/// best-effort fetch first, then the local branch, searched in the recent
-/// first-parent history the merge just extended. Commits are matched one to
-/// one, so two slice commits sharing a subject map to two landed commits.
-// trace:TASK-1951 trace:TASK-1620 | ai:claude
+/// with `subjects` (both newest first). A rebase merge puts the commits on
+/// the base's first-parent line as ONE consecutive run, so only a run that
+/// matches every subject in order counts: a later commit that reuses one
+/// slice subject cannot be bound in place of the real one (TASK-2132), and a
+/// stale `origin/<base>` that does not hold the run yet matches nothing
+/// instead of something wrong (#2816 deferral (c)). The remote tracking ref
+/// (after a fetch) is searched first, then the local branch; the run may be
+/// in either commit order. No run leaves every entry `None`.
+// trace:TASK-1951 trace:TASK-1620 trace:TASK-2132 | ai:claude
 fn landed_commits_for_subjects(
     project_root: &std::path::Path,
     base_branch: &str,
     subjects: &[String],
 ) -> Vec<Option<String>> {
-    let _ = std::process::Command::new("git")
+    let fetched = std::process::Command::new("git")
         .current_dir(project_root)
         .args(["fetch", "--quiet", "origin", base_branch])
         // trace:BUG-2181 | ai:claude
         .remote_credentials(project_root, "origin")
-        .output();
-    let mut landed: Vec<Option<String>> = vec![None; subjects.len()];
+        .output()
+        .is_ok_and(|out| out.status.success());
+    if !fetched {
+        eprintln!(
+            "  warning: could not fetch origin/{base_branch}; looking for the landed slice commits in the local refs"
+        );
+    }
+    if subjects.is_empty() {
+        return Vec::new();
+    }
     for base in [format!("origin/{base_branch}"), base_branch.to_string()] {
         let Some(out) = std::process::Command::new("git")
             .current_dir(project_root)
@@ -5339,35 +5546,49 @@ fn landed_commits_for_subjects(
         else {
             continue;
         };
-        // Newest-first landed shas per subject, consumed in range order.
-        let mut by_subject: std::collections::BTreeMap<&str, std::collections::VecDeque<&str>> =
-            std::collections::BTreeMap::new();
         let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
-        for line in stdout.lines() {
-            if let Some((sha, subject)) = line.split_once('\t') {
-                by_subject.entry(subject.trim()).or_default().push_back(sha);
-            }
-        }
-        let mut complete = true;
-        let mut found: Vec<Option<String>> = Vec::with_capacity(subjects.len());
-        for subject in subjects {
-            let sha = by_subject
-                .get_mut(subject.as_str())
-                .and_then(|shas| shas.pop_front())
-                .map(str::to_owned);
-            complete &= sha.is_some();
-            found.push(sha);
-        }
-        if found.iter().filter(|s| s.is_some()).count()
-            > landed.iter().filter(|s| s.is_some()).count()
-        {
-            landed = found;
-        }
-        if complete {
-            break;
+        let log: Vec<(&str, &str)> = stdout
+            .lines()
+            .filter_map(|line| line.split_once('\t'))
+            .map(|(sha, subject)| (sha, subject.trim()))
+            .collect();
+        if let Some(run) = landed_run(&log, subjects) {
+            return run.into_iter().map(Some).collect();
         }
     }
-    landed
+    vec![None; subjects.len()]
+}
+
+/// The newest consecutive run of `log` (newest first) whose subjects are
+/// `subjects` in order, or in reverse order; the shas are returned aligned
+/// with `subjects`.
+// trace:TASK-1951 trace:TASK-2132 | ai:claude
+fn landed_run(log: &[(&str, &str)], subjects: &[String]) -> Option<Vec<String>> {
+    let n = subjects.len();
+    if n == 0 || log.len() < n {
+        return None;
+    }
+    for start in 0..=log.len() - n {
+        let window = &log[start..start + n];
+        if window.iter().zip(subjects).all(|((_, s), want)| s == want) {
+            return Some(window.iter().map(|(sha, _)| sha.to_string()).collect());
+        }
+        if window
+            .iter()
+            .rev()
+            .zip(subjects)
+            .all(|((_, s), want)| s == want)
+        {
+            return Some(
+                window
+                    .iter()
+                    .rev()
+                    .map(|(sha, _)| sha.to_string())
+                    .collect(),
+            );
+        }
+    }
+    None
 }
 
 /// STORY-1663: transition resolved specs to `Completed` when a rebase merge
@@ -7697,6 +7918,7 @@ mod story_1663_rebase_ship_tests {
             "main",
             Some(&pr_head),
             "claude/story-78-part1",
+            &[],
         )
         .expect("marker recorded");
         let stored = backend
@@ -7717,6 +7939,7 @@ mod story_1663_rebase_ship_tests {
             "main",
             Some("0123456789abcdef0123456789abcdef01234567"),
             "no-spec-branch",
+            &[],
         )
         .expect_err("an unreadable range fails before the empty-candidates return");
         assert!(err.to_string().contains("commit subjects"), "{err:#}");
@@ -7760,6 +7983,7 @@ mod story_1663_rebase_ship_tests {
             "main",
             Some(&pr_head),
             "claude/story-77-part1",
+            &[],
         )
         .expect("marker recorded");
         let stored = || {
@@ -7790,16 +8014,37 @@ mod story_1663_rebase_ship_tests {
             "main",
             Some(&pr_head),
             "claude/story-77-part1",
+            &[],
         )
         .expect_err("a missing store must be reported");
         assert!(err.to_string().contains("store"), "{err:#}");
     }
 
+    fn task_1951_merged_meta(
+        state: crate::forge::ChangeState,
+        branch: &str,
+        sha: &str,
+    ) -> crate::forge::ChangeMetadata {
+        crate::forge::ChangeMetadata {
+            state,
+            title: "feat: slice one".into(),
+            author: None,
+            merged_at: None,
+            base_ref: "main".into(),
+            head_ref: branch.into(),
+            head_sha: sha.into(),
+            is_draft: false,
+            is_cross_repository: false,
+            head_repo: None,
+        }
+    }
+
     /// TASK-1621: an already-merged re-run, from a `main` checkout whose tip
-    /// names another spec, resolves the merged PR's own branch, base and head
-    /// and marks only the PR's spec, once, however often it re-runs. When the
-    /// merged PR cannot be resolved it refuses, and the pull is skipped
-    /// (TASK-1622).
+    /// names another spec, resolves the merged PR's own branch, base, head
+    /// and commits and marks only the PR's spec, once, however often it
+    /// re-runs. When the merged PR cannot be resolved it refuses and names
+    /// the `--rebase` re-run, and the pull is skipped (TASK-1622, deferral
+    /// (d) of #2816).
     // trace:TASK-1951 trace:TASK-1621 trace:TASK-1622 | ai:claude
     #[test]
     fn task_1951_already_merged_rerun_marks_only_the_merged_prs_spec() {
@@ -7828,36 +8073,48 @@ mod story_1663_rebase_ship_tests {
         git(&["switch", "-q", "main"]);
         git(&["update-ref", "refs/remotes/origin/main", "HEAD"]);
         git(&["cherry-pick", &pr_head]);
+        let landed = git(&["rev-parse", "HEAD"]);
         std::fs::write(root.join("other.txt"), "other\n").unwrap();
         git(&["add", "other.txt"]);
         git(&["commit", "-q", "-m", "fix: other work (STORY-88)"]);
+        // Deferral (b): this clone never fetched the PR head object.
+        git(&["branch", "-D", "claude/story-77-part1"]);
+        git(&["reflog", "expire", "--expire=now", "--all"]);
+        git(&["gc", "-q", "--prune=now"]);
 
-        let merged_json = format!(
-            r#"{{"state":"MERGED","headRefName":"claude/story-77-part1","baseRefName":"main","headRefOid":"{pr_head}"}}"#
+        let meta = task_1951_merged_meta(
+            crate::forge::ChangeState::Merged,
+            "claude/story-77-part1",
+            &pr_head,
         );
-        for _ in 0..2 {
+        let run = RebaseSliceRun {
+            main_worktree: root,
+            project_root: root,
+            pr_number: 77,
+            final_slice: false,
+            already_merged: true,
             // The checkout is `main`, as when the advisor re-runs ship.
-            let inputs = rebase_slice_inputs(true, 77, "main", "main", None, || {
-                parse_merged_pr_refs(merged_json.as_bytes())
-            })
-            .expect("merged PR resolves");
-            assert_eq!(inputs.branch, "claude/story-77-part1");
-            assert_eq!(inputs.head_sha.as_deref(), Some(pr_head.as_str()));
-            record_non_completing_rebase_slice(
-                root,
-                root,
-                77,
-                &inputs.base,
-                inputs.head_sha.as_deref(),
-                &inputs.branch,
-            )
-            .expect("marker recorded");
+            ship_branch: "main",
+            retarget_base: "main",
+            merged_head_sha: None,
+        };
+        for _ in 0..2 {
+            let outcome = rebase_slice_bookkeeping(
+                &run,
+                &[],
+                |_| unreachable!("no final slice"),
+                || {
+                    merged_pr_refs_from_metadata(
+                        &meta,
+                        vec!["feat: slice one (STORY-77)".to_string()],
+                    )
+                },
+            );
+            assert_eq!(outcome, SliceBookkeeping::default());
         }
+        let stored = |id: &str| backend.get_requirement_unambiguous(id).unwrap().unwrap();
         let markers = |id: &str| {
-            backend
-                .get_requirement_unambiguous(id)
-                .unwrap()
-                .unwrap()
+            stored(id)
                 .comments
                 .iter()
                 .filter(|c| c.content.contains(pr_ship::NON_COMPLETING_REBASE_MARKER))
@@ -7865,26 +8122,208 @@ mod story_1663_rebase_ship_tests {
         };
         assert_eq!(markers("STORY-77"), 1, "one marker for the PR's spec");
         assert_eq!(markers("STORY-88"), 0, "main's tip spec is untouched");
+        assert!(
+            crate::db_reconcile::spec_ignores_non_completing_rebase_commit(
+                root,
+                &stored("STORY-77"),
+                &landed
+            )
+        );
 
-        let unresolved = rebase_slice_inputs(true, 77, "main", "main", None, || {
-            anyhow::bail!("gh unavailable")
-        })
-        .expect_err("an unresolvable merged PR refuses");
-        assert!(unresolved.to_string().contains("PR-77"), "{unresolved:#}");
+        let unresolved = rebase_slice_bookkeeping(
+            &RebaseSliceRun {
+                pr_number: 78,
+                ..run
+            },
+            &[],
+            |_| unreachable!(),
+            || anyhow::bail!("forge unavailable"),
+        );
+        let warning = unresolved.warning.unwrap();
+        assert!(
+            warning.contains("PR-78") && warning.contains("forge unavailable"),
+            "{warning}"
+        );
+        assert!(
+            warning.contains("re-run `aida pr ship 78 --rebase`"),
+            "{warning}"
+        );
         assert_eq!(
-            post_merge_pull_skip_reason(true),
+            unresolved.pull_skip,
             Some("non-completing slice marker not recorded")
         );
         assert_eq!(post_merge_pull_skip_reason(false), None);
+
+        let sha = "0123456789abcdef0123456789abcdef01234567";
         for bad in [
-            r#"{"state":"OPEN","headRefName":"b","baseRefName":"main","headRefOid":"0123456789abcdef0123456789abcdef01234567"}"#,
-            r#"{"state":"MERGED","headRefName":"b","baseRefName":"main"}"#,
-            r#"{"state":"MERGED","headRefName":"-x","baseRefName":"main","headRefOid":"0123456789abcdef0123456789abcdef01234567"}"#,
+            task_1951_merged_meta(crate::forge::ChangeState::Open, "b", sha),
+            task_1951_merged_meta(crate::forge::ChangeState::Merged, "b", ""),
+            task_1951_merged_meta(crate::forge::ChangeState::Merged, "-x", sha),
         ] {
-            assert!(parse_merged_pr_refs(bad.as_bytes()).is_err(), "{bad}");
+            assert!(
+                merged_pr_refs_from_metadata(&bad, Vec::new()).is_err(),
+                "{bad:?}"
+            );
         }
-        // The operator hint names --rebase, so the re-run takes the rebase path.
-        assert!(include_str!("pr_cmd.rs").contains("re-run `aida pr ship {pr_number} --rebase`"));
+    }
+
+    /// TASK-2130: `--rebase` on a re-run of a PR that was squash-merged
+    /// records nothing and completes nothing, even with `--final-slice`.
+    /// TASK-1621 (a): a final slice that was rebase-merged completes the
+    /// specs of the merged PR's branch, not the checkout's.
+    // trace:TASK-1951 trace:TASK-2130 trace:TASK-1621 | ai:claude
+    #[test]
+    fn task_1951_already_merged_rerun_confirms_the_rebase_merge() {
+        let (tmp, git) = task_1951_repo();
+        let root = tmp.path();
+        let backend = aida_core::db::GitBackend::new(&root.join(".aida-store")).unwrap();
+        use aida_core::db::DatabaseBackend;
+        for id in ["STORY-91", "STORY-92"] {
+            let mut req = aida_core::Requirement::new(format!("{id} spec"), String::new());
+            req.spec_id = Some(id.to_string());
+            req.status = aida_core::RequirementStatus::InProgress;
+            backend.add_requirement(req).unwrap();
+        }
+        // STORY-91's two commits were squash-merged as one.
+        git(&["switch", "-q", "-c", "claude/story-91-part1"]);
+        for n in ["a", "b"] {
+            std::fs::write(root.join(n), "x\n").unwrap();
+            git(&["add", n]);
+            git(&["commit", "-q", "-m", &format!("feat: part {n} (STORY-91)")]);
+        }
+        let squashed_head = git(&["rev-parse", "HEAD"]);
+        git(&["switch", "-q", "main"]);
+        git(&["merge", "-q", "--squash", "claude/story-91-part1"]);
+        git(&["commit", "-q", "-m", "feat: slice (#91)"]);
+        // STORY-92 was rebase-merged.
+        git(&["switch", "-q", "-c", "claude/story-92-part2"]);
+        std::fs::write(root.join("c"), "x\n").unwrap();
+        git(&["add", "c"]);
+        git(&["commit", "-q", "-m", "feat: last part (STORY-92)"]);
+        let rebased_head = git(&["rev-parse", "HEAD"]);
+        git(&["switch", "-q", "main"]);
+        git(&["cherry-pick", &rebased_head]);
+        git(&["update-ref", "refs/remotes/origin/main", "HEAD"]);
+
+        let run = |pr, final_slice| RebaseSliceRun {
+            main_worktree: root,
+            project_root: root,
+            pr_number: pr,
+            final_slice,
+            already_merged: true,
+            ship_branch: "main",
+            retarget_base: "main",
+            merged_head_sha: None,
+        };
+        for final_slice in [false, true] {
+            let outcome = rebase_slice_bookkeeping(
+                &run(91, final_slice),
+                &[],
+                |_| panic!("a squash merge must complete nothing"),
+                || {
+                    merged_pr_refs_from_metadata(
+                        &task_1951_merged_meta(
+                            crate::forge::ChangeState::Merged,
+                            "claude/story-91-part1",
+                            &squashed_head,
+                        ),
+                        vec![
+                            "feat: part a (STORY-91)".to_string(),
+                            "feat: part b (STORY-91)".to_string(),
+                        ],
+                    )
+                },
+            );
+            let warning = outcome.warning.unwrap();
+            assert!(warning.contains("was not rebase-merged"), "{warning}");
+        }
+        let story = |id: &str| backend.get_requirement_unambiguous(id).unwrap().unwrap();
+        assert!(story("STORY-91").comments.is_empty());
+        assert_eq!(
+            story("STORY-91").status,
+            aida_core::RequirementStatus::InProgress
+        );
+
+        let asked = std::cell::RefCell::new(None);
+        let outcome = rebase_slice_bookkeeping(
+            &run(92, true),
+            &["STORY-91".to_string()],
+            |branch| {
+                *asked.borrow_mut() = Some(branch.to_string());
+                vec!["STORY-92".to_string()]
+            },
+            || {
+                merged_pr_refs_from_metadata(
+                    &task_1951_merged_meta(
+                        crate::forge::ChangeState::Merged,
+                        "claude/story-92-part2",
+                        &rebased_head,
+                    ),
+                    vec!["feat: last part (STORY-92)".to_string()],
+                )
+            },
+        );
+        assert_eq!(outcome, SliceBookkeeping::default());
+        assert_eq!(asked.borrow().as_deref(), Some("claude/story-92-part2"));
+        assert_eq!(
+            story("STORY-92").status,
+            aida_core::RequirementStatus::Completed
+        );
+        assert_eq!(
+            story("STORY-91").status,
+            aida_core::RequirementStatus::InProgress
+        );
+    }
+
+    /// TASK-2132 + #2816 deferral (c): the landed commits are matched as one
+    /// consecutive run, so a newer commit reusing a slice subject is not
+    /// bound in place of the real one, and a stale `origin/<base>` that does
+    /// not hold the run yet matches nothing there.
+    // trace:TASK-1951 trace:TASK-2132 | ai:claude
+    #[test]
+    fn task_1951_landed_run_ignores_later_subject_reuse_and_stale_refs() {
+        let log = [
+            ("f", "feat: slice one (STORY-5)"),
+            ("e", "chore: unrelated"),
+            ("d", "feat: slice two (STORY-5)"),
+            ("c", "feat: slice one (STORY-5)"),
+            ("b", "chore: base"),
+        ];
+        let subjects = vec![
+            "feat: slice two (STORY-5)".to_string(),
+            "feat: slice one (STORY-5)".to_string(),
+        ];
+        assert_eq!(
+            landed_run(&log, &subjects),
+            Some(vec!["d".to_string(), "c".to_string()])
+        );
+        let oldest_first: Vec<String> = subjects.iter().rev().cloned().collect();
+        assert_eq!(
+            landed_run(&log, &oldest_first),
+            Some(vec!["c".to_string(), "d".to_string()])
+        );
+        assert_eq!(
+            landed_run(&log[..2], &subjects),
+            None,
+            "a stale ref holds no run"
+        );
+
+        let (tmp, git) = task_1951_repo();
+        let root = tmp.path();
+        git(&["update-ref", "refs/remotes/origin/main", "HEAD"]);
+        std::fs::write(root.join("s"), "x\n").unwrap();
+        git(&["add", "s"]);
+        git(&["commit", "-q", "-m", "feat: slice one (STORY-5)"]);
+        let real = git(&["rev-parse", "HEAD"]);
+        std::fs::write(root.join("t"), "x\n").unwrap();
+        git(&["add", "t"]);
+        git(&["commit", "-q", "-m", "chore: unrelated"]);
+        // origin/main is stale (never fetched past the base); the local base
+        // holds the run.
+        assert_eq!(
+            landed_commits_for_subjects(root, "main", &["feat: slice one (STORY-5)".to_string()]),
+            vec![Some(real)]
+        );
     }
 
     /// TASK-1765: a non-completing squash ship writes the declaration into
@@ -7901,17 +8340,58 @@ mod story_1663_rebase_ship_tests {
         assert!(crate::db_reconcile::commit_declares_non_completing(
             &format!("fix: x (#9)\n\n{}", non_completing_squash_body("* a"))
         ));
-        let src = include_str!("pr_cmd.rs");
-        let decl = src
-            .find("no_complete || pr_ship::pr_body_declares_non_completing(&ship_meta.body);")
-            .expect("ship derives the non-completing declaration");
-        let body = src[decl..]
-            .find("Some(non_completing_squash_body(&body))")
-            .expect("the declaration reaches the squash body");
-        let merge = src[decl..]
-            .find("squash_body: sanitized_squash_body,")
-            .expect("merge options carry the body");
-        assert!(body < merge, "the marker is added before the merge options");
+        // TASK-2117: the body a --no-complete squash ship builds reaches the
+        // forge's merge argv, whether the identity gate rewrote the body or
+        // left it to the forge; an ordinary ship leaves it to the forge.
+        // trace:TASK-1951 trace:TASK-2117 | ai:claude
+        use crate::forge::MergeMethod;
+        let squash = |declares, sanitized: Option<&str>| {
+            ship_squash_body(
+                MergeMethod::Squash,
+                declares,
+                sanitized.map(str::to_string),
+                || Ok("* fix: one (Refs TASK-9)".to_string()),
+            )
+            .unwrap()
+        };
+        for body in [squash(true, None), squash(true, Some("* sanitized"))] {
+            let opts = crate::forge::MergeOptions {
+                method: MergeMethod::Squash,
+                squash_subject: None,
+                squash_body: body,
+                delete_branch: true,
+                match_head: None,
+            };
+            let argv = crate::forge::github_merge_argv(9, &opts);
+            let at = argv
+                .iter()
+                .position(|a| a == "--body")
+                .expect("--body passed");
+            assert!(argv[at + 1].ends_with("\n\naida: no-complete"), "{argv:?}");
+        }
+        assert_eq!(
+            squash(false, None),
+            None,
+            "an ordinary ship leaves the body to the forge"
+        );
+        assert_eq!(
+            ship_squash_body(MergeMethod::Rebase, true, None, || unreachable!()).unwrap(),
+            None
+        );
+    }
+
+    /// The unreadable recorded-label probe reaches `pr ship` after the marker
+    /// is released, so the retry names the human clear and the ship re-run.
+    // trace:TASK-1951 | ai:claude
+    #[test]
+    fn task_1951_ship_unlabel_failure_names_the_ship_retry() {
+        let line = ship_unlabel_failure(
+            12,
+            &crate::merge_hold::LabelSyncError::Other("could not read PR #12's labels".into()),
+        );
+        assert!(line.contains("could not read PR #12's labels"), "{line}");
+        assert!(line.contains("aida merge-hold clear 12"), "{line}");
+        assert!(line.contains("re-run `aida pr ship 12`"), "{line}");
     }
 
     #[test]
@@ -8243,6 +8723,7 @@ mod story_1663_rebase_ship_tests {
             "main",
             Some(&slice_sha),
             "claude/story-1663-part1",
+            &[],
         )
         .expect("marker recorded");
 
