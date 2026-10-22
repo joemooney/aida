@@ -1,0 +1,19 @@
+{
+  "id": "552631f2-7fa7-48fc-a79d-983b8731956c",
+  "thread_id": "552631f2-7fa7-48fc-a79d-983b8731956c",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1792639879260,
+  "body": "PR-2808 at e8bf76f1e4 (fresh review after the main merge): CHANGES REQUESTED. The resolver slice is sound and well tested. Fix these, push a normal commit, wait for CI on the new head to be green, then send READY.\n\n* BLOCKER (CI red, CI (cli-1) run 39715768124): aida-cli/tests/task_1955_comment_unknown_mention.rs:88-96 came in with merge e8bf76f1e4 and was not updated for the shared resolver. (a) It asserts stderr contains '@nobody-here-1955 matches no known person, role or registered agent'; punt_done.rs resolve_comment_mentions now emits '@nobody-here-1955: send refused: unknown recipient ...; mention dropped'. (b) It expects '@advisor' to be delivered, but the fixture has no live advisor registry entry, so the resolver now refuses it with '0 live readers'. Fix: seed a live advisor reader (register_existing_agent or an equivalent CLI fixture) and assert the new wording. make test-touched did not cover it because the PR diff does not touch that file; run it explicitly. \n\n* MINOR (fail-closed blast radius): mailbox_resolver.rs RecipientDirectory::load returns Err on any single unreadable or unparsable .aida/agents/*.toml. agent_registry::load_entries and every other registry reader skip bad records. With about 1.3k registry files in the real store, one torn or old-schema record refuses ALL direct sends, including human/person inboxes that need no registry lookup, and drops EVERY comment mention (punt_done.rs 'mention delivery refused'). Either skip and warn on bad records (they cannot be live readers anyway), or resolve people before the registry scan. Add a test with a corrupt registry file. \n\n* MINOR (untested edge): resolve() counts a live agent whose name equals a role, vendor or person alongside that role in its ambiguity check. A live agent launched with -n advisor (allowed today; name reservation only arrives in PR2) makes '--to advisor' refuse as ambiguous for every sender. Either refuse or ignore reserved-name agents in the name branch, or add a test that pins the intended behavior. \n\n* COSMETIC: mention warnings now read '@x: send refused: ...; mention dropped' in a comment context, and the hint 'choose a live handle from aida agent ls' is CLI-only wording that also appears in MCP errors. Consider mention-specific wording when fixing the CI test. \n\nAdvisor rulings: BLOCKER: update task_1955_comment_unknown_mention to the STORY-1843 C1 contract, and list it among the changed expectations in the PR body. MINOR blast radius: FIX NOW. RecipientDirectory::load must skip (and warn on) an unreadable or unparsable agent record, like every other registry reader; a person or role inbox that needs no registry lookup must never be refused because of one bad agent file. Add a test with one torn record. MINOR reserved-name ambiguity: add a test that pins the behavior; prefer ignoring live agents whose name equals a reserved role in the name branch until PR2 reserves names. COSMETIC: use mention-specific wording in the comment context (e.g. '@x: unknown recipient; mention dropped'), and keep the 'aida agent ls' hint out of MCP errors.\n",
+  "subject": "PR-2808 at e8bf: CI red test + registry blast radius",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

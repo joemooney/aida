@@ -1,0 +1,19 @@
+{
+  "id": "2a3e8f8b-70e6-4a80-85e3-edec567d007f",
+  "thread_id": "2a3e8f8b-70e6-4a80-85e3-edec567d007f",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1792639884125,
+  "body": "",
+  "subject": "PR-2808 at e8bf: CI red test + registry blast radius",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": true,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

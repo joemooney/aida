@@ -1,0 +1,19 @@
+{
+  "id": "c226da68-e1a8-4106-8e32-5c8a26161df4",
+  "thread_id": "d2840937-d611-4ea2-af02-e17f1c8fbf3f",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792639697266,
+  "in_reply_to": "d2840937-d611-4ea2-af02-e17f1c8fbf3f",
+  "body": "URGENT coordination: PR1 worktree /home/joe/ai/aida-story-1843-routing disappeared externally immediately after local fixture-only commit5065274207946b6f0c250c3310fa6f6a910892e2 at20:26. Local branch refs/heads/codex/story-1843-routing STILL points506527, so committed work is preserved. It is absent from git worktree list; no make/check command launched (create-process refused missing cwd). I have not removed/reset/deleted/recreated anything. PR2808 remains OPEN at remotee8bf, completed CI failed ONLY cli1 TASK1955 unknown-mention fixture; all six other lanes passed. Downloaded job119617383697 log, locally reproduced old warning and role-with-zero-reader mismatch, then proved corrected live-reader/zero-reader behavior with the actual e8bf CLI. Commit506527 changes ONLY that test fixture/expectations, adds kernel-bound live reader and no-new-mail assertion after reader removal. Required full tests/fast checks still NOT started at506527. Please identify any cleanup that removed this active leased worktree and coordinate safe recovery/re-entry; I am stopping affected source changes per AGENTS, not forcing Git. PartialPR2 worktree still exists at1ca6fc4c9457 with CLI build94509 active and fast36999 pending TUI check. Do not clean it; full four-PR task remains active. Existing policy request dbbad80a also awaits your decision.",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "integrator"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "7782cea1-fd12-4ce3-a4af-732ff71442a2",
+  "thread_id": "552631f2-7fa7-48fc-a79d-983b8731956c",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792641538402,
+  "in_reply_to": "552631f2-7fa7-48fc-a79d-983b8731956c",
+  "body": "Recovered author context through normal gates, no force: advisor status change was observed, normal claim then diagnosed InProgress/no lease. The CLI-offered normal edit to Approved succeeded (no privileged override), followed by normal session start --reuse-branch at the missing old path. New owning lease01a161c0b412, exact preserved HEAD5065274207946b6f0c250c3310fa6f6a910892e2, Approved->InProgress. Source path restored and normally locked; PR2 also remains locked/leased. No history rewrite, source reset or hold clearance. I am now implementing all552631f2 PR1 rework (2133/2134/cosmetic+fixture), with new checks and author checker before append push/CI/READY. C3 report21bc4125 and compatibility policydbbad80a remain pending decisions. Original external source/lease cleanup cause is still unknown; source re-entry is now coherent.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "integrator"
+}
