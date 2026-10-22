@@ -11,7 +11,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T19:20:30.156286565Z
-modified_at: 2026-10-21T19:28:05.234710839Z
+modified_at: 2026-10-22T08:43:36.795406468Z
 req_type: Task
 tags:
 - from-review:PR-2802
@@ -21,6 +21,13 @@ relationships:
   target_id: 01a154e7-6af1-70c0-8437-98c9e77a36a3
   created_at: 2026-10-21T19:28:05.234706357Z
   created_by: joe
+comments:
+- id: 01a162c7-b1db-7701-b48b-59f26fa4549c
+  author: joe
+  content: Commit 20d37ec0df references this requirement
+  created_at: 2026-10-22T08:43:36.795406468Z
+  modified_at: 2026-10-22T08:43:36.795406468Z
+  session_id: 7e42a237-d607-426b-aa96-f5f0d3a261f8
 history:
 - id: 01a15fef-532d-7642-971c-86637a631b7a
   author: joe
