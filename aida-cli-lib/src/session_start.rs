@@ -1835,6 +1835,23 @@ pub(crate) fn session_start_with_receipt(
                 crate::worktree::is_registered(&String::from_utf8_lossy(&o.stdout), &worktree_path)
             })
             .unwrap_or(false);
+    // TASK-2053 S4c: the default flipped to `clone`, but a clone cannot yet
+    // host a review session, re-enter an existing --path, or live at an
+    // explicit --path outside the worktree parent. With no explicit knob
+    // those launches keep the worktree they had before the flip; an explicit
+    // `seat_tree = "clone"` still refuses them below.
+    // trace:TASK-2053 | ai:claude
+    let tree_kind = if tree_kind == crate::seat_clone::TreeKind::Clone
+        && !crate::seat_clone::seat_tree_is_explicit(&project_root)
+        && (review_target.is_some()
+            || reuse_existing_worktree_path
+            || (explicit_path.is_some()
+                && !crate::seat_clone::is_seat_clone_location(&project_root, &worktree_path)))
+    {
+        crate::seat_clone::TreeKind::Worktree
+    } else {
+        tree_kind
+    };
     if worktree_path.exists() && !reuse_existing_worktree_path {
         anyhow::bail!(
             "{} already exists — pick a different --path or remove it first",

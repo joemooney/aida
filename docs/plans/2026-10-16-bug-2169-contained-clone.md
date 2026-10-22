@@ -668,3 +668,27 @@ S4c (flip `seat_tree` to `clone`, retire `AIDA_DEV_SEAT_CLONE`, close PR #2694).
   runaway, teardown refusal with no untagged git in the clone; stray markers with a symlinked
   `.aida`; under live bwrap, a status row and an unshipped item for a clone with a commit and a
   dirty file.
+
+## S4c as built (default flip)
+
+- `[contained] seat_tree` now defaults to `clone`. `AIDA_DEV_SEAT_CLONE` and `clone_seats_enabled`
+  are gone, and `seat_tree = "worktree"` opts out.
+- With no knob set, three contained launches that a clone cannot serve yet keep a linked
+  worktree, as they had before the flip:
+  - a review session
+  - re-entering an existing `--path`
+  - an explicit `--path` outside the worktree parent
+  An explicit `seat_tree = "clone"` still refuses them. The point is that the flip never turns a
+  working contained review into a refusal. Test:
+  `the_default_is_a_clone_and_an_explicit_path_keeps_a_worktree`.
+- **S5 decision data** (advisor rule: p95 at or under 20 s rejects S5; over 20 s files it). The
+  measurement is on this host (2026-10-22, load average 14) and replicates `seat_clone::create`:
+  `git clone --no-checkout --no-hardlinks --reference <main> <origin>` plus the checkout, five
+  runs each.
+  - Cold (main's objects evicted from the page cache with `posix_fadvise(DONTNEED)`):
+    34.5–35.7 s, p50 34.8 s, p95 35.7 s.
+  - Warm: 1.5–2.6 s, p50 1.7 s, p95 2.6 s.
+  - Cold time is reading main's object store: 2.0 GiB, of which 128k loose objects; the packs are
+    237 MiB. The clone itself borrows through alternates and copies almost nothing.
+  - By the rule, S5 is filed. Packing main's loose objects (`git gc` / maintenance) is probably
+    the cheaper fix for the cold case, and S5 should be ruled against it.
