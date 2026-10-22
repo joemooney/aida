@@ -1059,17 +1059,20 @@ pub(crate) fn emit_notice_time_line() {
         .map(|payload| presence::parse_hook_payload(&payload))
         .unwrap_or((None, false));
     if is_session_start {
-        let project_root = std::env::current_dir()
+        // BUG-2167: the row records the hook's own worktree, not the main
+        // checkout. trace:TASK-1955 | ai:claude (BUG-2167)
+        let worktree_root = std::env::current_dir()
             .ok()
-            .and_then(|cwd| find_aida_project_root_from(&cwd).ok())
-            .map(|root| main_worktree_root_from(&root));
-        if let Some(project_root) = project_root {
+            .and_then(|cwd| find_aida_project_root_from(&cwd).ok());
+        if let Some(worktree_root) = worktree_root {
+            let project_root = main_worktree_root_from(&worktree_root);
             let binary = agent_registry::AgentBinaryIdentity::new(
                 env!("CARGO_PKG_VERSION").to_string(),
                 env!("AIDA_BUILD_GIT_SHA").to_string(),
             );
             let _ = agent_registry::touch_session_start_agent(
                 &project_root,
+                &worktree_root,
                 session_id.as_deref(),
                 &binary,
             );

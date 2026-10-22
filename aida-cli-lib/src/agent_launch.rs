@@ -3002,20 +3002,6 @@ pub(crate) fn agent_new_bg_dispatch(
     let session_id = parse_bg_session_id(&stdout);
     match (&session_id, &plan.lease_id) {
         (Some(sid), Some(lease_id)) => {
-            // Update or create the manifest. trace:SPIKE-34 | ai:claude
-            let manifest_path = session_manifest::manifest_path(&plan.project_root, lease_id);
-            let mut manifest = session_manifest::load(&manifest_path).unwrap_or_else(|_| {
-                session_manifest::SessionManifest {
-                    session_id: lease_id.clone(),
-                    planned_at: chrono::Utc::now(),
-                    plan_source: "agent new --bg".to_string(),
-                    claude_session_id: None,
-                    batch_name: None,
-                    plan: None,
-                    items: Vec::new(),
-                }
-            });
-            manifest.claude_session_id = Some(sid.clone());
             // BUG-1918: the backgrounded agent — not this launcher — works
             // the lease; record its session id as one of the lease's authors.
             // trace:BUG-1918 | ai:claude
@@ -3024,7 +3010,7 @@ pub(crate) fn agent_new_bg_dispatch(
                 lease_id,
                 &[format!("session:{sid}")],
             );
-            if let Err(err) = session_manifest::save(&manifest_path, &manifest) {
+            if let Err(err) = link_bg_session(&plan, lease_id, sid) {
                 eprintln!(
                     "  {} couldn't record claude sessionId on lease manifest: {err}",
                     "warning:".yellow().bold()
@@ -3052,6 +3038,40 @@ pub(crate) fn agent_new_bg_dispatch(
     // its PID here — `aida status` (SPIKE-30) reads `claude agents
     // --json` for the truth and joins via the manifest's
     // claude_session_id we just wrote.
+    Ok(())
+}
+
+/// Link lease `lease_id` to the `--bg` Claude session `sid`: record the id on
+/// the lease manifest (SPIKE-34), THEN give any registry entry that
+/// session's SessionStart hook already wrote this launch's identity. The
+/// order matters (BUG-2167): a hook firing after the save resolves the lease
+/// itself, and one that fired before it is corrected here, so no window
+/// leaves a row registered from the spare's stale environment.
+// trace:SPIKE-34 | ai:claude
+// trace:TASK-1955 | ai:claude (BUG-2167)
+pub(crate) fn link_bg_session(plan: &AgentLaunchPlan, lease_id: &str, sid: &str) -> Result<()> {
+    let manifest_path = session_manifest::manifest_path(&plan.project_root, lease_id);
+    let mut manifest = session_manifest::load(&manifest_path).unwrap_or_else(|_| {
+        session_manifest::SessionManifest {
+            session_id: lease_id.to_string(),
+            planned_at: chrono::Utc::now(),
+            plan_source: "agent new --bg".to_string(),
+            claude_session_id: None,
+            batch_name: None,
+            plan: None,
+            items: Vec::new(),
+        }
+    });
+    manifest.claude_session_id = Some(sid.to_string());
+    session_manifest::save(&manifest_path, &manifest)?;
+    agent_registry::adopt_bg_session_identity(
+        &plan.project_root,
+        sid,
+        &plan.name,
+        plan.current_spec.as_deref(),
+        plan.role.as_deref(),
+        &plan.launch_cwd,
+    );
     Ok(())
 }
 
@@ -4401,6 +4421,19 @@ fresh `aida agent new ... --spec NEXT-ID` session.\n"
     ));
     out.push('\n');
 
+    // TASK-1806: the active mandate, for every vendor. Claude Code and Codex
+    // print it from their SessionStart / per-turn hooks; Antigravity installs
+    // neither, so without this an agy seat or relay lane never sees it.
+    // Omitted entirely when no mandate is active.
+    // trace:TASK-1955 | ai:claude (TASK-1806)
+    if let Some(section) = render_launch_mandate_section(
+        crate::mandate::mandate_dir().ok().as_deref(),
+        &plan.project_root,
+        chrono::Utc::now(),
+    ) {
+        out.push_str(&section);
+    }
+
     // STORY-1226: the seat's due jobs from the `[schedule]` registry, so a
     // freshly launched seat starts with the periodic work that applies to it
     // — identical under every vendor (one registry, one view). No vendor is
@@ -4469,6 +4502,20 @@ pub(crate) fn render_seat_gate_section(project_root: &std::path::Path, role: &st
     let waiting = queue_head_line(project_root, Some(&seat))
         .unwrap_or_else(|| format!("- Nothing is waiting on the `{seat}` role queue."));
     format!("{responsibility}\n\nAt your gate now:\n{waiting}\n")
+}
+
+/// The launch-context `## Mandate` section: the `aida mandate status --line`
+/// output while a mandate is active, `None` otherwise.
+// trace:TASK-1955 | ai:claude (TASK-1806)
+pub(crate) fn render_launch_mandate_section(
+    mandate_dir: Option<&std::path::Path>,
+    project_root: &std::path::Path,
+    now: chrono::DateTime<chrono::Utc>,
+) -> Option<String> {
+    let line = crate::mandate::current_status_line(mandate_dir?, Some(project_root), now)?;
+    Some(format!(
+        "## Mandate\n\n{line}\n(Point-in-time; run `aida mandate status --line` for the current state.)\n\n"
+    ))
 }
 
 /// STORY-619: build the launch-context `## Mailbox` body for a spawned agent.
@@ -5015,7 +5062,7 @@ pub(crate) fn render_agent_show_prompt(
 /// program + argv from [`harness_version_probe_program_and_args`], so the probe
 /// runs under the same os_wrap boundary as the child.
 // trace:TASK-1793 | ai:codex
-fn apply_harness_version(
+pub(crate) fn apply_harness_version(
     command: &mut std::process::Command,
     (program, args): (std::ffi::OsString, Vec<String>),
 ) {
@@ -5727,3 +5774,157 @@ pub(crate) static AGENT: crate::command_registry::CommandReg =
 #[cfg(test)]
 #[path = "tests/task_1793_harness_version_tests.rs"]
 mod harness_version_tests;
+
+/// TASK-1806: the launch context every vendor (Antigravity included) gets
+/// carries the MANDATE line while a mandate is active, and nothing when none.
+// trace:TASK-1955 | ai:claude (TASK-1806)
+#[cfg(test)]
+mod task_1806_launch_mandate_tests {
+    use super::*;
+
+    fn plan_at(project: &std::path::Path) -> AgentLaunchPlan {
+        AgentLaunchPlan {
+            project_root: project.to_path_buf(),
+            launch_cwd: project.to_path_buf(),
+            role: Some("implementer".into()),
+            role_instance: RoleInstanceKind::Driver,
+            current_spec: Some("TASK-2000".into()),
+            name: "agy-lane".to_string(),
+            lease_id: None,
+            native_session_id: None,
+            resumed_from: None,
+        }
+    }
+
+    /// PR-2809 r1: the body every vendor receives (Antigravity included)
+    /// carries the `## Mandate` section while a mandate is active.
+    // trace:TASK-1955 | ai:claude (TASK-1806)
+    #[test]
+    fn rendered_launch_context_carries_the_active_mandate() {
+        let tmp = tempfile::tempdir().unwrap();
+        let home = tmp.path().join("home");
+        let project = tmp.path().join("project");
+        std::fs::create_dir_all(&project).unwrap();
+        let _env =
+            crate::test_env::EnvVarsGuard::apply(&[("AIDA_HOME", Some(home.to_str().unwrap()))]);
+        let config = AgentLaunchConfig {
+            agent_type: "antigravity",
+            binary: "agy",
+            default_args: Vec::new(),
+            prompt_style: AgentPromptStyle::Positional,
+            contained: false,
+        };
+        let plan = plan_at(&project);
+        let before = render_agent_launch_context(&config, &plan, "t").unwrap();
+        assert!(!before.contains("## Mandate"), "{before}");
+
+        let dir = crate::mandate::mandate_dir().unwrap();
+        std::fs::create_dir_all(&dir).unwrap();
+        crate::mandate::start_with(
+            &dir,
+            &|| Ok(()),
+            &crate::current_user_id(None),
+            chrono::Duration::hours(2),
+            None,
+            false,
+            false,
+            chrono::Utc::now(),
+        )
+        .unwrap();
+        let after = render_agent_launch_context(&config, &plan, "t").unwrap();
+        assert!(after.contains("## Mandate\n\nMANDATE ship-held"), "{after}");
+    }
+
+    /// PR-2809 r1 (BUG-2167): linking a `--bg` session saves the manifest
+    /// before re-labelling, so the hook's own lease lookup and the launcher's
+    /// correction both see the link.
+    // trace:TASK-1955 | ai:claude (BUG-2167)
+    #[test]
+    fn linking_a_bg_session_saves_the_manifest_then_relabels_the_entry() {
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().canonicalize().unwrap();
+        let now = chrono::Utc::now();
+        let stale = agent_registry::AgentRegistryEntry {
+            id: "claude-4000123".into(),
+            agent_type: "claude".into(),
+            pid: 4_000_123,
+            pid_start: None,
+            name: Some("fix-task-1784".into()),
+            description: None,
+            tty: None,
+            terminal: None,
+            started_at: now,
+            last_active_at: now,
+            role: None,
+            current_spec: Some("TASK-1784".into()),
+            worktree_path: project.clone(),
+            source: "session-start-hook".into(),
+            binary_version: None,
+            build_sha: None,
+            availability: agent_registry::Availability::Available,
+            paused_since: None,
+            paused_reason: None,
+            expected_back: None,
+            native_session_id: None,
+            claude_session_id: Some("abcd1234-0000-4000-8000-000000000000".into()),
+            ended_at: None,
+            spec_status_at_end: None,
+            resumed_from: None,
+        };
+        agent_registry::write_entry(&project, &stale).unwrap();
+
+        let plan = plan_at(&project);
+        link_bg_session(&plan, "leaseb00000001", "abcd1234").unwrap();
+
+        let manifest =
+            session_manifest::load(&session_manifest::manifest_path(&project, "leaseb00000001"))
+                .unwrap();
+        assert_eq!(manifest.claude_session_id.as_deref(), Some("abcd1234"));
+        let entries = agent_registry::load_entries(&project);
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].1.name.as_deref(), Some("agy-lane"));
+        assert_eq!(entries[0].1.current_spec.as_deref(), Some("TASK-2000"));
+    }
+
+    #[test]
+    fn launch_context_shows_the_mandate_only_while_one_is_active() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path().join("mandates");
+        std::fs::create_dir_all(&dir).unwrap();
+        let project = tmp.path().join("project");
+        std::fs::create_dir_all(&project).unwrap();
+        let now = chrono::Utc::now();
+
+        assert_eq!(
+            render_launch_mandate_section(Some(&dir), &project, now),
+            None
+        );
+        assert_eq!(render_launch_mandate_section(None, &project, now), None);
+
+        crate::mandate::start_with(
+            &dir,
+            &|| Ok(()),
+            &crate::current_user_id(None),
+            chrono::Duration::hours(2),
+            Some("operator away".into()),
+            false,
+            false,
+            now,
+        )
+        .unwrap();
+        let section = render_launch_mandate_section(Some(&dir), &project, now)
+            .expect("an active mandate is shown");
+        assert!(
+            section.starts_with("## Mandate\n\nMANDATE ship-held · "),
+            "{section}"
+        );
+        assert!(section.contains("operator away"), "{section}");
+
+        let later = now + chrono::Duration::hours(3);
+        assert_eq!(
+            render_launch_mandate_section(Some(&dir), &project, later),
+            None,
+            "an expired mandate is not shown"
+        );
+    }
+}

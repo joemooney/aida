@@ -862,26 +862,20 @@ pub(crate) fn acquire_claim_receipted(
                 // commit + working-tree change so the next iteration's
                 // pull --rebase has a clean tree, then re-decide. Mirrors
                 // register_node_full's BUG-1-069 reset.
-                rollback_claim_commit(
-                    store_root,
-                    commit_sha
-                        .as_deref()
-                        .context("missing claim commit identity")?,
-                    &written,
-                )?;
+                drop_unpushed_claim_commit(store_root, committed_sha, &written)?;
                 let _ = attempt; // loop continues
                 continue;
             }
             Err(e) => {
                 // Push errored for a non-contention reason (network mid-flight).
-                // Roll back our commit and proceed local-only rather than wedge.
-                rollback_claim_commit(
-                    store_root,
-                    commit_sha
-                        .as_deref()
-                        .context("missing claim commit identity")?,
-                    &written,
-                )?;
+                // Roll back our commit and proceed local-only rather than wedge:
+                // a rollback that cannot complete is reported, never fatal.
+                // trace:TASK-1955 | ai:claude (TASK-2069)
+                if let Err(rollback) =
+                    drop_unpushed_claim_commit(store_root, committed_sha, &written)
+                {
+                    eprintln!("warning: the unpushed lease claim commit was kept: {rollback:#}");
+                }
                 return Ok((
                     AcquireOutcome::Unavailable(format!("could not push lease claim ({e})")),
                     // The remote may have accepted before the connection failed.
@@ -896,6 +890,24 @@ pub(crate) fn acquire_claim_receipted(
         "could not claim lease for `{scope}` after {MAX_CAS_RETRIES} attempts — \
          too much contention on the shared lease registry"
     )
+}
+
+// Drop this acquisition's own unpushed claim commit after a rejected or
+// failed push. `push_exact` runs outside the store write lock, so another
+// writer in this clone may have committed on top meanwhile: then our commit
+// is rebased out from under the newer HEAD (TASK-1981's rule), keeping the
+// peer's commit. The strict identity check still applies when HEAD is ours.
+// trace:TASK-1955 | ai:claude (TASK-2069)
+// The HEAD read and the rollback it selects run under one (re-entrant) store
+// write lock, so no writer can commit between the decision and the reset.
+// trace:TASK-1955 | ai:claude (TASK-2069, PR-2809 r1)
+fn drop_unpushed_claim_commit(store_root: &Path, claim_sha: &str, expected: &Claim) -> Result<()> {
+    aida_core::db::with_store_write_lock(store_root, || {
+        if aida_core::git_ops::head_sha(store_root)? == claim_sha {
+            return rollback_claim_commit(store_root, claim_sha, expected);
+        }
+        aida_core::git_ops::rollback_commit_if_head_matches(store_root, claim_sha).map(|_| ())
+    })
 }
 
 // Drop only the exact clean commit this acquisition just made. A concurrent
@@ -3048,6 +3060,58 @@ mod bug2188_claim_rollback_tests {
         // first invocation's receipt no longer authorizes deleting it.
         assert!(!release_claim_receipt(&store, &first).unwrap());
         assert!(claim_path(&store, "TASK-1").exists());
+    }
+
+    /// TASK-2069: a writer that committed on top of our unpushed claim
+    /// commit (push runs outside the lock) no longer fails the CAS retry:
+    /// our commit is dropped and the peer's commit kept.
+    // trace:TASK-1955 | ai:claude (TASK-2069)
+    #[test]
+    fn unpushed_claim_commit_is_dropped_under_a_newer_local_commit() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = dir.path();
+        let run = |args: &[&str]| {
+            let out = crate::test_git::git_command()
+                .current_dir(store)
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(
+                out.status.success(),
+                "git {args:?}: {}",
+                String::from_utf8_lossy(&out.stderr)
+            );
+        };
+        run(&["init", "-q", "-b", "aida-store"]);
+        run(&["config", "user.name", "fixture"]);
+        run(&["config", "user.email", "fixture@test"]);
+        run(&["commit", "-q", "--allow-empty", "-m", "seed"]);
+        std::fs::create_dir_all(leases_dir(store)).unwrap();
+        let claim = build_claim(store, "TASK-1", store, "implementer", false);
+        std::fs::write(
+            claim_path(store, "TASK-1"),
+            toml::to_string(&claim).unwrap(),
+        )
+        .unwrap();
+        run(&["add", "-A"]);
+        run(&["commit", "-q", "-m", "claim"]);
+        let claim_sha = aida_core::git_ops::head_sha(store).unwrap();
+        std::fs::write(store.join("peer.txt"), "peer\n").unwrap();
+        run(&["add", "peer.txt"]);
+        run(&["commit", "-q", "-m", "peer"]);
+
+        drop_unpushed_claim_commit(store, &claim_sha, &claim).unwrap();
+        assert!(
+            !claim_path(store, "TASK-1").exists(),
+            "our claim commit is gone"
+        );
+        assert!(store.join("peer.txt").exists(), "the peer's commit is kept");
+        let log = crate::test_git::git_command()
+            .current_dir(store)
+            .args(["log", "--format=%s"])
+            .output()
+            .unwrap();
+        assert_eq!(String::from_utf8_lossy(&log.stdout), "peer\nseed\n");
     }
 
     #[test]
