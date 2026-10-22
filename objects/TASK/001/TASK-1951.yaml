@@ -64,7 +64,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T15:55:48.750553278Z
-modified_at: 2026-10-22T08:19:06.373761224Z
+modified_at: 2026-10-22T09:02:55.918165582Z
 req_type: Task
 tags:
 - reconcile
@@ -430,6 +430,12 @@ comments:
   created_at: 2026-10-22T08:19:06.373761224Z
   modified_at: 2026-10-22T08:19:06.373761224Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a162d9-61ae-7343-9182-b0e5e115b0aa
+  author: joe
+  content: 'Implementer 2026-10-22 01:45: #2822 final-round fixes pushed at 8c7342e563 (clear on an unreadable forge reports unknown state and exits non-zero; behavioural lane-liveness primary-log test). Added to the completing slice by the advisor: TASK-2138 (route or document the remaining MergeHoldChanged readers), replace the merge_hold_cmd include_str test with a behavioural one, and retry wording specific to the ship and auto-release paths. Everything else is as in the 00:30 handoff.'
+  created_at: 2026-10-22T09:02:55.918165582Z
+  modified_at: 2026-10-22T09:02:55.918165582Z
+  session_id: ff6e8bf8-1dc6-42b0-b4cd-7470b3ef42aa
 history:
 - id: 01a154e0-78cf-7a40-bc67-d8f6e5580d97
   author: joe
