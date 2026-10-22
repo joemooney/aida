@@ -121,6 +121,48 @@ pub(crate) fn hold_terminal_state(
     }
 }
 
+/// `aida merge-hold clear N` with no marker and an unreadable forge label:
+/// the label drop is attempted in case one lingered. Only a drop that
+/// succeeded is reported as done; a failed one changed nothing, so it is an
+/// error (non-zero exit) naming the unknown state and the retry.
+// trace:TASK-1951 | ai:claude
+fn unread_label_clear_outcome(
+    pr: u64,
+    unlabel: &Result<(), merge_hold::LabelSyncError>,
+) -> anyhow::Result<String> {
+    match unlabel {
+        Ok(()) => Ok(format!(
+            "No merge-hold marker for PR #{pr} and the forge label could not be read; dropped the `aida:merge-hold` label in case it lingered."
+        )),
+        Err(err) => anyhow::bail!(
+            "No merge-hold marker for PR #{pr}; the forge could not be read ({err}), so the label state is unknown and nothing changed. Re-run `aida merge-hold clear {pr}` when the forge is reachable."
+        ),
+    }
+}
+
+/// `aida merge-hold clear N` on a PR with no hold: a cleared label on a PR
+/// never recorded as held fails the merge-hold gate, so drop it. Returns
+/// the line to print, if any; a forge failure is reported on stderr.
+// trace:TASK-1951 | ai:claude
+fn no_hold_orphan_cleanup(
+    pr: u64,
+    drop_orphan: impl FnOnce() -> Result<bool, String>,
+) -> Option<String> {
+    match drop_orphan() {
+        Ok(true) => Some(format!(
+            "Removed the orphaned `aida:merge-hold-cleared` label from PR #{pr} (it was never recorded as held)."
+        )),
+        Ok(false) => None,
+        Err(err) => {
+            eprintln!(
+                "  {} could not check PR #{pr} for an orphaned `aida:merge-hold-cleared` label: {err}",
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+            );
+            None
+        }
+    }
+}
+
 #[cfg(test)]
 mod merge_hold_cli_tests {
     use super::partition_stale_holds;
@@ -1039,7 +1081,9 @@ pub(crate) fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<
                             },
                         );
                         ev.seat = events::active_seat();
-                        events::emit(&root, &ev);
+                        // Beside the placement event (TASK-1406).
+                        // trace:TASK-1951 trace:TASK-1406 | ai:claude
+                        events::emit(&merge_hold::hold_store_root(&root), &ev);
                     };
                     if matches!(
                         label_only_forge,
@@ -1056,6 +1100,12 @@ pub(crate) fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<
                             println!(
                                 "No merge-hold on PR #{pr}: no marker, and the forge carries no `aida:merge-hold` label."
                             );
+                            // trace:TASK-1951 | ai:claude
+                            if let Some(line) = no_hold_orphan_cleanup(*pr, || {
+                                merge_hold::drop_orphaned_cleared_label(&root, *pr)
+                            }) {
+                                println!("{line}");
+                            }
                         }
                         return Ok(());
                     }
@@ -1086,9 +1136,7 @@ pub(crate) fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<
                             );
                         }
                     } else {
-                        println!(
-                            "No merge-hold marker for PR #{pr} and the forge label could not be read; dropped the `aida:merge-hold` label anyway in case it lingered."
-                        );
+                        println!("{}", unread_label_clear_outcome(*pr, &unlabel)?);
                     }
                     Ok(())
                 }
@@ -1218,3 +1266,52 @@ pub(crate) static MERGE_HOLD: crate::command_registry::CommandReg =
         },
         run: crate::command_registry::Handler::Early(run_merge_hold),
     };
+
+// trace:TASK-1951 | ai:claude
+#[cfg(test)]
+mod task_1951_orphan_cleared_label_tests {
+    use super::*;
+
+    /// A failed label drop on an unreadable forge is an error that says
+    /// nothing changed, never a claim that the label was dropped.
+    // trace:TASK-1951 | ai:claude
+    #[test]
+    fn unreadable_forge_clear_reports_unknown_state_and_fails() {
+        let err = unread_label_clear_outcome(
+            7,
+            &Err(merge_hold::LabelSyncError::Other("HTTP 502".into())),
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(
+            err.contains("label state is unknown and nothing changed"),
+            "{err}"
+        );
+        assert!(
+            err.contains("HTTP 502") && err.contains("aida merge-hold clear 7"),
+            "{err}"
+        );
+        assert!(!err.contains("dropped"), "{err}");
+        let ok = unread_label_clear_outcome(7, &Ok(())).unwrap();
+        assert!(ok.contains("dropped the `aida:merge-hold` label"), "{ok}");
+    }
+
+    #[test]
+    fn no_hold_clear_drops_an_orphaned_cleared_label() {
+        let called = std::cell::Cell::new(false);
+        let line = no_hold_orphan_cleanup(9, || {
+            called.set(true);
+            Ok(true)
+        });
+        assert!(called.get());
+        assert!(line.unwrap().contains("orphaned `aida:merge-hold-cleared`"));
+        assert_eq!(no_hold_orphan_cleanup(9, || Ok(false)), None);
+        assert_eq!(no_hold_orphan_cleanup(9, || Err("HTTP 502".into())), None);
+        // The "No merge-hold" branch of `merge-hold clear` calls it.
+        let src = include_str!("merge_hold_cmd.rs");
+        let no_hold = src
+            .find("\"No merge-hold on PR #{pr}: no marker, and the forge carries no")
+            .unwrap();
+        assert!(src[no_hold..no_hold + 1200].contains("no_hold_orphan_cleanup("));
+    }
+}

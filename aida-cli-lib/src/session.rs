@@ -3516,7 +3516,7 @@ pub(crate) fn bwrap_confinement_args(worktree: &Path, rw_paths: &[PathBuf]) -> V
 /// `/etc/claude-code` managed-settings drop the TASK-809 path mounts over) and
 /// TLS roots under `/etc`. `/dev`, `/proc`, `/tmp` are provided separately by
 /// the bwrap `--dev`/`--proc`/`--tmpfs` flags. trace:STORY-617 | ai:claude
-fn strict_read_essential_paths() -> &'static [&'static str] {
+pub(crate) fn strict_read_essential_paths() -> &'static [&'static str] {
     &[
         "/usr", "/bin", "/sbin", "/lib", "/lib64", "/lib32", "/etc", "/opt", "/nix", "/run", "/var",
     ]
