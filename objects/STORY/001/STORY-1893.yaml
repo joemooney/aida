@@ -1,0 +1,20 @@
+id: 01a1655f-4d9d-7d11-97dd-24ed6a7296e9
+spec_id: STORY-1893
+agreed_id: STORY-1893
+title: 'Review PR-2836: TASK-2053 S4b seat-clone visibility and shipped-head count'
+description: 'Hand-filed review story: Refs-only PR (BUG-2208 gap, folded into TASK-1955). Covers TASK-2053.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-22T20:48:27.037867867Z
+modified_at: 2026-10-22T20:48:27.037867867Z
+req_type: Story
+filed_at:
+  code_sha: 7ffa46a9d0dff57c2e76d77a001e94dec1cb8009
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 7ffa46a9d0
+  vendor: claude
+  session: 7d71bfbf-a609-42bd-a714-a7d52d81db81
