@@ -1491,6 +1491,52 @@ fn task_2053_bwrap_session_end_and_dismiss_run_no_host_git_and_never_follow_a_cl
     }
 }
 
+/// TASK-2162: session end tells the operator to remove a clone with
+/// submodules by hand, then `aida worktree dismiss` it. Dismiss on the
+/// removed clone, whose lease and pin remain, releases both and runs no
+/// host git there.
+// trace:TASK-2162 | ai:claude
+#[test]
+fn task_2162_dismiss_releases_a_hand_removed_seat_clone() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let fx = fixture();
+    let id = "c0ffee000041";
+    let clone = seat(&fx, "removed", id);
+    let pin = pin_ref(&clone).unwrap();
+    std::fs::remove_dir_all(&clone).unwrap();
+    assert!(ref_exists(&fx.main, &pin));
+    assert!(crate::lease_path(&fx.main, id).exists());
+
+    let (shim_dir, log) = logging_git_shim(&fx);
+    let path = format!(
+        "{}:{}",
+        shim_dir.display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+    let _ambient =
+        crate::test_env::AmbientGuard::hermetic_and(&fx.main, None, &[("PATH", Some(&path))]);
+    crate::worktree_dismiss::handle_dismiss(Some(clone.to_str().unwrap()), None).unwrap();
+
+    assert!(!ref_exists(&fx.main, &pin), "the base pin outlived dismiss");
+    assert!(
+        !crate::lease_path(&fx.main, id).exists(),
+        "the clone lease outlived dismiss"
+    );
+    let ledger = std::fs::read_to_string(
+        fx.main
+            .join(".aida/discipline/worktree_dismiss_ledger.jsonl"),
+    )
+    .unwrap();
+    assert!(ledger.contains("seat_clone_dismiss"), "{ledger}");
+    let untagged = untagged_git_in(&log, &clone);
+    assert!(
+        untagged.is_empty(),
+        "host git ran in the clone: {untagged:#?}"
+    );
+}
+
 /// Review round 3: a clone using the reftable ref backend stays readable by
 /// the probe (its `refStorage` extension is carried into the probe config).
 /// Skipped where git cannot migrate refs to reftable.
