@@ -6,8 +6,9 @@
 //! [`crate::git_ops::host_git_command`] use [`seat_clone_root`] to refuse.
 //!
 //! Every read here is FIFO-safe: a seat can plant a FIFO or a symlink where a
-//! marker or alternates file is expected, so a path is read only when
-//! `symlink_metadata` says it is a regular file.
+//! marker or alternates file is expected, so a path is opened without
+//! following a symlink or blocking, and read only when the opened handle is a
+//! regular file, never past a size cap.
 //! trace:BUG-2169 | ai:claude
 
 use std::path::{Path, PathBuf};
@@ -24,11 +25,34 @@ const MAX_READ: u64 = 64 * 1024;
 /// never a FIFO or device) no larger than 64 KiB; `None` otherwise.
 // trace:BUG-2169 | ai:claude
 pub fn read_regular_file(path: &Path) -> Option<String> {
-    let meta = std::fs::symlink_metadata(path).ok()?;
+    use std::io::Read;
+    // One open, then checks on that handle: a seat can swap a FIFO or a
+    // symlink to /dev/zero in between a stat by name and a reopen. O_NOFOLLOW
+    // refuses a final symlink, O_NONBLOCK keeps a FIFO open from blocking,
+    // and the read stops one byte past the cap whatever fstat said.
+    // trace:TASK-2053 | ai:claude
+    let mut options = std::fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
+    }
+    #[cfg(not(unix))]
+    if !std::fs::symlink_metadata(path).ok()?.file_type().is_file() {
+        return None;
+    }
+    let file = options.open(path).ok()?;
+    let meta = file.metadata().ok()?;
     if !meta.file_type().is_file() || meta.len() > MAX_READ {
         return None;
     }
-    std::fs::read_to_string(path).ok()
+    let mut body = Vec::new();
+    file.take(MAX_READ + 1).read_to_end(&mut body).ok()?;
+    if body.len() as u64 > MAX_READ {
+        return None;
+    }
+    String::from_utf8(body).ok()
 }
 
 /// Whether `path` itself (not a symlink target) is a directory.
@@ -299,5 +323,35 @@ mod bug_2192_lease_scan_tests {
         std::fs::remove_file(sessions.join("b.toml")).unwrap();
         assert_eq!(clone_lease_roots(main.path()), vec![seat]);
         crate::host_git_cache::ALWAYS_SETTLED.with(|s| s.set(false));
+    }
+}
+
+#[cfg(all(test, unix))]
+mod task_2053_read_regular_file_tests {
+    use super::read_regular_file;
+
+    /// A FIFO with no writer, a symlink to /dev/zero and an oversized file all
+    /// read as `None` without blocking or reading without bound; a small
+    /// regular file reads back.
+    // trace:TASK-2053 | ai:claude
+    #[test]
+    fn read_regular_file_refuses_fifo_symlink_and_oversize() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let fifo = dir.path().join("config-fifo");
+        let c_path = std::ffi::CString::new(fifo.to_str().unwrap()).unwrap();
+        assert_eq!(unsafe { libc::mkfifo(c_path.as_ptr(), 0o600) }, 0);
+        assert_eq!(read_regular_file(&fifo), None);
+
+        let zero = dir.path().join("config-zero");
+        std::os::unix::fs::symlink("/dev/zero", &zero).unwrap();
+        assert_eq!(read_regular_file(&zero), None);
+
+        let big = dir.path().join("config-big");
+        std::fs::write(&big, vec![b'a'; 64 * 1024 + 1]).unwrap();
+        assert_eq!(read_regular_file(&big), None);
+
+        let ok = dir.path().join("config");
+        std::fs::write(&ok, "[core]\n").unwrap();
+        assert_eq!(read_regular_file(&ok).as_deref(), Some("[core]\n"));
     }
 }

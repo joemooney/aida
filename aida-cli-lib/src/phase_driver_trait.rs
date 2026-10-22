@@ -2451,6 +2451,10 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
 
     fn merge(&mut self) -> Result<(), auto_complete::PhaseFailure> {
         self.mark_drain_phase(auto_complete::Phase::Merge);
+        // A standalone implementer stops at an open PR. trace:STORY-1662 | ai:claude
+        crate::standalone_implementer::refuse_under_marker("drain merge").map_err(|e| {
+            auto_complete::PhaseFailure::of(auto_complete::FailureKind::Internal, format!("{e:#}"))
+        })?;
         let pr = self.pr_number.ok_or_else(|| {
             auto_complete::PhaseFailure::of(
                 auto_complete::FailureKind::Internal,

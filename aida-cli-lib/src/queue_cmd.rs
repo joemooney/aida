@@ -11371,6 +11371,18 @@ pub(crate) fn handle_queue_work(
     let rework_branch_override =
         rework_pr_head_branch_override(&project_root, &plan, branch_override);
     let session_branch_override = branch_override.or(rework_branch_override.as_deref());
+    // STORY-1662: a fresh headless implementer pickup outside a drain waits
+    // for its child and reports the outcome. Its concurrency slot is taken
+    // before any setup and held until this command returns.
+    // trace:STORY-1662 | ai:claude
+    let standalone_implementer = !no_launch
+        && matches!(launch, Some(QueueWorkLaunch::Fresh(_)))
+        && crate::standalone_implementer::is_standalone_implementer(
+            &role,
+            plan.review_target.is_none(),
+            no_human,
+        );
+    let mut _standalone_slot = None;
     if !list_sessions {
         eprintln!("  pickup role: {role} ({role_origin}); --role overrides queue routing, then scope default");
         if let Some(message) = queue_work_role_mismatch(
@@ -11421,6 +11433,14 @@ pub(crate) fn handle_queue_work(
                         &format!("{cause:#}"),
                     ));
                 }
+            }
+            // trace:STORY-1662 | ai:claude
+            if standalone_implementer {
+                _standalone_slot = Some(crate::standalone_implementer::acquire_slot(
+                    &project_root,
+                    &plan.scope,
+                    crate::standalone_implementer::configured_cap(&project_root),
+                )?);
             }
             // Persist only the synthesized explicit row, after all three
             // preflight decisions. Do not reselect a different queue head.
@@ -12926,6 +12946,32 @@ pub(crate) fn handle_queue_work(
             }
             headless_child_grant = Some(grant);
         }
+        // STORY-1662: spawn the standalone implementer, wait, and report its
+        // outcome instead of exec'ing the vendor.
+        // trace:STORY-1662 | ai:claude
+        if standalone_implementer {
+            if let (QueueWorkLaunch::Fresh(id), Some(child_grant)) =
+                (&launch, headless_child_grant.as_ref())
+            {
+                crate::standalone_implementer::record_child_authority(
+                    &project_root,
+                    &lease.id,
+                    child_grant,
+                );
+                eprintln!();
+                return crate::standalone_implementer::run(crate::standalone_implementer::Launch {
+                    project_root: &project_root,
+                    vendor: launch_vendor,
+                    prompt: &prompt,
+                    session_id: id,
+                    spec: &plan.scope,
+                    lease_id: &lease.id,
+                    branch: &lease.branch,
+                    contained,
+                    child_grant,
+                });
+            }
+        }
         // TASK-895: a Codex tab hosts a fresh interactive Codex session. Codex has
         // no caller-minted session id / AIDA-addressable resume, and the interactive
         // tab launch is never `--no-human` (the headless drain resolves its own
@@ -13148,7 +13194,12 @@ pub(crate) fn handle_queue_work(
             }
         }
     })();
-    if setup_result.is_err() {
+    // A standalone implementer's outcome (punted, held, no PR) is a result,
+    // not a failed setup to continue by hand. trace:STORY-1662 | ai:claude
+    if setup_result.as_ref().is_err_and(|e| {
+        e.downcast_ref::<crate::standalone_implementer::StandaloneImplementerExit>()
+            .is_none()
+    }) {
         eprintln!(
             "{}",
             queue_work_manual_continuation(&plan.anchor_display, guided)
