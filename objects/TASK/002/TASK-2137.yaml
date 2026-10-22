@@ -11,12 +11,17 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-22T04:14:51.494241176Z
-modified_at: 2026-10-22T04:33:35.771376322Z
+modified_at: 2026-10-22T04:33:37.451923197Z
 req_type: Task
 tags:
 - from-review:PR-2820
 - phase-gates
 - severity:cosmetic
+relationships:
+- rel_type: SupersededBy
+  target_id: 01a154e0-4e8e-78b2-bd13-799da4c4282d
+  created_at: 2026-10-22T04:33:37.451919844Z
+  created_by: joe
 history:
 - id: 01a161e2-cc1b-7b23-9189-3f75f27e1d59
   author: joe
@@ -26,6 +31,11 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Superseded
+- id: 01a161e2-d825-7642-8a75-6d2b4a291f31
+  author: joe
+  timestamp: 2026-10-22T04:33:38.853808671Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
 filed_at:
   code_sha: 15081ef196bb0d7a347d302cf9a7c69bcd03acdc
   branch: pr-2820
