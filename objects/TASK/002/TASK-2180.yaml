@@ -12,11 +12,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-22T20:46:07.800901523Z
-modified_at: 2026-10-22T20:58:24.756175556Z
+modified_at: 2026-10-22T22:52:35.538385416Z
 req_type: Task
 tags:
 - from-review:PR-2835
 - severity:cosmetic
+comments:
+- id: 01a165d0-f552-7340-bb69-45cf3fa5d864
+  author: joe
+  content: 'Implemented in PR #2842 (head 2ee2494ee2e61ee0eaaebb05e954a888a6bff8fa). plan_pr reads the hold once and judges CI with it (ci_with_hold); an unreadable hold is reported once, as the hold label. Test-first; 23 pr_ship_batch tests pass; check-ci-fast passes all 34 gates. make test-touched did not run: its build refused because the disk is under the 15G floor (14.0G free, cargo reap found nothing to reclaim). The wait_for_review ''_ => {}'' aside is unchanged (it predates #2835 and the review timeout bounds it).'
+  created_at: 2026-10-22T22:52:35.538385416Z
+  modified_at: 2026-10-22T22:52:35.538385416Z
+  session_id: eb54acbb-0550-42b8-8c7c-9ddc326d8509
 history:
 - id: 01a16568-2576-7fe0-ab29-16f5ea333838
   author: joe
