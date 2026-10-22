@@ -1,0 +1,27 @@
+id: 01a161a8-e5b1-7ca1-b4ee-01223d47ee54
+spec_id: TASK-2134
+agreed_id: TASK-2134
+title: 'Mailbox resolver: a live agent named like a role makes role mail ambiguous'
+description: |
+  mailbox_resolver.rs resolve() counts a live agent whose name equals a role, vendor or person in its ambiguity sum. An agent launched with -n advisor makes '--to advisor' refuse for every sender. Name reservation is planned for PR2; until then, pin the behavior with a test or ignore reserved-name agents in the name branch.
+
+  Raised in review of PR-2808: https://github.com/joemooney/aida/pull/2808#issuecomment-6331976477
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-22T03:30:21.233079866Z
+modified_at: 2026-10-22T03:30:21.233079866Z
+req_type: Task
+tags:
+- from-review:PR-2808
+- severity:minor
+filed_at:
+  code_sha: c540b90955548e997aad6d2e117be9d1bf85d2b5
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c540b90955
+  vendor: claude
+  session: 01a161a63fe4
+  harness_version: 2.1.307 (Claude Code)

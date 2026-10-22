@@ -47,7 +47,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T15:57:44.849505155Z
-modified_at: 2026-10-22T00:06:52.337480815Z
+modified_at: 2026-10-22T03:29:48.627409804Z
 req_type: Task
 tags:
 - contained
@@ -513,6 +513,12 @@ history:
   timestamp: 2026-10-22T00:06:50.431949010Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
   changes: []
+- id: 01a161a8-76db-7422-8fcc-05d0d1201660
+  author: joe
+  timestamp: 2026-10-22T03:29:52.859189926Z
+  session_id: 01a161a619c9
+  harness_version: 2.1.307 (Claude Code)
+  changes: []
 processing_record:
 - id: 01a15cd6-7d71-7962-8b84-e2ae16b3e1d0
   timestamp: 2026-10-21T05:02:03.121912504Z
@@ -535,7 +541,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'CI red (cli-0) from this PR: store-pair now skips store commits, breaking task_1717 template_hook_profile; plus an absolute-path-shell NO_SLOT guard bypass regression. Other slice items verified.'
+  detail: 'Round 2: store-commit, store-hooks and store-pair items pass (CI green at cb7c3b72); the reworked NO_SLOT guard now lets common executable forms through that the old guard blocked. AC: TASK-2009 verified by task_2009_a_host_staged_path_the_child_deleted_does_not_abort_the_commit; TASK-2126 verified by code (rev-parse --verify HEAD^{commit}, other errors propagate), unborn/error branches untested; TASK-1759 verified by bug_1929_only_owner_may_write_matrix + task_1759_user_private_group_rule + host-dependent 0775 test; BUG-2117(i) verified by bug_2117_store_toplevel_skips_commit_config_and_trailer; BUG-2117(ii) verified by the same test; TASK-1643/TASK-2123 prose cases verified by tests/test_git_guardrails_parse.sh (all pass), executable compound payloads FAIL (finding 1); TASK-2125/TASK-2127 not-applicable-because deferred to the next slice in the PR body; other sweep members not-applicable-because covered by other slices.'
   recovery_hint: address the review findings, move TASK-1952 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-10-22T00:04:38.048441664Z
+  shelved_at: 2026-10-22T03:29:48.627409804Z
