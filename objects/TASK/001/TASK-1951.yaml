@@ -64,7 +64,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T15:55:48.750553278Z
-modified_at: 2026-10-22T09:33:36.050979291Z
+modified_at: 2026-10-22T14:25:46.553468282Z
 req_type: Task
 tags:
 - reconcile
@@ -450,6 +450,21 @@ comments:
   created_at: 2026-10-22T09:33:36.050979291Z
   modified_at: 2026-10-22T09:33:36.050979291Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a16400-f439-7232-9f81-17ce93198b69
+  author: joe
+  content: |-
+    REMAINING (TASK-1951) — implementer 2026-10-22 07:40, after #2822 and #2823 merged.
+    DONE: TASK-1408/1661, 1411/1660, 1659, 1663 (#2811); TASK-1615, 1617 (#2812); TASK-1618 pull side, TASK-1765(2)(4) (#2815); TASK-1619, 1620, 1622 (#2816); TASK-1668/1814(2), 1670 (#2819); TASK-1814(3), 1671, 1669, 2049 (#2820); 18:35 orphaned cleared label, TASK-1406 (#2822); TASK-1623, TASK-1662 deadline (#2823).
+    NO CHANGE (evidence in PR bodies): TASK-1814(1) (renameat2, TASK-1801); TASK-2035 (BUG-2203); TASK-1765(3); TASK-1618 --final-slice squash (refusal kept); TASK-1662 combined pass (BUG-2179).
+    REMAINING, by planned slice:
+     S9 gate, merge_hold.rs/merge_hold_cmd.rs/rework_hold_release.rs/lane_liveness.rs: TASK-2152, TASK-2153, TASK-2138, behavioural replacement for the merge_hold_cmd include_str test, ship/auto-release-specific retry wording (pr_cmd.rs:3538, rework_hold_release.rs:520), BUG-2123 (strict), TASK-1757(1-4 + the 10-14 "say why it didn't release" note).
+     S10 ship/reconcile, pr_cmd.rs/db_reconcile.rs/forge.rs/mandate.rs: TASK-1621 rest = #2816 deferred (a)-(d); TASK-2130, 2131, 2132; TASK-2114, 2115, 2116, 2117; TASK-1765(1) held-merge retry; TASK-1991 ship-level carry-over test; TASK-2141 timeout message/default.
+     S11 drain/forge/review: TASK-2099, 2100, 2104, 2105, 2106, 2135, 2136, 2137.
+     S12 release flow: TASK-1692 (1-419), 1688 (1-420), 1691 (1-423).
+     Final (completing "(TASK-1951)"): TASK-2003, option A display-only lens per the 2026-10-21 14:04 design fork (no advisor ruling for B received).
+  created_at: 2026-10-22T14:25:46.553468282Z
+  modified_at: 2026-10-22T14:25:46.553468282Z
+  session_id: d32da6c3-6fcd-4a6d-9999-3f89b70d28bd
 history:
 - id: 01a154e0-78cf-7a40-bc67-d8f6e5580d97
   author: joe
