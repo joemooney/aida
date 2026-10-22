@@ -1399,7 +1399,9 @@ fn load_human_holds(project_root: &Path, snapshot: &mut LaneLivenessSnapshot) {
     // The current episode of each hold starts at its first placement after
     // its most recent release.
     let mut placed_since: BTreeMap<u64, DateTime<Utc>> = BTreeMap::new();
-    for event in events::read_all(project_root) {
+    // Hold events live beside the markers, in the primary (TASK-1406).
+    // trace:TASK-1951 trace:TASK-1406 | ai:claude
+    for event in events::read_all(&crate::merge_hold::hold_store_root(project_root)) {
         if let EventKind::MergeHoldChanged { pr, placed, .. } = event.kind {
             let pr = u64::from(pr);
             if placed {

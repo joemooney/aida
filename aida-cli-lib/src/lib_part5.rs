@@ -2920,6 +2920,8 @@ pub(crate) fn handle_review_record_at(
     finding_classes: &[String],
     pr: Option<u64>,
 ) -> Result<()> {
+    // trace:STORY-1662 | ai:claude
+    crate::standalone_implementer::refuse_under_marker("review record")?;
     #[cfg(test)]
     assert_review_write_root_is_isolated(&project_root);
     // STORY-1417: resolve classes up front; a bad class is a warning, never a

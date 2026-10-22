@@ -136,6 +136,8 @@ mod mailbox_root;
 mod markdown_render;
 mod memory_doc;
 mod merge_hold_cmd;
+// trace:BUG-2015 | ai:claude — attested mirror-sync allowance for a project's pre-push main guard.
+mod mirror_guard;
 mod orchestrator_leases;
 mod output_format;
 mod phase_driver;
@@ -200,7 +202,9 @@ mod session_misc;
 mod session_start;
 mod skill_cmd;
 mod solo_cmd;
+// trace:STORY-1662 | ai:claude
 mod stakeholder_role;
+mod standalone_implementer;
 mod status_awaiting;
 mod status_cmd;
 mod status_prs;
@@ -461,6 +465,7 @@ mod pending_approval;
 mod plan_cmd;
 mod pr_rebase;
 mod pr_ship;
+mod pr_ship_batch;
 mod presence;
 mod presence_cmd;
 mod process_probe;

@@ -1154,6 +1154,11 @@ mod bug_1581_merge_block_tests {
 /// (BUG-758). Returns whether the merge itself succeeded.
 // trace:TASK-1169 | ai:claude
 pub(crate) fn merge_wave_pr(project_root: &std::path::Path, pr: &burndown::ResidualPr) -> bool {
+    // A standalone implementer stops at an open PR. trace:STORY-1662 | ai:claude
+    if let Err(e) = crate::standalone_implementer::refuse_under_marker("burndown merge") {
+        eprintln!("  {e:#}");
+        return false;
+    }
     // BUG-1163: the merge-EXECUTION chokepoint self-guards. Even though the wave
     // loop already gates on `wave_pr_supervision_label` via `wave_pr_action`,
     // this second check at the point the merge actually runs means no caller

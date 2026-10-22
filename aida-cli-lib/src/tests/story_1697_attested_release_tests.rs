@@ -169,6 +169,8 @@ impl Case {
                         state: mh::ChangeState::Open,
                         head_sha: Some(HEAD.into()),
                         hold_label: true,
+                        recorded_label: true,
+                        cleared_label: false,
                     }))
                 },
                 read_hold: &|| mh::read_hold_record(root.path(), PR),
