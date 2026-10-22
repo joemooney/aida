@@ -47,7 +47,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T15:57:44.849505155Z
-modified_at: 2026-10-22T06:45:05.122080681Z
+modified_at: 2026-10-22T07:59:03.745165612Z
 req_type: Task
 tags:
 - contained
@@ -327,6 +327,12 @@ comments:
   created_at: 2026-10-22T06:45:05.122080681Z
   modified_at: 2026-10-22T06:45:05.122080681Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a1629e-e841-7961-b909-4c5d4019ac78
+  author: joe
+  content: 'Implementer status 2026-10-22 01:00. Merged: S2 #2813 (TASK-1989, 2036, 2037, BUG-2016, BUG-2154 incl. yaml_backend, TASK-2031/2034, TASK-2107 relative back-pointer) and S3 #2818 (TASK-1652/2009, 1759, BUG-2117, TASK-1643, 2123, 2126). Open: S4 #2827 (TASK-1942 file-lookup memo; TASK-1942 blob case already shipped by BUG-2192 #2788; TASK-1943 1-3; TASK-1926), CI pending. Remaining for the next slices: BUG-1992 (store-git guard shapes + git_backend.rs:621 route), TASK-1924 (per-host credential helper scope), TASK-2001 (remote-credentials ratchet), TASK-1976/1977 (grant-env guard), TASK-2125 (another user with the group as primary gid), TASK-2127, and the launcher items TASK-1761/1770/1798/1781 (check for gate files before slicing). No code change, reason for the PR body: TASK-1642 (the wording was in an old PR body), TASK-1641 (needs an operator real-claude run). The last PR carries the bare (TASK-1952). Note: bug_2192_store_git_lookup_spawns_are_memoised_until_the_repo_changes flaked once under load (first=1, expected 2); not caused by this work.'
+  created_at: 2026-10-22T07:59:03.745165612Z
+  modified_at: 2026-10-22T07:59:03.745165612Z
+  session_id: 1a3dd0da-90b8-4fa2-9a00-3695ecd5d597
 history:
 - id: 01a154e2-43c6-7962-8a7c-8c6c68d81e7d
   author: joe
