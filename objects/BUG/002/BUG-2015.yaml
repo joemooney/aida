@@ -16,12 +16,12 @@ description: |
   ## Acceptance
   - In a repo with the main guard on and a registered mirror, `aida remote mirror-sync` mirrors `origin/main` without an override and still refuses a local-only `main` commit.
   - `aida remote mirror` never creates a commit on the default branch in such a repo.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T15:56:41.281129856Z
-modified_at: 2026-10-22T10:26:28.509078627Z
+modified_at: 2026-10-22T14:49:18.498071933Z
 req_type: Bug
 tags:
 - from:aida-host
@@ -68,6 +68,21 @@ history:
   session_id: 01a162b8db54
   harness_version: 2.1.308 (Claude Code)
   changes: []
+- id: 01a16416-7f9d-7022-9be7-ab896886a0df
+  author: aida-auto-bump
+  timestamp: 2026-10-22T14:49:18.493754810Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a16416-7fa2-7971-b15c-cc002ed707ec
+  timestamp: 2026-10-22T14:49:18.498062970Z
+  agent: aida
+  commit_sha: 24ae097d9aedbbb54bc17591c2af3a32cb66309c
+  summary: 'Re-review after merge from main (only lib.rs mod-list context changed vs prior PASS at c78d82b2e8). Both ACs traced and covered: ac6fb370 by aida-cli/tests/bug_2015_mirror_main_guard.rs (guarded mirror-sync mirrors origin tip with no override; local-only main refused to mirror and origin even with forged attestation; stale tip, headless-mirror trunk default, fail-closed without origin/HEAD) plus remote_create.rs guard-check unit tests; ac204075 by remote_create.rs bug_2015_remote_mirror_never_commits_onto_the_default_branch + dirty/init variant. Guard fails closed (aida missing, config unreadable, origin unreachable, unattested, deletion, origin target). PR CI green at head (run 39792933099). Bug protocol: PR touches test files — met. Non-blocking: TASK-2163/TASK-2164 already filed; guard-before-mirror install order leaves fan-out uninstalled (minor).'
+  review_verdict: approved
 filed_at:
   code_sha: 0f5182ee79067fee08f4c8d5836acdd89673a830
   branch: main
@@ -76,11 +91,7 @@ filed_at:
   aida_build_sha: 3163cc1b21
   vendor: claude
   session: 936a7b4a-8e58-4bed-98c1-b7f3b021c370
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Both ACs have code and tests (integration test bug_2015_mirror_main_guard.rs exercises the real guard), but PR CI is red at head and the shipped guard has two defects: wrong default-branch resolution and its install clobbers the mirror fan-out hook'
-  recovery_hint: address the review findings, move BUG-2015 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-22T08:31:39.345096735Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-22T14:49:18.493750080Z
+  completion_sha: 24ae097d9aedbbb54bc17591c2af3a32cb66309c
