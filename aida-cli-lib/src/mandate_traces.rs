@@ -80,18 +80,220 @@ pub(crate) fn collect_pr(
 /// Refuse a moving or dirty store rather than mixing uncommitted working objects
 /// with a historical exclusion read. Ref tips bind the existing --all history
 /// reader, including sticky versions not reachable from the store's HEAD.
-pub(crate) fn store_snapshot(store: &Path) -> Result<Vec<u8>> {
+///
+/// BUG-2195: the snapshot is the store HEAD plus every ref's tip, compared by
+/// [`store_snapshot_stable`] rather than byte for byte, so an unrelated ref move
+/// in the shared code repository no longer discards a collection attempt. A
+/// dirty store is a [`StoreDirty`] error, which the caller may retry
+/// (TASK-2019). Every snapshot git call is config-independent: no system
+/// config, no replace objects, no path quoting, explicit status options.
+// trace:TASK-2067 | ai:antigravity
+pub(crate) fn store_snapshot(store: &Path) -> Result<StoreSnapshot> {
     ensure!(
-        git(
+        snapshot_git(
             store,
-            &["status", "--porcelain=v1", "--untracked-files=all"]
+            &[
+                "status",
+                "--porcelain=v1",
+                "--untracked-files=all",
+                "--ignore-submodules=none",
+                "--no-renames",
+            ],
+            None,
         )?
         .is_empty(),
-        "mandate exclusion store has uncommitted evidence; retry after the store write completes"
+        StoreDirty
     );
-    let mut snapshot = git(store, &["rev-parse", "--verify", "HEAD"])?;
-    snapshot.extend(git(store, &["show-ref", "--head"])?);
-    Ok(snapshot)
+    let head = snapshot_git(store, &["rev-parse", "--verify", "HEAD^{commit}"], None)?;
+    let head = String::from_utf8(head).context("non-text store HEAD")?;
+    let head = head.trim().to_owned();
+    ensure!(oid(&head), "unreadable mandate store HEAD");
+    let mut refs = std::collections::BTreeMap::new();
+    let listing = snapshot_git(
+        store,
+        &["for-each-ref", "--format=%(objectname) %(refname)"],
+        None,
+    )?;
+    for line in String::from_utf8(listing)
+        .context("non-text store ref listing")?
+        .lines()
+    {
+        let (tip, name) = line.split_once(' ').context("invalid store ref listing")?;
+        ensure!(oid(tip), "invalid store ref tip for {name}");
+        refs.insert(name.to_owned(), tip.to_owned());
+    }
+    Ok(StoreSnapshot { head, refs })
+}
+
+/// BUG-2195: what one [`store_snapshot`] observed.
+// trace:TASK-2067 | ai:antigravity
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct StoreSnapshot {
+    head: String,
+    refs: std::collections::BTreeMap<String, String>,
+}
+
+/// TASK-2019: the store had uncommitted evidence when a snapshot was taken.
+/// Retryable within the caller's bound; refusing after it.
+// trace:TASK-2067 | ai:antigravity
+#[derive(Debug)]
+pub(crate) struct StoreDirty;
+
+impl std::fmt::Display for StoreDirty {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(
+            "mandate exclusion store has uncommitted evidence; retry after the store write completes",
+        )
+    }
+}
+
+impl std::error::Error for StoreDirty {}
+
+/// BUG-2195: whether evidence gathered between `before` and `after` came from
+/// one store version as far as the mandate exclusion reader can tell. Stable
+/// iff HEAD is unchanged and no ref change can alter the `--all` history of
+/// `objects/`:
+/// - a changed or added ref must bring no commit touching `objects/` that no
+///   earlier tip already reached;
+/// - a ref moved to a tip that does not contain its old tip (force move) must
+///   not drop any commit touching `objects/` (advisor condition C3);
+/// - a deleted ref only removes versions, so the evidence already gathered
+///   stays a superset and the attempt stays stable.
+///
+/// Any git failure is reported as unstable, so the caller re-collects and then
+/// refuses after its bound (fail closed).
+// trace:TASK-2067 | ai:antigravity
+pub(crate) fn store_snapshot_stable(
+    store: &Path,
+    before: &StoreSnapshot,
+    after: &StoreSnapshot,
+) -> bool {
+    if before.head != after.head {
+        return false;
+    }
+    let mut new_tips: Vec<&str> = Vec::new();
+    let mut forced: Vec<(&str, &str)> = Vec::new();
+    for (name, tip) in &after.refs {
+        match before.refs.get(name) {
+            Some(old) if old == tip => {}
+            Some(old) => {
+                new_tips.push(tip);
+                forced.push((old, tip));
+            }
+            None => new_tips.push(tip),
+        }
+    }
+    if new_tips.is_empty() {
+        return true;
+    }
+    // New objects/ history: commits reachable from a changed or added tip
+    // that no earlier tip (or HEAD) reached.
+    let mut input = String::new();
+    for tip in &new_tips {
+        input.push_str(tip);
+        input.push('\n');
+    }
+    for tip in before
+        .refs
+        .values()
+        .map(String::as_str)
+        .chain([before.head.as_str()])
+    {
+        input.push('^');
+        input.push_str(tip);
+        input.push('\n');
+    }
+    if !no_objects_commit(store, &input) {
+        return false;
+    }
+    // A changed ref that is not a fast-forward drops its old commits.
+    for (old, new) in forced {
+        let fast_forward = snapshot_status(store, &["merge-base", "--is-ancestor", old, new]);
+        match fast_forward {
+            Some(true) => {}
+            Some(false) => {
+                if !no_objects_commit(store, &format!("{old}\n^{new}\n")) {
+                    return false;
+                }
+            }
+            None => return false,
+        }
+    }
+    true
+}
+
+/// `true` when the commit range on stdin (`rev-list --stdin` syntax) has no
+/// commit touching `objects/`; `false` when it has one or git fails.
+// trace:TASK-2067 | ai:antigravity
+fn no_objects_commit(store: &Path, range: &str) -> bool {
+    matches!(
+        snapshot_git(
+            store,
+            &["rev-list", "--max-count=1", "--stdin", "--", "objects/"],
+            Some(range.as_bytes()),
+        ),
+        Ok(out) if out.is_empty()
+    )
+}
+
+/// Exit status of a snapshot git query: `Some(true)` for 0, `Some(false)` for
+/// 1, `None` for anything else.
+// trace:TASK-2067 | ai:antigravity
+fn snapshot_status(store: &Path, args: &[&str]) -> Option<bool> {
+    let status = snapshot_command(store).args(args).status().ok()?;
+    match status.code() {
+        Some(0) => Some(true),
+        Some(1) => Some(false),
+        _ => None,
+    }
+}
+
+/// The config-independent host git command every snapshot query uses.
+// trace:TASK-2067 | ai:antigravity
+fn snapshot_command(store: &Path) -> std::process::Command {
+    let mut cmd = aida_core::git_ops::host_git_command(store);
+    cmd.args(["-c", "core.quotePath=false"])
+        .env("GIT_NO_REPLACE_OBJECTS", "1")
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
+    cmd
+}
+
+/// One snapshot git query; `Err` carries git's stderr.
+// trace:TASK-2067 | ai:antigravity
+fn snapshot_git(store: &Path, args: &[&str], stdin: Option<&[u8]>) -> Result<Vec<u8>> {
+    use std::io::Write;
+    let mut cmd = snapshot_command(store);
+    cmd.args(args);
+    if stdin.is_some() {
+        cmd.stdin(std::process::Stdio::piped());
+    }
+    let mut child = cmd
+        .spawn()
+        .context("reading the mandate exclusion store snapshot")?;
+    let writer = stdin.map(|input| {
+        let mut pipe = child.stdin.take().expect("piped stdin");
+        let input = input.to_vec();
+        std::thread::spawn(move || pipe.write_all(&input))
+    });
+    let out = child
+        .wait_with_output()
+        .context("reading the mandate exclusion store snapshot")?;
+    if let Some(writer) = writer {
+        writer
+            .join()
+            .map_err(|_| anyhow::anyhow!("snapshot stdin writer panicked"))?
+            .context("writing to git")?;
+    }
+    ensure!(
+        out.status.success(),
+        "git {}: {}",
+        args[0],
+        String::from_utf8_lossy(&out.stderr)
+    );
+    Ok(out.stdout)
 }
 
 /// Inputs must already be pinned commit IDs. Paths are decoded only for source
@@ -513,3 +715,7 @@ mod tests;
 #[cfg(test)]
 #[path = "tests/task_1800_trace_replay_tests.rs"]
 mod replay_tests;
+
+#[cfg(test)]
+#[path = "tests/bug_2195_store_snapshot_tests.rs"]
+mod snapshot_tests;

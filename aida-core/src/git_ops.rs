@@ -10110,6 +10110,99 @@ mod tests {
         }
     }
 
+    /// BUG-2117: a hand commit on a DETACHED store HEAD (no aida guard, not
+    /// on the `aida-store` branch) still skips a planted commit-config, and a
+    /// planted nested `.aida-store/.git` inside the store cannot forge an
+    /// `Aida-Store:` trailer on a store commit.
+    // trace:TASK-1952 | trace:BUG-2117 | ai:claude
+    #[cfg(unix)]
+    #[test]
+    fn bug_2117_store_toplevel_skips_commit_config_and_trailer() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let main = dir.path().join("main");
+        init(&main).unwrap();
+        configure_user(&main, "Test", "test@example.com").unwrap();
+        std::fs::write(main.join("README.md"), "hi").unwrap();
+        add(&main, &["README.md"]).unwrap();
+        commit(&main, "chore: init").unwrap();
+        let store = create_store_worktree(&main, ".aida-store", "aida-store").unwrap();
+        let executable = |path: &Path, body: &str| {
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, body).unwrap();
+            std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        };
+        for (hook, name) in [
+            ("commit-msg", "hooks/aida-commit-msg"),
+            ("prepare-commit-msg", "hooks/aida-store-pair.sh"),
+        ] {
+            let installed = crate::scaffolding::wrap_with_aida_header(
+                Path::new(&format!(".git/hooks/{hook}")),
+                crate::templates::EMBEDDED_TEMPLATES[name],
+            );
+            executable(&hooks_dir(&main).unwrap().join(hook), &installed);
+        }
+        crate::db::with_store_write_lock(&store, || {
+            std::fs::write(store.join("notes.txt"), "one\n")?;
+            add(&store, &["notes.txt"])?;
+            commit_paths(&store, "chore: store write", &["notes.txt"])
+        })
+        .expect("first store commit");
+        // (i) A planted commit-config that would record that it ran.
+        let marker = dir.path().join("SOURCED-ON-HOST");
+        let config = store.join(".aida").join("commit-config");
+        std::fs::create_dir_all(config.parent().unwrap()).unwrap();
+        std::fs::write(&config, format!("touch '{}'\n", marker.display())).unwrap();
+        // (ii) A planted nested store with its own history.
+        let planted = store.join(".aida-store");
+        init(&planted).unwrap();
+        configure_user(&planted, "Evil", "evil@example.com").unwrap();
+        std::fs::write(planted.join("x"), "x").unwrap();
+        add(&planted, &["x"]).unwrap();
+        commit(&planted, "planted").unwrap();
+        let forged = git(&planted, &["rev-parse", "HEAD"]).unwrap().stdout;
+
+        assert!(
+            git(&store, &["checkout", "-q", "--detach"])
+                .unwrap()
+                .success
+        );
+        let own_head = git(&store, &["rev-parse", "HEAD"]).unwrap().stdout;
+        std::fs::write(store.join("notes.txt"), "by hand\n").unwrap();
+        let out = host_git_command(&store)
+            .env_remove("AIDA_STORE_WRITE_GUARD")
+            .args(["add", "notes.txt"])
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "{out:?}");
+        let out = host_git_command(&store)
+            .env_remove("AIDA_STORE_WRITE_GUARD")
+            .args([
+                "commit",
+                "-q",
+                "-m",
+                "chore: detached by hand",
+                "--",
+                "notes.txt",
+            ])
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "{out:?}");
+        assert!(
+            !marker.exists(),
+            "a hand commit on a detached store HEAD sourced the planted commit-config"
+        );
+        let body = git(&store, &["log", "-1", "--format=%B"]).unwrap().stdout;
+        assert!(
+            !body.contains(forged.trim()),
+            "the planted nested store forged the trailer: {body}"
+        );
+        assert!(
+            body.contains(&format!("Aida-Store: {}", own_head.trim())),
+            "a store commit pins the store's own head: {body}"
+        );
+    }
+
     /// A store commit never runs `.aida/commit-config`. The store's tree is
     /// writable by contained sessions, so a planted config setting PATH to a
     /// planted `git` would run that binary on the host when the shipped
