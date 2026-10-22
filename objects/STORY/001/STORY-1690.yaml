@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T12:00:43.205703912Z
-modified_at: 2026-10-22T14:23:16.535177837Z
+modified_at: 2026-10-22T23:22:09.508555053Z
 req_type: Story
 tags:
 - ci
@@ -132,6 +132,12 @@ comments:
     Plan: implement S2-S5 in this worktree as one story, slice PRs carry (Refs STORY-1690), final PR (STORY-1690).
   created_at: 2026-10-22T14:23:16.535177837Z
   modified_at: 2026-10-22T14:23:16.535177837Z
+  session_id: 4d679734-3be0-4ab2-8b88-dcf00e4a75d1
+- id: 01a165ec-06e4-7833-b474-f2e3a06c8c77
+  author: joe
+  content: 'PR #2843 opened (head 35665fdd31): S2-S5 + folded TASK-1378 — aida pr train, merge-hold-gate train mode, docs. Needs STRICT independent review; operator merges.'
+  created_at: 2026-10-22T23:22:09.508555053Z
+  modified_at: 2026-10-22T23:22:09.508555053Z
   session_id: 4d679734-3be0-4ab2-8b88-dcf00e4a75d1
 history:
 - id: 01a152ec-52a2-7801-ad7c-7dd74bedcf59
