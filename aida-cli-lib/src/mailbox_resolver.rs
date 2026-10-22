@@ -314,11 +314,14 @@ mod tests {
         };
         std::fs::write(dir.join(format!("{id}.toml")), format!(
             "id = '{id}'\nagent_type = 'codex'\npid = {}\nname = '{name}'\nrole = '{role}'\nstarted_at = '2026-10-20T00:00:00Z'\nlast_active_at = '2026-10-20T00:00:00Z'\nworktree_path = '{}'\nsource = 'agent-launcher'\n{end}", std::process::id(), project.display())).unwrap();
-        let path = dir.join(format!("{id}.toml"));
-        let mut entry: AgentRegistryEntry =
-            toml::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
-        entry.pid_namespace = agent_registry::current_pid_namespace();
-        agent_registry::write_entry(project, &entry).unwrap();
+        if let Some(namespace) = agent_registry::current_pid_namespace() {
+            use std::io::Write;
+            let mut file = std::fs::OpenOptions::new()
+                .append(true)
+                .open(dir.join(format!("{id}.toml")))
+                .unwrap();
+            writeln!(file, "pid_namespace = {namespace}").unwrap();
+        }
     }
 
     // trace:STORY-1843 | ai:codex
