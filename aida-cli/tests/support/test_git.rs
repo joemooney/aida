@@ -64,11 +64,14 @@ fn ensure_template_dir(parent: &std::path::Path) -> std::path::PathBuf {
         hash = (hash ^ u64::from(byte)).wrapping_mul(0x0100_0000_01b3);
     }
     std::fs::create_dir_all(parent).expect("create git template parent dir");
-    // A dir this process just made is owned by its effective uid.
+    // A dir this process just made is owned by its effective uid. tempfile
+    // creates it with the umask's mode (0755 on most hosts), so it is made
+    // private before anything is written or renamed into place.
     let staging = tempfile::Builder::new()
         .prefix(".aida-test-git-template-staging-")
         .tempdir_in(parent)
         .expect("create git template staging dir");
+    make_private(staging.path());
     let owner = template_owner(staging.path());
     let dir = parent.join(format!("aida-test-git-template-{owner}-{hash:016x}"));
     let complete = |dir: &std::path::Path| {
@@ -110,6 +113,19 @@ fn ensure_template_dir(parent: &std::path::Path) -> std::path::PathBuf {
     dir
 }
 
+/// Set `dir`'s mode to 0700 (no-op where there are no modes).
+#[allow(dead_code)]
+fn make_private(dir: &std::path::Path) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt as _;
+        std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))
+            .expect("make git template dir private");
+    }
+    #[cfg(not(unix))]
+    let _ = dir;
+}
+
 /// The uid that owns `path` (0 where there are no uids).
 #[allow(dead_code)]
 fn template_owner(path: &std::path::Path) -> u32 {
@@ -128,8 +144,9 @@ fn template_owner(path: &std::path::Path) -> u32 {
 }
 
 /// Whether `dir` exists. Panics when it exists but is not a real directory
-/// owned by `owner` with mode 0700, since its hooks would run in every
-/// fixture repository.
+/// owned by `owner` that only `owner` can write, since its hooks would run in
+/// every fixture repository. One that is only readable by others (say, from a
+/// build that left it 0755) is tightened to 0700 and used.
 // trace:TASK-1955 | ai:claude (TASK-2017)
 #[allow(dead_code)]
 fn template_dir_trusted(dir: &std::path::Path, owner: u32) -> bool {
@@ -142,11 +159,14 @@ fn template_dir_trusted(dir: &std::path::Path, owner: u32) -> bool {
     {
         use std::os::unix::fs::MetadataExt as _;
         assert!(
-            meta.file_type().is_dir() && meta.uid() == owner && meta.mode() & 0o777 == 0o700,
-            "refusing git template dir {}: it is not a 0700 directory owned by uid {owner}; \
-             remove it and re-run",
+            meta.file_type().is_dir() && meta.uid() == owner && meta.mode() & 0o022 == 0,
+            "refusing git template dir {}: it is not a directory owned and only writable \
+             by uid {owner}; remove it and re-run",
             dir.display()
         );
+        if meta.mode() & 0o777 != 0o700 {
+            make_private(dir);
+        }
     }
     #[cfg(not(unix))]
     {
