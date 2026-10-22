@@ -3759,6 +3759,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             vendor,
             self.contained,
             contained_in,
+            &worktree,
             "CI-fix session",
             &program,
             fix_args,
@@ -3801,6 +3802,32 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 return false;
             }
         };
+        // TASK-1798: stamp the grant on the implementer's lease before the
+        // child starts, so a lease end or reap revokes it even when this
+        // launcher dies mid-child. A lease that cannot be stamped refuses
+        // the child (fail closed) rather than running it unstamped.
+        // trace:TASK-1952 | trace:TASK-1798 | ai:claude
+        let stamped_lease = match (child_grant.id(), self.implementer_lease.as_deref()) {
+            (Some(id), Some(lease_id)) => {
+                if let Err(e) = session::set_lease_grant_key_at(
+                    &self.project_root,
+                    lease_id,
+                    session::LEASE_CI_FIX_CHILD_GRANT_KEY,
+                    Some(id),
+                ) {
+                    session::revoke_headless_child_grant(id);
+                    tee.stop();
+                    eprintln!(
+                        "  {} could not record the CI-fix child grant on its lease ({e:#}) — \
+                         leaving the red-CI failure standing",
+                        crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+                    );
+                    return false;
+                }
+                Some(lease_id.to_string())
+            }
+            _ => None,
+        };
         let mut child_cmd = build_phase_driver_ci_fix_command(
             &worktree,
             &program,
@@ -3817,6 +3844,14 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         tee.stop();
         if let Some(id) = child_grant.id() {
             session::revoke_headless_child_grant(id);
+        }
+        if let Some(lease_id) = stamped_lease {
+            let _ = session::set_lease_grant_key_at(
+                &self.project_root,
+                &lease_id,
+                session::LEASE_CI_FIX_CHILD_GRANT_KEY,
+                None,
+            );
         }
         // BUG-2140: commit any pending store changes left by a contained
         // CI-fix child on the host before continuing.

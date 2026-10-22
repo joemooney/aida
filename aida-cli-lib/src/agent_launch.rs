@@ -2193,6 +2193,25 @@ pub(crate) fn refuse_uncontained_child_of_contained_parent(
     Ok(())
 }
 
+/// TASK-1781: `--no-default-flags` skips agents.toml, and with it the
+/// `[agents] contained` knob. It is the operator's escape hatch from those
+/// defaults, so a contained parent may not use it.
+// trace:TASK-1952 | trace:TASK-1781 | ai:claude
+pub(crate) fn refuse_no_default_flags_under_contained_parent(
+    parent_contained: bool,
+    flag_options: &AgentDefaultFlagOptions,
+) -> Result<()> {
+    if parent_contained && !flag_options.use_config_defaults {
+        anyhow::bail!(
+            "[contained] this session is contained (AIDA_CONTAINED), so it may not pass \
+             --no-default-flags: that flag skips agents.toml, including the [agents] contained \
+             posture, and is reserved for the operator. Drop it, or launch from an \
+             uncontained shell."
+        );
+    }
+    Ok(())
+}
+
 // why: command-dispatch fn whose params mirror distinct CLI flags; bundling into a struct adds indirection without clarifying the call sites.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn agent_new_claude(
@@ -2218,6 +2237,7 @@ pub(crate) fn agent_new_claude(
     // contained parent (or a malformed AIDA_CONTAINED) refuses before any
     // interaction. trace:BUG-2151 | ai:claude
     let parent_contained = session::aida_contained_env()?;
+    refuse_no_default_flags_under_contained_parent(parent_contained, &flag_options)?;
     let knob_contained = || -> Result<bool> {
         if !flag_options.use_config_defaults {
             return Ok(false);
@@ -2326,6 +2346,15 @@ pub(crate) fn agent_new_codex(
     name: Option<String>,
     description: Option<String>,
 ) -> Result<()> {
+    // TASK-1781: a contained parent refuses codex before the role picker.
+    // trace:TASK-1952 | trace:TASK-1781 | ai:claude
+    refuse_uncontained_child_of_contained_parent(&AgentLaunchConfig {
+        agent_type: "codex",
+        binary: "codex",
+        default_args: Vec::new(),
+        prompt_style: AgentPromptStyle::Positional,
+        contained: false,
+    })?;
     // TASK-646: resolve the child role before launch (flag → picker → default).
     let role = match resolve_child_role(&child_role_project_root(cwd)?, role, "codex")? {
         Some(r) => Some(r),
@@ -2395,6 +2424,15 @@ pub(crate) fn agent_new_antigravity(
     name: Option<String>,
     description: Option<String>,
 ) -> Result<()> {
+    // TASK-1781: a contained parent refuses agy before the role picker.
+    // trace:TASK-1952 | trace:TASK-1781 | ai:claude
+    refuse_uncontained_child_of_contained_parent(&AgentLaunchConfig {
+        agent_type: "antigravity",
+        binary: "agy",
+        default_args: Vec::new(),
+        prompt_style: AgentPromptStyle::Flag("--prompt-interactive"),
+        contained: false,
+    })?;
     // TASK-646: resolve the child role before launch (flag → picker → default).
     let role = match resolve_child_role(&child_role_project_root(cwd)?, role, "antigravity")? {
         Some(r) => Some(r),

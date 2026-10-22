@@ -216,3 +216,119 @@ fn relative_gitdir_back_pointer_verifies() {
     std::fs::write(gitdir.join("gitdir"), "../../../../wt/.git\n").unwrap();
     crate::session::verify_linked_worktree_main(&wt, &main).expect("relative back-pointer");
 }
+
+// TASK-2111: a tree whose `.git` is a directory holding a `commondir` that
+// names another repository, or a symlink to another repository's `.git`,
+// redirects `git worktree list` (so the resolved main). Neither is a
+// host-recorded seat clone, so the contained launch refuses.
+// trace:TASK-1952 | trace:TASK-2111 | ai:claude
+#[cfg(unix)]
+#[test]
+fn task_2111_git_dir_or_symlink_redirect_refuses() {
+    // A `.git` directory with a commondir naming the other repository.
+    let (_tmp, _main, wt, other) = fixture();
+    std::fs::remove_file(wt.join(".git")).unwrap();
+    let dot_git = wt.join(".git");
+    std::fs::create_dir_all(&dot_git).unwrap();
+    std::fs::write(
+        dot_git.join("commondir"),
+        format!("{}\n", other.join(".git").display()),
+    )
+    .unwrap();
+    std::fs::write(dot_git.join("HEAD"), "ref: refs/heads/main\n").unwrap();
+    let resolved = crate::main_worktree_root_from(&wt);
+    assert_ne!(
+        std::fs::canonicalize(&resolved).ok(),
+        std::fs::canonicalize(&wt).ok(),
+        "precondition: the redirect moves the resolved main off the tree"
+    );
+    assert!(crate::session::verify_linked_worktree_main(&wt, &resolved).is_err());
+
+    // A `.git` symlink to the other repository's `.git` directory.
+    let (_tmp, _main, wt, other) = fixture();
+    std::fs::remove_file(wt.join(".git")).unwrap();
+    std::os::unix::fs::symlink(other.join(".git"), wt.join(".git")).unwrap();
+    let resolved = crate::main_worktree_root_from(&wt);
+    assert!(crate::session::verify_linked_worktree_main(&wt, &resolved).is_err());
+    assert!(crate::session::verify_linked_worktree_main(&wt, &other).is_err());
+
+    // A plain repository is its own main and still verifies; a tree with no
+    // `.git` at all (a --cwd subdirectory) is not refused either.
+    let (_tmp, main, _wt, _other) = fixture();
+    crate::session::verify_linked_worktree_main(&main, &main).expect("own main");
+    let sub = main.join("sub");
+    std::fs::create_dir_all(&sub).unwrap();
+    crate::session::verify_linked_worktree_main(&sub, &main).expect("subdirectory");
+}
+
+// TASK-2112: Claude keys transcripts by cwd, so a contained resume moved to
+// the lease tree copies the one transcript listed under main into the lease
+// tree's project store: mode 0600, only that file, never over a different
+// one and never through a symlink.
+// trace:TASK-1952 | trace:TASK-2112 | ai:claude
+#[cfg(unix)]
+#[test]
+fn task_2112_contained_resume_stages_the_transcript_in_the_lease_tree() {
+    use std::os::unix::fs::PermissionsExt;
+    let (tmp, main, wt, _other) = fixture();
+    let home = tmp.path().join("home");
+    let _env = crate::test_env::EnvVarsGuard::apply(&[
+        ("AIDA_TEST_HOME", Some(home.to_str().unwrap())),
+        ("AIDA_OS_WRAP", Some("0")),
+    ]);
+    mint_lease(&main, "lease-a", "claude-a", &wt);
+    let main_store = crate::session::claude_project_dir(&main).unwrap();
+    let wt_store = crate::session::claude_project_dir(&wt).unwrap();
+    std::fs::create_dir_all(&main_store).unwrap();
+    std::fs::write(main_store.join("claude-a.jsonl"), "{\"a\":1}\n").unwrap();
+    std::fs::write(main_store.join("other-session.jsonl"), "{}\n").unwrap();
+    let target = crate::session::ResumeTarget {
+        agent: "claude".to_string(),
+        id: "claude-a".to_string(),
+        worktree: Some(main.clone()),
+    };
+    let build = || {
+        aida_core::git_ops::with_host_git_version("git version 2.43.0", || {
+            crate::session::build_contained_resume_command(&target, &main)
+        })
+    };
+    let cmd = build().unwrap();
+    assert_eq!(cmd.get_current_dir(), Some(wt.as_path()));
+    let copied = wt_store.join("claude-a.jsonl");
+    assert_eq!(std::fs::read_to_string(&copied).unwrap(), "{\"a\":1}\n");
+    assert_eq!(
+        std::fs::metadata(&copied).unwrap().permissions().mode() & 0o777,
+        0o600
+    );
+    assert!(
+        !wt_store.join("other-session.jsonl").exists(),
+        "only the resumed session's transcript is copied"
+    );
+    // Idempotent on identical bytes.
+    build().expect("an identical copy is reused");
+    // A different transcript already there refuses the resume.
+    std::fs::write(&copied, "{\"forged\":1}\n").unwrap();
+    let err = build().expect_err("a differing destination refuses");
+    assert!(
+        format!("{err:#}").contains("different transcript"),
+        "{err:#}"
+    );
+    // A symlinked destination refuses.
+    std::fs::remove_file(&copied).unwrap();
+    std::os::unix::fs::symlink(main_store.join("other-session.jsonl"), &copied).unwrap();
+    assert!(build().is_err(), "a symlinked destination refuses");
+    std::fs::remove_file(&copied).unwrap();
+    // A symlinked source refuses.
+    std::fs::rename(
+        main_store.join("claude-a.jsonl"),
+        main_store.join("real.jsonl"),
+    )
+    .unwrap();
+    std::os::unix::fs::symlink(
+        main_store.join("real.jsonl"),
+        main_store.join("claude-a.jsonl"),
+    )
+    .unwrap();
+    assert!(build().is_err(), "a symlinked source refuses");
+    assert!(!copied.exists());
+}

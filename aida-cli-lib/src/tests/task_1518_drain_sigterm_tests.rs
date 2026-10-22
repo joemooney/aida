@@ -41,6 +41,7 @@ fn populate_fake_drain(root: &Path, pid: u32) {
         binary_path: String::new(),
         launched_stale: false,
         specs: vec!["TASK-1".to_string()],
+        child_grant_id: None,
     };
     std::fs::write(
         drain_lock_path(root),

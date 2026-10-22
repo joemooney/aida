@@ -313,6 +313,7 @@ fn bug_2130_solo_and_drain_locks_write_exact_identity_and_read_back_live() {
         binary_path: String::new(),
         launched_stale: false,
         specs: Vec::new(),
+        child_grant_id: None,
     };
     std::fs::write(
         crate::drain_lock::drain_lock_path(root),

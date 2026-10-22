@@ -586,6 +586,10 @@ pub(crate) fn handle_burndown_run(
                     queue_cmd::headless_baseline_notice("implementer", cause)
                 );
             }
+            // TASK-1798: stamp the grant on the drain lock before launching,
+            // so a takeover of a dead launcher's lock revokes it.
+            // trace:TASK-1952 | trace:TASK-1798 | ai:claude
+            stamp_burndown_child_grant(&project_root, &child_grant)?;
             let res = build_burndown_quiet_command(
                 &current_prompt,
                 mode,
@@ -604,6 +608,7 @@ pub(crate) fn handle_burndown_run(
             });
             if let Some(id) = child_grant.id() {
                 session::revoke_headless_child_grant(id);
+                let _ = crate::drain_lock::stamp_drain_lock_child_grant(&project_root, None);
             }
             res?
         };
@@ -2064,6 +2069,13 @@ pub(crate) fn run_burndown_verbose(
             queue_cmd::headless_baseline_notice("implementer", cause)
         );
     }
+    // The drain lock lives in the main checkout (`handle_burndown_run`).
+    // trace:TASK-1952 | trace:TASK-1798 | ai:claude
+    let lock_root = find_main_worktree_root().unwrap_or_else(|_| project_root.clone());
+    if let Err(e) = stamp_burndown_child_grant(&lock_root, &child_grant) {
+        tee_handle.stop();
+        return Err(e);
+    }
     let status_code = build_burndown_verbose_command(
         prompt,
         mode,
@@ -2085,8 +2097,28 @@ pub(crate) fn run_burndown_verbose(
     tee_handle.stop();
     if let Some(id) = child_grant.id() {
         session::revoke_headless_child_grant(id);
+        let _ = crate::drain_lock::stamp_drain_lock_child_grant(&lock_root, None);
     }
     status_code
+}
+
+/// TASK-1798: record an issued burndown child grant on this launcher's drain
+/// lock. A grant that cannot be recorded is revoked and the launch refused,
+/// so no child runs with a grant only this process could revoke. A baseline
+/// (ungranted) child has nothing to record.
+// trace:TASK-1952 | trace:TASK-1798 | ai:claude
+pub(crate) fn stamp_burndown_child_grant(
+    project_root: &std::path::Path,
+    child_grant: &seat_authority::HeadlessChildGrant,
+) -> Result<()> {
+    let Some(id) = child_grant.id() else {
+        return Ok(());
+    };
+    if let Err(e) = crate::drain_lock::stamp_drain_lock_child_grant(project_root, Some(id)) {
+        session::revoke_headless_child_grant(id);
+        return Err(e.context("could not record the burndown child grant on the drain lock"));
+    }
+    Ok(())
 }
 
 // trace:BUG-2124 | ai:antigravity
