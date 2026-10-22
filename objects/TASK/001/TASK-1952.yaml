@@ -47,7 +47,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T15:57:44.849505155Z
-modified_at: 2026-10-22T14:26:13.871643933Z
+modified_at: 2026-10-22T14:27:44.588015151Z
 req_type: Task
 tags:
 - contained
@@ -391,6 +391,34 @@ comments:
     - TASK-1641: needs an operator real-claude run. I will mail the advisor the command and an evidence template; it is not faked.
   created_at: 2026-10-22T14:26:13.871643933Z
   modified_at: 2026-10-22T14:26:13.871643933Z
+  session_id: ca53c5e3-5950-45d1-b677-6e96eddf719f
+- id: 01a16402-c14c-7411-a63b-5edcfa51276a
+  author: joe
+  content: |
+    SKETCH (TASK-1952 S6: launcher/gate items). Implementer 2026-10-22. Waiting for advisor signoff before writing any of this. S5 (no launcher change) is in progress meanwhile.
+
+    1. TASK-2111 verify_linked_worktree_main (session.rs:2971). Today it returns Ok when <tree>/.git is not a regular file. Change: use symlink_metadata. When the tree is not main and .git is a directory or a symlink, return Ok only when seat_clone::host_recorded_clone(tree) names this main. Otherwise refuse with the existing message. A missing .git stays Ok (a --cwd subdirectory has none). Fixtures: a .git dir holding a commondir that names another repo, and a .git symlink to another repo's .git. Each must refuse; a host-recorded seat clone must pass.
+
+    2. TASK-2112 contained resume cwd (session.rs:660 build_contained_resume_command). Claude keys transcripts by cwd (~/.claude/projects/<slug(cwd)>/<id>.jsonl). resolve_resume_target finds them only under main's slug, so a resume from the lease tree probably reports "no conversation found". This fails closed, and it cannot be verified live from a nested session. Change: when the cwd is the lease tree and <slug(lease tree)>/<id>.jsonl is absent but <slug(main)>/<id>.jsonl exists, copy that transcript into the lease tree's project dir (host side, before exec; never a symlink, never overwriting) and resume there. The contained boundary stays the lease tree. Update the stale BUG-2157 doc comment. Test: with AIDA_TEST_HOME, assert the copy and the cwd. Alternative if you prefer: keep cwd=main when the lease store lacks the transcript, which reopens the TASK-2031 cwd-in-main issue. I recommend the copy.
+
+    3. TASK-1781 posture check (agent_launch.rs:2160 refuse_uncontained_child_of_contained_parent).
+       a. Under a contained parent, every `--flag` in default_args and the passthrough args must be on a closed allowlist: the two containment flags, plus --model, --append-system-prompt, --name, --resume/--continue, --permission-mode (only the values contained already permits), -p/--print, --output-format, --verbose and --session-id. Anything else refuses, including --allowedTools, --add-dir, --mcp-config, --permission-prompt-tool and --dangerously-*. Self-test per denied flag, plus one allowed set.
+       b. --no-default-flags under a contained parent: refuse. It skips the [agents] contained config. From an uncontained shell it stays the operator escape hatch, documented in --help.
+       c. contained_posture(): compute the write root from the --cwd target when given, not process cwd. Test with --cwd <other worktree>.
+       d. codex/agy: refuse before the role picker (move the vendor check above pick). Cosmetic.
+
+    4. TASK-1761 (from the #2640 review). (a) is already gone on main: no containment_applied(..,false) remains. (b) Add tests: agent_new_claude --sandbox yields contained=true, and a per-tool --settings in agents.toml reads as uncontained. (d) Fix the burndown_run.rs error-string indentation. Tests and cosmetics only.
+
+    5. TASK-1770 (phase_driver.rs:2316 contained_child_program_and_args). With !contained it returns the raw program, so an uncontained drain with os_wrap on runs CI-fix and advisor children unwrapped while the implementer is wrapped (session.rs:3687). Change: when !contained and contained_in is Some, route through session::os_wrapped_program_and_args(root, ..). That is a no-op with os_wrap off and fails closed when bwrap is missing, exactly like the implementer. The advisor builder gets the same treatment at its call site. (2) CI guard: add argv-level tests that need no userns. Assert that the CI-fix and advisor argv under os_wrap on start with bwrap and bind the worktree rw, and that Claude's default contained settings carry sandbox.enabled with the expected denyWrite. The real-bwrap functional test stays as the live check; no CI runner change.
+
+    6. TASK-1798 child-grant lease stamping.
+       - CI-fix (phase_driver_trait.rs ~3779): stamp the grant on self.implementer_lease under a NEW key `ci_fix_child_grant_id`. The implementer's own `child_grant_id` is not overwritten. revoke_lease_child_grant revokes both keys. After the child exits, clear the key and revoke in process, as today.
+       - Quiet and verbose burndown (burndown_run.rs ~577 / ~2058): the drain holds no session lease. Record the grant id in the drain's pid-scoped lock file (line ~485, BUG-660), and have the stale-lock takeover / reap revoke a grant recorded by a dead pid. If you would rather not extend the lock, the alternative is a small `.aida/sessions/burndown-<pid>.grant` sidecar that the reaper scans. I recommend the lock.
+       Tests: a stamped key exists while the child runs (fake program), and reaping a dead-pid lock or lease revokes the grant.
+
+    Order: one PR (S6, the completing "(TASK-1952)"), after S5 merges. Gates: test-touched + check-ci-fast.
+  created_at: 2026-10-22T14:27:44.588015151Z
+  modified_at: 2026-10-22T14:27:44.588015151Z
   session_id: ca53c5e3-5950-45d1-b677-6e96eddf719f
 history:
 - id: 01a154e2-43c6-7962-8a7c-8c6c68d81e7d
