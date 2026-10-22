@@ -1,0 +1,28 @@
+id: 01a1642a-44c7-7840-b193-773323708647
+spec_id: TASK-1-432
+title: 'cosmetic (new, not filed): the NotDetected AIDA_STORE note says only that AIDA_…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-2072, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  cosmetic (new, not filed): the NotDetected AIDA_STORE note says only that AIDA_STORE is set; it does not name the path aida team reads (seat_authority.rs:138-143)
+  Reviewed sha: 4e53b0baede3eacd6476a647b98ac4e8785eb0ce
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-22T15:10:54.151621243Z
+modified_at: 2026-10-22T15:10:54.151621243Z
+req_type: Task
+tags:
+- carried-from:TASK-2072
+- finding-hash:8fd5bbb0
+- from-review:TASK-2072
+- kind:carried-forward
+filed_at:
+  code_sha: 28b4a3711adfba1de4c5f3932b5ca71dab896975
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6d3b5d1591
+  vendor: claude
+  session: 7d71bfbf-a609-42bd-a714-a7d52d81db81
