@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T00:51:06.094986066Z
-modified_at: 2026-10-22T10:14:04.301848647Z
+modified_at: 2026-10-22T10:16:21.287607387Z
 req_type: Bug
 tags:
 - batch:2026-10-11
@@ -17,6 +17,11 @@ tags:
 - review
 - security
 - triaged:night
+relationships:
+- rel_type: Supersedes
+  target_id: 01a1631a-fe7c-7db3-8e8c-cab9c0afe72f
+  created_at: 2026-10-22T10:16:21.287596573Z
+  created_by: joe
 comments:
 - id: 01a129cd-2f5e-7a80-9aa1-8c854647255c
   author: night-fable
@@ -188,6 +193,11 @@ history:
   timestamp: 2026-10-22T10:14:04.441076707Z
   session_id: 01a16316a684
   harness_version: 2.1.308 (Claude Code)
+  changes: []
+- id: 01a1631c-a0d1-7861-bf49-d56f221446b0
+  author: joe
+  timestamp: 2026-10-22T10:16:22.993893754Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
   changes: []
 execution_mode: guided
 filed_at:
