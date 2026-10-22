@@ -101,7 +101,9 @@ pub(crate) trait BatchPorts {
         fetch: bool,
     ) -> Result<Vec<String>>;
     fn update_branch(&mut self, pr: u64, expected_head: &str) -> Result<()>;
-    fn ci_at_head(&mut self, pr: u64, head: &str) -> Result<CiAtHead>;
+    /// CI at `head`; `held` is the PR's hold state, read by the caller
+    /// (see [`read_ci`]) so a hold-label error is not reported as CI.
+    fn ci_at_head(&mut self, pr: u64, head: &str, held: bool) -> Result<CiAtHead>;
     /// Enqueue a review of the current head; never launches or records one.
     fn enqueue_review(&mut self, pr: u64, view: &PrView);
     fn review_at_head(&mut self, pr: u64, view: &PrView) -> ReviewAtHead;
@@ -262,12 +264,12 @@ fn plan_pr(ports: &mut dyn BatchPorts, pr: u64) -> PrOutcome {
         Ok(_) => {}
         Err(e) => steps.push(format!("could not check staleness: {e:#}")),
     }
-    let ci = match ports.ci_at_head(pr, &view.head_sha) {
+    let ci = match read_ci(ports, pr, &view.head_sha) {
         Ok(CiAtHead::Passing) => "green".to_string(),
         Ok(CiAtHead::Pending) => "pending".to_string(),
         Ok(CiAtHead::Failing(why)) => format!("red ({why})"),
         Ok(CiAtHead::HeadMoved) => "head moved while reading".to_string(),
-        Err(e) => format!("unreadable ({e:#})"),
+        Err(why) => format!("unreadable ({why})"),
     };
     steps.push(format!("CI at {}: {ci}", short(&view.head_sha)));
     steps.push(match ports.review_at_head(pr, &view) {
@@ -405,19 +407,37 @@ fn wait_for_new_head(
     }
 }
 
+/// CI at `head`, judged with the PR's hold state. Each read error names
+/// what could not be read: the hold label or the CI rollup.
+// trace:TASK-2172 | ai:claude
+fn read_ci(
+    ports: &mut dyn BatchPorts,
+    pr: u64,
+    head: &str,
+) -> std::result::Result<CiAtHead, String> {
+    let held = ports
+        .hold(pr)
+        .map_err(|e| format!("could not read the hold label on PR #{pr} ({e:#})"))?
+        .is_some();
+    ports
+        .ci_at_head(pr, head, held)
+        .map_err(|e| format!("could not read PR #{pr}'s CI: {e:#}"))
+}
+
 /// C3: CI for exactly `head`; a green from any other head never counts.
 fn wait_for_ci(ports: &mut dyn BatchPorts, pr: u64, head: &str, timeout_secs: u64) -> Wait {
     let started = ports.elapsed_secs();
     let mut said = false;
     loop {
-        match ports.ci_at_head(pr, head) {
+        // trace:TASK-2172 | ai:claude
+        match read_ci(ports, pr, head) {
             Ok(CiAtHead::Passing) => return Wait::Ready,
             Ok(CiAtHead::Failing(why)) => {
                 return Wait::Stop(format!("PR #{pr}'s CI is red at {}: {why}", short(head)))
             }
             Ok(CiAtHead::HeadMoved) => return Wait::Moved,
             Ok(CiAtHead::Pending) => {}
-            Err(e) => return Wait::Stop(format!("could not read PR #{pr}'s CI: {e:#}")),
+            Err(why) => return Wait::Stop(why),
         }
         if !said {
             ports.say(&format!("  waiting for CI at {}", short(head)));
@@ -477,7 +497,7 @@ fn wait_for_review(
             ports.say(&line);
             last_line = Some(now);
         }
-        match ports.ci_at_head(pr, &view.head_sha) {
+        match read_ci(ports, pr, &view.head_sha) {
             Ok(CiAtHead::HeadMoved) => return Err(Wait::Moved),
             Ok(CiAtHead::Failing(why)) => {
                 return Err(Wait::Stop(format!(
@@ -528,6 +548,7 @@ fn confirm_and_ship(
     if typed.as_deref().map(str::trim) != Some(pr.to_string().as_str()) {
         return PrOutcome::Stopped(format!("PR #{pr} was not confirmed; nothing shipped"));
     }
+    let mut cleared = false;
     if hold.is_some() {
         let typed = ports.ask(&format!(
             "PR #{pr} has a merge-hold. Type 'clear' to clear it and ship (anything else stops): "
@@ -540,9 +561,15 @@ fn confirm_and_ship(
         if let Err(e) = ports.clear_hold(pr) {
             return PrOutcome::Stopped(format!("could not clear PR #{pr}'s merge-hold: {e:#}"));
         }
+        cleared = true;
     }
     match ports.ship(pr, ShipOverrides::NONE) {
         Ok(()) => PrOutcome::Shipped,
+        // A refusal after the clear leaves the PR unheld; say so.
+        // trace:TASK-2172 | ai:claude
+        Err(e) if cleared => PrOutcome::Stopped(format!(
+            "`aida pr ship {pr}` refused: {e:#}; PR #{pr}'s merge-hold was already cleared"
+        )),
         Err(e) => PrOutcome::Stopped(format!("`aida pr ship {pr}` refused: {e:#}")),
     }
 }
@@ -765,10 +792,9 @@ impl BatchPorts for GitHubPorts {
         crate::forge::forge_for(&self.project_root).update_change_branch(pr, expected_head)
     }
 
-    fn ci_at_head(&mut self, pr: u64, head: &str) -> Result<CiAtHead> {
+    fn ci_at_head(&mut self, pr: u64, head: &str, held: bool) -> Result<CiAtHead> {
         let v = self.gh_pr_json(pr, "headRefOid,statusCheckRollup")?;
         let cfg = crate::ci_gate::read_ci_gate_config(&self.project_root);
-        let held = self.hold(pr)?.is_some();
         Ok(ci_from_rollup(&v, head, &cfg, held))
     }
 
@@ -948,6 +974,7 @@ mod tests {
         reviews: BTreeMap<String, VecDeque<ReviewAtHead>>,
         holds: BTreeMap<u64, String>,
         hold_unreadable: Vec<u64>,
+        ship_refuses: Vec<u64>,
         answers: VecDeque<String>,
         clock: u64,
         forge_calls: u32,
@@ -1024,7 +1051,7 @@ mod tests {
             self.updates.push((pr, expected_head.to_string()));
             Ok(())
         }
-        fn ci_at_head(&mut self, pr: u64, head: &str) -> Result<CiAtHead> {
+        fn ci_at_head(&mut self, pr: u64, head: &str, _held: bool) -> Result<CiAtHead> {
             self.forge_calls += 1;
             self.ci_heads.push((pr, head.to_string()));
             Ok(self
@@ -1059,6 +1086,9 @@ mod tests {
             Ok(())
         }
         fn ship(&mut self, pr: u64, overrides: ShipOverrides) -> Result<()> {
+            if self.ship_refuses.contains(&pr) {
+                anyhow::bail!("the ship gate refused");
+            }
             self.shipped.push((pr, overrides));
             Ok(())
         }
@@ -1167,6 +1197,9 @@ mod tests {
         };
         assert!(run_batch(&mut f, &[1], dry).is_err());
         assert_eq!(f.forge_calls, 0);
+        // TASK-2172: a refused dry run still records the refusal.
+        // trace:TASK-2172 | ai:claude
+        assert_eq!(f.recorded, vec![(None, "refused".to_string())]);
     }
 
     // T3 + C3: order is kept; a BEHIND PR is refreshed, its old head's green
@@ -1591,5 +1624,51 @@ mod tests {
         );
         assert!(f.cleared.is_empty() && f.shipped.is_empty());
         assert_eq!(f.answers.len(), 2, "only 'go' was consumed");
+    }
+
+    // TASK-2172: a ship refused after the hold was cleared says the hold is
+    // already gone, so the operator does not believe the PR is still held.
+    // trace:TASK-2172 | ai:claude
+    #[test]
+    fn task_2172_ship_refused_after_clear_says_hold_already_cleared() {
+        let mut f = ready(Fake::human(), 9, "999999999999a").answers(&["go", "9", "clear"]);
+        f.holds.insert(9, "supervised".to_string());
+        f.ship_refuses.push(9);
+        let out = run_batch(&mut f, &[9], OPTS).unwrap();
+        assert_eq!(f.cleared, vec![9]);
+        assert!(
+            matches!(&out[0].1, PrOutcome::Stopped(why)
+                if why.contains("refused") && why.contains("merge-hold was already cleared")),
+            "{out:?}"
+        );
+        // Without a hold to clear, the refusal does not mention one.
+        let mut f = ready(Fake::human(), 9, "999999999999a").answers(&["go", "9"]);
+        f.ship_refuses.push(9);
+        let out = run_batch(&mut f, &[9], OPTS).unwrap();
+        assert!(
+            matches!(&out[0].1, PrOutcome::Stopped(why)
+                if why.contains("refused") && !why.contains("merge-hold")),
+            "{out:?}"
+        );
+    }
+
+    // TASK-2172: a hold label that cannot be read while waiting for CI is
+    // reported as the hold label, not as unreadable CI.
+    // trace:TASK-2172 | ai:claude
+    #[test]
+    fn task_2172_unreadable_hold_label_during_ci_wait_names_the_hold_label() {
+        let mut f = ready(Fake::human(), 9, "999999999999a").answers(&["go", "9"]);
+        f.hold_unreadable.push(9);
+        let out = run_batch(&mut f, &[9], OPTS).unwrap();
+        assert!(
+            matches!(&out[0].1, PrOutcome::Stopped(why)
+                if why.contains("could not read the hold label") && !why.contains("CI")),
+            "{out:?}"
+        );
+        assert!(
+            f.ci_heads.is_empty(),
+            "CI is not read without the hold state"
+        );
+        assert!(f.shipped.is_empty());
     }
 }
