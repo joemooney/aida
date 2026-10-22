@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T16:10:51.339931588Z
-modified_at: 2026-10-20T18:53:25.654391024Z
+modified_at: 2026-10-22T00:28:42.510018353Z
 req_type: Task
 comments:
 - id: 01a15aa9-2a73-77e1-87a5-bd629414faa5
@@ -17,6 +17,12 @@ comments:
   created_at: 2026-10-20T18:53:18.323461788Z
   modified_at: 2026-10-20T18:53:18.323461788Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+- id: 01a16102-988e-7da3-bad3-1805bb92dfa7
+  author: joe
+  content: Commit 4361fbd456 references this requirement
+  created_at: 2026-10-22T00:28:42.510018353Z
+  modified_at: 2026-10-22T00:28:42.510018353Z
+  session_id: 5cbdc4d8-e942-438b-98a0-dde2d885697e
 history:
 - id: 01a15aa9-4716-7cd2-aba0-c4ed05e90259
   author: joe
