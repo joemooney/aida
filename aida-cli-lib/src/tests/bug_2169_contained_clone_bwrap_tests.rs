@@ -579,11 +579,29 @@ mod linux {
             crate::seat_clone::host_recorded_clone(&clone).is_none(),
             "a forged main is never host-recorded"
         );
-        let settings = settings_for(&fx.main, &clone);
-        assert!(
-            !entries(&settings, "allowWrite").contains(&elsewhere),
-            "{settings}"
-        );
+        // TASK-2111: a tree whose `.git` directory resolves to a main other
+        // than itself, and is not a host-recorded clone, refuses the
+        // contained launch outright, so nothing is granted from the forgery.
+        // trace:TASK-1952 | trace:TASK-2111 | ai:claude
+        let refused = {
+            let _ambient = ambient(&fx.main);
+            let roots = crate::session::contained_session_write_roots_from(&clone);
+            crate::session::claude_contained_flags_for_roots(&roots)
+        };
+        match refused {
+            Err(e) => assert!(
+                format!("{e:#}").contains("not a seat clone the host recorded"),
+                "{e:#}"
+            ),
+            Ok(flags) => {
+                let settings: serde_json::Value =
+                    serde_json::from_str(flags.last().unwrap()).unwrap();
+                assert!(
+                    !entries(&settings, "allowWrite").contains(&elsewhere),
+                    "{settings}"
+                );
+            }
+        }
         assert!(
             !crate::session::os_wrap_rw_paths(&clone).contains(&elsewhere),
             "os_wrap binds nothing from the forged lease"
