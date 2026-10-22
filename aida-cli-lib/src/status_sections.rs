@@ -346,6 +346,38 @@ mod fleet_state_hygiene_tests;
 #[path = "tests/story_673_terse_status_tests.rs"]
 mod story_673_terse_status_tests;
 
+// TASK-1943: a refused or failed `git status` reads as dirty in the branch
+// facts, never clean. trace:TASK-1952 | trace:TASK-1943 | ai:claude
+#[cfg(test)]
+mod task_1943_branch_facts_tests {
+    #[test]
+    fn a_failed_status_reads_as_dirty() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path();
+        let git = |args: &[&str]| {
+            let st = std::process::Command::new("git")
+                .args(["-c", "user.name=t", "-c", "user.email=t@example.com"])
+                .args(["-c", "maintenance.auto=false", "-c", "gc.auto=0"])
+                .args(args)
+                .current_dir(repo)
+                .output()
+                .unwrap();
+            assert!(st.status.success(), "git {args:?}: {st:?}");
+        };
+        git(&["init", "-q", "-b", "main"]);
+        std::fs::write(repo.join("a.txt"), "a").unwrap();
+        git(&["add", "a.txt"]);
+        git(&["commit", "-q", "-m", "init"]);
+        let clean = super::collect_branch_facts(repo).expect("branch facts");
+        assert!(!clean.dirty, "a clean tree reads clean");
+        // A corrupt index makes `git status` fail.
+        std::fs::write(repo.join(".git/index"), "not an index").unwrap();
+        assert_eq!(super::working_tree_clean(repo), None);
+        let failed = super::collect_branch_facts(repo).expect("branch facts");
+        assert!(failed.dirty, "a failed status must read as dirty");
+    }
+}
+
 /// STORY-456: I/O wrapper that gathers the inputs (worktrees, leases, live
 /// sessions, the batched open-PR snapshot, per-worktree ahead-of-default
 /// counts) and hands them to the pure `assemble_worktree_status_rows`. Shared
