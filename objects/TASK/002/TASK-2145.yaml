@@ -1,0 +1,28 @@
+id: 01a16282-2eaf-76c2-9587-da59cf0195a5
+spec_id: TASK-2145
+agreed_id: TASK-2145
+title: Mandate store dirty check honours the user's global git excludesFile
+description: |
+  The dirty check in store_snapshot runs 'git status --porcelain=v1 --untracked-files=all' through snapshot_command (mandate_traces.rs). It sets GIT_CONFIG_NOSYSTEM, but the user's global config (core.excludesFile) still applies; only the test fixtures scrub GIT_CONFIG_GLOBAL. An untracked object file the global config ignores therefore reads as a clean store, while the working-tree loader may still read it. This gap already existed. Consider -c core.excludesFile= (or GIT_CONFIG_GLOBAL=/dev/null) on the snapshot status call, plus a test.
+
+  Raised in review of PR-2825: https://github.com/joemooney/aida/pull/2825#issuecomment-6335244221
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-22T07:27:41.231423928Z
+modified_at: 2026-10-22T07:27:41.231423928Z
+req_type: Task
+tags:
+- from-review:PR-2825
+- mandate
+- severity:minor
+filed_at:
+  code_sha: e2abc9dbed4d5ade70eea666abc400e0c361a196
+  branch: pr-2825
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 0f68094ad3
+  vendor: claude
+  session: 01a1627eaa5d
+  harness_version: 2.1.308 (Claude Code)
