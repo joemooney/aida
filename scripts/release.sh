@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# scripts/release.sh — bump workspace version, tag, push tag.
+# scripts/release.sh — bump workspace version through a release PR, tag the
+# merged commit, push the tag.
 #
 # This is a developer-only script (the AIDA repo's release process). End
 # users of AIDA never need to run this. Triggered by:
@@ -8,6 +9,13 @@
 #   ./scripts/release.sh minor       # 0.4.0 -> 0.5.0
 #   ./scripts/release.sh major       # 0.4.0 -> 1.0.0
 #   ./scripts/release.sh 0.5.0       # explicit version
+#
+# Publishing never pushes main directly (TASK-1721): the version bump is
+# committed on `release/vX.Y.Z`, pushed, opened as a PR, merged with
+# `gh pr merge --squash --match-head-commit` once its checks pass, and the
+# squash-merged commit on main is what gets tagged. Only the tag is pushed, so
+# the release works with "Require a pull request before merging" on main.
+# `--dry-run` prints that planned sequence and changes nothing.
 #
 # Pushing the tag triggers .github/workflows/release.yml, which builds
 # binaries for linux-{x86_64,arm64} (AIDA is Linux-only, ADR-72) and attaches
@@ -37,6 +45,7 @@ set -euo pipefail
 # "cancelled" without ever pausing. trace:TASK-79 | ai:claude
 auto_yes=${AIDA_RELEASE_YES:-0}
 prepare_only=0
+dry_run=0
 # ADR-72: releases no longer require any cross-platform CI run. The former
 # --skip-xplat-check flag / AIDA_SKIP_XPLAT_CHECK env are still accepted (and
 # ignored) so existing callers such as `aida release` keep working.
@@ -51,10 +60,11 @@ for arg in "$@"; do
     case "$arg" in
         --yes|-y) auto_yes=1 ;;
         --prepare-only) prepare_only=1 ;;
+        --dry-run) dry_run=1 ;;  # trace:TASK-1721 | ai:claude
         --skip-xplat-check) ;;  # accepted, no-op (ADR-72)
         --skip-docs-check) skip_docs=1 ;;
         -h|--help)
-            echo "usage: $0 [--prepare-only] [--yes] [--skip-xplat-check] [--skip-docs-check] {major|minor|patch|<explicit-version>}"
+            echo "usage: $0 [--prepare-only] [--dry-run] [--yes] [--skip-xplat-check] [--skip-docs-check] {major|minor|patch|<explicit-version>}"
             exit 0
             ;;
         -*)
@@ -72,7 +82,7 @@ for arg in "$@"; do
 done
 
 if [ -z "$bump" ]; then
-    echo "usage: $0 [--prepare-only] [--yes] [--skip-xplat-check] [--skip-docs-check] {major|minor|patch|<explicit-version>}" >&2
+    echo "usage: $0 [--prepare-only] [--dry-run] [--yes] [--skip-xplat-check] [--skip-docs-check] {major|minor|patch|<explicit-version>}" >&2
     exit 1
 fi
 
@@ -112,6 +122,201 @@ esac
 if [ "$new" = "$current" ]; then
     echo "error: new version $new equals current version" >&2
     exit 1
+fi
+
+# ─── Release PR plumbing (TASK-1721) ─────────────────────────────────────
+# The remote and default branch the release PR targets. Overridable only so the
+# bare-remote fixture (tests/test_release_pr_flow.sh) can point elsewhere.
+# trace:TASK-1721 | ai:claude
+release_remote=${AIDA_RELEASE_REMOTE:-origin}
+release_base=${AIDA_RELEASE_BASE:-main}
+release_branch="release/v$new"
+
+# BUG-2193 (folded into TASK-1721): `aida pr ship` holds the base branch's
+# merge-lease (aida-cli-lib/src/merge_lock.rs, STORY-1171) while it checks,
+# merges and fast-forwards the primary checkout. A release that starts, or
+# merges, under a live ship races it, so release.sh refuses to start while the
+# lease is live and takes the same lease (same file format) for the local
+# mutation and merge phases. trace:TASK-1721 | ai:claude
+common_dir=$(git rev-parse --path-format=absolute --git-common-dir)
+main_root=$(cd "$common_dir/.." && pwd)
+lease_file="$main_root/.aida/merge-locks/${release_base//\//_}"
+lease_host=${AIDA_HOST_OVERRIDE:-$(uname -n)}
+lease_ttl=${AIDA_RELEASE_LEASE_TTL_SECS:-3600}
+lease_held=0
+
+# Field 22 (starttime) of /proc/<pid>/stat as `linux-starttime:<ticks>`, the
+# identity merge_lock.rs records; empty when unreadable.
+lease_pid_start() {
+    local stat
+    stat=$(cat "/proc/$1/stat" 2>/dev/null) || return 0
+    stat=${stat##*)}
+    # shellcheck disable=SC2086
+    set -- $stat
+    [ -n "${20:-}" ] && printf 'linux-starttime:%s' "${20}"
+}
+
+lease_field() {
+    sed -n "s/^$1=//p" "$lease_file" 2>/dev/null | head -n1
+}
+
+# Exit 0 when the lease file names a live holder, mirroring merge_lock.rs's
+# stale_reason: a same-host holder whose pid is dead (or recycled, or a zombie)
+# is stale, and so is any holder aged past its TTL.
+lease_is_live() {
+    [ -f "$lease_file" ] || return 1
+    local host pid start ttl acquired age live_start state
+    host=$(lease_field host)
+    pid=$(lease_field pid)
+    start=$(lease_field pid_start)
+    ttl=$(lease_field ttl_secs)
+    acquired=$(lease_field acquired_at)
+    case "$ttl" in ''|*[!0-9]*|0) ttl=600 ;; esac
+    case "$acquired" in ''|*[!0-9]*) acquired=0 ;; esac
+    age=$(( $(date +%s) - acquired ))
+    [ "$age" -gt "$ttl" ] && return 1
+    if [ -n "$host" ] && [ "$host" = "$lease_host" ]; then
+        case "$pid" in ''|*[!0-9]*|0) return 1 ;; esac
+        kill -0 "$pid" 2>/dev/null || [ -d "/proc/$pid" ] || return 1
+        state=$(sed -n 's/.*) \([A-Z]\).*/\1/p' "/proc/$pid/stat" 2>/dev/null)
+        [ "$state" = "Z" ] && return 1
+        case "$start" in
+            linux-starttime:*)
+                live_start=$(lease_pid_start "$pid")
+                [ -n "$live_start" ] && [ "$live_start" != "$start" ] && return 1
+                ;;
+        esac
+    fi
+    return 0
+}
+
+lease_describe() {
+    local pr note
+    pr=$(lease_field pr)
+    note=$(lease_field note)
+    printf '%s (pid %s on %s%s)' "${note:-a merger}" "$(lease_field pid)" "$(lease_field host)" "${pr:+, PR #$pr}"
+}
+
+lease_acquire() {
+    local wait_secs=${1:-0} deadline
+    deadline=$(( $(date +%s) + wait_secs ))
+    mkdir -p "$(dirname "$lease_file")"
+    while :; do
+        # Write the full record to a temp file in the same directory, then
+        # hard-link it into place: link(2) fails if the lease exists, so the
+        # claim is atomic and a reader never sees a partial or empty lease.
+        local tmp
+        tmp=$(mktemp "$lease_file.XXXXXX")
+        printf 'host=%s\npid=%s\npid_start=%s\npr=%s\nnote=%s\nacquired_at=%s\nttl_secs=%s\n' \
+            "$lease_host" "$$" "$(lease_pid_start "$$")" "${2:-}" \
+            "scripts/release.sh v$new" "$(date +%s)" "$lease_ttl" > "$tmp"
+        if ln "$tmp" "$lease_file" 2>/dev/null; then
+            rm -f "$tmp"
+            lease_held=1
+            return 0
+        fi
+        rm -f "$tmp"
+        if ! lease_is_live; then
+            rm -f "$lease_file"
+            continue
+        fi
+        [ "$(date +%s)" -ge "$deadline" ] && return 1
+        sleep 2
+    done
+}
+
+lease_release() {
+    if [ "$lease_held" = "1" ] && [ "$(lease_field pid)" = "$$" ]; then
+        rm -f "$lease_file"
+    fi
+    lease_held=0
+}
+trap lease_release EXIT
+
+if lease_is_live && [ "$dry_run" = "1" ]; then
+    # A preview changes nothing, so it warns instead of refusing.
+    echo "warning: a real release would refuse to start now: $(lease_describe) holds the '$release_base' merge-lease (check with \`aida merge-lock\`)." >&2
+elif lease_is_live; then
+    cat <<EOM >&2
+error: an \`aida pr ship\` (or other merger) holds the '$release_base' merge-lease:
+  $(lease_describe)
+Releasing now would race that merge. Wait for it to finish (check with
+\`aida merge-lock\`), then re-run. Nothing was changed.
+EOM
+    exit 1
+fi
+
+# The release-PR publish sequence, printed by --dry-run and by the manual
+# fallbacks so an operator never pushes main directly. trace:TASK-1721 | ai:claude
+print_publish_steps() {
+    local indent=$1 notes=${2:-<tag-notes-file>}
+    cat <<EOM
+${indent}git switch -c $release_branch
+${indent}git add ${manifest_paths[*]:-Cargo.toml Cargo.lock <member Cargo.toml files> CHANGELOG.md}
+${indent}AIDA_RELEASE=1 git commit -m "chore: release v$new"
+${indent}git push $release_remote $release_branch
+${indent}gh pr create --base $release_base --head $release_branch --title "chore: release v$new"
+${indent}gh pr checks <PR> --watch                      # wait for checks
+${indent}gh pr merge <PR> --squash --match-head-commit <release-branch-sha> --delete-branch
+${indent}git fetch $release_remote $release_base       # merged SHA: gh pr view <PR> --json mergeCommit
+${indent}git tag -a v$new <merged-sha> -F $notes
+${indent}git push $release_remote v$new
+EOM
+}
+
+if [ "$dry_run" = "1" ]; then
+    echo "dry run: v$current -> v$new. Nothing will be changed, committed, or pushed."
+    echo
+    echo "Planned release sequence:"
+    echo "  1. take the '$release_base' merge-lease ($lease_file) after any ecosystem-watch prompt"
+    echo "  2. bump the workspace version, dependency pins, Cargo.lock and CHANGELOG.md; run cargo check and the docs gate"
+    echo "  3. release the lease, then ask for confirmation"
+    echo "  4. retake the lease; commit the bump on branch $release_branch (AIDA_RELEASE=1)"
+    echo "  5. push branch: git push $release_remote $release_branch; release the lease"
+    echo "  6. open the PR: gh pr create --base $release_base --head $release_branch --title \"chore: release v$new\""
+    echo "  7. wait for checks: gh pr checks <PR> --watch"
+    echo "  8. retake the lease; squash-merge: gh pr merge <PR> --squash --match-head-commit <release-branch-sha>"
+    echo "  9. tag the merged SHA: git tag -a v$new <merged-sha>"
+    echo " 10. push the tag: git push $release_remote v$new"
+    echo
+    echo "Main is never pushed directly; only the tag is pushed."
+    exit 0
+fi
+
+# Publish prerequisites, checked before anything is modified: the release PR
+# is cut from an up-to-date base branch, and needs gh. --prepare-only stops
+# before publishing, so it skips them. trace:TASK-1721 | ai:claude
+if [ "$prepare_only" != "1" ]; then
+    on_branch=$(git symbolic-ref --short -q HEAD || true)
+    if [ "$on_branch" != "$release_base" ]; then
+        echo "error: run the release from '$release_base' (currently on '${on_branch:-detached HEAD}')" >&2
+        exit 1
+    fi
+    if ! command -v gh >/dev/null 2>&1; then
+        echo "error: gh (GitHub CLI) is required to open and merge the release PR" >&2
+        exit 1
+    fi
+    git fetch -q "$release_remote" "$release_base"
+    if [ "$(git rev-parse HEAD)" != "$(git rev-parse FETCH_HEAD)" ]; then
+        echo "error: local $release_base is not $release_remote/$release_base; sync it (git pull --ff-only) and re-run" >&2
+        exit 1
+    fi
+    if git rev-parse -q --verify "refs/heads/$release_branch" >/dev/null \
+        || git ls-remote --exit-code --heads "$release_remote" "$release_branch" >/dev/null 2>&1; then
+        cat <<EOM >&2
+error: branch $release_branch already exists (locally or on $release_remote), probably from
+an earlier release run that stopped partway. Either finish that release PR:
+  gh pr create --base $release_base --head $release_branch --title "chore: release v$new"   # if no PR is open yet
+  gh pr view $release_branch                                                                # if one is
+or delete the branch and re-run:
+  git push $release_remote --delete $release_branch; git branch -D $release_branch
+EOM
+        exit 1
+    fi
+    if git rev-parse -q --verify "refs/tags/v$new" >/dev/null; then
+        echo "error: tag v$new already exists" >&2
+        exit 1
+    fi
 fi
 
 # Verify the ecosystem review has been performed recently for major/minor releases.
@@ -209,6 +414,15 @@ if [ "$is_major_or_minor" = "1" ]; then
             fi
             ;;
     esac
+fi
+
+# Hold the lease while the working tree is being bumped, so a concurrent ship
+# cannot fast-forward this checkout mid-bump. It is taken after the ecosystem
+# prompt and released before the confirmation prompt, so no prompt waits on a
+# human while holding it. trace:TASK-1721 | ai:claude
+if ! lease_acquire 0; then
+    echo "error: the '$release_base' merge-lease was taken by $(lease_describe); re-run once it finishes" >&2
+    exit 1
 fi
 
 echo "bumping workspace from v$current -> v$new"
@@ -356,17 +570,16 @@ if [ "$prepare_only" = "1" ]; then
 prepared v$new. No commit, tag, or push was performed.
 
 Next operator step:
-  inspect the version bump and tag notes, then publish manually if approved:
-    git add ${manifest_paths[*]}
-    AIDA_ALLOW_PRIMARY_COMMIT=1 git commit -m "chore: release v$new"
-    git tag -a v$new -F $notes_file
-    git push origin HEAD
-    git push origin v$new
+  inspect the version bump and tag notes, then publish through a release PR
+  if approved (main is never pushed directly):
+$(print_publish_steps "    " "$notes_file")
 
 Tag notes saved at: $notes_file
 EOM
     exit 0
 fi
+
+lease_release  # trace:TASK-1721 | ai:claude
 
 if [ "$auto_yes" = "1" ]; then
     echo "auto-confirm: --yes (or AIDA_RELEASE_YES=1) — proceeding without prompt."
@@ -393,7 +606,7 @@ Tag notes saved at: $notes_file
 EOM
     exit 1
 else
-    read -r -p "Commit + tag v$new + push? [y/N]: " answer
+    read -r -p "Open release PR for v$new, merge it, then tag + push the tag? [y/N]: " answer
 fi
 case "${answer,,}" in
     y|yes)
@@ -404,12 +617,9 @@ case "${answer,,}" in
 cancelled. The version bump is in your working tree but not committed.
 Pick one:
 
-  1. Proceed manually (use the auto-generated tag notes):
-       git add ${manifest_paths[*]}
-       AIDA_ALLOW_PRIMARY_COMMIT=1 git commit -m "chore: release v$new"
-       git tag -a v$new -F $notes_file
-       git push origin main
-       git push origin v$new
+  1. Proceed manually through a release PR (main is never pushed directly;
+     uses the auto-generated tag notes):
+$(print_publish_steps "       " "$notes_file")
 
   2. Discard the bump (stay on v$current):
        git restore ${manifest_paths[*]}
@@ -428,16 +638,134 @@ esac
 # is unaffected — release commits still can't sneak intermediate build products in.
 # trace:TASK-488 | ai:claude
 export AIDA_RELEASE=1
-# The release commit is the operator's version bump on main in the primary
-# checkout, which the STORY-1647 pre-commit gate refuses by default; this is the
-# documented operator override (until release moves to a PR, TASK-1721).
-# trace:STORY-1647 | ai:claude
-export AIDA_ALLOW_PRIMARY_COMMIT=1
+# Retake the lease for the commit and branch push. trace:TASK-1721 | ai:claude
+if ! lease_acquire "${AIDA_RELEASE_LEASE_WAIT_SECS:-180}"; then
+    cat <<EOM >&2
+error: the '$release_base' merge-lease is held by $(lease_describe).
+The version bump is still in your working tree; re-run the publish steps once it
+finishes, or discard with: git restore ${manifest_paths[*]}
+Tag notes saved at: $notes_file
+EOM
+    exit 1
+fi
+# TASK-1721: the bump is committed on release/vX, not on main, so the
+# STORY-1647 primary-checkout gate only warns and no override is needed.
+# trace:TASK-1721 | ai:claude
+git switch -q -c "$release_branch"
 git add "${manifest_paths[@]}"
 git commit -m "chore: release v$new"
-git tag -a "v$new" -F "$notes_file"
-git push origin HEAD
-git push origin "v$new"
+release_head=$(git rev-parse HEAD)
+if ! git push "$release_remote" "$release_branch"; then
+    git switch -q "$release_base"
+    cat <<EOM >&2
+error: pushing $release_branch failed; nothing was opened, merged, or tagged.
+The bump commit is on local branch $release_branch ($release_head). Retry with
+  git push $release_remote $release_branch
+and finish by hand, or discard it: git branch -D $release_branch
+Tag notes saved at: $notes_file
+EOM
+    exit 1
+fi
+# Back on the base branch, whose tree is clean again: the bump only exists on
+# the release branch until the PR merges.
+git switch -q "$release_base"
+lease_release
+
+# Open the PR and wait for its checks. The lease is not held while CI runs.
+# trace:TASK-1721 | ai:claude
+if ! pr_url=$(gh pr create --base "$release_base" --head "$release_branch" \
+    --title "chore: release v$new" --body-file "$notes_file"); then
+    cat <<EOM >&2
+error: gh pr create failed; $release_branch ($release_head) is pushed but no PR is open.
+Nothing was merged or tagged. Either open the PR by hand and finish the release:
+  gh pr create --base $release_base --head $release_branch --title "chore: release v$new" --body-file $notes_file
+  gh pr checks <PR> --watch
+  gh pr merge <PR> --squash --match-head-commit $release_head --delete-branch
+  git fetch $release_remote $release_base && git tag -a v$new <merged-sha> -F $notes_file
+  git push $release_remote v$new
+or delete the branch and re-run:
+  git push $release_remote --delete $release_branch; git branch -D $release_branch
+
+Tag notes saved at: $notes_file
+EOM
+    exit 1
+fi
+pr_url=$(printf '%s\n' "$pr_url" | tail -n1)
+pr_number=${pr_url##*/}
+echo "opened release PR #$pr_number: $pr_url"
+
+checks_appear_secs=${AIDA_RELEASE_CHECKS_APPEAR_SECS:-300}
+checks_timeout_secs=${AIDA_RELEASE_CHECKS_TIMEOUT_SECS:-3600}
+checks_interval=${AIDA_RELEASE_CHECKS_INTERVAL_SECS:-10}
+release_pr_stuck() {
+    cat <<EOM >&2
+
+error: $1
+Release PR #$pr_number ($pr_url) is open on $release_branch; nothing was tagged.
+Fix the cause, then finish by hand:
+  gh pr merge $pr_number --squash --match-head-commit $release_head --delete-branch
+  git fetch $release_remote $release_base && git tag -a v$new <merged-sha> -F $notes_file
+  git push $release_remote v$new
+Or abandon it: gh pr close $pr_number --delete-branch
+
+Tag notes saved at: $notes_file
+EOM
+    exit 1
+}
+# Checks register a few seconds after the PR opens; until then `gh pr checks`
+# reports none and exits non-zero.
+appear_deadline=$(( $(date +%s) + checks_appear_secs ))
+until checks_out=$(gh pr checks "$pr_number" 2>&1) || ! printf '%s' "$checks_out" | grep -qi 'no checks reported'; do
+    [ "$(date +%s)" -ge "$appear_deadline" ] && release_pr_stuck "no checks appeared on the release PR within ${checks_appear_secs}s"
+    sleep "$checks_interval"
+done
+echo "waiting for release PR #$pr_number checks (timeout ${checks_timeout_secs}s)..."
+if ! timeout "$checks_timeout_secs" gh pr checks "$pr_number" --watch --interval "$checks_interval"; then
+    release_pr_stuck "release PR #$pr_number checks failed or did not finish within ${checks_timeout_secs}s"
+fi
+
+# Merge pinned to the head the checks ran on, under the merge-lease.
+# trace:TASK-1721 | ai:claude
+if ! lease_acquire "${AIDA_RELEASE_LEASE_WAIT_SECS:-180}" "$pr_number"; then
+    release_pr_stuck "the '$release_base' merge-lease is held by $(lease_describe)"
+fi
+if ! gh pr merge "$pr_number" --squash --match-head-commit "$release_head" --delete-branch; then
+    release_pr_stuck "gh pr merge failed"
+fi
+merged_sha=$(gh pr view "$pr_number" --json mergeCommit -q .mergeCommit.oid)
+git fetch -q "$release_remote" "$release_base"
+merged_version=$(git show "$merged_sha:Cargo.toml" 2>/dev/null \
+    | awk '/^\[workspace\.package\]/{f=1; next} f && /^version/{gsub(/[" ]/,""); split($0, a, "="); print a[2]; exit}')
+if [ -z "$merged_sha" ] || ! git merge-base --is-ancestor "$merged_sha" FETCH_HEAD 2>/dev/null \
+    || [ "$merged_version" != "$new" ]; then
+    cat <<EOM >&2
+error: release PR #$pr_number merged, but its merge commit '${merged_sha:-?}' is not on
+$release_remote/$release_base at v$new (found '${merged_version:-?}'); not tagging.
+Find the squash-merged commit on $release_base, then tag it by hand:
+  git fetch $release_remote $release_base && git tag -a v$new <merged-sha> -F $notes_file
+  git push $release_remote v$new
+EOM
+    exit 1
+fi
+
+# Tag only the squash-merged commit main contains. A failed tag push removes
+# the local tag so no tag is left that the remote does not have.
+git tag -a "v$new" "$merged_sha" -F "$notes_file"
+if ! git push "$release_remote" "v$new"; then
+    git tag -d "v$new" >/dev/null
+    echo "error: pushing tag v$new failed; the local tag was removed. Retry with:" >&2
+    echo "  git tag -a v$new $merged_sha -F $notes_file && git push $release_remote v$new" >&2
+    exit 1
+fi
+# Bring the local base branch up to the merged commit (best-effort).
+if ! git merge -q --ff-only FETCH_HEAD; then
+    echo "  ⚠ could not fast-forward local $release_base; run: git pull --ff-only" >&2
+fi
+git branch -q -D "$release_branch" 2>/dev/null || true
+lease_release
+if [ -n "${AIDA_RELEASE_TAG_FILE:-}" ]; then
+    printf 'v%s\n' "$new" > "$AIDA_RELEASE_TAG_FILE"
+fi
 
 # STORY-1048: the GitHub release remains the source of record, but release tags
 # must be visible on every configured hub so GitLab-triggered release jobs can
@@ -473,7 +801,7 @@ done
 rm -f "$notes_file"
 
 echo
-echo "✓ tag v$new pushed."
+echo "✓ release PR #$pr_number merged; tag v$new pushed at $merged_sha."
 echo "  Watch the release workflow: gh run watch --workflow=release.yml"
 echo "  Once it completes, release artifacts will be at:"
 echo "    https://github.com/joemooney/aida/releases/tag/v$new"

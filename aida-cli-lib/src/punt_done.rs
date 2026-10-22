@@ -389,11 +389,14 @@ pub(crate) fn resolve_comment_mentions(
 ) -> (Vec<String>, Vec<String>) {
     // trace:TASK-1766 | ai:claude — people (team roster, user handles, aliases)
     // are known too, and delivery uses the identity's stored spelling.
-    // trace:STORY-1843 | ai:codex
-    let candidates = extract_mention_candidates(text);
+    // Resolve known raw tokens before shape filtering, preserving SHA-shaped
+    // live names while still dropping unknown code-like tokens.
+    // trace:STORY-1843 trace:TASK-1955 | ai:codex
+    let candidates = extract_raw_mention_tokens(text);
     if candidates.is_empty() {
         return (Vec::new(), Vec::new());
     }
+    let known = crate::known_mailbox_recipients(store_root);
     let project_root = store_root.parent().unwrap_or(store_root);
     let directory =
         match crate::mailbox_resolver::RecipientDirectory::load(project_root, store_root) {
@@ -410,7 +413,9 @@ pub(crate) fn resolve_comment_mentions(
     let mut warnings = Vec::new();
     for handle in candidates {
         let trimmed = handle.trim();
-        if trimmed.eq_ignore_ascii_case(author_trimmed) {
+        if trimmed.eq_ignore_ascii_case(author_trimmed)
+            || (!known.contains_key(&trimmed.to_lowercase()) && !is_mention_candidate(trimmed))
+        {
             continue;
         }
         match directory.resolve(trimmed) {

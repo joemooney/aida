@@ -964,7 +964,7 @@ aida dev serve                         # foreground supervisor: aida-server (808
 aida dev deactivate                    # the wrapper auto-evals this too
 ```
 
-`aida dev activate` prepends `target/{release,debug}/` (whichever is more recently built) to PATH and prefixes the shell prompt with `(aida-debug)` or `(aida-release)`. For releases, `scripts/release.sh {major|minor|patch}` bumps the workspace version, generates tag notes, commits, tags, and pushes — triggering the release workflow that builds and publishes binary tarballs.
+`aida dev activate` prepends `target/{release,debug}/` (whichever is more recently built) to PATH and prefixes the shell prompt with `(aida-debug)` or `(aida-release)`. For releases, `scripts/release.sh {major|minor|patch}` bumps the workspace version, generates tag notes, and lands the bump through a `release/vX.Y.Z` PR (squash-merged once its checks pass; main is never pushed directly), then tags the merged commit and pushes the tag — triggering the release workflow that builds and publishes binary tarballs.
 
 The shell helper applies role/session/dev/worktree environment updates only
 after a successful CLI exit with one complete pair of standalone

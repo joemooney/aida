@@ -20,6 +20,7 @@ use super::*;
 fn finished_but_live_facts() -> ReapFacts {
     ReapFacts {
         spec_finished: true,
+        review_pr_terminal: false,
         // The single bit that distinguishes NOTIFY from REAP.
         process_exited: false,
         locked: false,

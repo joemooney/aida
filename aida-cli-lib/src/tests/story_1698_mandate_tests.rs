@@ -1033,9 +1033,12 @@ fn every_failure_after_a_mandate_release_re_arms_the_hold() {
     assert!(window.contains("re-arm a mandate-released hold on a failed merge"));
     assert_eq!(
         window.matches("rearm_after_mandate_failure(").count(),
-        3,
-        "gate timeout, lapse and merge failure each re-arm"
+        4,
+        "gate timeout, lapse, a moved base and merge failure each re-arm"
     );
+    // TASK-1915: the moved-base (TASK-1960) refusal re-arms too.
+    // trace:TASK-1915 | ai:claude
+    assert!(window.contains("like every other post-release exit"));
 }
 
 // ── Review B5: decide mode is always human ─────────────────────────────────

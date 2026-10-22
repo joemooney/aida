@@ -10774,6 +10774,47 @@ mod tests {
         assert!(err.is_err(), "must require to/broadcast: {err:?}");
     }
 
+    /// TASK-1928 / TASK-1918: MCP `send_message` trims `to` and stores a
+    /// known identity under its stored spelling, exactly as the CLI does.
+    // trace:TASK-1955 | ai:claude (TASK-1928, TASK-1918)
+    #[test]
+    fn mcp_send_message_trims_and_canonicalizes_a_known_recipient() {
+        let dir = tempdir().unwrap();
+        let server = mk_server(dir.path());
+        // The role and private name need a real live reader under the shared resolver.
+        // trace:STORY-1843 | ai:codex
+        crate::agent_registry::register_existing_agent(
+            dir.path(),
+            "claude",
+            std::process::id(),
+            "advisor".into(),
+            None,
+            dir.path().to_path_buf(),
+            Some("newagent".into()),
+            None,
+        )
+        .unwrap();
+        server
+            .tool_send_message(&json!({ "to": "ADVISOR", "body": "upper", "from": "codex" }))
+            .unwrap();
+        server
+            .tool_send_message(&json!({ "to": "  newagent  ", "body": "padded", "from": "codex" }))
+            .unwrap();
+        let mut to: Vec<_> = crate::mailbox_store::read_local_messages(dir.path())
+            .unwrap()
+            .into_iter()
+            .map(|m| m.to)
+            .collect();
+        to.sort_by_key(|r| format!("{r:?}"));
+        assert_eq!(
+            to,
+            vec![
+                aida_core::mailbox::Recipient::Agent("advisor".into()),
+                aida_core::mailbox::Recipient::Agent("newagent".into()),
+            ]
+        );
+    }
+
     /// send_message → read_inbox round-trip for `subject` (BUG-1461): the CLI
     /// gained `aida mailbox send --subject` in BUG-1231, but the MCP schema and
     /// handler were never mirrored — `subject` was accepted by no schema
