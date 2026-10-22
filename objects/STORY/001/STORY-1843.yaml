@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-22T05:48:14.351481860Z
+modified_at: 2026-10-22T05:48:44.733709781Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -275,6 +275,11 @@ comments:
     No clearance, approval, verdict, merge or ship performed. READY means ready for review, not ready to merge. PR body updated with changed expectations and fresh checks. PR2 remains paused until PR1 merges; its next scope is dry-run plus manifest refusal only, with write mode deferred. Existing locks and leases preserved. Parent remains in-progress.
   created_at: 2026-10-22T05:48:14.351481860Z
   modified_at: 2026-10-22T05:48:14.351481860Z
+- id: 01a16227-993d-7b01-a1ac-63fbc2ef1356
+  author: ai:codex:joe
+  content: 'Quiet point reached after READY mail 9b5e8347-6e30-4465-8ee4-8484b8e56796: both local gates and normal push have finished; read-only gh checks watcher finished (exit 1 solely for the retained active merge-hold-gate). CI workflow 39729148898 and aggregate Build succeeded at 61888258f63bd932982cbb4ebcc3552f318bb1b5. No owned jobs remain, source worktree clean. Waiting for advisor review; PR2 remains paused. Worktree locks/leases retained.'
+  created_at: 2026-10-22T05:48:44.733709781Z
+  modified_at: 2026-10-22T05:48:44.733709781Z
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
   author: joe
