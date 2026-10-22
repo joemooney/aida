@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T15:03:49.211949451Z
-modified_at: 2026-10-22T10:12:38.803737682Z
+modified_at: 2026-10-22T10:12:43.032312216Z
 req_type: Story
 tags:
 - mandate
@@ -113,6 +113,12 @@ comments:
   created_at: 2026-10-22T09:07:01.412312854Z
   modified_at: 2026-10-22T09:07:01.412312854Z
   session_id: 7a71b0f4-ebdf-4711-b086-1ba29a8aeead
+- id: 01a16319-4598-7383-a71d-d52e6656bce5
+  author: joe
+  content: 'ADVISOR 03:14: folded the PR-2828 review notes TASK-2155 (record batch start/outcome/stop in events.jsonl, as the sketch promised), TASK-2156 (the review wait must build verdict-candidate spec ids exactly as aida pr ship does) and TASK-2157 (--dry-run runs git fetch). The PR-2828 rework brief covers them.'
+  created_at: 2026-10-22T10:12:43.032312216Z
+  modified_at: 2026-10-22T10:12:43.032312216Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a16149-ba64-7710-ba41-1cba72846b5c
   author: joe
