@@ -1,0 +1,31 @@
+id: 01a16107-5bfe-7052-8041-deff8b3b965e
+spec_id: TASK-2128
+agreed_id: TASK-2128
+title: 'Cargo-timeout hook resolver: define .RECIPEPREFIX, bare $(VAR) rule lines and upper-case suffix rules fail open; no ifneq/ifndef fixtures'
+description: |
+  Each fail-open below was checked against `make -n` on PR-2817 head 493f1185 (aida-core/templates/hooks/aida-cargo-timeout-guard.sh):
+  1. `define .RECIPEPREFIX` / `override define .RECIPEPREFIX` with body `>`, then `hello:` and `>cargo test`. The hook is silent but make runs cargo test. The indef rule (line ~233) skips the define block before the .RECIPEPREFIX rule can see it, while the header claims .RECIPEPREFIX is unresolvable.
+  2. `X := hello: ; cargo test`, then a safe `hello:` rule, then a bare `$(X)` line. The hook is silent; make overrides the recipe and runs cargo. The same happens with `X := hello: build` (adding a prerequisite). Lines whose head contains `$` are dropped (line ~246). This is the same class as the `$(eval)` rule generation TASK-2077 fixed. Fail closed on a top-level line that is only a variable expansion, or list it under Known misses.
+  3. The suffix-rule detector (line ~267) exempts `^\.[A-Z_]+$` as special targets, so `.C:`, `.S:` and `.F:` (GNU make default suffixes) never set `implicit`. An unknown prerequisite they build passes as a plain file. Use an explicit special-target list instead.
+  4. tests/test_cargo_timeout_guard.sh still has no ifneq or ifndef fixture. The regex covers both (probed), but no test pins them. This is round-1 finding 2's remaining half.
+
+  Raised in review of PR-2817: https://github.com/joemooney/aida/pull/2817#issuecomment-6329742064
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-22T00:33:54.686734283Z
+modified_at: 2026-10-22T00:33:54.686734283Z
+req_type: Task
+tags:
+- from-review:PR-2817
+- hooks
+- severity:minor
+filed_at:
+  code_sha: 493f11855aaaa3dd57f0dab62c4c581f6c71c6a1
+  branch: pr-2817
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 612d9b792d
+  vendor: claude
+  session: 01a16104177b
