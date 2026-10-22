@@ -6,17 +6,26 @@ description: |
   (1) task_1915_mandate_ship_failure_ledger_tests.rs rust_code_only treats the 'r' in br"..." as following an identifier, so it scans the body as a normal string. (2) review_watch_forge.rs probe_ref_in_use: a ref named with a future t<secs> satisfies now - t < floor forever and is never swept. Neither is reachable today.
 
   Raised in review of PR-2826: https://github.com/joemooney/aida/pull/2826#issuecomment-6342821731
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-22T14:09:45.313112618Z
-modified_at: 2026-10-22T14:09:45.313112618Z
+modified_at: 2026-10-22T14:11:02.429784010Z
 req_type: Task
 tags:
 - from-review:PR-2826
 - severity:cosmetic
 - tests
+history:
+- id: 01a163f3-769d-79e0-8a67-6a4256111b11
+  author: joe
+  timestamp: 2026-10-22T14:11:02.429774977Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 4077e142f3f18ce70d4936f49b9ab33cd7ddb808
   branch: pr-2826
