@@ -59,6 +59,10 @@ fn run_remote(
             pushed_remote,
             dry_run,
         } => remote_create::handle_remote_mirror_push(&project_root, pushed_remote, *dry_run),
+        // trace:BUG-2015 | ai:claude
+        crate::cli::RemoteCommand::MirrorGuardCheck { remote } => {
+            mirror_guard::handle_mirror_guard_check(&project_root, remote)
+        }
         // trace:BUG-1676 | ai:claude
         crate::cli::RemoteCommand::MirrorSync { json } => {
             remote_create::handle_remote_mirror_sync(&project_root, *json)

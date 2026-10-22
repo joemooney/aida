@@ -1908,6 +1908,13 @@ pub fn mirror_sync_hubs(project_root: &Path) -> Result<MirrorSyncReport> {
                 mirror,
                 None,
             );
+            // Name this exact push for a project's pre-push main guard; the
+            // guard re-verifies it via `aida remote mirror-guard-check`.
+            // trace:BUG-2015 | ai:claude
+            push_cmd.env(
+                crate::mirror_guard::MIRROR_SYNC_ATTEST_ENV,
+                crate::mirror_guard::mirror_sync_attestation(mirror, source, branch),
+            );
             let out = push_cmd
                 .args([
                     "push",
@@ -2252,12 +2259,26 @@ pub(crate) fn run_remote_mirror(
     install_mirror_pre_push_hook(project_root)?;
 
     // 4. Settle the config change. trace:BUG-1938 | ai:claude
+    // Never commit onto the default branch: it advances only through a PR,
+    // and a repo guarding it could never push the commit. Leave the change
+    // in the tree and name the branch route instead.
+    // trace:BUG-2015 | ai:claude
+    let default_branch = aida_core::git_ops::default_branch_name(project_root);
+    let on_default = current_branch(project_root) == default_branch;
+    let mode = if on_default {
+        crate::config_commit::CommitMode::Never
+    } else {
+        mode
+    };
     let outcome = crate::config_commit::finish_config_change(
         project_root,
         config_was_clean,
         mode,
         &format!("[AI:aida] chore(remote): list {name} as a store mirror"),
     );
+    if on_default && outcome == crate::config_commit::ConfigChangeOutcome::LeftUncommitted {
+        println!("{}", mirror_default_branch_note(name, &default_branch));
+    }
 
     println!();
     println!("Every `git push origin …` now mirrors the pushed code refs to `{name}`");
@@ -2265,6 +2286,17 @@ pub(crate) fn run_remote_mirror(
     println!();
     println!("{}", mirror_next_steps(name));
     Ok(outcome)
+}
+
+/// Printed when `aida remote mirror` left its config change uncommitted
+/// because HEAD is the default branch: land it on a branch through a PR.
+// trace:BUG-2015 | ai:claude
+fn mirror_default_branch_note(name: &str, default_branch: &str) -> String {
+    format!(
+        "  not committed on `{default_branch}` — the default branch advances only through a PR:\n    \
+         git switch -c chore/mirror-{name} && git commit -m \"chore(remote): list {name} as a store mirror\" -- .aida/config.toml\n    \
+         git push -u origin HEAD    # then open a PR"
+    )
 }
 
 /// The block every `aida remote mirror` run ends with: the first push skips
@@ -4362,6 +4394,8 @@ host = \"should.not.count\"
         let project = tmp.path().join("project");
         std::fs::create_dir_all(&project).unwrap();
         repo_with_committed_config(&project);
+        // Off the default branch: BUG-2015 never commits onto main.
+        git(&project, &["checkout", "-q", "-b", "chore/mirror"]);
         git(tmp.path(), &["init", "-q", "--bare", "hub.git"]);
         let url = tmp.path().join("hub.git").display().to_string();
 
@@ -4407,5 +4441,147 @@ host = \"should.not.count\"
         assert_eq!(git_out(&project, &["rev-parse", "HEAD"]).unwrap(), head);
         let body = std::fs::read_to_string(project.join(".aida/config.toml")).unwrap();
         assert!(body.contains("# operator wip") && body.contains("mirror"));
+    }
+
+    // BUG-2015 (b): on the default branch the mirror's config edit is left in
+    // the tree with the branch route, never committed onto main — even
+    // non-interactively with a clean config.
+    // trace:BUG-2015 | ai:claude
+    #[test]
+    fn bug_2015_remote_mirror_never_commits_onto_the_default_branch() {
+        use crate::config_commit::{CommitMode, ConfigChangeOutcome};
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("project");
+        std::fs::create_dir_all(&project).unwrap();
+        repo_with_committed_config(&project);
+        git(tmp.path(), &["init", "-q", "--bare", "hub.git"]);
+        let url = tmp.path().join("hub.git").display().to_string();
+        let head = git_out(&project, &["rev-parse", "HEAD"]).unwrap();
+
+        let outcome = run_remote_mirror(&project, "mirror", Some(&url), CommitMode::Auto).unwrap();
+
+        assert_eq!(outcome, ConfigChangeOutcome::LeftUncommitted);
+        assert_eq!(git_out(&project, &["rev-parse", "HEAD"]).unwrap(), head);
+        let body = std::fs::read_to_string(project.join(".aida/config.toml")).unwrap();
+        assert!(body.contains("mirror"), "{body}");
+        let note = mirror_default_branch_note("mirror", "main");
+        assert!(note.contains("git switch -c chore/mirror-mirror"), "{note}");
+        assert!(note.contains("open a PR"), "{note}");
+    }
+
+    /// BUG-2015: install a pre-push hook in `project` that records each
+    /// push's remote, attestation and ref lines (tab-separated) and allows
+    /// it. Returns the log path.
+    // trace:BUG-2015 | ai:claude
+    fn record_pushes(project: &Path) -> PathBuf {
+        let log = project.join(".git").join("push-log");
+        crate::test_exec::write_executable(
+            &project.join(".git").join("hooks").join("pre-push"),
+            format!(
+                "#!/bin/sh\nrefs=$(cat)\nprintf '%s\\t%s\\t%s\\n' \"$1\" \"$AIDA_MIRROR_SYNC_ATTEST\" \"$refs\" >> '{}'\nexit 0\n",
+                log.display()
+            ),
+        );
+        log
+    }
+
+    // BUG-2015 (a): mirror-sync's push of origin's main tip carries an
+    // attestation that the guard check accepts, so a main guard consulting
+    // `aida remote mirror-guard-check` lets the mirror catch up.
+    // trace:BUG-2015 | ai:claude
+    #[test]
+    fn bug_2015_mirror_sync_push_of_origin_tip_passes_the_guard_check() {
+        use crate::mirror_guard::check_mirror_sync_push;
+        let tmp = tempfile::tempdir().unwrap();
+        let (project, origin, mirror) = two_hub_fixture(tmp.path());
+        let main_sha = advance_on_origin(tmp.path(), &origin, "main", "merged.txt");
+        let log = record_pushes(&project);
+
+        let report = mirror_sync_hubs(&project).unwrap();
+        assert!(report.failures().is_empty(), "{report:?}");
+        assert_eq!(tip(&mirror, "main"), Some(main_sha.clone()));
+
+        let body = std::fs::read_to_string(&log).unwrap();
+        let (remote, attest, refs) = body
+            .lines()
+            .map(|l| {
+                let mut it = l.splitn(3, '\t');
+                (it.next().unwrap(), it.next().unwrap(), it.next().unwrap())
+            })
+            .find(|(_, _, refs)| refs.contains(" refs/heads/main "))
+            .unwrap_or_else(|| panic!("no main push recorded: {body}"));
+        assert_eq!(remote, "mirror");
+        assert_eq!(attest, format!("mirror {main_sha} refs/heads/main"));
+        assert_eq!(
+            check_mirror_sync_push(&project, remote, refs, Some(attest)),
+            Ok(())
+        );
+    }
+
+    // BUG-2015 refusals: the allowance never covers a sha that is not
+    // origin's tip (a local-only main commit), a push to origin, an
+    // unattested push, an unregistered remote, or a deletion.
+    // trace:BUG-2015 | ai:claude
+    #[test]
+    fn bug_2015_guard_check_refuses_everything_but_an_attested_origin_tip() {
+        use crate::mirror_guard::{check_mirror_sync_push, mirror_sync_attestation};
+        let tmp = tempfile::tempdir().unwrap();
+        let (project, _origin, _mirror) = two_hub_fixture(tmp.path());
+        let origin_tip = git_out(&project, &["rev-parse", "refs/remotes/origin/main"])
+            .unwrap()
+            .trim()
+            .to_string();
+        let local_only = commit_file(&project, "local.txt", "local only\n", "local-only commit");
+        let line = |sha: &str| format!("refs/heads/main {sha} refs/heads/main {ZEROS}\n");
+        let attest = |remote: &str, sha: &str| mirror_sync_attestation(remote, sha, "main");
+
+        // The allowed shape, as the control.
+        let ok = attest("mirror", &origin_tip);
+        assert_eq!(
+            check_mirror_sync_push(&project, "mirror", &line(&origin_tip), Some(&ok)),
+            Ok(())
+        );
+        // A local-only main commit to the mirror, even with a forged attestation.
+        let forged = attest("mirror", &local_only);
+        let err = check_mirror_sync_push(&project, "mirror", &line(&local_only), Some(&forged))
+            .unwrap_err();
+        assert!(err.contains("not origin/main's tip"), "{err}");
+        // A direct push to origin's main, attested or not.
+        let err = check_mirror_sync_push(
+            &project,
+            "origin",
+            &line(&origin_tip),
+            Some(&attest("origin", &origin_tip)),
+        )
+        .unwrap_err();
+        assert!(err.contains("origin"), "{err}");
+        // No attestation: a hand push of origin's tip is still the guard's call.
+        let err = check_mirror_sync_push(&project, "mirror", &line(&origin_tip), None).unwrap_err();
+        assert!(err.contains("not attested"), "{err}");
+        // An attestation for another remote does not transfer.
+        git(
+            &project,
+            &[
+                "remote",
+                "add",
+                "stray",
+                tmp.path().join("origin.git").to_str().unwrap(),
+            ],
+        );
+        let err = check_mirror_sync_push(
+            &project,
+            "stray",
+            &line(&origin_tip),
+            Some(&attest("stray", &origin_tip)),
+        )
+        .unwrap_err();
+        assert!(err.contains("not a registered mirror"), "{err}");
+        // Deleting main on the mirror.
+        let deletion = format!("(delete) {ZEROS} refs/heads/main {origin_tip}\n");
+        let err = check_mirror_sync_push(&project, "mirror", &deletion, Some(&ok)).unwrap_err();
+        assert!(err.contains("deleting"), "{err}");
+        // A push with no default-branch ref has nothing to allow.
+        let feature = format!("refs/heads/f {origin_tip} refs/heads/f {ZEROS}\n");
+        assert!(check_mirror_sync_push(&project, "mirror", &feature, Some(&ok)).is_err());
     }
 }
