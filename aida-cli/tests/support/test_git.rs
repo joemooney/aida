@@ -46,8 +46,15 @@ fn template_dir() -> &'static std::path::Path {
 
 /// Create (idempotently) the content-addressed template dir under `parent`
 /// and return its path. Concurrent processes race safely: each builds a
-/// private sibling and renames it into place; a loser whose rename finds the
-/// directory already there discards its copy and uses the winner's.
+/// private (0700) sibling and renames it into place; a loser whose rename
+/// finds the directory already there discards its copy and uses the winner's.
+///
+/// The name carries the owner's uid, and an existing directory is used only
+/// when it is a real directory owned by this user with mode 0700: a shared
+/// temp dir lets another user pre-create it with a planted hook, so anything
+/// else is refused. A partial directory is repaired atomically: it is renamed
+/// aside into a fresh `mkdtemp` dir, never removed in place while another
+/// process may be installing over it.
 // trace:TASK-1955 | ai:claude (TASK-2017)
 #[allow(dead_code)]
 fn ensure_template_dir(parent: &std::path::Path) -> std::path::PathBuf {
@@ -56,34 +63,99 @@ fn ensure_template_dir(parent: &std::path::Path) -> std::path::PathBuf {
     for byte in TEMPLATE_CONFIG.bytes().chain(TEMPLATE_DESCRIPTION.bytes()) {
         hash = (hash ^ u64::from(byte)).wrapping_mul(0x0100_0000_01b3);
     }
-    let dir = parent.join(format!("aida-test-git-template-{hash:016x}"));
+    std::fs::create_dir_all(parent).expect("create git template parent dir");
+    // A dir this process just made is owned by its effective uid.
+    let staging = tempfile::Builder::new()
+        .prefix(".aida-test-git-template-staging-")
+        .tempdir_in(parent)
+        .expect("create git template staging dir");
+    let owner = template_owner(staging.path());
+    let dir = parent.join(format!("aida-test-git-template-{owner}-{hash:016x}"));
     let complete = |dir: &std::path::Path| {
         std::fs::read_to_string(dir.join("config")).is_ok_and(|c| c == TEMPLATE_CONFIG)
             && dir.join("info/exclude").is_file()
             && dir.join("hooks").is_dir()
     };
-    if complete(&dir) {
+    let existed = template_dir_trusted(&dir, owner);
+    if existed && complete(&dir) {
         return dir;
     }
-    std::fs::create_dir_all(parent).expect("create git template parent dir");
-    let staging = tempfile::Builder::new()
-        .prefix(".aida-test-git-template-staging-")
-        .tempdir_in(parent)
-        .expect("create git template staging dir");
     let root = staging.path();
     std::fs::create_dir_all(root.join("hooks")).unwrap();
     std::fs::create_dir_all(root.join("info")).unwrap();
     std::fs::write(root.join("info/exclude"), "").unwrap();
     std::fs::write(root.join("description"), TEMPLATE_DESCRIPTION).unwrap();
     std::fs::write(root.join("config"), TEMPLATE_CONFIG).unwrap();
-    if std::fs::rename(root, &dir).is_err() && !complete(&dir) {
-        // Not a lost race: a stale or partial directory (say, half-removed by
-        // a temp cleaner). Replace it.
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::rename(root, &dir).expect("install git template dir");
+    // Move a partial dir (say, half-removed by a temp cleaner) aside; another
+    // process may already have moved it, which is fine.
+    let aside = tempfile::Builder::new()
+        .prefix(".aida-test-git-template-stale-")
+        .tempdir_in(parent)
+        .expect("create git template stale dir");
+    if existed {
+        let _ = std::fs::rename(&dir, aside.path().join("old"));
     }
-    // The staging TempDir is now gone (renamed) or a loser's copy; dropping it
-    // removes whatever is left.
+    if std::fs::rename(root, &dir).is_err() {
+        // Lost the race: whoever won must have installed a complete, private copy.
+        assert!(
+            template_dir_trusted(&dir, owner) && complete(&dir),
+            "git template dir {} is incomplete after a concurrent install",
+            dir.display()
+        );
+    }
+    // The staging TempDir is now gone (renamed) or a loser's copy, and the
+    // stale one holds the moved-aside dir; dropping them removes what is left.
     drop(staging);
+    drop(aside);
     dir
+}
+
+/// The uid that owns `path` (0 where there are no uids).
+#[allow(dead_code)]
+fn template_owner(path: &std::path::Path) -> u32 {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt as _;
+        std::fs::symlink_metadata(path)
+            .expect("stat git template staging dir")
+            .uid()
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = path;
+        0
+    }
+}
+
+/// Whether `dir` exists. Panics when it exists but is not a real directory
+/// owned by `owner` with mode 0700, since its hooks would run in every
+/// fixture repository.
+// trace:TASK-1955 | ai:claude (TASK-2017)
+#[allow(dead_code)]
+fn template_dir_trusted(dir: &std::path::Path, owner: u32) -> bool {
+    let meta = match std::fs::symlink_metadata(dir) {
+        Ok(meta) => meta,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return false,
+        Err(e) => panic!("stat git template dir {}: {e}", dir.display()),
+    };
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt as _;
+        assert!(
+            meta.file_type().is_dir() && meta.uid() == owner && meta.mode() & 0o777 == 0o700,
+            "refusing git template dir {}: it is not a 0700 directory owned by uid {owner}; \
+             remove it and re-run",
+            dir.display()
+        );
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = owner;
+        assert!(
+            meta.file_type().is_dir(),
+            "refusing git template dir {}: not a directory",
+            dir.display()
+        );
+    }
+    true
 }

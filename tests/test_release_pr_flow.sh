@@ -311,6 +311,13 @@ fi
 touch -d "@$(( $(date +%s) - 120 ))" "$F4/work/.aida/merge-locks/main"
 run_release "$F4" patch --dry-run >/dev/null 2>&1 || fail "an empty lease past its grace blocked the release"
 pass "a fresh empty lease reads live; past its grace it is stale"
+# --dry-run only warns about a live lease, so read its warning.
+touch -d "@$(( $(date +%s) + 600 ))" "$F4/work/.aida/merge-locks/main"
+out=$(run_release "$F4" patch --dry-run 2>&1) || fail "dry run failed over a far-future empty lease: $out"
+if printf '%s' "$out" | grep -q "would refuse to start"; then
+    fail "an empty lease with a far-future mtime read live: $out"
+fi
+pass "an empty lease with a far-future mtime is stale, not live forever"
 
 info "Test 4c: the release holds the lease while it mutates the checkout"
 F5="$TEST_DIR/f5"; make_fixture "$F5"

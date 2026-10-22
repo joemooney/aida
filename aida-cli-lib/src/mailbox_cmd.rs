@@ -886,9 +886,11 @@ pub(crate) fn archive_phantom_inboxes(store_root: &std::path::Path) -> Result<Ph
 
 /// [`archive_phantom_inboxes`] judged against `readers`, this machine's inbox
 /// identities. Re-addressing a case variant has a defined precedence: a
-/// spelling a local reader reads under is never moved, and a variant moves to
-/// a local reader's spelling before the roster's first-registered one. So
-/// team.toml `Joe` with `USER=joe` keeps `joe` mail readable here.
+/// spelling a local reader reads under, or the roster's own spelling, is never
+/// moved, and any other variant moves to a local reader's spelling before the
+/// roster's first-registered one. So team.toml `Joe` with `USER=joe` keeps
+/// `joe` mail readable here, and mail to `Joe` stays where every machine
+/// agrees it belongs.
 // trace:TASK-1955 | ai:claude (TASK-2122)
 pub(crate) fn archive_phantom_inboxes_for(
     store_root: &std::path::Path,
@@ -912,7 +914,8 @@ pub(crate) fn archive_phantom_inboxes_for(
             continue;
         };
         let trimmed = r.trim();
-        let known_spelling = known.get(&trimmed.to_lowercase()).cloned().map(|k| {
+        let roster_spelling = known.get(&trimmed.to_lowercase()).cloned();
+        let known_spelling = roster_spelling.clone().map(|k| {
             readers
                 .iter()
                 .find(|r| r.eq_ignore_ascii_case(&k))
@@ -929,7 +932,11 @@ pub(crate) fn archive_phantom_inboxes_for(
         // Mail stored to a known id in another spelling (`ADVISOR`, as MCP
         // send_message wrote before TASK-1928) reaches no inbox: `addressed_to`
         // is exact. trace:TASK-1955 | ai:claude (TASK-2085)
+        // Mail already under the roster spelling is never moved: another
+        // machine's reader spelling would only move it back.
+        // trace:TASK-1955 | ai:claude (TASK-2122)
         let misspelled = known_spelling.as_deref().is_some_and(|k| k != trimmed)
+            && roster_spelling.as_deref() != Some(trimmed)
             && !readers.iter().any(|r| r == trimmed);
         if !(padded || misspelled || junk || unknown_mention) {
             continue;
@@ -2209,12 +2216,13 @@ mod tests {
     }
 
     /// TASK-2122: a case variant a local reader reads under stays put, and
-    /// another variant moves to that reader's spelling, not the roster's.
+    /// another variant moves to that reader's spelling, not the roster's, and
+    /// mail under the roster spelling itself is never moved.
     // trace:TASK-1955 | ai:claude (TASK-2122)
     #[test]
     fn archive_phantom_inboxes_never_moves_mail_away_from_a_local_reader_spelling() {
         let (project, store) = store_with_person_joe();
-        for (id, to) in [("lower", "joe"), ("upper", "JOE")] {
+        for (id, to) in [("lower", "joe"), ("upper", "JOE"), ("roster", "Joe")] {
             let mut m = message(id, &format!("thread-{id}"));
             m.to = aida_core::mailbox::Recipient::Agent(to.into());
             m.body = "direct hi".into();
@@ -2232,6 +2240,11 @@ mod tests {
             "{:?}",
             report.lines
         );
+        assert!(
+            !report.lines.iter().any(|l| l.contains("roster")),
+            "mail under the roster spelling `Joe` is never moved: {:?}",
+            report.lines
+        );
         let merged = aida_core::mailbox::merge_dedup(
             &mailbox_store::read_local_messages(project.path()).unwrap(),
             &mailbox_store::read_canonical_messages(&store).unwrap(),
@@ -2239,7 +2252,15 @@ mod tests {
         assert_eq!(
             aida_core::mailbox::unread_inbox("joe", &merged, None).len(),
             2,
-            "the local reader `joe` reads both"
+            "the local reader `joe` reads its own mail and the re-addressed `JOE` copy"
+        );
+        assert_eq!(
+            aida_core::mailbox::unread_inbox("Joe", &merged, None)
+                .iter()
+                .map(|m| m.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["roster"],
+            "the roster-spelled mail stays under `Joe`, unarchived"
         );
     }
 

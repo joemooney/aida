@@ -173,7 +173,9 @@ lease_is_live() {
     # trace:TASK-1955 | ai:claude (TASK-1-421)
     if ! grep -q '^ttl_secs=' "$lease_file" 2>/dev/null; then
         mtime=$(stat -c %Y "$lease_file" 2>/dev/null || stat -f %m "$lease_file" 2>/dev/null) || return 1  # portable-fallback: BSD stat reads the mtime with -f %m
-        [ $(( $(date +%s) - mtime )) -gt 30 ] && return 1
+        # A future mtime is as far off as a past one, so it cannot read live forever.
+        age=$(( $(date +%s) - mtime ))
+        [ "${age#-}" -gt 30 ] && return 1
         return 0
     fi
     host=$(lease_field host)

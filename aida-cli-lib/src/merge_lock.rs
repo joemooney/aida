@@ -150,13 +150,72 @@ fn file_stale_reason(path: &Path, our_host: &str) -> Option<String> {
     if is_complete_record(&body) {
         return stale_reason(&parse(&body), our_host);
     }
-    let age = std::fs::metadata(path)
-        .and_then(|m| m.modified())
-        .ok()
-        .and_then(|t| SystemTime::now().duration_since(t).ok())
-        .map(|d| d.as_secs())?;
+    let age = mtime_distance_secs(path)?;
     (age > PARTIAL_GRACE_SECS).then(|| {
         format!("incomplete lease record aged {age}s past its {PARTIAL_GRACE_SECS}s grace")
+    })
+}
+
+/// How far `path`'s mtime is from now, either way: a future mtime (clock skew,
+/// a copied file) is as far off as a past one, so it cannot read live forever.
+// trace:TASK-1955 | ai:claude (TASK-1-421)
+fn mtime_distance_secs(path: &Path) -> Option<u64> {
+    let mtime = std::fs::metadata(path).and_then(|m| m.modified()).ok()?;
+    let now = SystemTime::now();
+    let d = now
+        .duration_since(mtime)
+        .or_else(|_| mtime.duration_since(now))
+        .ok()?;
+    Some(d.as_secs())
+}
+
+/// Remove the temp records for `path` (this module's and release.sh's
+/// `.<name>.*`) orphaned by a writer killed before its link: any aged past
+/// [`PARTIAL_GRACE_SECS`]. A live writer links within moments.
+// trace:TASK-1955 | ai:claude (TASK-1-422)
+fn sweep_orphan_temps(path: &Path) {
+    let (Some(dir), Some(name)) = (path.parent(), path.file_name()) else {
+        return;
+    };
+    let prefix = format!(".{}.", name.to_string_lossy());
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for e in entries.flatten() {
+        let file = e.file_name().to_string_lossy().into_owned();
+        if file.starts_with(&prefix)
+            && mtime_distance_secs(&e.path()).is_some_and(|age| age > PARTIAL_GRACE_SECS)
+        {
+            let _ = std::fs::remove_file(e.path());
+        }
+    }
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Test seam: act as a filesystem without hard links.
+    static NO_HARD_LINKS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+fn link_record(tmp: &Path, path: &Path) -> std::io::Result<()> {
+    #[cfg(test)]
+    if NO_HARD_LINKS.with(std::cell::Cell::get) {
+        return Err(std::io::ErrorKind::Unsupported.into());
+    }
+    std::fs::hard_link(tmp, path)
+}
+
+/// Publish `record` at `path` with `O_EXCL` where the filesystem has no hard
+/// links. A reader may briefly see it partial, which [`file_stale_reason`]
+/// reads as live inside its grace; a failed write removes the file.
+// trace:TASK-1955 | ai:claude (TASK-1-421)
+fn publish_exclusive(path: &Path, record: &str) -> std::io::Result<()> {
+    let mut f = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(path)?;
+    f.write_all(record.as_bytes()).inspect_err(|_| {
+        let _ = std::fs::remove_file(path);
     })
 }
 
@@ -234,6 +293,7 @@ pub(crate) fn acquire(
     let path = lock_path(project_root, branch);
     let our_host = crate::coordination::hostname();
     let deadline = Instant::now() + wait;
+    sweep_orphan_temps(&path);
     loop {
         let h = Holder {
             host: our_host.clone(),
@@ -248,10 +308,17 @@ pub(crate) fn acquire(
         // link(2) fails if the lease exists, so the claim stays atomic and no
         // reader (release.sh included) sees an empty or partial lease.
         // trace:TASK-1955 | ai:claude (TASK-1-421)
+        // A filesystem without hard links falls back to O_EXCL.
+        let record = serialize(&h);
         let tmp = temp_path(&path);
         let linked = std::fs::File::create(&tmp)
-            .and_then(|mut f| f.write_all(serialize(&h).as_bytes()))
-            .and_then(|()| std::fs::hard_link(&tmp, &path));
+            .and_then(|mut f| f.write_all(record.as_bytes()))
+            .and_then(|()| match link_record(&tmp, &path) {
+                Err(e) if e.kind() != std::io::ErrorKind::AlreadyExists => {
+                    publish_exclusive(&path, &record)
+                }
+                linked => linked,
+            });
         let _ = std::fs::remove_file(&tmp);
         match linked {
             Ok(()) => return Ok(MergeLease { path, held: true }),
@@ -547,6 +614,91 @@ mod tests {
         let st = status(root);
         assert_eq!(st.len(), 1, "{st:?}");
         assert_eq!(st[0].0, "main");
+    }
+
+    /// A future mtime (clock skew) does not keep an incomplete record live
+    /// forever: it is as far off as a past one, so it is reclaimed after the
+    /// grace.
+    // trace:TASK-1955 | ai:claude (TASK-1-421)
+    #[test]
+    fn task_1_421_incomplete_lease_with_a_future_mtime_is_stale_after_the_grace() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        std::fs::create_dir_all(locks_dir(root)).unwrap();
+        let path = lock_path(root, "main");
+        std::fs::write(&path, "").unwrap();
+        let future = SystemTime::now() + Duration::from_secs(PARTIAL_GRACE_SECS + 60);
+        std::fs::File::options()
+            .write(true)
+            .open(&path)
+            .unwrap()
+            .set_modified(future)
+            .unwrap();
+        let _g = acquire(root, "main", Some(2), "steal", Duration::from_millis(100)).unwrap();
+        assert!(std::fs::read_to_string(&path)
+            .unwrap()
+            .contains("note=steal"));
+    }
+
+    /// A temp record orphaned by a killed writer (Rust's or release.sh's) is
+    /// swept once past the grace; a fresh one, a live writer's, is kept.
+    // trace:TASK-1955 | ai:claude (TASK-1-422)
+    #[test]
+    fn task_1_422_acquire_sweeps_orphaned_temp_records() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let locks = locks_dir(root);
+        std::fs::create_dir_all(&locks).unwrap();
+        let old = SystemTime::now() - Duration::from_secs(PARTIAL_GRACE_SECS + 5);
+        for name in [".main.4242.17.tmp", ".main.Ab12Cd"] {
+            std::fs::write(locks.join(name), "host=x\n").unwrap();
+            std::fs::File::options()
+                .write(true)
+                .open(locks.join(name))
+                .unwrap()
+                .set_modified(old)
+                .unwrap();
+        }
+        std::fs::write(locks.join(".main.99.1.tmp"), "host=x\n").unwrap();
+        std::fs::write(locks.join(".other.1.1.tmp"), "host=x\n").unwrap();
+        std::fs::File::options()
+            .write(true)
+            .open(locks.join(".other.1.1.tmp"))
+            .unwrap()
+            .set_modified(old)
+            .unwrap();
+        let _g = acquire(root, "main", Some(1), "held", DEFAULT_WAIT).unwrap();
+        let mut names: Vec<String> = std::fs::read_dir(&locks)
+            .unwrap()
+            .flatten()
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .collect();
+        names.sort();
+        assert_eq!(names, [".main.99.1.tmp", ".other.1.1.tmp", "main"]);
+    }
+
+    /// Where hard links are unsupported the lease is still claimed, through
+    /// `O_EXCL`, complete, and still exclusive.
+    // trace:TASK-1955 | ai:claude (TASK-1-421)
+    #[test]
+    fn task_1_421_acquire_falls_back_to_o_excl_without_hard_links() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        NO_HARD_LINKS.with(|c| c.set(true));
+        let held = acquire(root, "main", Some(1), "held", DEFAULT_WAIT);
+        let second = acquire(root, "main", Some(2), "second", Duration::from_millis(100));
+        NO_HARD_LINKS.with(|c| c.set(false));
+        let _g = held.unwrap();
+        assert_eq!(second.unwrap_err().kind(), std::io::ErrorKind::WouldBlock);
+        assert!(is_complete_record(
+            &std::fs::read_to_string(lock_path(root, "main")).unwrap()
+        ));
+        let names: Vec<String> = std::fs::read_dir(locks_dir(root))
+            .unwrap()
+            .flatten()
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(names, ["main"], "no temp record is left behind");
     }
 
     #[test]
