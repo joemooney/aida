@@ -105,8 +105,9 @@ pub(crate) trait BatchPorts {
     /// Enqueue a review of the current head; never launches or records one.
     fn enqueue_review(&mut self, pr: u64, view: &PrView);
     fn review_at_head(&mut self, pr: u64, view: &PrView) -> ReviewAtHead;
-    /// The merge-hold on `pr`, described with its release condition.
-    fn hold(&mut self, pr: u64) -> Option<String>;
+    /// The merge-hold on `pr`, described with its release condition. An
+    /// error means the hold state could not be read (not a hold to clear).
+    fn hold(&mut self, pr: u64) -> Result<Option<String>>;
     /// Which spec IDs the ship would complete.
     fn completion_preview(&mut self, pr: u64, view: &PrView) -> Option<String>;
     /// One line typed by the operator; `None` at end of input.
@@ -196,7 +197,9 @@ pub(crate) fn run_batch(
             PrOutcome::Shipped => ("shipped", String::new()),
             PrOutcome::AlreadyMerged => ("already-merged", String::new()),
             PrOutcome::Stopped(why) => ("stopped", why.clone()),
-            PrOutcome::Planned(plan) => ("planned", plan.clone()),
+            PrOutcome::Planned(_) => {
+                unreachable!("ship_one never plans; a dry run returns before this loop")
+            }
         };
         ports.record(Some(*pr), label, &detail);
         let stop = matches!(outcome, PrOutcome::Stopped(_));
@@ -205,7 +208,30 @@ pub(crate) fn run_batch(
             break;
         }
     }
+    ports.record(None, "finished", &finished_summary(&outcomes));
     Ok(outcomes)
+}
+
+/// The `finished` record's detail: what shipped, what was skipped, where the
+/// batch stopped.
+// trace:STORY-1887 | ai:claude
+fn finished_summary(outcomes: &[(u64, PrOutcome)]) -> String {
+    let shipped = outcomes
+        .iter()
+        .filter(|(_, o)| *o == PrOutcome::Shipped)
+        .count();
+    let merged = outcomes
+        .iter()
+        .filter(|(_, o)| *o == PrOutcome::AlreadyMerged)
+        .count();
+    let mut out = format!("{shipped} shipped, {merged} already merged");
+    if let Some((pr, _)) = outcomes
+        .iter()
+        .find(|(_, o)| matches!(o, PrOutcome::Stopped(_)))
+    {
+        out.push_str(&format!(", stopped at #{pr}"));
+    }
+    out
 }
 
 /// `--dry-run` for one PR: reads only.
@@ -249,8 +275,12 @@ fn plan_pr(ports: &mut dyn BatchPorts, pr: u64) -> PrOutcome {
         ReviewAtHead::Negative(why) => format!("{why}: the batch would stop here"),
         ReviewAtHead::Awaiting(_) => "no approval at this head yet".to_string(),
     });
-    if let Some(hold) = ports.hold(pr) {
-        steps.push(format!("merge-hold: {hold}"));
+    match ports.hold(pr) {
+        Ok(Some(hold)) => steps.push(format!("merge-hold: {hold}")),
+        Ok(None) => {}
+        Err(e) => steps.push(format!(
+            "could not read the hold label ({e:#}): the batch would stop here"
+        )),
     }
     PrOutcome::Planned(steps.join("; "))
 }
@@ -471,7 +501,16 @@ fn confirm_and_ship(
             "no human at an interactive terminal any more; nothing shipped".to_string(),
         );
     }
-    let hold = ports.hold(pr);
+    // A hold state that cannot be read is not offered as a hold to clear.
+    // trace:STORY-1887 | ai:claude
+    let hold = match ports.hold(pr) {
+        Ok(hold) => hold,
+        Err(e) => {
+            return PrOutcome::Stopped(format!(
+                "could not read the hold label on PR #{pr} ({e:#}); nothing shipped"
+            ))
+        }
+    };
     ports.say(&format!("  ready: PR #{pr} {}", view.title));
     ports.say(&format!(
         "    head {}, CI green, approved: {approval}",
@@ -664,6 +703,7 @@ pub(crate) fn ci_from_rollup(
     v: &serde_json::Value,
     head: &str,
     cfg: &crate::ci_gate::CiGateConfig,
+    held: bool,
 ) -> CiAtHead {
     if !crate::forge::head_matches_pin(head, &json_str(v, "headRefOid")) {
         return CiAtHead::HeadMoved;
@@ -673,7 +713,9 @@ pub(crate) fn ci_from_rollup(
         .and_then(|r| r.as_array())
         .cloned()
         .unwrap_or_default();
-    let status = crate::pr_list::github_rollup_ci_status(&rollup, cfg);
+    // A held PR's red merge-hold-gate is the hold, which the confirm step
+    // offers to clear; it is not a CI failure. trace:STORY-1887 | ai:claude
+    let status = crate::pr_list::github_rollup_ci_status_for(&rollup, cfg, held);
     if status == "Failing" {
         CiAtHead::Failing("a required check failed".to_string())
     } else if status.starts_with("Passing") {
@@ -726,7 +768,8 @@ impl BatchPorts for GitHubPorts {
     fn ci_at_head(&mut self, pr: u64, head: &str) -> Result<CiAtHead> {
         let v = self.gh_pr_json(pr, "headRefOid,statusCheckRollup")?;
         let cfg = crate::ci_gate::read_ci_gate_config(&self.project_root);
-        Ok(ci_from_rollup(&v, head, &cfg))
+        let held = self.hold(pr)?.is_some();
+        Ok(ci_from_rollup(&v, head, &cfg, held))
     }
 
     fn enqueue_review(&mut self, _pr: u64, view: &PrView) {
@@ -759,20 +802,20 @@ impl BatchPorts for GitHubPorts {
         review_state(pr, &candidates, &policy, &view.head_sha)
     }
 
-    fn hold(&mut self, pr: u64) -> Option<String> {
+    fn hold(&mut self, pr: u64) -> Result<Option<String>> {
         if let Some(record) = crate::merge_hold::read_hold_record(&self.main_worktree, pr) {
-            return Some(match record.release_condition {
+            return Ok(Some(match record.release_condition {
                 Some(cond) => format!("{} (release when: {cond})", record.detail),
                 None => record.detail,
-            });
+            }));
         }
         if let Some(detail) = crate::merge_hold::read_hold(&self.main_worktree, pr) {
-            return Some(detail);
+            return Ok(Some(detail));
         }
         match crate::merge_hold::label_present(&self.main_worktree, pr) {
-            Ok(true) => Some("the `aida:merge-hold` label is set".to_string()),
-            Ok(false) => None,
-            Err(e) => Some(format!("could not read the hold label: {e}")),
+            Ok(true) => Ok(Some("the `aida:merge-hold` label is set".to_string())),
+            Ok(false) => Ok(None),
+            Err(e) => Err(anyhow::anyhow!("{e}")),
         }
     }
 
@@ -904,6 +947,7 @@ mod tests {
         ci: BTreeMap<String, VecDeque<CiAtHead>>,
         reviews: BTreeMap<String, VecDeque<ReviewAtHead>>,
         holds: BTreeMap<u64, String>,
+        hold_unreadable: Vec<u64>,
         answers: VecDeque<String>,
         clock: u64,
         forge_calls: u32,
@@ -998,8 +1042,11 @@ mod tests {
                 .and_then(next)
                 .unwrap_or(ReviewAtHead::Awaiting(None))
         }
-        fn hold(&mut self, pr: u64) -> Option<String> {
-            self.holds.get(&pr).cloned()
+        fn hold(&mut self, pr: u64) -> Result<Option<String>> {
+            if self.hold_unreadable.contains(&pr) {
+                anyhow::bail!("label lookup failed");
+            }
+            Ok(self.holds.get(&pr).cloned())
         }
         fn completion_preview(&mut self, _pr: u64, _view: &PrView) -> Option<String> {
             None
@@ -1372,12 +1419,17 @@ mod tests {
             "statusCheckRollup": [{"name": "Build", "status": "COMPLETED", "conclusion": "SUCCESS"}],
         });
         assert_eq!(
-            ci_from_rollup(&green, "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", &cfg),
+            ci_from_rollup(
+                &green,
+                "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                &cfg,
+                false
+            ),
             CiAtHead::HeadMoved
         );
-        assert_eq!(ci_from_rollup(&green, a, &cfg), CiAtHead::Passing);
+        assert_eq!(ci_from_rollup(&green, a, &cfg, false), CiAtHead::Passing);
         let empty = serde_json::json!({ "headRefOid": a, "statusCheckRollup": [] });
-        assert_eq!(ci_from_rollup(&empty, a, &cfg), CiAtHead::Pending);
+        assert_eq!(ci_from_rollup(&empty, a, &cfg, false), CiAtHead::Pending);
         let view = parse_pr_view(&serde_json::json!({
             "state": "OPEN", "mergeable": "CONFLICTING", "mergeStateStatus": "BEHIND",
             "isDraft": true, "headRefOid": "abc", "headRefName": "b", "title": "t", "body": "",
@@ -1421,7 +1473,15 @@ mod tests {
                 (None, "started".to_string()),
                 (Some(1), "shipped".to_string()),
                 (Some(2), "stopped".to_string()),
+                (None, "finished".to_string()),
             ]
+        );
+        assert_eq!(
+            finished_summary(&[
+                (1, PrOutcome::Shipped),
+                (2, PrOutcome::Stopped("CI red".into()))
+            ]),
+            "1 shipped, 0 already merged, stopped at #2"
         );
         let ev = ship_batch_event(Some(2), "stopped", " CI red \n");
         assert_eq!(ev.kind.name(), "ShipBatchStep");
@@ -1471,5 +1531,65 @@ mod tests {
         let mut f = ready(Fake::human(), 4, "head_0000").answers(&["go", "4"]);
         run_batch(&mut f, &[4], OPTS).unwrap();
         assert_eq!(f.fetches, 1);
+    }
+
+    // Round 2: a held PR whose only red check is merge-hold-gate is green for
+    // the batch and reaches the hold-clear prompt; another red check on a
+    // held PR still stops it; unheld, merge-hold-gate red is a CI failure.
+    // trace:STORY-1887 | ai:claude
+    #[test]
+    fn held_pr_red_hold_gate_reaches_the_clear_prompt() {
+        let cfg = crate::ci_gate::CiGateConfig::default();
+        let head = "cccccccccccccccccccccccccccccccccccccccc";
+        let rollup = |checks: serde_json::Value| serde_json::json!({ "headRefOid": head, "statusCheckRollup": checks });
+        let ok =
+            serde_json::json!({"name": "Build", "status": "COMPLETED", "conclusion": "SUCCESS"});
+        let hold_red = serde_json::json!({
+            "name": crate::ci_gate::HOLD_GATE_CHECK, "status": "COMPLETED", "conclusion": "FAILURE",
+        });
+        let build_red =
+            serde_json::json!({"name": "Build", "status": "COMPLETED", "conclusion": "FAILURE"});
+        let only_hold = rollup(serde_json::json!([ok.clone(), hold_red.clone()]));
+        let ci = ci_from_rollup(&only_hold, head, &cfg, true);
+        assert_eq!(ci, CiAtHead::Passing);
+        assert!(matches!(
+            ci_from_rollup(&only_hold, head, &cfg, false),
+            CiAtHead::Failing(_)
+        ));
+        assert!(matches!(
+            ci_from_rollup(
+                &rollup(serde_json::json!([build_red, hold_red])),
+                head,
+                &cfg,
+                true
+            ),
+            CiAtHead::Failing(_)
+        ));
+
+        let mut f = Fake::human()
+            .views(9, vec![open(head)])
+            .ci(head, vec![ci])
+            .review(head, vec![approved()])
+            .answers(&["go", "9", "clear"]);
+        f.holds.insert(9, "supervised".to_string());
+        let out = run_batch(&mut f, &[9], OPTS).unwrap();
+        assert_eq!(out[0].1, PrOutcome::Shipped);
+        assert_eq!(f.cleared, vec![9]);
+    }
+
+    // Round 2: an unreadable hold label is reported as such and stops the PR;
+    // it is never offered as a hold to clear.
+    // trace:STORY-1887 | ai:claude
+    #[test]
+    fn unreadable_hold_label_stops_without_a_clear_prompt() {
+        let mut f = ready(Fake::human(), 9, "999999999999a").answers(&["go", "9", "clear"]);
+        f.hold_unreadable.push(9);
+        let out = run_batch(&mut f, &[9], OPTS).unwrap();
+        assert!(
+            matches!(&out[0].1, PrOutcome::Stopped(why) if why.contains("could not read the hold label")),
+            "{out:?}"
+        );
+        assert!(f.cleared.is_empty() && f.shipped.is_empty());
+        assert_eq!(f.answers.len(), 2, "only 'go' was consumed");
     }
 }

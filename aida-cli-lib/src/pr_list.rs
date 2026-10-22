@@ -311,11 +311,23 @@ pub(crate) fn github_rollup_ci_status(
     rollup: &[serde_json::Value],
     cfg: &crate::ci_gate::CiGateConfig,
 ) -> String {
+    github_rollup_ci_status_for(rollup, cfg, false)
+}
+
+/// [`github_rollup_ci_status`] for a PR whose merge-hold state is known:
+/// with `held`, a red `merge-hold-gate` check is the hold (owned by the hold
+/// clear), not a CI failure — the way `aida pr ship` classifies it.
+// trace:STORY-1887 | ai:claude
+pub(crate) fn github_rollup_ci_status_for(
+    rollup: &[serde_json::Value],
+    cfg: &crate::ci_gate::CiGateConfig,
+    held: bool,
+) -> String {
     if rollup.is_empty() {
         return "None".to_string();
     }
     let rows: Vec<crate::ci_gate::CheckRow> = rollup.iter().map(rollup_check_row).collect();
-    let refined = crate::ci_gate::classify_red(&rows, &[], cfg, false, false);
+    let refined = crate::ci_gate::classify_red(&rows, &[], cfg, false, held);
     if refined.is_real() {
         "Failing".to_string()
     } else if refined.has_pending() {

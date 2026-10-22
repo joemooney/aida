@@ -517,8 +517,8 @@ pub enum EventKind {
     },
     /// STORY-1887: one step of an operator `aida pr ship-batch` run: the
     /// batch start, each PR's outcome, a refusal, and the final stop.
-    /// `outcome` is started | shipped | skipped | stopped | planned |
-    /// refused | finished. **Not actionable**: the operator is at the TTY
+    /// `outcome` is started | shipped | already-merged | stopped | refused |
+    /// finished. A dry run records nothing. **Not actionable**: the operator is at the TTY
     /// running it; the record is for `aida history events --kind
     /// ship-batch-step`.
     // trace:STORY-1887 | ai:claude
