@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T15:33:51.496539087Z
-modified_at: 2026-10-22T20:49:05.944782823Z
+modified_at: 2026-10-22T21:37:33.681226371Z
 req_type: Story
 tags:
 - architecture
@@ -167,6 +167,12 @@ comments:
   created_at: 2026-10-22T20:49:05.944782823Z
   modified_at: 2026-10-22T20:49:05.944782823Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a1658c-43f1-7000-af32-144d33f6a694
+  author: joe
+  content: 'Advisor 14:40: PR2 split approved — (a)+(b)+(c) of merge_hold.rs to gate/merge_hold_core.rs (floor), (d) plumbing stays outside. Conditions: serde attrs unchanged + recused_principals round-trip test; TTY-floor refusal byte-identical; pure move.'
+  created_at: 2026-10-22T21:37:33.681226371Z
+  modified_at: 2026-10-22T21:37:33.681226371Z
+  session_id: 37c635ef-7a29-44ab-b2b4-0e1dc247e5ce
 history:
 - id: 01a15f19-1b8d-7a60-bd9c-acf0c42193fc
   author: joe
