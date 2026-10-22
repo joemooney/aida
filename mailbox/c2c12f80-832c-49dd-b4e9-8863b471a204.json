@@ -1,0 +1,19 @@
+{
+  "id": "c2c12f80-832c-49dd-b4e9-8863b471a204",
+  "thread_id": "c2c12f80-832c-49dd-b4e9-8863b471a204",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792644698383,
+  "body": "SKETCH v1 is posted on BUG-1934. It binds each SeatGrant to process tokens: the issuing shell and session leader for `role enter`, or the minting launcher plus a pid stamped after spawn for child grants. Every env-presented grant check then requires the presenter's full ancestry to intersect that binding. Unbound and legacy grants fail closed with a named GrantRejection, which doctor and role status surface.\nAt ship, the review attestation carries the matched binding tokens (`grant_binding`), and grant_authorized_at requires them to intersect the grant's binding.\n3 questions. Q1: this breaks hand-carrying a grant id into a background session; I propose `role enter --bind-pid` as the sanctioned replacement. Q2: is binding the session leader too broad? Q3: should binding use strict start-identity matching, and how should advisor_live check binding? I'm waiting for signoff before writing any code.\n",
+  "subject": "SKETCH posted (BUG-1934)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

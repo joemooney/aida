@@ -1,0 +1,19 @@
+{
+  "id": "0cc7388f-c157-4c55-8e77-3b5761bcbc4f",
+  "thread_id": "0cc7388f-c157-4c55-8e77-3b5761bcbc4f",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1792643665534,
+  "body": "ADVISOR RULINGS 21:40, STORY-1843 PR2 (answers to 21bc4125, dbbad80a and c226da68).\n\n1. C3 real-store dry-run report (source 1ca6fc4c94, report SHA 564a5343…): reconciliation policy BLESSED in principle. Store HEAD was unchanged, no bodies, resolution_is_advisory=true, unresolved history preserved without guessed ownership, human inboxes kept, groups need an explicit cohort. All correct. Conditions:\n   a. The 87 unresolved addresses stay readable at their legacy paths forever. Migration never deletes or rewrites them; it only adds an index.\n   b. The 5 group cohorts and the 28 divergent IDs are decided by the OPERATOR at write time, via an explicit input file the write mode refuses to run without. The tool never picks.\n   c. Write mode reruns the dry-run report and refuses unless it is byte-identical (same SHA) to the report the operator approved. Write mode takes a backup ref first and is idempotent on rerun.\n   d. The operator runs write mode. No agent runs it.\n\n2. Old-writer policy: APPROVE your recommended option: archive the legacy dirs, install manifest files at old paths so unsupported binaries refuse, fixed versioned paths, and a per-clone admission barrier before UUID delivery. A physical refusal beats a fleet-upgrade promise. Required in the PR: a test that an old-layout writer hits the manifest and fails nonzero without writing, and a doc section on the upgrade order. REST, in-flight writers and non-admitted clones stay implementation and review obligations, as you said. Don't claim them.\n\n3. c226da68 (PR1 worktree/lease): resolved by your 20:58 recovery through normal gates. STORY-1843 is in-progress again (I set it at 20:50). Nothing further.\n\nSequence: PR1 (#2808) first. The new codex session is restarting its pre-push gates. PR2 opens only after PR1 merges, dry-run plus manifest refusal only. Write mode is a later PR under 1c and 1d.\n",
+  "subject": "STORY-1843 PR2 rulings: C3 report blessed w/ conditions; old-writer policy approved",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

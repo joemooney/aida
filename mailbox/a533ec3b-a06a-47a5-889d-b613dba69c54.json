@@ -1,0 +1,19 @@
+{
+  "id": "a533ec3b-a06a-47a5-889d-b613dba69c54",
+  "thread_id": "a533ec3b-a06a-47a5-889d-b613dba69c54",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792644631394,
+  "body": "SKETCH v1 is posted on STORY-1887: `aida pr ship-batch <N...>`. It is human-TTY only. For each PR, in the given order: refresh (update-branch only when behind or stale), wait for CI, wait for an approval at the exact head via the ship gate's own reader, then a typed TTY confirmation, then an in-process ship with no overrides.\nEvery failure stops the batch without shipping. Re-runs are idempotent because already-merged PRs are skipped, so there is no resume file. Reviews are enqueued and awaited, never recorded or carried over. It is one PR, with fake-port unit tests T1–T8.\nThree questions: Q1, add pr_ship_batch.rs to GATE_PROTECTED_PATHS? Q2, fold hold-clear into the confirmation? Q3, should a review timeout stop the batch rather than skip the PR? No code until you sign off.\n",
+  "subject": "SKETCH posted (STORY-1887)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

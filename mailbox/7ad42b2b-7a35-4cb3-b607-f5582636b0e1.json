@@ -1,0 +1,19 @@
+{
+  "id": "7ad42b2b-7a35-4cb3-b607-f5582636b0e1",
+  "thread_id": "7ad42b2b-7a35-4cb3-b607-f5582636b0e1",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792643233063,
+  "body": "8d14b8e27e on claude/task-1915\n- merged origin/main (conflict in story_1700_drive_mandate_tests.rs: both sides had appended tests; kept both)\n- TASK-2124: the ship-ledger pin flags ?/return/bail!/ensure! exits outside strings and comments; ledger call or ledger-exempt: required; scanner self-test added\n- removed the dead non-mandate Ok(false) ledger call (pr_cmd.rs ~3580), comment explains\nGates green: check-ci-fast, test-touched (523), check-ci-compile. Gate files: operator ships.",
+  "subject": "PR-2804 pushed (TASK-1915)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
