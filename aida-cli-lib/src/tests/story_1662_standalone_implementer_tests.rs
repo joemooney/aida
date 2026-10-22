@@ -592,21 +592,24 @@ fn cap_comes_from_config_with_a_default_of_three() {
 // ── Authorship and the Q1 ledger note ─────────────────────────────────────
 
 fn implementer_lease(worktree: std::path::PathBuf) -> SessionLease {
-    let mut lease: SessionLease = toml::from_str(&format!(
+    let mut table: toml::Table = toml::from_str(&format!(
         r#"
 id = "{LEASE}"
 scope = "STORY-9"
 slug = "story-9"
 owner = "tester"
-worktree_path = "{}"
 branch = "claude/story-9"
 started_at = "2026-10-21T00:00:00Z"
 hostname = "h"
 role = "implementer"
-"#,
-        worktree.display()
+"#
     ))
     .unwrap();
+    table.insert(
+        "worktree_path".into(),
+        toml::Value::String(worktree.to_string_lossy().into_owned()),
+    );
+    let mut lease: SessionLease = table.try_into().unwrap();
     // The caller's Bash shell ran `aida queue work`.
     lease.creator_pid = Some(200);
     lease.creator_pid_start_time = Some("s".into());
