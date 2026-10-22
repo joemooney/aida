@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T14:43:21.417683996Z
-modified_at: 2026-10-22T00:06:11.214114927Z
+modified_at: 2026-10-22T00:06:14.332732914Z
 req_type: Task
 relationships:
 - rel_type: Supersedes
@@ -37,6 +37,12 @@ comments:
   content: 'ADVISOR 11:50: folded the auto-filed PR-2804 findings TASK-2079, 2081, 2082 and 2083. They are being fixed on #2804 per the 11:38 ruling.'
   created_at: 2026-10-21T18:49:09.184349346Z
   modified_at: 2026-10-21T18:49:09.184349346Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a160ee-063c-7dc3-88b6-be2da7b0dafe
+  author: joe
+  content: 'ADVISOR 17:06: PR-2802 re-reviewed at bae5ada508 (after update-branch): PASS. Folded TASK-2124 (''?'' early exits slip past the ship-ledger wiring pin), plus a dead ledger call at pr_cmd.rs:3581 and a PR body that undersells the TASK-1960 re-arm change. Handle them in #2804''s rework.'
+  created_at: 2026-10-22T00:06:14.332732914Z
+  modified_at: 2026-10-22T00:06:14.332732914Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a15fad-510f-7123-93df-acdf03517e5a
