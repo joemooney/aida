@@ -8,16 +8,25 @@ description: |
   2. outcome_exit_codes_are_distinct_and_mapped_by_exit_code_for_error checks against a hand-written list that omits DRIVE_EXIT_HARD_FAIL=3 and TIMEOUT_EXIT_STATUS=124. Use a single exit-code table that both exit_code_for_error and the test read.
 
   Raised in review of PR-2829: https://github.com/joemooney/aida/pull/2829#issuecomment-6337877063
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-22T09:52:13.797668281Z
-modified_at: 2026-10-22T09:52:13.797668281Z
+modified_at: 2026-10-22T09:53:00.575266143Z
 req_type: Task
 tags:
 - from-review:PR-2829
 - severity:minor
+history:
+- id: 01a16307-3a9f-7a63-893d-4a45f76c7cd4
+  author: joe
+  timestamp: 2026-10-22T09:53:00.575260209Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 597bc0c876bd4307043fa789df46ce811979321f
   branch: pr-2829
