@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T13:11:27.819459305Z
-modified_at: 2026-10-22T07:49:16.142711444Z
+modified_at: 2026-10-22T07:49:22.642872860Z
 req_type: Task
 relationships:
 - rel_type: References
@@ -91,6 +91,12 @@ comments:
     C5 (ship path): all three PRs touch mandate code, so the operator ships each after an independent review. Never self-ship. Mail the advisor the PR number and head when each is open.
   created_at: 2026-10-22T01:36:06.463771326Z
   modified_at: 2026-10-22T01:36:06.463771326Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a16296-0a52-72b2-b7b0-01016f7671d0
+  author: joe
+  content: 'ADVISOR 00:52: folded the PR-2825 non-blocking notes TASK-2144 (the snapshot misses other worktrees'' detached HEADs that git log --all walks) and TASK-2145 (the dirty check honours the global core.excludesFile; pass -c core.excludesFile=). Take them in PR2.'
+  created_at: 2026-10-22T07:49:22.642872860Z
+  modified_at: 2026-10-22T07:49:22.642872860Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a15e96-e99e-7123-b5b2-06413f72154e
