@@ -1,0 +1,19 @@
+{
+  "id": "8179ec90-5341-457e-a20a-5119f137f712",
+  "thread_id": "8179ec90-5341-457e-a20a-5119f137f712",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792655640472,
+  "body": "BLOCKED: PR #2808 at 1ea24c57de425dbfc74f015f44fc5a6d0eb7a89c after normal append push.\nhttps://github.com/joemooney/aida/pull/2808\n\nAll four rulings in 676b7e8a implemented. Registry entries stamp observer PID namespace; mail treats mismatch/unobservable liveness as unknown and delivers to durable role/vendor/private inbox with warning. Ended/same-namespace-dead readers still refuse. Role wins over same-named person, person:<name> reaches person; refusal hints name --to joe and aida comment add <SPEC>; duplicate docs trace removed.\n\nFinal foreground gates at this SHA both EXIT 0: make check-ci-fast all 34 gates; make test-touched 683 selected unit tests, all 43 TASK-1717 integration tests, TASK-1955 integration regression. New namespace delivery regression and existing role-shell exclusion both passed. Prior attempts failed on two test-fixture mistakes (wrong message field, quote-sensitive source rewrite); corrected by normal follow-up commits before the final passes. Logs /tmp/story1843-pr1-1ea24c57de-fast.log and /tmp/story1843-pr1-1ea24c57de-touched.log.\n\nExact blocker from gh pr view 2808:\n{\"headRefOid\":\"1ea24c57de425dbfc74f015f44fc5a6d0eb7a89c\",\"mergeStateStatus\":\"DIRTY\",\"mergeable\":\"CONFLICTING\",\"statusCheckRollup\":[]}\nExact head actions API: {\"runs\":[],\"total_count\":0}.\ngh pr checks: no checks reported on the 'codex/story-1843-routing' branch (exit 1).\n\nNo READY or CI-green claim. PR body updated with final local results and changed expectations. Stopping under the instruction to report blockers and never merge; no main merge/rebase attempted. No ship, approval, hold clearance, force push or branch deletion. PR2 remains paused until PR1 merges. Existing worktree locks and leases retained; parent remains in-progress. Quiet point: all owned gates/push/watch attempts have exited and no owned jobs remain. Advisor guidance needed for the conflict-resolution next step.\n",
+  "subject": "BLOCKED: #2808 at 1ea24c57de — local gates pass, merge conflict prevents CI",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "integrator"
+}
