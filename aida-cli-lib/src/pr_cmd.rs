@@ -8083,6 +8083,23 @@ mod story_1663_rebase_ship_tests {
         .expect("head movement after preflight/CI must refuse");
         assert!(stale.contains("PR-1490"), "{stale}");
         assert!(stale.contains("moved"), "{stale}");
+        // TASK-1623: a head that could not be read refuses instead of
+        // skipping the check. trace:TASK-1951 trace:TASK-1623 | ai:claude
+        let h = Some("1111111111111111111111111111111111111111");
+        for (pre, post, at) in [
+            (None, h, "preflight"),
+            (Some(""), h, "preflight"),
+            (h, None, "merge"),
+            (h, Some("  "), "merge"),
+        ] {
+            let refusal = pr_ship::stale_head_after_ci_refusal(1490, pre, post)
+                .expect("an unreadable head must refuse");
+            assert!(
+                refusal.contains(&format!("could not be read at {at}")),
+                "{refusal}"
+            );
+        }
+        assert!(pr_ship::stale_head_after_ci_refusal(1490, h, h).is_none());
 
         let unpinned =
             pr_ship::require_rebase_head_pin(1490, crate::forge::MergeMethod::Rebase, None)
