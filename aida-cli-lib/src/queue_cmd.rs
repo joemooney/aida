@@ -12957,6 +12957,9 @@ pub(crate) fn handle_queue_work(
                     &project_root,
                     &lease.id,
                     child_grant,
+                    std::env::var(crate::seat_authority::GRANT_ENV)
+                        .ok()
+                        .as_deref(),
                 );
                 eprintln!();
                 return crate::standalone_implementer::run(crate::standalone_implementer::Launch {

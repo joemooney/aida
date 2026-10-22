@@ -850,6 +850,73 @@ pub(crate) fn classify_rebase_subprocess_exit(
     }
 }
 
+/// STORY-1662 (TASK-2154): every exit code an `aida` command assigns a
+/// meaning to, in ONE table. A caller that branches on a code needs it to be
+/// unambiguous, so the distinctness test reads this table rather than a
+/// hand-kept list; a new named code goes here, or the test cannot see it.
+/// A code with two meanings on different commands is one row naming both.
+/// Vendor exit codes that pass through (`queue work` reviewer and
+/// implementer launches) are not listed: they are the vendor's, not ours.
+// trace:STORY-1662 | ai:claude
+pub(crate) const EXIT_CODES: &[(i32, &str)] = &[
+    (auto_complete::DRIVE_EXIT_CLEAN, "success"),
+    (1, "error"),
+    (
+        auto_complete::DRIVE_EXIT_SHELVED,
+        "usage error (clap); `--auto-complete` drive shelved a spec",
+    ),
+    (
+        auto_complete::DRIVE_EXIT_HARD_FAIL,
+        "`--auto-complete` drive hard failure",
+    ),
+    (drain_next_n::DRAIN_CAP_EXIT_CODE, "drain cap reached"),
+    (pr_rebase::REBASE_EXIT_CODE_CONFLICT, "pr rebase conflict"),
+    (pr_rebase::REBASE_EXIT_CODE_REFUSED, "pr rebase refused"),
+    (pr_ship::ShipRefusal::CiRed as i32, "pr ship: CI red"),
+    (
+        pr_ship::ShipRefusal::CiTimeout as i32,
+        "pr ship: CI timeout",
+    ),
+    (
+        pr_ship::ShipRefusal::NotMergeable as i32,
+        "pr ship: not mergeable",
+    ),
+    (pr_ship::ShipRefusal::Review as i32, "pr ship: review"),
+    (
+        pr_ship::ShipRefusal::StaleDefinition as i32,
+        "pr ship: stale definition",
+    ),
+    (
+        pr_ship::ShipRefusal::MergeHold as i32,
+        "pr ship: merge hold",
+    ),
+    (
+        queue_cmd::NO_REVIEW_VERDICT_EXIT_CODE,
+        "standalone reviewer: no verdict",
+    ),
+    (
+        crate::standalone_implementer::NO_PR_EXIT_CODE,
+        "standalone implementer: no PR",
+    ),
+    (
+        crate::standalone_implementer::PUNTED_EXIT_CODE,
+        "standalone implementer: punted",
+    ),
+    (
+        crate::standalone_implementer::HELD_EXIT_CODE,
+        "standalone implementer: held",
+    ),
+    (
+        crate::standalone_implementer::CAP_EXIT_CODE,
+        "standalone implementer: concurrency cap",
+    ),
+    (
+        crate::maintenance_schedule::TIMEOUT_EXIT_STATUS,
+        "scheduled job timed out",
+    ),
+    (drain_signal::SIGTERM_EXIT_CODE, "terminated by SIGTERM"),
+];
+
 /// BUG-1295: the process exit code `main_entry` returns for a top-level
 /// error. Pulled out of `main_entry` so it's unit-testable: a
 /// `pr_rebase::RebaseFailureExit` (the sentinel a `pr rebase` conflict /

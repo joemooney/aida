@@ -1877,6 +1877,8 @@ pub(crate) fn ensure_spec_worktree(
     path_override: Option<&str>,
     branch_override: Option<&str>,
     worktree_context: &str,
+    // STORY-1662: the role recorded on a freshly minted lease.
+    role: &str,
 ) -> Result<WorktreeOutcome> {
     let main_root = find_main_worktree_root()?;
     let home =
@@ -2038,7 +2040,7 @@ pub(crate) fn ensure_spec_worktree(
                 /* launch_name */ None,
                 /* permission_mode */ None,
                 /* launch_contained */ false,
-                /* role */ Some("implementer".to_string()),
+                /* role (STORY-1662) */ Some(role.to_string()),
                 /* force_claim (TASK-1784: own dead lease) */ reclaimed_dead_lease,
                 /* use_pool */ Some(false),
                 /* self_claim: the caller works it (BUG-2010) */ true,
@@ -2135,7 +2137,8 @@ pub(crate) fn handle_worktree_command(cmd: &WorktreeCommand) -> Result<()> {
             target,
             path,
             branch,
-        } => handle_worktree_add(target, path.as_deref(), branch.as_deref()),
+            role,
+        } => handle_worktree_add(target, path.as_deref(), branch.as_deref(), role.as_deref()),
         WorktreeCommand::Enter {
             target,
             path,
@@ -2902,13 +2905,43 @@ pub(crate) fn handle_worktree_add(
     arg: &str,
     path_override: Option<&str>,
     branch_override: Option<&str>,
+    role: Option<&str>,
 ) -> Result<()> {
+    // STORY-1662: the role the lane's lease records. A `claude --bg` session
+    // started in this worktree takes its identity from it.
+    // trace:STORY-1662 | ai:claude
+    let lane_role = role
+        .map(|r| crate::lane_env::validate_value("role", r.trim()))
+        .transpose()?
+        .map(|r| crate::canonical_role_name(&r));
     let out = match classify_worktree_arg(arg) {
-        WorktreeTarget::Epic => ensure_epic_worktree(arg, path_override, branch_override)?,
-        WorktreeTarget::Spec { display, focus } => {
-            ensure_spec_worktree(&display, &focus, path_override, branch_override, "add")?
+        WorktreeTarget::Epic => {
+            if lane_role.is_some() {
+                anyhow::bail!(
+                    "--role applies to a spec worktree; `{arg}` is an epic, whose worktree holds no lease"
+                );
+            }
+            ensure_epic_worktree(arg, path_override, branch_override)?
         }
+        WorktreeTarget::Spec { display, focus } => ensure_spec_worktree(
+            &display,
+            &focus,
+            path_override,
+            branch_override,
+            "add",
+            lane_role.as_deref().unwrap_or("implementer"),
+        )?,
     };
+    if let (Some(role), Some(lease_id)) = (lane_role.as_deref(), out.lease_id.as_deref()) {
+        let main_root = find_main_worktree_root()?;
+        let current = list_leases(&main_root)
+            .into_iter()
+            .find(|l| l.id == lease_id)
+            .and_then(|l| l.role);
+        if current.as_deref() != Some(role) {
+            crate::lane_env::stamp_lease_role_at(&main_root, lease_id, role)?;
+        }
+    }
     // BUG-2143: print an absolute path, and never a blank one as success.
     ensure_worktree_on_disk(&out.path, &out.focus)?;
     let mut out = out;
@@ -2943,9 +2976,14 @@ pub(crate) fn handle_worktree_enter(
 ) -> Result<()> {
     let out = match classify_worktree_arg(arg) {
         WorktreeTarget::Epic => ensure_epic_worktree(arg, path_override, branch_override)?,
-        WorktreeTarget::Spec { display, focus } => {
-            ensure_spec_worktree(&display, &focus, path_override, branch_override, "enter")?
-        }
+        WorktreeTarget::Spec { display, focus } => ensure_spec_worktree(
+            &display,
+            &focus,
+            path_override,
+            branch_override,
+            "enter",
+            "implementer",
+        )?,
     };
     // BUG-2143: never `cd` into a path that is not a git worktree.
     ensure_worktree_on_disk(&out.path, &out.focus)?;

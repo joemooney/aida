@@ -358,12 +358,33 @@ pub(crate) struct Launch<'a> {
     pub(crate) child_grant: &'a crate::seat_authority::HeadlessChildGrant,
 }
 
+/// The audit reason for a baseline child whose launcher presented no grant at
+/// all, as opposed to [`BASELINE_NOT_DELEGATED`].
+pub(crate) const BASELINE_NO_GRANT: &str = "launcher-has-no-grant";
+/// The audit reason for a baseline child whose launcher holds a grant that
+/// does not delegate `implementer` (signoff Q1).
+pub(crate) const BASELINE_NOT_DELEGATED: &str = "launcher-did-not-delegate";
+
+/// Why a baseline child is ungranted: `launcher_grant` is the launcher's
+/// `AIDA_SESSION_GRANT` value. Unset or blank means the launcher had no grant
+/// to delegate from; anything else is a grant that did not delegate the seat.
+// trace:STORY-1662 | ai:claude
+pub(crate) fn baseline_reason(launcher_grant: Option<&str>) -> &'static str {
+    match launcher_grant.map(str::trim) {
+        None | Some("") => BASELINE_NO_GRANT,
+        Some(_) => BASELINE_NOT_DELEGATED,
+    }
+}
+
 /// Record on the authorship ledger the authority the child runs with (the
 /// Q1 audit note: a baseline child names why it is ungranted).
+/// `launcher_grant` is the launcher's own `AIDA_SESSION_GRANT`, which tells
+/// "no grant" apart from "a grant that does not delegate".
 pub(crate) fn record_child_authority(
     project_root: &Path,
     lease_id: &str,
     grant: &crate::seat_authority::HeadlessChildGrant,
+    launcher_grant: Option<&str>,
 ) {
     use crate::seat_authority::HeadlessChildGrant;
     let launch = match grant {
@@ -376,7 +397,7 @@ pub(crate) fn record_child_authority(
         HeadlessChildGrant::Baseline { cause } => crate::review_authority::LaunchAuthority {
             seat: "implementer".to_string(),
             grant: "baseline".to_string(),
-            reason: "launcher-did-not-delegate".to_string(),
+            reason: baseline_reason(launcher_grant).to_string(),
             detail: Some(cause.clone()),
         },
     };

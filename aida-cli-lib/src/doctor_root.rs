@@ -1256,8 +1256,37 @@ pub(crate) fn collect_doctor_findings(
         }
     }
 
+    // STORY-1662 (signoff C4): a claude daemon started from a shell holding a
+    // seat grant hands that grant to every `claude --bg` session it hosts.
+    // trace:STORY-1662 | ai:claude
+    for pid in crate::lane_env::daemons_holding_a_grant(std::path::Path::new("/proc")) {
+        push(claude_daemon_grant_finding(pid));
+    }
+
     out.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     Ok(out)
+}
+
+/// STORY-1662 (signoff C4): the finding for a claude daemon whose environment
+/// holds `AIDA_SESSION_GRANT`. Diagnostic only: restarting the daemon is the
+/// operator's call.
+// trace:STORY-1662 | ai:claude
+pub(crate) fn claude_daemon_grant_finding(pid: u32) -> DoctorFinding {
+    DoctorFinding {
+        category: "claude-daemon-grant".to_string(),
+        id: format!("pid {pid}"),
+        summary:
+            "the claude daemon's environment holds AIDA_SESSION_GRANT, so every `claude --bg` \
+                  session it hosts starts with that seat grant"
+                .to_string(),
+        action: format!(
+            "once no `claude --bg` session is running, stop the daemon (`kill {pid}`); the next \
+             `claude --bg` starts a new one, so run that from a shell with no AIDA_SESSION_* \
+             variables (`env -u AIDA_SESSION_GRANT -u AIDA_SESSION_ROLE -u AIDA_SESSION_PURPOSE \
+             claude --bg ...`). Lane worktrees still correct their own identity at session start"
+        ),
+        safe_heal: false,
+    }
 }
 
 /// Locate `binary` on PATH (the portable `command -v`). `None` when absent.
@@ -1577,6 +1606,12 @@ pub(crate) static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
             "toon-leak",
         ],
         "round-trip-artifacts",
+    ),
+    // STORY-1662: a claude daemon whose environment holds a seat grant.
+    // trace:STORY-1662 | ai:claude
+    (
+        &["claude-daemon-grant", "daemon-grant", "claude-daemon"],
+        "claude-daemon-grant",
     ),
     // STORY-1463: a registered `[schedule]` job that nothing ever ticks —
     // no crontab driver installed, or an installed one that isn't actually
