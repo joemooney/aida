@@ -1,0 +1,41 @@
+id: 01a16935-5490-7111-ba1a-f00539108ed5
+spec_id: STORY-1911
+agreed_id: STORY-1911
+title: 'Review PR-2853: [AI:claude] fix(mandate): resolve unresolved trace IDs config-independently; CI replay bundle; snapshot worktree HEADs and excludes (TASK-2067)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `claude/task-2067-pr2`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2853>
+  - Branch: `claude/task-2067-pr2` → `main`
+
+  ## Covers
+
+  - TASK-2067
+
+  ## References (not delivered)
+
+  Spec IDs mentioned in commit bodies or trace comments — touched but not delivered by this PR. Spot-check for regressions.
+
+  - BUG-1-040
+  - BUG-26
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2853` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-23T14:41:05.168564940Z
+modified_at: 2026-10-23T14:41:05.168564940Z
+req_type: Story
+filed_at:
+  code_sha: c6bb0dc4f168f6183260f8a692248eda24e9e7a7
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 51e59ef00d
+  vendor: claude
+  session: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
