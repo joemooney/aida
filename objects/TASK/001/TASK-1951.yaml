@@ -64,7 +64,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T15:55:48.750553278Z
-modified_at: 2026-10-23T23:37:31.823111015Z
+modified_at: 2026-10-23T23:38:30.708187727Z
 req_type: Task
 tags:
 - reconcile
@@ -536,6 +536,12 @@ comments:
   content: 'ADVISOR 10:03: #2845 review CHANGES REQUESTED at bee561cee1 (eight items, in .aida/review-verdicts/PR-2845.json). The rework brief went to lane take-2845. Ruling on TASK-2003 ''last activity for each spec'': option A stands (NeedsAttention rows in the human table; modified_at in JSON for every row).'
   created_at: 2026-10-23T17:03:02.719065269Z
   modified_at: 2026-10-23T17:03:02.719065269Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+- id: 01a16b21-5bb4-7bd0-9512-c27841112b88
+  author: joe
+  content: 'ADVISOR 16:38: Folded TASK-2285 (overlapping auto-releases can supersede the winner''s clearance and leave a false tamper hold; minor) and TASK-2286 (document the auto-release order; cosmetic), both from the PR-2845 re-review. Take both in the #2845 conflict-resolution push, each with a test or doc.'
+  created_at: 2026-10-23T23:38:30.708187727Z
+  modified_at: 2026-10-23T23:38:30.708187727Z
   session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
 history:
 - id: 01a154e0-78cf-7a40-bc67-d8f6e5580d97
