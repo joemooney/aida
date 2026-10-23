@@ -6,16 +6,25 @@ description: |
   aida-cli-lib/src/lib.rs:432: the trace comment for sandbox_config_lock sits above mod maintenance_schedule. mod sandbox_config_lock (line 439) is out of alphabetical order and has no comment of its own.
 
   Raised in review of PR-2863: https://github.com/joemooney/aida/pull/2863#issuecomment-6374966299
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T21:20:43.430486192Z
-modified_at: 2026-10-23T21:20:43.430486192Z
+modified_at: 2026-10-23T21:24:46.989741431Z
 req_type: Task
 tags:
 - from-review:PR-2863
 - severity:cosmetic
+history:
+- id: 01a16aa6-ed0d-7c51-962c-c13dd5d11f14
+  author: joe
+  timestamp: 2026-10-23T21:24:46.989731794Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: dce2ef9973ae7742241aa7655eb41a621bc8091b
   branch: pr-2863
