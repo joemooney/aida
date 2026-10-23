@@ -1,0 +1,34 @@
+id: 01a168af-1961-7c60-8b9d-4a111e98271d
+spec_id: STORY-1903
+agreed_id: STORY-1903
+title: 'Review PR-2843: [AI:claude] feat(pr): merge train — land approved PRs only on a CI-tested stack, bisect red trains (STORY-1690)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `claude/story-1690`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2843>
+  - Branch: `claude/story-1690` → `main`
+
+  ## Covers
+
+  - STORY-1690
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2843` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-23T12:14:28.193548458Z
+modified_at: 2026-10-23T12:14:28.193548458Z
+req_type: Story
+filed_at:
+  code_sha: 51e59ef00d8527eb72bef58bf6f1a6018b9fbd70
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 51e59ef00d
+  vendor: claude
+  session: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
