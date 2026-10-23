@@ -248,6 +248,14 @@ pub struct RecorderAttestation {
     // trace:STORY-1655 | ai:claude
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub solo_human: bool,
+    /// BUG-1934: the recorder's process tokens that satisfied the seat
+    /// grant's binding when it recorded. The ship gate requires them to match
+    /// the grant's binding again; empty (an older verdict, or no grant) never
+    /// verifies a grant attestation. Kept apart from `identity` so the
+    /// author-overlap check is unchanged.
+    // trace:BUG-1934 | ai:claude
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub grant_binding: Vec<String>,
 }
 
 impl RecorderAttestation {

@@ -274,9 +274,10 @@ impl<'de> serde::Deserialize<'de> for OrderedJson {
 /// Write the Antigravity hook wiring and handlers under `project_root`.
 ///
 /// `.agents/hooks.json` is a shared, user-owned file holding named hook entries.
-/// When it already exists as a valid JSON object, only the `aida-grant-expiry-notice`
-/// key is inserted or updated (when `force = true`), preserving all other keys
-/// and their original key order. If `.agents/hooks.json` exists and is invalid
+/// When it already exists as a valid JSON object, only AIDA's own keys
+/// (`aida-grant-expiry-notice`, `aida-mail-notice`) are inserted when missing
+/// or updated (when `force = true`), preserving all other keys and their
+/// original key order. If `.agents/hooks.json` exists and is invalid
 /// JSON or not a top-level object, it is never overwritten (even with `force = true`),
 /// the handler script is not dropped, and a single warning is recorded on the outcome.
 // trace:TASK-1744 | ai:antigravity
@@ -331,25 +332,28 @@ pub fn scaffold_antigravity_hooks(
             out.written.push(AGY_HOOKS_JSON_REL.to_string());
         }
         Some(mut entries) => {
-            if entries.iter().any(|(k, _)| k == AGY_EXPIRY_NOTICE_KEY) && !force {
+            // Every AIDA-managed key in the template: a missing one is added
+            // (so re-init brings an older install up to date), an existing
+            // one is replaced only under `force`. trace:TASK-2253 | ai:claude
+            let template_entries = match serde_json::from_str::<OrderedJson>(template_body) {
+                Ok(OrderedJson::Object(t)) => t,
+                _ => Vec::new(),
+            };
+            let mut changed = false;
+            for (key, entry) in template_entries {
+                if let Some((_, slot)) = entries.iter_mut().find(|(k, _)| *k == key) {
+                    if force {
+                        *slot = entry;
+                        changed = true;
+                    }
+                } else {
+                    entries.push((key, entry));
+                    changed = true;
+                }
+            }
+            if !changed {
                 out.skipped_existing.push(AGY_HOOKS_JSON_REL.to_string());
             } else {
-                if let Ok(OrderedJson::Object(template_entries)) =
-                    serde_json::from_str::<OrderedJson>(template_body)
-                {
-                    if let Some((_, entry)) = template_entries
-                        .into_iter()
-                        .find(|(k, _)| k == AGY_EXPIRY_NOTICE_KEY)
-                    {
-                        if let Some((_, slot)) =
-                            entries.iter_mut().find(|(k, _)| k == AGY_EXPIRY_NOTICE_KEY)
-                        {
-                            *slot = entry;
-                        } else {
-                            entries.push((AGY_EXPIRY_NOTICE_KEY.to_string(), entry));
-                        }
-                    }
-                }
                 let rendered = serde_json::to_string_pretty(&OrderedJson::Object(entries))
                     .map_err(std::io::Error::other)?;
                 std::fs::write(&wiring, format!("{rendered}\n"))?;
@@ -634,6 +638,14 @@ mod tests {
         "command": "echo b"
       }
     ]
+  },
+  "aida-mail-notice": {
+    "SessionStart": [
+      {
+        "type": "command",
+        "command": "custom-mail"
+      }
+    ]
   }
 }
 "#;
@@ -663,6 +675,128 @@ mod tests {
         assert!(after_force[AGY_EXPIRY_NOTICE_KEY]
             .to_string()
             .contains("aida-grant-expiry-notice.sh"));
+    }
+
+    /// An install from before the agy SessionStart wiring gains it on a
+    /// non-force pass, leaving the customized expiry key alone.
+    // trace:TASK-2253.acd91dca | ai:claude
+    #[test]
+    fn antigravity_scaffolding_adds_missing_mail_notice_key_without_force() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let wiring = root.join(AGY_HOOKS_JSON_REL);
+        std::fs::create_dir_all(wiring.parent().unwrap()).unwrap();
+        std::fs::write(
+            &wiring,
+            r#"{"aida-grant-expiry-notice":{"PreInvocation":[{"type":"command","command":"custom-aida"}]}}"#,
+        )
+        .unwrap();
+
+        let out = scaffold_antigravity_hooks(root, false).unwrap();
+        assert!(out.written.iter().any(|w| w == AGY_HOOKS_JSON_REL));
+        let v: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&wiring).unwrap()).unwrap();
+        assert_eq!(
+            v[AGY_EXPIRY_NOTICE_KEY]["PreInvocation"][0]["command"],
+            "custom-aida"
+        );
+        assert!(v["aida-mail-notice"]["SessionStart"][0]["command"]
+            .as_str()
+            .unwrap()
+            .contains("aida-mail-notice.sh"));
+        assert!(root
+            .join(AGY_HOOKS_DIR_REL)
+            .join("aida-mail-notice.sh")
+            .is_file());
+    }
+
+    /// Antigravity names `SessionStart` as a flat handler list whose stdin is
+    /// camelCase (`conversationId`, no event name) and whose stdout must be a
+    /// JSON object. Run the scaffolded agy SessionStart command, as agy does
+    /// (`sh -c`, cwd = the dir holding hooks.json), against a recording fake
+    /// `aida`: the payload and the named event reach `aida awaiting --notice`
+    /// — the session-start path that runs the host-side dead-row gc — and the
+    /// notice comes back as an injected system message. Contract source:
+    /// Antigravity CLI 1.4.2 builtin `agy-customizations/docs/hooks.md`,
+    /// "### 3. `SessionStart` Contract".
+    // trace:TASK-2253.acd91dca | ai:claude
+    #[cfg(unix)]
+    #[test]
+    fn agy_session_start_hook_reaches_the_notice_session_start_path() {
+        use std::io::Write;
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let st = crate::test_git::git_command()
+            .args(["init", "-q"])
+            .current_dir(root)
+            .status()
+            .unwrap();
+        assert!(st.success());
+        scaffold_antigravity_hooks(root, false).unwrap();
+
+        let wiring: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(root.join(AGY_HOOKS_JSON_REL)).unwrap())
+                .unwrap();
+        let command = wiring["aida-mail-notice"]["SessionStart"][0]["command"]
+            .as_str()
+            .expect("agy SessionStart handler is flat")
+            .to_string();
+
+        let bin = root.join("fake-bin");
+        std::fs::create_dir_all(&bin).unwrap();
+        let record = root.join("notice-env");
+        let fake = bin.join("aida");
+        std::fs::write(
+            &fake,
+            format!(
+                "#!/bin/sh\n[ \"$1 $2\" = \"awaiting --notice\" ] || exit 0\n\
+                 {{ printf 'PAYLOAD=%s\\n' \"$AIDA_HOOK_PAYLOAD\"; printf 'EVENT=%s\\n' \"$AIDA_HOOK_EVENT\"; }} > '{}'\n\
+                 printf 'Current date/time: now \"q\" a\\\\b\\nAwaiting you: 1 mail\\n'\n",
+                record.display()
+            ),
+        )
+        .unwrap();
+        set_executable(&fake);
+
+        let payload =
+            r#"{"conversationId":"agy-conv-1","workspacePaths":["/w"],"modelName":"auto"}"#;
+        let path = format!(
+            "{}:{}",
+            bin.display(),
+            std::env::var("PATH").unwrap_or_default()
+        );
+        let mut child = std::process::Command::new("sh")
+            .arg("-c")
+            .arg(&command)
+            .current_dir(root.join(".agents"))
+            .env("PATH", path)
+            .env_remove("AIDA_SESSION_PROJECT")
+            .env_remove("CLAUDE_PROJECT_DIR")
+            .env_remove("CODEX_PROJECT_DIR")
+            .env_remove("AIDA_HOOK_EVENT")
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .spawn()
+            .unwrap();
+        child
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(payload.as_bytes())
+            .unwrap();
+        let output = child.wait_with_output().unwrap();
+        assert!(output.status.success());
+
+        let seen = std::fs::read_to_string(&record).expect("aida awaiting --notice ran");
+        assert!(seen.contains(&format!("PAYLOAD={payload}")), "{seen}");
+        assert!(seen.contains("EVENT=SessionStart"), "{seen}");
+
+        let out: serde_json::Value = serde_json::from_slice(&output.stdout)
+            .unwrap_or_else(|e| panic!("agy stdout must be JSON ({e}): {:?}", output.stdout));
+        assert_eq!(
+            out["injectSteps"][0]["systemMessage"]["systemMessage"],
+            "Current date/time: now \"q\" a\\b\nAwaiting you: 1 mail"
+        );
     }
 
     // trace:TASK-1744 | ai:antigravity

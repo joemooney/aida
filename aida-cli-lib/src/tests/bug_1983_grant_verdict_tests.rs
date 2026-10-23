@@ -350,6 +350,10 @@ fn same_check(reason: &GrantRejection) -> String {
         GrantRejection::ParentNotDelegating { parent_seat } => {
             format!("ParentNotDelegating({parent_seat})")
         }
+        GrantRejection::Unbound => "Unbound".into(),
+        GrantRejection::PresenterNotBound { .. } => "PresenterNotBound".into(),
+        GrantRejection::ForeignNamespace { .. } => "ForeignNamespace".into(),
+        GrantRejection::KeyringUnavailable { .. } => "KeyringUnavailable".into(),
     }
 }
 
