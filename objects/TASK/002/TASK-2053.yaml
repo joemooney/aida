@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T09:53:13.924066900Z
-modified_at: 2026-10-23T13:37:48.980638316Z
+modified_at: 2026-10-23T13:48:54.492835746Z
 req_type: Task
 relationships:
 - rel_type: References
@@ -256,6 +256,11 @@ comments:
   content: 'Session 2: PR #2839 pushed at 3aaaa4b8b57007120483da576ddb339d854e9152, stacked on #2836 ade7ac0f89. S4c default/fallback25/25 and require-live TASK-2053 bwrap27/27 passed at c4dab30796; final merge changes only the tested doctor JSON assertion, no production/default-test change. Final-head fast34/34 passed. PR bodies updated, advisor mailed both pushed SHAs and precise TASK-1641 real-Claude operator command. No current CI/real-vendor PASS claimed; C3 hold remains.'
   created_at: 2026-10-23T13:37:48.980638316Z
   modified_at: 2026-10-23T13:37:48.980638316Z
+- id: 01a16905-8f5c-71d1-9ee5-486be092b6e1
+  author: ai:codex:joe
+  content: 'READY PR-2836: exact pushed ade7ac0f893c170a21688ff315e76673a539a58c CI39960998119 completed SUCCESS (all seven lanes plus required Build); merge-hold-gate passed. Current gates log proves live bwrap34/34, including all27 TASK-2053 tests, quoted in updated PR body. Local final283/0/1 targeted, required-live27/27, fast34/34. Advisor mailed READY for independent review. PR2839 pushed3aaaa4b8b57007120483da576ddb339d854e9152 local default25/25, live27/27, fast34/34; main-based full CI awaits B landing/retarget. Remaining external gates: independent B review/landing, C current CI/independent PASS, operator TASK1641 real-Claude run and C3 merge. No implementation-session verdict/clearance/ship; task remains In Progress.'
+  created_at: 2026-10-23T13:48:54.492835746Z
+  modified_at: 2026-10-23T13:48:54.492835746Z
 history:
 - id: 01a15de1-409d-7c42-b18e-94acbd5eb19d
   author: joe
