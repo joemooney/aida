@@ -514,6 +514,10 @@ fn review_record_refuses_a_presenter_not_bound_grant() {
 // trace:BUG-1934 | ai:claude
 #[test]
 fn role_enter_refuses_to_print_the_secret_to_a_terminal() {
+    if !crate::grant_keyring::available() {
+        eprintln!("SKIP: no session keyring, so no secret is minted");
+        return;
+    }
     let dir = tempfile::tempdir().unwrap();
     let _env = crate::test_env::EnvVarsGuard::apply(&[
         ("AIDA_HEADLESS", None),

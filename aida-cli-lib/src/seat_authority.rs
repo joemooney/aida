@@ -1565,10 +1565,15 @@ pub(crate) fn issue_direct(
     bind_pid: Option<u32>,
 ) -> Result<IssuedGrant> {
     require_direct_human()?;
-    // BUG-1934 (round 2): a terminal-bound grant's eval text carries its
-    // session-key secret, so it is only ever written to a pipe the shell
-    // eval's, never printed to the terminal. trace:BUG-1934 | ai:claude
-    if bind_pid.is_none() && crate::authority_stdout_is_terminal() {
+    // SKETCH v2: a grant for THIS terminal is also bound to a session-key
+    // secret where the kernel offers a session keyring (elsewhere it stays
+    // process-bound only); `--bind-pid` stays pid-only (Q4).
+    // trace:BUG-1934 | ai:claude
+    let key_secret = (bind_pid.is_none() && crate::grant_keyring::available()).then(new_key_secret);
+    // Round 2: the eval text then carries that secret, so it is only ever
+    // written to a pipe the shell eval's, never printed to the terminal.
+    // trace:BUG-1934 | ai:claude
+    if key_secret.is_some() && crate::authority_stdout_is_terminal() {
         bail!(
             "`aida role enter` prints shell code holding a one-time secret; run it as `eval \"$(aida role enter {seat})\"` (or through the aida shell helper) so it is never shown on the terminal"
         );
@@ -1576,9 +1581,6 @@ pub(crate) fn issue_direct(
     // BUG-1934: bind before anything is written; an unbindable grant is
     // never minted. trace:BUG-1934 | ai:claude
     let caller = presenter_source();
-    // SKETCH v2: a grant for THIS terminal is also bound to a session-key
-    // secret; `--bind-pid` stays pid-only (Q4). trace:BUG-1934 | ai:claude
-    let key_secret = bind_pid.is_none().then(new_key_secret);
     let mut binding = match bind_pid {
         None => direct_issue_binding(&caller)?,
         Some(pid) => vec![check_bind_target(
