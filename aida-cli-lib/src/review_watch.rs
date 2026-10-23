@@ -2124,7 +2124,7 @@ fn report(
         }
         // Not throttled: a failed delivery is retried on the next pass, and
         // never stops the readiness report.
-        if let Err(error) = notice::send(root, store, change, history) {
+        if let Err(error) = notice::send(root, store, change, history, evidence) {
             eprintln!("{key}: review notice not delivered; retried next pass: {error:#}");
         }
     }
@@ -2150,24 +2150,29 @@ fn report(
             checked_at: chrono::Utc::now(),
         });
         let prefix = format!("{}:", change.head);
-        entry.wakes.retain(|k, _| k.starts_with(&prefix));
-        let (Some(kind), Some(approval)) = (readiness.wake(), approval.as_ref()) else {
+        let current = match (readiness.wake(), approval.as_ref()) {
+            (Some(kind), Some(approval)) => Some((
+                format!("{prefix}{kind}:{}", notice::digest(&approval.identity)),
+                approval,
+            )),
+            _ => None,
+        };
+        prune_wakes(
+            &mut entry.wakes,
+            &prefix,
+            current.as_ref().map(|(k, _)| k.as_str()),
+        );
+        let Some((wake_key, approval)) = current else {
             return Ok(None);
         };
         // A pending wake keeps the message it was recorded with, so a retry
         // re-delivers it under the same ID. The key names the approval, as
         // the message ID does: a new approval of the head is a new wake.
         // trace:TASK-1945 | ai:claude (TASK-2200)
-        let wake = entry
-            .wakes
-            .entry(format!(
-                "{prefix}{kind}:{}",
-                notice::digest(&approval.identity)
-            ))
-            .or_insert_with(|| Notice {
-                message: ready::wake_message(&repository, change, &readiness, approval),
-                sent: false,
-            });
+        let wake = entry.wakes.entry(wake_key).or_insert_with(|| Notice {
+            message: ready::wake_message(&repository, change, &readiness, approval),
+            sent: false,
+        });
         Ok((!wake.sent).then(|| wake.clone()))
     })?;
     let Some(wake) = wake else {
@@ -2202,6 +2207,15 @@ fn report(
     })?;
     eprintln!("{key}: ready wake delivered to the advisor");
     Ok(())
+}
+
+/// Keep only the wakes for the current head (`prefix` is `<head>:`), and of
+/// those drop every unsent one but `current`: a pending wake whose readiness
+/// kind or approval has since changed is never redelivered, and left in place
+/// it would disable [`throttled`] for the head on every pass.
+// trace:TASK-2238 | ai:claude
+fn prune_wakes(wakes: &mut BTreeMap<String, Notice>, prefix: &str, current: Option<&str>) {
+    wakes.retain(|k, w| k.starts_with(prefix) && (w.sent || Some(k.as_str()) == current));
 }
 
 /// Whether `head` was judged within `interval`, so this pass skips it. A
