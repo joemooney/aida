@@ -19,7 +19,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-07T22:20:18.378078722Z
-modified_at: 2026-10-15T03:02:35.772469381Z
+modified_at: 2026-10-23T17:58:15.902751014Z
 req_type: Bug
 tags:
 - atomicity
@@ -4176,6 +4176,20 @@ comments:
   content: '[aida:closure-held] Code merged to the default branch (commit defb55f), but completion is held at Done: the spec''s own declared closure criteria are unmet: "tag `closure:pending` is set". Whoever owns those criteria (the spec''s owner or the advisor) resolves them by checking the box in the spec''s Closure section, or removing the tag, via `aida edit BUG-1808 --description ...` / `aida edit BUG-1808 --remove-tag closure:pending`. The next `aida pull` completes it once nothing holds it; to replay by hand, run `aida db reconcile-status --spec BUG-1808 --since defb55f^`. If the blockers form a cycle, or you decide to ship regardless, a human runs `aida edit BUG-1808 --status completed`. (merge sha: defb55f88bc4108334f0ec266e20a5afed5a83f3)'
   created_at: 2026-10-15T03:02:35.786234355Z
   modified_at: 2026-10-15T03:02:35.786234355Z
+- id: 01a169e9-da5e-7803-b90c-1eda170eb161
+  author: ai:codex:joe
+  content: |-
+    UNSHIPPED AUDIT 2026-10-23 (integrator)
+
+    Pinned origin/main: a9e78d34914e43b30fc9d2b590d83ab96feb48b2.
+
+    bug-1808-preflight: SHIPPED-ELSEWHERE. Head `c58efa4cd5f7`; cherry **2+, 1−**. Aggregate PID `9fd0f1022e4eacbddcea4a17dd78f1872f7d81b3` differs from the squash because the contained-field fixture fix was already patch-equivalent on main. **All four changed files are byte-identical at branch tip and landing commit** [defb55f88bc4](https://github.com/joemooney/aida/commit/defb55f88bc4108334f0ec266e20a5afed5a83f3) / merged [#2645](https://github.com/joemooney/aida/pull/2645). BUG-1808 is Done with `closure:pending`; code shipment and closure are distinct.
+
+    bug-1808-delegation-publication: SALVAGE. Head `6a1733a134b2`; cherry **2+**; aggregate PID `bb5c79136aecb066717f60d96f4272c17cc6d721`. Its publication/git-publication modules are absent from pinned main. BUG-1808’s 2026-10-10 scope ruling moved this architecture to EPIC-76 and says not to build the narrow bug on this branch. EPIC-76 (Deferred) explicitly retains this approved groundwork, parked until a production consumer exists, and forbids standalone shipment. A future, newly authorized guided PR would recover the useful publication primitives **together with a reviewed concrete consumer**, binding-signoff/A2 review prerequisites and tests. TASK-1612 is now Rejected; old first-step plans are not dispatch authorization. Preserve as conditional salvage, not a standalone PR.
+
+    These are branch-artifact verdicts, not completion or dispatch/merge authority. No spec status, branch, PR or active worktree changed. Full 14-branch table: .aida/handoff/advisor/unshipped-audit-2026-10-23.md (8 SHIPPED-ELSEWHERE, 3 SALVAGE, 3 ABANDON).
+  created_at: 2026-10-23T17:58:15.902751014Z
+  modified_at: 2026-10-23T17:58:15.902751014Z
 history:
 - id: 01a119db-71a7-7a53-9bb9-8a532dc94ecf
   author: aida-session-start
