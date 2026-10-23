@@ -1,0 +1,43 @@
+id: 01a169c7-ada4-7d31-8556-766e7ab64d6f
+spec_id: FAQ-60
+agreed_id: FAQ-60
+title: Why does aida worktree reclaim find nothing when the build disk is nearly full?
+description: |
+  **It counts every worktree with an open PR as in use, even an idle second copy, and it skips everything when it cannot reach GitHub. Stale caches it ignores can be removed by hand from `target/worktrees/`.**
+
+  ## Why
+  `aida worktree reclaim` (dry run by default; `--apply` deletes) protects any worktree whose branch has an open PR. Takeover fixers often create a second worktree for the same PR branch (`take-N` next to `impl-*` or `fin-*`), and the idle copy's build cache, often 5–45 GiB, counts as protected. When `gh` is unreachable (for example from a sandboxed agent shell), every worktree is reported as "open-PR state unknown" and skipped. On 2026-10-23, `/mnt/build` sat at 88% and reclaim found only 5.2 GiB; 77 GiB of merged-PR and idle-duplicate caches had to be removed by hand.
+
+  ## How
+  1. Run the dry run from a normal terminal, so gh works: `aida worktree reclaim`.
+  2. List the caches under the shared target dir: `du -sh target/worktrees/* | sort -h`.
+  3. A cache is safe to delete when its PR is merged or closed, or when it is an idle duplicate (another worktree on the same branch is the active one) with no writes in the last few hours (`find <dir> -maxdepth 4 -mmin -180 -print -quit` prints nothing).
+  4. Delete only `target/worktrees/<name>`, never the worktree's source dir, and never `target/agent` (the live dev build). A cache rebuilds on the next build in that worktree.
+
+  ## Caveat
+  STORY-1916 makes reclaim count idle duplicates as reclaimable, fall back to git ancestry when gh is unreachable, and add an emergency tier at 95% full. Until it lands, the manual steps above apply.
+
+  ## See also
+  STORY-1916, TASK-1562
+status: Completed
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-23T17:20:56.228617743Z
+modified_at: 2026-10-23T17:20:56.228617743Z
+req_type: Faq
+tags:
+- audience:dev
+- topic:build
+- topic:disk
+filed_at:
+  code_sha: a9e78d34914e43b30fc9d2b590d83ab96feb48b2
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c6bb0dc4f1
+  vendor: claude
+  session: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-23T17:20:56.228654869Z
