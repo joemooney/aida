@@ -4132,16 +4132,11 @@ pub(crate) struct ListArgs {
     #[clap(long)]
     pub no_focus: bool,
 
-    /// Select AND order the displayed columns, e.g.
-    /// `--fields id,title,status,priority,tags`. Renders exactly those
-    /// columns in that order — on the human table AND the token-efficient
-    /// agent output (a real token win for agents). Valid fields: id, title,
-    /// status, type, priority, feature, owner, assignee, tags, heft, weight,
-    /// queued, in_flight, blocked. Default (no `--fields`) keeps the standard
-    /// columns; agent mode defaults to the minimal id,title,status,type set.
+    // Help text is generated from the parser's field set (`list_fields_help`).
     // trace:TASK-964 | ai:claude — plain `//` keeps the marker out of `--help`.
     // trace:STORY-734 | ai:claude — now drives the human table too.
-    #[clap(long, value_name = "CSV")]
+    // trace:TASK-2205 | ai:claude
+    #[clap(long, value_name = "FIELDS", help = crate::list_fields_help())]
     pub fields: Option<String>,
 
     /// List the topics (tags) in use on live FAQs, with how many FAQs
