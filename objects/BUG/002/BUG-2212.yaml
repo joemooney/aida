@@ -8,8 +8,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T17:20:19.556174803Z
-modified_at: 2026-10-23T19:12:56.616024739Z
+modified_at: 2026-10-23T21:16:38.580266264Z
 req_type: Bug
+comments:
+- id: 01a16a9f-7934-7c70-979d-7acd07d760ca
+  author: joe
+  content: Commit fa70e34d47 references this requirement
+  created_at: 2026-10-23T21:16:38.580266264Z
+  modified_at: 2026-10-23T21:16:38.580266264Z
+  session_id: e4aac5bc-c046-4268-8239-f233e1f17612
 history:
 - id: 01a16a2e-3928-7950-8571-236934ce2779
   author: joe
