@@ -25,7 +25,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T12:00:26.553324153Z
-modified_at: 2026-10-23T17:51:51.202630657Z
+modified_at: 2026-10-23T17:58:41.425026528Z
 req_type: Story
 tags:
 - dev-build
@@ -130,6 +130,18 @@ comments:
   created_at: 2026-10-22T11:19:46.814070848Z
   modified_at: 2026-10-22T11:19:46.814070848Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a169ea-3e11-7ca0-9d45-c548d1bd6e04
+  author: ai:codex:joe
+  content: |-
+    UNSHIPPED AUDIT 2026-10-23 (integrator)
+
+    Pinned origin/main: a9e78d34914e43b30fc9d2b590d83ab96feb48b2.
+
+    pr-2850: ABANDON. **Redundant reviewer snapshot only**, head `49ee734fc73d`; cherry **5+**; aggregate PID `4a582e6cf9e7b2b396fc97f6283a7bb6640b54ad`. It is the same head as OPEN [#2850](https://github.com/joemooney/aida/pull/2850), source `claude/story-1689`; STORY-1689 is Needs Attention and the live PR owns rework. Main already has only the prerequisite forge fix (`46b958aa3d55`), not the scheduled-promote PR2. Abandon the duplicate snapshot as an independent recovery branch; preserve and continue the existing PR, not a new salvage PR.
+
+    These are branch-artifact verdicts, not completion or dispatch/merge authority. No spec status, branch, PR or active worktree changed. Full 14-branch table: .aida/handoff/advisor/unshipped-audit-2026-10-23.md (8 SHIPPED-ELSEWHERE, 3 SALVAGE, 3 ABANDON).
+  created_at: 2026-10-23T17:58:41.425026528Z
+  modified_at: 2026-10-23T17:58:41.425026528Z
 history:
 - id: 01a16149-6e2b-7cc0-9c50-a8547ec8a529
   author: joe
