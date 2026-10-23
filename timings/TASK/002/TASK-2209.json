@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-2209",
+  "publishes": [
+    {
+      "at": "2026-10-23T15:02:05.018435383Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-23T15:01:24.330102917Z",
+      "spec": "TASK-2209",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-23T15:01:42.337105242Z",
+      "spec": "TASK-2209",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2854
+      }
+    },
+    {
+      "ts": "2026-10-23T15:02:04.820316938Z",
+      "spec": "TASK-2209",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "fce1463450fffaa7324261e6305463a58be10b95",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
