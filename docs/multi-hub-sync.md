@@ -109,7 +109,9 @@ stale tip is still refused.
   clone. It writes the guard to `hooks/aida-main-guard` and chains it in front of
   `pre-push`, handing the ref lines back on stdin, so the mirror fan-out hook that
   `aida remote mirror` installs still runs (and a later `aida remote mirror` refresh
-  keeps the chain). A custom pre-push hook is left alone unless you add `--force`.
+  keeps the chain). A custom pre-push hook is left alone unless you add `--force`, and
+  even then only a shell hook (`sh`, `bash`, `dash`, `zsh`, `ksh`) is chained; a hook in
+  another language (Python, Node, ...) is refused, so add the guard call to it yourself.
   The guard protects **origin's** default branch (`refs/remotes/origin/HEAD`), whatever
   remote you push to; when that is unset it refuses every push until you run
   `git remote set-head origin --auto`.
