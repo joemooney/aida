@@ -13,14 +13,6 @@
   added_at: 2026-10-08T04:16:06.248375109Z
   for_role: implementer
 - user_id: joe
-  requirement_id: 01a1678e-98b7-78b2-9f89-5c22999bcb00
-  position: 48000
-  added_by: joe
-  note: auto-queued by `aida pr` ((no-sess); covers 3 specs
-  added_at: 2026-10-23T06:59:46.914694379Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
   requirement_id: 01a1678f-134e-7d40-971a-0d2ed39e2b7d
   position: 49000
   added_by: joe
