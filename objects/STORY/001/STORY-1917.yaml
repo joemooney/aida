@@ -1,0 +1,30 @@
+id: 01a169c3-090b-7350-9b07-de2fa0c4ad61
+spec_id: STORY-1917
+agreed_id: STORY-1917
+title: 'Typed dispatch requests: a sandboxed advisor seat queues flow/review/takeover/lane launches that the scheduler tick executes outside the sandbox'
+description: |-
+  Operator request 2026-10-23. Under Claude Code's Bash sandbox, the advisor seat cannot write sibling worktrees or .git/config, so it cannot launch reviewers, takeover fixers or lanes, or restart PR flows. The auto-mode classifier also denies sandbox bypass. The stopgap is a scratchpad bash dispatcher the operator starts by hand; it polls *.req files and runs four fixed helpers with regex-validated arguments. It dies on reboot, lives outside git, and has no ledger.
+
+  Design direction (needs a sketch and advisor signoff; this is architecture):
+  - A CLI verb (e.g. aida dispatch request <verb> <args>) writes a typed, ledgered request into the substrate. The verbs are closed and enumerated: pr-flow <N> [--no-ship], review <N>, takeover <N> --brief <file>, lane <spec> --brief <file>. Arguments are validated at request time and again at execution.
+  - A substrate schedule job (dispatch-tick, every 1-2 min, or event-driven) runs under the cron/systemd driver, outside any agent sandbox. It executes pending requests through the existing machinery (aida queue work, aida agent new --bg, the review-on-push pipeline from TASK-1945, aida pr ship). It does not run shell helpers.
+  - Authority: a request is honoured only if the requester's seat grant is valid AND an operator mandate is active that covers dispatch, so the operator's approval is the mandate, not a per-command prompt. Shipping keeps every existing hold and integrity gate (a supervised hold still needs a human at a TTY).
+  - Visibility: aida dispatch list shows pending, running and done requests with their outcomes; results are mailed back to the requesting seat; aida schedule status shows the tick.
+  - aida init installs the job with the rest of the schedule (enabled only when a mandate allows it). Nothing new to start by hand.
+
+  Acceptance: a sandboxed advisor can take a PR from READY to shipped, and launch a takeover fixer and a new lane, with no operator command, while a mandate is active; with no mandate every request is refused with the reason; a request with a non-enumerated verb or a malformed argument is refused at both ends; each request leaves a ledger row.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-23T17:15:51.947160848Z
+modified_at: 2026-10-23T17:15:51.947160848Z
+req_type: Story
+filed_at:
+  code_sha: a9e78d34914e43b30fc9d2b590d83ab96feb48b2
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c6bb0dc4f1
+  vendor: claude
+  session: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
