@@ -1,5 +1,6 @@
 id: 01a16953-fde9-7d20-ae9a-2fa0db55ae7c
 spec_id: TASK-1-447
+agreed_id: TASK-1815
 title: 'minor: TASK-2145 fix (-c core.excludesFile=/dev/null) leaves $GIT_DIR/info/excl…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-2067, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -35,6 +36,11 @@ history:
 - id: 01a16978-a7da-7551-b7ef-175da02cebdc
   author: joe
   timestamp: 2026-10-23T15:54:37.402186712Z
+  session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
+  changes: []
+- id: 01a1697e-b8af-7a10-94b2-c13d2953c406
+  author: joe
+  timestamp: 2026-10-23T16:01:14.927222738Z
   session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
   changes: []
 filed_at:

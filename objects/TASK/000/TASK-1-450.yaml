@@ -1,5 +1,6 @@
 id: 01a16954-17e6-7e03-ba8e-78eaa86684ed
 spec_id: TASK-1-450
+agreed_id: TASK-1816
 title: 'cosmetic: task_1800_trace_replay_tests.rs resolve_all labels an ID with aliases…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-2067, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -35,6 +36,11 @@ history:
 - id: 01a16978-f66a-73a0-a2a6-84f3866103d1
   author: joe
   timestamp: 2026-10-23T15:54:57.514940719Z
+  session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
+  changes: []
+- id: 01a1697e-b8bb-78b0-bee1-f59d0d74eb99
+  author: joe
+  timestamp: 2026-10-23T16:01:14.939301910Z
   session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
   changes: []
 filed_at:
