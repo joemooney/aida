@@ -376,7 +376,8 @@ class ProseClassificationRuleTest(unittest.TestCase):
             subprocess.run(["git", "config", "user.email", "fixture@example.invalid"], cwd=root, check=True)
             subprocess.run(["git", "config", "user.name", "Fixture"], cwd=root, check=True)
             subprocess.run(["git", "add", "--", f"src/{name}.rs"], cwd=root, check=True)
-            subprocess.run(["git", "commit", "-q", "-m", "fixture"], cwd=root, check=True)
+            # trace:TASK-1955 | ai:claude (TASK-2010)
+            subprocess.run(["git", "-c", "maintenance.auto=false", "-c", "gc.auto=0", "commit", "-q", "-m", "fixture"], cwd=root, check=True)
             subprocess.run(["git", "worktree", "add", "-q", ".claude/worktrees/agent-fixture"], cwd=root, check=True)
             nested_git = root / ".claude/worktrees/agent-fixture/.git"
             self.assertTrue(nested_git.is_file())

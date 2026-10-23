@@ -681,12 +681,15 @@ impl Store {
     /// forge login names (stored spelling), else the advisor. Mailbox
     /// delivery matches the AIDA identity exactly, so a bare forge login
     /// (`joemooney` vs `joe`) reached no inbox and the stale PR stalled.
-    // trace:TASK-1955 | ai:claude (TASK-1-410)
+    /// An aliased login resolves to its canonical identity first: delivery
+    /// does not resolve aliases, so mail to the alias spelling is a phantom.
+    // trace:TASK-1955 | ai:claude (TASK-1-410) (TASK-2118)
     fn notice_recipient(&self, author: &str) -> String {
         let store = crate::detect_distributed_store_from(&self.root)
             .unwrap_or_else(|| self.root.join(".aida-store"));
+        let canonical = aida_core::alias::AliasRegistry::load(&store).resolve(author);
         crate::known_mailbox_recipients(&store)
-            .get(&author.to_lowercase())
+            .get(&canonical.to_lowercase())
             .cloned()
             .unwrap_or_else(|| "advisor".to_string())
     }

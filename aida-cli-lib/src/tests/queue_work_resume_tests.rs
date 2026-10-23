@@ -150,6 +150,7 @@ fn find_orchestrated_lease_pins_session_by_claude_id() {
             plan_source: "queue work".to_string(),
             claude_session_id: claude_id.map(str::to_string),
             batch_name: None,
+            agent_name: None,
             plan: None,
             items: vec![],
         };
@@ -376,6 +377,7 @@ fn orchestrated_lease_owner_alive_rejects_recycled_pid() {
             plan_source: "queue work".to_string(),
             claude_session_id: Some(claude_id.to_string()),
             batch_name: None,
+            agent_name: None,
             plan: None,
             items: vec![],
         };

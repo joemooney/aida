@@ -574,25 +574,32 @@ pub(crate) fn touch_mcp_agent(
 }
 
 /// The lease an `aida agent new --bg` launch linked to this Claude session
-/// (its manifest records the session id, possibly as a short prefix).
-// trace:TASK-1955 | ai:claude (BUG-2167)
-fn lease_linked_to_session(project_root: &Path, session_id: &str) -> Option<SessionLease> {
+/// (its manifest records the session id, possibly as a short prefix), with
+/// the name the launch gave it (TASK-2102).
+// trace:TASK-1955 | ai:claude (BUG-2167, TASK-2102)
+fn lease_linked_to_session(
+    project_root: &Path,
+    session_id: &str,
+) -> Option<(SessionLease, Option<String>)> {
     let session_id = session_id.trim();
     if session_id.is_empty() {
         return None;
     }
-    let linked: Vec<String> = crate::session_manifest::list_all(project_root)
+    let linked: Vec<(String, Option<String>)> = crate::session_manifest::list_all(project_root)
         .into_iter()
         .filter(|m| {
             m.claude_session_id
                 .as_deref()
                 .is_some_and(|sid| !sid.is_empty() && session_id.starts_with(sid))
         })
-        .map(|m| m.session_id)
+        .map(|m| (m.session_id, m.agent_name))
         .collect();
     crate::leases::list_leases(project_root)
         .into_iter()
-        .find(|l| linked.contains(&l.id))
+        .find_map(|l| {
+            let name = linked.iter().find(|(id, _)| *id == l.id)?.1.clone();
+            Some((l, name))
+        })
 }
 
 /// Record the session a SessionStart hook fires in. `worktree_root` is the
@@ -622,6 +629,10 @@ pub(crate) fn touch_session_start_agent(
     let session_id = session_id.filter(|s| !s.trim().is_empty());
     let current_start = crate::process_probe::process_start_identity(pid);
     let linked = session_id.and_then(|sid| lease_linked_to_session(project_root, sid));
+    let (linked, launch_name) = match linked {
+        Some((lease, name)) => (Some(lease), name),
+        None => (None, None),
+    };
     let env_scope = env_nonempty("AIDA_SESSION_SCOPE").filter(|s| looks_like_spec_id(s));
     let env_name = match &linked {
         Some(lease) if env_scope.as_deref() != Some(lease.scope.as_str()) => None,
@@ -680,6 +691,12 @@ pub(crate) fn touch_session_start_agent(
     entry.pid = pid;
     entry.last_active_at = now;
     if let Some(lease) = &linked {
+        // The launch's own name wins over the spare's env and over a name a
+        // same-start entry already carried; a hook firing after the link has
+        // no later adopt step to correct it. trace:TASK-1955 | ai:claude (TASK-2102)
+        if let Some(name) = launch_name.clone().or_else(|| env_name.clone()) {
+            entry.name = Some(name);
+        }
         entry.role = lease.role.clone().or(entry.role);
         entry.current_spec = Some(lease.scope.clone());
         entry.worktree_path = lease.worktree_path.clone();
@@ -2857,6 +2874,47 @@ mod tests {
             .collect();
         assert_eq!(views.len(), 1);
         assert_eq!(views[0].name.as_deref(), Some("rebase-2673"));
+    }
+
+    /// TASK-2102: a SessionStart hook that fires AFTER `link_bg_session`
+    /// saved the manifest names the row from the launch, even when the
+    /// spare's env contradicts the lease and its pid already had an entry
+    /// with this start identity carrying a stale name.
+    // trace:TASK-1955 | ai:claude (TASK-2102)
+    #[test]
+    fn bg_session_start_after_the_link_takes_the_launch_name() {
+        let tmp = TempDir::new().unwrap();
+        let pool = tmp.path().join("pool-8");
+        bug_2167_linked_lease(tmp.path(), "leaseb00000002", "TASK-2001", &pool, "feed5678");
+        let manifest = tmp
+            .path()
+            .join(".aida")
+            .join("sessions")
+            .join("leaseb00000002.manifest.toml");
+        let body = std::fs::read_to_string(&manifest).unwrap();
+        std::fs::write(
+            &manifest,
+            body.replace("items = []", "agent_name = \"rebase-2678\"\nitems = []"),
+        )
+        .unwrap();
+        let _env = crate::test_env::EnvVarsGuard::set(&[
+            ("AIDA_AGENT_TYPE", "claude"),
+            ("AIDA_AGENT_NAME", "fix-task-1784"),
+            ("AIDA_SESSION_SCOPE", "TASK-1784"),
+        ]);
+        let binary = AgentBinaryIdentity::new("0.16.0".into(), "abc".into());
+        let sid = "feed5678-0000-4000-8000-000000000000";
+        // The spare's first session already left a same-start entry named
+        // from its stale env.
+        let first = touch_session_start_agent(tmp.path(), tmp.path(), Some(sid), &binary).unwrap();
+        let mut stale = first.clone();
+        stale.name = Some("fix-task-1784".into());
+        write_entry(tmp.path(), &stale).unwrap();
+
+        let entry = touch_session_start_agent(tmp.path(), tmp.path(), Some(sid), &binary).unwrap();
+        assert_eq!(entry.name.as_deref(), Some("rebase-2678"));
+        assert_eq!(entry.current_spec.as_deref(), Some("TASK-2001"));
+        assert_eq!(first.name.as_deref(), Some("rebase-2678"));
     }
 
     /// BUG-2167: a pid's entry left by an earlier session never lends its
