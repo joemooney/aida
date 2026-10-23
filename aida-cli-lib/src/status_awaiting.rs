@@ -1076,6 +1076,10 @@ pub(crate) fn emit_notice_time_line() {
                 session_id.as_deref(),
                 &binary,
             );
+            // Hooks run outside the command sandbox, so this is where dead
+            // rows get ended before a sandboxed sender counts them as
+            // unverified mail readers. trace:STORY-1843 | ai:claude
+            let _ = agent_registry::gc_dead_agents(&project_root, false, None);
         }
     }
     let now = chrono::Local::now();
