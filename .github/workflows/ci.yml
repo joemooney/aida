@@ -276,12 +276,24 @@ jobs:
       # TASK-2053 S3: the seat-clone probe/destroy lifecycle (`task_2053_bwrap_`,
       # including T7: seat-planted hooks never run on the host) joins the gate.
       # trace:TASK-2053 | ai:claude
+      # TASK-2161: a passing filter run is not proof each test ran, so the step
+      # requires one `... ok` line per `bug_2169_bwrap_`/`task_2053_bwrap_` test
+      # in the source and no bwrap skip; other skips (e.g. git too old for
+      # reftable) are listed. trace:TASK-2161 | ai:claude
       - name: Live bwrap OS-wrap confinement gate
         if: ${{ matrix.shard == 'gates' && (steps.changes.outputs.full_ci == 'true' && runner.os == 'Linux') }}
         run: |
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+          log="$RUNNER_TEMP/live-bwrap.log"
+          set -o pipefail
           AIDA_REQUIRE_BWRAP_LIVE=1 cargo test -p aida-cli-lib --lib -- --nocapture \
-            bwrap_write_confinement_live_or_fail_closed bug_2169_bwrap_ task_2053_bwrap_
+            bwrap_write_confinement_live_or_fail_closed bug_2169_bwrap_ task_2053_bwrap_ 2>&1 | tee "$log"
+          expected=$(grep -rhoE 'fn (bug_2169|task_2053)_bwrap_[a-z0-9_]+' aida-cli-lib/src | sort -u | wc -l)
+          ran=$(grep -oE '(bug_2169|task_2053)_bwrap_[a-z0-9_]+ \.\.\. ok$' "$log" | sort -u | wc -l)
+          echo "live bwrap tests: $ran of $expected ran ok"
+          grep -n 'SKIP (' "$log" || true
+          if grep -q 'SKIP (bwrap unavailable)' "$log"; then echo "::error::a live bwrap test skipped under the gate"; exit 1; fi
+          if [ "$ran" -ne "$expected" ]; then echo "::error::only $ran of $expected live bwrap tests ran ok"; exit 1; fi
 
       # MCP stdio compatibility suite — black-box tests against `aida mcp-serve`.
       # Runs the FULL roundtrip: descriptors + CLI->MCP read direction
