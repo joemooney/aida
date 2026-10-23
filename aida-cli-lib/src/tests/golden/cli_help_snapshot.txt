@@ -4429,6 +4429,7 @@ Inter-agent mailbox: peer↔peer messaging (send / inbox / thread)
 Usage: aida mailbox [OPTIONS] <COMMAND>
 
 Commands:
+  migrate  Preview legacy mailbox reconciliation before recipient migration
   latency  Show mailbox read latency for the active identity (or an explicit recipient)
   send     Send a message to another agent, or `--broadcast` to all
   inbox    Show an agent's inbox: messages addressed to it + broadcasts, oldest-first. Reading marks
@@ -4451,6 +4452,30 @@ Commands:
   help     Print this message or the help of the given subcommand(s)
 
 Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida mailbox migrate
+Preview legacy mailbox reconciliation before recipient migration
+
+Usage: aida mailbox migrate [OPTIONS] --dry-run
+
+Options:
+      --dry-run
+          Produce a read-only report. Write-mode migration is not available
+
+      --json
+          Print the reconciliation report as JSON
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -7443,6 +7468,14 @@ Commands:
   solo-active              Query effective solo mode for the Claude advisor-code-guard PreToolUse
                            hook. Exits 0 when solo mode is active and 1 when it is off; prints
                            nothing
+  lane-env                 Print the environment correction for a session inside a lane worktree:
+                           shell lines setting AIDA_SESSION_ROLE to the role its lease records, and
+                           exporting the lease's child grant or unsetting an inherited grant for
+                           another seat (and the inherited purpose). Prints nothing outside a lane
+                           or when the environment already matches. Read-only. Called by the
+                           SessionStart hook, which appends the lines to $CLAUDE_ENV_FILE. Exits
+                           non-zero, printing nothing, when the lease cannot be turned into safe
+                           lines
   help                     Print this message or the help of the given subcommand(s)
 
 Options:
@@ -7550,6 +7583,32 @@ is active and 1 when it is off; prints nothing
 Usage: aida internal solo-active [OPTIONS]
 
 Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida internal lane-env
+Print the environment correction for a session inside a lane worktree: shell lines setting
+AIDA_SESSION_ROLE to the role its lease records, and exporting the lease's child grant or unsetting
+an inherited grant for another seat (and the inherited purpose). Prints nothing outside a lane or
+when the environment already matches. Read-only. Called by the SessionStart hook, which appends the
+lines to $CLAUDE_ENV_FILE. Exits non-zero, printing nothing, when the lease cannot be turned into
+safe lines
+
+Usage: aida internal lane-env [OPTIONS]
+
+Options:
+      --cwd <PATH>
+          The session directory to resolve the lane for (default: cwd)
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -8938,6 +8997,10 @@ Options:
 
       --branch <BRANCH>
           Override the branch name (default `<id>-work`)
+
+      --role <ROLE>
+          The role recorded on the worktree's lease (default `implementer`). A session started
+          inside the worktree takes its identity from the lease, not from an inherited environment
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -10655,7 +10718,8 @@ Commands:
             of the project's roles; non-interactively it errors. Outputs shell code that must run in
             the calling shell: raw binary: `eval "$(aida role enter advisor)"` via the shell helper
             (`aida dev shell-init`): just `aida role enter advisor` The helper auto-evals it, so the
-            bare form is correct there
+            bare form is correct there. The seat grant is bound to this terminal session: any
+            process in this terminal session can use this grant, and no process outside it can
   add       Add a new role, then enter it. Errors if the name already exists (use `aida role enter`
             to resume an existing one)
   list      List all roles for this project (and any global roles), sorted by last activity. Active
@@ -10675,6 +10739,10 @@ Commands:
             session; it also exits 3 when `AIDA_SESSION_GRANT` is set but its grant can't be used
             (missing, malformed, or revoked). No grant at all, or an implementer grant, is never
             refused
+  status    Show this session's seat grant (seat, expiry, the processes it is bound to, and whether
+            and how this process may present it: by its session key or by process) and this
+            session's agent harness pid for `aida role enter <seat> --bind-pid`. Read-only; always
+            exits 0
   end       Deactivate the current role (state preserved). Outputs shell code: `eval "$(aida role
             end)"`
   delete    Delete a role's state file permanently. Confirms before deleting unless --yes is passed
@@ -10707,7 +10775,9 @@ Options:
 Enter (resume) an existing role. With no name on an interactive terminal, shows a picker of the
 project's roles; non-interactively it errors. Outputs shell code that must run in the calling shell:
 raw binary: `eval "$(aida role enter advisor)"` via the shell helper (`aida dev shell-init`): just
-`aida role enter advisor` The helper auto-evals it, so the bare form is correct there
+`aida role enter advisor` The helper auto-evals it, so the bare form is correct there. The seat
+grant is bound to this terminal session: any process in this terminal session can use this grant,
+and no process outside it can
 
 Usage: aida role enter [OPTIONS] [NAME]
 
@@ -10732,6 +10802,14 @@ Options:
       --ttl <TTL>
           Grant time-to-live duration (e.g. 72h), capped by [seat] max_grant_hours (default 24, hard
           ceiling 168h)
+
+      --bind-pid <PID>
+          Bind the grant to another running session instead of this terminal: the pid of that
+          session's agent harness (claude, codex, agy) or shell, owned by you (`aida role status`
+          shows a session's harness pid). Prints the grant id for that session to export and leaves
+          this shell's role unchanged. Binds the process only: that session's hooks and MCP server
+          can present the grant, but not its sandboxed tool calls, which need a session started from
+          a role shell
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -10903,6 +10981,52 @@ Options:
       --refuse-within <REFUSE_WITHIN>
           Exit 3 with a refusal when less than this span is left
 
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida role status
+Show this session's seat grant (seat, expiry, the processes it is bound to, and whether and how this
+process may present it: by its session key or by process) and this session's agent harness pid for
+`aida role enter <seat> --bind-pid`. Read-only; always exits 0
+
+Usage: aida role status [OPTIONS]
+
+Options:
+      --json
+          Emit JSON instead of text
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida role adopt-key
+Install a seat grant's session key into the calling shell's session keyring. Run by the `aida role
+enter` eval text with the secret on stdin; not for direct use
+
+Usage: aida role adopt-key [OPTIONS] <ID>
+
+Arguments:
+  <ID>
+          The grant id
+
+Options:
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -28251,6 +28375,37 @@ Working on aida itself
     "path": [
       "aida",
       "mailbox",
+      "migrate"
+    ],
+    "about": "Preview legacy mailbox reconciliation before recipient migration",
+    "flags": [
+      {
+        "name": "dry-run",
+        "takes_value": false,
+        "help": "Produce a read-only report. Write-mode migration is not available"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Print the reconciliation report as JSON"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "mailbox",
       "latency"
     ],
     "about": "Show mailbox read latency for the active identity (or an explicit recipient)",
@@ -31220,6 +31375,32 @@ Working on aida itself
   {
     "path": [
       "aida",
+      "internal",
+      "lane-env"
+    ],
+    "about": "Print the environment correction for a session inside a lane worktree: shell lines setting AIDA_SESSION_ROLE to the role its lease records, and exporting the lease's child grant or unsetting an inherited grant for another seat (and the inherited purpose). Prints nothing outside a lane or when the environment already matches. Read-only. Called by the SessionStart hook, which appends the lines to $CLAUDE_ENV_FILE. Exits non-zero, printing nothing, when the lease cannot be turned into safe lines",
+    "flags": [
+      {
+        "name": "cwd",
+        "takes_value": true,
+        "help": "The session directory to resolve the lane for (default: cwd)"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": true
+  },
+  {
+    "path": [
+      "aida",
       "commit"
     ],
     "about": "Author a conventional-format-compliant commit and run `git commit`. Builds the `[AI:tool]? type(scope): description (REQ-ID)` shape the commit-msg hook requires, so a plain-terminal commit can't be rejected for format. The REQ-ID is inferred from staged trace comments when a single spec is present; `--spec` sets it explicitly. The CLI-native counterpart to the `/aida-commit` skill",
@@ -32558,6 +32739,11 @@ Working on aida itself
         "name": "path",
         "takes_value": true,
         "help": "Override the worktree path (default `~/ai/aida-<slug>`)"
+      },
+      {
+        "name": "role",
+        "takes_value": true,
+        "help": "The role recorded on the worktree's lease (default `implementer`). A session started inside the worktree takes its identity from the lease, not from an inherited environment"
       }
     ],
     "hidden": false
@@ -34284,8 +34470,13 @@ Working on aida itself
       "role",
       "enter"
     ],
-    "about": "Enter (resume) an existing role. With no name on an interactive terminal, shows a picker of the project's roles; non-interactively it errors. Outputs shell code that must run in the calling shell: raw binary: `eval \"$(aida role enter advisor)\"` via the shell helper (`aida dev shell-init`): just `aida role enter advisor` The helper auto-evals it, so the bare form is correct there",
+    "about": "Enter (resume) an existing role. With no name on an interactive terminal, shows a picker of the project's roles; non-interactively it errors. Outputs shell code that must run in the calling shell: raw binary: `eval \"$(aida role enter advisor)\"` via the shell helper (`aida dev shell-init`): just `aida role enter advisor` The helper auto-evals it, so the bare form is correct there. The seat grant is bound to this terminal session: any process in this terminal session can use this grant, and no process outside it can",
     "flags": [
+      {
+        "name": "bind-pid",
+        "takes_value": true,
+        "help": "Bind the grant to another running session instead of this terminal: the pid of that session's agent harness (claude, codex, agy) or shell, owned by you (`aida role status` shows a session's harness pid). Prints the grant id for that session to export and leaves this shell's role unchanged. Binds the process only: that session's hooks and MCP server can present the grant, but not its sandboxed tool calls, which need a session started from a role shell"
+      },
       {
         "name": "cd",
         "takes_value": false,
@@ -34495,6 +34686,53 @@ Working on aida itself
       }
     ],
     "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "role",
+      "status"
+    ],
+    "about": "Show this session's seat grant (seat, expiry, the processes it is bound to, and whether and how this process may present it: by its session key or by process) and this session's agent harness pid for `aida role enter <seat> --bind-pid`. Read-only; always exits 0",
+    "flags": [
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Emit JSON instead of text"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "role",
+      "adopt-key"
+    ],
+    "about": "Install a seat grant's session key into the calling shell's session keyring. Run by the `aida role enter` eval text with the secret on stdin; not for direct use",
+    "flags": [
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": true
   },
   {
     "path": [

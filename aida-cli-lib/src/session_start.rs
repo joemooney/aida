@@ -1572,10 +1572,16 @@ fn transactional_worktree_add(
     rollback: &mut Option<SessionStartCleanup>,
 ) -> Result<std::process::Output> {
     let Some(cleanup) = rollback.as_mut() else {
-        return Ok(std::process::Command::new("git")
-            .current_dir(root)
-            .args(args)
-            .output()?);
+        // trace:BUG-2211 | ai:claude
+        return Ok(aida_core::git_ops::output_healing_config_lock(
+            root,
+            || {
+                let mut cmd = std::process::Command::new("git");
+                cmd.current_dir(root);
+                cmd
+            },
+            args,
+        )?);
     };
     if std::fs::symlink_metadata(requested).is_ok() {
         anyhow::bail!("worktree path {} already exists; kept it unchanged; inspect `git worktree list --porcelain`", requested.display());
@@ -1618,10 +1624,16 @@ fn transactional_worktree_add(
     cleanup.gitdir = Some(gitdir);
     let mut staged_args = args.iter().map(|s| s.to_string()).collect::<Vec<_>>();
     staged_args[path_index] = staging.to_string_lossy().into_owned();
-    let out = std::process::Command::new("git")
-        .current_dir(root)
-        .args(&staged_args)
-        .output()?;
+    // trace:BUG-2211 | ai:claude
+    let out = aida_core::git_ops::output_healing_config_lock(
+        root,
+        || {
+            let mut cmd = std::process::Command::new("git");
+            cmd.current_dir(root);
+            cmd
+        },
+        &staged_args,
+    )?;
     if !out.status.success() {
         return Ok(out);
     }

@@ -1906,6 +1906,7 @@ pub(crate) fn lease_agent_view(
         native_session_id: None,
         ended_at: None,
         resumed_from: None,
+        liveness: agent_registry::LivenessBasis::Process,
     }
 }
 

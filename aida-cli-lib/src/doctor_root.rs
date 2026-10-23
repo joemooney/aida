@@ -547,6 +547,30 @@ pub(crate) fn collect_doctor_findings(
     store: &aida_core::models::RequirementsStore,
     category_filter: Option<&str>,
 ) -> Result<Vec<DoctorFinding>> {
+    collect_doctor_findings_at(project_root, store, category_filter, &doctor_proc_root())
+}
+
+/// TASK-2216: the process table the doctor scans for a claude daemon holding
+/// a grant. `/proc`, except under `cfg(test)`, where no doctor test reads the
+/// real machine's processes; a test that wants the scan injects a fake root
+/// through [`collect_doctor_findings_at`].
+// trace:STORY-1662 | ai:claude
+pub(crate) fn doctor_proc_root() -> std::path::PathBuf {
+    if cfg!(test) {
+        std::path::PathBuf::new()
+    } else {
+        std::path::PathBuf::from("/proc")
+    }
+}
+
+/// [`collect_doctor_findings`] with the process-table root injected.
+// trace:STORY-1662 | ai:claude
+pub(crate) fn collect_doctor_findings_at(
+    project_root: &std::path::Path,
+    store: &aida_core::models::RequirementsStore,
+    category_filter: Option<&str>,
+    proc_root: &std::path::Path,
+) -> Result<Vec<DoctorFinding>> {
     let filter = category_filter.map(normalize_doctor_category).transpose()?;
     let mut out = Vec::new();
     let cleanup = collect_cleanup_report(project_root, store);
@@ -1256,8 +1280,38 @@ pub(crate) fn collect_doctor_findings(
         }
     }
 
+    // STORY-1662 (signoff C4): a claude daemon started from a shell holding a
+    // seat grant hands that grant to every `claude --bg` session it hosts.
+    // trace:STORY-1662 | ai:claude
+    for pid in crate::lane_env::daemons_holding_a_grant(proc_root) {
+        push(claude_daemon_grant_finding(pid));
+    }
+
     out.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     Ok(out)
+}
+
+/// STORY-1662 (signoff C4): the finding for a claude daemon whose environment
+/// holds the session grant ([`crate::seat_authority::GRANT_ENV`]). Diagnostic only: restarting the daemon is the
+/// operator's call.
+// trace:STORY-1662 | ai:claude
+pub(crate) fn claude_daemon_grant_finding(pid: u32) -> DoctorFinding {
+    let grant_env = crate::seat_authority::GRANT_ENV;
+    DoctorFinding {
+        category: "claude-daemon-grant".to_string(),
+        id: format!("pid {pid}"),
+        summary: format!(
+            "the claude daemon's environment holds {grant_env}, so every `claude --bg` \
+             session it hosts starts with that seat grant"
+        ),
+        action: format!(
+            "once no `claude --bg` session is running, stop the daemon (`kill {pid}`); the next \
+             `claude --bg` starts a new one, so run that from a shell with no AIDA_SESSION_* \
+             variables (`env -u {grant_env} -u AIDA_SESSION_ROLE -u AIDA_SESSION_PURPOSE \
+             claude --bg ...`). Lane worktrees still correct their own identity at session start"
+        ),
+        safe_heal: false,
+    }
 }
 
 /// Locate `binary` on PATH (the portable `command -v`). `None` when absent.
@@ -1578,6 +1632,12 @@ pub(crate) static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
         ],
         "round-trip-artifacts",
     ),
+    // STORY-1662: a claude daemon whose environment holds a seat grant.
+    // trace:STORY-1662 | ai:claude
+    (
+        &["claude-daemon-grant", "daemon-grant", "claude-daemon"],
+        "claude-daemon-grant",
+    ),
     // STORY-1463: a registered `[schedule]` job that nothing ever ticks —
     // no crontab driver installed, or an installed one that isn't actually
     // firing (a substrate job overdue by more than 2x its interval).
@@ -1644,6 +1704,13 @@ pub(crate) static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
     (
         &["mandate-drive", "drive-mandate", "mandate"],
         "mandate-drive",
+    ),
+    // BUG-1934: the session's exported seat grant was refused (unbound,
+    // presented outside its process tree, expired, ...). Report-only.
+    // trace:BUG-1934 | ai:claude
+    (
+        &["seat-grant", "grant", "session-grant", "grant-binding"],
+        "seat-grant",
     ),
     // BUG-1700: the folder-trust gate on a freshly created worktree. Claude
     // Code stops an INTERACTIVE launch in a directory it has never seen behind
@@ -1729,6 +1796,12 @@ pub(crate) static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
             "checkout-drift",
         ],
         "main-checkout-drift",
+    ),
+    // BUG-2211: an empty read-only config.lock left by a sandboxed shell.
+    // trace:BUG-2211 | ai:claude
+    (
+        &["sandbox-config-lock", "config-lock", "git-config-lock"],
+        "sandbox-config-lock",
     ),
     // BUG-1229 / BUG-2140: store worktree gitdir/rebase/permission integrity.
     // trace:BUG-2140 | ai:antigravity

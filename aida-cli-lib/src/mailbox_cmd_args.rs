@@ -10,6 +10,17 @@ use std::path::PathBuf;
 // trace:STORY-493 | ai:claude
 #[derive(Subcommand, Debug)]
 pub enum MailboxCommand {
+    /// Preview legacy mailbox reconciliation before recipient migration.
+    // trace:STORY-1843 | ai:codex
+    Migrate {
+        /// Produce a read-only report. Write-mode migration is not available.
+        #[clap(long, required = true)]
+        dry_run: bool,
+        /// Print the reconciliation report as JSON.
+        #[clap(long)]
+        json: bool,
+    },
+
     /// Show mailbox read latency for the active identity (or an explicit recipient).
     // trace:TASK-1271 | ai:codex
     Latency {
