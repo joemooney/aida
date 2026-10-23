@@ -3,12 +3,12 @@ spec_id: TASK-2053
 agreed_id: TASK-2053
 title: 'BUG-2169 remaining slices: S3 probe/destroy lifecycle, S4 visibility + default flip, S5 host clone pool, plus folded hardening TASK-2046/2047/2048'
 description: 'BUG-2169 was auto-completed by the PR-2787 ship (b66e4d93b8) although the PR subject said ''(Refs BUG-2169)'': aida pr ship appended a bare (BUG-2169) trailer (see the bug filed alongside). Slices S1 and S2 are merged. The remaining scope moves here unchanged from BUG-2169''s signed design and comments: S3 probe/destroy lifecycle; S4 visibility and the default flip; S5 host clone pool (only if O1 says the launcher can be sandboxed). Also the hardening folded into BUG-2169 on 2026-10-21: TASK-2046 (anchor host_recorded_clone to the launcher''s main), TASK-2047 (scope session resume os_wrap/--settings to the lease tree), TASK-2048 (trust tests: main/.git deny under a forged main; mismatched cargo_target_dir lease). Read BUG-2169 comments for the signed sketch.'
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T09:53:13.924066900Z
-modified_at: 2026-10-23T13:48:54.492835746Z
+modified_at: 2026-10-23T14:38:47.160289776Z
 req_type: Task
 relationships:
 - rel_type: References
@@ -397,6 +397,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a16933-3978-7f70-9f96-8397ed456572
+  author: aida-orchestrator
+  timestamp: 2026-10-23T14:38:47.160313986Z
+  session_id: 01a1691cc254
+  harness_version: 2.1.309 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: b66e4d93b8fefe25b2af3139fe725fa1801e1981
   branch: main
@@ -409,7 +418,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'S4a round 1 re-check at 5b014fb9e2: CI green and the C1 log quote is in the PR body, but round-1 findings 3-7 are unaddressed (the only new commit is the ratchet perf fix)'
+  detail: 'S4b scope and the folded TASK-2110/2189/2190/2191/2192/2197/2198 work are implemented, and CI is green at 1ef4f761a6 (lib-1 failed once, passed on re-run). Changes requested: one gh call can hang, one scan ignores its deadline, the phase-2 clone gate has a gap, and three changed surfaces have no test.'
   recovery_hint: address the review findings, move TASK-2053 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-10-22T20:06:03.426026886Z
+  shelved_at: 2026-10-23T14:38:47.160289776Z
