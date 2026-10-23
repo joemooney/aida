@@ -21,7 +21,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-08T04:28:54.577389253Z
-modified_at: 2026-10-08T19:24:01.989230115Z
+modified_at: 2026-10-23T17:58:23.905501762Z
 req_type: Task
 tags:
 - operator-held
@@ -109,6 +109,18 @@ comments:
   content: 'PROXY rework after full independent TASK1715_DELIVERY_INDEPENDENT_AUDIT.md REQUEST_CHANGES. F1 delivery branch contains only audit row, real74c implementation is separate/nonancestor. F2 normalize numeric GitHub/GitLab via configured forge before shared queue-work path. F3 complete help/lifecycle/templates and parser-dispatch/shared-refusal coverage. Full numbered brief: task1715-numbered-rework.md. Live creator1623529 retains CLIlease01a119ea3c02; no competing implementation, force-end, sharedPR2458/BUG1811 mutation or stalelease bypass. Fresh isolated Sonnet doer only after legitimate ownerhandoff, then new different independent reviewer.'
   created_at: 2026-10-08T19:24:00.562097025Z
   modified_at: 2026-10-08T19:24:00.562097025Z
+- id: 01a169e9-f9a1-7de1-a773-b727f3cf5ed2
+  author: ai:codex:joe
+  content: |-
+    UNSHIPPED AUDIT 2026-10-23 (integrator)
+
+    Pinned origin/main: a9e78d34914e43b30fc9d2b590d83ab96feb48b2.
+
+    task-1715: SALVAGE. Head `74c9ad174f7c`; cherry **1+**; aggregate PID `28a7723d4abda847abf0e6b61fd81cc0e897c902`. [#2457](https://github.com/joemooney/aida/pull/2457) is CLOSED, unmerged, at this exact head; pinned main’s PrCommand has no Review variant. Spec is Deferred after REQUEST_CHANGES. A future released PR would recover the real alias, normalize bare numbers through the configured GitHub/GitLab forge, delegate to existing queue-work auto-complete, and add missing help/lifecycle/template plus parser/dispatch/shared-refusal coverage. Do not revive the unrelated BUG-1811 delivery branch or duplicate the pipeline.
+
+    These are branch-artifact verdicts, not completion or dispatch/merge authority. No spec status, branch, PR or active worktree changed. Full 14-branch table: .aida/handoff/advisor/unshipped-audit-2026-10-23.md (8 SHIPPED-ELSEWHERE, 3 SALVAGE, 3 ABANDON).
+  created_at: 2026-10-23T17:58:23.905501762Z
+  modified_at: 2026-10-23T17:58:23.905501762Z
 history:
 - id: 01a119ea-3e16-7a33-8411-ac7968b10987
   author: aida-session-start
