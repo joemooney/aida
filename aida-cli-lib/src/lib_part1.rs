@@ -713,6 +713,8 @@ pub(crate) const TOON_LIST_KNOWN_FIELDS: &[&str] = &[
     "heft",
     // trace:TASK-1215 | ai:codex — freshness signal for authored lane memory.
     "modified_at",
+    // trace:TASK-2205 | ai:claude — creation time; see TOON_LIST_FIELD_ALIASES.
+    "opened",
     // trace:FR-283 | ai:claude — the optional numeric weight/score.
     "weight",
     "queued",
@@ -729,6 +731,39 @@ pub(crate) const TOON_LIST_KNOWN_FIELDS: &[&str] = &[
     // trace:TASK-1951 trace:TASK-2003 | ai:claude — NeedsAttention review lens.
     "review_lens",
 ];
+
+/// Accepted alternate spellings for `--fields` entries, as `(alias, field)`.
+/// [`toon_list_fields`] rewrites each alias to its canonical field, and
+/// [`list_fields_help`] names them, so help and parser share one table.
+// trace:TASK-2205 | ai:claude
+pub(crate) const TOON_LIST_FIELD_ALIASES: &[(&str, &str)] = &[
+    ("req_type", "type"),
+    ("created_at", "opened"),
+    ("created", "opened"),
+];
+
+/// The `aida list --fields` help text, generated from
+/// [`TOON_LIST_KNOWN_FIELDS`], [`TOON_LIST_FIELD_ALIASES`] and
+/// [`TOON_LIST_DEFAULT_FIELDS`] so the documented set cannot drift from the
+/// set the parser accepts.
+// trace:TASK-2205 | ai:claude
+pub(crate) fn list_fields_help() -> String {
+    let aliases: Vec<String> = TOON_LIST_FIELD_ALIASES
+        .iter()
+        .map(|(alias, field)| format!("{alias} = {field}"))
+        .collect();
+    format!(
+        "Select AND order the displayed columns, e.g. `--fields id,title,status,priority,tags` \
+         or `--fields 'id title opened'`; entries are separated by commas and/or whitespace. \
+         Renders exactly those columns in that order — on the human table AND the \
+         token-efficient agent output (a real token win for agents). Valid fields: {}. \
+         `opened` is the creation time. Aliases: {}. Default (no `--fields`) keeps the \
+         standard columns; agent mode defaults to the minimal {} set",
+        TOON_LIST_KNOWN_FIELDS.join(", "),
+        aliases.join(", "),
+        TOON_LIST_DEFAULT_FIELDS.join(",")
+    )
+}
 
 /// Render a numeric weight/score for display: integral values drop the
 /// fractional part (`42`, not `42.0`); everything else uses the shortest
@@ -773,6 +808,8 @@ pub(crate) fn list_field_header(field: &str) -> String {
         "heft" => "Heft",
         // trace:TASK-1215 | ai:codex
         "modified_at" => "Modified",
+        // trace:TASK-2205 | ai:claude
+        "opened" => "Opened",
         // trace:FR-283 | ai:claude
         "weight" => "Weight",
         "queued" => "Queued",
