@@ -775,8 +775,8 @@ pub(crate) fn child_argv(sha: &str) -> Vec<String> {
 /// never reach it), else detached in a new session.
 fn spawn_child_real(repo: &Path, sha: &str, log: &Path) -> Result<(Option<u32>, String)> {
     use crate::schedule_driver::{
-        build_wave_unit_argv, classify_systemd_run, expands_in_unit, repo_hash8, DriverHost,
-        RealDriverHost, RunFailure, WaveLimits, WaveUnitSpec, WAVE_UNIT_RUN_TIMEOUT,
+        expands_in_unit, launch_transient_unit, repo_hash8, DriverHost, RealDriverHost, RunFailure,
+        WaveLimits, WaveUnitSpec,
     };
     if let Some(parent) = log.parent() {
         std::fs::create_dir_all(parent)?;
@@ -804,7 +804,8 @@ fn spawn_child_real(repo: &Path, sha: &str, log: &Path) -> Result<(Option<u32>, 
         let set_env = crate::shift::wave_unit_set_env(&path_env);
         let unset_env = crate::shift::wave_unit_unset_env();
         let limits = WaveLimits::default();
-        let args = build_wave_unit_argv(&WaveUnitSpec {
+        // trace:STORY-1689 | ai:claude — the shared launch (TASK-1510).
+        let spec = WaveUnitSpec {
             unit: &unit,
             repo: &repo_s,
             exe: &exe_s,
@@ -815,8 +816,8 @@ fn spawn_child_real(repo: &Path, sha: &str, log: &Path) -> Result<(Option<u32>, 
             set_env: &set_env,
             unset_env: &unset_env,
             argv: &argv,
-        });
-        match classify_systemd_run(&host.systemd_run_user(&args, WAVE_UNIT_RUN_TIMEOUT)) {
+        };
+        match launch_transient_unit(&mut host, &spec) {
             Ok(()) => return Ok((None, format!("unit {unit}"))),
             Err(RunFailure::NotStarted(why)) => fallback = Some(why),
             // It may have started: never launch a second copy. The child
