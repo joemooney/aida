@@ -94,7 +94,11 @@ fn undetected_store_reports_the_probed_path_not_the_roster() {
             probed: root.to_path_buf(),
             cause: StoreMiss::StoreMissing {
                 config: root.join(".aida").join("config.toml"),
-                stores: vec![root.join(".aida-store")],
+                stores: vec![MissedStore {
+                    path: root.join(".aida-store"),
+                    exists: false,
+                }],
+                main_worktree: vec![],
             },
         })
     );
@@ -146,7 +150,11 @@ fn undetected_store_names_the_config_and_the_missing_store_it_named() {
             probed: root.to_path_buf(),
             cause: StoreMiss::StoreMissing {
                 config: config.clone(),
-                stores: vec![root.join(".aida-store")],
+                stores: vec![MissedStore {
+                    path: root.join(".aida-store"),
+                    exists: false,
+                }],
+                main_worktree: vec![],
             },
         }
     );
@@ -188,11 +196,129 @@ fn every_store_miss_reads_as_its_own_cause() {
         msg.contains("`/p/.aida/config.toml` names no store directory"),
         "{msg}"
     );
+    let missing = |path: &str| MissedStore {
+        path: PathBuf::from(path),
+        exists: false,
+    };
     let msg = text(StoreMiss::StoreMissing {
         config: PathBuf::from("/p/.aida/config.toml"),
-        stores: vec![PathBuf::from("/p/one"), PathBuf::from("/p/two")],
+        stores: vec![missing("/p/one"), missing("/p/two")],
+        main_worktree: vec![],
     });
-    assert!(msg.contains("`/p/one` or `/p/two`"), "{msg}");
+    assert!(
+        msg.contains("`/p/one` (does not exist) or `/p/two` (does not exist)"),
+        "{msg}"
+    );
+    assert!(!msg.contains("main worktree"), "{msg}");
+}
+
+/// A store path that exists as a file is not called missing, and the
+/// main-worktree store the walk also tried is named.
+// trace:TASK-2169 | ai:claude
+#[test]
+fn task_2169_store_missing_names_a_non_directory_and_the_main_worktree_store() {
+    let msg = RosterStoreError::NotDetected {
+        probed: PathBuf::from("/wt/linked"),
+        cause: StoreMiss::StoreMissing {
+            config: PathBuf::from("/wt/linked/.aida/config.toml"),
+            stores: vec![MissedStore {
+                path: PathBuf::from("/wt/linked/.aida-store"),
+                exists: true,
+            }],
+            main_worktree: vec![MissedStore {
+                path: PathBuf::from("/wt/main/.aida-store"),
+                exists: false,
+            }],
+        },
+    }
+    .to_string();
+    assert!(
+        msg.contains("`/wt/linked/.aida-store` (exists, but is not a directory)"),
+        "{msg}"
+    );
+    assert!(
+        msg.contains("the main worktree's `/wt/main/.aida-store` (does not exist)"),
+        "{msg}"
+    );
+}
+
+/// `AIDA_STORE` as `store_sync::aida_store_setting` hands it over.
+fn usable_aida_store(store: &Path) -> impl FnOnce() -> Option<(String, StoreOverride)> {
+    let store = store.to_path_buf();
+    move || Some((store.display().to_string(), StoreOverride::Usable(store)))
+}
+
+fn unset_aida_store() -> Option<(String, StoreOverride)> {
+    None
+}
+
+/// An undetected store's refusal names a set `AIDA_STORE`'s value and why the
+/// seat check did not use it; the error text itself never reads the
+/// environment.
+// trace:TASK-2170 | ai:claude
+#[test]
+fn task_2170_undetected_store_note_names_the_aida_store_value_and_reason() {
+    let tmp = tempdir().unwrap();
+    let root = tmp.path().join("project");
+    fs::create_dir_all(root.join(".aida")).unwrap();
+    fs::write(
+        root.join(".aida").join("config.toml"),
+        "store_path = \".aida-store\"\n",
+    )
+    .unwrap();
+
+    let unset = roster_check_with_override(&root, USER, "advisor", unset_aida_store).unwrap_err();
+    assert!(!unset.describe("").contains("AIDA_STORE"), "{unset:?}");
+
+    let unusable = roster_check_with_override(&root, USER, "advisor", || {
+        Some((
+            "/nowhere/store".to_string(),
+            StoreOverride::Unusable {
+                reason: "not a directory".to_string(),
+            },
+        ))
+    })
+    .unwrap_err();
+    let msg = unusable.describe("");
+    assert!(msg.contains("no AIDA store was found"), "{msg}");
+    assert!(
+        msg.contains("AIDA_STORE is `/nowhere/store`, which is unusable (not a directory)"),
+        "{msg}"
+    );
+
+    let other = tmp.path().join("sandbox");
+    fs::create_dir_all(other.join("objects")).unwrap();
+    let msg = roster_check_with_override(&root, USER, "advisor", usable_aida_store(&other))
+        .unwrap_err()
+        .describe("");
+    assert!(
+        msg.contains(&format!(
+            "AIDA_STORE points at `{}`, so `aida team` reads that store's roster",
+            other.display()
+        )),
+        "{msg}"
+    );
+}
+
+/// An allowed seat never resolves `AIDA_STORE`, so an unusable one is not
+/// warned about again on every seat check.
+// trace:TASK-2171 | ai:claude
+#[test]
+fn task_2171_allowed_seat_never_resolves_aida_store() {
+    let tmp = tempdir().unwrap();
+    let root = tmp.path();
+    let store = solo_store_without_objects(root);
+    write_roster(&store, &format!("[members]\n\"{USER}\" = [\"advisor\"]\n"));
+    let resolved = std::cell::Cell::new(false);
+    let lookup = || {
+        resolved.set(true);
+        None
+    };
+    assert_eq!(
+        roster_check_with_override(root, USER, "advisor", lookup).unwrap(),
+        store
+    );
+    assert!(!resolved.get(), "the allow path resolved AIDA_STORE");
 }
 
 /// An `AIDA_STORE` that resolves to another store is named in the roster
@@ -212,7 +338,8 @@ fn roster_refusal_names_a_diverging_aida_store() {
     // As `store_sync::aida_store_override` hands it over: canonicalized.
     let other = other.canonicalize().unwrap();
 
-    let refusal = roster_check_with_override(&root, USER, "reviewer", Some(&other)).unwrap_err();
+    let refusal =
+        roster_check_with_override(&root, USER, "reviewer", usable_aida_store(&other)).unwrap_err();
     let msg = refusal.describe("seat `reviewer` is refused");
     assert!(
         msg.contains(&roster_path(&store).display().to_string()),
@@ -225,18 +352,20 @@ fn roster_refusal_names_a_diverging_aida_store() {
     );
 
     // The same store adds no note.
-    let same = roster_check_with_override(&root, USER, "reviewer", Some(&store)).unwrap_err();
+    let same =
+        roster_check_with_override(&root, USER, "reviewer", usable_aida_store(&store)).unwrap_err();
     assert!(!same.describe("x").contains("AIDA_STORE"));
 
     // An allowed seat passes and returns the one store it resolved.
     assert_eq!(
-        roster_check_with_override(&root, USER, "advisor", Some(&other)).unwrap(),
+        roster_check_with_override(&root, USER, "advisor", usable_aida_store(&other)).unwrap(),
         store
     );
 
     // A store with no roster file carries the same note.
     fs::remove_file(roster_path(&store)).unwrap();
-    let refusal = roster_check_with_override(&root, USER, "advisor", Some(&other)).unwrap_err();
+    let refusal =
+        roster_check_with_override(&root, USER, "advisor", usable_aida_store(&other)).unwrap_err();
     assert!(
         matches!(refusal, RosterRefusal::Unreachable { .. }),
         "{refusal:?}"
