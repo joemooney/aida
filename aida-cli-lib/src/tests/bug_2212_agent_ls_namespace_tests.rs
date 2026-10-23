@@ -17,7 +17,7 @@ fn view(liveness: agent_registry::LivenessBasis) -> agent_registry::AgentRegistr
         last_active_at: now,
         role: Some("implementer".to_string()),
         current_spec: None,
-        worktree_path: std::path::PathBuf::from("/tmp/aida-fixture"),
+        worktree_path: std::path::PathBuf::from("aida-fixture"),
         source: "session-start-hook".to_string(),
         binary_version: None,
         build_sha: None,
