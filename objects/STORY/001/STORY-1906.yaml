@@ -3,12 +3,12 @@ spec_id: STORY-1906
 agreed_id: STORY-1906
 title: 'Review PR-2848: STORY-1843 PR2 mailbox readers and operator naming'
 description: 'Hand-filed review story: #2848 is Refs-only, so auto-queue-review filed none (BUG-2208, folded into TASK-1955). Covers STORY-1843.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T12:16:41.371500103Z
-modified_at: 2026-10-23T12:16:54.068762915Z
+modified_at: 2026-10-23T17:08:49.935200537Z
 req_type: Story
 relationships:
 - rel_type:
@@ -16,12 +16,25 @@ relationships:
   target_id: 01a15037-319b-7e92-850d-affbbac2a99d
   created_at: 2026-10-23T12:16:54.068759721Z
   created_by: joe
+comments:
+- id: 01a169bc-988f-7fb1-9baa-5b3d16dd43e9
+  author: aida-auto-bump
+  content: 'Auto-completed: PR #2848 is merged on the forge (its merge commit was outside the local scan window).'
+  created_at: 2026-10-23T17:08:49.935343075Z
+  modified_at: 2026-10-23T17:08:49.935343075Z
 history:
 - id: 01a168b1-58cd-7202-bedf-e92049168960
   author: joe
   timestamp: 2026-10-23T12:16:55.501804689Z
   session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
   changes: []
+- id: 01a169bc-988f-7fb1-9baa-5b4cb6669542
+  author: aida-auto-bump
+  timestamp: 2026-10-23T17:08:49.935349111Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
 filed_at:
   code_sha: d56a08fed4f0e180ce02a448bdc36dcf531eb22a
   branch: main
@@ -30,3 +43,6 @@ filed_at:
   aida_build_sha: 51e59ef00d
   vendor: claude
   session: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-23T17:08:49.935341651Z
