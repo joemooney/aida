@@ -23,7 +23,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-23T20:13:23.478802434Z
+modified_at: 2026-10-23T22:44:20.833007625Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -509,6 +509,12 @@ history:
   timestamp: 2026-10-23T20:13:23.672831471Z
   session_id: 526b64ae-49de-4b4f-9f2e-39cc41d6e4e9
   changes: []
+- id: 01a16aef-c57f-75e1-81b2-634e2b471ad6
+  author: joe
+  timestamp: 2026-10-23T22:44:20.991198446Z
+  session_id: 01a16aebd34e
+  harness_version: 2.1.309 (Claude Code)
+  changes: []
 filed_at:
   code_sha: ba665aaf98777ed00ac96a782a6d6f51dfd528bd
   branch: main
@@ -521,7 +527,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'STORY-1843 PR2 scope (dry-run, manifest refusal, upgrade-order doc) and TASK-2177/2178/2179 are implemented with tests, but CI is red from this PR: cli-0 fails on all three branch heads because the new ''aida mailbox migrate'' leaf is missing from docs/cli-format-json-audit.md. gc also stamps ended_at=now on long-dead rows, which reorders resume-latest.'
+  detail: 'STRICT review PR2b: agent ls (ac97b025) and handle mail delivery mostly met, but handle binding has identity defects: unrelated sessions can steal a launcher''s unbound reservation, inherited CLAUDE_CODE_SESSION_ID makes child agents read the parent''s handle mail, retired-spelling reuse inherits the old UUID, and the Codex statusline handle is unreachable via its documented integration. CI was still pending at review time.'
   recovery_hint: address the review findings, move STORY-1843 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-10-23T13:13:13.079712401Z
+  shelved_at: 2026-10-23T22:44:20.833007625Z
