@@ -16,7 +16,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T15:30:48.862626134Z
-modified_at: 2026-10-23T19:11:25.568464471Z
+modified_at: 2026-10-23T19:11:29.471543891Z
 req_type: Story
 tags:
 - authority
@@ -127,6 +127,12 @@ comments:
   created_at: 2026-10-22T11:19:45.066571516Z
   modified_at: 2026-10-22T11:19:45.066571516Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a16a2c-e4bf-7782-86ec-0e4a46ed6519
+  author: joe
+  content: 'ADVISOR 12:16: #2832 (PR1) PASSED round 2; the operator ships it (supervised hold). Folded TASK-1-457 (the ratchet''s non_test_lines still swallows production code after a #[cfg(test)] on a field or statement with no brace) into STORY-1888 PR2. Fix it with a test.'
+  created_at: 2026-10-23T19:11:29.471543891Z
+  modified_at: 2026-10-23T19:11:29.471543891Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
 history:
 - id: 01a15f16-5a0d-7f63-9b4c-3e1a7a6c5560
   author: joe
