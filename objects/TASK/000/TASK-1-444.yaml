@@ -1,0 +1,28 @@
+id: 01a16948-ab0a-7fa0-bd99-da65aad21ba2
+spec_id: TASK-1-444
+title: 'cosmetic (non-blocking): aida-core/templates/skills/aida-review.md:527 places ''…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-2209, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  cosmetic (non-blocking): aida-core/templates/skills/aida-review.md:527 places 'trace:TASK-2209 | ai:claude' mid-sentence in the rendered step-2 prose; move it to the end of the bullet.
+  Reviewed sha: 96fd8b253affb617d6431836c0523a5baa8a1f21
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-23T15:02:12.490825372Z
+modified_at: 2026-10-23T15:02:12.490825372Z
+req_type: Task
+tags:
+- carried-from:TASK-2209
+- finding-hash:67c0c5e7
+- from-review:TASK-2209
+- kind:carried-forward
+filed_at:
+  code_sha: fce1463450fffaa7324261e6305463a58be10b95
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 017e4a4949
+  vendor: claude
+  session: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
