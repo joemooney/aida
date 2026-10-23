@@ -576,14 +576,32 @@ fn ci_skip_maps_only_green_to_build() {
 struct FakeBuild {
     head: String,
     fail_build: bool,
+    /// The checkout gains a tracked change once the build has run.
+    dirtied_by_build: bool,
+    built: bool,
+}
+
+impl FakeBuild {
+    fn at(head: &str, fail_build: bool) -> Self {
+        Self {
+            head: head.into(),
+            fail_build,
+            dirtied_by_build: false,
+            built: false,
+        }
+    }
 }
 
 impl BuildSteps for FakeBuild {
     fn probe(&mut self, _repo: &Path) -> Result<CheckoutState> {
-        Ok(CheckoutState {
+        let mut state = CheckoutState {
             head: Some(self.head.clone()),
             ..clean_main()
-        })
+        };
+        if self.built && self.dirtied_by_build {
+            state.tracked_changes = vec!["Cargo.lock".into()];
+        }
+        Ok(state)
     }
     fn guard(&mut self, _repo: &Path, _binary: &Path, _after_wave: bool) -> Result<()> {
         Ok(())
@@ -595,6 +613,7 @@ impl BuildSteps for FakeBuild {
         Ok(())
     }
     fn build(&mut self, layout: &DevLayout) -> Result<()> {
+        self.built = true;
         if self.fail_build {
             bail!("cargo build failed");
         }
@@ -629,10 +648,7 @@ fn the_child_records_promoted_through_the_unchanged_pipeline() {
         false,
         &chrono::Utc::now().to_rfc3339(),
     );
-    let mut build = FakeBuild {
-        head: TARGET.into(),
-        fail_build: false,
-    };
+    let mut build = FakeBuild::at(TARGET, false);
     run_child(&f.layout, TARGET, 99, &mut build, &mut Vec::new()).unwrap();
     let state = read_state(&f.layout.live_dir).unwrap();
     assert_eq!((state.phase, state.pid), (Phase::Promoted, Some(99)));
@@ -654,10 +670,7 @@ fn the_child_records_a_failed_build_for_a_single_report() {
         false,
         &chrono::Utc::now().to_rfc3339(),
     );
-    let mut build = FakeBuild {
-        head: TARGET.into(),
-        fail_build: true,
-    };
+    let mut build = FakeBuild::at(TARGET, true);
     assert!(run_child(&f.layout, TARGET, 99, &mut build, &mut Vec::new()).is_err());
     let state = read_state(&f.layout.live_dir).unwrap();
     assert_eq!((state.phase, state.reported), (Phase::Failed, false));
@@ -679,19 +692,17 @@ fn the_child_refuses_a_moved_head_or_an_unlaunched_sha() {
         false,
         &chrono::Utc::now().to_rfc3339(),
     );
-    let mut build = FakeBuild {
-        head: LIVE_SHA.into(),
-        fail_build: false,
-    };
+    let mut build = FakeBuild::at(LIVE_SHA, false);
     let e = run_child(&f.layout, TARGET, 99, &mut build, &mut Vec::new()).unwrap_err();
     assert!(e.to_string().contains("HEAD moved"), "{e:#}");
-    assert_eq!(read_state(&f.layout.live_dir).unwrap().phase, Phase::Failed);
+    assert!(is_refusal(&e), "{e:#}");
+    assert_eq!(
+        read_state(&f.layout.live_dir).unwrap().phase,
+        Phase::Refused
+    );
 
     let f = fixture();
-    let mut build = FakeBuild {
-        head: TARGET.into(),
-        fail_build: false,
-    };
+    let mut build = FakeBuild::at(TARGET, false);
     assert!(run_child(&f.layout, TARGET, 99, &mut build, &mut Vec::new()).is_err());
     assert_eq!(
         read_promotion_meta(&f.layout.live_dir).unwrap().sha,
@@ -841,4 +852,104 @@ fn the_repository_guide_documents_the_scheduled_promote() {
             "the dev-build paragraph must name {needle}"
         );
     }
+}
+
+// --- review findings (TASK-2258, TASK-2259, TASK-2260) --------------------
+
+// trace:STORY-1689 | ai:claude
+#[test]
+fn a_checkout_moved_during_the_build_is_a_refusal_not_a_failure() {
+    let f = fixture();
+    put_state(
+        &f,
+        Phase::Running,
+        None,
+        false,
+        &chrono::Utc::now().to_rfc3339(),
+    );
+    let mut build = FakeBuild::at(TARGET, false);
+    build.dirtied_by_build = true;
+    let e = run_child(&f.layout, TARGET, 99, &mut build, &mut Vec::new()).unwrap_err();
+    assert!(e.to_string().contains("checkout changed"), "{e:#}");
+    assert!(is_refusal(&e), "{e:#}");
+    assert_eq!(
+        read_state(&f.layout.live_dir).unwrap().phase,
+        Phase::Refused
+    );
+    assert_eq!(
+        read_promotion_meta(&f.layout.live_dir).unwrap().sha,
+        LIVE_SHA
+    );
+    // The next tick neither reports a failure nor parks the SHA as failed:
+    // it decides afresh and relaunches.
+    let mut fake = Fake::green();
+    assert!(
+        matches!(tick(&f, &mut fake), TickOutcome::Launched { .. }),
+        "{:?}",
+        fake.calls
+    );
+}
+
+// trace:STORY-1689 | ai:claude
+#[test]
+fn a_real_build_failure_is_still_not_a_refusal() {
+    let f = fixture();
+    put_state(
+        &f,
+        Phase::Running,
+        None,
+        false,
+        &chrono::Utc::now().to_rfc3339(),
+    );
+    let mut build = FakeBuild::at(TARGET, true);
+    let e = run_child(&f.layout, TARGET, 99, &mut build, &mut Vec::new()).unwrap_err();
+    assert!(!is_refusal(&e), "{e:#}");
+}
+
+// trace:STORY-1689 | ai:claude
+#[test]
+fn the_child_outwaits_the_launch_bound_for_the_lock() {
+    assert!(
+        CHILD_LOCK_WAIT > crate::schedule_driver::WAVE_UNIT_RUN_TIMEOUT,
+        "the tick holds the lock across systemd-run ({:?}); the child waits {:?}",
+        crate::schedule_driver::WAVE_UNIT_RUN_TIMEOUT,
+        CHILD_LOCK_WAIT
+    );
+    // A lock released while the child waits is taken, not reported held.
+    let f = fixture();
+    put_state(
+        &f,
+        Phase::Running,
+        None,
+        false,
+        &chrono::Utc::now().to_rfc3339(),
+    );
+    let held = try_lock(&f.layout.live_dir, Duration::ZERO)
+        .unwrap()
+        .unwrap();
+    let release = std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(600));
+        drop(held);
+    });
+    let mut build = FakeBuild::at(TARGET, false);
+    run_child(&f.layout, TARGET, 99, &mut build, &mut Vec::new()).unwrap();
+    release.join().unwrap();
+    assert_eq!(
+        read_state(&f.layout.live_dir).unwrap().phase,
+        Phase::Promoted
+    );
+}
+
+// trace:STORY-1689 | ai:claude
+#[test]
+fn an_untracked_file_skip_says_it_stops_the_scheduled_promote() {
+    let state = CheckoutState {
+        untracked: 7,
+        ..clean_main()
+    };
+    let skip = checkout_skip(&state).unwrap();
+    assert_eq!(skip.reason(), "dirty");
+    let detail = skip.detail();
+    assert!(detail.contains("7 untracked"), "{detail}");
+    assert!(detail.contains("remove or ignore them"), "{detail}");
 }

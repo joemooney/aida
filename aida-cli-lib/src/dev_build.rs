@@ -376,6 +376,21 @@ pub(crate) fn probe_checkout(repo: &Path) -> Result<CheckoutState> {
 /// The side-effecting steps of the pipeline. [`RealSteps`] runs the real
 /// toolchain; tests substitute fakes so no unit test runs a cargo build or
 /// touches the host's live binaries or MCP servers.
+/// The checkout does not qualify (or stopped qualifying during the build),
+/// so nothing was promoted. Typed so the scheduled promote can report it as
+/// a refusal, not a failed build.
+// trace:STORY-1689 | ai:claude
+#[derive(Debug)]
+pub(crate) struct PromotionRefused(pub String);
+
+impl std::fmt::Display for PromotionRefused {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl std::error::Error for PromotionRefused {}
+
 pub(crate) trait BuildSteps {
     fn probe(&mut self, repo: &Path) -> Result<CheckoutState>;
     /// Live-wave guard: refuse (or wait, with `after_wave`) when a live drain
@@ -427,7 +442,10 @@ pub(crate) fn run_dev_build(
     let state = steps.probe(&layout.repo)?;
     let plan = plan_promotion(&state, opts.no_promote, opts.allow_dirty);
     match &plan {
-        PromotionPlan::Refuse { reasons } => bail!("{}", refusal_message(reasons)),
+        // trace:STORY-1689 | ai:claude
+        PromotionPlan::Refuse { reasons } => {
+            return Err(PromotionRefused(refusal_message(reasons)).into())
+        }
         PromotionPlan::Promote { warnings } => {
             for w in warnings {
                 writeln!(out, "warning: {w}")?;
@@ -569,10 +587,12 @@ pub(crate) fn run_dev_build(
                 plan_promotion(&state, false, opts.allow_dirty)
             {
                 let _ = std::fs::remove_dir_all(&incoming);
-                bail!(
+                // trace:STORY-1689 | ai:claude
+                return Err(PromotionRefused(format!(
                     "the checkout changed during the build, so the new build was not promoted.\n{}",
                     refusal_message(&reasons)
-                );
+                ))
+                .into());
             }
             // trace:STORY-1646 | ai:claude
             let head = state.head.clone().unwrap_or_default();

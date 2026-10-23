@@ -35,8 +35,11 @@ pub(crate) const TICK_BUDGET: Duration = Duration::from_secs(90);
 /// What must remain of the budget to start the fast-forward: its own bound
 /// plus the launch (`systemd-run` is bounded at 20s).
 pub(crate) const FF_RESERVE: Duration = Duration::from_secs(45);
-/// How long the child waits for the tick to release the lock.
-const CHILD_LOCK_WAIT: Duration = Duration::from_secs(5);
+/// How long the child waits for the tick to release the lock. The tick
+/// holds it across the `systemd-run` launch, so this outlasts that bound.
+// trace:STORY-1689 | ai:claude
+pub(crate) const CHILD_LOCK_WAIT: Duration =
+    Duration::from_secs(crate::schedule_driver::WAVE_UNIT_RUN_TIMEOUT.as_secs() + 10);
 /// A `running` record with no pid (a unit whose pid was never read) that
 /// the child has not claimed within this long is a build that never started.
 const UNCLAIMED_GRACE_SECS: i64 = 15 * 60;
@@ -135,6 +138,10 @@ pub(crate) enum Phase {
     Running,
     Promoted,
     Failed,
+    /// The checkout moved under the build, so nothing was promoted. Not a
+    /// failure: never reported, and the next tick decides afresh.
+    // trace:STORY-1689 | ai:claude
+    Refused,
 }
 
 /// `<live>/autopromote.json`.
@@ -257,8 +264,10 @@ pub(crate) fn checkout_skip(state: &CheckoutState) -> Option<Skip> {
         None => return Some(Skip::OffMain("HEAD is detached".into())),
     }
     if !state.tracked_changes.is_empty() || state.untracked > 0 {
+        // trace:STORY-1689 | ai:claude
         return Some(Skip::Dirty(format!(
-            "{} modified and {} untracked path(s)",
+            "{} modified and {} untracked path(s); untracked files count too, so remove or \
+             ignore them for the scheduled promote to run",
             state.tracked_changes.len(),
             state.untracked
         )));
@@ -581,7 +590,10 @@ pub(crate) fn run_child(
     let result = (|| -> Result<()> {
         let head = build_steps.probe(&layout.repo)?.head.unwrap_or_default();
         if head != sha {
-            bail!("HEAD moved to {head} before the build of {sha} started");
+            return Err(crate::dev_build::PromotionRefused(format!(
+                "HEAD moved to {head} before the build of {sha} started"
+            ))
+            .into());
         }
         run_dev_build(layout, &DevBuildOptions::default(), build_steps, out)?;
         Ok(())
@@ -593,7 +605,12 @@ pub(crate) fn run_child(
             state.error = None;
         }
         Err(e) => {
-            state.phase = Phase::Failed;
+            // trace:STORY-1689 | ai:claude
+            state.phase = if is_refusal(e) {
+                Phase::Refused
+            } else {
+                Phase::Failed
+            };
             state.reported = false;
             state.error = Some(format!("{e:#}").lines().next().unwrap_or("").to_string());
         }
@@ -601,6 +618,14 @@ pub(crate) fn run_child(
     write_state(live, &state)?;
     drop(lock);
     result
+}
+
+/// The checkout moved before or during the build, so the pipeline refused
+/// to promote: a refusal, not a failed build.
+// trace:STORY-1689 | ai:claude
+pub(crate) fn is_refusal(e: &anyhow::Error) -> bool {
+    e.downcast_ref::<crate::dev_build::PromotionRefused>()
+        .is_some()
 }
 
 /// Append `line` to the autopromote log. A skip is written only when its
@@ -858,6 +883,10 @@ pub(crate) fn handle_child(sha: &str) -> Result<()> {
     );
     let line = match &result {
         Ok(()) => format!("promoted {sha}"),
+        Err(e) if is_refusal(e) => format!(
+            "refused {sha}: {}",
+            format!("{e:#}").lines().next().unwrap_or("")
+        ),
         Err(e) => format!(
             "build-failed {sha}: {}",
             format!("{e:#}").lines().next().unwrap_or("")
