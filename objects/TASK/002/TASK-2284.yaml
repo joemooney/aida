@@ -1,0 +1,27 @@
+id: 01a16b0d-bf26-72e3-8953-5ef7a2e4f35b
+spec_id: TASK-2284
+agreed_id: TASK-2284
+title: 'pr ship: empty else-if branch hides side-effecting skip_seat_clone_post_merge_pull'
+description: |
+  aida-cli-lib/src/pr_cmd.rs:4037: `} else if skip_seat_clone_post_merge_pull(&project_root, &main_worktree, pr_number) {}` is a branch with an empty body. The predicate prints the step-4 note and writes the activity log, so the code reads as a no-op. Make the helper return Option<reason>, like post_merge_pull_skip_reason, and log in one place.
+
+  Raised in review of PR-2836: https://github.com/joemooney/aida/pull/2836#issuecomment-6376647899
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-23T23:17:05.446291857Z
+modified_at: 2026-10-23T23:17:05.446291857Z
+req_type: Task
+tags:
+- from-review:PR-2836
+- severity:cosmetic
+filed_at:
+  code_sha: bdd2846897925f4f2a5ab7cd6fe9560fedf8b6e4
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c51da86593
+  vendor: claude
+  session: 01a16b0971a7
+  harness_version: 2.1.309 (Claude Code)
