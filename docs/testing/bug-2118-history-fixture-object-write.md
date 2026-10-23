@@ -179,17 +179,30 @@ an hour under the widened window):
 
 <!-- trace:BUG-2191.ac490e38 | ai:claude -->
 
-Known exclusions of the ratchet (follow-up work, out of scope for BUG-2191):
+Shapes the ratchet covers since TASK-1955 (follow-ups TASK-2010/TASK-2018):
 
 - **Split statements and variable argv.** `let mut c = Command::new("git");
-  c.arg("commit")` and `let a = vec!["commit", ..]; git.args(&a)` report no
-  site, because the scan looks for the subcommand literal in the same
-  statement as the git call. Test-code `Command::new("git")` is now the
-  helper in the migrated files, but a new fixture written in those shapes is
-  not caught.
-- **Shell and Python test files.** `tests/*.sh` and `tests/*.py` (for example
-  `tests/test_distributed.sh`, `tests/test_cache_refresh_outputs.py`) still
-  run bare `git commit`; the scan covers Rust sources only.
+  c.arg("commit")` counts unless the binding is the `test_git` helper or a
+  statement on it applies the `-c` pair; `let a = vec!["commit", ..];
+  git.args(&a)` counts when a later unguarded git spawn receives `a`.
+- **Shell and Python test files.** `tests/*.sh`, `tests/lib/*.sh` and
+  `tests/*.py` are scanned too. A shell fixture exports the environment form
+  of the pair near its top
+  (`export GIT_CONFIG_COUNT=2 GIT_CONFIG_KEY_0=maintenance.auto
+  GIT_CONFIG_VALUE_0=false GIT_CONFIG_KEY_1=gc.auto GIT_CONFIG_VALUE_1=0`);
+  a site behind `env -i` loses that environment and passes the `-c` pair
+  inline. A Python fixture passes the pair in its argv list.
+
+Known exclusions of the ratchet:
+
+- The exported pair does not reach a bare remote's `receive-pack` on a local
+  `git push` (local transport clears the config environment); the Rust
+  `test_git` helper covers that through `init.templateDir`, shell fixtures do
+  not.
+- Python argv built across several lines, or a shell command assembled in a
+  variable, is not parsed.
+
+<!-- trace:TASK-1955 | ai:claude (TASK-2010) -->
 
 ## General Test-Isolation Hygiene Landed in This PR (TASK-1970, Refs BUG-2118)
 

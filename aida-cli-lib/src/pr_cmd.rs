@@ -70,6 +70,12 @@ pub(crate) fn handle_pr_command(cmd: &PrCommand) -> Result<()> {
                 *final_slice,
             )
         }
+        // trace:STORY-1887 | ai:claude
+        PrCommand::ShipBatch {
+            prs,
+            review_timeout,
+            dry_run,
+        } => crate::pr_ship_batch::run(prs, *review_timeout, *dry_run),
         PrCommand::Hold { reason } => pr_hold_handler(reason.as_deref()),
         PrCommand::Gc { dry_run } => pr_gc_handler(*dry_run),
         PrCommand::List { json, mapped_only } => pr_list_handler(*json, *mapped_only),
@@ -1657,8 +1663,9 @@ pub(crate) fn pr_ship_approval_gate(
     }
     // STORY-1655: name the mode when a solo-human approval is relied on.
     // trace:STORY-1655 | ai:claude
+    // Same stream as merge_path_approval_gate. trace:TASK-1955 | ai:claude (TASK-1808)
     if let Some(notice) = pr_ship::solo_approval_notice(candidates, policy) {
-        println!("  {notice}");
+        eprintln!("  {notice}");
     }
     let Some(refusal) = pr_ship::approval_head_refusal(candidates, head_sha) else {
         return Ok(pr_ship::approved_match_head(candidates, head_sha));
@@ -1802,6 +1809,27 @@ pub(crate) fn pr_gate_subject(
         forge_resolved,
         normalized_spec_ids(&refs_ids),
     )
+}
+
+/// The spec IDs the ship approval gate looks verdicts up under: the gate
+/// records for the local range, then every ID in the branch and the title.
+/// `aida pr ship-batch` waits on the same set, so its "approved at head"
+/// cannot drift from what ship accepts.
+// trace:STORY-1887 | ai:claude
+pub(crate) fn ship_gate_known_ids(
+    project_root: &std::path::Path,
+    branch: &str,
+    title: Option<&str>,
+) -> Vec<String> {
+    let mut ids: Vec<String> = ship_gate_spec_records(project_root)
+        .into_iter()
+        .map(|(id, _, _)| id)
+        .collect();
+    ids.extend(pr_ship::extract_spec_ids_from_text(branch));
+    if let Some(title) = title {
+        ids.extend(pr_ship::extract_spec_ids_from_text(title));
+    }
+    ids
 }
 
 /// BUG-1918: the approval candidates for merging PR `pr` (read from `roots`)
@@ -2091,6 +2119,22 @@ pub(crate) fn normalized_spec_ids(spec_ids: &[String]) -> Vec<String> {
     ids
 }
 
+/// The stale-definition gate's own predicate: PR `pr_number`'s base branch
+/// and the staleness warning its ship branch carries against it. A warning
+/// with `definition_files` is exactly what [`ship_stale_definition_gate`]
+/// refuses, so `aida pr ship-batch` reads this, never a re-implementation.
+// trace:STORY-1887 | ai:claude
+pub(crate) fn ship_stale_definition_warning(
+    project_root: &std::path::Path,
+    ship_branch: &str,
+    pr_number: u64,
+) -> (String, Option<StaleCheckWarning>) {
+    let base_branch = pr_ship_target_branch(pr_number);
+    let base_ref = format!("origin/{base_branch}");
+    let warning = pr_stale_check_warning(project_root, ship_branch, &base_ref);
+    (base_branch, warning)
+}
+
 // trace:TASK-1606 | ai:codex
 fn ship_stale_definition_gate(
     project_root: &std::path::Path,
@@ -2098,9 +2142,9 @@ fn ship_stale_definition_gate(
     pr_number: u64,
     override_stale_check: bool,
 ) -> Result<()> {
-    let base_branch = pr_ship_target_branch(pr_number);
-    let base_ref = format!("origin/{base_branch}");
-    if let Some(warning) = pr_stale_check_warning(&project_root, &ship_branch, &base_ref) {
+    let (base_branch, warning) =
+        ship_stale_definition_warning(project_root, ship_branch, pr_number);
+    if let Some(warning) = warning {
         if !warning.definition_files.is_empty() {
             if override_stale_check {
                 eprintln!(
@@ -2163,14 +2207,7 @@ fn ship_preflight_gates(
             change.id
         )));
     }
-    let mut ids: Vec<String> = ship_gate_spec_records(project_root)
-        .into_iter()
-        .map(|(id, _, _)| id)
-        .collect();
-    ids.extend(pr_ship::extract_spec_ids_from_text(&change.branch));
-    if let Some(title) = &change.title {
-        ids.extend(pr_ship::extract_spec_ids_from_text(title));
-    }
+    let ids = ship_gate_known_ids(project_root, &change.branch, change.title.as_deref());
     // BUG-1918: authors resolved from what the forge says the PR ships, not
     // only the local range (empty when shipping from main).
     let (candidates, policy) = merge_approval_inputs(
@@ -2265,6 +2302,24 @@ pub(crate) fn pr_ship_handler(
         crate::forge::MergeMethod::Squash,
         false,
     )
+}
+
+/// The refusal a post-release exit returns: when this ship's mandate
+/// released a hold (a mandate cover and a hold marker), the hold is re-armed
+/// and what `rearm` reports is appended; any other exit returns `refusal`
+/// unchanged and re-arms nothing.
+// trace:TASK-1955 | ai:claude (TASK-2088)
+pub(crate) fn refusal_with_mandate_rearm(
+    refusal: String,
+    mandate_released: bool,
+    held: bool,
+    rearm: impl FnOnce() -> String,
+) -> String {
+    if mandate_released && held {
+        format!("{refusal}{}", rearm())
+    } else {
+        refusal
+    }
 }
 
 // trace:STORY-1663 | ai:antigravity
@@ -3563,13 +3618,25 @@ pub(crate) fn pr_ship_with_method(
                 ) {
                     Ok(true) => {}
                     // STORY-1698: a mandate release never stays released on
-                    // a failure. trace:STORY-1698 | ai:claude
-                    Ok(false) if mandate_release.is_some() => {
-                        let refusal = format!(
-                            "released the merge-hold on PR-{pr_number} under a mandate, but `{}` has not re-run green within 180s.{}",
-                            crate::ci_gate::HOLD_GATE_CHECK,
-                            rearm_after_mandate_failure(&hold_root, hold_record.as_ref(), pr_number)
-                        );
+                    // a failure. One exit for both arms, so the ledger call
+                    // is the mandate arm's real write, not a no-op kept for
+                    // the wiring pin. trace:STORY-1698 | ai:claude
+                    // trace:TASK-1955 | ai:claude (TASK-2086)
+                    Ok(false) => {
+                        let refusal = if mandate_release.is_some() {
+                            format!(
+                                "released the merge-hold on PR-{pr_number} under a mandate, but `{}` has not re-run green within 180s.{}",
+                                crate::ci_gate::HOLD_GATE_CHECK,
+                                rearm_after_mandate_failure(&hold_root, hold_record.as_ref(), pr_number)
+                            )
+                        } else {
+                            format!(
+                                "released the merge-hold on PR-{pr_number}, but `{}` has not re-run green within \
+                                 180s — retry `aida pr ship {pr_number}` shortly (the hold stays released), or \
+                                 inspect `gh pr checks {pr_number}`",
+                                crate::ci_gate::HOLD_GATE_CHECK
+                            )
+                        };
                         // trace:TASK-1915 | ai:claude
                         ledger_mandate_ship_failure(
                             &main_worktree,
@@ -3577,18 +3644,6 @@ pub(crate) fn pr_ship_with_method(
                             pr_number,
                             &refusal,
                         );
-                        anyhow::bail!(refusal)
-                    }
-                    Ok(false) => {
-                        let refusal = format!(
-                            "released the merge-hold on PR-{pr_number}, but `{}` has not re-run green within \
-                             180s — retry `aida pr ship {pr_number}` shortly (the hold stays released), or \
-                             inspect `gh pr checks {pr_number}`",
-                            crate::ci_gate::HOLD_GATE_CHECK
-                        );
-                        // ledger-exempt: mandate_release is None in this arm (the
-                        // guarded arm above takes every mandate ship), so there is
-                        // no MandateDriveAction row to write. trace:TASK-1915 | ai:claude
                         anyhow::bail!(refusal)
                     }
                     Err(e) => eprintln!(
@@ -3650,13 +3705,13 @@ pub(crate) fn pr_ship_with_method(
                 );
                 // The hold a mandate released is re-armed and the refusal ledgered,
                 // like every other post-release exit. trace:TASK-1915 | ai:claude
-                let refusal = match (&mandate_release, &marker_reason) {
-                    (Some(_), Some(_)) => format!(
-                        "{refusal}{}",
-                        rearm_after_mandate_failure(&hold_root, hold_record.as_ref(), pr_number)
-                    ),
-                    _ => refusal,
-                };
+                // trace:TASK-1955 | ai:claude (TASK-2088)
+                let refusal = refusal_with_mandate_rearm(
+                    refusal,
+                    mandate_release.is_some(),
+                    marker_reason.is_some(),
+                    || rearm_after_mandate_failure(&hold_root, hold_record.as_ref(), pr_number),
+                );
                 ledger_mandate_ship_failure(
                     &main_worktree,
                     mandate_release.as_ref(),

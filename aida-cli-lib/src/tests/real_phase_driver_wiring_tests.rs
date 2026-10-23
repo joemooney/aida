@@ -162,6 +162,7 @@ fn mint_lease(root: &std::path::Path, lease_id: &str, branch: &str, claude_id: O
         plan_source: "queue work".to_string(),
         claude_session_id: claude_id.map(str::to_string),
         batch_name: None,
+        agent_name: None,
         plan: None,
         items: vec![],
     };
@@ -3157,6 +3158,12 @@ fn bug_2185_phase_driver_implementer_commits_child_store_writes() {
     d.drain_tuning.no_progress = std::time::Duration::ZERO;
     d.drain_tuning.ceiling = std::time::Duration::ZERO;
 
-    let _ = d.run_implementer();
+    // The fake child exits 1 without a lease: the launch-refused exit is the
+    // path that must still commit the child's store writes.
+    // trace:TASK-1955 | ai:claude (TASK-2074)
+    let failure = d
+        .run_implementer()
+        .expect_err("the fake implementer starts no session");
+    assert_eq!(failure.kind, FailureKind::LaunchRefused, "{failure:?}");
     bug_2185_assert_store_committed_by(&store_root, "implementer");
 }
