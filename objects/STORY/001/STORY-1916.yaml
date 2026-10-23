@@ -10,13 +10,22 @@ description: |-
   2. reclaim classifies an idle duplicate (a second worktree on the same open-PR branch whose cache is idle) as reclaimable, and falls back to git merge-base ancestry against origin/main when gh is unreachable instead of skipping everything.
   3. Stuck escalation: when the floor is breached and a reclaim dry run frees less than the deficit, the routed item says so, with the top cache consumers and sizes, and escalates to the operator (aida notify) rather than re-firing silently every 30m.
   4. Visibility: aida schedule status (or aida doctor check disk-headroom) shows free space, the floor, the ceiling, the last run, and the last automatic reclaim, so the operator can see at a glance that the guard is running.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T16:40:04.586148211Z
-modified_at: 2026-10-23T16:40:04.586148211Z
+modified_at: 2026-10-23T16:40:30.680678439Z
 req_type: Story
+history:
+- id: 01a169a2-aad8-73f0-ad7d-63d28b5dc539
+  author: joe
+  timestamp: 2026-10-23T16:40:30.680670963Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: ff14eaf5002dfbfd8f0838ae330a0c1703ce36ae
   branch: main
