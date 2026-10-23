@@ -781,7 +781,7 @@ blocks:
   type_prefix: BUG
   range_start: 2017
   range_end: 2116
-  next: 2017
+  next: 2018
   allocated_at: 2026-10-09T20:10:22.931888528Z
 - node_id: '11'
   owner: redacted@node.invalid
