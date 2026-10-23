@@ -551,9 +551,11 @@ ops = ["ship"]   # any of: ship, sketch-signoff, dispatch, hold-clear
   mandate. The fix is `AIDA_USER=<you>` in the driver's environment.
 
 `aida fleet drive` on its own previews what `aida fleet drive --tick` would
-route, and changes nothing. `aida fleet drive --json` prints that preview as
-JSON.
-<!-- trace:STORY-1700 | ai:claude -->
+route, and changes nothing. The preview applies the same holds as the tick: an
+unreadable store, `[mandate.human_gates]`, and the operator-only floor of every
+spec a lane touches. `aida fleet drive --json` prints that preview as JSON, and
+`aida fleet drive --tick --json` prints the tick report.
+<!-- trace:STORY-1700 | ai:claude --> <!-- trace:TASK-1955 | ai:claude -->
 
 ### `aida pr ship-batch`
 

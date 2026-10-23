@@ -1507,6 +1507,7 @@ pub(crate) fn session_manifest_write(
         plan_source: source.to_string(),
         claude_session_id: None,
         batch_name,
+        agent_name: None,
         plan: None,
         items: manifest_items,
     };
@@ -1660,6 +1661,7 @@ pub(crate) fn write_queue_work_manifest(
         // TASK-272: record the batch when set up via `aida queue work
         // --batch NAME` so /aida-pickup detects batch context.
         batch_name: batch_name.map(str::to_string),
+        agent_name: None,
         plan: plan_context,
         items,
     };
