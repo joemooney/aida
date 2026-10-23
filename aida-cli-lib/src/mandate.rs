@@ -2085,33 +2085,45 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
             for w in &warnings {
                 eprintln!("warning: {w}");
             }
-            if *json {
-                let mut out = status_json(&state, now);
-                if let (Some(root), Some(m)) = (&audit_root, state_mandate(&state)) {
-                    out["drive_actions"] = crate::mandate_drive::ledger_json(root, &m.id);
-                }
-                // trace:STORY-1888 | ai:claude
-                if let Some(root) = &audit_root {
-                    out["protected_paths"] = crate::mandate_gates::protected_paths_json(root);
-                }
-                println!("{out}");
-            } else {
-                println!("{}", status_text(&state, now));
-                if let (Some(root), Some(m)) = (&audit_root, state_mandate(&state)) {
-                    let gates = crate::mandate_gates::describe(Some(root));
-                    println!("  human gates: {gates}");
-                    if let Some(summary) = crate::mandate_drive::ledger_text(root, &m.id) {
-                        println!("{summary}");
-                    }
-                }
-                // trace:STORY-1888 | ai:claude
-                if let Some(root) = &audit_root {
-                    print!("{}", crate::mandate_gates::protected_paths_text(root));
-                }
-            }
+            print!(
+                "{}",
+                status_report(&state, now, audit_root.as_deref(), *json)
+            );
             Ok(())
         }
     }
+}
+
+/// The full `aida mandate status` output (text or JSON), newline-terminated.
+// trace:STORY-1888 | ai:claude
+pub(crate) fn status_report(
+    state: &MandateState,
+    now: DateTime<Utc>,
+    audit_root: Option<&Path>,
+    json: bool,
+) -> String {
+    if json {
+        let mut out = status_json(state, now);
+        if let (Some(root), Some(m)) = (audit_root, state_mandate(state)) {
+            out["drive_actions"] = crate::mandate_drive::ledger_json(root, &m.id);
+        }
+        if let Some(root) = audit_root {
+            out["protected_paths"] = crate::mandate_gates::protected_paths_json(root);
+        }
+        return format!("{out}\n");
+    }
+    let mut out = format!("{}\n", status_text(state, now));
+    if let (Some(root), Some(m)) = (audit_root, state_mandate(state)) {
+        let gates = crate::mandate_gates::describe(Some(root));
+        out.push_str(&format!("  human gates: {gates}\n"));
+        if let Some(summary) = crate::mandate_drive::ledger_text(root, &m.id) {
+            out.push_str(&format!("{summary}\n"));
+        }
+    }
+    if let Some(root) = audit_root {
+        out.push_str(&crate::mandate_gates::protected_paths_text(root));
+    }
+    out
 }
 
 #[cfg(test)]

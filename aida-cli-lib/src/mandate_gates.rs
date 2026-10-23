@@ -550,8 +550,11 @@ pub(crate) fn parse_protected_entry(raw: &str) -> Result<String> {
     if entry.contains(['*', '?', '[', ']']) {
         bail!("globs are not supported; use an exact path or a `dir/` prefix");
     }
+    // At most one trailing `/` marks a prefix; `foo//` keeps an empty
+    // segment and is refused (it could never match a normalised path).
     if entry
-        .trim_end_matches('/')
+        .strip_suffix('/')
+        .unwrap_or(entry)
         .split('/')
         .any(|seg| seg.is_empty() || seg == "." || seg == "..")
     {

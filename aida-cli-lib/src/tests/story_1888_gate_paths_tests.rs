@@ -17,6 +17,7 @@ fn paths(ps: &[&str]) -> Vec<String> {
 
 // ── tighten-only config layer ───────────────────────────────────────────────
 
+// trace:STORY-1888.ac4d90ed | ai:claude
 #[test]
 fn protected_paths_parse_exact_and_prefix_entries() {
     let l = layer(
@@ -31,6 +32,7 @@ fn protected_paths_parse_exact_and_prefix_entries() {
     );
 }
 
+// trace:STORY-1888.ac4d90ed | ai:claude
 #[test]
 fn malformed_protected_entries_are_config_errors() {
     for bad in [
@@ -41,6 +43,7 @@ fn malformed_protected_entries_are_config_errors() {
         "\"src/[ab].rs\"",
         "\"a\\\\b.rs\"",
         "\"a//b.rs\"",
+        "\"a//\"",
         "\"C:/x.rs\"",
         "1",
     ] {
@@ -57,6 +60,7 @@ fn malformed_protected_entries_are_config_errors() {
     .is_err());
 }
 
+// trace:STORY-1888.acd4bc79 | ai:claude
 #[test]
 fn a_directory_prefix_matches_nested_files_on_a_component_boundary() {
     let mut set = ProtectedPaths::floor();
@@ -76,6 +80,7 @@ fn a_directory_prefix_matches_nested_files_on_a_component_boundary() {
     assert_eq!(touches_gates(&paths(&["bar.rs.bak"]), &set), None);
 }
 
+// trace:STORY-1888.acd4bc79 | ai:claude
 #[test]
 fn no_layer_can_shrink_the_floor() {
     let committed = layer(
@@ -112,6 +117,7 @@ fn no_layer_can_shrink_the_floor() {
     );
 }
 
+// trace:STORY-1888.ac4d90ed | ai:claude
 #[test]
 fn an_unreadable_load_still_checks_the_floor() {
     let gates: std::result::Result<HumanGates, String> = Err("no origin/main".into());
@@ -142,6 +148,7 @@ fn git(dir: &Path, args: &[&str]) {
     );
 }
 
+// trace:STORY-1888.acd4bc79 | ai:claude
 #[test]
 fn a_branch_only_edit_to_the_committed_layer_has_no_effect() {
     let repo = tempfile::tempdir().unwrap();
@@ -171,6 +178,7 @@ fn a_branch_only_edit_to_the_committed_layer_has_no_effect() {
     assert_eq!(touches_gates(&paths(&["branch.rs"]), &g.protected), None);
 }
 
+// trace:STORY-1888.ac4d90ed | ai:claude
 #[test]
 fn refusal_text_names_the_entry_and_its_source() {
     let hit = GateMatch {
@@ -190,6 +198,7 @@ fn refusal_text_names_the_entry_and_its_source() {
     );
 }
 
+// trace:STORY-1888.ac4d90ed | ai:claude
 #[test]
 fn status_json_lists_each_entry_with_its_source() {
     let mut set = ProtectedPaths::floor();
@@ -201,6 +210,84 @@ fn status_json_lists_each_entry_with_its_source() {
         json[GATE_PROTECTED_PATHS.len()]["source"],
         "origin/main:.aida/config.toml"
     );
+}
+
+/// A repo whose `origin/main` carries `config` as `.aida/config.toml`.
+fn repo_with_committed_config(config: &str) -> tempfile::TempDir {
+    let repo = tempfile::tempdir().unwrap();
+    git(repo.path(), &["init", "-q", "-b", "main"]);
+    std::fs::create_dir_all(repo.path().join(".aida")).unwrap();
+    std::fs::write(repo.path().join(".aida/config.toml"), config).unwrap();
+    git(repo.path(), &["add", "."]);
+    git(repo.path(), &["commit", "-q", "-m", "gates"]);
+    git(
+        repo.path(),
+        &["update-ref", "refs/remotes/origin/main", "HEAD"],
+    );
+    repo
+}
+
+// trace:STORY-1888.ac4d90ed | ai:claude
+#[test]
+fn mandate_status_lists_every_protected_entry_with_its_source() {
+    let repo = repo_with_committed_config(
+        "[mandate.human_gates]\nprotected_paths = [\"gate/\", \"kept.rs\"]\n",
+    );
+    let state = crate::mandate::MandateState::None;
+    let now = chrono::Utc::now();
+    let text = crate::mandate::status_report(&state, now, Some(repo.path()), false);
+    assert!(text.contains("  protected paths:\n"), "{text}");
+    for floor in GATE_PROTECTED_PATHS {
+        assert!(
+            text.contains(&format!("    {floor}  [built-in]\n")),
+            "{floor} missing:\n{text}"
+        );
+    }
+    for entry in ["gate/", "kept.rs"] {
+        assert!(
+            text.contains(&format!("    {entry}  [origin/main:.aida/config.toml]\n")),
+            "{entry} missing:\n{text}"
+        );
+    }
+    let json: serde_json::Value = serde_json::from_str(&crate::mandate::status_report(
+        &state,
+        now,
+        Some(repo.path()),
+        true,
+    ))
+    .unwrap();
+    let entries = json["protected_paths"].as_array().unwrap();
+    assert!(entries.contains(&serde_json::json!({
+        "path": "gate/",
+        "source": "origin/main:.aida/config.toml",
+    })));
+    assert_eq!(entries[0]["source"], "built-in");
+}
+
+// trace:STORY-1888.ac4d90ed | ai:claude
+#[test]
+fn mandate_status_with_an_unreadable_committed_layer_shows_the_floor_only() {
+    let repo = repo_with_committed_config("[mandate.human_gates]\nprotected_paths = [\"a//\"]\n");
+    let state = crate::mandate::MandateState::None;
+    let now = chrono::Utc::now();
+    let text = crate::mandate::status_report(&state, now, Some(repo.path()), false);
+    assert!(
+        text.contains("  protected paths (gate config unreadable, built-in floor only: "),
+        "{text}"
+    );
+    let listed: Vec<&str> = text.lines().filter(|l| l.starts_with("    ")).collect();
+    assert_eq!(listed.len(), GATE_PROTECTED_PATHS.len(), "{text}");
+    assert!(listed.iter().all(|l| l.ends_with("  [built-in]")), "{text}");
+    let json: serde_json::Value = serde_json::from_str(&crate::mandate::status_report(
+        &state,
+        now,
+        Some(repo.path()),
+        true,
+    ))
+    .unwrap();
+    let pp = &json["protected_paths"];
+    assert!(pp["error"].as_str().unwrap().contains("a//"), "{pp}");
+    assert_eq!(pp["floor"], ProtectedPaths::floor().to_json());
 }
 
 // ── drift ratchet ───────────────────────────────────────────────────────────
@@ -240,8 +327,31 @@ fn rust_files(dir: &Path, out: &mut Vec<PathBuf>) {
     }
 }
 
+/// `{` minus `}` on one line, ignoring line comments, string literals and
+/// `'{'` / `'}'` char literals.
+fn brace_delta(line: &str) -> i32 {
+    let line = line.replace("'{'", "").replace("'}'", "");
+    let mut depth = 0;
+    let mut in_str = false;
+    let mut chars = line.chars().peekable();
+    while let Some(c) = chars.next() {
+        match c {
+            '\\' if in_str => {
+                chars.next();
+            }
+            '"' => in_str = !in_str,
+            '/' if !in_str && chars.peek() == Some(&'/') => break,
+            '{' if !in_str => depth += 1,
+            '}' if !in_str => depth -= 1,
+            _ => {}
+        }
+    }
+    depth
+}
+
 /// The lines of `text` outside `#[cfg(test)]` and `#[test]` items. An item
-/// ends at its `;` or at the closing brace at its own indentation.
+/// ends at its `;` (before any brace opens) or where its braces balance, so
+/// a one-line item or one closed by `});` never swallows the next item.
 fn non_test_lines(text: &str) -> Vec<&str> {
     let lines: Vec<&str> = text.lines().collect();
     let mut out = Vec::new();
@@ -250,20 +360,21 @@ fn non_test_lines(text: &str) -> Vec<&str> {
         let line = lines[i];
         let trimmed = line.trim_start();
         if trimmed == "#[cfg(test)]" || trimmed == "#[test]" {
-            let indent = &line[..line.len() - trimmed.len()];
             i += 1;
             while i < lines.len() && lines[i].trim_start().starts_with("#[") {
                 i += 1;
             }
-            if i < lines.len() && lines[i].trim_end().ends_with(';') {
+            let mut depth = 0;
+            let mut opened = false;
+            while i < lines.len() {
+                let item = lines[i];
+                opened |= item.contains('{');
+                depth += brace_delta(item);
                 i += 1;
-                continue;
+                if (opened && depth <= 0) || (!opened && item.trim_end().ends_with(';')) {
+                    break;
+                }
             }
-            let close = format!("{indent}}}");
-            while i < lines.len() && lines[i].trim_end() != close {
-                i += 1;
-            }
-            i += 1;
             continue;
         }
         out.push(line);
@@ -279,13 +390,16 @@ fn gate_authority(text: &str) -> Option<String> {
         r"^(\w*_)?(approval|authority|hold|ship|merge|verdict|seat|mandate|signoff|review)\w*_(gate|gated|authority|authorized|decision|refusal)$|_authority_from$",
     )
     .unwrap();
-    let fn_def = regex::Regex::new(r"^\s*(pub(\([^)]*\))?\s+)?(async\s+)?fn\s+(\w+)").unwrap();
+    let fn_def = regex::Regex::new(
+        r#"^\s*(pub(\([^)]*\))?\s+)?((const|async|unsafe)\s+)*(extern\s+("[^"]*"\s+)?)?fn\s+(?P<name>\w+)"#,
+    )
+    .unwrap();
     let lines = non_test_lines(text);
     if lines.iter().any(|l| l.trim() == MARKER) {
         return Some(format!("carries `{MARKER}`"));
     }
     lines.iter().find_map(|l| {
-        let f = fn_def.captures(l)?.get(4)?.as_str();
+        let f = fn_def.captures(l)?.name("name")?.as_str();
         name.is_match(f).then(|| format!("defines `fn {f}`"))
     })
 }
@@ -310,16 +424,42 @@ fn scan() -> std::collections::BTreeMap<String, String> {
         .collect()
 }
 
+// trace:STORY-1888.aca70d99 | ai:claude
 #[test]
 fn ratchet_skips_test_items() {
     let text = "fn ok() {}\n#[cfg(test)]\nmod tests {\n    fn ship_gate() {}\n}\n    #[test]\n    fn merge_decision() {\n    }\n";
     assert_eq!(gate_authority(text), None);
+    // A one-line test item ends on its own line ...
+    let one_line = "#[cfg(test)]\nfn fixture() -> u8 { 1 }\npub(crate) fn ship_gate() {}\n";
+    assert!(gate_authority(one_line).is_some(), "{one_line}");
+    // ... and so does one closed by `});`.
+    let closure = "#[cfg(test)]\nstatic FIXTURE: Lazy<u8> = Lazy::new(|| {\n    1\n});\nfn merge_decision() {}\n";
+    assert!(gate_authority(closure).is_some(), "{closure}");
+    let braces =
+        "#[test]\nfn t() {\n    let _ = \"}\"; // }\n    let _ = '}';\n}\nfn ship_gate() {}\n";
+    assert!(gate_authority(braces).is_some(), "{braces}");
     assert!(gate_authority("pub(crate) fn hold_authorized() {}\n").is_some());
     assert!(gate_authority("fn advisor_authority_from() {}\n").is_some());
     assert!(gate_authority("//! notes\n// mandate-gate\n").is_some());
     assert_eq!(gate_authority("// see `// mandate-gate` markers\n"), None);
 }
 
+// trace:STORY-1888.aca70d99 | ai:claude
+#[test]
+fn ratchet_sees_qualified_fns() {
+    for def in [
+        "pub(crate) const fn ship_gate() {}",
+        "unsafe fn merge_decision() {}",
+        "pub extern \"C\" fn hold_authorized() {}",
+        "pub(crate) const unsafe fn verdict_gate() {}",
+        "extern fn seat_authority() {}",
+        "async fn review_decision() {}",
+    ] {
+        assert!(gate_authority(&format!("{def}\n")).is_some(), "{def}");
+    }
+}
+
+// trace:STORY-1888.aca70d99 | ai:claude
 #[test]
 fn gate_authority_code_is_on_the_floor() {
     let missing: Vec<String> = scan()
@@ -340,6 +480,7 @@ fn gate_authority_code_is_on_the_floor() {
     );
 }
 
+// trace:STORY-1888.aca70d99 | ai:claude
 #[test]
 fn every_floor_source_file_carries_the_marker() {
     let root = workspace_root();
@@ -360,6 +501,7 @@ fn every_floor_source_file_carries_the_marker() {
     );
 }
 
+// trace:STORY-1888.aca70d99 | ai:claude
 #[test]
 fn known_unprotected_only_shrinks() {
     let found = scan();
