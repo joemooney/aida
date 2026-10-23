@@ -705,9 +705,27 @@ pub(crate) fn stray_worktree_markers(main_root: &Path) -> Vec<(u64, PathBuf)> {
     let canon = |p: &Path| std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
     let primary = canon(&local_holds_dir(main_root));
     let mut found = Vec::new();
-    for tree in crate::worktree::parse_worktree_paths(&String::from_utf8_lossy(&out.stdout)) {
+    // TASK-2053: seat clones too; removing one destroys its markers just the
+    // same. A clone is seat-written, so its holds dir is read only when it is
+    // a real directory, never through a symlink.
+    // trace:TASK-2053 | ai:claude
+    let clones = crate::clone_seat_trees(main_root)
+        .into_iter()
+        .map(|wt| wt.path);
+    let trees = crate::worktree::parse_worktree_paths(&String::from_utf8_lossy(&out.stdout))
+        .into_iter()
+        .map(|tree| (tree, false))
+        .chain(clones.map(|tree| (tree, true)));
+    for (tree, clone) in trees {
         let dir = local_holds_dir(&tree);
         if canon(&dir) == primary {
+            continue;
+        }
+        if clone
+            && ![tree.join(".aida"), dir.clone()]
+                .iter()
+                .all(|d| std::fs::symlink_metadata(d).is_ok_and(|m| m.is_dir()))
+        {
             continue;
         }
         let Ok(entries) = std::fs::read_dir(&dir) else {
