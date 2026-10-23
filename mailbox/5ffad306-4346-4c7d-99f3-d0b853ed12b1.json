@@ -1,0 +1,19 @@
+{
+  "id": "5ffad306-4346-4c7d-99f3-d0b853ed12b1",
+  "thread_id": "5ffad306-4346-4c7d-99f3-d0b853ed12b1",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792767083262,
+  "body": "82ca387565 — round 2, all 7 fixed: (1) ship refuses any head behind base, points at aida pr train N, no override; ship-batch refreshes git-behind heads (2) train member gate applies review_marker::merge_gate, fail-closed on unknown head (3) land re-checks main right before merge + warns if first car's parent != base (4) MemberChecks/TrainForge ports + fake-forge tests for gate/head-moved/hold-appeared/stale/TOCTOU/lease (5) lease contention → retire + Landing::Stale (6) ACs ac22c696/ac453d5b/acb4ffd6 traced (7) hold-gate validates @sha hex 7+. check-ci-fast green; targeted cargo 56/57, the 1 a docs-test whitespace bug fixed after (not re-run). main is 3 ahead, not merged. Needs a fresh independent reviewer.",
+  "subject": "PR-2843 pushed (STORY-1690)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "337878bd-9bb2-49f5-84e2-8f8d52b3b23b",
+  "thread_id": "337878bd-9bb2-49f5-84e2-8f8d52b3b23b",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792767636520,
+  "body": "PR-2850 head 2e9eb5c966. main is merged in (no force), and every review item plus TASK-2220/2221 is fixed:\n- TASK-2220 (b2c30d369e): commit_checks refuses anything but a full 40/64-hex SHA, with a clear error. Tested.\n- TASK-2221: the TASK-1424 note is back above ci_status_from_glab_pipelines. A test pins it there.\n- (1) portability: split_once(\": \"). check-portability.sh exits 0.\n- (2) the golden help snapshot is regenerated (--if-main-green and the hidden --autopromote-child).\n- (3) verify-manual.py passes against a freshly built aida-cli binary. The cause was 11-dev.md citing 'systemd-run --user', which the guard read as an aida flag; reworded.\n- (4) ac3e63c0 is traced on the skip and promote tests, and ac481f1d on the config test. ac873b7a is anchored by a test on the guide's dev-build paragraph. 'aida criteria' shows no unanchored tests.\n- (5) the routed last line now reads 'build of <sha> failed; log <path>; tail: ...'. Asserted in the test, and the route prompt is fixed.\n- (6) a pure required_checks(ForgeKind) helper, tested, including green-without-the-aggregator => MissingRequired.\n- (7) a 90s tick budget (under the 120s kill). The ff is skipped as 'out-of-time' unless 45s remain (ff bounded at 20s, plus systemd-run's 20s); fetch is bounded at 40s. Tests cover the skip and the budget arithmetic.\nGates (LIGHT): targeted aida-cli-lib tests (112 passed) and make check-ci-fast (34 gates) are green.",
+  "subject": "READY: PR-2850 round 2 (STORY-1689)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

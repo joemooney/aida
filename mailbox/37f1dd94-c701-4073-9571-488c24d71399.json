@@ -1,0 +1,19 @@
+{
+  "id": "37f1dd94-c701-4073-9571-488c24d71399",
+  "thread_id": "37f1dd94-c701-4073-9571-488c24d71399",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792767332871,
+  "body": "PR-2856 at 274aa1083f, completing slice (TASK-1945). S3b (d): one author mail per blocking verdict on the head, naming the findings file(s), the round and whether it was the last (test 14). S3b (e): one advisor wake per change at the two-round cap when the head has no review (test 15). TASK-2200: the wake key names the approval digest. TASK-2201: required CI checks come from [review_watch] required_checks in .aida/config.toml; AIDA's config names Build (ubuntu-latest), pinned to ci.yml by a test. TASK-2202: the GitLab advice is a merge of the target branch, not a rebase. TASK-2203: the Live adapters are tested on real marker, corpus and hold files. TASK-2204: a pending wake is not throttled. The PR body maps every TASK-1945 acceptance item to its evidence on main. Gates: 101 targeted tests pass; check-ci-fast passed all 34 gates. This is gate code, so it needs an independent review.",
+  "subject": "READY: PR-2856 (TASK-1945)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

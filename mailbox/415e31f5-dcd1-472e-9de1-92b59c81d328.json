@@ -1,0 +1,19 @@
+{
+  "id": "415e31f5-dcd1-472e-9de1-92b59c81d328",
+  "thread_id": "415e31f5-dcd1-472e-9de1-92b59c81d328",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792766996077,
+  "body": "PR-2855 head 0289613240, completing slice 8 (TASK-1955). DRAFT only because TASK-2210/2211/2212 need #2830's code; once #2830 merges I merge main, fix those 3 with tests, and mark it ready.\n- BUG-2208: auto-queue files a covers-only review story for Refs-only PRs; PR->spec resolution prefers the Refs spec and drops superseded members; the fallback names its error (5 tests).\n- Drive TASK-2078/1696: backoff 2h/4h/8h, cap of 3 re-routes. TASK-2080/1694: prune + pre-epoch dating. TASK-2084/1693: no event-log scan. TASK-1697: reap refusals once per reason. Comment 22 a/b. TASK-1695 + TASK-2176(1): scanners.\n- Comment 35: ChildGrantRefused releases the PR-N reviewer lease.\n- Deferred status: interactive + MCP refuse, legacy tag counts, autopilot Restore; TASK-2174 unit test.\n- TASK-2173/2185/2186 hook; TASK-2089 (criteria scanner now reads tests/test_*.sh), TASK-2090, TASK-2093 release flow.\n- TASK-2175 in-place template repair; TASK-2176(2) future probe refs; TASK-2187 #2826 body fixed; TASK-2188 doc.\n- New folds: TASK-2199(=1705-1707), TASK-2206, TASK-2207 (ledger-only row), TASK-2208.\nGates: targeted runs + check-ci-fast pass. The post-merge drive run was refused at the cargo 15G disk floor (not overridden), so CI is the gate for 2206/2207/2208/2199. A table with one row per member (all 86 + folds) is in the PR body.",
+  "subject": "READY (draft): PR-2855 (TASK-1955)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

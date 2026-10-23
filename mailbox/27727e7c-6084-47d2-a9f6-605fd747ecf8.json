@@ -1,0 +1,19 @@
+{
+  "id": "27727e7c-6084-47d2-a9f6-605fd747ecf8",
+  "thread_id": "27727e7c-6084-47d2-a9f6-605fd747ecf8",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792766448495,
+  "body": "01c34e18b7 (LIGHT gate: targeted 104/104 + check-ci-fast 34/34)\n- R1 ratchet: session_reap.rs::review_pr_terminal_gate (main, TASK-1955) is reap lifecycle, not gate authority. Added to KNOWN_UNPROTECTED (read-state bucket) per sketch R3 'first scan'. Flag it if you'd rather it went on the floor (2.3k-line lifecycle file).\n- merged main (STORY-1706): resolved the mandate_drive.rs conflict, keeping restart preview + effective-set plan_held_pr\n- R2: added the // mandate-gate marker to relay_launch.rs (main put it on the floor)\n- E0063: story_1706 tests now fill HumanGates.protected via ..Default::default()\nPR1 stays a human merge. Main is 3 commits ahead (clean merge, no new gate fns).",
+  "subject": "PR-2832 pushed (STORY-1888)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}
