@@ -1,0 +1,27 @@
+id: 01a168e3-9ea4-7090-81de-4d32f1f3f246
+spec_id: TASK-2214
+agreed_id: TASK-2214
+title: claim_role falls back to the inherited seat when a lane lease role is malformed
+description: |-
+  claim.rs:118 swallows lease_role's validation error (.ok()) and returns current_seat, recording the daemon's advisor seat inside a lane. Fail closed (record no role) and test it.
+
+  Raised in review of PR-2844 (STORY-1662 PR2): https://github.com/joemooney/aida/pull/2844#issuecomment-6365669702
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-23T13:11:50.180914739Z
+modified_at: 2026-10-23T13:11:50.180914739Z
+req_type: Task
+tags:
+- from-review:PR-2844
+- severity:minor
+filed_at:
+  code_sha: 5d97a467c400301a4f830cd335a9732f0a75db87
+  branch: pr-2844
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 017e4a4949
+  vendor: claude
+  session: 01a168da3dde
+  harness_version: 2.1.309 (Claude Code)
