@@ -1,0 +1,27 @@
+id: 01a16ab2-3960-7fa1-867f-bf3abecbe9ff
+spec_id: TASK-2271
+agreed_id: TASK-2271
+title: 'aida pr train: car subject fallback reads the local branch, not the gated approved head sha'
+description: |
+  pr_train.rs:904 (LiveChecks::message) falls back to branch_head_commit_message(project_root, head_ref) when ship's derivation returns None. That helper prefers the LOCAL branch over origin/<branch>, and it never reads the gated approved head sha. If the merge seat's checkout has a stale local branch with the same name, the car gets the subject and (SPEC-ID) of an older commit, so it completes the wrong spec or none. Ship reads the branch the same way, but the train already holds the exact head (m.head), so it should read that commit's message (git log -1 --format=%B <head>). Also fold in the cosmetic test gaps: the named = !opts.all_ready wiring (pr_train.rs:1641/1702) is untested, and a_car_keeps_the_head_commits_spec_id_when_ship_derives_no_subject re-implements ship's None rule inline instead of driving derive_pr_ship_squash_subject_from.
+
+  Raised in review of PR-2843: https://github.com/joemooney/aida/pull/2843#issuecomment-6375228237
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-23T21:37:07.424548156Z
+modified_at: 2026-10-23T21:37:07.424548156Z
+req_type: Task
+tags:
+- from-review:PR-2843
+- severity:minor
+filed_at:
+  code_sha: 972dd37d7ce3e2d72351c40e3b5e9a16dd25b8af
+  branch: pr-2843
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c51da86593
+  vendor: claude
+  session: 01a16ab032a2
+  harness_version: 2.1.309 (Claude Code)
