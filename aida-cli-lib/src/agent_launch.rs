@@ -3456,7 +3456,7 @@ fn preflight_agent_new_delegation(
 /// An explicit owning cwd is read-only re-entry, never a claim or forced takeover.
 /// Both launch paths call this before prompts, and plan creation checks it again.
 // trace:BUG-2002 | ai:codex
-fn preflight_agent_launch_lease(
+pub(crate) fn preflight_agent_launch_lease(
     project_root: &std::path::Path,
     role: Option<&str>,
     spec: Option<&str>,
@@ -3497,12 +3497,27 @@ fn preflight_agent_launch_lease(
         );
     }
     defer_cmd::enforce_reasoned_operator_hold(project_root, spec)?;
-    let branch = std::process::Command::new("git")
-        .current_dir(&lease.worktree_path)
-        .args(["symbolic-ref", "--short", "HEAD"])
-        .output()
-        .context("could not verify the owning worktree branch")?;
-    if !branch.status.success() || String::from_utf8_lossy(&branch.stdout).trim() != lease.branch {
+    // BUG-2169: a seat clone's branch comes from its sandboxed probe; host
+    // git never runs in it. trace:TASK-2053 | ai:claude
+    let current = if lease.tree_kind == crate::seat_clone::TreeKind::Clone {
+        match crate::seat_clone::probe(project_root, &lease.worktree_path) {
+            crate::seat_clone::Probe::Known(facts) => facts.branch,
+            crate::seat_clone::Probe::Unknown(why)
+            | crate::seat_clone::Probe::HasSubmodules(why) => {
+                anyhow::bail!("could not verify the owning seat clone's branch: {why}")
+            }
+        }
+    } else {
+        let branch = aida_core::git_ops::host_git_command(&lease.worktree_path)
+            .args(["symbolic-ref", "--short", "HEAD"])
+            .output()
+            .context("could not verify the owning worktree branch")?;
+        branch
+            .status
+            .success()
+            .then(|| String::from_utf8_lossy(&branch.stdout).trim().to_string())
+    };
+    if current.as_deref() != Some(lease.branch.as_str()) {
         anyhow::bail!(
             "the owning worktree no longer matches its recorded branch; inspect `aida session leases --all` before redispatching"
         );
