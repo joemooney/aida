@@ -6,17 +6,26 @@ description: |
   aida-cli-lib/src/review_watch.rs report(): entry.wakes is keyed <head>:<kind>. The Approval.identity doc (review_watch_ready.rs), the wake_message doc and docs/cli/06-roles-sessions.md say a wake goes out once per head, readiness and approval. A new approval of the same head therefore never wakes again. Align the code or the docs.
 
   Raised in review of PR-2846: https://github.com/joemooney/aida/pull/2846#issuecomment-6363820786
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T11:27:32.409908212Z
-modified_at: 2026-10-23T11:27:32.409908212Z
+modified_at: 2026-10-23T13:30:38.350608938Z
 req_type: Task
 tags:
 - from-review:PR-2846
 - review-watch
 - severity:minor
+history:
+- id: 01a168f4-d58e-7312-a304-d7436f8e6188
+  author: joe
+  timestamp: 2026-10-23T13:30:38.350599287Z
+  session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 239478f5ada5b2274194856cb92edb0312b1d93f
   branch: pr-2846
