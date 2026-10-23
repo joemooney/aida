@@ -1,0 +1,29 @@
+id: 01a16882-1912-74c1-8325-024108d36a47
+spec_id: TASK-2199
+agreed_id: TASK-2199
+title: Pin whitespace-only AIDA_STORE → no seat-check note (TASK-2170 test gap)
+description: |
+  aida-cli-lib/src/store_sync.rs:352 aida_store_setting trims AIDA_STORE and returns None when it is blank. That is the behavior TASK-2170 asked for, but no test asserts it. The task_2170 test injects the lookup, so it never exercises the trim. Add a test for the trim/blank classification, for example by splitting out a pure `aida_store_setting_from(raw: &str)`, so a regression can't bring back the spurious "AIDA_STORE is set" note.
+
+  Raised in review of PR-2840: https://github.com/joemooney/aida/pull/2840#issuecomment-6363783539
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-23T11:25:18.994097612Z
+modified_at: 2026-10-23T11:25:18.994097612Z
+req_type: Task
+tags:
+- from-review:PR-2840
+- roster
+- severity:minor
+- test
+filed_at:
+  code_sha: e38f0a8fcfd9c7cc3b3192d4773227b9acfe2c91
+  branch: pr-2840
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 017e4a4949
+  vendor: claude
+  session: 01a168808e10
+  harness_version: 2.1.309 (Claude Code)
