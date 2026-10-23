@@ -3,12 +3,12 @@ spec_id: STORY-1706
 agreed_id: STORY-1706
 title: 'Drive mandate: auto-restart a crashed relay from a human launch record (aida-relay launch record + tick restart)'
 description: 'Split from STORY-1700 per the advisor''s STRICT sketch ruling (comment on STORY-1700, 2026-10-16 01:20). Part 1 (aida-relay): at startup, write an atomic 0600 <run dir>/relay.launch holding ORIG_ARGS verbatim, the profile ref and sha256, PROJECT_ROOT, the relay.sh path, agent, SESSION_ROLE, force_seat, MAX_SESSIONS, principal, launched_from_tty, launched_at, run id and restart lineage. Add exit reason= values (signal:TERM, session-cap, setup-error) and a relay.norestart marker written by an operator stop verb. Part 2 (aida): the drive tick restarts ONLY the crash ending (trap never ran, per relay.sh --status flock), with the conditions in the ruling: principal == mandate principal; TTY-rooted lineage; profile hash unchanged; not advisor or --force-seat; at most 3 restarts with 1/2/4-tick backoff; --max-sessions = remaining budget; at least 30 minutes left on the mandate; re-check before the exec; ledger every decision. The tick never mints, holds or forwards a grant.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T08:18:11.550823998Z
-modified_at: 2026-10-23T11:18:13.607335311Z
+modified_at: 2026-10-23T11:18:20.493231132Z
 req_type: Story
 relationships:
 - rel_type:
@@ -143,6 +143,14 @@ history:
   timestamp: 2026-10-23T11:18:15.165171711Z
   session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
   changes: []
+- id: 01a1687b-b64d-72e0-9bb0-6347265f280b
+  author: aida-pr-open
+  timestamp: 2026-10-23T11:18:20.493229771Z
+  session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 5fb188c5221a3609af83b197c1fef2e99a47fcfc
   branch: main
