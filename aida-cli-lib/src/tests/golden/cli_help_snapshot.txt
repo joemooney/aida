@@ -24199,7 +24199,7 @@ Options:
           Run one tick: route stalled lanes and ledger every action
 
       --json
-          Print the tick report as JSON
+          Print the preview as JSON, or with `--tick` the tick report
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -47539,7 +47539,7 @@ Working on aida itself
       {
         "name": "json",
         "takes_value": false,
-        "help": "Print the tick report as JSON"
+        "help": "Print the preview as JSON, or with `--tick` the tick report"
       },
       {
         "name": "tick",

@@ -14,7 +14,8 @@ pub enum FleetAction {
         /// Run one tick: route stalled lanes and ledger every action.
         #[clap(long)]
         tick: bool,
-        /// Print the tick report as JSON.
+        /// Print the preview as JSON, or with `--tick` the tick report.
+        // trace:TASK-1955 | ai:claude (TASK-1933)
         #[clap(long)]
         json: bool,
     },
