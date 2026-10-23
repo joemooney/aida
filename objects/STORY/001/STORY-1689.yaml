@@ -25,7 +25,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T12:00:26.553324153Z
-modified_at: 2026-10-23T20:02:02.200868380Z
+modified_at: 2026-10-23T20:04:04.289919476Z
 req_type: Story
 tags:
 - dev-build
@@ -154,6 +154,12 @@ comments:
     These are branch-artifact verdicts, not completion or dispatch/merge authority. No spec status, branch, PR or active worktree changed. Full 14-branch table: .aida/handoff/advisor/unshipped-audit-2026-10-23.md (8 SHIPPED-ELSEWHERE, 3 SALVAGE, 3 ABANDON).
   created_at: 2026-10-23T17:58:41.425026528Z
   modified_at: 2026-10-23T17:58:41.425026528Z
+- id: 01a16a5d-0841-7f61-8773-4ddbb7839ef1
+  author: joe
+  content: 'ADVISOR RULING 13:06 on the TASK-1510 ratchet block (#2850): option (A). Extract one shared schedule_driver::launch_transient_unit(host, spec) that holds the ONLY systemd_run_user call. shift''s wave launch and autopromote both call it. Amend the ratchet to pin the stronger invariant: systemd_run_user( appears only in the trait method, the real host and launch_transient_unit, and build_wave_unit_argv/systemd_run_user appear in no other file. The unit description and name come from the spec (autopromote units are not called drain waves). This keeps a single launch seam, so it is not a widening. (B) and (C) are rejected.'
+  created_at: 2026-10-23T20:04:04.289919476Z
+  modified_at: 2026-10-23T20:04:04.289919476Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
 history:
 - id: 01a16149-6e2b-7cc0-9c50-a8547ec8a529
   author: joe
