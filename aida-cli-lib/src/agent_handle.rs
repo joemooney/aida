@@ -987,4 +987,56 @@ mod tests {
         ]);
         assert_eq!(current_native_session_id().as_deref(), Some("codex-t"));
     }
+
+    // trace:STORY-1843.ac97b025 | ai:claude
+    #[test]
+    fn agent_ls_views_list_every_vendor_with_handle_role_spec_and_liveness() {
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path();
+        let binary = agent_registry::AgentBinaryIdentity::new("0.16.0".into(), "abc".into());
+        for (vendor, role, spec, sid) in [
+            ("claude", "implementer", "STORY-1843", "claude-s"),
+            ("codex", "reviewer", "TASK-1", "codex-t"),
+            ("antigravity", "advisor", "BUG-2", "agy-c"),
+        ] {
+            let _env = crate::test_env::EnvVarsGuard::apply(&[
+                ("AIDA_AGENT_TYPE", Some(vendor)),
+                ("AIDA_SESSION_ROLE", Some(role)),
+                ("AIDA_SESSION_SCOPE", Some(spec)),
+                ("AIDA_AGENT_NAME", None),
+            ]);
+            agent_registry::touch_session_start_agent(project, project, Some(sid), &binary)
+                .unwrap();
+        }
+        let mut gone = entry(
+            project,
+            "claude-4000000",
+            Some("claude-implementer-09"),
+            Some("old"),
+        );
+        gone.pid = 4_000_000;
+        gone.pid_start = Some("1".to_string());
+        agent_registry::write_entry(project, &gone).unwrap();
+
+        let ctx = agent_registry::AgentClassifyContext::new(Utc::now(), 30, Vec::new());
+        let views = agent_registry::list_agent_views(project, &ctx);
+        let row = |handle: &str| views.iter().find(|v| v.name.as_deref() == Some(handle));
+        for (handle, role, spec) in [
+            ("claude-implementer-01", "implementer", "STORY-1843"),
+            ("codex-reviewer-01", "reviewer", "TASK-1"),
+            ("agy-advisor-01", "advisor", "BUG-2"),
+        ] {
+            let v = row(handle).unwrap_or_else(|| panic!("{handle} missing: {views:?}"));
+            assert_eq!(v.role.as_deref(), Some(role));
+            assert_eq!(v.current_spec.as_deref(), Some(spec));
+            assert_ne!(
+                v.status,
+                agent_registry::AgentStatus::Stale,
+                "{handle} is live"
+            );
+        }
+        // A dead row is marked, never passed off as live.
+        let dead = row("claude-implementer-09").expect("dead row listed under --all");
+        assert_eq!(dead.status, agent_registry::AgentStatus::Stale);
+    }
 }

@@ -50,7 +50,7 @@ pub(crate) fn agent_ls(show_all: bool, stale_only: bool, ended_only: bool) -> Re
 
     println!(
         "{:<30} {:<10} {:<20} {:<8} {:<11} {:<12} {:<18} {:<6} {:<8} {:<8} {:<24} WORKTREE",
-        "NAME/ID", "PID", "TTY", "KIND", "ROLE", "SPEC", "SCOPE", "STATUS", "AGE", "CPU", "DESC"
+        "HANDLE", "PID", "TTY", "KIND", "ROLE", "SPEC", "SCOPE", "STATUS", "AGE", "CPU", "DESC"
     );
     let now = chrono::Utc::now();
     for agent in agents {

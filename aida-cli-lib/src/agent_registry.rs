@@ -3606,6 +3606,7 @@ mod tests {
     // STORY-1843 (TASK-2177): a dead resumable row stays for resume but is
     // stamped ended, so a sandboxed mail sender stops counting it as a reader.
     // trace:STORY-1843 | ai:claude
+    // trace:STORY-1843.ac97b025 | ai:claude
     #[test]
     fn gc_dead_agents_marks_dead_resumable_rows_ended_and_keeps_them() {
         let tmp = TempDir::new().unwrap();
