@@ -15,8 +15,95 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T16:40:04.586148211Z
-modified_at: 2026-10-23T16:40:30.680678439Z
+modified_at: 2026-10-23T16:53:46.900148220Z
 req_type: Story
+comments:
+- id: 01a169ae-d114-7903-a981-31fc6a94cd99
+  author: joe
+  content: |-
+    SKETCH: STORY-1916 (disk guard emergency tier, reclaim gaps, stuck escalation, visibility)
+
+    Grounding found while reading the code (this changes the scope):
+    - On this host the per-worktree caches are <main>/target/worktrees/<worktree-dir-name> (BUG-1783 isolate_cargo_target_dir); <main>/target is a bind mount of /dev/sdd1[/aida-target] (/mnt/build). `aida worktree reclaim` today only looks at <worktree>/target, which these worktrees do not have. So reclaim currently cannot see the 77G that had to be removed by hand.
+    - The guard probes free space on the filesystem holding the PROJECT ROOT (/), using the longest-prefix mount for that path. <main>/target is a different filesystem, so the guard never measured /mnt/build.
+    => Both the guard and the emergency tier will probe the filesystem holding the project root AND the one holding <main>/target (a canonical path, so the bind mount resolves). Each filesystem is judged on its own. Emergency deletion runs only when the cache filesystem is the one over the ceiling.
+
+    1. DELETION ALLOWLIST (emergency tier, new module disk_emergency.rs)
+    - A candidate must be a direct child directory of C = canonicalize(<main>/target)/worktrees. It must be a real directory: symlink_metadata, not a symlink. Nothing else is ever enumerated.
+    - Hard refusals, re-checked at the delete site and independent of the planner (same double-check pattern as reclaim's rail 2):
+      - the path's parent must be exactly C;
+      - the path must not equal or contain <main>/target/agent, <main>/target/{debug,release}, <main> itself, or any `git worktree list` source path;
+      - the path must not contain, or be under, ~/.local/share/aida/live (or the canonical target of the live binary links).
+      Any of these is a bail!, not a skip.
+    - Never deleted: worktree sources, .aida-store, the main checkout's target/agent, the live binary, sccache.
+
+    2. IDLE TEST
+    - Idle age = now minus the NEWEST mtime of any entry under the cache: one walk without following symlinks, which also yields the size.
+    - An mtime in the future (clock skew), or a walk that cannot read the root, counts as FRESH and is never deleted.
+    - Window: [doctor.disk_headroom] emergency_idle_hours, default 2.
+    - A cache written within the window is never deleted, whatever its reason label. Idle >= window is the NECESSARY condition for every emergency deletion.
+    - Reason labels, recorded in the ledger: worktree-gone (no git worktree and no lease, including seat-clone leases, whose dir basename == name), merged, closed, idle.
+
+    3. ORDERING AND STOP CONDITION
+    - Trigger: the substrate run only (AIDA_SCHEDULE_CHILD=1, as lane_liveness does), when used% of the cache filesystem >= emergency_used_pct (default 95; 0 disables). A manual `aida doctor check disk-headroom` reports what it WOULD delete and deletes nothing.
+    - Order:
+      - tier 0: worktree-gone, merged, or closed;
+      - tier 1: idle with no live lease;
+      - tier 2: idle but a live lease holds it.
+      Within each tier, oldest-idle first.
+    - Before EACH deletion, re-probe used%. Stop once used% < emergency_used_pct - emergency_margin_pct (default margin 5, so 90%). If the plan runs out first, record "exhausted".
+    - One run per tick, guarded by an flock on <main>/.aida/disk-emergency.lock, so overlapping ticks cannot double-walk.
+
+    4. LEDGER
+    - Append-only JSONL at <main>/.aida/disk-reclaim-ledger.jsonl.
+    - One row per deletion: {ts, path, bytes, reason, idle_secs, used_pct_before}.
+    - Plus one summary row per run: {ts, kind:"run", freed_bytes, used_pct_after, stopped:"below-margin"|"exhausted", failed:[...]}.
+    - Failures (remove_dir_all error) are ledgered and never retried within the run.
+
+    5. NOTIFY PATH
+    - crate::notify::send_direct(root, rule, title, body), the same channel mandate_drive uses. That gives us the [notify] command, quiet hours, min_interval, and recording in the ledger only when no command is configured.
+    - Rule "disk-emergency": sent after any run that deleted something or failed to get below the margin. The body lists freed bytes, the before/after %, and each path, size and reason.
+
+    6. STUCK ESCALATION (AC3)
+    - When the floor is breached, the guard builds the extended reclaim plan as a dry run and compares its reclaimable bytes with deficit = floor - free.
+    - If reclaimable < deficit, the finding summary says so: "reclaim can free X of the Y deficit", plus the top 5 consumers by size under C and under <main>/target. The route job's item carries this text.
+    - It also sends notify rule "disk-stuck" to the operator, deduped by a state file (<main>/.aida/disk-guard-state.json, last_stuck_at). It re-escalates at most every 6h, or sooner when the deficit grows by >= 10 GiB, so the operator does not get a silent 30m re-fire.
+
+    7. RECLAIM CHANGES (AC2)
+    a) Reclaim also considers <main>/target/worktrees/<basename(wt)> for each worktree, and orphaned cache dirs with no worktree. All existing rails still apply. Rail 2 (the protected main target) is extended to the whole allowlist from section 1.
+    b) Merged detection when gh is unreachable (open_pr_branches == None):
+      - per branch, `git merge-base --is-ancestor <branch> origin/main` means merged;
+      - otherwise, squash-merge detection, read-only:
+        - P = `git diff <mb> <branch> | git patch-id --stable`;
+        - S = the patch-ids of `git log -p --max-count=2000 <mb>..origin/main | git patch-id --stable`;
+        - P in S means squash-merged.
+      - Merged branches are reclaimable (reason merged).
+      - A branch that is neither is held per branch (Skip::PrStateUnknown on that worktree only), not the whole survey.
+      - When gh works, behaviour is unchanged.
+    c) Idle duplicate: group worktrees whose branch has an open PR (or unknown state) by branch. If a group has two or more, keep the one whose cache was written most recently. Each OTHER member whose cache is idle (rail 6 window) and not held by a live lease becomes reclaimable as Skip-exempt reason "idle-duplicate". Only the cache is reclaimed, never the worktree.
+      - git refuses two worktrees on the same branch, so the duplicates in practice are detached-HEAD worktrees (take-NNNN, pr-NNNN) at the same PR. They are matched by the PR number in the dir name (take-/pr-/aida-pr- NNNN). A branch worktree or a detached worktree whose HEAD equals the open PR's head sha counts as the same group when gh is up. I'll state the exact matching in code and tests.
+
+    8. VISIBILITY (AC4)
+    - `aida doctor check disk-headroom` (human output, and a `disk_status` object in --json) always shows a status block:
+      - per probed filesystem: mount, free/total, used%;
+      - floor (min_free_gib) and ceiling (emergency_used_pct, margin, idle window);
+      - the last guard run, from the scheduler's state/ledger for job disk-headroom-guard;
+      - the last automatic reclaim, from the ledger summary row: when, freed, and the after %.
+    - Findings and exit gating are unchanged, so the scheduler's verdict is unchanged.
+
+    TESTS
+    - All tests use tempdirs with injected probes: used%, now, and remove. None touches /mnt/build.
+    - Allowlist: refuses agent, live, sources, symlinked children, and an injected path outside C.
+    - Idle: a fresh file deep in the tree blocks deletion even though the root dir mtime is old.
+    - Ordering and stop-at-margin; ledger rows; notify called through an injected sink.
+    - Stuck escalation text plus dedupe.
+    - Reclaim: worktrees/<name> layout, orphan cache, ancestry merge, squash merge (real git fixture via test_git::git_command), idle duplicate.
+    - Status block rendering.
+
+    Config keys added under [doctor.disk_headroom]: emergency_used_pct=95, emergency_margin_pct=5, emergency_idle_hours=2.
+  created_at: 2026-10-23T16:53:46.900148220Z
+  modified_at: 2026-10-23T16:53:46.900148220Z
+  session_id: 41351cdf-9697-4b7c-9b0d-1f15a91510a9
 history:
 - id: 01a169a2-aad8-73f0-ad7d-63d28b5dc539
   author: joe
