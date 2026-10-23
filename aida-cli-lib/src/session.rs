@@ -4374,6 +4374,35 @@ pub(crate) const LEASE_CHILD_GRANT_KEY: &str = "child_grant_id";
 // trace:TASK-1952 | trace:TASK-1798 | ai:claude
 pub(crate) const LEASE_CI_FIX_CHILD_GRANT_KEY: &str = "ci_fix_child_grant_id";
 
+/// TASK-2217: serialize the read-modify-write lease stampers (role, child
+/// grant, active pid) under one lock file in the sessions directory, so two
+/// stamps on one lease never lose each other's field. `write_atomic` replaces
+/// the lease file, so the lock cannot be the lease file itself.
+// trace:STORY-1662 | ai:claude
+pub(crate) fn with_lease_write_lock<T>(
+    project_root: &Path,
+    write: impl FnOnce() -> Result<T>,
+) -> Result<T> {
+    use fs2::FileExt;
+    let dir = project_root.join(".aida").join("sessions");
+    std::fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
+    let lock_path = dir.join(LEASE_WRITE_LOCK);
+    let lock = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(&lock_path)
+        .with_context(|| format!("opening {}", lock_path.display()))?;
+    lock.lock_exclusive()
+        .with_context(|| format!("locking {}", lock_path.display()))?;
+    let out = write();
+    let _ = FileExt::unlock(&lock);
+    out
+}
+
+/// The lease-write lock file's name under `.aida/sessions/`.
+pub(crate) const LEASE_WRITE_LOCK: &str = ".lease-write.lock";
+
 // trace:BUG-2139 | ai:claude
 pub(crate) fn stamp_lease_child_grant_at(
     project_root: &Path,
@@ -4404,20 +4433,21 @@ pub(crate) fn set_lease_grant_key_at(
         .join(".aida")
         .join("sessions")
         .join(format!("{lease_id}.toml"));
-    let body = std::fs::read_to_string(&path)
-        .with_context(|| format!("reading lease {}", path.display()))?;
-    let mut doc = body
-        .parse::<DocumentMut>()
-        .with_context(|| format!("parsing lease {}", path.display()))?;
-    match grant_id {
-        Some(id) => doc[key] = value(id),
-        None => {
-            doc.remove(key);
+    with_lease_write_lock(project_root, || {
+        let body = std::fs::read_to_string(&path)
+            .with_context(|| format!("reading lease {}", path.display()))?;
+        let mut doc = body
+            .parse::<DocumentMut>()
+            .with_context(|| format!("parsing lease {}", path.display()))?;
+        match grant_id {
+            Some(id) => doc[key] = value(id),
+            None => {
+                doc.remove(key);
+            }
         }
-    }
-    aida_core::write_atomic(&path, doc.to_string())
-        .with_context(|| format!("writing lease {}", path.display()))?;
-    Ok(())
+        aida_core::write_atomic(&path, doc.to_string())
+            .with_context(|| format!("writing lease {}", path.display()))
+    })
 }
 
 /// BUG-2139: revoke the child grant stamped on lease file `lease_file`, if
@@ -4458,20 +4488,23 @@ pub(crate) fn stamp_lease_active_pid_at(
         .join(".aida")
         .join("sessions")
         .join(format!("{lease_id}.toml"));
-    let body = std::fs::read_to_string(&path)
-        .with_context(|| format!("reading lease {}", path.display()))?;
-    let mut doc = body
-        .parse::<DocumentMut>()
-        .with_context(|| format!("parsing lease {}", path.display()))?;
-    doc["active_pid"] = value(i64::from(pid));
     let start_time = crate::process_probe::process_start_identity(pid);
-    if let Some(start_time) = &start_time {
-        doc["active_pid_start_time"] = value(start_time.clone());
-    }
-    // STORY-1429: atomic, so a reader never sees a half-rewritten lease.
-    // trace:STORY-1429 | ai:claude
-    aida_core::write_atomic(&path, doc.to_string())
-        .with_context(|| format!("writing lease {}", path.display()))?;
+    // trace:STORY-1662 | ai:claude
+    with_lease_write_lock(project_root, || {
+        let body = std::fs::read_to_string(&path)
+            .with_context(|| format!("reading lease {}", path.display()))?;
+        let mut doc = body
+            .parse::<DocumentMut>()
+            .with_context(|| format!("parsing lease {}", path.display()))?;
+        doc["active_pid"] = value(i64::from(pid));
+        if let Some(start_time) = &start_time {
+            doc["active_pid_start_time"] = value(start_time.clone());
+        }
+        // STORY-1429: atomic, so a reader never sees a half-rewritten lease.
+        // trace:STORY-1429 | ai:claude
+        aida_core::write_atomic(&path, doc.to_string())
+            .with_context(|| format!("writing lease {}", path.display()))
+    })?;
     // BUG-1918: the spawned worker — not the launcher that claimed — works
     // this lease; record its process as one of the lease's authors so the
     // ledger outlives the lease.

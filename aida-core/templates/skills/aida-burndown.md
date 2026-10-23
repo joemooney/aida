@@ -100,10 +100,26 @@ lease scope; carry only the genuinely-idle remainder into the wave below.
 > lock/state as a competitor is the BUG-607 self-deadlock (the drain reports a
 > live `pid …` that is actually its own parent and then refuses to do anything).
 
-For up to **N** of the remaining ready specs (a bounded wave), spawn one
-**worktree-isolated implementer subagent per spec**. **N = the `--concurrency`
-value from `$ARGUMENTS` if provided** (so `aida burndown run --concurrency 6`
-flows through), else `N ≈ 4` — or scale to budget:
+For up to **N** of the remaining ready specs (a bounded wave), launch one
+**standalone implementer process per spec** from Bash, as a
+`run_in_background` job:
+
+```bash
+aida queue work <SPEC> --role implementer --no-human --vendor claude
+```
+
+Each gets its own worktree, lease and implementer seat (never your grant),
+opens its own PR and stops, and ends with one `implementer:` line whose exit
+code you branch on: 0 PR opened, 31 no PR, 32 punted, 33 held, 34 the
+concurrency cap refused it (nothing set up; launch it in a later wave).
+**N = the `--concurrency` value from `$ARGUMENTS` if provided** (so
+`aida burndown run --concurrency 6` flows through), else 3, and never more
+than `[queue] standalone_implementer_cap`.
+<!-- trace:STORY-1662 | ai:claude -->
+
+An Agent-tool implementer subagent is the fallback only where the launch
+above is unavailable. It shares your session, so it inherits your seat, and
+you are an author of what it writes:
 
 > `Agent(subagent_type: "general-purpose", isolation: "worktree")` — each gets
 > ONE ready spec and a self-contained prompt: read it (`aida show <SPEC> -c`),
