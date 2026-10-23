@@ -119,19 +119,12 @@ fn resolve_all(
         .into_iter()
         .map(|spec| {
             let versions = spec.history.as_ref().ok().map(Vec::len);
-            let kind = match (&spec.current, versions) {
-                (Some(r), _)
-                    if r.spec_id
-                        .as_deref()
-                        .is_some_and(|s| s.eq_ignore_ascii_case(&spec.id)) =>
-                {
-                    "current"
-                }
-                (Some(_), _) => "recorded alias",
-                (None, None) => "history unreadable",
-                (None, Some(0)) if spec.aliases.is_empty() => "dangling",
-                (None, Some(_)) => "deleted with history",
-            };
+            let current = spec.current.as_ref().map(|r| {
+                r.spec_id
+                    .as_deref()
+                    .is_some_and(|s| s.eq_ignore_ascii_case(&spec.id))
+            });
+            let kind = resolution_kind(current, versions, spec.aliases.is_empty());
             let class = match crate::mandate::judge_exclusion_spec(&spec, ledger, false) {
                 Ok(()) => None,
                 Err(MandateRefusal::AlwaysHuman { class, .. }) => Some(class),
@@ -150,6 +143,45 @@ fn resolve_all(
             (spec.id, resolved)
         })
         .collect()
+}
+
+/// The report label for how an ID resolved: `current` is `Some(true)` when
+/// the current record is the ID's own, `Some(false)` when it is found only
+/// through a recorded alias.
+// trace:TASK-2238 | ai:claude
+fn resolution_kind(
+    current: Option<bool>,
+    versions: Option<usize>,
+    no_aliases: bool,
+) -> &'static str {
+    match (current, versions) {
+        (Some(true), _) => "current",
+        (Some(false), _) => "recorded alias",
+        (None, None) => "history unreadable",
+        (None, Some(0)) if no_aliases => "dangling",
+        // TASK-2233: an alias was found but no version under it was.
+        (None, Some(0)) => "alias with no versions",
+        (None, Some(_)) => "deleted with history",
+    }
+}
+
+/// TASK-2233: an ID with aliases but no versions is not "deleted with
+/// history".
+// trace:TASK-2238 | ai:claude
+#[test]
+fn task_2238_resolution_kind_labels_an_alias_with_no_versions() {
+    assert_eq!(
+        resolution_kind(None, Some(0), false),
+        "alias with no versions"
+    );
+    assert_eq!(resolution_kind(None, Some(0), true), "dangling");
+    assert_eq!(
+        resolution_kind(None, Some(2), false),
+        "deleted with history"
+    );
+    assert_eq!(resolution_kind(None, None, false), "history unreadable");
+    assert_eq!(resolution_kind(Some(true), Some(0), true), "current");
+    assert_eq!(resolution_kind(Some(false), None, false), "recorded alias");
 }
 
 fn digest(ids: &BTreeSet<String>) -> String {
