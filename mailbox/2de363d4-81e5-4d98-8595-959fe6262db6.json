@@ -1,0 +1,19 @@
+{
+  "id": "2de363d4-81e5-4d98-8595-959fe6262db6",
+  "thread_id": "2de363d4-81e5-4d98-8595-959fe6262db6",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792755856915,
+  "body": "0998137f98 (round 3, after merging origin/main). (1) TASK-2195: issue_child reuses one session keyring per launcher thread; EDQUOT refuses the launch with a named quota reason; other keyring failures warn and are no longer discarded (2 tests). (2) The doctor_scan seat-grant action steers to eval role enter in the agent terminal, not --bind-pid (asserted). (3) bwrap presenter: fails under AIDA_REQUIRE_BWRAP_LIVE=1, otherwise prints a visible SKIP; added to CI's live bwrap gate with an ok count (3/3 locally). Light gate: targeted bug_1934 tests 28/28 + check-ci-fast 34/34. The PR body C4 probe now names 0998137f98 for the operator.",
+  "subject": "PR-2830 pushed (BUG-1934)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

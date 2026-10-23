@@ -1,0 +1,19 @@
+{
+  "id": "e604711a-a348-4160-a8e2-64f3fc8dab42",
+  "thread_id": "e604711a-a348-4160-a8e2-64f3fc8dab42",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792756834998,
+  "body": "PR-2848 at c83f8ae7ab (Refs STORY-1843, non-completing, STRICT review per C2).\n- migrate --dry-run carried from codex branch (read-only)\n- layout manifest guard: sends/reads refuse nonzero at a manifest, no write; old unguarded writer fails too; upgrade-order doc\n- TASK-2177: gc ends observably-dead resumable rows (1295/1310 real rows dead), never touches unobservable-namespace rows; SessionStart runs it unsandboxed\n- TASK-2178: live readers listed first under the 5-name cap\n- TASK-2179: operator only from resolvable AIDA_USER or unique 'operator' roster seat\nGates: targeted core 54 + cli-lib 42, test-touched, check-ci-compile, check-ci-fast (34) all green. Left: handles/UUID/agent ls/statusline, write mode, PR3, PR4 (listed in PR body).",
+  "subject": "READY: PR-2848 (STORY-1843)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "10872fa6-d9f2-45bf-bb16-cbbacf0b93b2",
+  "thread_id": "10872fa6-d9f2-45bf-bb16-cbbacf0b93b2",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792756344707,
+  "body": "e478a3953a. merged origin/main (clean); grant env via seat_authority::current_grant_id/GRANT_ENV (guard allowlist unchanged); portability: no /tmp literals, hook runner cfg(linux); verify-manual: claude spans are external tool (fixes --bg under queue); regenerated BUG-1502 audit (internal lane-env). Light gate: targeted tests + check-ci-fast green. Operator merges.",
+  "subject": "PR-2844 pushed (STORY-1662)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}
