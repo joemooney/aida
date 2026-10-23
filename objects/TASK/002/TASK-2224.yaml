@@ -1,0 +1,27 @@
+id: 01a16926-2dad-7cb3-aaca-a13abfbe0e53
+spec_id: TASK-2224
+agreed_id: TASK-2224
+title: Close the write window in write_member_seats for callers without the store lock
+description: |
+  write_member_seats re-reads the file to compare and swap, then calls write_atomic. A caller that doesn't hold the store write lock (test_support::mint_grant_for) can still lose a write that lands between the re-read and the rename. Either take the store write lock in mint_grant_for or document the residual window.
+
+  Raised in review of PR-2851: https://github.com/joemooney/aida/pull/2851#issuecomment-6367149662
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-23T14:24:32.173881733Z
+modified_at: 2026-10-23T14:24:32.173881733Z
+req_type: Task
+tags:
+- from-review:PR-2851
+- severity:minor
+filed_at:
+  code_sha: 8a9e317dfa36e46254952b60cba14ab128eef0fc
+  branch: pr-2851
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 017e4a4949
+  vendor: claude
+  session: 01a16923b14f
+  harness_version: 2.1.309 (Claude Code)

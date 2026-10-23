@@ -1,0 +1,27 @@
+id: 01a16926-1ba8-72e0-bce8-07302622a938
+spec_id: TASK-2223
+agreed_id: TASK-2223
+title: Guard roster writes inside aida_core::team::write_member_seats
+description: |
+  write_member_seats (aida-core/src/team.rs) is pub but doesn't call guard_roster_write. Only its callers are guarded (the CAS fns, and mint_grant_for via assert_scratch_store), so a future caller skips the BUG-2209 guard. Put the guard in the primitive, keeping the cli-lib target/ allowance for the fixture.
+
+  Raised in review of PR-2851: https://github.com/joemooney/aida/pull/2851#issuecomment-6367149662
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-23T14:24:27.560350735Z
+modified_at: 2026-10-23T14:24:27.560350735Z
+req_type: Task
+tags:
+- from-review:PR-2851
+- severity:minor
+filed_at:
+  code_sha: 8a9e317dfa36e46254952b60cba14ab128eef0fc
+  branch: pr-2851
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 017e4a4949
+  vendor: claude
+  session: 01a16923b14f
+  harness_version: 2.1.309 (Claude Code)
