@@ -1,0 +1,19 @@
+{
+  "id": "85ebb0e9-fed1-48dc-89c0-15482a4d884e",
+  "thread_id": "85ebb0e9-fed1-48dc-89c0-15482a4d884e",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792774448580,
+  "body": "40348420f207d859735e6e214ca6883580d07843 (tree identical to tested bd49545a93; clean main + remote-history merges, no force push).\nBound gh merged-head lookups to 20s; parsing/failure/timeout regressions pass.\nClone scans share their deadline and report skipped candidates as incomplete; expired and hung-probe regressions pass.\nTASK-2191 verifies origin via host ls-remote, publishes only a missing base-only branch from its host pin, and rejects forged/stale tracking evidence.\nAdded worktree-list clone JSON/focus and ship pull-skipped activity regressions.\nLive WIP regression covers dirty scope/actual branch and unreadable clone retention, with no host git in either clone.\nNamed lib-1 flake in the PR body: mandate_drive::story_1706_relay_restart_tests::a_live_session_of_the_run_refuses_the_restart (run39964582660 attempt1).\nValidation: required-live targeted module 9/9; final fast 34/34. PR body updated. Please independently re-review; CI is newly queued. S4c merge-forward follows. No author review/hold-clear/ship.",
+  "subject": "PR-2836 READY (TASK-2053)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}
