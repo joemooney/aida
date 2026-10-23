@@ -1,0 +1,19 @@
+{
+  "id": "92bd40c6-d696-44ca-b378-28bf67c6bd96",
+  "thread_id": "92bd40c6-d696-44ca-b378-28bf67c6bd96",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792744860953,
+  "body": "Operator installed cargo-nextest and asked to run now. The run is not valid: another session fast-forwarded the primary checkout twice mid-run (64c2153d82 -> 597ea98e77 -> 017e4a4949), so the warm build was wasted and the tests recompiled (~29 min). Load1 median 26, max 100. Raw: test step 1:21:21; 12,377 passed / 11 ignored / 2 failed. The 2 failures look like load or drift artefacts: bug_1620 TIMEOUT 180s, task_1287 ownership_and_ci_share_one_wait_deadline. Details are on STORY-1853. Next attempt: a dedicated worktree pinned to one SHA, warmed first, timed in a load<2 window. Should I arm that?",
+  "subject": "STORY-1853 AC2 run 2 (nextest): not valid, main moved mid-run under load ~26",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

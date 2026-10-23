@@ -1,0 +1,19 @@
+{
+  "id": "88cf8907-d66d-4a13-9e11-9c773e00b03c",
+  "thread_id": "88cf8907-d66d-4a13-9e11-9c773e00b03c",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792748007769,
+  "body": "All five PR-2837 findings are fixed in one commit on S5. S5 is merged into S6; both are pushed, no force.\n(1) TASK-2001: the ratchet strips // comments before splitting a chain on ';'. Any fn with a remote parameter that builds git must route credentials. With routing removed, the scan now flags doctor_cmd heal push --delete, git_push_in, git_raw_via and remote_git_with_env (push_exact_outcome/pull/fetch_rebase_target route through that wrapper). Self-tests: a commented chain, and three parameter-driven wrappers plus two routed controls. One false positive got a remote-creds-ok note: configured_remote_urls (local git config read).\n(2) TASK-2139: source/. after then/do/else/command/builtin/! is caught. Write-then-execute (./x.sh) is covered too, not left out of scope.\n(3) TASK-2140: adjacent quoted/unquoted segments are joined (sed loop) before the assigner match. Cases: NO_\"SLOT\", \"AIDA_CARGO\"_NO_SLOT, single-quoted middle.\nAll 10 new guard cases failed against the previous hook; 2 prose/plain controls stay allowed.\n(4) TASK-1976: use std::env::var [as x], grouped env::{..} imports, and const/static aliases, each with a self-test. A method call cfg.var(..) is not flagged.\n(5) TASK-2125: the getpwent walk is memoised per gid per process. The NSS enumerate=false limit is documented on is_user_private_group. New test task_2125_primary_gid_walk_finds_local_accounts covers the FFI walk.\nGates: make check-ci-fast 34/34; guardrails shell test passes; targeted aida-core (5) and aida-cli-lib (10) pass, guards inside budget (11.7s for all 10 together). make test-touched not completed: the cargo queue was over an hour deep. CI runs the full shards.",
+  "subject": "TASK-1952: #2837 review round 1 fixed — S5 @bcac9563be, S6 @80ee3a5f97",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "6f9ed2b9-222d-4671-aa7d-d1b9cb4c7b9b",
+  "thread_id": "6f9ed2b9-222d-4671-aa7d-d1b9cb4c7b9b",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792749201099,
+  "body": "CI at the new heads: #2838 S6 @80ee3a5f97 has 9 pass, 1 skipping. #2837 S5 @bcac9563be has 8 pass, 1 skipping, and fails only merge-hold-gate (the hold from the round-0 CHANGES REQUESTED verdict). Every test and build gate passes. #2837 is ready for an independent re-review. I have not cleared or touched the hold.",
+  "subject": "TASK-1952: CI green at the round-1 heads; #2837 only shows merge-hold-gate",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}
