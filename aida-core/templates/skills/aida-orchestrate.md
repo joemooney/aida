@@ -90,11 +90,12 @@ Without `--delegate-seat reviewer` the first reviewer launch fails closed.
 Report that to the operator; don't work around it.
 <!-- trace:STORY-1654 | ai:claude -->
 
-**Implementation and review must always run in separate sessions.** Without
-subagents, launch them with `aida queue work <SPEC> --strict` (the spec must be
-queued; `--strict` refuses to auto-queue an unsigned-off spec),
-or with `aida agent new` told to push a branch and not open a PR. You can also
-route review to another seat. If no second session is available, stop at
+**Implementation and review must always run in separate sessions.** An
+implementer is only ever a separate process (step 4): a headless
+`aida queue work <SPEC> --role implementer --no-human`, or an interactive lane
+started inside `aida worktree add <SPEC> --role implementer`. Never an
+Agent-tool subagent. You can also route review to another seat.
+<!-- trace:STORY-1662 | ai:claude --> If no second session is available, stop at
 pushed branches and report. **Never review your own diff.**
 
 ## The loop

@@ -274,7 +274,9 @@ aida agent new claude --role implementer --spec <SPEC> --prompt "<short pickup l
 ```
 
 When you need the worktree before a session exists, `aida worktree add <SPEC>
---path ../wt-<spec> --branch <agent>/<spec>` takes the lease directly.
+--role implementer --path ../wt-<spec> --branch <agent>/<spec>` takes the lease
+directly and records the implementer role on it, so a session started inside
+it takes the implementer identity. <!-- trace:STORY-1662 | ai:claude -->
 
 **Concurrency cap.** Run **at most 3 live child sessions** at once, counting
 implementers and reviewers together, unless the operator's delegation names a

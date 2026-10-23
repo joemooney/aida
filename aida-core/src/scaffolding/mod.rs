@@ -4794,25 +4794,92 @@ mod tests {
         }
     }
 
+    /// The marker that keeps a read-only research subagent line (Explore,
+    /// Plan) legal in a seat template, on that line or the line above it.
+    const SUBAGENT_RATCHET_ALLOW: &str = "aida:allow-research-subagent";
+
+    /// Phrasings that launch implementer, fixer, architect or advisor work
+    /// through the Agent tool. Matched case-insensitively, except the
+    /// literal `Agent(` call.
+    const AGENT_TOOL_LAUNCHES: &[&str] = &[
+        "subagent_type",
+        "isolation: \"worktree\"",
+        "isolation:\"worktree\"",
+        "implementer subagent",
+        "fixer subagent",
+        "architect subagent",
+        "advisor subagent",
+        "subagents implement",
+        "subagent fan-out",
+        "subagent fanout",
+    ];
+
+    /// Every `key:line: pattern` in `body` that launches seat work through
+    /// the Agent tool, skipping lines the research marker covers.
+    // trace:STORY-1662 | ai:claude
+    fn agent_tool_launches(key: &str, body: &str) -> Vec<String> {
+        let mut violations = Vec::new();
+        let mut previous = "";
+        for (idx, line) in body.lines().enumerate() {
+            let allowed =
+                line.contains(SUBAGENT_RATCHET_ALLOW) || previous.contains(SUBAGENT_RATCHET_ALLOW);
+            previous = line;
+            if allowed {
+                continue;
+            }
+            let lower = line.to_ascii_lowercase();
+            if line.contains("Agent(") {
+                violations.push(format!("{key}:{}: `Agent(`", idx + 1));
+            }
+            for pattern in AGENT_TOOL_LAUNCHES {
+                if lower.contains(pattern) {
+                    violations.push(format!("{key}:{}: `{pattern}`", idx + 1));
+                }
+            }
+        }
+        violations
+    }
+
+    /// The scan refuses each phrasing, ignoring case, and the research marker
+    /// on the line or the line above exempts exactly that line.
+    // trace:STORY-1662.AC4 | ai:claude
+    #[test]
+    fn agent_tool_launch_scan_refuses_each_phrasing_and_honours_the_marker() {
+        let refused = [
+            "> `Agent(subagent_type: \"general-purpose\", isolation: \"worktree\")`",
+            "You coordinate and subagents implement.",
+            "The Subagent fan-out is the harness primitive.",
+            "an architect subagent writes the sketch",
+            "a separate advisor subagent signs it off",
+            "fan ONE worktree-isolated implementer subagent per spec",
+            "every PR your fixer subagents wrote",
+        ];
+        for line in refused {
+            assert!(
+                !agent_tool_launches("t.md", line).is_empty(),
+                "not refused: {line}"
+            );
+        }
+        let same_line =
+            format!("Agent(subagent_type: \"Explore\") <!-- {SUBAGENT_RATCHET_ALLOW} -->");
+        assert!(agent_tool_launches("t.md", &same_line).is_empty());
+        let line_above =
+            format!("<!-- {SUBAGENT_RATCHET_ALLOW} -->\nAgent(subagent_type: \"Plan\")\nAgent(x)");
+        assert_eq!(
+            agent_tool_launches("t.md", &line_above),
+            vec!["t.md:3: `Agent(`"]
+        );
+        assert!(agent_tool_launches("t.md", "launch a separate implementer process").is_empty());
+    }
+
     /// Seat skills, commands and discipline launch implementers and fixers as
     /// separate processes, never through the Agent tool: an in-session
-    /// subagent inherits the launcher's seat and grant. A read-only research
-    /// subagent (Explore, Plan) stays legal on a line carrying, or directly
-    /// under a line carrying, the `aida:allow-research-subagent` marker.
+    /// subagent inherits the launcher's seat and grant.
     // trace:STORY-1662 | ai:claude
     // trace:STORY-1662.AC4 | ai:claude
     #[test]
     fn seat_templates_never_launch_implementers_through_the_agent_tool() {
         use crate::templates::EMBEDDED_TEMPLATES;
-        const SUBAGENT_RATCHET_ALLOW: &str = "aida:allow-research-subagent";
-        const FORBIDDEN: &[&str] = &[
-            "Agent(",
-            "subagent_type",
-            "isolation: \"worktree\"",
-            "isolation:\"worktree\"",
-            "implementer subagent",
-            "fixer subagent",
-        ];
         let mut violations = Vec::new();
         let mut scanned = 0;
         for (key, body) in EMBEDDED_TEMPLATES.iter() {
@@ -4825,22 +4892,9 @@ mod tests {
             .iter()
             .any(|prefix| key.starts_with(prefix))
                 && key.ends_with(".md");
-            if !seat_file {
-                continue;
-            }
-            scanned += 1;
-            let mut previous = "";
-            for (idx, line) in body.lines().enumerate() {
-                let allowed = line.contains(SUBAGENT_RATCHET_ALLOW)
-                    || previous.contains(SUBAGENT_RATCHET_ALLOW);
-                if !allowed {
-                    for pattern in FORBIDDEN {
-                        if line.contains(pattern) {
-                            violations.push(format!("{key}:{}: `{pattern}`", idx + 1));
-                        }
-                    }
-                }
-                previous = line;
+            if seat_file {
+                scanned += 1;
+                violations.extend(agent_tool_launches(key, body));
             }
         }
         assert!(scanned > 20, "the scan found only {scanned} seat templates");
