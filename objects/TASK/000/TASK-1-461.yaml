@@ -1,0 +1,27 @@
+id: 01a16ad5-11a1-7e53-ad2a-e2418a83a1c1
+spec_id: TASK-1-461
+title: 'minor (non-blocking): display_liveness feeds every list_agent_views consumer, n…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2212, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  minor (non-blocking): display_liveness feeds every list_agent_views consumer, not only agent ls. From a sandbox, a host session that crashed without ended_at reads live for up to 24h in matching_live_duplicate (agent_launch.rs ~1789, false duplicate-launch refusal), supervise live_advisor_recipient (supervise_cmd.rs:291, nudges routed to a dead advisor) and terminal resolve_session_target. Fail-closed direction, but untested for those consumers
+  Reviewed sha: f8a98e8a2435a3cd4f06b01138f57d7a6a87d65d
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-23T22:15:11.009032219Z
+modified_at: 2026-10-23T22:15:11.009032219Z
+req_type: Task
+tags:
+- carried-from:BUG-2212
+- finding-hash:4432d32e
+- from-review:BUG-2212
+- kind:carried-forward
+filed_at:
+  code_sha: 70e3aa867f67aba2e0d11e0985f71bb64232a76d
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c51da86593
+  vendor: claude
