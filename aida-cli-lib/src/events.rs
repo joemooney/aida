@@ -531,6 +531,17 @@ pub enum EventKind {
         #[serde(default, skip_serializing_if = "String::is_empty")]
         detail: String,
     },
+    /// `aida review watch` found a PR ready to ship at `head`: an authorized
+    /// approval covers it, CI on it is green, nothing holds it, and it is 0
+    /// behind its base (or `after_update_branch`: behind only on paths it
+    /// does not touch). Report only: the watcher never merges. Emitted once
+    /// per head and readiness. **Actionable.**
+    // trace:TASK-1945 | ai:claude
+    ReviewWatchReady {
+        pr: u64,
+        head: String,
+        after_update_branch: bool,
+    },
     /// Forward-compat catch-all: a kind a newer binary wrote that this one
     /// does not know. Never emitted by this binary; produced only by
     /// deserializing an unrecognized `event` tag. Classified **actionable**
@@ -634,6 +645,8 @@ impl EventKind {
             | EventKind::CronJobFired { .. }
             | EventKind::CronJobFailed { .. }
             | EventKind::MailReceived { .. }
+            // trace:TASK-1945 | ai:claude
+            | EventKind::ReviewWatchReady { .. }
             | EventKind::Unknown => true,
         }
     }
@@ -693,6 +706,7 @@ impl EventKind {
             EventKind::MandateDriveAction { .. } => "MandateDriveAction",
             EventKind::MandateDriveDue { .. } => "MandateDriveDue",
             EventKind::ShipBatchStep { .. } => "ShipBatchStep",
+            EventKind::ReviewWatchReady { .. } => "ReviewWatchReady",
             EventKind::Unknown => "Unknown",
         }
     }
@@ -735,6 +749,7 @@ impl EventKind {
             "MandateDriveAction",
             "MandateDriveDue",
             "ShipBatchStep",
+            "ReviewWatchReady",
         ]
     }
 }
