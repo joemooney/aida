@@ -8,8 +8,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T17:20:13.687947949Z
-modified_at: 2026-10-23T17:20:13.687947949Z
+modified_at: 2026-10-23T17:21:31.432199264Z
 req_type: Bug
+comments:
+- id: 01a169c8-3728-75a1-91fc-4539b94d63a4
+  author: joe
+  content: '10:18: a third stale lock appeared at 10:11:xx. The advisor ran no git write then, so other sandboxed sessions (bg lanes in sibling worktrees share the main .git/config) also produce it. The scope is any sandboxed agent, not just the advisor. Stopgap: the advisor''s dispatcher clears an empty lock older than 2 min every 10 s.'
+  created_at: 2026-10-23T17:21:31.432199264Z
+  modified_at: 2026-10-23T17:21:31.432199264Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
 filed_at:
   code_sha: a9e78d34914e43b30fc9d2b590d83ab96feb48b2
   branch: main
