@@ -85,6 +85,15 @@ pub(crate) fn config_is_clean(root: &Path) -> Option<bool> {
     Some(String::from_utf8_lossy(&status.stdout).trim().is_empty())
 }
 
+/// Whether git tracks the config (false outside a checkout too).
+// trace:BUG-2015 | ai:claude
+pub(crate) fn config_is_tracked(root: &Path) -> bool {
+    aida_core::git_ops::host_git_command(root)
+        .args(["ls-files", "--error-unmatch", "--", CONFIG_REL_PATH])
+        .output()
+        .is_ok_and(|o| o.status.success())
+}
+
 /// Settle a config change: commit exactly `.aida/config.toml` with `subject`
 /// when the file was clean before the command (`was_clean`) and `mode`
 /// allows it; otherwise print [`config_change_hint`]. A failed commit (hook

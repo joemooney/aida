@@ -100,6 +100,13 @@ pub struct SessionManifest {
     /// trace:TASK-272 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub batch_name: Option<String>,
+    /// BUG-2167 / TASK-2102: the name `aida agent new --bg` gave the launch.
+    /// A SessionStart hook that fires after the link (the `--bg` session starts
+    /// asynchronously) names the registry row from it, not from the spare
+    /// process's stale env.
+    // trace:TASK-1955 | ai:claude (TASK-2102)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent_name: Option<String>,
     /// TASK-95: plan brief pre-populated from a matching `docs/plans/` file
     /// at `aida queue work` time. `None` when no plan file was found.
     /// Declared before `items` so TOML serialization emits the `[plan]`
@@ -336,6 +343,7 @@ mod tests {
             plan_source: "test".to_string(),
             claude_session_id: None,
             batch_name: None,
+            agent_name: None,
             plan: None,
             items: specs.iter().map(|(s, p)| item(s, *p)).collect(),
         }
@@ -435,6 +443,7 @@ mod tests {
             plan_source: "user prompt".to_string(),
             claude_session_id: None,
             batch_name: None,
+            agent_name: None,
             plan: None,
             items: vec![item("STORY-1", 1), item("BUG-2", 2)],
         };
@@ -508,6 +517,7 @@ mod tests {
             plan_source: "test".to_string(),
             claude_session_id: None,
             batch_name: None,
+            agent_name: None,
             plan: None,
             items: vec![item("X", 1)],
         };
@@ -539,6 +549,7 @@ mod tests {
             plan_source: "test".to_string(),
             claude_session_id: None,
             batch_name: None,
+            agent_name: None,
             plan: None,
             items: vec![item("X", 1)],
         };

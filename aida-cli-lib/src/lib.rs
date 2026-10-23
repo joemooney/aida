@@ -138,6 +138,8 @@ mod mailbox_root;
 mod markdown_render;
 mod memory_doc;
 mod merge_hold_cmd;
+// trace:BUG-2015 | ai:claude — attested mirror-sync allowance for a project's pre-push main guard.
+mod mirror_guard;
 mod orchestrator_leases;
 mod output_format;
 mod phase_driver;
@@ -465,6 +467,7 @@ mod pending_approval;
 mod plan_cmd;
 mod pr_rebase;
 mod pr_ship;
+mod pr_ship_batch;
 mod presence;
 mod presence_cmd;
 mod process_probe;
@@ -514,14 +517,12 @@ mod review_verdict;
 // trace:TASK-1960 | ai:claude — attested-approval carry-over across clean base merges.
 mod review_carryover;
 mod role_cmd;
-// trace:STORY-1655 | ai:claude — audited solo-human self-approval mode (global key only).
 mod rules_cmd;
 mod rules_sync;
-mod solo_review;
-// trace:TASK-1307 | ai:claude — the pre-BUG-1452 stranded-refusal sweep.
 mod sandbox_cmd;
 mod scaffold_cmd;
 mod scaffold_refresh;
+// trace:TASK-1307 | ai:claude — the pre-BUG-1452 stranded-refusal sweep.
 mod stranded_sweep;
 mod sweep_test_hook;
 // trace:STORY-262 | ai:claude
@@ -553,6 +554,8 @@ mod session_reap;
 mod shell_eval;
 // trace:STORY-627 | ai:claude — per-repo solo-loop lock + liveness sentinel.
 mod solo_lock;
+// trace:STORY-1655 | ai:claude — audited solo-human self-approval mode (global key only).
+mod solo_review;
 mod stacks;
 mod state_snapshot;
 mod status_cleanup;

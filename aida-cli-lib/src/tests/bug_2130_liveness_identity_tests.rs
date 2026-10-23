@@ -34,7 +34,10 @@ fn bug_2130_worktree_gc_owner_is_caller_matches_legacy_lease_and_exact_caller() 
     let me = std::process::id();
     let legacy = aida_core::liveness::process_start_identity_legacy(me).expect("own legacy start");
     let exact = aida_core::liveness::process_start_identity(me).expect("own exact start");
-    assert!(exact.starts_with("linux-starttime:"), "{exact}");
+    assert!(
+        exact.starts_with(aida_core::liveness::NATIVE_EXACT_SCHEME),
+        "{exact}"
+    );
     assert_ne!(legacy, exact);
 
     let lease = sample_lease(Some(me), Some(&legacy));
@@ -125,7 +128,7 @@ fn bug_2130_adopt_spec_lease_for_subagent_reclaims_recycled_active_pid_and_prese
         .and_then(|v| v.as_str())
         .expect("updated active_pid_start_time");
     assert!(
-        new_start.starts_with("linux-starttime:"),
+        new_start.starts_with(aida_core::liveness::NATIVE_EXACT_SCHEME),
         "adopted lease must stamp exact start identity, got {new_start}"
     );
 
@@ -250,7 +253,7 @@ fn bug_2130_solo_and_drain_locks_write_exact_identity_and_read_back_live() {
             assert_eq!(lock.pid, std::process::id());
             let start = lock.pid_start_time.as_deref().expect("solo pid_start_time");
             assert!(
-                start.starts_with("linux-starttime:"),
+                start.starts_with(aida_core::liveness::NATIVE_EXACT_SCHEME),
                 "solo lock must record exact tick identity, got {start}"
             );
         }
@@ -267,7 +270,7 @@ fn bug_2130_solo_and_drain_locks_write_exact_identity_and_read_back_live() {
         .as_deref()
         .expect("drain pid_start_time");
     assert!(
-        drain_start.starts_with("linux-starttime:"),
+        drain_start.starts_with(aida_core::liveness::NATIVE_EXACT_SCHEME),
         "drain lock must record exact tick identity, got {drain_start}"
     );
     drop(drain_guard);

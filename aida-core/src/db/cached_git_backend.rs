@@ -5067,18 +5067,43 @@ mod tests {
                 .read_line(&mut line)
                 .unwrap();
             assert_eq!(line.trim(), "ready");
+            // The holder leaves only once this reader has found the lock
+            // contended: the release runs before its SECOND acquire attempt.
+            // A timer let a loaded runner's reader reach its first attempt
+            // after the holder had gone, win the lock, refresh and never
+            // report `deferred` (the in-process test-touched flake).
+            // trace:TASK-1955 | ai:claude
+            let (release_tx, release_rx) = std::sync::mpsc::channel::<()>();
+            let (gone_tx, gone_rx) = std::sync::mpsc::channel::<()>();
             let thread = std::thread::spawn(move || {
-                std::thread::sleep(std::time::Duration::from_millis(30));
+                let _ = release_rx.recv();
                 if crash {
                     child.kill().unwrap();
                 } else {
                     child.stdin.as_mut().unwrap().write_all(b"\n").unwrap();
                 }
                 child.wait().unwrap();
+                let _ = gone_tx.send(());
+            });
+            BEFORE_ACQUIRE.with(|h| {
+                *h.borrow_mut() = Some(Box::new(move || {
+                    BEFORE_ACQUIRE.with(|h| {
+                        *h.borrow_mut() = Some(Box::new(move || {
+                            release_tx.send(()).unwrap();
+                            gone_rx.recv().unwrap();
+                        }))
+                    })
+                }))
             });
             let scope = CacheReadScope::new();
             let start = std::time::Instant::now();
             backend.list_summaries(&ListFilter::default()).unwrap();
+            BEFORE_ACQUIRE.with(|h| {
+                assert!(
+                    h.borrow_mut().take().is_none(),
+                    "the reader never retried the lock"
+                )
+            });
             thread.join().unwrap();
             assert_eq!(scope.metadata()["refreshing"], "deferred");
             assert!(start.elapsed() < std::time::Duration::from_secs(1));

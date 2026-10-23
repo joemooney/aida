@@ -13753,6 +13753,7 @@ mod tests {
             plan_source: "test".to_string(),
             claude_session_id: None,
             batch_name: None,
+            agent_name: None,
             plan: None,
             items: vec![
                 crate::session_manifest::ManifestItem {
