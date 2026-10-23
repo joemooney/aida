@@ -7,12 +7,12 @@ description: |-
 
   minor (non-blocking): root CLAUDE.md:41 still lists 'make check-ci-compile # after merging main into a branch' as unconditional, contradicting the new conditional rule (shared test infra or >10 files). Outside the spec's named scope (skills + discipline docs) but it is the always-loaded guide.
   Reviewed sha: 96fd8b253affb617d6431836c0523a5baa8a1f21
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-23T15:02:07.750685206Z
-modified_at: 2026-10-23T15:02:07.750685206Z
+modified_at: 2026-10-23T15:55:24.232851576Z
 req_type: Task
 tags:
 - carried-from:TASK-2209
@@ -25,6 +25,14 @@ history:
   timestamp: 2026-10-23T15:14:16.368781466Z
   session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
   changes: []
+- id: 01a16979-5ec8-74c0-a9d4-7ebb89e439ac
+  author: joe
+  timestamp: 2026-10-23T15:55:24.232845381Z
+  session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: fce1463450fffaa7324261e6305463a58be10b95
   branch: main
