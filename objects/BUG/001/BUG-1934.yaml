@@ -3,12 +3,12 @@ spec_id: BUG-1934
 agreed_id: BUG-1934
 title: 'Seat grants are trusted from AIDA_SESSION_GRANT env without binding to the presenting session: an implementer can export a reviewer/advisor grant id'
 description: 'Raised as design question C on BUG-1918 / PR #2485 (2026-10-10). Grant re-validation at ship (seat_authority::grant_authorized_at) checks that the grant exists, carries a non-implementer seat, and was valid at recorded_at, but cannot tell WHO presented it. Any same-user process that knows a grant id (e.g. from env, a log, or ~/.aida) can record an approval under that seat. Fix: bind a grant to its session at issue time (grant.session_id = the issuing Claude session / lease identity tokens) and require the recorder''s identity to overlap the grant''s binding at record and ship time. Acceptance: a recorder exporting another session''s AIDA_SESSION_GRANT is refused at record and at ship; the legitimate holder passes.'
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T00:51:06.094986066Z
-modified_at: 2026-10-23T17:58:25.453976005Z
+modified_at: 2026-10-23T22:43:45.388500925Z
 req_type: Bug
 tags:
 - batch:2026-10-11
@@ -418,6 +418,20 @@ history:
   timestamp: 2026-10-23T11:17:32.634926622Z
   session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
   changes: []
+- id: 01a16aef-3a64-73f2-9733-fcc9d6ad0e36
+  author: aida-auto-bump
+  timestamp: 2026-10-23T22:43:45.380732943Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a16aef-3a6c-7b21-816b-808156c22018
+  timestamp: 2026-10-23T22:43:45.388485362Z
+  agent: aida
+  commit_sha: bdd2846897925f4f2a5ab7cd6fe9560fedf8b6e4
+  summary: 'Merge-main re-review at 19a043baf4: the BUG-1934 delta is unchanged from the round-3 approved, C4-probed head 08d07ea961 (per-file delta comparison over all 32 PR files: identical except a blank-line alignment in seat_authority.rs mod list and fleet-row ordering in the generated format-json audit, both main-side artifacts). grant_keyring/seat_authority unchanged beyond conflict resolution, so per the advisor 09:10 ruling no new C4 probe is needed. PR CI green on every lane at the head, including the counted live bwrap gate (bug_1934_bwrap_ required, no silent skip). Main''s new STORY-1662 lane_env classifies inherited grants through the presenter-checked grant_check, so a leaked grant is Rejected->unset (fail-closed). Every acceptance criterion and v1/v2/round-3 condition is covered by named tests. A human merges (mandate_drive.rs touched): aida pr ship 2830.'
+  review_verdict: approved
 execution_mode: guided
 filed_at:
   code_sha: 7cad9ce231370e41649618c83aaa709db36cc17f
@@ -427,11 +441,7 @@ filed_at:
   aida_build_sha: fe6723558e
   vendor: antigravity
   session: d1ebc976-deb4-4770-b036-20a1547772ad
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Design and tests cover every BUG-1934 acceptance bullet and v1/v2 signoff condition, but CI is red: the PR''s new bwrap test trips the portability ratchet, and the signed C4 merge precondition (live sandboxed via:key) is unrecorded'
-  recovery_hint: address the review findings, move BUG-1934 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-22T21:11:25.906625403Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-23T22:43:45.380727690Z
+  completion_sha: bdd2846897925f4f2a5ab7cd6fe9560fedf8b6e4
