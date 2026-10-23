@@ -53,6 +53,10 @@ pub(crate) enum CommitCi {
 
 /// The check AIDA's own CI reports once every lane has passed (the
 /// `build-result` job, whose single step is "Require every CI lane").
+/// Readiness reads required checks from each project's config; this pins
+/// AIDA's configured name to its workflow in tests.
+// trace:TASK-1945 | ai:claude (TASK-2201)
+#[cfg(test)]
 pub(crate) const CI_AGGREGATOR_CHECK: &str = "Build (ubuntu-latest)";
 
 /// Judge `checks`: a failure outranks a pending check, which outranks a

@@ -26,6 +26,10 @@ pub(crate) use mailbox_cmd_args::*;
 use crate::cli::MailboxCommand;
 use crate::*;
 
+// trace:STORY-1843 | ai:codex
+#[path = "mailbox_migration.rs"]
+mod mailbox_migration;
+
 /// Largest recorded read latency among the recipient's 100 most recent
 /// acknowledgements. Keeping this calculation shared lets transport-level
 /// acknowledgement tests verify the same history consumed by the CLI.
@@ -72,6 +76,14 @@ pub(crate) fn handle_mailbox_command(
         .ok_or_else(|| anyhow::anyhow!("cannot derive project root from store path"))?;
 
     match cmd {
+        MailboxCommand::Migrate { dry_run, json } => {
+            // trace:STORY-1843 | ai:codex
+            if !dry_run {
+                anyhow::bail!("mailbox migration requires --dry-run; write mode is unavailable");
+            }
+            let report = mailbox_migration::report(project_root, store_root)?;
+            mailbox_migration::print_report(&report, *json || crate::output_format_is_json())
+        }
         MailboxCommand::Latency { recipient, json } => {
             let local = mailbox_store::read_local_messages(project_root)?;
             let canonical = mailbox_store::read_canonical_messages(store_root)?;
@@ -2465,7 +2477,11 @@ fn mailbox_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::Cm
     crate::command_registry::CmdPolicy {
         stakeholder: if matches!(
             inner,
-            Some(MailboxCommand::Inbox { .. } | MailboxCommand::Thread { .. })
+            Some(
+                MailboxCommand::Inbox { .. }
+                    | MailboxCommand::Thread { .. }
+                    | MailboxCommand::Migrate { .. }
+            )
         ) {
             SA::Read
         } else {
