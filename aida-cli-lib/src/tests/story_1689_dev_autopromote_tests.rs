@@ -495,7 +495,8 @@ fn a_failed_build_is_reported_once_with_its_log_tail() {
 #[test]
 fn a_build_whose_process_died_is_reported_as_failed() {
     let f = fixture();
-    put_state(&f, Phase::Running, Some(77), false, "2026-10-22T00:00:00Z");
+    let recent = (chrono::Utc::now() - chrono::Duration::minutes(5)).to_rfc3339();
+    put_state(&f, Phase::Running, Some(77), false, &recent);
     let mut fake = Fake::green();
     fake.alive = false;
     let TickOutcome::Failure { message, .. } = tick(&f, &mut fake) else {
@@ -505,6 +506,26 @@ fn a_build_whose_process_died_is_reported_as_failed() {
         message.contains("ended without recording a result"),
         "{message}"
     );
+    let state = read_state(&f.layout.live_dir).unwrap();
+    assert_eq!((state.phase, state.reported), (Phase::Failed, true));
+}
+
+#[test]
+fn a_running_record_past_the_build_time_limit_fails_even_if_its_pid_is_reused() {
+    let f = fixture();
+    // The pid is "alive" (an unrelated process reused it), but the record is
+    // older than any build unit can run.
+    let old = (chrono::Utc::now() - chrono::Duration::hours(3)).to_rfc3339();
+    put_state(&f, Phase::Running, Some(77), false, &old);
+    let mut fake = Fake::green();
+    let TickOutcome::Failure { message, .. } = tick(&f, &mut fake) else {
+        panic!("expected a failure report");
+    };
+    assert!(
+        message.contains("outlived the build time limit"),
+        "{message}"
+    );
+    assert!(!fake.called("pid-alive"), "{:?}", fake.calls);
     let state = read_state(&f.layout.live_dir).unwrap();
     assert_eq!((state.phase, state.reported), (Phase::Failed, true));
 }

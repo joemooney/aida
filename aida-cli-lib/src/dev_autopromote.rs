@@ -393,9 +393,16 @@ fn settle_previous(
         let started = chrono::DateTime::parse_from_rfc3339(&state.at)
             .map(|t| t.with_timezone(&chrono::Utc))
             .unwrap_or(at);
+        let age = (at - started).num_seconds();
+        // A bare kill-0 cannot tell the build from an unrelated process that
+        // reused its pid (after a reboot, say), so a record older than the
+        // unit could ever live is dead whatever holds the pid now.
+        // trace:STORY-1689 | ai:claude
+        let overdue = age > UNCLAIMED_GRACE_SECS + BUILD_RUNTIME_MAX_SECS as i64;
         let dead = match state.pid {
+            Some(_) if overdue => true,
             Some(pid) => !steps.pid_alive(pid),
-            None => (at - started).num_seconds() > UNCLAIMED_GRACE_SECS,
+            None => age > UNCLAIMED_GRACE_SECS,
         };
         if !dead {
             return Ok(Some(TickOutcome::Skipped(Skip::InFlight(format!(
@@ -406,6 +413,9 @@ fn settle_previous(
         state.phase = Phase::Failed;
         state.reported = false;
         state.error = Some(match state.pid {
+            Some(pid) if overdue => format!(
+                "the build process {pid} outlived the build time limit without recording a result"
+            ),
             Some(pid) => format!("the build process {pid} ended without recording a result"),
             None => "the launched build never started".into(),
         });

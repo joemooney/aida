@@ -373,9 +373,6 @@ pub(crate) fn probe_checkout(repo: &Path) -> Result<CheckoutState> {
 // Pipeline
 // ---------------------------------------------------------------------------
 
-/// The side-effecting steps of the pipeline. [`RealSteps`] runs the real
-/// toolchain; tests substitute fakes so no unit test runs a cargo build or
-/// touches the host's live binaries or MCP servers.
 /// The checkout does not qualify (or stopped qualifying during the build),
 /// so nothing was promoted. Typed so the scheduled promote can report it as
 /// a refusal, not a failed build.
@@ -391,6 +388,9 @@ impl std::fmt::Display for PromotionRefused {
 
 impl std::error::Error for PromotionRefused {}
 
+/// The side-effecting steps of the pipeline. [`RealSteps`] runs the real
+/// toolchain; tests substitute fakes so no unit test runs a cargo build or
+/// touches the host's live binaries or MCP servers.
 pub(crate) trait BuildSteps {
     fn probe(&mut self, repo: &Path) -> Result<CheckoutState>;
     /// Live-wave guard: refuse (or wait, with `after_wave`) when a live drain
