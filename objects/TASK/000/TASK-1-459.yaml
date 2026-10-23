@@ -1,0 +1,27 @@
+id: 01a16ac8-dc2d-7361-9fb5-a73c37e6e661
+spec_id: TASK-1-459
+title: 'cosmetic: aida-cli-lib/src/lib.rs:432 places the ''trace:BUG-2211 — sandbox-left…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2211, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  cosmetic: aida-cli-lib/src/lib.rs:432 places the 'trace:BUG-2211 — sandbox-left config.lock doctor check' comment above 'mod maintenance_schedule;' instead of above 'mod sandbox_config_lock;' (line 437), so the trace annotates the wrong module.
+  Reviewed sha: 0fb55cc8c9ada5c192938658ee7d32de0ca34abb
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-23T22:01:50.893848083Z
+modified_at: 2026-10-23T22:01:50.893848083Z
+req_type: Task
+tags:
+- carried-from:BUG-2211
+- finding-hash:318a3c90
+- from-review:BUG-2211
+- kind:carried-forward
+filed_at:
+  code_sha: 4aa9aea412a5418bc7cc92e607a3175eedd17372
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c51da86593
+  vendor: claude
