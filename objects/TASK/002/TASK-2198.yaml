@@ -7,17 +7,26 @@ description: |
   2) loose_objects.rs:43: the remediation wraps the root in single quotes, so a path that contains ' gives a broken command. Use shell-safe quoting.
 
   Raised in review of PR-2847: https://github.com/joemooney/aida/pull/2847#issuecomment-6360081887
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T07:45:41.993800162Z
-modified_at: 2026-10-23T07:45:41.993800162Z
+modified_at: 2026-10-23T07:48:07.046952564Z
 req_type: Task
 tags:
 - doctor
 - from-review:PR-2847
 - severity:cosmetic
+history:
+- id: 01a167bb-3f06-7700-bd79-564933346fba
+  author: joe
+  timestamp: 2026-10-23T07:48:07.046945817Z
+  session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 8f554d49b46a377e8b4dc31b690e38e275f97925
   branch: pr-2847
