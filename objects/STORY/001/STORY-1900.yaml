@@ -1,0 +1,20 @@
+id: 01a1679b-090a-7951-91b6-e9ed0371c73e
+spec_id: STORY-1900
+agreed_id: STORY-1900
+title: 'Review PR-2847: TASK-2053 S5 doctor loose-objects check'
+description: 'Hand-filed review story: #2847 is Refs-only, so auto-queue-review filed none (BUG-2208, folded into TASK-1955). Covers TASK-2053.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-23T07:12:56.074590432Z
+modified_at: 2026-10-23T07:12:56.074590432Z
+req_type: Story
+filed_at:
+  code_sha: 597ea98e77150b4819f186a5d652b9855d5ee3cb
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 64c2153d82
+  vendor: claude
+  session: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
