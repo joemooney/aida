@@ -2,7 +2,7 @@ id: 01a15037-319b-7e92-850d-affbbac2a99d
 spec_id: STORY-1843
 agreed_id: STORY-1843
 title: 'Addressable agent handles: one short name per live agent, shown on the statusline, accepted by aida agent ls and aida mailbox send'
-description: |-
+description: |
   Operator ask (2026-10-18): 'if each agent had a short id shown on the statusline I could give that name to you'. Today the advisor could not message the two agy batch agents.
 
   Observed gaps (pieces exist but are not joined):
@@ -17,12 +17,13 @@ description: |-
   - aida agent ls lists live agents of all vendors with the handle, real role, spec and liveness. Dead entries are pruned or marked.
   - aida mailbox send <handle> delivers to that agent's inbox, which its per-turn mailbox notice hook surfaces. A handle that resolves to no live agent is refused with a hint, rather than creating a phantom inbox.
   - A Claude session can address an agy session by handle and the agy session sees the message on its next turn (black-box test with the agy hook shape).
+  - After this ships, the operator runs the C3 write-mode mailbox migration against the advisor-approved dry-run report (rulings 1c/1d: operator-run, never an agent; not a code obligation of this story).
 status: NeedsAttention
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-23T19:25:15.572588242Z
+modified_at: 2026-10-23T20:13:23.478802434Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -502,6 +503,11 @@ history:
   author: joe
   timestamp: 2026-10-23T13:30:35.564614670Z
   session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
+  changes: []
+- id: 01a16a65-9158-7d23-9a8f-2a32b8a3edac
+  author: joe
+  timestamp: 2026-10-23T20:13:23.672831471Z
+  session_id: 526b64ae-49de-4b4f-9f2e-39cc41d6e4e9
   changes: []
 filed_at:
   code_sha: ba665aaf98777ed00ac96a782a6d6f51dfd528bd
