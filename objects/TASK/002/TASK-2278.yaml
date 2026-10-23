@@ -1,0 +1,27 @@
+id: 01a16acb-e1ef-7251-bfac-4e0ef1e832e7
+spec_id: TASK-2278
+agreed_id: TASK-2278
+title: No test drives resolve_build_repo/handle_dev_release through the home-repo fallback
+description: |
+  dev_build_and_release_fall_back_to_the_home_repo_for_a_removed_worktree tests only env_dev_repo(). The call sites (dev_build.rs:1577, upgrade_release.rs:1540/1600/1771) are verified by inspection only.
+
+  Raised in review of PR-2866: https://github.com/joemooney/aida/pull/2866#issuecomment-6375661428
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-23T22:05:08.975671218Z
+modified_at: 2026-10-23T22:05:08.975671218Z
+req_type: Task
+tags:
+- from-review:PR-2866
+- severity:cosmetic
+filed_at:
+  code_sha: d0c9f09d33072f6cc9868bf2306ba8d2120e2ee7
+  branch: pr-2866
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c51da86593
+  vendor: claude
+  session: 01a16aca5d72
+  harness_version: 2.1.309 (Claude Code)

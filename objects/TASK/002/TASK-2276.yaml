@@ -1,0 +1,27 @@
+id: 01a16acb-c423-73f3-86e0-792a9acb7dc0
+spec_id: TASK-2276
+agreed_id: TASK-2276
+title: PR-2866 title names pure-git already-merged fixes the diff lacks
+description: |
+  The PR-2866 title says 'pure-git already-merged fixes' (TASK-2248/2249), but the diff contains only TASK-2265/2266. Retitle before the squash merge, or land those fixes first.
+
+  Raised in review of PR-2866: https://github.com/joemooney/aida/pull/2866#issuecomment-6375661428
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-23T22:05:01.347595842Z
+modified_at: 2026-10-23T22:05:01.347595842Z
+req_type: Task
+tags:
+- from-review:PR-2866
+- severity:cosmetic
+filed_at:
+  code_sha: d0c9f09d33072f6cc9868bf2306ba8d2120e2ee7
+  branch: pr-2866
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c51da86593
+  vendor: claude
+  session: 01a16aca5d72
+  harness_version: 2.1.309 (Claude Code)
