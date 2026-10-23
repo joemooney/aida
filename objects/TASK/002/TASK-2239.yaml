@@ -1,0 +1,27 @@
+id: 01a1697d-93b8-74b0-bf58-9ad5376812a9
+spec_id: TASK-2239
+agreed_id: TASK-2239
+title: Test that aida list --format json --fields opened emits an 'opened' key
+description: |
+  PR-2852 (TASK-2205) added the 'opened' field. In narrowed JSON (requirements_cli.rs ~5300-5330) it is emitted only through the toon_list_cell fallback, because the full ListJsonRow has no 'opened' key. No test pins this, so a later change to the fallback could silently drop it. Add a JSON narrowing test for --fields opened (and an alias such as created_at).
+
+  Raised in review of PR-2852: https://github.com/joemooney/aida/pull/2852#issuecomment-6369092757
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-23T15:59:59.928784483Z
+modified_at: 2026-10-23T15:59:59.928784483Z
+req_type: Task
+tags:
+- from-review:PR-2852
+- severity:minor
+filed_at:
+  code_sha: b7ae643527e250e7b127374a2eddb10f768603dd
+  branch: pr-2852
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 017e4a4949
+  vendor: claude
+  session: 01a1696ede26
+  harness_version: 2.1.309 (Claude Code)
