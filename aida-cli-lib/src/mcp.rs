@@ -8640,6 +8640,12 @@ fn workflow_tool_descriptors() -> Value {
 /// `project_root` is the AIDA project root (parent of `.aida/`). The
 /// coordination tools (STORY-361) resolve their file paths under this root.
 pub fn run_mcp_server(storage: &Storage, project_root: PathBuf) -> Result<()> {
+    // STORY-1662 (signoff C2): a `claude --bg` lane spawns this server with
+    // the daemon's environment; take the lane's identity from its lease
+    // before any grant-gated tool reads the env. trace:STORY-1662 | ai:claude
+    if let Ok(cwd) = std::env::current_dir() {
+        crate::lane_env::apply_in_process(&project_root, &cwd);
+    }
     let server = McpServer::new(storage, project_root);
     let respawn = McpRespawnState::new();
     let stdin = io::stdin();

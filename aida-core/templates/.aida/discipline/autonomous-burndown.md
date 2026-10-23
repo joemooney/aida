@@ -9,7 +9,7 @@ The failure mode is not "the agent can't do the work" — it's that the agent *s
 ## The pattern that works
 
 1. **Front-load decisions once.** Disposition the backlog so the ready set is decision-free; tag decided-and-buildable specs. A spec with an unresolved design fork is *not* ready.
-2. **Fan out implementer subagents in parallel**, each isolated in its own git worktree, each taking **one** bounded ready spec end-to-end to a PR (read spec → implement to acceptance → trace markers → build + test + fmt → commit → push → open PR). Worktree isolation means parallel agents never collide.
+2. **Launch implementers in parallel as separate processes**, each isolated in its own git worktree, each taking **one** bounded ready spec end-to-end to a PR (read spec → implement to acceptance → trace markers → build + test + fmt → commit → push → open PR). Launch each from Bash with `aida queue work <SPEC> --role implementer --no-human`: it runs in its own implementer seat (never the integrator's grant), stops once the PR is open, and ends with one `implementer:` line and an exit code to branch on. Worktree isolation means parallel implementers never collide. <!-- trace:STORY-1662 | ai:claude -->
 3. **The main session is the integrator** — it does *not* implement. It polls the PRs, merges the green + clean ones, reconciles them to Completed, pulls, and launches the next wave.
 4. **Loop it event-driven.** Wait on the wave with the harness `Monitor` tool over the drain's wake feed — `Monitor(command: "aida watch --emit-wakes", persistent: true)` — which wakes the session **only** on an actionable verb (a PR shipped/merged, a CI verdict, a punt, a shelve, the queue drained) and stays silent through the benign phase churn, so the supervisor burns **zero tokens** between events: supervision cost is O(actionable-events), not O(time-elapsed). Keep a **long-interval** scheduled wake-up (30–60 min) as the degenerate fallback so a wedged or event-less watcher still resurfaces the loop.
 
@@ -38,7 +38,7 @@ The failure mode is not "the agent can't do the work" — it's that the agent *s
 
 ## Harness scope: this fan-out is Claude-only
 
-The parallel fan-out engine is **Claude-Code-harness-only.** Step 2's wave is the harness's native subagent fan-out — `Agent(subagent_type: …, isolation: "worktree")` — a primitive only the Claude Code harness provides. A non-Claude vendor (Codex, Cursor, Amp, a bare `claude -p` script) has no equivalent, so it **cannot** run this loop.
+The parallel fan-out engine is **Claude-Code-harness-only.** Step 2's wave needs Bash background jobs that notify the integrator when each launch exits, which only the Claude Code harness provides. A non-Claude vendor (Codex, Cursor, Amp, a bare `claude -p` script) has no equivalent, so it **cannot** run this loop.
 
 Those vendors drain the same ready set the **serial** way instead: `aida queue work --auto-complete` one spec at a time (add `--batch NAME` to walk a cluster member-by-member). Same lifecycle — implement → CI → review → merge → pull → build — but sequential rather than a parallel wave, and vendor-agnostic because the **orchestrator**, not the harness, owns the drive. The trade is the usual one: lower throughput, universal reach. (SPIKE-74 tracks the agent-agnostic drain backend — a drain engine behind a trait — that would let non-Claude vendors fan out too; until it lands, fan-out is Claude-only and serial is the fallback.)
 

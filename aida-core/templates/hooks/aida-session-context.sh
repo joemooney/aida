@@ -25,6 +25,86 @@ set -u
 TOP_N=5
 TITLE_WIDTH=56
 
+# STORY-1662: lane identity from the worktree lease. A `claude --bg` session
+# runs under the long-lived claude daemon, so its environment is the daemon's
+# (often the advisor's role, grant and purpose), not the lane's. The lane's
+# lease (`aida worktree add <SPEC> --role implementer`) records who it is;
+# `aida internal lane-env` turns it into shell lines, which go into
+# $CLAUDE_ENV_FILE (sourced before every Bash command) and into this hook's
+# own env. Only quoted AIDA_SESSION_ROLE / AIDA_SESSION_GRANT exports and
+# AIDA_SESSION_GRANT / AIDA_SESSION_PURPOSE unsets are accepted. FAIL CLOSED:
+# if lane-env errors, times out or prints anything else inside a linked
+# worktree, the grant and purpose are dropped and no role is set. An `aida`
+# that predates lane-env (clap's unrecognized-subcommand refusal) corrects
+# nothing: it cannot read a lane, and dropping the grant there would strip
+# every seat in every worktree, a reviewer's recording grant included.
+# trace:STORY-1662 | ai:claude
+session_cwd=$PWD
+lane_line_ok() {
+    local value
+    case "$1" in
+        "unset AIDA_SESSION_GRANT" | "unset AIDA_SESSION_PURPOSE") return 0 ;;
+        "export AIDA_SESSION_ROLE='"*"'" | "export AIDA_SESSION_GRANT='"*"'")
+            value=${1#*=\'}
+            value=${value%\'}
+            case "$value" in
+                '' | *[!A-Za-z0-9_-]*) return 1 ;;
+            esac
+            [ "${#value}" -le 64 ]
+            return
+            ;;
+    esac
+    return 1
+}
+in_linked_worktree() {
+    local dir common
+    dir=$(git -C "$1" rev-parse --path-format=absolute --git-dir 2>/dev/null) || return 1
+    common=$(git -C "$1" rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || return 1
+    [ "$dir" != "$common" ]
+}
+lane_env_correction() {
+    local out rc line err_file
+    err_file=$(mktemp 2>/dev/null) || err_file=/dev/null
+    if ! command -v aida >/dev/null 2>&1; then
+        rc=127
+    elif command -v timeout >/dev/null 2>&1; then
+        out=$(timeout 10 aida internal lane-env --cwd "$session_cwd" 2>"$err_file")
+        rc=$?
+    else
+        out=$(aida internal lane-env --cwd "$session_cwd" 2>"$err_file")
+        rc=$?
+    fi
+    if [ "$rc" -eq 2 ] && [ "$err_file" != /dev/null ] \
+        && grep -q "unrecognized subcommand 'lane-env'" "$err_file" 2>/dev/null; then
+        rm -f "$err_file"
+        return 0
+    fi
+    [ "$err_file" != /dev/null ] && rm -f "$err_file"
+    if [ "$rc" -eq 0 ]; then
+        while IFS= read -r line; do
+            [ -z "$line" ] && continue
+            lane_line_ok "$line" || {
+                rc=1
+                break
+            }
+        done <<EOF_LANE
+$out
+EOF_LANE
+    fi
+    if [ "$rc" -ne 0 ]; then
+        in_linked_worktree "$session_cwd" || return 0
+        out='unset AIDA_SESSION_GRANT
+unset AIDA_SESSION_PURPOSE'
+    fi
+    [ -n "$out" ] || return 0
+    if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
+        printf '%s\n' "$out" >>"$CLAUDE_ENV_FILE"
+    fi
+    # Every line was validated above (or is the fixed fail-closed pair).
+    eval "$out"
+}
+lane_env_correction
+
 command -v aida >/dev/null 2>&1 || exit 0
 
 # Run against the right store regardless of the hook's cwd, mirroring the other
