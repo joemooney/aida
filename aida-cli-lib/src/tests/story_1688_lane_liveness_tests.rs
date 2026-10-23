@@ -1434,6 +1434,57 @@ fn reviewer_lease_with_a_dead_creator_is_read_with_live_probes() {
     );
 }
 
+/// TASK-2120: the live-session arm of `review_lease_running`. A Claude
+/// reviewer still running in its review worktree after its creator shell
+/// exited has started the review, with no agent-registry entry; with no live
+/// session there, the lease is not running. The probes are pre-filled, so no
+/// real process table is read.
+// trace:TASK-1955 | ai:claude (TASK-2120)
+#[test]
+fn reviewer_lease_with_a_dead_creator_counts_a_live_claude_session_in_its_worktree() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().canonicalize().unwrap();
+    let now = Utc::now();
+    let worktree = root.join("aida-pr-2731");
+    std::fs::create_dir_all(&worktree).unwrap();
+    let mut review = lease("rv31", "PR-2731", &dead_pid(), now);
+    review.role = Some("reviewer".into());
+    review.review_verb = true;
+    review.claim_verb = false;
+    review.worktree_path = worktree.clone();
+    review.active_pid = None;
+    review.active_pid_start_time = None;
+    let creator = dead_pid();
+    review.creator_pid = Some(creator.0);
+    review.creator_pid_start_time = creator.1;
+
+    let claude = |cwd: &Path| crate::process_probe::LiveSession {
+        // Not the inspecting process or its ancestors (BUG-2197 excludes those).
+        pid: 4_000_001,
+        cwd: cwd.to_path_buf(),
+        jsonl: None,
+        stale_cwd: false,
+    };
+    let running = |sessions: Vec<crate::process_probe::LiveSession>| {
+        review_lease_running(
+            &root,
+            &review,
+            &mut Some(sessions),
+            &mut Some(Vec::new()),
+            now,
+        )
+    };
+    assert!(
+        running(vec![claude(&worktree.join("src"))]),
+        "a live Claude session in the review worktree has started the review"
+    );
+    assert!(!running(Vec::new()), "nothing live: the reviewer crashed");
+    assert!(
+        !running(vec![claude(&root.join("elsewhere"))]),
+        "a session outside the review worktree does not count"
+    );
+}
+
 /// TASK-2025 / TASK-1664: an operator notice counts as delivered only when a
 /// configured notify command sent or queued it; with `[notify]` unconfigured
 /// the finding stays unrouted and the tick warns that it reaches no one.

@@ -8,6 +8,11 @@ avoid it with `-c maintenance.auto=false -c gc.auto=0`, via the per-crate
 `test_git` helper (or inline in a shell script). The count of unguarded sites
 per file may only go down; `scripts/git-maintenance-baseline.txt` records it.
 
+The scan covers Rust test code (including split statements such as
+`let mut c = Command::new("git"); c.arg("commit")` and argv passed through a
+variable) and the shell/Python fixtures under `tests/`: a shell script exports
+SCRIPT_GUARD_LINE, a Python fixture passes the -c pair in its argv list.
+
 Run `python3 tests/test_git_maintenance_ratchet.py --print` to list the sites,
 `--write-baseline` after migrating fixtures.
 """
@@ -39,7 +44,7 @@ CANDIDATE = re.compile(
     r'"(?:' + "|".join(map(re.escape, WRITE_CLASS)) + r')"|\bgit\b[^\n]*?\b(?:' + "|".join(map(re.escape, WRITE_CLASS)) + r")\b"
 )
 SHELL_SITE = re.compile(
-    r"\bgit((?:\s+-[cC]\s+\S+|\s+--?[A-Za-z][\w-]*(?:=\S+)?)*)\s+(" + "|".join(map(re.escape, WRITE_CLASS)) + r")\b"
+    r"\bgit((?:\s+-[cC]\s+\S+|\s+--?[A-Za-z][\w-]*(?:=\S+)?)*)\s+(" + "|".join(map(re.escape, WRITE_CLASS)) + r")(?![\w-])"
 )
 
 
@@ -225,6 +230,79 @@ def looks_like_script(literal: str, source: str, masked: str, start: int, lo: in
     return bool(re.search(r'"(?:/bin/)?(?:sh|bash)"|"-c"', source[s:e]))
 
 
+GITISH = re.compile(r'"(?:[^"\n]*/)?git"|\w*git\w*\s*[(!]|git_|_git\b')
+
+
+def gitish(source: str, s: int, e: int) -> bool:
+    return bool(GITISH.search(source[s:e]))
+
+
+def statement_guarded(source: str, masked: str, definitions, s: int, e: int) -> bool:
+    return any(token in source[s:e] for token in GUARD_TEXT) or definitions.guarded_call_in(masked, s, e)
+
+
+def git_bindings(source: str, masked: str, definitions, lo: int, before: int):
+    """`let [mut] NAME = <git command>` statements in [lo, before): name ->
+    (statement start, guarded) for the nearest such binding of each name. A
+    later `NAME.args(NO_AUTO_MAINTENANCE)`-style statement also guards it."""
+    # trace:TASK-1955 | ai:claude (TASK-2010)
+    found = {}
+    for m in re.finditer(r"\blet\s+(?:mut\s+)?(\w+)\s*(?::[^=;]*)?=(?!=)", masked[:before]):
+        if m.start() < lo:
+            continue
+        s, e = statement_span(masked, m.end(), lo, before)
+        rhs = source[m.end():e]
+        command = re.match(r'\s*(?:[\w:]*::)?Command::new\(\s*"(?:[^"\n]*/)?git"', rhs)
+        helper = re.match(r"[\s&]*(?:mut\s+)?[\w:.()&\s]*?\b(\w*git\w*)\s*\(", masked[m.end():e])
+        if not (command or helper) or e > before:
+            continue
+        name = m.group(1)
+        guarded = statement_guarded(source, masked, definitions, m.end(), e) or bool(
+            re.search(r"\b" + re.escape(name) + r"\b[^;]*(?:" + "|".join(map(re.escape, GUARD_TEXT)) + ")", source[e:before])
+        )
+        found[name] = (m.start(), guarded)
+    return found
+
+
+def git_receiver(source: str, masked: str, definitions, s: int, e: int, lo: int):
+    """None when the statement calls methods on no git-command binding; else
+    whether that binding is guarded."""
+    # trace:TASK-1955 | ai:claude (TASK-2010)
+    # A literal reaches a split command only through `.arg(` / `.args(`; a
+    # method on the captured output (`held.trim()` of `git_ok(..)`) is not a run.
+    if not re.search(r"\.\s*args?\s*\(", masked[s:e]):
+        return None
+    names = set(re.findall(r"\b(\w+)\s*\.\s*\w+", masked[s:e]))
+    if not names:
+        return None
+    bindings = git_bindings(source, masked, definitions, lo, s)
+    hits = [bindings[n][1] for n in names if n in bindings]
+    if not hits:
+        return None
+    return all(hits)
+
+
+def unguarded_argv_use(source: str, masked: str, definitions, s: int, e: int, lo: int, hi: int) -> bool:
+    """The literal sits in `let NAME = [..]`/`vec![..]`; some later statement
+    passes NAME to an unguarded git spawn."""
+    m = re.match(r"\s*let\s+(?:mut\s+)?(\w+)\b", masked[s:e])
+    if not m:
+        return False
+    name = m.group(1)
+    for use in re.finditer(r"\b" + re.escape(name) + r"\b", masked[e:hi]):
+        at = e + use.start()
+        us, ue = statement_span(masked, at, lo, hi)
+        if re.match(r"\s*let\s+(?:mut\s+)?" + re.escape(name) + r"\b", masked[us:ue]):
+            break  # rebound: later uses see another value
+        if gitish(source, us, ue):
+            if not statement_guarded(source, masked, definitions, us, ue):
+                return True
+            continue
+        if git_receiver(source, masked, definitions, us, ue, lo) is False:
+            return True
+    return False
+
+
 def file_sites(path: Path, source: str, masked: str, strings) -> list[str]:
     definitions = None
     newlines = [k for k, ch in enumerate(source) if ch == "\n"]
@@ -238,15 +316,21 @@ def file_sites(path: Path, source: str, masked: str, strings) -> list[str]:
             line = line_of(start)
             if literal in WRITE_CLASS:
                 s, e = statement_span(masked, start, lo, hi)
-                stmt = source[s:e]
-                if not re.search(r'"git"|\w*git\w*\s*[(!]|git_|_git\b', stmt):
-                    continue
-                if any(token in stmt for token in GUARD_TEXT):
-                    continue
                 definitions = definitions or Definitions(source, masked)
-                if definitions.guarded_call_in(masked, s, e):
+                if gitish(source, s, e):
+                    if not statement_guarded(source, masked, definitions, s, e):
+                        sites.append(f"{line}: git {literal}")
                     continue
-                sites.append(f"{line}: git {literal}")
+                # trace:TASK-1955 | ai:claude (TASK-2010)
+                # Split statement: `let mut c = Command::new("git"); c.arg("commit")`.
+                binding = git_receiver(source, masked, definitions, s, e, lo)
+                if binding is not None:
+                    if not binding:
+                        sites.append(f"{line}: git {literal}")
+                    continue
+                # Variable argv: `let a = ["commit", ..]; git(dir, &a)`.
+                if unguarded_argv_use(source, masked, definitions, s, e, lo, hi):
+                    sites.append(f"{line}: git {literal}")
             elif looks_like_script(literal, source, masked, start, lo, hi):
                 # A `\n` escape ends a shell line; "\n " keeps the length (offsets).
                 script = ESCAPES.sub("\n ", literal)
@@ -265,6 +349,83 @@ def file_sites(path: Path, source: str, masked: str, strings) -> list[str]:
     return sites
 
 
+# trace:TASK-1955 | ai:claude (TASK-2010)
+# Shell and Python fixtures under tests/. A shell script turns maintenance off
+# for every git it runs with SCRIPT_GUARD_LINE near its top (the environment
+# form of the -c pair); a site behind `env -i` loses that environment and
+# needs the inline pair. Python fixtures pass the pair in the argv list.
+SCRIPT_GUARD_LINE = (
+    "export GIT_CONFIG_COUNT=2 GIT_CONFIG_KEY_0=maintenance.auto GIT_CONFIG_VALUE_0=false"
+    " GIT_CONFIG_KEY_1=gc.auto GIT_CONFIG_VALUE_1=0"
+)
+SCRIPT_GUARD = re.compile(r"^[^#\n]*\bGIT_CONFIG_KEY_(\d+)=maintenance\.auto\b", re.M)
+
+
+def script_guard(source: str):
+    """The first SCRIPT_GUARD line that really applies: its GIT_CONFIG_COUNT
+    covers the key's index and the matching value turns maintenance off."""
+    # trace:TASK-1955 | ai:claude (TASK-2010)
+    for m in SCRIPT_GUARD.finditer(source):
+        end = source.find("\n", m.end())
+        line = source[m.start():end if end >= 0 else len(source)]
+        index = int(m.group(1))
+        count = re.search(r"\bGIT_CONFIG_COUNT=(\d+)\b", line)
+        value = re.search(rf"\bGIT_CONFIG_VALUE_{index}=false\b", line)
+        if count and int(count.group(1)) > index and value:
+            return m
+    return None
+PY_SITE = re.compile(
+    r"""["']git["']\s*,((?:\s*(?:["'][^"'\n]*["']|[\w.]+)\s*,)*?)\s*["'](""" + "|".join(map(re.escape, WRITE_CLASS)) + r""")["']"""
+)
+
+
+def script_sites(source: str, python: bool = False) -> list[str]:
+    sites = []
+    lines = source.split("\n")
+    if python:
+        for number, text in enumerate(lines, 1):
+            if text.lstrip().startswith("#"):
+                continue
+            for m in PY_SITE.finditer(text):
+                if "maintenance.auto=false" not in m.group(1):
+                    sites.append(f"{number}: py git {m.group(2)}")
+        return sites
+    guard = script_guard(source)
+    guard_line = source.count("\n", 0, guard.start()) + 1 if guard else None
+    number = 0
+    while number < len(lines):
+        first = number + 1
+        text = lines[number]
+        while text.endswith("\\") and number + 1 < len(lines):
+            number += 1
+            text = text[:-1] + " " + lines[number]
+        number += 1
+        if text.lstrip().startswith("#"):
+            continue
+        for m in SHELL_SITE.finditer(text):
+            if "maintenance.auto=false" in m.group(1):
+                continue
+            prefix = text[:m.start()]
+            # Quoted text (an assertion message, a grep pattern, JSON) is not
+            # a git run; `$(` starts a command again inside double quotes.
+            inner = prefix.rsplit("$(", 1)[-1]
+            if inner.count("'") % 2 or inner.count('"') % 2:
+                continue
+            command = re.split(r";|&&|\|\||\||\(", prefix)[-1]
+            if re.match(r"\s*(?:echo|printf)\b", command):
+                continue
+            if guard_line is not None and guard_line < first and not re.search(r"\benv\s+-i\b", prefix):
+                continue
+            sites.append(f"{first}: sh git {m.group(2)}")
+    return sites
+
+
+def script_paths() -> list[Path]:
+    paths = sorted((ROOT / "tests").glob("*.sh")) + sorted((ROOT / "tests/lib").glob("*.sh"))
+    paths += sorted(p for p in (ROOT / "tests").glob("*.py") if p.resolve() != Path(__file__).resolve())
+    return paths
+
+
 def scan() -> dict[str, list[str]]:
     sources = {}
     for crate in CRATES:
@@ -277,6 +438,10 @@ def scan() -> dict[str, list[str]]:
     result = {}
     for path, (source, masked, strings) in sources.items():
         sites = file_sites(path, source, masked, strings)
+        if sites:
+            result[path.relative_to(ROOT).as_posix()] = sites
+    for path in script_paths():
+        sites = script_sites(path.read_text(encoding="utf-8"), python=path.suffix == ".py")
         if sites:
             result[path.relative_to(ROOT).as_posix()] = sites
     return result
@@ -407,6 +572,83 @@ mod tests {
 fn later_prod() { Command::new("git").args(["merge"]).status(); }
 '''
         self.assertEqual(["5: git commit"], self.sites(source, "aida-core/src/x.rs"))
+
+    # trace:TASK-1955 | ai:claude (TASK-2010)
+    def test_detects_split_statements_and_variable_argv(self):
+        source = '''
+fn t() {
+    let mut c = Command::new("git");
+    c.current_dir(dir);
+    c.args(["commit", "-m", "x"]);
+    let args = vec!["merge", "--no-ff", "side"];
+    git(dir, &args);
+    let fetch = ["fetch", "origin"];
+    std::process::Command::new("/usr/bin/git").args(fetch).status();
+    let kind = "commit";
+    assert_eq!(kind, label);
+}
+'''
+        self.assertEqual(["5: git commit", "6: git merge", "8: git fetch"], self.sites(source))
+        guarded = (
+            source.replace('Command::new("git")', "crate::test_git::git_command()")
+            .replace("git(dir, &args)", "crate::test_git::git_command().current_dir(dir).args(&args)")
+            .replace(".args(fetch)", ".args(NO_AUTO_MAINTENANCE).args(fetch)")
+        )
+        self.assertEqual([], self.sites(guarded))
+        # A binding guarded by a later statement on it is guarded too.
+        later = '''
+fn t() {
+    let mut c = Command::new("git");
+    c.args(crate::git_ops::NO_AUTO_MAINTENANCE);
+    c.arg("commit");
+}
+'''
+        self.assertEqual([], self.sites(later))
+        # Output captured from a git helper is a string, not a command.
+        captured = '''
+fn t() {
+    let held = git_ok(dir, &["cat-file", "-t", sha]);
+    assert_eq!(held.trim(), "commit");
+}
+'''
+        self.assertEqual([], self.sites(captured))
+
+    # trace:TASK-1955 | ai:claude (TASK-2010)
+    def test_detects_unguarded_shell_and_python_fixture_sites(self):
+        script = '''#!/bin/bash
+set -euo pipefail
+git commit -qm seed
+git -C "$R" merge-base --is-ancestor a b
+info "Test 4: release exports AIDA_RELEASE=1 before git commit"
+grep -n '^git push origin' "$SCRIPT"
+out="$(git fetch origin 2>&1)"
+env -i PATH="$PATH" \\
+    git -c user.name=t commit -qm hook
+# git commit in a comment
+'''
+        self.assertEqual(
+            ["3: sh git commit", "7: sh git fetch", "8: sh git commit"], script_sites(script)
+        )
+        guarded = script.replace("set -euo pipefail\n", "set -euo pipefail\n" + SCRIPT_GUARD_LINE + "\n")
+        # The exported pair covers every site but the one behind `env -i`.
+        self.assertEqual(["9: sh git commit"], script_sites(guarded))
+        # A pair the count does not reach, or a value that leaves maintenance
+        # on, guards nothing.
+        for broken in (
+            SCRIPT_GUARD_LINE.replace("GIT_CONFIG_COUNT=2", "GIT_CONFIG_COUNT=0"),
+            SCRIPT_GUARD_LINE.replace("GIT_CONFIG_VALUE_0=false", "GIT_CONFIG_VALUE_0=true"),
+        ):
+            unguarded = script.replace("set -euo pipefail\n", "set -euo pipefail\n" + broken + "\n")
+            self.assertEqual(["4: sh git commit", "8: sh git fetch", "9: sh git commit"], script_sites(unguarded))
+        inline = guarded.replace("git -c user.name=t", "git -c maintenance.auto=false -c gc.auto=0 -c user.name=t")
+        self.assertEqual([], script_sites(inline))
+        python = '''
+subprocess.run(["git", "commit", "-qm", "x"], cwd=root, check=True)
+subprocess.run(["git", "-c", "commit.gpgsign=false", "commit", "-qm", "x"])
+subprocess.run(["git", "-c", "maintenance.auto=false", "-c", "gc.auto=0", "commit", "-qm", "x"])
+subprocess.run(["git", "merge-base", "a", "b"])
+'''
+        self.assertEqual(["2: py git commit", "3: py git commit"], script_sites(python, python=True))
 
 
 if __name__ == "__main__":
