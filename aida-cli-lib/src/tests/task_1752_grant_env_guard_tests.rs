@@ -174,12 +174,18 @@ fn is_env_read(code: &str) -> bool {
 /// statement.
 // trace:TASK-1952 | trace:TASK-1976 | ai:claude
 fn split_or_aliased_env_reads(production: &str) -> Vec<String> {
+    // Most files never read the environment: skip them before any regex
+    // work, so the guard stays inside its time budget.
+    if !production.contains("env::var") {
+        return Vec::new();
+    }
+    static ALIAS: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+        regex::Regex::new(r"\bGRANT_ENV as (\w+)|\blet (\w+)\b[^=;]*= &?[\w:]*\bGRANT_ENV ?;")
+            .unwrap()
+    });
     let text = production.split_whitespace().collect::<Vec<_>>().join(" ");
     let mut names = vec!["GRANT_ENV".to_string(), GRANT_LITERAL.to_string()];
-    let alias =
-        regex::Regex::new(r"\bGRANT_ENV as (\w+)|\blet (\w+)\b[^=;]*= &?[\w:]*\bGRANT_ENV ?;")
-            .unwrap();
-    for capture in alias.captures_iter(&text) {
+    for capture in ALIAS.captures_iter(&text) {
         let name = capture.get(1).or(capture.get(2)).unwrap().as_str();
         names.push(name.to_string());
     }
@@ -208,7 +214,11 @@ fn split_or_aliased_env_reads(production: &str) -> Vec<String> {
 /// that lacks that attribute, as `(line number, declaration)`.
 // trace:TASK-1952 | trace:TASK-1977 | ai:claude
 fn ungated_test_dir_modules(lines: &[(usize, &str)]) -> Vec<(usize, String)> {
-    let module = regex::Regex::new(r"^(pub(\([^)]*\))? )?mod (\w+);").unwrap();
+    static MODULE: std::sync::LazyLock<regex::Regex> =
+        std::sync::LazyLock::new(|| regex::Regex::new(r"^(pub(\([^)]*\))? )?mod (\w+);").unwrap());
+    static ALL_TEST: std::sync::LazyLock<regex::Regex> =
+        std::sync::LazyLock::new(|| regex::Regex::new(r"[(,]\s*test\s*[,)]").unwrap());
+    let module = &*MODULE;
     let mut found = Vec::new();
     for (at, (line, text)) in lines.iter().enumerate() {
         let Some(capture) = module.captures(text.trim()) else {
@@ -227,11 +237,7 @@ fn ungated_test_dir_modules(lines: &[(usize, &str)]) -> Vec<(usize, String)> {
         // `cfg(test)` or `cfg(all(test, ...))`; never `any(...)`, which also
         // compiles without test.
         let test_only = |a: &&str| {
-            a.starts_with("#[cfg(test)]")
-                || (a.starts_with("#[cfg(all(")
-                    && regex::Regex::new(r"[(,]\s*test\s*[,)]")
-                        .unwrap()
-                        .is_match(a))
+            a.starts_with("#[cfg(test)]") || (a.starts_with("#[cfg(all(") && ALL_TEST.is_match(a))
         };
         if into_tests && !attrs.iter().any(test_only) {
             found.push((*line, text.trim().to_string()));
