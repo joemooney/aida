@@ -19,10 +19,14 @@ Commit metadata is fixed, so each commit ID depends only on the real diff.
 
 `task_1800_audited_cases_replay_from_the_vendored_bundle`
 (`aida-cli-lib/src/tests/task_1800_trace_replay_tests.rs`) fetches the bundle
-into a temporary repository under `diff.renames` unset, `false` and `copies`.
-It checks each case's scoped digest, fallback set and changed paths against
-`docs/testing/task-1800-trace-exclusions.json` and the audit, re-hashes every
-audited blob, and fails if any true-touch or unresolved pair is lost.
+into a temporary repository and runs the production collector once, with
+`diff.renames` unset. It checks each case's scoped digest, fallback set and
+changed paths against `docs/testing/task-1800-trace-exclusions.json` and the
+audit, re-hashes every audited blob, and fails if any true-touch or unresolved
+pair is lost. Under `diff.renames` `false` and `copies` it re-runs only the
+collector's one git diff call (`diff_tree_args`) and requires the same bytes,
+so the evidence cannot depend on the rename config.
+<!-- trace:TASK-2238 | ai:claude -->
 
 ## Regenerate or verify
 

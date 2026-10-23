@@ -146,6 +146,14 @@ pub(crate) fn handle_doctor_command(
             // trace:TASK-1544 | ai:codex
             if !all && !*sub_all {
                 match normalize_doctor_category(category).ok().as_deref() {
+                    // trace:TASK-2197 | ai:codex
+                    Some(crate::loose_objects::CATEGORY) => {
+                        return doctor_check_store_free_light(
+                            crate::loose_objects::CATEGORY,
+                            *json,
+                            *fail_on_findings,
+                        );
+                    }
                     Some("performance") => {
                         return doctor_check_store_free_light(
                             "performance",
@@ -765,12 +773,6 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     }
 
-    // BUG-1700: the folder-trust gate that silently strands an interactive
-    // `aida agent new claude --spec` launch. Read-only (it never writes the
-    // operator's ~/.claude.json) and silent unless the worktree parent really
-    // lacks a covering trust record. Opt-in path for the same reason as
-    // disk-headroom: it reads a file outside the project.
-    // trace:BUG-1700 | ai:claude
     // TASK-2053 S5: loose objects that slow seat-clone creation (opt-in
     // append path, like disk-headroom: it runs git).
     // trace:TASK-2053 | ai:claude
@@ -811,6 +813,12 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     }
 
+    // BUG-1700: the folder-trust gate that silently strands an interactive
+    // `aida agent new claude --spec` launch. Read-only (it never writes the
+    // operator's ~/.claude.json) and silent unless the worktree parent really
+    // lacks a covering trust record. Opt-in path for the same reason as
+    // disk-headroom: it reads a file outside the project.
+    // trace:BUG-1700 | ai:claude
     if doctor_category_selected(opts.category.as_deref(), "agent-launch")? {
         findings.extend(scan_agent_worktree_trust(&project_root));
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
@@ -1178,6 +1186,10 @@ fn doctor_check_disk_headroom_light(json: bool, fail_on_findings: bool) -> Resul
 fn doctor_check_store_free_light(category: &str, json: bool, fail_on_findings: bool) -> Result<()> {
     let project_root = main_worktree_root_from(&find_project_root()?);
     let report = match category {
+        // trace:TASK-2197 | ai:codex
+        crate::loose_objects::CATEGORY => {
+            DoctorReport::from_findings(crate::loose_objects::scan(&project_root))
+        }
         "performance" => performance_light_report(&project_root),
         "remote-drift" => remote_drift_light_report(&project_root),
         // trace:STORY-1699 | ai:claude
@@ -2478,7 +2490,12 @@ fn count_unrelated_child_dirs(
         .filter_map(Result::ok)
         .filter(|entry| {
             let entry_path = normalize_path_lexically(&entry.path());
-            !entry.file_name().to_string_lossy().starts_with('.')
+            let name = entry.file_name();
+            let name = name.to_string_lossy();
+            // TASK-2053: seat clones are this project's own trees.
+            // trace:TASK-2053 | ai:claude
+            !name.starts_with('.')
+                && !name.starts_with(aida_core::seat_clone_detect::CLONE_DIR_PREFIX)
                 && entry.file_type().is_ok_and(|kind| kind.is_dir())
                 && entry_path != project_root
                 && entry_path != worktree_parent
@@ -14752,3 +14769,90 @@ mod bug_1985_destructive_gate_tests;
 #[cfg(test)]
 #[path = "tests/task_1981_writer_tests.rs"]
 mod task_1981_writer_tests;
+
+#[cfg(test)]
+mod loose_objects_followup_tests {
+    use super::*;
+
+    // trace:TASK-2197 | ai:codex
+    #[test]
+    fn loose_object_check_aliases_run_without_a_loadable_store() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        let tmp = tempfile::tempdir().unwrap();
+        assert!(std::process::Command::new("git")
+            .args(["init", "-q"])
+            .arg(tmp.path())
+            .status()
+            .unwrap()
+            .success());
+        std::fs::create_dir(tmp.path().join(".aida")).unwrap();
+        std::fs::write(
+            tmp.path().join(".aida/config.toml"),
+            "[doctor.loose_objects]\nmax = \"bad\"\n",
+        )
+        .unwrap();
+        std::fs::write(tmp.path().join(".aida-store"), "unloadable store").unwrap();
+        assert!(Storage::new(&tmp.path().join(".aida-store"))
+            .load()
+            .is_err());
+        std::env::set_current_dir(tmp.path()).unwrap();
+        for alias in ["loose-objects", "loose-object", "git-objects", "repack"] {
+            assert_eq!(
+                normalize_doctor_category(alias).unwrap(),
+                crate::loose_objects::CATEGORY
+            );
+            let check = cli::DoctorCommand::Check {
+                category: alias.into(),
+                all: false,
+                json: true,
+                fail_on_findings: false,
+            };
+            handle_doctor_command(false, false, None, true, false, false, None, Some(&check))
+                .unwrap();
+            let check = cli::DoctorCommand::Check {
+                category: alias.into(),
+                all: false,
+                json: true,
+                fail_on_findings: true,
+            };
+            let error =
+                handle_doctor_command(false, false, None, true, false, false, None, Some(&check))
+                    .unwrap_err();
+            // JSON output owns the diagnostic; the dispatcher receives its
+            // typed nonzero-exit marker. trace:TASK-2197 | ai:codex
+            assert!(error.downcast_ref::<crate::TypedPayloadEmitted>().is_some());
+        }
+    }
+
+    // Pin the opt-in append call separately from the light dispatch. The
+    // scan's actual config/count behavior is covered by loose_objects tests.
+    // trace:TASK-2053 trace:TASK-2198 | ai:codex
+    #[test]
+    fn full_doctor_keeps_the_loose_object_scan_and_trust_comment_together() {
+        let source = include_str!("doctor_cmd.rs");
+        let full = source
+            .split_once("fn doctor_multi_agent(opts:")
+            .unwrap()
+            .1
+            .split_once("fn doctor_check_store_free_light(")
+            .unwrap()
+            .0;
+        assert!(full.contains("if doctor_category_selected(opts.category.as_deref(), crate::loose_objects::CATEGORY)? {\n        findings.extend(crate::loose_objects::scan(&project_root));"));
+        let trust = full
+            .split_once("// BUG-1700: the folder-trust gate")
+            .unwrap()
+            .1;
+        assert!(trust
+            .split_once("scan_agent_worktree_trust")
+            .unwrap()
+            .0
+            .contains("\"agent-launch\""));
+        assert!(!trust
+            .split_once("scan_agent_worktree_trust")
+            .unwrap()
+            .0
+            .contains("loose_objects"));
+    }
+}

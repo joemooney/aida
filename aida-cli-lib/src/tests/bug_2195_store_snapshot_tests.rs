@@ -243,3 +243,24 @@ fn an_excludes_file_does_not_hide_an_untracked_object() {
     let err = store_snapshot(s.path()).unwrap_err();
     assert!(err.is::<StoreDirty>(), "{err:#}");
 }
+
+/// TASK-2230: neither `$GIT_DIR/info/exclude` nor a `.gitignore` hides an
+/// untracked object from the dirty check.
+// trace:TASK-2238 | ai:claude
+#[test]
+fn task_2238_info_exclude_and_gitignore_do_not_hide_an_untracked_object() {
+    for hide in ["info/exclude", ".gitignore"] {
+        let (s, _) = store();
+        if hide == ".gitignore" {
+            s.commit(".gitignore", "objects/TASK/000/TASK-9.yaml\n");
+        } else {
+            let common = s.path().join(s.git(&["rev-parse", "--git-common-dir"]));
+            std::fs::create_dir_all(common.join("info")).unwrap();
+            std::fs::write(common.join("info/exclude"), "*.yaml\n").unwrap();
+        }
+        std::fs::write(s.path().join("objects/TASK/000/TASK-9.yaml"), "x\n").unwrap();
+        assert_eq!(s.git(&["status", "--porcelain"]), "", "{hide} hides it");
+        let err = store_snapshot(s.path()).unwrap_err();
+        assert!(err.is::<StoreDirty>(), "{hide}: {err:#}");
+    }
+}

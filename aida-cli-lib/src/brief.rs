@@ -283,6 +283,14 @@ pub(crate) fn render_agent_brief(
             ));
             out.push_str("```\n\n");
         }
+        BriefBranchTarget::SeatClone { branch, clone } => {
+            out.push_str(&format!(
+                "This spec's branch `{branch}` is being worked in a contained seat's private clone \
+                 at {} — continue it in that seat (launching the seat again re-enters the clone); \
+                 don't start a second lineage, and don't run git in the clone from outside it.\n\n",
+                clone.display()
+            ));
+        }
         BriefBranchTarget::ExistingBranch {
             branch,
             remote_only,
@@ -356,6 +364,14 @@ pub(crate) enum BriefBranchTarget {
         branch: String,
         worktree: std::path::PathBuf,
     },
+    /// TASK-2053: exactly one existing branch was found, and a contained
+    /// seat's private clone holds it. The work continues in that seat; the
+    /// host never runs git in the clone.
+    // trace:TASK-2053 | ai:claude
+    SeatClone {
+        branch: String,
+        clone: std::path::PathBuf,
+    },
     /// Exactly one existing branch was found but no worktree currently has
     /// it checked out — attach a worktree to that branch (`remote_only`
     /// picks `-B <branch> origin/<branch>` over a plain local checkout).
@@ -420,6 +436,18 @@ pub(crate) fn resolve_brief_branch_target(
         }
     }
 
+    // TASK-2053: a contained seat's clone branch is in neither main's refs
+    // nor origin until it pushes; its lease names it.
+    // trace:TASK-2053 | ai:claude
+    let trees = seat_trees(project_root);
+    for wt in trees.iter().filter(|wt| wt.clone) {
+        if let Some(name) = wt.branch.as_deref() {
+            if branch_name_references_spec(name, spec_id) && !is_orphan_store_branch(name) {
+                candidates.insert(name.to_string());
+            }
+        }
+    }
+
     if candidates.is_empty() {
         return BriefBranchTarget::Fresh {
             branch: fresh_branch,
@@ -432,7 +460,13 @@ pub(crate) fn resolve_brief_branch_target(
     }
     let branch = candidates.into_iter().next().unwrap();
 
-    for wt in list_worktrees(project_root) {
+    for wt in trees {
+        if wt.branch.as_deref() == Some(branch.as_str()) && wt.clone {
+            return BriefBranchTarget::SeatClone {
+                branch,
+                clone: wt.path,
+            };
+        }
         if wt.branch.as_deref() == Some(branch.as_str()) {
             return BriefBranchTarget::ExistingWorktree {
                 branch,

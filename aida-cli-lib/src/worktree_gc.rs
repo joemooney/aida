@@ -3554,9 +3554,45 @@ pub(crate) fn session_env_eval_lines(body: &str, running_exe: &std::path::Path) 
 // trace:STORY-716 | ai:claude
 pub(crate) fn handle_worktree_list(json: bool) -> Result<()> {
     let main_root = find_main_worktree_root()?;
+    let rows = worktree_list_rows(&main_root)?;
+
+    if json {
+        let arr = worktree_list_json(&rows);
+        println!("{}", serde_json::to_string_pretty(&serde_json::json!(arr))?);
+        return Ok(());
+    }
+
+    if rows.is_empty() {
+        println!("No git worktrees found.");
+        return Ok(());
+    }
+    println!("{}", "AIDA worktrees".bold());
+    for (p, b, f, clone) in &rows {
+        let focus = if *clone {
+            "seat clone".dimmed().to_string()
+        } else {
+            f.as_deref()
+                .map(|s| s.cyan().bold().to_string())
+                .unwrap_or_else(|| "\u{2014}".dimmed().to_string())
+        };
+        let branch = b.as_deref().unwrap_or("(detached)");
+        println!(
+            "  {}  [{}]  focus: {}",
+            p.display().to_string().cyan(),
+            branch,
+            focus,
+        );
+    }
+    Ok(())
+}
+
+// trace:TASK-2053 | ai:codex
+type WorktreeListRow = (std::path::PathBuf, Option<String>, Option<String>, bool);
+
+pub(crate) fn worktree_list_rows(main_root: &std::path::Path) -> Result<Vec<WorktreeListRow>> {
     let porcelain = std::process::Command::new("git")
         .arg("-C")
-        .arg(&main_root)
+        .arg(main_root)
         .args(["worktree", "list", "--porcelain"])
         .output()
         .context("failed to invoke `git worktree list`")?;
@@ -3572,49 +3608,37 @@ pub(crate) fn handle_worktree_list(json: bool) -> Result<()> {
     // Pair each worktree with its focus marker + current branch (re-parse the
     // porcelain for the branch line that follows each `worktree` record).
     let branches = parse_worktree_branches(&text);
-    let rows: Vec<(std::path::PathBuf, Option<String>, Option<String>)> = paths
+    let mut rows: Vec<(std::path::PathBuf, Option<String>, Option<String>, bool)> = paths
         .iter()
         .map(|p| {
             let focus = crate::focus::read_focus_marker(p);
             let branch = branches.get(p).cloned();
-            (p.clone(), branch, focus)
+            (p.clone(), branch, focus, false)
         })
         .collect();
+    // TASK-2053: contained seats' private clones, with their lease branch.
+    // Their seat-written focus marker is not read.
+    // trace:TASK-2053 | ai:claude
+    rows.extend(
+        crate::clone_seat_trees(main_root)
+            .into_iter()
+            .map(|wt| (wt.path, wt.branch, None, true)),
+    );
 
-    if json {
-        let arr: Vec<serde_json::Value> = rows
-            .iter()
-            .map(|(p, b, f)| {
-                serde_json::json!({
-                    "path": p.display().to_string(),
-                    "branch": b,
-                    "focus": f,
-                })
+    Ok(rows)
+}
+
+pub(crate) fn worktree_list_json(rows: &[WorktreeListRow]) -> Vec<serde_json::Value> {
+    rows.iter()
+        .map(|(p, b, f, clone)| {
+            serde_json::json!({
+                "path": p.display().to_string(),
+                "branch": b,
+                "focus": f,
+                "kind": if *clone { "clone" } else { "worktree" },
             })
-            .collect();
-        println!("{}", serde_json::to_string_pretty(&serde_json::json!(arr))?);
-        return Ok(());
-    }
-
-    if rows.is_empty() {
-        println!("No git worktrees found.");
-        return Ok(());
-    }
-    println!("{}", "AIDA worktrees".bold());
-    for (p, b, f) in &rows {
-        let focus = f
-            .as_deref()
-            .map(|s| s.cyan().bold().to_string())
-            .unwrap_or_else(|| "\u{2014}".dimmed().to_string());
-        let branch = b.as_deref().unwrap_or("(detached)");
-        println!(
-            "  {}  [{}]  focus: {}",
-            p.display().to_string().cyan(),
-            branch,
-            focus,
-        );
-    }
-    Ok(())
+        })
+        .collect()
 }
 
 /// Parse `git worktree list --porcelain` into a path -> branch-shortname map.

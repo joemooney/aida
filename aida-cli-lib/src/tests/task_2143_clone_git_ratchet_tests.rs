@@ -32,49 +32,116 @@ const RAW_GIT_ALLOWLIST: &[(&str, usize)] = &[
     ("aida-cli-lib/src/session_start.rs", 18),
     ("aida-cli-lib/src/status_awaiting.rs", 1),
     ("aida-cli-lib/src/status_cmd.rs", 1),
+    // S4b: status_prs.rs and trace.rs began reading leases (seat_trees);
+    // every raw site in them runs in the main checkout (`git -C project_root`).
+    ("aida-cli-lib/src/status_prs.rs", 12),
     ("aida-cli-lib/src/status_sections.rs", 5),
+    ("aida-cli-lib/src/trace.rs", 13),
     ("aida-cli-lib/src/worktree_dismiss.rs", 4),
     ("aida-cli-lib/src/worktree_gc.rs", 14),
-    ("aida-cli-lib/src/worktree_reclaim.rs", 1),
     ("aida-cli-lib/src/worktree_scope_gate.rs", 1),
     ("aida-core/src/git_ops.rs", 5),
 ];
 
-/// The net `{` minus `}` on one line, outside comments, string literals and
-/// char literals. `in_string` carries an open string literal across lines.
-fn brace_delta(line: &str, in_string: &mut bool) -> i64 {
-    let mut delta = 0;
-    let mut chars = line.chars().peekable();
-    while let Some(c) = chars.next() {
-        if *in_string {
-            match c {
-                '\\' => {
-                    chars.next();
-                }
-                '"' => *in_string = false,
-                _ => {}
+/// Lexical state across lines: braces inside Rust literals and comments do
+/// not close a test module. Raw strings close only with their full delimiter.
+// trace:TASK-2190 | ai:codex
+#[derive(Default)]
+struct BraceState {
+    string: bool,
+    raw_hashes: Option<usize>,
+    block_depth: usize,
+}
+
+fn brace_delta(line: &str, state: &mut BraceState) -> i64 {
+    let b = line.as_bytes();
+    let (mut i, mut delta) = (0, 0);
+    while i < b.len() {
+        if let Some(hashes) = state.raw_hashes {
+            if b[i] == b'"'
+                && b.get(i + 1..i + 1 + hashes)
+                    .is_some_and(|tail| tail.iter().all(|c| *c == b'#'))
+            {
+                state.raw_hashes = None;
+                i += 1 + hashes;
+            } else {
+                i += 1;
             }
             continue;
         }
-        match c {
-            '/' if chars.peek() == Some(&'/') => break,
-            '"' => *in_string = true,
-            // A char literal ('{', '\''), not a lifetime ('a).
-            '\'' => {
-                let rest: String = chars.clone().take(3).collect();
-                if rest.starts_with('\\') {
-                    chars.next();
-                    chars.next();
-                    chars.next();
-                } else if rest.chars().nth(1) == Some('\'') {
-                    chars.next();
-                    chars.next();
+        if state.block_depth > 0 {
+            if b[i..].starts_with(b"/*") {
+                state.block_depth += 1;
+                i += 2;
+            } else if b[i..].starts_with(b"*/") {
+                state.block_depth -= 1;
+                i += 2;
+            } else {
+                i += 1;
+            }
+            continue;
+        }
+        if state.string {
+            match b[i] {
+                b'\\' => i += 2,
+                b'"' => {
+                    state.string = false;
+                    i += 1;
+                }
+                _ => i += 1,
+            }
+            continue;
+        }
+        if b[i..].starts_with(b"//") {
+            break;
+        }
+        if b[i..].starts_with(b"/*") {
+            state.block_depth = 1;
+            i += 2;
+            continue;
+        }
+        if b[i] == b'r' {
+            let mut j = i + 1;
+            while b.get(j) == Some(&b'#') {
+                j += 1;
+            }
+            if b.get(j) == Some(&b'"') {
+                state.raw_hashes = Some(j - i - 1);
+                i = j + 1;
+                continue;
+            }
+        }
+        match b[i] {
+            b'"' => state.string = true,
+            // Skip character literals, while leaving lifetimes alone.
+            b'\'' => {
+                let mut j = i + 1;
+                if b.get(j..j + 3) == Some(b"\\u{") {
+                    j += 3;
+                    while b
+                        .get(j)
+                        .is_some_and(|c| c.is_ascii_hexdigit() || *c == b'_')
+                    {
+                        j += 1;
+                    }
+                    if b.get(j) == Some(&b'}') {
+                        j += 1;
+                    }
+                } else if b.get(j) == Some(&b'\\') {
+                    j += 2;
+                } else if let Some(c) = line.get(j..).and_then(|s| s.chars().next()) {
+                    j += c.len_utf8();
+                }
+                if b.get(j) == Some(&b'\'') {
+                    i = j + 1;
+                    continue;
                 }
             }
-            '{' => delta += 1,
-            '}' => delta -= 1,
+            b'{' => delta += 1,
+            b'}' => delta -= 1,
             _ => {}
         }
+        i += 1;
     }
     delta
 }
@@ -105,7 +172,7 @@ fn test_module_lines(lines: &[&str]) -> std::collections::HashSet<usize> {
             i += 1;
             continue;
         };
-        let (mut depth, mut in_string) = (0, false);
+        let (mut depth, mut state) = (0, BraceState::default());
         let mut j = start;
         while j < lines.len() {
             skip.insert(j);
@@ -116,7 +183,7 @@ fn test_module_lines(lines: &[&str]) -> std::collections::HashSet<usize> {
             } else {
                 lines[j]
             };
-            depth += brace_delta(line, &mut in_string);
+            depth += brace_delta(line, &mut state);
             if depth <= 0 {
                 break;
             }
@@ -310,4 +377,30 @@ fn task_2143_no_new_raw_git_where_a_lease_tree_is_read() {
         "raw git where a lease tree (possibly a seat clone) is read:\n  {}",
         violations.join("\n  ")
     );
+}
+
+// trace:TASK-2190 | ai:codex
+#[test]
+fn task_2190_raw_string_braces_do_not_swallow_production_git() {
+    for literal in [
+        "r\"{\"",
+        "r\"\\\"",
+        "r#\"a\"b\"#",
+        "'\\u{7b}'",
+        "'\\u{007D}'",
+        "'\\\''",
+        "'é'",
+        "r#\"\"{\n}\"#",
+        "r###\"\"# {{ /* \n } \"## }\"###",
+        "br##\"\" { } }\"##",
+        "cr#\"\" {\"#",
+        "/* { /* } */ { */ 0",
+    ] {
+        let src = format!(
+            "fn lease(l: &Lease) {{ let _ = &l.worktree_path; }}\n\
+             #[cfg(test)] mod t {{ fn test() {{ let _ = {literal}; }} }}\n\
+             fn production() {{ Command::new(\"git\"); }}\n"
+        );
+        assert_eq!(raw_git_in_lease_reader(&src), Some(1), "{src}");
+    }
 }
