@@ -6,16 +6,25 @@ description: |
   mandate_drive.rs restart_crashed: RestartVerdict::No writes no relay-restart ActionRow. The reason only goes into the advisor item's detail and mail ('; not auto-restarted: <why>'). The routing row says 'routed to the advisor seat'. Once per.emitted dedupes the item, a reason that changes later (for example, the mandate re-minted with the scope but the profile now changed) is never recorded. STORY-1706 asks to 'ledger every decision'. Consider a skip_once row keyed by (lane, crashed head, why).
 
   Raised in review of PR-2834: https://github.com/joemooney/aida/pull/2834#issuecomment-6364063660
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T11:42:29.620822371Z
-modified_at: 2026-10-23T11:42:29.620822371Z
+modified_at: 2026-10-23T13:32:58.876298399Z
 req_type: Task
 tags:
 - from-review:PR-2834
 - severity:minor
+history:
+- id: 01a168f6-fa7c-7cc0-b0ca-511ff968bd25
+  author: joe
+  timestamp: 2026-10-23T13:32:58.876286744Z
+  session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 6a9d444081d2e07914ceb08700265b2b4a8401b2
   branch: pr-2834
