@@ -1120,6 +1120,7 @@ pub(crate) fn pull_store_before_id_allocation(
     // A failed stage/commit (a refusing hook) stops the allocation with the
     // original error; the pending changes stay as they were.
     aida_core::db::with_store_write_lock(store_path, || {
+        git_ops::protect_roster_advisors(store_path)?; // trace:BUG-2209 | ai:claude
         if git_ops::has_changes_checked(store_path)
             .context("cannot read the store status before id allocation")?
         {

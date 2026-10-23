@@ -35,7 +35,7 @@ fn toon_status_token_normalizes() {
 // STORY-734 test fixtures: a minimal RequirementSummary builder so the
 // `--fields` projection + human table layout are unit-testable.
 // trace:STORY-734 | ai:claude
-fn fields_summary(
+pub(super) fn fields_summary(
     id: &str,
     title: &str,
     status: &str,
