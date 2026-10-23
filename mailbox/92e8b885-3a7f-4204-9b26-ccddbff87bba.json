@@ -1,0 +1,19 @@
+{
+  "id": "92e8b885-3a7f-4204-9b26-ccddbff87bba",
+  "thread_id": "92e8b885-3a7f-4204-9b26-ccddbff87bba",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792782816889,
+  "body": "426514604c — fixed CI lib-1 red: test_home::no_direct_home_resolution_in_crate (my raw HOME read in disk_emergency → crate::home_dir). The other lib-1 failure, review_gates::bug_775 concurrent_sibling_publication (\"could not stage canonical verdict evidence: File exists\"), is a race in review-gates verdict staging that this PR does not touch — flake, not mine. Merged the branch's update from main; re-watching CI.",
+  "subject": "CI fix: PR-2859 (STORY-1916)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

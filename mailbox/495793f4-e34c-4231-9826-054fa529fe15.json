@@ -1,0 +1,19 @@
+{
+  "id": "495793f4-e34c-4231-9826-054fa529fe15",
+  "thread_id": "495793f4-e34c-4231-9826-054fa529fe15",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792789274365,
+  "body": "PR-2864 (draft) at 0a0269034b. Handle allocation (vendor-role-NN, common-root lock + reservation, UUID bound to the native session, name bounds), session-start binding, mail to a handle surfaced by the notice, and the statusline handle for claude/codex/agy. Targeted run: 406 passed. Fast gates: 34 passed. C3 write mode recorded as post-deployment criterion acf32e9f. Remaining for READY: the agent ls HANDLE/LIVE columns plus an anchored test, built on BUG-2212 PR-2860 once it merges (coordinated with impl-bug-2212). Then PR3 after TASK-2253 merges.",
+  "subject": "PROGRESS: STORY-1843 PR2b draft PR-2864 (not READY yet)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

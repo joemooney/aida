@@ -1,0 +1,19 @@
+{
+  "id": "5e7630a5-c6c3-4faf-89b5-faa91b1796fb",
+  "thread_id": "5e7630a5-c6c3-4faf-89b5-faa91b1796fb",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792781980684,
+  "body": "893de128ce (main merged, no conflicts). TASK-2001: routing must be in the builder's own chain; mutation removing routing at pr_cmd 5086/6229/6405 + queue_cmd 14632 flags all 4; self-tests for adjacent builders and a long routed chain. TASK-2245: .args(local_array) resolved before the verb match, with a self-test. TASK-2246: hook blocks time [-p] dot-source, xargs env, printf -v/read/mapfile, bare export; tests added. Targeted cargo test + check-ci-fast green.",
+  "subject": "PR-2837 pushed (TASK-1952)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

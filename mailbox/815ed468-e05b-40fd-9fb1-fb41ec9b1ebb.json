@@ -1,0 +1,19 @@
+{
+  "id": "815ed468-e05b-40fd-9fb1-fb41ec9b1ebb",
+  "thread_id": "815ed468-e05b-40fd-9fb1-fb41ec9b1ebb",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792789038348,
+  "body": "dce2ef9973 (code) on 104afe6742 (docs).\n(1) self-heal: aida_core::git_ops::output_healing_config_lock clears an empty mode-0444 config.lock before worktree add / branch -D / store gc config writes. On a lock refusal it clears and retries once; worktree add -b retries as -B, because the refused -b already created the branch.\n(2) doctor: new sandbox-config-lock category; safe heal re-checks the predicate.\n(3) tests: tempdir repos cover placeholder removed then success, recreated placeholder cleared and retried once, non-empty or 0644 lock left alone with git's error surfaced, doctor scan and heal.\nGates: targeted cargo 10/10, check-ci-fast 34 gates green.",
+  "subject": "READY: PR-2863 (BUG-2211)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

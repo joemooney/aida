@@ -1,0 +1,19 @@
+{
+  "id": "048ff6cb-811f-4b26-9d06-aaabf599cc3e",
+  "thread_id": "048ff6cb-811f-4b26-9d06-aaabf599cc3e",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792782021628,
+  "body": "PR-2858 at ea7c9dc706, all 3 review items fixed. (1) TASK-2235: merged main; docs/cli/06-roles-sessions.md now says only the start hook always runs outside the sandbox, gc/ls run where invoked, and host rows need a host-side aida agent gc. Runtime doc test: mailbox_doc_says_only_the_start_hook_runs_outside_the_sandbox. (2) TASK-2237 agy half: follow-up spec TASK-2253 filed and commented on TASK-2237. (3) The cap wake now asks the new Evidence::approval_only (live_approval_only = approval_at, no corpus gate). round_cap_wake_respects_a_carried_over_approval now uses evidence whose corpus refuses while the approval gate passes. Targeted run 48/48, check-ci-fast 34/34. History note: the hook rejected my rework commit, so --amend folded the rework into the main-merge commit ea7c9dc706. The tree is correct; I left the history as is rather than force-push. TASK-2253 is still Draft, so it needs promoting before anyone picks it up.",
+  "subject": "PR-2858 pushed (TASK-2238)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

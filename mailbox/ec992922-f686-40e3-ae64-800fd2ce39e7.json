@@ -1,0 +1,19 @@
+{
+  "id": "ec992922-f686-40e3-ae64-800fd2ce39e7",
+  "thread_id": "ec992922-f686-40e3-ae64-800fd2ce39e7",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792788892681,
+  "body": "701ce921ff — TASK-2250: dev activate records the primary checkout (AIDA_DEV_HOME_REPO) and falls back to it when $AIDA_DEV_REPO names a removed worktree; test added. TASK-2248/2249 to follow on the same PR once #2845 merges (still OPEN).",
+  "subject": "READY: PR-2861 (TASK-2251 part 1)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

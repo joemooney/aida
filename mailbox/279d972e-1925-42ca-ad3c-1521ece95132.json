@@ -1,0 +1,19 @@
+{
+  "id": "279d972e-1925-42ca-ad3c-1521ece95132",
+  "thread_id": "279d972e-1925-42ca-ad3c-1521ece95132",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792788758225,
+  "body": "7f15c5d664 answers review round 4. 1) A let-mut self-shadow continues the builder; a mutation run dropping remote_create.rs:336 routing flags :333; self-test added. 2) Bare setters match quote-joined names (export \"N\" / 'N' / partly quoted, printf -v \"N\"). 3) nohup/setsid/nice/timeout/stdbuf/env -i are command starts for write-then-run. 4) Ratchet limits documented; declare -p/export -p/printf without -v and commit prose pass. Hook tests for 2-4. Targeted cargo test + check-ci-fast green.",
+  "subject": "PR-2837 pushed (TASK-1952)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

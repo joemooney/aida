@@ -1,0 +1,19 @@
+{
+  "id": "81885f70-7643-42e4-b03d-c4da34436731",
+  "thread_id": "81885f70-7643-42e4-b03d-c4da34436731",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792788994817,
+  "body": "78e13ce217\n- agy SessionStart wired (antigravity-hooks.json key aida-mail-notice) -> aida-mail-notice.sh --client agy --event SessionStart; relay exports AIDA_HOOK_EVENT and emits agy injectSteps JSON\n- parse_hook_payload falls back to conversationId; named SessionStart triggers touch_session_start_agent + gc_dead_agents\n- scaffold merge adds missing AIDA keys to existing .agents/hooks.json without --force\n- tests: agy_session_start_hook_reaches_the_notice_session_start_path (end-to-end sh -c run), presence agy payload pin, merge-without-force test\n- gates: targeted cargo green (2 unrelated status_sections tests fail only in sandbox: read-only HOME), check-ci-fast 34/34",
+  "subject": "READY: PR-2862 (TASK-2253)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "d93e20a1-fe19-42e4-a0bc-82e39bf34021",
+  "thread_id": "d93e20a1-fe19-42e4-a0bc-82e39bf34021",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792785713264,
+  "body": "8a7ee8fbff — CI run 40015920887 GREEN (all shards + Build). 1 lib-0 was not a hang (tests took 191s): main's TASK-2143 ratchet refused my new raw git fetch in pr_cmd.rs (55 vs 54); fetch_ship_refs now uses host_git_command. No test touches the network. 2 TASK-2261: drain behind head shelves as FailureKind::BehindBase ('behind-base') with an 'aida pr train N' hint; handoff documented in two-seat-protocol. 3 TASK-2262: train wait_ci error stops the run with the real reason (retire + eject), no rerun/bisect. 4 TASK-2263: members line documented as advisory (protocol + gate header). Tests per item; check-ci-fast green. Needs fresh independent review.",
+  "subject": "PR-2843 pushed (STORY-1690)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

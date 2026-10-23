@@ -1,0 +1,19 @@
+{
+  "id": "11867c2f-80ba-4fa3-9a33-24eb1a600a5d",
+  "thread_id": "11867c2f-80ba-4fa3-9a33-24eb1a600a5d",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792780677191,
+  "body": "075ce95e6a STORY-1916 — https://github.com/joemooney/aida/pull/2859\n- AC1 emergency tier (disk_emergency.rs). At >= emergency_used_pct (95) on the build-cache fs, the scheduled run only:\n  - deletes idle (>= 2h, newest mtime) direct children of canonical(<main>/target)/worktrees;\n  - tier 0 -> 1 -> 2, oldest-idle first; stops below ceiling - margin;\n  - re-checks the allowlist with bail! at the delete site;\n  - ledgers to .aida/disk-reclaim-ledger.jsonl; notifies via send_direct (disk-emergency).\n- C1: non-blocking flock on <cache>/<profile>/.cargo-lock plus a tree re-walk before each delete; busy = skip + ledger; there is a held-flock test.\n- C2: tier 2 only while used% >= ceiling; each tier-2 delete mails the holder.\n- C3: squash patch-id scan has a 20 s deadline (60 s overall); timeout = unknown/held; tested with Duration::ZERO.\n- Guard now also probes the /mnt/build bind mount via statvfs (finding disk-headroom-cache).\n- AC2 reclaim: sees the target/worktrees/<name> layout and orphan caches; rail 6 uses the newest write; idle duplicates (branch or take-/pr-<N>) are reclaimed and the freshest/live member is kept; gh-down = git ancestry + squash proof, unproven branches held one by one.\n- AC3 stuck: finding says STUCK with reclaimable vs deficit + top 5 consumers; notify disk-stuck deduped (6h or +10 GiB).\n- AC4 status: doctor check disk-headroom prints the disk-guard block, and --json carries disk_status (free/used per fs, floor, ceiling, last run, last reclaim).\n- Gates: targeted cargo test 69 passed; make check-ci-fast 34 gates passed. Watching CI now.",
+  "subject": "READY: PR-2859 (STORY-1916)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

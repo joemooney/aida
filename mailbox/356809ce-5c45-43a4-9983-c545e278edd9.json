@@ -1,0 +1,19 @@
+{
+  "id": "356809ce-5c45-43a4-9983-c545e278edd9",
+  "thread_id": "356809ce-5c45-43a4-9983-c545e278edd9",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792784588554,
+  "body": "083f2ac859 pushed. TASK-2258: a refused promote (checkout moved) is typed PromotionRefused, recorded as phase refused, never routed; the next tick relaunches. TASK-2259: CHILD_LOCK_WAIT = WAVE_UNIT_RUN_TIMEOUT+10s. TASK-2260: the dirty skip and the guide warn about untracked files. Targeted 'cargo test -p aida-cli-lib --lib dev_': 116 passed. check-ci-fast green. BLOCKED on fix 1 (lib-1 ratchet wave_unit_helper_has_single_call_site): routing through schedule_driver is impossible without editing the ratchet. task_1510_wave_unit_tests.rs:388 asserts driver.matches(\"systemd_run_user(\").count()==2 ('the trait method and the real host only'), and shift.rs '.systemd_run_user(' count==1 with launch_wave_isolated( def+1 call inside RealExec::spawn_wave. Any new caller anywhere (a schedule_driver helper, a DriverHost provided method, a shift.rs wrapper) breaks one of those counts. The only no-ratchet-edit path is building shift::RealExec (needs a CachedGitBackend plus shift config) and calling spawn_wave. That launches the build as an 'aida-wave-*' unit described as a drain wave, which I'd reject. Options: (A, recommended) amend the TASK-1510 ratchet to one shared schedule_driver::launch_transient_unit(host, spec) that both shift and autopromote call. That keeps a single systemd-run call site, but changes the counts (driver 2->3, shift 1->0). (B) Raise the driver count to 3 for an autopromote-only helper. (C) Drop the systemd-run launch from autopromote (detached only); the child then dies when the tick unit stops (control-group KillMode), so it is not viable. Which ruling?",
+  "subject": "PR-2850 pushed (STORY-1689)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

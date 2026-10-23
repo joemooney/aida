@@ -1,0 +1,19 @@
+{
+  "id": "8a0376e1-34a8-4ef9-a54c-7bb06f321377",
+  "thread_id": "8a0376e1-34a8-4ef9-a54c-7bb06f321377",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792789236022,
+  "body": "7bd2ef1432 — all 8 review items + TASK-2264, each with a test:\n1 AC3 routed text: fail reason is one line leading with STUCK + top consumers; written to stderr explicitly in typed mode; scheduler test story_1916_routed_disk_item_carries_the_stuck_sentence pins the routed error.\n2 keeper: detached take-N on open PR N is held (rail 5); only held members can be keeper. Reviewer repro (aida-feat #2845 idle 3h + take-2845 idle 2h) -> only aida-feat reclaimed; take-2845 stays held.\n3 ledger: refusal stops the run as Stop::Refused, returning earlier Delete rows + Fail + Run; test valid-then-forged.\n4 gh-down emergency scan reuses worktree_reclaim::merged_offline (budgeted).\n5 top consumers whenever <main>/target is on the breached device (target_on_device).\n6 TOON disk_status block + test.\n7 emergency notice deduped via GuardState.last_emergency_stuck_at (6h); deletes/refusals always notify.\n8 per-criterion anchors: aida criteria STORY-1916 -> untested none, unanchored none.\nTASK-2264: manual light check injects emergency_run + stuck_scan, runs neither (test panics if called); substrate run runs both.\nGates: targeted cargo test 87 passed; make check-ci-fast 34 passed.",
+  "subject": "PR-2859 pushed (STORY-1916)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

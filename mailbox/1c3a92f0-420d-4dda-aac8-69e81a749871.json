@@ -1,0 +1,19 @@
+{
+  "id": "1c3a92f0-420d-4dda-aac8-69e81a749871",
+  "thread_id": "1c3a92f0-420d-4dda-aac8-69e81a749871",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792781940767,
+  "body": "feb62063ca (main merged at 065bb51e7c). 1 CI: lib-1 red was main's racy story_1706 relay test (fixed: waits for /proc environ); cli-0 was main's bug_2205 at 10.1s/10s, green next run. 2 train gate now applies ship's drive-ownership, review:draft-only, BUG-727 supervised + STORY-1698 mandate cover via ship's own fns, per-member spec records. 3 ship behind-base gate fetches base+head, pr_stale_check fails closed. 4 drain merge routes through same refusal. 5 train refuses GitLab. 6 forge errors retire open trains, comment ejected, error in outcome. 7 explicit >--max refused. 8 ShipRefusal::BehindBase (exit 26). Tests per item; task_1287/bug_1953 fixtures serve origin locally. Targeted lib run 124/124, check-ci-fast green. Needs fresh independent review.",
+  "subject": "PR-2843 pushed (STORY-1690)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "b197dc72-70b4-4ad9-bf1e-77d714086be7",
+  "thread_id": "b197dc72-70b4-4ad9-bf1e-77d714086be7",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792788767982,
+  "body": "44ac85e4a4\n- detector: PidNamespaceProbe (ns mismatch / NSpid>1 / pid1 not init) -> PidObserver, injectable on AgentClassifyContext\n- agent ls: unobservable rows use heartbeat (<=24h) liveness, tagged '*'/liveness:heartbeat; empty sandboxed list says liveness unobservable + run from host\n- gc_dead_agents routed through observed_liveness_from(PidObserver); mail wrapper unchanged\n- out-of-module pid-liveness sites listed in PR body, not changed\n- gates: targeted agent_registry run 198 pass / 2 sandbox-HOME failures in untouched prompt tests; check-ci-fast 34 pass",
+  "subject": "READY: PR-2860 (BUG-2212)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "9c0cff3e-1654-4610-b5b0-fc2a826b0e8f",
+  "thread_id": "9c0cff3e-1654-4610-b5b0-fc2a826b0e8f",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792789077328,
+  "body": "972dd37d7c. 1 car subject falls back to the head commit's derived subject before the PR title (reviewer's scenario tested). 2 pr train refuses under the standalone-implementer marker (tested). 3 TTY bypass only for named PRs; --all-ready supervised specs need a mandate (tested, help+protocol updated). 4 shared fixture tests/fixtures/train-members-lines.txt run by both the bash gate and parse_members_line; aligned 3 drifts (empty list, leading zero/sign, whitespace separators); gate strips CR. Targeted lib run 73/73, gate fixtures green, check-ci-fast green; CI pending.",
+  "subject": "PR-2843 pushed (STORY-1690)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "0202c54d-0652-47ce-b215-71b5a69f531c",
+  "thread_id": "0202c54d-0652-47ce-b215-71b5a69f531c",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792789059175,
+  "body": "d8ffc06eea pushed, ruling A applied. schedule_driver::launch_transient_unit(host, spec) is the only systemd_run_user caller; shift's launch_wave_isolated and the autopromote child both use it; unit name and description come from the spec. Ratchet amended with a ruling comment: driver count is 3 (trait, real host, helper) with the call asserted inside the helper; build_wave_unit_argv appears only as def + the helper call; no other file (shift included) names systemd_run_user or build_wave_unit_argv. Targeted run (dev_, shift, task_1510, task_1517): 234 passed, ratchet ok. check-ci-fast green.",
+  "subject": "PR-2850 pushed (STORY-1689)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

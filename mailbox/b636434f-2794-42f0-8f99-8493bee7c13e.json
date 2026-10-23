@@ -1,0 +1,19 @@
+{
+  "id": "b636434f-2794-42f0-8f99-8493bee7c13e",
+  "thread_id": "b636434f-2794-42f0-8f99-8493bee7c13e",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792789512050,
+  "body": "head f7b43e3f. Audit table in PR body: AC1-AC20 now structured on the spec; aida criteria: untested none, unanchored none.\n- AC4/C5 GAP fixed: ratchet test seat_templates_never_launch_implementers_through_the_agent_tool; Agent-tool implementer fallback removed from burndown/solo/orchestrate; fire-mode fixers are separate processes (TASK-1764): worktree add --role implementer + claude --bg, or queue work --no-human.\n- PR3 glossary GAP fixed: 'standalone implementer' entry (book glossary regenerated).\n- Per-criterion trace anchors on all existing PR1/PR2 tests.\n- Everything else DONE on main (PR-2829, PR-2844): C1-C6, Q1, PR2 C1-C4, TASK-2154, TASK-2213..2218.\n- PR2-C5: BUG-1934 not merged, so no test (conditional).\nREMAINING GAPs that need you (not code): (1) AC3 is post-deployment: a live advisor-seat launch on a scratch spec (PR, separate reviewer, pr ship with no override and no advisor author) plus throughput over the next 3 standalone runs vs Agent-tool implementers. The ledger has zero standalone launches so far. Your seat must run it, or file it as a measurement spec blocked by STORY-1662. (2) The relay prompts in .aida/handoff/*/prompt*.md are untracked and operator-owned, and the primary checkout is read-only from this lane.\nGates: targeted cargo test -p aida-core (ratchet) ok; make check-ci-fast 34/34 (sccache unusable here, ran with RUSTC_WRAPPER unset). Security spec: operator merges.",
+  "subject": "READY: PR-2865 (STORY-1662)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}
