@@ -3,12 +3,12 @@ spec_id: BUG-2209
 agreed_id: BUG-2209
 title: A test run as the hermetic test user rewrote the real store roster (registry/team.toml), wiping the operator's seats
 description: 'At 2026-10-23 00:50:37 -0700 the store auto-sync commit da5ab2b581 (''chore: sync pending changes'') pushed registry/team.toml reduced to: [members] bug-1618-hermetic-test-user = ["implementer"]. joe and joe.mooney were deleted. Every advisor grant then failed check_roster (RosterDenied), and all reviewer launches refused with ''no valid parent seat grant is active''. Earlier leaks of the same user: 200d821b93 and 7abcf479db on 2026-10-20 added bug-1618-hermetic-test-user (once with advisor) to the real roster. Root cause to find: a test running under test_env''s AIDA_USER=HERMETIC_TEST_USER resolved the PRIMARY store (AIDA_STORE / AIDA_DEV_REPO / cwd fallback) instead of its tempdir and wrote the roster with a whole-file replace; the auto-sync then committed it. Acceptance: (1) identify the test(s) and make them hermetic; (2) a guard: any roster write from a process whose AIDA_USER is HERMETIC_TEST_USER, or whose store is not under a tempdir while cfg(test), panics; (3) roster writes merge members rather than replace the file (CAS on the member being changed), so one user''s set-role can never delete another member; (4) the auto-sync refuses to commit a team.toml change that removes a member who holds advisor, or flags it loudly; (5) a regression test for each.'
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T08:20:38.620581447Z
-modified_at: 2026-10-23T14:26:42.709006649Z
+modified_at: 2026-10-23T14:58:21.084950185Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -37,6 +37,21 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Done
+- id: 01a16945-22ce-7bf2-9d19-20df22d55e42
+  author: aida-auto-bump
+  timestamp: 2026-10-23T14:58:21.006258084Z
+  session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a16945-231c-7fe2-99e1-5aa035604478
+  timestamp: 2026-10-23T14:58:21.084945362Z
+  agent: aida
+  commit_sha: c6bb0dc4f168f6183260f8a692248eda24e9e7a7
+  summary: 'All 5 BUG-2209 acceptance items met: fixture store walk sealed, hermetic/cfg(test) roster-write guard, one-member CAS merge with strict read + atomic rename, sync guard at all 5 sync-commit sites (all under the store write lock), regression tests for each; CI green at head.'
+  review_verdict: approved
 filed_at:
   code_sha: 017e4a4949c7911e04fe140c18fc7628cc3fc48c
   branch: main
@@ -45,3 +60,7 @@ filed_at:
   aida_build_sha: 017e4a4949
   vendor: claude
   session: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-23T14:58:21.006253708Z
+  completion_sha: c6bb0dc4f168f6183260f8a692248eda24e9e7a7
