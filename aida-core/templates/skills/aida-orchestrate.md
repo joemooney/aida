@@ -71,7 +71,9 @@ This skill composes existing surfaces rather than restating them:
 ## Required capabilities
 
 This skill needs four harness capabilities:
-- a subagent launcher (Claude Code: `Agent`), used for implementers only;
+- a subagent launcher (Claude Code: `Agent`), used for read-only research
+  only: implementers and reviewers run as separate processes you start from
+  Bash;
 - a way to message a running subagent (`SendMessage`);
 - Bash `run_in_background` jobs that notify when they exit;
 - a way to stop a stuck job (`TaskStop`).
@@ -184,11 +186,33 @@ Advisors often find real bugs on main. File each one as its own spec, with
 
 ### 4. Dispatch implementers (bounded parallel)
 
-Use one session per spec, each in a worktree that takes the implementer lease:
+Launch each implementer as a separate process from Bash, as a
+`run_in_background` job:
 
 ```bash
-aida worktree add <SPEC> --path ../wt-<spec> --branch <agent>/<spec>
+aida queue work <SPEC> --role implementer --no-human --vendor claude
 ```
+
+It creates the worktree and implementer lease, runs a headless implementer
+with its own seat (a child grant if your grant delegates `implementer`,
+otherwise baseline; never your grant), waits, and prints one `implementer:`
+result line. Branch on the exit code: 0 PR opened (go to step 5), 31 no PR,
+32 punted, 33 held, 34 the concurrency cap refused the launch (nothing was
+set up). The implementer opens its own PR and stops; it cannot ship or record
+a review. Don't `aida claim` the spec first: the launch refuses a held spec.
+
+When you need an interactive lane you will steer, pre-create its worktree
+with the role on its lease, then start the session from inside it:
+
+```bash
+aida worktree add <SPEC> --role implementer --path ../wt-<spec> --branch <agent>/<spec>
+cd ../wt-<spec> && claude --bg ...
+```
+
+The lane takes its identity from the lease at session start (a `--bg`
+session inherits the claude daemon's environment, not yours), so don't
+juggle `AIDA_SESSION_*` variables on the launch line.
+<!-- trace:STORY-1662 | ai:claude -->
 
 **Concurrency cap.** Run **at most 3 live child sessions** at once, counting
 implementers and reviewers together, unless the operator's delegation names a

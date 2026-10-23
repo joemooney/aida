@@ -170,6 +170,15 @@ pub(crate) fn agent_gc(dry_run: bool, older_than: Option<u64>) -> Result<()> {
             )
         }
     );
+    // trace:STORY-1843 | ai:claude
+    if report.marked_ended > 0 {
+        println!(
+            "  {} {} retained entr{} ended (process gone; no longer a mail reader)",
+            if dry_run { "would mark" } else { "marked" },
+            report.marked_ended,
+            if report.marked_ended == 1 { "y" } else { "ies" }
+        );
+    }
     for row in &report.removed {
         println!(
             "  {} {}#{} ({}) {}",
