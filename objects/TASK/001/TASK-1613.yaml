@@ -24,7 +24,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-08T04:15:57.651449326Z
-modified_at: 2026-10-08T21:20:16.592984648Z
+modified_at: 2026-10-23T17:58:22.284093107Z
 req_type: Task
 tags:
 - docs:impacted
@@ -458,6 +458,18 @@ comments:
   created_at: 2026-10-08T21:20:16.592978262Z
   modified_at: 2026-10-08T21:20:16.592978262Z
   relayed_from: batch-c-final-fresh-review
+- id: 01a169e9-f34c-7bf2-af69-13f77af79ce2
+  author: ai:codex:joe
+  content: |-
+    UNSHIPPED AUDIT 2026-10-23 (integrator)
+
+    Pinned origin/main: a9e78d34914e43b30fc9d2b590d83ab96feb48b2.
+
+    task-1613: SALVAGE. Head `f03306facc28`; cherry **1+**; aggregate PID `a70b9aa6258dd55b5b78eb554d157c2310687f99`; no PR found by TASK-1613 title search. Spec is Done, but pinned main still has the legacy long aida-pr skill and 13-byte “Run /aida-pr.” command description. A future authorized PR would recover the thin `aida ship <SPEC> --no-merge` redirect, explicit independent-review handoff and generated documentation parity. Fix the recorded REQUEST_CHANGES defect first: the branch’s 62-byte command description exceeds the unchanged 48-byte budget; do not widen the budget. Existing dispatch/publication restrictions remain.
+
+    These are branch-artifact verdicts, not completion or dispatch/merge authority. No spec status, branch, PR or active worktree changed. Full 14-branch table: .aida/handoff/advisor/unshipped-audit-2026-10-23.md (8 SHIPPED-ELSEWHERE, 3 SALVAGE, 3 ABANDON).
+  created_at: 2026-10-23T17:58:22.284093107Z
+  modified_at: 2026-10-23T17:58:22.284093107Z
 history:
 - id: 01a11c4d-439e-7890-8926-b76a03022ec6
   author: aida-session-start
