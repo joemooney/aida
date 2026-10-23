@@ -10,12 +10,12 @@ description: |
   Acceptance:
   - An agy session start (or the nearest event agy offers) triggers the same host-side dead-row gc, or another host-side trigger ends dead agy rows. Name the agy hook event used and pin its payload shape with a test, as was done for Codex.
   - A test shows a dead agy row ends without a manual `aida agent gc`.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T18:23:23.372759315Z
-modified_at: 2026-10-23T21:22:34.503943095Z
+modified_at: 2026-10-23T22:28:54.474560817Z
 req_type: Task
 history:
 - id: 01a16a2e-3e78-76a0-9f74-cec08382fb1b
@@ -32,6 +32,20 @@ history:
   session_id: 01a16aa112dd
   harness_version: 2.1.309 (Claude Code)
   changes: []
+- id: 01a16ae1-a245-7501-b4bb-4c64b164f42c
+  author: aida-auto-bump
+  timestamp: 2026-10-23T22:28:54.469059997Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a16ae1-a24a-7552-b044-4ce1fbfe56a7
+  timestamp: 2026-10-23T22:28:54.474555983Z
+  agent: aida
+  commit_sha: 509f5a3026150f815eb257e799ccc9265a5d5cd9
+  summary: 'TASK-2253 PASS: agy SessionStart wired (antigravity-hooks.json aida-mail-notice) -> aida-mail-notice.sh --client agy --event SessionStart -> AIDA_HOOK_EVENT -> notice_hook_session runs gc_dead_agents; payload shape pinned against agy 1.4.2 SessionStart contract (verified in local agy binary); dead agy row ended in agy_session_start_ends_a_dead_agy_row_without_manual_gc; CI green at head. Non-blocking: agy session-start registration may record the hook pid (cmdline_matches_agent wants ''antigravity''/''gemini'', agy binary is ''agy'').'
+  review_verdict: approved
 filed_at:
   code_sha: e353dc77adea0bf1d39683bc1f4236d9d8e8eb99
   branch: claude/task-2238
@@ -40,11 +54,7 @@ filed_at:
   aida_build_sha: a9e78d3491
   vendor: claude
   session: da288a75-2066-4577-8fb5-8a6386f53efe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: AC acd91dca met (agy SessionStart wired, payload shape matches agy 1.4.2 hooks.md); AC ac73e966 unverified — no test shows a dead agy row ends via the hook path; tests not criterion-anchored. CI green.
-  recovery_hint: address the review findings, move TASK-2253 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-23T21:22:34.503943095Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-23T22:28:54.469055650Z
+  completion_sha: 509f5a3026150f815eb257e799ccc9265a5d5cd9
