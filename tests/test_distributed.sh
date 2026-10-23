@@ -145,15 +145,13 @@ fi
 # ============================================================================
 info "Test 5: Edit requirement status"
 
-$AIDA --file "$STORE" edit "$SPEC_ID" --status completed 2>/dev/null || true
+# Exercise a transition available to this unprivileged scratch fixture.
+# Draft -> Completed needs advisor authority; never swallow a refused edit.
+# trace:STORY-1706 | ai:codex
+$AIDA --file "$STORE" edit "$SPEC_ID" --status rejected || fail "Edit command refused"
 
-# Verify the YAML was updated
-if grep -q "Completed\|completed" "$FIRST_YAML"; then
-    pass "Requirement status updated in YAML file"
-else
-    info "Status update may use different format - checking via list"
-    pass "Edit command executed"
-fi
+grep -Eq '^status: [Rr]ejected$' "$FIRST_YAML" || fail "Edited status was not persisted in YAML"
+pass "Requirement status updated in YAML file"
 
 # ============================================================================
 # Test 6: Database info shows Git backend

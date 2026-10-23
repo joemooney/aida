@@ -5725,7 +5725,9 @@ Options:
       --drive
           A DRIVE mandate: also covers advisor signoff of sketches and dispatching fixers, and turns
           on the 15-minute drive tick that routes every stalled lane. Implies --ship-held and covers
-          sensitive specs unless --exclude-supervised
+          sensitive specs unless --exclude-supervised. It also covers relay-restart: the tick may
+          restart a crashed relay a human started at a terminal (a drive mandate started before this
+          scope existed does not; start a new one)
 
       --exclude-supervised
           With --drive: keep sensitive specs human-only
@@ -29478,7 +29480,7 @@ Working on aida itself
       {
         "name": "drive",
         "takes_value": false,
-        "help": "A DRIVE mandate: also covers advisor signoff of sketches and dispatching fixers, and turns on the 15-minute drive tick that routes every stalled lane. Implies --ship-held and covers sensitive specs unless --exclude-supervised"
+        "help": "A DRIVE mandate: also covers advisor signoff of sketches and dispatching fixers, and turns on the 15-minute drive tick that routes every stalled lane. Implies --ship-held and covers sensitive specs unless --exclude-supervised. It also covers relay-restart: the tick may restart a crashed relay a human started at a terminal (a drive mandate started before this scope existed does not; start a new one)"
       },
       {
         "name": "exclude-supervised",

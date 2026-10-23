@@ -1,4 +1,5 @@
-//! Pinned, strict discovery for the review watcher. No CI queries occur here.
+//! Pinned, strict discovery for the review watcher, and the pinned
+//! commit-keyed CI read its readiness report takes.
 // trace:TASK-1945 trace:TASK-1993 | ai:codex
 use super::*;
 use crate::forge::ForgeKind;
@@ -13,6 +14,9 @@ pub(super) struct Change {
     pub author: String,
     pub gitlab: bool,
     pub overlap: Option<bool>,
+    // Commits the head is behind its base, from the same probe as `overlap`.
+    // trace:TASK-1945 | ai:claude
+    pub behind: Option<u64>,
 }
 impl Change {
     pub fn key(&self) -> String {
@@ -259,8 +263,49 @@ impl Repository {
             Self::load(root)?.identity == self.identity,
             "origin identity changed during base probe"
         );
-        change.overlap = Some(self.overlap(root, change)?);
+        let (overlap, behind) = self.overlap(root, change)?;
+        change.overlap = Some(overlap);
+        change.behind = Some(behind);
         Ok(())
+    }
+    /// Every CI check on `sha`, through the shared commit-keyed reader,
+    /// pinned to this repository like discovery. Any failure is an error.
+    // trace:TASK-1945 | ai:claude
+    pub fn commit_checks(&self, root: &Path, sha: &str) -> Result<crate::forge::CommitChecks> {
+        anyhow::ensure!(valid_sha(sha), "invalid commit for a CI read");
+        anyhow::ensure!(
+            Self::load(root)?.identity == self.identity,
+            "origin identity changed during the CI read"
+        );
+        let gitlab = self.kind == ForgeKind::GitLab;
+        let program = if gitlab { "glab" } else { "gh" };
+        let mut api = |endpoint: &str| -> Result<Vec<u8>> {
+            let mut command = Command::new(program);
+            command
+                .args(["api", "-X", "GET", endpoint])
+                .current_dir(root)
+                .stdin(Stdio::null());
+            self.pin_command(&mut command);
+            let out =
+                crate::command_output_with_timeout(command, std::time::Duration::from_secs(30))
+                    .with_context(|| format!("{program} CI read timed out or failed to spawn"))?;
+            anyhow::ensure!(
+                out.status.success(),
+                "{program} CI read failed ({}): {}",
+                out.status,
+                bounded_diagnostic(String::from_utf8_lossy(&out.stderr).trim())
+            );
+            anyhow::ensure!(
+                out.stdout.len() as u64 <= LIMIT,
+                "CI read output exceeds size limit"
+            );
+            Ok(out.stdout)
+        };
+        if gitlab {
+            crate::forge::gitlab_commit_checks(&self.project, sha, &mut api)
+        } else {
+            crate::forge::github_commit_checks(&self.project, sha, &mut api)
+        }
     }
     /// Fetch by remote name, never by URL: a stored `user:token@` origin then
     /// reaches git only through the credential gate's environment, not argv
@@ -295,7 +340,7 @@ impl Repository {
         );
         Ok(())
     }
-    fn overlap(&self, root: &Path, change: &Change) -> Result<bool> {
+    fn overlap(&self, root: &Path, change: &Change) -> Result<(bool, u64)> {
         let branch = change.base.as_str();
         git(root, &["check-ref-format", &format!("refs/heads/{branch}")])
             .context("change base branch is not a valid branch name")?;
@@ -331,7 +376,7 @@ impl Repository {
                 .parse::<u64>()
                 .context("invalid behind count")?;
             if behind == 0 {
-                return Ok(false);
+                return Ok((false, 0));
             }
             let ancestor = git(root, &["merge-base", &base, &head])?;
             let ancestor = ancestor.trim();
@@ -357,7 +402,7 @@ impl Repository {
                     .map(String::from)
                     .collect())
             };
-            Ok(paths_overlap(&names(&base)?, &names(&head)?))
+            Ok((paths_overlap(&names(&base)?, &names(&head)?), behind))
         })();
         // These UUID refs belong only to this probe, never another watcher.
         let _ = output(root, "git", &["update-ref", "-d", &base]);
@@ -549,6 +594,7 @@ pub(super) fn parse_change(value: &serde_json::Value, gitlab: bool) -> Result<Op
         author,
         gitlab,
         overlap: None,
+        behind: None,
     }))
 }
 

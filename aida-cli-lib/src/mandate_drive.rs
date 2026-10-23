@@ -15,10 +15,12 @@
 //! 4. re-reads the mandate immediately before every side effect, so a stop or
 //!    an expiry mid-tick refuses the rest.
 //!
-//! The tick never mints, holds or forwards a grant, never ships, never
-//! restarts a relay (STORY-1706) and never clears a hold. Every decision is
-//! a `MandateDriveAction` row in `.aida/events.jsonl`.
+//! The tick never mints, holds or forwards a grant, never ships and never
+//! clears a hold. Its one exec is STORY-1706's restart of a crashed relay,
+//! from the human launch record alone ([`restart_verdict`]). Every decision
+//! is a `MandateDriveAction` row in `.aida/events.jsonl`.
 // trace:STORY-1700 | ai:claude
+// trace:STORY-1706 | ai:claude
 
 use crate::fleet_lanes::{Lane, LaneClass, SeatKind};
 use crate::mandate::{Mandate, MandateRefusal, MandateState, Scope};
@@ -469,6 +471,274 @@ pub(crate) fn plan_relay_lane(
     }
 }
 
+// ── Crashed-relay restart (STORY-1706) ──────────────────────────────────────
+
+/// The least mandate time left for a restart.
+const RESTART_MANDATE_FLOOR: Duration = Duration::minutes(30);
+
+/// A restart the tick may run: everything comes from the launch record and
+/// the lineage file, nothing from the environment or the current config.
+// trace:STORY-1706 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct RestartPlan {
+    pub lane: String,
+    pub run_id: String,
+    pub run_dir: PathBuf,
+    pub relay_sh: PathBuf,
+    pub cwd: PathBuf,
+    /// The record's `arg=` lines, then `--max-sessions <remaining>` (C1).
+    pub argv: Vec<String>,
+    /// The record's sha256: the lineage key and `AIDA_RELAY_RESTART`.
+    pub launch_sha: String,
+    pub generation: u32,
+    pub max_sessions: u32,
+    pub used_before: u32,
+    /// The crashed status this restart answers (`updated/state/session`).
+    pub crashed_head: String,
+}
+
+/// What the tick does about one crashed lane.
+// trace:STORY-1706 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum RestartVerdict {
+    Restart(RestartPlan),
+    /// Backing off: the tick retries later, so the lane is not routed.
+    Wait(String),
+    /// Not restartable: the lane routes to the advisor as before.
+    No(String),
+    /// The lineage used its restarts: one operator notice per launch sha.
+    CrashLoop(String),
+}
+
+fn crashed_head(lane: &Lane) -> String {
+    let f = |k| lane.evidence.field(k).unwrap_or("-");
+    format!("{}/{}/{}", f("updated"), f("state"), f("session"))
+}
+
+/// The handoff's first line says the task is done or blocked.
+fn handoff_settled(lane: &Lane) -> bool {
+    let Some(h) = lane.evidence.field("handoff") else {
+        return false;
+    };
+    let p = PathBuf::from(h);
+    let p = if p.is_absolute() {
+        p
+    } else {
+        lane.run_dir.join(p)
+    };
+    std::fs::read_to_string(p).is_ok_and(|t| {
+        t.lines().find(|l| !l.trim().is_empty()).is_some_and(|l| {
+            let l = l.trim_start();
+            l.starts_with("TASK_COMPLETE") || l.starts_with("BLOCKED_ON_HUMAN")
+        })
+    })
+}
+
+/// Is any process of this user still carrying `AIDA_RELAY_RUN=<run>` (every
+/// relay session does)? `None` when `/proc` cannot be read: unknown, so the
+/// caller refuses. Processes of other users are unreadable and skipped.
+// trace:STORY-1706 | ai:claude
+pub(crate) fn run_process_alive(run: &str) -> Option<bool> {
+    let needle = format!("AIDA_RELAY_RUN={run}");
+    let me = std::process::id().to_string();
+    for entry in std::fs::read_dir("/proc").ok()?.flatten() {
+        let name = entry.file_name();
+        let Some(pid) = name
+            .to_str()
+            .filter(|n| n.bytes().all(|b| b.is_ascii_digit()))
+        else {
+            continue;
+        };
+        if pid == me {
+            continue;
+        }
+        let Ok(environ) = std::fs::read(entry.path().join("environ")) else {
+            continue;
+        };
+        if environ
+            .split(|b| *b == 0)
+            .any(|var| var == needle.as_bytes())
+        {
+            return Some(true);
+        }
+    }
+    Some(false)
+}
+
+fn same_dir(a: &Path, b: &Path) -> bool {
+    match (a.canonicalize(), b.canonicalize()) {
+        (Ok(a), Ok(b)) => a == b,
+        _ => false,
+    }
+}
+
+fn executable_file(p: &Path) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::symlink_metadata(p)
+        .ok()
+        .filter(|m| m.is_file())
+        .or_else(|| std::fs::metadata(p).ok().filter(|m| m.is_file()))
+        .is_some_and(|m| m.permissions().mode() & 0o111 != 0)
+}
+
+/// STORY-1706 (R4): may the tick restart this lane? `None` when the lane is
+/// not the crash ending at all. Every condition of the advisor's ruling must
+/// hold; the first that fails is the ledgered reason. Reads the record, the
+/// lineage, the marker and the profile from disk afresh.
+// trace:STORY-1706 | ai:claude
+pub(crate) fn restart_verdict(
+    lane: &Lane,
+    mandate: &Mandate,
+    project_root: &Path,
+    gates: &std::result::Result<HumanGates, String>,
+    spec_always_human: &dyn Fn(&str) -> Option<String>,
+    spec_known: &dyn Fn(&str) -> bool,
+    now: DateTime<Utc>,
+) -> Option<RestartVerdict> {
+    use crate::relay_launch as rl;
+    use RestartVerdict::{CrashLoop, No, Wait};
+    if lane.class != LaneClass::Crashed || !lane.evidence.trap_never_ran() {
+        return None;
+    }
+    let no = |why: String| Some(No(why));
+    if !mandate.covers(Scope::RelayRestart) {
+        return no("the mandate does not cover relay-restart (start a new drive mandate)".into());
+    }
+    if let Some(why) = crate::mandate_gates::gate_reason(gates, GateOp::RelayRestart) {
+        return no(format!("gated: {why}"));
+    }
+    if lane
+        .run_dir
+        .join(rl::NORESTART_FILE)
+        .symlink_metadata()
+        .is_ok()
+    {
+        return no("the operator marked this run --no-restart".into());
+    }
+    if handoff_settled(lane) {
+        return no("its handoff says the task is complete or blocked".into());
+    }
+    if lane.seat_kind == SeatKind::Advisor {
+        return no("an advisor-seat run is never restarted".into());
+    }
+    // A relay killed alone leaves its agent session running (A2).
+    match run_process_alive(&lane.run_id) {
+        Some(false) => {}
+        Some(true) => {
+            return no("an agent session of this run is still running; stop it first".into())
+        }
+        None => return no("cannot tell whether a session of this run is still running".into()),
+    }
+    let record = match rl::load(&lane.run_dir) {
+        Ok(r) => r,
+        Err(why) => return no(format!("no usable launch record: {why}")),
+    };
+    if record.run != lane.run_id {
+        return no(format!(
+            "the launch record names run {}, not {}",
+            record.run, lane.run_id
+        ));
+    }
+    if !same_dir(&record.project_root, project_root) {
+        return no("the launch record names another project root".into());
+    }
+    if !executable_file(&record.relay_sh) {
+        return no(format!(
+            "{} is not an executable file",
+            record.relay_sh.display()
+        ));
+    }
+    if record.principal.trim() != mandate.principal.trim() {
+        return no(format!(
+            "launched by {}, not the mandate's principal {}",
+            record.principal, mandate.principal
+        ));
+    }
+    if !record.launched_from_tty {
+        return no("not started by a human at a terminal".into());
+    }
+    if record.force_seat || record.session_role.trim().eq_ignore_ascii_case("advisor") {
+        return no("an advisor or --force-seat run is never restarted".into());
+    }
+    if let (Some(file), Some(want)) = (&record.profile_file, &record.profile_sha256) {
+        if rl::sha256_file(file).as_deref() != Some(want.as_str()) {
+            return no(format!("its profile {} changed or is gone", file.display()));
+        }
+    }
+    // The status's spec, else the one the launch named (exact id, known to
+    // the store); neither means unknown, refused.
+    let Some(spec) = run_spec(lane, spec_known).or_else(|| {
+        record
+            .spec
+            .clone()
+            .filter(|id| spec_ids_in(id).first() == Some(id) && spec_known(id))
+    }) else {
+        return no(RUN_SPEC_UNKNOWN.into());
+    };
+    if let Some(class) = spec_always_human(&spec) {
+        return no(format!("{spec} is {class}"));
+    }
+    let lineage = match rl::restarts(&lane.run_dir, &record.sha256) {
+        Ok(l) => l,
+        Err(why) => return no(format!("the restart lineage is unreadable: {why}")),
+    };
+    if lineage.len() >= rl::MAX_RESTARTS {
+        return Some(CrashLoop(record.sha256));
+    }
+    if let Some(last) = lineage.last() {
+        let ticks = BACKOFF_TICKS[(lineage.len() - 1).min(BACKOFF_TICKS.len() - 1)];
+        let eligible = last.at + TICK_INTERVAL * ticks;
+        if now < eligible {
+            return Some(Wait(format!(
+                "restart {} backs off until {}",
+                lineage.len() + 1,
+                eligible.to_rfc3339()
+            )));
+        }
+    }
+    // Sessions: the crashed instance started at the record's session (the
+    // first launch) or at 1 (a restart's resume argv), and the session it
+    // crashed in counts as used.
+    let (instance_max, used_before, instance_start) = match lineage.last() {
+        Some(l) => (l.max_sessions, l.used_before, 1),
+        None => (record.max_sessions, 0, record.start_session),
+    };
+    let session = match lane.evidence.field("session") {
+        None => instance_start.saturating_sub(1),
+        Some(s) => match s.parse::<u32>() {
+            Ok(n) => n,
+            Err(_) => return no(format!("its status names session `{s}`")),
+        },
+    };
+    let used_now = (session + 1)
+        .saturating_sub(instance_start)
+        .min(instance_max);
+    let budget = (record.max_sessions + 1).saturating_sub(record.start_session);
+    let used = used_before + used_now;
+    let remaining = budget.saturating_sub(used);
+    if remaining == 0 {
+        return no(format!("no sessions left of its {budget}"));
+    }
+    if mandate.expires_at - now < RESTART_MANDATE_FLOOR {
+        return no("less than 30 minutes left on the mandate".into());
+    }
+    let mut argv = record.args.clone();
+    argv.extend(["--max-sessions".to_string(), remaining.to_string()]);
+    Some(RestartVerdict::Restart(RestartPlan {
+        lane: format!("relay:{}", lane.run_id),
+        run_id: lane.run_id.clone(),
+        run_dir: lane.run_dir.clone(),
+        relay_sh: record.relay_sh.clone(),
+        cwd: record.launch_cwd.clone(),
+        argv,
+        launch_sha: record.sha256,
+        generation: lineage.len() as u32 + 1,
+        max_sessions: remaining,
+        used_before: used,
+        crashed_head: crashed_head(lane),
+    }))
+}
+
 /// A held PR the tick may route for shipping.
 // trace:STORY-1700 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -574,9 +844,16 @@ impl ActionRow {
 }
 
 /// Everything a tick does to the world. Production writes events, mail and
-/// notifications; tests record. None of these spawns a relay or a model.
+/// notifications; tests record. Only [`DriveEffects::restart_relay`] spawns
+/// anything: a crashed relay, from its launch record (STORY-1706).
 // trace:STORY-1700 | ai:claude
 pub(crate) trait DriveEffects {
+    /// Start `plan`'s relay detached, with the scrubbed environment; `Ok` is
+    /// its pid. A backend that cannot spawn refuses (fail closed).
+    // trace:STORY-1706 | ai:claude
+    fn restart_relay(&mut self, plan: &RestartPlan) -> Result<u32> {
+        anyhow::bail!("this backend cannot restart {}", plan.run_id)
+    }
     /// Emit the advisor due item (event + mail nudge).
     fn emit_due(&mut self, mandate_id: &str, item: &Planned) -> Result<()>;
     /// Tell the operator; `Ok` names the delivery.
@@ -956,6 +1233,179 @@ impl Tick<'_, '_> {
     }
 }
 
+/// STORY-1706 (R4/R5): restart every crashed lane [`restart_verdict`]
+/// allows. Before the exec: re-read the mandate, re-probe the lane and judge
+/// it again from fresh reads, then append the lineage line (no line, no
+/// exec). Returns, per lane key, `None` to leave the lane unrouted this tick
+/// (restarted or backing off) or `Some(why)` to note on its advisor item.
+// trace:STORY-1706 | ai:claude
+fn restart_crashed(
+    tick: &mut Tick<'_, '_>,
+    per: &mut PerMandate,
+    mandate: &Mandate,
+    acted: &mut usize,
+) -> BTreeMap<String, Option<String>> {
+    const ACTION: &str = "relay-restart";
+    let inp = tick.inp;
+    let known = |id: &str| (inp.spec_signoff)(id).is_some();
+    let verdict = |lane: &Lane| {
+        restart_verdict(
+            lane,
+            mandate,
+            inp.project_root,
+            &inp.gates,
+            inp.spec_always_human,
+            &known,
+            (inp.clock)(),
+        )
+    };
+    let mut notes = BTreeMap::new();
+    for lane in &inp.lanes {
+        let Some(v) = verdict(lane) else {
+            continue;
+        };
+        let key = format!("relay:{}", lane.run_id);
+        let subject = format!("relay run {}", lane.run_id);
+        let skip = |tick: &mut Tick<'_, '_>, per: &mut PerMandate, why: String| {
+            let row = ActionRow::new(&key, &subject, ACTION, Outcome::Skipped, Some(why));
+            tick.skip_once(per, &format!("{key}|{ACTION}|{}", crashed_head(lane)), row);
+        };
+        let plan = match v {
+            RestartVerdict::Wait(why) => {
+                skip(tick, per, why);
+                notes.insert(key.clone(), None);
+                continue;
+            }
+            // No row of its own: the reason rides on the lane's advisor
+            // item, which is routed as before.
+            RestartVerdict::No(why) => {
+                notes.insert(key.clone(), Some(why));
+                continue;
+            }
+            RestartVerdict::CrashLoop(sha) => {
+                let why = format!(
+                    "restarted {} times; it keeps crashing",
+                    crate::relay_launch::MAX_RESTARTS
+                );
+                let loop_key = format!("{key}|crash-loop|{sha}");
+                if !per.emitted.contains(&loop_key) && tick.ended.is_none() {
+                    match tick.recheck() {
+                        Err(why) => tick.end(&key, &subject, ACTION, why),
+                        Ok(()) => {
+                            let sent = tick.fx.notify_operator(
+                                &format!("AIDA drive: {subject} is crash-looping"),
+                                &format!(
+                                    "{subject} crashed again after {} automatic restarts; the drive tick will not restart it again. Read {} and relaunch it yourself.",
+                                    crate::relay_launch::MAX_RESTARTS,
+                                    lane.run_dir.display()
+                                ),
+                            );
+                            let (outcome, note) = match sent {
+                                Ok(d) => {
+                                    per.emitted.insert(loop_key);
+                                    (Outcome::Routed, format!("{why}; operator notified ({d})"))
+                                }
+                                Err(e) => {
+                                    (Outcome::Refused, format!("{why}; notify failed: {e:#}"))
+                                }
+                            };
+                            tick.row(ActionRow::new(&key, &subject, ACTION, outcome, Some(note)));
+                        }
+                    }
+                }
+                notes.insert(key.clone(), Some(why));
+                continue;
+            }
+            RestartVerdict::Restart(plan) => plan,
+        };
+        if let Some(why) = tick.ended.clone() {
+            skip(tick, per, why.clone());
+            notes.insert(key.clone(), Some(why));
+            continue;
+        }
+        if *acted >= tick.budget {
+            skip(
+                tick,
+                per,
+                format!("budget of {} actions per tick reached", tick.budget),
+            );
+            notes.insert(key.clone(), None);
+            continue;
+        }
+        let refuse = |tick: &mut Tick<'_, '_>, why: String| {
+            tick.row(ActionRow::new(
+                &key,
+                &subject,
+                ACTION,
+                Outcome::Refused,
+                Some(why),
+            ));
+        };
+        if let Err(why) = tick.recheck() {
+            refuse(tick, why.clone());
+            tick.ended = Some(why.clone());
+            notes.insert(key.clone(), Some(why));
+            continue;
+        }
+        // Judge the lane again from fresh reads: the lock, the owner, the
+        // status, the record, the lineage, the profile and the clock.
+        let fresh = crate::fleet_lanes::probe_lane(lane.run_dir.clone());
+        let again = fresh.as_ref().and_then(|l| verdict(l));
+        match again {
+            Some(RestartVerdict::Restart(p))
+                if p.launch_sha == plan.launch_sha
+                    && p.argv == plan.argv
+                    && p.crashed_head == plan.crashed_head => {}
+            _ => {
+                let why = "the run changed before the restart; left for the next tick".to_string();
+                refuse(tick, why);
+                notes.insert(key.clone(), None);
+                continue;
+            }
+        }
+        let line = crate::relay_launch::RestartLine {
+            generation: plan.generation,
+            at: (inp.clock)(),
+            launch: plan.launch_sha.clone(),
+            mandate: tick.mandate_id.clone(),
+            max_sessions: plan.max_sessions,
+            used_before: plan.used_before,
+        };
+        if let Err(why) = crate::relay_launch::append_restart(&plan.run_dir, &line) {
+            let why = format!("cannot record the restart, so it does not run: {why}");
+            refuse(tick, why.clone());
+            notes.insert(key.clone(), Some(why));
+            continue;
+        }
+        *acted += 1;
+        match tick.fx.restart_relay(&plan) {
+            Ok(pid) => {
+                per.actions += 1;
+                tick.row(ActionRow::new(
+                    &key,
+                    &subject,
+                    ACTION,
+                    Outcome::Done,
+                    Some(format!(
+                        "restart {} of {} (pid {pid}, --max-sessions {})",
+                        plan.generation,
+                        crate::relay_launch::MAX_RESTARTS,
+                        plan.max_sessions
+                    )),
+                ));
+                notes.insert(key.clone(), None);
+            }
+            Err(e) => {
+                // The lineage line stands: a failed spawn counts toward the
+                // cap and backs off like a crash.
+                refuse(tick, format!("restart {} failed: {e:#}", plan.generation));
+                notes.insert(key.clone(), None);
+            }
+        }
+    }
+    notes
+}
+
 /// STORY-1700: one drive tick over `inp`. See the module docs.
 // trace:STORY-1700 | ai:claude
 pub(crate) fn run_tick(
@@ -1194,10 +1644,26 @@ pub(crate) fn run_tick(
         }
     }
 
+    // STORY-1706: restart crashed relays the human launch record allows.
+    // A lane restarted or backing off is not routed this tick; any other
+    // reason rides on the lane's advisor item.
+    let mut acted = 0usize;
+    let restart_notes = restart_crashed(&mut tick, per, &mandate, &mut acted);
     let mut decisions: Vec<LaneDecision> = inp
         .lanes
         .iter()
         .map(|l| plan_relay_lane(l, inp.spec_signoff))
+        .filter_map(|d| match d {
+            LaneDecision::Act(mut p) => match restart_notes.get(&p.lane) {
+                Some(None) => None,
+                Some(Some(why)) => {
+                    p.detail.push_str(&format!("; not auto-restarted: {why}"));
+                    Some(LaneDecision::Act(p))
+                }
+                None => Some(LaneDecision::Act(p)),
+            },
+            d => Some(d),
+        })
         .collect();
     decisions.extend(inp.held_prs.iter().map(plan_held_pr));
     // Each unowned spec carries its dispatch epoch, so a dead fixer's spec
@@ -1247,7 +1713,6 @@ pub(crate) fn run_tick(
             }
         }
     }
-    let mut acted = 0usize;
     for decision in decisions {
         let planned = match decision {
             LaneDecision::None => continue,
@@ -1414,6 +1879,94 @@ fn scrub_own_env() -> bool {
     inherited
 }
 
+/// STORY-1706 (R6): one preview line per crashed lane, saying whether the
+/// tick would restart it and, when not, why.
+// trace:STORY-1706 | ai:claude
+fn restart_preview(
+    root: &Path,
+    lanes: &[Lane],
+    reqs: &[aida_core::Requirement],
+    signoff: &dyn Fn(&str) -> Option<bool>,
+    now: DateTime<Utc>,
+) -> Vec<String> {
+    let mandate = crate::mandate::mandate_dir().ok().and_then(|dir| {
+        let principal = crate::current_user_id(None);
+        let (valid, _) = crate::mandate::load_valid(&dir, &principal, now);
+        match crate::mandate::state_at(&valid, now) {
+            MandateState::Active(m) if m.is_drive() => Some(m),
+            _ => None,
+        }
+    });
+    let ledger = crate::mandate::mandate_dir()
+        .ok()
+        .and_then(|d| crate::mandate::read_exclusions(&d).ok());
+    let always_human = spec_always_human_from(reqs, ledger.as_ref());
+    let gates = crate::mandate_gates::load_human_gates(root).map_err(|e| format!("{e:#}"));
+    let known = |id: &str| signoff(id).is_some();
+    lanes
+        .iter()
+        .filter(|l| l.class == LaneClass::Crashed && l.evidence.trap_never_ran())
+        .map(|lane| {
+            let verdict = mandate
+                .as_ref()
+                .and_then(|m| restart_verdict(lane, m, root, &gates, &always_human, &known, now));
+            let what = match verdict {
+                None => "not: no active drive mandate".to_string(),
+                Some(RestartVerdict::Restart(p)) => format!(
+                    "eligible (restart {}, --max-sessions {})",
+                    p.generation, p.max_sessions
+                ),
+                Some(RestartVerdict::Wait(why)) => format!("waiting: {why}"),
+                Some(RestartVerdict::No(why)) => format!("not: {why}"),
+                Some(RestartVerdict::CrashLoop(_)) => "not: crash-looping".to_string(),
+            };
+            format!("relay:{}  auto-restart: {what}", lane.run_id)
+        })
+        .collect()
+}
+
+/// STORY-1706 (R5): start a planned relay restart. The argv is the plan's
+/// (record `arg=` lines plus `--max-sessions`); the environment is the
+/// tick's, scrubbed of every session grant, role, purpose and agent name; no
+/// terminal; its own process group, so it outlives the tick; output appended
+/// to `<run dir>/relay.restart.log`.
+// trace:STORY-1706 | ai:claude
+pub(crate) fn spawn_restart(plan: &RestartPlan) -> Result<u32> {
+    use std::os::unix::fs::OpenOptionsExt;
+    use std::os::unix::process::CommandExt;
+    let log_path = plan.run_dir.join(crate::relay_launch::RESTART_LOG);
+    let log = std::fs::OpenOptions::new()
+        .append(true)
+        .create(true)
+        .mode(0o600)
+        .custom_flags(libc::O_NOFOLLOW)
+        .open(&log_path)
+        .with_context(|| format!("cannot open {}", log_path.display()))?;
+    let mut cmd = scrubbed_command(&plan.relay_sh);
+    for var in RESTART_ENV_SCRUB {
+        cmd.env_remove(var);
+    }
+    let child = cmd
+        .args(&plan.argv)
+        .current_dir(&plan.cwd)
+        .env(crate::relay_launch::RESTART_ENV, &plan.launch_sha)
+        .stdin(std::process::Stdio::null())
+        .stdout(log.try_clone()?)
+        .stderr(log)
+        .process_group(0)
+        .spawn()
+        .with_context(|| format!("cannot start {}", plan.relay_sh.display()))?;
+    Ok(child.id())
+}
+
+/// Beyond [`SESSION_ENV`]: an agent identity would make the restarted relay
+/// look like an agent's launch, and a stale restart token is never passed on.
+const RESTART_ENV_SCRUB: [&str; 3] = [
+    "AIDA_AGENT_NAME",
+    "AIDA_AGENT_TYPE",
+    crate::relay_launch::RESTART_ENV,
+];
+
 struct LiveEffects<'a> {
     root: &'a Path,
 }
@@ -1443,6 +1996,10 @@ impl DriveEffects for LiveEffects<'_> {
 
     fn reap_dead_leases(&mut self) -> Vec<ReapRow> {
         reap_rows(crate::session_reap::reap_quiet_outcomes(self.root))
+    }
+
+    fn restart_relay(&mut self, plan: &RestartPlan) -> Result<u32> {
+        spawn_restart(plan)
     }
 
     fn ledger(&mut self, mandate_id: &str, row: &ActionRow) {
@@ -2420,10 +2977,12 @@ pub(crate) fn handle_fleet(action: &crate::cli::FleetAction) -> Result<()> {
                 gates: crate::mandate_gates::load_human_gates(&root).map_err(|e| format!("{e:#}")),
                 spec_always_human: &always_human,
             };
-            let mut decisions: Vec<LaneDecision> = crate::fleet_lanes::classify_lanes(&root, now)
-                .iter()
-                .map(|l| plan_relay_lane(l, &signoff))
-                .collect();
+            // Keep restart eligibility alongside the preview's current gate inputs.
+            // trace:STORY-1706 | ai:codex
+            let lanes = crate::fleet_lanes::classify_lanes(&root, now);
+            let restart_lines = restart_preview(&root, &lanes, &reqs, &signoff, now);
+            let mut decisions: Vec<LaneDecision> =
+                lanes.iter().map(|l| plan_relay_lane(l, &signoff)).collect();
             decisions.extend(collect_held_prs(&root).iter().map(plan_held_pr));
             decisions.extend(
                 collect_unowned_specs(&root, &reqs)
@@ -2435,7 +2994,8 @@ pub(crate) fn handle_fleet(action: &crate::cli::FleetAction) -> Result<()> {
                 println!("{}", serde_json::to_string_pretty(&preview)?);
                 return Ok(());
             }
-            let lines = preview_lines(&decisions, &ctx);
+            let mut lines = preview_lines(&decisions, &ctx);
+            lines.extend(restart_lines);
             for line in &lines {
                 println!("{line}");
             }
@@ -2450,6 +3010,10 @@ pub(crate) fn handle_fleet(action: &crate::cli::FleetAction) -> Result<()> {
 #[cfg(test)]
 #[path = "tests/story_1700_drive_mandate_tests.rs"]
 mod story_1700_drive_mandate_tests;
+
+#[cfg(test)]
+#[path = "tests/story_1706_relay_restart_tests.rs"]
+mod story_1706_relay_restart_tests;
 
 /// Fleet operations over relay runs and lanes.
 ///
