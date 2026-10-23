@@ -168,6 +168,41 @@ pub(crate) fn identities_overlap(a: &[String], b: &[String]) -> bool {
     a.iter().any(|x| b.iter().any(|y| tokens_match(x, y)))
 }
 
+/// BUG-1934: do two process tokens name the same live process, for GRANTING
+/// authority? `proc`, `shell` and `sid` are one class (a session leader that
+/// is also an ancestor is one process). Unlike [`tokens_match`], which backs
+/// refusals, both sides must carry a start identity and the two must be
+/// equal: a missing start or a scheme mismatch refuses, never matches.
+///
+/// A `key:<sha256>` token (possession of the grant's session-keyring secret,
+/// SKETCH v2) matches only the identical token, and only with a full
+/// 64-hex-digit digest.
+// trace:BUG-1934 | ai:claude
+pub(crate) fn binding_tokens_match(a: &str, b: &str) -> bool {
+    if let (Some(x), Some(y)) = (a.strip_prefix("key:"), b.strip_prefix("key:")) {
+        return x.len() == 64 && x.bytes().all(|c| c.is_ascii_hexdigit()) && x == y;
+    }
+    fn process_part(token: &str) -> Option<(&str, &str)> {
+        let (kind, value) = token.split_once(':')?;
+        if !matches!(kind, "proc" | "shell" | "sid") {
+            return None;
+        }
+        let (pid, start) = value.split_once('@')?;
+        (!pid.is_empty() && pid != "0" && pid != "1" && !start.trim().is_empty())
+            .then_some((pid, start))
+    }
+    matches!((process_part(a), process_part(b)), (Some(x), Some(y)) if x == y)
+}
+
+/// BUG-1934: does `presenter` carry any process `binding` names, under the
+/// strict [`binding_tokens_match`]? An empty binding never matches.
+// trace:BUG-1934 | ai:claude
+pub(crate) fn binding_overlaps(binding: &[String], presenter: &[String]) -> bool {
+    binding
+        .iter()
+        .any(|b| presenter.iter().any(|p| binding_tokens_match(b, p)))
+}
+
 fn push_unique(out: &mut Vec<String>, token: String) {
     if !out.contains(&token) {
         out.push(token);
@@ -363,6 +398,23 @@ impl IdentitySource {
         out
     }
 
+    /// BUG-1934: what a seat-grant PRESENTER is: every process in its
+    /// ancestry, itself included, plus its POSIX session leader. Unlike
+    /// [`Self::recorder_tokens`] the walk is NOT cut at the agent harness:
+    /// the shell a grant was entered in sits above the harness it launched.
+    /// Session ids and leases are left out: they are as copyable as the grant.
+    // trace:BUG-1934 | ai:claude
+    pub(crate) fn presenter_tokens(&self) -> Vec<String> {
+        let mut out = Vec::new();
+        for p in self.chain.iter().filter(|p| p.pid > 1) {
+            push_unique(&mut out, p.token("proc"));
+        }
+        if let Some(leader) = self.session_leader.as_ref().filter(|l| l.pid > 1) {
+            push_unique(&mut out, leader.token("sid"));
+        }
+        out
+    }
+
     /// What a LAUNCH path leaves for the worker it claims for: only the
     /// claiming process itself, which an `exec` turns into the worker. The
     /// launcher's session ids, shell and harness are deliberately left out.
@@ -404,9 +456,9 @@ impl IdentitySource {
 /// The live ancestry of this process, nearest first, including itself.
 /// Walks one pid at a time — a single-pid refresh per ancestor, never a
 /// process-table scan (the BUG-613 hotspot pattern) — so the cost is the
-/// depth of the tree, not its size.
-#[cfg(not(test))]
-fn live_ancestry() -> Vec<ProcEntry> {
+/// depth of the tree, not its size. (Compiled under `cfg(test)` too, for the
+/// BUG-1934 grant-presenter fallback only; see `seat_authority`.)
+pub(crate) fn live_ancestry() -> Vec<ProcEntry> {
     use sysinfo::{ProcessRefreshKind, System, UpdateKind};
     let mut out = Vec::new();
     let mut cur = sysinfo::Pid::from_u32(std::process::id());
@@ -434,8 +486,7 @@ fn live_ancestry() -> Vec<ProcEntry> {
 }
 
 /// The leader of this process's POSIX session (`getsid(0)`).
-#[cfg(not(test))]
-fn live_session_leader() -> Option<ProcEntry> {
+pub(crate) fn live_session_leader() -> Option<ProcEntry> {
     #[cfg(unix)]
     {
         // SAFETY: getsid(0) only reads the calling process's session id.
@@ -1102,11 +1153,13 @@ pub(crate) fn verified_authority_keys(
                 .as_deref()
                 .and_then(|t| chrono::DateTime::parse_from_rfc3339(t.trim()).ok())
                 .is_some_and(|at| {
+                    // trace:BUG-1934 | ai:claude
                     crate::seat_authority::grant_authorized_at(
                         project_root,
                         grant,
                         seat,
                         at.with_timezone(&chrono::Utc),
+                        &att.grant_binding,
                     )
                 })
                 .then(|| att.identity.clone()),

@@ -52,6 +52,34 @@
 # trace:BUG-681 | ai:claude
 # trace:BUG-1239 | ai:codex
 
+# Antigravity (`--client agy`) wires this on its SessionStart event, whose
+# payload is camelCase (`conversationId`) with no event-name field and whose
+# stdout must be one JSON object (`{}` is a no-op). So the agy relay names the
+# event (`--event`, exported as AIDA_HOOK_EVENT for the verb) and wraps the
+# notice text as an injected system message. Claude/Codex pass no arguments.
+# trace:TASK-2253 | ai:claude
+client=""
+event=""
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --client) client="${2:-}"; [ $# -ge 2 ] && shift; shift ;;
+        --event) event="${2:-}"; [ $# -ge 2 ] && shift; shift ;;
+        *) shift ;;
+    esac
+done
+case "$client" in
+    agy|antigravity|antigravity-cli) agy=1 ;;
+    *) agy="" ;;
+esac
+if [ -n "$event" ]; then
+    AIDA_HOOK_EVENT="$event"
+    export AIDA_HOOK_EVENT
+fi
+done_out() {
+    [ -n "$agy" ] && printf '{}\n'
+    exit 0
+}
+
 # Capture the bounded hook body once, before invoking helpers, so the notice
 # command itself never reads stdin. Direct/scripted `aida awaiting --notice`
 # callers may have an open non-TTY pipe with no EOF and must still return.
@@ -65,8 +93,8 @@ project_root="${AIDA_SESSION_PROJECT:-${CLAUDE_PROJECT_DIR:-${CODEX_PROJECT_DIR:
 # `--notice` defaults its identity to the union of this shell's user id and the
 # session role ($AIDA_SESSION_ROLE) — the same identity the statusline uses.
 # Plain text out (no TTY → no ANSI). Swallow errors; emit only real output.
-cd "$project_root" 2>/dev/null || exit 0
-command -v aida >/dev/null 2>&1 || exit 0
+cd "$project_root" 2>/dev/null || done_out
+command -v aida >/dev/null 2>&1 || done_out
 
 # Opportunistic maintenance heartbeat. It is best-effort and hook-scoped:
 # `--hook` skips tasks registered as network/heavy, and the scheduler's
@@ -82,11 +110,22 @@ fi
 # Cross-platform outer bound: prefer GNU `timeout`, then macOS/Homebrew
 # `gtimeout`; if neither exists, run bare (the verb's internal fast-fail already
 # guarantees it returns promptly). 4s stays inside the hook's own timeout.
-if command -v timeout >/dev/null 2>&1; then
-    timeout 4 aida awaiting --notice 2>/dev/null || true
-elif command -v gtimeout >/dev/null 2>&1; then
-    gtimeout 4 aida awaiting --notice 2>/dev/null || true
-else
-    aida awaiting --notice 2>/dev/null || true
+notice() {
+    if command -v timeout >/dev/null 2>&1; then
+        timeout 4 aida awaiting --notice 2>/dev/null || true
+    elif command -v gtimeout >/dev/null 2>&1; then
+        gtimeout 4 aida awaiting --notice 2>/dev/null || true
+    else
+        aida awaiting --notice 2>/dev/null || true
+    fi
+}
+if [ -z "$agy" ]; then
+    notice
+    exit 0
 fi
+# JSON-escape the notice lines (backslash, quote, tab; CR dropped; lines
+# joined with \n) — the verb prints plain text with no other control bytes.
+text=$(notice | awk '{ gsub(/\\/, "\\\\"); gsub(/"/, "\\\""); gsub(/\t/, "\\t"); gsub(/\r/, ""); if (NR > 1) printf "\\n"; printf "%s", $0 }')
+[ -n "$text" ] || done_out
+printf '{"injectSteps":[{"systemMessage":{"systemMessage":"%s"}}]}\n' "$text"
 exit 0

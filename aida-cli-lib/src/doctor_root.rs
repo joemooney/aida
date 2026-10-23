@@ -1705,6 +1705,13 @@ pub(crate) static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
         &["mandate-drive", "drive-mandate", "mandate"],
         "mandate-drive",
     ),
+    // BUG-1934: the session's exported seat grant was refused (unbound,
+    // presented outside its process tree, expired, ...). Report-only.
+    // trace:BUG-1934 | ai:claude
+    (
+        &["seat-grant", "grant", "session-grant", "grant-binding"],
+        "seat-grant",
+    ),
     // BUG-1700: the folder-trust gate on a freshly created worktree. Claude
     // Code stops an INTERACTIVE launch in a directory it has never seen behind
     // a "Quick safety check" modal, so a fresh per-spec worktree strands
@@ -1789,6 +1796,12 @@ pub(crate) static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
             "checkout-drift",
         ],
         "main-checkout-drift",
+    ),
+    // BUG-2211: an empty read-only config.lock left by a sandboxed shell.
+    // trace:BUG-2211 | ai:claude
+    (
+        &["sandbox-config-lock", "config-lock", "git-config-lock"],
+        "sandbox-config-lock",
     ),
     // BUG-1229 / BUG-2140: store worktree gitdir/rebase/permission integrity.
     // trace:BUG-2140 | ai:antigravity

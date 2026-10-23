@@ -292,12 +292,17 @@ fn pr_gc_branch_tip(project_root: &std::path::Path, branch: &str) -> Result<Stri
 }
 
 fn pr_gc_delete_branch(project_root: &std::path::Path, branch: &str) -> Result<()> {
-    let out = std::process::Command::new("git")
-        .arg("-C")
-        .arg(project_root)
-        .args(["branch", "-D", branch])
-        .output()
-        .context("running git branch -D")?;
+    // trace:BUG-2211 | ai:claude
+    let out = aida_core::git_ops::output_healing_config_lock(
+        project_root,
+        || {
+            let mut cmd = std::process::Command::new("git");
+            cmd.arg("-C").arg(project_root);
+            cmd
+        },
+        &["branch", "-D", branch],
+    )
+    .context("running git branch -D")?;
     anyhow::ensure!(
         out.status.success(),
         "git branch -D {branch} failed: {}",
