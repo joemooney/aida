@@ -1,0 +1,28 @@
+id: 01a16948-a1d8-76e3-99e2-2bfa119f5106
+spec_id: TASK-1-443
+title: 'cosmetic (non-blocking): aida-core/templates/hooks/aida-git-guardrails.sh:589 A…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-2209, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  cosmetic (non-blocking): aida-core/templates/hooks/aida-git-guardrails.sh:589 AIDA_CARGO_NO_SLOT block message still names '(make check-ci-fast + make test-touched)' as the pre-push step; should name one targeted cargo test + check-ci-fast. Shell file, so not reviewer fix-forwardable.
+  Reviewed sha: 96fd8b253affb617d6431836c0523a5baa8a1f21
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-23T15:02:10.136098141Z
+modified_at: 2026-10-23T15:02:10.136098141Z
+req_type: Task
+tags:
+- carried-from:TASK-2209
+- finding-hash:27ada901
+- from-review:TASK-2209
+- kind:carried-forward
+filed_at:
+  code_sha: fce1463450fffaa7324261e6305463a58be10b95
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 017e4a4949
+  vendor: claude
+  session: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
