@@ -334,9 +334,10 @@ pub(super) fn required_checks(root: &Path) -> Result<Vec<String>> {
     let text = match std::fs::read_to_string(&path) {
         Ok(text) => text,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
-        Err(error) => return Err(error).context("read .aida/config.toml"),
+        Err(error) => return Err(error).with_context(|| format!("read {}", path.display())),
     };
-    let config: toml::Value = toml::from_str(&text).context("parse .aida/config.toml")?;
+    let config: toml::Value =
+        toml::from_str(&text).with_context(|| format!("parse {}", path.display()))?;
     let Some(value) = config
         .get("review_watch")
         .and_then(|section| section.get("required_checks"))
