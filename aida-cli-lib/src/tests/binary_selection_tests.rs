@@ -685,8 +685,12 @@ fn activate_auto_in_a_worktree_prefers_its_own_older_build_over_mains_newer_one(
     let main_str = main.display().to_string();
 
     // Run from inside the worktree while $AIDA_DEV_REPO names main.
-    let (repo, source) =
-        choose_activate_repo(None, Some(&main_str), &worktree.join("aida-cli-lib/src"));
+    let (repo, source) = choose_activate_repo(
+        None,
+        Some(&main_str),
+        None,
+        &worktree.join("aida-cli-lib/src"),
+    );
     assert_eq!(repo, worktree);
     assert_eq!(source, ActivateRepoSource::Enclosing);
 
@@ -715,7 +719,7 @@ fn activate_auto_in_a_worktree_prefers_its_own_older_build_over_mains_newer_one(
     assert!(note.contains(&main_str), "{note}");
 
     // Primary-checkout behaviour is unchanged: from main, main's build.
-    let (repo, source) = choose_activate_repo(None, Some(&main_str), &main);
+    let (repo, source) = choose_activate_repo(None, Some(&main_str), None, &main);
     assert_eq!(
         (repo.as_path(), source),
         (main.as_path(), ActivateRepoSource::Enclosing)
@@ -735,12 +739,100 @@ fn activate_auto_in_a_worktree_prefers_its_own_older_build_over_mains_newer_one(
     let outside = temp.path().join("elsewhere");
     std::fs::create_dir_all(&outside).unwrap();
     assert_eq!(
-        choose_activate_repo(None, Some(&main_str), &outside),
+        choose_activate_repo(None, Some(&main_str), None, &outside),
         (main.clone(), ActivateRepoSource::EnvRepo)
     );
     let wt_str = worktree.display().to_string();
     assert_eq!(
-        choose_activate_repo(Some(&wt_str), Some(&main_str), &main),
+        choose_activate_repo(Some(&wt_str), Some(&main_str), None, &main),
         (worktree.clone(), ActivateRepoSource::Flag)
+    );
+}
+
+// trace:TASK-2251 | ai:claude
+#[test]
+fn activate_falls_back_to_the_primary_checkout_once_the_worktree_in_aida_dev_repo_is_removed() {
+    use crate::dev_cmd::{activate_choice_note, choose_activate_repo, primary_checkout_of};
+    use crate::dev_cmd::{ActivateRepoSource, BinarySelectionReason};
+    let temp = tempfile::tempdir().unwrap();
+    let main = temp.path().join("aida");
+    std::fs::create_dir_all(&main).unwrap();
+    let main = main.canonicalize().unwrap();
+    let git = |dir: &std::path::Path, args: &[&str]| {
+        let out = crate::test_git::git_command()
+            .current_dir(dir)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "git {args:?}: {out:?}");
+    };
+    git(&main, &["init", "-q", "-b", "main"]);
+    git(
+        &main,
+        &[
+            "-c",
+            "user.name=t",
+            "-c",
+            "user.email=t@t",
+            "commit",
+            "-q",
+            "--allow-empty",
+            "-m",
+            "init",
+        ],
+    );
+    let worktree = temp.path().join("aida-worktrees/take-2250");
+    git(
+        &main,
+        &[
+            "worktree",
+            "add",
+            "-q",
+            "-b",
+            "take",
+            worktree.to_str().unwrap(),
+        ],
+    );
+
+    // Activation records the primary checkout from either side.
+    assert_eq!(primary_checkout_of(&worktree), main);
+    assert_eq!(primary_checkout_of(&main), main);
+
+    // The worktree is removed; $AIDA_DEV_REPO still names it.
+    let wt_str = worktree.display().to_string();
+    git(&main, &["worktree", "remove", "--force", &wt_str]);
+    assert!(!worktree.exists());
+    let main_str = main.display().to_string();
+    let outside = temp.path().join("elsewhere");
+    std::fs::create_dir_all(&outside).unwrap();
+
+    let (repo, source) = choose_activate_repo(None, Some(&wt_str), Some(&main_str), &outside);
+    assert_eq!(
+        (repo.as_path(), source),
+        (main.as_path(), ActivateRepoSource::HomeRepo)
+    );
+    let note = activate_choice_note(
+        "agent",
+        &main.join("target/agent"),
+        &BinarySelectionReason::OnlyOne,
+        false,
+        &repo,
+        source,
+        Some(&wt_str),
+    );
+    assert!(
+        note.contains(&format!("$AIDA_DEV_REPO ({wt_str}) no longer exists")),
+        "{note}"
+    );
+
+    // A live $AIDA_DEV_REPO still wins over the recorded primary.
+    assert_eq!(
+        choose_activate_repo(None, Some(&main_str), Some(&wt_str), &outside),
+        (main.clone(), ActivateRepoSource::EnvRepo)
+    );
+    // Nothing to fall back to: the stale path is kept so the error names it.
+    assert_eq!(
+        choose_activate_repo(None, Some(&wt_str), None, &outside),
+        (worktree.clone(), ActivateRepoSource::EnvRepo)
     );
 }
