@@ -6,18 +6,27 @@ description: |-
 
   minor: review_watch.rs throttled()/report(): a pending (unsent) wake whose kind or approval identity is no longer current is never pruned (retain keeps every key for the head) and never redelivered, so READY_INTERVAL throttling stays disabled for that head indefinitely and every pass re-runs the full live evaluation (CI API, carry-over git, corpus). Prune or supersede stale pending wakes for the head when a different kind/approval is recorded or readiness drops.
   Reviewed sha: 7932cf76e5d417b618534488ddee6db2d2dceb7f
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-23T16:52:45.755004027Z
-modified_at: 2026-10-23T16:52:45.755004027Z
+modified_at: 2026-10-23T16:57:35.985576599Z
 req_type: Task
 tags:
 - carried-from:TASK-1945
 - finding-hash:08dd7e89
 - from-review:TASK-1945
 - kind:carried-forward
+history:
+- id: 01a169b2-4ff1-71c2-a211-f3d637d2698b
+  author: joe
+  timestamp: 2026-10-23T16:57:35.985574184Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 902cd420d221c0ec5c62d6f0ef5e5f470f875f33
   branch: main
