@@ -2,7 +2,7 @@ id: 01a12b1c-ff55-76c0-b29d-5495b413ce81
 spec_id: STORY-1662
 agreed_id: STORY-1662
 title: Implementers launched by an orchestrator or advisor session run as separate processes with their own implementer seat
-description: |-
+description: |
   Split out of STORY-1654 (advisor signoff 2026-10-11, ruling Q2). STORY-1654 moves reviewers into separate processes. This story covers implementers.
 
   Problem: orchestrator, relay and advisor sessions launch implementers as Agent-tool subagents. A subagent shares the parent's Claude session id, harness pid and seat grant. As a result, (1) the orchestrator becomes a recorded author of everything it implements, which costs it --override-stale-approval and blurs authorship, and (2) an implementer launched from an advisor session inherits the advisor seat and trips the advisor code guard (seen 2026-10-10 on TASK-1723; Joe's comment on STORY-1654).
@@ -10,12 +10,37 @@ description: |-
   Want: the orchestrator or advisor launches each implementer as a separate process with a child implementer grant (issue_child seat=implementer, parent entered with --delegate-seat implementer). Candidates: `aida queue work <SPEC> --no-human` (implementer phase only) or `aida agent new claude --role implementer`. Pick one, document it, and update the aida-orchestrate / aida-burndown skill masters and the relay prompts.
 
   Acceptance: an advisor-launched implementer edits code without tripping the advisor guard; the orchestrator session is not recorded as an author of a spec it only orchestrated; throughput cost is measured as in STORY-1654; template gates pass. Sequence it after STORY-1654 lands.
+
+  ## Acceptance
+
+  Structured from the acceptance sentence above, advisor signoffs C1–C6 (2026-10-22 17:22, 18:16) and the PR2 addendum signoff C1–C5 (2026-10-22 04:45), and the folded findings (TASK-1764, BUG-2207, TASK-2154, TASK-2213..2218). Option A (operator decision 2026-10-12): `aida queue work <SPEC> --role implementer --no-human`.
+
+  AC1: An advisor-launched implementer (standalone launch or a `claude --bg` lane in an `aida worktree add <SPEC> --role implementer` worktree) edits code without the advisor code guard or the commit gate blocking it, while the advisor's own env stays blocked.
+  AC2: The orchestrator or advisor that launches an implementer is never recorded as an author of that spec: the launch record carries only the worker's tokens.
+  AC3: After this ships, a live advisor-seat launch on a scratch spec opens a PR that a separate reviewer approves and `aida pr ship` accepts with no override and no advisor among its authors, and the throughput of the following 3 standalone runs is compared with Agent-tool implementers as STORY-1654 did; both are recorded on this spec.
+  AC4: Template gates pass, and no seat skill, command or discipline doc launches implementers or fixers through the Agent tool (`Agent(`, `subagent_type`, `isolation: "worktree"`, "implementer subagent"); a ratchet test enforces it, with an explicit marker for read-only research subagents.
+  AC5: A granted launcher that does not delegate implementer, or an ungranted launcher, gets a baseline child (never the launcher's grant), with a stderr notice and a launch-ledger note whose reason distinguishes launcher-has-no-grant from launcher-did-not-delegate.
+  AC6: The stop contract is enforced, not only prompted: under AIDA_STANDALONE_IMPLEMENTER, `aida pr ship`, `aida ship` (merging), the burndown/drain/release merges and `aida review record` refuse.
+  AC7: A concurrency cap counts live standalone implementers (default 3, `[queue] standalone_implementer_cap`) and refuses past it with exit 34, leaving no lease, worktree or queue row.
+  AC8: Exit codes 31/32/33/34 come from one EXIT_CODES table that exit_code_for_error reads, distinct from every other code, and are documented in docs/cli.
+  AC9: The child env scrub is driven by one LAUNCHER_ONLY_ENV list shared with its test (drain context, grant file, verdict file, marker), so a grandchild is never bound.
+  AC10: A launched lane shows in `aida ps` as a live implementer on its spec, its claim sets the owner and moves the spec to In Progress, the cargo-slot WHO role is implementer, and no advisor-role lease is created (BUG-2207).
+  AC11: `aida queue work <SPEC> --role implementer --no-human` outside a drain dispatches to the standalone launcher (never inside a drain), records the child authority and prints no manual-continuation hint.
+  AC12: The launcher ends with one `implementer:` result line and reports only a PR whose head is the lease branch; a punt or hold signal wins over the PR lookup.
+  AC13: The MCP server a `--bg` lane spawns applies the same lease-role correction at start, and outside a lane keeps its env.
+  AC14: `aida internal lane-env` emits only AIDA_SESSION_* lines with plain-name values; a role or grant with shell metacharacters is refused.
+  AC15: `aida doctor` warns when a `claude daemon` process's environ holds AIDA_SESSION_GRANT, reading an injectable proc root so tests stay hermetic.
+  AC16: Inside a lane, an inherited grant is kept only when its seat is the lease role; otherwise the lease's child grant is exported or the grant is unset, and a reviewer lane keeps its reviewer grant.
+  AC17: Lane correction leaves a guest or requester persona unchanged.
+  AC18: `aida claim` in a lane whose lease role is malformed records no role rather than the inherited seat.
+  AC19: Lease role stamps take the lease-write lock and refuse a lease a live session holds.
+  AC20: The SessionStart hook fails closed: if lane-env errors, times out or prints a foreign line inside a linked worktree, it unsets the grant and purpose and sets no role.
 status: NeedsAttention
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T13:18:03.093067119Z
-modified_at: 2026-10-23T17:58:39.047453149Z
+modified_at: 2026-10-23T19:31:17.852666572Z
 req_type: Story
 tags:
 - groom:needs-decision
@@ -270,6 +295,11 @@ history:
   timestamp: 2026-10-23T13:54:40.877475135Z
   session_id: 01a16907f417
   harness_version: 2.1.309 (Claude Code)
+  changes: []
+- id: 01a16a3f-0797-7310-ba97-386295961c14
+  author: joe
+  timestamp: 2026-10-23T19:31:18.039289106Z
+  session_id: 0d442fbf-cd73-46c7-b16f-aa52c8cc33ca
   changes: []
 filed_at:
   code_sha: fba16d9c884b16090b3c2d079a53a1def8aa9a36
