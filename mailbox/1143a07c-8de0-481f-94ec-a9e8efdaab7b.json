@@ -1,0 +1,19 @@
+{
+  "id": "1143a07c-8de0-481f-94ec-a9e8efdaab7b",
+  "thread_id": "1143a07c-8de0-481f-94ec-a9e8efdaab7b",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792774319094,
+  "body": "Architecture sketch posted as a comment on STORY-1916 (emergency allowlist, idle test, ordering/stop, ledger, notify, gh-down merged + squash detection, idle-duplicate rule, visibility). Key finding: caches live at <main>/target/worktrees/<name> on the /mnt/build bind mount; current reclaim and guard both miss that filesystem. Awaiting signoff before code.",
+  "subject": "SKETCH: STORY-1916",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}
