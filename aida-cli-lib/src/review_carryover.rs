@@ -611,7 +611,7 @@ fn single_merge_base(repo: &Path, base_tip: &str, sha: &str) -> Result<String, C
 /// `git patch-id --verbatim` of `from..to`, diffed without renames, external
 /// drivers or text conversion, binary content included.
 // trace:TASK-1960 | ai:claude
-fn patch_id(repo: &Path, from: &str, to: &str) -> Result<String, CarryOverRefusal> {
+pub(crate) fn patch_id(repo: &Path, from: &str, to: &str) -> Result<String, CarryOverRefusal> {
     let diff = git_raw(
         repo,
         &[

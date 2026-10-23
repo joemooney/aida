@@ -597,6 +597,13 @@ pub(crate) enum FailureKind {
     /// `recover_phase1_failure_with_open_pr`.
     // trace:BUG-1524 | ai:claude
     LaunchRefused,
+    /// STORY-1690: the merge phase refused because the PR's head is behind
+    /// its base (or that could not be computed), so its green was never
+    /// tested with main's newer commits. Not a broken PR: it lands through
+    /// `aida pr train`, which tests it on the current main. Shelved, never
+    /// retried (a retry meets the same moved main).
+    // trace:STORY-1690 | ai:claude
+    BehindBase,
     /// The spawned work ran and reported failure — the phase-specific default.
     /// The hint points at the phase's normal "address it and retry" path.
     Failed,
@@ -655,6 +662,8 @@ impl FailureKind {
                 | Self::ShippedMismatch
                 // trace:TASK-1459 | ai:claude
                 | Self::ReviewInProgress
+                // trace:STORY-1690 | ai:claude
+                | Self::BehindBase
         )
     }
 
@@ -693,6 +702,8 @@ impl FailureKind {
             Self::ShippedMismatch => "shipped-mismatch",
             // trace:TASK-1459 | ai:claude
             Self::ReviewInProgress => "review-in-progress",
+            // trace:STORY-1690 | ai:claude
+            Self::BehindBase => "behind-base",
         }
     }
 
@@ -727,6 +738,7 @@ impl FailureKind {
             "tool-exit" => Self::Failed,
             "shipped-mismatch" => Self::ShippedMismatch,
             "review-in-progress" => Self::ReviewInProgress,
+            "behind-base" => Self::BehindBase,
             _ => return None,
         })
     }
@@ -2275,6 +2287,12 @@ pub(crate) fn recovery_hint(phase: Phase, kind: FailureKind, ctx: &HintContext) 
              or `aida awaiting`. Wait for the verdict (`aida review record … --pr {pr}` clears \
              this marker), or, if that review was abandoned, release it with \
              `aida review claim --pr {pr} --release` and retry."
+        ),
+        // STORY-1690: the drain-to-train handoff. trace:STORY-1690 | ai:claude
+        (Phase::Merge, FailureKind::BehindBase) => format!(
+            "PR-{pr} is approved and green, but its head is behind main, so the drain will \
+             not merge it. Land it through the merge train, which tests it on the current \
+             main first: `aida pr train {pr}`."
         ),
         (Phase::Merge, FailureKind::MissingTool) => {
             forge_cli_missing_hint(ctx.forge, "merge the PR", "merge the PR manually")
@@ -10783,6 +10801,20 @@ mod tests {
     /// conflict — the drain merge refusal must carry its own kind with an
     /// accurate hint, not point the user at `aida merge-lock` (which names a
     /// different seat entirely: another MERGER, not a review still running).
+    /// STORY-1690: a behind head shelves with its own kind and a hint that
+    /// hands the PR to the merge train.
+    #[test]
+    fn behind_base_is_distinct_and_hands_off_to_the_train() {
+        assert!(FailureKind::BehindBase.is_shelvable());
+        assert_eq!(FailureKind::BehindBase.cause_slug(), "behind-base");
+        assert_eq!(
+            FailureKind::from_cause_slug("behind-base"),
+            Some(FailureKind::BehindBase)
+        );
+        let hint = recovery_hint(Phase::Merge, FailureKind::BehindBase, &ctx());
+        assert!(hint.contains("aida pr train 46"), "hint: {hint}");
+    }
+
     #[test]
     fn review_in_progress_is_distinct_from_lease_conflict() {
         assert!(FailureKind::ReviewInProgress.is_shelvable());

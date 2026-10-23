@@ -819,8 +819,11 @@ fn store_git(
     let mut cmd = aida_core::git_ops::host_git_command(store_root);
     // TASK-2067 (advisor C1): no system config, and no path quoting, decide
     // what a history walk reports. trace:TASK-2067 | ai:claude
+    // TASK-2238: nor do refs/replace/* objects, as for the snapshot queries.
+    // trace:TASK-2238 | ai:claude
     cmd.args(["-c", "core.quotePath=false"])
         .env("GIT_CONFIG_NOSYSTEM", "1")
+        .env("GIT_NO_REPLACE_OBJECTS", "1")
         .args(args)
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
@@ -1167,10 +1170,19 @@ pub(crate) fn store_history_alias_map(
             )
         })?;
         let id = caps[2].to_ascii_uppercase();
-        // The other side of a rename only adds versions to judge.
-        let renamed = other
-            .filter(|other| Some(*other) != hit)
-            .and_then(canonical_object_stem);
+        // The other side of a rename only adds versions to judge. TASK-2238:
+        // a non-canonical other side would be versions never judged, so it
+        // refuses like a non-canonical hit rather than being dropped.
+        // trace:TASK-2238 | ai:claude
+        let renamed = match other.filter(|other| Some(*other) != hit) {
+            None => None,
+            Some(other) => Some(canonical_object_stem(other).ok_or_else(|| {
+                format!(
+                    "store history renames {} to or from a non-canonical object path ({other})",
+                    &caps[2]
+                )
+            })?),
+        };
         if let Some(aliases) = found.get_mut(&id) {
             for stem in std::iter::once(stem).chain(renamed) {
                 let stem = stem.to_ascii_uppercase();

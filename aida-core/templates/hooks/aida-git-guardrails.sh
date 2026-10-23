@@ -586,7 +586,9 @@ if no_slot_set; then
         echo "BLOCKED: AIDA_CARGO_NO_SLOT bypasses the cargo build-slot limiter."
         echo "Agents queue for a slot like everyone else: drop the variable and run long cargo"
         echo "commands in the background. A full suite is CI's job, not a pre-push step"
-        echo "(make check-ci-fast + make test-touched). Only the operator may bypass the queue."
+        # trace:TASK-2238 | ai:claude — the LIGHT gate (TASK-2209)
+        echo "(one targeted cargo test --profile agent run + make check-ci-fast)."
+        echo "Only the operator may bypass the queue."
     } >&2
     exit 2
 fi
