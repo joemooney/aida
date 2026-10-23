@@ -64,7 +64,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T15:55:48.750553278Z
-modified_at: 2026-10-23T11:16:47.211256637Z
+modified_at: 2026-10-23T11:17:34.819842701Z
 req_type: Task
 tags:
 - reconcile
@@ -512,6 +512,12 @@ comments:
   created_at: 2026-10-23T10:29:41.782869279Z
   modified_at: 2026-10-23T10:29:41.782869279Z
   session_id: 2eb8f55e-10e6-4db1-9cfb-54654200d536
+- id: 01a1687b-03e3-7cf0-9e96-d1e3c7d8ce3d
+  author: joe
+  content: 'ADVISOR 04:25: folded the #2842 review findings TASK-2193 (the pr_ship_batch test Fake ignores held, so plan_pr''s hold-state propagation to CI is untested) and TASK-2194 (ship-batch wait_for_review silently retries read_ci errors until the review timeout; surface them). Take them in #2845 with a test each.'
+  created_at: 2026-10-23T11:17:34.819842701Z
+  modified_at: 2026-10-23T11:17:34.819842701Z
+  session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
 history:
 - id: 01a154e0-78cf-7a40-bc67-d8f6e5580d97
   author: joe
