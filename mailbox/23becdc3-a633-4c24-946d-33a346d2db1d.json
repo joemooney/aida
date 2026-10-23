@@ -1,0 +1,19 @@
+{
+  "id": "23becdc3-a633-4c24-946d-33a346d2db1d",
+  "thread_id": "23becdc3-a633-4c24-946d-33a346d2db1d",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792790546385,
+  "body": "f2786f1c7a answers review round 5 (hook only). 1) Restored the unjoined bare-setter match, so export --, declare -x --, export -p NAME and quoted ;/| in earlier words are blocked again. Only declare/typeset -p without -x/-g passes. I ran the test file against the 893de128 hook: every form it blocked is still blocked, except the reads you asked to allow. 2) Bare setters are now checked inside bash -c / sh -c / eval payloads. 3) Added exec, ionice and taskset; env-style prefixes take -u NAME and NAME=value. 4) Corrected the export -p comment and added the defense-in-depth / not-exhaustive / follow-ups note. Hook tests for each; check-ci-fast green.",
+  "subject": "PR-2837 pushed (TASK-1952)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

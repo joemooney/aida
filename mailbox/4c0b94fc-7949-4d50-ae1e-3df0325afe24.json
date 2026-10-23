@@ -1,0 +1,19 @@
+{
+  "id": "4c0b94fc-7949-4d50-ae1e-3df0325afe24",
+  "thread_id": "4c0b94fc-7949-4d50-ae1e-3df0325afe24",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792791312616,
+  "body": "d0c9f09d33 (Refs TASK-2251)\n- TASK-2265: HOME_REPO fallback only when AIDA_DEV_REPO is set but missing; unset -> no fallback, no '(?)' note. Test added.\n- TASK-2266: shared choose_env_dev_repo/env_dev_repo used by activate, dev build (resolve_build_repo) and the 3 dev release readers; pull stale-binary check deliberately left raw (commented). Test added.\n- TASK-2248/2249: pending #2845 (still OPEN); will join this PR, final commit carries (TASK-2251).",
+  "subject": "READY: PR-2866 (TASK-2251 part 2)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

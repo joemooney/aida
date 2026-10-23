@@ -1,0 +1,19 @@
+{
+  "id": "81f3077c-effc-405b-8662-19bc71d31a21",
+  "thread_id": "81f3077c-effc-405b-8662-19bc71d31a21",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792791520994,
+  "body": "New head fa70e34d47 fixes the portability-ratchet finding (a /tmp literal in the new test). All CI lanes pass. The only red check is merge-hold-gate (active aida:merge-hold), which needs reviewer/advisor clearance. I have not touched it.",
+  "subject": "PR-2860 (BUG-2212) CI green at fa70e34d47; awaiting review for merge-hold",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

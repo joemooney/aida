@@ -1,0 +1,19 @@
+{
+  "id": "c36e80b1-e323-4477-857e-bb970d3438cd",
+  "thread_id": "c36e80b1-e323-4477-857e-bb970d3438cd",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792791245269,
+  "body": "3ad3ee0e46\n1. ac73e966: status_awaiting::task_2253_agy_session_start_gc_tests::agy_session_start_ends_a_dead_agy_row_without_manual_gc drives the extracted session-start branch (notice_hook_session, called by emit_notice_time_line) with an agy payload + SessionStart against a temp registry holding a dead agy row; asserts ended_at set. Negative case: no SessionStart -> row untouched.\n2. anchors: trace:TASK-2253.acd91dca on payload/hook tests; trace:TASK-2253.ac73e966 on the new test module.\n3. source cited (Antigravity CLI 1.4.2 builtin hooks.md, ### 3. SessionStart Contract) in presence.rs and both tests.\n4. docs/cli/06-roles-sessions.md and docs/mailbox.md updated.\n5. fake aida prints a backslash; JSON parse asserts it round-trips.\nGates: targeted cargo 13/13, check-ci-fast 34/34.",
+  "subject": "PR-2862 pushed (TASK-2253)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

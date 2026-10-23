@@ -1,0 +1,19 @@
+{
+  "id": "e84e49a7-6791-4fa5-a4da-108e2971a544",
+  "thread_id": "e84e49a7-6791-4fa5-a4da-108e2971a544",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792790538146,
+  "body": "PR-2864 at 46e134be96 (Refs STORY-1843; STRICT review per signoff).\n- aca8ca0d handle at session start: agent_handle.rs (vendor-role-NN; common-root lock and reservation; UUID bound to the native session; name bounds; reserved aliases), wired into the SessionStart touch, agent new (preview reserves nothing), --bg adoption and agent register. Tests: 7 in agent_handle.rs, including a concurrency test.\n- aceb5213 statusline handle for claude/agy (payload session id) and codex (thread-id env). Tests: statusline_session_evidence_covers_all_three_clients, current_session_handle_matches_by_session_never_borrows_another.\n- ac97b025 agent ls HANDLE column; cross-vendor test; dead rows marked. Sandboxed liveness is BUG-2212's PR-2860, independent of this PR.\n- acfeb946 mail by handle reaches the holder's notice; unknown handle refused, no phantom inbox. Tests: mail_to_a_handle_reaches_the_session_holding_it_and_nothing_else, plus anchored resolver refusal tests.\n- C3 write mode recorded as post-deployment criterion acf32e9f.\n- Remaining: ac0eef56 (PR3, after TASK-2253) and C2 relay (PR4).\nGates: targeted runs 406 and 130 passed (the only failure was a sandbox HOME test unrelated to this change); check-ci-fast 34 passed at both commits.",
+  "subject": "READY: PR-2864 (STORY-1843 PR2b)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}
