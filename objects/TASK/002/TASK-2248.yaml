@@ -1,0 +1,27 @@
+id: 01a169f2-d893-7381-a6b7-55c22b3b08e1
+spec_id: TASK-2248
+agreed_id: TASK-2248
+title: Pure-git already-merged re-run refuses a fast-forwarded slice
+description: |
+  pr_cmd.rs pure_git_slice_refs refuses an empty <base>..<slice> range. A pure-git slice merged by fast-forward (the base had not moved) therefore can never be re-run as already-merged, although slice_fork_point explicitly handles the fast-forward case (head~n). It fails closed with a clear error. Fix: confirm the fast-forward case from head~n..head.
+
+  Raised in review of PR-2845: https://github.com/joemooney/aida/pull/2845#issuecomment-6371549385
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-23T18:08:05.267036318Z
+modified_at: 2026-10-23T18:08:05.267036318Z
+req_type: Task
+tags:
+- from-review:PR-2845
+- severity:minor
+filed_at:
+  code_sha: 2eb88160b4f04d978d0e8ef387480fce08d11fac
+  branch: pr-2845
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: a9e78d3491
+  vendor: claude
+  session: 01a169f0aadb
+  harness_version: 2.1.309 (Claude Code)
