@@ -11,12 +11,12 @@ description: |-
   3. Tests cover: an operator-layer path refuses a mandate ship; a branch-only edit to the committed layer has no effect; a directory prefix matches nested files; the floor cannot be shrunk by any layer.
 
   This change edits mandate_gates.rs, so it needs a sketch with advisor signoff, and a human must merge it (it is self-protected).
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T15:30:48.862626134Z
-modified_at: 2026-10-23T07:00:49.935601270Z
+modified_at: 2026-10-23T07:00:53.852003725Z
 req_type: Story
 tags:
 - authority
@@ -147,6 +147,14 @@ history:
   timestamp: 2026-10-23T07:00:51.061703871Z
   session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
   changes: []
+- id: 01a16790-03db-7720-9edf-52a463c608d7
+  author: aida-pr-open
+  timestamp: 2026-10-23T07:00:53.852000465Z
+  session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 7be4321436b8f93b2daba2bd71b649046818e35f
   branch: main
