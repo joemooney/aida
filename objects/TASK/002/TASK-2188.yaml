@@ -6,17 +6,26 @@ description: |
   aida-cli-lib/src/seat_authority.rs:225-227: the RosterRefusal doc comment says `note` names an AIDA_STORE that resolves to another store than the one checked. Since PR-2840 (TASK-2170), an undetected store's note can also name an unusable AIDA_STORE value and the reason it is unusable. Update the doc comment to match.
 
   Raised in review of PR-2840: https://github.com/joemooney/aida/pull/2840#issuecomment-6359467415
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T07:05:34.113711148Z
-modified_at: 2026-10-23T07:05:34.113711148Z
+modified_at: 2026-10-23T07:12:00.291812595Z
 req_type: Task
 tags:
 - docs
 - from-review:PR-2840
 - severity:cosmetic
+history:
+- id: 01a1679a-2f23-70a0-b43b-1bbba569ead4
+  author: joe
+  timestamp: 2026-10-23T07:12:00.291806305Z
+  session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 6b347f3586a93997d43eb78e1c54c441b482ab1f
   branch: pr-2840
