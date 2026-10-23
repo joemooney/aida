@@ -817,7 +817,11 @@ fn store_git(
 ) -> std::result::Result<Vec<u8>, String> {
     use std::io::Write;
     let mut cmd = aida_core::git_ops::host_git_command(store_root);
-    cmd.args(args)
+    // TASK-2067 (advisor C1): no system config, and no path quoting, decide
+    // what a history walk reports. trace:TASK-2067 | ai:claude
+    cmd.args(["-c", "core.quotePath=false"])
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .args(args)
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .stdin(if stdin.is_some() {
@@ -952,10 +956,14 @@ impl StoreHistoryBatch {
             .collect();
         tops.sort_unstable();
         tops.dedup();
+        // TASK-2067 (advisor C1): renames off explicitly, so the listed names
+        // never depend on diff.renames or diff.renameLimit; a renamed-to path
+        // is listed as an addition. trace:TASK-2067 | ai:claude
         let mut args: Vec<&str> = vec![
             "log",
             "--all",
             "--format=%x00%H",
+            "--no-renames",
             "--diff-filter=ACMRT",
             "--name-only",
             "--",
@@ -1094,6 +1102,12 @@ pub(crate) fn store_history_alias_map(
             "--unified=0",
             "--no-color",
             "--no-ext-diff",
+            "--no-textconv",
+            "--no-show-signature",
+            "--src-prefix=a/",
+            "--dst-prefix=b/",
+            "--find-renames",
+            "-l0",
             "--regexp-ignore-case",
             &format!("-G{pattern}"),
             "--",
@@ -1102,51 +1116,82 @@ pub(crate) fn store_history_alias_map(
         None,
     )
     .map_err(|e| format!("cannot search store history for {}: {e}", ids.join(", ")))?;
-    let mut file: Option<String> = None;
+    // TASK-2067: the (old, new) paths of the file pair being read. Renames
+    // are detected explicitly (`--find-renames -l0` above), whatever the
+    // user's diff.renames or diff.renameLimit, so a renumbered object is one
+    // pair: a removed line belongs to the old path, an added line to the new
+    // one, and both stems of a rename are the same spec.
+    // trace:TASK-2067 | ai:claude
+    let mut pair: Option<(String, String)> = None;
     for line in String::from_utf8_lossy(&out).lines() {
         if let Some(paths) = line.strip_prefix("diff --git ") {
-            file = paths.rsplit_once(" b/").map(|(_, b)| b.to_string());
+            pair = paths
+                .strip_prefix("a/")
+                .and_then(|paths| paths.rsplit_once(" b/"))
+                .map(|(a, b)| (a.to_string(), b.to_string()));
+            continue;
+        }
+        if let (Some(from), Some((old, _))) = (line.strip_prefix("rename from "), pair.as_mut()) {
+            *old = from.to_string();
+            continue;
+        }
+        if let (Some(to), Some((_, new))) = (line.strip_prefix("rename to "), pair.as_mut()) {
+            *new = to.to_string();
             continue;
         }
         if line.starts_with("+++ ") || line.starts_with("--- ") {
             continue;
         }
-        let Some(body) = line.strip_prefix('+').or_else(|| line.strip_prefix('-')) else {
-            continue;
+        let (body, removed) = match (line.strip_prefix('-'), line.strip_prefix('+')) {
+            (Some(body), _) => (body, true),
+            (None, Some(body)) => (body, false),
+            (None, None) => continue,
         };
         let Some(caps) = line_re.captures(body) else {
             continue;
+        };
+        let (hit, other) = match &pair {
+            Some((old, new)) if removed => (Some(old.as_str()), Some(new.as_str())),
+            Some((old, new)) => (Some(new.as_str()), Some(old.as_str())),
+            None => (None, None),
         };
         // TASK-1800 (comment 24): the history read below finds versions only
         // at an object's canonical path. A hit anywhere else would read as no
         // history and drop the ID as dangling, so it refuses instead.
         // trace:TASK-1800 | ai:claude
-        let stem = file
-            .as_deref()
-            .and_then(|path| {
-                let stem = Path::new(path)
-                    .file_name()?
-                    .to_str()?
-                    .strip_suffix(".yaml")?;
-                let canonical = aida_core::object_store::relative_object_path(stem).ok()?;
-                (canonical == path).then_some(stem)
-            })
-            .ok_or_else(|| {
-                format!(
-                    "store history carries {} outside a canonical object path ({})",
-                    &caps[2],
-                    file.as_deref().unwrap_or("no file")
-                )
-            })?;
+        let stem = hit.and_then(canonical_object_stem).ok_or_else(|| {
+            format!(
+                "store history carries {} outside a canonical object path ({})",
+                &caps[2],
+                hit.unwrap_or("no file")
+            )
+        })?;
         let id = caps[2].to_ascii_uppercase();
-        let stem = stem.to_ascii_uppercase();
+        // The other side of a rename only adds versions to judge.
+        let renamed = other
+            .filter(|other| Some(*other) != hit)
+            .and_then(canonical_object_stem);
         if let Some(aliases) = found.get_mut(&id) {
-            if stem != id && !aliases.contains(&stem) {
-                aliases.push(stem);
+            for stem in std::iter::once(stem).chain(renamed) {
+                let stem = stem.to_ascii_uppercase();
+                if stem != id && !aliases.contains(&stem) {
+                    aliases.push(stem);
+                }
             }
         }
     }
     Ok(found)
+}
+
+/// The object ID whose canonical object path is `path`, if it is one.
+// trace:TASK-1800 trace:TASK-2067 | ai:claude
+fn canonical_object_stem(path: &str) -> Option<&str> {
+    let stem = Path::new(path)
+        .file_name()?
+        .to_str()?
+        .strip_suffix(".yaml")?;
+    let canonical = aida_core::object_store::relative_object_path(stem).ok()?;
+    (canonical == path).then_some(stem)
 }
 
 /// TASK-1800: [`store_history_alias_map`] for one ID.
@@ -1619,85 +1664,101 @@ fn hold_cover<'a>(c: &ShipCheck<'a>) -> std::result::Result<&'a Mandate, Mandate
     // trace:STORY-1698 | ai:claude
     // trace:TASK-1800 | ai:antigravity
     for spec in c.specs {
-        let id = &spec.id;
-        if spec.named && spec.current.is_none() {
-            return Err(MandateRefusal::SpecsUnresolved);
-        }
-        let history = match &spec.history {
-            Ok(history) => history,
-            Err(why) => {
-                return Err(MandateRefusal::HistoryUnreadable {
-                    spec: id.clone(),
-                    why: why.clone(),
-                })
-            }
-        };
-        if spec.named && history.is_empty() {
+        judge_exclusion_spec(spec, ledger, mandate.include_supervised)?;
+    }
+    Ok(mandate)
+}
+
+/// One exclusion subject under the per-spec rules [`hold_cover`] applies to
+/// every spec: fail closed on a missing named spec or unreadable history, the
+/// ledger first, then every version; a dangling trace-derived ID passes.
+/// Shared with the TASK-1800 replay (TASK-2067).
+// trace:STORY-1698 | ai:claude
+// trace:TASK-1800 | ai:antigravity
+// trace:TASK-2067 | ai:claude
+pub(crate) fn judge_exclusion_spec(
+    spec: &ShipSpec,
+    ledger: &std::collections::BTreeMap<String, Exclusion>,
+    include_supervised: bool,
+) -> std::result::Result<(), MandateRefusal> {
+    let id = &spec.id;
+    if spec.named && spec.current.is_none() {
+        return Err(MandateRefusal::SpecsUnresolved);
+    }
+    let history = match &spec.history {
+        Ok(history) => history,
+        Err(why) => {
             return Err(MandateRefusal::HistoryUnreadable {
                 spec: id.clone(),
-                why: format!("no version of {id} in the store's history"),
-            });
+                why: why.clone(),
+            })
         }
-        // The ledger is the first source: once seen excluded, always excluded.
-        // Consult both the ID and any recorded aliases.
-        let mut excluded: Option<String> = None;
-        for key in std::iter::once(id).chain(spec.aliases.iter()) {
-            if let Some(entry) = ledger.get(&key.to_ascii_uppercase()) {
-                if entry.always_human {
-                    return Err(MandateRefusal::AlwaysHuman {
-                        spec: id.clone(),
-                        class: entry.class.clone(),
-                    });
-                }
-                if excluded.is_none() {
-                    excluded = Some(format!(
-                        "{}, recorded {}",
-                        entry.class,
-                        entry.first_seen.to_rfc3339()
-                    ));
-                }
-            }
-        }
-        if !spec.named && spec.current.is_none() && history.is_empty() && excluded.is_none() {
-            // Dangling trace-derived reference: no current version, no store
-            // history on any ref, and no exclusion ledger entry.
-            continue;
-        }
-        let current_changes = spec
-            .current
-            .as_ref()
-            .map(field_change_versions)
-            .unwrap_or_default();
-        let versions = spec
-            .current
-            .iter()
-            .chain(current_changes.iter())
-            .chain(history.iter());
-        for (i, version) in versions.enumerate() {
-            if let Some(class) = always_human_class(version) {
+    };
+    if spec.named && history.is_empty() {
+        return Err(MandateRefusal::HistoryUnreadable {
+            spec: id.clone(),
+            why: format!("no version of {id} in the store's history"),
+        });
+    }
+    // The ledger is the first source: once seen excluded, always excluded.
+    // Consult both the ID and any recorded aliases.
+    let mut excluded: Option<String> = None;
+    for key in std::iter::once(id).chain(spec.aliases.iter()) {
+        if let Some(entry) = ledger.get(&key.to_ascii_uppercase()) {
+            if entry.always_human {
                 return Err(MandateRefusal::AlwaysHuman {
                     spec: id.clone(),
-                    class,
+                    class: entry.class.clone(),
                 });
             }
             if excluded.is_none() {
-                excluded = excluded_class(version).map(|why| {
-                    if i == 0 && spec.current.is_some() {
-                        why
-                    } else {
-                        format!("{why}, in an earlier version")
-                    }
-                });
+                excluded = Some(format!(
+                    "{}, recorded {}",
+                    entry.class,
+                    entry.first_seen.to_rfc3339()
+                ));
             }
         }
-        if let (Some(why), false) = (excluded, mandate.include_supervised) {
-            return Err(MandateRefusal::Excluded {
+    }
+    if !spec.named && spec.current.is_none() && history.is_empty() && excluded.is_none() {
+        // Dangling trace-derived reference: no current version, no store
+        // history on any ref, and no exclusion ledger entry.
+        return Ok(());
+    }
+    let current_changes = spec
+        .current
+        .as_ref()
+        .map(field_change_versions)
+        .unwrap_or_default();
+    let versions = spec
+        .current
+        .iter()
+        .chain(current_changes.iter())
+        .chain(history.iter());
+    for (i, version) in versions.enumerate() {
+        if let Some(class) = always_human_class(version) {
+            return Err(MandateRefusal::AlwaysHuman {
                 spec: id.clone(),
-                why,
+                class,
+            });
+        }
+        if excluded.is_none() {
+            excluded = excluded_class(version).map(|why| {
+                if i == 0 && spec.current.is_some() {
+                    why
+                } else {
+                    format!("{why}, in an earlier version")
+                }
             });
         }
     }
-    Ok(mandate)
+    if let (Some(why), false) = (excluded, include_supervised) {
+        return Err(MandateRefusal::Excluded {
+            spec: id.clone(),
+            why,
+        });
+    }
+    Ok(())
 }
 
 // ── Ledger ──────────────────────────────────────────────────────────────────
