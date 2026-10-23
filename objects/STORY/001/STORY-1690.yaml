@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T12:00:43.205703912Z
-modified_at: 2026-10-23T19:22:01.133885566Z
+modified_at: 2026-10-23T19:24:54.400378520Z
 req_type: Story
 tags:
 - ci
@@ -37,6 +37,10 @@ relationships:
     custom: implemented-by
   target_id: 01a168af-1961-7c60-8b9d-4a111e98271d
   created_at: 2026-10-23T12:14:49.536877618Z
+  created_by: joe
+- rel_type: Supersedes
+  target_id: 01a16a37-1ace-7a32-a0fb-2e61361dbe9b
+  created_at: 2026-10-23T19:24:54.400365208Z
   created_by: joe
 comments:
 - id: 01a13b1b-609a-7331-bbc8-465daf557510
@@ -197,6 +201,11 @@ history:
   timestamp: 2026-10-23T19:22:01.287063618Z
   session_id: 01a16a321d5d
   harness_version: 2.1.309 (Claude Code)
+  changes: []
+- id: 01a16a39-3276-7762-bf01-2599aa905dff
+  author: joe
+  timestamp: 2026-10-23T19:24:55.798118049Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
   changes: []
 filed_at:
   code_sha: 71d04b3609f89ac607471a35013a0ad9962708f6
