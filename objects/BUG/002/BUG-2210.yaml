@@ -3,13 +3,22 @@ spec_id: BUG-2210
 agreed_id: BUG-2210
 title: dev activate auto in a worktree picks main's fresher build instead of the worktree's own build
 description: 'In ~/ai/aida-worktrees/take-2830, `aida dev build` printed ''try this build in your shell'' via `aida dev activate auto`, but activate auto selected the primary checkout''s newer build (c6bb0dc4f1) instead of the worktree''s target/agent build. The operator ran the BUG-1934 C4 probe against the wrong binary until PATH was set to the worktree''s target/agent by hand. Expected: run from a worktree, activate auto prefers that worktree''s build, or it names the build it picked and why.'
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T16:14:49.536406704Z
-modified_at: 2026-10-23T16:14:49.536406704Z
+modified_at: 2026-10-23T16:46:02.219081433Z
 req_type: Bug
+history:
+- id: 01a169a7-b9eb-73e2-948d-df6feb1101d3
+  author: joe
+  timestamp: 2026-10-23T16:46:02.219078501Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: ff14eaf5002dfbfd8f0838ae330a0c1703ce36ae
   branch: main
