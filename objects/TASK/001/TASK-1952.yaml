@@ -47,7 +47,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T15:57:44.849505155Z
-modified_at: 2026-10-23T07:03:30.450240527Z
+modified_at: 2026-10-23T15:09:05.721123986Z
 req_type: Task
 tags:
 - contained
@@ -700,6 +700,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1694e-f9db-7510-8107-cfacb2c632ed
+  author: joe
+  timestamp: 2026-10-23T15:09:05.883349265Z
+  session_id: 01a1694bc723
+  harness_version: 2.1.309 (Claude Code)
+  changes: []
 processing_record:
 - id: 01a15cd6-7d71-7962-8b84-e2ae16b3e1d0
   timestamp: 2026-10-21T05:02:03.121912504Z
@@ -722,7 +728,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'S5 items TASK-1924, BUG-1992(1,4), TASK-1976/1977, 2125, 2127, 2139, 2140, 2146-2149, 2113 pass. TASK-2001 is PARTIAL: the remote-credentials ratchet does not flag dropped routing at several sites the spec names. Minor guard gaps are also listed. CI is green at the reviewed head.'
+  detail: 'Round 2: all round-1 items fixed (doctor push --delete, git_push_in, git_raw_via, remote_git_with_env now flagged; TASK-2139/2140/1976/2125 gaps closed, CI green). TASK-2001 ratchet still misses 4 routed remote sites when their routing is removed: verbs after -c options and a >3-statement let-mut chain.'
   recovery_hint: address the review findings, move TASK-1952 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-10-23T07:03:30.450240527Z
+  shelved_at: 2026-10-23T15:09:05.721123986Z
