@@ -316,11 +316,14 @@ fn template_dir_repair_keeps_the_dir_in_place_under_racing_repairers() {
         let reader = s.spawn(|| {
             barrier.wait();
             let mut seen = 0u64;
-            while !stop.load(std::sync::atomic::Ordering::Relaxed) {
+            // Checks at least once, even if scheduled only after the repair.
+            loop {
                 assert!(dir.is_dir(), "the template dir went missing mid-repair");
                 seen += 1;
+                if stop.load(std::sync::atomic::Ordering::Relaxed) {
+                    break seen;
+                }
             }
-            seen
         });
         let repairers: Vec<_> = (0..8)
             .map(|_| {
