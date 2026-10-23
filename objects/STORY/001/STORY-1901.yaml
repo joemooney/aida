@@ -1,0 +1,20 @@
+id: 01a1679b-3cdc-7ad2-bc6c-c1e958d9e302
+spec_id: STORY-1901
+agreed_id: STORY-1901
+title: 'Review PR-2846: TASK-1945 S3a ship-ready report and once-only advisor wake'
+description: 'Hand-filed review story: #2846 is Refs-only, so auto-queue-review filed none (BUG-2208, folded into TASK-1955). Covers TASK-1945.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-23T07:13:09.340269229Z
+modified_at: 2026-10-23T07:13:09.340269229Z
+req_type: Story
+filed_at:
+  code_sha: 597ea98e77150b4819f186a5d652b9855d5ee3cb
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 64c2153d82
+  vendor: claude
+  session: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
