@@ -1,0 +1,28 @@
+id: 01a169e6-9def-76c2-9d91-15d1d103ae3c
+spec_id: TASK-2247
+agreed_id: TASK-2247
+title: collect_cleanup_report probes each seat clone with no shared deadline
+description: |
+  In aida-cli-lib/src/status_awaiting.rs, collect_cleanup_report (around lines 41-54) calls seat_clone::probe once per clone_seat_trees entry. That is up to three sandboxed calls per clone, each bounded only by PROBE_TIMEOUT, and the callers' budgets are ignored. With several clone leases (or slow bwrap), the uncommitted-WIP detector in awaiting/status can overrun its budget. PR-2836 fixed exactly this for collect_unshipped_work_items_bounded, using probe_until.
+  Fix: pass a deadline through to probe_until. A clone that gets skipped should still show as one explanatory entry, as an unreadable clone does now.
+
+  Raised in review of PR-2836: https://github.com/joemooney/aida/pull/2836#issuecomment-6371297477
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-23T17:54:43.823592946Z
+modified_at: 2026-10-23T17:54:43.823592946Z
+req_type: Task
+tags:
+- from-review:PR-2836
+- severity:minor
+filed_at:
+  code_sha: 4657f4e29334f6f9c7c32cd2125161c6636187c8
+  branch: pr-2836
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 017e4a4949
+  vendor: claude
+  session: 01a169e42454
+  harness_version: 2.1.309 (Claude Code)
