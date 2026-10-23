@@ -1,0 +1,34 @@
+id: 01a1678f-7053-7223-9470-ea1793cc6ad5
+spec_id: STORY-1897
+agreed_id: STORY-1897
+title: 'Review PR-2842: [AI:claude] fix(pr): ship-batch dry run reads the hold once and reports it as the hold (TASK-2180)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `claude/task-2180`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2842>
+  - Branch: `claude/task-2180` → `main`
+
+  ## Covers
+
+  - TASK-2180
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2842` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-23T07:00:16.083701423Z
+modified_at: 2026-10-23T07:00:16.083701423Z
+req_type: Story
+filed_at:
+  code_sha: 64c2153d82b8ac704fa54f3895d3796dd7afdf18
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 519bdccd6e
+  vendor: claude
+  session: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
