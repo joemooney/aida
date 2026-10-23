@@ -1,0 +1,28 @@
+id: 01a16883-f849-7d80-92a0-66a61c402502
+spec_id: TASK-1-437
+title: 'non-blocking (minor): no test pins TASK-2170''s whitespace-only AIDA_STORE case …'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-2170, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  non-blocking (minor): no test pins TASK-2170's whitespace-only AIDA_STORE case — aida_store_setting (aida-cli-lib/src/store_sync.rs:352) trims, but nothing asserts a blank value yields None/no note
+  Reviewed sha: e38f0a8fcfd9c7cc3b3192d4773227b9acfe2c91
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-23T11:27:21.673552918Z
+modified_at: 2026-10-23T11:27:21.673552918Z
+req_type: Task
+tags:
+- carried-from:TASK-2170
+- finding-hash:8ede2ff3
+- from-review:TASK-2170
+- kind:carried-forward
+filed_at:
+  code_sha: 830f037b87a3f5da59c06b9b54f0929b0bf6555d
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 017e4a4949
+  vendor: claude
+  session: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
