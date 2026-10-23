@@ -1953,9 +1953,13 @@ pub(crate) fn issue_child(
         // presented by a sandboxed worker. Any other failure is named.
         // trace:BUG-1934 | ai:claude
         Err(e) if e.quota_exhausted() => bail!("{}", key_quota_refusal(requested_seat, &e)),
-        Err(e) => eprintln!(
-            "Warning: the child `{requested_seat}` grant is bound to this launcher's process only: {e}. A worker whose tool calls run in a sandbox cannot present it"
-        ),
+        Err(e) => {
+            if let Some(warning) =
+                proc_only_child_warning(requested_seat, &e, crate::grant_keyring::available())
+            {
+                eprintln!("{warning}");
+            }
+        }
     }
     let grant = SeatGrant {
         id,
@@ -1973,6 +1977,23 @@ pub(crate) fn issue_child(
     };
     write_grant(&grant)?;
     Ok(grant)
+}
+
+/// The warning for a child grant that keeps only its process binding. `None`
+/// where the keyring is structurally unavailable (off Linux, or refused by
+/// the kernel): every launch there is proc-only, so a per-launch warning is
+/// noise (TASK-2212).
+// trace:TASK-1955 | ai:claude (TASK-2212)
+pub(crate) fn proc_only_child_warning(
+    seat: &str,
+    err: &crate::grant_keyring::InstallError,
+    keyring_available: bool,
+) -> Option<String> {
+    keyring_available.then(|| {
+        format!(
+            "Warning: the child `{seat}` grant is bound to this launcher's process only: {err}. A worker whose tool calls run in a sandbox cannot present it"
+        )
+    })
 }
 
 /// TASK-2195: why a child launch is refused when the kernel key quota is

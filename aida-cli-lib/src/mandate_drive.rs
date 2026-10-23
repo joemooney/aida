@@ -2423,8 +2423,8 @@ pub(crate) fn advisor_live(project_root: &Path, now: DateTime<Utc>) -> bool {
 /// STORY-1700: the per-turn notice's stamp for the session's seat grant
 /// ([`crate::seat_authority::GRANT_ENV`]), read back by [`advisor_live`].
 /// BUG-1934: the stamp carries this process's tokens that satisfy the
-/// grant's binding; none (an unbound grant, a foreign presenter) leaves a
-/// stamp that never makes the seat live.
+/// grant's binding; none (an unbound grant, a foreign presenter) stamps
+/// nothing, so it can neither make the seat live nor end a live one.
 // trace:STORY-1700 | ai:claude
 // trace:BUG-1934 | ai:claude
 pub(crate) fn stamp_grant_turn(grant: Option<&str>, now: DateTime<Utc>) {
@@ -2440,6 +2440,14 @@ pub(crate) fn stamp_grant_turn(grant: Option<&str>, now: DateTime<Utc>) {
                 )
             })
             .unwrap_or_default();
+        // TASK-2210: a presenter the grant is not bound to (a daemon lane
+        // that inherited a leaked grant id) matches nothing. Its stamp would
+        // overwrite the bound session's with an empty binding and flap
+        // advisor liveness, so it stamps nothing.
+        // trace:TASK-1955 | ai:claude (TASK-2210)
+        if binding.is_empty() {
+            return;
+        }
         crate::presence::stamp_bound_turn_clock(&grant_turn_key(g), binding, now);
     }
 }

@@ -468,6 +468,43 @@ fn advisor_live_requires_the_stamped_binding() {
     assert!(crate::mandate_drive::advisor_live(root, now));
 }
 
+/// TASK-2210: a turn from a presenter the grant is not bound to (a daemon
+/// lane holding a leaked grant id) leaves the bound session's stamp alone,
+/// so the advisor seat stays live instead of flapping off.
+// trace:TASK-1955 | ai:claude (TASK-2210)
+#[test]
+fn an_unbound_presenter_does_not_overwrite_the_bound_turn_stamp() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let mut env = pinned_env();
+    let home = tempfile::tempdir().unwrap();
+    env.set_key("AIDA_HOME", &home.path().display().to_string());
+    let id = test_support::mint_grant_for(root, SUBJECT, crate::mandate::MANDATE_SEAT, &[]);
+    env.set_key(GRANT_ENV, &id);
+    set_binding(&id, &["proc:4242@linux-starttime:424"]);
+    let now = Utc::now();
+    with_identity_source(presenter_source(), || {
+        crate::mandate_drive::stamp_grant_turn(Some(&id), now)
+    });
+    assert!(crate::mandate_drive::advisor_live(root, now));
+    let daemon_lane = IdentitySource {
+        session_ids: vec!["daemon-session".into()],
+        chain: vec![
+            proc(7000, "aida", "linux-starttime:700"),
+            proc(6800, "claude-daemon", "linux-starttime:680"),
+        ],
+        session_leader: Some(proc(6800, "claude-daemon", "linux-starttime:680")),
+    };
+    let later = now + chrono::Duration::minutes(1);
+    with_identity_source(daemon_lane, || {
+        crate::mandate_drive::stamp_grant_turn(Some(&id), later)
+    });
+    assert!(
+        crate::mandate_drive::advisor_live(root, later),
+        "the unbound presenter's turn must not clear the bound stamp"
+    );
+}
+
 #[test]
 fn bg_launch_refuses_a_seat_it_cannot_bind() {
     let err = crate::agent_launch::bg_seat_refusal("reviewer")
