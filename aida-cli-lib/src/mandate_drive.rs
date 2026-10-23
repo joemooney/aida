@@ -1310,24 +1310,7 @@ pub(crate) fn run_tick(
                 continue;
             }
         }
-        let gate = planned
-            .forced_gate
-            .clone()
-            .or_else(|| {
-                planned
-                    .action
-                    .gate_op()
-                    .and_then(|op| crate::mandate_gates::gate_reason(&inp.gates, op))
-            })
-            .or_else(|| {
-                // Every spec the action touches takes the floor, not just
-                // the first. trace:STORY-1700 | ai:claude
-                planned
-                    .spec
-                    .iter()
-                    .chain(planned.other_specs.iter())
-                    .find_map(|s| (inp.spec_always_human)(s).map(|c| format!("{s} is {c}")))
-            });
+        let gate = planned_gate(&planned, &inp.gates, inp.spec_always_human);
         if let Err(why) = tick.recheck() {
             let r = row(Outcome::Refused, why.clone());
             tick.row(r);
@@ -2292,11 +2275,51 @@ fn print_report(report: &TickReport, json: bool) -> Result<()> {
     Ok(())
 }
 
+/// The human gate a planned action takes: its forced gate, the
+/// `[mandate.human_gates]` op gate, then the operator-only/sticky floor of
+/// every spec it touches. The tick and the preview both ask this, so the
+/// preview never shows routed what the tick would gate.
+// trace:STORY-1700 | ai:claude
+// trace:TASK-1955 | ai:claude (TASK-1933)
+fn planned_gate(
+    planned: &Planned,
+    gates: &std::result::Result<HumanGates, String>,
+    spec_always_human: &dyn Fn(&str) -> Option<String>,
+) -> Option<String> {
+    planned
+        .forced_gate
+        .clone()
+        .or_else(|| {
+            planned
+                .action
+                .gate_op()
+                .and_then(|op| crate::mandate_gates::gate_reason(gates, op))
+        })
+        .or_else(|| {
+            // Every spec the action touches takes the floor, not just
+            // the first. trace:STORY-1700 | ai:claude
+            planned
+                .spec
+                .iter()
+                .chain(planned.other_specs.iter())
+                .find_map(|s| spec_always_human(s).map(|c| format!("{s} is {c}")))
+        })
+}
+
+/// What the preview reads to mirror the tick's holds.
+// trace:TASK-1955 | ai:claude (TASK-1933)
+pub(crate) struct PreviewGates<'a> {
+    pub store_readable: bool,
+    pub gates: std::result::Result<HumanGates, String>,
+    pub spec_always_human: &'a dyn Fn(&str) -> Option<String>,
+}
+
 /// The read-only `aida fleet drive` preview. It mirrors the tick: with an
 /// unreadable store it warns, and every gated seat action shows as
 /// withheld rather than routed. Empty when no lane would act.
 // trace:STORY-1700 | ai:claude
-pub(crate) fn preview_lines(decisions: &[LaneDecision], store_readable: bool) -> Vec<String> {
+pub(crate) fn preview_lines(decisions: &[LaneDecision], ctx: &PreviewGates) -> Vec<String> {
+    let store_readable = ctx.store_readable;
     let mut out = Vec::new();
     for d in decisions {
         match d {
@@ -2306,7 +2329,7 @@ pub(crate) fn preview_lines(decisions: &[LaneDecision], store_readable: bool) ->
             }
             LaneDecision::Act(p) => {
                 let route = p.route.as_str();
-                let status = preview_hold(p, store_readable)
+                let status = preview_hold(p, ctx)
                     .map(|h| format!(" ({h})"))
                     .unwrap_or_default();
                 out.push(format!(
@@ -2328,20 +2351,21 @@ pub(crate) fn preview_lines(decisions: &[LaneDecision], store_readable: bool) ->
 }
 
 /// Why the preview would not route a planned action as-is: withheld (an
-/// unreadable store) or gated. `None` routes it.
+/// unreadable store) or gated, exactly as the tick gates it. `None` routes it.
 // trace:STORY-1700 | ai:claude
-fn preview_hold(p: &Planned, store_readable: bool) -> Option<String> {
-    if !store_readable && p.action.gate_op().is_some() {
+// trace:TASK-1955 | ai:claude (TASK-1933)
+fn preview_hold(p: &Planned, ctx: &PreviewGates) -> Option<String> {
+    if !ctx.store_readable && p.action.gate_op().is_some() {
         Some("withheld: the requirement store is unreadable".to_string())
     } else {
-        p.forced_gate.as_deref().map(|g| format!("gated: {g}"))
+        planned_gate(p, &ctx.gates, ctx.spec_always_human).map(|g| format!("gated: {g}"))
     }
 }
 
 /// The `--json` projection of the preview: the same lanes `preview_lines`
 /// renders, as data. `lanes` is empty when no lane would act.
 // trace:STORY-1700 | ai:claude
-pub(crate) fn preview_json(decisions: &[LaneDecision], store_readable: bool) -> serde_json::Value {
+pub(crate) fn preview_json(decisions: &[LaneDecision], ctx: &PreviewGates) -> serde_json::Value {
     let lanes: Vec<serde_json::Value> = decisions
         .iter()
         .filter_map(|d| match d {
@@ -2358,12 +2382,12 @@ pub(crate) fn preview_json(decisions: &[LaneDecision], store_readable: bool) -> 
                 "subject": p.subject,
                 "action": p.action.as_str(),
                 "route": p.route.as_str(),
-                "held": preview_hold(p, store_readable),
+                "held": preview_hold(p, ctx),
                 "command": p.command,
             })),
         })
         .collect();
-    serde_json::json!({ "store_readable": store_readable, "lanes": lanes })
+    serde_json::json!({ "store_readable": ctx.store_readable, "lanes": lanes })
 }
 
 /// `aida fleet drive [--tick] [--json]`.
@@ -2385,6 +2409,17 @@ pub(crate) fn handle_fleet(action: &crate::cli::FleetAction) -> Result<()> {
             let reqs: Vec<aida_core::Requirement> =
                 store.map(|s| s.requirements).unwrap_or_default();
             let signoff = spec_signoff_from(&reqs);
+            // The tick's own gate inputs, so the preview holds what it holds.
+            // trace:TASK-1955 | ai:claude (TASK-1933)
+            let ledger = crate::mandate::mandate_dir()
+                .ok()
+                .and_then(|dir| crate::mandate::read_exclusions(&dir).ok());
+            let always_human = spec_always_human_from(&reqs, ledger.as_ref());
+            let ctx = PreviewGates {
+                store_readable,
+                gates: crate::mandate_gates::load_human_gates(&root).map_err(|e| format!("{e:#}")),
+                spec_always_human: &always_human,
+            };
             let mut decisions: Vec<LaneDecision> = crate::fleet_lanes::classify_lanes(&root, now)
                 .iter()
                 .map(|l| plan_relay_lane(l, &signoff))
@@ -2396,11 +2431,11 @@ pub(crate) fn handle_fleet(action: &crate::cli::FleetAction) -> Result<()> {
                     .map(plan_unowned_spec),
             );
             if *json {
-                let preview = preview_json(&decisions, store_readable);
+                let preview = preview_json(&decisions, &ctx);
                 println!("{}", serde_json::to_string_pretty(&preview)?);
                 return Ok(());
             }
-            let lines = preview_lines(&decisions, store_readable);
+            let lines = preview_lines(&decisions, &ctx);
             for line in &lines {
                 println!("{line}");
             }

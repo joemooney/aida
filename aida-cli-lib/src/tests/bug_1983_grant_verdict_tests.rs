@@ -49,13 +49,24 @@ fn grant_file(id: &str) -> std::path::PathBuf {
         .join(format!("{id}.json"))
 }
 
+/// The grant store's home is env-derived (`$AIDA_HOME`/`$HOME`). A read or an
+/// edit outside the env lock could resolve a sibling test's temporary home
+/// and miss the record (the in-process `make test-touched` flake), so both
+/// hold the lock unless the caller already does.
+// trace:TASK-1955 | ai:claude
+fn env_locked() -> Option<crate::test_env::EnvLockGuard> {
+    (!crate::test_env::holds_env_lock()).then(crate::test_env::env_lock)
+}
+
 fn read(id: &str) -> Option<SeatGrant> {
+    let _lock = env_locked();
     uuid::Uuid::parse_str(id).ok()?;
     let grant: SeatGrant = serde_json::from_slice(&std::fs::read(grant_file(id)).ok()?).ok()?;
     (grant.id == id).then_some(grant)
 }
 
 fn edit(id: &str, change: impl FnOnce(&mut SeatGrant)) {
+    let _lock = env_locked();
     let mut grant = read(id).unwrap();
     change(&mut grant);
     std::fs::write(grant_file(id), serde_json::to_vec(&grant).unwrap()).unwrap();
@@ -693,7 +704,10 @@ fn one_rejection_table_drives_the_edit_gate_and_review_record() {
             );
             continue;
         }
-        let id = setup(root);
+        let id = {
+            let _lock = env_locked();
+            setup(root)
+        };
         let _ambient = AmbientGuard::hermetic_with_grant(root, Some(label), &id);
         let edit_message = edit_gate_refusal(&store);
         assert!(

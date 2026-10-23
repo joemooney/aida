@@ -36,7 +36,9 @@ impl Fixture {
 
     #[cfg(unix)]
     fn git(&self, args: &[&str]) {
+        // trace:TASK-1955 | ai:claude (BUG-2202)
         let output = std::process::Command::new("/usr/bin/git")
+            .args(aida_core::git_ops::NO_AUTO_MAINTENANCE)
             .current_dir(&self.store)
             .args(args)
             .env("GIT_AUTHOR_NAME", "Fixture")
@@ -405,7 +407,9 @@ fn tick_errors_on_replaced_root_even_when_a_branch_keeps_the_old_tip() {
     let _env = crate::test_env::EnvVarGuard::set("AIDA_HISTORY_CACHE", "1");
     let fx = Fixture::new();
     fx.git(&["branch", "keep-old", "HEAD"]);
+    // trace:TASK-1955 | ai:claude (BUG-2202)
     let out = std::process::Command::new("/usr/bin/git")
+        .args(aida_core::git_ops::NO_AUTO_MAINTENANCE)
         .current_dir(&fx.store)
         .args(["commit-tree", "HEAD^{tree}", "-m", "squashed"])
         .env("GIT_AUTHOR_NAME", "Fixture")

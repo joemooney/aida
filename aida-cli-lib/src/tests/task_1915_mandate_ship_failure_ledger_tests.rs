@@ -71,9 +71,130 @@ fn every_exit_between_the_mandate_release_and_the_merge_ledgers_a_refusal() {
         "exits after the release decision that write no MandateDriveAction row: {unledgered:#?}"
     );
     // The release floor, the refusal hold, the refusal pin, the rebase pin,
-    // both hold-gate timeouts, the mandate ending, the proven base, and the
-    // merge failure with and without a hold to re-arm.
-    assert_eq!(exits.len(), 10, "{exits:#?}");
+    // the hold-gate timeout (one exit for both arms since TASK-2086), the
+    // mandate ending, the proven base, and the merge failure with and without
+    // a hold to re-arm.
+    assert_eq!(exits.len(), 9, "{exits:#?}");
+}
+
+// TASK-2087: a `?` propagation in the same window would skip the ledger
+// without being a `return Err(` / `bail!(` exit, so the window holds none.
+// trace:TASK-1955 | ai:claude (TASK-2087)
+#[test]
+fn no_question_mark_exit_between_the_mandate_release_and_the_merge() {
+    let src = include_str!("../pr_cmd.rs");
+    let body = &src[src
+        .find(concat!("pub(crate) fn pr_ship_", "with_method("))
+        .expect("pr_ship_with_method exists")..];
+    let start = body
+        .find(concat!("let mandate_release = (!floor_", "authority)"))
+        .expect("the mandate release decision");
+    let end = body
+        .find(concat!(
+            "STORY-1700: a ship under a mandate is a ",
+            "mandate-driven action"
+        ))
+        .expect("the post-merge success ledger");
+    let window = &body[start..end];
+    let offenders: Vec<&str> = rust_code_only(window)
+        .lines()
+        .zip(window.lines())
+        .filter(|(code, _)| code.contains('?'))
+        .map(|(_, line)| line)
+        .collect();
+    assert!(
+        offenders.is_empty(),
+        "a `?` here skips the MandateDriveAction ledger: {offenders:#?}"
+    );
+}
+
+/// `text` with every string literal (raw and multi-line included), char
+/// literal and comment blanked out, newlines kept, so line `n` of the result
+/// is line `n` of `text`'s code.
+// trace:TASK-1955 | ai:claude (TASK-2087)
+fn rust_code_only(text: &str) -> String {
+    let c: Vec<char> = text.chars().collect();
+    let mut out = String::new();
+    // Skip from `i` to `end`, keeping only the newlines in between.
+    let skip = |out: &mut String, from: usize, end: usize| {
+        out.extend(c[from..end.min(c.len())].iter().filter(|&&ch| ch == '\n'));
+        end
+    };
+    let mut i = 0;
+    while i < c.len() {
+        let next = c.get(i + 1).copied();
+        let ident_before = i > 0 && (c[i - 1].is_alphanumeric() || c[i - 1] == '_');
+        i = match c[i] {
+            '/' if next == Some('/') => {
+                let end = (i..c.len()).find(|&j| c[j] == '\n').unwrap_or(c.len());
+                skip(&mut out, i, end)
+            }
+            '/' if next == Some('*') => {
+                let end = (i + 2..c.len())
+                    .find(|&j| c[j] == '*' && c.get(j + 1) == Some(&'/'))
+                    .map_or(c.len(), |j| j + 2);
+                skip(&mut out, i, end)
+            }
+            'r' if !ident_before && matches!(next, Some('"' | '#')) => {
+                let hashes = c[i + 1..].iter().take_while(|&&ch| ch == '#').count();
+                let open = i + 1 + hashes;
+                if c.get(open) != Some(&'"') {
+                    out.push('r');
+                    i + 1
+                } else {
+                    let end = (open + 1..c.len())
+                        .find(|&j| c[j] == '"' && (1..=hashes).all(|k| c.get(j + k) == Some(&'#')))
+                        .map_or(c.len(), |j| j + 1 + hashes);
+                    skip(&mut out, i, end)
+                }
+            }
+            '"' => {
+                let mut j = i + 1;
+                while j < c.len() && c[j] != '"' {
+                    j += if c[j] == '\\' { 2 } else { 1 };
+                }
+                skip(&mut out, i, j + 1)
+            }
+            // A char literal (`'x'`, `'\''`, `'\u{..}'`); otherwise a lifetime.
+            '\'' if next == Some('\\') => {
+                let end = (i + 3..c.len())
+                    .find(|&j| c[j] == '\'')
+                    .map_or(c.len(), |j| j + 1);
+                skip(&mut out, i, end)
+            }
+            '\'' if c.get(i + 2) == Some(&'\'') => i + 3,
+            ch => {
+                out.push(ch);
+                i + 1
+            }
+        };
+    }
+    out
+}
+
+/// The `?` pin's stripper hides only literals and comments: a `?` inside a
+/// multi-line or raw string, a char literal or a block comment is no exit,
+/// and one after a `'"'` char literal still is.
+// trace:TASK-1955 | ai:claude (TASK-2087)
+#[test]
+fn the_question_mark_stripper_hides_only_literals_and_comments() {
+    let text = concat!(
+        "let a = \"first\n",
+        "  still a string? yes\";\n",
+        "let b = r#\"raw \"?\" body\"#;\n",
+        "let q = '?'; let e = '\\''; /* a? */\n",
+        "let d = '\"'; let x = load()?;\n",
+        "fn f<'a>(s: &'a str) -> Option<&'a str> { s.get(0..)?; None }\n",
+    );
+    let code = rust_code_only(text);
+    let flagged: Vec<usize> = code
+        .lines()
+        .enumerate()
+        .filter(|(_, l)| l.contains('?'))
+        .map(|(n, _)| n)
+        .collect();
+    assert_eq!(code.lines().count(), text.lines().count(), "{code}");
+    assert_eq!(flagged, [4, 5], "{code}");
 }
 
 /// The pin's scanner catches every kind of early exit, and ignores a `?` or

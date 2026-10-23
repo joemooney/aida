@@ -1,3 +1,9 @@
+Mailbox delivery resolves named agents against current registry liveness,
+shares canonicalization across CLI/MCP/mentions, refuses unknown/dead agents
+and empty role/vendor audiences, and lists group readers. Known people retain
+offline inboxes; historical reads do not require a live recipient.
+<!-- trace:STORY-1843 | ai:codex -->
+
 Review watch discovers open non-draft GitHub/GitLab changes against pinned
 origin and each change's own base-branch evidence and dispatches ordinary attested reviewers before
 CI settles. Atomic version-1 state under the main worktree's `.aida/review-watch`
