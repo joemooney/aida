@@ -1,6 +1,8 @@
-//! TASK-1800 corpus replay (§4b of the signed-off AC2 sketch). Local
-//! evidence, not CI: the squash-merged PR heads it pins need not exist in
-//! CI's clone. Run it with `make task-1800-replay`.
+//! TASK-1800 corpus replay (§4b of the signed-off AC2 sketch). The full
+//! replay is local evidence, not CI: the squash-merged PR heads it pins need
+//! not exist in CI's clone. Run it with `make task-1800-replay`. TASK-2068:
+//! its 18 audited cases also run in CI from a vendored bundle
+//! ([`task_1800_audited_cases_replay_from_the_vendored_bundle`]).
 //!
 //! It replays the production collector (`ChangedItems`) and the full file on
 //! the 50 frozen endpoints of `docs/testing/task-1800-trace-exclusions.json`.
@@ -14,11 +16,141 @@
 //! relay evidence and not published; pass their path in
 //! `AIDA_TASK1800_POLICY_CLASSES` to add them. `AIDA_TASK1800_REPLAY_OUT`
 //! names a file for the JSON report.
+//!
+//! TASK-2067: with the policy classes, `AIDA_TASK1800_LEDGER` (the private
+//! exclusion ledger; its entries up to the frozen store commit must hash to
+//! the recorded ledger digest) adds the AFTER column: every scoped trace ID is
+//! resolved by the production path (`resolve_exclusion_specs`) and judged by
+//! the production per-spec rules (`judge_exclusion_spec`) on a store pinned
+//! at the frozen store commit, a shared clone with that one ref. The same
+//! judgment on the live store is printed as an informational column, never
+//! asserted. Named refusals are the frozen ones (named handling is unchanged).
 // trace:TASK-1800 | ai:claude
+// trace:TASK-2067 | ai:claude
 use super::*;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
+
+/// The frozen store commit every TASK-1800 classification was read at.
+const FROZEN_STORE: &str = "a5dae7145abd11d2480271c466030b12db6e7668";
+
+/// The frozen ledger: entries first seen up to the frozen store commit, whose
+/// spec-keyed map must hash (sorted compact JSON) to the recorded digest.
+// trace:TASK-2067 | ai:claude
+fn frozen_ledger(path: &std::ffi::OsStr) -> BTreeMap<String, crate::mandate::Exclusion> {
+    const FROZEN_AT: &str = "2026-10-16T20:56:57Z";
+    const DIGEST: &str = "753d1a323b18af13ed73a18f20f9a6f7c6242e3584edf01049897d0dba7289af";
+    let frozen_at: chrono::DateTime<chrono::Utc> = FROZEN_AT.parse().unwrap();
+    let mut raw = BTreeMap::new();
+    let mut ledger = BTreeMap::new();
+    for line in std::fs::read_to_string(path).unwrap().lines() {
+        let value: Value = serde_json::from_str(line).unwrap();
+        let entry: crate::mandate::Exclusion = serde_json::from_value(value.clone()).unwrap();
+        if entry.first_seen <= frozen_at {
+            raw.entry(entry.spec.clone()).or_insert(value);
+            ledger
+                .entry(entry.spec.to_ascii_uppercase())
+                .or_insert(entry);
+        }
+    }
+    let digest = format!("{:x}", Sha256::digest(serde_json::to_string(&raw).unwrap()));
+    assert_eq!(digest, DIGEST, "the ledger is not the frozen one");
+    ledger
+}
+
+/// A checkout of `commit` in a fresh repository whose only ref is that
+/// commit, sharing `repo`'s object database: `--all` sees nothing later.
+// trace:TASK-2067 | ai:claude
+fn pinned_store(repo: &Path, commit: &str) -> tempfile::TempDir {
+    let dir = tempfile::tempdir().unwrap();
+    let common = git(
+        repo,
+        &["rev-parse", "--path-format=absolute", "--git-common-dir"],
+    )
+    .unwrap();
+    let common = std::path::PathBuf::from(String::from_utf8(common).unwrap().trim());
+    let run = |args: &[&str]| {
+        let out = crate::test_git::git_command()
+            .current_dir(dir.path())
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "git {args:?}: {out:?}");
+    };
+    run(&["init", "-q"]);
+    std::fs::write(
+        dir.path().join(".git/objects/info/alternates"),
+        format!("{}\n", common.join("objects").display()),
+    )
+    .unwrap();
+    run(&["update-ref", "refs/heads/store", commit]);
+    run(&["symbolic-ref", "HEAD", "refs/heads/store"]);
+    run(&["checkout", "-q", "-f", "store"]);
+    dir
+}
+
+/// One resolved trace ID: how it resolved and its production judgment.
+// trace:TASK-2067 | ai:claude
+#[derive(Debug)]
+struct Resolved {
+    kind: &'static str,
+    aliases: Vec<String>,
+    versions: Option<usize>,
+    class: Option<String>,
+}
+
+/// Resolve and judge every one of `ids` (as trace-derived IDs) on `store`.
+/// One resolution serves every case: each ID's facts are its own.
+// trace:TASK-2067 | ai:claude
+fn resolve_all(
+    store: &Path,
+    ids: &BTreeSet<String>,
+    ledger: &BTreeMap<String, crate::mandate::Exclusion>,
+) -> BTreeMap<String, Resolved> {
+    use crate::mandate::MandateRefusal;
+    let backend = aida_core::GitBackend::new(store).unwrap();
+    let current = aida_core::DatabaseBackend::load(&backend).unwrap();
+    let specs =
+        crate::mandate_ship::resolve_exclusion_specs(Some(&current), store, &[], ids.clone());
+    specs
+        .into_iter()
+        .map(|spec| {
+            let versions = spec.history.as_ref().ok().map(Vec::len);
+            let kind = match (&spec.current, versions) {
+                (Some(r), _)
+                    if r.spec_id
+                        .as_deref()
+                        .is_some_and(|s| s.eq_ignore_ascii_case(&spec.id)) =>
+                {
+                    "current"
+                }
+                (Some(_), _) => "recorded alias",
+                (None, None) => "history unreadable",
+                (None, Some(0)) if spec.aliases.is_empty() => "dangling",
+                (None, Some(_)) => "deleted with history",
+            };
+            let class = match crate::mandate::judge_exclusion_spec(&spec, ledger, false) {
+                Ok(()) => None,
+                Err(MandateRefusal::AlwaysHuman { class, .. }) => Some(class),
+                Err(MandateRefusal::Excluded { why, .. }) => Some(why),
+                Err(MandateRefusal::HistoryUnreadable { why, .. }) => {
+                    Some(format!("history unreadable: {why}"))
+                }
+                Err(other) => Some(format!("{other:?}")),
+            };
+            let resolved = Resolved {
+                kind,
+                aliases: spec.aliases.clone(),
+                versions,
+                class,
+            };
+            (spec.id, resolved)
+        })
+        .collect()
+}
 
 fn digest(ids: &BTreeSet<String>) -> String {
     let sorted: Vec<&String> = ids.iter().collect();
@@ -50,6 +182,9 @@ fn task_1800_corpus_replay() {
         std::env::var_os("AIDA_TASK1800_POLICY_CLASSES")
             .filter(|p| !p.is_empty())
             .map(|path| serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap());
+    let ledger = std::env::var_os("AIDA_TASK1800_LEDGER")
+        .filter(|p| !p.is_empty() && policy.is_some())
+        .map(|path| frozen_ledger(&path));
     let mut drift = Vec::new();
     let mut lost = Vec::new();
     let mut cases = Vec::new();
@@ -99,7 +234,126 @@ fn task_1800_corpus_replay() {
         }));
         scoped.insert(pr, items.ids);
     }
+    // TASK-2067: the AFTER column, production resolution on the pinned store,
+    // and the live store as an informational column.
+    let resolution = ledger.as_ref().map(|ledger| {
+        let ids: BTreeSet<String> = scoped.values().flatten().cloned().collect();
+        let pinned = pinned_store(repo, FROZEN_STORE);
+        let live = crate::store_sync::detect_distributed_store_from(repo);
+        let columns = [
+            ("pinned", Some(resolve_all(pinned.path(), &ids, ledger))),
+            ("live", live.map(|live| resolve_all(&live, &ids, ledger))),
+        ];
+        let policy = policy.as_ref().unwrap();
+        let mut report = serde_json::Map::new();
+        for (name, column) in &columns {
+            let Some(column) = column else { continue };
+            let mut total = 0;
+            let mut changed = Vec::new();
+            for case in &mut cases {
+                let pr = case["pr"].as_u64().unwrap();
+                let row = frozen["rows"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .find(|row| row["pr"] == pr)
+                    .unwrap();
+                let named = !row["classification"]["scoped_ordinary"]["named_blocker"].is_null();
+                let blockers: Vec<&String> = scoped[&pr]
+                    .iter()
+                    .filter(|id| column[*id].class.is_some())
+                    .collect();
+                let refused = named || !blockers.is_empty();
+                total += usize::from(refused);
+                case[format!("refused_after_{name}")] = json!(refused);
+                if Some(refused) != case["refused"].as_bool() {
+                    changed.push(json!({"pr": pr, "before": case["refused"], "after": refused, "blockers": blockers}));
+                }
+            }
+            let ids: BTreeMap<&String, Value> = column
+                .iter()
+                .filter(|(id, r)| policy.get(*id).cloned().flatten() != r.class)
+                .map(|(id, r)| {
+                    (id, json!({"kind": r.kind, "aliases": r.aliases, "versions": r.versions,
+                        "before": policy.get(id).cloned().flatten(), "after": r.class}))
+                })
+                .collect();
+            println!("refusals over 50 after, {name} store: {total}");
+            report.insert(
+                name.to_string(),
+                json!({"total": total, "changed_cases": changed, "changed_ids": ids}),
+            );
+        }
+        (report, columns)
+    });
     // The 18 audited cases: blob drift, then the zero-loss gate.
+    audit_gate(
+        repo,
+        &audit,
+        &scoped,
+        |row, side| row[side].as_str().unwrap().to_owned(),
+        &mut drift,
+        &mut lost,
+    );
+    // TASK-2067: how each audited unresolved ID now resolves on the pinned
+    // store. None may still refuse for an unreadable or missing history.
+    let mut unresolved = BTreeMap::new();
+    if let Some((_, columns)) = &resolution {
+        let pinned = columns[0].1.as_ref().unwrap();
+        for row in audit["rows"].as_array().unwrap() {
+            for blocker in row["blockers"].as_array().unwrap() {
+                let id = blocker["id"].as_str().unwrap();
+                if blocker["judgment"] != "unresolved" || unresolved.contains_key(id) {
+                    continue;
+                }
+                let Some(r) = pinned.get(id) else { continue };
+                if r.class
+                    .as_deref()
+                    .is_some_and(|c| c.starts_with("history unreadable"))
+                {
+                    lost.push(format!("{id} still refuses: {:?}", r.class));
+                }
+                unresolved.insert(
+                    id.to_owned(),
+                    json!({"kind": r.kind, "aliases": r.aliases, "versions": r.versions, "after": r.class}),
+                );
+            }
+        }
+    }
+    let report = json!({
+        "cases": cases,
+        "refusals": policy.as_ref().map(|_| json!({"named": named_refused, "total": refused})),
+        "resolution": resolution.as_ref().map(|(report, _)| report),
+        "unresolved_ids": unresolved,
+        "lost": lost,
+        "drift": drift,
+    });
+    if let Some(out) = std::env::var_os("AIDA_TASK1800_REPLAY_OUT").filter(|p| !p.is_empty()) {
+        std::fs::write(out, serde_json::to_vec_pretty(&report).unwrap()).unwrap();
+    }
+    if policy.is_some() {
+        println!("refusals over 50: {refused} ({named_refused} named)");
+    }
+    assert!(drift.is_empty(), "corpus or collector drift: {drift:#?}");
+    assert!(
+        lost.is_empty(),
+        "true-touch/unresolved pairs lost: {lost:#?}"
+    );
+}
+
+/// The 18 audited cases: each audited occurrence's blob still hashes as the
+/// audit recorded it (drift), and no (case, ID) pair the audit judged
+/// true-touch or unresolved in scoped mode is missing from `scoped` (the
+/// zero-loss gate). `commit(row, side)` names the case's base or head.
+// trace:TASK-1800 trace:TASK-2067 | ai:claude
+fn audit_gate(
+    repo: &Path,
+    audit: &Value,
+    scoped: &BTreeMap<u64, BTreeSet<String>>,
+    commit: impl Fn(&Value, &str) -> String,
+    drift: &mut Vec<String>,
+    lost: &mut Vec<String>,
+) {
     for row in audit["rows"].as_array().unwrap() {
         let pr = row["pr"].as_u64().unwrap();
         for blocker in row["blockers"].as_array().unwrap() {
@@ -111,7 +365,7 @@ fn task_1800_corpus_replay() {
                 };
                 let spec = format!(
                     "{}:{}",
-                    row[side].as_str().unwrap(),
+                    commit(row, side),
                     occurrence["path"].as_str().unwrap()
                 );
                 let blob = git(repo, &["cat-file", "blob", &spec]).unwrap();
@@ -127,21 +381,90 @@ fn task_1800_corpus_replay() {
             }
         }
     }
-    let report = json!({
-        "cases": cases,
-        "refusals": policy.as_ref().map(|_| json!({"named": named_refused, "total": refused})),
-        "lost": lost,
-        "drift": drift,
-    });
-    if let Some(out) = std::env::var_os("AIDA_TASK1800_REPLAY_OUT").filter(|p| !p.is_empty()) {
-        std::fs::write(out, serde_json::to_vec_pretty(&report).unwrap()).unwrap();
+}
+
+/// TASK-2068: the CI half of the replay. The vendored bundle
+/// (`tests/fixtures/task-1800-replay/`, built by
+/// `scripts/task-1800-replay-fixture.py`) holds a synthetic base and head per
+/// audited case with exactly the real diff, so the production collector must
+/// reproduce each recorded scoped digest, fallback set and changed-path list,
+/// every audited blob, and the zero-loss gate. It runs under every rename
+/// configuration (advisor C1): the collector's diff must not depend on it.
+// trace:TASK-2067 | ai:claude
+#[test]
+fn task_1800_audited_cases_replay_from_the_vendored_bundle() {
+    let repo = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let frozen = load(repo, "docs/testing/task-1800-trace-exclusions.json");
+    let audit = load(repo, "docs/testing/task-1800-semantic-audit.json");
+    let bundle = repo.join("tests/fixtures/task-1800-replay/audited-cases.bundle");
+    for renames in [None, Some("false"), Some("copies")] {
+        let dir = tempfile::tempdir().unwrap();
+        let run = |args: &[&str]| {
+            let out = crate::test_git::git_command()
+                .current_dir(dir.path())
+                .env("GIT_CONFIG_NOSYSTEM", "1")
+                .env("GIT_CONFIG_GLOBAL", "/dev/null")
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(out.status.success(), "git {args:?}: {out:?}");
+        };
+        run(&["init", "-q", "--bare"]);
+        if let Some(renames) = renames {
+            run(&["config", "diff.renames", renames]);
+        }
+        run(&[
+            "fetch",
+            "-q",
+            bundle.to_str().unwrap(),
+            "refs/task-1800/*:refs/task-1800/*",
+        ]);
+        let commit = |row: &Value, side: &str| {
+            let name = format!("refs/task-1800/{}/{side}^{{commit}}", row["pr"]);
+            let sha = git(dir.path(), &["rev-parse", "--verify", &name]).unwrap();
+            String::from_utf8(sha).unwrap().trim().to_owned()
+        };
+        let (mut drift, mut lost) = (Vec::new(), Vec::new());
+        let mut scoped = BTreeMap::new();
+        for row in audit["rows"].as_array().unwrap() {
+            let pr = row["pr"].as_u64().unwrap();
+            let record = frozen["rows"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|r| r["pr"] == pr)
+                .unwrap_or_else(|| panic!("PR {pr} is not a frozen case"));
+            let items = collect(
+                dir.path(),
+                &commit(row, "base"),
+                &commit(row, "head"),
+                Scope::ChangedItems,
+            )
+            .unwrap();
+            if digest(&items.ids) != record["scoped"]["ids_sha256"].as_str().unwrap() {
+                drift.push(format!(
+                    "PR {pr}: scoped set differs from the recorded digest"
+                ));
+            }
+            if items.full_file_fallbacks != strings(&record["scoped"]["fallbacks"]) {
+                drift.push(format!(
+                    "PR {pr}: scoped fallback paths differ from the record"
+                ));
+            }
+            let audited: BTreeSet<String> = row["changed_paths"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|p| p["path"].as_str().unwrap().to_owned())
+                .collect();
+            if items.paths != audited {
+                drift.push(format!("PR {pr}: changed paths differ from the audit"));
+            }
+            scoped.insert(pr, items.ids);
+        }
+        audit_gate(dir.path(), &audit, &scoped, commit, &mut drift, &mut lost);
+        assert_eq!(scoped.len(), 18, "the audit covers 18 cases");
+        assert!(drift.is_empty(), "diff.renames={renames:?}: {drift:#?}");
+        assert!(lost.is_empty(), "diff.renames={renames:?}: {lost:#?}");
     }
-    if policy.is_some() {
-        println!("refusals over 50: {refused} ({named_refused} named)");
-    }
-    assert!(drift.is_empty(), "corpus or collector drift: {drift:#?}");
-    assert!(
-        lost.is_empty(),
-        "true-touch/unresolved pairs lost: {lost:#?}"
-    );
 }
