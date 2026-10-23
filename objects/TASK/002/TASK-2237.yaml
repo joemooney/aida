@@ -11,7 +11,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T15:25:17.188199131Z
-modified_at: 2026-10-23T15:54:15.328761500Z
+modified_at: 2026-10-23T18:23:38.320684139Z
 req_type: Task
 tags:
 - from-review:PR-2848
@@ -22,6 +22,13 @@ relationships:
   target_id: 01a16976-a882-78c2-b263-66f12497408a
   created_at: 2026-10-23T15:54:15.328757279Z
   created_by: joe
+comments:
+- id: 01a16a01-1550-7d62-ac51-0e546a686dd5
+  author: joe
+  content: 'Swept in TASK-2238 (PR-2858). Codex half verified: codex-hooks.json SessionStart runs aida-mail-notice.sh, and codex 0.163''s session-start input schema pins hook_event_name=SessionStart. Pinned by codex_session_start_reaches_the_notice_session_start_path. Antigravity half: antigravity-hooks.json has no session-start hook, so agy never reaches the gc. Tracked as the follow-up TASK-2253.'
+  created_at: 2026-10-23T18:23:38.320684139Z
+  modified_at: 2026-10-23T18:23:38.320684139Z
+  session_id: da288a75-2066-4577-8fb5-8a6386f53efe
 history:
 - id: 01a16978-4bbc-7cf2-9965-df940db340aa
   author: joe
