@@ -102,12 +102,8 @@ impl ActivateRepoSource {
 /// activation) exports `$AIDA_DEV_REPO` as the primary checkout, which made
 /// `cd <worktree> && aida dev activate auto` — the hint `aida dev build`
 /// prints in a worktree — activate the primary checkout's build instead.
-/// Same order as `dev_build::resolve_build_repo`.
-///
-/// A `$AIDA_DEV_REPO` that no longer exists (activation from a worktree
-/// exports the worktree, which is later removed) is skipped in favour of
-/// `env_home` — `$AIDA_DEV_HOME_REPO`, the primary checkout recorded at
-/// activation — when that still exists.
+/// Same order as `dev_build::resolve_build_repo`; both read the env pair
+/// through [`choose_env_dev_repo`].
 // trace:BUG-2210 trace:TASK-2251 | ai:claude
 pub(crate) fn choose_activate_repo(
     repo_arg: Option<&str>,
@@ -123,19 +119,46 @@ pub(crate) fn choose_activate_repo(
     if let Some(found) = cwd.ancestors().find(|p| is_aida_repo(p)) {
         return (found.to_path_buf(), ActivateRepoSource::Enclosing);
     }
-    let env_repo = env_repo.filter(|p| !p.is_empty());
-    if let Some(p) = env_repo.filter(|p| std::path::Path::new(p).exists()) {
-        return (std::path::PathBuf::from(p), ActivateRepoSource::EnvRepo);
-    }
-    // trace:TASK-2251 | ai:claude
-    if let Some(p) = env_home.filter(|p| !p.is_empty() && std::path::Path::new(p).exists()) {
-        return (std::path::PathBuf::from(p), ActivateRepoSource::HomeRepo);
-    }
-    if let Some(p) = env_repo {
-        // Stale and nothing to fall back to: name the stale path in the error.
-        return (std::path::PathBuf::from(p), ActivateRepoSource::EnvRepo);
+    if let Some(found) = choose_env_dev_repo(env_repo, env_home) {
+        return found;
     }
     (cwd.to_path_buf(), ActivateRepoSource::Cwd)
+}
+
+/// The checkout `$AIDA_DEV_REPO` names, for every `aida dev` path that reads
+/// it. A `$AIDA_DEV_REPO` that no longer exists (activation from a worktree
+/// exports the worktree, which is later removed) gives way to `env_home` —
+/// `$AIDA_DEV_HOME_REPO`, the primary checkout recorded at activation — when
+/// that still exists. The fallback fires only for a set-but-missing
+/// `$AIDA_DEV_REPO`: unset means "no dev checkout" and yields `None`. With
+/// nothing to fall back to, the stale path is returned so an error names it.
+// trace:TASK-2251 | ai:claude
+pub(crate) fn choose_env_dev_repo(
+    env_repo: Option<&str>,
+    env_home: Option<&str>,
+) -> Option<(std::path::PathBuf, ActivateRepoSource)> {
+    let env_repo = env_repo.filter(|p| !p.is_empty())?;
+    if !std::path::Path::new(env_repo).exists() {
+        if let Some(home) = env_home.filter(|p| !p.is_empty() && std::path::Path::new(p).exists()) {
+            return Some((std::path::PathBuf::from(home), ActivateRepoSource::HomeRepo));
+        }
+    }
+    Some((
+        std::path::PathBuf::from(env_repo),
+        ActivateRepoSource::EnvRepo,
+    ))
+}
+
+/// [`choose_env_dev_repo`] over the process env, keeping only a path that
+/// exists: what `aida dev build` and `aida dev release` fall back to outside
+/// a checkout.
+// trace:TASK-2251 | ai:claude
+pub(crate) fn env_dev_repo() -> Option<std::path::PathBuf> {
+    let env_repo = std::env::var("AIDA_DEV_REPO").ok();
+    let env_home = std::env::var("AIDA_DEV_HOME_REPO").ok();
+    choose_env_dev_repo(env_repo.as_deref(), env_home.as_deref())
+        .map(|(path, _)| path)
+        .filter(|path| path.exists())
 }
 
 /// The primary checkout of `repo`: `repo` itself, or — for a linked

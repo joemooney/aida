@@ -329,7 +329,10 @@ Antigravity (`antigravity-hooks.json`) template installs a `PreInvocation` hook
 once when a seat grant crosses 2h, 30m and expiry, including the terminal
 renewal command. It never prompts or decides tool permissions. New grants or
 renewal timestamps reset the notice epoch. Child expiry uses the earlier of
-child and parent expiry. Baseline seats stay silent.
+child and parent expiry. Baseline seats stay silent. The Antigravity template
+also installs a `SessionStart` hook running `aida-mail-notice.sh --client agy
+--event SessionStart`, the same mail notice and host-side dead-registry-row gc
+the Claude Code and Codex `SessionStart` hooks run.
 
 Without `AIDA_SESSION_GRANT`, the shell exits without launching the CLI
 (printing `{}` for Antigravity). With a grant it caps the notice command below
@@ -342,6 +345,7 @@ SessionStart and statusline warnings remain available. See
 [verified hook delivery](../testing/bug-2014-grant-expiry-notices.md).
 <!-- trace:BUG-2014 | ai:codex -->
 <!-- trace:TASK-1744 | ai:antigravity -->
+<!-- trace:TASK-2253 | ai:claude -->
 
 ## Watching for new review heads
 
