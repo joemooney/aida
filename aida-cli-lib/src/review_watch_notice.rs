@@ -18,15 +18,23 @@ pub(super) fn digest(text: &str) -> String {
 /// Record and deliver every notice `history` calls for. A receipt is marked
 /// sent only after its delivery; a pending one keeps the message it was
 /// recorded with, so a retry re-delivers it under the same ID.
+///
+/// The round-cap wake is for a head nobody approved: an approval that covers
+/// the head through `evidence` (including one carried over a clean merge of
+/// the base) suppresses it. That read runs only when the cap would fire.
+// trace:TASK-2238 | ai:claude
 pub(super) fn send(
     root: &Path,
     store: &Store,
     change: &forge::Change,
     history: &History,
+    evidence: &dyn ready::Evidence,
 ) -> Result<()> {
     let key = change.key();
     let blocking = findings_due(change, history);
-    let cap = history.blocking() >= 2 && !history.contains(&change.head);
+    let cap = history.blocking() >= 2
+        && !history.contains(&change.head)
+        && evidence.approval(change).is_err();
     if blocking.is_empty() && !cap {
         return Ok(());
     }
@@ -168,7 +176,10 @@ fn findings_message(
     );
     // The current verdict file always holds the latest round; an archived
     // round file is named when this verdict was also read from one.
-    let mut files = vec![format!(".aida/review-verdicts/{key}.json")];
+    let mut files = vec![format!(
+        ".aida/review-verdicts/{}",
+        verdict_file(&key, history)
+    )];
     for file in history.files.get(verdict).into_iter().flatten() {
         let path = format!(".aida/review-verdicts/{file}");
         if !files.contains(&path) {
@@ -234,8 +245,9 @@ fn cap_message(
         "{key} reached the two-round review cap: the reviews of {shas} each blocked done. \
          Its head {head} has no review, and the watcher will not start another. Decide the next \
          step: review the head by hand, or re-scope or close the change. Its findings are in \
-         `.aida/review-verdicts/{key}.json`.",
+         `.aida/review-verdicts/{file}`.",
         head = change.head,
+        file = verdict_file(&key, history),
     );
     message(
         id,
@@ -243,4 +255,26 @@ fn cap_message(
         format!("{key}: two-round review cap reached"),
         body,
     )
+}
+
+/// The current verdict file `history` was read from, relative to
+/// `.aida/review-verdicts/`: `<key>.json`, or for a GitLab MR whose verdicts
+/// sit in the historical `PR-N.json` alias, that alias.
+// trace:TASK-2238 | ai:claude
+fn verdict_file(key: &str, history: &History) -> String {
+    let own = format!("{key}.json");
+    let read: BTreeSet<&str> = history
+        .files
+        .values()
+        .flatten()
+        .map(String::as_str)
+        .filter(|file| !file.contains('/'))
+        .collect();
+    if read.contains(own.as_str()) {
+        return own;
+    }
+    key.strip_prefix("MR-")
+        .map(|number| format!("PR-{number}.json"))
+        .filter(|alias| read.contains(alias.as_str()))
+        .unwrap_or(own)
 }

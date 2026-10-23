@@ -292,8 +292,22 @@ pub(super) fn live_approval(
     let (candidates, policy, ids) =
         crate::pr_cmd::merge_approval_subject(&[root], root, change.id, &[], None, Some(head));
     let site = crate::review_carryover::CarryOverSite::quiet(root, Some(&change.base));
-    let approval = approval_at(change.id, &candidates, head, &policy, &site)?;
-    corpus_at(root, change, &ids)?;
+    approval_then_corpus(
+        || approval_at(change.id, &candidates, head, &policy, &site),
+        || corpus_at(root, change, &ids),
+    )
+}
+
+/// [`live_approval`]'s composition: the approval gate first, then the corpus
+/// gate, whose refusal wins over an approval. The corpus is not read when no
+/// approval covers the head.
+// trace:TASK-2238 | ai:claude
+pub(super) fn approval_then_corpus(
+    approval: impl FnOnce() -> std::result::Result<Approval, String>,
+    corpus: impl FnOnce() -> std::result::Result<(), String>,
+) -> std::result::Result<Approval, String> {
+    let approval = approval()?;
+    corpus()?;
     Ok(approval)
 }
 

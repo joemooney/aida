@@ -104,3 +104,30 @@ fn mint_never_replaces_an_unreadable_roster() {
         "[members]\njoe = [\"advisor\"\n"
     );
 }
+
+/// TASK-1708 (swept in TASK-2238): the guard sits in the
+/// `write_member_seats` primitive, so a caller that skips the CAS wrappers
+/// still cannot write a non-scratch roster as the hermetic user, while a
+/// temp or workspace-`target/` store stays writable.
+// trace:TASK-2238 | ai:claude
+#[test]
+fn task_2238_write_member_seats_guards_itself() {
+    let _env = EnvVarsGuard::apply(&[("AIDA_USER", Some(HERMETIC_TEST_USER))]);
+    let real = Path::new("/nonexistent-bug-2209/.aida-store");
+    assert!(panics(|| {
+        let _ = aida_core::team::write_member_seats(real, "x", None, |_| Some(vec![]));
+    }));
+    let tmp = tempfile::tempdir().unwrap();
+    assert!(
+        aida_core::team::write_member_seats(tmp.path(), "x", None, |_| {
+            Some(vec!["implementer".to_string()])
+        })
+        .unwrap()
+    );
+    let target = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .join("target");
+    std::fs::create_dir_all(&target).unwrap();
+    aida_core::team::guard_roster_write(&target.join("bug-2209-fixture/.aida-store"));
+}
