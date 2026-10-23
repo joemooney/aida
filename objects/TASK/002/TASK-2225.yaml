@@ -1,0 +1,28 @@
+id: 01a16946-d61b-7d40-84a7-136087c6f99d
+spec_id: TASK-2225
+agreed_id: TASK-2225
+title: Root CLAUDE.md still lists make check-ci-compile as unconditional after a main merge
+description: |
+  CLAUDE.md:41 says 'make check-ci-compile # after merging main into a branch: compile all tests, run none'. Under the LIGHT gate (TASK-2209) it runs only when the change touches shared test infra (test_env, test_git, ratchet baselines) or more than 10 files. This is the always-loaded guide, so the conflict is seen every session.
+
+  Raised in review of PR-2854: https://github.com/joemooney/aida/pull/2854#issuecomment-6367878895
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-23T15:00:12.443771318Z
+modified_at: 2026-10-23T15:00:12.443771318Z
+req_type: Task
+tags:
+- docs
+- from-review:PR-2854
+- severity:minor
+filed_at:
+  code_sha: 96fd8b253affb617d6431836c0523a5baa8a1f21
+  branch: pr-2854
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 017e4a4949
+  vendor: claude
+  session: 01a16945b2c8
+  harness_version: 2.1.309 (Claude Code)

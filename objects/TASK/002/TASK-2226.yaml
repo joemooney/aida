@@ -1,0 +1,28 @@
+id: 01a16946-e60c-7e41-a8f6-6090a8ee91ea
+spec_id: TASK-2226
+agreed_id: TASK-2226
+title: Guardrails hook NO_SLOT message still names make test-touched as the pre-push step
+description: |
+  aida-core/templates/hooks/aida-git-guardrails.sh:589 prints '(make check-ci-fast + make test-touched)'. Under the LIGHT gate it should be one targeted cargo test --profile agent run + make check-ci-fast.
+
+  Raised in review of PR-2854: https://github.com/joemooney/aida/pull/2854#issuecomment-6367878895
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-23T15:00:16.524997933Z
+modified_at: 2026-10-23T15:00:16.524997933Z
+req_type: Task
+tags:
+- docs
+- from-review:PR-2854
+- severity:cosmetic
+filed_at:
+  code_sha: 96fd8b253affb617d6431836c0523a5baa8a1f21
+  branch: pr-2854
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 017e4a4949
+  vendor: claude
+  session: 01a16945b2c8
+  harness_version: 2.1.309 (Claude Code)
