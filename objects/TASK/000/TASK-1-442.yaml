@@ -1,0 +1,28 @@
+id: 01a16948-9886-7422-bbca-cf910f29dda5
+spec_id: TASK-1-442
+title: 'minor (non-blocking): root CLAUDE.md:41 still lists ''make check-ci-compile # af…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-2209, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  minor (non-blocking): root CLAUDE.md:41 still lists 'make check-ci-compile # after merging main into a branch' as unconditional, contradicting the new conditional rule (shared test infra or >10 files). Outside the spec's named scope (skills + discipline docs) but it is the always-loaded guide.
+  Reviewed sha: 96fd8b253affb617d6431836c0523a5baa8a1f21
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-23T15:02:07.750685206Z
+modified_at: 2026-10-23T15:02:07.750685206Z
+req_type: Task
+tags:
+- carried-from:TASK-2209
+- finding-hash:afa2eba4
+- from-review:TASK-2209
+- kind:carried-forward
+filed_at:
+  code_sha: fce1463450fffaa7324261e6305463a58be10b95
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 017e4a4949
+  vendor: claude
+  session: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
