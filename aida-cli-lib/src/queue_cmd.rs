@@ -10926,6 +10926,21 @@ pub(crate) fn preflight_queue_work_branch(
             String::from_utf8_lossy(&out.stderr).trim()
         );
     }
+    // BUG-2169 slice S4: a contained seat's private clone on the branch holds
+    // it too. It is never offered for `git worktree remove` (not a linked
+    // worktree); ending its session salvages and removes it.
+    // trace:TASK-2053 | ai:claude
+    if let Some(clone) = clone_seat_trees(root)
+        .into_iter()
+        .find(|wt| wt.branch.as_deref() == Some(branch))
+    {
+        anyhow::bail!(
+            "branch `{branch}` is held by a contained seat's private clone at {} before pickup \
+             setup. Continue it in that seat, end that seat's session first (`aida session end`), \
+             or choose another --branch.",
+            clone.path.display()
+        );
+    }
     let inventory = String::from_utf8_lossy(&out.stdout);
     for wt in crate::worktree_reclaim::parse_worktree_entries(&inventory) {
         if wt.branch.as_deref() != Some(branch) {

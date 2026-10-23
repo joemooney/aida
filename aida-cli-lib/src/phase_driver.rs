@@ -2511,6 +2511,19 @@ impl RealPhaseDriver {
             return;
         }
 
+        // BUG-2169 slice S4: a contained seat's private clone is not a linked
+        // worktree, and host git never runs in it. Its session's end or reap
+        // probes, salvages and removes it.
+        // trace:TASK-2053 | ai:claude
+        if aida_core::seat_clone_detect::seat_clone_root(&worktree).is_some() {
+            log(format!(
+                "keeping the failed attempt's seat clone {} — ending or reaping its session \
+                 salvages and removes it",
+                worktree.display()
+            ));
+            return;
+        }
+
         let dirty = aida_core::git_ops::worktree_is_dirty(&worktree);
         let locked = worktree_is_locked(&self.project_root, &worktree);
         let unpushed = local_commits_not_on_branch(&worktree, &branch);
