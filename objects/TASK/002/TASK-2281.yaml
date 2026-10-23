@@ -1,0 +1,27 @@
+id: 01a16ad3-0d5c-7e63-8ef8-94a5137e6f18
+spec_id: TASK-2281
+agreed_id: TASK-2281
+title: PidNamespaceProbe init allowlist misclassifies runit/openrc/s6 hosts as isolated
+description: |
+  PidNamespaceProbe::is_isolated (agent_registry.rs) treats any pid 1 whose comm is not in [systemd, init, tini, dumb-init, docker-init, catatonit] as an isolated sandbox. Hosts running runit, openrc-init, s6-svscan or busybox init fail that check. On them an ordinary host shell gets observer.isolated = true, so unstamped legacy registry rows go unobserved (gc skips them, agent ls shows them heartbeat-based) and agent ls prints "run outside the sandbox" when there is no sandbox. Consider dropping the comm heuristic or widening the list.
+
+  Raised in review of PR-2860: https://github.com/joemooney/aida/pull/2860#issuecomment-6375776160
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-23T22:12:58.844476135Z
+modified_at: 2026-10-23T22:12:58.844476135Z
+req_type: Task
+tags:
+- from-review:PR-2860
+- severity:minor
+filed_at:
+  code_sha: f8a98e8a2435a3cd4f06b01138f57d7a6a87d65d
+  branch: pr-2860
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c51da86593
+  vendor: claude
+  session: 01a16ad13923
+  harness_version: 2.1.309 (Claude Code)

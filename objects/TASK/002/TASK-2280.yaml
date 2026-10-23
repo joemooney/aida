@@ -1,0 +1,31 @@
+id: 01a16ad3-0122-7c22-8b1f-912da9962f77
+spec_id: TASK-2280
+agreed_id: TASK-2280
+title: Heartbeat liveness fallback makes crashed host sessions look live to sandboxed launch/advisor guards
+description: |
+  PR-2860 (BUG-2212) put the heartbeat fallback in view_for, so it reaches every list_agent_views consumer, not only `agent ls`. From an isolated PID namespace, a host session that crashed without setting ended_at still reads as live for up to UNOBSERVED_HEARTBEAT_TTL_SECS (24h) in:
+  - agent_launch.rs matching_live_duplicate: a false duplicate-launch refusal
+  - supervise_cmd.rs:291 live_advisor_recipient: nudges go to a dead advisor
+  - terminal_cmd.rs resolve_session_target
+  These fail closed, but no test covers them. Decide whether the guards should treat LivenessBasis::Heartbeat rows differently, for example a shorter window or an explicit "unverified" result.
+
+  Raised in review of PR-2860: https://github.com/joemooney/aida/pull/2860#issuecomment-6375776160
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-23T22:12:55.714262367Z
+modified_at: 2026-10-23T22:12:55.714262367Z
+req_type: Task
+tags:
+- from-review:PR-2860
+- severity:minor
+filed_at:
+  code_sha: f8a98e8a2435a3cd4f06b01138f57d7a6a87d65d
+  branch: pr-2860
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c51da86593
+  vendor: claude
+  session: 01a16ad13923
+  harness_version: 2.1.309 (Claude Code)
