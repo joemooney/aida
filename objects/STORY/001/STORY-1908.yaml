@@ -1,0 +1,34 @@
+id: 01a16905-dd97-7362-b0a8-8f77803353cf
+spec_id: STORY-1908
+agreed_id: STORY-1908
+title: 'Review PR-2851: [AI:claude] fix(roster): tests can no longer rewrite the real store roster (BUG-2209)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `claude/bug-2209`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2851>
+  - Branch: `claude/bug-2209` → `main`
+
+  ## Covers
+
+  - BUG-2209
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2851` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-23T13:49:14.519787120Z
+modified_at: 2026-10-23T13:49:14.519787120Z
+req_type: Story
+filed_at:
+  code_sha: 1926ea4486197073fcfbd8129c2d1034eeafca58
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 51e59ef00d
+  vendor: claude
+  session: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
