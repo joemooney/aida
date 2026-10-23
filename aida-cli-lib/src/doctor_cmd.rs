@@ -747,6 +747,13 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
     // lacks a covering trust record. Opt-in path for the same reason as
     // disk-headroom: it reads a file outside the project.
     // trace:BUG-1700 | ai:claude
+    // TASK-2053 S5: loose objects that slow seat-clone creation (opt-in
+    // append path, like disk-headroom: it runs git).
+    // trace:TASK-2053 | ai:claude
+    if doctor_category_selected(opts.category.as_deref(), crate::loose_objects::CATEGORY)? {
+        findings.extend(crate::loose_objects::scan(&project_root));
+        findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
+    }
     // STORY-1699: stalled relay runs (opt-in append path, like disk-headroom).
     // trace:STORY-1699 | ai:claude
     if doctor_category_selected(opts.category.as_deref(), crate::relay_stall::CATEGORY)? {
@@ -7844,7 +7851,7 @@ fn heal_doctor_completed_without_commit(
     })
 }
 
-fn heal_doctor_orphan_worktree(
+pub(crate) fn heal_doctor_orphan_worktree(
     project_root: &std::path::Path,
     finding: &DoctorFinding,
 ) -> Result<DoctorHealResult> {

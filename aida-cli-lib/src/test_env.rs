@@ -550,6 +550,7 @@ impl AmbientGuard {
     /// [`Self::hermetic`] plus extra env pins applied under the SAME guard
     /// (the env lock is not reentrant).
     // trace:TASK-2053 | ai:claude
+    // trace:TASK-1955 | ai:claude (TASK-1808)
     pub(crate) fn hermetic_and(
         root: &std::path::Path,
         role: Option<&str>,

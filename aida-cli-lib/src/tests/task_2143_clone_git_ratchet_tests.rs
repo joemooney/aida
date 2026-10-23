@@ -39,12 +39,53 @@ const RAW_GIT_ALLOWLIST: &[(&str, usize)] = &[
     ("aida-cli-lib/src/trace.rs", 13),
     ("aida-cli-lib/src/worktree_dismiss.rs", 4),
     ("aida-cli-lib/src/worktree_gc.rs", 14),
+    ("aida-cli-lib/src/worktree_reclaim.rs", 1),
     ("aida-cli-lib/src/worktree_scope_gate.rs", 1),
     ("aida-core/src/git_ops.rs", 5),
 ];
 
-/// The 0-based lines of `#[cfg(test)] mod name { ... }` blocks (closed by a
-/// bare `}` at column 0).
+/// The net `{` minus `}` on one line, outside comments, string literals and
+/// char literals. `in_string` carries an open string literal across lines.
+fn brace_delta(line: &str, in_string: &mut bool) -> i64 {
+    let mut delta = 0;
+    let mut chars = line.chars().peekable();
+    while let Some(c) = chars.next() {
+        if *in_string {
+            match c {
+                '\\' => {
+                    chars.next();
+                }
+                '"' => *in_string = false,
+                _ => {}
+            }
+            continue;
+        }
+        match c {
+            '/' if chars.peek() == Some(&'/') => break,
+            '"' => *in_string = true,
+            // A char literal ('{', '\''), not a lifetime ('a).
+            '\'' => {
+                let rest: String = chars.clone().take(3).collect();
+                if rest.starts_with('\\') {
+                    chars.next();
+                    chars.next();
+                    chars.next();
+                } else if rest.chars().nth(1) == Some('\'') {
+                    chars.next();
+                    chars.next();
+                }
+            }
+            '{' => delta += 1,
+            '}' => delta -= 1,
+            _ => {}
+        }
+    }
+    delta
+}
+
+/// The 0-based lines of `#[cfg(test)] mod name { ... }` blocks, at any
+/// indentation and with the attribute on its own line or the module's,
+/// matched by brace balance.
 fn test_module_lines(lines: &[&str]) -> std::collections::HashSet<usize> {
     static MODULE: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
         regex::Regex::new(r"^\s*(pub(\(crate\))? )?mod \w+\s*\{").unwrap()
@@ -53,16 +94,39 @@ fn test_module_lines(lines: &[&str]) -> std::collections::HashSet<usize> {
     let mut skip = std::collections::HashSet::new();
     let mut i = 0;
     while i < lines.len() {
-        if lines[i].trim() == "#[cfg(test)]" && lines.get(i + 1).is_some_and(|l| module.is_match(l))
-        {
-            let mut j = i + 1;
-            while j < lines.len() && lines[j] != "}" {
-                skip.insert(j);
-                j += 1;
+        let attr = lines[i].trim_start();
+        let start = match attr.strip_prefix("#[cfg(test)]") {
+            Some(rest) if module.is_match(rest) => Some(i),
+            Some(rest)
+                if rest.trim().is_empty()
+                    && lines.get(i + 1).is_some_and(|l| module.is_match(l)) =>
+            {
+                Some(i + 1)
             }
-            i = j;
+            _ => None,
+        };
+        let Some(start) = start else {
+            i += 1;
+            continue;
+        };
+        let (mut depth, mut in_string) = (0, false);
+        let mut j = start;
+        while j < lines.len() {
+            skip.insert(j);
+            let line = if j == start {
+                lines[j]
+                    .split_once("#[cfg(test)]")
+                    .map_or(lines[j], |(_, rest)| rest)
+            } else {
+                lines[j]
+            };
+            depth += brace_delta(line, &mut in_string);
+            if depth <= 0 {
+                break;
+            }
+            j += 1;
         }
-        i += 1;
+        i = j + 1;
     }
     skip
 }
@@ -180,6 +244,34 @@ fn task_2143_raw_git_scanner_counts_only_lease_readers() {
     let test_only = "fn a() { let _ = Command::new(\"git\"); }\n#[cfg(test)]\nmod t {\n    \
                      fn c(l: &Lease) { let _ = &l.worktree_path; }\n}\n";
     assert_eq!(raw_git_in_lease_reader(test_only), None);
+}
+
+/// Review round 1, item 5: a one-line test module and a nested, indented
+/// one are skipped by brace balance, and the code after each still counts.
+#[test]
+fn task_2143_test_modules_are_skipped_by_brace_balance() {
+    let one_line = "fn a(l: &Lease) { let _ = &l.worktree_path; }\n\
+                    #[cfg(test)] mod t { fn c() { Command::new(\"git\"); } }\n\
+                    fn b() { let _ = Command::new(\"git\"); }\n";
+    assert_eq!(raw_git_in_lease_reader(one_line), Some(1));
+    let nested = "mod outer {\n    fn a(l: &Lease) { let _ = &l.worktree_path; }\n    \
+                  #[cfg(test)]\n    mod t {\n        fn c() {\n            \
+                  let _ = format!(\"{{\");\n            let _ = '}';\n            \
+                  let _ = \"} \\\n            }}\";\n            \
+                  Command::new(\"git\");\n        }\n    }\n    \
+                  fn b() { let _ = Command::new(\"git\"); }\n}\n\
+                  fn d() { let _ = Command::new(\"git\"); }\n";
+    assert_eq!(raw_git_in_lease_reader(nested), Some(2));
+    let lines: Vec<&str> = nested.lines().collect();
+    let skipped = test_module_lines(&lines);
+    assert_eq!(
+        skipped
+            .iter()
+            .copied()
+            .collect::<std::collections::BTreeSet<_>>(),
+        (3..=11).collect(),
+        "{lines:#?}"
+    );
 }
 
 #[test]
