@@ -1423,9 +1423,22 @@ fn restart_crashed(
                 notes.insert(key.clone(), None);
                 continue;
             }
-            // No row of its own: the reason rides on the lane's advisor
-            // item, which is routed as before.
+            // The reason rides on the lane's advisor item in the report, but
+            // that item is routed once; the ledger also records each new
+            // reason, once per (lane, crashed head, reason).
+            // trace:TASK-1955 | ai:claude (TASK-2207)
             RestartVerdict::No(why) => {
+                let seen = format!("{key}|{ACTION}|{}|no|{why}", crashed_head(lane));
+                if per.emitted.insert(seen) {
+                    let row = ActionRow::new(
+                        &key,
+                        &subject,
+                        ACTION,
+                        Outcome::Skipped,
+                        Some(format!("not auto-restarted: {why}")),
+                    );
+                    tick.fx.ledger(&tick.mandate_id, &row);
+                }
                 notes.insert(key.clone(), Some(why));
                 continue;
             }
@@ -2137,9 +2150,13 @@ pub(crate) fn spawn_restart(plan: &RestartPlan) -> Result<u32> {
 
 /// Beyond [`SESSION_ENV`]: an agent identity would make the restarted relay
 /// look like an agent's launch, and a stale restart token is never passed on.
-const RESTART_ENV_SCRUB: [&str; 3] = [
+/// A restarted relay is a long-lived worker, not a schedule child, so the
+/// marker `scrubbed_command` sets is removed again (TASK-2206).
+// trace:TASK-1955 | ai:claude (TASK-2206)
+const RESTART_ENV_SCRUB: [&str; 4] = [
     "AIDA_AGENT_NAME",
     "AIDA_AGENT_TYPE",
+    "AIDA_SCHEDULE_CHILD",
     crate::relay_launch::RESTART_ENV,
 ];
 

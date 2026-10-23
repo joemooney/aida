@@ -350,8 +350,14 @@ pub(crate) fn aida_store_override() -> Option<std::path::PathBuf> {
 /// unusable notice, for a caller that names the setting itself.
 // trace:TASK-2170, TASK-2171 | ai:claude
 pub(crate) fn aida_store_setting() -> Option<(String, StoreOverride)> {
-    let raw = std::env::var("AIDA_STORE").ok()?;
-    let raw = raw.trim();
+    aida_store_setting_from(std::env::var("AIDA_STORE").ok().as_deref())
+}
+
+/// [`aida_store_setting`] over a given raw value: a blank or whitespace-only
+/// one is unset, so no seat-check note names it.
+// trace:TASK-1955 | ai:claude (TASK-2199)
+pub(crate) fn aida_store_setting_from(raw: Option<&str>) -> Option<(String, StoreOverride)> {
+    let raw = raw?.trim();
     if raw.is_empty() {
         return None;
     }
@@ -360,6 +366,10 @@ pub(crate) fn aida_store_setting() -> Option<(String, StoreOverride)> {
         aida_store_override_from(std::path::Path::new(raw)),
     ))
 }
+
+#[cfg(test)]
+#[path = "tests/task_2199_aida_store_setting_tests.rs"]
+mod task_2199_aida_store_setting_tests;
 
 /// BUG-568: detect a "shared-store-but-multi-repo" context — a workspace where
 /// a single `.aida-store` is shared by two or more code repos (via a

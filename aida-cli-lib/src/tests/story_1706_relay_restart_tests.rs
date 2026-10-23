@@ -457,6 +457,29 @@ fn refusals_each_condition() {
             |f| std::fs::write(f.run_dir.join("handoff.md"), "TASK_COMPLETE\n").unwrap(),
             "complete or blocked",
         ),
+        // TASK-2208: the blocked form, and a first line after blank lines.
+        (
+            "blocked",
+            |f| {
+                std::fs::write(
+                    f.run_dir.join("handoff.md"),
+                    "BLOCKED_ON_HUMAN: needs a ruling\n",
+                )
+                .unwrap()
+            },
+            "complete or blocked",
+        ),
+        (
+            "blocked after blank lines",
+            |f| {
+                std::fs::write(
+                    f.run_dir.join("handoff.md"),
+                    "\n  \n  BLOCKED_ON_HUMAN: needs a ruling\n",
+                )
+                .unwrap()
+            },
+            "complete or blocked",
+        ),
         (
             "profile changed",
             |f| {
@@ -509,7 +532,55 @@ fn refusals_each_condition() {
                 .iter()
                 .any(|(_, b)| b.contains("not auto-restarted"));
         assert!(said, "{name}: {:?} {:?}", fake.due, fake.notices);
+        // TASK-2207: the reason is also ledgered as its own row.
+        assert!(
+            fake.rows.iter().any(|r| r.action == "relay-restart"
+                && r.outcome == Outcome::Skipped
+                && r.why.as_deref().is_some_and(|w| w.contains(needle))),
+            "{name}: {:?}",
+            fake.rows
+        );
     }
+}
+
+/// TASK-2207: the not-restarted reason is ledgered once per (lane, crashed
+/// head, reason), and again when the reason changes.
+// trace:TASK-1955 | ai:claude (TASK-2207)
+#[test]
+fn the_not_restarted_reason_is_ledgered_once_and_again_when_it_changes() {
+    let mut fx = Fixture::new();
+    let _m = fx.mandate();
+    std::fs::write(fx.run_dir.join(rl::NORESTART_FILE), "by=joe\n").unwrap();
+    let root = fx.root();
+    let clock = || now();
+    let reasons = |fake: &Fake| -> Vec<String> {
+        fake.rows
+            .iter()
+            .filter(|r| r.action == "relay-restart")
+            .filter_map(|r| r.why.clone())
+            .collect()
+    };
+    let mut first = Fake::default();
+    run_tick(&fx.inputs(&root, &clock), &TickHooks::default(), &mut first);
+    let got = reasons(&first);
+    assert_eq!(got.len(), 1, "{got:?}");
+    assert!(got[0].contains("--no-restart"), "{got:?}");
+
+    let mut again = Fake::default();
+    run_tick(&fx.inputs(&root, &clock), &TickHooks::default(), &mut again);
+    assert!(reasons(&again).is_empty(), "{:?}", reasons(&again));
+
+    std::fs::remove_file(fx.run_dir.join(rl::NORESTART_FILE)).unwrap();
+    std::fs::write(fx.run_dir.join("handoff.md"), "TASK_COMPLETE\n").unwrap();
+    let mut changed = Fake::default();
+    run_tick(
+        &fx.inputs(&root, &clock),
+        &TickHooks::default(),
+        &mut changed,
+    );
+    let got = reasons(&changed);
+    assert_eq!(got.len(), 1, "{got:?}");
+    assert!(got[0].contains("complete or blocked"), "{got:?}");
 }
 
 /// Advisor ruling 12:55: the record's `spec=` (from `--spec` or the
@@ -932,6 +1003,7 @@ fn the_live_spawn_scrubs_the_environment_and_detaches() {
         assert!(!text.contains(&format!("{var}=")), "{var} leaked: {text}");
     }
     assert!(text.contains("AIDA_RELAY_RESTART=abc123"), "{text}");
-    assert!(text.contains("AIDA_SCHEDULE_CHILD=1"), "{text}");
+    // TASK-2206: the restarted relay is not a schedule child.
+    assert!(!text.contains("AIDA_SCHEDULE_CHILD="), "{text}");
     assert!(fx.run_dir.join(rl::RESTART_LOG).exists());
 }
