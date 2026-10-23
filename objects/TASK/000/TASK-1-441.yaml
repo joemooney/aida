@@ -1,0 +1,28 @@
+id: 01a16945-43b4-7ac0-842c-5a5d9e8e7175
+spec_id: TASK-1-441
+title: 'minor: aida-core/src/team.rs write_member_seats CAS re-reads then write_atomic;…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2209, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  minor: aida-core/src/team.rs write_member_seats CAS re-reads then write_atomic; for callers not holding the store write lock (test_support::mint_grant_for) a writer landing between the re-read and the rename is still lost. Narrowed, not closed; acceptable for the fixture but worth a doc note or the lock.
+  Reviewed sha: 8a9e317dfa36e46254952b60cba14ab128eef0fc
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-23T14:58:29.428462695Z
+modified_at: 2026-10-23T14:58:29.428462695Z
+req_type: Task
+tags:
+- carried-from:BUG-2209
+- finding-hash:02e063ae
+- from-review:BUG-2209
+- kind:carried-forward
+filed_at:
+  code_sha: c6bb0dc4f168f6183260f8a692248eda24e9e7a7
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 017e4a4949
+  vendor: claude
+  session: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
