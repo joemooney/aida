@@ -7,7 +7,8 @@
 //! what the `role enter` eval text runs), is inherited into the namespace and
 //! satisfies the binding; the same command without the key is refused with
 //! the sandbox sentence. Skipped when bwrap is absent or cannot create user
-//! and PID namespaces on this host.
+//! and PID namespaces on this host, except under `AIDA_REQUIRE_BWRAP_LIVE=1`
+//! (CI's live bwrap gate), where a skip fails.
 // trace:BUG-1934 | ai:claude
 
 use std::path::PathBuf;
@@ -40,6 +41,23 @@ fn bwrap_usable() -> bool {
         .arg("true")
         .output()
         .is_ok_and(|o| o.status.success())
+}
+
+/// Whether the real-namespace cases can run. A skip prints
+/// `SKIP (bwrap unavailable)`, the line the CI live-bwrap gate fails on, and
+/// under `AIDA_REQUIRE_BWRAP_LIVE=1` (that gate) the test fails instead, so
+/// the namespace evidence is never a silent pass.
+// trace:BUG-1934 | ai:claude
+fn live_bwrap() -> bool {
+    if bwrap_usable() {
+        return true;
+    }
+    assert!(
+        std::env::var_os("AIDA_REQUIRE_BWRAP_LIVE").is_none(),
+        "AIDA_REQUIRE_BWRAP_LIVE=1 but bwrap is absent or cannot unshare namespaces here"
+    );
+    eprintln!("SKIP (bwrap unavailable): bwrap is absent or cannot unshare namespaces here");
+    false
 }
 
 /// The namespaces Claude Code's sandbox unshares (user, pid, ipc, uts, net,
@@ -138,9 +156,8 @@ fn json(out: &Output) -> serde_json::Value {
 }
 
 #[test]
-fn bwrap_presenter_holding_the_adopted_key_is_valid() {
-    if !bwrap_usable() {
-        eprintln!("SKIP: bwrap is absent or cannot unshare namespaces here");
+fn bug_1934_bwrap_presenter_holding_the_adopted_key_is_valid() {
+    if !live_bwrap() {
         return;
     }
     let fx = fixture();
@@ -161,9 +178,8 @@ fn bwrap_presenter_holding_the_adopted_key_is_valid() {
 }
 
 #[test]
-fn bwrap_presenter_without_the_key_is_refused_with_the_sandbox_sentence() {
-    if !bwrap_usable() {
-        eprintln!("SKIP: bwrap is absent or cannot unshare namespaces here");
+fn bug_1934_bwrap_presenter_without_the_key_is_refused_with_the_sandbox_sentence() {
+    if !live_bwrap() {
         return;
     }
     let fx = fixture();

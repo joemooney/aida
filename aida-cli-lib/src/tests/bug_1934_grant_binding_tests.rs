@@ -163,6 +163,22 @@ fn legacy_grant_without_binding_is_refused_and_names_the_fix() {
     assert_eq!(findings.len(), 1, "{findings:?}");
     assert_eq!(findings[0].category, DOCTOR_CATEGORY);
     assert_eq!(findings[0].summary, sentence);
+    // Round 3: the action steers to re-entering in the agent's terminal, and
+    // never offers --bind-pid as the fix for a (possibly sandboxed) session.
+    let action = &findings[0].action;
+    assert!(
+        action.contains("`eval \"$(aida role enter reviewer)\"`"),
+        "{action}"
+    );
+    assert!(
+        action.contains("start the agent session from that terminal"),
+        "{action}"
+    );
+    assert!(!action.contains("harness pid for --bind-pid"), "{action}");
+    assert!(
+        action.contains("only an already-running session's unsandboxed"),
+        "{action}"
+    );
     // ... and `role status --json` shows the binding verdict.
     let status = serde_json::to_value(grant_status(root)).unwrap();
     assert_eq!(status["grant"]["valid"], false);

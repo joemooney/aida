@@ -264,6 +264,71 @@ fn child_grant_key_is_held_by_the_launcher() {
     );
 }
 
+/// TASK-2195 (round 3): a long-lived launcher keeps ONE session keyring.
+/// Every child launch adds its key to the keyring the first launch joined,
+/// so launches never pin one keyring each against the kernel key quota.
+#[test]
+fn launcher_reuses_one_session_keyring_across_child_launches() {
+    if !fresh_keyring() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let mut env = pinned_env();
+    let parent = test_support::mint_grant_for(tmp.path(), SUBJECT, "advisor", &["reviewer"]);
+    env.set_key(GRANT_ENV, &parent);
+    let ring = crate::grant_keyring::session_keyring_id().expect("a session keyring");
+    let children: Vec<SeatGrant> = (0..3)
+        .map(|_| issue_child(tmp.path(), "reviewer", SUBJECT).unwrap())
+        .collect();
+    assert_eq!(
+        crate::grant_keyring::session_keyring_id(),
+        Some(ring),
+        "no keyring is joined per launch"
+    );
+    for child in &children {
+        assert!(possession_token(child).is_some(), "{}", child.id);
+    }
+    // Revoking a child invalidates its key in the shared keyring only.
+    assert!(revoke_by_id(&children[0].id).unwrap());
+    assert_eq!(
+        crate::grant_keyring::read(&children[0].id),
+        crate::grant_keyring::KeyRead::NotHeld
+    );
+    assert!(possession_token(&children[1]).is_some());
+}
+
+/// TASK-2195 (round 3): an exhausted kernel key quota refuses the launch with
+/// a named reason instead of silently minting a proc-only child grant.
+#[test]
+fn child_launch_refuses_on_key_quota_exhaustion() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut env = pinned_env();
+    let parent = test_support::mint_grant_for(tmp.path(), SUBJECT, "advisor", &["reviewer"]);
+    env.set_key(GRANT_ENV, &parent);
+    crate::grant_keyring::FORCE_INSTALL_ERRNO.with(|e| e.set(Some(libc::EDQUOT)));
+    let err = format!(
+        "{:#}",
+        issue_child(tmp.path(), "reviewer", SUBJECT).unwrap_err()
+    );
+    for needle in [
+        "cannot launch the `reviewer` worker",
+        "kernel key quota",
+        &format!("errno {}", libc::EDQUOT),
+        "kernel.keys.maxkeys",
+    ] {
+        assert!(err.contains(needle), "missing {needle:?}: {err}");
+    }
+    // A keyring that is merely unavailable keeps the documented proc-only
+    // fallback (warned on stderr), which a sandboxed worker cannot present.
+    crate::grant_keyring::FORCE_INSTALL_ERRNO.with(|e| e.set(Some(libc::ENOSYS)));
+    let child = issue_child(tmp.path(), "reviewer", SUBJECT).unwrap();
+    assert!(
+        child.binding.iter().all(|b| b.starts_with("proc:")),
+        "{:?}",
+        child.binding
+    );
+}
+
 /// `aida role adopt-key` accepts only the secret whose digest the grant
 /// carries. (The success path installs into the PARENT process's keyring, so
 /// it is exercised by the binary-level bwrap test, never in-process.)

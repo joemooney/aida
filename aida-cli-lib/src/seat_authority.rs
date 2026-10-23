@@ -1857,18 +1857,26 @@ pub(crate) fn issue_child(
     )?;
     let now = Utc::now();
     let id = Uuid::new_v4().to_string();
-    // SKETCH v2: the launcher joins a fresh session keyring holding the
-    // child's key before it spawns or execs the worker, so the worker and
-    // its sandboxed tool calls inherit it. When the keyring is unavailable
-    // the grant keeps only its process binding (a sandboxed worker is then
-    // refused, never allowed: C5). trace:BUG-1934 | ai:claude
+    // SKETCH v2: the launcher's session keyring holds the child's key before
+    // it spawns or execs the worker, so the worker and its sandboxed tool
+    // calls inherit it. When the keyring is unavailable the grant keeps only
+    // its process binding (a sandboxed worker is then refused, never
+    // allowed: C5). trace:BUG-1934 | ai:claude
     let secret = new_key_secret();
     let ttl = (parent.expires_at - now)
         .num_seconds()
         .clamp(1, u32::MAX as i64) as u32;
     let mut binding = vec![launcher];
-    if crate::grant_keyring::install(&id, secret.as_bytes(), ttl).is_ok() {
-        binding.push(key_token(secret.as_bytes()));
+    match crate::grant_keyring::install(&id, secret.as_bytes(), ttl) {
+        Ok(()) => binding.push(key_token(secret.as_bytes())),
+        // TASK-2195 (round 3): never discard a keyring failure. Quota
+        // exhaustion refuses the launch: a proc-only child could never be
+        // presented by a sandboxed worker. Any other failure is named.
+        // trace:BUG-1934 | ai:claude
+        Err(e) if e.quota_exhausted() => bail!("{}", key_quota_refusal(requested_seat, &e)),
+        Err(e) => eprintln!(
+            "Warning: the child `{requested_seat}` grant is bound to this launcher's process only: {e}. A worker whose tool calls run in a sandbox cannot present it"
+        ),
     }
     let grant = SeatGrant {
         id,
@@ -1886,6 +1894,15 @@ pub(crate) fn issue_child(
     };
     write_grant(&grant)?;
     Ok(grant)
+}
+
+/// TASK-2195: why a child launch is refused when the kernel key quota is
+/// exhausted, and how to free it.
+// trace:BUG-1934 | ai:claude
+pub(crate) fn key_quota_refusal(seat: &str, err: &crate::grant_keyring::InstallError) -> String {
+    format!(
+        "cannot launch the `{seat}` worker: its grant key does not fit in your kernel key quota ({err}; kernel.keys.maxkeys / kernel.keys.maxbytes). A worker without the key is refused in a sandbox. End stale role sessions and launchers (`eval \"$(aida role end)\"`), or raise the quota (`sudo sysctl kernel.keys.maxkeys=<n> kernel.keys.maxbytes=<n>`), then launch again"
+    )
 }
 
 /// BUG-2139: the seats that confer nothing a grant gates — the implementer
@@ -2193,7 +2210,7 @@ pub(crate) fn doctor_scan(project_root: &Path) -> Vec<crate::DoctorFinding> {
     let Some(sentence) = check.rejection_sentence() else {
         return findings;
     };
-    let GrantCheck::Rejected { id, .. } = &check else {
+    let GrantCheck::Rejected { id, seat, .. } = &check else {
         return findings;
     };
     let prefix: String = id.chars().take(8).collect();
@@ -2201,10 +2218,21 @@ pub(crate) fn doctor_scan(project_root: &Path) -> Vec<crate::DoctorFinding> {
         category: DOCTOR_CATEGORY.into(),
         id: format!("{DOCTOR_CATEGORY}:{prefix}"),
         summary: sentence,
-        action: "re-enter the role as the refusal says; `aida role status` shows this session's harness pid for --bind-pid".into(),
+        action: doctor_action(seat.as_deref()),
         safe_heal: false,
     });
     findings
+}
+
+/// BUG-1934 round 3: the doctor action for a refused grant. It steers to the
+/// round-2 recovery (re-enter in the terminal that starts the agent), never
+/// to `--bind-pid`, which cannot reach a sandboxed session's tool calls.
+// trace:BUG-1934 | ai:claude
+pub(crate) fn doctor_action(seat: Option<&str>) -> String {
+    let seat = seat.unwrap_or("<role>");
+    format!(
+        "run `eval \"$(aida role enter {seat})\"` in a terminal, then start the agent session from that terminal (`--bind-pid` binds only an already-running session's unsandboxed hooks and MCP server)"
+    )
 }
 
 /// BUG-1934 (SKETCH v2): with yama `ptrace_scope` 0, any same-user process
