@@ -76,6 +76,11 @@ pub(crate) enum ActivateRepoSource {
     Enclosing,
     /// `$AIDA_DEV_REPO`, because the cwd is not inside an aida checkout.
     EnvRepo,
+    /// `$AIDA_DEV_HOME_REPO` (the primary checkout recorded at activation),
+    /// because `$AIDA_DEV_REPO` names a path that no longer exists — a
+    /// worktree activated earlier and since removed.
+    // trace:TASK-2251 | ai:claude
+    HomeRepo,
     /// Nothing matched; the cwd itself, so the error names it.
     Cwd,
 }
@@ -86,6 +91,7 @@ impl ActivateRepoSource {
             ActivateRepoSource::Flag => "--repo",
             ActivateRepoSource::Enclosing | ActivateRepoSource::Cwd => "PWD",
             ActivateRepoSource::EnvRepo => "$AIDA_DEV_REPO",
+            ActivateRepoSource::HomeRepo => "$AIDA_DEV_HOME_REPO",
         }
     }
 }
@@ -97,10 +103,16 @@ impl ActivateRepoSource {
 /// `cd <worktree> && aida dev activate auto` — the hint `aida dev build`
 /// prints in a worktree — activate the primary checkout's build instead.
 /// Same order as `dev_build::resolve_build_repo`.
-// trace:BUG-2210 | ai:claude
+///
+/// A `$AIDA_DEV_REPO` that no longer exists (activation from a worktree
+/// exports the worktree, which is later removed) is skipped in favour of
+/// `env_home` — `$AIDA_DEV_HOME_REPO`, the primary checkout recorded at
+/// activation — when that still exists.
+// trace:BUG-2210 trace:TASK-2251 | ai:claude
 pub(crate) fn choose_activate_repo(
     repo_arg: Option<&str>,
     env_repo: Option<&str>,
+    env_home: Option<&str>,
     cwd: &std::path::Path,
 ) -> (std::path::PathBuf, ActivateRepoSource) {
     if let Some(p) = repo_arg {
@@ -111,10 +123,39 @@ pub(crate) fn choose_activate_repo(
     if let Some(found) = cwd.ancestors().find(|p| is_aida_repo(p)) {
         return (found.to_path_buf(), ActivateRepoSource::Enclosing);
     }
-    if let Some(p) = env_repo.filter(|p| !p.is_empty()) {
+    let env_repo = env_repo.filter(|p| !p.is_empty());
+    if let Some(p) = env_repo.filter(|p| std::path::Path::new(p).exists()) {
+        return (std::path::PathBuf::from(p), ActivateRepoSource::EnvRepo);
+    }
+    // trace:TASK-2251 | ai:claude
+    if let Some(p) = env_home.filter(|p| !p.is_empty() && std::path::Path::new(p).exists()) {
+        return (std::path::PathBuf::from(p), ActivateRepoSource::HomeRepo);
+    }
+    if let Some(p) = env_repo {
+        // Stale and nothing to fall back to: name the stale path in the error.
         return (std::path::PathBuf::from(p), ActivateRepoSource::EnvRepo);
     }
     (cwd.to_path_buf(), ActivateRepoSource::Cwd)
+}
+
+/// The primary checkout of `repo`: `repo` itself, or — for a linked
+/// worktree — the directory holding the shared `.git`. Recorded as
+/// `$AIDA_DEV_HOME_REPO` so a later activate can fall back to it once the
+/// worktree is gone.
+// trace:TASK-2251 | ai:claude
+pub(crate) fn primary_checkout_of(repo: &std::path::Path) -> std::path::PathBuf {
+    let git_dot = repo.join(".git");
+    if git_dot.is_dir() {
+        return repo.to_path_buf();
+    }
+    let primary = std::fs::read_to_string(&git_dot).ok().and_then(|gitfile| {
+        let raw = gitfile.trim().strip_prefix("gitdir:")?.trim().to_string();
+        let git_dir = repo.join(raw);
+        let common = std::fs::read_to_string(git_dir.join("commondir")).ok()?;
+        let common = git_dir.join(common.trim()).canonicalize().ok()?;
+        common.parent().map(std::path::Path::to_path_buf)
+    });
+    primary.unwrap_or_else(|| repo.to_path_buf())
 }
 
 /// Locate an AIDA repo (see [`choose_activate_repo`] for the order).
@@ -122,16 +163,26 @@ pub(crate) fn choose_activate_repo(
 fn resolve_aida_repo(repo_arg: Option<&str>) -> Result<(std::path::PathBuf, ActivateRepoSource)> {
     let cwd = std::env::current_dir()?;
     let env_repo = std::env::var("AIDA_DEV_REPO").ok();
-    let (candidate, src) = choose_activate_repo(repo_arg, env_repo.as_deref(), &cwd);
+    let env_home = std::env::var("AIDA_DEV_HOME_REPO").ok();
+    let (candidate, src) =
+        choose_activate_repo(repo_arg, env_repo.as_deref(), env_home.as_deref(), &cwd);
     // Track WHICH source we used so the error message can be specific about
     // what to fix.
     let source = src.label();
 
     let canonical = candidate.canonicalize().with_context(|| {
+        // trace:TASK-2251 | ai:claude
+        let hint = if src == ActivateRepoSource::EnvRepo && !candidate.exists() {
+            " — it no longer exists (a removed worktree?); cd into the aida \
+             checkout, or pass --repo, and activate again"
+        } else {
+            ""
+        };
         format!(
-            "Cannot resolve AIDA repo path ({}): {}",
+            "Cannot resolve AIDA repo path ({}): {}{}",
             source,
-            candidate.display()
+            candidate.display(),
+            hint
         )
     })?;
 
@@ -749,6 +800,11 @@ pub(crate) fn activate_choice_note(
             }
         }
         ActivateRepoSource::EnvRepo => "from $AIDA_DEV_REPO".to_string(),
+        // trace:TASK-2251 | ai:claude
+        ActivateRepoSource::HomeRepo => format!(
+            "the primary checkout; $AIDA_DEV_REPO ({}) no longer exists",
+            env_repo.unwrap_or("?")
+        ),
         ActivateRepoSource::Cwd => "the current directory".to_string(),
     };
     format!(
@@ -911,6 +967,13 @@ fn handle_dev_activate(
         "export AIDA_DEV_REPO='{}'",
         crate::sh_single_quote(&repo.display().to_string())
     );
+    // A worktree's path goes stale once the worktree is removed; record its
+    // primary checkout so the next activate can fall back to it.
+    // trace:TASK-2251 | ai:claude
+    println!(
+        "export AIDA_DEV_HOME_REPO='{}'",
+        crate::sh_single_quote(&primary_checkout_of(&repo).display().to_string())
+    );
     println!(
         "export AIDA_DEV_BIN='{}'",
         crate::sh_single_quote(&bin_dir.display().to_string())
@@ -1071,7 +1134,7 @@ fn handle_dev_deactivate() -> Result<()> {
     // Clean up the legacy save/restore env var if any prior session set it.
     println!("unset AIDA_DEV_PREV_PS1");
     println!(
-        "unset AIDA_DEV_REPO AIDA_DEV_BIN AIDA_DEV_PROFILE AIDA_DEV_ACTIVE AIDA_DEV_PROFILE_PIN"
+        "unset AIDA_DEV_REPO AIDA_DEV_HOME_REPO AIDA_DEV_BIN AIDA_DEV_PROFILE AIDA_DEV_ACTIVE AIDA_DEV_PROFILE_PIN"
     );
     println!(
         "echo '{} aida dev deactivated'",
