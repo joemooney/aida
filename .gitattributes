@@ -22,3 +22,7 @@ aida-cli-lib/assets/wiki/mermaid.min.js -text -diff linguist-vendored
 
 # Golden CLI help snapshot is compared byte-for-byte. trace:STORY-1728 | ai:claude
 aida-cli-lib/src/tests/golden/** text eol=lf
+
+# TASK-1800 replay fixture: a git bundle compared by content in CI, never
+# diffed or EOL-converted. trace:TASK-2067 | ai:claude
+tests/fixtures/task-1800-replay/*.bundle binary

@@ -464,7 +464,8 @@ pub(crate) fn pin_queue_user() -> EnvVarGuard {
 /// BUG-1618: the fixed identity `AmbientGuard::hermetic` pins `AIDA_USER` to,
 /// chosen to be absent from any real roster.
 // trace:BUG-1618 | ai:claude
-pub(crate) const HERMETIC_TEST_USER: &str = "bug-1618-hermetic-test-user";
+// trace:BUG-2209 | ai:claude — one constant, shared with aida-core's roster-write guard.
+pub(crate) const HERMETIC_TEST_USER: &str = aida_core::team::HERMETIC_TEST_USER;
 
 /// BUG-1618: a hermetic ambient context for tests that exercise the
 /// advisor-authority checks (`has_advisor_authority` and friends). Those checks
