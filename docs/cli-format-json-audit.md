@@ -178,8 +178,6 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida mandate start` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida mandate stop` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida mandate status` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
-| `aida fleet` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
-| `aida fleet drive` | JSON honoured | fleet drive (preview; changes nothing without --tick) |
 | `aida tail` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida integrate` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida watch` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
@@ -225,8 +223,8 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida remote attach` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida remote status` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida remote mirror` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
-| `aida remote mirror-guard-check` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida remote mirror-push` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida remote mirror-guard-check` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida remote mirror-sync` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida remote reconcile` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida push` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
@@ -401,6 +399,7 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida pr list` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida pr rebase` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida pr ship` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida pr train` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida pr ship-batch` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida pr hold` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida pr gc` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
@@ -683,3 +682,5 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida alias list` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida alias add` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida alias remove` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida fleet` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida fleet drive` | JSON honoured | fleet drive (preview; changes nothing without --tick) |
