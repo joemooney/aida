@@ -613,7 +613,6 @@ pub(crate) fn salvage_worktree_patch(
 }
 
 /// Refuses a seat clone (empty output; BUG-2169).
-
 // trace:TASK-2053 | ai:claude
 pub(crate) fn git_output_lossy(worktree: &std::path::Path, args: &[&str]) -> String {
     let out = aida_core::git_ops::host_git_command(worktree)

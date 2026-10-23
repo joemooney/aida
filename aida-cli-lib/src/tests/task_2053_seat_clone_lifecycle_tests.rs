@@ -1493,8 +1493,8 @@ fn task_2053_bwrap_session_end_and_dismiss_run_no_host_git_and_never_follow_a_cl
 
 /// TASK-2162: session end tells the operator to remove a clone with
 /// submodules by hand, then `aida worktree dismiss` it. Dismiss on the
-/// removed clone, whose lease and pin remain, releases both and runs no
-/// host git there.
+/// removed clone, whose lease, pin and cargo target remain, releases all
+/// three and runs no host git there.
 // trace:TASK-2162 | ai:claude
 #[test]
 fn task_2162_dismiss_releases_a_hand_removed_seat_clone() {
@@ -1505,6 +1505,8 @@ fn task_2162_dismiss_releases_a_hand_removed_seat_clone() {
     let id = "c0ffee000041";
     let clone = seat(&fx, "removed", id);
     let pin = pin_ref(&clone).unwrap();
+    let target = target_dir(&fx, &clone);
+    std::fs::create_dir_all(target.join("debug")).unwrap();
     std::fs::remove_dir_all(&clone).unwrap();
     assert!(ref_exists(&fx.main, &pin));
     assert!(crate::lease_path(&fx.main, id).exists());
@@ -1520,6 +1522,10 @@ fn task_2162_dismiss_releases_a_hand_removed_seat_clone() {
     crate::worktree_dismiss::handle_dismiss(Some(clone.to_str().unwrap()), None).unwrap();
 
     assert!(!ref_exists(&fx.main, &pin), "the base pin outlived dismiss");
+    assert!(
+        !target.exists(),
+        "the clone's cargo target outlived dismiss"
+    );
     assert!(
         !crate::lease_path(&fx.main, id).exists(),
         "the clone lease outlived dismiss"

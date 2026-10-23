@@ -162,3 +162,104 @@ fn task_2053_bwrap_bulk_lease_cleanup_destroys_a_seat_clone_salvage_first() {
         "host git ran in a seat clone: {violations:#?}"
     );
 }
+
+/// Review round 1, item 3: the fail-closed paths for a seat clone the probe
+/// cannot read (its `.git` rewired to a `gitdir:` file reads as Unknown with
+/// no bwrap run). Agent re-entry refuses; salvage errors, its caller (doctor's
+/// orphan heal) stops on that error, and nothing is written or removed.
+#[cfg(unix)]
+#[test]
+fn an_unreadable_seat_clone_fails_reentry_and_salvage_closed() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let fx = fixture();
+    let clone = leased_clone(&fx, "unreadable", "c0ffee000043");
+    std::fs::rename(clone.join(".git"), clone.join("real-git")).unwrap();
+    std::fs::write(clone.join(".git"), "gitdir: real-git\n").unwrap();
+    let (shim_dir, log, _) = git_shim(&fx);
+    let _path = crate::test_env::EnvVarGuard::prepend_path(&shim_dir);
+
+    let error = crate::agent_launch::preflight_agent_launch_lease(
+        &fx.main,
+        None,
+        Some("TASK-2053"),
+        Some(&clone),
+    )
+    .unwrap_err()
+    .to_string();
+    assert!(
+        error.contains("could not verify the owning seat clone's branch"),
+        "{error}"
+    );
+    let error = crate::worktree_gc::salvage_worktree_patch(&fx.main, "TASK-2053", None, &clone)
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("nothing was salvaged or removed"), "{error}");
+    let finding = crate::doctor_root::DoctorFinding {
+        category: "orphan-worktree".into(),
+        id: clone.display().to_string(),
+        summary: String::new(),
+        action: String::new(),
+        safe_heal: true,
+    };
+    let error = crate::doctor_cmd::heal_doctor_orphan_worktree(&fx.main, &finding)
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("nothing was salvaged or removed"), "{error}");
+    assert!(clone.join("real-git").is_dir());
+    assert!(!fx.main.join(".aida/salvage").exists());
+    let violations = untagged_in(&log, &clone);
+    assert!(
+        violations.is_empty(),
+        "host git ran in a seat clone: {violations:#?}"
+    );
+}
+
+/// Review round 1, item 3: a seat clone with a submodule (HasSubmodules)
+/// fails agent re-entry and salvage the same way.
+#[cfg(target_os = "linux")]
+#[test]
+fn task_2053_bwrap_a_submodule_clone_fails_reentry_and_salvage_closed() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let live = std::process::Command::new("bwrap")
+        .args(["--unshare-all", "--ro-bind", "/", "/", "--dev", "/dev"])
+        .args(["--proc", "/proc", "true"])
+        .output()
+        .is_ok_and(|o| o.status.success());
+    if !live {
+        assert!(
+            std::env::var_os("AIDA_REQUIRE_BWRAP_LIVE").is_none(),
+            "AIDA_REQUIRE_BWRAP_LIVE=1 but bwrap cannot run here"
+        );
+        eprintln!("SKIP (bwrap unavailable)");
+        return;
+    }
+    let fx = fixture();
+    let clone = leased_clone(&fx, "submodule", "c0ffee000044");
+    // Submodule evidence is a `.gitmodules` the probe finds; it need not be
+    // a working submodule.
+    std::fs::write(
+        clone.join(".gitmodules"),
+        "[submodule \"sm\"]\n\tpath = sm\n\turl = ../nowhere\n",
+    )
+    .unwrap();
+
+    let error = crate::agent_launch::preflight_agent_launch_lease(
+        &fx.main,
+        None,
+        Some("TASK-2053"),
+        Some(&clone),
+    )
+    .unwrap_err()
+    .to_string();
+    assert!(error.contains("submodules"), "{error}");
+    let error = crate::worktree_gc::salvage_worktree_patch(&fx.main, "TASK-2053", None, &clone)
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("has submodules"), "{error}");
+    assert!(clone.join(".gitmodules").is_file());
+    assert!(!fx.main.join(".aida/salvage").exists());
+}
