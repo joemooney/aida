@@ -40,9 +40,9 @@ fn finding(project_root: &Path, loose: usize, max: usize) -> Option<DoctorFindin
              they are not in the page cache"
         ),
         action: format!(
-            "pack them with `git -C '{}' repack -d` (it can take several minutes; nothing is \
+            "pack them with `git -C {} repack -d` (it can take several minutes; nothing is \
              deleted), or raise `[doctor.loose_objects] max` deliberately",
-            project_root.display()
+            crate::shell_quote(&project_root.display().to_string())
         ),
         safe_heal: false,
     })
@@ -51,10 +51,32 @@ fn finding(project_root: &Path, loose: usize, max: usize) -> Option<DoctorFindin
 /// Scan the main checkout's object store.
 pub(crate) fn scan(project_root: &Path) -> Vec<DoctorFinding> {
     let cfg = crate::read_project_config_value(project_root);
-    aida_core::git_ops::count_objects(project_root)
+    let mut findings = Vec::new();
+    // trace:TASK-2053 | ai:codex
+    if let Some(value) = cfg
+        .as_ref()
+        .and_then(|c| c.get("doctor"))
+        .and_then(|d| d.get("loose_objects"))
+        .and_then(|d| d.get("max"))
+    {
+        if value.as_integer().is_none() {
+            findings.push(DoctorFinding {
+                category: CATEGORY.into(),
+                id: "loose-objects-config".into(),
+                summary: format!(
+                    "[doctor.loose_objects] max must be an integer; using {DEFAULT_MAX_LOOSE}"
+                ),
+                action: "set `[doctor.loose_objects] max` to a positive integer".into(),
+                safe_heal: false,
+            });
+        }
+    }
+    if let Some(finding) = aida_core::git_ops::count_objects(project_root)
         .and_then(|counts| finding(project_root, counts.loose, max_loose(cfg.as_ref())))
-        .into_iter()
-        .collect()
+    {
+        findings.push(finding);
+    }
+    findings
 }
 
 #[cfg(test)]
@@ -77,11 +99,7 @@ mod tests {
         let f = finding(root, 128_766, 20_000).expect("finding");
         assert_eq!(f.category, CATEGORY);
         assert!(f.summary.contains("128766 loose objects"), "{}", f.summary);
-        assert!(
-            f.action.contains("git -C '/repo' repack -d"),
-            "{}",
-            f.action
-        );
+        assert!(f.action.contains("git -C /repo repack -d"), "{}", f.action);
         assert!(!f.safe_heal);
     }
 
@@ -118,5 +136,48 @@ mod tests {
         )
         .unwrap();
         assert!(scan(repo).is_empty());
+    }
+}
+
+#[cfg(test)]
+mod review_followup_tests {
+    use super::*;
+
+    // trace:TASK-2198 | ai:codex
+    #[cfg(unix)]
+    #[test]
+    fn remediation_round_trips_a_quoted_root_through_the_shell() {
+        let root = Path::new("/tmp/Joe's repo $(false)");
+        let finding = finding(root, 2, 1).unwrap();
+        let command = finding.action.split('`').nth(1).unwrap();
+        let args = command.strip_prefix("git ").unwrap();
+        let output = std::process::Command::new("sh")
+            .args(["-c", &format!("set -- {args}; printf '%s\\n' \"$@\"")])
+            .output()
+            .unwrap();
+        assert!(output.status.success());
+        assert_eq!(
+            String::from_utf8(output.stdout).unwrap(),
+            "-C\n/tmp/Joe's repo $(false)\nrepack\n-d\n"
+        );
+    }
+
+    // trace:TASK-2053 | ai:codex
+    #[test]
+    fn non_integer_max_reports_a_config_warning() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::create_dir(tmp.path().join(".aida")).unwrap();
+        for value in ["\"many\"", "1.5", "true"] {
+            std::fs::write(
+                tmp.path().join(".aida/config.toml"),
+                format!("[doctor.loose_objects]\nmax = {value}\n"),
+            )
+            .unwrap();
+            let findings = scan(tmp.path());
+            assert_eq!(findings.len(), 1);
+            assert_eq!(findings[0].id, "loose-objects-config");
+            assert!(findings[0].summary.contains("must be an integer"));
+            assert!(!findings[0].safe_heal);
+        }
     }
 }

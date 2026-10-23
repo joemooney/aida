@@ -78,6 +78,15 @@ fn git(root: &Path, args: &[&str]) -> Result<String> {
 // later operations. Ambient Git routing cannot select another repository.
 // trace:TASK-1993 | ai:codex
 pub(super) fn main_root(start: &Path) -> Result<PathBuf> {
+    // TASK-2053: recognise a seat clone before any git runs in `start`.
+    // trace:TASK-2053 | ai:claude
+    match crate::seat_clone::main_for(start) {
+        crate::seat_clone::MainFor::Verified(main) => return Ok(main.canonicalize()?),
+        crate::seat_clone::MainFor::Unverified(clone) => {
+            return Err(crate::seat_clone::unverified_refusal(&clone))
+        }
+        crate::seat_clone::MainFor::NotAClone => {}
+    }
     let root = PathBuf::from(git(start, &["rev-parse", "--show-toplevel"])?.trim());
     match crate::seat_clone::main_for(&root) {
         crate::seat_clone::MainFor::Verified(main) => return Ok(main.canonicalize()?),
