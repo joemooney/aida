@@ -438,6 +438,23 @@ fn describe(ek: &EventKind) -> (&'static str, String) {
             "mandate-drive-due",
             format!("drive routed {action} for {subject} to the advisor"),
         ),
+        // trace:TASK-1945 | ai:claude
+        EventKind::ReviewWatchReady {
+            pr,
+            head,
+            after_update_branch,
+        } => (
+            "review-watch-ready",
+            format!(
+                "PR #{pr} ready to ship at {}{}",
+                &head[..head.len().min(12)],
+                if *after_update_branch {
+                    " after its branch is updated"
+                } else {
+                    ""
+                }
+            ),
+        ),
         // trace:STORY-1887 | ai:claude
         EventKind::ShipBatchStep {
             pr,

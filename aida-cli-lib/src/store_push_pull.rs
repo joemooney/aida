@@ -567,6 +567,7 @@ pub(crate) fn auto_push_store_best_effort(store_path: &std::path::Path, reason: 
             git_ops::current_branch(store_path).unwrap_or_else(|_| "aida-store".to_string());
         // A failing `git status` defers the push (warned below); it is
         // never read as "nothing pending".
+        git_ops::protect_roster_advisors(store_path)?; // trace:BUG-2209 | ai:claude
         if git_ops::has_changes_checked(store_path)? {
             git_ops::add_all(store_path, ".")
                 .and_then(|_| git_ops::commit(store_path, "chore: sync pending changes"))
@@ -1612,6 +1613,7 @@ pub(crate) fn handle_push_command(
             // trace:TASK-1717 | ai:claude — a failed stage/commit (a refusing
             // hook) fails the leg with git's error: nothing is pushed and
             // the pending changes are kept, uncommitted.
+            git_ops::protect_roster_advisors(store_path)?; // trace:BUG-2209 | ai:claude
             if git_ops::has_changes_checked(store_path)? {
                 let msg = message.unwrap_or("chore: sync pending changes");
                 let committed = git_ops::add(store_path, &["."])
@@ -2336,6 +2338,12 @@ fn pull_store_leg_locked(
     // trace:TASK-1717 | ai:claude — a failed stage/commit (a refusing hook)
     // ends the leg with git's own error before any pull; the pending changes
     // are kept, uncommitted.
+    // trace:BUG-2209 | ai:claude
+    git_ops::protect_roster_advisors(store_path).map_err(|e| {
+        let failure = format!("store leg could not check the roster: {e:#}");
+        eprintln!("  {} {failure}", "Warning:".yellow().bold());
+        failure
+    })?;
     let pending = git_ops::has_changes_checked(store_path).map_err(|e| {
         let failure = format!("store leg could not read pending changes: {e:#}");
         eprintln!("  {} {failure}", "Warning:".yellow().bold());

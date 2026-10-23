@@ -65,18 +65,41 @@ fn guard_chain_block() -> String {
     )
 }
 
-/// `hook` with the guard chained in front of it (idempotent).
-// trace:BUG-2015 | ai:claude
-pub(crate) fn chain_guard_into(hook: &str) -> String {
+/// Whether a shebang line names a POSIX-family shell (directly or through
+/// `env`): the only interpreters that parse the sh chain block.
+// trace:TASK-2164 | ai:claude
+fn is_sh_shebang(first: &str) -> bool {
+    let mut words = first.trim_start_matches("#!").split_whitespace();
+    let mut prog = words.next().unwrap_or_default();
+    if prog.rsplit('/').next() == Some("env") {
+        prog = words.find(|w| !w.starts_with('-')).unwrap_or_default();
+    }
+    matches!(
+        prog.rsplit('/').next(),
+        Some("sh" | "bash" | "dash" | "zsh" | "ksh")
+    )
+}
+
+/// `hook` with the guard chained in front of it (idempotent). Refuses a hook
+/// whose shebang is not a shell: the sh chain block would be a syntax error
+/// there and fail every push.
+// trace:BUG-2015 trace:TASK-2164 | ai:claude
+pub(crate) fn chain_guard_into(hook: &str) -> Result<String> {
     if hook.contains(GUARD_CHAIN_MARKER) {
-        return hook.to_string();
+        return Ok(hook.to_string());
     }
-    match hook.split_once('\n') {
-        Some((first, rest)) if first.starts_with("#!") => {
-            format!("{first}\n{}{rest}", guard_chain_block())
-        }
-        _ => format!("#!/bin/sh\n{}{hook}", guard_chain_block()),
+    let (first, rest) = hook.split_once('\n').unwrap_or((hook, ""));
+    if !first.starts_with("#!") {
+        return Ok(format!("#!/bin/sh\n{}{hook}", guard_chain_block()));
     }
+    if !is_sh_shebang(first) {
+        anyhow::bail!(
+            "the pre-push hook starts with `{first}`, which is not a shell script — the main \
+             guard chains in as sh code, so it cannot go in front of it. Add the guard call \
+             to that hook yourself (docs/multi-hub-sync.md)"
+        );
+    }
+    Ok(format!("{first}\n{}{rest}", guard_chain_block()))
 }
 
 /// Write `body` to `path` as an executable hook.
@@ -99,10 +122,11 @@ pub fn install_main_guard(project_root: &Path, force: bool) -> Result<()> {
     let pre_push = hooks_dir.join("pre-push");
     let existing = std::fs::read_to_string(&pre_push).ok();
     let chained = match existing.as_deref() {
-        None => chain_guard_into("#!/bin/sh\nexit 0\n"),
+        None => chain_guard_into("#!/bin/sh\nexit 0\n")?,
         Some(body) if body.contains(GUARD_CHAIN_MARKER) => body.to_string(),
         Some(body) if body.contains(crate::remote_create::MIRROR_HOOK_HEADER) || force => {
-            chain_guard_into(body)
+            // trace:TASK-2164 | ai:claude
+            chain_guard_into(body).map_err(|e| anyhow::anyhow!("{} — {e}", pre_push.display()))?
         }
         Some(_) => anyhow::bail!(
             "a custom pre-push hook exists at {} — not changing it. Re-run with --force to \
@@ -135,7 +159,13 @@ pub(crate) fn check_mirror_sync_push(
     ref_lines: &str,
     attestation: Option<&str>,
 ) -> std::result::Result<(), String> {
-    let branch = aida_core::git_ops::default_branch_name(project_root);
+    // The guard's own resolver: origin/HEAD minus `origin/`, never a guess.
+    // trace:TASK-2163 | ai:claude
+    let branch = aida_core::git_ops::origin_default_branch(project_root).ok_or_else(|| {
+        "cannot tell origin's default branch (refs/remotes/origin/HEAD is unset) — run \
+         `git remote set-head origin --auto`"
+            .to_string()
+    })?;
     let protected = format!("refs/heads/{branch}");
     let judged: Vec<(&str, &str)> = ref_lines
         .lines()
