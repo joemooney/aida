@@ -615,6 +615,17 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     }
 
+    // BUG-2211: the empty read-only config.lock a sandboxed shell leaves in
+    // the shared git dir. One `git rev-parse` + one stat.
+    // trace:BUG-2211 | ai:claude
+    if doctor_category_selected(
+        opts.category.as_deref(),
+        crate::sandbox_config_lock::CATEGORY,
+    )? {
+        findings.extend(crate::sandbox_config_lock::scan(&project_root));
+        findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
+    }
+
     // TASK-1095: remote-drift scan — do the shared branches (trunk + store) hold
     // the same tip on every configured remote? Uses cheap `ls-remote` (refs
     // only, no object transfer), so it is kept OUT of the hot
@@ -6535,13 +6546,18 @@ fn heal_doctor_merged_agent_worktree(
     // recognized as merged by `-d`, and the scan already verified it shipped.
     let mut detail = None;
     if let Some(branch) = branch {
-        let deleted = std::process::Command::new("git")
-            .arg("-C")
-            .arg(project_root)
-            .args(["branch", "-D", &branch])
-            .status()
-            .map(|s| s.success())
-            .unwrap_or(false);
+        // trace:BUG-2211 | ai:claude
+        let deleted = aida_core::git_ops::output_healing_config_lock(
+            project_root,
+            || {
+                let mut cmd = std::process::Command::new("git");
+                cmd.arg("-C").arg(project_root);
+                cmd
+            },
+            &["branch", "-D", &branch],
+        )
+        .map(|o| o.status.success())
+        .unwrap_or(false);
         detail = Some(if deleted {
             format!("removed worktree + deleted branch `{branch}`")
         } else {
@@ -7369,6 +7385,8 @@ fn heal_doctor_finding(
         "store-staging-ignore" => heal_doctor_store_staging_ignore(project_root, finding),
         "orphan-queue-entries" => heal_doctor_orphan_queue_entry(project_root, finding),
         "stale-locks" => heal_doctor_stale_lock(finding),
+        // trace:BUG-2211 | ai:claude
+        "sandbox-config-lock" => heal_doctor_sandbox_config_lock(project_root, finding),
         "dead-agents" => heal_doctor_dead_agent(project_root, finding),
         // STORY-1128: permission-posture heal applies the contained profile
         // through the same merge-preserving writer as `config permissions set`.
@@ -8367,16 +8385,47 @@ fn heal_doctor_stale_lock(finding: &DoctorFinding) -> Result<DoctorHealResult> {
     })
 }
 
+/// Remove the sandbox-left `config.lock`. Re-resolves and re-checks the
+/// lock from `project_root` rather than trusting the finding's path, so a
+/// lock that became a real git lock since the scan is kept.
+// trace:BUG-2211 | ai:claude
+pub(crate) fn heal_doctor_sandbox_config_lock(
+    project_root: &std::path::Path,
+    finding: &DoctorFinding,
+) -> Result<DoctorHealResult> {
+    let removed = aida_core::git_ops::clear_sandbox_config_lock(project_root);
+    Ok(DoctorHealResult {
+        category: finding.category.clone(),
+        id: finding.id.clone(),
+        action: "removed empty read-only git config lock".to_string(),
+        status: if removed.is_some() {
+            "healed"
+        } else {
+            "skipped"
+        }
+        .to_string(),
+        detail: removed
+            .is_none()
+            .then(|| "lock is gone or no longer empty and read-only; left in place".to_string()),
+    })
+}
+
 fn heal_doctor_orphan_branch(
     project_root: &std::path::Path,
     finding: &DoctorFinding,
 ) -> Result<DoctorHealResult> {
-    let status = std::process::Command::new("git")
-        .arg("-C")
-        .arg(project_root)
-        .args(["branch", "-D", &finding.id])
-        .status()
-        .with_context(|| format!("deleting branch {}", finding.id))?;
+    // trace:BUG-2211 | ai:claude
+    let status = aida_core::git_ops::output_healing_config_lock(
+        project_root,
+        || {
+            let mut cmd = std::process::Command::new("git");
+            cmd.arg("-C").arg(project_root);
+            cmd
+        },
+        &["branch", "-D", &finding.id],
+    )
+    .with_context(|| format!("deleting branch {}", finding.id))?
+    .status;
     Ok(DoctorHealResult {
         category: finding.category.clone(),
         id: finding.id.clone(),
