@@ -1,5 +1,6 @@
 id: 01a16ad5-1da2-7bd0-8e12-3d6f4a99e5c5
 spec_id: TASK-1-462
+agreed_id: TASK-1830
 title: 'minor (non-blocking): PidNamespaceProbe::is_isolated''s pid1_comm allowlist (age…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on BUG-2212, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -18,6 +19,11 @@ tags:
 - finding-hash:d7a7870c
 - from-review:BUG-2212
 - kind:carried-forward
+history:
+- id: 01a16ae1-5805-7901-973e-470367d5ecf0
+  author: joe
+  timestamp: 2026-10-23T22:28:35.461448917Z
+  changes: []
 filed_at:
   code_sha: 70e3aa867f67aba2e0d11e0985f71bb64232a76d
   branch: main
