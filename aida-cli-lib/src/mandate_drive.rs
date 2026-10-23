@@ -2383,8 +2383,10 @@ fn changed_paths(main_root: &Path, head: &str) -> Option<Vec<String>> {
 }
 
 /// Is an advisor seat live: a valid advisor grant whose per-turn notice ran
-/// within 30 minutes?
+/// within 30 minutes? BUG-1934: from a process the grant is bound to, as the
+/// stamp recorded.
 // trace:STORY-1700 | ai:claude
+// trace:BUG-1934 | ai:claude
 pub(crate) fn advisor_live(project_root: &Path, now: DateTime<Utc>) -> bool {
     let (Ok(grants), Some(clock)) = (
         crate::seat_authority::grant_dir(),
@@ -2404,12 +2406,14 @@ pub(crate) fn advisor_live(project_root: &Path, now: DateTime<Utc>) -> bool {
         else {
             return false;
         };
+        let key = grant_turn_key(id);
         crate::seat_authority::grant_authorized_at(
             project_root,
             id,
             crate::mandate::MANDATE_SEAT,
             now,
-        ) && crate::presence::turn_clock_last_seen_in(&clock, &grant_turn_key(id))
+            &crate::presence::turn_clock_binding_in(&clock, &key),
+        ) && crate::presence::turn_clock_last_seen_in(&clock, &key)
             // A future-dated stamp (clock skew) is not evidence of a live
             // seat. trace:STORY-1700 | ai:claude
             .is_some_and(|seen| seen <= now && now - seen <= ADVISOR_LIVE_WITHIN)
@@ -2418,13 +2422,25 @@ pub(crate) fn advisor_live(project_root: &Path, now: DateTime<Utc>) -> bool {
 
 /// STORY-1700: the per-turn notice's stamp for the session's seat grant
 /// ([`crate::seat_authority::GRANT_ENV`]), read back by [`advisor_live`].
+/// BUG-1934: the stamp carries this process's tokens that satisfy the
+/// grant's binding; none (an unbound grant, a foreign presenter) leaves a
+/// stamp that never makes the seat live.
 // trace:STORY-1700 | ai:claude
+// trace:BUG-1934 | ai:claude
 pub(crate) fn stamp_grant_turn(grant: Option<&str>, now: DateTime<Utc>) {
     if let Some(g) = grant
         .map(str::trim)
         .filter(|g| uuid::Uuid::parse_str(g).is_ok())
     {
-        crate::presence::stamp_turn_clock(Some(&grant_turn_key(g)), false, now);
+        let binding = crate::seat_authority::read_grant(g)
+            .map(|record| {
+                crate::seat_authority::matched_binding(
+                    &record,
+                    &crate::seat_authority::presenter_tokens_for(&record),
+                )
+            })
+            .unwrap_or_default();
+        crate::presence::stamp_bound_turn_clock(&grant_turn_key(g), binding, now);
     }
 }
 

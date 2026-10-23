@@ -913,6 +913,11 @@ pub(crate) struct TurnClock {
     pub last_seen: String,
     #[serde(default)]
     pub prompt_count: u64,
+    /// BUG-1934: on a `grant-<id>` stamp only, the presenter tokens that
+    /// satisfied that grant's binding when the turn ran.
+    // trace:BUG-1934 | ai:claude
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub binding: Vec<String>,
 }
 
 impl TurnClock {
@@ -981,6 +986,33 @@ fn read_turn_clock_in(dir: &Path, session_id: &str) -> Option<TurnClock> {
 // trace:STORY-1700 | ai:claude
 pub(crate) fn turn_clock_last_seen_in(dir: &Path, key: &str) -> Option<DateTime<Utc>> {
     read_turn_clock_in(dir, key)?.last_seen_utc()
+}
+
+/// BUG-1934: the binding tokens the `key` stamp recorded (empty when none).
+// trace:BUG-1934 | ai:claude
+pub(crate) fn turn_clock_binding_in(dir: &Path, key: &str) -> Vec<String> {
+    read_turn_clock_in(dir, key)
+        .map(|c| c.binding)
+        .unwrap_or_default()
+}
+
+/// BUG-1934: stamp turn-clock `key` at `now` carrying `binding`. Overwrites
+/// the record: a grant stamp's binding is always the latest presenter's.
+// trace:BUG-1934 | ai:claude
+pub(crate) fn stamp_bound_turn_clock(key: &str, binding: Vec<String>, now: DateTime<Utc>) {
+    let Some(dir) = turn_clock_dir() else {
+        return;
+    };
+    let prompt_count = read_turn_clock_in(&dir, key).map_or(0, |c| c.prompt_count) + 1;
+    let _ = write_turn_clock_in(
+        &dir,
+        key,
+        &TurnClock {
+            last_seen: now.to_rfc3339(),
+            prompt_count,
+            binding,
+        },
+    );
 }
 
 fn write_turn_clock_in(dir: &Path, session_id: &str, clock: &TurnClock) -> Option<()> {
@@ -1054,6 +1086,7 @@ fn stamp_turn_clock_in(
         &TurnClock {
             last_seen: now.to_rfc3339(),
             prompt_count,
+            binding: Vec::new(),
         },
     );
     label
@@ -1100,8 +1133,13 @@ pub(crate) fn parse_hook_payload(stdin: &str) -> (Option<String>, bool) {
     let Ok(v) = serde_json::from_str::<serde_json::Value>(trimmed) else {
         return (None, false);
     };
+    // Antigravity payloads are camelCase and carry `conversationId`
+    // (Antigravity CLI 1.4.2 builtin `agy-customizations/docs/hooks.md`,
+    // "Common Input Fields" and "### 3. `SessionStart` Contract": no
+    // event-name field). trace:TASK-2253 | ai:claude
     let session_id = v
         .get("session_id")
+        .or_else(|| v.get("conversationId"))
         .and_then(|s| s.as_str())
         .filter(|s| !s.trim().is_empty())
         .map(|s| s.to_string());
@@ -1111,6 +1149,19 @@ pub(crate) fn parse_hook_payload(stdin: &str) -> (Option<String>, bool) {
         .map(|s| s.eq_ignore_ascii_case("SessionStart"))
         .unwrap_or(false);
     (session_id, is_session_start)
+}
+
+/// PURE: [`parse_hook_payload`] plus the event a relay named out-of-band
+/// (`AIDA_HOOK_EVENT`). Antigravity's SessionStart payload has no event-name
+/// field, so its relay names the event instead.
+// trace:TASK-2253 | ai:claude
+pub(crate) fn parse_hook_payload_with_event(
+    payload: &str,
+    event: Option<&str>,
+) -> (Option<String>, bool) {
+    let (session_id, is_session_start) = parse_hook_payload(payload);
+    let named_start = event.is_some_and(|e| e.trim().eq_ignore_ascii_case("SessionStart"));
+    (session_id, is_session_start || named_start)
 }
 
 /// Read `[presence] active_within` / `stale_after` from a project's config,
@@ -1752,6 +1803,7 @@ mod tests {
         let seeded = TurnClock {
             last_seen: (now - Duration::minutes(1)).to_rfc3339(),
             prompt_count: 0,
+            binding: Vec::new(),
         };
         assert_eq!(
             timing_label(Some(&seeded), false, now),
@@ -1761,6 +1813,7 @@ mod tests {
         let prev = TurnClock {
             last_seen: (now - Duration::minutes(3)).to_rfc3339(),
             prompt_count: 2,
+            binding: Vec::new(),
         };
         assert_eq!(
             timing_label(Some(&prev), false, now),
@@ -1770,6 +1823,7 @@ mod tests {
         let prev = TurnClock {
             last_seen: (now - Duration::hours(2)).to_rfc3339(),
             prompt_count: 5,
+            binding: Vec::new(),
         };
         assert_eq!(
             timing_label(Some(&prev), false, now),
@@ -1873,6 +1927,38 @@ mod tests {
         assert_eq!(parse_hook_payload(r#"{"session_id":""}"#), (None, false));
         assert_eq!(parse_hook_payload("not json"), (None, false));
         assert_eq!(parse_hook_payload(""), (None, false));
+    }
+
+    /// Antigravity's SessionStart payload (camelCase, no event-name field)
+    /// reaches the notice's session-start path — the one that runs the
+    /// host-side dead-row gc — once its relay names the event. Shape pinned
+    /// from Antigravity CLI 1.4.2 builtin `agy-customizations/docs/hooks.md`,
+    /// "### 3. `SessionStart` Contract".
+    // trace:TASK-2253.acd91dca | ai:claude
+    #[test]
+    fn agy_session_start_reaches_the_notice_session_start_path() {
+        let agy = r#"{"conversationId":"ec33ebf9","workspacePaths":["/w"],"modelName":"auto"}"#;
+        assert_eq!(
+            parse_hook_payload_with_event(agy, Some("SessionStart")),
+            (Some("ec33ebf9".to_string()), true)
+        );
+        // Without the named event an agy payload is an ordinary turn.
+        assert_eq!(
+            parse_hook_payload_with_event(agy, None),
+            (Some("ec33ebf9".to_string()), false)
+        );
+        assert_eq!(
+            parse_hook_payload_with_event(agy, Some("PreInvocation")),
+            (Some("ec33ebf9".to_string()), false)
+        );
+        // A Claude/Codex payload is unchanged by the event hint's absence.
+        assert_eq!(
+            parse_hook_payload_with_event(
+                r#"{"session_id":"s2","hook_event_name":"SessionStart"}"#,
+                None
+            ),
+            (Some("s2".to_string()), true)
+        );
     }
 
     /// Configurable thresholds parse from `[presence]`, defaulting when absent.

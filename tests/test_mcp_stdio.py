@@ -191,6 +191,19 @@ class McpClient:
             return ""
 
 
+def own_process_binding() -> list[str]:
+    """BUG-1934: the presenter binding ``test_support::mint_grant_for`` gives a
+    grant: ``proc:<pid>@linux-starttime:<ticks>`` for this test process (field
+    22 of its stat file, as ``process_start_identity`` reads it). Every binary
+    the test spawns descends from it, so its ancestry intersects the binding.
+    Raises instead of minting an unbindable grant. trace:BUG-1934 | ai:claude
+    """
+    pid = os.getpid()
+    stat = Path(f"/proc/{pid}/stat").read_text()
+    ticks = stat[stat.rindex(")") + 1 :].split()[22 - 3]
+    return [f"proc:{pid}@linux-starttime:{ticks}"]
+
+
 def mint_seat_grant(root: Path, seat: str, delegable: tuple[str, ...] = ()) -> dict[str, str]:
     """STORY-1473 / ADR-66: mint a validated, session-bound seat grant for a
     CLI invocation in this hermetic fixture.
@@ -244,6 +257,7 @@ def mint_seat_grant(root: Path, seat: str, delegable: tuple[str, ...] = ()) -> d
         "issued_at": now.isoformat(),
         "expires_at": (now + _dt.timedelta(hours=23)).isoformat(),
         "revoked_at": None,
+        "binding": own_process_binding(),
     }
     grants = Path(os.environ["HOME"]) / ".aida" / "session-grants"
     grants.mkdir(parents=True, exist_ok=True)
