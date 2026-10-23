@@ -49,7 +49,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T02:43:59.810701479Z
-modified_at: 2026-10-23T01:50:03.785064951Z
+modified_at: 2026-10-23T08:40:45.720055859Z
 req_type: Story
 tags:
 - architecture
@@ -342,6 +342,27 @@ comments:
     Artifacts (integrator scratchpad): `local-run-20261022T1817.{log,time,load}`.
   created_at: 2026-10-23T01:50:03.785064951Z
   modified_at: 2026-10-23T01:50:03.785064951Z
+  session_id: f91fd366-4181-4735-8802-dfc810a1c42e
+- id: 01a167eb-7198-7f01-99d0-4e31aee8c6ed
+  author: joe
+  content: |
+    ## AC2 local measurement #2 (nextest installed): NOT VALID. The run was contaminated; no AC2 figure from it
+
+    **Run:** 2026-10-22 23:57 to 2026-10-23 01:40 MST, primary checkout, started at 64c2153d82. Operator asked for it to run immediately rather than wait for a quiet window. cargo-nextest 0.9.149 is now installed, and `make test` ran the nextest lanes (no fallback).
+
+    **Why it doesn't count:**
+    - **The source changed mid-run.** Another session fast-forwarded the primary checkout's main twice while it ran: to 597ea98e77 at 00:02, and to 017e4a4949 at 00:39. So the warm-build step (`make check-ci-compile`, 21:37) was wasted, and `make test` recompiled: 13m55 + 6m44 + 1m17 + 7m17 (doc tests).
+    - **The machine was not idle.** load1 during the run: median 26, p90 57, max 100. Builds also queued for a cargo build slot.
+
+    **Raw figures, for the record only:** test step 1:21:21 wall, 113% CPU. 12,377 passed / 11 ignored / 2 failed.
+    - Lane execution: lib unittests 759 s, cli batch A 519 s, cli batch B 289 s, rest 104 s, guardrails 6 s.
+    - The 2 failures are most likely load and SHA-drift artefacts; neither fails in CI:
+      - TIMEOUT at 180 s: `task_1507_history_cache_tests::bug_1620_id_every_cut_across_merges_matches_the_walk`
+      - FAIL in 3.8 s: `task_1287_label_only_merge_hold::ownership_and_ci_share_one_wait_deadline`
+
+    **Method fix for the next attempt:** measure in a dedicated worktree pinned to one SHA, not the shared primary checkout, so no other session can move the source mid-run. Warm it with `cargo nextest run --no-run --profile ci --cargo-profile agent` (plus the doc-test build), then time `make test` alone in a window with load1 < 2.
+  created_at: 2026-10-23T08:40:45.720055859Z
+  modified_at: 2026-10-23T08:40:45.720055859Z
   session_id: f91fd366-4181-4735-8802-dfc810a1c42e
 history:
 - id: 01a152ec-592c-7ec2-af4d-e6cf3cea3865
