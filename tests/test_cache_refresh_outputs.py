@@ -94,7 +94,8 @@ def stale_allowed_outputs_cover_deferred_writer_busy_and_worker_running(binary):
         assert len(files) == 1
         files[0].write_text(files[0].read_text().replace("cache-label-seed", "cache-label-new"))
         require(run(["git", "add", "objects"], store, env))
-        require(run(["git", "commit", "-qm", "external title"], store, env))
+        # trace:TASK-1955 | ai:claude (TASK-2010)
+        require(run(["git", "-c", "maintenance.auto=false", "-c", "gc.auto=0", "commit", "-qm", "external title"], store, env))
         # Freeze the committed baseline using SQLite backup, never copying a live WAL file.
         baseline = Path(temp) / "baseline.db"
         with sqlite3.connect(cache) as source, sqlite3.connect(baseline) as dest:

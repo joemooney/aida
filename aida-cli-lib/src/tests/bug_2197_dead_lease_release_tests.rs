@@ -919,3 +919,38 @@ fn reviewer_without_a_recorded_head_is_reaped_only_when_nothing_is_unpushed() {
         "an unpushed local commit keeps the session"
     );
 }
+
+/// TASK-2119: the reap's dead-reviewer gate checks the lease's PR scope
+/// first, so a lease that is not a PR review spawns no reviewer-branch git.
+// trace:TASK-1955 | ai:claude (TASK-2119)
+#[test]
+fn reviewer_reap_gate_checks_pr_scope_before_any_git() {
+    let wt = Path::new("unused");
+    let spec_lease = lease_json("l1", wt, serde_json::json!({ "scope": "TASK-1" }));
+    assert!(!review_pr_terminal_gate(
+        true,
+        &spec_lease,
+        || panic!("a non-review lease must not run the review-branch git checks"),
+        |_| panic!("a non-review lease must not ask the forge"),
+    ));
+    let review = lease_json(
+        "l2",
+        wt,
+        serde_json::json!({ "scope": "PR-7", "role": "reviewer" }),
+    );
+    assert!(review_pr_terminal_gate(
+        true,
+        &review,
+        || true,
+        |pr| {
+            assert_eq!(pr, 7);
+            Some(true)
+        }
+    ));
+    assert!(!review_pr_terminal_gate(
+        true,
+        &review,
+        || false,
+        |_| { panic!("an unpushed review commit must stop the gate before the forge") }
+    ));
+}

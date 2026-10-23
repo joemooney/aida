@@ -148,6 +148,7 @@ fn gather_running_work_classifies_blocked_from_a_real_marker_file() {
         plan_source: "test".to_string(),
         claude_session_id: Some(claude_session_id.to_string()),
         batch_name: None,
+        agent_name: None,
         plan: None,
         items: Vec::new(),
     };
@@ -216,6 +217,7 @@ fn gather_running_work_ignores_a_stale_marker() {
         plan_source: "test".to_string(),
         claude_session_id: Some(claude_session_id.to_string()),
         batch_name: None,
+        agent_name: None,
         plan: None,
         items: Vec::new(),
     };

@@ -51,6 +51,7 @@ fn agent_entry(
         agent_type: agent_type.to_string(),
         pid,
         pid_start: crate::process_probe::process_start_identity(pid),
+        pid_namespace: crate::agent_registry::current_pid_namespace(),
         name: Some(name.to_string()),
         description: None,
         tty: None,
