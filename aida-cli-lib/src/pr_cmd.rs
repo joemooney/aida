@@ -1630,6 +1630,76 @@ pub(crate) fn ship_refusal_release(
     )
 }
 
+/// What the approval gate decides once approval AUTHORITY holds.
+// trace:TASK-1945 | ai:claude
+#[derive(Debug)]
+pub(crate) enum HeadDecision {
+    /// An approval covers the head: merge pinned to this (`None`: nothing to
+    /// pin to).
+    Covered(Option<String>),
+    /// TASK-1960: the head moved only by clean merges of the base branch,
+    /// with the PR's own diff unchanged, so the attested approval carries
+    /// over to `proof.new_head`. The outcome is `None` for a quiet site.
+    CarriedOver(
+        crate::review_carryover::CarryOver,
+        Option<crate::review_carryover::RecordOutcome>,
+    ),
+    /// No approval covers the head; `message` says why, including a refused
+    /// carry-over. Only `--override-stale-approval` can pass it.
+    Stale {
+        refusal: pr_ship::ApprovalHeadRefusal,
+        message: String,
+    },
+}
+
+/// The approval gate's decision with no output, log or event of its own:
+/// `Err(message)` when no authorized, non-author approval exists (BUG-1918,
+/// never overridable), else whether it covers `head_sha`. A carry-over is
+/// tried through `carry_over`; a quiet site records nothing, so through one
+/// this reads only. `aida pr ship` and the review watcher's readiness report
+/// both decide here, so the two cannot disagree.
+// trace:TASK-1945 | ai:claude
+pub(crate) fn approval_decision(
+    pr_number: u64,
+    candidates: &[crate::review_verdict::RecordedVerdict],
+    head_sha: Option<&str>,
+    policy: &pr_ship::ShipApprovalPolicy,
+    carry_over: Option<&crate::review_carryover::CarryOverSite<'_>>,
+) -> std::result::Result<HeadDecision, String> {
+    // BUG-1918: the approval must come from an authorized, non-author seat.
+    // Checked first: `--override-stale-approval` excuses a head that moved
+    // past a real approval, never a missing or self-recorded one.
+    // trace:BUG-1918 | ai:claude
+    if let Some(refusal) = pr_ship::approval_authority_refusal(candidates, policy) {
+        return Err(pr_ship::approval_authority_refusal_message(
+            pr_number, &refusal,
+        ));
+    }
+    let Some(refusal) = pr_ship::approval_head_refusal(candidates, head_sha) else {
+        return Ok(HeadDecision::Covered(pr_ship::approved_match_head(
+            candidates, head_sha,
+        )));
+    };
+    let mut message = pr_ship::approval_head_refusal_message(pr_number, &refusal);
+    // TASK-1960: a head that moved only by clean merges of the base branch,
+    // with the PR's own diff unchanged, keeps the attested approval. The
+    // merge is pinned to the proven head, so a later push still refuses.
+    // trace:TASK-1960 | ai:claude
+    match carry_over
+        .and_then(|site| crate::review_carryover::carry_over_for_refusal(site, pr_number, &refusal))
+    {
+        Some(Ok((proof, outcome))) => return Ok(HeadDecision::CarriedOver(proof, outcome)),
+        Some(Err(why)) => {
+            message = format!(
+                "{message} The approval did not carry over: {}.",
+                why.reason()
+            );
+        }
+        None => {}
+    }
+    Ok(HeadDecision::Stale { refusal, message })
+}
+
 /// TASK-1448 + TASK-1458: `aida pr ship`'s approval-covers-head gate.
 /// `Ok(pin)` = merge, pinned to `pin` (`MergeOptions.match_head`, i.e. gh
 /// `--match-head-commit`) so a push between this check and the merge is
@@ -1650,46 +1720,34 @@ pub(crate) fn pr_ship_approval_gate(
     delete_branch: bool,
     carry_over: Option<&crate::review_carryover::CarryOverSite<'_>>,
 ) -> Result<Option<String>> {
-    // BUG-1918: the approval must come from an authorized, non-author seat.
-    // Checked first and NOT overridable: `--override-stale-approval` excuses
-    // a head that moved past a real approval, never a missing or
-    // self-recorded one.
-    // trace:BUG-1918 | ai:claude
-    if let Some(refusal) = pr_ship::approval_authority_refusal(candidates, policy) {
-        let message = pr_ship::approval_authority_refusal_message(pr_number, &refusal);
-        log_ship_activity(
-            main_worktree,
-            Some(pr_number),
-            &pr_ship::ShipStep::Merge { delete_branch },
-            &pr_ship::StepOutcome::Failed(message.clone()),
-        );
-        crate::events::record_gate_held(
-            main_worktree,
-            crate::events::GATE_APPROVAL_AUTHORITY,
-            None,
-            Some(pr_number),
-            &message,
-        );
-        return Err(pr_ship::ShipRefusal::Review.error(message));
-    }
+    let decision = match approval_decision(pr_number, candidates, head_sha, policy, carry_over) {
+        Ok(decision) => decision,
+        Err(message) => {
+            log_ship_activity(
+                main_worktree,
+                Some(pr_number),
+                &pr_ship::ShipStep::Merge { delete_branch },
+                &pr_ship::StepOutcome::Failed(message.clone()),
+            );
+            crate::events::record_gate_held(
+                main_worktree,
+                crate::events::GATE_APPROVAL_AUTHORITY,
+                None,
+                Some(pr_number),
+                &message,
+            );
+            return Err(pr_ship::ShipRefusal::Review.error(message));
+        }
+    };
     // STORY-1655: name the mode when a solo-human approval is relied on.
     // trace:STORY-1655 | ai:claude
     // Same stream as merge_path_approval_gate. trace:TASK-1955 | ai:claude (TASK-1808)
     if let Some(notice) = pr_ship::solo_approval_notice(candidates, policy) {
         eprintln!("  {notice}");
     }
-    let Some(refusal) = pr_ship::approval_head_refusal(candidates, head_sha) else {
-        return Ok(pr_ship::approved_match_head(candidates, head_sha));
-    };
-    let mut message = pr_ship::approval_head_refusal_message(pr_number, &refusal);
-    // TASK-1960: a head that moved only by clean merges of the base branch,
-    // with the PR's own diff unchanged, keeps the attested approval. The
-    // merge is pinned to the proven head, so a later push still refuses.
-    // trace:TASK-1960 | ai:claude
-    match carry_over
-        .and_then(|site| crate::review_carryover::carry_over_for_refusal(site, pr_number, &refusal))
-    {
-        Some(Ok((proof, outcome))) => {
+    let (refusal, message) = match decision {
+        HeadDecision::Covered(pin) => return Ok(pin),
+        HeadDecision::CarriedOver(proof, outcome) => {
             // A quiet (preflight) site records nothing and stays silent; the
             // gate that pins the merge announces it once.
             if let Some(outcome) = outcome {
@@ -1709,14 +1767,8 @@ pub(crate) fn pr_ship_approval_gate(
             }
             return Ok(Some(proof.new_head));
         }
-        Some(Err(why)) => {
-            message = format!(
-                "{message} The approval did not carry over: {}.",
-                why.reason()
-            );
-        }
-        None => {}
-    }
+        HeadDecision::Stale { refusal, message } => (refusal, message),
+    };
     // BUG-1918: only a non-author session may ship commits no approval
     // covered; the override is neither honoured nor advertised to an author.
     // trace:BUG-1918 | ai:claude
@@ -1859,6 +1911,26 @@ pub(crate) fn merge_approval_inputs(
     Vec<crate::review_verdict::RecordedVerdict>,
     pr_ship::ShipApprovalPolicy,
 ) {
+    let (candidates, policy, _) =
+        merge_approval_subject(roots, main_worktree, pr, known_ids, head_branch, head_sha);
+    (candidates, policy)
+}
+
+/// [`merge_approval_inputs`] plus the spec ids the PR ships, which the
+/// corpus gate takes as its hints.
+// trace:TASK-1945 | ai:claude
+pub(crate) fn merge_approval_subject(
+    roots: &[&std::path::Path],
+    main_worktree: &std::path::Path,
+    pr: u64,
+    known_ids: &[String],
+    head_branch: Option<&str>,
+    head_sha: Option<&str>,
+) -> (
+    Vec<crate::review_verdict::RecordedVerdict>,
+    pr_ship::ShipApprovalPolicy,
+    Vec<String>,
+) {
     let (ids, branch, forge_resolved, authorship_ids) =
         pr_gate_subject(main_worktree, pr, known_ids, head_branch);
     let candidates = pr_ship::merge_gate_verdict_candidates(roots, pr, &ids, head_sha);
@@ -1867,7 +1939,7 @@ pub(crate) fn merge_approval_inputs(
     // trace:BUG-2199 | ai:claude
     let author_ids: &[String] = if forge_resolved { &authorship_ids } else { &[] };
     let policy = ship_approval_policy(main_worktree, author_ids, branch.as_deref(), &candidates);
-    (candidates, policy)
+    (candidates, policy, ids)
 }
 
 /// BUG-2184: what is left of `--wait SECS` for the CI wait: the time since the

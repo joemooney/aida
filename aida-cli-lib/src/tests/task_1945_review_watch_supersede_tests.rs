@@ -21,6 +21,7 @@ fn change(id: u64, head: u64) -> forge::Change {
         author: "writer".into(),
         gitlab: false,
         overlap: Some(false),
+        behind: Some(0),
     }
 }
 fn until(what: &str, done: impl Fn() -> bool) {

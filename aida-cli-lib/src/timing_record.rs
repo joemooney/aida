@@ -99,6 +99,9 @@ pub(crate) fn lifecycle_publishable(kind: &EventKind) -> bool {
         // STORY-1887: an operator batch-ship step stays local too.
         // trace:STORY-1887 | ai:claude
         | ShipBatchStep { .. }
+        // A watcher wake is coordination, not lifecycle evidence.
+        // trace:TASK-1945 | ai:claude
+        | ReviewWatchReady { .. }
         | UnreadMail
         | CompeteOutcome { .. }
         | CronJobFired { .. }
