@@ -41,6 +41,28 @@ fn tty_command(bin: &str, home: &Path, repo: &Path) -> CommandBuilder {
     cmd
 }
 
+/// `aida role enter advisor` with the terminal as stdin and stderr. On
+/// Unix its stdout is redirected to `out`, as `eval "$(aida role enter ...)"`
+/// captures it; elsewhere no secret is minted, so stdout stays the terminal.
+#[cfg(unix)]
+fn role_enter_tty_command(bin: &str, home: &Path, repo: &Path, out: &Path) -> CommandBuilder {
+    let mut cmd = tty_command("sh", home, repo);
+    cmd.arg("-c");
+    cmd.arg("exec \"$0\" role enter advisor > \"$1\"");
+    cmd.arg(bin);
+    cmd.arg(out);
+    cmd
+}
+
+#[cfg(not(unix))]
+fn role_enter_tty_command(bin: &str, home: &Path, repo: &Path, _out: &Path) -> CommandBuilder {
+    let mut cmd = tty_command(bin, home, repo);
+    cmd.arg("role");
+    cmd.arg("enter");
+    cmd.arg("advisor");
+    cmd
+}
+
 fn setup_repo(home: &Path, repo: &Path) {
     std::fs::create_dir_all(home).unwrap();
     std::fs::create_dir_all(repo).unwrap();
@@ -114,10 +136,11 @@ fn test_task_1597_delegation_prompt_and_recovery_hint() {
         })
         .unwrap();
 
-    let mut cmd = tty_command(bin, &home, &repo);
-    cmd.arg("role");
-    cmd.arg("enter");
-    cmd.arg("advisor");
+    // stdin and stderr are the terminal; stdout goes where `eval "$(...)"`
+    // sends it, never the terminal (it carries the grant's session-key
+    // secret, BUG-1934). trace:BUG-1934 | ai:claude
+    let eval_out = home.join("role-enter.out");
+    let cmd = role_enter_tty_command(bin, &home, &repo, &eval_out);
 
     let mut child = pair.slave.spawn_command(cmd).unwrap();
     drop(pair.slave);
@@ -150,7 +173,8 @@ fn test_task_1597_delegation_prompt_and_recovery_hint() {
 
     // Verify recovery hint on sub-launch failure
     let mut grant_id = String::new();
-    for line in output.lines() {
+    let eval_text = std::fs::read_to_string(&eval_out).unwrap_or_default();
+    for line in eval_text.lines().chain(output.lines()) {
         // ConPTY can prefix a rendered line with terminal control sequences.
         if let Some((_, rest)) = line.split_once("export AIDA_SESSION_GRANT='") {
             if let Some((id, _)) = rest.split_once("'") {

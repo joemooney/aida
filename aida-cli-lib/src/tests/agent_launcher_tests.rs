@@ -2131,6 +2131,7 @@ fn launcher_view(
         native_session_id: ended.then(|| format!("session-{id}")),
         ended_at: ended.then_some(now),
         resumed_from: None,
+        liveness: agent_registry::LivenessBasis::Process,
     }
 }
 
