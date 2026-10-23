@@ -25,7 +25,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T19:07:37.843699330Z
-modified_at: 2026-10-19T15:50:18.804957406Z
+modified_at: 2026-10-23T17:58:18.308039711Z
 req_type: Epic
 tags:
 - architecture
@@ -97,6 +97,18 @@ comments:
   created_at: 2026-10-12T06:01:26.907438174Z
   modified_at: 2026-10-12T06:01:26.907438174Z
   session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
+- id: 01a169e9-e3c4-7811-8c39-e45a9ff7848a
+  author: ai:codex:joe
+  content: |-
+    UNSHIPPED AUDIT 2026-10-23 (integrator)
+
+    Pinned origin/main: a9e78d34914e43b30fc9d2b590d83ab96feb48b2.
+
+    bug-1808-delegation-publication: SALVAGE. Head `6a1733a134b2`; cherry **2+**; aggregate PID `bb5c79136aecb066717f60d96f4272c17cc6d721`. Its publication/git-publication modules are absent from pinned main. BUG-1808’s 2026-10-10 scope ruling moved this architecture to EPIC-76 and says not to build the narrow bug on this branch. EPIC-76 (Deferred) explicitly retains this approved groundwork, parked until a production consumer exists, and forbids standalone shipment. A future, newly authorized guided PR would recover the useful publication primitives **together with a reviewed concrete consumer**, binding-signoff/A2 review prerequisites and tests. TASK-1612 is now Rejected; old first-step plans are not dispatch authorization. Preserve as conditional salvage, not a standalone PR.
+
+    These are branch-artifact verdicts, not completion or dispatch/merge authority. No spec status, branch, PR or active worktree changed. Full 14-branch table: .aida/handoff/advisor/unshipped-audit-2026-10-23.md (8 SHIPPED-ELSEWHERE, 3 SALVAGE, 3 ABANDON).
+  created_at: 2026-10-23T17:58:18.308039711Z
+  modified_at: 2026-10-23T17:58:18.308039711Z
 history:
 - id: 01a154db-46b3-7451-aacb-5b4328f536bc
   author: joe
