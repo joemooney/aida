@@ -1,0 +1,27 @@
+id: 01a16ac7-786f-7e43-a85b-16e56bfd5441
+spec_id: TASK-2273
+agreed_id: TASK-2273
+title: Heal the sandbox config.lock before git push -u in ship paths
+description: |
+  git push -u call sites (aida-cli-lib/src/pr_cmd.rs:4450 pr_ship_create_pr, orchestrator_leases.rs:1125, drain_batch.rs:1444) are not wrapped in aida_core::git_ops::output_healing_config_lock. Under the empty-0444 config.lock placeholder, git push -u exits 0 but prints 'could not lock config file' and leaves no upstream configured (reproduced). BUG-2211 names push -u as an affected config write.
+
+  Raised in review of PR-2863: https://github.com/joemooney/aida/pull/2863#issuecomment-6375592095
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-23T22:00:19.823108569Z
+modified_at: 2026-10-23T22:00:19.823108569Z
+req_type: Task
+tags:
+- from-review:PR-2863
+- severity:minor
+filed_at:
+  code_sha: 0fb55cc8c9ada5c192938658ee7d32de0ca34abb
+  branch: pr-2863
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c51da86593
+  vendor: claude
+  session: 01a16ac519b2
+  harness_version: 2.1.309 (Claude Code)
