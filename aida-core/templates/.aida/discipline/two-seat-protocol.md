@@ -79,8 +79,9 @@ batched form of `aida pr ship`:
 1. **Same gates per member.** Each PR must be open, not a draft (CI never runs
    Build on drafts, so a draft is refused with that reason), on the default
    branch, free of merge holds (marker and labels), approved at its head or
-   carried over a clean merge from main (TASK-1960), with a clear verdict
-   corpus. The train never releases a hold.
+   carried over a clean merge from main (TASK-1960), not claimed by a
+   reviewer for re-review at that head, with a clear verdict corpus. The
+   train never releases a hold.
 2. **Attestation carry-over by patch-id.** The train is main plus one squash
    commit per member, with the subject `aida pr ship` would write (including
    `(#N)` and the completing trailer). Each commit's patch-id must equal the
@@ -94,9 +95,12 @@ batched form of `aida pr ship`:
    without a recorded clearance.
 4. **Land pinned, only on an unmoved main.** Under the merge lease, the train
    re-gates every member, refuses if main moved since the build (it rebuilds
-   and retests instead), then rebase-merges the train PR with
-   `--match-head-commit <tip>`. Each member PR is closed with a pointer to
-   its commit on main, and `aida pull` completes specs from the trailers.
+   and retests instead), checks main once more right before merging, then
+   rebase-merges the train PR with `--match-head-commit <tip>`. If the landed
+   first commit's parent is not the tested base, it warns loudly. Each member
+   PR is closed with a pointer to its commit on main, and `aida pull`
+   completes specs from the trailers. A merge lease held by another merger
+   means main is about to move, so the train rebuilds instead of aborting.
 5. **Red trains bisect.** A red train is rerun once to rule out a flake, then
    split in halves, two sub-trains at a time. A green half lands at once,
    and the other half is rebuilt on the new main and retested. A one-member
@@ -106,6 +110,12 @@ batched form of `aida pr ship`:
 train without pushing anything; `--local-ci <CMD>` additionally simulates the
 whole run with a local command as CI. Branch protection's "require up to
 date" (`strict`) stays off; the train makes it unnecessary.
+
+`aida pr ship` enforces the same rule for a single PR: it refuses a PR whose
+head is behind main, since its green never saw main's newer commits, and
+names `aida pr train N` (a one-member train). It does the same when the forge
+does not report the branch as behind. No flag overrides the refusal. A head
+that already contains main ships as before.
 
 Mechanical enforcement is still pending. It arrives with the identity-bound
 approval gate in `aida pr ship` (BUG-1918). Until then, ADR-73 is policy, not

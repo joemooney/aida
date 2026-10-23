@@ -44,9 +44,10 @@ leave these unset and the recipe above is your fallback.
 
 Each PR's CI ran against the main that existed then, so two PRs that are each
 green can break main together (#2599/#2597: one added a whole-repo guard, the
-other added code the guard rejects). Do not ship several approved PRs back to
-back on those greens, and do not re-record approvals after `gh pr
-update-branch`. Land them with the merge train:
+other added code the guard rejects). `aida pr ship` therefore refuses a PR
+whose head is behind main and names `aida pr train N`; no flag overrides it.
+Do not re-record approvals after `gh pr update-branch`. Land approved PRs
+with the merge train:
 
 ```bash
 aida pr train 2597 2599 --dry-run   # gate verdict per PR + the planned train

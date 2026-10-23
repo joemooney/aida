@@ -21,7 +21,12 @@
 ///   base since divergence — the common, usually-harmless "base moved" case;
 ///   still worth surfacing (a reader may want to re-run), never worth
 ///   refusing.
-// trace:BUG-1468 | ai:claude
+///
+/// STORY-1690 supersedes the tiers for `aida pr ship`: it refuses ANY
+/// warning (a head behind its base), and the tiers only shape the message.
+/// The drain's merge phase still reads them as described above.
+// trace:BUG-1468 trace:STORY-1690 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct StaleCheckWarning {
     pub(crate) behind_commits: u64,
     pub(crate) definition_files: Vec<String>,

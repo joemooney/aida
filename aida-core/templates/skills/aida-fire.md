@@ -208,7 +208,7 @@ it saw. Ship it:
 
 ```bash
 gh pr ready N
-aida pr ship N    # --override-stale-check ONLY when the ci.yml delta on main is unrelated
+aida pr ship N    # refuses a head behind main: land it with `aida pr train N`
 ```
 
 Never run `aida review record` yourself. If the head moved after review
@@ -242,7 +242,8 @@ Please run: ! aida merge-hold clear N
 
 Two PRs that are each green can still break main together: one adds a required
 field, the other adds a literal without it. Neither run saw the other.
-`--override-stale-check` does not protect against this. Once two or more PRs
+`aida pr ship` refuses a head behind main for this reason, and no flag
+overrides it. Once two or more PRs
 are approved, land them as one train instead of shipping them one by one:
 
 ```bash

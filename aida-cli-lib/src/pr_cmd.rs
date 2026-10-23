@@ -2222,7 +2222,48 @@ pub(crate) fn ship_stale_definition_warning(
     (base_branch, warning)
 }
 
+/// What the stale gate does with PR `pr_number`'s staleness against
+/// `base_branch`: `Ok` ships, `Err` is the refusal. TASK-1606 refused only a
+/// green that predates a CI-definition change. STORY-1690: a head missing
+/// ANY commit on the base refuses, and no flag overrides it — two PRs each
+/// green on its own base can break main together (#2599/#2597), so a behind
+/// head lands through `aida pr train N`, which tests it on the current base.
 // trace:TASK-1606 | ai:codex
+// trace:STORY-1690 | ai:claude
+pub(crate) fn stale_gate_decision(
+    pr_number: u64,
+    base_branch: &str,
+    warning: Option<&StaleCheckWarning>,
+    override_stale_check: bool,
+) -> std::result::Result<(), String> {
+    let Some(warning) = warning else {
+        return Ok(());
+    };
+    let definition = if warning.definition_files.is_empty() {
+        String::new()
+    } else {
+        format!(
+            " Its CI also ran against an OLDER definition of the check ({} changed since).",
+            warning.definition_files.join(", ")
+        )
+    };
+    let flag = if override_stale_check {
+        " `--override-stale-check` does not ship a head that is behind its base."
+    } else {
+        ""
+    };
+    Err(format!(
+        "PR-{pr_number}'s head is {} commit(s) behind {base_branch}, so its green was never \
+         tested together with them; two PRs each green on its own base can still turn \
+         {base_branch} red together.{definition} Land it with `aida pr train {pr_number}` \
+         (it tests the PR on top of the current {base_branch} before merging), or merge \
+         {base_branch} into the branch, wait for green, and ship again.{flag}",
+        warning.behind_commits,
+    ))
+}
+
+// trace:TASK-1606 | ai:codex
+// trace:STORY-1690 | ai:claude
 fn ship_stale_definition_gate(
     project_root: &std::path::Path,
     ship_branch: &str,
@@ -2231,46 +2272,13 @@ fn ship_stale_definition_gate(
 ) -> Result<()> {
     let (base_branch, warning) =
         ship_stale_definition_warning(project_root, ship_branch, pr_number);
-    if let Some(warning) = warning {
-        if !warning.definition_files.is_empty() {
-            if override_stale_check {
-                eprintln!(
-                    "  {} PR-{}'s green predates a CI-definition change on {} \
-                         ({}) — shipping anyway (override)",
-                    crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
-                    pr_number,
-                    base_branch,
-                    warning.definition_files.join(", "),
-                );
-            } else {
-                return Err(pr_ship::ShipRefusal::StaleDefinition.error(format!(
-                        "PR-{pr_number}'s green check completed before {} changed on {base_branch}: {} \
-                         — its CI ran against an OLDER definition of that check, so the green does not \
-                         mean what it looks like it means. Re-run CI (push an empty commit or rebase), \
-                         or re-run with `--override-stale-check` to ship anyway.",
-                        if warning.definition_files.len() == 1 { "a CI definition file" } else { "CI definition files" },
-                        warning.definition_files.join(", "),
-                    )));
-            }
-        } else if !warning.test_files.is_empty() {
-            eprintln!(
-                "  {} {} commits behind; {} test files changed on main since this branch's base",
-                crate::glyph(crate::glyphs::Glyph::Info).cyan(),
-                warning.behind_commits,
-                warning.test_files.len(),
-            );
-        } else {
-            eprintln!(
-                "  {} PR-{}'s green predates {} commit(s) now on {} (base moved — \
-                     usually harmless)",
-                crate::glyph(crate::glyphs::Glyph::Info).cyan(),
-                pr_number,
-                warning.behind_commits,
-                base_branch,
-            );
-        }
-    }
-    Ok(())
+    stale_gate_decision(
+        pr_number,
+        &base_branch,
+        warning.as_ref(),
+        override_stale_check,
+    )
+    .map_err(|refusal| pr_ship::ShipRefusal::StaleDefinition.error(refusal))
 }
 
 // trace:TASK-1606 | ai:codex

@@ -579,30 +579,63 @@ fn fetch_base(repo: &Path, base: &str) -> Result<String> {
     rev_parse(repo, &format!("origin/{base}"))
 }
 
-/// The member gate, live: everything `aida pr ship` checks before it merges a
-/// PR, minus the CI wait (the train's own CI replaces it), and with no way to
+/// The per-member probes the member gate needs, so its order and its
+/// fail-closed paths are testable without a forge.
+// trace:STORY-1690 | ai:claude
+pub(crate) trait MemberChecks {
+    fn metadata(&mut self, pr: u64) -> std::result::Result<crate::forge::ChangeMetadata, String>;
+    /// The local merge-hold marker's reason, if any.
+    fn hold_marker(&mut self, pr: u64) -> Option<String>;
+    fn labels(
+        &mut self,
+        pr: u64,
+    ) -> std::result::Result<Option<crate::merge_hold::PinnedChange>, String>;
+    /// Fetch the head branch, so the approval and the subject read it.
+    fn fetch_head(&mut self, head_ref: &str) -> std::result::Result<(), String>;
+    /// The head the PR's attested approval is pinned to; `None` if none.
+    fn approval_pin(
+        &mut self,
+        pr: u64,
+        head_ref: &str,
+        head: &str,
+    ) -> std::result::Result<Option<String>, String>;
+    /// The root whose STORY-1405 review-in-progress markers ship honours.
+    fn marker_root(&self) -> &Path;
+    fn corpus(&mut self, pr: u64, hints: &[String], head: &str) -> std::result::Result<(), String>;
+    /// The (subject, body) `aida pr ship` would give the squash merge.
+    fn message(
+        &mut self,
+        pr: u64,
+        meta: &crate::forge::ChangeMetadata,
+        head: &str,
+    ) -> std::result::Result<(String, String), String>;
+}
+
+/// The member gate: everything `aida pr ship` checks before it merges a PR,
+/// minus the CI wait (the train's own CI replaces it), and with no way to
 /// release a hold. `Ok` carries the commit message ship would write.
 // trace:STORY-1690 | ai:claude
-pub(crate) fn gate_member(
-    project_root: &Path,
-    main_worktree: &Path,
-    forge: &dyn crate::forge::Forge,
+pub(crate) fn gate_member_with(
+    checks: &mut dyn MemberChecks,
     base: &str,
     pr: u64,
 ) -> std::result::Result<Member, String> {
-    let meta = forge
-        .change_metadata(pr, &mut crate::network_retry::NoopSink)
-        .map_err(|e| format!("its metadata could not be read ({e:#})"))?;
+    let meta = checks.metadata(pr)?;
     if let Some(why) = member_metadata_refusal(&meta, base) {
         return Err(why);
     }
-    if let Some(reason) = crate::merge_hold::read_hold(main_worktree, pr) {
+    let head = meta.head_sha.trim().to_string();
+    let head_ref = meta.head_ref.trim().to_string();
+    if head.is_empty() || head_ref.is_empty() {
+        return Err("its head could not be read from the forge; failing closed".to_string());
+    }
+    if let Some(reason) = checks.hold_marker(pr) {
         return Err(format!(
             "it is under a merge hold ({}); the train never releases a hold",
             reason.trim()
         ));
     }
-    match crate::merge_hold::fetch_pinned_change(project_root, forge.kind(), pr) {
+    match checks.labels(pr) {
         Ok(Some(c)) => {
             if let Some(why) = member_label_refusal(&c) {
                 return Err(why);
@@ -615,27 +648,17 @@ pub(crate) fn gate_member(
             ))
         }
     }
-    let head = meta.head_sha.trim().to_string();
-    let head_ref = meta.head_ref.trim().to_string();
-    // The approved head and the branch ref the subject derivation reads.
-    origin_git(
-        main_worktree,
-        &[
-            "fetch",
-            "--quiet",
-            "--no-tags",
-            "origin",
-            &format!("+refs/heads/{head_ref}:refs/remotes/origin/{head_ref}"),
-        ],
-    )
-    .map_err(|e| format!("its head could not be fetched ({e:#})"))?;
-    let pin = match crate::pr_cmd::merge_path_approval_gate(
-        project_root,
-        pr,
-        &[],
-        Some(&head_ref),
-        Some(&head),
-    ) {
+    // STORY-1405: a reviewer's claim on this head blocks the train exactly
+    // as it blocks ship; the head is known, so the marker cannot be skipped.
+    if let crate::review_marker::MergeGate::UnderReview(m) =
+        crate::review_marker::merge_gate(checks.marker_root(), pr, || Some(head.clone()))
+    {
+        return Err(crate::review_marker::refusal_message(&m));
+    }
+    checks
+        .fetch_head(&head_ref)
+        .map_err(|e| format!("its head could not be fetched ({e})"))?;
+    let pin = match checks.approval_pin(pr, &head_ref, &head) {
         Ok(Some(pin)) => pin,
         Ok(None) => return Err("no approval is recorded for it".to_string()),
         Err(why) => return Err(why),
@@ -648,38 +671,129 @@ pub(crate) fn gate_member(
         ));
     }
     let hints = crate::pr_ship::extract_spec_ids_from_text(&format!("{head_ref} {}", meta.title));
-    crate::merge_hold::enforce_corpus_gate_before_merge(
-        project_root,
-        pr,
-        &hints,
-        Some(base),
-        || Some(head.clone()),
-    )
-    .map_err(|e| format!("{e:#}"))?;
-    let ship_meta = if forge.kind() == crate::forge::ForgeKind::GitHub {
-        crate::pr_cmd::fetch_pr_ship_metadata_via_gh(project_root, pr)
-            .map_err(|e| format!("its title and body could not be read ({e:#})"))?
-    } else {
-        crate::pr_cmd::PrShipMetadata {
-            title: meta.title.clone(),
-            body: String::new(),
-        }
-    };
-    let (subject, _trailer) = crate::pr_cmd::derive_pr_ship_squash_subject_from(
-        project_root,
-        &ship_meta,
-        &head_ref,
-        false,
-    )
-    .map_err(|e| format!("its squash subject could not be derived ({e:#})"))?;
-    let subject = subject.unwrap_or_else(|| ship_meta.title.trim().to_string());
-    let body = member_body(project_root, base, &head, &ship_meta.body)?;
+    checks.corpus(pr, &hints, &head)?;
+    let (subject, body) = checks.message(pr, &meta, &head)?;
     Ok(Member {
         pr,
         head,
         subject,
         body,
     })
+}
+
+/// [`MemberChecks`] against the project's forge, store and main clone.
+// trace:STORY-1690 | ai:claude
+pub(crate) struct LiveChecks<'a> {
+    pub project_root: &'a Path,
+    pub main_worktree: &'a Path,
+    pub forge: &'a dyn crate::forge::Forge,
+    pub base: &'a str,
+}
+
+impl MemberChecks for LiveChecks<'_> {
+    fn metadata(&mut self, pr: u64) -> std::result::Result<crate::forge::ChangeMetadata, String> {
+        self.forge
+            .change_metadata(pr, &mut crate::network_retry::NoopSink)
+            .map_err(|e| format!("its metadata could not be read ({e:#})"))
+    }
+    fn hold_marker(&mut self, pr: u64) -> Option<String> {
+        crate::merge_hold::read_hold(self.main_worktree, pr)
+    }
+    fn labels(
+        &mut self,
+        pr: u64,
+    ) -> std::result::Result<Option<crate::merge_hold::PinnedChange>, String> {
+        crate::merge_hold::fetch_pinned_change(self.project_root, self.forge.kind(), pr)
+            .map_err(|e| e.to_string())
+    }
+    fn fetch_head(&mut self, head_ref: &str) -> std::result::Result<(), String> {
+        origin_git(
+            self.main_worktree,
+            &[
+                "fetch",
+                "--quiet",
+                "--no-tags",
+                "origin",
+                &format!("+refs/heads/{head_ref}:refs/remotes/origin/{head_ref}"),
+            ],
+        )
+        .map(|_| ())
+        .map_err(|e| format!("{e:#}"))
+    }
+    fn approval_pin(
+        &mut self,
+        pr: u64,
+        head_ref: &str,
+        head: &str,
+    ) -> std::result::Result<Option<String>, String> {
+        crate::pr_cmd::merge_path_approval_gate(
+            self.project_root,
+            pr,
+            &[],
+            Some(head_ref),
+            Some(head),
+        )
+    }
+    fn marker_root(&self) -> &Path {
+        self.main_worktree
+    }
+    fn corpus(&mut self, pr: u64, hints: &[String], head: &str) -> std::result::Result<(), String> {
+        crate::merge_hold::enforce_corpus_gate_before_merge(
+            self.project_root,
+            pr,
+            hints,
+            Some(self.base),
+            || Some(head.to_string()),
+        )
+        .map_err(|e| format!("{e:#}"))
+    }
+    fn message(
+        &mut self,
+        pr: u64,
+        meta: &crate::forge::ChangeMetadata,
+        head: &str,
+    ) -> std::result::Result<(String, String), String> {
+        let ship_meta = if self.forge.kind() == crate::forge::ForgeKind::GitHub {
+            crate::pr_cmd::fetch_pr_ship_metadata_via_gh(self.project_root, pr)
+                .map_err(|e| format!("its title and body could not be read ({e:#})"))?
+        } else {
+            crate::pr_cmd::PrShipMetadata {
+                title: meta.title.clone(),
+                body: String::new(),
+            }
+        };
+        let (subject, _trailer) = crate::pr_cmd::derive_pr_ship_squash_subject_from(
+            self.project_root,
+            &ship_meta,
+            meta.head_ref.trim(),
+            false,
+        )
+        .map_err(|e| format!("its squash subject could not be derived ({e:#})"))?;
+        let subject = subject.unwrap_or_else(|| ship_meta.title.trim().to_string());
+        let body = member_body(self.project_root, self.base, head, &ship_meta.body)?;
+        Ok((subject, body))
+    }
+}
+
+/// The member gate, live.
+// trace:STORY-1690 | ai:claude
+pub(crate) fn gate_member(
+    project_root: &Path,
+    main_worktree: &Path,
+    forge: &dyn crate::forge::Forge,
+    base: &str,
+    pr: u64,
+) -> std::result::Result<Member, String> {
+    gate_member_with(
+        &mut LiveChecks {
+            project_root,
+            main_worktree,
+            forge,
+            base,
+        },
+        base,
+        pr,
+    )
 }
 
 /// The squash body ship would write: the commit messages (identity-sanitized
@@ -740,42 +854,118 @@ pub(crate) fn train_pr_body(train: &Built) -> String {
     s
 }
 
-/// The rails that push, open, test and merge through the project's forge.
+/// The side effects the live train needs, so [`ForgeRails`]' test and land
+/// logic is testable against a fake forge.
 // trace:STORY-1690 | ai:claude
-pub(crate) struct ForgeRails<'a> {
+pub(crate) trait TrainForge {
+    /// Fetch the base and return its tip.
+    fn fetch_main(&mut self) -> Result<String>;
+    /// Take the base's merge lease for train PR `train_pr`; it is held until
+    /// the guard drops. `Err` says who holds it.
+    fn lease(&mut self, train_pr: u64) -> std::result::Result<Box<dyn std::any::Any>, String>;
+    /// Build a train on `base` in the main clone's object store.
+    fn build(&mut self, base: &str, members: &[Member]) -> Result<Built>;
+    /// The member gate for `pr`, live.
+    fn gate(&mut self, pr: u64) -> std::result::Result<Member, String>;
+    /// Push `train`'s tip to `branch` and open its train PR.
+    fn open(&mut self, train: &Built, branch: &str) -> Result<crate::forge::ChangeRef>;
+    fn wait_ci(&mut self, change: &crate::forge::ChangeRef) -> Result<CiVerdict>;
+    /// Close a train PR that will not merge, and delete its branch.
+    fn retire(&mut self, change: &crate::forge::ChangeRef, why: &str);
+    /// Rebase-merge the train PR, pinned to `tip`.
+    fn merge(&mut self, change: &crate::forge::ChangeRef, tip: &str) -> Result<()>;
+    /// The commits main received for `cars` between `base` and `main`.
+    fn landed(&mut self, base: &str, main: &str, cars: &[Car]) -> Vec<Option<String>>;
+    /// The first parent of `commit`.
+    fn parent(&mut self, commit: &str) -> Option<String>;
+    /// Close a landed member with a pointer and record its bookkeeping.
+    fn member_landed(
+        &mut self,
+        change: &crate::forge::ChangeRef,
+        train: &Built,
+        car: &Car,
+        sha: Option<&str>,
+    );
+    fn comment(&mut self, pr: u64, note: &str);
+}
+
+/// [`TrainForge`] through the project's forge and main clone.
+// trace:STORY-1690 | ai:claude
+pub(crate) struct LiveTrainForge<'a> {
     pub project_root: PathBuf,
     pub main_worktree: PathBuf,
     pub base: String,
     pub forge: &'a dyn crate::forge::Forge,
-    pub stamp: String,
-    pub opened: Vec<(String, crate::forge::ChangeRef)>,
-    pub count: usize,
-    /// Landed (member PR, commit on main).
-    pub landed_on_main: Vec<(u64, String)>,
 }
 
-impl ForgeRails<'_> {
-    fn change_for(&self, tip: &str) -> Result<crate::forge::ChangeRef> {
-        self.opened
-            .iter()
-            .rev()
-            .find(|(t, _)| t == tip)
-            .map(|(_, c)| c.clone())
-            .with_context(|| format!("no train PR is open for {}", short(tip)))
-    }
-
-    /// Close a train PR that will not merge, and delete its branch.
-    fn retire(&self, change: &crate::forge::ChangeRef, why: &str) {
-        if let Err(e) = self.forge.close_change(change, why) {
-            eprintln!("  warning: could not close train PR #{}: {e:#}", change.id);
+impl LiveTrainForge<'_> {
+    fn member_ref(&self, pr: u64) -> crate::forge::ChangeRef {
+        crate::forge::ChangeRef {
+            id: pr,
+            url: String::new(),
+            branch: String::new(),
+            base: self.base.clone(),
+            title: None,
         }
-        let _ = origin_git(
-            &self.main_worktree,
-            &["push", "--quiet", "origin", "--delete", &change.branch],
-        );
+    }
+}
+
+impl TrainForge for LiveTrainForge<'_> {
+    fn fetch_main(&mut self) -> Result<String> {
+        fetch_base(&self.main_worktree, &self.base)
     }
 
-    fn wait_for_ci(&self, change: &crate::forge::ChangeRef) -> Result<CiVerdict> {
+    fn lease(&mut self, train_pr: u64) -> std::result::Result<Box<dyn std::any::Any>, String> {
+        crate::merge_lock::acquire(
+            &self.main_worktree,
+            &self.base,
+            Some(train_pr),
+            "aida pr train",
+            crate::merge_lock::DEFAULT_WAIT,
+        )
+        .map(|lease| Box::new(lease) as Box<dyn std::any::Any>)
+        .map_err(|e| format!("{e:#}"))
+    }
+
+    fn build(&mut self, base: &str, members: &[Member]) -> Result<Built> {
+        build(&self.main_worktree, base, members)
+    }
+
+    fn gate(&mut self, pr: u64) -> std::result::Result<Member, String> {
+        gate_member(
+            &self.project_root,
+            &self.main_worktree,
+            self.forge,
+            &self.base,
+            pr,
+        )
+    }
+
+    fn open(&mut self, train: &Built, branch: &str) -> Result<crate::forge::ChangeRef> {
+        origin_git(
+            &self.main_worktree,
+            &[
+                "push",
+                "--quiet",
+                "origin",
+                &format!("{}:refs/heads/{branch}", train.tip),
+            ],
+        )?;
+        let prs: Vec<String> = train
+            .cars
+            .iter()
+            .map(|c| format!("#{}", c.member.pr))
+            .collect();
+        self.forge.open_change(crate::forge::OpenChange {
+            branch: branch.to_string(),
+            base: self.base.clone(),
+            title: format!("[train] land {}", prs.join(", ")),
+            body: train_pr_body(train),
+            draft: false,
+        })
+    }
+
+    fn wait_ci(&mut self, change: &crate::forge::ChangeRef) -> Result<CiVerdict> {
         use crate::forge::{CheckRegistration, CiState};
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(600);
         loop {
@@ -799,15 +989,131 @@ impl ForgeRails<'_> {
             )),
         })
     }
+
+    fn retire(&mut self, change: &crate::forge::ChangeRef, why: &str) {
+        if let Err(e) = self.forge.close_change(change, why) {
+            eprintln!("  warning: could not close train PR #{}: {e:#}", change.id);
+        }
+        let _ = origin_git(
+            &self.main_worktree,
+            &["push", "--quiet", "origin", "--delete", &change.branch],
+        );
+    }
+
+    fn merge(&mut self, change: &crate::forge::ChangeRef, tip: &str) -> Result<()> {
+        let opts = crate::forge::MergeOptions {
+            method: crate::forge::MergeMethod::Rebase,
+            squash_subject: None,
+            squash_body: None,
+            delete_branch: true,
+            match_head: Some(tip.to_string()),
+        };
+        self.forge
+            .merge_change(change, &opts, &mut crate::network_retry::StderrSink)
+            .map(|_| ())
+    }
+
+    fn landed(&mut self, base: &str, main: &str, cars: &[Car]) -> Vec<Option<String>> {
+        landed_commits(&self.main_worktree, base, main, cars)
+    }
+
+    fn parent(&mut self, commit: &str) -> Option<String> {
+        rev_parse(&self.main_worktree, &format!("{commit}^1")).ok()
+    }
+
+    fn member_landed(
+        &mut self,
+        change: &crate::forge::ChangeRef,
+        train: &Built,
+        car: &Car,
+        sha: Option<&str>,
+    ) {
+        let pr = car.member.pr;
+        let note = format!(
+            "Landed on `{}` as {} by merge train #{} (rebase-merged at {}). The approved \
+             head {} carried over: its patch-id {} is the landed commit's.",
+            self.base,
+            sha.unwrap_or("(commit not found by subject)"),
+            change.id,
+            short(&train.tip),
+            short(&car.member.head),
+            short(&car.patch_id),
+        );
+        if let Err(e) = self.forge.close_change(&self.member_ref(pr), &note) {
+            eprintln!("  warning: could not close PR #{pr} after landing: {e:#}");
+        }
+        let specs = crate::pr_ship::extract_trailing_spec_ids_from_subject(&car.member.subject);
+        crate::pr_cmd::emit_ship_pr_merged(&self.main_worktree, pr as u32, &specs);
+        crate::pr_cmd::append_ship_activity_line(
+            &self.main_worktree,
+            &serde_json::json!({
+                "ts": chrono::Utc::now().to_rfc3339(),
+                "command": "aida pr train",
+                "event": "train_member_landed",
+                "pr": pr,
+                "train_pr": change.id,
+                "approved_head": car.member.head,
+                "patch_id": car.patch_id,
+                "landed": sha,
+            })
+            .to_string(),
+        );
+    }
+
+    fn comment(&mut self, pr: u64, note: &str) {
+        if let Err(err) = self.forge.comment(&self.member_ref(pr), note) {
+            eprintln!("  warning: could not comment on PR #{pr}: {err:#}");
+        }
+    }
+}
+
+/// The rails that push, open, test and merge through a [`TrainForge`].
+// trace:STORY-1690 | ai:claude
+pub(crate) struct ForgeRails<'a> {
+    pub ports: &'a mut dyn TrainForge,
+    pub stamp: String,
+    pub opened: Vec<(String, crate::forge::ChangeRef)>,
+    pub count: usize,
+    /// Landed (member PR, commit on main).
+    pub landed_on_main: Vec<(u64, String)>,
+    /// Problems found after a merge, for the run's summary.
+    pub warnings: Vec<String>,
+}
+
+impl<'a> ForgeRails<'a> {
+    pub(crate) fn new(ports: &'a mut dyn TrainForge, stamp: String) -> Self {
+        ForgeRails {
+            ports,
+            stamp,
+            opened: Vec::new(),
+            count: 0,
+            landed_on_main: Vec::new(),
+            warnings: Vec::new(),
+        }
+    }
+
+    fn change_for(&self, tip: &str) -> Result<crate::forge::ChangeRef> {
+        self.opened
+            .iter()
+            .rev()
+            .find(|(t, _)| t == tip)
+            .map(|(_, c)| c.clone())
+            .with_context(|| format!("no train PR is open for {}", short(tip)))
+    }
+
+    fn warn(&mut self, line: String) {
+        eprintln!("  warning: {line}");
+        self.warnings.push(line);
+    }
 }
 
 impl Rails for ForgeRails<'_> {
     fn main_tip(&mut self) -> Result<String> {
-        fetch_base(&self.main_worktree, &self.base)
+        self.ports.fetch_main()
     }
 
     fn build(&mut self, base: &str, members: &[Member]) -> Result<Built> {
-        build(&self.main_worktree, base, members)
+        self.ports.build(base, members)
     }
 
     fn test(&mut self, trains: &[Built]) -> Result<Vec<CiVerdict>> {
@@ -815,23 +1121,8 @@ impl Rails for ForgeRails<'_> {
         for t in trains {
             self.count += 1;
             let branch = format!("{BRANCH_PREFIX}{}-{}", self.stamp, self.count);
-            origin_git(
-                &self.main_worktree,
-                &[
-                    "push",
-                    "--quiet",
-                    "origin",
-                    &format!("{}:refs/heads/{branch}", t.tip),
-                ],
-            )?;
+            let change = self.ports.open(t, &branch)?;
             let prs: Vec<String> = t.cars.iter().map(|c| format!("#{}", c.member.pr)).collect();
-            let change = self.forge.open_change(crate::forge::OpenChange {
-                branch: branch.clone(),
-                base: self.base.clone(),
-                title: format!("[train] land {}", prs.join(", ")),
-                body: train_pr_body(t),
-                draft: false,
-            })?;
             println!(
                 "  train PR #{} opened for {} ({branch} at {})",
                 change.id,
@@ -844,13 +1135,13 @@ impl Rails for ForgeRails<'_> {
         // Every train's CI runs at once; wait for each in turn.
         let mut verdicts = Vec::new();
         for change in &changes {
-            let v = match self.wait_for_ci(change) {
+            let v = match self.ports.wait_ci(change) {
                 Ok(v) => v,
                 Err(e) => CiVerdict::Red(format!("{e:#}")),
             };
             if let CiVerdict::Red(why) = &v {
                 println!("  train PR #{} is red: {why}", change.id);
-                self.retire(
+                self.ports.retire(
                     change,
                     &format!("Train CI red ({why}); the train reruns or bisects."),
                 );
@@ -864,18 +1155,21 @@ impl Rails for ForgeRails<'_> {
 
     fn land(&mut self, train: &Built) -> Result<Landing> {
         let change = self.change_for(&train.tip)?;
-        let _lease = crate::merge_lock::acquire(
-            &self.main_worktree,
-            &self.base,
-            Some(change.id),
-            "aida pr train",
-            crate::merge_lock::DEFAULT_WAIT,
-        )
-        .map_err(|e| {
-            anyhow::anyhow!("another merger holds the '{}' merge-lease: {e}", self.base)
-        })?;
-        if fetch_base(&self.main_worktree, &self.base)? != train.base {
-            self.retire(
+        // Another merger holding the lease is about to move main: rebuild on
+        // it rather than abort the run with open train PRs and no summary.
+        let _lease = match self.ports.lease(change.id) {
+            Ok(lease) => lease,
+            Err(holder) => {
+                println!("  the merge lease is held ({holder}); the train rebuilds");
+                self.ports.retire(
+                    &change,
+                    "Another merger holds the merge lease; the train rebuilds.",
+                );
+                return Ok(Landing::Stale);
+            }
+        };
+        if self.ports.fetch_main()? != train.base {
+            self.ports.retire(
                 &change,
                 "Main moved after this train was built; the train rebuilds.",
             );
@@ -886,13 +1180,7 @@ impl Rails for ForgeRails<'_> {
         let mut refused = Vec::new();
         for car in &train.cars {
             let pr = car.member.pr;
-            match gate_member(
-                &self.project_root,
-                &self.main_worktree,
-                self.forge,
-                &self.base,
-                pr,
-            ) {
+            match self.ports.gate(pr) {
                 Ok(m) if m.head == car.member.head => {}
                 Ok(m) => refused.push(Ejected {
                     pr,
@@ -906,80 +1194,67 @@ impl Rails for ForgeRails<'_> {
             }
         }
         if !refused.is_empty() {
-            self.retire(
+            self.ports.retire(
                 &change,
                 "A member failed its pre-land recheck; the train rebuilds.",
             );
             return Ok(Landing::Refused(refused));
         }
-        let opts = crate::forge::MergeOptions {
-            method: crate::forge::MergeMethod::Rebase,
-            squash_subject: None,
-            squash_body: None,
-            delete_branch: true,
-            match_head: Some(train.tip.clone()),
-        };
-        self.forge
-            .merge_change(&change, &opts, &mut crate::network_retry::StderrSink)
+        // The re-gate took several forge round trips, and a merge that does
+        // not take the lease (the web UI, a raw `gh pr merge`) could have
+        // moved main meanwhile; strict is off, so the forge would rebase the
+        // train onto an untested main. Look again right before merging.
+        if self.ports.fetch_main()? != train.base {
+            self.ports.retire(
+                &change,
+                "Main moved while the train was re-checked; the train rebuilds.",
+            );
+            return Ok(Landing::Stale);
+        }
+        self.ports
+            .merge(&change, &train.tip)
             .with_context(|| format!("train PR #{} was not merged", change.id))?;
-        let main = fetch_base(&self.main_worktree, &self.base)?;
-        let landed = landed_commits(&self.main_worktree, &train.base, &main, &train.cars);
-        for (car, sha) in train.cars.iter().zip(&landed) {
-            let pr = car.member.pr;
-            let member = crate::forge::ChangeRef {
-                id: pr,
-                url: String::new(),
-                branch: String::new(),
-                base: self.base.clone(),
-                title: None,
-            };
-            let note = format!(
-                "Landed on `{}` as {} by merge train #{} (rebase-merged at {}). The approved \
-                 head {} carried over: its patch-id {} is the landed commit's.",
-                self.base,
-                sha.as_deref().unwrap_or("(commit not found by subject)"),
-                change.id,
-                short(&train.tip),
-                short(&car.member.head),
-                short(&car.patch_id),
-            );
-            if let Err(e) = self.forge.close_change(&member, &note) {
-                eprintln!("  warning: could not close PR #{pr} after landing: {e:#}");
+        let main = match self.ports.fetch_main() {
+            Ok(main) => main,
+            Err(e) => {
+                self.warn(format!(
+                    "train PR #{} merged, but main could not be read after it ({e:#}); \
+                     check its commits on main by hand",
+                    change.id
+                ));
+                train.tip.clone()
             }
-            let specs = crate::pr_ship::extract_trailing_spec_ids_from_subject(&car.member.subject);
-            crate::pr_cmd::emit_ship_pr_merged(&self.main_worktree, pr as u32, &specs);
-            crate::pr_cmd::append_ship_activity_line(
-                &self.main_worktree,
-                &serde_json::json!({
-                    "ts": chrono::Utc::now().to_rfc3339(),
-                    "command": "aida pr train",
-                    "event": "train_member_landed",
-                    "pr": pr,
-                    "train_pr": change.id,
-                    "approved_head": car.member.head,
-                    "patch_id": car.patch_id,
-                    "landed": sha,
-                })
-                .to_string(),
-            );
+        };
+        let landed = self.ports.landed(&train.base, &main, &train.cars);
+        // The first car must sit directly on the base the train was tested
+        // on; anything else means another commit slipped in underneath.
+        let first_parent = landed
+            .first()
+            .and_then(|sha| sha.as_deref())
+            .and_then(|sha| self.ports.parent(sha));
+        if first_parent.as_deref() != Some(train.base.as_str()) {
+            self.warn(format!(
+                "train PR #{} landed, but its first commit's parent is {}, not the tested \
+                 base {}: main received a combination CI never ran. Check main's CI now.",
+                change.id,
+                first_parent.as_deref().map(short).unwrap_or("unknown"),
+                short(&train.base)
+            ));
+        }
+        for (car, sha) in train.cars.iter().zip(&landed) {
+            self.ports
+                .member_landed(&change, train, car, sha.as_deref());
             self.landed_on_main
-                .push((pr, sha.clone().unwrap_or_default()));
+                .push((car.member.pr, sha.clone().unwrap_or_default()));
         }
         Ok(Landing::Landed(main))
     }
 
     fn ejected(&mut self, e: &Ejected) {
-        let member = crate::forge::ChangeRef {
-            id: e.pr,
-            url: String::new(),
-            branch: String::new(),
-            base: self.base.clone(),
-            title: None,
-        };
-        let note = format!("Not landed by the merge train: {}.", e.reason);
-        if let Err(err) = self.forge.comment(&member, &note) {
-            eprintln!("  warning: could not comment on PR #{}: {err:#}", e.pr);
-        }
+        self.ports.comment(
+            e.pr,
+            &format!("Not landed by the merge train: {}.", e.reason),
+        );
     }
 }
 
@@ -1108,6 +1383,7 @@ pub(crate) fn pr_train_handler(opts: &TrainOptions<'_>) -> Result<()> {
         );
     }
     let main = fetch_base(&main_worktree, &base)?;
+    let mut warnings = Vec::new();
     let outcome = if opts.dry_run {
         let built = build(&main_worktree, &main, &members)?;
         println!(
@@ -1141,17 +1417,19 @@ pub(crate) fn pr_train_handler(opts: &TrainOptions<'_>) -> Result<()> {
         };
         drive(&mut rails, members)?
     } else {
-        let mut rails = ForgeRails {
+        let mut ports = LiveTrainForge {
             project_root: project_root.clone(),
             main_worktree: main_worktree.clone(),
             base: base.clone(),
             forge: forge.as_ref(),
-            stamp: chrono::Utc::now().format("%Y%m%d-%H%M%S").to_string(),
-            opened: Vec::new(),
-            count: 0,
-            landed_on_main: Vec::new(),
         };
-        drive(&mut rails, members)?
+        let mut rails = ForgeRails::new(
+            &mut ports,
+            chrono::Utc::now().format("%Y%m%d-%H%M%S").to_string(),
+        );
+        let outcome = drive(&mut rails, members)?;
+        warnings = rails.warnings;
+        outcome
     };
     println!(
         "\n{} landed, {} ejected, {} CI run(s){}",
@@ -1165,6 +1443,9 @@ pub(crate) fn pr_train_handler(opts: &TrainOptions<'_>) -> Result<()> {
     }
     for e in &outcome.ejected {
         println!("  ejected #{}: {}", e.pr, e.reason);
+    }
+    for w in &warnings {
+        println!("  warning: {w}");
     }
     if !opts.dry_run && !outcome.landed.is_empty() && !opts.no_pull {
         let status = std::process::Command::new(crate::pr_cmd::pr_ship_post_merge_aida_exe())

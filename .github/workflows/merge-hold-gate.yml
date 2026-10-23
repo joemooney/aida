@@ -88,12 +88,28 @@ jobs:
               for entry in $(printf '%s' "$members" | tr ',' ' '); do
                 n=${entry%%@*}
                 n=${n#\#}
+                sha=${entry#*@}
+                case "$entry" in
+                  *@*) ;;
+                  *) sha= ;;
+                esac
                 case "$n" in
                   ''|*[!0-9]*)
                     echo "::error::Malformed merge-train member entry: $entry"
                     exit 1
                     ;;
                 esac
+                # The approved head, as `aida pr train` writes it: 7+ hex chars.
+                case "$sha" in
+                  ''|*[!0-9a-fA-F]*)
+                    echo "::error::Malformed merge-train member entry (bad @sha): $entry"
+                    exit 1
+                    ;;
+                esac
+                if [ "${#sha}" -lt 7 ]; then
+                  echo "::error::Malformed merge-train member entry (@sha under 7 chars): $entry"
+                  exit 1
+                fi
                 if ! member_labels=$(gh api "repos/$REPO/issues/$n/labels" --jq '[.[].name] | join(",")'); then
                   echo "::error::Could not read the labels of train member #$n; failing closed."
                   exit 1

@@ -191,13 +191,11 @@ pub enum PrCommand {
         #[clap(long)]
         no_trailer_check: bool,
 
-        /// Ship even when the PR's green check completed before a
-        /// CI-definition file (a workflow, or a script it invokes directly)
-        /// changed on the base branch. Without this, ship refuses so a
-        /// green that no longer means what it looks like doesn't merge
-        /// unnoticed. A plain test-file change on the base branch only
-        /// warns and never needs this flag.
-        // trace:BUG-1468 | ai:claude — plain `//` keeps the marker out of `--help`.
+        /// Retired: ship now refuses any PR whose head is behind its base
+        /// branch, CI-definition change or not, and this flag does not
+        /// override that. Land a behind PR with `aida pr train N`, or merge
+        /// the base into the branch and wait for green.
+        // trace:BUG-1468 trace:STORY-1690 | ai:claude — plain `//` keeps the marker out of `--help`.
         #[clap(long)]
         override_stale_check: bool,
 

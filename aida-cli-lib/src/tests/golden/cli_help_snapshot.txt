@@ -12897,10 +12897,9 @@ Options:
           intentional (e.g. a cross-repo id the local store can't see)
 
       --override-stale-check
-          Ship even when the PR's green check completed before a CI-definition file (a workflow, or
-          a script it invokes directly) changed on the base branch. Without this, ship refuses so a
-          green that no longer means what it looks like doesn't merge unnoticed. A plain test-file
-          change on the base branch only warns and never needs this flag
+          Retired: ship now refuses any PR whose head is behind its base branch, CI-definition
+          change or not, and this flag does not override that. Land a behind PR with `aida pr train
+          N`, or merge the base into the branch and wait for green
 
       --override-stale-approval
           Ship even when the PR's newest recorded approval does not cover its current head — the
@@ -36466,7 +36465,7 @@ Working on aida itself
       {
         "name": "override-stale-check",
         "takes_value": false,
-        "help": "Ship even when the PR's green check completed before a CI-definition file (a workflow, or a script it invokes directly) changed on the base branch. Without this, ship refuses so a green that no longer means what it looks like doesn't merge unnoticed. A plain test-file change on the base branch only warns and never needs this flag"
+        "help": "Retired: ship now refuses any PR whose head is behind its base branch, CI-definition change or not, and this flag does not override that. Land a behind PR with `aida pr train N`, or merge the base into the branch and wait for green"
       },
       {
         "name": "rebase",
