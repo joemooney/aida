@@ -49,7 +49,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T02:43:59.810701479Z
-modified_at: 2026-10-22T14:56:52.446148030Z
+modified_at: 2026-10-23T01:50:03.785064951Z
 req_type: Story
 tags:
 - architecture
@@ -304,6 +304,45 @@ comments:
   created_at: 2026-10-22T14:56:52.446148030Z
   modified_at: 2026-10-22T14:56:52.446148030Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a16673-7009-7a21-8856-09e1e3222396
+  author: joe
+  content: |
+    ## AC2 local measurement: MISSED. 31:43 vs the 10 min target, and it ran on the cargo-test fallback, not nextest
+
+    **Run:** `make test` (agent profile) on main @ 519bdccd6e, 2026-10-22 18:17–18:49 MST, on the 6-core host. It started with load 1.92/2.30/3.04 and no rustc/cargo/linker processes. That was the first such window in 45 hourly checks since 2026-10-20 23:08; the host's idle floor is about 1.8–2.0. Load during the run ranged 1.9–30.7. The peaks line up with this run's own compile and link bursts. Load was sampled every 30 s, but other agents' activity was not isolated, so treat the result as "approximately idle".
+
+    **Result:** rc=0. **12,327 passed + 11 ignored = 12,338**, 0 failed (AC5's 11,683 baseline holds locally too). Wall time **31:43**, 285% CPU, max RSS 7.3 GB.
+
+    **Finding 1: cargo-nextest is not installed on this host.** `scripts/ci-test-shards.py` printed `# cargo-nextest is not installed ... running the same selections under cargo test`. So the local path still runs binaries one after another, which is the structure S2 removed in CI. This measures the fallback, not the STORY-1853 architecture.
+
+    **Where the 31:43 went:**
+
+    | Phase | Time |
+    |---|---|
+    | Compile (4 `cargo test` invocations: 5m52 + 3m24 + 1m48 + 3m07) | ~14.2 min |
+    | Test execution, summed across binaries (run one after another) | ~17.1 min (1026 s) |
+
+    **Dominant binaries (execution):**
+
+    | Binary | Time | Tests |
+    |---|---|---|
+    | aida-cli-lib unittests | 485 s | 9,783 |
+    | tests/task_1717_store_writer_lock | 62 s | 43 |
+    | aida-core unittests | 53 s | 1,604 |
+    | tests/bug_1502_format_json_audit | 23 s | 9 |
+    | bug_1947_session_end_live_process, queue_work_dry_run, task_1335, task_1283 | 15 s each | |
+
+    **By how much:** +21.7 min over target. Two separate gaps:
+
+    1. **Execution (17.1 min serial).** Under nextest the binaries run in one parallel pool. On CI's 4-core runners the per-lane test step is about 3–6 min, so a nextest local run would plausibly execute in roughly 5–8 min on 6 cores. That is unverified until nextest is installed.
+    2. **Compile (14.2 min).** This is incremental from whatever state `target/` was in after a day of main moving. Even with nextest, a cold-ish compile alone exceeds 10 min, so AC2 is only reachable with a warm build or the S5 lib split. Recommend the advisor rule on whether AC2 means a warm build (test execution only) or includes compile.
+
+    **Next step (operator decision):** `cargo install cargo-nextest --locked` on the host, then re-measure in the next quiet window. Run a warm build first (`cargo nextest run --no-run --profile agent`) so compile and execution are reported separately.
+
+    Artifacts (integrator scratchpad): `local-run-20261022T1817.{log,time,load}`.
+  created_at: 2026-10-23T01:50:03.785064951Z
+  modified_at: 2026-10-23T01:50:03.785064951Z
+  session_id: f91fd366-4181-4735-8802-dfc810a1c42e
 history:
 - id: 01a152ec-592c-7ec2-af4d-e6cf3cea3865
   author: joe
