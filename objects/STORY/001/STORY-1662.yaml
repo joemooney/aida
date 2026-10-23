@@ -11,9 +11,9 @@ description: |
 
   Acceptance: an advisor-launched implementer edits code without tripping the advisor guard; the orchestrator session is not recorded as an author of a spec it only orchestrated; throughput cost is measured as in STORY-1654; template gates pass. Sequence it after STORY-1654 lands.
 
-  ## Acceptance
-
   Structured from the acceptance sentence above, advisor signoffs C1–C6 (2026-10-22 17:22, 18:16) and the PR2 addendum signoff C1–C5 (2026-10-22 04:45), and the folded findings (TASK-1764, BUG-2207, TASK-2154, TASK-2213..2218). Option A (operator decision 2026-10-12): `aida queue work <SPEC> --role implementer --no-human`.
+
+  ## Acceptance
 
   AC1: An advisor-launched implementer (standalone launch or a `claude --bg` lane in an `aida worktree add <SPEC> --role implementer` worktree) edits code without the advisor code guard or the commit gate blocking it, while the advisor's own env stays blocked.
   AC2: The orchestrator or advisor that launches an implementer is never recorded as an author of that spec: the launch record carries only the worker's tokens.
@@ -40,7 +40,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T13:18:03.093067119Z
-modified_at: 2026-10-23T19:31:17.852666572Z
+modified_at: 2026-10-23T19:31:42.114318805Z
 req_type: Story
 tags:
 - groom:needs-decision
@@ -299,6 +299,11 @@ history:
 - id: 01a16a3f-0797-7310-ba97-386295961c14
   author: joe
   timestamp: 2026-10-23T19:31:18.039289106Z
+  session_id: 0d442fbf-cd73-46c7-b16f-aa52c8cc33ca
+  changes: []
+- id: 01a16a3f-663a-7c63-9e75-c7dba21f2724
+  author: joe
+  timestamp: 2026-10-23T19:31:42.266661556Z
   session_id: 0d442fbf-cd73-46c7-b16f-aa52c8cc33ca
   changes: []
 filed_at:
