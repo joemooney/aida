@@ -7468,6 +7468,14 @@ Commands:
   solo-active              Query effective solo mode for the Claude advisor-code-guard PreToolUse
                            hook. Exits 0 when solo mode is active and 1 when it is off; prints
                            nothing
+  lane-env                 Print the environment correction for a session inside a lane worktree:
+                           shell lines setting AIDA_SESSION_ROLE to the role its lease records, and
+                           exporting the lease's child grant or unsetting an inherited grant for
+                           another seat (and the inherited purpose). Prints nothing outside a lane
+                           or when the environment already matches. Read-only. Called by the
+                           SessionStart hook, which appends the lines to $CLAUDE_ENV_FILE. Exits
+                           non-zero, printing nothing, when the lease cannot be turned into safe
+                           lines
   help                     Print this message or the help of the given subcommand(s)
 
 Options:
@@ -7575,6 +7583,32 @@ is active and 1 when it is off; prints nothing
 Usage: aida internal solo-active [OPTIONS]
 
 Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida internal lane-env
+Print the environment correction for a session inside a lane worktree: shell lines setting
+AIDA_SESSION_ROLE to the role its lease records, and exporting the lease's child grant or unsetting
+an inherited grant for another seat (and the inherited purpose). Prints nothing outside a lane or
+when the environment already matches. Read-only. Called by the SessionStart hook, which appends the
+lines to $CLAUDE_ENV_FILE. Exits non-zero, printing nothing, when the lease cannot be turned into
+safe lines
+
+Usage: aida internal lane-env [OPTIONS]
+
+Options:
+      --cwd <PATH>
+          The session directory to resolve the lane for (default: cwd)
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -8963,6 +8997,10 @@ Options:
 
       --branch <BRANCH>
           Override the branch name (default `<id>-work`)
+
+      --role <ROLE>
+          The role recorded on the worktree's lease (default `implementer`). A session started
+          inside the worktree takes its identity from the lease, not from an inherited environment
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -31276,6 +31314,32 @@ Working on aida itself
   {
     "path": [
       "aida",
+      "internal",
+      "lane-env"
+    ],
+    "about": "Print the environment correction for a session inside a lane worktree: shell lines setting AIDA_SESSION_ROLE to the role its lease records, and exporting the lease's child grant or unsetting an inherited grant for another seat (and the inherited purpose). Prints nothing outside a lane or when the environment already matches. Read-only. Called by the SessionStart hook, which appends the lines to $CLAUDE_ENV_FILE. Exits non-zero, printing nothing, when the lease cannot be turned into safe lines",
+    "flags": [
+      {
+        "name": "cwd",
+        "takes_value": true,
+        "help": "The session directory to resolve the lane for (default: cwd)"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": true
+  },
+  {
+    "path": [
+      "aida",
       "commit"
     ],
     "about": "Author a conventional-format-compliant commit and run `git commit`. Builds the `[AI:tool]? type(scope): description (REQ-ID)` shape the commit-msg hook requires, so a plain-terminal commit can't be rejected for format. The REQ-ID is inferred from staged trace comments when a single spec is present; `--spec` sets it explicitly. The CLI-native counterpart to the `/aida-commit` skill",
@@ -32614,6 +32678,11 @@ Working on aida itself
         "name": "path",
         "takes_value": true,
         "help": "Override the worktree path (default `~/ai/aida-<slug>`)"
+      },
+      {
+        "name": "role",
+        "takes_value": true,
+        "help": "The role recorded on the worktree's lease (default `implementer`). A session started inside the worktree takes its identity from the lease, not from an inherited environment"
       }
     ],
     "hidden": false

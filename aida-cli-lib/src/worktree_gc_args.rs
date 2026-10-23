@@ -37,6 +37,12 @@ pub enum WorktreeCommand {
         /// Override the branch name (default `<id>-work`).
         #[clap(long, value_name = "BRANCH")]
         branch: Option<String>,
+        /// The role recorded on the worktree's lease (default `implementer`).
+        /// A session started inside the worktree takes its identity from the
+        /// lease, not from an inherited environment.
+        // trace:STORY-1662 | ai:claude
+        #[clap(long, value_name = "ROLE")]
+        role: Option<String>,
     },
 
     /// Create-if-missing, then cd into the worktree. This emits shell
