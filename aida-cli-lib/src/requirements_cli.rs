@@ -9396,13 +9396,15 @@ pub(crate) struct SearchArgs {
     #[clap(long, conflicts_with = "short")]
     pub json: bool,
 
-    /// Select AND order the displayed columns, e.g.
-    /// `--fields id,title,status,priority,tags`. Valid fields: id, title,
-    /// status, type, priority, feature, owner, assignee, tags. Renders
-    /// exactly those columns in that order; default keeps the standard
-    /// layout. Mirrors `aida list --fields`.
+    // Help text is generated from the parser's field set (`search_fields_help`).
     // trace:STORY-734 | ai:claude — plain `//` keeps the marker out of `--help`.
-    #[clap(long, value_name = "CSV", conflicts_with_all = ["short", "json"])]
+    // trace:TASK-2238 | ai:claude
+    #[clap(
+        long,
+        value_name = "FIELDS",
+        help = crate::search_fields_help(),
+        conflicts_with_all = ["short", "json"]
+    )]
     pub fields: Option<String>,
 }
 

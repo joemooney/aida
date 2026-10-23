@@ -70,6 +70,21 @@ pub(crate) fn handle_pr_command(cmd: &PrCommand) -> Result<()> {
                 *final_slice,
             )
         }
+        PrCommand::Train {
+            prs,
+            all_ready,
+            dry_run,
+            local_ci,
+            max,
+            no_pull,
+        } => crate::pr_train::pr_train_handler(&crate::pr_train::TrainOptions {
+            prs,
+            all_ready: *all_ready,
+            dry_run: *dry_run,
+            local_ci: local_ci.as_deref(),
+            max: *max,
+            no_pull: *no_pull,
+        }),
         // trace:STORY-1887 | ai:claude
         PrCommand::ShipBatch {
             prs,
@@ -1143,13 +1158,24 @@ pub(crate) fn ship_gate_spec_records(project_root: &std::path::Path) -> Vec<Ship
     let Ok(commits) = read_commits_in_range(project_root, &range) else {
         return Vec::new();
     };
-    let Some(store) = load_store_for_lookup(project_root) else {
-        return Vec::new();
-    };
     let mut ids: Vec<String> = Vec::new();
     for (_sha, subject) in &commits {
         ids.extend(pr_ship::extract_trailing_spec_ids_from_subject(subject));
     }
+    ship_gate_spec_records_for_ids(project_root, ids)
+}
+
+/// [`ship_gate_spec_records`] for an explicit set of spec IDs: what
+/// `aida pr train` reads for a member PR, whose commits are not the local
+/// range.
+// trace:STORY-1690 | ai:claude
+pub(crate) fn ship_gate_spec_records_for_ids(
+    project_root: &std::path::Path,
+    mut ids: Vec<String>,
+) -> Vec<ShipGateSpecRecord> {
+    let Some(store) = load_store_for_lookup(project_root) else {
+        return Vec::new();
+    };
     ids.sort();
     ids.dedup();
     let mut out = Vec::new();
@@ -1177,10 +1203,16 @@ pub(crate) fn ship_gate_spec_records(project_root: &std::path::Path) -> Vec<Ship
 /// the `review:draft-only` tag — the ship-time draft gate's input.
 // trace:STORY-529 | ai:claude
 pub(crate) fn draft_only_specs_for_ship(project_root: &std::path::Path) -> Vec<String> {
-    ship_gate_spec_records(project_root)
-        .into_iter()
+    draft_only_specs_in(&ship_gate_spec_records(project_root))
+}
+
+/// The `review:draft-only` filter over already-read spec records.
+// trace:STORY-529 trace:STORY-1690 | ai:claude
+pub(crate) fn draft_only_specs_in(records: &[ShipGateSpecRecord]) -> Vec<String> {
+    records
+        .iter()
         .filter(|(_, tags, _)| pr_ship::is_draft_only_tagged(tags))
-        .map(|(id, _, _)| id)
+        .map(|(id, _, _)| id.clone())
         .collect()
 }
 
@@ -1193,7 +1225,15 @@ pub(crate) fn supervised_specs_for_ship(
     project_root: &std::path::Path,
     interactive_tty: bool,
 ) -> Vec<(String, String)> {
-    let records = ship_gate_spec_records(project_root);
+    supervised_specs_in(ship_gate_spec_records(project_root), interactive_tty)
+}
+
+/// The BUG-727 supervised-merge filter over already-read spec records.
+// trace:BUG-727 trace:STORY-1690 | ai:claude
+pub(crate) fn supervised_specs_in(
+    records: Vec<ShipGateSpecRecord>,
+    interactive_tty: bool,
+) -> Vec<(String, String)> {
     // STORY-1698: every spec read during a ship feeds the mandate's
     // append-only exclusion ledger. trace:STORY-1698 | ai:claude
     if let Ok(dir) = crate::mandate::mandate_dir() {
@@ -1560,7 +1600,7 @@ fn acquire_merge_lease(
 // silently dropped. `emit` itself is best-effort (never errors the ship);
 // isolated here so the target-derivation logic is unit-testable without
 // stubbing `gh`. trace:BUG-1423 | ai:claude
-fn emit_ship_pr_merged(main_worktree: &std::path::Path, pr: u32, spec_ids: &[String]) {
+pub(crate) fn emit_ship_pr_merged(main_worktree: &std::path::Path, pr: u32, spec_ids: &[String]) {
     let seat = crate::events::active_seat();
     let targets: Vec<Option<String>> = if spec_ids.is_empty() {
         vec![None]
@@ -2198,7 +2238,7 @@ pub(crate) fn normalized_spec_ids(spec_ids: &[String]) -> Vec<String> {
 
 /// The stale-definition gate's own predicate: PR `pr_number`'s base branch
 /// and the staleness warning its ship branch carries against it. A warning
-/// with `definition_files` is exactly what [`ship_stale_definition_gate`]
+/// with `definition_files` is exactly what [`ship_behind_base_gate`]
 /// refuses, so `aida pr ship-batch` reads this, never a re-implementation.
 // trace:STORY-1887 | ai:claude
 pub(crate) fn ship_stale_definition_warning(
@@ -2212,55 +2252,151 @@ pub(crate) fn ship_stale_definition_warning(
     (base_branch, warning)
 }
 
+/// What the stale gate does with PR `pr_number`'s staleness against
+/// `base_branch`: `Ok` ships, `Err` is the refusal. TASK-1606 refused only a
+/// green that predates a CI-definition change. STORY-1690: a head missing
+/// ANY commit on the base refuses, and no flag overrides it — two PRs each
+/// green on its own base can break main together (#2599/#2597), so a behind
+/// head lands through `aida pr train N`, which tests it on the current base.
 // trace:TASK-1606 | ai:codex
-fn ship_stale_definition_gate(
+// trace:STORY-1690 | ai:claude
+pub(crate) fn stale_gate_decision(
+    pr_number: u64,
+    base_branch: &str,
+    warning: Option<&StaleCheckWarning>,
+    override_stale_check: bool,
+) -> std::result::Result<(), String> {
+    let Some(warning) = warning else {
+        return Ok(());
+    };
+    let definition = if warning.definition_files.is_empty() {
+        String::new()
+    } else {
+        format!(
+            " Its CI also ran against an OLDER definition of the check ({} changed since).",
+            warning.definition_files.join(", ")
+        )
+    };
+    let flag = if override_stale_check {
+        " `--override-stale-check` does not ship a head that is behind its base."
+    } else {
+        ""
+    };
+    Err(format!(
+        "PR-{pr_number}'s head is {} commit(s) behind {base_branch}, so its green was never \
+         tested together with them; two PRs each green on its own base can still turn \
+         {base_branch} red together.{definition} Land it with `aida pr train {pr_number}` \
+         (it tests the PR on top of the current {base_branch} before merging), or merge \
+         {base_branch} into the branch, wait for green, and ship again.{flag}",
+        warning.behind_commits,
+    ))
+}
+
+/// STORY-1690: fetch `base_branch` and the PR head `ship_branch` from origin,
+/// so the behind-base gate measures against the base as the forge has it
+/// now, not a local ref another machine, a web merge or another seat has
+/// since moved past.
+// trace:STORY-1690 | ai:claude
+pub(crate) fn fetch_ship_refs(
+    project_root: &std::path::Path,
+    base_branch: &str,
+    ship_branch: &str,
+) -> std::result::Result<(), String> {
+    let mut refspecs = vec![format!(
+        "+refs/heads/{base_branch}:refs/remotes/origin/{base_branch}"
+    )];
+    if ship_branch != base_branch {
+        refspecs.push(format!(
+            "+refs/heads/{ship_branch}:refs/remotes/origin/{ship_branch}"
+        ));
+    }
+    // TASK-2143: through the host-git chokepoint, which refuses a seat clone.
+    let out = aida_core::git_ops::host_git_command(project_root)
+        .args(["fetch", "--quiet", "--no-tags", "origin"])
+        .args(&refspecs)
+        .output()
+        .map_err(|e| format!("git fetch: {e}"))?;
+    if !out.status.success() {
+        return Err(format!(
+            "git fetch origin {base_branch} {ship_branch} failed: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        ));
+    }
+    Ok(())
+}
+
+/// The behind-base gate's outcome for PR `pr_number`: `staleness` is the
+/// fail-closed [`crate::pr_stale_check`] result (or the fetch error). A head
+/// behind its base refuses as `BehindBase`, or `StaleDefinition` when a CI
+/// definition also changed; staleness that cannot be computed refuses too.
+// trace:STORY-1690 | ai:claude
+pub(crate) fn behind_base_refusal(
+    pr_number: u64,
+    base_branch: &str,
+    staleness: std::result::Result<Option<StaleCheckWarning>, String>,
+    override_stale_check: bool,
+) -> std::result::Result<(), (pr_ship::ShipRefusal, String)> {
+    use pr_ship::ShipRefusal;
+    let warning = staleness.map_err(|e| {
+        (
+            ShipRefusal::BehindBase,
+            format!(
+                "PR-{pr_number}: whether its head is behind {base_branch} could not be \
+                 computed ({e}), so its green may be stale; refusing rather than shipping it. \
+                 Fix the fetch, or land it with `aida pr train {pr_number}`."
+            ),
+        )
+    })?;
+    let kind = if warning
+        .as_ref()
+        .is_some_and(|w| !w.definition_files.is_empty())
+    {
+        ShipRefusal::StaleDefinition
+    } else {
+        ShipRefusal::BehindBase
+    };
+    stale_gate_decision(
+        pr_number,
+        base_branch,
+        warning.as_ref(),
+        override_stale_check,
+    )
+    .map_err(|refusal| (kind, refusal))
+}
+
+/// The behind-base gate, live: fetch the base and the head, then refuse a
+/// head behind its base. `aida pr ship` (both preflight passes) and the
+/// drain's merge phase call it.
+// trace:TASK-1606 | ai:codex
+// trace:STORY-1690 | ai:claude
+pub(crate) fn ship_behind_base_gate(
     project_root: &std::path::Path,
     ship_branch: &str,
     pr_number: u64,
     override_stale_check: bool,
-) -> Result<()> {
-    let (base_branch, warning) =
-        ship_stale_definition_warning(project_root, ship_branch, pr_number);
-    if let Some(warning) = warning {
-        if !warning.definition_files.is_empty() {
-            if override_stale_check {
-                eprintln!(
-                    "  {} PR-{}'s green predates a CI-definition change on {} \
-                         ({}) — shipping anyway (override)",
-                    crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
-                    pr_number,
-                    base_branch,
-                    warning.definition_files.join(", "),
-                );
-            } else {
-                return Err(pr_ship::ShipRefusal::StaleDefinition.error(format!(
-                        "PR-{pr_number}'s green check completed before {} changed on {base_branch}: {} \
-                         — its CI ran against an OLDER definition of that check, so the green does not \
-                         mean what it looks like it means. Re-run CI (push an empty commit or rebase), \
-                         or re-run with `--override-stale-check` to ship anyway.",
-                        if warning.definition_files.len() == 1 { "a CI definition file" } else { "CI definition files" },
-                        warning.definition_files.join(", "),
-                    )));
-            }
-        } else if !warning.test_files.is_empty() {
-            eprintln!(
-                "  {} {} commits behind; {} test files changed on main since this branch's base",
-                crate::glyph(crate::glyphs::Glyph::Info).cyan(),
-                warning.behind_commits,
-                warning.test_files.len(),
-            );
-        } else {
-            eprintln!(
-                "  {} PR-{}'s green predates {} commit(s) now on {} (base moved — \
-                     usually harmless)",
-                crate::glyph(crate::glyphs::Glyph::Info).cyan(),
-                pr_number,
-                warning.behind_commits,
-                base_branch,
-            );
-        }
-    }
-    Ok(())
+) -> std::result::Result<(), (pr_ship::ShipRefusal, String)> {
+    behind_base_gate_on(
+        project_root,
+        ship_branch,
+        pr_number,
+        &pr_ship_target_branch(pr_number),
+        override_stale_check,
+    )
+}
+
+/// [`ship_behind_base_gate`] against a known base branch.
+// trace:STORY-1690 | ai:claude
+pub(crate) fn behind_base_gate_on(
+    project_root: &std::path::Path,
+    ship_branch: &str,
+    pr_number: u64,
+    base_branch: &str,
+    override_stale_check: bool,
+) -> std::result::Result<(), (pr_ship::ShipRefusal, String)> {
+    let staleness = fetch_ship_refs(project_root, base_branch, ship_branch).and_then(|()| {
+        crate::pr_stale_check(project_root, ship_branch, &format!("origin/{base_branch}"))
+    });
+    behind_base_refusal(pr_number, base_branch, staleness, override_stale_check)
 }
 
 // trace:TASK-1606 | ai:codex
@@ -2340,12 +2476,51 @@ fn ship_preflight_gates(
     ) {
         return Err(ShipRefusal::MergeHold.error(refusal));
     }
-    ship_stale_definition_gate(
+    ship_behind_base_gate(
         project_root,
         &change.branch,
         change.id,
         override_stale_check,
     )
+    .map_err(|(kind, refusal)| kind.error(refusal))
+}
+
+/// TASK-1602: whether this caller is a drive implementer/reviewer seat.
+// trace:TASK-1602 | ai:codex
+pub(crate) fn ship_caller_is_drive_seat() -> bool {
+    std::env::var("AIDA_HEADLESS").is_ok_and(|v| v == "1")
+        || std::env::var(orchestrator::AUTO_COMPLETE_ENV).is_ok_and(|v| !v.trim().is_empty())
+}
+
+/// TASK-1602: the in-drive ownership gate `aida pr ship` applies before it
+/// merges PR `pr`: `Some` when a live drive owns the PR or the caller is a
+/// drive seat. `aida pr train` applies it to every member.
+// trace:TASK-1602 | ai:codex
+// trace:STORY-1690 | ai:claude
+pub(crate) fn probe_ship_drive_block(
+    main_worktree: &std::path::Path,
+    pr: u64,
+) -> Option<pr_ship::ShipDriveBlock> {
+    let allow_in_drive = std::env::var("AIDA_PR_SHIP_ALLOW_IN_DRIVE").is_ok_and(|v| v == "1");
+    let scope = std::env::current_dir()
+        .ok()
+        .and_then(|cwd| active_lease_for_cwd(main_worktree, &cwd))
+        .map(|lease| lease.scope);
+    pr_ship::probe_ship_drive_guard(
+        main_worktree,
+        pr,
+        scope.as_deref(),
+        ship_caller_is_drive_seat(),
+        allow_in_drive,
+    )
+}
+
+/// BUG-727: a human at an interactive terminal is the explicit merge the
+/// supervised-merge gate waits for.
+// trace:BUG-727 | ai:claude
+pub(crate) fn ship_interactive_tty() -> bool {
+    std::io::IsTerminal::is_terminal(&std::io::stdin())
+        && std::io::IsTerminal::is_terminal(&std::io::stdout())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -2750,9 +2925,7 @@ pub(crate) fn pr_ship_with_method(
     // Reprobe the PR binding and caller on every poll; --wait never grants
     // authority to a drive seat or bypasses a merge hold.
     // trace:TASK-1602 | ai:codex
-    let allow_in_drive = std::env::var("AIDA_PR_SHIP_ALLOW_IN_DRIVE").is_ok_and(|v| v == "1");
-    let drive_seat = std::env::var("AIDA_HEADLESS").is_ok_and(|v| v == "1")
-        || std::env::var(orchestrator::AUTO_COMPLETE_ENV).is_ok_and(|v| !v.trim().is_empty());
+    let drive_seat = ship_caller_is_drive_seat();
     let direct_human = crate::seat_authority::require_direct_human().is_ok() && !drive_seat;
     // trace:TASK-1606 | ai:codex
     // One flag and deadline cover ownership plus CI registration/settlement.
@@ -2760,19 +2933,7 @@ pub(crate) fn pr_ship_with_method(
     let result = pr_ship::wait_for_drive_release(
         wait.map(std::time::Duration::from_secs),
         std::time::Duration::from_secs(2),
-        || {
-            let scope = std::env::current_dir()
-                .ok()
-                .and_then(|cwd| active_lease_for_cwd(&main_worktree, &cwd))
-                .map(|lease| lease.scope);
-            pr_ship::probe_ship_drive_guard(
-                &main_worktree,
-                pr_number,
-                scope.as_deref(),
-                drive_seat,
-                allow_in_drive,
-            )
-        },
+        || probe_ship_drive_block(&main_worktree, pr_number),
         |block, remaining| {
             eprintln!(
                 "  PR-{pr_number} waiting for drive release ({remaining:.0}s remaining): {}",
@@ -2972,8 +3133,7 @@ pub(crate) fn pr_ship_with_method(
     // non-interactive (automation) callers. Skipped when the PR is already
     // merged — there is nothing left to refuse, only the idempotent post-merge
     // sync below. trace:BUG-727 | ai:claude
-    let interactive_tty = std::io::IsTerminal::is_terminal(&std::io::stdin())
-        && std::io::IsTerminal::is_terminal(&std::io::stdout());
+    let interactive_tty = ship_interactive_tty();
     let supervised = if already_merged {
         Vec::new()
     } else {
@@ -4034,6 +4194,7 @@ pub(crate) fn pr_ship_with_method(
             &ShipStep::Pull,
             &StepOutcome::Skipped("--no-pull".into()),
         );
+    } else if skip_seat_clone_post_merge_pull(&project_root, &main_worktree, pr_number) {
     } else if let Some(reason) = post_merge_pull_skip_reason(slice_marker_failed) {
         eprintln!("  step 4: skipping `aida pull` ({reason})");
         log_ship_activity(
@@ -6003,6 +6164,36 @@ pub(crate) fn branch_in_sibling_worktree(
         }
     }
     false
+}
+
+/// The ship step calls this before any post-merge host sync.
+// trace:TASK-2053 | ai:codex
+pub(crate) fn skip_seat_clone_post_merge_pull(
+    project_root: &std::path::Path,
+    main_worktree: &std::path::Path,
+    pr_number: u64,
+) -> bool {
+    use pr_ship::{ShipStep, StepOutcome};
+    let Some(clone) = aida_core::seat_clone_detect::seat_clone_root(project_root) else {
+        return false;
+    };
+    // BUG-2169 slice S4: shipped from a contained seat's private clone.
+    // The main checkout is read-only to the seat, so the host syncs it
+    // (reap, the heartbeat, or the operator's next `aida pull`).
+    // trace:TASK-2053 | ai:claude
+    eprintln!(
+        "  step 4: skipping `aida pull`: this session works in a contained seat's private \
+             clone ({}), and the main checkout is synced from outside the seat (next `aida pull` \
+             there)",
+        clone.display()
+    );
+    log_ship_activity(
+        main_worktree,
+        Some(pr_number),
+        &ShipStep::Pull,
+        &StepOutcome::Skipped("seat clone: main is synced by the host".into()),
+    );
+    true
 }
 
 /// Append a JSONL activity-log entry to `<main_worktree>/.aida/advisor-activity.jsonl`.

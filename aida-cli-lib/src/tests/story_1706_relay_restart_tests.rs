@@ -714,6 +714,14 @@ fn a_live_session_of_the_run_refuses_the_restart() {
         .env("AIDA_RELAY_RUN", &fx.run)
         .spawn()
         .unwrap();
+    // spawn() returns while the child is still finishing exec, when its
+    // /proc environ can be briefly unreadable; wait until it is visible.
+    let seen = std::time::Instant::now();
+    while run_process_alive(&fx.run) != Some(true)
+        && seen.elapsed() < std::time::Duration::from_secs(5)
+    {
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
     let v = fx.verdict(&m, now());
     orphan.kill().unwrap();
     orphan.wait().unwrap();

@@ -213,7 +213,15 @@ pub(crate) struct Sources {
 // trace:STORY-1462 | ai:claude
 pub(crate) fn default_sources(project_root: &Path) -> Sources {
     let mut roots = vec![project_root.to_path_buf()];
-    for wt in aida_core::git_ops::list_worktree_paths(project_root) {
+    // TASK-2053: contained seats' private clones are seats too.
+    // trace:TASK-2053 | ai:claude
+    let clones = crate::clone_seat_trees(project_root)
+        .into_iter()
+        .map(|wt| wt.path);
+    for wt in aida_core::git_ops::list_worktree_paths(project_root)
+        .into_iter()
+        .chain(clones)
+    {
         if !roots.contains(&wt) {
             roots.push(wt);
         }

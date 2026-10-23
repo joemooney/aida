@@ -2461,42 +2461,17 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 "internal: PR number not resolved before the merge phase",
             )
         })?;
-        // AC1 follow-up (BUG-1468, then narrowed by the follow-up 2 proxy
-        // review): the drain's merge phase gets the same staleness *signal*
-        // as `aida pr ship`, but only ever WARNS and proceeds — it never
-        // shelves on this check. The spec asks the drain only to warn; only
-        // `aida pr ship` (an interactive/human-gated command) refuses. A
-        // definition-tier change (`.github/workflows/*` whose `on:`
-        // triggers include `pull_request`, or a script one of those
-        // workflows invokes directly) prints which files changed; an
-        // ordinary test-file change prints the lighter commits/test-count
-        // line. Never blocks the merge. trace:BUG-1468 | ai:claude
+        // STORY-1690: the drain's merge honours the same behind-base refusal
+        // as `aida pr ship` (BUG-1468 only warned here): a head missing any
+        // commit on its base was never tested with them, so it lands through
+        // `aida pr train`, never straight onto the base. Staleness that cannot
+        // be computed refuses too. trace:BUG-1468 | ai:claude
+        // trace:STORY-1690 | ai:claude
         if let Some(branch) = self.branch.clone() {
-            let base_branch = crate::pr_cmd::pr_ship_target_branch(pr as u64);
-            let base_ref = format!("origin/{base_branch}");
-            if let Some(warning) = pr_stale_check_warning(&self.project_root, &branch, &base_ref) {
-                if !warning.definition_files.is_empty() {
-                    println!(
-                        "  {} PR-{pr}'s green check completed before {} changed on {base_branch}: \
-                         {} — its CI ran against an OLDER definition of that check. Proceeding \
-                         (the drain warns; only `aida pr ship` refuses).",
-                        crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
-                        if warning.definition_files.len() == 1 {
-                            "a CI definition file"
-                        } else {
-                            "CI definition files"
-                        },
-                        warning.definition_files.join(", "),
-                    );
-                } else if !warning.test_files.is_empty() {
-                    println!(
-                        "  {} {} commits behind; {} test files changed on main since this branch's base",
-                        crate::glyph(crate::glyphs::Glyph::Info).cyan(),
-                        warning.behind_commits,
-                        warning.test_files.len(),
-                    );
-                }
-            }
+            crate::pr_cmd::ship_behind_base_gate(&self.project_root, &branch, pr as u64, false)
+                .map_err(|(_, refusal)| {
+                    auto_complete::PhaseFailure::of(auto_complete::FailureKind::BehindBase, refusal)
+                })?;
         }
 
         // STORY-516/TASK-669 + BUG-1037: keep the forge CLI-on-PATH guard as a

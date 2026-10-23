@@ -233,10 +233,34 @@ pub fn is_under_temp_root(path: &Path) -> bool {
         .any(|root| canonical.starts_with(root))
 }
 
+/// Is `path` under this workspace's `target/` directory? Test fixtures that
+/// must live outside `/tmp` build their stores there.
+// trace:TASK-2238 | ai:claude
+fn is_under_workspace_target(path: &Path) -> bool {
+    let Some(target) = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .map(|workspace| workspace.join("target"))
+        .and_then(|target| target.canonicalize().ok())
+    else {
+        return false;
+    };
+    let mut probe = path;
+    loop {
+        if let Ok(canonical) = probe.canonicalize() {
+            return canonical.starts_with(&target);
+        }
+        match probe.parent() {
+            Some(parent) => probe = parent,
+            None => return false,
+        }
+    }
+}
+
 /// Panic on a roster write a test must never make: from a process running as
 /// [`HERMETIC_TEST_USER`], or from this crate's own tests, into a store outside
-/// the system temp roots. Such a write once reached the operator's real store
-/// through a fixture's store walk-up and replaced their roster (BUG-2209).
+/// the system temp roots and the workspace `target/`. Such a write once reached
+/// the operator's real store through a fixture's store walk-up and replaced
+/// their roster (BUG-2209).
 // trace:BUG-2209 | ai:claude
 pub fn guard_roster_write(store_root: &Path) {
     guard_roster_write_allowing(store_root, None);
@@ -247,7 +271,10 @@ pub fn guard_roster_write(store_root: &Path) {
 // trace:TASK-1955 | ai:claude (TASK-2223)
 pub fn guard_roster_write_allowing(store_root: &Path, scratch_root: Option<&Path>) {
     let hermetic = std::env::var("AIDA_USER").is_ok_and(|user| user == HERMETIC_TEST_USER);
-    if !(hermetic || cfg!(test)) || is_under_temp_root(store_root) {
+    if !(hermetic || cfg!(test))
+        || is_under_temp_root(store_root)
+        || is_under_workspace_target(store_root)
+    {
         return;
     }
     let canonical = |p: &Path| p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
@@ -295,12 +322,14 @@ fn load_for_write(path: &Path) -> std::io::Result<(Option<Vec<u8>>, TeamRoster)>
 /// roster. `nodes`, when given, migrates stray integer keys first
 /// (STORY-653). Returns whether the file changed.
 ///
-/// The write runs [`guard_roster_write`] and holds the store write lock
-/// (re-entrant, so the CAS functions below, which already hold it around
-/// their stage and commit, nest). A caller without the lock therefore cannot
-/// lose a write that lands between the CAS re-read and the rename to another
-/// locked writer. Callers stage and commit the file.
+/// The write runs [`guard_roster_write`] in the primitive, so a new caller
+/// cannot bypass it, and holds the store write lock (re-entrant, so the CAS
+/// functions below, which already hold it around their stage and commit,
+/// nest). A caller without the lock therefore cannot lose a write that lands
+/// between the CAS re-read and the rename to another locked writer. Callers
+/// stage and commit the file.
 // trace:BUG-2209 | ai:claude
+// trace:TASK-2238 | ai:claude
 pub fn write_member_seats(
     store_root: &Path,
     user_id: &str,
