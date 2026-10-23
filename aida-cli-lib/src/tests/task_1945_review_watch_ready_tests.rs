@@ -88,6 +88,9 @@ impl Evidence for Fake {
     fn ci(&self, _: &str) -> Result<CommitChecks> {
         self.ci.clone().map_err(|e| anyhow::anyhow!(e))
     }
+    fn required_checks(&self) -> Result<Vec<String>> {
+        Ok(vec![CI_AGGREGATOR_CHECK.to_string()])
+    }
     fn base(&self, change: &forge::Change) -> Result<(u64, bool)> {
         Ok((change.behind.unwrap(), change.overlap.unwrap()))
     }
@@ -749,4 +752,282 @@ fn superseded_unclaimed_dispatch_frees_its_slot() {
         assert!(!active(a));
     }
     assert_eq!(capacity_holders(&store.load().unwrap()), "");
+}
+
+// TASK-2200: the wake key names the approval, as its message does: a new
+// approval of the same head wakes the advisor again; the same one never does.
+// trace:TASK-1945 | ai:claude (TASK-2200)
+#[test]
+fn new_approval_of_the_same_head_wakes_again() {
+    let (temp, store) = fixture();
+    record_verdict(temp.path(), "approved");
+    let c = change(0, false);
+    report(temp.path(), &store, &c, &Fake::ready()).unwrap();
+    report(temp.path(), &store, &c, &Fake::ready()).unwrap();
+    assert_eq!(mailbox(temp.path()).len(), 1);
+    let again = Fake {
+        approval: Ok(Approval {
+            identity: "second reviewer seat at 2026-10-23".into(),
+            ..approval()
+        }),
+        ..Fake::ready()
+    };
+    report(temp.path(), &store, &c, &again).unwrap();
+    report(temp.path(), &store, &c, &again).unwrap();
+    assert_eq!(mailbox(temp.path()).len(), 2);
+    let entry = &store.load().unwrap().entries["PR-7"];
+    assert_eq!(entry.wakes.len(), 2, "{:?}", entry.wakes.keys());
+    assert!(entry.wakes.values().all(|w| w.sent));
+}
+
+// TASK-2200: a wake receipt recorded before the key named the approval
+// (`<head>:<kind>`) still loads.
+#[test]
+fn legacy_wake_key_without_approval_loads() {
+    let (temp, store) = fixture();
+    record_verdict(temp.path(), "approved");
+    let c = change(0, false);
+    report(temp.path(), &store, &c, &Fake::ready()).unwrap();
+    let path = temp.path().join(".aida/review-watch").join(STATE);
+    let text = std::fs::read_to_string(&path).unwrap();
+    let key = store.load().unwrap().entries["PR-7"]
+        .wakes
+        .keys()
+        .next()
+        .unwrap()
+        .clone();
+    let legacy = key.rsplit_once(':').unwrap().0.to_string();
+    std::fs::write(&path, text.replace(&key, &legacy)).unwrap();
+    assert!(store.load().unwrap().entries["PR-7"]
+        .wakes
+        .contains_key(&legacy));
+}
+
+/// Evidence whose required checks are injected.
+struct Required(Fake, std::result::Result<Vec<String>, String>);
+impl Evidence for Required {
+    fn approval(&self, c: &forge::Change) -> std::result::Result<Approval, String> {
+        self.0.approval(c)
+    }
+    fn under_review(&self, c: &forge::Change) -> Option<String> {
+        self.0.under_review(c)
+    }
+    fn hold(&self, c: &forge::Change) -> Result<Option<String>> {
+        self.0.hold(c)
+    }
+    fn ci(&self, sha: &str) -> Result<CommitChecks> {
+        self.0.ci(sha)
+    }
+    fn required_checks(&self) -> Result<Vec<String>> {
+        self.1.clone().map_err(|e| anyhow::anyhow!(e))
+    }
+    fn base(&self, c: &forge::Change) -> Result<(u64, bool)> {
+        self.0.base(c)
+    }
+    fn head(&self, c: &forge::Change) -> Result<String> {
+        self.0.head(c)
+    }
+}
+
+// TASK-2201: the required checks are the project's own, from its config.
+// trace:TASK-1945 | ai:claude (TASK-2201)
+#[test]
+fn required_checks_come_from_the_project_config() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path();
+    assert!(
+        ready::required_checks(root).unwrap().is_empty(),
+        "no config"
+    );
+    std::fs::create_dir_all(root.join(".aida")).unwrap();
+    let config = root.join(".aida/config.toml");
+    std::fs::write(&config, "[drain]\nretry_transient = 2\n").unwrap();
+    assert!(ready::required_checks(root).unwrap().is_empty(), "unset");
+    std::fs::write(
+        &config,
+        "[review_watch]\nrequired_checks = [\"test (stable)\", \"lint\"]\n",
+    )
+    .unwrap();
+    assert_eq!(
+        ready::required_checks(root).unwrap(),
+        vec!["test (stable)".to_string(), "lint".to_string()]
+    );
+    for broken in [
+        "[review_watch]\nrequired_checks = \"lint\"\n",
+        "[review_watch]\nrequired_checks = [1]\n",
+        "[review_watch\n",
+    ] {
+        std::fs::write(&config, broken).unwrap();
+        assert!(ready::required_checks(root).is_err(), "{broken}");
+    }
+
+    // Another project's checks: green with none named, or with its own.
+    let c = change(0, false);
+    let theirs = CommitChecks {
+        sha: c.head.clone(),
+        checks: vec![check("test (stable)", CheckOutcome::Passed)],
+    };
+    let fake = || Fake {
+        ci: Ok(theirs.clone()),
+        ..Fake::ready()
+    };
+    for required in [vec![], vec!["test (stable)".to_string()]] {
+        let (readiness, _) = ready::evaluate(&c, &Required(fake(), Ok(required)));
+        assert_eq!(readiness, Readiness::Ready);
+    }
+    let missing = not_ready_with(&Required(fake(), Ok(vec!["lint".into()])), &c);
+    assert!(missing.contains("`lint`"), "{missing}");
+    let unknown = not_ready_with(&Required(fake(), Err("parse .aida/config.toml".into())), &c);
+    assert!(unknown.contains("required CI checks unknown"), "{unknown}");
+}
+
+fn not_ready_with(evidence: &dyn Evidence, c: &forge::Change) -> String {
+    match ready::evaluate(c, evidence) {
+        (Readiness::NotReady(reason), None) => reason,
+        other => panic!("expected not ready: {other:?}"),
+    }
+}
+
+// TASK-2202: the GitLab advice is a merge of the target branch, which the
+// carry-over accepts, never a rebase.
+// trace:TASK-1945 | ai:claude (TASK-2202)
+#[test]
+fn update_advice_is_a_merge_on_both_forges() {
+    let github = change(2, false);
+    let gitlab = forge::Change {
+        gitlab: true,
+        ..change(2, false)
+    };
+    assert_eq!(ready::update_command(&github), "`gh pr update-branch 7`");
+    let advice = ready::update_command(&gitlab);
+    assert!(advice.contains("`git merge origin/main`"), "{advice}");
+    let line = Readiness::ReadyAfterUpdateBranch { behind: 2 }.line(&gitlab);
+    assert!(!line.contains("rebase"), "{line}");
+    let message = ready::wake_message(
+        "gitlab:gitlab.com/owner/repo",
+        &gitlab,
+        &Readiness::ReadyAfterUpdateBranch { behind: 2 },
+        &approval(),
+    );
+    assert!(!message.body.contains("rebase"), "{}", message.body);
+    assert!(
+        message.body.contains("git merge origin/main"),
+        "{}",
+        message.body
+    );
+}
+
+// TASK-2203: the Live adapters read the real marker, corpus and hold files.
+// trace:TASK-1945 | ai:claude (TASK-2203)
+#[test]
+fn live_review_marker_is_read_for_the_head() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path();
+    let c = change(0, false);
+    assert_eq!(ready::live_under_review(root, &c), None);
+    let other = format!("{:040x}", 0xe);
+    let marker =
+        crate::review_marker::Marker::for_this_process(7, Some(&other), None, "reviewer seat");
+    crate::review_marker::write(root, &marker).unwrap();
+    assert_eq!(
+        ready::live_under_review(root, &c),
+        None,
+        "a marker for another head does not cover this one"
+    );
+    let marker =
+        crate::review_marker::Marker::for_this_process(7, Some(&c.head), None, "reviewer seat");
+    crate::review_marker::write(root, &marker).unwrap();
+    let described = ready::live_under_review(root, &c).expect("live marker at the head");
+    assert!(described.contains("reviewer seat"), "{described}");
+}
+
+#[test]
+fn live_corpus_gate_refuses_a_blocking_verdict_at_the_head() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path();
+    let c = change(0, false);
+    assert_eq!(ready::corpus_at(root, &c, &[]), Ok(()));
+    record_verdict(root, "request-changes");
+    let refusal = ready::corpus_at(root, &c, &[]).unwrap_err();
+    assert!(refusal.contains("request-changes"), "{refusal}");
+    assert!(
+        crate::merge_hold::read_hold_record(root, 7).is_none(),
+        "the read-only gate arms no hold"
+    );
+    record_verdict(root, "approved");
+    assert_eq!(ready::corpus_at(root, &c, &[]), Ok(()));
+}
+
+#[test]
+fn live_hold_reads_the_marker_then_the_label() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path();
+    let c = change(0, false);
+    std::fs::create_dir_all(root.join(".aida")).unwrap();
+    // No forge: no label to read, so no hold.
+    std::fs::write(
+        root.join(".aida/config.toml"),
+        "[forge]\nprovider = \"pure-git\"\n",
+    )
+    .unwrap();
+    assert_eq!(ready::live_hold(root, &c).unwrap(), None);
+    // A GitHub project whose label cannot be read pinned (no origin): not
+    // clean, an error.
+    std::fs::write(
+        root.join(".aida/config.toml"),
+        "[forge]\nprovider = \"github\"\n",
+    )
+    .unwrap();
+    let error = ready::live_hold(root, &c).unwrap_err();
+    assert!(
+        format!("{error:#}").contains("merge-hold label unreadable"),
+        "{error:#}"
+    );
+    // A marker is reported before the label is read.
+    let hold = crate::merge_hold::typed_hold(
+        7,
+        crate::merge_hold::HoldReasonKind::Rework,
+        "findings outstanding",
+        Some(c.head.clone()),
+    );
+    crate::merge_hold::write_typed_hold(root, &hold).unwrap();
+    let held = ready::live_hold(root, &c).unwrap().expect("marker hold");
+    assert!(held.contains("rework hold"), "{held}");
+}
+
+// TASK-2204: a pending wake is retried on the next pass, not an interval
+// later; a sent one, or a judged head with none, waits out the interval.
+// trace:TASK-1945 | ai:claude (TASK-2204)
+#[test]
+fn pending_wake_is_never_throttled() {
+    let head = format!("{HEAD:040x}");
+    let now = chrono::Utc::now();
+    let interval = chrono::Duration::seconds(120);
+    let mut entry = Entry {
+        readiness: Some(Reported {
+            head: head.clone(),
+            line: "ready".into(),
+            checked_at: now,
+        }),
+        ..Entry::default()
+    };
+    assert!(throttled(&entry, &head, now, interval));
+    assert!(!throttled(&entry, &format!("{:040x}", 0xe), now, interval));
+    assert!(!throttled(&entry, &head, now + interval, interval));
+    let wake = ready::wake_message(
+        "github:github.com/owner/repo",
+        &change(0, false),
+        &Readiness::Ready,
+        &approval(),
+    );
+    entry.wakes.insert(
+        format!("{head}:{}:{}", ready::WAKE_READY, notice::digest("a")),
+        Notice {
+            message: wake,
+            sent: false,
+        },
+    );
+    assert!(!throttled(&entry, &head, now, interval), "pending wake");
+    entry.wakes.values_mut().for_each(|w| w.sent = true);
+    assert!(throttled(&entry, &head, now, interval));
 }
