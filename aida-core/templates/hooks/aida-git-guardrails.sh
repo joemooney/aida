@@ -542,11 +542,13 @@ fi
 # An agent may not bypass the host cargo-slot limiter. Setting
 # AIDA_CARGO_NO_SLOT skips the slot queue, so one agent's full suite runs beside
 # two slotted builds on a 6-core host (fix-2725: `make check` took 1h20m).
-# Any assignment (`=`, `+=`, `export`, `env`) is blocked where it can run:
+# Any assignment (`=`, `+=`, `export`, `env`, and with no `=`: `printf -v`,
+# `read`, a bare `export`) is blocked where it can run:
 # - the command with quoted text and heredoc bodies removed (SCAN_COMMAND);
 # - anywhere, when the command runs an unquoted shell or eval (`bash -c
 #   "..."`, `sh -c '...'`, `eval "..."`, `bash <<EOF`, `| sh`, `fish -c`),
-#   runs `env -S` / `--split-string`, or sources a file (`source`, `.`);
+#   runs `env -S` / `--split-string` or `xargs`, or sources a file (`source`,
+#   `.`, also after `time`);
 # - inside a command or process substitution (`$(...)`, backticks, `<(...)`);
 # - a quoted assignment word, or a quoted name before `=`, after
 #   env/export/declare/typeset/local/readonly/make/gmake.
@@ -567,19 +569,28 @@ NO_SLOT_SHELL_END='([^A-Za-z0-9_.-]|$)'
 NO_SLOT_WORD_END='([^A-Za-z0-9_]|$)'
 # A command word at the start of a command: after a separator, the start, a
 # negation, or a keyword or builtin that runs the next word as a command
-# (`then . ./x`, `do source x`, `command . x`, `builtin source x`, `! . x`).
-# trace:TASK-1952 | trace:TASK-2139 | ai:claude
-NO_SLOT_CMD_START='(^|[;&|({!]|(^|[^A-Za-z0-9_])(then|do|else|command|builtin))[[:space:]]*'
+# (`then . ./x`, `do source x`, `command . x`, `builtin source x`, `! . x`,
+# TASK-2246: `time . x`, `time -p . x`).
+# trace:TASK-1952 | trace:TASK-2139 | trace:TASK-2246 | ai:claude
+NO_SLOT_CMD_START='(^|[;&|({!]|(^|[^A-Za-z0-9_])(then|do|else|command|builtin|time([[:space:]]+-p)?))[[:space:]]*'
+# TASK-2246: a builtin that sets or exports the name with no `=` in the word
+# (`printf -v NAME 1`, `read NAME`, `mapfile NAME`, a bare `export NAME` of a
+# value set some other way), at the start of a command.
+# trace:TASK-1952 | trace:TASK-2246 | ai:claude
+NO_SLOT_BARE="${NO_SLOT_CMD_START}(export|declare|typeset|readonly|local|read|readarray|mapfile|printf)([[:space:]]+[^[:space:];&|]+)*[[:space:]]+(-v[[:space:]]*)?AIDA_CARGO_NO_SLOT$NO_SLOT_WORD_END"
 no_slot_set() {
     printf '%s' "$SCAN_COMMAND" | grep -qE "(^|[^A-Za-z0-9_])$NO_SLOT_SET" && return 0
+    printf '%s' "$SCAN_COMMAND" | grep -qE "$NO_SLOT_BARE" && return 0
     # An unquoted shell or eval runs quoted text (`-c` payloads, `eval`
     # strings, heredocs or pipes fed to it), separators inside it included,
     # so the whole command is scanned. A shell named only inside quoted prose
     # runs nothing (TASK-2123). TASK-2139: so do `env -S` / `--split-string`
     # (env runs its string), `source` / `.` and a `./script` run (a file this
-    # command may just have written).
+    # command may just have written). TASK-2246: so does `xargs` (it feeds a
+    # file's words to a command, `xargs -a x.sh env`).
+    # trace:TASK-1952 | trace:TASK-2246 | ai:claude
     if printf '%s' "$SCAN_COMMAND" | grep -qE \
-        "$NO_SLOT_SHELL$NO_SLOT_SHELL_END|(^|[^A-Za-z0-9_])eval$NO_SLOT_WORD_END|(^|[^A-Za-z0-9_])env([[:space:]]+[^[:space:];&|]+)*[[:space:]]+(-[A-Za-z]*S|--split-string)|$NO_SLOT_CMD_START(source|\\.)[[:space:]]|$NO_SLOT_CMD_START\\./[^[:space:]]"; then
+        "$NO_SLOT_SHELL$NO_SLOT_SHELL_END|(^|[^A-Za-z0-9_])(eval|xargs)$NO_SLOT_WORD_END|(^|[^A-Za-z0-9_])env([[:space:]]+[^[:space:];&|]+)*[[:space:]]+(-[A-Za-z]*S|--split-string)|$NO_SLOT_CMD_START(source|\\.)[[:space:]]|$NO_SLOT_CMD_START\\./[^[:space:]]"; then
         printf '%s' "$COMMAND" | grep -qE "(^|[^A-Za-z0-9_])$NO_SLOT_SET" && return 0
     fi
     # Command and process substitutions run even inside double quotes.

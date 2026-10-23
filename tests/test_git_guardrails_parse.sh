@@ -129,6 +129,18 @@ assert_exit "a negated source is blocked" 2 "$(run '{"tool_input":{"command":"pr
 assert_exit "write then execute is blocked" 2 "$(run '{"tool_input":{"command":"printf '"'"'AIDA_CARGO_NO_SLOT=1 make'"'"' > x.sh; chmod +x x.sh; ./x.sh"}}')"
 assert_exit "a commit message naming source is allowed" 0 "$(run '{"tool_input":{"command":"git commit -m \"docs: never source a file that sets AIDA_CARGO_NO_SLOT=1\""}}')"
 assert_exit "a ./script without the variable is allowed" 0 "$(run '{"tool_input":{"command":"chmod +x x.sh; ./x.sh"}}')"
+# TASK-2246: a time prefix before the dot-source, env fed through xargs, and
+# setters with no `=` (printf -v, read, a bare export).
+# trace:TASK-1952 | trace:TASK-2246 | ai:claude
+assert_exit "a dot-source after time is blocked" 2 "$(run '{"tool_input":{"command":"printf '"'"'AIDA_CARGO_NO_SLOT=1 make'"'"' > x.sh; time . ./x.sh"}}')"
+assert_exit "a source after time -p is blocked" 2 "$(run '{"tool_input":{"command":"printf '"'"'AIDA_CARGO_NO_SLOT=1 make'"'"' > x.sh; time -p source x.sh"}}')"
+assert_exit "env fed through xargs is blocked" 2 "$(run '{"tool_input":{"command":"printf '"'"'AIDA_CARGO_NO_SLOT=1 make'"'"' > x.sh; xargs -a x.sh env"}}')"
+assert_exit "printf -v of the name is blocked" 2 "$(run '{"tool_input":{"command":"printf -v AIDA_CARGO_NO_SLOT 1; make check"}}')"
+assert_exit "read of the name is blocked" 2 "$(run '{"tool_input":{"command":"read AIDA_CARGO_NO_SLOT <<< 1; make check"}}')"
+assert_exit "a bare export of the name is blocked" 2 "$(run '{"tool_input":{"command":"export AIDA_CARGO_NO_SLOT"}}')"
+assert_exit "export of another name is allowed" 0 "$(run '{"tool_input":{"command":"export FOO; time make check"}}')"
+assert_exit "unset of the name is allowed" 0 "$(run '{"tool_input":{"command":"unset AIDA_CARGO_NO_SLOT; make check"}}')"
+assert_exit "a search for the name is allowed" 0 "$(run '{"tool_input":{"command":"rg -n AIDA_CARGO_NO_SLOT aida-core; git ls-files | xargs wc -l"}}')"
 rm -rf "$TMP"
 [ "$fail" -eq 0 ] || exit 1
 echo "GIT GUARDRAILS PARSE: all checks passed"
