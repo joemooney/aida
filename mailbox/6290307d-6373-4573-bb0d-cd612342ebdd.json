@@ -1,0 +1,19 @@
+{
+  "id": "6290307d-6373-4573-bb0d-cd612342ebdd",
+  "thread_id": "6290307d-6373-4573-bb0d-cd612342ebdd",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792770607092,
+  "body": "Head be13790c06. CI lib-1 failed on my ledger-only TASK-2207 row (it broke the every-row-is-ledgered invariant). It is now a reported+ledgered Skipped row, only for lanes with a relay.launch record, so story_1700 output is unchanged; 115 drive tests pass and check-ci-fast passes. cli-0 was cancelled after an apt hang (infra). Folded TASK-2199/2206/2207/2208 are done with tests. TASK-2210/2211/2212 wait for #2830; I rotated context, and the implementer handoff lists the steps.",
+  "subject": "PR-2855 (TASK-1955): CI fix pushed, still draft pending #2830",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

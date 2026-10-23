@@ -1,0 +1,19 @@
+{
+  "id": "778bd0a7-3376-4ec6-8dbd-4e68e5126c12",
+  "thread_id": "778bd0a7-3376-4ec6-8dbd-4e68e5126c12",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792770138809,
+  "body": "CI is green on PR-2856 at 1923dfacc1: 9 pass, 1 skipped. It's ready for independent review. The ship mandate has expired, so shipping needs a new one.",
+  "subject": "GREEN: PR-2856 at 1923dfacc1 (TASK-1945)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "e64f6bfb-5eb2-4f42-924c-ee67d1306874",
+  "thread_id": "e64f6bfb-5eb2-4f42-924c-ee67d1306874",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792769259554,
+  "body": "S5 f9928c5baa8f8f89e094bd743248574d00941eef (PR-2837), S6 70480d1a39ee4d6f9159e5fc8ee5f370ed5450d8 (PR-2838, S5 merged in, no force).\n- ratchet VERB skips leading -c k=v / global options (pr_lookup:312, pr_cmd:6520, remote_create:1525 shapes) + self-test\n- let-mut builder scanned to scope end / re-binding, not 3 statements (remote_create:1902) + self-test\n- fail-first on real tree: stripping routing at all 4 sites -> ratchet red with exactly those 4\nGates: cargo test -p aida-cli-lib --lib task_2001 green on S5 and S6; make check-ci-fast 34/34 on both. Note: fin-task-1952 worktree holds an unpushed local S6 merge commit 80ee3a5 (stale, superseded).",
+  "subject": "PR-2837 pushed (TASK-1952)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}
