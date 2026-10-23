@@ -1,0 +1,20 @@
+id: 01a16ab3-20ee-7550-afba-013cc6054d9c
+spec_id: TASK-2272
+agreed_id: TASK-2272
+title: 'Sweep: post-merge review notes batch 3 (2026-10-23 afternoon)'
+description: 'Advisor 14:39. Members superseded into this sweep: TASK-2271 (aida pr train: the car subject fallback reads the local branch, not the gated, approved head sha; read the subject at the approved sha). Each member needs a fix and a test. Start after #2843 merges.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-23T21:38:06.702176218Z
+modified_at: 2026-10-23T21:38:06.702176218Z
+req_type: Task
+filed_at:
+  code_sha: 3dfcf99117e6efbaa8259155a576276ab424a335
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c51da86593
+  vendor: claude
+  session: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
