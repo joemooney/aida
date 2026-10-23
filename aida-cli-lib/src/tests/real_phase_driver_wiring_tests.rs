@@ -2796,6 +2796,9 @@ fn t1458_run_merge(
             seat: Some(grant.seat.clone()),
             grant_id: Some(grant.id.clone()),
             identity: vec!["session:independent-reviewer".into()],
+            // BUG-1934: the presenter tokens `review record` stamps; ship
+            // refuses an attestation without them. trace:BUG-1934 | ai:claude
+            grant_binding: grant.binding.clone(),
             ..Default::default()
         })
         .unwrap();

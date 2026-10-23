@@ -1797,18 +1797,27 @@ pub(crate) fn prepare_graded_review(
     }
     let checkout =
         std::env::temp_dir().join(format!("aida-graded-pr-{pr}-{}", uuid::Uuid::now_v7()));
-    let added = std::process::Command::new("git")
-        .current_dir(project_root)
+    // trace:BUG-2211 | ai:claude
+    let added = aida_core::git_ops::output_healing_config_lock(
+        project_root,
+        || {
+            let mut cmd = std::process::Command::new("git");
+            cmd.current_dir(project_root);
+            cmd
+        },
         // trace:BUG-1622 | ai:claude
-        .args(["worktree", "add", "--detach", "--"])
-        .arg(&checkout)
-        .arg(reviewed_sha.trim())
-        .output()
-        .map_err(|e| {
-            auto_complete::PhaseFailure::new(format!(
-                "could not create graded-review checkout: {e}"
-            ))
-        })?;
+        &[
+            std::ffi::OsStr::new("worktree"),
+            std::ffi::OsStr::new("add"),
+            std::ffi::OsStr::new("--detach"),
+            std::ffi::OsStr::new("--"),
+            checkout.as_os_str(),
+            std::ffi::OsStr::new(reviewed_sha.trim()),
+        ],
+    )
+    .map_err(|e| {
+        auto_complete::PhaseFailure::new(format!("could not create graded-review checkout: {e}"))
+    })?;
     if !added.status.success() {
         return Err(auto_complete::PhaseFailure::new(format!(
             "could not check out reviewed head {reviewed_sha}: {}",

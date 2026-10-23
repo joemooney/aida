@@ -994,12 +994,19 @@ fn bug2188_production_failed_launches_rollback_setup_and_child_grant() {
             })
             .filter(|g| g.parent_grant_id.as_deref() == Some(&parent))
             .collect::<Vec<_>>();
-        assert_eq!(
-            children.len(),
-            1,
-            "production path must have issued a child grant"
-        );
-        assert!(children[0].revoked_at.is_some());
+        // BUG-1934: a `--bg` session cannot be bound to a grant, so the
+        // dispatcher mints none for its (baseline) implementer seat.
+        // trace:BUG-1934 | ai:claude
+        if background {
+            assert!(children.is_empty(), "a --bg launch mints no child grant");
+        } else {
+            assert_eq!(
+                children.len(),
+                1,
+                "production path must have issued a child grant"
+            );
+            assert!(children[0].revoked_at.is_some());
+        }
         assert_eq!(seat_authority::current_grant(&root).unwrap().id, parent);
     }
 }

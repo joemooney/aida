@@ -33,9 +33,11 @@ def main():
         (repo/'.aida-store/registry').mkdir()
         (repo/'.aida-store/registry/team.toml').write_text('[members]\nholder = ["orchestrator"]\nrequester = ["orchestrator"]\n')
         grants=home/'.aida/session-grants'; grants.mkdir(parents=True)
+        # BUG-1934: bind to this process, the ancestor of every worker. trace:BUG-1934 | ai:claude
+        stat=pathlib.Path('/proc/self/stat').read_text(); own_binding=f"proc:{os.getpid()}@linux-starttime:{stat[stat.rindex(')')+1:].split()[19]}"
         def mint(subject):
             now=datetime.datetime.now(datetime.timezone.utc); gid=str(uuid.uuid4())
-            data=dict(id=gid,principal=subject,subject=subject,session_id=str(uuid.uuid4()),seat='orchestrator',tty_issued_at=now.isoformat(),delegable_seats=[],parent_grant_id=None,issued_at=now.isoformat(),expires_at=(now+datetime.timedelta(hours=1)).isoformat(),revoked_at=None)
+            data=dict(id=gid,principal=subject,subject=subject,session_id=str(uuid.uuid4()),seat='orchestrator',tty_issued_at=now.isoformat(),delegable_seats=[],parent_grant_id=None,issued_at=now.isoformat(),expires_at=(now+datetime.timedelta(hours=1)).isoformat(),revoked_at=None,binding=[own_binding])
             (grants/(gid+'.json')).write_text(json.dumps(data)); return gid,data
         script=root/'worker.py'; script.write_text(worker)
         workers=[]
