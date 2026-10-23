@@ -6,12 +6,12 @@ description: |
   aida-cli-lib/src/seat_authority.rs roster_check calls store_sync::aida_store_override before the roster is checked, including on the allow path. An unusable AIDA_STORE makes every seat issuance or child delegation print the 'unusable' warning again, on top of the dispatcher's. Resolve the override lazily, only when building a refusal note.
 
   Raised in review of PR-2831: https://github.com/joemooney/aida/pull/2831#issuecomment-6340353942
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-22T12:08:28.224525041Z
-modified_at: 2026-10-23T06:59:44.309361642Z
+modified_at: 2026-10-23T11:27:05.409696404Z
 req_type: Task
 tags:
 - from-review:PR-2831
@@ -54,6 +54,21 @@ history:
   timestamp: 2026-10-23T06:59:45.549159007Z
   session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
   changes: []
+- id: 01a16883-b8bb-7ca3-8e01-9e2141bbdbea
+  author: aida-auto-bump
+  timestamp: 2026-10-23T11:27:05.403673523Z
+  session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a16883-b8c1-7881-bf75-db1d32395404
+  timestamp: 2026-10-23T11:27:05.409691050Z
+  agent: aida
+  commit_sha: 830f037b87a3f5da59c06b9b54f0929b0bf6555d
+  summary: 'TASK-2169/2170/2171 (+TASK-1-432) all PASS: StoreMissing names non-directory vs absent paths and the main-worktree candidate; AIDA_STORE note comes from a trimmed, lazily resolved setting; allow path never resolves AIDA_STORE. CI green at e38f0a8.'
+  review_verdict: approved
 filed_at:
   code_sha: 06f8be4827790b478907bef54ac92f96050ffb38
   branch: pr-2831
@@ -63,3 +78,7 @@ filed_at:
   vendor: claude
   session: 01a16380a484
   harness_version: 2.1.308 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-23T11:27:05.403668442Z
+  completion_sha: 830f037b87a3f5da59c06b9b54f0929b0bf6555d
