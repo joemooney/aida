@@ -1,0 +1,31 @@
+id: 01a167b7-70c6-7c42-89e2-ce68c06cefc2
+spec_id: TASK-2195
+agreed_id: TASK-2195
+title: issue_child joins a new session keyring per launch; quota exhaustion silently mints proc-only child grants
+description: |
+  aida-cli-lib/src/grant_keyring.rs sys::install joins a fresh session keyring (KEYCTL_JOIN_SESSION_KEYRING) on every call and links the previous one into it, so the previous keyring stays referenced. issue_child (seat_authority.rs) calls it once per child launch on the launcher thread. A long-lived launcher (queue work / drive loops, phase_driver CI-fix attempts, burndown relaunch rounds) therefore keeps one keyring per launch for its whole lifetime, counted against the per-user kernel key quota (maxkeys 200 / maxbytes 20000 by default, shared by all of the user's processes). Once the quota is hit, install fails with EDQUOT; issue_child discards the error (`.is_ok()`) and mints a child grant bound only to the launcher's proc token. A sandboxed worker cannot present that grant (ForeignNamespace), so a reviewer or advisor child stalls with no warning naming the cause.
+
+  Fix ideas: join a session keyring once per launcher thread, then add each child key into that same keyring (same inheritance breadth); log a warning naming the errno when install fails; optionally unlink a revoked child's key from the launcher keyring.
+
+  Raised in review of PR-2830: https://github.com/joemooney/aida/pull/2830#issuecomment-6360056858
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-23T07:43:57.638181847Z
+modified_at: 2026-10-23T07:43:57.638181847Z
+req_type: Task
+tags:
+- from-review:PR-2830
+- keyring
+- seat-grant
+- severity:minor
+filed_at:
+  code_sha: dfc7a78a2c0320be325c139bfc4f2bc3bd99ffca
+  branch: pr-2830
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 597ea98e77
+  vendor: claude
+  session: 01a167b19f3a
+  harness_version: 2.1.309 (Claude Code)
