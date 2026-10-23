@@ -1,0 +1,48 @@
+id: 01a16a96-f6ce-75e3-bdd7-ab32db7ae9c5
+spec_id: STORY-1741
+agreed_id: STORY-1741
+title: Keep AIDA adoption state off product code branches
+description: |-
+  ## Problem
+
+  AIDA project adoption currently writes shared configuration and generated agent scaffolding onto the product code branch. This prevents a team or an individual from adopting AIDA as a disposable collaboration layer while keeping the original repository history and tracked tree unchanged.
+
+  ## Acceptance
+
+  - A project can adopt shared AIDA configuration without adding, modifying, or deleting tracked files on its product code branches.
+  - Shared AIDA configuration and the source material for generated guidance live on an AIDA-owned orphan Git plane with no ancestry relationship to product code history.
+  - A clone discovers the conventional AIDA plane without requiring a marker file on the product branch; a nonstandard or sibling store uses an explicitly local, untracked locator.
+  - AIDA materializes configuration, hooks, and agent guidance into an ignored local projection and refreshes that projection deterministically from the shared plane.
+  - Removing AIDA deletes its local projection and hooks while leaving the product worktree, index, commits, branches, and configured product remotes unchanged.
+  - CI and agent environments can explicitly bootstrap the local projection from the shared plane and verify the selected configuration version before use.
+  - Existing projects with tracked AIDA scaffolding have a dry-run migration that preserves project policy and reports every product-branch file that can be removed.
+  - Normal AIDA operation leaves a clean product worktree when no product implementation changes are present.
+
+  ## Constraints
+
+  - Bootstrap must not depend on reading configuration that is available only after the shared plane has already been located.
+  - Project policy remains versioned and reviewable, while machine credentials, local paths, and user preferences remain local.
+  - Concurrent requirement-store writers and existing clone/node identity guarantees must continue to work.
+  - Migration must not rewrite published product or requirement history.
+
+  ## Non-goals
+
+  - Redesigning code-to-requirement trace semantics or commit-message conventions.
+  - Hiding ordinary implementation changes made while fulfilling a requirement.
+  - Replacing Git as the canonical shared persistence mechanism.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-23T21:07:20.910348370Z
+modified_at: 2026-10-23T21:07:20.910348370Z
+req_type: Story
+tags:
+- portable-intake
+filed_at:
+  code_sha: c51da8659361da4ae9a01c41f86ea6d28d00e948
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c51da86593
+  vendor: codex
