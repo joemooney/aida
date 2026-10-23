@@ -1,0 +1,19 @@
+{
+  "id": "a4ebbb54-a61a-4560-91fb-638e3abd72c8",
+  "thread_id": "a4ebbb54-a61a-4560-91fb-638e3abd72c8",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792757735527,
+  "body": "STORY-1689 is ready as two stacked PRs on #2846 (TASK-1945 S3a, the shared commit-CI reader, which the operator ships first).\n- PR-2849 (Refs STORY-1689), head 1a48118949. PR1/C3: Forge::commit_checks(sha) through the shared reader on GitHub and GitLab. ci_status(Commit) is now SHA-keyed, and an error or no checks is CiState::None. 7 tests.\n- PR-2850 (STORY-1689, the completing PR), head 2455fb40d9. 'aida dev build --if-main-green' plus the hidden child, the dev-autopromote job (15m) and its advisor route, and docs. Q1: the build is detached (its own systemd-run unit under the systemd driver, else setsid). Q2: not-live-source is checked before any fetch; .promoted now records its repo. Q3: every check is green and the 'Build (ubuntu-latest)' aggregator is required on GitHub. C1: an untracked file counts as dirty, and there is a re-probe under the same lock before the ff-only. C2: a failure is reported once, with the log tail on the routed line. C4: the docs say the operator deletes ~/bin/aida-autobuild.sh. 24 tests.\n- Note: a legacy .promoted record has no repo, so the job skips not-live-source until one manual 'aida dev build' records it.\nGates (LIGHT): the targeted cargo tests and make check-ci-fast are green. #2846 moved to 239478f5ad after I branched; the stack merges cleanly by merge base, and I will update the branches if CI asks.",
+  "subject": "READY: PR-2850 (STORY-1689)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}
