@@ -12810,6 +12810,8 @@ Commands:
                      --auto-complete` (which drives the full reviewer pipeline) — use this for
                      human-pre-approved work where no orchestrator review phase is needed (docs PRs,
                      master-signed architecture work, recovery merges)
+  train              Land a batch of approved PRs together through a merge train, so two PRs that
+                     are each green cannot break main together
   ship-batch         Ship several PRs that need a human merge, one at a time, in order
   hold               Deliberately HOLD the PR on the current session — push the branch but
                      intentionally do not open the PR yet, pending a manual gate (a smoke test, an
@@ -13023,10 +13025,9 @@ Options:
           intentional (e.g. a cross-repo id the local store can't see)
 
       --override-stale-check
-          Ship even when the PR's green check completed before a CI-definition file (a workflow, or
-          a script it invokes directly) changed on the base branch. Without this, ship refuses so a
-          green that no longer means what it looks like doesn't merge unnoticed. A plain test-file
-          change on the base branch only warns and never needs this flag
+          Retired: ship now refuses any PR whose head is behind its base branch, CI-definition
+          change or not, and this flag does not override that. Land a behind PR with `aida pr train
+          N`, or merge the base into the branch and wait for green
 
       --override-stale-approval
           Ship even when the PR's newest recorded approval does not cover its current head — the
@@ -13065,6 +13066,66 @@ Options:
 Exit codes: 0 merged (or already merged; dry-run previews); 1 other error; 20 CI red; 21
 ownership/CI wait timed out; 22 needs rebase/not mergeable; 23 needs review/approval at head; 24
 stale CI definition; 25 merge-hold present.
+===== aida pr train
+Land a batch of approved PRs together through a merge train, so two PRs that are each green cannot
+break main together.
+
+Each PR must pass the same gates `aida pr ship` applies before a merge: open, not a draft, on the
+default branch, no merge hold, an approval recorded at its head (or carried over a clean merge from
+main), a clear verdict corpus, no live drive owning it, and no spec tagged `review:draft-only`. A
+spec whose execution mode needs supervision merges only for a human at a terminal who named that PR,
+or under an active mandate (always for one found by --all-ready). Drafts are refused with a reason,
+since CI does not run Build on them. GitHub only for now.
+
+The train is main plus one squash commit per PR, each written with the subject `aida pr ship` would
+use and checked to carry exactly the PR's approved diff (by patch-id). A PR that conflicts, or whose
+diff changes once stacked, is left out with its reason. The train is opened as a `train/*` PR so the
+normal CI runs on exactly what main will receive. When it is green and main has not moved, it is
+rebase-merged pinned to its head, and each member PR is closed with a pointer to its commit on main.
+When it is red, it is rerun once, then split in halves (two at a time) until each bad PR is isolated
+and left out with a comment.
+
+`--dry-run` gates and builds the train and prints the plan without pushing anything; add `--local-ci
+<CMD>` to simulate the whole run with a local command as CI, against a checkout of each train tip.
+
+Usage: aida pr train [OPTIONS] <N|--all-ready>
+
+Arguments:
+  [N]...
+          PR numbers to train, in landing order
+
+Options:
+      --all-ready
+          Train every open PR on the default branch that passes the gates, oldest first
+
+      --dry-run
+          Gate and build the train and print the plan; push nothing
+
+      --local-ci <CMD>
+          With --dry-run: run CMD in a checkout of each train tip as the CI, and simulate the full
+          land / rerun / bisect run locally
+
+      --max <N>
+          At most this many PRs per train. With --all-ready the rest wait for the next train; naming
+          more PRs than this is refused
+          
+          [default: 10]
+
+      --no-pull
+          Skip the `aida pull` after a train lands
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+  -h, --help
+          Print help (see a summary with '-h')
 ===== aida pr ship-batch
 Ship several PRs that need a human merge, one at a time, in order.
 
@@ -36653,7 +36714,7 @@ Working on aida itself
       {
         "name": "override-stale-check",
         "takes_value": false,
-        "help": "Ship even when the PR's green check completed before a CI-definition file (a workflow, or a script it invokes directly) changed on the base branch. Without this, ship refuses so a green that no longer means what it looks like doesn't merge unnoticed. A plain test-file change on the base branch only warns and never needs this flag"
+        "help": "Retired: ship now refuses any PR whose head is behind its base branch, CI-definition change or not, and this flag does not override that. Land a behind PR with `aida pr train N`, or merge the base into the branch and wait for green"
       },
       {
         "name": "rebase",
@@ -36664,6 +36725,52 @@ Working on aida itself
         "name": "wait",
         "takes_value": true,
         "help": "Bound drive ownership plus CI registration/settlement wait in seconds. Bare --wait uses 300 seconds; omitted leaves CI unbounded and refuses drive-owned PRs immediately. Drive seats always refuse immediately. Exit codes: 20 CI red, 21 CI timeout, 22 not mergeable, 23 review, 24 stale CI definition, 25 merge hold (0 merged/already merged)"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "pr",
+      "train"
+    ],
+    "about": "Land a batch of approved PRs together through a merge train, so two PRs that are each green cannot break main together",
+    "flags": [
+      {
+        "name": "all-ready",
+        "takes_value": false,
+        "help": "Train every open PR on the default branch that passes the gates, oldest first"
+      },
+      {
+        "name": "dry-run",
+        "takes_value": false,
+        "help": "Gate and build the train and print the plan; push nothing"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "local-ci",
+        "takes_value": true,
+        "help": "With --dry-run: run CMD in a checkout of each train tip as the CI, and simulate the full land / rerun / bisect run locally"
+      },
+      {
+        "name": "max",
+        "takes_value": true,
+        "help": "At most this many PRs per train. With --all-ready the rest wait for the next train; naming more PRs than this is refused"
+      },
+      {
+        "name": "no-pull",
+        "takes_value": false,
+        "help": "Skip the `aida pull` after a train lands"
       }
     ],
     "hidden": false
