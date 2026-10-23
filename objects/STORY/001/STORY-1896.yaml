@@ -1,0 +1,34 @@
+id: 01a1678f-134e-7d40-971a-0d2ed39e2b7d
+spec_id: STORY-1896
+agreed_id: STORY-1896
+title: 'Review PR-2838: [AI:claude] fix(contained): seat-clone-only .git redirects, staged resume transcript, contained-parent flag refusals, os_wrap for uncontained drain children, lease-stamped child grants'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `claude/task-1952-s6`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2838>
+  - Branch: `claude/task-1952-s6` → `main`
+
+  ## Covers
+
+  - TASK-1952
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2838` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-23T06:59:52.270596305Z
+modified_at: 2026-10-23T06:59:52.270596305Z
+req_type: Story
+filed_at:
+  code_sha: 64c2153d82b8ac704fa54f3895d3796dd7afdf18
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 519bdccd6e
+  vendor: claude
+  session: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
