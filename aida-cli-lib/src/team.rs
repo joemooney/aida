@@ -373,11 +373,12 @@ pub(crate) fn effective_role_for_user(store_root: &Path, user_id: &str) -> (Stri
 /// stale commit and retry. Solo (no `origin`) writes locally and lets the next
 /// `aida push` upload. Returns the canonicalized role written. trace:STORY-646
 pub(crate) fn set_role_cas(store_root: &Path, user_id: &str, role: &str) -> anyhow::Result<()> {
+    // Delegate to the shared aida-core implementation so the CLI and the REST
+    // `PUT /api/v2/team/:user/role` endpoint write team.toml identically.
+    // trace:STORY-650 | ai:claude
+    // trace:TASK-1955 | ai:claude (TASK-2222: comment kept above the cfg guard)
     #[cfg(test)]
     crate::seat_authority::test_support::assert_scratch_store(store_root); // trace:BUG-2209 | ai:claude
-                                                                           // Delegate to the shared aida-core implementation so the CLI and the REST
-                                                                           // `PUT /api/v2/team/:user/role` endpoint write team.toml identically.
-                                                                           // trace:STORY-650 | ai:claude
     aida_core::team::set_role_cas(store_root, user_id, role)
         .map_err(|e| anyhow::anyhow!("setting team role failed: {}", e))
 }

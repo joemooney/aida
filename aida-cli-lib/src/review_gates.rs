@@ -1211,14 +1211,17 @@ pub(crate) fn try_auto_queue_pr_review_unbumped(
     ));
     desc.push_str(&format!("- {noun}: <{}>\n", pr.url));
     desc.push_str(&format!("- Branch: `{}` → `{}`\n\n", head, base));
-    if spec_ids.is_empty() {
+    // TASK-2255: a Refs-only slice has a spec (its "Slice of" section below),
+    // so it must not get the no-trailers advice to link one with `implements`.
+    // trace:TASK-1955 | ai:claude (TASK-2255)
+    if spec_ids.is_empty() && slice_refs.is_empty() {
         // BUG-776 gates this branch off — a zero-coverage story is no longer
         // filed at all. Kept as a defensive fallback so relaxing the gate
         // can't ship a story with an empty body. trace:BUG-776 | ai:claude
         desc.push_str(
             "No `(REQ-ID)` trailers were found in the PR's commit range — review against the PR title/body and link specs after the fact via `aida rel add <this> <spec> --type implements`.\n\n",
         );
-    } else {
+    } else if !spec_ids.is_empty() {
         desc.push_str("## Covers\n\n");
         for id in &spec_ids {
             desc.push_str(&format!("- {}\n", id));
@@ -1281,8 +1284,10 @@ pub(crate) fn try_auto_queue_pr_review_unbumped(
         aida_subcmd_rel_add_implements(project_root, &new_id, id);
     }
     // BUG-2208: `covers`, never `implements`, so the slice links the story
-    // to its spec (and `queue work PR-N` resolves it) without completing it.
-    // trace:TASK-1955 | ai:claude (BUG-2208)
+    // to its spec without completing it. Nothing reads `covers` back: `queue
+    // work PR-N` finds this story by its `Review PR-N` title, then resolves
+    // the spec from the PR's trailers through `resolve_pr_to_spec`.
+    // trace:TASK-1955 | ai:claude (BUG-2208, TASK-2255)
     for id in &slice_refs {
         aida_subcmd_rel_add(project_root, &new_id, id, "covers");
     }

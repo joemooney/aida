@@ -13216,15 +13216,17 @@ pub(crate) fn handle_queue_work(
     // launched nobody, so its PR-N lease would only block the next pickup
     // until --force-claim. Release it (the worktree stays).
     // trace:TASK-1955 | ai:claude (advisor comment 35)
-    if let (Err(err), Some(lease_id)) = (&setup_result, minted_lease_id.as_deref()) {
-        if refused_review_launch_releases_lease(plan.review_target.is_some(), err) {
-            crate::session_reap::release_lease_files(&project_root, lease_id);
-            eprintln!(
-                "  released the {} review lease: no reviewer was launched",
-                plan.scope
-            );
-            return setup_result;
-        }
+    if release_refused_review_lease(
+        &project_root,
+        plan.review_target.is_some(),
+        minted_lease_id.as_deref(),
+        &setup_result,
+    ) {
+        eprintln!(
+            "  released the {} review lease: no reviewer was launched",
+            plan.scope
+        );
+        return setup_result;
     }
     // A standalone implementer's outcome (punted, held, no PR) is a result,
     // not a failed setup to continue by hand. trace:STORY-1662 | ai:claude
@@ -13238,6 +13240,26 @@ pub(crate) fn handle_queue_work(
         );
     }
     setup_result
+}
+
+/// Advisor comment 35: release the lease `lease_id` a failed pickup minted
+/// when [`refused_review_launch_releases_lease`] says so. Returns whether it
+/// was released.
+// trace:TASK-1955 | ai:claude (TASK-2256)
+pub(crate) fn release_refused_review_lease(
+    project_root: &std::path::Path,
+    review_scoped: bool,
+    lease_id: Option<&str>,
+    setup_result: &Result<()>,
+) -> bool {
+    let (Err(err), Some(lease_id)) = (setup_result, lease_id) else {
+        return false;
+    };
+    if !refused_review_launch_releases_lease(review_scoped, err) {
+        return false;
+    }
+    crate::session_reap::release_lease_files(project_root, lease_id);
+    true
 }
 
 /// Advisor comment 35: whether a failed pickup's lease is released — only a

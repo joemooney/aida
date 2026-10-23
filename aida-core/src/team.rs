@@ -239,8 +239,21 @@ pub fn is_under_temp_root(path: &Path) -> bool {
 /// through a fixture's store walk-up and replaced their roster (BUG-2209).
 // trace:BUG-2209 | ai:claude
 pub fn guard_roster_write(store_root: &Path) {
+    guard_roster_write_allowing(store_root, None);
+}
+
+/// [`guard_roster_write`], also accepting a store under `scratch_root` (a
+/// test crate's own `target/`, where its fixtures may live).
+// trace:TASK-1955 | ai:claude (TASK-2223)
+pub fn guard_roster_write_allowing(store_root: &Path, scratch_root: Option<&Path>) {
     let hermetic = std::env::var("AIDA_USER").is_ok_and(|user| user == HERMETIC_TEST_USER);
-    if (hermetic || cfg!(test)) && !is_under_temp_root(store_root) {
+    if !(hermetic || cfg!(test)) || is_under_temp_root(store_root) {
+        return;
+    }
+    let canonical = |p: &Path| p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
+    let in_scratch =
+        scratch_root.is_some_and(|root| canonical(store_root).starts_with(canonical(root)));
+    if !in_scratch {
         panic!(
             "refusing a test roster write to `{}`: the store is not under a temp directory \
              (AIDA_USER hermetic: {hermetic}); a test resolved a real store",
@@ -282,8 +295,11 @@ fn load_for_write(path: &Path) -> std::io::Result<(Option<Vec<u8>>, TeamRoster)>
 /// roster. `nodes`, when given, migrates stray integer keys first
 /// (STORY-653). Returns whether the file changed.
 ///
-/// Callers stage and commit the file; the CAS functions below hold the store
-/// write lock around it.
+/// The write runs [`guard_roster_write`] and holds the store write lock
+/// (re-entrant, so the CAS functions below, which already hold it around
+/// their stage and commit, nest). A caller without the lock therefore cannot
+/// lose a write that lands between the CAS re-read and the rename to another
+/// locked writer. Callers stage and commit the file.
 // trace:BUG-2209 | ai:claude
 pub fn write_member_seats(
     store_root: &Path,
@@ -291,7 +307,22 @@ pub fn write_member_seats(
     nodes: Option<&NodeRegistry>,
     edit: impl Fn(Option<&[String]>) -> Option<Vec<String>>,
 ) -> std::io::Result<bool> {
+    write_member_seats_allowing(store_root, None, user_id, nodes, edit)
+}
+
+/// [`write_member_seats`] whose test guard also accepts a store under
+/// `scratch_root` (see [`guard_roster_write_allowing`]).
+// trace:TASK-1955 | ai:claude (TASK-2223, TASK-2224)
+pub fn write_member_seats_allowing(
+    store_root: &Path,
+    scratch_root: Option<&Path>,
+    user_id: &str,
+    nodes: Option<&NodeRegistry>,
+    edit: impl Fn(Option<&[String]>) -> Option<Vec<String>>,
+) -> std::io::Result<bool> {
     const MAX_ATTEMPTS: u32 = 20;
+    guard_roster_write_allowing(store_root, scratch_root);
+    let _lock = crate::db::acquire_store_write_lock(store_root).map_err(std::io::Error::other)?;
     let path = TeamRoster::path(store_root);
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
@@ -1614,5 +1645,63 @@ ttl_secs = 1800
             "/nonexistent-bug-2209/store"
         )));
         guard_roster_write(&dir.path().join(".aida-store"));
+    }
+
+    /// TASK-2223: the primitive guards its own write, so a caller that skips
+    /// the CAS functions still cannot reach a real store.
+    // trace:TASK-1955 | ai:claude
+    #[test]
+    #[should_panic(expected = "refusing a test roster write")]
+    fn task_2223_write_member_seats_guards_its_own_write() {
+        let _ = write_member_seats(
+            Path::new("/nonexistent-task-2223/.aida-store"),
+            "x",
+            None,
+            |_| Some(vec!["implementer".to_string()]),
+        );
+    }
+
+    /// TASK-2223: a named scratch root (a test crate's `target/`) is still
+    /// accepted outside the temp roots; anything else under it is not.
+    // trace:TASK-1955 | ai:claude
+    #[test]
+    fn task_2223_a_named_scratch_root_passes_the_guard() {
+        let scratch = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let store = scratch.join("not-a-store-task-2223/.aida-store");
+        assert!(!is_under_temp_root(&store));
+        guard_roster_write_allowing(&store, Some(scratch));
+        let outside = std::panic::catch_unwind(|| {
+            guard_roster_write_allowing(Path::new("/nonexistent-task-2223/s"), Some(scratch))
+        });
+        assert!(
+            outside.is_err(),
+            "a store outside the scratch root is refused"
+        );
+    }
+
+    /// TASK-2224: the write holds the store write lock across the CAS re-read
+    /// and the rename, for a caller that does not hold it, and nests for one
+    /// that does.
+    // trace:TASK-1955 | ai:claude
+    #[test]
+    fn task_2224_write_member_seats_holds_the_store_write_lock() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(!crate::db::store_write_lock_held(dir.path()));
+        assert!(write_member_seats(dir.path(), "tester", None, |_| {
+            assert!(
+                crate::db::store_write_lock_held(dir.path()),
+                "the edit runs under the store write lock"
+            );
+            Some(vec!["implementer".to_string()])
+        })
+        .unwrap());
+        assert!(!crate::db::store_write_lock_held(dir.path()), "released");
+        // A caller already holding it re-enters instead of deadlocking.
+        crate::db::with_store_write_lock(dir.path(), || {
+            write_member_seats(dir.path(), "tester", None, |_| None)?;
+            Ok(())
+        })
+        .unwrap();
+        assert!(TeamRoster::load(dir.path()).seats_for("tester").is_none());
     }
 }

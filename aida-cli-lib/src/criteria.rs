@@ -594,12 +594,17 @@ fn scan_shell_test_file(root: &Path, path: &Path, content: &str, spec: &str) -> 
 fn shell_test_name(trimmed: &str) -> Option<String> {
     for lead in ["info \"", "echo \""] {
         if let Some(rest) = trimmed.strip_prefix(lead) {
-            let label = rest.strip_prefix("Test ")?;
-            let label: String = label
+            // A section header is `Test <label>:` with a numbered label
+            // (`0`, `1b`, `4b2`). A status line such as `Test failed: …` or
+            // `Test dir: …` is not one. trace:TASK-1955 | ai:claude (TASK-2257)
+            let rest = rest.strip_prefix("Test ")?;
+            let label: String = rest
                 .chars()
-                .take_while(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '.' | '-' | '_'))
+                .take_while(|ch| ch.is_ascii_alphanumeric())
                 .collect();
-            return (!label.is_empty()).then(|| format!("Test {label}"));
+            let numbered = label.starts_with(|ch: char| ch.is_ascii_digit());
+            return (numbered && rest[label.len()..].starts_with(':'))
+                .then(|| format!("Test {label}"));
         }
     }
     let name = trimmed.strip_prefix("function ").unwrap_or(trimmed);
@@ -1235,6 +1240,40 @@ test_helper() {
         );
         assert_eq!(tests[0].path, "tests/test_sample.sh");
         assert_eq!(tests[0].line, 3);
+    }
+
+    // TASK-2257: a status line inside a section is not a section header, so
+    // the markers after it stay with the section they sit in.
+    // trace:TASK-1955 | ai:claude
+    #[test]
+    fn a_shell_status_line_does_not_open_a_section() {
+        let root = Path::new("/repo");
+        let path = root.join("tests/test_sample.sh");
+        let content = "\
+info \"Test 1: the real section\"
+echo \"Test failed: expected 0, got 1\"
+echo \"Test dir: $DIR\"
+info \"Test passed.\"
+# trace:STORY-1.A1 | ai:claude
+run_it
+";
+        let tests = scan_shell_test_file(root, &path, content, "STORY-1");
+        let got: Vec<(&str, Vec<&str>)> = tests
+            .iter()
+            .map(|t| {
+                (
+                    t.name.as_str(),
+                    t.traces.iter().map(String::as_str).collect(),
+                )
+            })
+            .collect();
+        assert_eq!(got, vec![("Test 1", vec!["STORY-1.A1"])]);
+        assert_eq!(shell_test_name("echo \"Test failed: x\""), None);
+        assert_eq!(
+            shell_test_name("echo \"Test 4b2: x\""),
+            Some("Test 4b2".into())
+        );
+        assert_eq!(shell_test_name("info \"Test 3 without colon\""), None);
     }
 
     #[test]

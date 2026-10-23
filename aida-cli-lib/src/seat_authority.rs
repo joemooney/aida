@@ -1491,6 +1491,15 @@ pub(crate) fn grant_id(grant: &SeatGrant) -> &str {
 pub(crate) mod test_support {
     use super::*;
 
+    /// The workspace `target/`, the one non-temp place a fixture store may
+    /// live.
+    // trace:TASK-1955 | ai:claude (TASK-2223)
+    fn workspace_target() -> Option<std::path::PathBuf> {
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .map(|workspace| workspace.join("target"))
+    }
+
     /// Panic unless `store` is a scratch store a test may write: under a
     /// system temp root, or under this workspace's `target/` (fixtures that
     /// must live outside `/tmp`). A test that resolves a real checkout's store
@@ -1500,11 +1509,8 @@ pub(crate) mod test_support {
         if aida_core::team::is_under_temp_root(store) {
             return;
         }
-        let target = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .map(|workspace| workspace.join("target"));
         let canonical = store.canonicalize().unwrap_or_else(|_| store.to_path_buf());
-        let in_target = target
+        let in_target = workspace_target()
             .and_then(|t| t.canonicalize().ok())
             .is_some_and(|t| canonical.starts_with(t));
         assert!(
@@ -1574,16 +1580,26 @@ pub(crate) mod test_support {
         // trace:BUG-2209 | ai:claude
         assert_scratch_store(&store);
         let seat = aida_core::team::canonical_role(seat);
-        aida_core::team::write_member_seats(&store, subject, None, |current| {
-            let mut seats = current.map(<[String]>::to_vec).unwrap_or_default();
-            for requested in std::iter::once(seat.as_str()).chain(delegable.iter().copied()) {
-                let canonical = aida_core::team::canonical_role(requested);
-                if !seats.iter().any(|have| *have == canonical) {
-                    seats.push(canonical);
+        // The primitive guards the write itself and takes the store write
+        // lock (TASK-2223, TASK-2224); `target/` stays an allowed scratch root.
+        // trace:TASK-1955 | ai:claude
+        let target = workspace_target();
+        aida_core::team::write_member_seats_allowing(
+            &store,
+            target.as_deref(),
+            subject,
+            None,
+            |current| {
+                let mut seats = current.map(<[String]>::to_vec).unwrap_or_default();
+                for requested in std::iter::once(seat.as_str()).chain(delegable.iter().copied()) {
+                    let canonical = aida_core::team::canonical_role(requested);
+                    if !seats.iter().any(|have| *have == canonical) {
+                        seats.push(canonical);
+                    }
                 }
-            }
-            Some(seats)
-        })
+                Some(seats)
+            },
+        )
         .unwrap();
 
         let lifetime = ttl.unwrap_or(MAX_GRANT_AGE);
@@ -1711,6 +1727,65 @@ mod tests {
                 "timestamp={expires_at}, seat={seat}"
             );
         }
+    }
+
+    /// TASK-2256 (advisor comment 35): the release `handle_queue_work` runs
+    /// after a refused reviewer child grant deletes the minted PR-N lease and
+    /// its companions, and keeps an implementer's lease, or one whose launch
+    /// failed for any other reason.
+    // trace:TASK-1955 | ai:claude (TASK-2256)
+    #[test]
+    fn a_refused_reviewer_child_grant_releases_only_the_review_lease() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let sessions = crate::leases::leases_dir(root);
+        std::fs::create_dir_all(&sessions).unwrap();
+        let mint = |id: &str| {
+            let lease = crate::leases::lease_path(root, id);
+            std::fs::write(&lease, format!("id = \"{id}\"\nscope = \"PR-42\"\n")).unwrap();
+            std::fs::write(crate::leases::session_activity_path(root, id), "").unwrap();
+            lease
+        };
+        let refused: anyhow::Result<()> = Err(anyhow::Error::new(ChildGrantRefused(
+            anyhow::anyhow!("seat `reviewer` is not delegable"),
+        ))
+        .context("launching the reviewer"));
+
+        let review = mint("leasereview01");
+        assert!(crate::queue_cmd::release_refused_review_lease(
+            root,
+            true,
+            Some("leasereview01"),
+            &refused
+        ));
+        assert!(!review.exists(), "the PR-N lease is released");
+        assert!(!crate::leases::session_activity_path(root, "leasereview01").exists());
+
+        let implementer = mint("leaseimpl0001");
+        assert!(!crate::queue_cmd::release_refused_review_lease(
+            root,
+            false,
+            Some("leaseimpl0001"),
+            &refused
+        ));
+        assert!(implementer.exists(), "an implementer lease stays");
+
+        let other = mint("leaseother001");
+        let failed: anyhow::Result<()> = Err(anyhow::anyhow!("reviewer exited 1"));
+        assert!(!crate::queue_cmd::release_refused_review_lease(
+            root,
+            true,
+            Some("leaseother001"),
+            &failed
+        ));
+        assert!(other.exists(), "any other failure keeps the lease");
+        assert!(!crate::queue_cmd::release_refused_review_lease(
+            root,
+            true,
+            Some("leaseother001"),
+            &Ok(())
+        ));
+        assert!(other.exists());
     }
 
     /// ADR-66 acceptance: an env-only `AIDA_SESSION_ROLE=advisor` confers no
