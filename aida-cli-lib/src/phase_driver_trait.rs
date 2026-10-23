@@ -2470,7 +2470,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         if let Some(branch) = self.branch.clone() {
             crate::pr_cmd::ship_behind_base_gate(&self.project_root, &branch, pr as u64, false)
                 .map_err(|(_, refusal)| {
-                    auto_complete::PhaseFailure::of(auto_complete::FailureKind::Failed, refusal)
+                    auto_complete::PhaseFailure::of(auto_complete::FailureKind::BehindBase, refusal)
                 })?;
         }
 

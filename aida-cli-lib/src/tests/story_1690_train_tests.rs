@@ -823,6 +823,19 @@ fn the_template_masters_document_the_train_and_the_ship_refusal() {
             "{doc} does not say ship refuses a behind head"
         );
     }
+    let protocol = std::fs::read_to_string(root.join(".aida/discipline/two-seat-protocol.md"))
+        .unwrap()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    assert!(
+        protocol.contains("Drain-to-train handoff") && protocol.contains("`behind-base`"),
+        "two-seat-protocol does not document the drain-to-train handoff"
+    );
+    assert!(
+        protocol.contains("That line is advisory"),
+        "two-seat-protocol does not say the members line is advisory"
+    );
 }
 
 // ───────────────────────── member gate, faked ───────────────────────────
@@ -1128,6 +1141,7 @@ struct FakeForge {
     /// Fail the open with this number (1-based), or every merge.
     open_fails_at: Option<u64>,
     merge_fails: bool,
+    ci_unreadable: bool,
 }
 
 impl FakeForge {
@@ -1177,6 +1191,9 @@ impl TrainForge for FakeForge {
         })
     }
     fn wait_ci(&mut self, _change: &crate::forge::ChangeRef) -> Result<CiVerdict> {
+        if self.ci_unreadable {
+            anyhow::bail!("no CI registered within 600s");
+        }
         Ok(CiVerdict::Green)
     }
     fn retire(&mut self, change: &crate::forge::ChangeRef, why: &str) {
@@ -1404,4 +1421,22 @@ fn an_open_error_ejects_the_members_instead_of_aborting_the_run() {
     assert_eq!(out.ejected.len(), 1);
     assert!(f.retired.is_empty(), "nothing was open");
     assert_eq!(f.comments, vec![1]);
+}
+
+#[test]
+fn an_unreadable_ci_stops_the_run_instead_of_bisecting_it_as_red() {
+    let mut f = FakeForge::mains(&["m0"]);
+    f.ci_unreadable = true;
+    let mut rails = ForgeRails::new(&mut f, "t".into());
+    let out = drive(&mut rails, fms(&[1, 2, 3])).unwrap();
+    assert!(out.landed.is_empty());
+    let error = out.error.clone().expect("the CI error is in the outcome");
+    assert!(error.contains("no CI registered"), "{error}");
+    assert_eq!(f.opened, 1, "no rerun or bisect on an infrastructure error");
+    assert_eq!(out.ejected.len(), 3);
+    for e in &out.ejected {
+        assert!(e.reason.contains("no CI registered"), "{e:?}");
+        assert!(!e.reason.contains("CI is red"), "{e:?}");
+    }
+    assert_eq!(f.retired.len(), 1, "the open train PR is retired");
 }

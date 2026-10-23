@@ -2886,6 +2886,7 @@ fn story_1690_drain_merge_refuses_a_head_behind_its_base() {
     d.pr_number = Some(77);
     d.branch = Some("task-1458".into());
     let failure = d.merge().expect_err("a behind head must not merge");
+    assert_eq!(failure.kind, FailureKind::BehindBase);
     assert!(
         failure.reason.contains("behind main") && failure.reason.contains("aida pr train 77"),
         "{}",

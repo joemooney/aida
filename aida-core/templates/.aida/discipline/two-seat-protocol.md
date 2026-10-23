@@ -96,7 +96,11 @@ batched form of `aida pr ship`:
 3. **CI on exactly what main receives.** The stack is opened as a `train/*`
    PR. Required checks run on it unchanged. merge-hold-gate's train mode reads
    the `aida-train-members:` line and fails if any member carries a hold
-   without a recorded clearance.
+   without a recorded clearance. That line is advisory: the gate does not
+   check it against the commits' `Aida-Train-Member:` trailers, so a
+   hand-made `train/*` PR can name any hold-clear PRs (no more than an
+   ordinary unlabelled PR could). The binding member check is `aida pr
+   train`'s own gate and its pre-land recheck.
 4. **Land pinned, only on an unmoved main.** Under the merge lease, the train
    re-gates every member, refuses if main moved since the build (it rebuilds
    and retests instead), checks main once more right before merging, then
@@ -122,6 +126,13 @@ head is behind main, since its green never saw main's newer commits, and
 names `aida pr train N` (a one-member train). It does the same when the forge
 does not report the branch as behind. No flag overrides the refusal. A head
 that already contains main ships as before.
+
+**Drain-to-train handoff.** The drain's merge phase applies the same refusal.
+An approved, green PR whose head is behind main is shelved with the
+`behind-base` cause (not an ordinary merge failure), and its hint names
+`aida pr train N`. The merge seat collects those PRs and lands them with
+`aida pr train N...` (or `--all-ready`); it does not update the branch and
+re-run the drain.
 
 Mechanical enforcement is still pending. It arrives with the identity-bound
 approval gate in `aida pr ship` (BUG-1918). Until then, ADR-73 is policy, not

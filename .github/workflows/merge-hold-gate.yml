@@ -32,7 +32,9 @@ name: merge-hold-gate
 # Its body names the members (`aida-train-members: N@<sha>,...`); the gate
 # reads each member's labels through the API and applies the same three rules,
 # failing when the members line is missing or malformed. A body edit re-runs
-# the gate. `aida pr train` re-checks every member right before it merges.
+# the gate. The line is advisory: it is not cross-checked against the train
+# commits' Aida-Train-Member trailers. `aida pr train`'s own member gate and
+# its re-check right before it merges are the binding member checks.
 #
 # The `run:` block below is the shipped artifact that
 # tests/test_merge_hold_gate.sh extracts and executes, so its fixtures assert

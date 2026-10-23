@@ -2305,9 +2305,8 @@ pub(crate) fn fetch_ship_refs(
             "+refs/heads/{ship_branch}:refs/remotes/origin/{ship_branch}"
         ));
     }
-    let out = std::process::Command::new("git")
-        .arg("-C")
-        .arg(project_root)
+    // TASK-2143: through the host-git chokepoint, which refuses a seat clone.
+    let out = aida_core::git_ops::host_git_command(project_root)
         .args(["fetch", "--quiet", "--no-tags", "origin"])
         .args(&refspecs)
         .output()

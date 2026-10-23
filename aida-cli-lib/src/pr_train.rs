@@ -1301,10 +1301,13 @@ impl Rails for ForgeRails<'_> {
         // Every train's CI runs at once; wait for each in turn.
         let mut verdicts = Vec::new();
         for change in &changes {
-            let v = match self.ports.wait_ci(change) {
-                Ok(v) => v,
-                Err(e) => CiVerdict::Red(format!("{e:#}")),
-            };
+            // A CI that cannot be read (none registered, an API error) is not
+            // a red verdict: bisecting it would spend CI runs and eject every
+            // member as "red alone". It stops the run with the real reason.
+            let v = self
+                .ports
+                .wait_ci(change)
+                .with_context(|| format!("train PR #{}'s CI could not be read", change.id))?;
             if let CiVerdict::Red(why) = &v {
                 println!("  train PR #{} is red: {why}", change.id);
                 self.retire(
