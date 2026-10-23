@@ -13,6 +13,7 @@
 //! user's other same-uid AIDA state (mandate records, session grants): a
 //! same-uid process that forges files is outside the threat model.
 // trace:STORY-1706 | ai:claude
+// mandate-gate
 
 use std::io::{Read, Write};
 use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
