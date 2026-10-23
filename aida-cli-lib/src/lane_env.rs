@@ -104,7 +104,9 @@ pub(crate) fn lease_role(lease: &SessionLease) -> Result<Option<String>> {
 
 /// The correction for a session in a lane whose lease records `lease_role`
 /// (and optionally a child grant), given the inherited role label and grant.
-/// `None` when the environment is already the lane's.
+/// `None` when the environment is already the lane's, or when the inherited
+/// role is a least-privilege stakeholder role (guest, requester): a lane
+/// lease never widens one to its own seat (TASK-2213).
 pub(crate) fn fix_for(
     lease_role: &str,
     lease_child_grant: Option<&str>,
@@ -116,6 +118,12 @@ pub(crate) fn fix_for(
         .map(str::trim)
         .filter(|r| !r.is_empty())
         .map(crate::canonical_role_name);
+    if env_role
+        .as_deref()
+        .is_some_and(crate::stakeholder_role::is_stakeholder_role)
+    {
+        return Ok(None);
+    }
     let role_differs = env_role.as_deref() != Some(role.as_str());
     let grant = match (
         lease_child_grant.map(str::trim).filter(|g| !g.is_empty()),
@@ -218,9 +226,7 @@ fn lane_env_lines(cwd: Option<&Path>) -> Result<String> {
 /// The fail-closed test when the lease cannot be read.
 pub(crate) fn in_linked_worktree(cwd: &Path) -> bool {
     let rev_parse = |arg: &str| {
-        std::process::Command::new("git")
-            .arg("-C")
-            .arg(cwd)
+        aida_core::git_ops::host_git_command(cwd)
             .args(["rev-parse", "--path-format=absolute", arg])
             .output()
             .ok()
@@ -302,20 +308,47 @@ pub(crate) fn daemons_holding_a_grant(proc_root: &Path) -> Vec<u32> {
     pids
 }
 
-/// Record `role` on lease `lease_id`/// Record `role` on lease `lease_id` (an existing worktree re-entered by
-/// `aida worktree add --role`).
+/// Record `role` on lease `lease_id` (an existing worktree re-entered by
+/// `aida worktree add --role`). Refuses a lease a live session is working:
+/// its role is that session's identity, not the caller's to rewrite
+/// (TASK-2217). The read-modify-write holds [`with_lease_write_lock`].
 pub(crate) fn stamp_lease_role_at(project_root: &Path, lease_id: &str, role: &str) -> Result<()> {
+    let main_root = crate::main_worktree_root_from(project_root);
+    let live_sessions = crate::process_probe::probe_live_claude_sessions();
+    let is_live = crate::leases::lease_is_live(&live_sessions, chrono::Utc::now());
+    stamp_lease_role_checked(&main_root, lease_id, role, |l| is_live(l))
+}
+
+/// [`stamp_lease_role_at`] with the liveness predicate injected.
+pub(crate) fn stamp_lease_role_checked(
+    main_root: &Path,
+    lease_id: &str,
+    role: &str,
+    is_live: impl Fn(&SessionLease) -> bool,
+) -> Result<()> {
     use toml_edit::{value, DocumentMut};
-    let path = crate::lease_path(&crate::main_worktree_root_from(project_root), lease_id);
-    let body = std::fs::read_to_string(&path)
-        .with_context(|| format!("reading lease {}", path.display()))?;
-    let mut doc = body
-        .parse::<DocumentMut>()
-        .with_context(|| format!("parsing lease {}", path.display()))?;
-    doc["role"] = value(role);
-    aida_core::write_atomic(&path, doc.to_string())
-        .with_context(|| format!("writing lease {}", path.display()))?;
-    Ok(())
+    let role = validate_value("role", role)?;
+    let path = crate::lease_path(main_root, lease_id);
+    crate::session::with_lease_write_lock(main_root, || {
+        let body = std::fs::read_to_string(&path)
+            .with_context(|| format!("reading lease {}", path.display()))?;
+        let lease: SessionLease =
+            toml::from_str(&body).with_context(|| format!("parsing lease {}", path.display()))?;
+        if is_live(&lease) {
+            anyhow::bail!(
+                "the worktree {} is held by a live session (lease {lease_id}, role {}); \
+                 end that session before giving its lane a new role",
+                lease.worktree_path.display(),
+                lease.role.as_deref().unwrap_or("none")
+            );
+        }
+        let mut doc = body
+            .parse::<DocumentMut>()
+            .with_context(|| format!("parsing lease {}", path.display()))?;
+        doc["role"] = value(role.as_str());
+        aida_core::write_atomic(&path, doc.to_string())
+            .with_context(|| format!("writing lease {}", path.display()))
+    })
 }
 
 #[cfg(test)]

@@ -109,16 +109,25 @@ pub(crate) fn claim_lease_branch(
 
 /// The role a claim records. Inside a lane worktree whose lease names a role,
 /// that role: the lease is the lane's identity, and a `claude --bg` lane's
-/// environment is the daemon's (often the advisor's). Elsewhere, the seat of
-/// the caller's validated grant.
+/// environment is the daemon's (often the advisor's). A lane lease whose role
+/// does not validate fails closed: no role, never the inherited seat
+/// (TASK-2214). Elsewhere, the seat of the caller's validated grant.
 // trace:STORY-1662 | ai:claude
 pub(crate) fn claim_role(
     project_root: &std::path::Path,
     cwd: Option<&std::path::Path>,
 ) -> Option<String> {
-    cwd.and_then(|cwd| crate::lane_env::lane_lease_for_cwd(project_root, cwd))
-        .and_then(|lease| crate::lane_env::lease_role(&lease).ok().flatten())
-        .or_else(|| crate::seat_authority::current_seat(project_root))
+    match cwd.and_then(|cwd| crate::lane_env::lane_lease_for_cwd(project_root, cwd)) {
+        Some(lease) => match crate::lane_env::lease_role(&lease) {
+            Ok(Some(role)) => Some(role),
+            Ok(None) => crate::seat_authority::current_seat(project_root),
+            Err(e) => {
+                eprintln!("warning: {e:#}; the claim records no role");
+                None
+            }
+        },
+        None => crate::seat_authority::current_seat(project_root),
+    }
 }
 
 /// `aida claim <spec>` — record a spec-scoped advisory CLAIM so advisor-fanned
@@ -157,6 +166,19 @@ pub(crate) fn handle_claim(spec: &str, worktree: Option<&str>) -> Result<()> {
         .or_else(|| std::env::var("USER").ok())
         .unwrap_or_else(|| "unknown".to_string());
 
+    let cwd = std::env::current_dir().ok();
+    let role = claim_role(&project_root, cwd.as_deref());
+    // BUG-2207 (2): a claim inside an implementer lane (a `claude --bg` lane
+    // the advisor pre-created with `aida worktree add --role implementer`) is
+    // the lane taking its spec: set the owner and move it to In Progress, as
+    // the standalone-implementer launch does.
+    // trace:STORY-1662 | ai:claude
+    let in_implementer_lane = role.as_deref() == Some("implementer")
+        && cwd
+            .as_deref()
+            .and_then(|cwd| crate::lane_env::lane_lease_for_cwd(&project_root, cwd))
+            .is_some();
+
     let id = match existing {
         Some(l) => l.id.clone(),
         None => uuid::Uuid::now_v7().to_string().replace('-', "")[..12].to_string(),
@@ -174,7 +196,7 @@ pub(crate) fn handle_claim(spec: &str, worktree: Option<&str>) -> Result<()> {
         started_at: chrono::Utc::now(),
         hostname: hostname(),
         // trace:TASK-1593 | ai:antigravity
-        role: claim_role(&project_root, std::env::current_dir().ok().as_deref()),
+        role: role.clone(),
         creator_pid: my_pid,
         creator_pid_start_time: my_pid.and_then(process_probe::process_start_identity),
         active_pid: None,
@@ -211,6 +233,9 @@ pub(crate) fn handle_claim(spec: &str, worktree: Option<&str>) -> Result<()> {
     // BUG-1918: durable record of who claimed this spec, surviving release.
     // trace:BUG-1918 | ai:claude
     crate::review_authority::record_authoring_lease(&project_root, &lease);
+    if in_implementer_lane {
+        crate::standalone_implementer::claim_spec(&project_root, &scope);
+    }
 
     let id_short: String = id.chars().take(8).collect();
     if refreshed {

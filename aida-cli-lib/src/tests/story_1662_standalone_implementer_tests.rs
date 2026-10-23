@@ -211,9 +211,37 @@ fn outcome_exit_codes_are_distinct_and_mapped_by_exit_code_for_error() {
         let err = anyhow::Error::new(StandaloneImplementerExit {
             code,
             message: "x".into(),
+            vendor_exit: false,
         })
         .context("queue work failed");
         assert_eq!(crate::exit_code_for_error(&err), code);
+    }
+}
+
+/// TASK-2215: `exit_code_for_error` reads the table. A named code with no
+/// row exits 1; only a vendor pass-through skips the table.
+#[test]
+fn exit_code_for_error_reads_the_exit_code_table() {
+    let unlisted = 77;
+    assert!(!crate::orchestrator_leases::EXIT_CODES
+        .iter()
+        .any(|(c, _)| *c == unlisted));
+    let exit = |vendor_exit| {
+        crate::exit_code_for_error(&anyhow::Error::new(StandaloneImplementerExit {
+            code: unlisted,
+            message: "x".into(),
+            vendor_exit,
+        }))
+    };
+    assert_eq!(exit(false), 1, "an unregistered named code must not escape");
+    assert_eq!(exit(true), unlisted, "the vendor's own code passes through");
+    let rebase = anyhow::Error::new(crate::pr_rebase::RebaseFailureExit {
+        code: unlisted,
+        message: "x".into(),
+    });
+    assert_eq!(crate::exit_code_for_error(&rebase), 1);
+    for (code, _) in crate::orchestrator_leases::EXIT_CODES {
+        assert_eq!(crate::orchestrator_leases::named_exit_code(*code), *code);
     }
 }
 

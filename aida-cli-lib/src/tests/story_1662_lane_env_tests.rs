@@ -308,3 +308,167 @@ fn doctor_finds_a_claude_daemon_holding_a_grant() {
         "claude-daemon-grant"
     );
 }
+
+/// TASK-2213: a least-privilege stakeholder role is never widened to the
+/// lane's seat, in the hook lines or in the MCP server's own env.
+#[test]
+fn a_guest_or_requester_in_a_lane_keeps_its_role() {
+    for role in ["guest", "requester", "Requester"] {
+        assert_eq!(
+            fix_for("implementer", None, Some(role), &InheritedGrant::Absent).unwrap(),
+            None,
+            "{role}"
+        );
+        assert_eq!(
+            fix_for("advisor", Some("g-child"), Some(role), &advisor_grant()).unwrap(),
+            None,
+            "{role}"
+        );
+    }
+    let (_tmp, root, lane) = lane_fixture();
+    write_lease(&root, LANE, &lane, Some("implementer"), false);
+    let _env = crate::test_env::EnvVarsGuard::apply(&[
+        ("AIDA_SESSION_ROLE", Some("requester")),
+        ("AIDA_SESSION_PURPOSE", Some("file")),
+        (crate::seat_authority::GRANT_ENV, None),
+    ]);
+    apply_in_process(&root, &lane);
+    assert_eq!(std::env::var("AIDA_SESSION_ROLE").unwrap(), "requester");
+    assert_eq!(std::env::var("AIDA_SESSION_PURPOSE").unwrap(), "file");
+}
+
+/// A reviewer seat in a reviewer worktree keeps its grant: the lane is
+/// already its own, so nothing is corrected (the PR-2844 reviewer that lost
+/// its recording grant).
+#[test]
+fn a_reviewer_in_a_reviewer_lane_keeps_its_grant() {
+    let reviewer = InheritedGrant::Valid {
+        id: "g-rev".into(),
+        seat: "reviewer".into(),
+    };
+    assert_eq!(
+        fix_for("reviewer", None, Some("reviewer"), &reviewer).unwrap(),
+        None
+    );
+}
+
+/// TASK-2214: a lane lease whose role does not validate fails closed. The
+/// claim records no role, never the inherited (valid) advisor seat.
+#[test]
+fn claim_in_a_lane_with_a_malformed_role_records_no_role() {
+    let (_tmp, root, lane) = lane_fixture();
+    write_lease(&root, LANE, &lane, Some("implementer;touch x"), false);
+    let grant = crate::seat_authority::test_support::mint_grant_for(
+        &root,
+        &crate::current_user_id(None),
+        "advisor",
+        &[],
+    );
+    let _env = crate::test_env::EnvVarsGuard::apply(&[
+        ("AIDA_SESSION_ROLE", Some("advisor")),
+        (crate::seat_authority::GRANT_ENV, Some(grant.as_str())),
+    ]);
+    assert_eq!(
+        crate::seat_authority::current_seat(&root).as_deref(),
+        Some("advisor"),
+        "the inherited seat is valid, so a fallback would record it"
+    );
+    assert_eq!(crate::claim::claim_role(&root, Some(&lane)), None);
+    assert_eq!(
+        crate::claim::claim_role(&root, Some(&root)).as_deref(),
+        Some("advisor"),
+        "outside a lane the grant's seat is recorded"
+    );
+}
+
+/// TASK-2217: the restamp refuses a lease a live session holds, and leaves
+/// every other field of an idle lease intact.
+#[test]
+fn stamping_a_lane_role_refuses_a_live_lease_and_keeps_other_fields() {
+    let (_tmp, root, lane) = lane_fixture();
+    write_lease(&root, LANE, &lane, Some("advisor"), false);
+    let err = stamp_lease_role_checked(&root, LANE, "implementer", |_| true).unwrap_err();
+    assert!(format!("{err:#}").contains("live session"), "{err:#}");
+    let lease = lane_lease_for_cwd(&root, &lane).unwrap();
+    assert_eq!(
+        lease.role.as_deref(),
+        Some("advisor"),
+        "a refusal writes nothing"
+    );
+
+    stamp_lease_role_checked(&root, LANE, "implementer", |_| false).unwrap();
+    let lease = lane_lease_for_cwd(&root, &lane).unwrap();
+    assert_eq!(lease.role.as_deref(), Some("implementer"));
+    assert_eq!(lease.scope, "STORY-9");
+    assert_eq!(lease.branch, "claude/story-9");
+    assert!(stamp_lease_role_checked(&root, LANE, "x'; id; '", |_| false).is_err());
+}
+
+/// TASK-2217: the restamp waits for the lease-write lock, so it can never
+/// interleave with another stamp's read-modify-write on the same lease.
+#[test]
+fn stamping_a_lane_role_takes_the_lease_write_lock() {
+    let (_tmp, root, lane) = lane_fixture();
+    write_lease(&root, LANE, &lane, Some("advisor"), false);
+    let (held_tx, held_rx) = std::sync::mpsc::channel();
+    let (release_tx, release_rx) = std::sync::mpsc::channel::<()>();
+    std::thread::scope(|scope| {
+        let root_ref = &root;
+        let holder = scope.spawn(move || {
+            crate::session::with_lease_write_lock(root_ref, || {
+                held_tx.send(()).unwrap();
+                release_rx.recv().unwrap();
+                Ok(())
+            })
+            .unwrap();
+        });
+        held_rx.recv().unwrap();
+        let stamper =
+            scope.spawn(|| stamp_lease_role_checked(&root, LANE, "implementer", |_| false));
+        std::thread::sleep(std::time::Duration::from_millis(300));
+        assert_eq!(
+            lane_lease_for_cwd(&root, &lane).unwrap().role.as_deref(),
+            Some("advisor"),
+            "the stamp ran while another writer held the lock"
+        );
+        release_tx.send(()).unwrap();
+        holder.join().unwrap();
+        stamper.join().unwrap().unwrap();
+    });
+    assert_eq!(
+        lane_lease_for_cwd(&root, &lane).unwrap().role.as_deref(),
+        Some("implementer")
+    );
+}
+
+/// TASK-2216: the doctor scans an injected process table; under `cfg(test)`
+/// the default never reads the real `/proc`.
+#[test]
+fn the_doctor_daemon_scan_reads_an_injected_proc_root() {
+    let (_tmp, root, _lane) = lane_fixture();
+    let proc_root = tempfile::tempdir().unwrap();
+    let dir = proc_root.path().join("42");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("cmdline"), "claude\0daemon\0").unwrap();
+    std::fs::write(dir.join("environ"), "AIDA_SESSION_GRANT=g-advisor\0").unwrap();
+    let store = aida_core::models::RequirementsStore::default();
+    let found = crate::doctor_root::collect_doctor_findings_at(
+        &root,
+        &store,
+        Some("claude-daemon-grant"),
+        proc_root.path(),
+    )
+    .unwrap();
+    assert_eq!(
+        found.iter().map(|f| f.id.as_str()).collect::<Vec<_>>(),
+        vec!["pid 42"]
+    );
+    assert_eq!(
+        crate::doctor_root::doctor_proc_root(),
+        std::path::PathBuf::new()
+    );
+    let default =
+        crate::doctor_root::collect_doctor_findings(&root, &store, Some("claude-daemon-grant"))
+            .unwrap();
+    assert!(default.is_empty(), "{default:?}");
+}

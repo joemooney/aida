@@ -214,6 +214,9 @@ pub(crate) fn report(outcome: &Outcome, vendor_code: Option<i32>) -> (String, i3
 pub(crate) struct StandaloneImplementerExit {
     pub(crate) code: i32,
     pub(crate) message: String,
+    /// `code` is the vendor's own exit code passed through (BUG-2187), not a
+    /// named code from `EXIT_CODES`.
+    pub(crate) vendor_exit: bool,
 }
 
 impl std::fmt::Display for StandaloneImplementerExit {
@@ -320,6 +323,7 @@ pub(crate) fn acquire_slot_with(
         let _ = FileExt::unlock(&lock);
         running.sort();
         return Err(anyhow::Error::new(StandaloneImplementerExit {
+            vendor_exit: false,
             code: CAP_EXIT_CODE,
             message: format!(
                 "{} standalone implementers are already running ({}); the cap is {cap} \
@@ -514,6 +518,7 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
         ),
     };
     Err(anyhow::Error::new(StandaloneImplementerExit {
+        vendor_exit: matches!(outcome, Outcome::NoPr) && code != NO_PR_EXIT_CODE,
         code,
         message,
     }))

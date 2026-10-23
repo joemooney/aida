@@ -2935,6 +2935,14 @@ pub(crate) fn handle_worktree_add(
         .map(|r| crate::lane_env::validate_value("role", r.trim()))
         .transpose()?
         .map(|r| crate::canonical_role_name(&r));
+    // A reviewer lease is a review lock, not a lane: `worktree add` could
+    // never find the lease it had just written.
+    if lane_role.as_deref() == Some("reviewer") {
+        anyhow::bail!(
+            "--role reviewer is not a lane role; a review worktree comes from \
+             `aida queue work PR-<N> --role reviewer`"
+        );
+    }
     let out = match classify_worktree_arg(arg) {
         WorktreeTarget::Epic => {
             if lane_role.is_some() {

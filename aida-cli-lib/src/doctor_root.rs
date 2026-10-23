@@ -547,6 +547,30 @@ pub(crate) fn collect_doctor_findings(
     store: &aida_core::models::RequirementsStore,
     category_filter: Option<&str>,
 ) -> Result<Vec<DoctorFinding>> {
+    collect_doctor_findings_at(project_root, store, category_filter, &doctor_proc_root())
+}
+
+/// TASK-2216: the process table the doctor scans for a claude daemon holding
+/// a grant. `/proc`, except under `cfg(test)`, where no doctor test reads the
+/// real machine's processes; a test that wants the scan injects a fake root
+/// through [`collect_doctor_findings_at`].
+// trace:STORY-1662 | ai:claude
+pub(crate) fn doctor_proc_root() -> std::path::PathBuf {
+    if cfg!(test) {
+        std::path::PathBuf::new()
+    } else {
+        std::path::PathBuf::from("/proc")
+    }
+}
+
+/// [`collect_doctor_findings`] with the process-table root injected.
+// trace:STORY-1662 | ai:claude
+pub(crate) fn collect_doctor_findings_at(
+    project_root: &std::path::Path,
+    store: &aida_core::models::RequirementsStore,
+    category_filter: Option<&str>,
+    proc_root: &std::path::Path,
+) -> Result<Vec<DoctorFinding>> {
     let filter = category_filter.map(normalize_doctor_category).transpose()?;
     let mut out = Vec::new();
     let cleanup = collect_cleanup_report(project_root, store);
@@ -1259,7 +1283,7 @@ pub(crate) fn collect_doctor_findings(
     // STORY-1662 (signoff C4): a claude daemon started from a shell holding a
     // seat grant hands that grant to every `claude --bg` session it hosts.
     // trace:STORY-1662 | ai:claude
-    for pid in crate::lane_env::daemons_holding_a_grant(std::path::Path::new("/proc")) {
+    for pid in crate::lane_env::daemons_holding_a_grant(proc_root) {
         push(claude_daemon_grant_finding(pid));
     }
 

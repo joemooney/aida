@@ -928,11 +928,11 @@ pub(crate) const EXIT_CODES: &[(i32, &str)] = &[
 pub(crate) fn exit_code_for_error(err: &anyhow::Error) -> i32 {
     // trace:TASK-1606 | ai:codex
     if let Some(failure) = err.downcast_ref::<pr_ship::ShipFailure>() {
-        return failure.reason as i32;
+        return named_exit_code(failure.reason as i32);
     }
     // trace:BUG-2149 | ai:claude
     if err.downcast_ref::<queue_cmd::NoReviewVerdict>().is_some() {
-        return queue_cmd::NO_REVIEW_VERDICT_EXIT_CODE;
+        return named_exit_code(queue_cmd::NO_REVIEW_VERDICT_EXIT_CODE);
     }
     // trace:BUG-2187 | ai:claude
     if let Some(exit) = err.downcast_ref::<queue_cmd::ReviewerVendorExit>() {
@@ -942,11 +942,27 @@ pub(crate) fn exit_code_for_error(err: &anyhow::Error) -> i32 {
     if let Some(exit) =
         err.downcast_ref::<crate::standalone_implementer::StandaloneImplementerExit>()
     {
-        return exit.code;
+        return if exit.vendor_exit {
+            exit.code
+        } else {
+            named_exit_code(exit.code)
+        };
     }
     err.downcast_ref::<pr_rebase::RebaseFailureExit>()
-        .map(|sig| sig.code)
+        .map(|sig| named_exit_code(sig.code))
         .unwrap_or(1)
+}
+
+/// TASK-2215: a named exit code, read from [`EXIT_CODES`]. A code with no row
+/// there exits 1, so a code nobody registered can never reach a caller that
+/// branches on it. Vendor pass-through codes do not come through here.
+// trace:STORY-1662 | ai:claude
+pub(crate) fn named_exit_code(code: i32) -> i32 {
+    if EXIT_CODES.iter().any(|(c, _)| *c == code) {
+        code
+    } else {
+        1
+    }
 }
 
 /// STORY-335: the argv `aida queue integrate --rebase` hands to the `aida`
