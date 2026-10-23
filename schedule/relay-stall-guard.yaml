@@ -1,13 +1,10 @@
 job: relay-stall-guard
-last_run: 2026-10-23T02:59:27.533583973Z
+last_run: 2026-10-23T03:22:14.031487093Z
 last_by:
   seat: substrate
   vendor: tick
 result: failed:1
 failure_trips:
-- trip_id: relay-stall-guard@2026-10-22T19:26:04.593111398Z
-  at: 2026-10-22T19:26:04.593111398Z
-  status: 1
 - trip_id: relay-stall-guard@2026-10-22T19:50:21.309571010Z
   at: 2026-10-22T19:50:21.309571010Z
   status: 1
@@ -64,4 +61,7 @@ failure_trips:
   status: 1
 - trip_id: relay-stall-guard@2026-10-23T02:59:27.533583973Z
   at: 2026-10-23T02:59:27.533583973Z
+  status: 1
+- trip_id: relay-stall-guard@2026-10-23T03:22:14.031487093Z
+  at: 2026-10-23T03:22:14.031487093Z
   status: 1
