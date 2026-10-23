@@ -6,16 +6,25 @@ description: |
   pr_cmd.rs pure_git_slice_refs refuses an empty <base>..<slice> range. A pure-git slice merged by fast-forward (the base had not moved) therefore can never be re-run as already-merged, although slice_fork_point explicitly handles the fast-forward case (head~n). It fails closed with a clear error. Fix: confirm the fast-forward case from head~n..head.
 
   Raised in review of PR-2845: https://github.com/joemooney/aida/pull/2845#issuecomment-6371549385
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T18:08:05.267036318Z
-modified_at: 2026-10-23T18:08:05.267036318Z
+modified_at: 2026-10-23T18:16:34.202592882Z
 req_type: Task
 tags:
 - from-review:PR-2845
 - severity:minor
+history:
+- id: 01a169fa-9c9a-7d31-8ee8-f415559b22b0
+  author: joe
+  timestamp: 2026-10-23T18:16:34.202588088Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 2eb88160b4f04d978d0e8ef387480fce08d11fac
   branch: pr-2845
