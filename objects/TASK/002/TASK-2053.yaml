@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T09:53:13.924066900Z
-modified_at: 2026-10-23T12:48:27.213301880Z
+modified_at: 2026-10-23T13:25:14.251997563Z
 req_type: Task
 relationships:
 - rel_type: References
@@ -246,6 +246,11 @@ comments:
   created_at: 2026-10-23T12:48:27.213301880Z
   modified_at: 2026-10-23T12:48:27.213301880Z
   session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
+- id: 01a168ef-e38c-7653-bf77-3dac196fe0b8
+  author: ai:codex:joe
+  content: 'Session 2: PR #2836 pushed at ade7ac0f893c170a21688ff315e76673a539a58c after clean main merges. Local targeted modules 283 passed/0 failed/1 ignored (scheduled PATH stress); required-live TASK-2053 bwrap 27/27; fast gates 34/34. Targeted execution caught one new test assertion assuming JSON failure display text; exact reproduction showed correct TypedPayloadEmitted behavior and assertion was fixed. TASK-1641 unit leased-fixture preflight passed, real-Claude opt-in skip is not vendor evidence. CI39960998119 started. PR #2839 fast34/34 passed at c4dab30796; its targeted default tests still compiling, then assertion fix merges forward and push follows. Advisor mailed pushed SHA.'
+  created_at: 2026-10-23T13:25:14.251997563Z
+  modified_at: 2026-10-23T13:25:14.251997563Z
 history:
 - id: 01a15de1-409d-7c42-b18e-94acbd5eb19d
   author: joe
