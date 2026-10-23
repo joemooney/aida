@@ -1,0 +1,27 @@
+id: 01a16b1f-f03f-7c63-b7d6-9f034c4da5c9
+spec_id: TASK-1-470
+title: 'cosmetic (carry-over): pr_cmd_args.rs:252 over-long unwrapped doc-comment line'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on STORY-1690, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  cosmetic (carry-over): pr_cmd_args.rs:252 over-long unwrapped doc-comment line
+  Reviewed sha: 6d9a7623ee6bd0ad8164d3593b75de8dc31fc3ff
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-23T23:36:57.663073621Z
+modified_at: 2026-10-23T23:36:57.663073621Z
+req_type: Task
+tags:
+- carried-from:STORY-1690
+- finding-hash:531df7b5
+- from-review:STORY-1690
+- kind:carried-forward
+filed_at:
+  code_sha: c38043228df6044c6c523a3c6a16805f359d3083
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c51da86593
+  vendor: claude
