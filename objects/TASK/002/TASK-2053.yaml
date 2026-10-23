@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T09:53:13.924066900Z
-modified_at: 2026-10-23T12:08:03.685494998Z
+modified_at: 2026-10-23T12:08:09.147383877Z
 req_type: Task
 relationships:
 - rel_type: References
@@ -230,6 +230,11 @@ comments:
   created_at: 2026-10-23T11:17:37.239093634Z
   modified_at: 2026-10-23T11:17:37.239093634Z
   session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
+- id: 01a168a9-50bb-7a11-ae48-384a424a4877
+  author: ai:codex:joe
+  content: 'Relay session 1 (2026-10-23): #2836 local head 3bed09035c merges origin/main via 9812f46c1c (no rebase/force push), preserves S4a strict tests, and implements folded TASK-2197/2198/2190/2189/2191 plus doctor alias/full wiring/config-warning regressions. TASK-1641 fixture now has a host-owned clone lease and a boundary preflight test. C1 final S4a run 39915809949 at a86d35f6e8 reports 31/31. Author self-check: two fresh-context rounds, historical ratchet-count wording fixed; final no confirmed findings with own lightweight evidence, not approval. Local cargo check --tests / check-ci-fast / test-touched are queued/running, not green yet; no push yet. #2839 merged this local S4b head without conflicts and remains held for operator real-Claude test. #2847 is already merged at 269605c38d; untouched by this session.'
+  created_at: 2026-10-23T12:08:09.147383877Z
+  modified_at: 2026-10-23T12:08:09.147383877Z
 history:
 - id: 01a15de1-409d-7c42-b18e-94acbd5eb19d
   author: joe
