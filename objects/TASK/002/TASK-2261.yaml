@@ -1,0 +1,28 @@
+id: 01a16a37-1ace-7a32-a0fb-2e61361dbe9b
+spec_id: TASK-2261
+agreed_id: TASK-2261
+title: Drain merge shelves every behind head as a plain failure with no route to aida pr train
+description: |
+  STORY-1690 changed the drain's merge phase (phase_driver_trait.rs:2470) to refuse a head behind its base through ship_behind_base_gate, mapped to FailureKind::Failed. Main moves several times an hour and CI takes 25-35 min, so most drain PRs will be behind at phase 4 and shelve. Nothing routes them to 'aida pr train', and the shelve looks like an ordinary merge failure. Give it a distinct, recognizable outcome, or document the drain-to-train hand-off.
+
+  Raised in review of PR-2843: https://github.com/joemooney/aida/pull/2843#issuecomment-6372926096
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-23T19:22:38.670766675Z
+modified_at: 2026-10-23T19:22:38.670766675Z
+req_type: Task
+tags:
+- drain
+- from-review:PR-2843
+- severity:minor
+filed_at:
+  code_sha: feb62063ca9cb8621f9015b630ec51715c6a151d
+  branch: pr-2843
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c51da86593
+  vendor: claude
+  session: 01a16a321d5d
+  harness_version: 2.1.309 (Claude Code)
