@@ -1,0 +1,19 @@
+{
+  "id": "3f719651-3255-4942-b2b2-079d8a1b924b",
+  "thread_id": "3f719651-3255-4942-b2b2-079d8a1b924b",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792758643840,
+  "body": "Fixture drift is confirmed in source: real_claude_contained_session_cannot_redirect_main_git_metadata created its clone without any lease, causing own-.git write denial. Current local #2836 branch claude/task-2053-s4b2 at 40de39bb0e and #2839 claude/task-2053-s4c at c02db85111 now persist a host-owned clone lease and assert marker/alternates/lease recognition before launch. Added a unit settings preflight for own-.git exemption and main-.git denial. Both branches pass cargo check -p aida-cli-lib --tests --profile agent; actual unit and real-Claude runs remain pending. Generated settings contain write denies for main/.git, no denyRead; no read-root widening made. Operator can run the required AIDA_TEST_REAL_CLAUDE=1 cargo test -p aida-cli-lib --lib real_claude_contained_session_cannot_redirect_main_git_metadata -- --nocapture from /home/joe/ai/aida-worktrees/task-2053-s4c. Branches are NOT pushed yet: targeted tests queued behind shared slots; fast gate caught a missing cfg(unix) on the new shell quoting test, fixed and rerunning. This is progress/fixture evidence, not a READY or PASS claim. S4c hold remains.",
+  "subject": "TASK-1641 fixture repaired locally (TASK-2053; vendor gate pending)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}
