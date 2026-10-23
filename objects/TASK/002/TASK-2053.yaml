@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T09:53:13.924066900Z
-modified_at: 2026-10-23T18:16:09.104780286Z
+modified_at: 2026-10-23T18:16:21.685136616Z
 req_type: Task
 relationships:
 - rel_type: References
@@ -276,6 +276,12 @@ comments:
   content: 'S4b review rework pushed: PR-2836 40348420f207d859735e6e214ca6883580d07843 (tracked tree identical to tested bd49545a93). All findings addressed: bounded gh lookup; deadline-aware/count-honest clone scans; real-origin phase-2 publication with host-base-only branch creation; clone JSON/focus and ship-pull-skip regressions; dirty/unreadable WIP regressions. Named historical lib-1 flake in PR body: mandate_drive::story_1706_relay_restart_tests::a_live_session_of_the_run_refuses_the_restart, run39964582660 attempt1. Final required-live S4b module9/9, fast34/34. Initial8/9 run exposed only fixture rename logging, corrected and rerun. Remote reviewed merge1ef4f761a6 retained via a tree-identical merge, no force-push. S4c PR-2839 pushed20dcefb44039992c298b9e008fe35c201f7c6cb8 by clean merge-forward; only existing five-file default delta versus B. Contained-boundary code unchanged, operator real-Claude PASS at3aaaa4b8b5 retained without rerun. Both PR bodies updated and advisor mailed twice. No author verdict, hold-clear or ship; awaiting independent B review/landing then C retarget/current CI/review and operator merge.'
   created_at: 2026-10-23T16:54:48.386854495Z
   modified_at: 2026-10-23T16:54:48.386854495Z
+- id: 01a169fa-6bb5-7753-99e7-3b2790ad738c
+  author: joe
+  content: 'ADVISOR 11:19: #2836 (S4b) PASSED; the operator ships it (supervised hold). Folded TASK-2247 (collect_cleanup_report probes each seat clone with no shared deadline) into TASK-2053. Take it in #2839 (S4c), with a test, after #2836 merges and #2839 is retargeted to main.'
+  created_at: 2026-10-23T18:16:21.685136616Z
+  modified_at: 2026-10-23T18:16:21.685136616Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
 history:
 - id: 01a15de1-409d-7c42-b18e-94acbd5eb19d
   author: joe
