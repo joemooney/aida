@@ -1,0 +1,27 @@
+id: 01a16ad5-1da2-7bd0-8e12-3d6f4a99e5c5
+spec_id: TASK-1-462
+title: 'minor (non-blocking): PidNamespaceProbe::is_isolated''s pid1_comm allowlist (age…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2212, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  minor (non-blocking): PidNamespaceProbe::is_isolated's pid1_comm allowlist (agent_registry.rs, INITS) leaves out common host inits such as runit, openrc-init, s6-svscan and busybox init. On those hosts a normal shell is classed isolated: unstamped legacy rows go unobserved (gc skips them) and agent ls tells the user to run outside a sandbox they are not in
+  Reviewed sha: f8a98e8a2435a3cd4f06b01138f57d7a6a87d65d
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-23T22:15:14.082011044Z
+modified_at: 2026-10-23T22:15:14.082011044Z
+req_type: Task
+tags:
+- carried-from:BUG-2212
+- finding-hash:d7a7870c
+- from-review:BUG-2212
+- kind:carried-forward
+filed_at:
+  code_sha: 70e3aa867f67aba2e0d11e0985f71bb64232a76d
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c51da86593
+  vendor: claude
