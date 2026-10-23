@@ -144,6 +144,7 @@ mod review_followup_tests {
     use super::*;
 
     // trace:TASK-2198 | ai:codex
+    #[cfg(unix)]
     #[test]
     fn remediation_round_trips_a_quoted_root_through_the_shell() {
         let root = Path::new("/tmp/Joe's repo $(false)");
