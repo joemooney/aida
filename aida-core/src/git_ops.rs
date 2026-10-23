@@ -3813,11 +3813,13 @@ fn now_compact_stamp() -> String {
     secs.to_string()
 }
 
-/// The repo's default branch name (`main` / `master`), detected from
-/// `origin/HEAD` when set, else by which local branch exists, else `"main"`.
-// trace:STORY-714 | ai:claude
-pub fn default_branch_name(repo_root: &Path) -> String {
-    if let Ok(r) = git(
+/// Origin's default branch: the target of `refs/remotes/origin/HEAD` minus
+/// its `origin/` prefix, so a slash-containing name (`release/x`) keeps every
+/// segment. `None` when origin/HEAD is unset. The main guard hook resolves
+/// the branch the same way (`${default_branch#origin/}`).
+// trace:TASK-2163 | ai:claude
+pub fn origin_default_branch(repo_root: &Path) -> Option<String> {
+    let r = git(
         repo_root,
         &[
             "symbolic-ref",
@@ -3825,14 +3827,22 @@ pub fn default_branch_name(repo_root: &Path) -> String {
             "--short",
             "refs/remotes/origin/HEAD",
         ],
-    ) {
-        if r.success {
-            if let Some(name) = r.stdout.rsplit('/').next() {
-                if !name.is_empty() {
-                    return name.to_string();
-                }
-            }
-        }
+    )
+    .ok()?;
+    if !r.success {
+        return None;
+    }
+    let name = r.stdout.strip_prefix("origin/").unwrap_or(&r.stdout);
+    (!name.is_empty()).then(|| name.to_string())
+}
+
+/// The repo's default branch name (`main` / `master`), detected from
+/// `origin/HEAD` when set ([`origin_default_branch`]), else by which local
+/// branch exists, else `"main"`.
+// trace:STORY-714 trace:TASK-2163 | ai:claude
+pub fn default_branch_name(repo_root: &Path) -> String {
+    if let Some(name) = origin_default_branch(repo_root) {
+        return name;
     }
     for cand in ["main", "master"] {
         let exists = git(repo_root, &["rev-parse", "--verify", "--quiet", cand])
@@ -6863,6 +6873,36 @@ mod tests {
             "a 1 ns budget was reported as met: {spent:?}"
         );
         assert!(ample.unwrap(), "HEAD is its own ancestor");
+    }
+
+    /// TASK-2163: origin's default branch keeps every segment after
+    /// `origin/` — `release/x` stays `release/x`, matching the main guard's
+    /// `${default_branch#origin/}` — and is `None` when origin/HEAD is unset.
+    // trace:TASK-2163 | ai:claude
+    #[test]
+    fn origin_default_branch_keeps_a_slash_containing_name() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = tmp.path();
+        run_git(repo, &["init", "-q", "-b", "main"]);
+        run_git(repo, &["config", "user.email", "aida@example.invalid"]);
+        run_git(repo, &["config", "user.name", "AIDA Test"]);
+        run_git(repo, &["commit", "-q", "--allow-empty", "-m", "a"]);
+        assert_eq!(origin_default_branch(repo), None);
+        assert_eq!(default_branch_name(repo), "main");
+        run_git(
+            repo,
+            &["update-ref", "refs/remotes/origin/release/x", "HEAD"],
+        );
+        run_git(
+            repo,
+            &[
+                "symbolic-ref",
+                "refs/remotes/origin/HEAD",
+                "refs/remotes/origin/release/x",
+            ],
+        );
+        assert_eq!(origin_default_branch(repo).as_deref(), Some("release/x"));
+        assert_eq!(default_branch_name(repo), "release/x");
     }
 
     // trace:BUG-1677 | ai:claude — an exclude file that exists but cannot be
