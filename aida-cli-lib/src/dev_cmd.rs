@@ -77,27 +77,67 @@ pub(crate) fn handle_dev_command(cmd: &DevCommand) -> Result<()> {
     }
 }
 
-/// Locate an AIDA repo: prefer `--repo` arg, then $AIDA_DEV_REPO, then CWD
-/// if it looks like one. Returns absolute path.
-fn resolve_aida_repo(repo_arg: Option<&str>) -> Result<std::path::PathBuf> {
+/// Where `aida dev activate` found the checkout it activates, so it can say
+/// why it picked that checkout's build.
+// trace:BUG-2210 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ActivateRepoSource {
+    /// `--repo` was passed.
+    Flag,
+    /// The checkout enclosing the cwd (a worktree activates its own build).
+    Enclosing,
+    /// `$AIDA_DEV_REPO`, because the cwd is not inside an aida checkout.
+    EnvRepo,
+    /// Nothing matched; the cwd itself, so the error names it.
+    Cwd,
+}
+
+impl ActivateRepoSource {
+    fn label(self) -> &'static str {
+        match self {
+            ActivateRepoSource::Flag => "--repo",
+            ActivateRepoSource::Enclosing | ActivateRepoSource::Cwd => "PWD",
+            ActivateRepoSource::EnvRepo => "$AIDA_DEV_REPO",
+        }
+    }
+}
+
+/// Pure-ish core of [`resolve_aida_repo`]: `--repo`, then the aida checkout
+/// enclosing `cwd`, then `$AIDA_DEV_REPO`, then `cwd` itself. The enclosing
+/// checkout beats `$AIDA_DEV_REPO` because shell-init (and every previous
+/// activation) exports `$AIDA_DEV_REPO` as the primary checkout, which made
+/// `cd <worktree> && aida dev activate auto` — the hint `aida dev build`
+/// prints in a worktree — activate the primary checkout's build instead.
+/// Same order as `dev_build::resolve_build_repo`.
+// trace:BUG-2210 | ai:claude
+pub(crate) fn choose_activate_repo(
+    repo_arg: Option<&str>,
+    env_repo: Option<&str>,
+    cwd: &std::path::Path,
+) -> (std::path::PathBuf, ActivateRepoSource) {
+    if let Some(p) = repo_arg {
+        return (std::path::PathBuf::from(p), ActivateRepoSource::Flag);
+    }
+    // Walk up from cwd so activation works from a subdirectory too.
+    // trace:BUG-760 | ai:claude
+    if let Some(found) = cwd.ancestors().find(|p| is_aida_repo(p)) {
+        return (found.to_path_buf(), ActivateRepoSource::Enclosing);
+    }
+    if let Some(p) = env_repo.filter(|p| !p.is_empty()) {
+        return (std::path::PathBuf::from(p), ActivateRepoSource::EnvRepo);
+    }
+    (cwd.to_path_buf(), ActivateRepoSource::Cwd)
+}
+
+/// Locate an AIDA repo (see [`choose_activate_repo`] for the order).
+/// Returns the canonical path and where it came from.
+fn resolve_aida_repo(repo_arg: Option<&str>) -> Result<(std::path::PathBuf, ActivateRepoSource)> {
+    let cwd = std::env::current_dir()?;
+    let env_repo = std::env::var("AIDA_DEV_REPO").ok();
+    let (candidate, src) = choose_activate_repo(repo_arg, env_repo.as_deref(), &cwd);
     // Track WHICH source we used so the error message can be specific about
     // what to fix.
-    let (candidate, source): (std::path::PathBuf, &str) = if let Some(p) = repo_arg {
-        (std::path::PathBuf::from(p), "--repo")
-    } else if let Ok(p) = std::env::var("AIDA_DEV_REPO") {
-        (std::path::PathBuf::from(p), "$AIDA_DEV_REPO")
-    } else {
-        // Walk up from cwd to the enclosing checkout so activation works
-        // from a subdirectory too (no $AIDA_DEV_REPO needed). Falls back to
-        // cwd itself so the not-a-checkout error message stays specific.
-        // trace:BUG-760 | ai:claude
-        let cwd = std::env::current_dir()?;
-        let found = cwd
-            .ancestors()
-            .find(|p| is_aida_repo(p))
-            .map(|p| p.to_path_buf());
-        (found.unwrap_or(cwd), "PWD")
-    };
+    let source = src.label();
 
     let canonical = candidate.canonicalize().with_context(|| {
         format!(
@@ -156,7 +196,7 @@ fn resolve_aida_repo(repo_arg: Option<&str>) -> Result<std::path::PathBuf> {
         }
         anyhow::bail!("{}", msg);
     }
-    Ok(canonical)
+    Ok((canonical, src))
 }
 
 /// Re-exec decision for `aida dev activate` — the pure core.
@@ -255,7 +295,7 @@ pub(crate) enum BinarySelectionReason {
 /// current branch HEAD (TASK-221). Recency is the fallback when neither
 /// binary's SHA is recognizable on the current branch. Errors when the
 /// requested profile isn't built, or when neither exists at all.
-fn pick_dev_binary_dir(
+pub(crate) fn pick_dev_binary_dir(
     repo: &std::path::Path,
     requested: Option<&str>,
 ) -> Result<(std::path::PathBuf, &'static str, BinarySelectionReason)> {
@@ -685,6 +725,52 @@ fn handle_dev_ps1() -> Result<()> {
     Ok(())
 }
 
+/// One line naming the build `aida dev activate` picked, why that profile,
+/// and why that checkout — including when it overrode `$AIDA_DEV_REPO`.
+// trace:BUG-2210 | ai:claude
+pub(crate) fn activate_choice_note(
+    profile: &str,
+    bin_dir: &std::path::Path,
+    reason: &BinarySelectionReason,
+    defaulted: bool,
+    repo: &std::path::Path,
+    source: ActivateRepoSource,
+    env_repo: Option<&str>,
+) -> String {
+    let why_build = match reason {
+        BinarySelectionReason::Explicit if defaulted => "the default profile",
+        BinarySelectionReason::Explicit => "the profile you asked for",
+        BinarySelectionReason::ShaExactMatch => "its commit matches HEAD",
+        BinarySelectionReason::ShaAncestorMatch => "its commit is an ancestor of HEAD",
+        BinarySelectionReason::RecencyFallback => "the newest build (none matches HEAD)",
+        BinarySelectionReason::OnlyOne => "the only build in this checkout",
+    };
+    let why_repo = match source {
+        ActivateRepoSource::Flag => "named by --repo".to_string(),
+        ActivateRepoSource::Enclosing => {
+            let overridden = env_repo
+                .filter(|e| !e.is_empty())
+                .map(std::path::PathBuf::from)
+                .filter(|e| e.canonicalize().unwrap_or_else(|_| e.clone()) != repo);
+            match overridden {
+                Some(e) => format!(
+                    "the checkout you are in, not $AIDA_DEV_REPO ({})",
+                    e.display()
+                ),
+                None => "the checkout you are in".to_string(),
+            }
+        }
+        ActivateRepoSource::EnvRepo => "from $AIDA_DEV_REPO".to_string(),
+        ActivateRepoSource::Cwd => "the current directory".to_string(),
+    };
+    format!(
+        "dev activate: picked the {profile} build at {} ({why_build}); checkout {} ({why_repo})",
+        bin_dir.display(),
+        repo.display(),
+    )
+    .replace(['\n', '\r'], " ")
+}
+
 fn handle_dev_activate(
     repo_arg: Option<&str>,
     profile_pos: Option<&str>,
@@ -692,7 +778,7 @@ fn handle_dev_activate(
     release_flag: bool,
     auto_flag: bool,
 ) -> Result<()> {
-    let repo = resolve_aida_repo(repo_arg)?;
+    let (repo, repo_source) = resolve_aida_repo(repo_arg)?;
 
     // The first activate of a fresh shell executes the INSTALLED aida (PATH
     // is only prepended by the activation itself), so an old binary's pin
@@ -746,6 +832,20 @@ fn handle_dev_activate(
 
     let (bin_dir, profile, reason) = pick_dev_binary_dir(&repo, effective_request)?;
     let stale = alternate_build_is_newer(&repo, profile);
+    // Always say which build was picked and why — on stderr, since stdout is
+    // eval'd and its `#` header never reaches anyone. trace:BUG-2210 | ai:claude
+    eprintln!(
+        "# {}",
+        activate_choice_note(
+            profile,
+            &bin_dir,
+            &reason,
+            defaulted,
+            &repo,
+            repo_source,
+            std::env::var("AIDA_DEV_REPO").ok().as_deref(),
+        )
+    );
     let ps1_marker = if stale { "*" } else { "" };
 
     // TASK-221: when the chosen binary doesn't match current HEAD by SHA,
@@ -941,7 +1041,7 @@ fn binary_change_conflicts(pinned: &std::path::Path, target: &std::path::Path) -
 }
 
 fn handle_dev_build_guard(profile: &str, after_wave: bool) -> Result<()> {
-    let repo = resolve_aida_repo(None)?;
+    let (repo, _) = resolve_aida_repo(None)?;
     guard_binary_change(
         &repo,
         &repo.join("target").join(profile).join("aida"),

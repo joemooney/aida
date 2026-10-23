@@ -648,3 +648,99 @@ fn reexec_single_profile_builds_delegate_to_that_profile() {
         Some(std::path::Path::new("/repo/target/debug/aida"))
     );
 }
+
+// ---- BUG-2210: activate in a worktree uses the worktree's own build ----
+
+/// A fake aida checkout at `dir` with an agent build stamped `age_secs` old.
+fn fake_checkout_with_agent_build(dir: &std::path::Path, age_secs: u64) {
+    std::fs::create_dir_all(dir.join("target/agent")).unwrap();
+    std::fs::write(
+        dir.join("Cargo.toml"),
+        "[workspace]\n[workspace.package]\nrepository = \"https://github.com/joemooney/aida\"\n",
+    )
+    .unwrap();
+    let bin = dir.join("target/agent/aida");
+    std::fs::write(&bin, b"binary").unwrap();
+    let mtime = std::time::SystemTime::now() - std::time::Duration::from_secs(age_secs);
+    std::fs::File::options()
+        .write(true)
+        .open(&bin)
+        .unwrap()
+        .set_modified(mtime)
+        .unwrap();
+}
+
+#[test]
+fn activate_auto_in_a_worktree_prefers_its_own_older_build_over_mains_newer_one() {
+    use crate::dev_cmd::ActivateRepoSource;
+    use crate::dev_cmd::{activate_choice_note, choose_activate_repo, pick_dev_binary_dir};
+    let temp = tempfile::tempdir().unwrap();
+    let main = temp.path().join("aida");
+    let worktree = temp.path().join("aida-worktrees/take-2830");
+    fake_checkout_with_agent_build(&main, 10); // newer
+    fake_checkout_with_agent_build(&worktree, 3600); // older
+    let main = main.canonicalize().unwrap();
+    let worktree = worktree.canonicalize().unwrap();
+    std::fs::create_dir_all(worktree.join("aida-cli-lib/src")).unwrap();
+    let main_str = main.display().to_string();
+
+    // Run from inside the worktree while $AIDA_DEV_REPO names main.
+    let (repo, source) =
+        choose_activate_repo(None, Some(&main_str), &worktree.join("aida-cli-lib/src"));
+    assert_eq!(repo, worktree);
+    assert_eq!(source, ActivateRepoSource::Enclosing);
+
+    // `auto` (request None) picks the worktree's agent build.
+    let (bin_dir, profile, reason) = pick_dev_binary_dir(&repo, None).unwrap();
+    assert_eq!(bin_dir, worktree.join("target/agent"));
+    assert_eq!(profile, "agent");
+
+    let note = activate_choice_note(
+        profile,
+        &bin_dir,
+        &reason,
+        false,
+        &repo,
+        source,
+        Some(&main_str),
+    );
+    assert!(
+        note.contains(&worktree.join("target/agent").display().to_string()),
+        "{note}"
+    );
+    assert!(
+        note.contains("the checkout you are in, not $AIDA_DEV_REPO"),
+        "{note}"
+    );
+    assert!(note.contains(&main_str), "{note}");
+
+    // Primary-checkout behaviour is unchanged: from main, main's build.
+    let (repo, source) = choose_activate_repo(None, Some(&main_str), &main);
+    assert_eq!(
+        (repo.as_path(), source),
+        (main.as_path(), ActivateRepoSource::Enclosing)
+    );
+    let note = activate_choice_note(
+        "agent",
+        &main.join("target/agent"),
+        &reason,
+        false,
+        &main,
+        source,
+        Some(&main_str),
+    );
+    assert!(note.ends_with("(the checkout you are in)"), "{note}");
+
+    // Outside any checkout, $AIDA_DEV_REPO still applies; --repo beats all.
+    let outside = temp.path().join("elsewhere");
+    std::fs::create_dir_all(&outside).unwrap();
+    assert_eq!(
+        choose_activate_repo(None, Some(&main_str), &outside),
+        (main.clone(), ActivateRepoSource::EnvRepo)
+    );
+    let wt_str = worktree.display().to_string();
+    assert_eq!(
+        choose_activate_repo(Some(&wt_str), Some(&main_str), &main),
+        (worktree.clone(), ActivateRepoSource::Flag)
+    );
+}
