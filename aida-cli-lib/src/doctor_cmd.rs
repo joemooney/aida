@@ -9148,6 +9148,48 @@ mod story_462_doctor_tests {
         }
     }
 
+    /// The sandbox config.lock category is reachable by every alias, selected
+    /// by `--category`, and its findings route to the heal that removes the
+    /// placeholder.
+    // trace:TASK-2270 | ai:claude
+    #[cfg(unix)]
+    #[test]
+    fn sandbox_config_lock_category_routes_from_alias_to_heal() {
+        use std::os::unix::fs::PermissionsExt;
+        for alias in ["sandbox-config-lock", "config-lock", "git-config-lock"] {
+            assert_eq!(
+                normalize_doctor_category(alias).unwrap(),
+                crate::sandbox_config_lock::CATEGORY
+            );
+            assert!(
+                doctor_category_selected(Some(alias), crate::sandbox_config_lock::CATEGORY)
+                    .unwrap()
+            );
+        }
+        assert!(!doctor_category_selected(
+            Some("stale-locks"),
+            crate::sandbox_config_lock::CATEGORY
+        )
+        .unwrap());
+
+        let dir = tempfile::tempdir().unwrap();
+        let init = crate::test_git::git_command()
+            .current_dir(dir.path())
+            .args(["init", "-q", "-b", "main"])
+            .output()
+            .unwrap();
+        assert!(init.status.success(), "{init:?}");
+        let lock = dir.path().join(".git/config.lock");
+        std::fs::write(&lock, b"").unwrap();
+        std::fs::set_permissions(&lock, std::fs::Permissions::from_mode(0o444)).unwrap();
+
+        let finding = crate::sandbox_config_lock::scan(dir.path()).remove(0);
+        let healed =
+            heal_doctor_finding(dir.path(), &finding, &DoctorRunOptions::default()).unwrap();
+        assert_eq!(healed.status, "healed");
+        assert!(!lock.exists());
+    }
+
     // ── TASK-717: stale-remote-branch classification ──
 
     #[test]
