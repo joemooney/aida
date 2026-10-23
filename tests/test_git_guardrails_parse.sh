@@ -141,6 +141,24 @@ assert_exit "a bare export of the name is blocked" 2 "$(run '{"tool_input":{"com
 assert_exit "export of another name is allowed" 0 "$(run '{"tool_input":{"command":"export FOO; time make check"}}')"
 assert_exit "unset of the name is allowed" 0 "$(run '{"tool_input":{"command":"unset AIDA_CARGO_NO_SLOT; make check"}}')"
 assert_exit "a search for the name is allowed" 0 "$(run '{"tool_input":{"command":"rg -n AIDA_CARGO_NO_SLOT aida-core; git ls-files | xargs wc -l"}}')"
+# PR-2837 review round 4: quoted names after a bare setter, write-then-run
+# through exec prefixes, and reads or prose that only name the variable.
+# trace:TASK-1952 | trace:TASK-2246 | ai:claude
+assert_exit "a bare export of a double-quoted name is blocked" 2 "$(run '{"tool_input":{"command":"export \"AIDA_CARGO_NO_SLOT\""}}')"
+assert_exit "a bare export of a single-quoted name is blocked" 2 "$(run '{"tool_input":{"command":"export '"'"'AIDA_CARGO_NO_SLOT'"'"'"}}')"
+assert_exit "a bare export of a partly quoted name is blocked" 2 "$(run '{"tool_input":{"command":"export AIDA_CARGO_NO_\"SLOT\""}}')"
+assert_exit "printf -v with a quoted name is blocked" 2 "$(run '{"tool_input":{"command":"printf -v \"AIDA_CARGO_NO_SLOT\" 1; make check"}}')"
+assert_exit "write then run under nohup is blocked" 2 "$(run '{"tool_input":{"command":"printf '"'"'AIDA_CARGO_NO_SLOT=1 make'"'"' > x.sh; chmod +x x.sh; nohup ./x.sh"}}')"
+assert_exit "write then run under nice -n is blocked" 2 "$(run '{"tool_input":{"command":"printf '"'"'AIDA_CARGO_NO_SLOT=1 make'"'"' > x.sh; chmod +x x.sh; nice -n 5 ./x.sh"}}')"
+assert_exit "write then run under timeout is blocked" 2 "$(run '{"tool_input":{"command":"printf '"'"'AIDA_CARGO_NO_SLOT=1 make'"'"' > x.sh; chmod +x x.sh; timeout 10 ./x.sh"}}')"
+assert_exit "write then run under setsid is blocked" 2 "$(run '{"tool_input":{"command":"printf '"'"'AIDA_CARGO_NO_SLOT=1 make'"'"' > x.sh; chmod +x x.sh; setsid ./x.sh"}}')"
+assert_exit "write then run under stdbuf is blocked" 2 "$(run '{"tool_input":{"command":"printf '"'"'AIDA_CARGO_NO_SLOT=1 make'"'"' > x.sh; chmod +x x.sh; stdbuf -oL ./x.sh"}}')"
+assert_exit "write then run under env -i is blocked" 2 "$(run '{"tool_input":{"command":"printf '"'"'AIDA_CARGO_NO_SLOT=1 make'"'"' > x.sh; chmod +x x.sh; env -i ./x.sh"}}')"
+assert_exit "declare -p of the name is allowed" 0 "$(run '{"tool_input":{"command":"declare -p AIDA_CARGO_NO_SLOT; make check"}}')"
+assert_exit "printf of the name is allowed" 0 "$(run '{"tool_input":{"command":"printf '"'"'%s\\n'"'"' AIDA_CARGO_NO_SLOT"}}')"
+assert_exit "a commit message naming a bare export is allowed" 0 "$(run '{"tool_input":{"command":"git commit -m \"docs: never export AIDA_CARGO_NO_SLOT; queue for a slot\""}}')"
+assert_exit "a commit message naming printf -v is allowed" 0 "$(run '{"tool_input":{"command":"git commit -m \"guard: block printf -v AIDA_CARGO_NO_SLOT\""}}')"
+assert_exit "nohup without the variable is allowed" 0 "$(run '{"tool_input":{"command":"nohup make check > log 2>&1"}}')"
 rm -rf "$TMP"
 [ "$fail" -eq 0 ] || exit 1
 echo "GIT GUARDRAILS PARSE: all checks passed"

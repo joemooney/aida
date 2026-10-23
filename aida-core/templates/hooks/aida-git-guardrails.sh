@@ -547,8 +547,8 @@ fi
 # - the command with quoted text and heredoc bodies removed (SCAN_COMMAND);
 # - anywhere, when the command runs an unquoted shell or eval (`bash -c
 #   "..."`, `sh -c '...'`, `eval "..."`, `bash <<EOF`, `| sh`, `fish -c`),
-#   runs `env -S` / `--split-string` or `xargs`, or sources a file (`source`,
-#   `.`, also after `time`);
+#   runs `env -S` / `--split-string` or `xargs`, or sources or runs a file
+#   (`source`, `.`, `./x`, also after `time` or an exec prefix like `nohup`);
 # - inside a command or process substitution (`$(...)`, backticks, `<(...)`);
 # - a quoted assignment word, or a quoted name before `=`, after
 #   env/export/declare/typeset/local/readonly/make/gmake.
@@ -570,17 +570,21 @@ NO_SLOT_WORD_END='([^A-Za-z0-9_]|$)'
 # A command word at the start of a command: after a separator, the start, a
 # negation, or a keyword or builtin that runs the next word as a command
 # (`then . ./x`, `do source x`, `command . x`, `builtin source x`, `! . x`,
-# TASK-2246: `time . x`, `time -p . x`).
+# TASK-2246: `time . x`, `time -p . x`, and the exec prefixes `nohup`,
+# `setsid`, `nice -n 5`, `timeout 10`, `stdbuf -oL`, `env -i` with their
+# option and numeric words).
 # trace:TASK-1952 | trace:TASK-2139 | trace:TASK-2246 | ai:claude
-NO_SLOT_CMD_START='(^|[;&|({!]|(^|[^A-Za-z0-9_])(then|do|else|command|builtin|time([[:space:]]+-p)?))[[:space:]]*'
+NO_SLOT_EXEC_PREFIX='(nohup|setsid|nice|timeout|stdbuf|env)([[:space:]]+(-[^[:space:];&|]*|[0-9][^[:space:];&|]*))*'
+NO_SLOT_CMD_START="(^|[;&|({!]|(^|[^A-Za-z0-9_])(then|do|else|command|builtin|time([[:space:]]+-p)?|$NO_SLOT_EXEC_PREFIX))[[:space:]]*"
 # TASK-2246: a builtin that sets or exports the name with no `=` in the word
 # (`printf -v NAME 1`, `read NAME`, `mapfile NAME`, a bare `export NAME` of a
-# value set some other way), at the start of a command.
+# value set some other way), at the start of a command. Reads are not sets:
+# `declare -p NAME` / `export -p` print, and `printf` sets only with `-v`.
 # trace:TASK-1952 | trace:TASK-2246 | ai:claude
-NO_SLOT_BARE="${NO_SLOT_CMD_START}(export|declare|typeset|readonly|local|read|readarray|mapfile|printf)([[:space:]]+[^[:space:];&|]+)*[[:space:]]+(-v[[:space:]]*)?AIDA_CARGO_NO_SLOT$NO_SLOT_WORD_END"
+NO_SLOT_BARE_WORD='[^-[:space:];&|][^[:space:];&|]*'
+NO_SLOT_BARE="${NO_SLOT_CMD_START}((export|declare|typeset|readonly|local)([[:space:]]+(-[A-Za-oq-z]+|$NO_SLOT_BARE_WORD))*|(read|readarray|mapfile)([[:space:]]+[^[:space:];&|]+)*|printf([[:space:]]+[^[:space:];&|]+)*[[:space:]]+-v)[[:space:]]+AIDA_CARGO_NO_SLOT$NO_SLOT_WORD_END"
 no_slot_set() {
     printf '%s' "$SCAN_COMMAND" | grep -qE "(^|[^A-Za-z0-9_])$NO_SLOT_SET" && return 0
-    printf '%s' "$SCAN_COMMAND" | grep -qE "$NO_SLOT_BARE" && return 0
     # An unquoted shell or eval runs quoted text (`-c` payloads, `eval`
     # strings, heredocs or pipes fed to it), separators inside it included,
     # so the whole command is scanned. A shell named only inside quoted prose
@@ -604,15 +608,27 @@ no_slot_set() {
     # first: a quote between two word characters, or opening a word, is
     # dropped (TASK-2140).
     # trace:TASK-1952 | trace:TASK-2140 | ai:claude
+    # PR-2837 review round 4: a bare setter's name is joined the same way
+    # (`export "NAME"`, `printf -v 'NAME'`), gated on an unquoted setter at a
+    # command start so quoted prose naming one (a commit message) passes.
+    # trace:TASK-1952 | trace:TASK-2246 | ai:claude
     NO_SLOT_ASSIGNER='(env|export|declare|typeset|local|readonly|make|gmake)'
-    if printf '%s' "$SCAN_COMMAND" | grep -qE "(^|[^A-Za-z0-9_])$NO_SLOT_ASSIGNER$NO_SLOT_WORD_END"; then
+    NO_SLOT_SETTER='(export|declare|typeset|local|readonly|read|readarray|mapfile|printf)'
+    NO_SLOT_HAS_ASSIGNER=0 NO_SLOT_HAS_SETTER=0
+    printf '%s' "$SCAN_COMMAND" | grep -qE "(^|[^A-Za-z0-9_])$NO_SLOT_ASSIGNER$NO_SLOT_WORD_END" \
+        && NO_SLOT_HAS_ASSIGNER=1
+    printf '%s' "$SCAN_COMMAND" | grep -qE "$NO_SLOT_CMD_START$NO_SLOT_SETTER$NO_SLOT_WORD_END" \
+        && NO_SLOT_HAS_SETTER=1
+    if [ "$NO_SLOT_HAS_ASSIGNER" = 1 ] || [ "$NO_SLOT_HAS_SETTER" = 1 ]; then
         NO_SLOT_JOINED=$(printf '%s' "$COMMAND" | sed -E \
             -e ':a' \
             -e 's/([A-Za-z0-9_+=])["'"'"']+([A-Za-z0-9_+=])/\1\2/' \
             -e 'ta' \
             -e 's/(^|[[:space:]])["'"'"']+([A-Za-z_])/\1\2/g')
-        printf '%s' "$NO_SLOT_JOINED" | grep -qE \
+        [ "$NO_SLOT_HAS_ASSIGNER" = 1 ] && printf '%s' "$NO_SLOT_JOINED" | grep -qE \
             "(^|[^A-Za-z0-9_])$NO_SLOT_ASSIGNER([[:space:]]+[^[:space:];&|]+)*[[:space:]]+$NO_SLOT_SET" \
+            && return 0
+        [ "$NO_SLOT_HAS_SETTER" = 1 ] && printf '%s' "$NO_SLOT_JOINED" | grep -qE "$NO_SLOT_BARE" \
             && return 0
     fi
     return 1

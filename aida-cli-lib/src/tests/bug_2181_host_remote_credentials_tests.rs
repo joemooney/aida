@@ -214,6 +214,13 @@ fn an_unrouted_remote_call_leaks_the_token_into_transport_argv() {
 /// `remote-creds-ok(TASK-2001): <why>` comment in the three lines above. A builder is `host_git_command(`, any
 /// `<Type>::new("git")`, or a `git(dir, &["fetch", ...])` style helper call.
 /// Inline `#[cfg(test)] mod name { ... }` blocks are skipped.
+///
+/// Heuristic limits (a line scanner, not a parser): only the first
+/// `.args(name)` with a local array binding is resolved, and the nearest
+/// earlier `let name = [..]` in the fn wins; a bracket or `;` inside a string
+/// literal can end a statement early; a `let` that shadows the builder with
+/// itself (`let push = push.args(..)`) continues it, any other re-binding of
+/// the name ends it.
 // trace:TASK-1952 | trace:TASK-2001 | ai:claude
 fn task_2001_unrouted_remote_calls(src: &str) -> Vec<usize> {
     use std::sync::LazyLock;
@@ -298,11 +305,17 @@ fn task_2001_unrouted_remote_calls(src: &str) -> Vec<usize> {
             // variable up to the end of its block or its next re-binding.
             let mention = regex::Regex::new(&format!(r"\b{var}\b")).unwrap();
             let rebind = regex::Regex::new(&format!(r"\blet (mut )?{var}\b")).unwrap();
+            // PR-2837 review round 4: a shadow that continues the same builder
+            // (`let push = push.args(["push", ..])`) is not a re-binding.
+            let shadow = regex::Regex::new(&format!(
+                r"\blet (mut )?{var}\s*(:[^=]*)?=\s*(&mut\s+|&)?{var}\b"
+            ))
+            .unwrap();
             let mut depth = 0i64;
             let mut end = lines.len();
             for (j, l) in lines.iter().enumerate().skip(i) {
                 let code = TRAILING_COMMENT.replace(l, "");
-                if j > i && rebind.is_match(&code) {
+                if j > i && rebind.is_match(&code) && !shadow.is_match(&code) {
                     end = j;
                     break;
                 }
@@ -508,6 +521,16 @@ fn task_2001_every_host_remote_call_routes_its_credentials() {
         "            \"x\",\n".repeat(16)
     );
     assert_eq!(task_2001_unrouted_remote_calls(&tall), vec![23]);
+    // PR-2837 review round 4: a shadow re-binding that continues the builder
+    // (remote_create's add_origin_and_push) with its routing dropped, and
+    // the routed original.
+    let shadow = "fn push_it(d: &Path, b: &str) {\n    let mut push = Command::new(\"git\");\n    \
+                  push.arg(\"-C\").arg(d);\n    let push = push\n        .args([\"push\", \"-u\", \"origin\", b])\n        \
+                  .status();\n}\n\
+                  fn routed(d: &Path, b: &str) {\n    let mut push = Command::new(\"git\");\n    \
+                  configure_git_remote_credentials(&mut push, d, \"origin\", None);\n    \
+                  let push = push.args([\"push\", b]).status();\n}\n";
+    assert_eq!(task_2001_unrouted_remote_calls(shadow), vec![2]);
 
     let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     let mut offenders = Vec::new();
