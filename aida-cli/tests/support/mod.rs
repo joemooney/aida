@@ -156,6 +156,9 @@ fn grant_seat_with_id(
         "issued_at": now,
         "expires_at": expires,
         "revoked_at": null,
+        // BUG-1934: bound to this test process, an ancestor of every binary
+        // the test spawns. trace:BUG-1934 | ai:claude
+        "binding": [test_process_binding()],
     });
     let grants = home.join(".aida").join("session-grants");
     std::fs::create_dir_all(&grants).expect("create session-grants dir");
@@ -164,6 +167,16 @@ fn grant_seat_with_id(
         serde_json::to_vec_pretty(&record).unwrap(),
     )
     .expect("write grant record");
+}
+
+/// BUG-1934: the `proc:<pid>@<start>` token binding a fixture grant to this
+/// test process, as `seat_authority` writes one.
+// trace:BUG-1934 | ai:claude
+pub fn test_process_binding() -> String {
+    let pid = std::process::id();
+    let start = aida_core::liveness::process_start_identity(pid)
+        .expect("this test process's start identity is readable");
+    format!("proc:{pid}@{start}")
 }
 
 /// The store the spawned binary will detect for `repo`: the first

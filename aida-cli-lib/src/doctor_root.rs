@@ -1709,6 +1709,13 @@ pub(crate) static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
         &["mandate-drive", "drive-mandate", "mandate"],
         "mandate-drive",
     ),
+    // BUG-1934: the session's exported seat grant was refused (unbound,
+    // presented outside its process tree, expired, ...). Report-only.
+    // trace:BUG-1934 | ai:claude
+    (
+        &["seat-grant", "grant", "session-grant", "grant-binding"],
+        "seat-grant",
+    ),
     // BUG-1700: the folder-trust gate on a freshly created worktree. Claude
     // Code stops an INTERACTIVE launch in a directory it has never seen behind
     // a "Quick safety check" modal, so a fresh per-spec worktree strands
