@@ -3284,7 +3284,8 @@ fn valid_commands() -> Vec<&'static str> {
 /// indefinitely. Generous rather than tight: these are periodic maintenance
 /// checks, not a latency-sensitive per-turn hook path (that path already
 /// skips network-touching jobs — see `tick`'s `hook` flag).
-const SCHEDULED_COMMAND_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(120);
+pub(crate) const SCHEDULED_COMMAND_TIMEOUT: std::time::Duration =
+    std::time::Duration::from_secs(120);
 
 /// Exit status a killed-at-timeout (or unspawnable) scheduled child reports.
 const TIMEOUT_EXIT_STATUS: i32 = 124;
@@ -4263,7 +4264,7 @@ mod tests {
     /// STORY-1689: this repository's own config registers the live-binary
     /// promote job and binds its failure route to the advisor; the route's
     /// `CronJobFailed:<job>` binding names a real job, so it loads enabled.
-    // trace:STORY-1689 | ai:claude
+    // trace:STORY-1689.ac481f1d | ai:claude
     #[test]
     fn repo_config_registers_dev_autopromote_and_its_advisor_route() {
         let tmp = tempfile::tempdir().unwrap();

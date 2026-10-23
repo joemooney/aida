@@ -163,7 +163,7 @@ impl AutopromoteSteps for Fake {
 }
 
 fn tick(f: &Fixture, fake: &mut Fake) -> TickOutcome {
-    run_tick(&f.layout, &f.paths, fake).unwrap()
+    run_tick(&f.layout, &f.paths, fake, Instant::now() + TICK_BUDGET).unwrap()
 }
 
 fn skip_reason(outcome: &TickOutcome) -> &'static str {
@@ -197,6 +197,7 @@ fn put_state(f: &Fixture, phase: Phase, pid: Option<u32>, reported: bool, at: &s
 
 // --- the promote path -----------------------------------------------------
 
+// trace:STORY-1689.ac3e63c0 | ai:claude
 #[test]
 fn green_main_fast_forwards_then_launches_and_records_running() {
     let f = fixture();
@@ -242,6 +243,7 @@ fn not_live_source_skips_before_any_fetch() {
     assert!(fake.calls.is_empty(), "{:?}", fake.calls);
 }
 
+// trace:STORY-1689.ac3e63c0 | ai:claude
 #[test]
 fn worktree_off_main_and_dirty_skip_before_any_fetch() {
     let cases = [
@@ -302,6 +304,7 @@ fn fetch_failure_skips() {
     assert_untouched(&fake);
 }
 
+// trace:STORY-1689.ac3e63c0 | ai:claude
 #[test]
 fn unchanged_skips_without_reading_ci_and_is_never_logged() {
     let f = fixture();
@@ -325,6 +328,7 @@ fn a_failed_sha_is_not_rebuilt() {
     assert_untouched(&fake);
 }
 
+// trace:STORY-1689.ac3e63c0 | ai:claude
 #[test]
 fn non_fast_forward_skips() {
     let f = fixture();
@@ -342,6 +346,7 @@ fn non_fast_forward_skips() {
     assert!(read_state(&f.layout.live_dir).is_none());
 }
 
+// trace:STORY-1689.ac3e63c0 | ai:claude
 #[test]
 fn ci_that_is_not_green_skips() {
     let cases = [
@@ -470,6 +475,12 @@ fn a_failed_build_is_reported_once_with_its_log_tail() {
     // C2: the routed line (the last one) carries the tail, not the head.
     let last = message.lines().last().unwrap();
     assert!(last.contains("error[E0425]"), "{last}");
+    // The routed line names the commit and the full log path too.
+    assert!(last.contains(TARGET), "{last}");
+    assert!(
+        last.contains(&f.paths.build_logs.join("b.log").display().to_string()),
+        "{last}"
+    );
     assert!(
         last.contains("line 59") && !last.contains("line 5 |"),
         "{last}"
@@ -536,7 +547,7 @@ fn a_repeated_skip_is_logged_once_and_a_new_reason_again() {
     let kinds: Vec<&str> = body
         .lines()
         .map(|l| l.split_once(' ').unwrap().1)
-        .map(|rest| rest.split(':').next().unwrap())
+        .map(|rest| rest.split_once(": ").map_or(rest, |(kind, _)| kind))
         .collect();
     assert_eq!(
         kinds,
@@ -727,4 +738,76 @@ fn if_main_green_refuses_the_manual_build_flags() {
         crate::command_registry::try_parse_from(&["aida", "dev", "build", "--if-main-green"])
             .is_ok()
     );
+}
+
+// --- review round 1 -------------------------------------------------------
+
+// trace:STORY-1689.ac3e63c0 | ai:claude
+#[test]
+fn too_little_budget_left_skips_before_the_fast_forward() {
+    let f = fixture();
+    let mut fake = Fake::green();
+    let outcome = run_tick(
+        &f.layout,
+        &f.paths,
+        &mut fake,
+        Instant::now() + FF_RESERVE - Duration::from_secs(1),
+    )
+    .unwrap();
+    assert_eq!(skip_reason(&outcome), "out-of-time");
+    assert!(fake.called("ci"), "the checks still ran: {:?}", fake.calls);
+    assert_untouched(&fake);
+    assert!(read_state(&f.layout.live_dir).is_none());
+}
+
+#[test]
+fn the_tick_budget_fits_inside_the_scheduler_kill() {
+    let kill = crate::maintenance_schedule::SCHEDULED_COMMAND_TIMEOUT;
+    assert!(TICK_BUDGET < kill, "{TICK_BUDGET:?} vs {kill:?}");
+    // The fast-forward and launch, started with FF_RESERVE left, end
+    // before the budget does.
+    assert!(FF_TIMEOUT + crate::schedule_driver::WAVE_UNIT_RUN_TIMEOUT <= FF_RESERVE);
+}
+
+#[test]
+fn github_requires_the_ci_aggregator_and_gitlab_requires_nothing() {
+    use crate::forge::ForgeKind;
+    assert_eq!(
+        required_checks(ForgeKind::GitHub),
+        &[crate::forge::CI_AGGREGATOR_CHECK]
+    );
+    assert!(required_checks(ForgeKind::GitLab).is_empty());
+    assert!(required_checks(ForgeKind::None).is_empty());
+    // Green without the aggregator is not green on GitHub.
+    let checks = crate::forge::CommitChecks {
+        sha: TARGET.into(),
+        checks: vec![crate::forge::CommitCheck {
+            name: "CI (lib-0)".into(),
+            outcome: crate::forge::CheckOutcome::Passed,
+        }],
+    };
+    assert!(matches!(
+        crate::forge::judge_commit_checks(&checks, required_checks(ForgeKind::GitHub)),
+        CommitCi::MissingRequired(_)
+    ));
+}
+
+// trace:STORY-1689.ac873b7a | ai:claude
+#[test]
+fn the_repository_guide_documents_the_scheduled_promote() {
+    let guide = include_str!("../../../docs/agents/aida-repository-guide.md");
+    let para = guide
+        .lines()
+        .find(|l| l.contains("**The live binary everyone runs is promoted by `aida dev build`**"))
+        .expect("the dev-build paragraph");
+    for needle in [
+        "`dev-autopromote`",
+        "`aida dev build --if-main-green`",
+        "aida-autobuild.sh",
+    ] {
+        assert!(
+            para.contains(needle),
+            "the dev-build paragraph must name {needle}"
+        );
+    }
 }

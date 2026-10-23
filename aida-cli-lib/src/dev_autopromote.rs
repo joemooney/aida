@@ -26,7 +26,15 @@ pub(crate) const LOCK_FILE: &str = ".autopromote.lock";
 /// The state of the last launched build, beside the live pair.
 pub(crate) const STATE_FILE: &str = "autopromote.json";
 /// Bound on `git fetch origin main`.
-const FETCH_TIMEOUT: Duration = Duration::from_secs(60);
+const FETCH_TIMEOUT: Duration = Duration::from_secs(40);
+/// Bound on `git merge --ff-only`.
+const FF_TIMEOUT: Duration = Duration::from_secs(20);
+/// The whole tick's budget, kept inside the scheduler's per-job kill
+/// (`SCHEDULED_COMMAND_TIMEOUT`, 120s) so it is never killed mid-ff.
+pub(crate) const TICK_BUDGET: Duration = Duration::from_secs(90);
+/// What must remain of the budget to start the fast-forward: its own bound
+/// plus the launch (`systemd-run` is bounded at 20s).
+pub(crate) const FF_RESERVE: Duration = Duration::from_secs(45);
 /// How long the child waits for the tick to release the lock.
 const CHILD_LOCK_WAIT: Duration = Duration::from_secs(5);
 /// A `running` record with no pid (a unit whose pid was never read) that
@@ -59,6 +67,8 @@ pub(crate) enum Skip {
     CiRed(String),
     CiUnknown(String),
     WavePinned(String),
+    /// Too little of the tick's budget is left to fast-forward and launch.
+    OutOfTime(String),
 }
 
 impl Skip {
@@ -78,6 +88,7 @@ impl Skip {
             Skip::CiRed(_) => "ci-red",
             Skip::CiUnknown(_) => "ci-unknown",
             Skip::WavePinned(_) => "wave-pinned",
+            Skip::OutOfTime(_) => "out-of-time",
         }
     }
 
@@ -95,7 +106,8 @@ impl Skip {
             | Skip::CiPending(d)
             | Skip::CiRed(d)
             | Skip::CiUnknown(d)
-            | Skip::WavePinned(d) => d.clone(),
+            | Skip::WavePinned(d)
+            | Skip::OutOfTime(d) => d.clone(),
         }
     }
 }
@@ -279,6 +291,15 @@ pub(crate) fn ci_skip(sha: &str, ci: Result<crate::forge::CommitCi>) -> Option<S
     }
 }
 
+/// PURE: the checks that must be present and pass on a commit before it is
+/// promoted. AIDA's own CI reports its every-lane aggregator on GitHub only.
+pub(crate) fn required_checks(kind: crate::forge::ForgeKind) -> &'static [&'static str] {
+    match kind {
+        crate::forge::ForgeKind::GitHub => &[crate::forge::CI_AGGREGATOR_CHECK],
+        _ => &[],
+    }
+}
+
 /// A held lock file; released on drop.
 pub(crate) struct Lock(#[allow(dead_code)] std::fs::File);
 
@@ -369,9 +390,12 @@ fn settle_previous(
         .error
         .clone()
         .unwrap_or_else(|| "the build or its smoke test failed".into());
+    // The scheduler routes only the last stderr line, so that line carries
+    // the SHA, the log path and the tail.
     let message = format!(
         "the scheduled live-binary build of {} failed ({why}); the live binary was not changed. \
-         It is not retried until origin/main moves. Log: {}\nlog tail: {}",
+         It is not retried until origin/main moves.\nbuild of {} failed; log {}; tail: {}",
+        state.sha,
         state.sha,
         state.log,
         log_tail_line(Path::new(&state.log))
@@ -383,11 +407,13 @@ fn settle_previous(
 }
 
 /// One scheduled tick. Never builds: it decides, fast-forwards and
-/// launches the detached child.
+/// launches the detached child. `deadline` ends the tick's budget; the
+/// fast-forward starts only with [`FF_RESERVE`] of it left.
 pub(crate) fn run_tick(
     layout: &DevLayout,
     paths: &Paths,
     steps: &mut dyn AutopromoteSteps,
+    deadline: Instant,
 ) -> Result<TickOutcome> {
     let repo = &layout.repo;
     let live = &layout.live_dir;
@@ -457,6 +483,15 @@ pub(crate) fn run_tick(
             }
         }
         Err(e) => return skipped(Skip::Dirty(format!("could not read the checkout: {e:#}"))),
+    }
+    let left = deadline.saturating_duration_since(Instant::now());
+    if left < FF_RESERVE {
+        return skipped(Skip::OutOfTime(format!(
+            "{}s of the tick's budget left, {}s needed to fast-forward and launch; \
+             retrying next tick",
+            left.as_secs(),
+            FF_RESERVE.as_secs()
+        )));
     }
     if let Err(e) = steps.ff_only(repo, &target) {
         return skipped(Skip::NonFf(format!("fast-forward refused: {e:#}")));
@@ -655,14 +690,11 @@ impl AutopromoteSteps for RealAutopromoteSteps {
 
     fn commit_ci(&mut self, repo: &Path, sha: &str) -> Result<crate::forge::CommitCi> {
         let forge = crate::forge::forge_for(repo);
-        // AIDA's own CI reports the aggregator check on GitHub only.
-        let required: &[&str] = if forge.kind() == crate::forge::ForgeKind::GitHub {
-            &[crate::forge::CI_AGGREGATOR_CHECK]
-        } else {
-            &[]
-        };
         let checks = forge.commit_checks(sha)?;
-        Ok(crate::forge::judge_commit_checks(&checks, required))
+        Ok(crate::forge::judge_commit_checks(
+            &checks,
+            required_checks(forge.kind()),
+        ))
     }
 
     fn wave_guard(&mut self, repo: &Path, binary: &Path) -> Result<()> {
@@ -672,7 +704,7 @@ impl AutopromoteSteps for RealAutopromoteSteps {
     fn ff_only(&mut self, repo: &Path, sha: &str) -> Result<()> {
         let mut cmd = git(repo);
         cmd.args(["merge", "--ff-only", "--quiet", sha]);
-        git_ok(cmd, "git merge --ff-only", Duration::from_secs(60)).map(|_| ())
+        git_ok(cmd, "git merge --ff-only", FF_TIMEOUT).map(|_| ())
     }
 
     fn spawn_child(&mut self, repo: &Path, sha: &str, log: &Path) -> Result<(Option<u32>, String)> {
@@ -767,7 +799,8 @@ pub(crate) fn handle_if_main_green() -> Result<()> {
     let repo = crate::dev_build::resolve_build_repo()?;
     let layout = DevLayout::for_repo(&repo)?;
     let paths = Paths::default_paths()?;
-    let outcome = run_tick(&layout, &paths, &mut RealAutopromoteSteps)?;
+    let deadline = Instant::now() + TICK_BUDGET;
+    let outcome = run_tick(&layout, &paths, &mut RealAutopromoteSteps, deadline)?;
     if let Err(e) = log_outcome(&paths.log, &outcome) {
         eprintln!("warning: could not write {}: {e:#}", paths.log.display());
     }
