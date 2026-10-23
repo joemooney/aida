@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-1945",
+  "publishes": [
+    {
+      "at": "2026-10-23T16:52:40.894894981Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-19T15:26:50.675136851Z",
+      "spec": "TASK-1945",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-20T07:24:58.328375175Z",
+      "spec": "TASK-1945",
+      "seat": "integrator",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-22T07:49:27.085572364Z",
+      "spec": "TASK-1945",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-22T07:49:27.086274743Z",
+      "spec": "TASK-1945",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-22T08:56:34.312996432Z",
+      "spec": "TASK-1945",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-23T11:29:01.023404087Z",
+      "spec": "TASK-1945",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-23T12:20:56.952732071Z",
+      "spec": "TASK-1945",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-23T16:51:48.831022650Z",
+      "spec": "TASK-1945",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-23T16:52:07.935710376Z",
+      "spec": "TASK-1945",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2856
+      }
+    },
+    {
+      "ts": "2026-10-23T16:52:40.633060224Z",
+      "spec": "TASK-1945",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "902cd420d221c0ec5c62d6f0ef5e5f470f875f33",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
