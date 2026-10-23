@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T08:18:11.550823998Z
-modified_at: 2026-10-22T19:48:53.874873348Z
+modified_at: 2026-10-23T08:51:45.245902049Z
 req_type: Story
 comments:
 - id: 01a16149-ad5a-76e3-b0bb-520dd436cea8
@@ -110,6 +110,19 @@ comments:
   created_at: 2026-10-22T19:48:53.874873348Z
   modified_at: 2026-10-22T19:48:53.874873348Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a167f5-81dd-7340-a2c2-4b157af77e4e
+  author: ai:codex:joe
+  content: |
+    Integrator update for STORY-1706 / PR #2834, pushed 76bce0e3ea2c57505543baaa838967b5ed17aa3c.
+
+    - Merged origin/main at 597ea98e77150b4819f186a5d652b9855d5ee3cb; resolved mandate_drive.rs conflicts by preserving main's PreviewGates checks and STORY-1706's relay restart eligibility output.
+    - Corrected the distributed-store status fixture: use the permitted Draft-to-Rejected transition, require CLI success, and assert the persisted YAML status instead of swallowing a refused Draft-to-Completed edit.
+
+    Validation on the final source tree: 28 STORY-1706 targeted tests passed; help_surface_matches_golden_snapshot passed without regeneration; make check-ci-fast passed all 34 gates; make test-touched passed 410 tests with 1 existing ignored test; make check-ci-compile passed (all test targets compiled, none run by that gate); tests/test_distributed.sh passed against this branch's agent-profile binary, including the corrected status assertion and real-HOME guard. Classifier inventory matched; all 12 classifier fixtures and 25 shard fixtures passed. The earlier classifier regeneration and duplicate-shard diagnostics were expected negative-fixture output, not failures. No baseline/allowlist changes or full-suite run.
+
+    Existing PR title/trailer retained. No PR merge, rebase, force push, self-approval, ship, or hold clearance. GitHub reports MERGEABLE; independent STRICT review and operator merge remain pending. All owned commands have finished; work is ready for a quiet handoff.
+  created_at: 2026-10-23T08:51:45.245902049Z
+  modified_at: 2026-10-23T08:51:45.245902049Z
 history:
 - id: 01a16149-9ba7-7df3-aec7-b485bef56bae
   author: joe
