@@ -1046,6 +1046,41 @@ pub(crate) fn collect_awaiting_report_inner(
     }
 }
 
+/// Parse the hook payload (plus the event a relay named out-of-band) and, on
+/// a session start, register the session's row and end dead registry rows.
+/// Returns `(session_id, is_session_start)` for the turn clock.
+// trace:TASK-2253 | ai:claude
+pub(crate) fn notice_hook_session(
+    payload: &str,
+    event: Option<&str>,
+    cwd: Option<&std::path::Path>,
+) -> (Option<String>, bool) {
+    let (session_id, is_session_start) = presence::parse_hook_payload_with_event(payload, event);
+    if is_session_start {
+        // BUG-2167: the row records the hook's own worktree, not the main
+        // checkout. trace:TASK-1955 | ai:claude (BUG-2167)
+        let worktree_root = cwd.and_then(|cwd| find_aida_project_root_from(cwd).ok());
+        if let Some(worktree_root) = worktree_root {
+            let project_root = main_worktree_root_from(&worktree_root);
+            let binary = agent_registry::AgentBinaryIdentity::new(
+                env!("CARGO_PKG_VERSION").to_string(),
+                env!("AIDA_BUILD_GIT_SHA").to_string(),
+            );
+            let _ = agent_registry::touch_session_start_agent(
+                &project_root,
+                &worktree_root,
+                session_id.as_deref(),
+                &binary,
+            );
+            // Hooks run outside the command sandbox, so this is where dead
+            // rows get ended before a sandboxed sender counts them as
+            // unverified mail readers. trace:STORY-1843 | ai:claude
+            let _ = agent_registry::gc_dead_agents(&project_root, false, None);
+        }
+    }
+    (session_id, is_session_start)
+}
+
 /// STORY-741: render the unified "Awaiting you" report as a first-class
 /// command. Two shapes:
 ///   - `--notice`: the COMPACT one-line per-turn signal the `UserPromptSubmit`
@@ -1070,34 +1105,13 @@ pub(crate) fn collect_awaiting_report_inner(
 /// time line with no session key. Fail-open throughout.
 pub(crate) fn emit_notice_time_line() {
     // trace:BUG-1239 | ai:codex
-    let (session_id, is_session_start) = std::env::var("AIDA_HOOK_PAYLOAD")
-        .ok()
-        .map(|payload| presence::parse_hook_payload(&payload))
-        .unwrap_or((None, false));
-    if is_session_start {
-        // BUG-2167: the row records the hook's own worktree, not the main
-        // checkout. trace:TASK-1955 | ai:claude (BUG-2167)
-        let worktree_root = std::env::current_dir()
-            .ok()
-            .and_then(|cwd| find_aida_project_root_from(&cwd).ok());
-        if let Some(worktree_root) = worktree_root {
-            let project_root = main_worktree_root_from(&worktree_root);
-            let binary = agent_registry::AgentBinaryIdentity::new(
-                env!("CARGO_PKG_VERSION").to_string(),
-                env!("AIDA_BUILD_GIT_SHA").to_string(),
-            );
-            let _ = agent_registry::touch_session_start_agent(
-                &project_root,
-                &worktree_root,
-                session_id.as_deref(),
-                &binary,
-            );
-            // Hooks run outside the command sandbox, so this is where dead
-            // rows get ended before a sandboxed sender counts them as
-            // unverified mail readers. trace:STORY-1843 | ai:claude
-            let _ = agent_registry::gc_dead_agents(&project_root, false, None);
-        }
-    }
+    // trace:TASK-2253 | ai:claude — an agy relay names the event in env.
+    let event = std::env::var("AIDA_HOOK_EVENT").ok();
+    let (session_id, is_session_start) = notice_hook_session(
+        &std::env::var("AIDA_HOOK_PAYLOAD").unwrap_or_default(),
+        event.as_deref(),
+        std::env::current_dir().ok().as_deref(),
+    );
     let now = chrono::Local::now();
     let label = presence::stamp_turn_clock(
         session_id.as_deref(),
@@ -3681,3 +3695,99 @@ pub(crate) static AWAITING: crate::command_registry::CommandReg =
         },
         run: crate::command_registry::Handler::Store(run_awaiting),
     };
+
+/// TASK-2253: an Antigravity SessionStart reaches the notice's session-start
+/// branch and ends a dead agy registry row with no manual `aida agent gc`.
+// trace:TASK-2253.ac73e966 | ai:claude
+#[cfg(test)]
+mod task_2253_agy_session_start_gc_tests {
+    use super::*;
+    use crate::agent_registry::{
+        current_pid_namespace, load_entries, write_entry, AgentRegistryEntry, Availability,
+    };
+    use chrono::{Duration, Utc};
+
+    fn dead_agy_row(worktree: &std::path::Path) -> AgentRegistryEntry {
+        let pid = u32::MAX - 1;
+        let at = Utc::now() - Duration::minutes(5);
+        AgentRegistryEntry {
+            id: format!("antigravity-{pid}"),
+            agent_type: "antigravity".to_string(),
+            pid,
+            pid_start: None,
+            pid_namespace: current_pid_namespace(),
+            name: None,
+            description: None,
+            tty: None,
+            terminal: None,
+            started_at: at,
+            last_active_at: at,
+            role: Some("implementer".to_string()),
+            current_spec: None,
+            worktree_path: worktree.to_path_buf(),
+            source: "hook".to_string(),
+            binary_version: None,
+            build_sha: None,
+            availability: Availability::Available,
+            paused_since: None,
+            paused_reason: None,
+            expected_back: None,
+            // Resumable, so gc keeps the row and stamps it ended.
+            native_session_id: Some("agy-dead-conv".to_string()),
+            claude_session_id: None,
+            ended_at: None,
+            spec_status_at_end: None,
+            resumed_from: None,
+        }
+    }
+
+    #[test]
+    fn agy_session_start_ends_a_dead_agy_row_without_manual_gc() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let proj = tmp.path().join("proj");
+        std::fs::create_dir_all(proj.join(".aida")).unwrap();
+        std::fs::write(proj.join(".aida/config.toml"), "").unwrap();
+        let st = crate::test_git::git_command()
+            .args(["init", "-q"])
+            .current_dir(&proj)
+            .status()
+            .unwrap();
+        assert!(st.success());
+        let proj = proj.canonicalize().unwrap();
+        write_entry(&proj, &dead_agy_row(&proj)).unwrap();
+
+        // Antigravity CLI 1.4.2 SessionStart stdin: camelCase common fields,
+        // no event name; the relay names the event (AIDA_HOOK_EVENT).
+        let payload =
+            r#"{"conversationId":"agy-live-conv","workspacePaths":["/w"],"modelName":"auto"}"#;
+        let (sid, start) = notice_hook_session(payload, Some("SessionStart"), Some(&proj));
+        assert_eq!(sid.as_deref(), Some("agy-live-conv"));
+        assert!(start);
+
+        let dead = load_entries(&proj)
+            .into_iter()
+            .map(|(_, e)| e)
+            .find(|e| e.id == format!("antigravity-{}", u32::MAX - 1))
+            .expect("resumable dead agy row is kept");
+        assert!(
+            dead.ended_at.is_some(),
+            "the agy session start must end the dead row"
+        );
+    }
+
+    /// The same payload on a non-start turn leaves the dead row alone.
+    #[test]
+    fn agy_payload_without_session_start_does_not_gc() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let proj = tmp.path().join("proj");
+        std::fs::create_dir_all(proj.join(".aida")).unwrap();
+        std::fs::write(proj.join(".aida/config.toml"), "").unwrap();
+        let proj = proj.canonicalize().unwrap();
+        write_entry(&proj, &dead_agy_row(&proj)).unwrap();
+
+        let payload = r#"{"conversationId":"agy-live-conv"}"#;
+        let (_, start) = notice_hook_session(payload, None, Some(&proj));
+        assert!(!start);
+        assert!(load_entries(&proj)[0].1.ended_at.is_none());
+    }
+}
