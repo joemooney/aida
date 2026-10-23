@@ -1,5 +1,6 @@
 id: 01a16ae1-ceb9-7d92-952b-7dcd0597d948
 spec_id: TASK-1-463
+agreed_id: TASK-1832
 title: 'non-blocking (minor): notice_hook_session now calls touch_session_start_agent f…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-2253, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -36,6 +37,10 @@ history:
   author: joe
   timestamp: 2026-10-23T22:33:48.107713173Z
   session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+  changes: []
+- id: 01a16aef-19c7-73a1-abed-55bb9427eee7
+  author: joe
+  timestamp: 2026-10-23T22:43:37.031028640Z
   changes: []
 filed_at:
   code_sha: 509f5a3026150f815eb257e799ccc9265a5d5cd9
