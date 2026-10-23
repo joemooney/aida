@@ -6,17 +6,26 @@ description: |
   ForgeRails::test (pr_train.rs, around line 1268) maps every wait_ci error to CiVerdict::Red: 'no CI registered within 600s', forge NoCi, or a watch_ci API error. An infrastructure failure is then rerun and bisected down to single members, each ejected with 'CI is red with this PR alone on top of main'. That reason is wrong, and it spends about 2N CI runs. Treat a wait error as a run error (abort and eject with the real reason), and add a test.
 
   Raised in review of PR-2843: https://github.com/joemooney/aida/pull/2843#issuecomment-6372926096
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T19:22:44.363791352Z
-modified_at: 2026-10-23T19:22:44.363791352Z
+modified_at: 2026-10-23T19:24:58.303367193Z
 req_type: Task
 tags:
 - from-review:PR-2843
 - severity:minor
 - train
+history:
+- id: 01a16a39-3c3f-7f80-9909-12da0adc3382
+  author: joe
+  timestamp: 2026-10-23T19:24:58.303356049Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: feb62063ca9cb8621f9015b630ec51715c6a151d
   branch: pr-2843
