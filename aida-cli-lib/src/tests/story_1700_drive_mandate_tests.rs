@@ -2118,12 +2118,59 @@ fn a_redispatch_or_setup_lane_carries_the_runs_spec_and_fails_closed_without_one
     }
 }
 
+/// Preview gate inputs with no human gate and no always-human spec.
+fn ungated(store_readable: bool) -> PreviewGates<'static> {
+    PreviewGates {
+        store_readable,
+        gates: Ok(HumanGates::default()),
+        spec_always_human: &|_| None,
+    }
+}
+
+/// TASK-1933: the preview applies the tick's `[mandate.human_gates]` op gate
+/// and the operator-only/sticky floor, in the human and the `--json` form, so
+/// it never shows routed (`held: null`) a lane the tick would gate.
+// trace:TASK-1955 | ai:claude (TASK-1933)
+#[test]
+fn the_preview_shows_human_gates_and_the_operator_only_floor_as_the_tick_does() {
+    let decisions = vec![plan_unowned_spec(&unowned("STORY-9"))];
+    assert_eq!(
+        preview_json(&decisions, &ungated(true))["lanes"][0]["held"],
+        serde_json::Value::Null
+    );
+
+    let op_gated = PreviewGates {
+        store_readable: true,
+        gates: Ok(HumanGates {
+            ops: [GateOp::Dispatch].into_iter().collect(),
+            ..Default::default()
+        }),
+        spec_always_human: &|_| None,
+    };
+    let held = preview_json(&decisions, &op_gated)["lanes"][0]["held"].clone();
+    assert!(
+        held.as_str().is_some_and(|h| h.starts_with("gated: ")),
+        "{held}"
+    );
+    assert!(preview_lines(&decisions, &op_gated)[0].contains("(gated: "));
+
+    let operator_only = PreviewGates {
+        store_readable: true,
+        gates: Ok(HumanGates::default()),
+        spec_always_human: &|s| (s == "STORY-9").then(|| "operator-only".to_string()),
+    };
+    assert_eq!(
+        preview_json(&decisions, &operator_only)["lanes"][0]["held"],
+        "gated: STORY-9 is operator-only"
+    );
+}
+
 // `aida fleet drive --json` (preview) emits JSON even with no lane to drive,
 // and carries the same withheld status the human preview shows.
 // trace:STORY-1700 | ai:claude
 #[test]
 fn the_json_preview_is_json_with_no_lanes_and_mirrors_withheld_routes() {
-    let empty = preview_json(&[], true);
+    let empty = preview_json(&[], &ungated(true));
     assert_eq!(empty["store_readable"], true);
     assert_eq!(empty["lanes"], serde_json::json!([]));
 
@@ -2132,9 +2179,9 @@ fn the_json_preview_is_json_with_no_lanes_and_mirrors_withheld_routes() {
         &lane("c", LaneClass::Crashed, &fx.run_dir("c"), &[]),
         &fixture_signoff,
     )];
-    let readable = preview_json(&decisions, true);
+    let readable = preview_json(&decisions, &ungated(true));
     assert_eq!(readable["lanes"][0]["held"], serde_json::Value::Null);
-    let blind = preview_json(&decisions, false);
+    let blind = preview_json(&decisions, &ungated(false));
     assert_eq!(blind["store_readable"], false);
     let lane = &blind["lanes"][0];
     assert!(lane["subject"].as_str().unwrap().contains("relay run c"));
@@ -2159,11 +2206,11 @@ fn the_preview_warns_and_shows_routes_withheld_when_the_store_is_unreadable() {
             &fixture_signoff,
         ),
     ];
-    let readable = preview_lines(&decisions, true);
+    let readable = preview_lines(&decisions, &ungated(true));
     assert!(readable
         .iter()
         .all(|l| !l.contains("withheld") && !l.starts_with("warning")));
-    let blind = preview_lines(&decisions, false);
+    let blind = preview_lines(&decisions, &ungated(false));
     assert!(blind[0].starts_with("warning: the requirement store is unreadable"));
     let crash = blind.iter().find(|l| l.contains("relay run c")).unwrap();
     assert!(
@@ -2176,7 +2223,7 @@ fn the_preview_warns_and_shows_routes_withheld_when_the_store_is_unreadable() {
         "an ungated operator notice is not withheld: {api}"
     );
     assert_eq!(
-        preview_lines(&[], false).len(),
+        preview_lines(&[], &ungated(false)).len(),
         1,
         "the warning shows even with no lanes"
     );

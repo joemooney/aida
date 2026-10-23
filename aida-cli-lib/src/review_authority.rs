@@ -286,12 +286,19 @@ impl IdentitySource {
     /// `AIDA_SESSION_ID` is read from the environment — the test runner's
     /// own Claude session and ancestry are ambient, not part of any fixture —
     /// plus whatever the test injected with [`with_identity_source`].
+    /// The env is read only by a thread holding the test env lock (every
+    /// env-setting guard does): a test that pins nothing must not pick up a
+    /// sibling test's `AIDA_SESSION_ID` mid-run (the in-process
+    /// `make test-touched` flake).
+    // trace:TASK-1955 | ai:claude
     pub(crate) fn live() -> Self {
         #[cfg(test)]
         {
             let mut src = TEST_SOURCE.with(|s| s.borrow().clone()).unwrap_or_default();
-            for id in env_session_ids(&["AIDA_SESSION_ID"]) {
-                push_unique(&mut src.session_ids, id);
+            if crate::test_env::holds_env_lock() {
+                for id in env_session_ids(&["AIDA_SESSION_ID"]) {
+                    push_unique(&mut src.session_ids, id);
+                }
             }
             src
         }

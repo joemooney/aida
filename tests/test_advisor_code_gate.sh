@@ -11,6 +11,10 @@
 #
 # trace:STORY-684
 set -euo pipefail
+# Fixture git runs with automatic maintenance off: a detached repack can
+# race the next object write (BUG-2191). `env -i` sites pass the -c pair.
+# trace:TASK-1955 | ai:claude (TASK-2010)
+export GIT_CONFIG_COUNT=2 GIT_CONFIG_KEY_0=maintenance.auto GIT_CONFIG_VALUE_0=false GIT_CONFIG_KEY_1=gc.auto GIT_CONFIG_VALUE_1=0
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -124,7 +128,7 @@ chmod +x .git/hooks/pre-commit
 stage src/via_hook.rs
 set +e
 env -i PATH="$PATH" HOME="$FAKEHOME" AIDA_SESSION_ROLE=advisor AIDA_SESSION_GRANT="$ADVISOR_GRANT" \
-    git -c user.email=t@t.t -c user.name=t commit -qm "feat(x): code (TASK-1)" >/dev/null 2>&1
+    git -c maintenance.auto=false -c gc.auto=0 -c user.email=t@t.t -c user.name=t commit -qm "feat(x): code (TASK-1)" >/dev/null 2>&1
 hook_rc=$?
 set -e
 assert_exit "raw git commit by advisor is aborted by pre-commit hook" 1 "$hook_rc"
@@ -133,7 +137,7 @@ assert_exit "raw git commit by advisor is aborted by pre-commit hook" 1 "$hook_r
 #    escape hatch exists and is honored).
 set +e
 env -i PATH="$PATH" HOME="$FAKEHOME" AIDA_SESSION_ROLE=advisor AIDA_SESSION_GRANT="$ADVISOR_GRANT" \
-    git -c user.email=t@t.t -c user.name=t commit --no-verify -qm "feat(x): code (TASK-1)" >/dev/null 2>&1
+    git -c maintenance.auto=false -c gc.auto=0 -c user.email=t@t.t -c user.name=t commit --no-verify -qm "feat(x): code (TASK-1)" >/dev/null 2>&1
 noverify_rc=$?
 set -e
 assert_exit "advisor git commit --no-verify bypasses the gate" 0 "$noverify_rc"
