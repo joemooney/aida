@@ -64,7 +64,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T15:55:48.750553278Z
-modified_at: 2026-10-23T17:01:06.365469466Z
+modified_at: 2026-10-23T17:03:02.719065269Z
 req_type: Task
 tags:
 - reconcile
@@ -523,6 +523,12 @@ comments:
   created_at: 2026-10-23T11:17:34.819842701Z
   modified_at: 2026-10-23T11:17:34.819842701Z
   session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
+- id: 01a169b7-4c3f-72a2-879e-a86fd9a8deff
+  author: joe
+  content: 'ADVISOR 10:03: #2845 review CHANGES REQUESTED at bee561cee1 (eight items, in .aida/review-verdicts/PR-2845.json). The rework brief went to lane take-2845. Ruling on TASK-2003 ''last activity for each spec'': option A stands (NeedsAttention rows in the human table; modified_at in JSON for every row).'
+  created_at: 2026-10-23T17:03:02.719065269Z
+  modified_at: 2026-10-23T17:03:02.719065269Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
 history:
 - id: 01a154e0-78cf-7a40-bc67-d8f6e5580d97
   author: joe
