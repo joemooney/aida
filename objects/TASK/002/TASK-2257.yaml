@@ -6,16 +6,25 @@ description: |-
   criteria.rs shell_test_name matches echo/info lines starting with 'Test ' and any word label, so echo "Test failed: ..." opens a phantom section and markers get attributed to the wrong section. Require a label followed by ':'.
 
   Raised in review of PR-2855: https://github.com/joemooney/aida/pull/2855#issuecomment-6372272250
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T18:46:33.681195158Z
-modified_at: 2026-10-23T18:46:33.681195158Z
+modified_at: 2026-10-23T18:48:41.922879058Z
 req_type: Task
 tags:
 - from-review:PR-2855
 - severity:cosmetic
+history:
+- id: 01a16a18-06c2-7173-9d6f-e28848e549e1
+  author: joe
+  timestamp: 2026-10-23T18:48:41.922874047Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 97ce4423aed886338602ae7c6759264b8cad7373
   branch: pr-2855
