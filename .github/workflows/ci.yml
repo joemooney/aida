@@ -280,6 +280,10 @@ jobs:
       # requires one `... ok` line per `bug_2169_bwrap_`/`task_2053_bwrap_` test
       # in the source and no bwrap skip; other skips (e.g. git too old for
       # reftable) are listed. trace:TASK-2161 | ai:claude
+      # BUG-1934: the real-namespace seat-grant presenter (`bug_1934_bwrap_`,
+      # an aida-cli integration test driving the built binary) joins the gate
+      # and the same count, so its key-inheritance evidence is never a silent
+      # skip. trace:BUG-1934 | ai:claude
       - name: Live bwrap OS-wrap confinement gate
         if: ${{ matrix.shard == 'gates' && (steps.changes.outputs.full_ci == 'true' && runner.os == 'Linux') }}
         run: |
@@ -288,8 +292,10 @@ jobs:
           set -o pipefail
           AIDA_REQUIRE_BWRAP_LIVE=1 cargo test -p aida-cli-lib --lib -- --nocapture \
             bwrap_write_confinement_live_or_fail_closed bug_2169_bwrap_ task_2053_bwrap_ 2>&1 | tee "$log"
-          expected=$(grep -rhoE 'fn (bug_2169|task_2053)_bwrap_[a-z0-9_]+' aida-cli-lib/src | sort -u | wc -l)
-          ran=$(grep -oE '(bug_2169|task_2053)_bwrap_[a-z0-9_]+ \.\.\. ok$' "$log" | sort -u | wc -l)
+          AIDA_REQUIRE_BWRAP_LIVE=1 cargo test -p aida-cli --test bug_1934_bwrap_presenter -- --nocapture \
+            bug_1934_bwrap_ 2>&1 | tee -a "$log"
+          expected=$(grep -rhoE 'fn (bug_2169|task_2053|bug_1934)_bwrap_[a-z0-9_]+' aida-cli-lib/src aida-cli/tests/bug_1934_bwrap_presenter.rs | sort -u | wc -l)
+          ran=$(grep -oE '(bug_2169|task_2053|bug_1934)_bwrap_[a-z0-9_]+ \.\.\. ok$' "$log" | sort -u | wc -l)
           echo "live bwrap tests: $ran of $expected ran ok"
           grep -n 'SKIP (' "$log" || true
           if grep -q 'SKIP (bwrap unavailable)' "$log"; then echo "::error::a live bwrap test skipped under the gate"; exit 1; fi
