@@ -7252,7 +7252,8 @@ Options:
           Install the main guard and chain it in front of the pre-push hook
 
       --force
-          With --install-guard: chain in front of a custom pre-push hook too
+          With --install-guard: chain in front of a custom pre-push hook too (shell hooks only; a
+          Python or Node hook is refused)
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -30916,7 +30917,7 @@ Working on aida itself
       {
         "name": "force",
         "takes_value": false,
-        "help": "With --install-guard: chain in front of a custom pre-push hook too"
+        "help": "With --install-guard: chain in front of a custom pre-push hook too (shell hooks only; a Python or Node hook is refused)"
       },
       {
         "name": "format",

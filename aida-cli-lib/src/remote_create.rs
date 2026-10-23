@@ -2101,7 +2101,7 @@ fn install_mirror_pre_push_hook(project_root: &Path) -> Result<()> {
             // Keep a chained main guard across the refresh.
             // trace:BUG-2015 | ai:claude
             let script = if existing.contains(crate::mirror_guard::GUARD_CHAIN_MARKER) {
-                crate::mirror_guard::chain_guard_into(&script)
+                crate::mirror_guard::chain_guard_into(&script)?
             } else {
                 script
             };
@@ -3955,6 +3955,9 @@ host = \"should.not.count\"
             &["remote", "add", "mirror", mirror.to_str().unwrap()],
         );
         git(&project, &["push", "-q", "origin", "main"]);
+        // A clone's origin/HEAD, which the main guard check resolves.
+        // trace:TASK-2163 | ai:claude
+        git(&project, &["remote", "set-head", "origin", "main"]);
         // The spec store: an orphan branch, pushed to origin only (the way
         // every targeted `aida edit` write pushes it).
         git(&project, &["checkout", "-q", "--orphan", STORE_BRANCH]);
@@ -4662,5 +4665,133 @@ host = \"should.not.count\"
         // A push with no default-branch ref has nothing to allow.
         let feature = format!("refs/heads/f {origin_tip} refs/heads/f {ZEROS}\n");
         assert!(check_mirror_sync_push(&project, "mirror", &feature, Some(&ok)).is_err());
+    }
+
+    /// TASK-2163: a repo whose origin default branch is `release/x`.
+    // trace:TASK-2163 | ai:claude
+    fn release_x_default_fixture(tmp: &Path) -> PathBuf {
+        let project = tmp.join("project");
+        std::fs::create_dir_all(&project).unwrap();
+        init_repo_with_commit(&project);
+        git(
+            &project,
+            &["update-ref", "refs/remotes/origin/release/x", "HEAD"],
+        );
+        git(
+            &project,
+            &[
+                "symbolic-ref",
+                "refs/remotes/origin/HEAD",
+                "refs/remotes/origin/release/x",
+            ],
+        );
+        project
+    }
+
+    // TASK-2163: with origin's default branch `release/x`, the guard check
+    // protects the same ref the main guard flags (refs/heads/release/x, not
+    // refs/heads/x), and with origin/HEAD unset it refuses like the guard
+    // instead of judging a guessed `main`.
+    // trace:TASK-2163 | ai:claude
+    #[test]
+    fn task_2163_guard_check_protects_a_slash_containing_default_branch() {
+        use crate::mirror_guard::check_mirror_sync_push;
+        let tmp = tempfile::tempdir().unwrap();
+        let project = release_x_default_fixture(tmp.path());
+        let head = git_out(&project, &["rev-parse", "HEAD"]).unwrap();
+        let head = head.trim();
+        let push = format!("refs/heads/release/x {head} refs/heads/release/x {ZEROS}\n");
+        let err = check_mirror_sync_push(&project, "origin", &push, None).unwrap_err();
+        assert!(err.contains("never a mirror sync"), "{err}");
+        let short = format!("refs/heads/x {head} refs/heads/x {ZEROS}\n");
+        let err = check_mirror_sync_push(&project, "origin", &short, None).unwrap_err();
+        assert!(err.contains("no push to refs/heads/release/x"), "{err}");
+
+        git(
+            &project,
+            &["symbolic-ref", "--delete", "refs/remotes/origin/HEAD"],
+        );
+        let main = format!("refs/heads/main {head} refs/heads/main {ZEROS}\n");
+        let err = check_mirror_sync_push(&project, "mirror", &main, None).unwrap_err();
+        assert!(err.contains("origin/HEAD"), "{err}");
+    }
+
+    // TASK-2163: the shell guard flags the same `release/x` ref.
+    // trace:TASK-2163 | ai:claude
+    #[cfg(unix)]
+    #[test]
+    fn task_2163_shell_guard_refuses_a_push_to_a_slash_containing_default_branch() {
+        use std::io::Write;
+        let tmp = tempfile::tempdir().unwrap();
+        let project = release_x_default_fixture(tmp.path());
+        let guard = tmp.path().join("guard.sh");
+        std::fs::write(&guard, crate::mirror_guard::main_guard_hook_script()).unwrap();
+        let run = |line: &str| {
+            let mut child = std::process::Command::new("sh")
+                .arg(&guard)
+                .arg("origin")
+                .current_dir(&project)
+                .env("PATH", "/usr/bin:/bin")
+                .stdin(std::process::Stdio::piped())
+                .stderr(std::process::Stdio::piped())
+                .spawn()
+                .unwrap();
+            child
+                .stdin
+                .take()
+                .unwrap()
+                .write_all(line.as_bytes())
+                .unwrap();
+            child.wait_with_output().unwrap()
+        };
+        let out = run(&format!(
+            "refs/heads/release/x {ZEROS} refs/heads/release/x {ZEROS}\n"
+        ));
+        assert!(!out.status.success());
+        assert!(String::from_utf8_lossy(&out.stderr).contains("release/x"));
+        let out = run(&format!("refs/heads/x {ZEROS} refs/heads/x {ZEROS}\n"));
+        assert!(out.status.success());
+    }
+
+    // TASK-2164: --install-guard --force refuses a pre-push hook whose
+    // shebang is not a POSIX-family shell (the chain block is sh), leaving it
+    // untouched; sh-family shebangs, including via env, still chain.
+    // trace:TASK-2164 | ai:claude
+    #[test]
+    fn task_2164_force_install_guard_refuses_a_non_sh_shebang() {
+        use crate::mirror_guard::{install_main_guard, GUARD_CHAIN_MARKER};
+        for shebang in [
+            "#!/usr/bin/env python3",
+            "#!/usr/bin/node",
+            "#!/usr/bin/env -S node --x",
+        ] {
+            let tmp = tempfile::tempdir().unwrap();
+            let project = tmp.path().join("project");
+            std::fs::create_dir_all(&project).unwrap();
+            init_repo_with_commit(&project);
+            let hook = project.join(".git/hooks/pre-push");
+            let body = format!("{shebang}\nprint('hi')\n");
+            std::fs::write(&hook, &body).unwrap();
+            let err = install_main_guard(&project, true).unwrap_err().to_string();
+            assert!(err.contains("not a shell script"), "{shebang}: {err}");
+            assert_eq!(std::fs::read_to_string(&hook).unwrap(), body);
+        }
+        for shebang in [
+            "#!/bin/sh",
+            "#!/bin/bash -e",
+            "#!/usr/bin/env zsh",
+            "#!/bin/dash",
+        ] {
+            let tmp = tempfile::tempdir().unwrap();
+            let project = tmp.path().join("project");
+            std::fs::create_dir_all(&project).unwrap();
+            init_repo_with_commit(&project);
+            let hook = project.join(".git/hooks/pre-push");
+            std::fs::write(&hook, format!("{shebang}\necho hi\n")).unwrap();
+            install_main_guard(&project, true).unwrap();
+            let chained = std::fs::read_to_string(&hook).unwrap();
+            assert!(chained.starts_with(shebang), "{chained}");
+            assert!(chained.contains(GUARD_CHAIN_MARKER), "{chained}");
+        }
     }
 }
