@@ -1,0 +1,27 @@
+id: 01a16a16-11d1-7410-9dee-e31214656e25
+spec_id: TASK-2257
+agreed_id: TASK-2257
+title: criteria shell scanner reads any echo "Test <word>" line as a section header
+description: |-
+  criteria.rs shell_test_name matches echo/info lines starting with 'Test ' and any word label, so echo "Test failed: ..." opens a phantom section and markers get attributed to the wrong section. Require a label followed by ':'.
+
+  Raised in review of PR-2855: https://github.com/joemooney/aida/pull/2855#issuecomment-6372272250
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-23T18:46:33.681195158Z
+modified_at: 2026-10-23T18:46:33.681195158Z
+req_type: Task
+tags:
+- from-review:PR-2855
+- severity:cosmetic
+filed_at:
+  code_sha: 97ce4423aed886338602ae7c6759264b8cad7373
+  branch: pr-2855
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: a9e78d3491
+  vendor: claude
+  session: 01a16a11bfd1
+  harness_version: 2.1.309 (Claude Code)

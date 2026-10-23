@@ -1,0 +1,27 @@
+id: 01a16a15-fbed-73a1-a484-878bd6607a26
+spec_id: TASK-2256
+agreed_id: TASK-2256
+title: Test the refused-delegation PR-N lease release in handle_queue_work
+description: |-
+  queue_cmd.rs:13219 releases the minted lease when a reviewer child grant is refused. Only the predicate refused_review_launch_releases_lease is tested; no test drives the release, or the kept implementer lease.
+
+  Raised in review of PR-2855: https://github.com/joemooney/aida/pull/2855#issuecomment-6372272250
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-23T18:46:28.077992076Z
+modified_at: 2026-10-23T18:46:28.077992076Z
+req_type: Task
+tags:
+- from-review:PR-2855
+- severity:minor
+filed_at:
+  code_sha: 97ce4423aed886338602ae7c6759264b8cad7373
+  branch: pr-2855
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: a9e78d3491
+  vendor: claude
+  session: 01a16a11bfd1
+  harness_version: 2.1.309 (Claude Code)

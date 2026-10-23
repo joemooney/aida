@@ -1,0 +1,27 @@
+id: 01a16a15-e74c-7a32-9c91-d1fcef9e12b0
+spec_id: TASK-2255
+agreed_id: TASK-2255
+title: Test BUG-2208 Refs-only auto-queue filing end to end; fix the 'covers' resolution comment
+description: |-
+  No test runs try_auto_queue_pr_review_unbumped on a Refs-only range and asserts that a story is filed with a covers link and no implements link. Nothing reads the custom covers type, so the comment at review_gates.rs:1283 claiming queue work PR-N resolves through it is wrong.
+
+  Raised in review of PR-2855: https://github.com/joemooney/aida/pull/2855#issuecomment-6372272250
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-23T18:46:22.796403436Z
+modified_at: 2026-10-23T18:46:22.796403436Z
+req_type: Task
+tags:
+- from-review:PR-2855
+- severity:minor
+filed_at:
+  code_sha: 97ce4423aed886338602ae7c6759264b8cad7373
+  branch: pr-2855
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: a9e78d3491
+  vendor: claude
+  session: 01a16a11bfd1
+  harness_version: 2.1.309 (Claude Code)

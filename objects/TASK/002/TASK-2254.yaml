@@ -1,0 +1,27 @@
+id: 01a16a15-d109-7622-8173-22d5938c4467
+spec_id: TASK-2254
+agreed_id: TASK-2254
+title: Anchor TASK-1955 criteria ac81e033/ace9d610 on the agent_launch mandate tests
+description: |-
+  agent_launch.rs:5822 rendered_launch_context_carries_the_active_mandate and :5935 launch_context_shows_the_mandate_only_while_one_is_active cover both TASK-1955 criteria but carry no per-criterion trace anchor; aida criteria lists them untraced.
+
+  Raised in review of PR-2855: https://github.com/joemooney/aida/pull/2855#issuecomment-6372272250
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-23T18:46:17.097788781Z
+modified_at: 2026-10-23T18:46:17.097788781Z
+req_type: Task
+tags:
+- from-review:PR-2855
+- severity:minor
+filed_at:
+  code_sha: 97ce4423aed886338602ae7c6759264b8cad7373
+  branch: pr-2855
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: a9e78d3491
+  vendor: claude
+  session: 01a16a11bfd1
+  harness_version: 2.1.309 (Claude Code)
