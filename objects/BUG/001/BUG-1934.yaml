@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T00:51:06.094986066Z
-modified_at: 2026-10-23T07:48:53.667872166Z
+modified_at: 2026-10-23T07:49:02.556075328Z
 req_type: Bug
 tags:
 - batch:2026-10-11
@@ -317,6 +317,12 @@ comments:
   created_at: 2026-10-22T12:48:37.501588664Z
   modified_at: 2026-10-22T12:48:37.501588664Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a167bc-17dc-7fa1-8c2f-d3c8c08612d8
+  author: joe
+  content: 'ADVISOR 00:50: #2830 PASS at dfc7a78a2c. All in-scope minors are folded into BUG-1934 for a round 3 (no deferrals), because the merge waits on the operator''s C4 probe anyway: (1) TASK-2195: issue_child joins a new session keyring per launch; on EDQUOT the error is discarded and a proc-only child grant is minted, a silent fail-close. Reuse or revoke keyrings per launcher, and surface EDQUOT as a refusal or warning, never discard it; add a test. (2) the doctor_scan action text in seat_authority.rs still steers to --bind-pid; fix it to match round 2. (3) bug_1934_bwrap_presenter.rs''s silent SKIP: make the skip visible on CI (assert bwrap presence on the linux CI lane or emit a counted skip) so the real-namespace evidence is not a silent pass. The xtrace residual stays a documented residual (already ruled). After round 3 the operator runs the C4 probe at the FINAL head.'
+  created_at: 2026-10-23T07:49:02.556075328Z
+  modified_at: 2026-10-23T07:49:02.556075328Z
+  session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
 history:
 - id: 01a12b8d-6820-7292-ac96-3f451518bfcd
   author: joe
