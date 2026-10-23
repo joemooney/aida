@@ -1,0 +1,27 @@
+id: 01a16b1f-d5a1-7d31-9715-2c2501c7e431
+spec_id: TASK-1-467
+title: 'minor (carry-over, TASK-2271): pr_train.rs:905 car-subject fallback reads branc…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on STORY-1690, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  minor (carry-over, TASK-2271): pr_train.rs:905 car-subject fallback reads branch_head_commit_message(head_ref) (local branch, then origin/) instead of the gated approved head sha m.head
+  Reviewed sha: 6d9a7623ee6bd0ad8164d3593b75de8dc31fc3ff
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-23T23:36:50.849433392Z
+modified_at: 2026-10-23T23:36:50.849433392Z
+req_type: Task
+tags:
+- carried-from:STORY-1690
+- finding-hash:8c8c3ba1
+- from-review:STORY-1690
+- kind:carried-forward
+filed_at:
+  code_sha: c38043228df6044c6c523a3c6a16805f359d3083
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c51da86593
+  vendor: claude
