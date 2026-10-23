@@ -1100,8 +1100,10 @@ pub(crate) fn parse_hook_payload(stdin: &str) -> (Option<String>, bool) {
     let Ok(v) = serde_json::from_str::<serde_json::Value>(trimmed) else {
         return (None, false);
     };
-    // Antigravity payloads are camelCase and carry `conversationId`.
-    // trace:TASK-2253 | ai:claude
+    // Antigravity payloads are camelCase and carry `conversationId`
+    // (Antigravity CLI 1.4.2 builtin `agy-customizations/docs/hooks.md`,
+    // "Common Input Fields" and "### 3. `SessionStart` Contract": no
+    // event-name field). trace:TASK-2253 | ai:claude
     let session_id = v
         .get("session_id")
         .or_else(|| v.get("conversationId"))
@@ -1893,8 +1895,10 @@ mod tests {
 
     /// Antigravity's SessionStart payload (camelCase, no event-name field)
     /// reaches the notice's session-start path — the one that runs the
-    /// host-side dead-row gc — once its relay names the event.
-    // trace:TASK-2253 | ai:claude
+    /// host-side dead-row gc — once its relay names the event. Shape pinned
+    /// from Antigravity CLI 1.4.2 builtin `agy-customizations/docs/hooks.md`,
+    /// "### 3. `SessionStart` Contract".
+    // trace:TASK-2253.acd91dca | ai:claude
     #[test]
     fn agy_session_start_reaches_the_notice_session_start_path() {
         let agy = r#"{"conversationId":"ec33ebf9","workspacePaths":["/w"],"modelName":"auto"}"#;

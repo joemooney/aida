@@ -679,7 +679,7 @@ mod tests {
 
     /// An install from before the agy SessionStart wiring gains it on a
     /// non-force pass, leaving the customized expiry key alone.
-    // trace:TASK-2253 | ai:claude
+    // trace:TASK-2253.acd91dca | ai:claude
     #[test]
     fn antigravity_scaffolding_adds_missing_mail_notice_key_without_force() {
         let tmp = tempfile::tempdir().unwrap();
@@ -716,8 +716,10 @@ mod tests {
     /// (`sh -c`, cwd = the dir holding hooks.json), against a recording fake
     /// `aida`: the payload and the named event reach `aida awaiting --notice`
     /// — the session-start path that runs the host-side dead-row gc — and the
-    /// notice comes back as an injected system message.
-    // trace:TASK-2253 | ai:claude
+    /// notice comes back as an injected system message. Contract source:
+    /// Antigravity CLI 1.4.2 builtin `agy-customizations/docs/hooks.md`,
+    /// "### 3. `SessionStart` Contract".
+    // trace:TASK-2253.acd91dca | ai:claude
     #[cfg(unix)]
     #[test]
     fn agy_session_start_hook_reaches_the_notice_session_start_path() {
@@ -749,7 +751,7 @@ mod tests {
             format!(
                 "#!/bin/sh\n[ \"$1 $2\" = \"awaiting --notice\" ] || exit 0\n\
                  {{ printf 'PAYLOAD=%s\\n' \"$AIDA_HOOK_PAYLOAD\"; printf 'EVENT=%s\\n' \"$AIDA_HOOK_EVENT\"; }} > '{}'\n\
-                 printf 'Current date/time: now \"q\"\\nAwaiting you: 1 mail\\n'\n",
+                 printf 'Current date/time: now \"q\" a\\\\b\\nAwaiting you: 1 mail\\n'\n",
                 record.display()
             ),
         )
@@ -793,7 +795,7 @@ mod tests {
             .unwrap_or_else(|e| panic!("agy stdout must be JSON ({e}): {:?}", output.stdout));
         assert_eq!(
             out["injectSteps"][0]["systemMessage"]["systemMessage"],
-            "Current date/time: now \"q\"\nAwaiting you: 1 mail"
+            "Current date/time: now \"q\" a\\b\nAwaiting you: 1 mail"
         );
     }
 
