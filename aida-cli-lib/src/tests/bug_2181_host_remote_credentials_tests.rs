@@ -214,14 +214,31 @@ fn an_unrouted_remote_call_leaks_the_token_into_transport_argv() {
 /// Inline `#[cfg(test)] mod name { ... }` blocks are skipped.
 // trace:TASK-1952 | trace:TASK-2001 | ai:claude
 fn task_2001_unrouted_remote_calls(src: &str) -> Vec<usize> {
-    let builder = regex::Regex::new(r#"host_git_command\(|\b\w+::new\("git"\)"#).unwrap();
-    let verb = regex::Regex::new(
-        r#"\.args?\(\s*&?\[?\s*"(fetch|pull|push|ls-remote)"|\bgit\(\s*[^,()]+,\s*&\[\s*"(fetch|pull|push|ls-remote)""#,
-    )
-    .unwrap();
-    let routed = regex::Regex::new(r"remote_credentials|host_remote_git_command").unwrap();
-    let module = regex::Regex::new(r"^\s*(pub(\(crate\))? )?mod \w+\s*\{").unwrap();
-    let next_fn = regex::Regex::new(r"^\s*(pub(\([^)]*\))? )?(async )?fn \w+").unwrap();
+    use std::sync::LazyLock;
+    // Compiled once per process: the ratchet scans every workspace source.
+    static BUILDER: LazyLock<regex::Regex> =
+        LazyLock::new(|| regex::Regex::new(r#"host_git_command\(|\b\w+::new\("git"\)"#).unwrap());
+    static VERB: LazyLock<regex::Regex> = LazyLock::new(|| {
+        regex::Regex::new(
+            r#"\.args?\(\s*&?\[?\s*"(fetch|pull|push|ls-remote)"|\bgit\(\s*[^,()]+,\s*&\[\s*"(fetch|pull|push|ls-remote)""#,
+        )
+        .unwrap()
+    });
+    static ROUTED: LazyLock<regex::Regex> =
+        LazyLock::new(|| regex::Regex::new(r"remote_credentials|host_remote_git_command").unwrap());
+    static MODULE: LazyLock<regex::Regex> =
+        LazyLock::new(|| regex::Regex::new(r"^\s*(pub(\(crate\))? )?mod \w+\s*\{").unwrap());
+    static NEXT_FN: LazyLock<regex::Regex> =
+        LazyLock::new(|| regex::Regex::new(r"^\s*(pub(\([^)]*\))? )?(async )?fn \w+").unwrap());
+    // A file naming no remote verb has nothing to check.
+    if !["\"fetch\"", "\"pull\"", "\"push\"", "\"ls-remote\""]
+        .iter()
+        .any(|v| src.contains(v))
+    {
+        return Vec::new();
+    }
+    let (builder, verb, routed, module, next_fn) =
+        (&*BUILDER, &*VERB, &*ROUTED, &*MODULE, &*NEXT_FN);
     let lines: Vec<&str> = src.lines().collect();
     let mut tests = std::collections::HashSet::new();
     let mut i = 0;
