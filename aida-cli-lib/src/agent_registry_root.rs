@@ -13,6 +13,7 @@ pub(crate) fn agent_ls(show_all: bool, stale_only: bool, ended_only: bool) -> Re
     }
     let leases = list_leases(&project_root);
     let agent_ctx = build_agent_classify_context(&project_root, &leases);
+    let observer = agent_ctx.observer;
     let mut agents = if ended_only {
         agent_registry::ended_resumable_agent_views(&project_root, &agent_ctx)
     } else {
@@ -44,6 +45,9 @@ pub(crate) fn agent_ls(show_all: bool, stale_only: bool, ended_only: bool) -> Re
             println!("No stale agents found.");
         } else {
             println!("No active agents found.");
+            for note in unobserved_liveness_notes(&agents, observer) {
+                println!("{note}");
+            }
         }
         return Ok(());
     }
@@ -53,6 +57,7 @@ pub(crate) fn agent_ls(show_all: bool, stale_only: bool, ended_only: bool) -> Re
         "HANDLE", "PID", "TTY", "KIND", "ROLE", "SPEC", "SCOPE", "STATUS", "AGE", "CPU", "DESC"
     );
     let now = chrono::Utc::now();
+    let notes = unobserved_liveness_notes(&agents, observer);
     for agent in agents {
         let elapsed = agent_registry::humanize_elapsed(agent_registry::elapsed_secs_clamped(
             now,
@@ -113,7 +118,8 @@ pub(crate) fn agent_ls(show_all: bool, stale_only: bool, ended_only: bool) -> Re
             // finished its turn and is idling at a prompt — 3-46 SECONDS across hours, for seats
             // the status column called `busy`. Process-backed rows only; a lease has no pid.
             // trace:BUG-1701 | ai:claude
-            let cpu = if agent.source == "lease" {
+            let heartbeat = agent.liveness == agent_registry::LivenessBasis::Heartbeat;
+            let cpu = if agent.source == "lease" || heartbeat {
                 "-".to_string()
             } else {
                 agent_registry::process_cpu_secs(agent.pid)
@@ -129,7 +135,12 @@ pub(crate) fn agent_ls(show_all: bool, stale_only: bool, ended_only: bool) -> Re
                 agent.role.as_deref().unwrap_or("(none)"),
                 agent.current_spec.as_deref().unwrap_or("(none)"),
                 scope,
-                agent.status.as_str(),
+                // trace:BUG-2212 | ai:claude
+                format!(
+                    "{}{}",
+                    agent.status.as_str(),
+                    if heartbeat { "*" } else { "" }
+                ),
                 format!("({elapsed})"),
                 cpu,
                 desc,
@@ -138,7 +149,43 @@ pub(crate) fn agent_ls(show_all: bool, stale_only: bool, ended_only: bool) -> Re
             );
         }
     }
+    for note in notes {
+        println!("{note}");
+    }
     Ok(())
+}
+
+/// Footnotes for `agent ls` when this shell cannot see agent processes, so a
+/// sandboxed listing never passes off "no visible process" as "no agents".
+// trace:BUG-2212 | ai:claude
+pub(crate) fn unobserved_liveness_notes(
+    agents: &[agent_registry::AgentRegistryView],
+    observer: agent_registry::PidObserver,
+) -> Vec<String> {
+    let heartbeat_rows = agents
+        .iter()
+        .any(|a| a.liveness == agent_registry::LivenessBasis::Heartbeat);
+    let mut notes = Vec::new();
+    if heartbeat_rows {
+        notes.push(format!(
+            "* heartbeat-based: this shell cannot see that agent's process, so the row is \
+             listed because its last heartbeat is under {}h old.",
+            agent_registry::UNOBSERVED_HEARTBEAT_TTL_SECS / 3600
+        ));
+    } else if agents.is_empty() && observer.isolated {
+        notes.push(
+            "Note: this shell runs in an isolated process namespace and cannot observe agent \
+             processes, so an empty list here does not mean no agents are running."
+                .to_string(),
+        );
+    }
+    if heartbeat_rows || observer.isolated {
+        notes.push(
+            "To check process liveness, run `aida agent ls` from a terminal outside the sandbox."
+                .to_string(),
+        );
+    }
+    notes
 }
 
 // trace:TASK-1184 | ai:codex
@@ -703,3 +750,8 @@ mod agent_launcher_tests;
 #[cfg(test)]
 #[path = "tests/presentation_env_tests.rs"]
 mod presentation_env_tests;
+
+// trace:BUG-2212 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_2212_agent_ls_namespace_tests.rs"]
+mod bug_2212_agent_ls_namespace_tests;

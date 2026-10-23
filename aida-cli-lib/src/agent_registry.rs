@@ -191,6 +191,9 @@ pub(crate) struct AgentRegistryView {
     pub(crate) native_session_id: Option<String>,
     pub(crate) ended_at: Option<DateTime<Utc>>,
     pub(crate) resumed_from: Option<String>,
+    // trace:BUG-2212 | ai:claude
+    #[serde(default, skip_serializing_if = "LivenessBasis::is_process")]
+    pub(crate) liveness: LivenessBasis,
 }
 
 // trace:STORY-994 | ai:codex
@@ -287,6 +290,8 @@ pub(crate) struct AgentClassifyContext {
     pub(crate) live_lease_worktrees: Vec<PathBuf>,
     pub(crate) proc_tree: Option<ProcTree>,
     pub(crate) work_grace_secs: u64,
+    // trace:BUG-2212 | ai:claude
+    pub(crate) observer: PidObserver,
 }
 
 impl AgentClassifyContext {
@@ -301,7 +306,14 @@ impl AgentClassifyContext {
             live_lease_worktrees,
             proc_tree: None,
             work_grace_secs: 10,
+            observer: PidObserver::current(),
         }
+    }
+
+    // trace:BUG-2212 | ai:claude
+    pub(crate) fn with_observer(mut self, observer: PidObserver) -> Self {
+        self.observer = observer;
+        self
     }
 
     // trace:BUG-1704 | ai:codex
@@ -1190,12 +1202,13 @@ pub(crate) fn gc_dead_agents(
 ) -> Result<AgentGcReport> {
     let now = Utc::now();
     let mut report = AgentGcReport::default();
-    let observer = current_pid_namespace();
+    // trace:BUG-2212 | ai:claude
+    let observer = PidObserver::current();
     for (path, mut entry) in load_entries(project_root) {
         // A row this process cannot observe is neither live nor dead to it:
         // a sandboxed gc must not prune or end a host session's row.
         // trace:STORY-1843 | ai:claude
-        if observed_liveness(project_root, &entry, observer) != Some(false) {
+        if observed_liveness_from(project_root, &entry, observer) != Some(false) {
             continue;
         }
         let resumable = resumable_session_id(&entry);
@@ -1772,7 +1785,8 @@ fn view_for(
     entry: AgentRegistryEntry,
     ctx: &AgentClassifyContext,
 ) -> AgentRegistryView {
-    let pid_alive = registry_entry_is_live(project_root, &entry);
+    // trace:BUG-2212 | ai:claude
+    let (pid_alive, liveness) = display_liveness(project_root, &entry, ctx.observer, ctx.now);
     let status = classify_status(&entry, pid_alive, ctx);
     let native_session_id = resumable_session_id(&entry);
     AgentRegistryView {
@@ -1800,6 +1814,7 @@ fn view_for(
         native_session_id,
         ended_at: entry.ended_at,
         resumed_from: entry.resumed_from,
+        liveness,
     }
 }
 
@@ -1855,20 +1870,174 @@ pub(crate) fn observed_liveness(
     entry: &AgentRegistryEntry,
     observer: Option<u64>,
 ) -> Option<bool> {
+    let observer = PidObserver {
+        namespace: observer,
+        isolated: false,
+    };
+    observed_liveness_from(project_root, entry, observer)
+}
+
+/// [`observed_liveness`] from a full observer, so an isolated sandbox in the
+/// initial namespace's clothing still cannot vouch for unstamped rows.
+// trace:BUG-2212 | ai:claude
+pub(crate) fn observed_liveness_from(
+    project_root: &Path,
+    entry: &AgentRegistryEntry,
+    observer: PidObserver,
+) -> Option<bool> {
     if entry.ended_at.is_some() {
         return Some(false);
     }
-    let observable = match (entry.pid_namespace, observer) {
-        (Some(recorded), Some(current)) => recorded == current,
-        (None, Some(INITIAL_PID_NAMESPACE)) => true,
-        _ => false,
-    };
-    observable.then(|| registry_entry_is_live(project_root, entry))
+    observer
+        .can_observe(entry.pid_namespace)
+        .then(|| registry_entry_is_live(project_root, entry))
 }
 
 /// Inode of Linux's initial PID namespace.
 // trace:STORY-1843 | ai:claude
 pub(crate) const INITIAL_PID_NAMESPACE: u64 = 0xEFFF_FFFC;
+
+/// How long a row whose process this observer cannot see still counts as a
+/// live agent, from its last heartbeat. Same window the mail resolver gives
+/// unverified readers.
+// trace:BUG-2212 | ai:claude
+pub(crate) const UNOBSERVED_HEARTBEAT_TTL_SECS: i64 = 24 * 60 * 60;
+
+/// Raw `/proc` facts that say whether this process sits in a PID namespace
+/// of its own (a sandboxed shell sees only its own few pids).
+// trace:BUG-2212 | ai:claude
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct PidNamespaceProbe {
+    pub(crate) self_ns: Option<u64>,
+    /// `None` when `/proc/1/ns/pid` is unreadable (pid 1 owned by another user).
+    pub(crate) pid1_ns: Option<u64>,
+    /// Entries on the `NSpid:` line of `/proc/self/status`.
+    pub(crate) nspid_levels: usize,
+    pub(crate) pid1_comm: Option<String>,
+}
+
+impl PidNamespaceProbe {
+    pub(crate) fn read() -> Self {
+        use std::os::unix::fs::MetadataExt;
+        let ns = |path: &str| std::fs::metadata(path).ok().map(|m| m.ino());
+        let nspid_levels = std::fs::read_to_string("/proc/self/status")
+            .ok()
+            .and_then(|body| {
+                body.lines()
+                    .find_map(|l| l.strip_prefix("NSpid:"))
+                    .map(|rest| rest.split_whitespace().count())
+            })
+            .unwrap_or(0);
+        Self {
+            self_ns: ns("/proc/self/ns/pid"),
+            pid1_ns: ns("/proc/1/ns/pid"),
+            nspid_levels,
+            pid1_comm: std::fs::read_to_string("/proc/1/comm")
+                .ok()
+                .map(|c| c.trim().to_string()),
+        }
+    }
+
+    /// Isolated when pid 1 lives in another namespace, the kernel reports
+    /// more than one pid level, or pid 1 is not an init process.
+    pub(crate) fn is_isolated(&self) -> bool {
+        const INITS: [&str; 6] = [
+            "systemd",
+            "init",
+            "tini",
+            "dumb-init",
+            "docker-init",
+            "catatonit",
+        ];
+        if matches!((self.self_ns, self.pid1_ns), (Some(a), Some(b)) if a != b) {
+            return true;
+        }
+        if self.nspid_levels > 1 {
+            return true;
+        }
+        self.pid1_comm
+            .as_deref()
+            .is_some_and(|comm| !INITS.contains(&comm))
+    }
+}
+
+/// The PID view a liveness check runs from: which namespace this process is
+/// in, and whether that namespace is an isolated sandbox.
+// trace:BUG-2212 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct PidObserver {
+    pub(crate) namespace: Option<u64>,
+    pub(crate) isolated: bool,
+}
+
+impl PidObserver {
+    pub(crate) fn current() -> Self {
+        Self::from_probe(&PidNamespaceProbe::read())
+    }
+
+    pub(crate) fn from_probe(probe: &PidNamespaceProbe) -> Self {
+        Self {
+            namespace: probe.self_ns,
+            isolated: probe.is_isolated(),
+        }
+    }
+
+    /// A row's process is visible only from the namespace it was stamped in;
+    /// an unstamped legacy row only from a non-isolated initial namespace.
+    pub(crate) fn can_observe(&self, recorded: Option<u64>) -> bool {
+        match (recorded, self.namespace) {
+            (Some(recorded), Some(current)) => recorded == current,
+            (None, Some(INITIAL_PID_NAMESPACE)) => !self.isolated,
+            _ => false,
+        }
+    }
+}
+
+/// What a displayed row's liveness rests on.
+// trace:BUG-2212 | ai:claude
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum LivenessBasis {
+    #[default]
+    Process,
+    /// The process is invisible from this PID namespace; the row's recent
+    /// heartbeat stands in for it.
+    Heartbeat,
+}
+
+impl LivenessBasis {
+    pub(crate) fn is_process(&self) -> bool {
+        *self == Self::Process
+    }
+}
+
+/// Liveness for display. Process-observed when the observer can see the
+/// row's pid; otherwise a heartbeat within `UNOBSERVED_HEARTBEAT_TTL_SECS`
+/// counts as live, never a process absence the observer cannot see.
+// trace:BUG-2212 | ai:claude
+pub(crate) fn display_liveness(
+    project_root: &Path,
+    entry: &AgentRegistryEntry,
+    observer: PidObserver,
+    now: DateTime<Utc>,
+) -> (bool, LivenessBasis) {
+    if entry.ended_at.is_some() {
+        return (false, LivenessBasis::Process);
+    }
+    if observer.can_observe(entry.pid_namespace) {
+        return (
+            registry_entry_is_live(project_root, entry),
+            LivenessBasis::Process,
+        );
+    }
+    let age = now
+        .signed_duration_since(entry.last_active_at)
+        .num_seconds();
+    (
+        age <= UNOBSERVED_HEARTBEAT_TTL_SECS,
+        LivenessBasis::Heartbeat,
+    )
+}
 
 /// The entry's process is still running: pid plus recorded start time, so a
 /// recycled pid reads dead.
@@ -3695,6 +3864,100 @@ mod tests {
         assert_eq!(before, after);
     }
 
+    fn probe(self_ns: u64, pid1_ns: Option<u64>, nspid: usize, comm: &str) -> PidNamespaceProbe {
+        PidNamespaceProbe {
+            self_ns: Some(self_ns),
+            pid1_ns,
+            nspid_levels: nspid,
+            pid1_comm: Some(comm.to_string()),
+        }
+    }
+
+    // BUG-2212: each signal alone marks the caller isolated; a host shell
+    // with systemd as pid 1 in its own namespace is not.
+    // trace:BUG-2212 | ai:claude
+    #[test]
+    fn pid_namespace_probe_detects_isolated_callers() {
+        let host = INITIAL_PID_NAMESPACE;
+        assert!(!probe(host, Some(host), 1, "systemd").is_isolated());
+        assert!(!probe(host, None, 1, "init").is_isolated());
+        assert!(probe(7, Some(host), 1, "systemd").is_isolated());
+        assert!(probe(7, None, 2, "systemd").is_isolated());
+        // bubblewrap: pid 1 unreadable from the sandbox user, comm is not init.
+        assert!(probe(7, None, 1, "3").is_isolated());
+        assert!(!PidNamespaceProbe::default().is_isolated());
+    }
+
+    // trace:BUG-2212 | ai:claude
+    #[test]
+    fn pid_observer_sees_only_its_own_namespace_and_unstamped_rows_from_the_host() {
+        let host = PidObserver::from_probe(&probe(INITIAL_PID_NAMESPACE, None, 1, "systemd"));
+        let sandbox = PidObserver::from_probe(&probe(7, None, 1, "bwrap"));
+        assert!(host.can_observe(Some(INITIAL_PID_NAMESPACE)));
+        assert!(host.can_observe(None));
+        assert!(!host.can_observe(Some(7)));
+        assert!(sandbox.can_observe(Some(7)));
+        assert!(!sandbox.can_observe(Some(INITIAL_PID_NAMESPACE)));
+        assert!(!sandbox.can_observe(None));
+        // An isolated caller cannot vouch for unstamped rows even when its
+        // namespace inode reads as the initial one.
+        let masked = PidObserver {
+            namespace: Some(INITIAL_PID_NAMESPACE),
+            isolated: true,
+        };
+        assert!(!masked.can_observe(None));
+    }
+
+    // BUG-2212: from a sandboxed shell a live host session's pid is invisible.
+    // agent ls must list it on its fresh heartbeat, labelled as such, and only
+    // age it out once the heartbeat is past the window.
+    // trace:BUG-2212 | ai:claude
+    #[test]
+    fn list_agent_views_falls_back_to_heartbeat_for_unobservable_rows() {
+        let tmp = TempDir::new().unwrap();
+        let now = Utc::now();
+        let mut fresh = entry_with(u32::MAX - 1, now - chrono::Duration::minutes(5));
+        fresh.pid_namespace = Some(INITIAL_PID_NAMESPACE);
+        write_entry(tmp.path(), &fresh).unwrap();
+        let mut old = entry_with(u32::MAX - 2, now - chrono::Duration::hours(25));
+        old.pid_namespace = Some(INITIAL_PID_NAMESPACE);
+        write_entry(tmp.path(), &old).unwrap();
+        let sandbox = PidObserver::from_probe(&probe(7, None, 1, "bwrap"));
+
+        let views = list_agent_views(tmp.path(), &ctx(now, 30, vec![]).with_observer(sandbox));
+        let by_pid: std::collections::HashMap<u32, &AgentRegistryView> =
+            views.iter().map(|v| (v.pid, v)).collect();
+        assert_eq!(by_pid[&(u32::MAX - 1)].status, AgentStatus::Idle);
+        assert_eq!(by_pid[&(u32::MAX - 1)].liveness, LivenessBasis::Heartbeat);
+        assert_eq!(by_pid[&(u32::MAX - 2)].status, AgentStatus::Stale);
+        assert_eq!(by_pid[&(u32::MAX - 2)].liveness, LivenessBasis::Heartbeat);
+
+        // From the host the same dead pids read Stale on process evidence.
+        let host = PidObserver {
+            namespace: Some(INITIAL_PID_NAMESPACE),
+            isolated: false,
+        };
+        let views = list_agent_views(tmp.path(), &ctx(now, 30, vec![]).with_observer(host));
+        assert!(views
+            .iter()
+            .all(|v| v.status == AgentStatus::Stale && v.liveness == LivenessBasis::Process));
+    }
+
+    // trace:BUG-2212 | ai:claude
+    #[test]
+    fn display_liveness_treats_ended_rows_as_dead_from_any_namespace() {
+        let tmp = TempDir::new().unwrap();
+        let now = Utc::now();
+        let mut ended = entry_with(u32::MAX - 1, now);
+        ended.pid_namespace = Some(INITIAL_PID_NAMESPACE);
+        ended.ended_at = Some(now);
+        let sandbox = PidObserver::from_probe(&probe(7, None, 1, "bwrap"));
+        assert_eq!(
+            display_liveness(tmp.path(), &ended, sandbox, now),
+            (false, LivenessBasis::Process)
+        );
+    }
+
     // TASK-543: raw-registered agents use the same stale-PID transition as
     // launcher/MCP entries.
     #[test]
@@ -3785,6 +4048,7 @@ mod tests {
             native_session_id: None,
             ended_at: None,
             resumed_from: None,
+            liveness: LivenessBasis::Process,
         };
 
         let lines = format_agent_status_lines(&[view]);
@@ -3834,6 +4098,7 @@ mod tests {
             native_session_id: None,
             ended_at: None,
             resumed_from: None,
+            liveness: LivenessBasis::Process,
         };
 
         let lines = mcp_authority_status_lines(&[view]);
@@ -4052,6 +4317,7 @@ source = "mcp"
             native_session_id: None,
             ended_at: None,
             resumed_from: None,
+            liveness: LivenessBasis::Process,
         };
 
         let avail_line = &format_agent_status_lines(&[mk(Availability::Available, None)])[0];
