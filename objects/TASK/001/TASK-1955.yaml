@@ -52,12 +52,12 @@ description: |-
   mandate_drive.rs preview_hold reports only forced_gate and an unreadable store; run_tick additionally applies [mandate.human_gates] (gate_reason, ~:1074) and the operator-only/sticky floor (~:1083). The preview (human and --json) can show a lane as routed (held: null) that the tick would gate. Also cli.rs FleetAction::Drive json doc says "Print the tick report as JSON" but now governs the preview too.
 
   Raised in review of PR-2725: https://github.com/joemooney/aida/pull/2725#issuecomment-6260881377
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T16:03:34.769123409Z
-modified_at: 2026-10-23T15:50:52.792402419Z
+modified_at: 2026-10-23T15:50:58.327727180Z
 req_type: Task
 tags:
 - launch
@@ -1261,6 +1261,14 @@ history:
   timestamp: 2026-10-23T15:50:54.180039733Z
   session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
   changes: []
+- id: 01a16975-5017-72c1-97b7-81ab37b00bfe
+  author: aida-pr-open
+  timestamp: 2026-10-23T15:50:58.327718844Z
+  session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 6d590ed914dea5135a126f7dae6abb403adec66d
   branch: main
