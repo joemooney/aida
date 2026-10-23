@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-1934",
+  "publishes": [
+    {
+      "at": "2026-10-23T22:43:50.723037502Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-11T15:20:53.086174330Z",
+      "spec": "BUG-1934",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-14T01:34:06.166776098Z",
+      "spec": "BUG-1934",
+      "seat": "advisor",
+      "kind": {
+        "event": "ExecutionModeChanged",
+        "after": "guided"
+      }
+    },
+    {
+      "ts": "2026-10-22T17:37:02.937023860Z",
+      "spec": "BUG-1934",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-1934",
+        "branch": "pr-2830",
+        "first_seen": "2026-10-22T17:37:02.936956137+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-23T22:43:15.850427219Z",
+      "spec": "BUG-1934",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-23T22:43:30.677821698Z",
+      "spec": "BUG-1934",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2830
+      }
+    },
+    {
+      "ts": "2026-10-23T22:43:50.517230969Z",
+      "spec": "BUG-1934",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "bdd2846897925f4f2a5ab7cd6fe9560fedf8b6e4",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
