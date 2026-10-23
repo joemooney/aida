@@ -6,12 +6,12 @@ description: |
   mirror_guard::chain_guard_into (aida-cli-lib/src/mirror_guard.rs ~L113) inserts a POSIX-sh chain block right after ANY shebang. With --force on a foreign pre-push hook written in python/node/etc. the result is a syntax error and every push fails. Refuse non-sh shebangs (sh/bash/dash/zsh) or chain via a sh wrapper that execs the original hook.
 
   Raised in review of PR-2821: https://github.com/joemooney/aida/pull/2821#issuecomment-6338485525
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-22T10:25:20.125545148Z
-modified_at: 2026-10-23T12:16:22.134277544Z
+modified_at: 2026-10-23T13:24:14.506380848Z
 req_type: Task
 tags:
 - from-review:PR-2821
@@ -45,6 +45,21 @@ history:
   timestamp: 2026-10-23T12:16:23.659364494Z
   session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
   changes: []
+- id: 01a168ee-fa22-7a71-afe1-2883f04be4ea
+  author: aida-auto-bump
+  timestamp: 2026-10-23T13:24:14.498428036Z
+  session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a168ee-fa2a-7433-8234-7fa5f0c3e7d3
+  timestamp: 2026-10-23T13:24:14.506374299Z
+  agent: aida
+  commit_sha: 1926ea4486197073fcfbd8129c2d1034eeafca58
+  summary: 'TASK-2163: origin_default_branch strips only origin/ (release/x kept), shared by default_branch_name and check_mirror_sync_push, refuses when origin/HEAD unset like the shell guard; TASK-2164: chain_guard_into refuses non-POSIX-shell shebangs (incl. env -S), hook left untouched. Tests cover both refusal and happy paths; CI green at head.'
+  review_verdict: approved
 filed_at:
   code_sha: c78d82b2e84cfcfc0b621723ad072e65deabfac0
   branch: pr-2821
@@ -54,3 +69,7 @@ filed_at:
   vendor: claude
   session: 01a162fe8880
   harness_version: 2.1.308 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-23T13:24:14.498422651Z
+  completion_sha: 1926ea4486197073fcfbd8129c2d1034eeafca58
