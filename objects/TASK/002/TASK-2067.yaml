@@ -3,12 +3,12 @@ spec_id: TASK-2067
 agreed_id: TASK-2067
 title: Resolve unresolved trace IDs via store history and aliases so they stop blocking mandate coverage
 description: 'Follow-up from TASK-1800 (AC2 slice 1, PR #2798). Item-level trace attribution was measured on the 50 frozen mandate endpoints and rejected: it never changed case-level refusals (49/50) and widened evidence (fallback 290 -> 414 as signed off, 333 after one advisor iteration). The remaining lever is the unresolved trace IDs: the 18-case audit has 30 scoped (case, ID) pairs judged unresolved (e.g. TASK-176, TASK-1335, EPIC-1-001, BUG-1-051, FR-1-043), whose frozen history or aliases are missing, and their refusals cannot be judged true or incidental. Acceptance: (1) for each unresolved ID in docs/testing/task-1800-semantic-audit.json, classify it as recorded alias, deleted-with-history, or dangling, using store history and the alias registry; (2) repair the resolution path for any alias or history that exists but is not found, keeping the comment-24 fail-closed rule (any history hit that cannot be read refuses); (3) report the before/after case-level refusals on the 50 frozen endpoints with make task-1800-replay. Named IDs and decide() fail-closed handling are unchanged.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T13:11:27.819459305Z
-modified_at: 2026-10-23T14:41:31.991312114Z
+modified_at: 2026-10-23T15:14:24.959583703Z
 req_type: Task
 relationships:
 - rel_type: References
@@ -150,6 +150,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a16953-d83b-75d0-8edd-860aea19c537
+  author: aida-auto-bump
+  timestamp: 2026-10-23T15:14:24.955741635Z
+  session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a16953-d83f-7930-b464-9db8eabbb005
+  timestamp: 2026-10-23T15:14:24.959579107Z
+  agent: aida
+  commit_sha: 4d0d544861c3db9522ce5de97a80f9f064f430b7
+  summary: All TASK-2067 ACs and folded TASK-2068/2144/2145 met; C1/C2/C4 verified in diff+tests, refactor is a pure move; CI green at head; six non-blocking notes
+  review_verdict: approved
 filed_at:
   code_sha: c8f7d054ba9d01bc4ecf7a48e90c91bc97f1f6cf
   branch: claude/task-1800-ac2-s1
@@ -158,3 +173,7 @@ filed_at:
   aida_build_sha: b5c03f772f
   vendor: claude
   session: 5a255452-d2b7-43de-a888-7bf28259e983
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-23T15:14:24.955736981Z
+  completion_sha: 4d0d544861c3db9522ce5de97a80f9f064f430b7
