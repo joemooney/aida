@@ -5145,7 +5145,9 @@ fn load_agent_views_for_enrich() -> Vec<crate::agent_registry::AgentRegistryView
     let Ok(project_root) = crate::find_main_worktree_root() else {
         return Vec::new();
     };
-    let ctx = crate::agent_registry::AgentClassifyContext::new(chrono::Utc::now(), 30, vec![]);
+    // trace:TASK-2272 | ai:claude
+    let ctx = crate::agent_registry::AgentClassifyContext::new(chrono::Utc::now(), 30, vec![])
+        .for_display();
     crate::agent_registry::list_agent_views(&project_root, &ctx)
 }
 

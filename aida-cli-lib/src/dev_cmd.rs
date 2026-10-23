@@ -119,7 +119,10 @@ pub(crate) fn choose_activate_repo(
     if let Some(found) = cwd.ancestors().find(|p| is_aida_repo(p)) {
         return (found.to_path_buf(), ActivateRepoSource::Enclosing);
     }
-    if let Some(found) = choose_env_dev_repo(env_repo, env_home) {
+    if let Some(found) = choose_env_dev_repo(
+        env_repo.map(std::ffi::OsStr::new),
+        env_home.map(std::ffi::OsStr::new),
+    ) {
         return found;
     }
     (cwd.to_path_buf(), ActivateRepoSource::Cwd)
@@ -132,10 +135,12 @@ pub(crate) fn choose_activate_repo(
 /// that still exists. The fallback fires only for a set-but-missing
 /// `$AIDA_DEV_REPO`: unset means "no dev checkout" and yields `None`. With
 /// nothing to fall back to, the stale path is returned so an error names it.
+/// Both are `OsStr` so a non-UTF-8 path is honoured, not silently dropped.
 // trace:TASK-2251 | ai:claude
+// trace:TASK-2272 | ai:claude
 pub(crate) fn choose_env_dev_repo(
-    env_repo: Option<&str>,
-    env_home: Option<&str>,
+    env_repo: Option<&std::ffi::OsStr>,
+    env_home: Option<&std::ffi::OsStr>,
 ) -> Option<(std::path::PathBuf, ActivateRepoSource)> {
     let env_repo = env_repo.filter(|p| !p.is_empty())?;
     if !std::path::Path::new(env_repo).exists() {
@@ -154,8 +159,8 @@ pub(crate) fn choose_env_dev_repo(
 /// a checkout.
 // trace:TASK-2251 | ai:claude
 pub(crate) fn env_dev_repo() -> Option<std::path::PathBuf> {
-    let env_repo = std::env::var("AIDA_DEV_REPO").ok();
-    let env_home = std::env::var("AIDA_DEV_HOME_REPO").ok();
+    let env_repo = std::env::var_os("AIDA_DEV_REPO");
+    let env_home = std::env::var_os("AIDA_DEV_HOME_REPO");
     choose_env_dev_repo(env_repo.as_deref(), env_home.as_deref())
         .map(|(path, _)| path)
         .filter(|path| path.exists())

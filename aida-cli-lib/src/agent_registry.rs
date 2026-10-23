@@ -292,6 +292,11 @@ pub(crate) struct AgentClassifyContext {
     pub(crate) work_grace_secs: u64,
     // trace:BUG-2212 | ai:claude
     pub(crate) observer: PidObserver,
+    /// How long a heartbeat-only row (process unobservable) counts as live.
+    /// Defaults to the short guard bound; display surfaces opt into the
+    /// longer window with [`Self::for_display`].
+    // trace:TASK-2272 | ai:claude
+    pub(crate) heartbeat_ttl_secs: i64,
 }
 
 impl AgentClassifyContext {
@@ -307,7 +312,18 @@ impl AgentClassifyContext {
             proc_tree: None,
             work_grace_secs: 10,
             observer: PidObserver::current(),
+            heartbeat_ttl_secs: GUARD_HEARTBEAT_TTL_SECS,
         }
+    }
+
+    /// A listing a human reads: a heartbeat-only row stays listed for the
+    /// full `UNOBSERVED_HEARTBEAT_TTL_SECS`. Guards (launch dedupe, nudge
+    /// routing, reaping) keep the short default, so a crashed host session
+    /// seen from a sandbox stops counting as live within minutes.
+    // trace:TASK-2272 | ai:claude
+    pub(crate) fn for_display(mut self) -> Self {
+        self.heartbeat_ttl_secs = UNOBSERVED_HEARTBEAT_TTL_SECS;
+        self
     }
 
     // trace:BUG-2212 | ai:claude
@@ -1791,7 +1807,8 @@ pub(crate) fn mcp_authority_status_lines(agents: &[AgentRegistryView]) -> Vec<St
 
 pub(crate) fn mcp_authority_status_lines_for_project(project_root: &Path) -> Vec<String> {
     let cfg = Config::load(project_root);
-    let ctx = AgentClassifyContext::new(Utc::now(), cfg.busy_threshold_secs, Vec::new());
+    let ctx =
+        AgentClassifyContext::new(Utc::now(), cfg.busy_threshold_secs, Vec::new()).for_display();
     let agents = list_agent_views(project_root, &ctx);
     mcp_authority_status_lines(&agents)
 }
@@ -1813,7 +1830,13 @@ fn view_for(
     ctx: &AgentClassifyContext,
 ) -> AgentRegistryView {
     // trace:BUG-2212 | ai:claude
-    let (pid_alive, liveness) = display_liveness(project_root, &entry, ctx.observer, ctx.now);
+    let (pid_alive, liveness) = observer_liveness(
+        project_root,
+        &entry,
+        ctx.observer,
+        ctx.now,
+        ctx.heartbeat_ttl_secs,
+    );
     let status = classify_status(&entry, pid_alive, ctx);
     let native_session_id = resumable_session_id(&entry);
     AgentRegistryView {
@@ -1930,6 +1953,11 @@ pub(crate) const INITIAL_PID_NAMESPACE: u64 = 0xEFFF_FFFC;
 // trace:BUG-2212 | ai:claude
 pub(crate) const UNOBSERVED_HEARTBEAT_TTL_SECS: i64 = 24 * 60 * 60;
 
+/// The bound a guard (duplicate-launch refusal, advisor nudge routing) gives a
+/// heartbeat-only row: past it the row is unverified, not live.
+// trace:TASK-2272 | ai:claude
+pub(crate) const GUARD_HEARTBEAT_TTL_SECS: i64 = 10 * 60;
+
 /// Raw `/proc` facts that say whether this process sits in a PID namespace
 /// of its own (a sandboxed shell sees only its own few pids).
 // trace:BUG-2212 | ai:claude
@@ -1965,22 +1993,32 @@ impl PidNamespaceProbe {
         }
     }
 
-    /// Isolated when pid 1 lives in another namespace, the kernel reports
-    /// more than one pid level, or pid 1 is not an init process.
+    /// Isolated when pid 1 lives in another namespace or the kernel reports
+    /// more than one pid level. Only when `/proc/1/ns/pid` is unreadable does
+    /// pid 1's name decide: anything but a known init means a sandbox.
+    // trace:TASK-2272 | ai:claude
     pub(crate) fn is_isolated(&self) -> bool {
-        const INITS: [&str; 6] = [
+        const INITS: [&str; 10] = [
             "systemd",
             "init",
             "tini",
             "dumb-init",
             "docker-init",
             "catatonit",
+            "runit",
+            "openrc-init",
+            "s6-svscan",
+            "busybox",
         ];
-        if matches!((self.self_ns, self.pid1_ns), (Some(a), Some(b)) if a != b) {
-            return true;
+        match (self.self_ns, self.pid1_ns) {
+            (Some(a), Some(b)) if a != b => return true,
+            _ => {}
         }
         if self.nspid_levels > 1 {
             return true;
+        }
+        if self.pid1_ns.is_some() {
+            return false;
         }
         self.pid1_comm
             .as_deref()
@@ -2038,15 +2076,17 @@ impl LivenessBasis {
     }
 }
 
-/// Liveness for display. Process-observed when the observer can see the
-/// row's pid; otherwise a heartbeat within `UNOBSERVED_HEARTBEAT_TTL_SECS`
-/// counts as live, never a process absence the observer cannot see.
+/// Liveness as `observer` sees it. Process-observed when the observer can see
+/// the row's pid; otherwise a heartbeat within `heartbeat_ttl_secs` counts as
+/// live, never a process absence the observer cannot see.
 // trace:BUG-2212 | ai:claude
-pub(crate) fn display_liveness(
+// trace:TASK-2272 | ai:claude
+pub(crate) fn observer_liveness(
     project_root: &Path,
     entry: &AgentRegistryEntry,
     observer: PidObserver,
     now: DateTime<Utc>,
+    heartbeat_ttl_secs: i64,
 ) -> (bool, LivenessBasis) {
     if entry.ended_at.is_some() {
         return (false, LivenessBasis::Process);
@@ -2060,10 +2100,7 @@ pub(crate) fn display_liveness(
     let age = now
         .signed_duration_since(entry.last_active_at)
         .num_seconds();
-    (
-        age <= UNOBSERVED_HEARTBEAT_TTL_SECS,
-        LivenessBasis::Heartbeat,
-    )
+    (age <= heartbeat_ttl_secs, LivenessBasis::Heartbeat)
 }
 
 /// The entry's process is still running: pid plus recorded start time, so a
@@ -2744,12 +2781,25 @@ fn process_cmdline(pid: u32) -> Option<String> {
 }
 
 #[cfg(unix)]
-fn session_start_agent_pid(mut child_pid: u32, agent_type: &str) -> Option<u32> {
-    while let Some(parent) = parent_pid(child_pid) {
+fn session_start_agent_pid(child_pid: u32, agent_type: &str) -> Option<u32> {
+    session_start_agent_pid_in(child_pid, agent_type, parent_pid, process_cmdline)
+}
+
+/// The nearest ancestor of `child_pid` whose cmdline is the agent's, over an
+/// injectable process tree so the walk is testable without `/proc`.
+// trace:TASK-2272 | ai:claude
+#[cfg(unix)]
+fn session_start_agent_pid_in(
+    mut child_pid: u32,
+    agent_type: &str,
+    parent_of: impl Fn(u32) -> Option<u32>,
+    cmdline_of: impl Fn(u32) -> Option<String>,
+) -> Option<u32> {
+    while let Some(parent) = parent_of(child_pid) {
         if parent == 0 || parent == child_pid {
             return None;
         }
-        if process_cmdline(parent).is_some_and(|cmd| cmdline_matches_agent(&cmd, agent_type)) {
+        if cmdline_of(parent).is_some_and(|cmd| cmdline_matches_agent(&cmd, agent_type)) {
             return Some(parent);
         }
         child_pid = parent;
@@ -2777,7 +2827,18 @@ fn cmdline_matches_agent(cmdline: &str, agent_type: &str) -> bool {
                 .and_then(|s| s.to_str())
                 .is_some_and(|name| name == "codex")
         }),
-        "antigravity" => lower.contains("antigravity") || lower.contains("gemini"),
+        // The installed Antigravity CLI binary is `agy`.
+        // trace:TASK-2272 | ai:claude
+        "antigravity" => {
+            lower.contains("antigravity")
+                || lower.contains("gemini")
+                || lower.split_whitespace().any(|arg| {
+                    std::path::Path::new(arg)
+                        .file_name()
+                        .and_then(|s| s.to_str())
+                        .is_some_and(|name| name == "agy")
+                })
+        }
         _ => false,
     }
 }
@@ -3012,10 +3073,47 @@ mod tests {
             "claude"
         ));
         assert!(cmdline_matches_agent("gemini --model pro", "antigravity"));
+        // trace:TASK-2272 | ai:claude
+        assert!(cmdline_matches_agent(
+            "/home/joe/.local/bin/agy --resume",
+            "antigravity"
+        ));
+        assert!(!cmdline_matches_agent(
+            "aida awaiting --notice",
+            "antigravity"
+        ));
         assert!(!cmdline_matches_agent(
             "bash .claude/hooks/aida-mail-notice.sh",
             "claude"
         ));
+    }
+
+    // TASK-2272 (TASK-2282, TASK-1-463): the Antigravity SessionStart hook
+    // runs as `aida awaiting --notice` under a hook shell under `agy`. The
+    // registry row must name the `agy` process, not the short-lived hook.
+    // trace:TASK-2272 | ai:claude
+    #[cfg(unix)]
+    #[test]
+    fn session_start_agent_pid_finds_the_agy_ancestor_of_the_hook() {
+        let tree: std::collections::HashMap<u32, (u32, &str)> = [
+            (300, (200, "aida awaiting --notice")),
+            (200, (100, "sh -c aida awaiting --notice")),
+            (100, (1, "/home/joe/.local/bin/agy")),
+            (1, (0, "/sbin/init")),
+        ]
+        .into_iter()
+        .collect();
+        let parent_of = |pid: u32| tree.get(&pid).map(|(p, _)| *p);
+        let cmdline_of = |pid: u32| tree.get(&pid).map(|(_, c)| c.to_string());
+        assert_eq!(
+            session_start_agent_pid_in(300, "antigravity", parent_of, cmdline_of),
+            Some(100)
+        );
+        // No agent ancestor: None, so the caller falls back to the hook pid.
+        assert_eq!(
+            session_start_agent_pid_in(300, "codex", parent_of, cmdline_of),
+            None
+        );
     }
 
     #[test]
@@ -3914,6 +4012,23 @@ mod tests {
         assert!(!PidNamespaceProbe::default().is_isolated());
     }
 
+    // TASK-2272 (TASK-2281): a host whose pid 1 is runit/openrc/s6 shares its
+    // namespace with pid 1, so the inode comparison settles it and the name is
+    // never consulted. The name decides only when /proc/1/ns/pid is unreadable.
+    // trace:TASK-2272 | ai:claude
+    #[test]
+    fn pid_namespace_probe_prefers_the_namespace_inode_over_pid1_comm() {
+        let host = INITIAL_PID_NAMESPACE;
+        for comm in ["runit", "openrc-init", "s6-svscan", "my-custom-init"] {
+            assert!(!probe(host, Some(host), 1, comm).is_isolated(), "{comm}");
+        }
+        for comm in ["runit", "openrc-init", "s6-svscan", "dumb-init", "tini"] {
+            assert!(!probe(host, None, 1, comm).is_isolated(), "{comm}");
+        }
+        assert!(probe(host, None, 1, "bwrap").is_isolated());
+        assert!(probe(7, Some(host), 1, "runit").is_isolated());
+    }
+
     // trace:BUG-2212 | ai:claude
     #[test]
     fn pid_observer_sees_only_its_own_namespace_and_unstamped_rows_from_the_host() {
@@ -3969,9 +4084,65 @@ mod tests {
             .all(|v| v.status == AgentStatus::Stale && v.liveness == LivenessBasis::Process));
     }
 
+    // TASK-2272 (TASK-2280): a host session that crashed without `ended_at`
+    // keeps its last heartbeat. From a sandbox, the display listing still shows
+    // it for the 24h window, but guards (launch dedupe, advisor nudge routing)
+    // stop counting it live once its heartbeat is past the short guard bound.
+    // trace:TASK-2272 | ai:claude
+    #[test]
+    fn guards_give_heartbeat_only_rows_a_short_bound_and_display_the_full_window() {
+        let tmp = TempDir::new().unwrap();
+        let now = Utc::now();
+        let mut fresh = entry_with(u32::MAX - 1, now - chrono::Duration::minutes(2));
+        fresh.pid_namespace = Some(INITIAL_PID_NAMESPACE);
+        fresh.role = Some("advisor".to_string());
+        write_entry(tmp.path(), &fresh).unwrap();
+        let mut crashed = entry_with(u32::MAX - 2, now - chrono::Duration::hours(1));
+        crashed.pid_namespace = Some(INITIAL_PID_NAMESPACE);
+        crashed.role = Some("advisor".to_string());
+        write_entry(tmp.path(), &crashed).unwrap();
+        let sandbox = PidObserver::from_probe(&probe(7, None, 1, "bwrap"));
+
+        let status = |views: &[AgentRegistryView], pid: u32| {
+            views.iter().find(|v| v.pid == pid).unwrap().status
+        };
+        let guard = list_agent_views(tmp.path(), &ctx(now, 30, vec![]).with_observer(sandbox));
+        assert_eq!(status(&guard, u32::MAX - 1), AgentStatus::Idle);
+        assert_eq!(status(&guard, u32::MAX - 2), AgentStatus::Stale);
+        assert!(guard.iter().all(|v| v.liveness == LivenessBasis::Heartbeat));
+
+        let display = list_agent_views(
+            tmp.path(),
+            &ctx(now, 30, vec![]).with_observer(sandbox).for_display(),
+        );
+        assert_eq!(status(&display, u32::MAX - 1), AgentStatus::Idle);
+        assert_eq!(status(&display, u32::MAX - 2), AgentStatus::Idle);
+
+        // The launch guard refuses only for the freshly heartbeating row.
+        let dup = crate::agent_launch::matching_live_duplicate(
+            &guard,
+            &crashed.agent_type,
+            Some("advisor"),
+            None,
+        )
+        .expect("the fresh row is a live duplicate");
+        assert_eq!(dup.pid, u32::MAX - 1);
+        let only_crashed: Vec<_> = guard
+            .into_iter()
+            .filter(|v| v.pid == u32::MAX - 2)
+            .collect();
+        assert!(crate::agent_launch::matching_live_duplicate(
+            &only_crashed,
+            &crashed.agent_type,
+            Some("advisor"),
+            None,
+        )
+        .is_none());
+    }
+
     // trace:BUG-2212 | ai:claude
     #[test]
-    fn display_liveness_treats_ended_rows_as_dead_from_any_namespace() {
+    fn observer_liveness_treats_ended_rows_as_dead_from_any_namespace() {
         let tmp = TempDir::new().unwrap();
         let now = Utc::now();
         let mut ended = entry_with(u32::MAX - 1, now);
@@ -3979,7 +4150,13 @@ mod tests {
         ended.ended_at = Some(now);
         let sandbox = PidObserver::from_probe(&probe(7, None, 1, "bwrap"));
         assert_eq!(
-            display_liveness(tmp.path(), &ended, sandbox, now),
+            observer_liveness(
+                tmp.path(),
+                &ended,
+                sandbox,
+                now,
+                UNOBSERVED_HEARTBEAT_TTL_SECS
+            ),
             (false, LivenessBasis::Process)
         );
     }

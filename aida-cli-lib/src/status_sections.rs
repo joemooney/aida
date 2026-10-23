@@ -1710,7 +1710,8 @@ pub(crate) fn collect_user_context(
 
     let (queue_head, queue_total) =
         collect_queue_snapshot(backend, store, role.as_deref(), &leases);
-    let agent_ctx = build_agent_classify_context(project_root, &leases);
+    // trace:TASK-2272 | ai:claude
+    let agent_ctx = build_agent_classify_context(project_root, &leases).for_display();
     let registry_agents = agent_registry::list_agent_views(project_root, &agent_ctx);
     let agents =
         merge_agent_views_with_lease_fallback(project_root, &leases, registry_agents, &agent_ctx);

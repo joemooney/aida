@@ -9509,7 +9509,7 @@ Arguments:
 Options:
       --repo <REPO>
           Override the AIDA repo path (defaults to current directory if it looks like the aida repo,
-          or $AIDA_DEV_REPO if set)
+          or $AIDA_DEV_REPO if set; when that names a removed worktree, $AIDA_DEV_HOME_REPO)
 
       --debug
           Pin to the debug build (target/debug). Sticky — subsequent plain `aida dev activate`
@@ -33170,7 +33170,7 @@ Working on aida itself
       {
         "name": "repo",
         "takes_value": true,
-        "help": "Override the AIDA repo path (defaults to current directory if it looks like the aida repo, or $AIDA_DEV_REPO if set)"
+        "help": "Override the AIDA repo path (defaults to current directory if it looks like the aida repo, or $AIDA_DEV_REPO if set; when that names a removed worktree, $AIDA_DEV_HOME_REPO)"
       }
     ],
     "hidden": true

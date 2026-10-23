@@ -1570,7 +1570,12 @@ impl BuildSteps for RealSteps {
 /// when that names a removed worktree, `$AIDA_DEV_HOME_REPO`.
 // trace:TASK-2251 | ai:claude
 pub(crate) fn resolve_build_repo() -> Result<PathBuf> {
-    let cwd = std::env::current_dir()?;
+    resolve_build_repo_from(&std::env::current_dir()?)
+}
+
+/// [`resolve_build_repo`] from an explicit cwd.
+// trace:TASK-2272 | ai:claude
+pub(crate) fn resolve_build_repo_from(cwd: &Path) -> Result<PathBuf> {
     if let Some(found) = cwd.ancestors().find(|p| crate::is_aida_repo(p)) {
         return Ok(found.canonicalize()?);
     }
