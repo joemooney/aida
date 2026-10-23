@@ -466,3 +466,7 @@ pub(crate) fn mandate_still_active(id: &str) -> bool {
 #[cfg(test)]
 #[path = "tests/bug_2179_mandate_recollect_tests.rs"]
 mod bug_2179_mandate_recollect_tests;
+
+#[cfg(test)]
+#[path = "tests/task_2067_trace_resolution_tests.rs"]
+mod task_2067_trace_resolution_tests;
