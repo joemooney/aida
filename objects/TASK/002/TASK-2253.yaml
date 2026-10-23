@@ -1,0 +1,27 @@
+id: 01a16a00-daec-7c03-a718-a7f27f2be5d1
+spec_id: TASK-2253
+agreed_id: TASK-2253
+title: Antigravity sessions never trigger the host-side dead-row gc that ends unverified mail readers
+description: |
+  Follow-up from TASK-2237 (swept in TASK-2238 / PR-2858).
+
+  The dead-row registry gc that ends unverified mail readers (STORY-1843, status_awaiting::emit_notice_time_line) runs only when a SessionStart hook payload reaches `aida awaiting --notice`. Claude and Codex both reach it: codex-hooks.json SessionStart runs aida-mail-notice.sh, and codex 0.163's session-start input schema pins hook_event_name = "SessionStart", which a test now covers. Antigravity does not: aida-core/templates/antigravity-hooks.json defines only a PreInvocation grant-expiry hook, with no session-start or mail-notice hook. An agy session's dead registry rows are therefore never ended by a host-side observer, and from a sandboxed sender they count as unverified mail readers for up to 24h.
+
+  Acceptance:
+  - An agy session start (or the nearest event agy offers) triggers the same host-side dead-row gc, or another host-side trigger ends dead agy rows. Name the agy hook event used and pin its payload shape with a test, as was done for Codex.
+  - A test shows a dead agy row ends without a manual `aida agent gc`.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-23T18:23:23.372759315Z
+modified_at: 2026-10-23T18:23:23.372759315Z
+req_type: Task
+filed_at:
+  code_sha: e353dc77adea0bf1d39683bc1f4236d9d8e8eb99
+  branch: claude/task-2238
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: a9e78d3491
+  vendor: claude
+  session: da288a75-2066-4577-8fb5-8a6386f53efe
