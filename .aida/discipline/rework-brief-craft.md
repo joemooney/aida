@@ -15,9 +15,11 @@ A rework brief preserves a review finding across a cold session. It is not
 5. Keep judgment in the finding and mechanics in the requested change. If the
    remedy requires a product/design choice, route that choice to the advisor
    instead of pretending it is implementation detail.
-6. State the local gate, and only the local gate: `make check-ci-fast`,
-   `make test-touched` (or named `cargo test --profile agent -p <crate>
-   <filter>` runs), and `make check-ci-compile` after merging main. A brief
+6. State the local gate, and only the local gate: ONE targeted
+   `cargo test --profile agent -p <crate> <module filter>` run plus
+   `make check-ci-fast`, then push. `make test-touched` and
+   `make check-ci-compile` only when the change touches shared test infra
+   (`test_env`, `test_git`, ratchet baselines) or more than 10 files. A brief
    never orders `make check-ci`, `make check`, `cargo test --workspace` or an
    unfiltered `--lib` run; the full suite is CI's job. It never sets
    `AIDA_CARGO_NO_SLOT` and never wraps cargo in `timeout N`. It tells the
