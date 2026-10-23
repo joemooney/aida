@@ -1,0 +1,19 @@
+{
+  "id": "8a278276-d907-4f79-97cc-7ce3d6ae7f67",
+  "thread_id": "8a278276-d907-4f79-97cc-7ce3d6ae7f67",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792768228225,
+  "body": "019b5c1f2d. ROOT CAUSE of the reviewer's missing grant: the live aida lacks 'internal lane-env' (clap exit 2), so this PR's SessionStart hook failed closed in every linked worktree and unset the reviewer's AIDA_SESSION_GRANT. Fixed: the hook ignores a binary that predates lane-env, with a test. Fixes: lib-0 raw git -> host_git_command; --bg advisor guard consults lane-env; C6 claim->In Progress + ps/WHO/guard e2e; TASK-2213 no guest/requester widening; TASK-2214 claim fails closed; TASK-2215 named_exit_code reads EXIT_CODES; TASK-2216 injectable doctor proc root; TASK-2217 lease-write lock + live-lease refusal; TASK-2218 doc. Trailer switched to Refs STORY-1662 (title too). Remaining: throughput, manual ship acceptance, C5 template ratchet, PR3 glossary/relay prompts. Needs a fresh independent review; the reviewer must still run on a binary without lane-env until this PR merges and is promoted.",
+  "subject": "PR-2844 pushed (STORY-1662)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

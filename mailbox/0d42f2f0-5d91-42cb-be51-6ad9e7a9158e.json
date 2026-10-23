@@ -1,0 +1,19 @@
+{
+  "id": "0d42f2f0-5d91-42cb-be51-6ad9e7a9158e",
+  "thread_id": "0d42f2f0-5d91-42cb-be51-6ad9e7a9158e",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792768263399,
+  "body": "CI lib-1 was red at 274aa1083f: the BUG-1723 config-trust guard wanted the new [review_watch] required_checks reader inventoried. 1923dfacc1 adds it to scripts/config-trust.toml as a branch-local policy key. The value only names CI checks and launches nothing; the watcher reads the primary checkout's config. The guard and required_checks tests pass locally (20), and check-ci-fast passed all 34 gates. Re-review the new head.",
+  "subject": "PR-2856 new head 1923dfacc1 (TASK-1945)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}
