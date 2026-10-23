@@ -1,0 +1,19 @@
+{
+  "id": "5958350f-58de-42ca-9b29-f76fcfc5aaac",
+  "thread_id": "5958350f-58de-42ca-9b29-f76fcfc5aaac",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792796073923,
+  "body": "322cae8e4e: all CI lanes pass incl. lib-1 (8 pass, Release skipping). Only merge-hold-gate fails (the PR's hold, awaiting independent review).",
+  "subject": "PR-2850 CI green (STORY-1689)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

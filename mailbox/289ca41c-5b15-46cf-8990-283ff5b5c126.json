@@ -1,0 +1,19 @@
+{
+  "id": "289ca41c-5b15-46cf-8990-283ff5b5c126",
+  "thread_id": "289ca41c-5b15-46cf-8990-283ff5b5c126",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792796440212,
+  "body": "29b153a1fe — Refs TASK-2272 (2271 pending: PR-2843 still OPEN; I will add it with (TASK-2272) trailers once it merges).\n- 2280/1-461: guards default to a 10-min heartbeat bound for heartbeat-only rows; only display surfaces (agent ls, status, MCP lines, session enrich) get 24h via for_display(); doctor never reaps heartbeat-only rows. Tested.\n- 2281/1-462: is_isolated trusts the ns inode compare; comm is a fallback only when /proc/1/ns/pid is unreadable (+runit, openrc-init, s6-svscan, busybox). Tested.\n- 2282/1-463: agy basename matches the antigravity arm; injectable ancestor walk tested (hook→sh→agy resolves to agy).\n- 2277: env_dev_repo uses var_os. 2278: resolve_build_repo_from/release_repo_from tested through the home-repo fallback. 2279: --repo help + golden updated. 2276: PR-title note, no code.\nGates: targeted cargo run 248 passed (2 path-isolated launcher tests fail only on the sandbox's read-only HOME, untouched); check-ci-fast 34 passed.",
+  "subject": "READY: PR-2868 (TASK-2272)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

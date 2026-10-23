@@ -1,0 +1,19 @@
+{
+  "id": "e5db7a8e-7471-4a70-8d56-d63b7c3c86e4",
+  "thread_id": "e5db7a8e-7471-4a70-8d56-d63b7c3c86e4",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792796490505,
+  "body": "Report: .aida/handoff/advisor/regroup-delta-2026-10-23.md. Audited all 191 draft entries: 148 STILL-ACCURATE; 0 SHIPPED-SINCE; 43 CHANGED; 0 MISSING-FROM-DRAFT. Current deferred set: 156, all covered. Main pinned and rechecked at bdd284689792; STORY-1690 PR #2843 remains open. Report includes per-spec evidence and six operator decision groups. No specs, branches, PRs or worktrees edited.",
+  "subject": "regroup delta done",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "integrator"
+}

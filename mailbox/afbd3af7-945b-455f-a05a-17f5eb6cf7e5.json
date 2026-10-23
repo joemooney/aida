@@ -1,0 +1,19 @@
+{
+  "id": "afbd3af7-945b-455f-a05a-17f5eb6cf7e5",
+  "thread_id": "afbd3af7-945b-455f-a05a-17f5eb6cf7e5",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792796830599,
+  "body": "head fe066ccd7f. Round 2:\n1. burndown:262, orchestrate skill (RequestChanges section + capability line 77), orchestrate command step 5, and git-sync-and-review:902: rework = relaunch 'aida queue work <SPEC> --role implementer --no-human' on the existing branch, or mail an interactive lane. No SendMessage to implementers.\n2. orchestrate skill brief: scoped to the interactive 'aida worktree add --role implementer' lane; a headless launch takes no brief (record needs on the spec via aida comment add); the lane opens its own PR and stops, as in step 4. 'Don't open a PR' dropped.\n3. Ratchet: a line routing work to an implementer/fixer via SendMessage is refused; the self-test covers both phrasings plus the bare allowed-tools '- SendMessage' entry (still legal).\nGates: 6 targeted scaffolding tests ok, check-templates ok, check-ci-fast 34/34.",
+  "subject": "PR-2865 pushed (STORY-1662)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}
