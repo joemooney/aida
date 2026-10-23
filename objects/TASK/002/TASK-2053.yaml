@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T09:53:13.924066900Z
-modified_at: 2026-10-23T12:08:09.147383877Z
+modified_at: 2026-10-23T12:36:32.596822291Z
 req_type: Task
 relationships:
 - rel_type: References
@@ -235,6 +235,11 @@ comments:
   content: 'Relay session 1 (2026-10-23): #2836 local head 3bed09035c merges origin/main via 9812f46c1c (no rebase/force push), preserves S4a strict tests, and implements folded TASK-2197/2198/2190/2189/2191 plus doctor alias/full wiring/config-warning regressions. TASK-1641 fixture now has a host-owned clone lease and a boundary preflight test. C1 final S4a run 39915809949 at a86d35f6e8 reports 31/31. Author self-check: two fresh-context rounds, historical ratchet-count wording fixed; final no confirmed findings with own lightweight evidence, not approval. Local cargo check --tests / check-ci-fast / test-touched are queued/running, not green yet; no push yet. #2839 merged this local S4b head without conflicts and remains held for operator real-Claude test. #2847 is already merged at 269605c38d; untouched by this session.'
   created_at: 2026-10-23T12:08:09.147383877Z
   modified_at: 2026-10-23T12:08:09.147383877Z
+- id: 01a168c3-4ed4-7d53-a700-a9180d1459ce
+  author: ai:codex:joe
+  content: 'Relay checkpoint: both branch test-target checks passed (S4b2 /tmp/task2053-check-r2.log; S4c /tmp/task2053-s4c-check.log). Full fast gate caught two test infrastructure nits before any push: shell quoting needed cfg(unix), and new fixture git writes needed shared test_git helper. Both fixed and merged forward. Direct portability check exit 0; git-maintenance ratchet 8/8 pass with the old BUG-1982 baseline lowered. Current clean committed heads: #2836 19df8a08ad, #2839 f40a89ca37. Final test-target/fast reruns are queued, make test-touched queued; no push, READY, review verdict, hold-clear or ship. Exact commands/logs and prepared PR bodies will be in relay handoff. Advisor was mailed the leased TASK-1641 fixture details and local operator command; real-Claude PASS still required.'
+  created_at: 2026-10-23T12:36:32.596822291Z
+  modified_at: 2026-10-23T12:36:32.596822291Z
 history:
 - id: 01a15de1-409d-7c42-b18e-94acbd5eb19d
   author: joe
