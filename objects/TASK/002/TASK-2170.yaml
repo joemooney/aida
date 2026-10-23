@@ -6,12 +6,12 @@ description: |
   aida-cli-lib/src/seat_authority.rs RosterStoreError::NotDetected Display uses std::env::var_os("AIDA_STORE") with a non-empty check but no trim, unlike store_sync::aida_store_override, so a whitespace-only AIDA_STORE adds a spurious 'AIDA_STORE is set' note.
 
   Raised in review of PR-2831: https://github.com/joemooney/aida/pull/2831#issuecomment-6340353942
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-22T12:08:24.079180280Z
-modified_at: 2026-10-23T06:59:39.149729141Z
+modified_at: 2026-10-23T11:27:01.972977718Z
 req_type: Task
 tags:
 - from-review:PR-2831
@@ -63,6 +63,21 @@ history:
   timestamp: 2026-10-23T06:59:40.511793988Z
   session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
   changes: []
+- id: 01a16883-ab4c-7521-a44a-35bb6d526a54
+  author: aida-auto-bump
+  timestamp: 2026-10-23T11:27:01.964756302Z
+  session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a16883-ab54-7721-9037-6fc9b34bf0f6
+  timestamp: 2026-10-23T11:27:01.972971339Z
+  agent: aida
+  commit_sha: 830f037b87a3f5da59c06b9b54f0929b0bf6555d
+  summary: 'TASK-2169/2170/2171 (+TASK-1-432) all PASS: StoreMissing names non-directory vs absent paths and the main-worktree candidate; AIDA_STORE note comes from a trimmed, lazily resolved setting; allow path never resolves AIDA_STORE. CI green at e38f0a8.'
+  review_verdict: approved
 filed_at:
   code_sha: 06f8be4827790b478907bef54ac92f96050ffb38
   branch: pr-2831
@@ -72,3 +87,7 @@ filed_at:
   vendor: claude
   session: 01a16380a484
   harness_version: 2.1.308 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-23T11:27:01.964751681Z
+  completion_sha: 830f037b87a3f5da59c06b9b54f0929b0bf6555d
