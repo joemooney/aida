@@ -206,10 +206,11 @@ fn an_unrouted_remote_call_leaks_the_token_into_transport_argv() {
 }
 
 /// TASK-2001: the host git builders in `src` (1-based lines) that contact a
-/// remote (`fetch`, `pull`, `push` or `ls-remote` as the subcommand) with no
-/// credential routing (`remote_credentials`, `host_remote_git_command`) later
-/// in the same function (at most 25 lines), and no `remote-creds-ok(TASK-2001): <why>` comment in the
-/// three lines above. A builder is `host_git_command(`, any
+/// remote (`fetch`, `pull`, `push` or `ls-remote` as the subcommand, after any
+/// `-c k=v` options; a `let mut` builder in any statement up to its scope end)
+/// with no credential routing (`remote_credentials`, `host_remote_git_command`)
+/// later in the same function (at most 25 lines), and no
+/// `remote-creds-ok(TASK-2001): <why>` comment in the three lines above. A builder is `host_git_command(`, any
 /// `<Type>::new("git")`, or a `git(dir, &["fetch", ...])` style helper call.
 /// Inline `#[cfg(test)] mod name { ... }` blocks are skipped.
 // trace:TASK-1952 | trace:TASK-2001 | ai:claude
@@ -219,11 +220,17 @@ fn task_2001_unrouted_remote_calls(src: &str) -> Vec<usize> {
     static BUILDER: LazyLock<regex::Regex> =
         LazyLock::new(|| regex::Regex::new(r#"host_git_command\(|\b\w+::new\("git"\)"#).unwrap());
     static VERB: LazyLock<regex::Regex> = LazyLock::new(|| {
-        regex::Regex::new(
-            r#"\.args?\(\s*&?\[?\s*"(fetch|pull|push|ls-remote)"|\bgit\(\s*[^,()]+,\s*&\[\s*"(fetch|pull|push|ls-remote)""#,
-        )
+        // PR-2837 review: global options may precede the subcommand
+        // (`"-c", "http.lowSpeedLimit=1000", "ls-remote"`), so skip any run of
+        // `"-c"`/`"-C"` with its value and of other `"-..."` literals first.
+        let opts = r#"(?:"-[cC]"\s*,\s*[^,\]]+,\s*|"-[^"]*"\s*,\s*)*"#;
+        regex::Regex::new(&format!(
+            r#"\.args?\(\s*&?\[?\s*{opts}"(fetch|pull|push|ls-remote)"|\bgit\(\s*[^,()]+,\s*&\[\s*{opts}"(fetch|pull|push|ls-remote)""#
+        ))
         .unwrap()
     });
+    static LET_MUT: LazyLock<regex::Regex> =
+        LazyLock::new(|| regex::Regex::new(r"\blet mut (\w+)").unwrap());
     static ROUTED: LazyLock<regex::Regex> =
         LazyLock::new(|| regex::Regex::new(r"remote_credentials|host_remote_git_command").unwrap());
     static MODULE: LazyLock<regex::Regex> =
@@ -276,14 +283,42 @@ fn task_2001_unrouted_remote_calls(src: &str) -> Vec<usize> {
         }
         // BUG review (PR-2837): comments are not code; a `;` inside one must
         // not end the builder chain before its `.args(["push", ...])`.
-        let window = lines[i..lines.len().min(i + 14)]
-            .iter()
-            .map(|l| TRAILING_COMMENT.replace(l, "").into_owned())
-            .collect::<Vec<_>>()
-            .join("\n");
-        let statements = if line.contains("let mut ") { 3 } else { 1 };
-        let chain: Vec<&str> = window.split(';').take(statements).collect();
-        if !verb.is_match(&chain.join(";")) {
+        let strip = |ls: &[&str]| {
+            ls.iter()
+                .map(|l| TRAILING_COMMENT.replace(l, "").into_owned())
+                .collect::<Vec<_>>()
+                .join("\n")
+        };
+        let chain = if let Some(var) = LET_MUT.captures(line).map(|c| c[1].to_string()) {
+            // PR-2837 review: a `let mut` builder may take its verb any
+            // number of statements later, so scan every statement naming the
+            // variable up to the end of its block or its next re-binding.
+            let mention = regex::Regex::new(&format!(r"\b{var}\b")).unwrap();
+            let rebind = regex::Regex::new(&format!(r"\blet (mut )?{var}\b")).unwrap();
+            let mut depth = 0i64;
+            let mut end = lines.len();
+            for (j, l) in lines.iter().enumerate().skip(i) {
+                let code = TRAILING_COMMENT.replace(l, "");
+                if j > i && rebind.is_match(&code) {
+                    end = j;
+                    break;
+                }
+                depth += code.matches('{').count() as i64 - code.matches('}').count() as i64;
+                if depth < 0 {
+                    end = j + 1;
+                    break;
+                }
+            }
+            strip(&lines[i..end])
+                .split(';')
+                .filter(|st| mention.is_match(st))
+                .collect::<Vec<_>>()
+                .join(";")
+        } else {
+            let window = strip(&lines[i..lines.len().min(i + 14)]);
+            window.split(';').next().unwrap_or_default().to_string()
+        };
+        if !verb.is_match(&chain) {
             continue;
         }
         // The routing must sit in the same function, before the next `fn`.
@@ -370,6 +405,33 @@ fn task_2001_every_host_remote_call_routes_its_credentials() {
                     fn via_helper(cwd: &Path, remote: &str, args: &[&str]) {\n    \
                     run(host_remote_git_command(cwd, remote), args);\n}\n";
     assert_eq!(task_2001_unrouted_remote_calls(wrappers), vec![1, 4, 12]);
+    // PR-2837 review: `-c key=value` options before the verb (pr_lookup's
+    // ls-remote probe, the mirror push) with their routing removed.
+    let leading_options = "fn probe(d: &Path) {\n    let out = std::process::Command::new(\"git\")\n        \
+                           .current_dir(d)\n        .args([\n            \"-c\",\n            \
+                           // Keep the probe bounded.\n            \"http.lowSpeedLimit=1000\",\n            \
+                           \"-c\",\n            \"http.lowSpeedTime=10\",\n            \"ls-remote\",\n            \
+                           \"origin\",\n        ])\n        .output();\n}\n\
+                           fn mirror(d: &Path, m: &str) {\n    let mut command = Command::new(\"git\");\n    \
+                           command.arg(\"-C\").arg(d).args([\n        \"-c\",\n        \
+                           \"core.hooksPath=/dev/null\",\n        \"push\",\n    ]);\n    \
+                           let _ = command.arg(m).output();\n}\n\
+                           fn stash(d: &Path) { let _ = Command::new(\"git\").args([\"-c\", \"x=y\", \"stash\", \"push\"]).output(); }\n";
+    assert_eq!(
+        task_2001_unrouted_remote_calls(leading_options),
+        vec![2, 16]
+    );
+    // PR-2837 review: a `let mut` builder whose verb sits in its 4th+
+    // statement (remote_create's mirror-sync push_cmd), routing removed;
+    // a re-bound name ends the scan.
+    let long_chain = "fn sync(d: &Path, m: &str) {\n    let mut push_cmd = Command::new(\"git\");\n    \
+                      push_cmd.arg(\"-C\").arg(d);\n    // a; b; c\n    push_cmd.env(\"A\", \"1\");\n    \
+                      push_cmd.env(\"B\", \"2\");\n    let out = push_cmd\n        .args([\"push\", m])\n        \
+                      .output();\n}\n\
+                      fn local(d: &Path) {\n    let mut cmd = Command::new(\"git\");\n    cmd.arg(\"status\");\n    \
+                      let _ = cmd.output();\n    let mut cmd = host_git_command(d);\n    \
+                      cmd.args([\"fetch\"]).remote_credentials(d, \"origin\");\n}\n";
+    assert_eq!(task_2001_unrouted_remote_calls(long_chain), vec![2]);
 
     let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     let mut offenders = Vec::new();
