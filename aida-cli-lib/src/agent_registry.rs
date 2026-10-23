@@ -1236,11 +1236,12 @@ pub(crate) fn gc_dead_agents(
                 .unwrap_or(true);
         if protected_ended_or_resumable {
             // Keep the resumable history but stop it counting as a mail
-            // reader: an observably dead process has ended.
-            // trace:STORY-1843 | ai:claude
+            // reader: an observably dead process has ended. Its end is the
+            // last heartbeat, never now, so an old crash cannot outrank a
+            // recent end in resume ordering. trace:STORY-1843 | ai:claude
             if entry.ended_at.is_none() {
                 if !dry_run {
-                    entry.ended_at = Some(now);
+                    entry.ended_at = Some(entry.last_active_at);
                     write_entry(project_root, &entry)?;
                 }
                 report.marked_ended += 1;
@@ -3654,8 +3655,38 @@ mod tests {
         assert_eq!(ended.native_session_id.as_deref(), Some("native-session-1"));
         assert_eq!(ended.last_active_at, record.last_active_at);
 
+        assert_eq!(ended.ended_at, Some(record.last_active_at));
+
         let again = gc_dead_agents(tmp.path(), false, None).unwrap();
         assert_eq!(again.marked_ended, 0, "ending is idempotent");
+    }
+
+    // STORY-1843: a crash gc discovers late keeps its last-heartbeat end, so a
+    // session that ended recently stays first for resume-latest and the picker.
+    // trace:STORY-1843 | ai:claude
+    #[test]
+    fn gc_ended_old_crash_does_not_outrank_a_recent_end_for_resume() {
+        let tmp = TempDir::new().unwrap();
+        let now = Utc::now();
+        let mut crashed = entry_with(u32::MAX - 1, now - Duration::days(3));
+        crashed.native_session_id = Some("old-crash".to_string());
+        write_entry(tmp.path(), &crashed).unwrap();
+        let mut recent = entry_with(u32::MAX - 2, now - Duration::minutes(10));
+        recent.native_session_id = Some("recent-end".to_string());
+        recent.ended_at = Some(now - Duration::minutes(10));
+        write_entry(tmp.path(), &recent).unwrap();
+
+        let report = gc_dead_agents(tmp.path(), false, None).unwrap();
+        assert_eq!(report.marked_ended, 1);
+
+        let views =
+            ended_resumable_agent_views(tmp.path(), &ctx(Utc::now(), 30, vec![tmp.path().into()]));
+        let order: Vec<_> = views
+            .iter()
+            .map(|v| v.native_session_id.as_deref().unwrap_or(""))
+            .collect();
+        assert_eq!(order, vec!["recent-end", "old-crash"]);
+        assert_eq!(views[1].ended_at, Some(crashed.last_active_at));
     }
 
     // STORY-1843: gc in another PID namespace cannot see the row's process, so

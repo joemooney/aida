@@ -1090,7 +1090,8 @@ pub const SUPPORTED_MAILBOX_LAYOUT: u32 = 1;
 // trace:STORY-1843 | ai:claude
 pub fn mailbox_dir_guard(dir: &Path) -> std::io::Result<()> {
     use std::io::Read as _;
-    let meta = match std::fs::symlink_metadata(dir) {
+    // Follows symlinks: a mailbox linked to a real directory is ordinary.
+    let meta = match std::fs::metadata(dir) {
         Ok(meta) => meta,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
         Err(e) => return Err(e),
@@ -1913,6 +1914,12 @@ mod tests {
         assert!(mailbox_dir_guard(&dir).is_ok());
         std::fs::create_dir(&dir).unwrap();
         assert!(mailbox_dir_guard(&dir).is_ok());
+        let linked = tmp.path().join("linked");
+        std::os::unix::fs::symlink(&dir, &linked).unwrap();
+        assert!(
+            mailbox_dir_guard(&linked).is_ok(),
+            "symlink to a dir passes"
+        );
         let stray = tmp.path().join("stray");
         std::fs::write(&stray, "not a manifest").unwrap();
         let error = mailbox_dir_guard(&stray).unwrap_err().to_string();
@@ -1925,6 +1932,16 @@ mod tests {
         .unwrap();
         let error = mailbox_dir_guard(&damaged).unwrap_err().to_string();
         assert!(error.contains("damaged"), "{error}");
+        let to_manifest = tmp.path().join("to-manifest");
+        let manifest = tmp.path().join("manifest");
+        std::fs::write(
+            &manifest,
+            format!("{MAILBOX_LAYOUT_MANIFEST_MARKER}\nlayout = 2\n"),
+        )
+        .unwrap();
+        std::os::unix::fs::symlink(&manifest, &to_manifest).unwrap();
+        let error = mailbox_dir_guard(&to_manifest).unwrap_err().to_string();
+        assert!(error.contains("migrated to layout 2"), "{error}");
     }
 
     #[test]
