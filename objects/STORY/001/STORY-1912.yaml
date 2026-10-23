@@ -1,0 +1,34 @@
+id: 01a16935-d7a2-7033-b642-fea89652a908
+spec_id: STORY-1912
+agreed_id: STORY-1912
+title: 'Review PR-2852: [AI:claude] feat(list): --fields gains opened, whitespace separators, generated help (TASK-2205)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `claude/task-2205`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2852>
+  - Branch: `claude/task-2205` → `main`
+
+  ## Covers
+
+  - TASK-2205
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2852` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-23T14:41:38.722185968Z
+modified_at: 2026-10-23T14:41:38.722185968Z
+req_type: Story
+filed_at:
+  code_sha: c6bb0dc4f168f6183260f8a692248eda24e9e7a7
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 51e59ef00d
+  vendor: claude
+  session: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
