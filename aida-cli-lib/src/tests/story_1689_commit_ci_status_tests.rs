@@ -107,6 +107,36 @@ fn commit_checks_refuses_a_non_sha_before_any_cli_call() {
 }
 
 #[test]
+fn commit_checks_refuses_an_abbreviated_sha() {
+    let dir = tempfile::tempdir().unwrap();
+    for forge in [
+        Box::new(GitHubForge::new(dir.path())) as Box<dyn Forge>,
+        Box::new(GitLabForge::new(dir.path())),
+    ] {
+        let err = forge.commit_checks(&SHA[..12]).unwrap_err();
+        assert!(
+            err.to_string().contains("full 40- or 64-character SHA"),
+            "{err:#}"
+        );
+    }
+    assert!(is_full_commit_sha(SHA));
+    assert!(is_full_commit_sha(&"a".repeat(64)));
+    assert!(!is_full_commit_sha(&SHA[..39]));
+    assert!(!is_full_commit_sha(&"g".repeat(40)));
+}
+
+/// The TASK-1424 note sits directly above the mapper it describes.
+#[test]
+fn glab_pipeline_mapper_keeps_its_trace_comment() {
+    let src = include_str!("../forge.rs");
+    let at = src
+        .find("pub(crate) fn ci_status_from_glab_pipelines(")
+        .expect("mapper");
+    let above: Vec<&str> = src[..at].lines().rev().take(2).collect();
+    assert!(above[1].starts_with("// trace:TASK-1424"), "{above:?}");
+}
+
+#[test]
 fn pure_git_has_no_commit_ci() {
     let dir = tempfile::tempdir().unwrap();
     let forge = forge_for_kind(dir.path(), ForgeKind::None);
