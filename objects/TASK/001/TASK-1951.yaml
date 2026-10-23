@@ -64,7 +64,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T15:55:48.750553278Z
-modified_at: 2026-10-22T23:39:34.460321346Z
+modified_at: 2026-10-23T10:29:41.782869279Z
 req_type: Task
 tags:
 - reconcile
@@ -498,6 +498,12 @@ comments:
   created_at: 2026-10-22T23:39:34.460321346Z
   modified_at: 2026-10-22T23:39:34.460321346Z
   session_id: d32da6c3-6fcd-4a6d-9999-3f89b70d28bd
+- id: 01a1684f-2d16-7912-86cb-df2f89af886e
+  author: joe
+  content: 'Takeover fixer 2026-10-23 03:30: PR #2845 pushed at db5525ca7a. origin/main is merged and the PR no longer conflicts. One conflict (tests/test_release_pr_flow.sh Test 4e): kept the behavioural lease-watcher test (TASK-1691) and added main''s ls -A check for leftover dotfile temp files. The completing slice is unchanged (S9b lock, 10s refusal, contention test, superseded-clearance test, TASK-2003 option A). Gates: check-ci-fast 34/34, check-ci-compile ok, test-touched 1624 passed / 0 failed. Gate code; the operator merges. (Mailbox to advisor refused: 0 live readers.)'
+  created_at: 2026-10-23T10:29:41.782869279Z
+  modified_at: 2026-10-23T10:29:41.782869279Z
+  session_id: 2eb8f55e-10e6-4db1-9cfb-54654200d536
 history:
 - id: 01a154e0-78cf-7a40-bc67-d8f6e5580d97
   author: joe
