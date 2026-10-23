@@ -1150,3 +1150,28 @@ fn task_2146_contained_scan_quotes_paths_whatever_the_user_quote_path() {
     let lines = worktree_status_porcelain_lines(&wt).unwrap();
     assert_eq!(lines, vec![format!("?? {}", porcelain_quote(name))]);
 }
+
+// TASK-2125 (PR-2837 review): the password-database walk itself. Every
+// account /etc/passwd lists with this process's primary gid is found (local
+// accounts are always enumerable), and a second call is served from the
+// per-process memo with the same answer.
+// trace:TASK-1952 | trace:TASK-2125 | ai:claude
+#[cfg(unix)]
+#[test]
+fn task_2125_primary_gid_walk_finds_local_accounts() {
+    // SAFETY: getgid has no preconditions and cannot fail.
+    let gid = unsafe { libc::getgid() };
+    let local: Vec<String> = std::fs::read_to_string("/etc/passwd")
+        .unwrap_or_default()
+        .lines()
+        .filter_map(|l| {
+            let f: Vec<&str> = l.split(':').collect();
+            (f.len() > 3 && f[3] == gid.to_string()).then(|| f[0].to_string())
+        })
+        .collect();
+    let found = crate::store_hooks::accounts_with_primary_gid(gid);
+    for name in &local {
+        assert!(found.contains(name), "{name} missing from {found:?}");
+    }
+    assert_eq!(crate::store_hooks::accounts_with_primary_gid(gid), found);
+}

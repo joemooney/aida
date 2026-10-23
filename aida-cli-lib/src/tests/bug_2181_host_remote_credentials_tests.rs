@@ -230,10 +230,21 @@ fn task_2001_unrouted_remote_calls(src: &str) -> Vec<usize> {
         LazyLock::new(|| regex::Regex::new(r"^\s*(pub(\(crate\))? )?mod \w+\s*\{").unwrap());
     static NEXT_FN: LazyLock<regex::Regex> =
         LazyLock::new(|| regex::Regex::new(r"^\s*(pub(\([^)]*\))? )?(async )?fn \w+").unwrap());
-    // A file naming no remote verb has nothing to check.
-    if !["\"fetch\"", "\"pull\"", "\"push\"", "\"ls-remote\""]
-        .iter()
-        .any(|v| src.contains(v))
+    static REMOTE_PARAM: LazyLock<regex::Regex> =
+        LazyLock::new(|| regex::Regex::new(r"\bremote\s*:").unwrap());
+    static TRAILING_COMMENT: LazyLock<regex::Regex> =
+        LazyLock::new(|| regex::Regex::new(r"(^|\s)//.*$").unwrap());
+    // A file naming no remote verb and no `remote` parameter has nothing to
+    // check.
+    if ![
+        "\"fetch\"",
+        "\"pull\"",
+        "\"push\"",
+        "\"ls-remote\"",
+        "remote:",
+    ]
+    .iter()
+    .any(|v| src.contains(v))
     {
         return Vec::new();
     }
@@ -263,7 +274,13 @@ fn task_2001_unrouted_remote_calls(src: &str) -> Vec<usize> {
         if !builder.is_match(line) && !helper_call {
             continue;
         }
-        let window = lines[i..lines.len().min(i + 14)].join("\n");
+        // BUG review (PR-2837): comments are not code; a `;` inside one must
+        // not end the builder chain before its `.args(["push", ...])`.
+        let window = lines[i..lines.len().min(i + 14)]
+            .iter()
+            .map(|l| TRAILING_COMMENT.replace(l, "").into_owned())
+            .collect::<Vec<_>>()
+            .join("\n");
         let statements = if line.contains("let mut ") { 3 } else { 1 };
         let chain: Vec<&str> = window.split(';').take(statements).collect();
         if !verb.is_match(&chain.join(";")) {
@@ -281,6 +298,37 @@ fn task_2001_unrouted_remote_calls(src: &str) -> Vec<usize> {
             found.push(i + 1);
         }
     }
+    // A wrapper that takes the remote as a parameter takes its subcommand
+    // from the caller too (`git_push_in(dir, remote, args)`), so no verb is
+    // visible here: any git builder in a fn with a `remote` parameter must
+    // route that remote's credentials somewhere in its body.
+    let starts: Vec<usize> = (0..lines.len())
+        .filter(|&i| !tests.contains(&i) && next_fn.is_match(lines[i]))
+        .collect();
+    for (n, &start) in starts.iter().enumerate() {
+        let end = starts.get(n + 1).copied().unwrap_or(lines.len());
+        let sig_end = (start..end.min(start + 10))
+            .find(|&j| lines[j].contains('{'))
+            .unwrap_or(start);
+        let signature = lines[start..=sig_end].join(" ");
+        if !REMOTE_PARAM.is_match(&signature) {
+            continue;
+        }
+        let body: Vec<&str> = lines[start..end]
+            .iter()
+            .copied()
+            .filter(|l| !l.trim_start().starts_with("//"))
+            .collect();
+        let body = body.join("\n");
+        let justified = lines[start.saturating_sub(3)..start]
+            .iter()
+            .any(|l| l.contains("remote-creds-ok(TASK-2001):"));
+        if builder.is_match(&body) && !routed.is_match(&body) && !justified {
+            found.push(start + 1);
+        }
+    }
+    found.sort_unstable();
+    found.dedup();
     found
 }
 
@@ -303,6 +351,25 @@ fn task_2001_every_host_remote_call_routes_its_credentials() {
                   let _ = Command::new(\"git\").args([\"fetch\", \"../x\"]).output();\n}\n\
                   #[cfg(test)]\nmod t {\n    fn z(d: &Path) { Command::new(\"git\").args([\"push\"]); }\n}\n";
     assert_eq!(task_2001_unrouted_remote_calls(sample), vec![2, 19, 20]);
+    // PR-2837 review: a comment holding `;` between the builder and its
+    // verb (doctor heal's `push --delete`).
+    let commented =
+        "fn heal(d: &Path) {\n    let _ = Command::new(\"git\")\n        .arg(d)\n        \
+                     // The id is a branch name; end options before it.\n        \
+                     .args([\"push\", \"--delete\", \"origin\", \"x\"])\n        .status();\n}\n";
+    assert_eq!(task_2001_unrouted_remote_calls(commented), vec![2]);
+    // Parameter-driven wrappers: the verb comes from the caller.
+    let wrappers = "fn git_push_in(dir: &Path, remote: &str, args: &[&str]) {\n    \
+                    let _ = Command::new(\"git\").args(args).current_dir(dir).status();\n}\n\
+                    fn git_raw_via(\n    repo: &Path,\n    remote: Option<&str>,\n    args: &[&str],\n) {\n    \
+                    let mut cmd = Command::new(\"git\");\n    cmd.arg(\"-C\").arg(repo).args(args);\n}\n\
+                    fn remote_git_with_env(cwd: &Path, remote: &str, args: &[&str]) {\n    \
+                    run(host_git_command(cwd), args);\n}\n\
+                    fn routed(dir: &Path, remote: &str, args: &[&str]) {\n    \
+                    let _ = Command::new(\"git\").args(args).remote_credentials(dir, remote).status();\n}\n\
+                    fn via_helper(cwd: &Path, remote: &str, args: &[&str]) {\n    \
+                    run(host_remote_git_command(cwd, remote), args);\n}\n";
+    assert_eq!(task_2001_unrouted_remote_calls(wrappers), vec![1, 4, 12]);
 
     let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     let mut offenders = Vec::new();

@@ -175,27 +175,56 @@ fn is_env_read(code: &str) -> bool {
 // trace:TASK-1952 | trace:TASK-1976 | ai:claude
 fn split_or_aliased_env_reads(production: &str) -> Vec<String> {
     // Most files never read the environment: skip them before any regex
-    // work, so the guard stays inside its time budget.
-    if !production.contains("env::var") {
+    // work, so the guard stays inside its time budget. `std::env::{..}`
+    // covers a grouped import of `var`.
+    if !production.contains("env::var") && !production.contains("env::{") {
         return Vec::new();
     }
+    // Aliases of the variable: `GRANT_ENV as G`, `let k = ..GRANT_ENV;`,
+    // and (PR-2837 review) `const K: &str = ..GRANT_ENV;` / `static`.
     static ALIAS: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
-        regex::Regex::new(r"\bGRANT_ENV as (\w+)|\blet (\w+)\b[^=;]*= &?[\w:]*\bGRANT_ENV ?;")
-            .unwrap()
+        regex::Regex::new(
+            r"\bGRANT_ENV as (\w+)|\b(?:let|const|static) (\w+)\b[^=;]*= &?[\w:]*\bGRANT_ENV ?;",
+        )
+        .unwrap()
     });
+    // Readers imported bare (PR-2837 review): `use std::env::var;`,
+    // `use std::env::var as get;`, `use std::env::{self, var_os};`.
+    static READER_IMPORT: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+        regex::Regex::new(r"\buse (?:std::)?env::(var(?:_os)?)(?: as (\w+))? ?;").unwrap()
+    });
+    static GROUP_IMPORT: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+        regex::Regex::new(r"\buse (?:std::)?env::\{([^}]*)\}").unwrap()
+    });
+    static GROUP_READER: std::sync::LazyLock<regex::Regex> =
+        std::sync::LazyLock::new(|| regex::Regex::new(r"\b(var(?:_os)?)(?: as (\w+))?\b").unwrap());
     let text = production.split_whitespace().collect::<Vec<_>>().join(" ");
     let mut names = vec!["GRANT_ENV".to_string(), GRANT_LITERAL.to_string()];
     for capture in ALIAS.captures_iter(&text) {
         let name = capture.get(1).or(capture.get(2)).unwrap().as_str();
         names.push(name.to_string());
     }
+    let mut readers = vec![r"env::var(?:_os)?".to_string()];
+    let mut add_reader = |c: &regex::Captures| {
+        let name = c.get(2).or(c.get(1)).unwrap().as_str();
+        readers.push(format!(r"(?:^|[^\w:.]){}", regex::escape(name)));
+    };
+    for capture in READER_IMPORT.captures_iter(&text) {
+        add_reader(&capture);
+    }
+    for group in GROUP_IMPORT.captures_iter(&text) {
+        for capture in GROUP_READER.captures_iter(&group[1]) {
+            add_reader(&capture);
+        }
+    }
     let names = names
         .iter()
         .map(|n| regex::escape(n))
         .collect::<Vec<_>>()
         .join("|");
+    let readers = readers.join("|");
     let read = regex::Regex::new(&format!(
-        r"env::var(?:_os)? ?\( ?&? ?(?:[\w:]*::)?(?:{names})\b[^;]*"
+        r"(?:{readers}) ?\( ?&? ?(?:[\w:]*::)?(?:{names})\b[^;]*"
     ))
     .unwrap();
     let scan = regex::Regex::new(&format!(
@@ -356,6 +385,13 @@ fn scan_catches_split_aliased_and_iterated_reads() {
         "use crate::seat_authority::GRANT_ENV as G;\nfn a() { let _ = std::env::var(G); }\n",
         "fn a() {\n    let k = seat_authority::GRANT_ENV;\n    let _ = std::env::var_os(k);\n}\n",
         "fn a() { let _ = std::env::vars().find(|(k, _)| k == GRANT_ENV); }\n",
+        // PR-2837 review: a reader imported bare, renamed or grouped, and a
+        // const or static alias of the variable.
+        "use std::env::var;\nfn a() { let _ = var(crate::seat_authority::GRANT_ENV); }\n",
+        "use std::env::var as get;\nfn a() { let _ = get(GRANT_ENV); }\n",
+        "use std::env::{self, var_os};\nfn a() { let _ = var_os(GRANT_ENV); }\n",
+        "const K: &str = crate::seat_authority::GRANT_ENV;\nfn a() { let _ = std::env::var(K); }\n",
+        "static K: &str = GRANT_ENV;\nfn a() { let _ = std::env::var_os(K); }\n",
     ] {
         assert_eq!(
             split_or_aliased_env_reads(source).len(),
@@ -367,6 +403,7 @@ fn scan_catches_split_aliased_and_iterated_reads() {
         "fn a(c: &mut Command) { c.env(crate::seat_authority::GRANT_ENV, \"x\"); }\n",
         "fn a() { let n = crate::seat_authority::GRANT_ENV; println!(\"{n}\"); }\n",
         "fn a() { let _ = std::env::var(\"AIDA_SESSION_ID\"); }\n",
+        "use std::env::var;\nfn a() { let _ = var(\"AIDA_SESSION_ID\"); let v = cfg.var(GRANT_ENV); }\n",
     ] {
         assert!(
             split_or_aliased_env_reads(allowed).is_empty(),

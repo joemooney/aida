@@ -114,6 +114,21 @@ assert_exit "env with a single-quoted name is blocked" 2 "$(run '{"tool_input":{
 assert_exit "declare -x with a quoted name is blocked" 2 "$(run '{"tool_input":{"command":"declare -x \"AIDA_CARGO_NO_SLOT\"=1"}}')"
 assert_exit "export with an empty quote after the name is blocked" 2 "$(run '{"tool_input":{"command":"export AIDA_CARGO_NO_SLOT\"\"=1"}}')"
 assert_exit "make with a quoted name is blocked" 2 "$(run '{"tool_input":{"command":"make \"AIDA_CARGO_NO_SLOT\"=1 check"}}')"
+# PR-2837 review: a quote inside the name is joined too (TASK-2140), and a
+# sourced or executed file after then/do/else/command/builtin/! (TASK-2139).
+# trace:TASK-1952 | trace:TASK-2139 | trace:TASK-2140 | ai:claude
+assert_exit "a quoted tail of the name is blocked" 2 "$(run '{"tool_input":{"command":"export AIDA_CARGO_NO_\"SLOT\"=1"}}')"
+assert_exit "a quoted head of the name is blocked" 2 "$(run '{"tool_input":{"command":"export \"AIDA_CARGO\"_NO_SLOT=1"}}')"
+assert_exit "a single-quoted middle of the name is blocked" 2 "$(run '{"tool_input":{"command":"env AIDA_'"'"'CARGO_NO'"'"'_SLOT=1 make check"}}')"
+assert_exit "a dot-source after then is blocked" 2 "$(run '{"tool_input":{"command":"printf '"'"'AIDA_CARGO_NO_SLOT=1 make'"'"' > x.sh; if true; then . ./x.sh; fi"}}')"
+assert_exit "a source after do is blocked" 2 "$(run '{"tool_input":{"command":"printf '"'"'AIDA_CARGO_NO_SLOT=1 make'"'"' > x.sh; for f in x.sh; do source $f; done"}}')"
+assert_exit "a dot-source after else is blocked" 2 "$(run '{"tool_input":{"command":"printf '"'"'AIDA_CARGO_NO_SLOT=1 make'"'"' > x.sh; if false; then true; else . ./x.sh; fi"}}')"
+assert_exit "command dot-source is blocked" 2 "$(run '{"tool_input":{"command":"printf '"'"'AIDA_CARGO_NO_SLOT=1 make'"'"' > x.sh; command . ./x.sh"}}')"
+assert_exit "builtin source is blocked" 2 "$(run '{"tool_input":{"command":"printf '"'"'AIDA_CARGO_NO_SLOT=1 make'"'"' > x.sh; builtin source x.sh"}}')"
+assert_exit "a negated source is blocked" 2 "$(run '{"tool_input":{"command":"printf '"'"'AIDA_CARGO_NO_SLOT=1 make'"'"' > x.sh; ! source x.sh"}}')"
+assert_exit "write then execute is blocked" 2 "$(run '{"tool_input":{"command":"printf '"'"'AIDA_CARGO_NO_SLOT=1 make'"'"' > x.sh; chmod +x x.sh; ./x.sh"}}')"
+assert_exit "a commit message naming source is allowed" 0 "$(run '{"tool_input":{"command":"git commit -m \"docs: never source a file that sets AIDA_CARGO_NO_SLOT=1\""}}')"
+assert_exit "a ./script without the variable is allowed" 0 "$(run '{"tool_input":{"command":"chmod +x x.sh; ./x.sh"}}')"
 rm -rf "$TMP"
 [ "$fail" -eq 0 ] || exit 1
 echo "GIT GUARDRAILS PARSE: all checks passed"

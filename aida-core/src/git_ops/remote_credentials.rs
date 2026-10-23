@@ -315,6 +315,8 @@ fn append_git_config_env(cmd: &mut Command, key: &str, value: &str) {
 /// Every `remote.<name>.url` and `remote.<name>.pushurl` value exactly as
 /// configured (before any `insteadOf` rewrite), in git's order.
 // trace:BUG-2119 | ai:claude
+// remote-creds-ok(TASK-2001): `git config --get-regexp` reads the local
+// configuration only; it never contacts the remote.
 fn configured_remote_urls(dir: &Path, remote: &str) -> Vec<String> {
     let out = super::host_git_command(dir)
         .args([
