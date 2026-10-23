@@ -214,3 +214,41 @@ fn json_rows_carry_both_type_spellings() {
         "the narrowed row must not carry unrequested keys: {row}"
     );
 }
+
+/// TASK-2239 (swept in TASK-2238): the full JSON row has no `opened` key, so a
+/// narrowed `--fields opened` (or its `created_at` alias) is emitted only
+/// through the shared cell fallback. Pin it so a change to that fallback
+/// cannot silently drop the field.
+// trace:TASK-2238 | ai:claude
+#[test]
+fn narrowed_json_emits_opened_for_the_field_and_its_alias() {
+    let (_tmp, repo, home) = init_repo();
+    for fields in ["id,opened", "id created_at"] {
+        let out = aida(
+            &repo,
+            &home,
+            &["list", "--fields", fields, "--format", "json"],
+        );
+        assert!(
+            out.status.success(),
+            "{fields}: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let rows: serde_json::Value =
+            serde_json::from_slice(&out.stdout).expect("parseable narrowed json");
+        let row = rows
+            .as_array()
+            .and_then(|a| a.first())
+            .expect("at least one narrowed row");
+        let opened = row
+            .get("opened")
+            .and_then(|v| v.as_str())
+            .unwrap_or_else(|| panic!("{fields}: no `opened` key: {row}"));
+        assert!(!opened.trim().is_empty(), "{fields}: empty opened: {row}");
+        assert!(row.get("spec_id").is_some(), "{fields}: {row}");
+        assert!(
+            row.get("created_at").is_none(),
+            "{fields}: alias leaked: {row}"
+        );
+    }
+}

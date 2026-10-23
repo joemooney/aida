@@ -662,9 +662,9 @@ pub(crate) fn local_commits_not_on_branch(worktree: &std::path::Path, branch: &s
         return 1;
     }
     let remote_ref = format!("origin/{branch}");
-    let out = std::process::Command::new("git")
-        .arg("-C")
-        .arg(worktree)
+    // TASK-2053: refuses a seat clone (no answer → keep).
+    // trace:TASK-2053 | ai:claude
+    let out = aida_core::git_ops::host_git_command(worktree)
         .args(["rev-list", "--count", "HEAD", "--not", &remote_ref])
         .output();
     match out {
