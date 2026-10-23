@@ -1,0 +1,27 @@
+id: 01a16b1a-2e1f-7e20-933e-e1cdf802f327
+spec_id: TASK-1-465
+title: 'cosmetic (non-blocking): the TASK-2232 classification table comment on TASK-206…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-2238, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  cosmetic (non-blocking): the TASK-2232 classification table comment on TASK-2067 (comments[5]) has no header row. It starts at |---|---|---|, so markdown renders it as plain text instead of a table. Add a '| Class | IDs | Evidence |' header line.
+  Reviewed sha: e5e9db3f6b3188113eaea3e8f47c4447fff4591b
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-23T23:30:40.287841007Z
+modified_at: 2026-10-23T23:30:40.287841007Z
+req_type: Task
+tags:
+- carried-from:TASK-2238
+- finding-hash:e5c5d358
+- from-review:TASK-2238
+- kind:carried-forward
+filed_at:
+  code_sha: a62f57fbac4874cf7d668cc6c9e3841787a8a838
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c51da86593
+  vendor: claude
