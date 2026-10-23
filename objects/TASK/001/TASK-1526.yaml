@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T18:51:03.515884243Z
-modified_at: 2026-10-19T16:08:10.852752117Z
+modified_at: 2026-10-23T17:58:14.473454457Z
 req_type: Task
 tags:
 - batch:next
@@ -4163,6 +4163,20 @@ comments:
   created_at: 2026-10-18T23:01:10.538995345Z
   modified_at: 2026-10-18T23:01:10.538995345Z
   session_id: d9d20604-d01b-4fae-a5d2-4f57366ee283
+- id: 01a169e9-d4c9-74f3-af89-6b63811af4c8
+  author: ai:codex:joe
+  content: |-
+    UNSHIPPED AUDIT 2026-10-23 (integrator)
+
+    Pinned origin/main: a9e78d34914e43b30fc9d2b590d83ab96feb48b2.
+
+    task-1526-salvage: SHIPPED-ELSEWHERE. Head `b06cd3662dcc`; cherry **7+**. Aggregate PID `82e08de5d1d697605423aa6d058a165f2960451b` exactly matches main [4d4253135278](https://github.com/joemooney/aida/commit/4d42531352783450a847c764c7dfdbe8a2d5708e) / merged [#2283](https://github.com/joemooney/aida/pull/2283). Spec is Deferred after an explicit reopen at `bf65220959c7`; V4 latency rework remains separately gated. This branch contains the already-landed implementation, not that later remedy.
+
+    task-1526: SHIPPED-ELSEWHERE. Head `22935f599a58`; cherry **1+**; aggregate PID `5bd16faf13306112fbd130de05433b524ac1b197`. Recovery commit `e9f76cce84fb` explicitly says it salvaged this WIP and squash-replayed it; **23/24 per-file patch IDs match** that first salvage commit (the crate root was adapted to its newer base). The refined salvage aggregate then exactly matches main [4d4253135278](https://github.com/joemooney/aida/commit/4d42531352783450a847c764c7dfdbe8a2d5708e) / [#2283](https://github.com/joemooney/aida/pull/2283). Deferred rework is not a reason to replay this old WIP.
+
+    These are branch-artifact verdicts, not completion or dispatch/merge authority. No spec status, branch, PR or active worktree changed. Full 14-branch table: .aida/handoff/advisor/unshipped-audit-2026-10-23.md (8 SHIPPED-ELSEWHERE, 3 SALVAGE, 3 ABANDON).
+  created_at: 2026-10-23T17:58:14.473454457Z
+  modified_at: 2026-10-23T17:58:14.473454457Z
 history:
 - id: 01a0e0eb-7e92-7dd0-9ae3-5e4e5820902a
   author: aida-session-start
