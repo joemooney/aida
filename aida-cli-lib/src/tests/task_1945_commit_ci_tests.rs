@@ -264,3 +264,23 @@ fn aggregator_const_matches_the_ci_workflow() {
         "build-result is the job that requires every CI lane"
     );
 }
+
+/// AIDA's own readiness requires the aggregator through its project config
+/// (TASK-2201): the configured name is the workflow's job name.
+// trace:TASK-1945 | ai:claude (TASK-2201)
+#[test]
+fn project_config_requires_the_aggregator() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+    let config: toml::Value =
+        toml::from_str(&std::fs::read_to_string(root.join(".aida/config.toml")).unwrap()).unwrap();
+    let required = config["review_watch"]["required_checks"]
+        .as_array()
+        .unwrap();
+    assert_eq!(
+        required
+            .iter()
+            .map(|v| v.as_str().unwrap())
+            .collect::<Vec<_>>(),
+        vec![CI_AGGREGATOR_CHECK]
+    );
+}
