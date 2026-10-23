@@ -137,46 +137,27 @@ pub(crate) fn handle_mailbox_command(
             relayed_from,
             allow_second_person,
         } => {
-            let recipient = if *broadcast {
-                Recipient::Broadcast
-            } else if let Some(agent) = to {
-                let agent = agent.trim();
-                // BUG-2132: a junk id (flag, number, spec ID, line ref) opens a
-                // mailbox nobody reads; refuse it instead of warning.
-                // trace:BUG-2132 trace:TASK-1766 | ai:claude
-                if let Some(why) = aida_core::mailbox::recipient_id_rejection(agent) {
-                    anyhow::bail!(
-                        "send refused: --to {why}.\n  Pass an agent id or seat name (e.g. advisor, antigravity-implementer-1), or --broadcast."
-                    );
-                }
-                // trace:TASK-1766 | ai:claude — deliver a known identity under
-                // its stored spelling, exactly as an `@mention` of it is.
-                let known = crate::known_mailbox_recipients(store_root);
-                Recipient::Agent(
-                    known
-                        .get(&agent.to_lowercase())
-                        .cloned()
-                        .unwrap_or_else(|| agent.to_string()),
-                )
+            // Resolve before any message write; historical registry rows are not readers.
+            // trace:STORY-1843 | ai:codex
+            let resolution = if *broadcast {
+                None
             } else {
-                anyhow::bail!("specify --to <agent> or --broadcast");
-            };
-            // BUG-679: dead-letter guard. A direct message whose recipient
-            // matches no known role AND no registered agent may never be read
-            // (a typo'd name, a wrong role) — warn but still send, since the
-            // recipient might be a legitimate not-yet-live identity. Reuses the
-            // same known-identity set as the stranded-mail surface. Broadcasts
-            // reach everyone, so they are never flagged. trace:BUG-679 | ai:claude
-            if let Recipient::Agent(agent) = &recipient {
-                let known = known_mailbox_identities(project_root);
-                if !known.contains(&agent.trim().to_lowercase()) {
-                    eprintln!(
-                        "{} '{}' matches no known role or registered agent — this message may never be read.\n  Known roles: {}. Register agents with `aida agent new`.",
-                        crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
-                        agent.yellow(),
-                        AGENT_ROLES.join(", ")
-                    );
+                let target = to
+                    .as_deref()
+                    .ok_or_else(|| anyhow::anyhow!("specify --to <agent> or --broadcast"))?;
+                let directory =
+                    crate::mailbox_resolver::RecipientDirectory::load(project_root, store_root)?;
+                for warning in directory.warnings() {
+                    eprintln!("{warning}");
                 }
+                Some(directory.resolve(target)?)
+            };
+            let recipient = resolution
+                .as_ref()
+                .map(|r| Recipient::Agent(r.address.clone()))
+                .unwrap_or(Recipient::Broadcast);
+            if let Some(note) = resolution.as_ref().and_then(|r| r.reader_notice.as_ref()) {
+                eprintln!("{note}");
             }
             // trace:TASK-782 | ai:claude
             let parsed_intent = aida_core::mailbox::Intent::parse(intent).ok_or_else(|| {
@@ -1057,6 +1038,34 @@ mod tests {
     use crate::cli::{Cli, Command, MailboxCommand};
     use clap::Parser;
 
+    // Send tests need actual recipients now that unknown names and empty roles refuse.
+    // trace:STORY-1843 | ai:codex
+    fn seed_send_recipients(store: &std::path::Path) {
+        let project = store.parent().unwrap();
+        std::fs::create_dir_all(store.join("registry")).unwrap();
+        let roster = store.join("registry/team.toml");
+        let mut body = std::fs::read_to_string(&roster).unwrap_or_else(|_| "[members]\n".into());
+        body.push_str("alice = []\nbob = []\n");
+        std::fs::write(roster, body).unwrap();
+        for (vendor, name, role) in [
+            ("codex", "claude-reviewer-1", "advisor"),
+            ("claude", "agy-reviewer-task1522", "reviewer"),
+            ("antigravity", "antigravity-implementer-1", "implementer"),
+        ] {
+            crate::agent_registry::register_existing_agent(
+                project,
+                vendor,
+                std::process::id(),
+                role.into(),
+                None,
+                project.to_path_buf(),
+                Some(name.into()),
+                None,
+            )
+            .unwrap();
+        }
+    }
+
     fn message(id: &str, thread_id: &str) -> aida_core::mailbox::Message {
         aida_core::mailbox::Message {
             id: id.into(),
@@ -1100,6 +1109,7 @@ mod tests {
         let project = tempfile::tempdir().unwrap();
         let store = project.path().join(".aida-store");
         std::fs::create_dir_all(&store).unwrap();
+        seed_send_recipients(&store);
         mailbox_store::write_message(project.path(), &message("0fa629d6-1111", "thread-a"))
             .unwrap();
         mailbox_store::write_message(project.path(), &message("0fa629d6-2222", "thread-b"))
@@ -1309,6 +1319,7 @@ mod tests {
         let project = tempfile::tempdir().unwrap();
         let store = project.path().join(".aida-store");
         std::fs::create_dir_all(&store).unwrap();
+        seed_send_recipients(&store);
         let ok = [
             "advisor",
             "agy-reviewer-task1522",
@@ -1326,12 +1337,63 @@ mod tests {
         );
     }
 
+    // A foreign namespace makes kill(pid, 0) uninformative, not proof of death.
+    // trace:STORY-1843 | ai:codex
+    #[test]
+    fn mailbox_send_delivers_when_reader_pid_namespace_is_unobservable() {
+        let project = tempfile::tempdir().unwrap();
+        let store = project.path().join(".aida-store");
+        std::fs::create_dir_all(&store).unwrap();
+        let mut entry = crate::agent_registry::register_existing_agent(
+            project.path(),
+            "codex",
+            std::process::id(),
+            "advisor".into(),
+            None,
+            project.path().to_path_buf(),
+            Some("foreign-reader".into()),
+            None,
+        )
+        .unwrap();
+        let namespace = entry
+            .pid_namespace
+            .expect("Linux exposes the PID namespace");
+        entry.pid = u32::MAX; // Cannot be observed by the local PID probe.
+        entry.pid_namespace = Some(namespace ^ 1);
+        crate::agent_registry::write_entry(project.path(), &entry).unwrap();
+        let directory =
+            crate::mailbox_resolver::RecipientDirectory::load(project.path(), &store).unwrap();
+        for target in ["advisor", "codex", "foreign-reader"] {
+            let resolution = directory.resolve(target).unwrap();
+            assert!(resolution.reader_notice.unwrap().contains("unknown"));
+            handle_mailbox_command(&plain_send(target), &store).unwrap();
+        }
+        let messages = mailbox_store::read_local_messages(project.path()).unwrap();
+        assert_eq!(messages.len(), 3);
+        assert!(messages
+            .iter()
+            .any(|m| m.to == aida_core::mailbox::Recipient::Agent("advisor".into())));
+        assert!(messages
+            .iter()
+            .any(|m| m.to == aida_core::mailbox::Recipient::Agent("foreign-reader".into())));
+        entry.ended_at = Some(chrono::Utc::now());
+        crate::agent_registry::write_entry(project.path(), &entry).unwrap();
+        assert!(handle_mailbox_command(&plain_send("advisor"), &store).is_err());
+        assert_eq!(
+            mailbox_store::read_local_messages(project.path())
+                .unwrap()
+                .len(),
+            3
+        );
+    }
+
     // trace:BUG-1297 | ai:codex
     #[test]
     fn mailbox_reply_to_unknown_message_refuses_without_writing() {
         let project = tempfile::tempdir().unwrap();
         let store = project.path().join(".aida-store");
         std::fs::create_dir_all(&store).unwrap();
+        seed_send_recipients(&store);
         let command = MailboxCommand::Send {
             to: Some("bob".into()),
             broadcast: false,
@@ -1369,6 +1431,7 @@ mod tests {
         let project = tempfile::tempdir().unwrap();
         let store = project.path().join(".aida-store");
         std::fs::create_dir_all(&store).unwrap();
+        seed_send_recipients(&store);
         let existing = message("abcd1234-3333", "thread-c");
         mailbox_store::write_message(project.path(), &existing).unwrap();
 
@@ -1411,6 +1474,7 @@ mod tests {
         let project = tempfile::tempdir().unwrap();
         let store = project.path().join(".aida-store");
         std::fs::create_dir_all(&store).unwrap();
+        seed_send_recipients(&store);
         mailbox_store::write_message(project.path(), &message("abcd1234-3333", "thread-c"))
             .unwrap();
         mailbox_store::write_message(project.path(), &message("eeee5555-7777", "thread-z"))
@@ -1455,6 +1519,7 @@ mod tests {
         let project = tempfile::tempdir().unwrap();
         let store = project.path().join(".aida-store");
         std::fs::create_dir_all(&store).unwrap();
+        seed_send_recipients(&store);
         let original = message("abcd1234-3333", "thread-c");
         mailbox_store::write_message(project.path(), &original).unwrap();
         let command = MailboxCommand::Send {
@@ -1732,6 +1797,7 @@ mod tests {
         let project = tempfile::tempdir().unwrap();
         let store = project.path().join(".aida-store");
         std::fs::create_dir_all(&store).unwrap();
+        seed_send_recipients(&store);
         let _env = crate::test_env::EnvVarsGuard::apply(&[
             ("AIDA_AGENT_NAME", Some("claude-product-1")),
             ("AIDA_USER", None),
@@ -1760,6 +1826,7 @@ mod tests {
         let project = tempfile::tempdir().unwrap();
         let store = project.path().join(".aida-store");
         std::fs::create_dir_all(&store).unwrap();
+        seed_send_recipients(&store);
         let _env = crate::test_env::EnvVarsGuard::apply(&[
             ("AIDA_AGENT_NAME", Some("claude-product-1")),
             ("AIDA_USER", None),
@@ -1810,6 +1877,7 @@ mod tests {
         let project = tempfile::tempdir().unwrap();
         let store = project.path().join(".aida-store");
         std::fs::create_dir_all(&store).unwrap();
+        seed_send_recipients(&store);
         // A single EnvVarsGuard::apply for every key: the guard holds the
         // process-global env lock for its whole lifetime, and a second
         // acquisition on the same thread deadlocks (it is not reentrant) —
@@ -1841,6 +1909,7 @@ mod tests {
         let project = tempfile::tempdir().unwrap();
         let store = project.path().join(".aida-store");
         std::fs::create_dir_all(&store).unwrap();
+        seed_send_recipients(&store);
         let role_guard = crate::test_env::EnvVarsGuard::apply(&[
             ("AIDA_AGENT_NAME", None),
             ("AIDA_USER", None),
@@ -1889,6 +1958,7 @@ mod tests {
         let project = tempfile::tempdir().unwrap();
         let store = project.path().join(".aida-store");
         std::fs::create_dir_all(&store).unwrap();
+        seed_send_recipients(&store);
 
         {
             let _env = crate::test_env::EnvVarsGuard::apply(&[
@@ -1988,6 +2058,7 @@ mod tests {
         let project = tempfile::tempdir().unwrap();
         let store = project.path().join(".aida-store");
         std::fs::create_dir_all(&store).unwrap();
+        seed_send_recipients(&store);
         let _env = crate::test_env::EnvVarsGuard::apply(&[
             ("AIDA_AGENT_NAME", Some("claude-impl-7")),
             ("AIDA_USER", None),
@@ -2020,6 +2091,7 @@ mod tests {
         let project = tempfile::tempdir().unwrap();
         let store = project.path().join(".aida-store");
         std::fs::create_dir_all(&store).unwrap();
+        seed_send_recipients(&store);
         let _env = crate::test_env::EnvVarsGuard::apply(&[
             ("AIDA_AGENT_NAME", Some("claude-impl-7")),
             ("AIDA_USER", None),
@@ -2055,6 +2127,7 @@ mod tests {
     #[test]
     fn send_trims_recipient_whitespace_and_archive_phantom_inboxes_cleans_all_20_shapes() {
         let (project, store) = store_with_person_joe();
+        seed_send_recipients(&store);
 
         handle_mailbox_command(&plain_send("  advisor  "), &store).unwrap();
         let sent = mailbox_store::read_local_messages(project.path()).unwrap();
@@ -2295,9 +2368,10 @@ mod tests {
     #[test]
     fn send_to_known_identity_uses_stored_spelling() {
         let (project, store) = store_with_person_joe();
+        seed_send_recipients(&store);
         handle_mailbox_command(&plain_send("JOE"), &store).unwrap();
         handle_mailbox_command(&plain_send("ADVISOR"), &store).unwrap();
-        handle_mailbox_command(&plain_send("NewAgent"), &store).unwrap();
+        assert!(handle_mailbox_command(&plain_send("NewAgent"), &store).is_err());
         let mut to: Vec<_> = mailbox_store::read_local_messages(project.path())
             .unwrap()
             .into_iter()
@@ -2308,7 +2382,6 @@ mod tests {
             to,
             vec![
                 aida_core::mailbox::Recipient::Agent("Joe".into()),
-                aida_core::mailbox::Recipient::Agent("NewAgent".into()),
                 aida_core::mailbox::Recipient::Agent("advisor".into()),
             ]
         );
