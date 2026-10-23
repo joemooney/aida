@@ -11,12 +11,17 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T17:13:09.582222036Z
-modified_at: 2026-10-23T18:15:32.693065499Z
+modified_at: 2026-10-23T18:15:36.349252827Z
 req_type: Task
 tags:
 - from-review:PR-2837
 - guards
 - severity:minor
+relationships:
+- rel_type: SupersededBy
+  target_id: 01a154e2-1411-71b0-9344-2a78faddcce9
+  created_at: 2026-10-23T18:15:36.349248137Z
+  created_by: joe
 history:
 - id: 01a169f9-ac55-7401-b3a2-251438e3e410
   author: joe
@@ -26,6 +31,11 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Superseded
+- id: 01a169f9-c12a-79a0-990f-a5bc7d0885bf
+  author: joe
+  timestamp: 2026-10-23T18:15:38.026140354Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+  changes: []
 filed_at:
   code_sha: 9415a864f4e70991f81e26587d09474e779c431e
   branch: pr-2837
