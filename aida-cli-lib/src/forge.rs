@@ -30,6 +30,11 @@ use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+// The one commit-keyed CI reader. trace:TASK-1945 | ai:claude
+#[path = "forge_commit_ci.rs"]
+mod commit_ci;
+pub(crate) use commit_ci::*;
+
 /// A supervised merge-hold deliberately refused a merge.
 ///
 /// Keep this as a typed error so orchestrator callers can distinguish a human

@@ -56,24 +56,34 @@ pub(crate) const KIND_DRIVE: &str = "drive";
 /// STORY-1700: what a mandate covers beyond its on-disk `scope`. A closed
 /// set with no catch-all arm, so an unknown scope string fails
 /// deserialization and [`load_valid`] ignores that record (fail closed).
-/// Relay restart is not a scope here (STORY-1706).
+/// STORY-1706: `relay-restart` lets the drive tick restart a crashed relay
+/// from its human launch record. A drive record minted before it does not
+/// cover it; the operator re-mints.
 // trace:STORY-1700 | ai:claude
+// trace:STORY-1706 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub(crate) enum Scope {
     ShipHeld,
     SketchSignoff,
     Dispatch,
+    RelayRestart,
 }
 
 impl Scope {
-    pub(crate) const ALL: [Scope; 3] = [Scope::ShipHeld, Scope::SketchSignoff, Scope::Dispatch];
+    pub(crate) const ALL: [Scope; 4] = [
+        Scope::ShipHeld,
+        Scope::SketchSignoff,
+        Scope::Dispatch,
+        Scope::RelayRestart,
+    ];
 
     pub(crate) fn as_str(self) -> &'static str {
         match self {
             Self::ShipHeld => SCOPE_SHIP_HELD,
             Self::SketchSignoff => "sketch-signoff",
             Self::Dispatch => "dispatch",
+            Self::RelayRestart => "relay-restart",
         }
     }
 }

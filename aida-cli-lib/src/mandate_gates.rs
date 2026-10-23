@@ -32,6 +32,9 @@ pub(crate) enum GateOp {
     Dispatch,
     /// Listed so an operator can state it; drive never clears holds.
     HoldClear,
+    /// The drive tick's restart of a crashed relay.
+    // trace:STORY-1706 | ai:claude
+    RelayRestart,
 }
 
 impl GateOp {
@@ -41,6 +44,7 @@ impl GateOp {
             Self::SketchSignoff => "sketch-signoff",
             Self::Dispatch => "dispatch",
             Self::HoldClear => "hold-clear",
+            Self::RelayRestart => "relay-restart",
         }
     }
 
@@ -50,6 +54,7 @@ impl GateOp {
             Self::SketchSignoff,
             Self::Dispatch,
             Self::HoldClear,
+            Self::RelayRestart,
         ]
         .into_iter()
         .find(|op| op.as_str() == raw.trim())
@@ -130,7 +135,7 @@ pub(crate) fn parse_layer(text: &str, source: &str) -> Result<GateLayer> {
                                 })?;
                                 let Some(op) = GateOp::parse(raw) else {
                                     bail!(
-                                        "{source}: [mandate.human_gates] unknown op `{raw}` (known: ship, sketch-signoff, dispatch, hold-clear)"
+                                        "{source}: [mandate.human_gates] unknown op `{raw}` (known: ship, sketch-signoff, dispatch, hold-clear, relay-restart)"
                                     );
                                 };
                                 layer.ops.insert(op);
@@ -381,6 +386,7 @@ pub(crate) const GATE_PROTECTED_PATHS: &[&str] = &[
     "aida-cli-lib/src/mandate_drive.rs",
     "aida-cli-lib/src/mandate_ship.rs",
     "aida-cli-lib/src/mandate_traces.rs",
+    "aida-cli-lib/src/relay_launch.rs",
     "aida-cli-lib/src/rework_hold_release.rs",
     "aida-cli-lib/src/review_authority.rs",
     "aida-cli-lib/src/solo_review.rs",
