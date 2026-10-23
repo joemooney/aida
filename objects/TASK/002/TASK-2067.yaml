@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T13:11:27.819459305Z
-modified_at: 2026-10-23T16:01:26.947152975Z
+modified_at: 2026-10-23T23:47:53.748562088Z
 req_type: Task
 relationships:
 - rel_type: References
@@ -108,6 +108,7 @@ comments:
   content: |
     TASK-2232 (swept in TASK-2238): the classification table PLAN v1 promised for this spec. Source of record: docs/testing/task-1800-trace-exclusions.md, section "TASK-2067: resolving the unresolved trace IDs". 30 audited unresolved IDs resolved on the pinned store a5dae7145a with the frozen five-entry ledger:
 
+    | Class | IDs | Evidence |
     |---|---|---|
     | recorded alias (17) | TASK-123, -1327, -1328, -1331, -1335, -1338, -1363, -1364, -1365, -1366, -140, -141, -142, -152, -153, -176, CR-8 | the `agreed_id` of a current object (TASK-1-096, -219, -220, -223, -226, -229, -294, -297, -295, -296, -115, -117, -118, -128, -129, -152; CR-1-173) |
     | deleted with history (10) | BUG-1-040, BUG-1-051, BUG-1-069, EPIC-1-001, EPIC-1-052, FR-0259, FR-1-002, FR-1-043, FR-1-044, FR-1-071 | renumbered: history at the old path, linked to the new stem (BUG-26, BUG-21, BUG-22, EPIC-16, EPIC-11, FR-237, FR-272, FR-276, FR-279, FR-259) |
@@ -115,7 +116,7 @@ comments:
 
     No audited unresolved ID still refuses for an unreadable or missing history. Three still refuse for a real policy class in an earlier version of the renumbered spec: BUG-1-040 and EPIC-1-001/-052 (keystone-class) and BUG-1-069 (identity metadata).
   created_at: 2026-10-23T16:01:26.947152975Z
-  modified_at: 2026-10-23T16:01:26.947152975Z
+  modified_at: 2026-10-23T23:47:53.748561567Z
   session_id: da288a75-2066-4577-8fb5-8a6386f53efe
 history:
 - id: 01a15e96-e99e-7123-b5b2-06413f72154e
@@ -172,6 +173,11 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Completed
+- id: 01a16b29-fac9-7fd3-9104-584dd854ff5d
+  author: joe
+  timestamp: 2026-10-23T23:47:55.721267576Z
+  session_id: d101649d-27bd-4d0b-9c03-2bacb68e28e0
+  changes: []
 processing_record:
 - id: 01a16953-d83f-7930-b464-9db8eabbb005
   timestamp: 2026-10-23T15:14:24.959579107Z
