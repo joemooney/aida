@@ -1730,8 +1730,9 @@ pub(crate) fn pr_ship_approval_gate(
     };
     // STORY-1655: name the mode when a solo-human approval is relied on.
     // trace:STORY-1655 | ai:claude
+    // Same stream as merge_path_approval_gate. trace:TASK-1955 | ai:claude (TASK-1808)
     if let Some(notice) = pr_ship::solo_approval_notice(candidates, policy) {
-        println!("  {notice}");
+        eprintln!("  {notice}");
     }
     let (refusal, message) = match decision {
         HeadDecision::Covered(pin) => return Ok(pin),
@@ -2373,6 +2374,24 @@ pub(crate) fn pr_ship_handler(
         crate::forge::MergeMethod::Squash,
         false,
     )
+}
+
+/// The refusal a post-release exit returns: when this ship's mandate
+/// released a hold (a mandate cover and a hold marker), the hold is re-armed
+/// and what `rearm` reports is appended; any other exit returns `refusal`
+/// unchanged and re-arms nothing.
+// trace:TASK-1955 | ai:claude (TASK-2088)
+pub(crate) fn refusal_with_mandate_rearm(
+    refusal: String,
+    mandate_released: bool,
+    held: bool,
+    rearm: impl FnOnce() -> String,
+) -> String {
+    if mandate_released && held {
+        format!("{refusal}{}", rearm())
+    } else {
+        refusal
+    }
 }
 
 // trace:STORY-1663 | ai:antigravity
@@ -3671,13 +3690,25 @@ pub(crate) fn pr_ship_with_method(
                 ) {
                     Ok(true) => {}
                     // STORY-1698: a mandate release never stays released on
-                    // a failure. trace:STORY-1698 | ai:claude
-                    Ok(false) if mandate_release.is_some() => {
-                        let refusal = format!(
-                            "released the merge-hold on PR-{pr_number} under a mandate, but `{}` has not re-run green within 180s.{}",
-                            crate::ci_gate::HOLD_GATE_CHECK,
-                            rearm_after_mandate_failure(&hold_root, hold_record.as_ref(), pr_number)
-                        );
+                    // a failure. One exit for both arms, so the ledger call
+                    // is the mandate arm's real write, not a no-op kept for
+                    // the wiring pin. trace:STORY-1698 | ai:claude
+                    // trace:TASK-1955 | ai:claude (TASK-2086)
+                    Ok(false) => {
+                        let refusal = if mandate_release.is_some() {
+                            format!(
+                                "released the merge-hold on PR-{pr_number} under a mandate, but `{}` has not re-run green within 180s.{}",
+                                crate::ci_gate::HOLD_GATE_CHECK,
+                                rearm_after_mandate_failure(&hold_root, hold_record.as_ref(), pr_number)
+                            )
+                        } else {
+                            format!(
+                                "released the merge-hold on PR-{pr_number}, but `{}` has not re-run green within \
+                                 180s — retry `aida pr ship {pr_number}` shortly (the hold stays released), or \
+                                 inspect `gh pr checks {pr_number}`",
+                                crate::ci_gate::HOLD_GATE_CHECK
+                            )
+                        };
                         // trace:TASK-1915 | ai:claude
                         ledger_mandate_ship_failure(
                             &main_worktree,
@@ -3685,18 +3716,6 @@ pub(crate) fn pr_ship_with_method(
                             pr_number,
                             &refusal,
                         );
-                        anyhow::bail!(refusal)
-                    }
-                    Ok(false) => {
-                        let refusal = format!(
-                            "released the merge-hold on PR-{pr_number}, but `{}` has not re-run green within \
-                             180s — retry `aida pr ship {pr_number}` shortly (the hold stays released), or \
-                             inspect `gh pr checks {pr_number}`",
-                            crate::ci_gate::HOLD_GATE_CHECK
-                        );
-                        // ledger-exempt: mandate_release is None in this arm (the
-                        // guarded arm above takes every mandate ship), so there is
-                        // no MandateDriveAction row to write. trace:TASK-1915 | ai:claude
                         anyhow::bail!(refusal)
                     }
                     Err(e) => eprintln!(
@@ -3758,13 +3777,13 @@ pub(crate) fn pr_ship_with_method(
                 );
                 // The hold a mandate released is re-armed and the refusal ledgered,
                 // like every other post-release exit. trace:TASK-1915 | ai:claude
-                let refusal = match (&mandate_release, &marker_reason) {
-                    (Some(_), Some(_)) => format!(
-                        "{refusal}{}",
-                        rearm_after_mandate_failure(&hold_root, hold_record.as_ref(), pr_number)
-                    ),
-                    _ => refusal,
-                };
+                // trace:TASK-1955 | ai:claude (TASK-2088)
+                let refusal = refusal_with_mandate_rearm(
+                    refusal,
+                    mandate_release.is_some(),
+                    marker_reason.is_some(),
+                    || rearm_after_mandate_failure(&hold_root, hold_record.as_ref(), pr_number),
+                );
                 ledger_mandate_ship_failure(
                     &main_worktree,
                     mandate_release.as_ref(),
