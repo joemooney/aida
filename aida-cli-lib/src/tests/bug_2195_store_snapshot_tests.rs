@@ -185,3 +185,61 @@ fn a_dirty_store_is_a_typed_error_whatever_the_status_config() {
     assert!(err.is::<StoreDirty>(), "{err:#}");
     assert!(format!("{err:#}").contains("uncommitted evidence"));
 }
+
+/// TASK-2144: `git log --all` walks another worktree's detached HEAD, so an
+/// object version committed there during collection is a change.
+// trace:TASK-2067 | ai:claude
+#[test]
+fn an_object_version_on_another_worktrees_detached_head_is_unstable() {
+    let (s, base) = store();
+    let other = tempfile::tempdir().unwrap();
+    let wt = other.path().join("wt");
+    s.git(&[
+        "worktree",
+        "add",
+        "-q",
+        "--detach",
+        wt.to_str().unwrap(),
+        &base,
+    ]);
+    let before = s.snap();
+    assert!(
+        before
+            .refs
+            .keys()
+            .any(|k| k.starts_with("HEAD of worktree ")),
+        "{before:?}"
+    );
+    std::fs::write(wt.join("objects/TASK/000/TASK-1.yaml"), "title: two\n").unwrap();
+    for args in [&["add", "-A"][..], &["commit", "-qm", "detached"]] {
+        let out = crate::test_git::git_command()
+            .current_dir(&wt)
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "{out:?}");
+    }
+    assert!(
+        !s.stable(&before),
+        "the detached HEAD brought a new version"
+    );
+}
+
+/// TASK-2145: an excludes file (here repository-local; the global one is
+/// overridden the same way) never hides an untracked object from the dirty
+/// check.
+// trace:TASK-2067 | ai:claude
+#[test]
+fn an_excludes_file_does_not_hide_an_untracked_object() {
+    let (s, _) = store();
+    let dir = tempfile::tempdir().unwrap();
+    let excludes = dir.path().join("excludes");
+    std::fs::write(&excludes, "*.yaml\n").unwrap();
+    s.git(&["config", "core.excludesFile", excludes.to_str().unwrap()]);
+    std::fs::write(s.path().join("objects/TASK/000/TASK-9.yaml"), "x\n").unwrap();
+    assert_eq!(s.git(&["status", "--porcelain"]), "", "the file hides it");
+    let err = store_snapshot(s.path()).unwrap_err();
+    assert!(err.is::<StoreDirty>(), "{err:#}");
+}
