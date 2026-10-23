@@ -3,12 +3,12 @@ spec_id: TASK-2205
 agreed_id: TASK-2205
 title: 'aida list --fields: add an ''opened'' (creation time) field and accept whitespace as well as commas between fields'
 description: 'Operator request 2026-10-23. (1) Add a field ''opened'': the spec''s creation time (the timestamp in the spec record that filed_at / ''added'' events use), rendered like modified_at on the human table, TOON and JSON. Accept ''created_at'' and ''created'' as aliases. (2) The --fields value is split on commas AND/OR one or more whitespace characters, so a header line copied from existing output works, e.g. --fields ''id title status modified_at'' or ''id, title,  status''. Empty segments are ignored; an unknown field still errors with the valid list. (3) Fix the help-text drift: the --fields help must list exactly the valid set the parser accepts (modified_at, mode, origin, deferred_reason, driver, driver_kind are missing today). Generate it from the same const as the error message, and add a test that pins help == parser set. Tests for each item: the whitespace/comma mix, aliases, opened ordering, and the unknown-field error. Regenerate the golden help snapshot.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T11:32:27.459114078Z
-modified_at: 2026-10-23T14:42:01.143900620Z
+modified_at: 2026-10-23T16:01:24.389781880Z
 req_type: Task
 relationships:
 - rel_type:
@@ -30,6 +30,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1697e-dda2-7410-80f0-ee498bf1290f
+  author: aida-auto-bump
+  timestamp: 2026-10-23T16:01:24.386252806Z
+  session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1697e-dda5-7bb1-b9de-941137afc681
+  timestamp: 2026-10-23T16:01:24.389778577Z
+  agent: aida
+  commit_sha: ff14eaf5002dfbfd8f0838ae330a0c1703ce36ae
+  summary: 'All TASK-2205 acceptance met: opened field + created_at/created aliases, comma/whitespace separators, help generated from parser consts with a help==parser test, golden snapshot regenerated; CI green at head (lib-0 flake passed on rerun).'
+  review_verdict: approved
 filed_at:
   code_sha: 830f037b87a3f5da59c06b9b54f0929b0bf6555d
   branch: main
@@ -38,3 +53,7 @@ filed_at:
   aida_build_sha: 017e4a4949
   vendor: claude
   session: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-23T16:01:24.386249090Z
+  completion_sha: ff14eaf5002dfbfd8f0838ae330a0c1703ce36ae
