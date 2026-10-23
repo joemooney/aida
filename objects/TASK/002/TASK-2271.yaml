@@ -6,16 +6,25 @@ description: |
   pr_train.rs:904 (LiveChecks::message) falls back to branch_head_commit_message(project_root, head_ref) when ship's derivation returns None. That helper prefers the LOCAL branch over origin/<branch>, and it never reads the gated approved head sha. If the merge seat's checkout has a stale local branch with the same name, the car gets the subject and (SPEC-ID) of an older commit, so it completes the wrong spec or none. Ship reads the branch the same way, but the train already holds the exact head (m.head), so it should read that commit's message (git log -1 --format=%B <head>). Also fold in the cosmetic test gaps: the named = !opts.all_ready wiring (pr_train.rs:1641/1702) is untested, and a_car_keeps_the_head_commits_spec_id_when_ship_derives_no_subject re-implements ship's None rule inline instead of driving derive_pr_ship_squash_subject_from.
 
   Raised in review of PR-2843: https://github.com/joemooney/aida/pull/2843#issuecomment-6375228237
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T21:37:07.424548156Z
-modified_at: 2026-10-23T21:37:07.424548156Z
+modified_at: 2026-10-23T21:38:10.191063398Z
 req_type: Task
 tags:
 - from-review:PR-2843
 - severity:minor
+history:
+- id: 01a16ab3-2e8f-7a70-b8fe-2262d9a7f1f3
+  author: joe
+  timestamp: 2026-10-23T21:38:10.191053548Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 972dd37d7ce3e2d72351c40e3b5e9a16dd25b8af
   branch: pr-2843
