@@ -906,7 +906,8 @@ fn write_record(dir: &Path, body: &serde_json::Value) {
 // trace:STORY-1700.ace038d6 | ai:claude
 #[test]
 fn unknown_scope_string_fails_closed() {
-    for bogus in ["relay-restart", "bogus"] {
+    // relay-restart became a real scope in STORY-1706. trace:STORY-1706 | ai:claude
+    for bogus in ["relay-kill", "bogus"] {
         let dir = tempfile::tempdir().unwrap();
         let mut body = serde_json::to_value(drive_mandate(dir.path(), "joe")).unwrap();
         let id = uuid::Uuid::new_v4().to_string();

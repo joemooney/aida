@@ -17,6 +17,7 @@ fn change(id: u64, head: u64, overlap: bool) -> forge::Change {
         author: "writer".into(),
         gitlab: false,
         overlap: Some(overlap),
+        behind: Some(u64::from(overlap)),
     }
 }
 fn dispatch(action: Action) -> Attempt {
@@ -1331,7 +1332,14 @@ fn task1993_capacity_refusal_names_holders_and_recovery() {
 #[test]
 fn task1993_watcher_never_signals_merges_or_runs_cargo() {
     let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
-    for file in ["review_watch.rs", "review_watch_forge.rs"] {
+    // Readiness and the commit CI reader too: the report names update and
+    // ship commands for the advisor but never runs one. trace:TASK-1945 | ai:claude
+    for file in [
+        "review_watch.rs",
+        "review_watch_forge.rs",
+        "review_watch_ready.rs",
+        "forge_commit_ci.rs",
+    ] {
         let text = std::fs::read_to_string(src.join(file)).unwrap();
         for forbidden in [
             "libc::kill",
@@ -1339,7 +1347,11 @@ fn task1993_watcher_never_signals_merges_or_runs_cargo() {
             "killpg",
             "nix::sys::signal",
             "\"merge\"",
-            "update-branch",
+            "\"update-branch\"",
+            "\"push\"",
+            "\"rebase\"",
+            "--override",
+            "merge_change",
             "\"cargo\"",
             "\"ship\"",
             // trace:TASK-1993 | ai:claude

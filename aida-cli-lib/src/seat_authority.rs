@@ -2,7 +2,7 @@
 //! routing only; authorization comes from a validated local grant record.
 // trace:STORY-1473 | ai:codex
 
-use aida_core::store_locate::StoreMiss;
+use aida_core::store_locate::{MissedStore, StoreMiss, StoreOverride};
 use anyhow::{bail, Context, Result};
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
@@ -119,28 +119,34 @@ impl std::fmt::Display for RosterStoreError {
                         "the search stopped at the system temp directory `{}` before finding a `.aida/config.toml`",
                         root.display()
                     )?,
-                    StoreMiss::StoreMissing { config, stores } => write!(
-                        f,
-                        "`{}` names the store directory {}, which does not exist",
-                        config.display(),
-                        stores
-                            .iter()
-                            .map(|store| format!("`{}`", store.display()))
-                            .collect::<Vec<_>>()
-                            .join(" or ")
-                    )?,
+                    // trace:TASK-2169 | ai:claude
+                    StoreMiss::StoreMissing {
+                        config,
+                        stores,
+                        main_worktree,
+                    } => {
+                        write!(
+                            f,
+                            "`{}` names the store directory {}",
+                            config.display(),
+                            missed_stores(stores)
+                        )?;
+                        if !main_worktree.is_empty() {
+                            write!(
+                                f,
+                                "; the main worktree's {} was tried too",
+                                missed_stores(main_worktree)
+                            )?;
+                        }
+                    }
                     StoreMiss::NoStorePath { config } => write!(
                         f,
                         "`{}` names no store directory (`store_path`)",
                         config.display()
                     )?,
                 }
-                if std::env::var_os("AIDA_STORE").is_some_and(|v| !v.is_empty()) {
-                    write!(
-                        f,
-                        " (AIDA_STORE is set, but seat checks read the roster from the project's own store, never from an environment override)"
-                    )?;
-                }
+                // trace:TASK-2170 | ai:claude — a set `AIDA_STORE` is named
+                // by the refusal note, never read from the environment here.
                 Ok(())
             }
             Self::NoRoster { store } => write!(
@@ -151,6 +157,23 @@ impl std::fmt::Display for RosterStoreError {
             ),
         }
     }
+}
+
+/// Each missed store path with why it did not resolve, joined by "or".
+// trace:TASK-2169 | ai:claude
+fn missed_stores(stores: &[MissedStore]) -> String {
+    stores
+        .iter()
+        .map(|store| {
+            let why = if store.exists {
+                "exists, but is not a directory"
+            } else {
+                "does not exist"
+            };
+            format!("`{}` ({why})", store.path.display())
+        })
+        .collect::<Vec<_>>()
+        .join(" or ")
 }
 
 fn roster_path(store: &Path) -> PathBuf {
@@ -245,46 +268,75 @@ pub(crate) fn roster_check(
     principal: &str,
     seat: &str,
 ) -> std::result::Result<PathBuf, RosterRefusal> {
-    let aida_store = crate::store_sync::aida_store_override();
-    roster_check_with_override(project_root, principal, seat, aida_store.as_deref())
+    // trace:TASK-2171 | ai:claude — passed unresolved: only a refusal reads it.
+    roster_check_with_override(
+        project_root,
+        principal,
+        seat,
+        crate::store_sync::aida_store_setting,
+    )
 }
 
-/// [`roster_check`] with the `AIDA_STORE` store (as
-/// `store_sync::aida_store_override` resolves it) passed in, so a test never
-/// mutates the process environment.
+/// [`roster_check`] with the `AIDA_STORE` lookup (as
+/// `store_sync::aida_store_setting` resolves it) passed in, so a test never
+/// mutates the process environment. The lookup runs only on a refusal, so an
+/// allowed seat never resolves `AIDA_STORE`.
 // trace:TASK-2072, TASK-2054, TASK-1666 | ai:claude
+// trace:TASK-2170, TASK-2171 | ai:claude
 pub(crate) fn roster_check_with_override(
     project_root: &Path,
     principal: &str,
     seat: &str,
-    aida_store: Option<&Path>,
+    aida_store: impl FnOnce() -> Option<(String, StoreOverride)>,
 ) -> std::result::Result<PathBuf, RosterRefusal> {
-    let divergence = |store: &Path| {
-        let canonical = |p: &Path| p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
-        aida_store
-            .filter(|other| canonical(store) != canonical(other))
-            .map(|other| {
-                format!(
-                    "AIDA_STORE points at `{}`, so `aida team` reads that store's roster; seat checks always read the project's own store",
-                    other.display()
-                )
-            })
+    let store = match roster_store(project_root) {
+        Ok(store) => store,
+        Err(why) => {
+            let note = match &why {
+                RosterStoreError::NoRoster { store } => divergence(store, aida_store),
+                RosterStoreError::NotDetected { .. } => aida_store().map(|(raw, setting)| {
+                    match setting {
+                        StoreOverride::Usable(other) => diverging_note(&other),
+                        StoreOverride::Unusable { reason } => format!(
+                            "AIDA_STORE is `{raw}`, which is unusable ({reason}); seat checks read the roster from the project's own store, never from an environment override"
+                        ),
+                    }
+                }),
+            };
+            return Err(RosterRefusal::Unreachable { why, note });
+        }
     };
-    let store = roster_store(project_root).map_err(|why| {
-        let note = match &why {
-            RosterStoreError::NoRoster { store } => divergence(store),
-            // The NotDetected text already names a set AIDA_STORE.
-            RosterStoreError::NotDetected { .. } => None,
-        };
-        RosterRefusal::Unreachable { why, note }
-    })?;
     if store_allows(&store, principal, seat) {
         return Ok(store);
     }
     Err(RosterRefusal::Denied {
         roster: roster_path(&store),
-        note: divergence(&store),
+        note: divergence(&store, aida_store),
     })
+}
+
+/// The note for a usable `AIDA_STORE` that resolves to another store than
+/// `store`; an unusable one falls back to the project's store, as `aida team`
+/// does too, so it diverges from nothing.
+// trace:TASK-2072, TASK-2054 | ai:claude
+fn divergence(
+    store: &Path,
+    aida_store: impl FnOnce() -> Option<(String, StoreOverride)>,
+) -> Option<String> {
+    let canonical = |p: &Path| p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
+    match aida_store()? {
+        (_, StoreOverride::Usable(other)) if canonical(store) != canonical(&other) => {
+            Some(diverging_note(&other))
+        }
+        _ => None,
+    }
+}
+
+fn diverging_note(other: &Path) -> String {
+    format!(
+        "AIDA_STORE points at `{}`, so `aida team` reads that store's roster; seat checks always read the project's own store",
+        other.display()
+    )
 }
 
 /// Why an exported grant failed validation. The checks and their order are
