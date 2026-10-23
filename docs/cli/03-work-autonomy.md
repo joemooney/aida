@@ -104,7 +104,8 @@ branches on the exit code:
 The child runs in its own lease and worktree as `implementer`. If the
 launcher's grant delegates `implementer`, it gets a child grant. Otherwise
 (no grant, or a grant that does not delegate it) it runs at baseline
-authority, with a notice on stderr and a note in the authorship ledger. It
+authority, with a notice on stderr and a note in the authorship ledger whose
+reason says which (`launcher-has-no-grant` or `launcher-did-not-delegate`). It
 never inherits the launcher's grant, session purpose, or drain context. The
 lane shows in `aida ps` as a live implementer on its spec, and its pickup
 sets the spec's owner and moves it to In Progress.
@@ -114,8 +115,39 @@ The child must stop once its PR is open. Inside it, `aida pr ship` and
 `AIDA_STANDALONE_IMPLEMENTER`). At most three standalone implementers run at
 once per project; set `[queue] standalone_implementer_cap` in
 `.aida/config.toml` to change the cap. A launch past the cap exits 34
-without creating a lease, worktree or status change. Do not `aida claim` the
+without creating a lease, worktree, queue row or status change. Do not `aida claim` the
 spec yourself before launching: the pickup refuses a spec whose lease is held.
+<!-- trace:STORY-1662 | ai:claude -->
+
+**An interactive `claude --bg` lane takes its identity from its worktree
+lease.** A `claude --bg` session runs under the long-lived claude daemon, so
+its environment is the daemon's: often the role, grant and purpose of the
+shell that first started the daemon, whatever the launching command set. To
+start an interactive implementer lane, create its worktree with the role on
+its lease, then start the session from inside it:
+
+```bash
+aida worktree add <SPEC> --role implementer
+cd <worktree> && claude --bg ...
+```
+
+`--role` defaults to `implementer`. At session start the SessionStart hook
+runs `aida internal lane-env`, which reads the lease covering the session's
+directory and prints the correction: `AIDA_SESSION_ROLE` set to the lease's
+role, the lease's child grant exported or an inherited grant for another
+seat unset, and an inherited `AIDA_SESSION_PURPOSE` unset. The hook appends
+those lines to `$CLAUDE_ENV_FILE`, which Claude Code sources before every
+Bash command, so `aida claim`, `aida ps` and the cargo-slot WHO column all
+read the lane's role. The MCP server applies the same correction to itself
+when it starts. `aida claim` inside a lane records the lease's role in any
+case. If `lane-env` fails or times out inside a linked worktree, the hook
+drops the inherited grant and purpose and sets no role. Outside a lane
+nothing changes. This corrects the lane's commands; it is not an authority
+boundary, since grants are validated wherever they are used.
+
+The root fix is operator-side: start the claude daemon from a shell with no
+`AIDA_SESSION_*` variables. `aida doctor` (category `claude-daemon-grant`)
+warns when a running daemon's environment holds `AIDA_SESSION_GRANT`.
 <!-- trace:STORY-1662 | ai:claude -->
 
 **`aida worktree add <ID>` re-enters only a live linked worktree.** A session lease is re-entered only when its path is a linked git worktree that still exists; a lease recorded at the project root (or any other path that is not a linked worktree) is no longer re-entered — `worktree add` refuses, names that session, and tells you to end it with `aida session end <id>`. If you deleted the spec's worktree by hand (`rm -rf`), `worktree add` ends the dead session (its lease and stale git registration; the branch is kept) and mints a fresh worktree on the same branch. <!-- trace:TASK-1784 | ai:claude -->

@@ -369,7 +369,8 @@ pub(crate) fn run_do_drive(
                 WorktreeTarget::Spec { focus, .. } => focus,
                 WorktreeTarget::Epic => unreachable!("epics are refused above"),
             };
-            let out = ensure_spec_worktree(&display, &focus, None, None, "do-guided")?;
+            let out =
+                ensure_spec_worktree(&display, &focus, None, None, "do-guided", "implementer")?;
             // The codex prompt is a whole adapted document — summarize it in
             // the launch line instead of dumping it.
             let prompt_note = if launch.prompt.contains('\n') {

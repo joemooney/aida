@@ -22,6 +22,9 @@ mod signal;
 // Ship readiness: report only. trace:TASK-1945 | ai:claude
 #[path = "review_watch_ready.rs"]
 mod ready;
+// The author's findings mail and the round-cap wake. trace:TASK-1945 | ai:claude
+#[path = "review_watch_notice.rs"]
+mod notice;
 
 #[derive(Args, Debug)]
 pub struct ReviewWatchArgs {
@@ -274,6 +277,13 @@ struct Entry {
     // trace:TASK-1945 | ai:claude
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     wakes: BTreeMap<String, Notice>,
+    // Author findings mails for the current head, keyed
+    // `<head>:<verdict digest>`. trace:TASK-1945 | ai:claude
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    findings: BTreeMap<String, Notice>,
+    // The advisor's round-cap wake: once per change.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    cap: Option<Notice>,
     // The last readiness report, for display only: never authority.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     readiness: Option<Reported>,
@@ -283,6 +293,8 @@ impl Entry {
         self.attempts.is_empty()
             && self.notices.is_empty()
             && self.wakes.is_empty()
+            && self.findings.is_empty()
+            && self.cap.is_none()
             && self.readiness.is_none()
     }
 }
@@ -664,6 +676,7 @@ impl Store {
     fn history(&self, key: &str) -> Result<History> {
         let mut history = History {
             keys: self.retained(key)?,
+            ..History::default()
         };
         let Some(dir) = Directory::existing(&self.runtime.path().join("review-verdicts"))? else {
             return Ok(history);
@@ -676,7 +689,7 @@ impl Store {
         };
         for alias in aliases {
             if let Some(bytes) = dir.read_file(&format!("{alias}.json"), true)? {
-                history.add(&bytes)?;
+                history.add(&bytes, &format!("{alias}.json"))?;
             }
             if history.blocking() >= 2 {
                 return Ok(history);
@@ -702,7 +715,7 @@ impl Store {
                     let bytes = archive
                         .read_file(&name, true)?
                         .context("review history disappeared during admission")?;
-                    history.add(&bytes)?;
+                    history.add(&bytes, &format!("{alias}/{name}"))?;
                     if history.blocking() >= 2 {
                         return Ok(history);
                     }
@@ -858,9 +871,12 @@ impl Store {
 #[derive(Default)]
 struct History {
     keys: BTreeSet<crate::review_verdict::RecordingKey>,
+    // The verdict files each recording was read from, relative to
+    // `.aida/review-verdicts/`, for the findings mail. trace:TASK-1945 | ai:claude
+    files: BTreeMap<crate::review_verdict::RecordingKey, Vec<String>>,
 }
 impl History {
-    fn add(&mut self, bytes: &[u8]) -> Result<()> {
+    fn add(&mut self, bytes: &[u8], file: &str) -> Result<()> {
         let mut object = serde_json::from_slice::<serde_json::Value>(bytes)?
             .as_object()
             .cloned()
@@ -885,6 +901,10 @@ impl History {
                 valid_recording_key(&key),
                 "unidentifiable historical review requires advisor reconciliation"
             );
+            let files = self.files.entry(key.clone()).or_default();
+            if !files.iter().any(|f| f == file) {
+                files.push(file.to_string());
+            }
             self.keys.insert(key);
         }
         Ok(())
@@ -1012,15 +1032,27 @@ fn validate_state(state: &State, repository: &str) -> Result<()> {
                 && entry
                     .wakes
                     .keys()
-                    .all(|k| k.split_once(':').is_some_and(|(head, kind)| {
+                    .all(|k| k.split_once(':').is_some_and(|(head, rest)| {
+                        // `<kind>:<approval digest>`; a bare `<kind>` was
+                        // recorded before the key named the approval.
+                        let (kind, digest) = rest.split_once(':').unwrap_or((rest, ""));
                         valid_sha(head)
                             && matches!(kind, ready::WAKE_READY | ready::WAKE_AFTER_UPDATE)
+                            && (digest.is_empty() || notice::valid_digest(digest))
                     }))
                 && entry
                     .readiness
                     .as_ref()
                     .is_none_or(|r| { valid_sha(&r.head) && r.line.len() <= DIAGNOSTIC_LIMIT }),
             "invalid review-watch readiness record"
+        );
+        // trace:TASK-1945 | ai:claude
+        anyhow::ensure!(
+            entry.findings.len() <= MAX_WAKES
+                && entry.findings.keys().all(|k| k.split_once(':').is_some_and(
+                    |(head, digest)| { valid_sha(head) && notice::valid_digest(digest) }
+                )),
+            "invalid review-watch findings receipt"
         );
     }
     Ok(())
@@ -2080,15 +2112,24 @@ fn report(
     if entry.is_some_and(|e| e.attempts.iter().any(active)) {
         return Ok(());
     }
-    let recent = entry.and_then(|e| e.readiness.as_ref()).is_some_and(|r| {
-        r.head == change.head && chrono::Utc::now() - r.checked_at < READY_INTERVAL
-    });
+    let recent =
+        entry.is_some_and(|e| throttled(e, &change.head, chrono::Utc::now(), READY_INTERVAL));
+    let history = store.history(&key);
+    if let Ok(history) = &history {
+        if history.keys.is_empty() {
+            return Ok(());
+        }
+        // Not throttled: a failed delivery is retried on the next pass, and
+        // never stops the readiness report.
+        if let Err(error) = notice::send(root, store, change, history) {
+            eprintln!("{key}: review notice not delivered; retried next pass: {error:#}");
+        }
+    }
     if recent {
         return Ok(());
     }
     // An unreadable verdict history is reported, never read as clean.
-    let (readiness, approval) = match store.history(&key) {
-        Ok(history) if history.keys.is_empty() => return Ok(()),
+    let (readiness, approval) = match history {
         Ok(_) => ready::evaluate(change, evidence),
         Err(error) => (
             ready::Readiness::NotReady(format!("verdict history unreadable: {error:#}")),
@@ -2111,10 +2152,15 @@ fn report(
             return Ok(None);
         };
         // A pending wake keeps the message it was recorded with, so a retry
-        // re-delivers it under the same ID.
+        // re-delivers it under the same ID. The key names the approval, as
+        // the message ID does: a new approval of the head is a new wake.
+        // trace:TASK-1945 | ai:claude (TASK-2200)
         let wake = entry
             .wakes
-            .entry(format!("{prefix}{kind}"))
+            .entry(format!(
+                "{prefix}{kind}:{}",
+                notice::digest(&approval.identity)
+            ))
             .or_insert_with(|| Notice {
                 message: ready::wake_message(&repository, change, &readiness, approval),
                 sent: false,
@@ -2155,6 +2201,27 @@ fn report(
     Ok(())
 }
 
+/// Whether `head` was judged within `interval`, so this pass skips it. A
+/// wake for the head still pending delivery is never throttled: its retry
+/// runs on the next pass, not an interval later.
+// trace:TASK-1945 | ai:claude (TASK-2204)
+fn throttled(
+    entry: &Entry,
+    head: &str,
+    now: chrono::DateTime<chrono::Utc>,
+    interval: chrono::Duration,
+) -> bool {
+    let pending = entry
+        .wakes
+        .iter()
+        .any(|(k, w)| !w.sent && k.split_once(':').is_some_and(|(h, _)| h == head));
+    !pending
+        && entry
+            .readiness
+            .as_ref()
+            .is_some_and(|r| r.head == head && now - r.checked_at < interval)
+}
+
 /// Each change's last readiness report, `(change, "at <head>: <line>
 /// (checked <when>)")`, read without creating or changing any watcher state
 /// (`aida ps`).
@@ -2193,3 +2260,7 @@ mod supersede_tests;
 #[cfg(test)]
 #[path = "tests/task_1945_review_watch_ready_tests.rs"]
 mod ready_tests;
+
+#[cfg(test)]
+#[path = "tests/task_1945_review_watch_notice_tests.rs"]
+mod notice_tests;

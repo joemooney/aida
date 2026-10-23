@@ -128,6 +128,8 @@ mod faq_topics;
 // trace:STORY-1642 | ai:claude
 mod knowledge_list;
 // trace:BUG-1944 | ai:claude — live-work evidence + start-of-work status bump.
+// trace:STORY-1662 | ai:claude
+mod lane_env;
 mod leases;
 mod live_work;
 pub(crate) use live_work::try_auto_queue_pr_review;
@@ -208,8 +210,8 @@ mod session_misc;
 mod session_start;
 mod skill_cmd;
 mod solo_cmd;
-// trace:STORY-1662 | ai:claude
 mod stakeholder_role;
+// trace:STORY-1662 | ai:claude
 mod standalone_implementer;
 mod status_awaiting;
 mod status_cmd;

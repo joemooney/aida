@@ -251,7 +251,7 @@ def parse_chapters(files):
                 for cm in AIDA_CMD_RE.finditer(line):
                     snippets.append((cm.start(), cm.group(0), None))
                 for bm in re.finditer(r"`([^`]+)`", line):
-                    if re.match(r"(?:git|cargo|python3?|bash|gh|glab)\b", bm.group(1)):
+                    if re.match(r"(?:git|cargo|python3?|bash|gh|glab|claude)\b", bm.group(1)):
                         for fm in re.finditer(r"--[a-z][a-z0-9-]*", bm.group(1)):
                             consumed.add((bm.start(1) + fm.start(), fm.group(0)))
                         continue
@@ -570,7 +570,7 @@ REPO_ROOT = os.path.dirname(os.path.dirname(CLI_DIR))
 CLAP_SOURCE_DIRS = ("aida-cli-lib/src", "aida-cli/src")
 CLAP_ATTR_RE = re.compile(r"#\[(?:clap|arg)\(")
 STRING_LIT_RE = re.compile(r'"(?:\\.|[^"\\])*"')
-EXTERNAL_TOOL_RE = re.compile(r"(?:git|cargo|python3?|bash|gh|glab)\b")
+EXTERNAL_TOOL_RE = re.compile(r"(?:git|cargo|python3?|bash|gh|glab|claude)\b")
 FIELD_RE = re.compile(r"(?:pub(?:\([^)]*\))?\s+)?(?:r#)?([a-z_][a-z0-9_]*)\s*:(?!:)")
 
 

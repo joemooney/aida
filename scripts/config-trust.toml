@@ -55,6 +55,11 @@ sites = 6
 channels = ["home"]
 sites = 1
 
+# review watch readiness: the project's required CI check names (TASK-1945).
+[readers."aida-cli-lib/src/review_watch_ready.rs"]
+channels = ["worktree"]
+sites = 1
+
 [readers."aida-cli-lib/src/ci_gate.rs"]
 channels = ["worktree"]
 sites = 1
@@ -559,6 +564,11 @@ ctrl_d_palette = "policy"
 
 [keys.worktree."pipeline.gate"]
 "*" = "policy" # [pipeline.gate.<name>] kind / role / applies_to / on_fail
+
+# Names of CI checks readiness requires; it can only add requirements beyond
+# "every check on the head passed", and it launches nothing. TASK-1945.
+[keys.worktree.review_watch]
+required_checks = "policy"
 
 [keys.worktree.drain]
 gh_verify_retries = "policy"
