@@ -6,18 +6,27 @@ description: |-
 
   cosmetic: TASK-2203 asked for a corpus-gate refusal through Live::approval; the test exercises corpus_at directly, not the live_approval composition (approval_at then corpus_at).
   Reviewed sha: 7932cf76e5d417b618534488ddee6db2d2dceb7f
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-23T16:52:57.036979645Z
-modified_at: 2026-10-23T16:52:57.036979645Z
+modified_at: 2026-10-23T16:58:15.215684561Z
 req_type: Task
 tags:
 - carried-from:TASK-1945
 - finding-hash:2725aa4c
 - from-review:TASK-1945
 - kind:carried-forward
+history:
+- id: 01a169b2-e92f-7e53-b944-2bb54658a6a2
+  author: joe
+  timestamp: 2026-10-23T16:58:15.215677238Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 902cd420d221c0ec5c62d6f0ef5e5f470f875f33
   branch: main
