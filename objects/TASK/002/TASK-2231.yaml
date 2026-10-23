@@ -6,17 +6,26 @@ description: |
   aida-cli-lib/src/mandate.rs store_git sets GIT_CONFIG_NOSYSTEM and core.quotePath=false but not GIT_NO_REPLACE_OBJECTS, which snapshot_command sets. refs/replace/* could change what StoreHistoryBatch and the -G alias walk read. Pre-existing.
 
   Raised in review of PR-2853: https://github.com/joemooney/aida/pull/2853#issuecomment-6368135934
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T15:13:10.566414310Z
-modified_at: 2026-10-23T15:13:10.566414310Z
+modified_at: 2026-10-23T15:53:22.421543353Z
 req_type: Task
 tags:
 - from-review:PR-2853
 - mandate
 - severity:minor
+history:
+- id: 01a16977-82f5-7333-adfd-a76438c0fc9b
+  author: joe
+  timestamp: 2026-10-23T15:53:22.421536655Z
+  session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 396296ab394c4e17ef55911c1bea3d0ec3cd81ba
   branch: pr-2853
