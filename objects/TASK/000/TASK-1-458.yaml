@@ -1,0 +1,27 @@
+id: 01a16ac8-d477-7363-95ec-0bb088fbe664
+spec_id: TASK-1-458
+title: 'minor: git push -u call sites (pr_cmd.rs:4450 pr_ship_create_pr, orchestrator_l…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2211, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  minor: git push -u call sites (pr_cmd.rs:4450 pr_ship_create_pr, orchestrator_leases.rs:1125, drain_batch.rs:1444) are not wrapped in output_healing_config_lock. Under the placeholder lock git push -u exits 0 but prints 'could not lock config file' and leaves no upstream (reproduced locally), so the ship path silently loses tracking config. The spec names push -u as an affected config write.
+  Reviewed sha: 0fb55cc8c9ada5c192938658ee7d32de0ca34abb
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-23T22:01:48.919882448Z
+modified_at: 2026-10-23T22:01:48.919882448Z
+req_type: Task
+tags:
+- carried-from:BUG-2211
+- finding-hash:7cb7234d
+- from-review:BUG-2211
+- kind:carried-forward
+filed_at:
+  code_sha: 4aa9aea412a5418bc7cc92e607a3175eedd17372
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c51da86593
+  vendor: claude
