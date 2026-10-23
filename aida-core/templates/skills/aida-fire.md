@@ -111,7 +111,17 @@ the wave to **about 10 agents in total** (fixers plus reviewers). More than
 that costs more coordination than it saves.
 
 - **Fixers:** one per spec, or a tight pair that shares files. Never two
-  fixers on files that overlap. Serialize those.
+  fixers on files that overlap. Serialize those. Each fixer is a separate
+  **process** in its own implementer seat, never an Agent-tool subagent (an
+  in-session subagent inherits your advisor seat and the advisor code guard
+  blocks its edits). Pre-create its worktree with the role on the lease,
+  `aida worktree add <SPEC-ID> --role implementer`, then start
+  `claude --bg` from inside that worktree with the fixer prompt below; the
+  lane takes its identity from the lease. For a spec whose comments already
+  say everything, a headless
+  `aida queue work <SPEC-ID> --role implementer --no-human --vendor claude`
+  needs no prompt and ends with one `implementer:` line and an exit code.
+  <!-- trace:STORY-1662 | ai:claude -->
 - **Reviewers:** a separate reviewer **process** per PR, never the fixer and
   never an Agent-tool subagent. Launch each from Bash as a
   `run_in_background` job (see "Reviewer launch" below). The reviewer picks
@@ -126,8 +136,9 @@ Each fixer claims its spec (`aida claim <SPEC-ID>`) so a later survey sees it.
 You are a fixer in <repo path>. First read CLAUDE.md and
 .aida/discipline/README.md. Export AIDA_AGENT_TYPE=<tool> AIDA_AGENT_NAME=fixer-<id>.
 Rules:
-- Work in an isolated sibling worktree, never the main checkout: create it
-  with `aida worktree add <SPEC-ID>` (off origin/main; prints the path).
+- Work in the sibling worktree you were started in (the advisor created it
+  with `aida worktree add <SPEC-ID> --role implementer`), never the main
+  checkout.
 - Claim the spec first (`aida claim <SPEC-ID>`). If it is already claimed or
   has a branch or PR, STOP and report.
 - Commit format: `[AI:<tool>] type(scope): summary (<SPEC-ID>)` + co-author
@@ -157,9 +168,8 @@ Report the PR number, head SHA, files changed and check results in under 150 wor
 #### Reviewer launch
 
 The approval `aida pr ship` accepts is the one a reviewer process records from
-its own reviewer seat. You are an author of every PR your fixer subagents
-wrote, so a verdict you record, or one an Agent-tool reviewer records inside
-your session, is refused at ship. Launch each reviewer from Bash:
+its own reviewer seat. A verdict you record, or one an Agent-tool reviewer
+records inside your session, is refused at ship. Launch each reviewer from Bash:
 
 ```bash
 aida queue work PR-<N> --role reviewer --no-human --vendor claude
@@ -219,8 +229,8 @@ Never run `aida review record` yourself. If the head moved after review
 approval binds to a SHA, and `--override-stale-approval` stays an operator
 tool.
 
-**RequestChanges:** resume the **same** fixer (`SendMessage` to its agent id) with
-a rework brief per `.aida/discipline/rework-brief-craft.md`: each blocking
+**RequestChanges:** resume the **same** fixer lane
+(`aida mailbox send --to <lane> ...`) with a rework brief per `.aida/discipline/rework-brief-craft.md`: each blocking
 finding, its file:line, the failure scenario, and what "fixed" looks like. If
 the PR belongs to another seat, mail the owning seat instead.
 

@@ -71,9 +71,15 @@ mandate.
   as a separate reviewer process launched from Bash
   (`aida queue work PR-<n> --role reviewer --no-human --vendor claude`;
   codex refuses under `AIDA_CONTAINED`), never as an
-  Agent-tool subagent, and the advisor never records a verdict itself: it is
-  an author of every PR its fixer subagents wrote, so the ship gate refuses
-  its approvals. <!-- trace:STORY-1654 | ai:claude -->
+  Agent-tool subagent, and the advisor never records a verdict itself: the
+  ship gate accepts only the approval a reviewer process records from its own
+  reviewer seat. <!-- trace:STORY-1654 | ai:claude -->
+- **Fixers are separate processes.** Each fixer runs in its own worktree and
+  implementer seat: an interactive lane started from inside
+  `aida worktree add <SPEC> --role implementer`, or a headless
+  `aida queue work <SPEC> --role implementer --no-human`. Never an
+  Agent-tool subagent, which inherits the advisor seat and is blocked by the
+  advisor code guard. <!-- trace:STORY-1662 | ai:claude -->
 
 ## Risk tiers
 

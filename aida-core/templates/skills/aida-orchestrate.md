@@ -274,8 +274,7 @@ says why.
 Every branch gets a reviewer that did not write it, running as a **separate
 process with its own identity**. The approval that `aida pr ship` accepts is
 the one that reviewer records from its own reviewer seat. An Agent-tool
-subagent shares your session, and you are an author of everything your
-implementer subagents wrote, so its approval is refused at ship.
+subagent shares your session and seat, so its approval is refused at ship.
 
 1. Open the branch's PR if it has none
    (`gh pr create --draft --head <branch> ...`), and note its number `<n>`.

@@ -4794,6 +4794,65 @@ mod tests {
         }
     }
 
+    /// Seat skills, commands and discipline launch implementers and fixers as
+    /// separate processes, never through the Agent tool: an in-session
+    /// subagent inherits the launcher's seat and grant. A read-only research
+    /// subagent (Explore, Plan) stays legal on a line carrying, or directly
+    /// under a line carrying, the `aida:allow-research-subagent` marker.
+    // trace:STORY-1662 | ai:claude
+    // trace:STORY-1662.AC4 | ai:claude
+    #[test]
+    fn seat_templates_never_launch_implementers_through_the_agent_tool() {
+        use crate::templates::EMBEDDED_TEMPLATES;
+        const SUBAGENT_RATCHET_ALLOW: &str = "aida:allow-research-subagent";
+        const FORBIDDEN: &[&str] = &[
+            "Agent(",
+            "subagent_type",
+            "isolation: \"worktree\"",
+            "isolation:\"worktree\"",
+            "implementer subagent",
+            "fixer subagent",
+        ];
+        let mut violations = Vec::new();
+        let mut scanned = 0;
+        for (key, body) in EMBEDDED_TEMPLATES.iter() {
+            let seat_file = [
+                "skills/",
+                "skills-portable/",
+                "commands/",
+                ".aida/discipline/",
+            ]
+            .iter()
+            .any(|prefix| key.starts_with(prefix))
+                && key.ends_with(".md");
+            if !seat_file {
+                continue;
+            }
+            scanned += 1;
+            let mut previous = "";
+            for (idx, line) in body.lines().enumerate() {
+                let allowed = line.contains(SUBAGENT_RATCHET_ALLOW)
+                    || previous.contains(SUBAGENT_RATCHET_ALLOW);
+                if !allowed {
+                    for pattern in FORBIDDEN {
+                        if line.contains(pattern) {
+                            violations.push(format!("{key}:{}: `{pattern}`", idx + 1));
+                        }
+                    }
+                }
+                previous = line;
+            }
+        }
+        assert!(scanned > 20, "the scan found only {scanned} seat templates");
+        assert!(
+            violations.is_empty(),
+            "seat templates launch work through the Agent tool; use \
+             `aida queue work <SPEC> --role implementer --no-human` (or mark a \
+             research-only line with `{SUBAGENT_RATCHET_ALLOW}`):\n{}",
+            violations.join("\n")
+        );
+    }
+
     // STORY-1129: default scaffolding keeps CLI-capable agents on the
     // token-efficient CLI/TOON lane and does not register MCP unless opted in.
     // trace:TASK-0424 STORY-1129 | ai:claude,codex
