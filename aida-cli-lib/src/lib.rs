@@ -474,6 +474,7 @@ mod plan_cmd;
 mod pr_rebase;
 mod pr_ship;
 mod pr_ship_batch;
+mod pr_train;
 mod presence;
 mod presence_cmd;
 mod process_probe;
@@ -537,6 +538,8 @@ mod schedule_cmd;
 mod schedule_ledger;
 mod schedule_predicate;
 mod schema;
+// trace:BUG-1934 | ai:claude
+mod grant_keyring;
 // trace:STORY-1473 | ai:codex
 mod seat_authority;
 // trace:BUG-2169 | ai:claude — a contained seat's private clone (the only host accessor).

@@ -169,12 +169,15 @@ pub(crate) fn agent_output_mode_from(env: Option<&str>, stdout_is_tty: bool) -> 
 /// Resolve the requested `--fields` selection for agent-mode `aida list` into a
 /// validated, ordered field list. `None` (no `--fields`) yields the minimal
 /// default. A `csv` string is split on commas and/or whitespace (so a copied
-/// header line works), lowercased, alias-resolved via
+/// TOON header's field list works; the human table's display headers, such as
+/// `Modified`, are labels rather than field names and are rejected),
+/// lowercased, alias-resolved via
 /// [`TOON_LIST_FIELD_ALIASES`], and checked against [`TOON_LIST_KNOWN_FIELDS`];
 /// an unknown name is an error naming the valid set. Empty segments are
 /// ignored; an empty selection falls back to the default.
 // trace:TASK-964
 // trace:TASK-2205 | ai:claude
+// trace:TASK-2238 | ai:claude
 pub(crate) fn toon_list_fields(csv: Option<&str>) -> Result<Vec<String>> {
     let Some(csv) = csv else {
         return Ok(TOON_LIST_DEFAULT_FIELDS

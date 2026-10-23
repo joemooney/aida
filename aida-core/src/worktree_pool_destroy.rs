@@ -314,6 +314,16 @@ pub fn teardown_worktree_path(
     // are automatic sweeps, and an in-use tree is simply kept.
     // trace:BUG-1947 | ai:claude
     crate::worktree_holders::check_worktree_removal(worktree_path)?;
+    // BUG-2169: a contained seat's private clone is not a linked worktree;
+    // only `seat_clone::destroy` removes it, after its sandboxed probe and
+    // salvage. Refuse before any hook runs in it.
+    // trace:TASK-2053 | ai:claude
+    if let Some(clone) = crate::seat_clone_detect::seat_clone_root(worktree_path) {
+        anyhow::bail!(
+            "refusing to tear down {} as a worktree: it is a contained seat's private clone",
+            clone.display()
+        );
+    }
     // pre_destroy hooks (cargo clean) fire while the tree still exists.
     if worktree_path.exists() {
         crate::worktree_hooks::run_hooks(pre_destroy_hooks, worktree_path, "pre_destroy");
