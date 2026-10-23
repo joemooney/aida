@@ -6,17 +6,26 @@ description: |
   aida-cli-lib/src/mandate_traces.rs snapshot_command passes -c core.excludesFile=/dev/null (TASK-2145), but the shared common dir's info/exclude can still hide an untracked objects/ file from git status, so the store reads clean. Consider --ignored checks or status with an explicit exclude override.
 
   Raised in review of PR-2853: https://github.com/joemooney/aida/pull/2853#issuecomment-6368135934
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T15:13:06.903620964Z
-modified_at: 2026-10-23T15:13:06.903620964Z
+modified_at: 2026-10-23T15:53:15.305564785Z
 req_type: Task
 tags:
 - from-review:PR-2853
 - mandate
 - severity:minor
+history:
+- id: 01a16977-6729-7be2-81f0-fb5406634944
+  author: joe
+  timestamp: 2026-10-23T15:53:15.305556729Z
+  session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 396296ab394c4e17ef55911c1bea3d0ec3cd81ba
   branch: pr-2853
