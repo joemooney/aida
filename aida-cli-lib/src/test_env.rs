@@ -1333,3 +1333,64 @@ fn find_matching_brace(source: &str, open_brace: usize) -> Option<usize> {
 #[cfg(test)]
 #[path = "tests/bug_1994_path_isolation_tests.rs"]
 mod bug_1994_path_isolation_tests;
+
+#[cfg(test)]
+mod documentation_tests {
+    // Check the attributes Rust actually attaches to each item, so the const
+    // cannot silently take the isolation helper's rustdoc again.
+    // trace:TASK-2189 | ai:codex
+    #[test]
+    fn path_isolation_rustdoc_belongs_to_the_function() {
+        let source = syn::parse_file(include_str!("test_env.rs")).unwrap();
+        let docs = |attrs: &[syn::Attribute]| {
+            attrs
+                .iter()
+                .filter_map(|attr| {
+                    if !attr.path().is_ident("doc") {
+                        return None;
+                    }
+                    let syn::Meta::NameValue(meta) = &attr.meta else {
+                        return None;
+                    };
+                    let syn::Expr::Lit(expr) = &meta.value else {
+                        return None;
+                    };
+                    let syn::Lit::Str(value) = &expr.lit else {
+                        return None;
+                    };
+                    Some(value.value())
+                })
+                .collect::<Vec<_>>()
+                .join("\n")
+        };
+        let function = source
+            .items
+            .iter()
+            .find_map(|item| match item {
+                syn::Item::Fn(item) if item.sig.ident == "run_path_isolated_test" => {
+                    Some(docs(&item.attrs))
+                }
+                _ => None,
+            })
+            .unwrap();
+        let constant = source
+            .items
+            .iter()
+            .find_map(|item| match item {
+                syn::Item::Const(item) if item.ident == "REQUIRE_BWRAP_LIVE_ENV" => {
+                    Some(docs(&item.attrs))
+                }
+                _ => None,
+            })
+            .unwrap();
+        assert!(
+            function.contains("Returns true in the parent"),
+            "{function}"
+        );
+        assert!(
+            !constant.contains("Returns true in the parent"),
+            "{constant}"
+        );
+        assert!(constant.contains("live-bwrap CI gate"), "{constant}");
+    }
+}
