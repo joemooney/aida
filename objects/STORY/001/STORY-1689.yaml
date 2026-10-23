@@ -25,7 +25,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T12:00:26.553324153Z
-modified_at: 2026-10-23T20:04:04.289919476Z
+modified_at: 2026-10-23T21:58:26.103697731Z
 req_type: Story
 tags:
 - dev-build
@@ -234,6 +234,12 @@ history:
   session_id: 01a16a59502e
   harness_version: 2.1.309 (Claude Code)
   changes: []
+- id: 01a16ac5-bc84-7240-ae9d-9e6989659ffc
+  author: joe
+  timestamp: 2026-10-23T21:58:26.180742190Z
+  session_id: 01a16ac30298
+  harness_version: 2.1.309 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 71d04b3609f89ac607471a35013a0ad9962708f6
   branch: main
@@ -246,7 +252,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'The rework fixes TASK-2258/2259/2260 correctly, but CI is still red at 083f2ac859: lib-0 fails, so Build (ubuntu-latest) is red. dev_autopromote.rs calls systemd_run_user, which the TASK-1510 single-launch-seam ratchet forbids. All three criteria have traced tests but none can be verified while CI is red.'
+  detail: Design and code meet all 3 STORY-1689 criteria (skip-reason + promote tests, schedule+route job, guide docs) and the advisor's C1-C4 and option-A ratchet ruling; but CI (lib-1) and the Build aggregator are red at head ceec152. The PR was green at d8ffc06, and the red most likely came in with the main merge (TASK-2251), since main is red on that lane at 3dfcf99. Re-run green before ship, plus two small defects.
   recovery_hint: address the review findings, move STORY-1689 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-10-23T20:02:02.200868380Z
+  shelved_at: 2026-10-23T21:58:26.103697731Z
