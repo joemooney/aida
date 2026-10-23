@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T13:18:03.093067119Z
-modified_at: 2026-10-23T13:11:00.956343397Z
+modified_at: 2026-10-23T13:31:28.143022645Z
 req_type: Story
 tags:
 - groom:needs-decision
@@ -39,6 +39,10 @@ relationships:
     custom: implemented-by
   target_id: 01a168af-9a97-7102-afee-124c283f002d
   created_at: 2026-10-23T12:15:40.559453208Z
+  created_by: joe
+- rel_type: Supersedes
+  target_id: 01a168e3-89e2-7061-876e-90135a684e4f
+  created_at: 2026-10-23T13:31:28.143016669Z
   created_by: joe
 comments:
 - id: 01a12eab-7f73-7140-87ca-c06439430c26
@@ -199,6 +203,11 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a168f5-9d37-7772-9a8a-f055eac12704
+  author: joe
+  timestamp: 2026-10-23T13:31:29.463459490Z
+  session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
+  changes: []
 filed_at:
   code_sha: fba16d9c884b16090b3c2d079a53a1def8aa9a36
   branch: main
