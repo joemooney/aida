@@ -6,17 +6,26 @@ description: |
   CLAUDE.md:41 says 'make check-ci-compile # after merging main into a branch: compile all tests, run none'. Under the LIGHT gate (TASK-2209) it runs only when the change touches shared test infra (test_env, test_git, ratchet baselines) or more than 10 files. This is the always-loaded guide, so the conflict is seen every session.
 
   Raised in review of PR-2854: https://github.com/joemooney/aida/pull/2854#issuecomment-6367878895
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T15:00:12.443771318Z
-modified_at: 2026-10-23T15:00:12.443771318Z
+modified_at: 2026-10-23T15:52:37.060542919Z
 req_type: Task
 tags:
 - docs
 - from-review:PR-2854
 - severity:minor
+history:
+- id: 01a16976-d1c4-7c22-8e10-759cb372c36d
+  author: joe
+  timestamp: 2026-10-23T15:52:37.060535465Z
+  session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 96fd8b253affb617d6431836c0523a5baa8a1f21
   branch: pr-2854
