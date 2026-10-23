@@ -3,12 +3,12 @@ spec_id: STORY-1706
 agreed_id: STORY-1706
 title: 'Drive mandate: auto-restart a crashed relay from a human launch record (aida-relay launch record + tick restart)'
 description: 'Split from STORY-1700 per the advisor''s STRICT sketch ruling (comment on STORY-1700, 2026-10-16 01:20). Part 1 (aida-relay): at startup, write an atomic 0600 <run dir>/relay.launch holding ORIG_ARGS verbatim, the profile ref and sha256, PROJECT_ROOT, the relay.sh path, agent, SESSION_ROLE, force_seat, MAX_SESSIONS, principal, launched_from_tty, launched_at, run id and restart lineage. Add exit reason= values (signal:TERM, session-cap, setup-error) and a relay.norestart marker written by an operator stop verb. Part 2 (aida): the drive tick restarts ONLY the crash ending (trap never ran, per relay.sh --status flock), with the conditions in the ruling: principal == mandate principal; TTY-rooted lineage; profile hash unchanged; not advisor or --force-seat; at most 3 restarts with 1/2/4-tick backoff; --max-sessions = remaining budget; at least 30 minutes left on the mandate; re-check before the exec; ledger every decision. The tick never mints, holds or forwards a grant.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T08:18:11.550823998Z
-modified_at: 2026-10-23T11:18:20.493231132Z
+modified_at: 2026-10-23T12:26:39.126244241Z
 req_type: Story
 relationships:
 - rel_type:
@@ -151,6 +151,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a168ba-4092-7150-a907-a5bfa46e1a6d
+  author: aida-auto-bump
+  timestamp: 2026-10-23T12:26:39.122335824Z
+  session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a168ba-4096-72a2-bb2d-802f75222248
+  timestamp: 2026-10-23T12:26:39.126238570Z
+  agent: aida
+  commit_sha: 898e1a849c2c30f5418de17276f3e61573afc83b
+  summary: 'STRICT: every Part-2 acceptance criterion and advisor condition C1-C3/A1/A2/spec-field is implemented and tested (story_1706_* suites, CI green at head); refusal paths fail closed. Part 1 lives in aida-relay#97 (still OPEN) - operator merges per C4; merge #97 first or together, since this PR''s (STORY-1706) trailer completes the story. Non-blocking: AIDA_SCHEDULE_CHILD leaks into restarted relay; ineligible-restart reasons are not their own ledger rows.'
+  review_verdict: approved
 filed_at:
   code_sha: 5fb188c5221a3609af83b197c1fef2e99a47fcfc
   branch: main
@@ -159,3 +174,7 @@ filed_at:
   aida_build_sha: 5fb188c522
   vendor: claude
   session: b0657c59-d482-4ef7-a931-e3c7b919e148
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-23T12:26:39.122330683Z
+  completion_sha: 898e1a849c2c30f5418de17276f3e61573afc83b
