@@ -7,12 +7,12 @@ description: |-
 
   cosmetic (non-blocking): the TASK-2232 classification table comment on TASK-2067 (comments[5]) has no header row. It starts at |---|---|---|, so markdown renders it as plain text instead of a table. Add a '| Class | IDs | Evidence |' header line.
   Reviewed sha: e5e9db3f6b3188113eaea3e8f47c4447fff4591b
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-23T23:30:40.287841007Z
-modified_at: 2026-10-23T23:30:40.287841007Z
+modified_at: 2026-10-23T23:38:07.541477678Z
 req_type: Task
 tags:
 - carried-from:TASK-2238
@@ -24,6 +24,14 @@ history:
   author: joe
   timestamp: 2026-10-23T23:36:32.183726885Z
   changes: []
+- id: 01a16b21-0135-7a51-a4b4-dd559aa99add
+  author: joe
+  timestamp: 2026-10-23T23:38:07.541467404Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: a62f57fbac4874cf7d668cc6c9e3841787a8a838
   branch: main
