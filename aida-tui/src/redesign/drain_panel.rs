@@ -124,6 +124,11 @@ fn drain_state_path(project_root: &Path) -> PathBuf {
 /// drain-state file next to the orchestrator.
 // trace:STORY-833 | ai:codex
 fn main_worktree_root_from(start: &Path) -> PathBuf {
+    // BUG-2169: never run git in a contained seat's private clone; a cockpit
+    // started there reads its own directory. trace:TASK-2053 | ai:claude
+    if aida_core::seat_clone_detect::seat_clone_root(start).is_some() {
+        return start.to_path_buf();
+    }
     let out = std::process::Command::new("git")
         .arg("-C")
         .arg(start)
