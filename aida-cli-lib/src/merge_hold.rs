@@ -3234,6 +3234,28 @@ pub(crate) fn enforce_corpus_gate_before_merge(
     base_branch: Option<&str>,
     head: impl FnOnce() -> Option<String>,
 ) -> anyhow::Result<()> {
+    match corpus_gate_decision(project_root, pr, spec_hints, base_branch, head)? {
+        CorpusMergeGate::Clear => Ok(()),
+        CorpusMergeGate::Refuse { message, arm } => {
+            if let Some(arm) = arm.filter(|_| pr > 0) {
+                arm_corpus_mirrors(project_root, pr, &arm);
+            }
+            anyhow::bail!(message)
+        }
+    }
+}
+
+/// [`enforce_corpus_gate_before_merge`]'s decision, with no side effects:
+/// the mirrors a refusal arms are the caller's to write. `Err` when a
+/// verdict artifact exists but cannot be read.
+// trace:TASK-1945 | ai:claude
+pub(crate) fn corpus_gate_decision(
+    project_root: &Path,
+    pr: u64,
+    spec_hints: &[String],
+    base_branch: Option<&str>,
+    head: impl FnOnce() -> Option<String>,
+) -> anyhow::Result<CorpusMergeGate> {
     let main_root = crate::main_worktree_root_from(project_root);
     let mut roots: Vec<&Path> = vec![project_root];
     if main_root != project_root {
@@ -3247,7 +3269,7 @@ pub(crate) fn enforce_corpus_gate_before_merge(
         ),
     };
     if bodies.is_empty() {
-        return Ok(());
+        return Ok(CorpusMergeGate::Clear);
     }
     let head = head();
     let base_branch = base_branch.map(str::trim).filter(|b| !b.is_empty());
@@ -3255,15 +3277,12 @@ pub(crate) fn enforce_corpus_gate_before_merge(
     let prove = |refusal: &crate::pr_ship::ApprovalHeadRefusal| {
         crate::review_carryover::prove_for_refusal(&site, pr, refusal)
     };
-    match corpus_merge_gate_carrying(pr, &bodies, head.as_deref(), &prove) {
-        CorpusMergeGate::Clear => Ok(()),
-        CorpusMergeGate::Refuse { message, arm } => {
-            if let Some(arm) = arm.filter(|_| pr > 0) {
-                arm_corpus_mirrors(project_root, pr, &arm);
-            }
-            anyhow::bail!(message)
-        }
-    }
+    Ok(corpus_merge_gate_carrying(
+        pr,
+        &bodies,
+        head.as_deref(),
+        &prove,
+    ))
 }
 
 /// Refresh the marker + label mirrors from the gate's definite at-head
