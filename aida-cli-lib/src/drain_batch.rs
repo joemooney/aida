@@ -1441,6 +1441,8 @@ pub(crate) fn open_cluster_pr(
     title: &str,
     body: &str,
 ) -> Result<u64> {
+    // trace:TASK-2270 | ai:claude
+    aida_core::git_ops::clear_sandbox_config_lock(project_root);
     let push = std::process::Command::new("git")
         .arg("-C")
         .arg(project_root)
@@ -1452,6 +1454,7 @@ pub(crate) fn open_cluster_pr(
     if !push.success() {
         anyhow::bail!("`git push -u origin {branch}` failed — investigate before retrying");
     }
+    aida_core::git_ops::repair_push_upstream(project_root, "origin", Some(branch), branch);
     let change = crate::forge::forge_for_open_change(project_root)
         .open_change(crate::forge::OpenChange {
             branch: branch.to_string(),

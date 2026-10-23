@@ -1122,6 +1122,8 @@ pub(crate) fn push_branch_from_implementer_worktree(
             worktree.display()
         )));
     }
+    // trace:TASK-2270 | ai:claude
+    aida_core::git_ops::clear_sandbox_config_lock(worktree);
     let out = std::process::Command::new("git")
         .current_dir(worktree)
         .args(["push", "-u", "origin", &refspec])
@@ -1135,6 +1137,8 @@ pub(crate) fn push_branch_from_implementer_worktree(
             )
         })?;
     if out.status.success() {
+        // `HEAD:` refspec: the checked-out branch tracks origin/<branch>.
+        aida_core::git_ops::repair_push_upstream(worktree, "origin", None, branch);
         return Ok(());
     }
     let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
