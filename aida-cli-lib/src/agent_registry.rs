@@ -729,6 +729,9 @@ pub(crate) fn touch_session_start_agent(
     if let Some(session_id) = session_id.filter(|s| !s.trim().is_empty()) {
         entry.claude_session_id = Some(session_id.to_string());
     }
+    // Every session gets one stable handle at start; the launch's name when
+    // it gave one. trace:STORY-1843 | ai:claude
+    crate::agent_handle::assign_session_handle(project_root, &mut entry, session_id);
 
     write_entry(project_root, &entry)?;
     Ok(entry)
@@ -761,6 +764,19 @@ pub(crate) fn adopt_bg_session_identity(
         {
             continue;
         }
+        // The launch reserved `name`; bind it to this session so the
+        // generated handle its SessionStart took is released.
+        // trace:STORY-1843 | ai:claude
+        let _ = crate::agent_handle::reserve_handle(
+            project_root,
+            &crate::agent_handle::HandleRequest {
+                agent_type: &entry.agent_type,
+                role,
+                explicit: Some(name),
+                native_session_id: entry.claude_session_id.as_deref(),
+                registry_id: Some(&entry.id),
+            },
+        );
         entry.name = Some(name.to_string());
         entry.current_spec = spec.map(str::to_string);
         entry.role = role.map(str::to_string).or(entry.role);
@@ -874,109 +890,66 @@ pub(crate) fn register_role_enter_agent(
     Ok(entry)
 }
 
-/// Validate a custom agent name or generate a default '<type>-<role>-<seq>' name.
-/// Validates uniqueness across all active (non-stale) agents.
+/// Validate a custom agent name or generate a default `<vendor>-<role>-NN`
+/// handle. Validates uniqueness across all active (non-stale) agents and
+/// launch reservations. With `reserve`, the name is reserved under the
+/// handle namespace lock so a concurrent launch cannot take it before the
+/// launched session binds it; a preview passes `false` and reserves nothing.
 // trace:TASK-542 | ai:antigravity
+// trace:STORY-1843 | ai:claude
 pub(crate) fn generate_or_validate_name(
     project_root: &Path,
     agent_type: &str,
     role: Option<&str>,
     custom_name: Option<&str>,
+    reserve: bool,
 ) -> Result<String> {
     let agent_type_clean = normalize_agent_type(agent_type.to_string());
-    let role_clean = role.unwrap_or("unknown").to_lowercase();
-
-    // Read all alive agents
-    let mut alive_agents = Vec::new();
-    if let Ok(entries) = std::fs::read_dir(agents_dir(project_root)) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.extension().and_then(|s| s.to_str()) != Some("toml") {
-                continue;
-            }
-            if let Ok(body) = std::fs::read_to_string(&path) {
-                if let Ok(record) = toml::from_str::<AgentRegistryEntry>(&body) {
-                    if registry_entry_is_live(project_root, &record) {
-                        alive_agents.push(record);
-                    }
-                }
-            }
-        }
-    }
 
     if let Some(name) = custom_name {
         let name_trimmed = name.trim();
         if name_trimmed.is_empty() {
             anyhow::bail!("--name cannot be empty");
         }
+        let reserved = crate::agent_handle::reserved_addresses(project_root);
+        crate::agent_handle::validate_explicit_handle(name_trimmed, &reserved)?;
 
-        // 1. Uniqueness check across active agents
-        for agent in &alive_agents {
-            if let Some(ref active_name) = agent.name {
-                if active_name.eq_ignore_ascii_case(name_trimmed) {
-                    anyhow::bail!(
-                        "agent name `{}` is already in use by active agent process (PID {})",
-                        name_trimmed,
-                        agent.pid
-                    );
-                }
-            }
-        }
-
-        // 2. Prefix-hierarchy validation
+        // A name shaped like a generated `<vendor>-<role>-NN` handle would
+        // collide with the allocator's namespace.
         let name_lower = name_trimmed.to_lowercase();
-        let is_type = name_lower == "claude"
-            || name_lower == "codex"
-            || name_lower == "antigravity"
-            || name_lower == "web";
-        if is_type {
-            anyhow::bail!(
-                "invalid agent name `{}`: conflicts with agent type prefix",
-                name_trimmed
-            );
-        }
-
-        let is_type_role_prefix =
-            ["claude-", "codex-", "antigravity-", "web-"]
-                .iter()
-                .any(|prefix| {
-                    if let Some(remainder) = name_lower.strip_prefix(prefix) {
-                        if let Some(dash_idx) = remainder.rfind('-') {
-                            let suffix = &remainder[dash_idx + 1..];
-                            !suffix.chars().all(|c| c.is_ascii_digit()) || suffix.is_empty()
-                        } else {
-                            true
-                        }
+        let is_type_role_prefix = ["claude-", "codex-", "antigravity-", "agy-", "web-"]
+            .iter()
+            .any(|prefix| {
+                if let Some(remainder) = name_lower.strip_prefix(prefix) {
+                    if let Some(dash_idx) = remainder.rfind('-') {
+                        let suffix = &remainder[dash_idx + 1..];
+                        !suffix.chars().all(|c| c.is_ascii_digit()) || suffix.is_empty()
                     } else {
-                        false
+                        true
                     }
-                });
+                } else {
+                    false
+                }
+            });
         if is_type_role_prefix {
             anyhow::bail!(
                 "invalid agent name `{}`: conflicts with agent type+role prefix",
                 name_trimmed
             );
         }
-
-        return Ok(name_trimmed.to_string());
     }
 
-    // Default name generation: '<type>-<role>-<seq>' using the lowest free integer starting from 1
-    let mut seq = 1;
-    loop {
-        let candidate_name = format!("{}-{}-{}", agent_type_clean, role_clean, seq);
-        let in_use = alive_agents.iter().any(|agent| {
-            if let Some(ref active_name) = agent.name {
-                active_name.eq_ignore_ascii_case(&candidate_name)
-            } else {
-                false
-            }
-        });
-        if !in_use {
-            return Ok(candidate_name);
-        }
-        seq += 1;
+    let request = crate::agent_handle::HandleRequest {
+        agent_type: &agent_type_clean,
+        role,
+        explicit: custom_name.map(str::trim),
+        native_session_id: None,
+        registry_id: None,
+    };
+    if reserve {
+        return Ok(crate::agent_handle::reserve_handle(project_root, &request)?.handle);
     }
+    crate::agent_handle::preview_handle(project_root, &request)
 }
 
 /// Resolve an agent brief target to its allowed brief directories (exact name, type-role, and type)

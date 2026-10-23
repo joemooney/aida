@@ -3667,6 +3667,7 @@ fn prepare_agent_launch_attempt(
             agent_type,
             role.as_deref(),
             custom_name.as_deref(),
+            /* reserve */ true,
         )?;
         ensure_agent_launch_cwd_not_git_metadata(project_root)?;
         return Ok((
@@ -3725,6 +3726,7 @@ fn prepare_agent_launch_attempt(
                     agent_type,
                     plan_role.as_deref(),
                     custom_name.as_deref(),
+                    /* reserve */ true,
                 )?;
                 ensure_agent_launch_cwd_not_git_metadata(&lease.worktree_path)?;
                 return Ok((
@@ -3750,6 +3752,7 @@ fn prepare_agent_launch_attempt(
                 agent_type,
                 role.as_deref().or(Some(agent_new_scope_role(&spec))),
                 custom_name.as_deref(),
+                /* reserve */ true,
             )?;
             let requested_path = requested_cwd
                 .as_ref()
@@ -3853,6 +3856,7 @@ fn prepare_agent_launch_attempt(
                 agent_type,
                 plan_role.as_deref(),
                 custom_name.as_deref(),
+                /* reserve */ true,
             )?;
             ensure_agent_launch_cwd_not_git_metadata(project_root)?;
             Ok((
@@ -4185,8 +4189,8 @@ pub(crate) fn pr_state_for_spec(project_root: &std::path::Path, spec: &str) -> O
 /// by `--show-context`, which is a pure preview. The working directory is
 /// reported as the project root (the dedicated worktree only exists after a
 /// real launch); the preview banner makes that explicit. `generate_or_validate_name`
-/// is read-only (it inspects the registry to pick a unique name but reserves
-/// nothing until the agent record is written at launch), so it is safe here.
+/// runs with `reserve: false` here, so it inspects the registry and handle
+/// reservations to pick a unique name but reserves nothing.
 /// trace:BUG-408 | ai:claude
 pub(crate) fn prepare_agent_launch_dry(
     project_root: &std::path::Path,
@@ -4210,6 +4214,7 @@ pub(crate) fn prepare_agent_launch_dry(
         agent_type,
         plan_role.as_deref(),
         custom_name.as_deref(),
+        /* reserve */ false,
     )?;
     ensure_agent_launch_cwd_not_git_metadata(project_root)?;
     Ok(AgentLaunchPlan {

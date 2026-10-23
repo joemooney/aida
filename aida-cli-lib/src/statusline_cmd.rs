@@ -153,6 +153,22 @@ pub(crate) fn handle_statusline_command(
         "αιδα".dimmed().to_string(),
         project_label.green().bold().to_string(),
     ];
+    // STORY-1843: the session's handle, the name an operator reads off and
+    // relays (`aida mailbox send --to <handle>`). Read the client payload
+    // up front: it names the session (Claude `session_id`, Agy
+    // `conversationId`); Codex and plain renders fall back to the client's
+    // per-session env. trace:STORY-1843 | ai:claude
+    let raw_payload = client.and_then(|_| statusline_contract::read_stdin_payload());
+    let session_id = raw_payload
+        .as_deref()
+        .and_then(crate::agent_handle::session_id_from_payload)
+        .or_else(crate::agent_handle::current_native_session_id);
+    if let Some(handle) = crate::agent_handle::current_session_handle(
+        &main_worktree_root_from(&project_root),
+        session_id.as_deref(),
+    ) {
+        parts.push(handle.blue().bold().to_string());
+    }
     let drain_root = find_main_worktree_root().unwrap_or_else(|_| project_root.clone());
     if let Some(segment) = crate::drain_state::status_segment(&drain_root) {
         parts.push(segment.cyan().bold().to_string());
@@ -468,7 +484,7 @@ pub(crate) fn handle_statusline_command(
     // AIDA-only segment, and the raw payload is never logged.
     let line = match client {
         Some(name) => {
-            let live = statusline_contract::read_stdin_payload().map(|raw| match name {
+            let live = raw_payload.map(|raw| match name {
                 "claude" => statusline_claude_adapter::parse_claude_payload(&raw),
                 "antigravity" | "agy" => statusline_agy_adapter::parse_agy_payload(&raw),
                 _ => Default::default(),

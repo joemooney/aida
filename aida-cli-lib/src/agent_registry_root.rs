@@ -416,6 +416,23 @@ pub(crate) fn agent_register(
         agent_registry::normalize_description(description.map(std::string::ToString::to_string));
 
     validate_register_pid(pid)?;
+    // A registered agent is addressable like a launched one: its handle is
+    // the given name, else a generated `<vendor>-<role>-NN`.
+    // trace:STORY-1843 | ai:claude
+    let registry_id = format!("{agent_type}-{pid}");
+    let name = Some(
+        crate::agent_handle::reserve_handle(
+            &project_root,
+            &crate::agent_handle::HandleRequest {
+                agent_type: &agent_type,
+                role: Some(role.as_str()),
+                explicit: name.as_deref(),
+                native_session_id: None,
+                registry_id: Some(&registry_id),
+            },
+        )?
+        .handle,
+    );
     let worktree_path = registered_process_cwd(pid).unwrap_or_else(|| project_root.clone());
     let entry = agent_registry::register_existing_agent(
         &project_root,
@@ -428,8 +445,9 @@ pub(crate) fn agent_register(
         description,
     )?;
     println!(
-        "{} registered {}#{} ({}) at {}",
+        "{} registered {} as {}#{} ({}) at {}",
         crate::glyph(crate::glyphs::Glyph::Check).green(),
+        entry.name.as_deref().unwrap_or("(unnamed)"),
         entry.agent_type,
         entry.pid,
         entry.role.as_deref().unwrap_or("(none)"),

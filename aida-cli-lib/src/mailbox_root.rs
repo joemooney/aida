@@ -338,6 +338,15 @@ pub(crate) fn inbox_identities() -> Vec<String> {
             ids.push(type_name);
         }
     }
+    // STORY-1843: the handle this session holds, resolved from its persisted
+    // registry binding (hook payload or the client's per-session env), so
+    // mail sent to the handle reaches a session no launcher named.
+    // trace:STORY-1843 | ai:claude
+    if let Some(handle) = crate::agent_handle::current_session_handle_for_cwd() {
+        if !ids.iter().any(|i| i.eq_ignore_ascii_case(&handle)) {
+            ids.push(handle);
+        }
+    }
     ids
 }
 
