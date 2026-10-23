@@ -1378,12 +1378,35 @@ fn mailbox_digest_rereads_canonical_and_commits_in_one_window() {
 #[test]
 fn local_mailbox_send_never_waits_for_the_store() {
     let fx = fixture();
+    // A valid offline person keeps this a store-lock test, rather than an
+    // unknown-recipient refusal. Preserve the fixture's existing grant roster.
+    // trace:STORY-1843 | ai:codex
+    let mut roster: toml::Value = std::fs::read_to_string(fx.store.join("registry/team.toml"))
+        .unwrap()
+        .parse()
+        .unwrap();
+    roster
+        .get_mut("members")
+        .unwrap()
+        .as_table_mut()
+        .unwrap()
+        .insert("bob".into(), toml::Value::Array(Vec::new()));
+    fx.write_store_file("registry/team.toml", &toml::to_string(&roster).unwrap());
+    git(&fx.store, &["add", "registry/team.toml"]);
+    git(&fx.store, &["commit", "-qm", "chore: known mailbox person"]);
+    let before = fx.head();
     let holder = hold_lock(&fx, "");
     let started = Instant::now();
     let out = fx.run(&["mailbox", "send", "--to", "bob", "hello"]);
     assert!(out.status.success(), "{}", text(&out));
     assert!(started.elapsed() < Duration::from_secs(20));
     assert!(!fx.store.join("mailbox").exists());
+    assert_eq!(
+        fx.head(),
+        before,
+        "local delivery must not commit canonical changes"
+    );
+    assert_eq!(git(&fx.store, &["status", "--porcelain"]), "");
     holder.release();
 }
 

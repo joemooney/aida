@@ -735,10 +735,6 @@ mod task_1768_stop_now_tests {
         .unwrap()
     }
 
-    /// A drain lock whose start identity is Unknown (garbage, non-canonical
-    /// exact ticks, absent) naming a LIVE unrelated pid is never signalled by
-    /// `stop --now`, even though the lenient lock probe reads it Running.
-    // trace:TASK-1768 | ai:claude
     /// Kills the `sleep` child on drop, so an early assert failure never
     /// orphans it.
     // trace:TASK-1955 | ai:claude (TASK-1773)
@@ -761,6 +757,10 @@ mod task_1768_stop_now_tests {
         )
     }
 
+    /// A drain lock whose start identity is Unknown (garbage, non-canonical
+    /// exact ticks, absent) naming a LIVE unrelated pid is never signalled by
+    /// `stop --now`, even though the lenient lock probe reads it Running.
+    // trace:TASK-1768 | ai:claude
     #[test]
     fn task_1768_stop_now_never_signals_an_unconfirmed_identity() {
         let mut guard = spawn_sleep();
