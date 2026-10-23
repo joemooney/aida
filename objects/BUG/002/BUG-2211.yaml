@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T17:20:13.687947949Z
-modified_at: 2026-10-23T17:21:31.432199264Z
+modified_at: 2026-10-23T17:30:41.968965555Z
 req_type: Bug
 comments:
 - id: 01a169c8-3728-75a1-91fc-4539b94d63a4
@@ -16,6 +16,12 @@ comments:
   content: '10:18: a third stale lock appeared at 10:11:xx. The advisor ran no git write then, so other sandboxed sessions (bg lanes in sibling worktrees share the main .git/config) also produce it. The scope is any sandboxed agent, not just the advisor. Stopgap: the advisor''s dispatcher clears an empty lock older than 2 min every 10 s.'
   created_at: 2026-10-23T17:21:31.432199264Z
   modified_at: 2026-10-23T17:21:31.432199264Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+- id: 01a169d0-9db0-78e0-a38e-8261acf1c2d7
+  author: joe
+  content: 'ROOT CAUSE CONFIRMED 10:30: the Claude Code Bash sandbox (bubblewrap) protects .git/config.lock by bind-mounting /dev/null over it. Inside the sandbox, ls shows ''crw-rw-rw- nobody nogroup 1, 3 .git/config.lock''. When the path does not exist on the host, bwrap first creates an empty 0444 file there as the mount point, and leaves it behind after the command exits. So EVERY sandboxed command in this repo or a sibling worktree (they share the main .git) recreates the placeholder, whether or not it runs git. Host-side git then sees a lock and refuses every config write: worktree add -b, branch -D, push -u. Signature: empty, mode 0444. A real git lock is never created read-only, so an empty 0444 config.lock is always safe to remove. Stopgaps: the advisor''s helpers remove it on sight, and the dispatcher sweeps every 10 s. Real fix: an aida launch-path and doctor check removes an empty 0444 config.lock before any config write, and the issue is reported upstream to Claude Code.'
+  created_at: 2026-10-23T17:30:41.968965555Z
+  modified_at: 2026-10-23T17:30:41.968965555Z
   session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
 filed_at:
   code_sha: a9e78d34914e43b30fc9d2b590d83ab96feb48b2
