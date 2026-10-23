@@ -6,16 +6,25 @@ description: |-
   agent_launch.rs:5822 rendered_launch_context_carries_the_active_mandate and :5935 launch_context_shows_the_mandate_only_while_one_is_active cover both TASK-1955 criteria but carry no per-criterion trace anchor; aida criteria lists them untraced.
 
   Raised in review of PR-2855: https://github.com/joemooney/aida/pull/2855#issuecomment-6372272250
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T18:46:17.097788781Z
-modified_at: 2026-10-23T18:46:17.097788781Z
+modified_at: 2026-10-23T18:48:19.602036743Z
 req_type: Task
 tags:
 - from-review:PR-2855
 - severity:minor
+history:
+- id: 01a16a17-af92-75f2-a239-8be01b0c3efb
+  author: joe
+  timestamp: 2026-10-23T18:48:19.602030793Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 97ce4423aed886338602ae7c6759264b8cad7373
   branch: pr-2855
