@@ -1,0 +1,28 @@
+id: 01a1695a-f427-7243-80b1-72c5fe51bb4b
+spec_id: TASK-2234
+agreed_id: TASK-2234
+title: aida search --fields help is hand-written and drifts from the shared parser set
+description: |
+  aida search --fields parses through the same toon_list_fields as aida list (requirements_cli.rs ~9460), so after PR-2852 it also accepts whitespace separators, `opened` and the created_at/created aliases. Its clap help is still hand-written and lists only a subset of TOON_LIST_KNOWN_FIELDS. Generate it from the same constants (as list_fields_help() does) and pin it with a test like list_fields_help_matches_parser_set.
+
+  Raised in review of PR-2852: https://github.com/joemooney/aida/pull/2852#issuecomment-6368328932
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-23T15:22:10.855168171Z
+modified_at: 2026-10-23T15:22:10.855168171Z
+req_type: Task
+tags:
+- docs
+- from-review:PR-2852
+- severity:minor
+filed_at:
+  code_sha: 3e998a65796fc176924bb0883d8bd95c7f114e29
+  branch: pr-2852
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 017e4a4949
+  vendor: claude
+  session: 01a16959f671
+  harness_version: 2.1.309 (Claude Code)
