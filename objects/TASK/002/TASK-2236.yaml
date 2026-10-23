@@ -1,0 +1,29 @@
+id: 01a1695d-be10-7223-8804-bba78d8ee3f4
+spec_id: TASK-2236
+agreed_id: TASK-2236
+title: Escape-hint test bypasses RecipientDirectory::load operator wiring
+description: |
+  aida-cli-lib/src/mailbox_resolver.rs round2_escape_hint_names_only_a_resolvable_person_or_no_recipient sets directory.operator by hand: None, then select_operator(None, ...). The path from load() through AIDA_USER and team.toml to the operator is therefore not covered end to end. Add a test that drives RecipientDirectory::load with a roster operator seat, with AIDA_USER controlled (for example, an env guard).
+
+  Raised in review of PR-2848: https://github.com/joemooney/aida/pull/2848#issuecomment-6368384665
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-23T15:25:13.616356957Z
+modified_at: 2026-10-23T15:25:13.616356957Z
+req_type: Task
+tags:
+- from-review:PR-2848
+- mailbox
+- severity:cosmetic
+- tests
+filed_at:
+  code_sha: eff10b9e5512f9b41a1e09b7b3f8e0eaa7736763
+  branch: pr-2848
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 017e4a4949
+  vendor: claude
+  session: 01a1695abb3a
+  harness_version: 2.1.309 (Claude Code)

@@ -1,0 +1,29 @@
+id: 01a1695d-afe0-7a52-8867-0c84be9635a9
+spec_id: TASK-2235
+agreed_id: TASK-2235
+title: Mailbox doc says aida agent gc/ls run outside the command sandbox; only the start hook does
+description: |
+  docs/cli/06-roles-sessions.md (mailbox resolver paragraph, STORY-1843 PR2) says "aida agent gc, aida agent ls and each session's start hook run outside the command sandbox". Only the SessionStart hook runs outside it. gc and ls run wherever they are invoked, and from a sandboxed shell they skip rows they cannot observe. Reword the sentence so operators know that ending host rows needs a host-side run.
+
+  Raised in review of PR-2848: https://github.com/joemooney/aida/pull/2848#issuecomment-6368384665
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-23T15:25:09.984751587Z
+modified_at: 2026-10-23T15:25:09.984751587Z
+req_type: Task
+tags:
+- docs
+- from-review:PR-2848
+- mailbox
+- severity:cosmetic
+filed_at:
+  code_sha: eff10b9e5512f9b41a1e09b7b3f8e0eaa7736763
+  branch: pr-2848
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 017e4a4949
+  vendor: claude
+  session: 01a1695abb3a
+  harness_version: 2.1.309 (Claude Code)

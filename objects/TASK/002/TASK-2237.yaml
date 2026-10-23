@@ -1,0 +1,28 @@
+id: 01a1695d-cc04-77d2-9a9e-c386cf04da90
+spec_id: TASK-2237
+agreed_id: TASK-2237
+title: Verify codex/agy SessionStart hooks trigger the dead-row gc that ends unverified mail readers
+description: |
+  STORY-1843 PR2 (TASK-2177 fix) ends dead resumable registry rows from emit_notice_time_line, but only when the hook payload is a SessionStart event (status_awaiting.rs ~1079). Dead rows that no host-side observer collects still count as unverified readers for 24h from a sandboxed sender. The Claude path is covered. Verify that the codex and agy hook shapes reach this gc, or add a host-side trigger.
+
+  Raised in review of PR-2848: https://github.com/joemooney/aida/pull/2848#issuecomment-6368384665
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-23T15:25:17.188199131Z
+modified_at: 2026-10-23T15:25:17.188199131Z
+req_type: Task
+tags:
+- from-review:PR-2848
+- mailbox
+- severity:minor
+filed_at:
+  code_sha: eff10b9e5512f9b41a1e09b7b3f8e0eaa7736763
+  branch: pr-2848
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 017e4a4949
+  vendor: claude
+  session: 01a1695abb3a
+  harness_version: 2.1.309 (Claude Code)
