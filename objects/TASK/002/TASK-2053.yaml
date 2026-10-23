@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T09:53:13.924066900Z
-modified_at: 2026-10-22T23:18:23.797532868Z
+modified_at: 2026-10-23T00:14:24.830035673Z
 req_type: Task
 relationships:
 - rel_type: References
@@ -166,6 +166,16 @@ comments:
     Next, I'm doing S4c ruling (2) on #2839: with no knob set and no origin remote, resolve to a worktree with a note; an explicit seat_tree=clone with no origin refuses. One test per branch.
   created_at: 2026-10-22T23:18:23.797532868Z
   modified_at: 2026-10-22T23:18:23.797532868Z
+  session_id: bbb07001-4f38-4b0c-988e-96d71b042df3
+- id: 01a1661b-de3e-78b3-bd33-6967561c0ecd
+  author: joe
+  content: |-
+    S5 packing step done (17:00). Under the main merge-lease I ran 'git repack -d' on the primary checkout's object store. It took 825 s. Loose objects went from 128,766 to 7,170 (the rest are probably unreachable). In-pack went from 349k to 468k, and the packs grew from 238 to 286 MiB. Re-measured with the same script and method (5 runs each, load average 13):
+    - Cold: 3.0-3.3 s, p50 3.2 s, p95 3.3 s (was 35.7 s).
+    - Warm: p50 1.2 s, p95 1.2 s.
+    Cold p95 is now well under 20 s, so per the 14:16 ruling S5 is just this packing step plus a doctor check. No host clone pool and no SKETCH. Note: main already has gc.auto=500 and gc.autoDetach=true in .git/config, yet 128k loose objects built up anyway, so the doctor check has to catch that. Next is the S5 PR: a doctor finding that warns when the main checkout's loose-object count is high enough to slow seat-clone creation, with the repack as its remediation.
+  created_at: 2026-10-23T00:14:24.830035673Z
+  modified_at: 2026-10-23T00:14:24.830035673Z
   session_id: bbb07001-4f38-4b0c-988e-96d71b042df3
 history:
 - id: 01a15de1-409d-7c42-b18e-94acbd5eb19d
