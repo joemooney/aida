@@ -3,12 +3,12 @@ spec_id: BUG-2211
 agreed_id: BUG-2211
 title: A sandboxed git command in the primary checkout leaves a stale read-only .git/config.lock that blocks every worktree add and branch -D
 description: 'Seen twice on 2026-10-23 (09:06:59 and 09:44:23). The advisor seat ran under Claude Code''s Bash sandbox (bubblewrap), where .git/config is write-denied. A git fetch from that shell created .git/config.lock (empty, mode r--r--r--) and could not complete or remove it. Every later git worktree add -b and branch -D failed with ''could not lock config file .git/config: File exists'' until a human removed it. That blocked takeover fixers, new lanes and reviewer cleanup. Fix direction: (1) aida doctor detects a config.lock that is empty and older than N minutes, with no git process holding it, and offers or does a safe removal; launch paths (aida agent new, queue work, worktree add) run the same check first. (2) The guardrails hook warns or refuses git writes (fetch, config, branch, worktree) from a sandboxed shell in the primary checkout. The stopgap in the advisor helper scripts removes a lock older than 2 min.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T17:20:13.687947949Z
-modified_at: 2026-10-23T19:12:55.244374539Z
+modified_at: 2026-10-23T22:01:45.875980893Z
 req_type: Bug
 comments:
 - id: 01a169c8-3728-75a1-91fc-4539b94d63a4
@@ -32,6 +32,20 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a16ac8-c88c-72f3-b1b2-49a924eb7913
+  author: aida-auto-bump
+  timestamp: 2026-10-23T22:01:45.868669924Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a16ac8-c893-7610-b6bc-b501d1fb57f7
+  timestamp: 2026-10-23T22:01:45.875970641Z
+  agent: aida
+  commit_sha: 4aa9aea412a5418bc7cc92e607a3175eedd17372
+  summary: 'BUG-2211 met: empty-0444 config.lock predicate, pre-clear + one retry on worktree-add/branch -D/git config call sites, doctor scan + heal with tests; CI green at head. Non-blocking: push -u sites unwrapped, misplaced lib.rs trace, doctor routing untested.'
+  review_verdict: approved
 filed_at:
   code_sha: a9e78d34914e43b30fc9d2b590d83ab96feb48b2
   branch: main
@@ -40,3 +54,7 @@ filed_at:
   aida_build_sha: c6bb0dc4f1
   vendor: claude
   session: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-23T22:01:45.868662494Z
+  completion_sha: 4aa9aea412a5418bc7cc92e607a3175eedd17372
