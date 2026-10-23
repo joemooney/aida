@@ -5889,6 +5889,56 @@ enabled = true
         .unwrap();
     }
 
+    /// STORY-1916 AC3: when reclaim cannot restore the floor, the routed
+    /// item's evidence says so, with the top consumers. The guard's
+    /// `--fail-on-findings` reason is its last stderr line, and the route
+    /// carries exactly that line.
+    // trace:STORY-1916.ac641c6e | ai:claude
+    #[test]
+    fn story_1916_routed_disk_item_carries_the_stuck_sentence() {
+        let tmp = tempfile::tempdir().unwrap();
+        let finding = crate::doctor_root::DoctorFinding {
+            category: "disk-headroom".into(),
+            id: "disk-headroom-cache".into(),
+            summary: format!(
+                "free disk space is 12.0 GiB, below the 60 GiB floor. {}",
+                crate::disk_emergency::stuck_summary(
+                    3 << 30,
+                    48 << 30,
+                    &[("/t/worktrees/take-2845".into(), 39 << 30)]
+                )
+            ),
+            action: String::new(),
+            safe_heal: false,
+        };
+        let reason = crate::doctor_cmd::disk_headroom_fail_reason(&[finding]).unwrap();
+        let events =
+            bug_1655_trip_disk_guard(tmp.path(), 1, &format!("warning: noise\n{reason}\n"));
+        bug_1655_route(
+            tmp.path(),
+            vec![seat_task(
+                "disk-headroom-guard-route",
+                &["advisor"],
+                None,
+                &["CronJobFailed:disk-headroom-guard"],
+            )],
+            &events,
+        );
+        let routed = schedule_ledger::load(&store_root(tmp.path()), "disk-headroom-guard-route")
+            .and_then(|l| l.due_failure)
+            .and_then(|f| f.error)
+            .expect("routed evidence");
+        assert!(routed.starts_with("exit 1: STUCK:"), "{routed}");
+        assert!(
+            routed.contains("can free only 3.0 GiB of the 48.0 GiB"),
+            "{routed}"
+        );
+        assert!(
+            routed.contains("39.0 GiB /t/worktrees/take-2845"),
+            "{routed}"
+        );
+    }
+
     #[test]
     fn bug_1655_only_the_failing_guards_route_comes_due_with_its_own_evidence() {
         let tmp = tempfile::tempdir().unwrap();

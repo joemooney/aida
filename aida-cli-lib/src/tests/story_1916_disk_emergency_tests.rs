@@ -79,6 +79,7 @@ struct Usage {
 // Config
 // ---------------------------------------------------------------------------
 
+// trace:STORY-1916.ac40b516 | ai:claude
 #[test]
 fn story_1916_config_defaults_overrides_and_disable() {
     assert_eq!(
@@ -115,6 +116,7 @@ fn story_1916_config_defaults_overrides_and_disable() {
 // Allowlist
 // ---------------------------------------------------------------------------
 
+// trace:STORY-1916.ac40b516 | ai:claude
 #[test]
 fn story_1916_allowlist_accepts_only_direct_cache_children() {
     let tmp = tempfile::tempdir().unwrap();
@@ -136,6 +138,7 @@ fn story_1916_allowlist_accepts_only_direct_cache_children() {
     }
 }
 
+// trace:STORY-1916.ac40b516 | ai:claude
 #[test]
 fn story_1916_allowlist_refuses_a_symlinked_cache() {
     let tmp = tempfile::tempdir().unwrap();
@@ -150,6 +153,7 @@ fn story_1916_allowlist_refuses_a_symlinked_cache() {
     assert!(err.to_string().contains("symlink"), "{err}");
 }
 
+// trace:STORY-1916.ac40b516 | ai:claude
 #[test]
 fn story_1916_allowlist_refuses_overlap_with_sources_and_live_binary() {
     let tmp = tempfile::tempdir().unwrap();
@@ -180,6 +184,7 @@ fn story_1916_allowlist_refuses_overlap_with_sources_and_live_binary() {
 // Idle test and planning
 // ---------------------------------------------------------------------------
 
+// trace:STORY-1916.ac40b516 | ai:claude
 #[test]
 fn story_1916_a_fresh_file_deep_in_the_tree_blocks_deletion() {
     let tmp = tempfile::tempdir().unwrap();
@@ -217,6 +222,7 @@ fn story_1916_a_fresh_file_deep_in_the_tree_blocks_deletion() {
     assert!(held[0].1.contains("idle window"), "{:?}", held[0]);
 }
 
+// trace:STORY-1916.ac40b516 | ai:claude
 #[test]
 fn story_1916_future_mtime_is_fresh() {
     let walk = CacheWalk {
@@ -227,6 +233,7 @@ fn story_1916_future_mtime_is_fresh() {
     assert_eq!(idle_for(&CacheWalk::default(), SystemTime::now()), None);
 }
 
+// trace:STORY-1916.ac40b516 | ai:claude
 #[test]
 fn story_1916_plan_orders_by_tier_then_oldest_idle() {
     let tmp = tempfile::tempdir().unwrap();
@@ -288,6 +295,7 @@ fn story_1916_plan_orders_by_tier_then_oldest_idle() {
     assert_eq!(candidates[4].holder.as_ref().unwrap().scope, "STORY-9");
 }
 
+// trace:STORY-1916.ac40b516 | ai:claude
 #[test]
 fn story_1916_plan_maps_detached_take_worktree_to_its_closed_pr() {
     let tmp = tempfile::tempdir().unwrap();
@@ -316,6 +324,7 @@ fn story_1916_plan_maps_detached_take_worktree_to_its_closed_pr() {
 // Apply: stop condition, tier 2, busy, refusal
 // ---------------------------------------------------------------------------
 
+// trace:STORY-1916.ac40b516 | ai:claude
 #[test]
 fn story_1916_apply_stops_once_below_ceiling_minus_margin() {
     let tmp = tempfile::tempdir().unwrap();
@@ -342,8 +351,7 @@ fn story_1916_apply_stops_once_below_ceiling_minus_margin() {
             Ok(())
         },
         |_| {},
-    )
-    .unwrap();
+    );
     assert!(!a.exists() && !b.exists(), "deleted until below 90%");
     assert!(c.exists(), "left warm once usage fell below the margin");
     assert_eq!(outcome.stopped, Stop::BelowMargin);
@@ -368,6 +376,7 @@ fn story_1916_apply_stops_once_below_ceiling_minus_margin() {
     );
 }
 
+// trace:STORY-1916.ac40b516 | ai:claude
 #[test]
 fn story_1916_tier2_runs_only_while_still_at_or_above_the_ceiling() {
     let tmp = tempfile::tempdir().unwrap();
@@ -385,8 +394,7 @@ fn story_1916_tier2_runs_only_while_still_at_or_above_the_ceiling() {
         || Some(93),
         |p| std::fs::remove_dir_all(p),
         |c| mailed.borrow_mut().push(c.path.clone()),
-    )
-    .unwrap();
+    );
     assert!(held.exists());
     assert_eq!(outcome.stopped, Stop::Tier2BelowCeiling);
     assert!(mailed.borrow().is_empty());
@@ -400,13 +408,13 @@ fn story_1916_tier2_runs_only_while_still_at_or_above_the_ceiling() {
         || Some(96),
         |p| std::fs::remove_dir_all(p),
         |c| mailed.borrow_mut().push(c.path.clone()),
-    )
-    .unwrap();
+    );
     assert!(!held.exists());
     assert_eq!(outcome.deleted.len(), 1);
     assert_eq!(mailed.borrow().as_slice(), &[held.clone()]);
 }
 
+// trace:STORY-1916.ac40b516 | ai:claude
 #[test]
 fn story_1916_held_cargo_lock_skips_the_cache_as_busy() {
     use fs2::FileExt;
@@ -424,8 +432,7 @@ fn story_1916_held_cargo_lock_skips_the_cache_as_busy() {
         || Some(99),
         |p| std::fs::remove_dir_all(p),
         |_| {},
-    )
-    .unwrap();
+    );
     assert!(
         c.exists(),
         "a cache whose cargo lock is held is never deleted"
@@ -443,6 +450,7 @@ fn story_1916_held_cargo_lock_skips_the_cache_as_busy() {
     );
 }
 
+// trace:STORY-1916.ac40b516 | ai:claude
 #[test]
 fn story_1916_a_write_since_planning_skips_the_cache_as_busy() {
     let tmp = tempfile::tempdir().unwrap();
@@ -460,36 +468,67 @@ fn story_1916_a_write_since_planning_skips_the_cache_as_busy() {
         || Some(99),
         |p| std::fs::remove_dir_all(p),
         |_| {},
-    )
-    .unwrap();
+    );
     assert!(c.exists());
     assert!(outcome.deleted.is_empty());
 }
 
+// trace:STORY-1916.ac40b516 | ai:claude
 #[test]
-fn story_1916_apply_bails_on_a_path_outside_the_allowlist() {
+fn story_1916_a_refusal_stops_the_run_and_keeps_earlier_ledger_rows() {
     let tmp = tempfile::tempdir().unwrap();
     let (main, root) = layout(tmp.path());
+    let valid = cache(&root, "valid", 10, 9 * HOUR);
     let agent = main.join("target/agent");
+    let after = cache(&root, "after", 10, 9 * HOUR);
     let removed = RefCell::new(Vec::new());
-    let err = apply(
+    let outcome = apply(
         &allow(&main, &root),
-        &[candidate(&agent, Reason::WorktreeGone, 9 * HOUR)],
+        &[
+            candidate(&valid, Reason::WorktreeGone, 9 * HOUR),
+            // A forged entry reaching the live dev build.
+            candidate(&agent, Reason::WorktreeGone, 9 * HOUR),
+            candidate(&after, Reason::Idle, 9 * HOUR),
+        ],
         &cfg(),
         SystemTime::now(),
         || Some(99),
         |p| {
             removed.borrow_mut().push(p.to_path_buf());
-            Ok(())
+            std::fs::remove_dir_all(p)
         },
         |_| {},
-    )
-    .expect_err("a forged plan reaching target/agent must bail");
-    assert!(err.to_string().contains("refusing to delete"), "{err}");
-    assert!(removed.borrow().is_empty());
-    assert!(agent.join("aida").is_file());
+    );
+    assert_eq!(
+        removed.borrow().as_slice(),
+        &[valid.clone()],
+        "nothing after the refusal"
+    );
+    assert!(agent.join("aida").is_file() && after.exists());
+    assert_eq!(outcome.stopped, Stop::Refused);
+    assert!(outcome
+        .refusal
+        .as_deref()
+        .is_some_and(|r| r.contains("refusing to delete")));
+    // The delete before the refusal is still ledgered, then the refusal,
+    // then the run summary.
+    assert!(
+        matches!(&outcome.rows[0], LedgerRow::Delete { path, .. } if path.ends_with("valid")),
+        "{:?}",
+        outcome.rows
+    );
+    assert!(
+        matches!(&outcome.rows[1], LedgerRow::Fail { error, .. } if error.contains("refusing"))
+    );
+    assert!(
+        matches!(&outcome.rows[2], LedgerRow::Run { stopped, deleted: 1, .. } if stopped == "refused")
+    );
+    let (title, body) = emergency_notice(&outcome, &cfg()).expect("a refusal is news");
+    assert!(title.contains("refused"), "{title}");
+    assert!(body.contains("Stopped by the allowlist"), "{body}");
 }
 
+// trace:STORY-1916.ac40b516 | ai:claude
 #[test]
 fn story_1916_apply_stops_when_the_probe_is_lost() {
     let tmp = tempfile::tempdir().unwrap();
@@ -503,8 +542,7 @@ fn story_1916_apply_stops_when_the_probe_is_lost() {
         || None,
         |p| std::fs::remove_dir_all(p),
         |_| {},
-    )
-    .unwrap();
+    );
     assert!(c.exists());
     assert_eq!(outcome.stopped, Stop::ProbeLost);
 }
@@ -521,9 +559,11 @@ fn outcome_with(deleted: Vec<Candidate>, after: Option<u8>) -> RunOutcome {
         stopped: Stop::BelowMargin,
         used_pct_before: Some(97),
         used_pct_after: after,
+        refusal: None,
     }
 }
 
+// trace:STORY-1916.ac40b516 | ai:claude
 #[test]
 fn story_1916_notice_only_when_something_happened_or_recovery_failed() {
     assert!(emergency_notice(&outcome_with(Vec::new(), Some(80)), &cfg()).is_none());
@@ -539,6 +579,7 @@ fn story_1916_notice_only_when_something_happened_or_recovery_failed() {
     assert!(body.contains("aida worktree reclaim"), "{body}");
 }
 
+// trace:STORY-1916.ac40b516 | ai:claude
 #[test]
 fn story_1916_ledger_round_trips_and_reports_the_last_run() {
     let tmp = tempfile::tempdir().unwrap();
@@ -573,6 +614,7 @@ fn story_1916_ledger_round_trips_and_reports_the_last_run() {
     assert!(last_reclaim(&tmp.path().join("none")).is_none());
 }
 
+// trace:STORY-1916.ac641c6e | ai:claude
 #[test]
 fn story_1916_stuck_escalation_dedupes_by_time_and_growth() {
     let now = Utc::now();
@@ -580,6 +622,7 @@ fn story_1916_stuck_escalation_dedupes_by_time_and_growth() {
     let state = GuardState {
         last_stuck_at: Some(now - chrono::Duration::hours(1)),
         last_stuck_deficit: Some(20 * GIB),
+        ..GuardState::default()
     };
     assert!(
         !should_escalate(&state, now, 25 * GIB),
@@ -600,6 +643,7 @@ fn story_1916_stuck_escalation_dedupes_by_time_and_growth() {
     assert_eq!(load_guard_state(tmp.path()), state);
 }
 
+// trace:STORY-1916.ac641c6e | ai:claude
 #[test]
 fn story_1916_stuck_summary_names_the_shortfall_and_top_consumers() {
     let text = stuck_summary(
@@ -612,6 +656,7 @@ fn story_1916_stuck_summary_names_the_shortfall_and_top_consumers() {
     assert!(text.contains("39.0 GiB /t/worktrees/take-2845"), "{text}");
 }
 
+// trace:STORY-1916.ac641c6e | ai:claude
 #[test]
 fn story_1916_top_consumers_counts_each_worktree_cache() {
     let tmp = tempfile::tempdir().unwrap();
@@ -627,6 +672,7 @@ fn story_1916_top_consumers_counts_each_worktree_cache() {
     );
 }
 
+// trace:STORY-1916.ac40b516 | ai:claude
 #[test]
 fn story_1916_finished_rows_open_wins_and_merged_beats_closed() {
     let rows: Vec<serde_json::Value> = serde_json::from_str(
@@ -650,6 +696,7 @@ fn story_1916_finished_rows_open_wins_and_merged_beats_closed() {
     assert!(!numbers.contains_key(&2));
 }
 
+// trace:STORY-1916.Visibility | ai:claude
 #[test]
 fn story_1916_probe_paths_adds_the_cache_fs_only_when_distinct() {
     let tmp = tempfile::tempdir().unwrap();
@@ -676,6 +723,7 @@ fn story_1916_probe_paths_adds_the_cache_fs_only_when_distinct() {
     assert_eq!(rows[1].2.used_pct(), 96);
 }
 
+// trace:STORY-1916.Visibility | ai:claude
 #[test]
 fn story_1916_status_block_shows_floor_ceiling_last_run_and_reclaim() {
     let at = "2026-10-23T17:00:00Z".parse::<DateTime<Utc>>().unwrap();
@@ -732,10 +780,55 @@ fn story_1916_status_block_shows_floor_ceiling_last_run_and_reclaim() {
     );
 }
 
+// trace:STORY-1916.Visibility | ai:claude
 #[test]
 fn story_1916_fs_stats_reads_a_real_tempdir() {
     let tmp = tempfile::tempdir().unwrap();
     let s = fs_stats(tmp.path()).expect("statvfs on a tempdir");
     assert!(s.total > 0 && s.avail <= s.total);
     assert!(s.used_pct() <= 100);
+}
+
+// trace:STORY-1916.ac40b516 | ai:claude
+#[test]
+fn story_1916_emergency_notice_dedupes_a_repeating_nothing_deleted_run() {
+    let now = Utc::now();
+    let stuck = outcome_with(Vec::new(), Some(97));
+    assert!(should_notify_emergency(&GuardState::default(), now, &stuck));
+    let recent = GuardState {
+        last_emergency_stuck_at: Some(now - chrono::Duration::minutes(30)),
+        ..GuardState::default()
+    };
+    assert!(
+        !should_notify_emergency(&recent, now, &stuck),
+        "the next 30m tick stays quiet"
+    );
+    assert!(should_notify_emergency(
+        &recent,
+        now + chrono::Duration::hours(6),
+        &stuck
+    ));
+    let deleted = outcome_with(
+        vec![candidate(Path::new("/c/take-1"), Reason::Idle, HOUR)],
+        Some(97),
+    );
+    assert!(
+        should_notify_emergency(&recent, now, &deleted),
+        "a delete is always news"
+    );
+}
+
+// trace:STORY-1916.ac641c6e | ai:claude
+#[test]
+fn story_1916_target_on_device_matches_a_single_filesystem_host() {
+    use std::os::unix::fs::MetadataExt;
+    let tmp = tempfile::tempdir().unwrap();
+    let (main, _) = layout(tmp.path());
+    let dev = std::fs::metadata(&main).unwrap().dev();
+    assert!(
+        target_on_device(&main, dev),
+        "target/ on the project filesystem"
+    );
+    assert!(!target_on_device(&main, dev.wrapping_add(1)));
+    assert!(!target_on_device(&tmp.path().join("no-such"), dev));
 }

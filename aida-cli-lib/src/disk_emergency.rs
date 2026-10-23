@@ -552,6 +552,8 @@ pub(crate) enum Stop {
     ProbeLost,
     /// Every candidate was tried.
     Exhausted,
+    /// The allowlist refused a candidate: the plan was built wrong.
+    Refused,
 }
 
 impl Stop {
@@ -561,6 +563,7 @@ impl Stop {
             Stop::Tier2BelowCeiling => "below-ceiling",
             Stop::ProbeLost => "probe-lost",
             Stop::Exhausted => "exhausted",
+            Stop::Refused => "refused",
         }
     }
 }
@@ -575,6 +578,8 @@ pub(crate) struct RunOutcome {
     pub stopped: Stop,
     pub used_pct_before: Option<u8>,
     pub used_pct_after: Option<u8>,
+    /// The allowlist refusal that stopped the run, if one did.
+    pub refusal: Option<String>,
 }
 
 /// Delete candidates in order until usage is below the margin. `used_pct`
@@ -590,13 +595,14 @@ pub(crate) fn apply(
     used_pct: impl Fn() -> Option<u8>,
     remove: impl Fn(&Path) -> std::io::Result<()>,
     mut on_tier2: impl FnMut(&Candidate),
-) -> Result<RunOutcome> {
+) -> RunOutcome {
     let ts = DateTime::<Utc>::from(now);
     let before = used_pct();
     let mut rows = Vec::new();
     let mut deleted = Vec::new();
     let mut freed = 0u64;
     let mut stopped = Stop::Exhausted;
+    let mut refusal = None;
     for c in candidates {
         let Some(pct) = used_pct() else {
             stopped = Stop::ProbeLost;
@@ -610,8 +616,20 @@ pub(crate) fn apply(
             stopped = Stop::Tier2BelowCeiling;
             break;
         }
-        allow.check(&c.path)?;
         let path = c.path.display().to_string();
+        // A refusal stops the run, but the deletes before it keep their
+        // ledger rows: they are returned with it, not dropped.
+        // trace:STORY-1916.ac40b516 | ai:claude
+        if let Err(e) = allow.check(&c.path) {
+            rows.push(LedgerRow::Fail {
+                ts,
+                path,
+                error: e.to_string(),
+            });
+            refusal = Some(e.to_string());
+            stopped = Stop::Refused;
+            break;
+        }
         if let Some(why) = busy_reason(&c.path, now, cfg.idle()) {
             rows.push(LedgerRow::Skip {
                 ts,
@@ -653,14 +671,15 @@ pub(crate) fn apply(
         used_pct_after: after,
         stopped: stopped.code().to_string(),
     });
-    Ok(RunOutcome {
+    RunOutcome {
         rows,
         deleted,
         freed_bytes: freed,
         stopped,
         used_pct_before: before,
         used_pct_after: after,
-    })
+        refusal,
+    }
 }
 
 /// The operator notice for a run, or `None` when the run deleted nothing
@@ -673,11 +692,13 @@ pub(crate) fn emergency_notice(
     let failed_to_recover = outcome
         .used_pct_after
         .is_none_or(|pct| pct >= cfg.stop_below());
-    if outcome.deleted.is_empty() && !failed_to_recover {
+    if outcome.deleted.is_empty() && !failed_to_recover && outcome.refusal.is_none() {
         return None;
     }
     let pct = |p: Option<u8>| p.map_or("?".to_string(), |p| format!("{p}%"));
-    let title = if failed_to_recover {
+    let title = if outcome.refusal.is_some() {
+        "Disk emergency: auto-reclaim refused a candidate and stopped".to_string()
+    } else if failed_to_recover {
         format!(
             "Disk emergency: build cache still at {} after auto-reclaim",
             pct(outcome.used_pct_after)
@@ -705,6 +726,9 @@ pub(crate) fn emergency_notice(
             c.path.display(),
             c.reason.code()
         ));
+    }
+    if let Some(refusal) = &outcome.refusal {
+        body.push_str(&format!("\nStopped by the allowlist: {refusal}"));
     }
     if failed_to_recover {
         body.push_str(
@@ -787,6 +811,10 @@ pub(crate) struct GuardState {
     pub last_stuck_at: Option<DateTime<Utc>>,
     #[serde(default)]
     pub last_stuck_deficit: Option<u64>,
+    /// When the last "still over the ceiling, nothing deleted" emergency
+    /// notice went out.
+    #[serde(default)]
+    pub last_emergency_stuck_at: Option<DateTime<Utc>>,
 }
 
 fn guard_state_path(main_root: &Path) -> PathBuf {
@@ -829,6 +857,24 @@ pub(crate) fn should_escalate(state: &GuardState, now: DateTime<Utc>, deficit: u
     stale || grew
 }
 
+/// Should this emergency run notify? A run that deleted something, or was
+/// refused, always does: each is news. A run that deleted nothing and is
+/// still over the margin repeats every tick, so it is deduped like the
+/// stuck escalation: at most every 6h. Pure.
+// trace:STORY-1916.ac40b516 | ai:claude
+pub(crate) fn should_notify_emergency(
+    state: &GuardState,
+    now: DateTime<Utc>,
+    outcome: &RunOutcome,
+) -> bool {
+    if !outcome.deleted.is_empty() || outcome.refusal.is_some() {
+        return true;
+    }
+    state
+        .last_emergency_stuck_at
+        .is_none_or(|last| now - last >= chrono::Duration::hours(STUCK_REESCALATE_HOURS))
+}
+
 /// The stuck sentence the finding and the notice carry. Pure.
 // trace:STORY-1916 | ai:claude
 pub(crate) fn stuck_summary(reclaimable: u64, deficit: u64, top: &[(PathBuf, u64)]) -> String {
@@ -846,6 +892,14 @@ pub(crate) fn stuck_summary(reclaimable: u64, deficit: u64, top: &[(PathBuf, u64
         text.push_str(&format!("; top consumers: {}", list.join(", ")));
     }
     text
+}
+
+/// Is `<main>/target` on the filesystem `dev`? Then its caches are what a
+/// breach of that filesystem should list, bind mount or not.
+// trace:STORY-1916.ac641c6e | ai:claude
+pub(crate) fn target_on_device(main_root: &Path, dev: u64) -> bool {
+    use std::os::unix::fs::MetadataExt;
+    std::fs::metadata(main_root.join("target")).is_ok_and(|m| m.dev() == dev)
 }
 
 /// The five largest directories under `<main>/target`, counting each
@@ -1178,22 +1232,10 @@ pub(crate) fn run_emergency(main_root: &Path, cfg: &EmergencyConfig) -> Option<R
     let home = crate::home_dir();
     let allow = Allowlist::for_main(main_root, cache_root.clone(), home.as_deref(), &worktrees);
     let (finished_branches, finished_prs) = finished_from_gh(main_root).unwrap_or_else(|| {
-        // gh unreachable: git can still prove merges (STORY-1916 AC2).
-        let default_ref = crate::resolve_default_branch_ref(main_root);
-        let branches = worktrees
-            .iter()
-            .filter_map(|w| w.branch.clone())
-            .filter(|b| {
-                default_ref.as_deref().is_some_and(|r| {
-                    crate::worktree_reclaim::branch_merged_offline(
-                        main_root,
-                        b,
-                        r,
-                        crate::worktree_reclaim::SQUASH_SCAN_DEADLINE,
-                    )
-                    .is_some()
-                })
-            })
+        // gh unreachable: git can still prove merges (STORY-1916 AC2), under
+        // reclaim's overall scan budget.
+        let branches = crate::worktree_reclaim::merged_offline(main_root, &worktrees)
+            .into_iter()
             .map(|b| (b, Reason::Merged))
             .collect();
         (branches, BTreeMap::new())
@@ -1209,7 +1251,7 @@ pub(crate) fn run_emergency(main_root: &Path, cfg: &EmergencyConfig) -> Option<R
         idle: cfg.idle(),
     };
     let (candidates, _held) = plan(&survey);
-    let outcome = match apply(
+    let outcome = apply(
         &allow,
         &candidates,
         cfg,
@@ -1217,29 +1259,18 @@ pub(crate) fn run_emergency(main_root: &Path, cfg: &EmergencyConfig) -> Option<R
         || fs_stats(&cache_root).map(|s| s.used_pct()),
         |p| std::fs::remove_dir_all(p),
         |c| mail_holder(main_root, c),
-    ) {
-        Ok(outcome) => outcome,
-        Err(e) => {
-            let _ = append_ledger(
-                main_root,
-                &[LedgerRow::Fail {
-                    ts: Utc::now(),
-                    path: cache_root.display().to_string(),
-                    error: e.to_string(),
-                }],
-            );
-            let _ = crate::notify::send_direct(
-                main_root,
-                "disk-emergency",
-                "Disk emergency: auto-reclaim refused",
-                &format!("{e:#}"),
-            );
-            return None;
-        }
-    };
+    );
     let _ = append_ledger(main_root, &outcome.rows);
+    let mut state = load_guard_state(main_root);
+    let now_utc = Utc::now();
     if let Some((title, body)) = emergency_notice(&outcome, cfg) {
-        let _ = crate::notify::send_direct(main_root, "disk-emergency", &title, &body);
+        if should_notify_emergency(&state, now_utc, &outcome) {
+            let _ = crate::notify::send_direct(main_root, "disk-emergency", &title, &body);
+            if outcome.deleted.is_empty() && outcome.refusal.is_none() {
+                state.last_emergency_stuck_at = Some(now_utc);
+                let _ = save_guard_state(main_root, &state);
+            }
+        }
     }
     Some(outcome)
 }

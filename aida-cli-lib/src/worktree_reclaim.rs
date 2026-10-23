@@ -467,14 +467,6 @@ pub fn plan(survey: &Survey) -> Plan {
 
         for target in targets {
             let walk = crate::disk_emergency::walk_cache(&target);
-            if let Some(g) = &group {
-                let entry = groups.entry(g.clone()).or_default();
-                entry.members.insert(wt.path.clone());
-                let newest = walk.newest.unwrap_or(SystemTime::UNIX_EPOCH);
-                if entry.keeper.as_ref().is_none_or(|(t, _)| newest > *t) {
-                    entry.keeper = Some((newest, wt.path.clone()));
-                }
-            }
             // Rail 5, including its fail-safe arm: when open-PR state is
             // unknown we hold every branch back that git cannot prove merged
             // (STORY-1916), rather than reclaiming everything. The reference
@@ -492,9 +484,25 @@ pub fn plan(survey: &Survey) -> Plan {
                             branch: branch.clone(),
                         })
                     }
+                    // A detached `take-<N>` worktree whose PR N is open is
+                    // that PR's worktree too.
+                    // trace:STORY-1916.ac149566 | ai:claude
+                    (Some(_), None) => group.clone().map(|branch| Skip::OpenPr { branch }),
                     _ => None,
                 };
                 if let Some(skip) = hold {
+                    // Only a member that stays held may be the group's
+                    // keeper: a keeper that is itself reclaimed would take
+                    // the open PR's last warm cache with it.
+                    // trace:STORY-1916.ac149566 | ai:claude
+                    if let Some(g) = &group {
+                        let entry = groups.entry(g.clone()).or_default();
+                        entry.members.insert(wt.path.clone());
+                        let newest = walk.newest.unwrap_or(SystemTime::UNIX_EPOCH);
+                        if entry.keeper.as_ref().is_none_or(|(t, _)| newest > *t) {
+                            entry.keeper = Some((newest, wt.path.clone()));
+                        }
+                    }
                     held.push(Held {
                         worktree: wt.path.clone(),
                         target,
@@ -941,7 +949,7 @@ const OFFLINE_SCAN_BUDGET: Duration = Duration::from_secs(60);
 
 /// Branches git alone proves merged, for every worktree branch.
 // trace:STORY-1916 | ai:claude
-fn merged_offline(main_root: &Path, worktrees: &[WorktreeEntry]) -> BTreeSet<String> {
+pub(crate) fn merged_offline(main_root: &Path, worktrees: &[WorktreeEntry]) -> BTreeSet<String> {
     let Some(default_ref) = crate::resolve_default_branch_ref(main_root) else {
         return BTreeSet::new();
     };

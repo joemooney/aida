@@ -1141,11 +1141,18 @@ fn doctor_check_disk_headroom_light(json: bool, fail_on_findings: bool) -> Resul
     let project_root = main_worktree_root_from(&find_project_root()?);
     let report = disk_headroom_light_report(&project_root);
 
-    let reason = (fail_on_findings && !report.findings.is_empty()).then(|| format!(
-        "{} finding(s) in {DISK_HEADROOM_CATEGORY} — failing because --fail-on-findings was requested",
-        report.findings.len()
-    ));
-    emit_doctor_report(report, reason, doctor_render_mode(json), false, |report| {
+    let reason = fail_on_findings
+        .then(|| disk_headroom_fail_reason(&report.findings))
+        .flatten();
+    let mode = doctor_render_mode(json);
+    // STORY-1916 AC3: the routed CronJobFailed item carries only the child's
+    // last stderr line, and a typed (JSON/TOON) failure prints nothing to
+    // stderr. Put the reason there explicitly so the route says why.
+    // trace:STORY-1916.ac641c6e | ai:claude
+    if let (Some(reason), true) = (&reason, mode != DoctorRenderMode::Human) {
+        eprintln!("{reason}");
+    }
+    emit_doctor_report(report, reason, mode, false, |report| {
         // trace:STORY-1916 | ai:claude
         if let Some(status) = &report.disk_status {
             print!("{}", crate::disk_emergency::render_status(status));
@@ -1249,11 +1256,7 @@ mod task_1544_light_doctor_tests;
 pub(crate) fn disk_headroom_light_report(project_root: &std::path::Path) -> DoctorReport {
     let cfg = crate::read_project_config_value(project_root);
     let emergency = crate::disk_emergency::emergency_config(cfg.as_ref());
-    // STORY-1916: only the substrate run deletes; a manual check reports.
     let scheduled = std::env::var_os("AIDA_SCHEDULE_CHILD").is_some_and(|v| v == "1");
-    if scheduled {
-        crate::disk_emergency::run_emergency(project_root, &emergency);
-    }
     // statvfs first: it resolves a bind-mounted `<main>/target` to its own
     // filesystem, which the mount-table lookup by path prefix may not.
     let free = |p: &std::path::Path| {
@@ -1261,28 +1264,68 @@ pub(crate) fn disk_headroom_light_report(project_root: &std::path::Path) -> Doct
             .map(|s| s.avail)
             .or_else(|| disk_free_bytes(p))
     };
-    let mut report = disk_headroom_light_report_with(project_root, free, cargo_slot_dir());
-    let min_free_gib = disk_headroom_min_free_gib(cfg.as_ref());
-    escalate_stuck_floor(project_root, &mut report.findings, min_free_gib, scheduled);
+    disk_headroom_light_report_finish(
+        project_root,
+        cfg.as_ref(),
+        scheduled,
+        || {
+            crate::disk_emergency::run_emergency(project_root, &emergency);
+        },
+        || disk_headroom_light_report_with(project_root, free, cargo_slot_dir()),
+        |dev, _role| {
+            let reclaimable = crate::disk_emergency::reclaimable_on(project_root, dev);
+            // trace:STORY-1916.ac641c6e | ai:claude
+            let top = if crate::disk_emergency::target_on_device(project_root, dev) {
+                crate::disk_emergency::top_consumers(project_root, 5)
+            } else {
+                Vec::new()
+            };
+            (reclaimable, top)
+        },
+    )
+}
+
+/// The light report around its two expensive, injected halves: the
+/// emergency run and the stuck scan (a reclaim dry run: `gh`, the offline
+/// merge scan, a walk of every cache). Both run only in the substrate run
+/// (TASK-2264): a manual light check reports free space, the floor breach
+/// and the status block, and stays cheap.
+// trace:STORY-1916 | ai:claude
+fn disk_headroom_light_report_finish(
+    project_root: &std::path::Path,
+    cfg: Option<&toml::Value>,
+    scheduled: bool,
+    emergency_run: impl FnOnce(),
+    report: impl FnOnce() -> DoctorReport,
+    stuck_scan: impl FnMut(u64, &str) -> (u64, Vec<(std::path::PathBuf, u64)>),
+) -> DoctorReport {
+    if scheduled {
+        emergency_run();
+    }
+    let mut report = report();
+    let min_free_gib = disk_headroom_min_free_gib(cfg);
+    if scheduled {
+        escalate_stuck_floor(project_root, &mut report.findings, min_free_gib, stuck_scan);
+    }
     report.disk_status = Some(crate::disk_emergency::status(
         project_root,
         min_free_gib,
-        emergency,
+        crate::disk_emergency::emergency_config(cfg),
     ));
     report
 }
 
 /// STORY-1916 AC3: for each filesystem below the floor, compare what a
-/// reclaim dry run could free there with the deficit. When it cannot
-/// restore the floor, say so in the finding (the routed item carries it),
-/// with the top cache consumers, and notify the operator, deduped, from the
-/// scheduled run only.
+/// reclaim dry run could free there (`stuck_scan`, keyed by device and
+/// role) with the deficit. When it cannot restore the floor, say so in the
+/// finding (the routed item carries it), with the top cache consumers, and
+/// notify the operator, deduped. Substrate run only.
 // trace:STORY-1916 | ai:claude
 fn escalate_stuck_floor(
     project_root: &std::path::Path,
     findings: &mut [DoctorFinding],
     min_free_gib: u64,
-    scheduled: bool,
+    mut stuck_scan: impl FnMut(u64, &str) -> (u64, Vec<(std::path::PathBuf, u64)>),
 ) {
     use crate::disk_emergency as de;
     let floor = min_free_gib.saturating_mul(1024 * 1024 * 1024);
@@ -1295,20 +1338,12 @@ fn escalate_stuck_floor(
             continue;
         };
         let deficit = floor - stats.avail;
-        let reclaimable = de::reclaimable_on(project_root, stats.dev);
+        let (reclaimable, top) = stuck_scan(stats.dev, role);
         if reclaimable >= deficit {
             continue;
         }
-        let top = if role == "build-cache" {
-            de::top_consumers(project_root, 5)
-        } else {
-            Vec::new()
-        };
         let text = de::stuck_summary(reclaimable, deficit, &top);
         finding.summary = format!("{}. {text}", finding.summary);
-        if !scheduled {
-            continue;
-        }
         let mut state = de::load_guard_state(project_root);
         let now = chrono::Utc::now();
         if !de::should_escalate(&state, now, deficit) {
@@ -1325,6 +1360,29 @@ fn escalate_stuck_floor(
             let _ = de::save_guard_state(project_root, &state);
         }
     }
+}
+
+/// The disk-headroom `--fail-on-findings` reason: one line, and it leads
+/// with the STUCK sentence (reclaim cannot restore the floor, plus the top
+/// consumers) when there is one, so the routed item carries it. `None` when
+/// there are no findings.
+// trace:STORY-1916.ac641c6e | ai:claude
+pub(crate) fn disk_headroom_fail_reason(findings: &[DoctorFinding]) -> Option<String> {
+    if findings.is_empty() {
+        return None;
+    }
+    let tail = format!(
+        "{} finding(s) in {DISK_HEADROOM_CATEGORY} — failing because --fail-on-findings was requested",
+        findings.len()
+    );
+    let stuck = findings
+        .iter()
+        .find_map(|f| f.summary.find("STUCK:").map(|i| &f.summary[i..]));
+    let reason = match stuck {
+        Some(stuck) => format!("{stuck} — {tail}"),
+        None => tail,
+    };
+    Some(reason.replace(['\n', '\r'], " "))
 }
 
 /// The finding id for a probed filesystem's floor breach.
@@ -6916,6 +6974,61 @@ pub(crate) fn render_doctor_report_toon(report: &DoctorReport) -> String {
                 &rows,
             ));
         }
+    }
+    // trace:STORY-1916.Visibility | ai:claude
+    if let Some(d) = &report.disk_status {
+        let rows = d
+            .filesystems
+            .iter()
+            .map(|f| {
+                vec![
+                    f.role.to_string(),
+                    f.path.clone(),
+                    f.free_bytes.to_string(),
+                    f.total_bytes.to_string(),
+                    f.used_pct.to_string(),
+                ]
+            })
+            .collect::<Vec<_>>();
+        blocks.push(table_raw(
+            "disk_filesystems",
+            &["role", "path", "free_bytes", "total_bytes", "used_pct"],
+            &rows,
+        ));
+        blocks.push(scalar("disk_floor_gib", &d.floor_gib.to_string()));
+        blocks.push(scalar(
+            "disk_ceiling_pct",
+            &d.emergency.used_pct.to_string(),
+        ));
+        blocks.push(scalar(
+            "disk_stop_below_pct",
+            &d.emergency.stop_below().to_string(),
+        ));
+        blocks.push(scalar(
+            "disk_idle_hours",
+            &d.emergency.idle_hours.to_string(),
+        ));
+        blocks.push(scalar(
+            "disk_last_guard_run",
+            &d.last_guard_run.map_or("never".into(), |t| t.to_rfc3339()),
+        ));
+        blocks.push(scalar(
+            "disk_last_guard_result",
+            d.last_guard_result.as_deref().unwrap_or("-"),
+        ));
+        blocks.push(scalar(
+            "disk_last_reclaim",
+            &d.last_reclaim.as_ref().map_or("none".into(), |r| {
+                format!(
+                    "{} freed={} deleted={} after={} stopped={}",
+                    r.at.to_rfc3339(),
+                    r.freed_bytes,
+                    r.deleted,
+                    r.used_pct_after.map_or("?".into(), |p| p.to_string()),
+                    r.stopped
+                )
+            }),
+        ));
     }
     if let Some(v) = &report.error {
         blocks.push(error_block(v, None));

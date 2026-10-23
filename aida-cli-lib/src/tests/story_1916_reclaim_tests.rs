@@ -100,6 +100,7 @@ fn reclaimed(p: &Plan) -> Vec<(String, ReclaimWhy)> {
     out
 }
 
+// trace:STORY-1916.ac149566 | ai:claude
 #[test]
 fn story_1916_reclaim_finds_the_target_worktrees_cache_layout() {
     let f = fixture();
@@ -118,6 +119,7 @@ fn story_1916_reclaim_finds_the_target_worktrees_cache_layout() {
     );
 }
 
+// trace:STORY-1916.ac149566 | ai:claude
 #[test]
 fn story_1916_rail6_reads_the_newest_write_not_the_root_mtime() {
     let f = fixture();
@@ -136,6 +138,7 @@ fn story_1916_rail6_reads_the_newest_write_not_the_root_mtime() {
     assert!(plan(&f.survey(vec![wt])).reclaim.is_empty());
 }
 
+// trace:STORY-1916.ac149566 | ai:claude
 #[test]
 fn story_1916_orphan_cache_is_reclaimable_unless_a_live_lease_names_it() {
     let f = fixture();
@@ -152,6 +155,7 @@ fn story_1916_orphan_cache_is_reclaimable_unless_a_live_lease_names_it() {
     assert_eq!(reclaimed(&p), vec![("gone-wt".into(), ReclaimWhy::Orphan)]);
 }
 
+// trace:STORY-1916.ac149566 | ai:claude
 #[test]
 fn story_1916_gh_down_reclaims_proven_merges_and_holds_only_the_rest() {
     let f = fixture();
@@ -174,6 +178,7 @@ fn story_1916_gh_down_reclaims_proven_merges_and_holds_only_the_rest() {
     );
 }
 
+// trace:STORY-1916.ac149566 | ai:claude
 #[test]
 fn story_1916_idle_duplicate_on_one_open_pr_keeps_the_freshest() {
     let f = fixture();
@@ -199,14 +204,66 @@ fn story_1916_idle_duplicate_on_one_open_pr_keeps_the_freshest() {
     }
 }
 
+/// The reviewer's repro: with gh up, a detached `take-2845` on open PR
+/// #2845 is that PR's worktree too. It must be held, and it may be the
+/// keeper, so exactly one of the PR's two caches goes.
+// trace:STORY-1916.ac149566 | ai:claude
 #[test]
 fn story_1916_idle_duplicate_with_gh_up_matches_take_dir_to_the_pr_branch() {
+    let f = fixture();
+    let branch_wt = f.worktree("aida-feat", Some("feat"), 3 * HOUR);
+    let take = f.worktree("take-2845", None, 2 * HOUR);
+    let mut s = f.survey(vec![branch_wt, take]);
+    s.open_pr_branches = Some(vec!["feat".into()]);
+    s.open_prs = vec![(2845, "feat".into())];
+    let p = plan(&s);
+    assert_eq!(
+        reclaimed(&p),
+        vec![("aida-feat".into(), ReclaimWhy::IdleDuplicate)]
+    );
+    assert!(
+        p.skipped
+            .iter()
+            .any(|(path, skip)| path.ends_with("take-2845")
+                && *skip
+                    == Skip::OpenPr {
+                        branch: "feat".into()
+                    }),
+        "the fresher take-2845 keeper stays held: {:?}",
+        p.skipped
+    );
+}
+
+/// The keeper is chosen among held members only: a cold detached worktree
+/// on a PR that is NOT open is plain stale, and never shields or replaces
+/// the open PR's only worktree.
+// trace:STORY-1916.ac149566 | ai:claude
+#[test]
+fn story_1916_a_reclaimed_worktree_is_never_the_keeper() {
+    let f = fixture();
+    let only = f.worktree("aida-feat", Some("feat"), 3 * HOUR);
+    let other = f.worktree("take-9999", None, 2 * HOUR);
+    let mut s = f.survey(vec![only, other]);
+    s.open_pr_branches = Some(vec!["feat".into()]);
+    s.open_prs = vec![(2845, "feat".into())];
+    let p = plan(&s);
+    assert_eq!(reclaimed(&p), vec![("take-9999".into(), ReclaimWhy::Stale)]);
+    assert!(p
+        .skipped
+        .iter()
+        .any(|(path, _)| path.ends_with("aida-feat")));
+}
+
+/// Two worktrees reported on one branch (a hand-built list): the fresher
+/// cache is kept.
+// trace:STORY-1916.ac149566 | ai:claude
+#[test]
+fn story_1916_idle_duplicate_on_one_branch_keeps_the_freshest() {
     let f = fixture();
     let branch_wt = f.worktree("aida-feat", Some("feat"), 3 * HOUR);
     let dup = f.worktree("aida-feat-2", Some("feat"), 5 * HOUR);
     let mut s = f.survey(vec![branch_wt, dup]);
     s.open_pr_branches = Some(vec!["feat".into()]);
-    s.open_prs = vec![(2845, "feat".into())];
     let p = plan(&s);
     assert_eq!(
         reclaimed(&p),
@@ -214,6 +271,7 @@ fn story_1916_idle_duplicate_with_gh_up_matches_take_dir_to_the_pr_branch() {
     );
 }
 
+// trace:STORY-1916.ac149566 | ai:claude
 #[test]
 fn story_1916_live_group_member_is_the_keeper() {
     let f = fixture();
@@ -233,6 +291,7 @@ fn story_1916_live_group_member_is_the_keeper() {
     );
 }
 
+// trace:STORY-1916.ac149566 | ai:claude
 #[test]
 fn story_1916_a_lone_open_pr_worktree_stays_held() {
     let f = fixture();
@@ -242,6 +301,7 @@ fn story_1916_a_lone_open_pr_worktree_stays_held() {
     assert!(plan(&s).reclaim.is_empty());
 }
 
+// trace:STORY-1916.ac149566 | ai:claude
 #[test]
 fn story_1916_apply_refuses_target_agent_and_symlinks() {
     let f = fixture();
@@ -275,6 +335,7 @@ fn story_1916_apply_refuses_target_agent_and_symlinks() {
     assert!(apply(&forged(odd), None, |_| None, rm).is_err());
 }
 
+// trace:STORY-1916.ac149566 | ai:claude
 #[test]
 fn story_1916_pr_number_and_gh_line_parsing() {
     assert_eq!(pr_number_from_dir("take-2830"), Some(2830));
@@ -336,6 +397,7 @@ fn repo() -> tempfile::TempDir {
     tmp
 }
 
+// trace:STORY-1916.ac149566 | ai:claude
 #[test]
 fn story_1916_offline_merge_proof_ancestor_squash_and_unmerged() {
     let tmp = repo();
@@ -353,6 +415,7 @@ fn story_1916_offline_merge_proof_ancestor_squash_and_unmerged() {
     assert_eq!(branch_merged_offline(r, "no-such-branch", "main", d), None);
 }
 
+// trace:STORY-1916.ac149566 | ai:claude
 #[test]
 fn story_1916_squash_scan_past_its_deadline_is_unknown_never_merged() {
     let tmp = repo();
