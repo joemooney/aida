@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T15:37:49.549035318Z
-modified_at: 2026-10-20T00:39:40.276267080Z
+modified_at: 2026-10-23T17:58:51.565987240Z
 req_type: Task
 tags:
 - ci
@@ -20,6 +20,19 @@ relationships:
   target_id: 01a1520b-60c2-7532-8779-bf18cf4e5669
   created_at: 2026-10-19T15:38:09.382452041Z
   created_by: joe
+comments:
+- id: 01a169ea-65ad-7c31-8452-0e7e2efbd706
+  author: ai:codex:joe
+  content: |-
+    UNSHIPPED AUDIT 2026-10-23 (integrator)
+
+    Pinned origin/main: a9e78d34914e43b30fc9d2b590d83ab96feb48b2.
+
+    story-1853: SHIPPED-ELSEWHERE. Head `2ec26b136a34`; cherry **4+**. Aggregate PID `e05be1597969aab5248045d2d881d63fa8595ae4` exactly matches main [128a5bb6eb16](https://github.com/joemooney/aida/commit/128a5bb6eb16acbd1313c3108f47fbfdd8089dfb) / merged [#2754](https://github.com/joemooney/aida/pull/2754) under TASK-1948. TASK-1948 and STORY-1853 are Completed. The operator’s 2026-10-23 09:51 AC2 ruling explicitly says this branch is fully on main; later nextest support is on `c43d5444ad02`. Nothing remains to ship from this branch.
+
+    These are branch-artifact verdicts, not completion or dispatch/merge authority. No spec status, branch, PR or active worktree changed. Full 14-branch table: .aida/handoff/advisor/unshipped-audit-2026-10-23.md (8 SHIPPED-ELSEWHERE, 3 SALVAGE, 3 ABANDON).
+  created_at: 2026-10-23T17:58:51.565987240Z
+  modified_at: 2026-10-23T17:58:51.565987240Z
 history:
 - id: 01a154d0-130a-77c1-8468-8b961e2c6853
   author: joe
