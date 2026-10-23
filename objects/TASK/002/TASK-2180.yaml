@@ -7,12 +7,12 @@ description: |
   Also: wait_for_review (~:500) still ignores read_ci errors with `_ => {}`. This is unchanged behaviour, so a hold-label read error there is retried silently until the review timeout.
 
   Raised in review of PR-2835: https://github.com/joemooney/aida/pull/2835#issuecomment-6350935978
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-22T20:46:07.800901523Z
-modified_at: 2026-10-23T07:00:26.914946166Z
+modified_at: 2026-10-23T12:15:13.430496610Z
 req_type: Task
 tags:
 - from-review:PR-2835
@@ -52,6 +52,21 @@ history:
   timestamp: 2026-10-23T07:00:27.901661977Z
   session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
   changes: []
+- id: 01a168af-ca11-78f3-ae51-4c2c15ccad42
+  author: aida-auto-bump
+  timestamp: 2026-10-23T12:15:13.425573955Z
+  session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a168af-ca16-7d92-8819-945879b16954
+  timestamp: 2026-10-23T12:15:13.430486617Z
+  agent: aida
+  commit_sha: d56a08fed4f0e180ce02a448bdc36dcf531eb22a
+  summary: plan_pr reads the hold once (Fake.hold_reads==1) and judges CI with it via ci_with_hold; an unreadable hold skips the CI line and is reported once as the hold label; read_ci delegates to ci_with_hold so ship paths are unchanged; CI green at 657c21a8 (all shards).
+  review_verdict: approved
 filed_at:
   code_sha: 5e3ada7fb19aaa7bebe1c2436a485808ed6d6d88
   branch: pr-2835
@@ -61,3 +76,7 @@ filed_at:
   vendor: claude
   session: 01a1655a17f1
   harness_version: 2.1.308 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-23T12:15:13.425569401Z
+  completion_sha: d56a08fed4f0e180ce02a448bdc36dcf531eb22a
