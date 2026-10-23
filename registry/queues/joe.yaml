@@ -21,27 +21,11 @@
   for_role: reviewer
   added_by_machine: imac
 - user_id: joe
-  requirement_id: 01a1678f-7053-7223-9470-ea1793cc6ad5
-  position: 50000
-  added_by: joe
-  note: auto-queued by `aida pr` ((no-sess); covers 1 spec
-  added_at: 2026-10-23T07:00:29.469211753Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
   requirement_id: 01a1678f-c38d-7260-b164-e6109a28562c
   position: 51000
   added_by: joe
   note: auto-queued by `aida pr` ((no-sess); covers 1 spec
   added_at: 2026-10-23T07:00:52.602256566Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a1687b-4e52-7921-bbfa-1865529788ea
-  position: 53000
-  added_by: joe
-  note: auto-queued by `aida pr` ((no-sess); covers 1 spec
-  added_at: 2026-10-23T11:18:18.388170301Z
   for_role: reviewer
   added_by_machine: imac
 - user_id: joe
