@@ -35,7 +35,6 @@
 #[cfg(unix)]
 use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 /// The three dispatch-health states a single `aida ps` row can classify into.
 // trace:TASK-1090 | ai:claude
@@ -562,10 +561,11 @@ pub(crate) fn newest_mtime_age_secs(
         .min()
 }
 
+/// Read-only git in a session's tree. Through the host git builder, so a
+/// contained seat's private clone is refused rather than run (BUG-2169).
+// trace:TASK-2053 | ai:claude
 fn git_stdout(worktree: &Path, args: &[&str]) -> Option<String> {
-    let out = Command::new("git")
-        .arg("-C")
-        .arg(worktree)
+    let out = aida_core::git_ops::host_git_command(worktree)
         .args(args)
         .output()
         .ok()?;
@@ -694,9 +694,9 @@ pub(crate) fn is_untracked_inside_tracked_dir<P: AsRef<Path>>(
         Some(p) if !p.as_os_str().is_empty() && p != Path::new(".") => p,
         _ => {
             // Root untracked file: check if the repository root has tracked files.
-            return match Command::new("git")
-                .arg("-C")
-                .arg(worktree)
+            // A seat clone is refused, which fails closed below (BUG-2169).
+            // trace:TASK-2053 | ai:claude
+            return match aida_core::git_ops::host_git_command(worktree)
                 .args(["ls-files"])
                 .output()
             {
@@ -718,9 +718,7 @@ pub(crate) fn is_untracked_inside_tracked_dir<P: AsRef<Path>>(
         if dir.as_os_str().is_empty() || dir == Path::new(".") {
             break;
         }
-        let out = Command::new("git")
-            .arg("-C")
-            .arg(worktree)
+        let out = aida_core::git_ops::host_git_command(worktree)
             .arg("ls-files")
             .arg(dir)
             .output();
