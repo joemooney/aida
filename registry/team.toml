@@ -1,2 +1,3 @@
 [members]
-bug-1618-hermetic-test-user = ["implementer"]
+joe = ["advisor", "implementer", "integrator", "product", "reviewer"]
+"joe.mooney" = ["advisor", "implementer"]
