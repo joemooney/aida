@@ -3,12 +3,12 @@ spec_id: BUG-2210
 agreed_id: BUG-2210
 title: dev activate auto in a worktree picks main's fresher build instead of the worktree's own build
 description: 'In ~/ai/aida-worktrees/take-2830, `aida dev build` printed ''try this build in your shell'' via `aida dev activate auto`, but activate auto selected the primary checkout''s newer build (c6bb0dc4f1) instead of the worktree''s target/agent build. The operator ran the BUG-1934 C4 probe against the wrong binary until PATH was set to the worktree''s target/agent by hand. Expected: run from a worktree, activate auto prefers that worktree''s build, or it names the build it picked and why.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T16:14:49.536406704Z
-modified_at: 2026-10-23T16:46:02.219081433Z
+modified_at: 2026-10-23T18:15:06.585644086Z
 req_type: Bug
 history:
 - id: 01a169a7-b9eb-73e2-948d-df6feb1101d3
@@ -19,6 +19,20 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a169f9-4655-7583-83a8-14d0edc9e3a1
+  author: aida-auto-bump
+  timestamp: 2026-10-23T18:15:06.581447173Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a169f9-4659-75d0-bf97-da800f233b9c
+  timestamp: 2026-10-23T18:15:06.585636307Z
+  agent: aida
+  commit_sha: c51da8659361da4ae9a01c41f86ea6d28d00e948
+  summary: Worktree activate now resolves the enclosing checkout before $AIDA_DEV_REPO (same order as resolve_build_repo) and always prints a stderr note naming the build, profile reason, and checkout reason incl. env override; unit test covers worktree/main/outside/--repo; CI green at head; bug protocol test-file item met.
+  review_verdict: approved
 filed_at:
   code_sha: ff14eaf5002dfbfd8f0838ae330a0c1703ce36ae
   branch: main
@@ -27,3 +41,7 @@ filed_at:
   aida_build_sha: c6bb0dc4f1
   vendor: claude
   session: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-23T18:15:06.581442294Z
+  completion_sha: c51da8659361da4ae9a01c41f86ea6d28d00e948
