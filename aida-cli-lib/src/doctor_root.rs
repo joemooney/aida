@@ -1607,6 +1607,13 @@ pub(crate) static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
         ],
         "disk-headroom",
     ),
+    // TASK-2053 S5: a main checkout whose loose objects slow seat-clone
+    // creation (`[doctor.loose_objects] max`, default 20000).
+    // trace:TASK-2053 | ai:claude
+    (
+        &["loose-objects", "loose-object", "git-objects", "repack"],
+        "loose-objects",
+    ),
     // STORY-1699: relay runs stopped at `state=blocked` / `exited` with no
     // `.done` acknowledgement. trace:STORY-1699 | ai:claude
     (

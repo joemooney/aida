@@ -264,20 +264,26 @@ fn plan_pr(ports: &mut dyn BatchPorts, pr: u64) -> PrOutcome {
         Ok(_) => {}
         Err(e) => steps.push(format!("could not check staleness: {e:#}")),
     }
-    let ci = match read_ci(ports, pr, &view.head_sha) {
-        Ok(CiAtHead::Passing) => "green".to_string(),
-        Ok(CiAtHead::Pending) => "pending".to_string(),
-        Ok(CiAtHead::Failing(why)) => format!("red ({why})"),
-        Ok(CiAtHead::HeadMoved) => "head moved while reading".to_string(),
-        Err(why) => format!("unreadable ({why})"),
-    };
-    steps.push(format!("CI at {}: {ci}", short(&view.head_sha)));
+    // TASK-2180: the hold is read once; CI is judged with it, and an
+    // unreadable hold is reported as the hold, not as CI.
+    // trace:TASK-2180 | ai:claude
+    let hold = ports.hold(pr);
+    if let Ok(held) = &hold {
+        let ci = match ci_with_hold(ports, pr, &view.head_sha, held.is_some()) {
+            Ok(CiAtHead::Passing) => "green".to_string(),
+            Ok(CiAtHead::Pending) => "pending".to_string(),
+            Ok(CiAtHead::Failing(why)) => format!("red ({why})"),
+            Ok(CiAtHead::HeadMoved) => "head moved while reading".to_string(),
+            Err(why) => format!("unreadable ({why})"),
+        };
+        steps.push(format!("CI at {}: {ci}", short(&view.head_sha)));
+    }
     steps.push(match ports.review_at_head(pr, &view) {
         ReviewAtHead::Approved(who) => format!("approved at this head ({who})"),
         ReviewAtHead::Negative(why) => format!("{why}: the batch would stop here"),
         ReviewAtHead::Awaiting(_) => "no approval at this head yet".to_string(),
     });
-    match ports.hold(pr) {
+    match hold {
         Ok(Some(hold)) => steps.push(format!("merge-hold: {hold}")),
         Ok(None) => {}
         Err(e) => steps.push(format!(
@@ -419,6 +425,17 @@ fn read_ci(
         .hold(pr)
         .map_err(|e| format!("could not read the hold label on PR #{pr} ({e:#})"))?
         .is_some();
+    ci_with_hold(ports, pr, head, held)
+}
+
+/// CI at `head` for a hold state the caller already read.
+// trace:TASK-2180 | ai:claude
+fn ci_with_hold(
+    ports: &mut dyn BatchPorts,
+    pr: u64,
+    head: &str,
+    held: bool,
+) -> std::result::Result<CiAtHead, String> {
     ports
         .ci_at_head(pr, head, held)
         .map_err(|e| format!("could not read PR #{pr}'s CI: {e:#}"))
@@ -974,6 +991,7 @@ mod tests {
         reviews: BTreeMap<String, VecDeque<ReviewAtHead>>,
         holds: BTreeMap<u64, String>,
         hold_unreadable: Vec<u64>,
+        hold_reads: u32,
         ship_refuses: Vec<u64>,
         answers: VecDeque<String>,
         clock: u64,
@@ -1070,6 +1088,7 @@ mod tests {
                 .unwrap_or(ReviewAtHead::Awaiting(None))
         }
         fn hold(&mut self, pr: u64) -> Result<Option<String>> {
+            self.hold_reads += 1;
             if self.hold_unreadable.contains(&pr) {
                 anyhow::bail!("label lookup failed");
             }
@@ -1670,5 +1689,43 @@ mod tests {
             "CI is not read without the hold state"
         );
         assert!(f.shipped.is_empty());
+    }
+
+    // TASK-2180: a dry run reads the hold once per PR; an unreadable hold is
+    // reported once, as the hold, and never as unreadable CI.
+    // trace:TASK-2180 | ai:claude
+    #[test]
+    fn task_2180_dry_run_reads_the_hold_once_and_names_it() {
+        let dry = BatchOptions {
+            dry_run: true,
+            ..OPTS
+        };
+        let mut f = ready(Fake::human(), 9, "999999999999a");
+        f.holds.insert(9, "supervised".to_string());
+        let out = run_batch(&mut f, &[9], dry).unwrap();
+        assert!(
+            matches!(&out[0].1, PrOutcome::Planned(p)
+                if p.contains("CI at 999999999999: green") && p.contains("merge-hold: supervised")),
+            "{out:?}"
+        );
+        assert_eq!(f.hold_reads, 1);
+
+        let mut f = ready(Fake::human(), 9, "999999999999a");
+        f.hold_unreadable.push(9);
+        let out = run_batch(&mut f, &[9], dry).unwrap();
+        let PrOutcome::Planned(plan) = &out[0].1 else {
+            panic!("{out:?}")
+        };
+        assert_eq!(
+            plan.matches("could not read the hold label").count(),
+            1,
+            "{plan}"
+        );
+        assert!(!plan.contains("unreadable"), "{plan}");
+        assert_eq!(f.hold_reads, 1);
+        assert!(
+            f.ci_heads.is_empty(),
+            "CI is not judged without the hold state"
+        );
     }
 }
