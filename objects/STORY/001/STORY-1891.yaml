@@ -3,12 +3,12 @@ spec_id: STORY-1891
 agreed_id: STORY-1891
 title: 'Review PR-2826: TASK-1955 slice 7 (Refs-only slice; advisor-filed review story)'
 description: 'Advisor-filed: auto-queue-review skips Refs-only slice PRs and the BUG-2150 fallback finds TASK-1955 plus BUG-2130 ambiguous. See BUG filed alongside.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-22T11:16:53.484776562Z
-modified_at: 2026-10-22T11:17:00.069625102Z
+modified_at: 2026-10-23T06:33:31.495121307Z
 req_type: Story
 relationships:
 - rel_type:
@@ -16,12 +16,25 @@ relationships:
   target_id: 01a154e7-6af1-70c0-8437-98c9e77a36a3
   created_at: 2026-10-22T11:17:00.069621843Z
   created_by: joe
+comments:
+- id: 01a16776-f467-75d3-bce0-48f8d52bf266
+  author: aida-auto-bump
+  content: 'Auto-completed: PR #2826 is merged on the forge (its merge commit was outside the local scan window).'
+  created_at: 2026-10-23T06:33:31.495423901Z
+  modified_at: 2026-10-23T06:33:31.495423901Z
 history:
 - id: 01a16354-2387-7f21-97ac-5b82d8d370c3
   author: joe
   timestamp: 2026-10-22T11:17:00.935592272Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
   changes: []
+- id: 01a16776-f467-75d3-bce0-490c24603456
+  author: aida-auto-bump
+  timestamp: 2026-10-23T06:33:31.495437078Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
 filed_at:
   code_sha: e33fec11d936d4cc6ce450719a506a68932915eb
   branch: main
@@ -30,3 +43,6 @@ filed_at:
   aida_build_sha: e33fec11d9
   vendor: claude
   session: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-23T06:33:31.495421845Z
