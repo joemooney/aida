@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T13:18:03.093067119Z
-modified_at: 2026-10-23T13:54:40.729309654Z
+modified_at: 2026-10-23T17:58:39.047453149Z
 req_type: Story
 tags:
 - groom:needs-decision
@@ -172,6 +172,18 @@ comments:
   created_at: 2026-10-22T11:22:27.999553800Z
   modified_at: 2026-10-22T11:22:27.999553800Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a169ea-34c7-78b2-86fc-9b21cf672c5b
+  author: ai:codex:joe
+  content: |-
+    UNSHIPPED AUDIT 2026-10-23 (integrator)
+
+    Pinned origin/main: a9e78d34914e43b30fc9d2b590d83ab96feb48b2.
+
+    pr-2844: SHIPPED-ELSEWHERE. Local `pr-2844` was **already absent at first inventory**; nothing was deleted by this audit. Its recorded source head `23cb63fa9179` exists locally and cherry gives **3+**. Head aggregate PID `eb1a11b2401d5bb33b9c5e214145747c7f5bbf35` exactly equals main [a9e78d34914e](https://github.com/joemooney/aida/commit/a9e78d34914e43b30fc9d2b590d83ab96feb48b2); [#2844](https://github.com/joemooney/aida/pull/2844) merged 2026-10-23T17:15:16Z at that commit. STORY-1662 remains Needs Attention; this row proves shipment of this snapshot’s PR2 content, not completion of every story obligation.
+
+    These are branch-artifact verdicts, not completion or dispatch/merge authority. No spec status, branch, PR or active worktree changed. Full 14-branch table: .aida/handoff/advisor/unshipped-audit-2026-10-23.md (8 SHIPPED-ELSEWHERE, 3 SALVAGE, 3 ABANDON).
+  created_at: 2026-10-23T17:58:39.047453149Z
+  modified_at: 2026-10-23T17:58:39.047453149Z
 history:
 - id: 01a130a2-c411-7752-a7b6-0f1f5090c74a
   author: joe
