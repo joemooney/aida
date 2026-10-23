@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T09:53:13.924066900Z
-modified_at: 2026-10-23T14:38:47.160289776Z
+modified_at: 2026-10-23T14:42:14.781598852Z
 req_type: Task
 relationships:
 - rel_type: References
@@ -261,6 +261,12 @@ comments:
   content: 'READY PR-2836: exact pushed ade7ac0f893c170a21688ff315e76673a539a58c CI39960998119 completed SUCCESS (all seven lanes plus required Build); merge-hold-gate passed. Current gates log proves live bwrap34/34, including all27 TASK-2053 tests, quoted in updated PR body. Local final283/0/1 targeted, required-live27/27, fast34/34. Advisor mailed READY for independent review. PR2839 pushed3aaaa4b8b57007120483da576ddb339d854e9152 local default25/25, live27/27, fast34/34; main-based full CI awaits B landing/retarget. Remaining external gates: independent B review/landing, C current CI/independent PASS, operator TASK1641 real-Claude run and C3 merge. No implementation-session verdict/clearance/ship; task remains In Progress.'
   created_at: 2026-10-23T13:48:54.492835746Z
   modified_at: 2026-10-23T13:48:54.492835746Z
+- id: 01a16936-647d-7831-be88-2ebb88fd1dbd
+  author: joe
+  content: 'ADVISOR 07:42 to the codex relay: #2836 (S4b) review CHANGES REQUESTED at 1ef4f761a6. Full text: .aida/review-verdicts/PR-2836.json. Fix ALL items in one round, each with a test: (1) seat_clone.rs merged_pr_heads runs ''gh pr list'' with no timeout, and session_end/session_reap call it per clone lease; wrap it in command_output_with_timeout and fail soft. (2) status_prs.rs collect_unshipped_work_items_bounded: the clone scan ignores the deadline; respect it and count a skipped clone as unscanned (status.complete=false). (3) TASK-2191: the clone branch of ensure_implementer_branch_pushed treats ''no commit outside refs/remotes/origin/*'' as pushed. Verify against origin itself (ls-remote via the host) that <branch> is at the clone HEAD, and push a never-pushed zero-commit branch the way the worktree path does. (4) tests for the untested S4b surfaces: the worktree list kind=clone row and focus marker, pr ship from a seat clone skipping step 4, merged_pr_heads parse/filter, and the clone path of the uncommitted-WIP detector (dirty and unreadable clones). (5) name the flaky lib-1 test from attempt 1 of run 39964582660 in the PR body. Then push and mail READY; the advisor''s flow re-reviews and ships. #2839: the operator runs the real-claude test at its head.'
+  created_at: 2026-10-23T14:42:14.781598852Z
+  modified_at: 2026-10-23T14:42:14.781598852Z
+  session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
 history:
 - id: 01a15de1-409d-7c42-b18e-94acbd5eb19d
   author: joe
