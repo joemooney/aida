@@ -2876,13 +2876,14 @@ pub(crate) fn collect_unshipped_work_items_bounded(
         })
         .collect();
     let mut items = items;
-    items.extend(clone_unshipped_work_items(project_root));
+    let (clones, clone_scan) = clone_unshipped_work_items_bounded(project_root, deadline);
+    items.extend(clones);
     (
         items,
         awaiting_you::UnshippedScanStatus {
-            complete: !truncated,
-            scanned,
-            candidates: total_candidates,
+            complete: !truncated && clone_scan.complete,
+            scanned: scanned + clone_scan.scanned,
+            candidates: total_candidates + clone_scan.candidates,
         },
     )
 }
@@ -2898,38 +2899,63 @@ pub(crate) fn collect_unshipped_work_items_bounded(
 pub(crate) fn clone_unshipped_work_items(
     project_root: &std::path::Path,
 ) -> Vec<awaiting_you::UnshippedWorkItem> {
+    clone_unshipped_work_items_bounded(project_root, None).0
+}
+
+// trace:TASK-2053 | ai:codex
+pub(crate) fn clone_unshipped_work_items_bounded(
+    project_root: &std::path::Path,
+    deadline: Option<std::time::Instant>,
+) -> (
+    Vec<awaiting_you::UnshippedWorkItem>,
+    awaiting_you::UnshippedScanStatus,
+) {
     let now = chrono::Utc::now();
     let mut items = Vec::new();
+    let mut scan = awaiting_you::UnshippedScanStatus {
+        complete: true,
+        scanned: 0,
+        candidates: 0,
+    };
     for lease in crate::list_leases(project_root) {
         if lease.tree_kind != crate::seat_clone::TreeKind::Clone
             || !std::fs::symlink_metadata(&lease.worktree_path).is_ok_and(|m| m.is_dir())
         {
             continue;
         }
-        let (branch, commits_ahead, recovery) =
-            match crate::seat_clone::probe(project_root, &lease.worktree_path) {
-                crate::seat_clone::Probe::Known(facts) if facts.unpushed == 0 => continue,
-                crate::seat_clone::Probe::Known(facts) => (
-                    facts.branch.unwrap_or_else(|| lease.branch.clone()),
-                    u32::try_from(facts.unpushed).unwrap_or(u32::MAX),
-                    format!(
-                        "commits exist only in the seat clone {}: the seat pushes them from its \
+        scan.candidates += 1;
+        if deadline.is_some_and(|end| std::time::Instant::now() >= end) {
+            scan.complete = false;
+            continue;
+        }
+        let probe =
+            crate::seat_clone::probe_until(project_root, &lease.worktree_path, &[], deadline);
+        if deadline.is_some_and(|end| std::time::Instant::now() >= end) {
+            scan.complete = false;
+            continue;
+        }
+        scan.scanned += 1;
+        let (branch, commits_ahead, recovery) = match probe {
+            crate::seat_clone::Probe::Known(facts) if facts.unpushed == 0 => continue,
+            crate::seat_clone::Probe::Known(facts) => (
+                facts.branch.unwrap_or_else(|| lease.branch.clone()),
+                u32::try_from(facts.unpushed).unwrap_or(u32::MAX),
+                format!(
+                    "commits exist only in the seat clone {}: the seat pushes them from its \
                          session; ending the session saves them under .aida/salvage first",
-                        lease.worktree_path.display()
-                    ),
+                    lease.worktree_path.display()
                 ),
-                crate::seat_clone::Probe::Unknown(why) => (
-                    lease.branch.clone(),
-                    0,
-                    format!(
-                        "seat clone {} could not be read ({why}); it is kept",
-                        lease.worktree_path.display()
-                    ),
+            ),
+            crate::seat_clone::Probe::Unknown(why) => (
+                lease.branch.clone(),
+                0,
+                format!(
+                    "seat clone {} could not be read ({why}); it is kept",
+                    lease.worktree_path.display()
                 ),
-                crate::seat_clone::Probe::HasSubmodules(reason) => {
-                    (lease.branch.clone(), 0, reason)
-                }
-            };
+            ),
+            crate::seat_clone::Probe::HasSubmodules(reason) => (lease.branch.clone(), 0, reason),
+        };
         // The clone's commit times are not read on the host; the session's
         // age stands in.
         let secs = now
@@ -2951,7 +2977,7 @@ pub(crate) fn clone_unshipped_work_items(
             pushed: false,
         });
     }
-    items
+    (items, scan)
 }
 
 // trace:STORY-1043 | ai:codex
