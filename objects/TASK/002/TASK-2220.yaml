@@ -1,0 +1,28 @@
+id: 01a168e7-b719-7173-995f-abcab577b618
+spec_id: TASK-2220
+agreed_id: TASK-2220
+title: Forge::commit_checks accepts a short SHA that can never match the API's full SHA
+description: |
+  GitHubForge/GitLabForge::commit_checks (aida-cli-lib/src/forge.rs ~1900, ~2505) guard the SHA with git_arg_guard::is_hex_sha, which accepts 7–64 hex characters. The shared reader's require_sha (forge_commit_ci.rs:100) then compares each run's full head_sha/sha with the input using eq_ignore_ascii_case. A short SHA therefore always errs, and ci_status(CiTarget::Commit(short)) is always CiState::None. That fails closed, but silently: the caller gets no signal instead of a clear error. Either require a full 40- or 64-character SHA at the guard or prefix-match in require_sha, and add a test.
+
+  Raised in review of PR-2849: https://github.com/joemooney/aida/pull/2849#issuecomment-6365760778
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-23T13:16:18.585868370Z
+modified_at: 2026-10-23T13:16:18.585868370Z
+req_type: Task
+tags:
+- forge
+- from-review:PR-2849
+- severity:minor
+filed_at:
+  code_sha: 244fdb4c842184e239b1453f944086f438eaee22
+  branch: pr-2849
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 017e4a4949
+  vendor: claude
+  session: 01a168e5e338
+  harness_version: 2.1.309 (Claude Code)

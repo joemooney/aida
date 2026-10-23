@@ -1,0 +1,28 @@
+id: 01a168e7-ceb0-7ad0-a2ac-1ede039ce3ba
+spec_id: TASK-2221
+agreed_id: TASK-2221
+title: Restore the TASK-1424 trace comment above ci_status_from_glab_pipelines
+description: |
+  PR-2849 inserted the COMMIT_CI_API_TIMEOUT / commit_ci_api / ci_status_from_commit_checks block between the "// trace:TASK-1424 … pub(crate) so gitlab_mirror_link can reuse this mapper" comment and ci_status_from_glab_pipelines (aida-cli-lib/src/forge.rs:3782). That comment now sits above the timeout const. Move it back directly above ci_status_from_glab_pipelines.
+
+  Raised in review of PR-2849: https://github.com/joemooney/aida/pull/2849#issuecomment-6365760778
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-23T13:16:24.624062790Z
+modified_at: 2026-10-23T13:16:24.624062790Z
+req_type: Task
+tags:
+- comments
+- from-review:PR-2849
+- severity:cosmetic
+filed_at:
+  code_sha: 244fdb4c842184e239b1453f944086f438eaee22
+  branch: pr-2849
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 017e4a4949
+  vendor: claude
+  session: 01a168e5e338
+  harness_version: 2.1.309 (Claude Code)
