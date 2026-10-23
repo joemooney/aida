@@ -1074,6 +1074,65 @@ pub fn local_mailbox_dir(project_root: &Path) -> PathBuf {
     project_root.join(".aida").join("mailbox")
 }
 
+/// First line of the manifest file that replaces a retired legacy mailbox
+/// directory. An old binary's `create_dir_all`/`read_dir` fails on the file;
+/// a binary that knows the marker refuses with the upgrade instruction.
+// trace:STORY-1843 | ai:claude
+pub const MAILBOX_LAYOUT_MANIFEST_MARKER: &str = "# aida-mailbox-layout-manifest";
+
+/// The mailbox layout this build reads and writes.
+// trace:STORY-1843 | ai:claude
+pub const SUPPORTED_MAILBOX_LAYOUT: u32 = 1;
+
+/// Refuse a mailbox directory path that holds a layout manifest for a newer
+/// layout (or any other non-directory), before anything is read or written.
+/// Absent and ordinary directories pass.
+// trace:STORY-1843 | ai:claude
+pub fn mailbox_dir_guard(dir: &Path) -> std::io::Result<()> {
+    use std::io::Read as _;
+    let meta = match std::fs::symlink_metadata(dir) {
+        Ok(meta) => meta,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => return Err(e),
+    };
+    if meta.is_dir() {
+        return Ok(());
+    }
+    let mut head = String::new();
+    if meta.is_file() {
+        std::fs::File::open(dir)?
+            .take(4096)
+            .read_to_string(&mut head)
+            .ok();
+    }
+    if !head.starts_with(MAILBOX_LAYOUT_MANIFEST_MARKER) {
+        return Err(std::io::Error::other(format!(
+            "mailbox path {} is not a directory",
+            dir.display()
+        )));
+    }
+    let layout = head
+        .lines()
+        .filter_map(|line| line.trim().strip_prefix("layout"))
+        .filter_map(|rest| rest.trim().strip_prefix('='))
+        .find_map(|v| v.trim().parse::<u32>().ok());
+    if layout.is_some_and(|v| v <= SUPPORTED_MAILBOX_LAYOUT) {
+        return Err(std::io::Error::other(format!(
+            "mailbox path {} holds a layout manifest for a layout this build already uses; \
+             the manifest is damaged — restore the mailbox directory from its backup ref",
+            dir.display()
+        )));
+    }
+    Err(std::io::Error::other(format!(
+        "mailbox at {} was migrated to layout {}; this aida build supports layout {} only \
+         and refuses to read or write it. Upgrade aida on this clone first (see \
+         \"Mailbox layout upgrade order\" in docs/cli/06-roles-sessions.md)",
+        dir.display(),
+        layout.map_or_else(|| "(unknown)".to_string(), |v| v.to_string()),
+        SUPPORTED_MAILBOX_LAYOUT,
+    )))
+}
+
 /// Neutralize an id into a safe filename component (path separators, etc.).
 /// Mirrors the CLI's `mailbox_store::sanitize_id`. trace:STORY-650 | ai:claude
 fn sanitize_id(id: &str) -> String {
@@ -1093,6 +1152,7 @@ fn sanitize_id(id: &str) -> String {
 /// never clobbers an existing message. trace:STORY-650 | ai:claude
 pub fn write_local_message(project_root: &Path, msg: &Message) -> std::io::Result<()> {
     let dir = local_mailbox_dir(project_root);
+    mailbox_dir_guard(&dir)?; // trace:STORY-1843 | ai:claude
     std::fs::create_dir_all(&dir)?;
     let path = dir.join(format!("{}.json", sanitize_id(&msg.id)));
     let json = serde_json::to_string_pretty(msg)
@@ -1111,6 +1171,7 @@ pub fn write_local_message(project_root: &Path, msg: &Message) -> std::io::Resul
 // trace:STORY-701 | ai:claude
 pub fn read_local_messages(project_root: &Path) -> std::io::Result<Vec<Message>> {
     let dir = local_mailbox_dir(project_root);
+    mailbox_dir_guard(&dir)?; // trace:STORY-1843 | ai:claude
     if !dir.exists() {
         return Ok(Vec::new());
     }
@@ -1803,6 +1864,68 @@ mod tests {
     }
 
     // ── STORY-701: direct-fs local reads (no `aida` shell-out) ────────────
+
+    // STORY-1843: a retired legacy mailbox path holds a manifest file. The
+    // pre-manifest writer sequence fails on it, the guarded writer refuses
+    // with the upgrade instruction, and neither writes anything.
+    // trace:STORY-1843 | ai:claude
+    #[test]
+    fn layout_manifest_refuses_legacy_writers_and_readers_without_writing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let aida = root.join(".aida");
+        std::fs::create_dir_all(&aida).unwrap();
+        let manifest = local_mailbox_dir(root);
+        let body = format!(
+            "{MAILBOX_LAYOUT_MANIFEST_MARKER}\nlayout = 2\narchived = \".aida/mailbox.v1\"\n"
+        );
+        std::fs::write(&manifest, &body).unwrap();
+        let listing = || {
+            let mut names: Vec<_> = std::fs::read_dir(&aida)
+                .unwrap()
+                .map(|e| e.unwrap().file_name())
+                .collect();
+            names.sort();
+            names
+        };
+        let before = listing();
+
+        // What an unguarded (older) build does before writing a message.
+        assert!(std::fs::create_dir_all(&manifest).is_err());
+        assert!(std::fs::read_dir(&manifest).is_err());
+
+        let msg = msg("m1", "t1", "codex", Recipient::Agent("claude".into()), 10);
+        let error = write_local_message(root, &msg).unwrap_err().to_string();
+        assert!(error.contains("migrated to layout 2"), "{error}");
+        assert!(error.contains("Upgrade aida"), "{error}");
+        let error = read_local_messages(root).unwrap_err().to_string();
+        assert!(error.contains("migrated to layout 2"), "{error}");
+
+        assert_eq!(std::fs::read_to_string(&manifest).unwrap(), body);
+        assert_eq!(listing(), before);
+    }
+
+    // trace:STORY-1843 | ai:claude
+    #[test]
+    fn mailbox_dir_guard_passes_absent_and_real_dirs_and_refuses_stray_files() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path().join("mailbox");
+        assert!(mailbox_dir_guard(&dir).is_ok());
+        std::fs::create_dir(&dir).unwrap();
+        assert!(mailbox_dir_guard(&dir).is_ok());
+        let stray = tmp.path().join("stray");
+        std::fs::write(&stray, "not a manifest").unwrap();
+        let error = mailbox_dir_guard(&stray).unwrap_err().to_string();
+        assert!(error.contains("is not a directory"), "{error}");
+        let damaged = tmp.path().join("damaged");
+        std::fs::write(
+            &damaged,
+            format!("{MAILBOX_LAYOUT_MANIFEST_MARKER}\nlayout = 1\n"),
+        )
+        .unwrap();
+        let error = mailbox_dir_guard(&damaged).unwrap_err().to_string();
+        assert!(error.contains("damaged"), "{error}");
+    }
 
     #[test]
     fn read_local_messages_roundtrips_written_messages() {

@@ -253,6 +253,9 @@ pub(crate) struct AgentGcRow {
 pub(crate) struct AgentGcReport {
     pub(crate) removed: Vec<AgentGcRow>,
     pub(crate) retained: Vec<AgentGcRow>,
+    // Retained rows whose dead process gc newly stamped ended.
+    // trace:STORY-1843 | ai:claude
+    pub(crate) marked_ended: usize,
 }
 
 impl AgentGcReport {
@@ -1214,8 +1217,12 @@ pub(crate) fn gc_dead_agents(
 ) -> Result<AgentGcReport> {
     let now = Utc::now();
     let mut report = AgentGcReport::default();
-    for (path, entry) in load_entries(project_root) {
-        if registry_entry_is_live(project_root, &entry) {
+    let observer = current_pid_namespace();
+    for (path, mut entry) in load_entries(project_root) {
+        // A row this process cannot observe is neither live nor dead to it:
+        // a sandboxed gc must not prune or end a host session's row.
+        // trace:STORY-1843 | ai:claude
+        if observed_liveness(project_root, &entry, observer) != Some(false) {
             continue;
         }
         let resumable = resumable_session_id(&entry);
@@ -1228,6 +1235,16 @@ pub(crate) fn gc_dead_agents(
                 })
                 .unwrap_or(true);
         if protected_ended_or_resumable {
+            // Keep the resumable history but stop it counting as a mail
+            // reader: an observably dead process has ended.
+            // trace:STORY-1843 | ai:claude
+            if entry.ended_at.is_none() {
+                if !dry_run {
+                    entry.ended_at = Some(now);
+                    write_entry(project_root, &entry)?;
+                }
+                report.marked_ended += 1;
+            }
             report
                 .retained
                 .push(gc_row(path, &entry, resumable, "retained"));
@@ -1853,6 +1870,31 @@ pub(crate) fn current_pid_namespace() -> Option<u64> {
     use std::os::unix::fs::MetadataExt;
     std::fs::metadata("/proc/self/ns/pid").ok().map(|m| m.ino())
 }
+
+/// Liveness as this observer can actually see it. `None` when the row's PID
+/// lives in a namespace the observer cannot probe (a sandboxed command, or a
+/// legacy unstamped row seen from outside the initial namespace). Ended rows
+/// are dead to every observer.
+// trace:STORY-1843 | ai:claude
+pub(crate) fn observed_liveness(
+    project_root: &Path,
+    entry: &AgentRegistryEntry,
+    observer: Option<u64>,
+) -> Option<bool> {
+    if entry.ended_at.is_some() {
+        return Some(false);
+    }
+    let observable = match (entry.pid_namespace, observer) {
+        (Some(recorded), Some(current)) => recorded == current,
+        (None, Some(INITIAL_PID_NAMESPACE)) => true,
+        _ => false,
+    };
+    observable.then(|| registry_entry_is_live(project_root, entry))
+}
+
+/// Inode of Linux's initial PID namespace.
+// trace:STORY-1843 | ai:claude
+pub(crate) const INITIAL_PID_NAMESPACE: u64 = 0xEFFF_FFFC;
 
 /// The entry's process is still running: pid plus recorded start time, so a
 /// recycled pid reads dead.
@@ -3585,6 +3627,67 @@ mod tests {
         assert_eq!(removed.removed_count(), 1);
         assert!(removed.retained.is_empty());
         assert!(!path.exists());
+    }
+
+    // STORY-1843 (TASK-2177): a dead resumable row stays for resume but is
+    // stamped ended, so a sandboxed mail sender stops counting it as a reader.
+    // trace:STORY-1843 | ai:claude
+    #[test]
+    fn gc_dead_agents_marks_dead_resumable_rows_ended_and_keeps_them() {
+        let tmp = TempDir::new().unwrap();
+        let now = Utc::now();
+        let mut record = entry_with(u32::MAX - 1, now - Duration::minutes(5));
+        record.native_session_id = Some("native-session-1".to_string());
+        let path = registry_path(tmp.path(), &record.id);
+        write_entry(tmp.path(), &record).unwrap();
+
+        let preview = gc_dead_agents(tmp.path(), true, None).unwrap();
+        assert_eq!(preview.marked_ended, 1);
+        assert!(load_entries(tmp.path())[0].1.ended_at.is_none());
+
+        let report = gc_dead_agents(tmp.path(), false, None).unwrap();
+        assert_eq!(report.marked_ended, 1);
+        assert_eq!(report.retained.len(), 1);
+        assert!(path.exists());
+        let ended = load_entries(tmp.path()).remove(0).1;
+        assert!(ended.ended_at.is_some());
+        assert_eq!(ended.native_session_id.as_deref(), Some("native-session-1"));
+        assert_eq!(ended.last_active_at, record.last_active_at);
+
+        let again = gc_dead_agents(tmp.path(), false, None).unwrap();
+        assert_eq!(again.marked_ended, 0, "ending is idempotent");
+    }
+
+    // STORY-1843: gc in another PID namespace cannot see the row's process, so
+    // it must neither prune nor end it.
+    // trace:STORY-1843 | ai:claude
+    #[test]
+    fn gc_dead_agents_leaves_rows_from_unobservable_namespaces_untouched() {
+        let Some(observer) = current_pid_namespace() else {
+            return;
+        };
+        let tmp = TempDir::new().unwrap();
+        let now = Utc::now();
+        let mut resumable = entry_with(u32::MAX - 1, now);
+        resumable.pid_namespace = Some(observer ^ 1);
+        resumable.native_session_id = Some("native-session-1".to_string());
+        write_entry(tmp.path(), &resumable).unwrap();
+        let mut plain = entry_with(u32::MAX - 2, now);
+        plain.pid_namespace = Some(observer ^ 1);
+        write_entry(tmp.path(), &plain).unwrap();
+        let before: Vec<_> = load_entries(tmp.path())
+            .into_iter()
+            .map(|(p, _)| std::fs::read(p).unwrap())
+            .collect();
+
+        let report = gc_dead_agents(tmp.path(), false, None).unwrap();
+
+        assert_eq!(report, AgentGcReport::default());
+        let after: Vec<_> = load_entries(tmp.path())
+            .into_iter()
+            .map(|(p, _)| std::fs::read(p).unwrap())
+            .collect();
+        assert_eq!(before, after);
     }
 
     // TASK-543: raw-registered agents use the same stale-PID transition as
