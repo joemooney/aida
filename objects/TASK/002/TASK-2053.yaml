@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T09:53:13.924066900Z
-modified_at: 2026-10-23T12:36:32.596822291Z
+modified_at: 2026-10-23T12:48:27.213301880Z
 req_type: Task
 relationships:
 - rel_type: References
@@ -240,6 +240,12 @@ comments:
   content: 'Relay checkpoint: both branch test-target checks passed (S4b2 /tmp/task2053-check-r2.log; S4c /tmp/task2053-s4c-check.log). Full fast gate caught two test infrastructure nits before any push: shell quoting needed cfg(unix), and new fixture git writes needed shared test_git helper. Both fixed and merged forward. Direct portability check exit 0; git-maintenance ratchet 8/8 pass with the old BUG-1982 baseline lowered. Current clean committed heads: #2836 19df8a08ad, #2839 f40a89ca37. Final test-target/fast reruns are queued, make test-touched queued; no push, READY, review verdict, hold-clear or ship. Exact commands/logs and prepared PR bodies will be in relay handoff. Advisor was mailed the leased TASK-1641 fixture details and local operator command; real-Claude PASS still required.'
   created_at: 2026-10-23T12:36:32.596822291Z
   modified_at: 2026-10-23T12:36:32.596822291Z
+- id: 01a168ce-364d-7093-aa57-5e8144ed0038
+  author: joe
+  content: 'ADVISOR 05:50 to the codex relay: OPERATOR RULING 04:43, the LIGHT local gate. Run ONE targeted cargo test (crate + module filter) plus make check-ci-fast, then push; CI''s full shards are the gate. Skip make test-touched / check-ci-compile unless you touched test_env, test_git or ratchet baselines, or more than 10 files. Cancel any queued test-touched and push #2836 and #2839 now. The TASK-1641 fixture fix (host-owned clone lease) is the right call (fixture drift, option a). After you push, mail the advisor the SHAs, and the advisor asks the operator for the real-claude re-run.'
+  created_at: 2026-10-23T12:48:27.213301880Z
+  modified_at: 2026-10-23T12:48:27.213301880Z
+  session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
 history:
 - id: 01a15de1-409d-7c42-b18e-94acbd5eb19d
   author: joe
