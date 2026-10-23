@@ -83,6 +83,16 @@ fn store() -> aida_core::RequirementsStore {
 /// One auto-release attempt. `heads` is the sequence of live heads the
 /// forge reports, the last one repeating.
 fn release(root: &Path, heads: &[&str]) -> (Result<Outcome>, Vec<String>) {
+    release_hooked(root, heads, &|_| {})
+}
+
+/// [`release`], calling `on_read(i)` before the forge answers its `i`th
+/// head read (0: eligibility, 1: first pass, 2: second pass, under the lock).
+fn release_hooked(
+    root: &Path,
+    heads: &[&str],
+    on_read: &dyn Fn(usize),
+) -> (Result<Outcome>, Vec<String>) {
     let hold = mh::read_hold_record(root, PR).expect("an armed hold");
     let comments = RefCell::new(Vec::new());
     let reads = Cell::new(0usize);
@@ -92,6 +102,7 @@ fn release(root: &Path, heads: &[&str]) -> (Result<Outcome>, Vec<String>) {
         &hold,
         AutoReleaseIo {
             live_head: &|| {
+                on_read(reads.get());
                 let i = reads.get().min(heads.len() - 1);
                 reads.set(reads.get() + 1);
                 Ok(Some(mh::PinnedChange {
@@ -477,4 +488,73 @@ fn an_approval_under_another_key_names_the_key_the_release_reads() {
         "{error}"
     );
     assert!(error.contains("aida review record TASK-51"), "{error}");
+}
+
+/// TASK-2285: a second auto-release of the same PR finishes while the first
+/// waits for the lock. The first's second pass refuses (the hold is gone) but
+/// must not withdraw the winner's clearance, or the released PR reads as a
+/// hand-deleted marker and every merge refuses until a human clears it.
+// trace:TASK-1951 trace:TASK-2285 | ai:claude
+#[test]
+fn an_overlapping_release_keeps_the_winners_clearance() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let _env = AmbientGuard::hermetic_with_seat(root, "reviewer", &[]);
+    refuse_both(root);
+    record(root, A, "approved", HEAD);
+    record(root, B, "approved", HEAD);
+
+    let winner = RefCell::new(None);
+    let (loser, comments) = release_hooked(root, &[HEAD], &|i| {
+        if i == 2 {
+            // The lock is re-entrant per thread, so the winner runs to
+            // completion here, as if it had held the lock first.
+            *winner.borrow_mut() = Some(release(root, &[HEAD]).0);
+        }
+    });
+    assert_eq!(
+        winner.into_inner().unwrap().unwrap(),
+        Outcome::Released { mandate: None }
+    );
+    let error = format!("{:#}", loser.unwrap_err());
+    assert!(error.contains("already removed the hold"), "{error}");
+    assert!(!mh::hold_path(root, PR).exists());
+    assert!(
+        mh::clearance_path(root, PR).exists(),
+        "the winner's clearance stands"
+    );
+    assert!(
+        !comments
+            .iter()
+            .any(|c| c.contains("authorization withdrawn")),
+        "{comments:?}"
+    );
+    assert!(mh::unrecorded_marker_removals(root).is_empty());
+}
+
+/// TASK-2285: a release whose clearance was withdrawn by a concurrent one
+/// (after the busy refusal) keeps the marker armed instead of removing it
+/// without a clearance.
+// trace:TASK-1951 trace:TASK-2285 | ai:claude
+#[test]
+fn a_withdrawn_clearance_keeps_the_hold_armed() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let _env = AmbientGuard::hermetic_with_seat(root, "reviewer", &[]);
+    refuse_both(root);
+    record(root, A, "approved", HEAD);
+    record(root, B, "approved", HEAD);
+
+    let (result, _) = release_hooked(root, &[HEAD], &|i| {
+        if i == 2 {
+            std::fs::remove_file(mh::clearance_path(root, PR)).unwrap();
+        }
+    });
+    let error = format!("{:#}", result.unwrap_err());
+    assert!(
+        error.contains("withdrawn by a concurrent release"),
+        "{error}"
+    );
+    assert!(mh::hold_path(root, PR).exists(), "the hold stays armed");
+    assert!(mh::unrecorded_marker_removals(root).is_empty());
 }

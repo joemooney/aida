@@ -332,7 +332,15 @@ pub(crate) fn approval_attested(
 /// ([`mh::with_hold_lock`]), so a re-arm cannot land between the check and
 /// the removal. A second pass that refuses supersedes the clearance it
 /// recorded, so it is never read as a release.
-// trace:TASK-1951 trace:TASK-1757 | ai:claude
+///
+/// TASK-2285: two auto-releases of one PR can overlap (the record-time
+/// release and an `aida merge-hold auto-release` sweep). The loser never
+/// withdraws the winner's clearance: under the lock it supersedes only while
+/// the marker is still armed, a busy refusal supersedes only a clearance this
+/// run wrote, and the marker is removed only while the clearance it answers
+/// still exists. No interleaving leaves the marker gone without a clearance,
+/// which the tamper check would report as a hand-deletion.
+// trace:TASK-1951 trace:TASK-1757 trace:TASK-2285 | ai:claude
 fn release_with(
     root: &Path,
     hold: &mh::MergeHoldRecord,
@@ -413,9 +421,20 @@ fn release_with(
             Ok(())
         });
         if let Err(why) = second {
+            // trace:TASK-1951 trace:TASK-2285 | ai:claude
+            if !mh::hold_path(root, hold.pr).exists() {
+                return Err(why.context(
+                    "a concurrent release already removed the hold; its clearance stands",
+                ));
+            }
             supersede_clearance(root, hold.pr, &why, &comment);
             return Err(why);
         }
+        ensure!(
+            path.exists(),
+            "the auto-release clearance was withdrawn by a concurrent release; the hold \
+             stays armed (re-run `aida merge-hold auto-release`)"
+        );
         labels()?;
         mh::clear_hold(root, hold.pr)?;
         Ok(())
@@ -423,10 +442,14 @@ fn release_with(
     match locked {
         Ok(released) => released,
         // Busy: the second pass never ran, so the clearance just recorded
-        // must not stand either.
+        // must not stand either. One this run found already recorded belongs
+        // to the release holding the lock (TASK-2285).
+        // trace:TASK-1951 trace:TASK-2285 | ai:claude
         Err(busy) => {
             let why = anyhow::Error::new(busy);
-            supersede_clearance(root, hold.pr, &why, &comment);
+            if !same {
+                supersede_clearance(root, hold.pr, &why, &comment);
+            }
             Err(why)
         }
     }

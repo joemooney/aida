@@ -381,10 +381,34 @@ current PR head. Omit the PR number to inspect every local hold, or use
 `aida merge-hold auto-release <pr>` for one. Any seat may retry this command;
 it has no override flag and never merges. Refused candidates remain held and
 produce a nonzero exit with a reason. The review-record handler runs the same
-release after a verified APPROVED write. Sensitive or composed holds retain
-the human clear. See [clearance policy](08-reporting.md#merge-hold-gate-and-clearance-limits)
+release after a verified APPROVED write. A hold composed with any non-Rework
+kind keeps the human clear, and so does a sensitive spec unless a mandate
+started with `--include-supervised` covers it. See [clearance policy](08-reporting.md#merge-hold-gate-and-clearance-limits)
 for grant, arming-round, metadata and audit requirements.
+
+- **Composed Rework holds.** When refusals on several specs compose into one
+  hold, each refusal must be answered by its own fresh approval at the PR
+  head. One unanswered or unreadable refusal keeps the whole hold, and the
+  reason names it. The clearance records the primary approval and lists the
+  others under `also_released_by`.
+- **Busy lock.** The release's second check and the marker removal run under
+  a per-PR hold lock, which hold placements take too. If another placement or
+  release holds it for 10 seconds, the command refuses with
+  `merge-hold PR-N is busy` and changes nothing; re-run it.
+- **Withdrawn clearances.** If the second check refuses after the clearance
+  was written (for example, the head moved), the clearance is moved aside to
+  `.aida/merge-hold-clearances/PR-N.superseded-<timestamp>.json` for audit, an
+  "authorization withdrawn" comment is posted, and the hold stays armed. A
+  superseded file is never read as a clearance. When two releases of one PR
+  overlap, the one that finishes second leaves the first one's clearance in
+  place.
+- **Order.** Auto-release records the clearance, posts the audit comment,
+  drops the forge labels, and removes the marker last, so a forge failure
+  leaves the hold armed for the next retry. The human `aida merge-hold clear`
+  records the clearance, removes the marker, then drops the labels; the
+  operator sees any label failure and re-runs it.
 <!-- trace:STORY-1687 | ai:codex -->
+<!-- trace:TASK-1951 trace:TASK-2286 | ai:claude -->
 
 ### `aida mandate`
 
