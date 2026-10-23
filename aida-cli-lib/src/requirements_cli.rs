@@ -5724,7 +5724,11 @@ fn run_list(
                             print_hidden_hints();
                             print_empty_list_hint();
                         } else {
-                            render_list_fields_table(&reqs, &selected, &row_routing);
+                            // trace:TASK-1951 trace:TASK-2003 | ai:claude
+                            render_list_fields_table(&reqs, &selected, &row_routing, |r, f| {
+                                (f == "review_lens")
+                                    .then(|| review_lens.get(&r.id).cloned().unwrap_or_default())
+                            });
                             println!(
                                 "\n{}",
                                 list_human_count_footer(

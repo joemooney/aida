@@ -1455,8 +1455,6 @@ pub(crate) fn read_hold(project_root: &Path, pr: u64) -> Option<String> {
         })
 }
 
-/// Clear the hold — an explicit human/advisor review. Idempotent: clearing a
-/// PR with no hold is a no-op success.
 /// How long a hold write or release waits for another one on the same PR.
 // trace:TASK-1951 trace:TASK-1757 | ai:claude
 const HOLD_LOCK_WAIT: std::time::Duration = std::time::Duration::from_secs(10);
@@ -1541,13 +1539,30 @@ pub(crate) fn with_hold_lock<T>(
         }
         std::thread::sleep(std::time::Duration::from_millis(50));
     }
+    // The guard drops the thread's entry and the flock even when `f`
+    // panics, so a caught panic cannot leave later calls on this thread
+    // taking the re-entrant shortcut unlocked.
+    // trace:TASK-1951 trace:TASK-1757 | ai:claude
+    struct Held<'a> {
+        path: &'a Path,
+        file: &'a std::fs::File,
+    }
+    impl Drop for Held<'_> {
+        fn drop(&mut self) {
+            HELD.with(|held| held.borrow_mut().retain(|p| p != self.path));
+            let _ = FileExt::unlock(self.file);
+        }
+    }
     HELD.with(|held| held.borrow_mut().push(path.clone()));
-    let out = f();
-    HELD.with(|held| held.borrow_mut().retain(|p| p != &path));
-    let _ = FileExt::unlock(&file);
-    Ok(out)
+    let _held = Held {
+        path: &path,
+        file: &file,
+    };
+    Ok(f())
 }
 
+/// Clear the hold — an explicit human/advisor review. Idempotent: clearing a
+/// PR with no hold is a no-op success.
 pub(crate) fn clear_hold(project_root: &Path, pr: u64) -> std::io::Result<()> {
     match std::fs::remove_file(hold_path(project_root, pr)) {
         Ok(()) => Ok(()),

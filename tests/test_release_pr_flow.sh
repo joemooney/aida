@@ -408,6 +408,7 @@ mkdir -p "$F9/work/.aida/merge-locks"
         if [ -e "$lease" ] && ! grep -q '^pid=' "$lease" 2>/dev/null; then
             [ -e "$lease" ] && echo "partial" >> "$F9/state/partial-lease"
         fi
+        sleep 0.01
     done
 ) & watcher=$!
 run_release "$F9" patch --yes --skip-docs-check >/dev/null 2>&1 || fail "release under the lease watcher failed"

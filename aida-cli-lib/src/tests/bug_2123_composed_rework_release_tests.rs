@@ -297,6 +297,41 @@ fn a_contended_hold_lock_refuses_placement_and_release() {
     mh::HOLD_LOCK_WAIT_OVERRIDE.with(|w| w.set(None));
 }
 
+/// TASK-1757 (1), review round 1: a panic inside the lock, caught by a
+/// long-lived thread, releases the flock and the thread's re-entrant entry,
+/// so the next call on that thread still waits on (and refuses past) a
+/// holder instead of taking the re-entrant shortcut unlocked.
+// trace:TASK-1951 trace:TASK-1757 | ai:claude
+#[test]
+fn a_caught_panic_inside_the_hold_lock_leaves_no_reentrant_entry() {
+    use fs2::FileExt;
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let _env = AmbientGuard::hermetic_with_seat(root, "reviewer", &[]);
+    mh::HOLD_LOCK_WAIT_OVERRIDE.with(|w| w.set(Some(std::time::Duration::from_millis(200))));
+
+    let panicked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        mh::with_hold_lock(root, PR, || panic!("inside the hold lock"))
+    }));
+    assert!(panicked.is_err());
+
+    let holder = std::fs::OpenOptions::new()
+        .write(true)
+        .open(mh::hold_lock_path(root, PR))
+        .unwrap();
+    holder
+        .try_lock_exclusive()
+        .expect("the panic released the flock");
+    let again = mh::with_hold_lock(root, PR, || ()).unwrap_err();
+    assert!(
+        again.to_string().contains("merge-hold PR-51 is busy"),
+        "the thread kept no re-entrant entry: {again}"
+    );
+    FileExt::unlock(&holder).unwrap();
+    mh::with_hold_lock(root, PR, || ()).unwrap();
+    mh::HOLD_LOCK_WAIT_OVERRIDE.with(|w| w.set(None));
+}
+
 /// TASK-1757 (4): the production `auto_release`, not `auto_release_with`
 /// with injected fixtures. A real repository (GitHub origin), a real
 /// distributed store and the real verdict files; only `gh` is faked, on

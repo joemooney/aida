@@ -105,3 +105,28 @@ fn list_fields_help_matches_parser_set() {
         assert_eq!(toon_list_fields(Some(alias)).unwrap(), vec![*field]);
     }
 }
+
+/// TASK-2003, review round 1: `--fields ...,review_lens` on the human table
+/// renders the lens under a `Review` header, not an empty raw column.
+// trace:TASK-1951 trace:TASK-2003 | ai:claude
+#[test]
+fn task_2003_human_fields_table_renders_review_lens() {
+    colored::control::set_override(false);
+    let r = fields_summary("TASK-1", "thing", "needs-attention", "medium");
+    let selected = toon_list_fields(Some("id,review_lens")).unwrap();
+    let lens = "in review: PR-7 @abcdef12, round 2".to_string();
+    let lines = build_list_fields_lines_with(
+        &[r.clone()],
+        &selected,
+        |_| (false, false, false),
+        |_, f| (f == "review_lens").then(|| lens.clone()),
+    );
+    assert_eq!(
+        lines[0].split_whitespace().collect::<Vec<_>>(),
+        vec!["ID", "Review"]
+    );
+    assert!(lines[2].contains(&lens), "{lines:?}");
+    // Without the lens hook the column is empty, as it was before the fix.
+    let bare = build_list_fields_lines(&[r], &selected, |_| (false, false, false));
+    assert!(!bare[2].contains("in review"), "{bare:?}");
+}

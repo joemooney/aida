@@ -5316,7 +5316,8 @@ pub(crate) fn merged_pr_refs_from_metadata(
 /// TASK-2131: the merged PR's refs through the forge abstraction, so an
 /// already-merged re-run works on GitLab as on GitHub. Pure-git has no
 /// merged-change record: the slice branch named on the command line is the
-/// record, so the re-run must name it.
+/// record, so the re-run must name it, and its commits are read from the
+/// local `<base>..<slice branch>` range (see [`pure_git_slice_refs`]).
 // trace:TASK-1951 trace:TASK-1621 trace:TASK-2131 | ai:claude
 fn fetch_merged_pr_refs(
     project_root: &std::path::Path,
@@ -5330,24 +5331,60 @@ fn fetch_merged_pr_refs(
             ship_branch != base && crate::git_arg_guard::is_shell_safe_branch_name(ship_branch),
             "a pure-git project has no merged change record; re-run `aida pr ship --rebase` from the slice branch"
         );
-        // trace:TASK-1951 | ai:claude
-        let head = aida_core::git_ops::host_git_command(project_root)
-            .args(["rev-parse", "--verify", "--quiet", ship_branch])
-            .output()
-            .ok()
-            .filter(|o| o.status.success())
-            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_owned());
-        return Ok(RebaseSliceInputs {
-            branch: ship_branch.to_owned(),
-            base: base.to_owned(),
-            head_sha: head,
-            subjects: Vec::new(),
-        });
+        return pure_git_slice_refs(project_root, ship_branch, base);
     }
     let mut sink = crate::network_retry::StderrSink;
     let meta = forge.change_metadata(n, &mut sink)?;
     let headlines = forge.change_commit_headlines(n, &mut sink)?;
     merged_pr_refs_from_metadata(&meta, headlines)
+}
+
+/// TASK-2131, review round 1: the pure-git already-merged inputs. A rebase
+/// merge rewrites the slice's commits onto the base, so the slice branch
+/// still holds the originals and `<base>..<slice branch>` lists their
+/// subjects, newest first, which [`confirm_rebase_merged`] then finds on the
+/// base. The remote tracking base is read first, then the local one. An
+/// empty range (the branch was fast-forwarded, or never had commits) is
+/// refused, because there is nothing to confirm.
+// trace:TASK-1951 trace:TASK-2131 | ai:claude
+fn pure_git_slice_refs(
+    project_root: &std::path::Path,
+    ship_branch: &str,
+    base: &str,
+) -> Result<RebaseSliceInputs> {
+    let git_out = |args: &[&str]| -> Option<String> {
+        aida_core::git_ops::host_git_command(project_root)
+            .args(args)
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
+    };
+    let head = git_out(&["rev-parse", "--verify", "--quiet", ship_branch])
+        .map(|out| out.trim().to_owned())
+        .filter(|sha| !sha.is_empty())
+        .with_context(|| format!("the slice branch `{ship_branch}` does not exist locally"))?;
+    let subjects = [format!("origin/{base}"), base.to_owned()]
+        .iter()
+        .find_map(|base_ref| git_out(&["log", "--format=%s", &format!("{base_ref}..{head}")]))
+        .map(|out| {
+            out.lines()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(str::to_owned)
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    anyhow::ensure!(
+        !subjects.is_empty(),
+        "`{base}..{ship_branch}` holds no commits, so the rebase merge of `{ship_branch}` cannot be confirmed in a pure-git project"
+    );
+    Ok(RebaseSliceInputs {
+        branch: ship_branch.to_owned(),
+        base: base.to_owned(),
+        head_sha: Some(head),
+        subjects,
+    })
 }
 
 /// What a run of `aida pr ship` needs to do the rebase slice bookkeeping.
@@ -5469,7 +5506,12 @@ fn confirm_rebase_merged(
         !inputs.subjects.is_empty(),
         "the forge reported no commits for PR-{pr}, so its rebase merge cannot be confirmed"
     );
-    let landed = landed_commits_for_subjects(project_root, &inputs.base, &inputs.subjects);
+    let landed = landed_commits_for_subjects(
+        project_root,
+        &inputs.base,
+        inputs.head_sha.as_deref(),
+        &inputs.subjects,
+    );
     anyhow::ensure!(
         landed.iter().all(Option::is_some),
         "PR-{pr} was not rebase-merged: its {} commit(s) do not sit on `{}` as one run. \
@@ -5573,7 +5615,8 @@ pub(crate) fn record_non_completing_rebase_slice(
     )
     .with_context(|| format!("could not open the store at {}", store_path.display()))?;
     use aida_core::DatabaseBackend;
-    let landed = landed_commits_for_subjects(project_root, base_branch, &range_subjects);
+    let landed =
+        landed_commits_for_subjects(project_root, base_branch, merged_head_sha, &range_subjects);
     let header = format!(
         "{} PR #{} rebase-merged without --final-slice; status stays unchanged until the final slice completes.",
         pr_ship::NON_COMPLETING_REBASE_MARKER,
@@ -5635,10 +5678,17 @@ pub(crate) fn record_non_completing_rebase_slice(
 /// instead of something wrong (#2816 deferral (c)). The remote tracking ref
 /// (after a fetch) is searched first, then the local branch; the run may be
 /// in either commit order. No run leaves every entry `None`.
+///
+/// Review round 1 (TASK-2132): with the PR's head known, the walk stops at
+/// the PR's fork point (see [`slice_fork_point`]) and the OLDEST matching run
+/// above it is taken, so a later commit that reuses the subject (n = 1, or a
+/// whole run repeated later) cannot bind in place of the slice. Without a
+/// head, the newest run is taken as before.
 // trace:TASK-1951 trace:TASK-1620 trace:TASK-2132 | ai:claude
 fn landed_commits_for_subjects(
     project_root: &std::path::Path,
     base_branch: &str,
+    head_sha: Option<&str>,
     subjects: &[String],
 ) -> Vec<Option<String>> {
     let fetched = std::process::Command::new("git")
@@ -5657,6 +5707,13 @@ fn landed_commits_for_subjects(
         return Vec::new();
     }
     for base in [format!("origin/{base_branch}"), base_branch.to_string()] {
+        let fork = head_sha
+            .filter(|h| !h.trim().is_empty())
+            .and_then(|head| slice_fork_point(project_root, &base, head.trim(), subjects.len()));
+        let range = match &fork {
+            Some(fork) => format!("{fork}..{base}"),
+            None => base.clone(),
+        };
         let Some(out) = std::process::Command::new("git")
             .current_dir(project_root)
             .args([
@@ -5665,7 +5722,7 @@ fn landed_commits_for_subjects(
                 "-n",
                 "500",
                 "--format=%H%x09%s",
-                &base,
+                &range,
             ])
             .output()
             .ok()
@@ -5679,43 +5736,86 @@ fn landed_commits_for_subjects(
             .filter_map(|line| line.split_once('\t'))
             .map(|(sha, subject)| (sha, subject.trim()))
             .collect();
-        if let Some(run) = landed_run(&log, subjects) {
+        if let Some(run) = landed_run(&log, subjects, fork.is_some()) {
             return run.into_iter().map(Some).collect();
         }
     }
     vec![None; subjects.len()]
 }
 
-/// The newest consecutive run of `log` (newest first) whose subjects are
-/// `subjects` in order, or in reverse order; the shas are returned aligned
-/// with `subjects`.
+/// TASK-2132: the base commit the PR's run landed on top of, the lower bound
+/// of the landed-run walk. A rebase merge rewrites the commits, so the PR head
+/// stays off the base and its merge-base with the base is the fork point. A
+/// fast-forward leaves the head on the base, so the fork point is `n` commits
+/// below it. `None` (head unknown or unreachable) leaves the walk unbounded.
 // trace:TASK-1951 trace:TASK-2132 | ai:claude
-fn landed_run(log: &[(&str, &str)], subjects: &[String]) -> Option<Vec<String>> {
+fn slice_fork_point(
+    project_root: &std::path::Path,
+    base: &str,
+    head: &str,
+    n: usize,
+) -> Option<String> {
+    let git_out = |args: &[&str]| -> Option<String> {
+        aida_core::git_ops::host_git_command(project_root)
+            .args(args)
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_owned())
+            .filter(|s| !s.is_empty())
+    };
+    let head = git_out(&[
+        "rev-parse",
+        "--verify",
+        "--quiet",
+        &format!("{head}^{{commit}}"),
+    ])?;
+    let fork = git_out(&["merge-base", base, &head])?;
+    if fork != head {
+        return Some(fork);
+    }
+    git_out(&["rev-parse", "--verify", "--quiet", &format!("{head}~{n}")])
+}
+
+/// A consecutive run of `log` (newest first) whose subjects are `subjects`
+/// in order, or in reverse order; the shas are returned aligned with
+/// `subjects`. `oldest` takes the oldest such run (the walk is bounded below
+/// at the PR's fork point, so that is the slice itself); otherwise the newest.
+// trace:TASK-1951 trace:TASK-2132 | ai:claude
+fn landed_run(log: &[(&str, &str)], subjects: &[String], oldest: bool) -> Option<Vec<String>> {
     let n = subjects.len();
     if n == 0 || log.len() < n {
         return None;
     }
+    let mut found = None;
     for start in 0..=log.len() - n {
         let window = &log[start..start + n];
-        if window.iter().zip(subjects).all(|((_, s), want)| s == want) {
-            return Some(window.iter().map(|(sha, _)| sha.to_string()).collect());
-        }
-        if window
+        let run = if window.iter().zip(subjects).all(|((_, s), want)| s == want) {
+            Some(window.iter().map(|(sha, _)| sha.to_string()).collect())
+        } else if window
             .iter()
             .rev()
             .zip(subjects)
             .all(|((_, s), want)| s == want)
         {
-            return Some(
+            Some(
                 window
                     .iter()
                     .rev()
                     .map(|(sha, _)| sha.to_string())
                     .collect(),
-            );
+            )
+        } else {
+            None
+        };
+        if run.is_some() {
+            found = run;
+            if !oldest {
+                break;
+            }
         }
     }
-    None
+    found
 }
 
 /// STORY-1663: transition resolved specs to `Completed` when a rebase merge
@@ -8421,16 +8521,16 @@ mod story_1663_rebase_ship_tests {
             "feat: slice one (STORY-5)".to_string(),
         ];
         assert_eq!(
-            landed_run(&log, &subjects),
+            landed_run(&log, &subjects, false),
             Some(vec!["d".to_string(), "c".to_string()])
         );
         let oldest_first: Vec<String> = subjects.iter().rev().cloned().collect();
         assert_eq!(
-            landed_run(&log, &oldest_first),
+            landed_run(&log, &oldest_first, false),
             Some(vec!["c".to_string(), "d".to_string()])
         );
         assert_eq!(
-            landed_run(&log[..2], &subjects),
+            landed_run(&log[..2], &subjects, false),
             None,
             "a stale ref holds no run"
         );
@@ -8448,9 +8548,151 @@ mod story_1663_rebase_ship_tests {
         // origin/main is stale (never fetched past the base); the local base
         // holds the run.
         assert_eq!(
-            landed_commits_for_subjects(root, "main", &["feat: slice one (STORY-5)".to_string()]),
+            landed_commits_for_subjects(
+                root,
+                "main",
+                None,
+                &["feat: slice one (STORY-5)".to_string()]
+            ),
             vec![Some(real)]
         );
+    }
+
+    /// TASK-2132, review round 1: with the PR head known, the walk stops at
+    /// the PR's fork point and takes the oldest run above it, so a later
+    /// commit reusing the subject of a one-commit slice (n = 1), or a whole
+    /// run repeated later, never binds in place of the slice.
+    // trace:TASK-1951 trace:TASK-2132 | ai:claude
+    #[test]
+    fn task_1951_landed_run_is_bounded_at_the_pr_fork_point() {
+        let one = vec!["feat: slice one (STORY-5)".to_string()];
+        let log = [
+            ("r", "feat: slice one (STORY-5)"),
+            ("x", "chore: unrelated"),
+            ("s", "feat: slice one (STORY-5)"),
+        ];
+        assert_eq!(landed_run(&log, &one, true), Some(vec!["s".to_string()]));
+        assert_eq!(landed_run(&log, &one, false), Some(vec!["r".to_string()]));
+        let two = vec![
+            "feat: slice two (STORY-5)".to_string(),
+            "feat: slice one (STORY-5)".to_string(),
+        ];
+        let repeated = [
+            ("d2", "feat: slice two (STORY-5)"),
+            ("c2", "feat: slice one (STORY-5)"),
+            ("x", "chore: unrelated"),
+            ("d", "feat: slice two (STORY-5)"),
+            ("c", "feat: slice one (STORY-5)"),
+        ];
+        assert_eq!(
+            landed_run(&repeated, &two, true),
+            Some(vec!["d".to_string(), "c".to_string()])
+        );
+
+        let (tmp, git) = task_1951_repo();
+        let root = tmp.path();
+        git(&["switch", "-q", "-c", "claude/story-5-part1"]);
+        std::fs::write(root.join("s"), "x\n").unwrap();
+        git(&["add", "s"]);
+        git(&["commit", "-q", "-m", "feat: slice one (STORY-5)"]);
+        let pr_head = git(&["rev-parse", "HEAD"]);
+        git(&["switch", "-q", "main"]);
+        std::fs::write(root.join("m"), "x\n").unwrap();
+        git(&["add", "m"]);
+        git(&["commit", "-q", "-m", "chore: base moved"]);
+        git(&["cherry-pick", &pr_head]);
+        let landed = git(&["rev-parse", "HEAD"]);
+        std::fs::write(root.join("t"), "x\n").unwrap();
+        git(&["add", "t"]);
+        git(&[
+            "commit",
+            "-q",
+            "--allow-empty",
+            "-m",
+            "feat: slice one (STORY-5)",
+        ]);
+        let reuse = git(&["rev-parse", "HEAD"]);
+        assert_eq!(
+            landed_commits_for_subjects(root, "main", Some(&pr_head), &one),
+            vec![Some(landed)]
+        );
+        assert_eq!(
+            landed_commits_for_subjects(root, "main", None, &one),
+            vec![Some(reuse)],
+            "without a head the newest run is taken, as before"
+        );
+    }
+
+    /// TASK-2131, review round 1: a pure-git already-merged `--rebase` re-run
+    /// reads the slice's commits from `<base>..<slice branch>`, confirms the
+    /// rebase merge on the base, and completes the slice branch's specs; an
+    /// empty range is refused, never confirmed.
+    // trace:TASK-1951 trace:TASK-2131 | ai:claude
+    #[test]
+    fn task_1951_pure_git_already_merged_rerun_uses_the_slice_branch() {
+        let (tmp, git) = task_1951_repo();
+        let root = tmp.path();
+        let backend = aida_core::db::GitBackend::new(&root.join(".aida-store")).unwrap();
+        use aida_core::db::DatabaseBackend;
+        let mut req = aida_core::Requirement::new("STORY-93 spec".to_string(), String::new());
+        req.spec_id = Some("STORY-93".to_string());
+        req.status = aida_core::RequirementStatus::InProgress;
+        backend.add_requirement(req).unwrap();
+        git(&["switch", "-q", "-c", "claude/story-93-part2"]);
+        std::fs::write(root.join("c"), "x\n").unwrap();
+        git(&["add", "c"]);
+        git(&["commit", "-q", "-m", "feat: last part (STORY-93)"]);
+        let slice_head = git(&["rev-parse", "HEAD"]);
+        git(&["switch", "-q", "main"]);
+        std::fs::write(root.join("m"), "x\n").unwrap();
+        git(&["add", "m"]);
+        git(&["commit", "-q", "-m", "chore: base moved"]);
+        git(&["cherry-pick", &slice_head]);
+        assert_eq!(
+            crate::forge::resolve_forge_kind(root),
+            crate::forge::ForgeKind::None
+        );
+
+        let inputs = fetch_merged_pr_refs(root, 93, "claude/story-93-part2", "main").unwrap();
+        assert_eq!(
+            inputs.subjects,
+            vec!["feat: last part (STORY-93)".to_string()]
+        );
+        assert_eq!(inputs.head_sha.as_deref(), Some(slice_head.as_str()));
+
+        let run = RebaseSliceRun {
+            main_worktree: root,
+            project_root: root,
+            pr_number: 93,
+            final_slice: true,
+            already_merged: true,
+            ship_branch: "claude/story-93-part2",
+            retarget_base: "main",
+            merged_head_sha: None,
+        };
+        let outcome = rebase_slice_bookkeeping(
+            &run,
+            &[],
+            |branch| {
+                assert_eq!(branch, "claude/story-93-part2");
+                vec!["STORY-93".to_string()]
+            },
+            || fetch_merged_pr_refs(root, 93, "claude/story-93-part2", "main"),
+        );
+        assert_eq!(outcome, SliceBookkeeping::default());
+        assert_eq!(
+            backend
+                .get_requirement_unambiguous("STORY-93")
+                .unwrap()
+                .unwrap()
+                .status,
+            aida_core::RequirementStatus::Completed
+        );
+
+        // A slice branch already on the base has an empty range: refused.
+        git(&["branch", "-f", "claude/story-93-part2", "main"]);
+        let err = fetch_merged_pr_refs(root, 93, "claude/story-93-part2", "main").unwrap_err();
+        assert!(format!("{err:#}").contains("holds no commits"), "{err:#}");
     }
 
     /// TASK-1765: a non-completing squash ship writes the declaration into

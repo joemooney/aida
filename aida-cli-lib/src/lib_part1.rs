@@ -815,6 +815,8 @@ pub(crate) fn list_field_header(field: &str) -> String {
         "queued" => "Queued",
         "in_flight" => "In-Flight",
         "blocked" => "Blocked",
+        // trace:TASK-1951 trace:TASK-2003 | ai:claude
+        "review_lens" => "Review",
         // Validated against the known set upstream, so this is unreachable in
         // practice; fall back to the raw name for robustness.
         other => return other.to_string(),
@@ -839,6 +841,23 @@ pub(crate) fn build_list_fields_lines<F>(
 where
     F: Fn(&aida_core::RequirementSummary) -> (bool, bool, bool),
 {
+    build_list_fields_lines_with(reqs, fields, routing_of, |_, _| None)
+}
+
+/// [`build_list_fields_lines`] with `cell_of` answering the columns that need
+/// state beyond the summary (the TASK-2003 `review_lens`); `None` falls back
+/// to [`toon_list_cell`].
+// trace:TASK-1951 trace:TASK-2003 | ai:claude
+pub(crate) fn build_list_fields_lines_with<F, C>(
+    reqs: &[aida_core::RequirementSummary],
+    fields: &[String],
+    routing_of: F,
+    cell_of: C,
+) -> Vec<String>
+where
+    F: Fn(&aida_core::RequirementSummary) -> (bool, bool, bool),
+    C: Fn(&aida_core::RequirementSummary, &str) -> Option<String>,
+{
     // Plain (uncoloured) cell text per row per column — width math runs on this.
     let plain: Vec<Vec<String>> = reqs
         .iter()
@@ -846,7 +865,7 @@ where
             let routing = routing_of(r);
             fields
                 .iter()
-                .map(|f| toon_list_cell(r, routing, f))
+                .map(|f| cell_of(r, f).unwrap_or_else(|| toon_list_cell(r, routing, f)))
                 .collect()
         })
         .collect();
