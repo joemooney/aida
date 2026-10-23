@@ -6,17 +6,26 @@ description: |
   .github/workflows/merge-hold-gate.yml train mode reads the 'aida-train-members:' body line and checks those PRs' labels. It never checks the line against the train commits' Aida-Train-Member trailers, so a hand-made train/* PR can name any hold-clear PRs. This is no escalation over an ordinary unlabelled PR, but two-seat-protocol.md presents it as the server-side member check. Either cross-check the trailers or say the line is advisory.
 
   Raised in review of PR-2843: https://github.com/joemooney/aida/pull/2843#issuecomment-6372926096
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T19:22:49.157354569Z
-modified_at: 2026-10-23T19:22:49.157354569Z
+modified_at: 2026-10-23T19:25:06.701932628Z
 req_type: Task
 tags:
 - ci
 - from-review:PR-2843
 - severity:cosmetic
+history:
+- id: 01a16a39-5d0d-7e62-8f92-b4e952341ff4
+  author: joe
+  timestamp: 2026-10-23T19:25:06.701921892Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: feb62063ca9cb8621f9015b630ec51715c6a151d
   branch: pr-2843
