@@ -2750,7 +2750,17 @@ fn cmdline_matches_agent(cmdline: &str, agent_type: &str) -> bool {
                 .and_then(|s| s.to_str())
                 .is_some_and(|name| name == "codex")
         }),
-        "antigravity" => lower.contains("antigravity") || lower.contains("gemini"),
+        // The Antigravity CLI runs as `agy`. trace:STORY-1843 | ai:claude
+        "antigravity" => {
+            lower.contains("antigravity")
+                || lower.contains("gemini")
+                || lower.split_whitespace().next().is_some_and(|argv0| {
+                    std::path::Path::new(argv0)
+                        .file_name()
+                        .and_then(|s| s.to_str())
+                        .is_some_and(|name| name == "agy")
+                })
+        }
         _ => false,
     }
 }
@@ -2985,6 +2995,16 @@ mod tests {
             "claude"
         ));
         assert!(cmdline_matches_agent("gemini --model pro", "antigravity"));
+        // trace:STORY-1843.aca8ca0d | ai:claude
+        assert!(cmdline_matches_agent(
+            "agy --dangerously-skip-permissions",
+            "antigravity"
+        ));
+        assert!(cmdline_matches_agent(
+            "/home/u/.local/bin/agy",
+            "antigravity"
+        ));
+        assert!(!cmdline_matches_agent("vim notes/agy.md", "antigravity"));
         assert!(!cmdline_matches_agent(
             "bash .claude/hooks/aida-mail-notice.sh",
             "claude"

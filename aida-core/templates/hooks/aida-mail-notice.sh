@@ -79,6 +79,14 @@ done_out() {
     [ -n "$agy" ] && printf '{}\n'
     exit 0
 }
+# An Antigravity process carries no vendor marker an env scan can trust (it
+# inherits CLAUDE_CODE_* settings from the shell, and GEMINI_API_KEY is a
+# credential the scan skips), so the agy relay names its vendor for the
+# session registration and handle this hook triggers. trace:STORY-1843 | ai:claude
+if [ -n "$agy" ]; then
+    AIDA_AGENT_TYPE=antigravity
+    export AIDA_AGENT_TYPE
+fi
 
 # Capture the bounded hook body once, before invoking helpers, so the notice
 # command itself never reads stdin. Direct/scripted `aida awaiting --notice`
@@ -95,6 +103,36 @@ project_root="${AIDA_SESSION_PROJECT:-${CLAUDE_PROJECT_DIR:-${CODEX_PROJECT_DIR:
 # Plain text out (no TTY → no ANSI). Swallow errors; emit only real output.
 cd "$project_root" 2>/dev/null || done_out
 command -v aida >/dev/null 2>&1 || done_out
+
+# STORY-1843: Antigravity has no per-prompt event; PreInvocation fires before
+# every model call. Its turn signal is unread mail only (`aida mailbox notice`,
+# addressed to this session's handle, role or user), injected as an ephemeral
+# message that the client drops after the turn. A turn is keyed by the
+# payload's `initialNumSteps`, so the same notice is not repeated on every
+# model call inside one turn, and shows again next turn while it stays unread.
+# trace:STORY-1843 | ai:claude
+if [ -n "$agy" ] && [ "$event" = "PreInvocation" ]; then
+    if command -v timeout >/dev/null 2>&1; then
+        mail=$(timeout 3 aida mailbox notice 2>/dev/null || true)
+    else
+        mail=$(aida mailbox notice 2>/dev/null || true)
+    fi
+    [ -n "$mail" ] || done_out
+    conv=$(printf '%s' "$AIDA_HOOK_PAYLOAD" | sed -n 's/.*"conversationId"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)
+    turn=$(printf '%s' "$AIDA_HOOK_PAYLOAD" | sed -n 's/.*"initialNumSteps"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p' | head -n 1)
+    case "$conv" in
+        "" | *[!A-Za-z0-9-]*) state="" ;;
+        *) state="$project_root/.aida/hook-state/agy-mail-$conv" ;;
+    esac
+    if [ -n "$state" ] && [ -n "$turn" ]; then
+        key="$turn $(printf '%s' "$mail" | cksum)"
+        [ "$(cat "$state" 2>/dev/null)" = "$key" ] && done_out
+        mkdir -p "${state%/*}" 2>/dev/null && printf '%s\n' "$key" >"$state" 2>/dev/null
+    fi
+    text=$(printf '%s\n' "$mail" | awk '{ gsub(/\\/, "\\\\"); gsub(/"/, "\\\""); gsub(/\t/, "\\t"); gsub(/\r/, ""); if (NR > 1) printf "\\n"; printf "%s", $0 }')
+    printf '{"injectSteps":[{"ephemeralMessage":"%s"}]}\n' "$text"
+    exit 0
+fi
 
 # Opportunistic maintenance heartbeat. It is best-effort and hook-scoped:
 # `--hook` skips tasks registered as network/heavy, and the scheduler's
