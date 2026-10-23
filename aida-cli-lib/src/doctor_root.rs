@@ -1268,21 +1268,22 @@ pub(crate) fn collect_doctor_findings(
 }
 
 /// STORY-1662 (signoff C4): the finding for a claude daemon whose environment
-/// holds `AIDA_SESSION_GRANT`. Diagnostic only: restarting the daemon is the
+/// holds the session grant ([`crate::seat_authority::GRANT_ENV`]). Diagnostic only: restarting the daemon is the
 /// operator's call.
 // trace:STORY-1662 | ai:claude
 pub(crate) fn claude_daemon_grant_finding(pid: u32) -> DoctorFinding {
+    let grant_env = crate::seat_authority::GRANT_ENV;
     DoctorFinding {
         category: "claude-daemon-grant".to_string(),
         id: format!("pid {pid}"),
-        summary:
-            "the claude daemon's environment holds AIDA_SESSION_GRANT, so every `claude --bg` \
-                  session it hosts starts with that seat grant"
-                .to_string(),
+        summary: format!(
+            "the claude daemon's environment holds {grant_env}, so every `claude --bg` \
+             session it hosts starts with that seat grant"
+        ),
         action: format!(
             "once no `claude --bg` session is running, stop the daemon (`kill {pid}`); the next \
              `claude --bg` starts a new one, so run that from a shell with no AIDA_SESSION_* \
-             variables (`env -u AIDA_SESSION_GRANT -u AIDA_SESSION_ROLE -u AIDA_SESSION_PURPOSE \
+             variables (`env -u {grant_env} -u AIDA_SESSION_ROLE -u AIDA_SESSION_PURPOSE \
              claude --bg ...`). Lane worktrees still correct their own identity at session start"
         ),
         safe_heal: false,

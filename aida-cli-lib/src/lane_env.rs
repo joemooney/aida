@@ -25,7 +25,8 @@ pub(crate) const PURPOSE_ENV: &str = "AIDA_SESSION_PURPOSE";
 /// The longest role or grant value a lane line may carry.
 const MAX_VALUE_LEN: usize = 64;
 
-/// What to do with `AIDA_SESSION_GRANT` in a lane.
+/// What to do with the session grant ([`crate::seat_authority::GRANT_ENV`]) in
+/// a lane.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum GrantFix {
     /// Export the lease's own child grant.
@@ -46,8 +47,8 @@ pub(crate) struct LaneFix {
     pub(crate) unset_purpose: bool,
 }
 
-/// What the inherited grant (`AIDA_SESSION_GRANT`) is, as far as a lane
-/// cares: absent, a valid grant for a seat, or present but invalid.
+/// What the inherited grant ([`crate::seat_authority::GRANT_ENV`]) is, as far
+/// as a lane cares: absent, a valid grant for a seat, or present but invalid.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum InheritedGrant {
     Absent,
@@ -266,7 +267,7 @@ pub(crate) fn apply_in_process(project_root: &Path, cwd: &Path) {
 /// Signoff C4: the operator-side root fix is to start the claude daemon from a
 /// shell with no `AIDA_SESSION_*` env. The pids under `proc_root` (`/proc`)
 /// whose command line is `claude daemon ...` and whose environment holds a
-/// non-empty `AIDA_SESSION_GRANT`: every `claude --bg` session they host
+/// non-empty session grant (`GRANT_ENV`): every `claude --bg` session they host
 /// starts with that grant. Unreadable entries are skipped; empty off Linux.
 pub(crate) fn daemons_holding_a_grant(proc_root: &Path) -> Vec<u32> {
     let Ok(entries) = std::fs::read_dir(proc_root) else {

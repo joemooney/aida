@@ -101,7 +101,7 @@ fn an_inherited_grant_is_kept_only_for_the_lease_seat() {
 #[test]
 fn values_with_shell_metacharacters_are_refused() {
     for bad in [
-        "implementer;touch /tmp/x",
+        "implementer;touch pwned",
         "impl'ementer",
         "a b",
         "$(id)",

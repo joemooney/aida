@@ -140,6 +140,7 @@ fn hook_path() -> PathBuf {
 
 /// Run the SessionStart hook in `cwd` with `bin` first on PATH and the
 /// advisor's env; return what it appended to $CLAUDE_ENV_FILE.
+#[cfg(target_os = "linux")]
 fn run_hook(fx: &Fixture, bin: &Path, cwd: &Path) -> String {
     let env_file = fx.base.join(format!(
         "claude-env-{}",
@@ -304,7 +305,7 @@ fn the_hook_fails_closed_when_lane_env_cannot_answer() {
         ),
         (
             "foreign",
-            "printf '%s\\n' \"export PATH='/tmp'\"".to_string(),
+            "printf '%s\\n' \"export PATH='/nonexistent'\"".to_string(),
         ),
     ] {
         let bin = fx.base.join(format!("stub-{name}"));
