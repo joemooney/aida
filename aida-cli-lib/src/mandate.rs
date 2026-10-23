@@ -1602,85 +1602,101 @@ fn hold_cover<'a>(c: &ShipCheck<'a>) -> std::result::Result<&'a Mandate, Mandate
     // trace:STORY-1698 | ai:claude
     // trace:TASK-1800 | ai:antigravity
     for spec in c.specs {
-        let id = &spec.id;
-        if spec.named && spec.current.is_none() {
-            return Err(MandateRefusal::SpecsUnresolved);
-        }
-        let history = match &spec.history {
-            Ok(history) => history,
-            Err(why) => {
-                return Err(MandateRefusal::HistoryUnreadable {
-                    spec: id.clone(),
-                    why: why.clone(),
-                })
-            }
-        };
-        if spec.named && history.is_empty() {
+        judge_exclusion_spec(spec, ledger, mandate.include_supervised)?;
+    }
+    Ok(mandate)
+}
+
+/// One exclusion subject under the per-spec rules [`hold_cover`] applies to
+/// every spec: fail closed on a missing named spec or unreadable history, the
+/// ledger first, then every version; a dangling trace-derived ID passes.
+/// Shared with the TASK-1800 replay (TASK-2067).
+// trace:STORY-1698 | ai:claude
+// trace:TASK-1800 | ai:antigravity
+// trace:TASK-2067 | ai:claude
+pub(crate) fn judge_exclusion_spec(
+    spec: &ShipSpec,
+    ledger: &std::collections::BTreeMap<String, Exclusion>,
+    include_supervised: bool,
+) -> std::result::Result<(), MandateRefusal> {
+    let id = &spec.id;
+    if spec.named && spec.current.is_none() {
+        return Err(MandateRefusal::SpecsUnresolved);
+    }
+    let history = match &spec.history {
+        Ok(history) => history,
+        Err(why) => {
             return Err(MandateRefusal::HistoryUnreadable {
                 spec: id.clone(),
-                why: format!("no version of {id} in the store's history"),
-            });
+                why: why.clone(),
+            })
         }
-        // The ledger is the first source: once seen excluded, always excluded.
-        // Consult both the ID and any recorded aliases.
-        let mut excluded: Option<String> = None;
-        for key in std::iter::once(id).chain(spec.aliases.iter()) {
-            if let Some(entry) = ledger.get(&key.to_ascii_uppercase()) {
-                if entry.always_human {
-                    return Err(MandateRefusal::AlwaysHuman {
-                        spec: id.clone(),
-                        class: entry.class.clone(),
-                    });
-                }
-                if excluded.is_none() {
-                    excluded = Some(format!(
-                        "{}, recorded {}",
-                        entry.class,
-                        entry.first_seen.to_rfc3339()
-                    ));
-                }
-            }
-        }
-        if !spec.named && spec.current.is_none() && history.is_empty() && excluded.is_none() {
-            // Dangling trace-derived reference: no current version, no store
-            // history on any ref, and no exclusion ledger entry.
-            continue;
-        }
-        let current_changes = spec
-            .current
-            .as_ref()
-            .map(field_change_versions)
-            .unwrap_or_default();
-        let versions = spec
-            .current
-            .iter()
-            .chain(current_changes.iter())
-            .chain(history.iter());
-        for (i, version) in versions.enumerate() {
-            if let Some(class) = always_human_class(version) {
+    };
+    if spec.named && history.is_empty() {
+        return Err(MandateRefusal::HistoryUnreadable {
+            spec: id.clone(),
+            why: format!("no version of {id} in the store's history"),
+        });
+    }
+    // The ledger is the first source: once seen excluded, always excluded.
+    // Consult both the ID and any recorded aliases.
+    let mut excluded: Option<String> = None;
+    for key in std::iter::once(id).chain(spec.aliases.iter()) {
+        if let Some(entry) = ledger.get(&key.to_ascii_uppercase()) {
+            if entry.always_human {
                 return Err(MandateRefusal::AlwaysHuman {
                     spec: id.clone(),
-                    class,
+                    class: entry.class.clone(),
                 });
             }
             if excluded.is_none() {
-                excluded = excluded_class(version).map(|why| {
-                    if i == 0 && spec.current.is_some() {
-                        why
-                    } else {
-                        format!("{why}, in an earlier version")
-                    }
-                });
+                excluded = Some(format!(
+                    "{}, recorded {}",
+                    entry.class,
+                    entry.first_seen.to_rfc3339()
+                ));
             }
         }
-        if let (Some(why), false) = (excluded, mandate.include_supervised) {
-            return Err(MandateRefusal::Excluded {
+    }
+    if !spec.named && spec.current.is_none() && history.is_empty() && excluded.is_none() {
+        // Dangling trace-derived reference: no current version, no store
+        // history on any ref, and no exclusion ledger entry.
+        return Ok(());
+    }
+    let current_changes = spec
+        .current
+        .as_ref()
+        .map(field_change_versions)
+        .unwrap_or_default();
+    let versions = spec
+        .current
+        .iter()
+        .chain(current_changes.iter())
+        .chain(history.iter());
+    for (i, version) in versions.enumerate() {
+        if let Some(class) = always_human_class(version) {
+            return Err(MandateRefusal::AlwaysHuman {
                 spec: id.clone(),
-                why,
+                class,
+            });
+        }
+        if excluded.is_none() {
+            excluded = excluded_class(version).map(|why| {
+                if i == 0 && spec.current.is_some() {
+                    why
+                } else {
+                    format!("{why}, in an earlier version")
+                }
             });
         }
     }
-    Ok(mandate)
+    if let (Some(why), false) = (excluded, include_supervised) {
+        return Err(MandateRefusal::Excluded {
+            spec: id.clone(),
+            why,
+        });
+    }
+    Ok(())
 }
 
 // ── Ledger ──────────────────────────────────────────────────────────────────
