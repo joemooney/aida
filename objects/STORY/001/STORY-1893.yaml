@@ -3,12 +3,12 @@ spec_id: STORY-1893
 agreed_id: STORY-1893
 title: 'Review PR-2836: TASK-2053 S4b seat-clone visibility and shipped-head count'
 description: 'Hand-filed review story: Refs-only PR (BUG-2208 gap, folded into TASK-1955). Covers TASK-2053.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-22T20:48:27.037867867Z
-modified_at: 2026-10-22T20:48:50.914388593Z
+modified_at: 2026-10-23T23:18:51.671787636Z
 req_type: Story
 relationships:
 - rel_type:
@@ -16,12 +16,25 @@ relationships:
   target_id: 01a15de1-12c4-7930-aae4-997df5a459ef
   created_at: 2026-10-22T20:48:50.914384205Z
   created_by: joe
+comments:
+- id: 01a16b0f-5e17-72c1-91bc-e83bb2075d4e
+  author: aida-auto-bump
+  content: 'Auto-completed: PR #2836 is merged on the forge (its merge commit was outside the local scan window).'
+  created_at: 2026-10-23T23:18:51.671943581Z
+  modified_at: 2026-10-23T23:18:51.671943581Z
 history:
 - id: 01a1655f-b14e-7e33-b9a5-9ddf8f94ae87
   author: joe
   timestamp: 2026-10-22T20:48:52.558604060Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
   changes: []
+- id: 01a16b0f-5e17-72c1-91bc-e844dca04e1c
+  author: aida-auto-bump
+  timestamp: 2026-10-23T23:18:51.671950619Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
 filed_at:
   code_sha: 7ffa46a9d0dff57c2e76d77a001e94dec1cb8009
   branch: main
@@ -30,3 +43,6 @@ filed_at:
   aida_build_sha: 7ffa46a9d0
   vendor: claude
   session: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-23T23:18:51.671942679Z
