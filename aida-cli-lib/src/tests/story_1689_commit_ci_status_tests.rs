@@ -49,7 +49,7 @@ fn github_commit_read_asks_for_the_sha_in_this_repository() {
             serde_json::to_vec(&json!({"sha": SHA, "total_count": 0, "statuses": []}))?
         } else {
             serde_json::to_vec(&json!({"total_count": 1, "check_runs": [
-                {"name": CI_AGGREGATOR_CHECK, "status": "completed",
+                {"name": "Build (ubuntu-latest)", "status": "completed",
                  "conclusion": "success", "head_sha": SHA}]}))?
         })
     };

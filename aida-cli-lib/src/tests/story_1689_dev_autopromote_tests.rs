@@ -357,9 +357,7 @@ fn ci_that_is_not_green_skips() {
         (Ok(CommitCi::Failed(vec!["CI (lib-0)".into()])), "ci-red"),
         (Ok(CommitCi::NoChecks), "ci-unknown"),
         (
-            Ok(CommitCi::MissingRequired(
-                crate::forge::CI_AGGREGATOR_CHECK.into(),
-            )),
+            Ok(CommitCi::MissingRequired("Build (ubuntu-latest)".into())),
             "ci-unknown",
         ),
         (Err("gh api failed: HTTP 502".to_string()), "ci-unknown"),
@@ -769,27 +767,60 @@ fn the_tick_budget_fits_inside_the_scheduler_kill() {
     assert!(FF_TIMEOUT + crate::schedule_driver::WAVE_UNIT_RUN_TIMEOUT <= FF_RESERVE);
 }
 
-#[test]
-fn github_requires_the_ci_aggregator_and_gitlab_requires_nothing() {
-    use crate::forge::ForgeKind;
-    assert_eq!(
-        required_checks(ForgeKind::GitHub),
-        &[crate::forge::CI_AGGREGATOR_CHECK]
-    );
-    assert!(required_checks(ForgeKind::GitLab).is_empty());
-    assert!(required_checks(ForgeKind::None).is_empty());
-    // Green without the aggregator is not green on GitHub.
-    let checks = crate::forge::CommitChecks {
+/// `[review_watch] required_checks` in a temp project, read through the
+/// same reader review-watch readiness uses.
+fn configured(toml: &str) -> Result<Vec<String>> {
+    let dir = tempfile::tempdir().unwrap();
+    fs::create_dir_all(dir.path().join(".aida")).unwrap();
+    fs::write(dir.path().join(".aida/config.toml"), toml).unwrap();
+    crate::review_watch::required_checks(dir.path())
+}
+
+fn lane_only() -> Result<crate::forge::CommitChecks> {
+    Ok(crate::forge::CommitChecks {
         sha: TARGET.into(),
         checks: vec![crate::forge::CommitCheck {
             name: "CI (lib-0)".into(),
             outcome: crate::forge::CheckOutcome::Passed,
         }],
-    };
+    })
+}
+
+#[test]
+fn the_configured_required_checks_gate_the_promote() {
+    use crate::forge::ForgeKind;
+    let aggregator = "[review_watch]\nrequired_checks = [\"Build (ubuntu-latest)\"]\n";
+    assert_eq!(
+        required_checks(ForgeKind::GitHub, configured(aggregator)).unwrap(),
+        vec!["Build (ubuntu-latest)".to_string()]
+    );
+    // Every lane green but the configured aggregator absent: not green.
     assert!(matches!(
-        crate::forge::judge_commit_checks(&checks, required_checks(ForgeKind::GitHub)),
-        CommitCi::MissingRequired(_)
+        judged_ci(ForgeKind::GitHub, configured(aggregator), lane_only()).unwrap(),
+        CommitCi::MissingRequired(name) if name == "Build (ubuntu-latest)"
     ));
+    // GitLab may require nothing beyond every check passing.
+    assert_eq!(
+        judged_ci(ForgeKind::GitLab, configured(""), lane_only()).unwrap(),
+        CommitCi::Green
+    );
+}
+
+#[test]
+fn a_github_repo_with_no_configured_required_checks_skips_as_ci_unknown() {
+    use crate::forge::ForgeKind;
+    for toml in [
+        "",
+        "[review_watch]\nrequired_checks = []\n",
+        "[review_watch]\nrequired_checks = 3\n",
+    ] {
+        let ci = judged_ci(ForgeKind::GitHub, configured(toml), lane_only());
+        assert_eq!(
+            ci_skip(TARGET, ci).map(|s| s.reason()),
+            Some("ci-unknown"),
+            "{toml:?}"
+        );
+    }
 }
 
 // trace:STORY-1689.ac873b7a | ai:claude

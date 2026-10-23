@@ -292,12 +292,33 @@ pub(crate) fn ci_skip(sha: &str, ci: Result<crate::forge::CommitCi>) -> Option<S
 }
 
 /// PURE: the checks that must be present and pass on a commit before it is
-/// promoted. AIDA's own CI reports its every-lane aggregator on GitHub only.
-pub(crate) fn required_checks(kind: crate::forge::ForgeKind) -> &'static [&'static str] {
-    match kind {
-        crate::forge::ForgeKind::GitHub => &[crate::forge::CI_AGGREGATOR_CHECK],
-        _ => &[],
+/// promoted: the project's `[review_watch] required_checks`, the same list
+/// review-watch readiness uses. On GitHub the list must name at least one
+/// check (the every-lane aggregator), or the commit's CI is unknown; an
+/// unreadable setting is unknown too.
+pub(crate) fn required_checks(
+    kind: crate::forge::ForgeKind,
+    configured: Result<Vec<String>>,
+) -> Result<Vec<String>> {
+    let names = configured.context("could not read `[review_watch] required_checks`")?;
+    if kind == crate::forge::ForgeKind::GitHub && names.is_empty() {
+        bail!(
+            "`[review_watch] required_checks` in .aida/config.toml names no check; on GitHub \
+             the promote needs the CI aggregator check named there"
+        );
     }
+    Ok(names)
+}
+
+/// PURE: the CI verdict on a commit, judged with the required checks.
+pub(crate) fn judged_ci(
+    kind: crate::forge::ForgeKind,
+    configured: Result<Vec<String>>,
+    checks: Result<crate::forge::CommitChecks>,
+) -> Result<crate::forge::CommitCi> {
+    let required = required_checks(kind, configured)?;
+    let required: Vec<&str> = required.iter().map(String::as_str).collect();
+    Ok(crate::forge::judge_commit_checks(&checks?, &required))
 }
 
 /// A held lock file; released on drop.
@@ -690,11 +711,11 @@ impl AutopromoteSteps for RealAutopromoteSteps {
 
     fn commit_ci(&mut self, repo: &Path, sha: &str) -> Result<crate::forge::CommitCi> {
         let forge = crate::forge::forge_for(repo);
-        let checks = forge.commit_checks(sha)?;
-        Ok(crate::forge::judge_commit_checks(
-            &checks,
-            required_checks(forge.kind()),
-        ))
+        judged_ci(
+            forge.kind(),
+            crate::review_watch::required_checks(repo),
+            forge.commit_checks(sha),
+        )
     }
 
     fn wave_guard(&mut self, repo: &Path, binary: &Path) -> Result<()> {
