@@ -441,6 +441,11 @@ pub(crate) struct DoctorReport {
     // trace:STORY-1462 | ai:claude
     #[serde(skip_serializing_if = "Option::is_none")]
     runaway_seats: Option<crate::runaway_seats::Coverage>,
+    /// STORY-1916: the disk guard at a glance (free space, floor, ceiling,
+    /// last run, last automatic reclaim). Set by the disk-headroom light path.
+    // trace:STORY-1916 | ai:claude
+    #[serde(skip_serializing_if = "Option::is_none")]
+    disk_status: Option<crate::disk_emergency::DiskStatus>,
 }
 
 impl DoctorReport {
@@ -454,6 +459,7 @@ impl DoctorReport {
             performance_audits: Vec::new(),
             error: None,
             runaway_seats: None,
+            disk_status: None,
         }
     }
 }
@@ -1139,7 +1145,12 @@ fn doctor_check_disk_headroom_light(json: bool, fail_on_findings: bool) -> Resul
         "{} finding(s) in {DISK_HEADROOM_CATEGORY} — failing because --fail-on-findings was requested",
         report.findings.len()
     ));
-    emit_doctor_report(report, reason, doctor_render_mode(json), false, |_| {})
+    emit_doctor_report(report, reason, doctor_render_mode(json), false, |report| {
+        // trace:STORY-1916 | ai:claude
+        if let Some(status) = &report.disk_status {
+            print!("{}", crate::disk_emergency::render_status(status));
+        }
+    })
 }
 
 // trace:TASK-1544 | ai:codex
@@ -1234,8 +1245,96 @@ mod task_1544_light_doctor_tests;
 /// + disk probe → report. Split out so a fixture can pin that it never needs
 /// a loadable store.
 // trace:BUG-1675 | ai:claude
+// trace:STORY-1916 | ai:claude
 pub(crate) fn disk_headroom_light_report(project_root: &std::path::Path) -> DoctorReport {
-    disk_headroom_light_report_with(project_root, disk_free_bytes, cargo_slot_dir())
+    let cfg = crate::read_project_config_value(project_root);
+    let emergency = crate::disk_emergency::emergency_config(cfg.as_ref());
+    // STORY-1916: only the substrate run deletes; a manual check reports.
+    let scheduled = std::env::var_os("AIDA_SCHEDULE_CHILD").is_some_and(|v| v == "1");
+    if scheduled {
+        crate::disk_emergency::run_emergency(project_root, &emergency);
+    }
+    // statvfs first: it resolves a bind-mounted `<main>/target` to its own
+    // filesystem, which the mount-table lookup by path prefix may not.
+    let free = |p: &std::path::Path| {
+        crate::disk_emergency::fs_stats(p)
+            .map(|s| s.avail)
+            .or_else(|| disk_free_bytes(p))
+    };
+    let mut report = disk_headroom_light_report_with(project_root, free, cargo_slot_dir());
+    let min_free_gib = disk_headroom_min_free_gib(cfg.as_ref());
+    escalate_stuck_floor(project_root, &mut report.findings, min_free_gib, scheduled);
+    report.disk_status = Some(crate::disk_emergency::status(
+        project_root,
+        min_free_gib,
+        emergency,
+    ));
+    report
+}
+
+/// STORY-1916 AC3: for each filesystem below the floor, compare what a
+/// reclaim dry run could free there with the deficit. When it cannot
+/// restore the floor, say so in the finding (the routed item carries it),
+/// with the top cache consumers, and notify the operator, deduped, from the
+/// scheduled run only.
+// trace:STORY-1916 | ai:claude
+fn escalate_stuck_floor(
+    project_root: &std::path::Path,
+    findings: &mut [DoctorFinding],
+    min_free_gib: u64,
+    scheduled: bool,
+) {
+    use crate::disk_emergency as de;
+    let floor = min_free_gib.saturating_mul(1024 * 1024 * 1024);
+    for (role, path, stats) in de::probe_paths(project_root, de::fs_stats) {
+        if stats.avail >= floor {
+            continue;
+        }
+        let id = disk_headroom_finding_id(role);
+        let Some(finding) = findings.iter_mut().find(|f| f.id == id) else {
+            continue;
+        };
+        let deficit = floor - stats.avail;
+        let reclaimable = de::reclaimable_on(project_root, stats.dev);
+        if reclaimable >= deficit {
+            continue;
+        }
+        let top = if role == "build-cache" {
+            de::top_consumers(project_root, 5)
+        } else {
+            Vec::new()
+        };
+        let text = de::stuck_summary(reclaimable, deficit, &top);
+        finding.summary = format!("{}. {text}", finding.summary);
+        if !scheduled {
+            continue;
+        }
+        let mut state = de::load_guard_state(project_root);
+        let now = chrono::Utc::now();
+        if !de::should_escalate(&state, now, deficit) {
+            continue;
+        }
+        let title = format!(
+            "Disk floor cannot be restored automatically ({})",
+            path.display()
+        );
+        if crate::notify::send_direct(project_root, "disk-stuck", &title, &finding.summary).is_ok()
+        {
+            state.last_stuck_at = Some(now);
+            state.last_stuck_deficit = Some(deficit);
+            let _ = de::save_guard_state(project_root, &state);
+        }
+    }
+}
+
+/// The finding id for a probed filesystem's floor breach.
+// trace:STORY-1916 | ai:claude
+fn disk_headroom_finding_id(role: &str) -> &'static str {
+    if role == "build-cache" {
+        "disk-headroom-cache"
+    } else {
+        "disk-headroom"
+    }
 }
 
 /// [`disk_headroom_light_report`] with the free-space probe injected, so a
@@ -1249,9 +1348,44 @@ fn disk_headroom_light_report_with(
     // trace:BUG-1702 | ai:claude
     cargo_slot_dir: Option<std::path::PathBuf>,
 ) -> DoctorReport {
+    // STORY-1916: the build cache may be its own filesystem (a bind mount of
+    // `/mnt/build` on the dev host); the project-root probe never saw it.
+    let cache_fs =
+        crate::disk_emergency::probe_paths(project_root, crate::disk_emergency::fs_stats)
+            .into_iter()
+            .find(|(role, _, _)| *role == "build-cache")
+            .map(|(_, path, _)| path);
+    disk_headroom_light_report_probing(project_root, free_bytes, cargo_slot_dir, cache_fs)
+}
+
+/// [`disk_headroom_light_report_with`] with the separate build-cache
+/// filesystem injected too.
+// trace:STORY-1916 | ai:claude
+fn disk_headroom_light_report_probing(
+    project_root: &std::path::Path,
+    free_bytes: impl Fn(&std::path::Path) -> Option<u64>,
+    cargo_slot_dir: Option<std::path::PathBuf>,
+    cache_fs: Option<std::path::PathBuf>,
+) -> DoctorReport {
     let cfg = crate::read_project_config_value(project_root);
     let min_free_gib = disk_headroom_min_free_gib(cfg.as_ref());
     let mut findings = disk_headroom_findings(free_bytes(project_root), min_free_gib);
+    // trace:STORY-1916 | ai:claude
+    if let Some(cache_fs) = cache_fs {
+        findings.extend(
+            disk_headroom_findings(free_bytes(&cache_fs), min_free_gib)
+                .into_iter()
+                .map(|mut f| {
+                    f.id = disk_headroom_finding_id("build-cache").to_string();
+                    f.summary = format!(
+                        "build-cache filesystem ({}): {}",
+                        cache_fs.display(),
+                        f.summary
+                    );
+                    f
+                }),
+        );
+    }
     // BUG-1702: the runtime tmpfs holding the Cargo slot locks is a separate, much smaller
     // filesystem than the project's, so the project-root floor above never sees it fill.
     // trace:BUG-1702 | ai:claude

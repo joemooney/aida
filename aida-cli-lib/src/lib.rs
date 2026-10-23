@@ -155,6 +155,8 @@ mod protocol_gate;
 mod dispatch_health_ps;
 // trace:TASK-1092 | ai:claude — [dispatch.routing] config loader (additive, not yet wired in).
 mod dispatch_routing_config;
+// trace:STORY-1916 | ai:claude — disk guard emergency tier, stuck escalation, status.
+mod disk_emergency;
 // trace:STORY-776 | ai:claude — pure decision logic for `aida do` mode dispatch.
 mod autoprogress;
 mod do_dispatch;

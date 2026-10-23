@@ -41,9 +41,21 @@
 //! and refuses. The second check is what makes the guarantee independent of
 //! ordering: an upstream filter bug cannot reach `remove_dir_all` on the live
 //! cache even if that cache is the largest candidate in the plan.
+//!
+//! ## Where the caches actually are (STORY-1916)
+//!
+//! BUG-1783 isolates each worktree's cargo cache at
+//! `<main>/target/worktrees/<worktree-dir-name>`, not `<worktree>/target`. The
+//! planner considers both. It also reclaims an orphaned cache (no worktree
+//! and no live lease with that dir name), an idle duplicate (a second
+//! worktree on the same open PR whose cache is cold), and, when `gh` cannot
+//! be reached, a branch that git alone proves merged (ancestry, or a squash
+//! whose patch-id is on the default branch). A branch it cannot prove stays
+//! held, and only that branch.
 // trace:TASK-1562 | ai:claude
+// trace:STORY-1916 | ai:claude
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
@@ -132,6 +144,34 @@ pub struct LeaseHold {
     pub pid: Option<u32>,
 }
 
+/// Why a cache is reclaimable. `Stale` is the TASK-1562 case; the rest are
+/// the STORY-1916 additions, each of which lifts one specific hold.
+// trace:STORY-1916 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReclaimWhy {
+    /// Passed every rail: no open PR, no live lease, cold.
+    Stale,
+    /// A `<main>/target/worktrees/<name>` cache with no worktree and no live
+    /// lease of that name.
+    Orphan,
+    /// `gh` was unreachable, but git proved the branch merged.
+    MergedOffline,
+    /// Another worktree on the same open PR has the fresher cache.
+    IdleDuplicate,
+}
+
+impl ReclaimWhy {
+    /// Stable machine token for `--json`.
+    pub fn code(&self) -> &'static str {
+        match self {
+            ReclaimWhy::Stale => "stale",
+            ReclaimWhy::Orphan => "orphan",
+            ReclaimWhy::MergedOffline => "merged",
+            ReclaimWhy::IdleDuplicate => "idle-duplicate",
+        }
+    }
+}
+
 /// A `target/` that passed every rail.
 // trace:TASK-1562 | ai:claude
 #[derive(Debug, Clone)]
@@ -139,6 +179,8 @@ pub struct Reclaimable {
     pub target: PathBuf,
     pub branch: Option<String>,
     pub bytes: u64,
+    // trace:STORY-1916 | ai:claude
+    pub why: ReclaimWhy,
 }
 
 /// Everything the planner needs, injected so a test can build a fixture
@@ -161,6 +203,18 @@ pub struct Survey {
     pub include_open_prs: bool,
     /// Injected clock, so rail 6 is testable.
     pub now: SystemTime,
+    /// `<main>/target/worktrees`, the BUG-1783 per-worktree cache root, when
+    /// it exists.
+    // trace:STORY-1916 | ai:claude
+    pub cache_root: Option<PathBuf>,
+    /// Open PRs as `(number, head branch)`, used to match a detached
+    /// `take-<N>` / `pr-<N>` worktree to its PR. Empty when unknown.
+    // trace:STORY-1916 | ai:claude
+    pub open_prs: Vec<(u64, String)>,
+    /// Branches git alone proved merged. Consulted only when
+    /// `open_pr_branches` is `None`.
+    // trace:STORY-1916 | ai:claude
+    pub merged_offline: BTreeSet<String>,
 }
 
 /// The classification result: what would be deleted, largest first, and every
@@ -171,6 +225,9 @@ pub struct Plan {
     pub main_root: PathBuf,
     pub reclaim: Vec<Reclaimable>,
     pub skipped: Vec<(PathBuf, Skip)>,
+    /// The per-worktree cache root `apply` accepts direct children of.
+    // trace:STORY-1916 | ai:claude
+    pub cache_root: Option<PathBuf>,
 }
 
 impl Plan {
@@ -225,32 +282,102 @@ pub fn dir_size_bytes(dir: &Path) -> u64 {
     total
 }
 
-/// Has this `target/` been touched within `min_age_mins`?
+/// Has this cache been written within `min_age`?
 ///
-/// Reads the directory's own mtime, which cargo bumps as it writes — the same
-/// signal the reference script used via `find -mmin`.
+/// STORY-1916: judged on the NEWEST mtime anywhere under the cache, not the
+/// directory's own. Cargo writes into `<profile>/deps` and `.fingerprint`,
+/// which leaves a `<main>/target/worktrees/<name>` root's own mtime hours
+/// old in the middle of a live build. An mtime in the future (clock skew)
+/// reads as "possibly in flight", the conservative arm.
 // trace:TASK-1562 | ai:claude
-fn touched_within(target: &Path, min_age: Duration, now: SystemTime) -> bool {
-    let Ok(md) = std::fs::metadata(target) else {
-        return false;
-    };
-    let Ok(mtime) = md.modified() else {
+// trace:STORY-1916 | ai:claude
+fn touched_within(newest: Option<SystemTime>, min_age: Duration, now: SystemTime) -> bool {
+    let Some(mtime) = newest else {
         return false;
     };
     match now.duration_since(mtime) {
-        // Younger than the floor, or an mtime in the future (clock skew), both
-        // read as "possibly in flight" — the conservative arm.
         Ok(age) => age < min_age,
         Err(_) => true,
     }
 }
 
-/// Classify every worktree against the six rails. Deletes nothing.
+/// The PR number a detached review worktree is named for: `take-2830`,
+/// `pr-2830`, `aida-pr-2830` (an optional `-<suffix>` is allowed). Pure.
+// trace:STORY-1916 | ai:claude
+pub fn pr_number_from_dir(name: &str) -> Option<u64> {
+    ["aida-pr-", "take-", "pr-"].iter().find_map(|prefix| {
+        let digits = name.strip_prefix(prefix)?.split('-').next()?;
+        (!digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit()))
+            .then(|| digits.parse().ok())
+            .flatten()
+    })
+}
+
+/// A real directory, not a symlink to one: a symlinked cache would make the
+/// delete land somewhere this command never classified.
+// trace:STORY-1916 | ai:claude
+fn is_real_dir(path: &Path) -> bool {
+    std::fs::symlink_metadata(path).is_ok_and(|m| m.is_dir())
+}
+
+/// The open-PR group a worktree belongs to, for the idle-duplicate rule. A
+/// branch worktree groups by its branch; a detached `take-<N>` worktree by
+/// the head branch of open PR N, or by `pr:<N>` when PR state is unknown.
+// trace:STORY-1916 | ai:claude
+fn pr_group(
+    wt: &WorktreeEntry,
+    open_prs: Option<&BTreeSet<&str>>,
+    by_number: &BTreeMap<u64, &str>,
+) -> Option<String> {
+    let number = wt
+        .path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .and_then(pr_number_from_dir);
+    match open_prs {
+        Some(set) => wt
+            .branch
+            .as_deref()
+            .filter(|b| set.contains(b))
+            .or_else(|| number.and_then(|n| by_number.get(&n).copied()))
+            .map(str::to_string),
+        None => wt
+            .branch
+            .clone()
+            .or_else(|| number.map(|n| format!("pr:{n}"))),
+    }
+}
+
+/// A cache held back by rail 5, kept for the idle-duplicate pass.
+// trace:STORY-1916 | ai:claude
+struct Held {
+    worktree: PathBuf,
+    target: PathBuf,
+    branch: Option<String>,
+    walk: crate::disk_emergency::CacheWalk,
+    group: Option<String>,
+    skip: Skip,
+}
+
+/// Per-group bookkeeping for the idle-duplicate rule: which worktrees are in
+/// the group, which one has the freshest cache, and whether a live session
+/// holds any of them (a live member is always the keeper).
+// trace:STORY-1916 | ai:claude
+#[derive(Default)]
+struct Group {
+    members: BTreeSet<PathBuf>,
+    keeper: Option<(SystemTime, PathBuf)>,
+    live: bool,
+}
+
+/// Classify every worktree against the six rails, plus the STORY-1916
+/// layout, orphan, offline-merge and idle-duplicate rules. Deletes nothing.
 ///
 /// The returned `reclaim` list is ordered largest-first, so a `--target-pct`
 /// run frees the most space per deletion; `skipped` preserves the walk order so
 /// the printed report reads like the worktree list.
 // trace:TASK-1562 | ai:claude
+// trace:STORY-1916 | ai:claude
 pub fn plan(survey: &Survey) -> Plan {
     let protected = protected_target(&survey.main_root);
     let min_age = Duration::from_secs(survey.min_age_mins.saturating_mul(60));
@@ -261,14 +388,29 @@ pub fn plan(survey: &Survey) -> Plan {
         .open_pr_branches
         .as_ref()
         .map(|b| b.iter().map(String::as_str).collect());
+    let by_number: BTreeMap<u64, &str> = survey
+        .open_prs
+        .iter()
+        .map(|(n, b)| (*n, b.as_str()))
+        .collect();
 
     let live: Vec<&LeaseHold> = survey.leases.iter().filter(|l| l.alive).collect();
 
     let mut reclaim = Vec::new();
     let mut skipped = Vec::new();
+    let mut held: Vec<Held> = Vec::new();
+    let mut groups: BTreeMap<String, Group> = BTreeMap::new();
+    // Dir names that own a cache under `cache_root`; anything else there is
+    // an orphan.
+    let mut owned: BTreeSet<std::ffi::OsString> = live
+        .iter()
+        .filter_map(|l| l.worktree_path.file_name().map(|n| n.to_os_string()))
+        .collect();
 
     for wt in &survey.worktrees {
-        let target = wt.path.join("target");
+        if let Some(name) = wt.path.file_name() {
+            owned.insert(name.to_os_string());
+        }
 
         // Rail 2. Compared against the named protected PATH, not against "is
         // this the first porcelain record", so a reordered or hand-built
@@ -282,7 +424,7 @@ pub fn plan(survey: &Survey) -> Plan {
         // the join comparison misses and the path comparison is the one that
         // fires. Keeping both is cheap; pretending they are separate rails
         // would not be.
-        if target == protected || wt.path == survey.main_root {
+        if wt.path.join("target") == protected || wt.path == survey.main_root {
             skipped.push((wt.path.clone(), Skip::MainCheckout));
             continue;
         }
@@ -291,54 +433,158 @@ pub fn plan(survey: &Survey) -> Plan {
             skipped.push((wt.path.clone(), Skip::Store));
             continue;
         }
-        if !target.is_dir() {
+        // A worktree's cache is `<wt>/target`, the BUG-1783
+        // `<cache_root>/<wt dir name>`, or both.
+        let targets: Vec<PathBuf> = [
+            Some(wt.path.join("target")),
+            survey
+                .cache_root
+                .as_ref()
+                .zip(wt.path.file_name())
+                .map(|(root, name)| root.join(name)),
+        ]
+        .into_iter()
+        .flatten()
+        .filter(|t| is_real_dir(t))
+        .collect();
+        if targets.is_empty() {
             skipped.push((wt.path.clone(), Skip::NoTarget));
             continue;
         }
+        let group = pr_group(wt, open_prs.as_ref(), &by_number);
         // Rail 4.
         if !survey.include_live {
             if let Some(hold) = live.iter().find(|l| l.worktree_path == wt.path) {
+                if let Some(g) = &group {
+                    let entry = groups.entry(g.clone()).or_default();
+                    entry.members.insert(wt.path.clone());
+                    entry.live = true;
+                }
                 skipped.push((wt.path.clone(), Skip::LiveSession { pid: hold.pid }));
                 continue;
             }
         }
-        // Rail 5, including its fail-safe arm: when open-PR state is
-        // unknown we hold EVERY branch back rather than reclaiming
-        // everything. The reference shell script had this inverted.
-        if !survey.include_open_prs {
-            match (&open_prs, &wt.branch) {
-                (None, _) => {
-                    skipped.push((wt.path.clone(), Skip::PrStateUnknown));
-                    continue;
+
+        for target in targets {
+            let walk = crate::disk_emergency::walk_cache(&target);
+            if let Some(g) = &group {
+                let entry = groups.entry(g.clone()).or_default();
+                entry.members.insert(wt.path.clone());
+                let newest = walk.newest.unwrap_or(SystemTime::UNIX_EPOCH);
+                if entry.keeper.as_ref().is_none_or(|(t, _)| newest > *t) {
+                    entry.keeper = Some((newest, wt.path.clone()));
                 }
-                (Some(set), Some(branch)) if set.contains(branch.as_str()) => {
-                    skipped.push((
-                        wt.path.clone(),
-                        Skip::OpenPr {
-                            branch: branch.clone(),
-                        },
-                    ));
-                    continue;
-                }
-                _ => {}
             }
+            // Rail 5, including its fail-safe arm: when open-PR state is
+            // unknown we hold every branch back that git cannot prove merged
+            // (STORY-1916), rather than reclaiming everything. The reference
+            // shell script had this inverted.
+            let mut why = ReclaimWhy::Stale;
+            if !survey.include_open_prs {
+                let hold = match (&open_prs, &wt.branch) {
+                    (None, Some(branch)) if survey.merged_offline.contains(branch) => {
+                        why = ReclaimWhy::MergedOffline;
+                        None
+                    }
+                    (None, _) => Some(Skip::PrStateUnknown),
+                    (Some(set), Some(branch)) if set.contains(branch.as_str()) => {
+                        Some(Skip::OpenPr {
+                            branch: branch.clone(),
+                        })
+                    }
+                    _ => None,
+                };
+                if let Some(skip) = hold {
+                    held.push(Held {
+                        worktree: wt.path.clone(),
+                        target,
+                        branch: wt.branch.clone(),
+                        walk,
+                        group: group.clone(),
+                        skip,
+                    });
+                    continue;
+                }
+            }
+            // Rail 6.
+            if touched_within(walk.newest, min_age, survey.now) {
+                skipped.push((
+                    wt.path.clone(),
+                    Skip::RecentlyTouched {
+                        mins: survey.min_age_mins,
+                    },
+                ));
+                continue;
+            }
+            reclaim.push(Reclaimable {
+                bytes: walk.bytes,
+                target,
+                branch: wt.branch.clone(),
+                why,
+            });
         }
-        // Rail 6.
-        if touched_within(&target, min_age, survey.now) {
+    }
+
+    // Idle duplicates: a rail-5 hold is lifted for a worktree that shares its
+    // open PR with another worktree holding the fresher (or a live) cache.
+    // Rail 6 still applies, so a duplicate mid-build is never touched.
+    for h in held {
+        let duplicate = h
+            .group
+            .as_ref()
+            .and_then(|g| groups.get(g))
+            .is_some_and(|g| {
+                g.members.len() >= 2
+                    && (g.live || g.keeper.as_ref().is_some_and(|(_, k)| *k != h.worktree))
+            });
+        if !duplicate {
+            skipped.push((h.worktree, h.skip));
+        } else if touched_within(h.walk.newest, min_age, survey.now) {
             skipped.push((
-                wt.path.clone(),
+                h.worktree,
                 Skip::RecentlyTouched {
                     mins: survey.min_age_mins,
                 },
             ));
-            continue;
+        } else {
+            reclaim.push(Reclaimable {
+                bytes: h.walk.bytes,
+                target: h.target,
+                branch: h.branch,
+                why: ReclaimWhy::IdleDuplicate,
+            });
         }
+    }
 
-        reclaim.push(Reclaimable {
-            bytes: dir_size_bytes(&target),
-            target,
-            branch: wt.branch.clone(),
-        });
+    // Orphans: a cache whose worktree and lease are both gone.
+    if let Some(cache_root) = &survey.cache_root {
+        let mut orphans: Vec<PathBuf> = std::fs::read_dir(cache_root)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .filter(|e| !owned.contains(&e.file_name()))
+            .map(|e| e.path())
+            .filter(|p| is_real_dir(p))
+            .collect();
+        orphans.sort();
+        for target in orphans {
+            let walk = crate::disk_emergency::walk_cache(&target);
+            if touched_within(walk.newest, min_age, survey.now) {
+                skipped.push((
+                    target,
+                    Skip::RecentlyTouched {
+                        mins: survey.min_age_mins,
+                    },
+                ));
+                continue;
+            }
+            reclaim.push(Reclaimable {
+                bytes: walk.bytes,
+                target,
+                branch: None,
+                why: ReclaimWhy::Orphan,
+            });
+        }
     }
 
     reclaim.sort_by(|a, b| b.bytes.cmp(&a.bytes).then_with(|| a.target.cmp(&b.target)));
@@ -347,7 +593,46 @@ pub fn plan(survey: &Survey) -> Plan {
         main_root: survey.main_root.clone(),
         reclaim,
         skipped,
+        cache_root: survey.cache_root.clone(),
     }
+}
+
+/// STORY-1916: the delete-site allowlist beyond rail 2. A path must be a
+/// worktree's own `target/` or a direct child of the plan's cache root, must
+/// not be a symlink, and must not sit anywhere else inside the main
+/// checkout's `target/` (`agent/` holds the live dev build).
+// trace:STORY-1916 | ai:claude
+fn refuse_outside_allowlist(plan: &Plan, target: &Path) -> Result<()> {
+    let refuse = |why: &str| -> Result<()> {
+        bail!(
+            "refusing to delete {}: {why}. Reaching this means the plan was built wrong.",
+            target.display()
+        )
+    };
+    if std::fs::symlink_metadata(target).is_ok_and(|m| m.file_type().is_symlink()) {
+        return refuse("it is a symlink");
+    }
+    let in_cache_root = plan
+        .cache_root
+        .as_deref()
+        .is_some_and(|root| target.parent() == Some(root));
+    if in_cache_root {
+        return Ok(());
+    }
+    let main_target = protected_target(&plan.main_root);
+    let canonical = main_target.canonicalize().ok();
+    let inside_main_target = target.starts_with(&main_target)
+        || canonical.as_deref().is_some_and(|c| target.starts_with(c));
+    if inside_main_target {
+        return refuse(
+            "it is inside the main checkout's target/ but not a per-worktree cache under \
+             target/worktrees",
+        );
+    }
+    if target.file_name().is_none_or(|n| n != "target") {
+        return refuse("it is neither a worktree's target/ nor a per-worktree cache");
+    }
+    Ok(())
 }
 
 /// Delete the planned caches.
@@ -378,6 +663,7 @@ pub fn apply(
                 entry.target.display()
             );
         }
+        refuse_outside_allowlist(plan, &entry.target)?;
 
         if let Some(floor) = stop_at_pct {
             if let Some(pct) = disk_pct(&plan.main_root) {
@@ -468,10 +754,11 @@ pub fn parse_worktree_entries(porcelain: &str) -> Vec<WorktreeEntry> {
     out
 }
 
-/// Branches with an open PR, via `gh`. `None` when `gh` is missing or the call
-/// fails — the fail-safe arm of rail 5.
+/// Open PRs as `(number, head branch)`, via `gh`. `None` when `gh` is missing
+/// or the call fails — the fail-safe arm of rail 5.
 // trace:TASK-1562 | ai:claude
-fn open_pr_branches(dir: &Path) -> Option<Vec<String>> {
+// trace:STORY-1916 | ai:claude
+fn open_prs(dir: &Path) -> Option<Vec<(u64, String)>> {
     let out = std::process::Command::new("gh")
         .current_dir(dir)
         .args([
@@ -482,22 +769,209 @@ fn open_pr_branches(dir: &Path) -> Option<Vec<String>> {
             "--limit",
             "200",
             "--json",
-            "headRefName",
+            "number,headRefName",
             "--jq",
-            ".[].headRefName",
+            r#".[] | "\(.number) \(.headRefName)""#,
         ])
         .output()
         .ok()?;
     if !out.status.success() {
         return None;
     }
-    Some(
-        String::from_utf8_lossy(&out.stdout)
-            .lines()
-            .map(|l| l.trim().to_string())
-            .filter(|l| !l.is_empty())
-            .collect(),
-    )
+    Some(parse_number_branch_lines(&String::from_utf8_lossy(
+        &out.stdout,
+    )))
+}
+
+/// Parse `<number> <branch>` lines. Pure.
+// trace:STORY-1916 | ai:claude
+pub fn parse_number_branch_lines(text: &str) -> Vec<(u64, String)> {
+    text.lines()
+        .filter_map(|l| {
+            let (n, b) = l.trim().split_once(' ')?;
+            Some((n.parse().ok()?, b.trim().to_string()))
+        })
+        .filter(|(_, b)| !b.is_empty())
+        .collect()
+}
+
+/// How git alone proved a branch merged into the default branch.
+// trace:STORY-1916 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MergeProof {
+    /// The branch tip is an ancestor of the default branch.
+    Ancestor,
+    /// The branch's cumulative diff has the same patch-id as one commit on
+    /// the default branch: a squash merge.
+    Squash,
+}
+
+/// The squash scan's per-branch deadline (advisor condition C3).
+pub const SQUASH_SCAN_DEADLINE: Duration = Duration::from_secs(20);
+/// The squash scan's commit bound.
+const SQUASH_SCAN_MAX_COMMITS: &str = "--max-count=2000";
+
+/// Prove `branch` merged into `default_ref` using git only, for when `gh`
+/// cannot be reached. `None` = not proven, which the caller treats as
+/// unknown (held), never as merged. That includes a squash scan that runs
+/// past `deadline`. Read-only: no object is written.
+// trace:STORY-1916 | ai:claude
+pub fn branch_merged_offline(
+    repo: &Path,
+    branch: &str,
+    default_ref: &str,
+    deadline: Duration,
+) -> Option<MergeProof> {
+    let head = format!("refs/heads/{branch}");
+    let ancestor = aida_core::git_ops::host_git_command(repo)
+        .args(["merge-base", "--is-ancestor", &head, default_ref])
+        .output()
+        .ok()?;
+    match ancestor.status.code() {
+        Some(0) => return Some(MergeProof::Ancestor),
+        Some(1) => {}
+        _ => return None,
+    }
+    let mb = aida_core::git_ops::host_git_command(repo)
+        .args(["merge-base", &head, default_ref])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .filter(|s| !s.is_empty())?;
+    let stop = std::time::Instant::now() + deadline;
+    let ours = patch_ids(
+        repo,
+        &[
+            "diff",
+            "--no-color",
+            "--no-ext-diff",
+            "--no-renames",
+            &mb,
+            &head,
+        ],
+        stop,
+    )?;
+    // An empty branch diff has no patch-id and proves nothing.
+    let ours = ours.first()?.clone();
+    let theirs = patch_ids(
+        repo,
+        &[
+            "log",
+            "-p",
+            "--no-color",
+            "--no-ext-diff",
+            "--no-renames",
+            "--no-merges",
+            SQUASH_SCAN_MAX_COMMITS,
+            &format!("{mb}..{default_ref}"),
+        ],
+        stop,
+    )?;
+    theirs.contains(&ours).then_some(MergeProof::Squash)
+}
+
+/// Run `git <producer>` piped into `git patch-id --stable` and return the
+/// patch-ids, or `None` on any failure or once `stop` passes (both children
+/// are killed). The output is drained on a thread so a large patch-id list
+/// cannot fill the pipe and stall the wait.
+// trace:STORY-1916 | ai:claude
+fn patch_ids(repo: &Path, producer: &[&str], stop: std::time::Instant) -> Option<Vec<String>> {
+    use std::io::Read;
+    use std::process::Stdio;
+    if std::time::Instant::now() >= stop {
+        return None;
+    }
+    let mut source = aida_core::git_ops::host_git_command(repo)
+        .args(producer)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .ok()?;
+    let piped = source.stdout.take()?;
+    let mut ids = match aida_core::git_ops::host_git_command(repo)
+        .args(["patch-id", "--stable"])
+        .stdin(piped)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+    {
+        Ok(child) => child,
+        Err(_) => {
+            let _ = source.kill();
+            let _ = source.wait();
+            return None;
+        }
+    };
+    let mut out = ids.stdout.take()?;
+    let reader = std::thread::spawn(move || {
+        let mut text = String::new();
+        let _ = out.read_to_string(&mut text);
+        text
+    });
+    let finished = loop {
+        match ids.try_wait() {
+            Ok(Some(status)) => break status.success(),
+            Ok(None) if std::time::Instant::now() < stop => {
+                std::thread::sleep(Duration::from_millis(20));
+            }
+            _ => break false,
+        }
+    };
+    if !finished {
+        let _ = ids.kill();
+        let _ = source.kill();
+        let _ = ids.wait();
+        let _ = source.wait();
+        return None;
+    }
+    let source_ok = source.wait().is_ok_and(|s| s.success());
+    let text = reader.join().ok()?;
+    source_ok.then(|| {
+        text.lines()
+            .filter_map(|l| l.split_whitespace().next().map(str::to_string))
+            .collect()
+    })
+}
+
+/// The whole offline scan's budget, so a host with many worktrees and an
+/// unreachable `gh` cannot stall a scheduled tick for minutes. Branches
+/// after the budget is spent stay unproven (held).
+const OFFLINE_SCAN_BUDGET: Duration = Duration::from_secs(60);
+
+/// Branches git alone proves merged, for every worktree branch.
+// trace:STORY-1916 | ai:claude
+fn merged_offline(main_root: &Path, worktrees: &[WorktreeEntry]) -> BTreeSet<String> {
+    let Some(default_ref) = crate::resolve_default_branch_ref(main_root) else {
+        return BTreeSet::new();
+    };
+    let budget_end = std::time::Instant::now() + OFFLINE_SCAN_BUDGET;
+    let mut merged = BTreeSet::new();
+    for branch in worktrees.iter().filter_map(|w| w.branch.as_deref()) {
+        let left = budget_end.saturating_duration_since(std::time::Instant::now());
+        if left.is_zero() {
+            break;
+        }
+        if branch_merged_offline(
+            main_root,
+            branch,
+            &default_ref,
+            left.min(SQUASH_SCAN_DEADLINE),
+        )
+        .is_some()
+        {
+            merged.insert(branch.to_string());
+        }
+    }
+    merged
+}
+
+/// `<main>/target/worktrees`, canonical, when it exists.
+// trace:STORY-1916 | ai:claude
+pub fn cache_root_of(main_root: &Path) -> Option<PathBuf> {
+    let target = protected_target(main_root).canonicalize().ok()?;
+    let root = target.join("worktrees");
+    is_real_dir(&root).then_some(root)
 }
 
 /// Session leases with liveness resolved through the SHARED staleness
@@ -573,14 +1047,27 @@ pub fn survey_from_env(cwd: &Path, opts: &ReclaimOptions) -> Result<Survey> {
             cwd.display()
         );
     };
+    let worktrees = parse_worktree_entries(&porcelain);
+    // Not consulted when the rail is waived; skip the network call.
+    let prs = if opts.include_open_prs {
+        Some(Vec::new())
+    } else {
+        open_prs(&main_root)
+    };
+    // trace:STORY-1916 | ai:claude
+    let merged_offline = if prs.is_none() {
+        merged_offline(&main_root, &worktrees)
+    } else {
+        BTreeSet::new()
+    };
     Ok(Survey {
-        worktrees: parse_worktree_entries(&porcelain),
-        open_pr_branches: if opts.include_open_prs {
-            // Not consulted when the rail is waived; skip the network call.
-            Some(Vec::new())
-        } else {
-            open_pr_branches(&main_root)
-        },
+        open_pr_branches: prs
+            .as_ref()
+            .map(|p| p.iter().map(|(_, b)| b.clone()).collect()),
+        open_prs: prs.unwrap_or_default(),
+        merged_offline,
+        cache_root: cache_root_of(&main_root),
+        worktrees,
         leases: lease_holds(&main_root),
         main_root,
         min_age_mins: opts.min_age_mins,
@@ -640,9 +1127,14 @@ pub fn run(opts: &ReclaimOptions) -> Result<()> {
     }
 
     println!();
-    println!("{:>10}  TARGET", "SIZE");
+    println!("{:>10}  {:<14}  TARGET", "SIZE", "WHY");
     for r in &plan.reclaim {
-        println!("{:>10}  {}", human_bytes(r.bytes), r.target.display());
+        println!(
+            "{:>10}  {:<14}  {}",
+            human_bytes(r.bytes),
+            r.why.code(),
+            r.target.display()
+        );
     }
     println!();
     println!(
@@ -693,6 +1185,7 @@ fn render_json(plan: &Plan, opts: &ReclaimOptions) -> Result<()> {
                 "target": r.target.display().to_string(),
                 "branch": r.branch,
                 "bytes": r.bytes,
+                "why": r.why.code(),
             })
         })
         .collect();
@@ -737,3 +1230,7 @@ fn render_json(plan: &Plan, opts: &ReclaimOptions) -> Result<()> {
     println!("{}", serde_json::to_string_pretty(&body)?);
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "tests/story_1916_reclaim_tests.rs"]
+mod story_1916_reclaim_tests;
