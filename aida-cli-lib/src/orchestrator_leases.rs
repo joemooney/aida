@@ -988,12 +988,14 @@ pub(crate) fn orchestrator_phase_child_env(
     env
 }
 
+/// Git in an implementer's tree, through the host git builder: a seat clone
+/// is refused rather than run (BUG-2169).
+// trace:TASK-2053 | ai:claude
 pub(crate) fn git_output_checked(
     worktree: &std::path::Path,
     args: &[&str],
 ) -> Result<String, String> {
-    let out = std::process::Command::new("git")
-        .current_dir(worktree)
+    let out = aida_core::git_ops::host_git_command(worktree)
         .args(args)
         .output()
         .map_err(|e| format!("could not invoke `git {}`: {e}", args.join(" ")))?;
@@ -1027,6 +1029,16 @@ pub(crate) fn push_branch_from_implementer_worktree(
 ) -> Result<(), auto_complete::PhaseFailure> {
     // trace:BUG-878 | ai:codex
     let refspec = format!("HEAD:refs/heads/{branch}");
+    // BUG-2169: a host push from a seat clone would run its seat-written
+    // pre-push hook and config; a clone seat pushes from its own sandbox.
+    // trace:TASK-2053 | ai:claude
+    if aida_core::seat_clone_detect::seat_clone_root(worktree).is_some() {
+        return Err(auto_complete::PhaseFailure::new(format!(
+            "`{}` is a contained seat's private clone; the host never pushes from it (the seat \
+             pushes `{branch}` itself)",
+            worktree.display()
+        )));
+    }
     let out = std::process::Command::new("git")
         .current_dir(worktree)
         .args(["push", "-u", "origin", &refspec])
@@ -1181,8 +1193,8 @@ pub(crate) fn open_orchestrator_pr_for_implementer_worktree(
     if let Some(existing) = existing_open_pr_for_branch(project_root, branch, forge_kind) {
         return Ok(existing);
     }
-    let commit_msg_out = std::process::Command::new("git")
-        .current_dir(worktree)
+    // A seat clone is refused (BUG-2169). trace:TASK-2053 | ai:claude
+    let commit_msg_out = aida_core::git_ops::host_git_command(worktree)
         .args(["log", "-1", "--format=%B"])
         .output()
         .context("could not invoke `git log` to derive orchestrator PR title/body")?;
