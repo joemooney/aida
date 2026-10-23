@@ -1175,7 +1175,7 @@ pub(crate) fn run_emergency(main_root: &Path, cfg: &EmergencyConfig) -> Option<R
     lock.try_lock_exclusive().ok()?;
 
     let worktrees = worktree_entries(main_root);
-    let home = std::env::var_os("HOME").map(PathBuf::from);
+    let home = crate::home_dir();
     let allow = Allowlist::for_main(main_root, cache_root.clone(), home.as_deref(), &worktrees);
     let (finished_branches, finished_prs) = finished_from_gh(main_root).unwrap_or_else(|| {
         // gh unreachable: git can still prove merges (STORY-1916 AC2).
