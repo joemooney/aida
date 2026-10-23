@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-1853",
+  "publishes": [
+    {
+      "at": "2026-10-23T16:52:11.578784473Z",
+      "closed_by": "edit"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-19T06:49:44.767537290Z",
+      "spec": "STORY-1853",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-19T06:51:53.642229639Z",
+      "spec": "STORY-1853",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-19T07:14:55.765121213Z",
+      "spec": "STORY-1853",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "STORY-1853",
+        "branch": "story-1853",
+        "first_seen": "2026-10-19T07:14:55.765061887+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-20T00:38:52.216556921Z",
+      "spec": "STORY-1853",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-21T04:49:03.274215495Z",
+      "spec": "STORY-1853",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-21T04:49:03.275101112Z",
+      "spec": "STORY-1853",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-23T16:52:06.490613755Z",
+      "spec": "STORY-1853",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "Completed"
+      }
+    },
+    {
+      "ts": "2026-10-23T16:52:06.491445769Z",
+      "spec": "STORY-1853",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "",
+        "closed_by": "edit"
+      }
+    }
+  ]
+}
