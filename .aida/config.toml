@@ -419,3 +419,10 @@ worktree_parent = "../aida-worktrees"
 # trace:TASK-1728 | ai:antigravity
 [hooks]
 block_primary_commits = true
+
+# TASK-1945: `aida review watch` reports a change ready to ship only when
+# every CI check on its head passed AND these named checks are present and
+# green. Names are this project's own: AIDA's `build-result` job, which
+# requires every CI lane. A test pins it to .github/workflows/ci.yml.
+[review_watch]
+required_checks = ["Build (ubuntu-latest)"]

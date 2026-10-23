@@ -7,7 +7,13 @@ pub(crate) fn active_stakeholder_role() -> Option<String> {
     std::env::var("AIDA_SESSION_ROLE")
         .ok()
         .map(|role| canonical_role_name(role.trim()))
-        .filter(|role| role == "guest" || role == "requester")
+        .filter(|role| is_stakeholder_role(role))
+}
+
+/// Whether a canonical role name is a least-privilege stakeholder role.
+// trace:STORY-1662 | ai:claude
+pub(crate) fn is_stakeholder_role(role: &str) -> bool {
+    role == "guest" || role == "requester"
 }
 
 // trace:TASK-1594 | ai:claude

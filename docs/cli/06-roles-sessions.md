@@ -251,7 +251,7 @@ So registration is what turns "a stranger handles the punt" into "your advisor, 
 
 **Reach for it when** — agents coordinating directly: `aida mailbox send "..." --to codex` (or `--broadcast`), `aida mailbox inbox` to read (which marks it seen), `aida mailbox thread` to see a full conversation. The operator's `aida mailbox list` for "who has mail waiting, who has unread/urgent."
 
-Explicit sends and comment mentions resolve against live named agents, role/vendor readers, and known people. Unknown or dead agent recipients refuse before creating mail. Role/vendor sends report the current live readers and warn when several can read the shared inbox; confirmed zero-reader sends refuse. If PID namespaces differ or liveness cannot be observed, an entry counts as an unverified reader only while its `last_active_at` is within the past 24 hours. Stale entries and entries without that heartbeat do not count. Delivery to fresh unverified readers continues to the durable inbox with a notice separating live and unverified readers. Notices list at most five names, then report how many more remain. Registry records are not deleted or rewritten. Human inboxes remain addressable without a running agent. A role wins over a same-named person; use `person:<name>` to address that person explicitly. Refused sends can instead reach a known person with `--to person:<name>` or leave a spec comment with `aida comment add <SPEC>`. The hint selects a resolvable person from the people catalog, preferring `AIDA_USER` when it resolves there, and omits the recipient name if none is available. Mention-drop warnings suggest contacting the operator, without suggesting another comment command. Historical inbox inspection remains available after an agent ends.
+Explicit sends and comment mentions resolve against live named agents, role/vendor readers, and known people. Unknown or dead agent recipients refuse before creating mail. Role/vendor sends report the current live readers and warn when several can read the shared inbox; confirmed zero-reader sends refuse. If PID namespaces differ or liveness cannot be observed, an entry counts as an unverified reader only while its `last_active_at` is within the past 24 hours. Stale entries and entries without that heartbeat do not count. Delivery to fresh unverified readers continues to the durable inbox with a notice separating live and unverified readers. Notices list at most five names, live readers first, then report how many more remain. Sending never deletes or rewrites registry records. Instead, `aida agent gc`, `aida agent ls` and each session's start hook run outside the command sandbox and mark a retained resumable record ended once its process is observably gone, so a finished session stops counting as an unverified reader. Garbage collection never prunes or ends a record whose PID namespace it cannot observe. Human inboxes remain addressable without a running agent. A role wins over a same-named person; use `person:<name>` to address that person explicitly. Refused sends can instead reach a known person with `--to person:<name>` or leave a spec comment with `aida comment add <SPEC>`. The hint names the operator only when `AIDA_USER` resolves to a known person, or exactly one person holds an explicit `operator` seat in the team roster (`registry/team.toml`). Otherwise it names no recipient. It never falls back to an arbitrary catalog person. Mention-drop warnings suggest contacting the operator, without suggesting another comment command. Historical inbox inspection remains available after an agent ends.
 
 An invalid or unreadable individual agent record produces a warning while other inboxes remain available. Role, vendor, and person catalog names retain their meaning when an older agent uses the same name; addressing that agent by ID does not grant it the reserved inbox.
 <!-- trace:STORY-1843 | ai:codex -->
@@ -270,6 +270,25 @@ An invalid or unreadable individual agent record produces a warning while other 
 - `retract` vs `delete` — `retract` leaves a withdrawn *tombstone* visible in views (you take back what you said, transparently); `delete` removes it with a marker so sync won't resurrect it. Different intents: walk-it-back vs erase.
 
 **Gotchas.** Reading an `inbox` *marks it seen* — that's a side effect, so use `inbox --all` (read-only, operator view) when you want to peek without clearing unread state. And the local-vs-synced split surprises people: a message is durable and cross-clone only *after* `aida mailbox sync`.
+
+`aida mailbox migrate --dry-run` previews legacy mailbox reconciliation. Add `--json` for the versioned report. It inventories local and canonical messages, original read-state filenames and timestamps, unresolved recipients, divergent copies of message IDs, and read-state filename collisions. Message bodies are omitted. Malformed or unsupported inputs and observed mailbox changes refuse the preview rather than silently skipping evidence.
+
+The report's fingerprint covers mailbox and read-state content; recipient liveness is sampled advisory information. Historical shared group watermarks cannot reconstruct private acknowledgements. The command does not assign recipient UUIDs, acknowledge mail, rewrite messages or enable a new layout. Write-mode migration is unavailable pending advisor review of the real-store report and compatibility policy.
+<!-- trace:STORY-1843 | ai:codex -->
+
+#### Mailbox layout upgrade order
+
+The recipient-UUID mailbox layout replaces each legacy mailbox directory (`.aida/mailbox/` and the store's `mailbox/`) with a small manifest file. The file starts with `# aida-mailbox-layout-manifest` and names the new layout. The legacy directory is archived beside it, and the original paths of its unresolved addresses stay readable. A binary older than the manifest fails at that path: creating or listing a directory there is an error, so it exits nonzero without writing. A binary that knows the marker refuses with "migrated to layout N … Upgrade aida on this clone first". Neither can silently write mail that the new layout would never read.
+
+Upgrade in this order:
+
+1. Upgrade `aida`, `aida-server` and the MCP and hook binaries on every clone and machine that sends or reads this project's mail, to a release whose supported layout includes the new one.
+2. The operator runs `aida mailbox migrate --dry-run --json` and approves that exact report (its SHA). Group cohorts and divergent message IDs are decided in an explicit input file. The tool never picks them.
+3. The operator, never an agent, runs write mode. It reruns the dry run and refuses unless the report is byte-identical to the approved one. It takes a backup ref first, archives the legacy directories, installs the manifests, and is idempotent on rerun. *(Write mode has not shipped yet.)*
+4. Each clone passes its own admission check before UUID delivery starts there. A clone that has not been upgraded meets the manifest and refuses, rather than writing to the old layout.
+
+A manifest that claims the layout this build already uses is reported as damaged. Restore the directory from the backup ref instead of editing the manifest.
+<!-- trace:STORY-1843 | ai:claude -->
 
 **Chains with** — agents launched via `aida agent new` coordinate over the mailbox; the advisor's `watch` loop runs a mailbox-triage pass; briefs route *assignments*, the mailbox carries the *conversation* around them.
 
@@ -468,23 +487,37 @@ read-only, and stops at the first refusal:
 - no merge hold of any kind is set (a marker, an unreadable marker, or the
   forge label). The report names the hold; the watcher never releases one;
 - the head is 0 commits behind its base. A head behind only on paths it does
-  not touch is "ready after its branch is updated" (`gh pr update-branch N`);
-  one behind with overlapping paths is not ready;
+  not touch is "ready after its branch is updated" (`gh pr update-branch N`,
+  or on GitLab a merge of the target branch into the source branch); one
+  behind with overlapping paths is not ready. The advice is always a merge:
+  a rebase rewrites the change's own commits, so its approval no longer
+  carries over;
 - an authorized, non-author approval covers the head, through the same
   decision `aida pr ship` makes, including the carry-over of an approval over
   clean merges of the base branch. The verdict corpus must not refuse the
   head;
 - every CI check on the head commit has finished and passed (success,
-  neutral or skipped), including the `Build (ubuntu-latest)` check that
-  requires every CI lane. CI is read by commit SHA: GitHub check runs and
-  commit statuses, or GitLab job statuses. No checks, a pending or failed
-  check, a missing required check, or a failed read is not ready;
+  neutral or skipped), and every check the project requires is among them.
+  A project names its required checks in `.aida/config.toml`; unset
+  requires none beyond every check passing. AIDA requires its
+  `Build (ubuntu-latest)` check, which requires every CI lane:
+
+  ```toml
+  [review_watch]
+  required_checks = ["Build (ubuntu-latest)"]
+  ```
+
+  CI is read by commit SHA: GitHub check runs and commit statuses, or GitLab
+  job statuses. No checks, a pending or failed check, a missing required
+  check, an unreadable config, or a failed read is not ready;
 - a final forge read finds the head unchanged.
 
 Each judgement prints `PR-N at <head>: ready | ready after its branch is
 updated | not ready: <reason>` on stderr. The last one per change is shown
 by `aida ps` (a "Review-watch readiness" section; `review_watch_ready` in
-`--json`). It is display only: `aida pr ship` checks everything again.
+`--json`). It is display only: `aida pr ship` checks everything again. A
+head with a wake still waiting for delivery is judged again on the next
+pass; otherwise it waits out the two minutes.
 
 When a change becomes ready, the watcher mails the advisor once per head,
 readiness and approval. The mail names the command to run (`aida pr ship N`,
@@ -494,6 +527,28 @@ and is recorded as sent only after both the mail and the event succeed, so a
 failure is retried without a duplicate mail. The watcher never merges, pushes
 or updates a branch; an active fire-mode mandate consumer acts through the
 ordinary `aida pr ship`.
+
+### Review notices
+<!-- trace:TASK-1945 | ai:claude -->
+
+The same pass sends two more notices, each once:
+
+- **Findings.** When a review of the current head requested changes (or
+  rejected it), and no approval of that head followed, the change author gets
+  one mail per verdict. It goes to the AIDA identity the forge login maps to
+  (the advisor when none does), the same mapping the merge-base notice uses.
+  The mail names the findings file (`.aida/review-verdicts/PR-N.json`, plus
+  the archived round file when the verdict was also archived), the round
+  number, and whether this was the last round under the two-round cap. A new
+  blocking verdict, on a new head or the same one, is a new mail.
+- **Round cap.** When a change has used both review rounds and its head has
+  no review, the watcher starts none, and mails the advisor once for the
+  change. The mail names the reviewed heads, the unreviewed head, and the
+  findings file.
+
+Like the ready wake, each notice has a deterministic ID and is recorded as
+sent only after delivery. A failed delivery is retried on a later pass and
+does not stop the readiness report.
 <!-- trace:TASK-1993 | ai:codex -->
 
 Launch setup keeps invocation receipts before Git allocation. Fresh worktrees
