@@ -179,7 +179,10 @@ fn task_2053_bwrap_status_and_unshipped_report_a_seat_clones_work() {
 
     // The cleanup detector also reads dirty clone state and attributes it to
     // the lease. Use the probe's branch even when it differs from the lease.
+    assert!(untagged_in(&log, &clone).is_empty());
     git(&["branch", "-m", "actual-seat-branch"]);
+    // The rename is explicit fixture setup; inspect only detector invocations.
+    std::fs::write(&log, "").unwrap();
     let unreadable = leased_clone(&fx, "unreadable-wip", "c0ffee000060");
     std::fs::rename(unreadable.join(".git"), unreadable.join("old-git")).unwrap();
     std::fs::write(unreadable.join(".git"), "gitdir: old-git\n").unwrap();
