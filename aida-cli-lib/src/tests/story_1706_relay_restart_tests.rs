@@ -532,11 +532,13 @@ fn refusals_each_condition() {
                 .iter()
                 .any(|(_, b)| b.contains("not auto-restarted"));
         assert!(said, "{name}: {:?} {:?}", fake.due, fake.notices);
-        // TASK-2207: the reason is also ledgered as its own row.
+        // TASK-2207: the reason is also ledgered as its own row, unless the
+        // run has no launch record at all (never a restart candidate).
         assert!(
-            fake.rows.iter().any(|r| r.action == "relay-restart"
-                && r.outcome == Outcome::Skipped
-                && r.why.as_deref().is_some_and(|w| w.contains(needle))),
+            name == "missing"
+                || fake.rows.iter().any(|r| r.action == "relay-restart"
+                    && r.outcome == Outcome::Skipped
+                    && r.why.as_deref().is_some_and(|w| w.contains(needle))),
             "{name}: {:?}",
             fake.rows
         );

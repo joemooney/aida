@@ -1423,13 +1423,14 @@ fn restart_crashed(
                 notes.insert(key.clone(), None);
                 continue;
             }
-            // The reason rides on the lane's advisor item in the report, but
-            // that item is routed once; the ledger also records each new
-            // reason, once per (lane, crashed head, reason).
+            // The lane's advisor item carries the reason, but it is routed
+            // once; a restart candidate (it has a launch record) also gets
+            // its own row per (lane, crashed head, reason). A relay launched
+            // without a record was never restartable, so it adds no row.
             // trace:TASK-1955 | ai:claude (TASK-2207)
             RestartVerdict::No(why) => {
-                let seen = format!("{key}|{ACTION}|{}|no|{why}", crashed_head(lane));
-                if per.emitted.insert(seen) {
+                let record = lane.run_dir.join(crate::relay_launch::RECORD_FILE);
+                if record.symlink_metadata().is_ok() {
                     let row = ActionRow::new(
                         &key,
                         &subject,
@@ -1437,7 +1438,11 @@ fn restart_crashed(
                         Outcome::Skipped,
                         Some(format!("not auto-restarted: {why}")),
                     );
-                    tick.fx.ledger(&tick.mandate_id, &row);
+                    tick.skip_once(
+                        per,
+                        &format!("{key}|{ACTION}|{}|no", crashed_head(lane)),
+                        row,
+                    );
                 }
                 notes.insert(key.clone(), Some(why));
                 continue;
