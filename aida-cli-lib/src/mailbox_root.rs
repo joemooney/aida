@@ -397,6 +397,18 @@ pub(crate) fn known_mailbox_recipients(
 ) -> std::collections::HashMap<String, String> {
     let project_root = store_root.parent().unwrap_or(store_root);
     let mut map = known_identity_spellings(project_root);
+    for (key, spelling) in known_mailbox_people(store_root) {
+        map.entry(key).or_insert(spelling);
+    }
+    map
+}
+
+// Human and explicit alias inboxes do not require a running process.
+// trace:STORY-1843 | ai:codex
+pub(crate) fn known_mailbox_people(
+    store_root: &std::path::Path,
+) -> std::collections::HashMap<String, String> {
+    let mut map = std::collections::HashMap::new();
     let mut add = |s: &str| {
         let t = s.trim();
         if !t.is_empty() {

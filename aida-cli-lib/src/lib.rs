@@ -131,6 +131,7 @@ mod knowledge_list;
 mod leases;
 mod live_work;
 pub(crate) use live_work::try_auto_queue_pr_review;
+mod mailbox_resolver;
 mod mailbox_root;
 // trace:STORY-1652 | ai:claude — terminal markdown rendering for human output.
 mod markdown_render;
@@ -515,14 +516,12 @@ mod review_verdict;
 // trace:TASK-1960 | ai:claude — attested-approval carry-over across clean base merges.
 mod review_carryover;
 mod role_cmd;
-// trace:STORY-1655 | ai:claude — audited solo-human self-approval mode (global key only).
 mod rules_cmd;
 mod rules_sync;
-mod solo_review;
-// trace:TASK-1307 | ai:claude — the pre-BUG-1452 stranded-refusal sweep.
 mod sandbox_cmd;
 mod scaffold_cmd;
 mod scaffold_refresh;
+// trace:TASK-1307 | ai:claude — the pre-BUG-1452 stranded-refusal sweep.
 mod stranded_sweep;
 mod sweep_test_hook;
 // trace:STORY-262 | ai:claude
@@ -554,6 +553,8 @@ mod session_reap;
 mod shell_eval;
 // trace:STORY-627 | ai:claude — per-repo solo-loop lock + liveness sentinel.
 mod solo_lock;
+// trace:STORY-1655 | ai:claude — audited solo-human self-approval mode (global key only).
+mod solo_review;
 mod stacks;
 mod state_snapshot;
 mod status_cleanup;
