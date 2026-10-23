@@ -565,34 +565,43 @@ NO_SLOT_SET='AIDA_CARGO_NO_SLOT\+?='
 NO_SLOT_SHELL='(^|[^A-Za-z0-9_.-])([^[:space:]'"'"'"]*/)?(bash|sh|zsh|dash|ksh|fish)'
 NO_SLOT_SHELL_END='([^A-Za-z0-9_.-]|$)'
 NO_SLOT_WORD_END='([^A-Za-z0-9_]|$)'
-# A command word at the start of a command: after a separator or the start.
-NO_SLOT_CMD_START='(^|[;&|(]|\{)[[:space:]]*'
+# A command word at the start of a command: after a separator, the start, a
+# negation, or a keyword or builtin that runs the next word as a command
+# (`then . ./x`, `do source x`, `command . x`, `builtin source x`, `! . x`).
+# trace:TASK-1952 | trace:TASK-2139 | ai:claude
+NO_SLOT_CMD_START='(^|[;&|({!]|(^|[^A-Za-z0-9_])(then|do|else|command|builtin))[[:space:]]*'
 no_slot_set() {
     printf '%s' "$SCAN_COMMAND" | grep -qE "(^|[^A-Za-z0-9_])$NO_SLOT_SET" && return 0
     # An unquoted shell or eval runs quoted text (`-c` payloads, `eval`
     # strings, heredocs or pipes fed to it), separators inside it included,
     # so the whole command is scanned. A shell named only inside quoted prose
     # runs nothing (TASK-2123). TASK-2139: so do `env -S` / `--split-string`
-    # (env runs its string) and `source` / `.` (a file this command may just
-    # have written).
+    # (env runs its string), `source` / `.` and a `./script` run (a file this
+    # command may just have written).
     if printf '%s' "$SCAN_COMMAND" | grep -qE \
-        "$NO_SLOT_SHELL$NO_SLOT_SHELL_END|(^|[^A-Za-z0-9_])eval$NO_SLOT_WORD_END|(^|[^A-Za-z0-9_])env([[:space:]]+[^[:space:];&|]+)*[[:space:]]+(-[A-Za-z]*S|--split-string)|$NO_SLOT_CMD_START(source|\\.)[[:space:]]"; then
+        "$NO_SLOT_SHELL$NO_SLOT_SHELL_END|(^|[^A-Za-z0-9_])eval$NO_SLOT_WORD_END|(^|[^A-Za-z0-9_])env([[:space:]]+[^[:space:];&|]+)*[[:space:]]+(-[A-Za-z]*S|--split-string)|$NO_SLOT_CMD_START(source|\\.)[[:space:]]|$NO_SLOT_CMD_START\\./[^[:space:]]"; then
         printf '%s' "$COMMAND" | grep -qE "(^|[^A-Za-z0-9_])$NO_SLOT_SET" && return 0
     fi
     # Command and process substitutions run even inside double quotes.
     printf '%s' "$COMMAND" | grep -qE "(\\\$\\(|<\\(|>\\(|\`)[^)\`]*$NO_SLOT_SET" && return 0
     # A quoted argument to an unquoted env/export/declare/typeset/local/
     # readonly is still an assignment word (`env "X=1"`, `export 'X=1'`), and
-    # make/gmake export a quoted `X=1` argument to recipes (TASK-2139). The
-    # name itself may be quoted, or followed by empty quotes, before an
-    # unquoted `=` (`export "X"=1`, `export X""=1`): quote removal joins them
-    # into one assignment word (TASK-2140).
+    # make/gmake export a quoted `X=1` argument to recipes (TASK-2139). Quote
+    # removal joins a word's adjacent quoted and unquoted segments into one
+    # assignment word (`export "X"=1`, `export X""=1`, `export X_"Y"=1`,
+    # `export "X"_Y=1`), so the command is matched with those segments joined
+    # first: a quote between two word characters, or opening a word, is
+    # dropped (TASK-2140).
     # trace:TASK-1952 | trace:TASK-2140 | ai:claude
     NO_SLOT_ASSIGNER='(env|export|declare|typeset|local|readonly|make|gmake)'
-    NO_SLOT_QUOTED_SET='AIDA_CARGO_NO_SLOT['"'"'"]*\+?='
     if printf '%s' "$SCAN_COMMAND" | grep -qE "(^|[^A-Za-z0-9_])$NO_SLOT_ASSIGNER$NO_SLOT_WORD_END"; then
-        printf '%s' "$COMMAND" | grep -qE \
-            "(^|[^A-Za-z0-9_])$NO_SLOT_ASSIGNER([[:space:]]+[^[:space:];&|]+)*[[:space:]]+['\"]?$NO_SLOT_QUOTED_SET" \
+        NO_SLOT_JOINED=$(printf '%s' "$COMMAND" | sed -E \
+            -e ':a' \
+            -e 's/([A-Za-z0-9_+=])["'"'"']+([A-Za-z0-9_+=])/\1\2/' \
+            -e 'ta' \
+            -e 's/(^|[[:space:]])["'"'"']+([A-Za-z_])/\1\2/g')
+        printf '%s' "$NO_SLOT_JOINED" | grep -qE \
+            "(^|[^A-Za-z0-9_])$NO_SLOT_ASSIGNER([[:space:]]+[^[:space:];&|]+)*[[:space:]]+$NO_SLOT_SET" \
             && return 0
     fi
     return 1
