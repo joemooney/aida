@@ -3,12 +3,12 @@ spec_id: BUG-2209
 agreed_id: BUG-2209
 title: A test run as the hermetic test user rewrote the real store roster (registry/team.toml), wiping the operator's seats
 description: 'At 2026-10-23 00:50:37 -0700 the store auto-sync commit da5ab2b581 (''chore: sync pending changes'') pushed registry/team.toml reduced to: [members] bug-1618-hermetic-test-user = ["implementer"]. joe and joe.mooney were deleted. Every advisor grant then failed check_roster (RosterDenied), and all reviewer launches refused with ''no valid parent seat grant is active''. Earlier leaks of the same user: 200d821b93 and 7abcf479db on 2026-10-20 added bug-1618-hermetic-test-user (once with advisor) to the real roster. Root cause to find: a test running under test_env''s AIDA_USER=HERMETIC_TEST_USER resolved the PRIMARY store (AIDA_STORE / AIDA_DEV_REPO / cwd fallback) instead of its tempdir and wrote the roster with a whole-file replace; the auto-sync then committed it. Acceptance: (1) identify the test(s) and make them hermetic; (2) a guard: any roster write from a process whose AIDA_USER is HERMETIC_TEST_USER, or whose store is not under a tempdir while cfg(test), panics; (3) roster writes merge members rather than replace the file (CAS on the member being changed), so one user''s set-role can never delete another member; (4) the auto-sync refuses to commit a team.toml change that removes a member who holds advisor, or flags it loudly; (5) a regression test for each.'
-status: Draft
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T08:20:38.620581447Z
-modified_at: 2026-10-23T13:49:32.467695414Z
+modified_at: 2026-10-23T14:26:42.709006649Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -16,12 +16,27 @@ relationships:
   target_id: 01a16905-dd97-7362-b0a8-8f77803353cf
   created_at: 2026-10-23T13:49:32.467692560Z
   created_by: joe
+comments:
+- id: 01a16928-2b95-7042-a3a6-7df1f2585250
+  author: aida-auto-bump
+  content: 'Flipped Draft → Done: a trailered commit (c6bb0dc) referencing this spec is already on the default branch, though it skipped the intermediate approval states. Confirm it, then move to Completed.'
+  created_at: 2026-10-23T14:26:42.709004595Z
+  modified_at: 2026-10-23T14:26:42.709004595Z
+  session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
 history:
 - id: 01a16906-2aea-7442-97db-2d7ab054ec88
   author: joe
   timestamp: 2026-10-23T13:49:34.314248272Z
   session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
   changes: []
+- id: 01a16928-2b94-7b03-ad9b-22942711b26c
+  author: aida-auto-bump
+  timestamp: 2026-10-23T14:26:42.709003553Z
+  session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Done
 filed_at:
   code_sha: 017e4a4949c7911e04fe140c18fc7628cc3fc48c
   branch: main
