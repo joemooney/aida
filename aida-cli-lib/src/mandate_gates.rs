@@ -415,6 +415,7 @@ pub(crate) const KNOWN_UNPROTECTED: &[&str] = &[
     // STORY-1889 confirms each before it moves or renames anything.
     "aida-cli-lib/src/human.rs",
     "aida-cli-lib/src/leases.rs",
+    "aida-cli-lib/src/session_reap.rs",
     "aida-cli-lib/src/session_start.rs",
     "aida-cli-lib/src/status_prs.rs",
 ];
