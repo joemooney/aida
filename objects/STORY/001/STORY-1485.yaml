@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T15:42:37.880863719Z
-modified_at: 2026-10-19T15:50:29.162447683Z
+modified_at: 2026-10-23T17:58:07.548725392Z
 req_type: Story
 tags:
 - operator-held
@@ -135,6 +135,20 @@ comments:
   created_at: 2026-10-07T01:45:15.798873613Z
   modified_at: 2026-10-07T01:45:15.798873613Z
   session_id: a36129c0-3fde-4c5c-92a2-908e517184b1
+- id: 01a169e9-b9bc-7960-b629-be78ff3efac7
+  author: ai:codex:joe
+  content: |-
+    UNSHIPPED AUDIT 2026-10-23 (integrator)
+
+    Pinned origin/main: a9e78d34914e43b30fc9d2b590d83ab96feb48b2.
+
+    story-1485-merge: SHIPPED-ELSEWHERE. Head `3c4fc053cb82`; cherry **9+**. Aggregate stable patch-ID `a9c658721a45e0a4e6bc8ef919b2d6c2ba10972d` exactly matches main [3d85bbde8413](https://github.com/joemooney/aida/commit/3d85bbde84130b00330ac845d79ffdd4eb9bcce7) / merged [#2451](https://github.com/joemooney/aida/pull/2451). STORY-1485 is Deferred; TASK-1607 is Done with EPIC-76 closure held. This proves the graceful slice shipped, not production-gateway activation or hard takeover.
+
+    story-1485: SHIPPED-ELSEWHERE. Head `c999b68fa265`; cherry **9+**; aggregate PID `f14f8cd424a6918de4efc02d078686a016ab0bf4` differs after the later main merge. This tip is an ancestor of `story-1485-merge` (`3c4fc053cb82`), whose entire aggregate exactly matches main [3d85bbde8413](https://github.com/joemooney/aida/commit/3d85bbde84130b00330ac845d79ffdd4eb9bcce7) / [#2451](https://github.com/joemooney/aida/pull/2451). Both branches have the same nine unique non-merge commits. Same Deferred parent / Done slice; no additional branch content to ship.
+
+    These are branch-artifact verdicts, not completion or dispatch/merge authority. No spec status, branch, PR or active worktree changed. Full 14-branch table: .aida/handoff/advisor/unshipped-audit-2026-10-23.md (8 SHIPPED-ELSEWHERE, 3 SALVAGE, 3 ABANDON).
+  created_at: 2026-10-23T17:58:07.548725392Z
+  modified_at: 2026-10-23T17:58:07.548725392Z
 history:
 - id: 01a0de62-2749-7593-84f9-480aecbeeb7e
   author: joe
