@@ -1,0 +1,31 @@
+id: 01a16ad8-bf9b-7382-ac24-d0caf63ed644
+spec_id: TASK-2282
+agreed_id: TASK-2282
+title: agy SessionStart registry row may record the hook pid, not the agy process
+description: |
+  PR-2862 (TASK-2253) routes the Antigravity SessionStart hook through status_awaiting::notice_hook_session, which calls agent_registry::touch_session_start_agent. That function picks the agent pid via session_start_agent_pid, which accepts an ancestor only when cmdline_matches_agent(cmd, "antigravity") holds, i.e. the cmdline contains "antigravity" or "gemini" (aida-cli-lib/src/agent_registry.rs:2611). The installed Antigravity CLI binary is `agy` (~/.local/bin/agy), so the ancestor match likely fails and the row falls back to the hook's own pid (the short-lived `aida awaiting --notice` process). The row is then dead on arrival: the live agy session is never registered as live, and a dead row lingers until the next host gc, briefly counting as an unverified mail reader. Agent-type detection also depends on ANTIGRAVITY_*/GEMINI_* env reaching the hook.
+
+  Fix: also match an `agy` basename in cmdline_matches_agent's antigravity arm, and add a test pinning the agy cmdline.
+
+  Raised in review of PR-2862: https://github.com/joemooney/aida/pull/2862#issuecomment-6375864421
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-23T22:19:12.155573512Z
+modified_at: 2026-10-23T22:19:12.155573512Z
+req_type: Task
+tags:
+- agent-registry
+- antigravity
+- from-review:PR-2862
+- severity:minor
+filed_at:
+  code_sha: 4fc80506877d9d9cb9880e721f034448c73c16da
+  branch: pr-2862
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c51da86593
+  vendor: claude
+  session: 01a16ad2cccd
+  harness_version: 2.1.309 (Claude Code)
