@@ -5,6 +5,22 @@
 
 use super::*;
 
+/// `git -C dir args...` through the maintenance-off test helper.
+fn sh_git(dir: &Path, args: &[&str]) -> String {
+    let out = crate::test_git::git_command()
+        .arg("-C")
+        .arg(dir)
+        .args(args)
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "git {args:?}: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    String::from_utf8_lossy(&out.stdout).trim().to_string()
+}
+
 const OPERATOR_ROSTER: &str = "[members]\n\
      bug-1618-hermetic-test-user = [\"implementer\", \"advisor\"]\n\
      joe = [\"advisor\", \"implementer\", \"integrator\", \"product\", \"reviewer\"]\n\
@@ -16,12 +32,12 @@ fn store_with_roster() -> (tempfile::TempDir, PathBuf) {
     let store = tmp.path().join(".aida-store");
     std::fs::create_dir_all(store.join("registry")).unwrap();
     std::fs::create_dir_all(store.join("objects")).unwrap();
-    run_git(&store, &["init", "-q", "-b", "aida-store"]);
-    run_git(&store, &["config", "user.email", "test@example.com"]);
-    run_git(&store, &["config", "user.name", "Test"]);
+    sh_git(&store, &["init", "-q", "-b", "aida-store"]);
+    sh_git(&store, &["config", "user.email", "test@example.com"]);
+    sh_git(&store, &["config", "user.name", "Test"]);
     std::fs::write(store.join("registry/team.toml"), OPERATOR_ROSTER).unwrap();
-    run_git(&store, &["add", "."]);
-    run_git(&store, &["commit", "-qm", "seed"]);
+    sh_git(&store, &["add", "."]);
+    sh_git(&store, &["commit", "-qm", "seed"]);
     (tmp, store)
 }
 
@@ -40,7 +56,7 @@ fn bug_2209_sync_commit_refuses_a_roster_that_drops_advisors() {
 
     assert!(commit_pending_store_changes_on_host(&store).unwrap());
 
-    let committed = run_git(&store, &["show", "HEAD:registry/team.toml"]);
+    let committed = sh_git(&store, &["show", "HEAD:registry/team.toml"]);
     assert!(committed.contains("joe = ["), "{committed}");
     assert!(committed.contains("\"joe.mooney\""), "{committed}");
     assert_eq!(
@@ -48,11 +64,11 @@ fn bug_2209_sync_commit_refuses_a_roster_that_drops_advisors() {
         OPERATOR_ROSTER
     );
     assert_eq!(
-        run_git(&store, &["show", "--name-only", "--format=", "HEAD"]),
+        sh_git(&store, &["show", "--name-only", "--format=", "HEAD"]),
         "objects/spec.yaml",
         "the other pending change is still committed"
     );
-    let rejected = run_git(
+    let rejected = sh_git(
         &store,
         &["rev-parse", "--git-path", "aida/rejected-team.toml"],
     );
@@ -98,5 +114,5 @@ fn bug_2209_sync_commit_keeps_a_roster_change_that_keeps_advisors() {
     std::fs::write(store.join("registry/team.toml"), &grown).unwrap();
     assert!(protect_roster_advisors(&store).unwrap().is_empty());
     assert!(commit_pending_store_changes_on_host(&store).unwrap());
-    assert!(run_git(&store, &["show", "HEAD:registry/team.toml"]).contains("alice"));
+    assert!(sh_git(&store, &["show", "HEAD:registry/team.toml"]).contains("alice"));
 }
