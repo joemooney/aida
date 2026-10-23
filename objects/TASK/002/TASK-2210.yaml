@@ -1,0 +1,28 @@
+id: 01a168e2-ec78-7b03-b1a5-466d28e64bde
+spec_id: TASK-2210
+agreed_id: TASK-2210
+title: advisor turn stamp is overwritten with an empty binding by an unbound presenter of the same grant
+description: |
+  mandate_drive.rs:2226 stamp_grant_turn always calls presence::stamp_bound_turn_clock, which overwrites the grant's turn-clock record with the latest presenter's matched binding. When a process that is NOT bound to the grant (e.g. a claude --bg daemon lane that inherited a leaked advisor grant id, STORY-1662) runs a turn, matched_binding is empty, so the stamp gets a fresh last_seen and an empty binding. advisor_live then returns false until the bound session's next turn. It fails closed (no escalation), but the advisor-liveness signal flaps. Fix: skip the stamp, or keep the previous non-empty binding, when matched_binding is empty.
+
+  Raised in review of PR-2830: https://github.com/joemooney/aida/pull/2830#issuecomment-6365656262
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-23T13:11:04.568407284Z
+modified_at: 2026-10-23T13:11:04.568407284Z
+req_type: Task
+tags:
+- from-review:PR-2830
+- seat-grant
+- severity:minor
+filed_at:
+  code_sha: 08d07ea961977a026fcf096e97218a5638635464
+  branch: pr-2830
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 017e4a4949
+  vendor: claude
+  session: 01a168def524
+  harness_version: 2.1.309 (Claude Code)

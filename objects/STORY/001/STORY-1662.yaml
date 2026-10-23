@@ -10,12 +10,12 @@ description: |-
   Want: the orchestrator or advisor launches each implementer as a separate process with a child implementer grant (issue_child seat=implementer, parent entered with --delegate-seat implementer). Candidates: `aida queue work <SPEC> --no-human` (implementer phase only) or `aida agent new claude --role implementer`. Pick one, document it, and update the aida-orchestrate / aida-burndown skill masters and the relay prompts.
 
   Acceptance: an advisor-launched implementer edits code without tripping the advisor guard; the orchestrator session is not recorded as an author of a spec it only orchestrated; throughput cost is measured as in STORY-1654; template gates pass. Sequence it after STORY-1654 lands.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T13:18:03.093067119Z
-modified_at: 2026-10-23T12:15:47.508341186Z
+modified_at: 2026-10-23T13:11:00.956343397Z
 req_type: Story
 tags:
 - groom:needs-decision
@@ -190,6 +190,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a168e2-de5c-7522-a69b-cc265e2d5ef8
+  author: aida-orchestrator
+  timestamp: 2026-10-23T13:11:00.956368545Z
+  session_id: 01a168da3dde
+  harness_version: 2.1.309 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: fba16d9c884b16090b3c2d079a53a1def8aa9a36
   branch: main
@@ -202,7 +211,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: PR1 of STORY-1662 is well built and closely matches the signed sketch (outcome contract, env scrub, cap, Q1 ledger note, C6 e2e), but CI is red at head (lib-1 Run tests; main is green) and the C1 stop contract can be bypassed with top-level 'aida ship'.
+  detail: 'Round 1: PR CI red at head (lib-0 shard, deterministic across 3 pushes, green on main); completing (STORY-1662) trailer would close the story with throughput, manual acceptance and the C5 ratchet undelivered; --bg path leaves the advisor code guard and BUG-2207 ps/claim/WHO acceptance unproven.'
   recovery_hint: address the review findings, move STORY-1662 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-10-22T09:51:44.805316277Z
+  shelved_at: 2026-10-23T13:11:00.956343397Z

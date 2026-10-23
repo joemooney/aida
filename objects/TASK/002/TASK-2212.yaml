@@ -1,0 +1,28 @@
+id: 01a168e3-1adf-7523-aa25-4067b39e354c
+spec_id: TASK-2212
+agreed_id: TASK-2212
+title: issue_child prints the proc-only keyring warning on every child launch off Linux
+description: |
+  grant_keyring::install returns InstallError(errno 0) off Linux, so seat_authority::issue_child prints "Warning: the child grant is bound to this launcher's process only ... (errno 0)" on every launch on macOS. AIDA is Linux-only, so this is noise only. Suppress the warning when the keyring is structurally unavailable (grant_keyring::available() is false).
+
+  Raised in review of PR-2830: https://github.com/joemooney/aida/pull/2830#issuecomment-6365656262
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-23T13:11:16.447662954Z
+modified_at: 2026-10-23T13:11:16.447662954Z
+req_type: Task
+tags:
+- from-review:PR-2830
+- seat-grant
+- severity:cosmetic
+filed_at:
+  code_sha: 08d07ea961977a026fcf096e97218a5638635464
+  branch: pr-2830
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 017e4a4949
+  vendor: claude
+  session: 01a168def524
+  harness_version: 2.1.309 (Claude Code)

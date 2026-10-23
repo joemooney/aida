@@ -1,0 +1,29 @@
+id: 01a168e3-0527-70c2-b28c-ddf32b09a7e1
+spec_id: TASK-2211
+agreed_id: TASK-2211
+title: grant_keyring install leaks a joined session keyring when add_key fails after JOIN
+description: |
+  grant_keyring.rs sys::install (new-keyring branch, ~lines 151-178): KEYCTL_JOIN_SESSION_KEYRING succeeds and the thread's session keyring changes, but if add_key, SETPERM or SET_TIMEOUT then fails (e.g. EDQUOT), install returns Err before LAUNCHER_KEYRING is set. The next launch on that thread sees reuse != current keyring and joins (and chains) another keyring, so repeated failing launches add keyring objects against the quota on exactly the EDQUOT path. Fix: record the joined ring in LAUNCHER_KEYRING as soon as JOIN succeeds (return it alongside the error), or unwind the join.
+
+  Raised in review of PR-2830: https://github.com/joemooney/aida/pull/2830#issuecomment-6365656262
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-23T13:11:10.887679361Z
+modified_at: 2026-10-23T13:11:10.887679361Z
+req_type: Task
+tags:
+- from-review:PR-2830
+- keyring
+- seat-grant
+- severity:minor
+filed_at:
+  code_sha: 08d07ea961977a026fcf096e97218a5638635464
+  branch: pr-2830
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 017e4a4949
+  vendor: claude
+  session: 01a168def524
+  harness_version: 2.1.309 (Claude Code)
