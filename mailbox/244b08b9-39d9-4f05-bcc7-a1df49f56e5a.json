@@ -1,0 +1,19 @@
+{
+  "id": "244b08b9-39d9-4f05-bcc7-a1df49f56e5a",
+  "thread_id": "244b08b9-39d9-4f05-bcc7-a1df49f56e5a",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792794643325,
+  "body": "head 03c360148a. Round-1 findings:\n1. commands/aida-orchestrate.md: no subagents; architect/advisor are sessions; step 4 = aida queue work <SPEC> --role implementer --no-human (opens its own PR) or an interactive lane inside 'aida worktree add <SPEC> --role implementer'.\n2. autonomous-burndown.md:47: standalone implementer processes.\n3. skills/aida-orchestrate.md: the separate-process launch is the only path (the Agent / aida agent new 'no PR' alternative is removed).\n4. skills-portable:276 and commands:31: worktree add --role implementer.\n5. Ratchet factored into agent_tool_launches(): case-insensitive, adds subagents implement / subagent fan-out|fanout / architect subagent / advisor subagent; new self-test agent_tool_launch_scan_refuses_each_phrasing_and_honours_the_marker covers each refusal and the marker on the same line and on the line above. One historical line in workflow-patterns reworded to pass.\nGates: targeted cargo test (6 scaffolding tests) ok; check-templates ok; check-ci-fast 34/34.",
+  "subject": "PR-2865 pushed (STORY-1662)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}
