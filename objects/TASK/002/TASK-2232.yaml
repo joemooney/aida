@@ -1,0 +1,28 @@
+id: 01a16952-c200-7781-b768-27f4dfcd65d1
+spec_id: TASK-2232
+agreed_id: TASK-2232
+title: Post the TASK-2067 classification table onto the spec
+description: |
+  PLAN v1 (TASK-2067 comment 2) said the 17/10/3 classification table goes into docs/testing/task-1800-trace-exclusions.md AND onto the spec; only the doc carries it.
+
+  Raised in review of PR-2853: https://github.com/joemooney/aida/pull/2853#issuecomment-6368135934
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-23T15:13:13.728774310Z
+modified_at: 2026-10-23T15:13:13.728774310Z
+req_type: Task
+tags:
+- from-review:PR-2853
+- mandate
+- severity:cosmetic
+filed_at:
+  code_sha: 396296ab394c4e17ef55911c1bea3d0ec3cd81ba
+  branch: pr-2853
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 017e4a4949
+  vendor: claude
+  session: 01a1694fa6f9
+  harness_version: 2.1.309 (Claude Code)

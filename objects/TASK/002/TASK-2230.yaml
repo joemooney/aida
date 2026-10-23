@@ -1,0 +1,28 @@
+id: 01a16952-a757-7601-9bc2-2df95fa1d386
+spec_id: TASK-2230
+agreed_id: TASK-2230
+title: Mandate store dirty check still honours $GIT_DIR/info/exclude
+description: |
+  aida-cli-lib/src/mandate_traces.rs snapshot_command passes -c core.excludesFile=/dev/null (TASK-2145), but the shared common dir's info/exclude can still hide an untracked objects/ file from git status, so the store reads clean. Consider --ignored checks or status with an explicit exclude override.
+
+  Raised in review of PR-2853: https://github.com/joemooney/aida/pull/2853#issuecomment-6368135934
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-23T15:13:06.903620964Z
+modified_at: 2026-10-23T15:13:06.903620964Z
+req_type: Task
+tags:
+- from-review:PR-2853
+- mandate
+- severity:minor
+filed_at:
+  code_sha: 396296ab394c4e17ef55911c1bea3d0ec3cd81ba
+  branch: pr-2853
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 017e4a4949
+  vendor: claude
+  session: 01a1694fa6f9
+  harness_version: 2.1.309 (Claude Code)

@@ -1,0 +1,28 @@
+id: 01a16952-99a9-7ea1-b12b-1ad8ede3711e
+spec_id: TASK-2229
+agreed_id: TASK-2229
+title: Mandate alias walk silently drops a rename's non-canonical other side
+description: |
+  aida-cli-lib/src/mandate.rs store_history_alias_map: the 'renamed' side of a rename pair is filtered through canonical_object_stem and dropped when non-canonical, with no refusal. Versions at a non-canonical rename target are never judged. Comment-24 refuses only the hit side. Not a regression vs git's default renames; consider refusing (fail closed) like a non-canonical hit.
+
+  Raised in review of PR-2853: https://github.com/joemooney/aida/pull/2853#issuecomment-6368135934
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-23T15:13:03.401062219Z
+modified_at: 2026-10-23T15:13:03.401062219Z
+req_type: Task
+tags:
+- from-review:PR-2853
+- mandate
+- severity:minor
+filed_at:
+  code_sha: 396296ab394c4e17ef55911c1bea3d0ec3cd81ba
+  branch: pr-2853
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 017e4a4949
+  vendor: claude
+  session: 01a1694fa6f9
+  harness_version: 2.1.309 (Claude Code)

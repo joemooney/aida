@@ -1,0 +1,28 @@
+id: 01a16952-8ba0-75f1-978e-edd7498eb861
+spec_id: TASK-2228
+agreed_id: TASK-2228
+title: TASK-1800 replay fixture README overstates the per-config collector runs
+description: |
+  tests/fixtures/task-1800-replay/README.md says the bundle test runs under diff.renames unset, false and copies and checks digests etc. under each; since b4d294e803 the collector runs once and only diff_tree_args bytes are compared under false/copies. Reword.
+
+  Raised in review of PR-2853: https://github.com/joemooney/aida/pull/2853#issuecomment-6368135934
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-23T15:12:59.808168469Z
+modified_at: 2026-10-23T15:12:59.808168469Z
+req_type: Task
+tags:
+- from-review:PR-2853
+- mandate
+- severity:cosmetic
+filed_at:
+  code_sha: 396296ab394c4e17ef55911c1bea3d0ec3cd81ba
+  branch: pr-2853
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 017e4a4949
+  vendor: claude
+  session: 01a1694fa6f9
+  harness_version: 2.1.309 (Claude Code)
