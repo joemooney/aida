@@ -1,5 +1,9 @@
 #!/bin/bash
 set -euo pipefail
+# Fixture git runs with automatic maintenance off: a detached repack can
+# race the next object write (BUG-2191). `env -i` sites pass the -c pair.
+# trace:TASK-1955 | ai:claude (TASK-2010)
+export GIT_CONFIG_COUNT=2 GIT_CONFIG_KEY_0=maintenance.auto GIT_CONFIG_VALUE_0=false GIT_CONFIG_KEY_1=gc.auto GIT_CONFIG_VALUE_1=0
 
 # trace:BUG-1785 | ai:codex
 # Simulates the CI job where aida-store is refreshed mid-job, but the shallow fetch

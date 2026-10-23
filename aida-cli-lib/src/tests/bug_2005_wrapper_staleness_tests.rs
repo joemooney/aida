@@ -9,7 +9,6 @@ use crate::dev_cmd::{
 };
 use crate::shell_eval::{EVAL_BLOCK_CAP, ZSH_LOCALOPTS_CAP};
 use crate::shell_wrapper_harness::{shell_args, wrapper_shells};
-use crate::test_exec::write_executable;
 use sha2::{Digest, Sha256};
 
 /// Real pre-fix leaking wrapper built from `3618fe739b^` (the commit immediately
@@ -98,6 +97,14 @@ fn pre_fix_leaking_wrapper_is_classified_stale_and_needs_reinstall() {
     }
 }
 
+/// `name` resolved on `PATH`: an executable nobody writes during the test.
+fn system_binary(name: &str) -> std::path::PathBuf {
+    std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default())
+        .map(|dir| dir.join(name))
+        .find(|p| p.is_file())
+        .unwrap_or_else(|| panic!("{name} is not on PATH"))
+}
+
 #[test]
 fn pre_fix_fixture_actually_leaks_in_zsh_and_not_in_bash() {
     const SECRET: &str = "bug2005-leaked-secret-token-xyz789";
@@ -119,8 +126,12 @@ fn pre_fix_fixture_actually_leaks_in_zsh_and_not_in_bash() {
         let dir = tempfile::tempdir().expect("create tempdir");
         let home = dir.path().join("home");
         std::fs::create_dir(&home).unwrap();
-        let bin = dir.path().join("aida");
-        write_executable(&bin, "#!/bin/sh\necho stub-ran\n");
+        // BUG-2196: the shell exec'd a stub written moments earlier, and a
+        // fork on another test thread could still hold its write descriptor
+        // (CI: "bad interpreter: Text file busy"). Link an existing system
+        // binary instead: nothing here is ever open for writing.
+        // trace:TASK-1955 | ai:claude (BUG-2196)
+        std::os::unix::fs::symlink(system_binary("true"), dir.path().join("aida")).unwrap();
 
         let script = format!(
             "PATH='{path}':\"$PATH\"\nexport PATH\n{fixture}\nAIDA_SECRET_KEY='{SECRET}'\nexport AIDA_SECRET_KEY\naida status\n",

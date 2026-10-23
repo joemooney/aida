@@ -3096,11 +3096,15 @@ pub(crate) fn link_bg_session(plan: &AgentLaunchPlan, lease_id: &str, sid: &str)
             plan_source: "agent new --bg".to_string(),
             claude_session_id: None,
             batch_name: None,
+            agent_name: None,
             plan: None,
             items: Vec::new(),
         }
     });
     manifest.claude_session_id = Some(sid.to_string());
+    // A hook that fires after this save names the row from it (TASK-2102).
+    // trace:TASK-1955 | ai:claude (TASK-2102)
+    manifest.agent_name = Some(plan.name.clone()).filter(|n| !n.trim().is_empty());
     session_manifest::save(&manifest_path, &manifest)?;
     agent_registry::adopt_bg_session_identity(
         &plan.project_root,
@@ -3490,7 +3494,7 @@ fn preflight_agent_new_delegation(
 /// An explicit owning cwd is read-only re-entry, never a claim or forced takeover.
 /// Both launch paths call this before prompts, and plan creation checks it again.
 // trace:BUG-2002 | ai:codex
-fn preflight_agent_launch_lease(
+pub(crate) fn preflight_agent_launch_lease(
     project_root: &std::path::Path,
     role: Option<&str>,
     spec: Option<&str>,
@@ -3531,12 +3535,27 @@ fn preflight_agent_launch_lease(
         );
     }
     defer_cmd::enforce_reasoned_operator_hold(project_root, spec)?;
-    let branch = std::process::Command::new("git")
-        .current_dir(&lease.worktree_path)
-        .args(["symbolic-ref", "--short", "HEAD"])
-        .output()
-        .context("could not verify the owning worktree branch")?;
-    if !branch.status.success() || String::from_utf8_lossy(&branch.stdout).trim() != lease.branch {
+    // BUG-2169: a seat clone's branch comes from its sandboxed probe; host
+    // git never runs in it. trace:TASK-2053 | ai:claude
+    let current = if lease.tree_kind == crate::seat_clone::TreeKind::Clone {
+        match crate::seat_clone::probe(project_root, &lease.worktree_path) {
+            crate::seat_clone::Probe::Known(facts) => facts.branch,
+            crate::seat_clone::Probe::Unknown(why)
+            | crate::seat_clone::Probe::HasSubmodules(why) => {
+                anyhow::bail!("could not verify the owning seat clone's branch: {why}")
+            }
+        }
+    } else {
+        let branch = aida_core::git_ops::host_git_command(&lease.worktree_path)
+            .args(["symbolic-ref", "--short", "HEAD"])
+            .output()
+            .context("could not verify the owning worktree branch")?;
+        branch
+            .status
+            .success()
+            .then(|| String::from_utf8_lossy(&branch.stdout).trim().to_string())
+    };
+    if current.as_deref() != Some(lease.branch.as_str()) {
         anyhow::bail!(
             "the owning worktree no longer matches its recorded branch; inspect `aida session leases --all` before redispatching"
         );
@@ -5887,6 +5906,8 @@ mod task_1806_launch_mandate_tests {
             agent_type: "claude".into(),
             pid: 4_000_123,
             pid_start: None,
+            // trace:STORY-1843 | ai:codex
+            pid_namespace: None,
             name: Some("fix-task-1784".into()),
             description: None,
             tty: None,
@@ -5922,6 +5943,30 @@ mod task_1806_launch_mandate_tests {
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].1.name.as_deref(), Some("agy-lane"));
         assert_eq!(entries[0].1.current_spec.as_deref(), Some("TASK-2000"));
+    }
+
+    /// TASK-2102: the link records the launch name on the session manifest,
+    /// which a SessionStart hook firing after the link names the row from
+    /// (`bg_session_start_after_the_link_takes_the_launch_name` pins that
+    /// read); a blank launch name records none rather than an empty one.
+    // trace:TASK-1955 | ai:claude (TASK-2102)
+    #[test]
+    fn linking_a_bg_session_records_the_launch_name_on_the_manifest() {
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().canonicalize().unwrap();
+        let load = |lease: &str| {
+            session_manifest::load(&session_manifest::manifest_path(&project, lease)).unwrap()
+        };
+
+        link_bg_session(&plan_at(&project), "leaseb00000003", "feed5678").unwrap();
+        let manifest = load("leaseb00000003");
+        assert_eq!(manifest.agent_name.as_deref(), Some("agy-lane"));
+        assert_eq!(manifest.claude_session_id.as_deref(), Some("feed5678"));
+
+        let mut blank = plan_at(&project);
+        blank.name = "  ".into();
+        link_bg_session(&blank, "leaseb00000004", "feed9999").unwrap();
+        assert_eq!(load("leaseb00000004").agent_name, None);
     }
 
     #[test]

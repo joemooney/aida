@@ -184,7 +184,8 @@ def main():
         print("PASS: R4 user/project inline first-save reload/force/remove and scope preservation", flush=True)
         # A real sibling worktree writes its own tracked config, not the parent.
         subprocess.run(["git","add",".aida/config.toml"],cwd=root,check=True)
-        subprocess.run(["git","-c","commit.gpgsign=false","commit","-qm","config"],cwd=root,check=True)
+        # trace:TASK-1955 | ai:claude (TASK-2010)
+        subprocess.run(["git","-c","maintenance.auto=false","-c","gc.auto=0","-c","commit.gpgsign=false","commit","-qm","config"],cwd=root,check=True)
         sibling = root/"sibling"
         subprocess.run(["git","worktree","add","-qb","layout-sibling",str(sibling)],cwd=root,check=True)
         before_project = project.read_bytes()

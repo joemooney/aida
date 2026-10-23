@@ -11,6 +11,10 @@
 #
 # trace:BUG-1933 | ai:claude
 set -euo pipefail
+# Fixture git runs with automatic maintenance off: a detached repack can
+# race the next object write (BUG-2191). `env -i` sites pass the -c pair.
+# trace:TASK-1955 | ai:claude (TASK-2010)
+export GIT_CONFIG_COUNT=2 GIT_CONFIG_KEY_0=maintenance.auto GIT_CONFIG_VALUE_0=false GIT_CONFIG_KEY_1=gc.auto GIT_CONFIG_VALUE_1=0
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -62,7 +66,7 @@ git commit --no-verify -qm "chore: seed"
 commit() {
     set +e
     env -i PATH="$SHIMS:$PATH" HOME="$FAKEHOME" AWK_MODE="$1" \
-        git -c user.email=t@t.t -c user.name=t commit -qm "$2" \
+        git -c maintenance.auto=false -c gc.auto=0 -c user.email=t@t.t -c user.name=t commit -qm "$2" \
         >/dev/null 2>"$STDERR_LOG"
     local rc=$?
     set -e

@@ -121,6 +121,7 @@ fn mint_lease(main: &Path, lease_id: &str, claude_id: &str, tree: &Path) {
         plan_source: "queue work".to_string(),
         claude_session_id: Some(claude_id.to_string()),
         batch_name: None,
+        agent_name: None,
         plan: None,
         items: vec![],
     };
