@@ -6,18 +6,27 @@ description: |
   aida-cli-lib/src/mailbox_resolver.rs round2_escape_hint_names_only_a_resolvable_person_or_no_recipient sets directory.operator by hand: None, then select_operator(None, ...). The path from load() through AIDA_USER and team.toml to the operator is therefore not covered end to end. Add a test that drives RecipientDirectory::load with a roster operator seat, with AIDA_USER controlled (for example, an env guard).
 
   Raised in review of PR-2848: https://github.com/joemooney/aida/pull/2848#issuecomment-6368384665
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T15:25:13.616356957Z
-modified_at: 2026-10-23T15:25:13.616356957Z
+modified_at: 2026-10-23T15:54:07.085751089Z
 req_type: Task
 tags:
 - from-review:PR-2848
 - mailbox
 - severity:cosmetic
 - tests
+history:
+- id: 01a16978-316d-7413-bb8c-68be79d10c00
+  author: joe
+  timestamp: 2026-10-23T15:54:07.085743224Z
+  session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: eff10b9e5512f9b41a1e09b7b3f8e0eaa7736763
   branch: pr-2848
