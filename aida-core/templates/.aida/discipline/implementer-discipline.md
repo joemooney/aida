@@ -138,8 +138,10 @@ every open PR's merge latency, not just yours.
 
 1. `make check-ci-fast` before every push, no exceptions. It is ~90s and needs
    no build; "I ran my own test file" does not substitute.
-   **After merging main into a branch, also run `make check-ci-compile`**
-   (compiles every test target, runs none, agent profile). check-ci-fast
+   **After merging main into a branch, run `make check-ci-compile` when the
+   change touches shared test infra (`test_env`, `test_git`, ratchet baselines)
+   or more than 10 files** (compiles every test target, runs none, agent
+   profile); otherwise CI's shards are the gate. check-ci-fast
    builds nothing, so it cannot see a test initializer that no longer compiles
    against a struct changed on main: on 2026-10-14 two PRs passed check-ci-fast
    after a main merge and went red in CI with E0063 (TASK-1763).
@@ -279,10 +281,11 @@ full-suite builds", and my own `aida doctor check performance` was killed at a 1
 timeout. The orchestrator seat was being starved by its own fleet.
 
 **How to brief from now on:**
-- Brief by the local testing tiers (`.aida/discipline/README.md`). A STANDARD implementer runs
-  `make test-touched` (targeted `cargo test --profile agent` for the touched modules; it exits
-  nonzero rather than report a filter that matched 0 tests) plus `make check-ci-compile`, and
-  `make check-ci-fast` before pushing.
+- Brief by the local testing tiers (`.aida/discipline/README.md`). A LIGHT implementer runs
+  ONE targeted `cargo test --profile agent -p <crate> <module filter>` plus `make check-ci-fast`,
+  then pushes. `make test-touched` (it exits nonzero rather than report a filter that matched 0
+  tests) and `make check-ci-compile` run only when the change touches shared test infra
+  (`test_env`, `test_git`, ratchet baselines) or more than 10 files.
 - `cargo test --workspace` and `cargo clippy --workspace` run **only in CI**, at the PR head,
   which is where they gate the merge. Nobody runs them locally, integrator included.
 - Accept the tradeoff knowingly: an implementer can break an unrelated test and only find
