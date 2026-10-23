@@ -81,6 +81,7 @@ fn obsolete_when_all_signals_quiet() {
     let wt = WorktreeRecord {
         path: std::path::PathBuf::from("/repo-wt"),
         branch: Some("task-999".to_string()),
+        clone: false,
     };
     let ahead = std::collections::HashMap::new(); // no ahead entry → None
     let rows = assemble_worktree_status_rows(
@@ -90,6 +91,7 @@ fn obsolete_when_all_signals_quiet() {
         &[],
         &std::collections::HashMap::new(),
         &ahead,
+        &std::collections::HashMap::new(),
     );
     assert_eq!(rows.len(), 1);
     assert!(rows[0].obsolete, "quiet worktree should be obsolete");
@@ -103,6 +105,7 @@ fn tied_when_commits_ahead() {
     let wt = WorktreeRecord {
         path: std::path::PathBuf::from("/repo-wt"),
         branch: Some("task-1".to_string()),
+        clone: false,
     };
     let mut ahead = std::collections::HashMap::new();
     ahead.insert(wt.path.clone(), 3u32);
@@ -113,6 +116,7 @@ fn tied_when_commits_ahead() {
         &[],
         &std::collections::HashMap::new(),
         &ahead,
+        &std::collections::HashMap::new(),
     );
     assert!(!rows[0].obsolete, "un-merged commits ahead → in flight");
     assert_eq!(rows[0].ahead, Some(3));
@@ -124,6 +128,7 @@ fn tied_when_open_pr_present() {
     let wt = WorktreeRecord {
         path: std::path::PathBuf::from("/repo-wt"),
         branch: Some("task-2".to_string()),
+        clone: false,
     };
     let mut prs = std::collections::HashMap::new();
     prs.insert("task-2".to_string(), pr_item(77, "task-2"));
@@ -133,6 +138,7 @@ fn tied_when_open_pr_present() {
         &[],
         &[],
         &prs,
+        &std::collections::HashMap::new(),
         &std::collections::HashMap::new(),
     );
     assert!(!rows[0].obsolete, "open PR → in flight");
@@ -147,6 +153,7 @@ fn tied_when_lease_covers_it() {
     let wt = WorktreeRecord {
         path: wt_path.clone(),
         branch: Some("story-456".to_string()),
+        clone: false,
     };
     let leases = vec![lease("STORY-456", &wt_path)];
     let rows = assemble_worktree_status_rows(
@@ -154,6 +161,7 @@ fn tied_when_lease_covers_it() {
         &main,
         &leases,
         &[],
+        &std::collections::HashMap::new(),
         &std::collections::HashMap::new(),
         &std::collections::HashMap::new(),
     );
@@ -169,14 +177,17 @@ fn skips_main_and_store_worktrees() {
         WorktreeRecord {
             path: main.clone(),
             branch: Some("main".to_string()),
+            clone: false,
         },
         WorktreeRecord {
             path: std::path::PathBuf::from("/repo-store"),
             branch: Some("aida-store".to_string()),
+            clone: false,
         },
         WorktreeRecord {
             path: std::path::PathBuf::from("/repo-wt"),
             branch: Some("task-3".to_string()),
+            clone: false,
         },
     ];
     let rows = assemble_worktree_status_rows(
@@ -184,6 +195,7 @@ fn skips_main_and_store_worktrees() {
         &main,
         &[],
         &[],
+        &std::collections::HashMap::new(),
         &std::collections::HashMap::new(),
         &std::collections::HashMap::new(),
     );

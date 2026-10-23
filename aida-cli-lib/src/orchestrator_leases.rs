@@ -891,6 +891,10 @@ pub(crate) const EXIT_CODES: &[(i32, &str)] = &[
         "pr ship: merge hold",
     ),
     (
+        pr_ship::ShipRefusal::BehindBase as i32,
+        "pr ship: head behind its base",
+    ),
+    (
         queue_cmd::NO_REVIEW_VERDICT_EXIT_CODE,
         "standalone reviewer: no verdict",
     ),
@@ -1149,11 +1153,108 @@ pub(crate) fn push_branch_from_implementer_worktree(
     )))
 }
 
+// trace:TASK-2191 | ai:codex
+fn clone_branch_origin_head(
+    main: &std::path::Path,
+    branch: &str,
+) -> Result<Option<String>, auto_complete::PhaseFailure> {
+    let reference = format!("refs/heads/{branch}");
+    let mut cmd = aida_core::git_ops::host_git_command(main);
+    cmd.args(["ls-remote", "--heads", "origin", &reference])
+        .remote_credentials(main, "origin");
+    let out = crate::command_output_with_timeout(cmd, std::time::Duration::from_secs(20))
+        .filter(|out| out.status.success())
+        .ok_or_else(|| {
+            auto_complete::PhaseFailure::new(
+                "could not verify implementer branch on origin before phase-2 CI/teardown",
+            )
+        })?;
+    let text = String::from_utf8_lossy(&out.stdout);
+    if text.trim().is_empty() {
+        return Ok(None);
+    }
+    let mut lines = text.lines();
+    let fields = lines
+        .next()
+        .unwrap_or_default()
+        .split_whitespace()
+        .collect::<Vec<_>>();
+    if fields.len() != 2
+        || fields[1] != reference
+        || lines.next().is_some()
+        || !matches!(fields[0].len(), 40 | 64)
+        || !fields[0].bytes().all(|b| b.is_ascii_hexdigit())
+    {
+        return Err(auto_complete::PhaseFailure::new(
+            "origin returned invalid implementer branch evidence",
+        ));
+    }
+    Ok(Some(fields[0].to_owned()))
+}
+
 pub(crate) fn ensure_implementer_branch_pushed(
     worktree: &std::path::Path,
     branch: &str,
     json: bool,
 ) -> Result<(), auto_complete::PhaseFailure> {
+    // Read private clone state only through the sandbox. Publication evidence
+    // comes from the real origin, never the seat-written tracking refs.
+    // trace:TASK-2191 | ai:codex
+    if aida_core::seat_clone_detect::seat_clone_root(worktree).is_some() {
+        let crate::seat_clone::MainFor::Verified(main) = crate::seat_clone::main_for(worktree)
+        else {
+            return Err(auto_complete::PhaseFailure::new(
+                "could not verify the implementer seat clone's main checkout before phase-2 CI/teardown",
+            ));
+        };
+        return match crate::seat_clone::probe(&main, worktree) {
+            crate::seat_clone::Probe::Known(facts) if facts.branch.as_deref() != Some(branch) => {
+                Err(auto_complete::PhaseFailure::new(format!(
+                    "implementer seat clone is on `{}` but phase 2 is driving `{branch}` — refusing to continue",
+                    facts.branch.as_deref().unwrap_or("DETACHED"),
+                )))
+            }
+            crate::seat_clone::Probe::Known(facts) if facts.unpushed > 0 => {
+                Err(auto_complete::PhaseFailure::new(format!(
+                    "implementer seat clone has {} unpushed commit(s); the seat must push `{branch}` before phase-2 CI/teardown (the host never pushes from a clone)",
+                    facts.unpushed,
+                )))
+            }
+            crate::seat_clone::Probe::Known(facts) => {
+                let Some(head) = facts.head else {
+                    return Err(auto_complete::PhaseFailure::new("implementer seat clone has no HEAD"));
+                };
+                let remote = clone_branch_origin_head(&main, branch)?;
+                if remote.as_deref() == Some(&head) {
+                    return Ok(());
+                }
+                // A zero-commit seat branch can be published from its host-owned
+                // base pin. Never read objects/config/hooks from the clone on the host.
+                // Existing remote branches are not overwritten on a mismatch.
+                if remote.is_none()
+                    && crate::seat_clone::pinned_base(&main, worktree).as_deref() == Some(&head)
+                {
+                    let mut cmd = aida_core::git_ops::host_git_command(&main);
+                    cmd.args(["push", "origin", &format!("{head}:refs/heads/{branch}")])
+                        .remote_credentials(&main, "origin");
+                    let out = crate::command_output_with_timeout(cmd, std::time::Duration::from_secs(30));
+                    if out.is_some_and(|out| out.status.success())
+                        && clone_branch_origin_head(&main, branch)?.as_deref() == Some(&head)
+                    {
+                        return Ok(());
+                    }
+                }
+                Err(auto_complete::PhaseFailure::new(format!(
+                    "implementer seat clone HEAD is not published at origin/{branch}; the seat must push `{branch}` before phase-2 CI/teardown",
+                )))
+            },
+            crate::seat_clone::Probe::Unknown(why) | crate::seat_clone::Probe::HasSubmodules(why) => {
+                Err(auto_complete::PhaseFailure::new(format!(
+                    "could not verify implementer seat clone before phase-2 CI/teardown: {why}",
+                )))
+            }
+        };
+    }
     // trace:BUG-878 | ai:codex
     let current = git_output_checked(worktree, &["branch", "--show-current"]).map_err(|e| {
         auto_complete::PhaseFailure::new(format!(

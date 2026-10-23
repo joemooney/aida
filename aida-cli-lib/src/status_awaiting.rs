@@ -38,7 +38,20 @@ pub(crate) fn collect_cleanup_report(
     // dirty state there is the normal mid-write moment between
     // `aida add`/`aida edit` and the next `aida push`, not lost work.
     // trace:STORY-385 | ai:claude
-    let worktrees = list_worktrees(project_root);
+    // TASK-2053: seat clones too; a clone's dirty files and branch come from
+    // its sandboxed probe (unreadable: one explanatory entry, so it shows).
+    // trace:TASK-2053 | ai:claude
+    let mut worktrees = list_worktrees(project_root);
+    let mut clone_facts = std::collections::HashMap::new();
+    for mut wt in clone_seat_trees(project_root) {
+        if let crate::seat_clone::Probe::Known(facts) =
+            crate::seat_clone::probe(project_root, &wt.path)
+        {
+            wt.branch = facts.branch.clone().or(wt.branch);
+            clone_facts.insert(wt.path.clone(), facts);
+        }
+        worktrees.push(wt);
+    }
     let mut uncommitted_wip = Vec::new();
     for wt in &worktrees {
         if !wt.path.exists() {
@@ -47,7 +60,10 @@ pub(crate) fn collect_cleanup_report(
         if wt.branch.as_deref() == Some("aida-store") {
             continue;
         }
-        let dirty = worktree_dirty_entries(&wt.path);
+        let dirty = match clone_facts.get(&wt.path) {
+            Some(facts) => facts.dirty.clone(),
+            None => worktree_dirty_entries(&wt.path),
+        };
         if dirty.is_empty() {
             continue;
         }

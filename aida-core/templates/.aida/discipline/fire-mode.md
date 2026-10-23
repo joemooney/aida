@@ -108,9 +108,13 @@ the spec was under-specified: park it and clarify the spec.
 
 Greens are computed against the main that existed when CI ran. Two PRs that
 are each green can break main together (one adds a required field, another
-adds a literal without it). So after any merge, the next PR is updated from
-main, gets a fresh Build, and is re-approved at its new head before it ships.
-Ship one at a time. A stale-check override is not a substitute.
+adds a literal without it). So approved PRs land through the merge train,
+`aida pr train` (see [`two-seat-protocol.md`](two-seat-protocol.md#merge-train)):
+CI runs on exactly the commits main will receive, and a PR that breaks the
+combination is bisected out before main moves. A lone PR may still ship with
+`aida pr ship`. Never ship PRs back to back on greens computed against an
+older main. A stale-check override is not a substitute.
+<!-- trace:STORY-1690 | ai:claude -->
 
 If main's Build goes red, **stop shipping**: every open green is void. Fix
 forward through the normal gate, wait for main to go green, then resume.
@@ -121,7 +125,8 @@ A merge hold is ready for the operator to clear when all of these are true:
 
 1. An approval is recorded at the PR's current head.
 2. Build is green at that head, against current main.
-3. The PR is up to date with main.
+3. The PR is up to date with main, or it will land through `aida pr train`
+   (whose CI runs on the train, against current main).
 4. For containment and sandbox PRs, functional verification passed at that head.
 
 The advisor checks these, then asks the operator. It never clears a hold to

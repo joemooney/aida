@@ -139,6 +139,10 @@ mod story_737_delight_tests;
 #[cfg(test)]
 #[path = "tests/task_1555_ci_gate_tiers_tests.rs"]
 mod task_1555_ci_gate_tiers_tests;
+// trace:TASK-2238 | ai:claude
+#[cfg(test)]
+#[path = "tests/task_2238_review_sweep_tests.rs"]
+mod task_2238_review_sweep_tests;
 // trace:TASK-1562 | ai:claude
 #[cfg(test)]
 #[path = "tests/task_1562_worktree_reclaim_tests.rs"]
@@ -760,6 +764,27 @@ pub(crate) fn list_fields_help() -> String {
         TOON_LIST_KNOWN_FIELDS.join(", "),
         aliases.join(", "),
         TOON_LIST_DEFAULT_FIELDS.join(",")
+    )
+}
+
+/// The `aida search --fields` help text. Search parses `--fields` through the
+/// same [`toon_list_fields`] as `aida list`, so its help is generated from the
+/// same tables as [`list_fields_help`].
+// trace:TASK-2238 | ai:claude
+pub(crate) fn search_fields_help() -> String {
+    let aliases: Vec<String> = TOON_LIST_FIELD_ALIASES
+        .iter()
+        .map(|(alias, field)| format!("{alias} = {field}"))
+        .collect();
+    format!(
+        "Select AND order the displayed columns, e.g. `--fields id,title,status,priority,tags` \
+         or `--fields 'id title opened'`; entries are separated by commas and/or whitespace. \
+         Renders exactly those columns in that order. Valid fields: {}. `opened` is the \
+         creation time. Aliases: {}. Search rows carry no work-routing state, so queued, \
+         in_flight and blocked render false. Default keeps the standard layout. Mirrors \
+         `aida list --fields`",
+        TOON_LIST_KNOWN_FIELDS.join(", "),
+        aliases.join(", ")
     )
 }
 

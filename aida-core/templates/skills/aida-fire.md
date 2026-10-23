@@ -221,7 +221,7 @@ it saw. Ship it:
 
 ```bash
 gh pr ready N
-aida pr ship N    # --override-stale-check ONLY when the ci.yml delta on main is unrelated
+aida pr ship N    # refuses a head behind main: land it with `aida pr train N`
 ```
 
 Never run `aida review record` yourself. If the head moved after review
@@ -251,17 +251,33 @@ PR #N's hold is ready to release: approved at <SHA>, Build green, up to date.
 Please run: ! aida merge-hold clear N
 ```
 
-### 5. Ship serially after any merge wave
+### 5. Land approved PRs through the merge train
 
 Two PRs that are each green can still break main together: one adds a required
 field, the other adds a literal without it. Neither run saw the other.
-`--override-stale-check` does not protect against this. Therefore:
+`aida pr ship` refuses a head behind main for this reason, and no flag
+overrides it. Once two or more PRs
+are approved, land them as one train instead of shipping them one by one:
 
-1. Ship **one** PR.
-2. For the next PR: update it from main (`gh pr update-branch N` or a merge
-   from main), let a **fresh** Build run on the new head, re-record the
-   approval at that head, then ship.
-3. Repeat. Never ship back to back on greens computed against an older main.
+```bash
+aida pr train --all-ready --dry-run   # the gate verdict per PR, and the plan
+aida pr train --all-ready             # or name them: aida pr train 12 13 14
+```
+
+The train applies ship's gates to every PR (approval at head or carried over a
+clean merge from main, no merge hold, clear verdicts), refuses drafts with a
+reason, and stacks one squash commit per PR on main. Each commit must carry
+exactly its PR's approved diff (patch-id), so no re-approval is needed. The
+stack is opened as a `train/*` PR and CI runs on exactly what main will
+receive. Green: it is rebase-merged pinned to its head and each member PR is
+closed with a pointer to its commit. Red: it is rerun once, then bisected in
+halves, and each PR that breaks it is left open with a comment saying why.
+The train never releases a merge hold. A held PR waits for the operator's
+`aida merge-hold clear N`, then rides the next train.
+
+A single approved PR still ships with `aida pr ship N`. Never ship two PRs back
+to back on greens computed against an older main; train them.
+<!-- trace:STORY-1690 | ai:claude -->
 
 ### 6. Wait without polling
 
@@ -288,7 +304,7 @@ Update the branch, or resume the fixer.
 PR's green is now meaningless. Diagnose the break (usually the fixer that hit
 it already knows), fix it forward with one small FASTTRACK PR through the
 normal gate (no `--no-verify`, even for one line), wait for main to go green,
-then resume serial shipping from step 5.
+then resume landing from step 5.
 
 ### 7. Respect spec-level gates
 

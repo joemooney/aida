@@ -524,7 +524,7 @@ For each non-informational spec in the checklist, in order:
 1. **Read the diff against acceptance criteria** — the merge-base diff from
    step 2b above, never a raw tree diff against `main`'s tip — does each
    `- [ ]` line in the spec have matching code?
-2. **Gate on CI, not local cargo** — by default the reviewer runs no cargo: the evidence is a green CI run at the exact PR head, so cite it. Run one targeted `cargo test --profile agent -p <crate> <test_name>` only to reproduce a specific suspected defect. trace:TASK-2209 | ai:claude Never run `cargo test --workspace`, `make check-ci` or an unfiltered `aida-cli-lib --lib` locally: CI's run at the PR head is the full-suite evidence, so cite it. Never set `AIDA_CARGO_NO_SLOT`.
+2. **Gate on CI, not local cargo** — by default the reviewer runs no cargo: the evidence is a green CI run at the exact PR head, so cite it. Run one targeted `cargo test --profile agent -p <crate> <test_name>` only to reproduce a specific suspected defect. Never run `cargo test --workspace`, `make check-ci` or an unfiltered `aida-cli-lib --lib` locally: CI's run at the PR head is the full-suite evidence, so cite it. Never set `AIDA_CARGO_NO_SLOT`. trace:TASK-2209 | ai:claude
 3. **Record the verdict inline in `.aida/review-prompt-pr-<N>.md`** — the file `aida review prompt --write` generated is your worksheet. Edit it in place, appending a verdict block under each spec's section:
    - ✅ **PASS** — every acceptance bullet covered, tests green, no obvious regression
    - ⚠️ **PARTIAL** — some bullets covered, others missing; name the gap precisely (file + line + which bullet)

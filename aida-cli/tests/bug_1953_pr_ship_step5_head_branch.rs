@@ -103,6 +103,28 @@ else
 fi
 "###;
 
+/// STORY-1690: `aida pr ship` fetches the base and the PR head before its
+/// behind-base gate and refuses when it cannot. The fixture's forge URLs
+/// therefore resolve to a local bare clone, and the forge is set in config.
+// trace:STORY-1690 | ai:claude
+fn serve_origin_locally(root: &Path, repo: &Path) {
+    let origin = root.join("origin.git");
+    git(
+        repo,
+        &["clone", "-q", "--bare", ".", origin.to_str().unwrap()],
+    );
+    let key = format!("url.{}.insteadOf", origin.display());
+    for url in [
+        "https://github.com/acme/aida-fixture.git",
+        "https://gitlab.com/acme/aida-fixture.git",
+    ] {
+        git(repo, &["config", "--add", &key, url]);
+    }
+}
+
+/// The fixture's forge setting, for every `.aida/config.toml` it writes.
+const FORGE_GITHUB: &str = "[forge]\nprovider = \"github\"\n";
+
 // trace:BUG-1953.ac87d12b | ai:claude
 #[test]
 fn ship_by_number_from_main_matches_the_lease_on_the_pr_head_branch() {
@@ -154,6 +176,9 @@ fn ship_by_number_from_main_matches_the_lease_on_the_pr_head_branch() {
             "https://github.com/acme/aida-fixture.git",
         ],
     );
+    serve_origin_locally(&root, &repo);
+    std::fs::create_dir_all(repo.join(".aida")).unwrap();
+    std::fs::write(repo.join(".aida/config.toml"), FORGE_GITHUB).unwrap();
 
     // A live lease on the PR head branch — the shell itself stays on `main`.
     let sessions = repo.join(".aida/sessions");
