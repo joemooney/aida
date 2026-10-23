@@ -20,8 +20,12 @@ pub enum MandateAction {
         /// A DRIVE mandate: also covers advisor signoff of sketches
         /// and dispatching fixers, and turns on the 15-minute drive tick that
         /// routes every stalled lane. Implies --ship-held and covers sensitive
-        /// specs unless --exclude-supervised.
+        /// specs unless --exclude-supervised. It also covers relay-restart: the
+        /// tick may restart a crashed relay a human started at a terminal (a
+        /// drive mandate started before this scope existed does not; start a
+        /// new one).
         // trace:STORY-1700 | ai:claude
+        // trace:STORY-1706 | ai:claude
         #[clap(long)]
         drive: bool,
         /// With --drive: keep sensitive specs human-only.

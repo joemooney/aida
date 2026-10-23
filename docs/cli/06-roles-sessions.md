@@ -421,7 +421,8 @@ rechecked before queue work and at the final vendor boundary; unreadable or
 unidentifiable history refuses dispatch. The round prompt comes from that
 combined count. Ordinary queue-work risk and review authority checks still apply. Review instructions forbid local
 Cargo, tests/builds, merge, and branch updates. The watcher adds no verdict
-authority, ship-ready report, or merge action.
+authority and takes no merge action; its ship-readiness report (below) only
+reports.
 
 ### Superseding a review when the head changes
 <!-- trace:TASK-1945 | ai:claude -->
@@ -467,6 +468,45 @@ remaining processes yourself, `aida review watch --release PR-N` clears the
 attempt. It stays refused while any recorded process is still running. An
 attempt recorded before process groups were kept gets per-process signals
 only, with no group sweep.
+
+### Ship-readiness report
+<!-- trace:TASK-1945 | ai:claude -->
+
+Once a change has a recorded verdict and no review of it is reserved, running
+or being superseded, the watcher judges whether it is ready to ship, at most
+once every two minutes per head. It reads the evidence `aida pr ship` checks,
+read-only, and stops at the first refusal:
+
+- no live review marker covers the head;
+- no merge hold of any kind is set (a marker, an unreadable marker, or the
+  forge label). The report names the hold; the watcher never releases one;
+- the head is 0 commits behind its base. A head behind only on paths it does
+  not touch is "ready after its branch is updated" (`gh pr update-branch N`);
+  one behind with overlapping paths is not ready;
+- an authorized, non-author approval covers the head, through the same
+  decision `aida pr ship` makes, including the carry-over of an approval over
+  clean merges of the base branch. The verdict corpus must not refuse the
+  head;
+- every CI check on the head commit has finished and passed (success,
+  neutral or skipped), including the `Build (ubuntu-latest)` check that
+  requires every CI lane. CI is read by commit SHA: GitHub check runs and
+  commit statuses, or GitLab job statuses. No checks, a pending or failed
+  check, a missing required check, or a failed read is not ready;
+- a final forge read finds the head unchanged.
+
+Each judgement prints `PR-N at <head>: ready | ready after its branch is
+updated | not ready: <reason>` on stderr. The last one per change is shown
+by `aida ps` (a "Review-watch readiness" section; `review_watch_ready` in
+`--json`). It is display only: `aida pr ship` checks everything again.
+
+When a change becomes ready, the watcher mails the advisor once per head,
+readiness and approval. The mail names the command to run (`aida pr ship N`,
+or the branch update first) and an actionable `ReviewWatchReady` event lets
+`aida watch --emit-wakes` wake a supervisor. The mail has a deterministic ID
+and is recorded as sent only after both the mail and the event succeed, so a
+failure is retried without a duplicate mail. The watcher never merges, pushes
+or updates a branch; an active fire-mode mandate consumer acts through the
+ordinary `aida pr ship`.
 <!-- trace:TASK-1993 | ai:codex -->
 
 Launch setup keeps invocation receipts before Git allocation. Fresh worktrees
