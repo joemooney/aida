@@ -6,16 +6,25 @@ description: |
   aida-cli-lib/src/status_sections.rs:1176-1191: collect_worktree_status_rows calls seat_clone::probe once per clone lease. That is up to three sandboxed calls per clone, each bounded only by PROBE_TIMEOUT (120 s), with no shared deadline. It runs on both the `aida status` worktree pane (status_sections.rs:323) and `aida status --json` (:3107). This is the same class as TASK-2247 (status_awaiting::collect_cleanup_report), but TASK-2247 does not name this function. Fix it in #2839 together with TASK-2247: pass a deadline through to probe_until, and show a clone the deadline skipped as one explanatory row.
 
   Raised in review of PR-2836: https://github.com/joemooney/aida/pull/2836#issuecomment-6376647899
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T23:17:02.884746612Z
-modified_at: 2026-10-23T23:17:02.884746612Z
+modified_at: 2026-10-23T23:17:39.089532318Z
 req_type: Task
 tags:
 - from-review:PR-2836
 - severity:minor
+history:
+- id: 01a16b0e-4291-70e1-8620-bdf47a4e6c64
+  author: joe
+  timestamp: 2026-10-23T23:17:39.089523214Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: bdd2846897925f4f2a5ab7cd6fe9560fedf8b6e4
   branch: main
