@@ -1444,12 +1444,17 @@ pub(crate) fn ensure_epic_worktree_core(
         args.push(base_ref.clone());
     }
 
-    let res = std::process::Command::new("git")
-        .arg("-C")
-        .arg(main_root)
-        .args(&args)
-        .output()
-        .context("failed to invoke `git worktree add`")?;
+    // trace:BUG-2211 | ai:claude
+    let res = aida_core::git_ops::output_healing_config_lock(
+        main_root,
+        || {
+            let mut cmd = std::process::Command::new("git");
+            cmd.arg("-C").arg(main_root);
+            cmd
+        },
+        &args,
+    )
+    .context("failed to invoke `git worktree add`")?;
     if !res.status.success() {
         anyhow::bail!(
             "`git worktree add` failed: {}",
