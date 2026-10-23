@@ -1,0 +1,27 @@
+id: 01a167ac-a343-7172-acd5-49f4291e0ca9
+spec_id: TASK-2189
+agreed_id: TASK-2189
+title: 'test_env.rs: REQUIRE_BWRAP_LIVE_ENV const took run_path_isolated_test''s doc comment'
+description: |
+  aida-cli-lib/src/test_env.rs:31-37: the new const sits between run_path_isolated_test's /// doc block and the fn. The const inherits the 'PATH readers... Returns true in the parent' doc, and the fn has none. Move the const above that doc block.
+
+  Raised in review of PR-2833: https://github.com/joemooney/aida/pull/2833#issuecomment-6359870563
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-23T07:32:09.667050586Z
+modified_at: 2026-10-23T07:32:09.667050586Z
+req_type: Task
+tags:
+- from-review:PR-2833
+- severity:cosmetic
+filed_at:
+  code_sha: a86d35f6e863a0018d3865e1769c8f1d0faaa3b8
+  branch: pr-2833
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 597ea98e77
+  vendor: claude
+  session: 01a167a7a143
+  harness_version: 2.1.309 (Claude Code)

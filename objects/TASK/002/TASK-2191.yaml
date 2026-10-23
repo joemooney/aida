@@ -1,0 +1,27 @@
+id: 01a167ae-0201-7be0-b839-fe0cf590b8ab
+spec_id: TASK-2191
+agreed_id: TASK-2191
+title: ensure_implementer_branch_pushed hard-fails phase 2 for clone-seat implementers; route through seat_clone::probe before S4c
+description: |
+  aida-cli-lib/src/orchestrator_leases.rs:1069: after S4a, git_output_checked(branch --show-current) and the push both refuse a seat clone. An orchestrated drive with seat_tree=clone therefore always fails phase 2 with 'could not verify implementer branch', even when the seat pushed. This is safe while clone seats are opt-in. S4b/S4c must read branch and unpushed state through seat_clone::probe (no host push) before the default flips.
+
+  Raised in review of PR-2833: https://github.com/joemooney/aida/pull/2833#issuecomment-6359870563
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-23T07:33:39.457686219Z
+modified_at: 2026-10-23T07:33:39.457686219Z
+req_type: Task
+tags:
+- from-review:PR-2833
+- severity:minor
+filed_at:
+  code_sha: a86d35f6e863a0018d3865e1769c8f1d0faaa3b8
+  branch: pr-2833
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 597ea98e77
+  vendor: claude
+  session: 01a167a7a143
+  harness_version: 2.1.309 (Claude Code)

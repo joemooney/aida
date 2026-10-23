@@ -1,0 +1,27 @@
+id: 01a167ad-a42c-7c00-b81d-a6cd9d6dacaf
+spec_id: TASK-2190
+agreed_id: TASK-2190
+title: TASK-2143 ratchet brace_delta mis-tracks raw strings, so a test module can swallow the rest of a file
+description: |
+  aida-cli-lib/src/tests/task_2143_clone_git_ratchet_tests.rs brace_delta treats a backslash in any string as an escape and has no raw-string delimiters. So r"\" or r#"a"b"# inside a #[cfg(test)] module leaves in_string open: the module never closes and the remaining production lines are skipped, so a raw git builder added after it goes uncounted (fail-open). A '\u{7b}' char literal also miscounts a brace. Handle raw strings and \u{..}, and add a layout test.
+
+  Raised in review of PR-2833: https://github.com/joemooney/aida/pull/2833#issuecomment-6359870563
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-23T07:33:15.436632340Z
+modified_at: 2026-10-23T07:33:15.436632340Z
+req_type: Task
+tags:
+- from-review:PR-2833
+- severity:minor
+filed_at:
+  code_sha: a86d35f6e863a0018d3865e1769c8f1d0faaa3b8
+  branch: pr-2833
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 597ea98e77
+  vendor: claude
+  session: 01a167a7a143
+  harness_version: 2.1.309 (Claude Code)

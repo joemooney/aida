@@ -1,0 +1,27 @@
+id: 01a167ae-24c2-7aa1-b12f-3da0ca1230d3
+spec_id: TASK-2192
+agreed_id: TASK-2192
+title: PR-2833 body C1 quote is stale (30 of 30 from 5b014fb9e2)
+description: |
+  The head a86d35f6e8 adds task_2053_bwrap_a_submodule_clone_fails_reentry_and_salvage_closed (31 fns). The live-bwrap step passed structurally at the head, but the quoted list does not name it. Refresh from run 39915809949.
+
+  Raised in review of PR-2833: https://github.com/joemooney/aida/pull/2833#issuecomment-6359870563
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-23T07:33:48.354054623Z
+modified_at: 2026-10-23T07:33:48.354054623Z
+req_type: Task
+tags:
+- from-review:PR-2833
+- severity:cosmetic
+filed_at:
+  code_sha: a86d35f6e863a0018d3865e1769c8f1d0faaa3b8
+  branch: pr-2833
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 597ea98e77
+  vendor: claude
+  session: 01a167a7a143
+  harness_version: 2.1.309 (Claude Code)

@@ -1,0 +1,28 @@
+id: 01a167ae-2e82-7be2-a281-70780db39349
+spec_id: TASK-2193
+agreed_id: TASK-2193
+title: pr_ship_batch test Fake ignores held, so plan_pr's hold-state propagation to CI is untested
+description: |
+  aida-cli-lib/src/pr_ship_batch.rs: the test Fake's ci_at_head (~:1072) takes `_held` and ignores it. As a result, nothing checks that plan_pr (~:272) passes `held.is_some()` into ci_with_hold. A constant `false` there would still pass every test, and a held PR whose only red check is merge-hold-gate would then show "red" in the dry-run plan. Suggestion: record `held` in the Fake (for example ci_heads: Vec<(u64, String, bool)>) and assert it in task_2180_dry_run_reads_the_hold_once_and_names_it.
+
+  Raised in review of PR-2842: https://github.com/joemooney/aida/pull/2842#issuecomment-6359898329
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-23T07:33:50.850225224Z
+modified_at: 2026-10-23T07:33:50.850225224Z
+req_type: Task
+tags:
+- from-review:PR-2842
+- severity:minor
+- tests
+filed_at:
+  code_sha: 519081b3b63f97d6e793f62353cce1a42684be50
+  branch: pr-2842
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 597ea98e77
+  vendor: claude
+  session: 01a167ac71c3
+  harness_version: 2.1.309 (Claude Code)
