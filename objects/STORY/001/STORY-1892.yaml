@@ -3,12 +3,12 @@ spec_id: STORY-1892
 agreed_id: STORY-1892
 title: 'Review PR-2833: TASK-2053 S4a live-gate honesty, no host git in seat clones, raw-git ratchet'
 description: 'Hand-filed review story: #2833 is Refs-only, so auto-queue-review filed none (BUG-2208, folded into TASK-1955). Covers TASK-2053.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-22T18:47:17.813658325Z
-modified_at: 2026-10-22T18:47:31.848695015Z
+modified_at: 2026-10-23T07:39:50.162258159Z
 req_type: Story
 relationships:
 - rel_type:
@@ -16,12 +16,27 @@ relationships:
   target_id: 01a15de1-12c4-7930-aae4-997df5a459ef
   created_at: 2026-10-22T18:47:31.848691537Z
   created_by: joe
+comments:
+- id: 01a167b3-aa12-7360-b989-9a2a79d6ec28
+  author: aida-auto-bump
+  content: 'Auto-completed: PR #2833 is merged on the forge (its merge commit was outside the local scan window).'
+  created_at: 2026-10-23T07:39:50.162413902Z
+  modified_at: 2026-10-23T07:39:50.162413902Z
+  session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
 history:
 - id: 01a164f0-9e80-73b0-8782-c87a05a41d3d
   author: joe
   timestamp: 2026-10-22T18:47:33.248121737Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
   changes: []
+- id: 01a167b3-aa12-7360-b989-9a3b2e8396e9
+  author: aida-auto-bump
+  timestamp: 2026-10-23T07:39:50.162419953Z
+  session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
 filed_at:
   code_sha: 7ffa46a9d0dff57c2e76d77a001e94dec1cb8009
   branch: main
@@ -30,3 +45,6 @@ filed_at:
   aida_build_sha: 7ffa46a9d0
   vendor: claude
   session: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-23T07:39:50.162412994Z
