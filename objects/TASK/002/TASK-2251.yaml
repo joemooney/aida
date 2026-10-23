@@ -3,12 +3,12 @@ spec_id: TASK-2251
 agreed_id: TASK-2251
 title: 'Sweep: post-merge review notes batch 2 (2026-10-23: #2845 #2857)'
 description: 'Advisor 11:19, operator goal no deferrals. Members (superseded into this sweep): TASK-2248 (a pure-git already-merged re-run refuses a fast-forwarded slice), TASK-2249 (pure-git already-merged refs read a possibly stale origin/<base> without fetching), TASK-2250 (dev activate in a worktree exports AIDA_DEV_REPO=<worktree>, which goes stale when the worktree is removed). Each gets a fix plus a test, or evidence it no longer reproduces. Start after #2845 and #2857 have merged.'
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T18:16:23.129102755Z
-modified_at: 2026-10-23T18:17:13.126970173Z
+modified_at: 2026-10-23T18:17:16.799574559Z
 req_type: Task
 relationships:
 - rel_type: Supersedes
@@ -39,6 +39,14 @@ history:
   timestamp: 2026-10-23T18:17:14.375765611Z
   session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
   changes: []
+- id: 01a169fb-42ff-75b2-9377-3d02459c7a55
+  author: joe
+  timestamp: 2026-10-23T18:17:16.799568958Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: c51da8659361da4ae9a01c41f86ea6d28d00e948
   branch: main
