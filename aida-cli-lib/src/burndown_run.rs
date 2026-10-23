@@ -480,6 +480,16 @@ pub(crate) fn handle_burndown_run(
     // so lock lifetime == `claude -p` child lifetime. trace:BUG-759 | ai:claude
     let _drain_guard =
         drain_lock::acquire_drain_lock_with_specs(&project_root, &drain_lock_command, &ready)?;
+    // TASK-1798: `aida drain stop --now` SIGTERMs this launcher; revoke the
+    // running child's grant in-process before exiting. Advisory: without the
+    // handler the lock removal by `stop --now` still revokes it.
+    // trace:TASK-1952 | trace:TASK-1798 | ai:claude
+    if let Err(e) = install_burndown_sigterm_revoke(&project_root) {
+        eprintln!(
+            "  {} {e:#}",
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+        );
+    }
 
     // BUG-660: keep the host awake for the unattended headless drain. Best-effort
     // + pid-scoped (auto-releases when this process exits). trace:BUG-660
@@ -2100,6 +2110,42 @@ pub(crate) fn run_burndown_verbose(
         let _ = crate::drain_lock::stamp_drain_lock_child_grant(&lock_root, None);
     }
     status_code
+}
+
+/// TASK-1798: the burndown launcher's SIGTERM path. Without it the default
+/// action killed the launcher before the in-process revoke after the child
+/// ran, leaving the orphaned `claude -p` child its live implementer grant.
+/// On SIGTERM: [`burndown_sigterm_cleanup`], then exit
+/// [`crate::drain_signal::SIGTERM_EXIT_CODE`].
+// trace:TASK-1952 | trace:TASK-1798 | ai:claude
+#[cfg(unix)]
+fn install_burndown_sigterm_revoke(project_root: &std::path::Path) -> Result<()> {
+    let mut signals = signal_hook::iterator::Signals::new([signal_hook::consts::SIGTERM])
+        .context("installing the burndown SIGTERM handler")?;
+    let root = project_root.to_path_buf();
+    std::thread::Builder::new()
+        .name("aida-burndown-sigterm".into())
+        .spawn(move || {
+            if signals.forever().next().is_some() {
+                burndown_sigterm_cleanup(&root);
+                std::process::exit(crate::drain_signal::SIGTERM_EXIT_CODE);
+            }
+        })
+        .context("spawning the burndown SIGTERM handler thread")?;
+    Ok(())
+}
+
+/// Windows has no SIGTERM; lock reclaim and `stop --now` still revoke.
+#[cfg(not(unix))]
+fn install_burndown_sigterm_revoke(_project_root: &std::path::Path) -> Result<()> {
+    Ok(())
+}
+
+/// TASK-1798: revoke the child grant recorded on this launcher's own drain
+/// lock and release the lock. True when a lock of ours was released.
+// trace:TASK-1952 | trace:TASK-1798 | ai:claude
+pub(crate) fn burndown_sigterm_cleanup(project_root: &std::path::Path) -> bool {
+    crate::drain_lock::release_lock_if_ours(project_root)
 }
 
 /// TASK-1798: record an issued burndown child grant on this launcher's drain

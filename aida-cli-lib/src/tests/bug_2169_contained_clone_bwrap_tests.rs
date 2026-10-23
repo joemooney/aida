@@ -651,21 +651,12 @@ mod linux {
             let _ambient = ambient(&fx.main);
             let roots = crate::session::contained_session_write_roots_from(&clone);
             crate::session::claude_contained_flags_for_roots(&roots)
-        };
-        match refused {
-            Err(e) => assert!(
-                format!("{e:#}").contains("not a seat clone the host recorded"),
-                "{e:#}"
-            ),
-            Ok(flags) => {
-                let settings: serde_json::Value =
-                    serde_json::from_str(flags.last().unwrap()).unwrap();
-                assert!(
-                    !entries(&settings, "allowWrite").contains(&elsewhere),
-                    "{settings}"
-                );
-            }
         }
+        .expect_err("a forged-main seat clone must refuse the contained launch");
+        assert!(
+            format!("{refused:#}").contains("not a seat clone the host recorded"),
+            "{refused:#}"
+        );
         assert!(
             !crate::session::os_wrap_rw_paths(&clone).contains(&elsewhere),
             "os_wrap binds nothing from the forged lease"

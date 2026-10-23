@@ -433,6 +433,71 @@ fn task_1518_stop_now_releases_only_the_dead_pids_own_lock() {
     );
 }
 
+/// TASK-1798: `stop --now` against a dead burndown launcher that recorded a
+/// child grant on its lock revokes that grant before removing the lock, the
+/// grant's only record.
+// trace:TASK-1952 | trace:TASK-1798 | ai:claude
+#[test]
+fn task_1798_stop_now_against_a_dead_launcher_revokes_its_child_grant() {
+    let _env = crate::drain_lock::test_env_isolation();
+    let dead_pid = std::process::id().wrapping_add(4243);
+    let tmp = fake_drain(dead_pid);
+    let root = tmp.path();
+    let subject = "task-1798-stop-now";
+    let grant =
+        crate::seat_authority::test_support::mint_grant_for(root, subject, "implementer", &[]);
+    let valid = || {
+        matches!(
+            crate::seat_authority::grant_check_for(root, &grant, subject),
+            crate::seat_authority::GrantCheck::Valid(_)
+        )
+    };
+    let mut lock = lock_of(root);
+    lock.child_grant_id = Some(grant.clone());
+    std::fs::write(drain_lock_path(root), serde_json::to_string(&lock).unwrap()).unwrap();
+    assert!(valid());
+
+    let outcome = crate::drain_cmd::release_lock_after_stop_now(
+        root,
+        &lock,
+        |_, _| false,
+        Duration::from_secs(1),
+        Duration::from_millis(10),
+    );
+    assert_eq!(outcome, crate::drain_cmd::StopNowLock::ReleasedAfterExit);
+    assert!(!drain_lock_path(root).exists());
+    assert!(
+        !valid(),
+        "stop --now revoked the dead launcher's child grant"
+    );
+}
+
+/// TASK-1798: the burndown launcher's SIGTERM cleanup revokes the running
+/// child's grant recorded on its own lock and releases the lock.
+// trace:TASK-1952 | trace:TASK-1798 | ai:claude
+#[test]
+fn task_1798_burndown_sigterm_cleanup_revokes_the_child_grant() {
+    let _env = crate::drain_lock::test_env_isolation();
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let subject = "task-1798-burndown-sigterm";
+    let grant =
+        crate::seat_authority::test_support::mint_grant_for(root, subject, "implementer", &[]);
+    let valid = || {
+        matches!(
+            crate::seat_authority::grant_check_for(root, &grant, subject),
+            crate::seat_authority::GrantCheck::Valid(_)
+        )
+    };
+    let guard = crate::drain_lock::acquire_drain_lock(root, "burndown run").unwrap();
+    crate::drain_lock::stamp_drain_lock_child_grant(root, Some(&grant)).unwrap();
+    assert!(valid());
+    assert!(crate::burndown_run::burndown_sigterm_cleanup(root));
+    assert!(!drain_lock_path(root).exists());
+    assert!(!valid(), "the SIGTERM path revoked the child grant");
+    drop(guard);
+}
+
 // --- Protocol ---------------------------------------------------------------
 
 /// Acceptance (1): SIGTERM to a fake drain marks the leases at once and
