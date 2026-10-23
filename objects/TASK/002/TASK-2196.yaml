@@ -7,18 +7,27 @@ description: |
   2. aida-cli/tests/bug_1934_bwrap_presenter.rs returns early with an eprintln SKIP when bwrap or user namespaces are unusable. On a CI runner without bwrap (or with AppArmor blocking unprivileged userns), the only real-namespace evidence silently counts as a pass. Consider a CI step that installs bwrap and asserts the test did not skip, or an explicit opt-in env that turns a skip into a failure on CI.
 
   Raised in review of PR-2830: https://github.com/joemooney/aida/pull/2830#issuecomment-6360056858
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T07:44:06.600543651Z
-modified_at: 2026-10-23T07:44:06.600543651Z
+modified_at: 2026-10-23T11:17:26.212978855Z
 req_type: Task
 tags:
 - from-review:PR-2830
 - seat-grant
 - severity:cosmetic
 - tests
+history:
+- id: 01a1687a-e244-71f1-8090-0b0cdf5d91db
+  author: joe
+  timestamp: 2026-10-23T11:17:26.212970465Z
+  session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: dfc7a78a2c0320be325c139bfc4f2bc3bd99ffca
   branch: pr-2830
