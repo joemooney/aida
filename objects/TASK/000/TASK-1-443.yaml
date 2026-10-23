@@ -7,12 +7,12 @@ description: |-
 
   cosmetic (non-blocking): aida-core/templates/hooks/aida-git-guardrails.sh:589 AIDA_CARGO_NO_SLOT block message still names '(make check-ci-fast + make test-touched)' as the pre-push step; should name one targeted cargo test + check-ci-fast. Shell file, so not reviewer fix-forwardable.
   Reviewed sha: 96fd8b253affb617d6431836c0523a5baa8a1f21
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-23T15:02:10.136098141Z
-modified_at: 2026-10-23T15:02:10.136098141Z
+modified_at: 2026-10-23T15:55:41.050228616Z
 req_type: Task
 tags:
 - carried-from:TASK-2209
@@ -25,6 +25,14 @@ history:
   timestamp: 2026-10-23T15:14:16.422192074Z
   session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
   changes: []
+- id: 01a16979-a07a-7b52-a81c-fc7c287deebb
+  author: joe
+  timestamp: 2026-10-23T15:55:41.050221143Z
+  session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: fce1463450fffaa7324261e6305463a58be10b95
   branch: main
