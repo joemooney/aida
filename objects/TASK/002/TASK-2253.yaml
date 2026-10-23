@@ -10,13 +10,22 @@ description: |
   Acceptance:
   - An agy session start (or the nearest event agy offers) triggers the same host-side dead-row gc, or another host-side trigger ends dead agy rows. Name the agy hook event used and pin its payload shape with a test, as was done for Codex.
   - A test shows a dead agy row ends without a manual `aida agent gc`.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T18:23:23.372759315Z
-modified_at: 2026-10-23T18:23:23.372759315Z
+modified_at: 2026-10-23T19:12:57.976097491Z
 req_type: Task
+history:
+- id: 01a16a2e-3e78-76a0-9f74-cec08382fb1b
+  author: joe
+  timestamp: 2026-10-23T19:12:57.976087025Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: e353dc77adea0bf1d39683bc1f4236d9d8e8eb99
   branch: claude/task-2238
