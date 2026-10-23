@@ -1100,8 +1100,13 @@ pub(crate) fn parse_hook_payload(stdin: &str) -> (Option<String>, bool) {
     let Ok(v) = serde_json::from_str::<serde_json::Value>(trimmed) else {
         return (None, false);
     };
+    // Antigravity payloads are camelCase and carry `conversationId`
+    // (Antigravity CLI 1.4.2 builtin `agy-customizations/docs/hooks.md`,
+    // "Common Input Fields" and "### 3. `SessionStart` Contract": no
+    // event-name field). trace:TASK-2253 | ai:claude
     let session_id = v
         .get("session_id")
+        .or_else(|| v.get("conversationId"))
         .and_then(|s| s.as_str())
         .filter(|s| !s.trim().is_empty())
         .map(|s| s.to_string());
@@ -1111,6 +1116,19 @@ pub(crate) fn parse_hook_payload(stdin: &str) -> (Option<String>, bool) {
         .map(|s| s.eq_ignore_ascii_case("SessionStart"))
         .unwrap_or(false);
     (session_id, is_session_start)
+}
+
+/// PURE: [`parse_hook_payload`] plus the event a relay named out-of-band
+/// (`AIDA_HOOK_EVENT`). Antigravity's SessionStart payload has no event-name
+/// field, so its relay names the event instead.
+// trace:TASK-2253 | ai:claude
+pub(crate) fn parse_hook_payload_with_event(
+    payload: &str,
+    event: Option<&str>,
+) -> (Option<String>, bool) {
+    let (session_id, is_session_start) = parse_hook_payload(payload);
+    let named_start = event.is_some_and(|e| e.trim().eq_ignore_ascii_case("SessionStart"));
+    (session_id, is_session_start || named_start)
 }
 
 /// Read `[presence] active_within` / `stale_after` from a project's config,
@@ -1873,6 +1891,38 @@ mod tests {
         assert_eq!(parse_hook_payload(r#"{"session_id":""}"#), (None, false));
         assert_eq!(parse_hook_payload("not json"), (None, false));
         assert_eq!(parse_hook_payload(""), (None, false));
+    }
+
+    /// Antigravity's SessionStart payload (camelCase, no event-name field)
+    /// reaches the notice's session-start path — the one that runs the
+    /// host-side dead-row gc — once its relay names the event. Shape pinned
+    /// from Antigravity CLI 1.4.2 builtin `agy-customizations/docs/hooks.md`,
+    /// "### 3. `SessionStart` Contract".
+    // trace:TASK-2253.acd91dca | ai:claude
+    #[test]
+    fn agy_session_start_reaches_the_notice_session_start_path() {
+        let agy = r#"{"conversationId":"ec33ebf9","workspacePaths":["/w"],"modelName":"auto"}"#;
+        assert_eq!(
+            parse_hook_payload_with_event(agy, Some("SessionStart")),
+            (Some("ec33ebf9".to_string()), true)
+        );
+        // Without the named event an agy payload is an ordinary turn.
+        assert_eq!(
+            parse_hook_payload_with_event(agy, None),
+            (Some("ec33ebf9".to_string()), false)
+        );
+        assert_eq!(
+            parse_hook_payload_with_event(agy, Some("PreInvocation")),
+            (Some("ec33ebf9".to_string()), false)
+        );
+        // A Claude/Codex payload is unchanged by the event hint's absence.
+        assert_eq!(
+            parse_hook_payload_with_event(
+                r#"{"session_id":"s2","hook_event_name":"SessionStart"}"#,
+                None
+            ),
+            (Some("s2".to_string()), true)
+        );
     }
 
     /// Configurable thresholds parse from `[presence]`, defaulting when absent.
