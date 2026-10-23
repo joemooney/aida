@@ -182,49 +182,66 @@ fn a_signal_wins_over_the_pr_lookup_which_is_then_skipped() {
 
 #[test]
 fn outcome_exit_codes_are_distinct_and_mapped_by_exit_code_for_error() {
-    let ours = [
+    // TASK-2154: distinctness comes from the ONE exit-code table, not a
+    // hand-kept list here.
+    let table = crate::orchestrator_leases::EXIT_CODES;
+    for (i, (code, meaning)) in table.iter().enumerate() {
+        assert!(
+            !table[..i].iter().any(|(c, _)| c == code),
+            "exit code {code} ({meaning}) has two rows; merge them into one"
+        );
+    }
+    for code in [3, 124] {
+        assert!(
+            table.iter().any(|(c, _)| *c == code),
+            "exit code {code} is missing from the table"
+        );
+    }
+    for code in [
         NO_PR_EXIT_CODE,
         PUNTED_EXIT_CODE,
         HELD_EXIT_CODE,
         CAP_EXIT_CODE,
-    ];
-    use crate::pr_ship::ShipRefusal::*;
-    let existing: Vec<i32> = [
-        0,
-        1,
-        2, // clap usage errors
-        crate::drain_next_n::DRAIN_CAP_EXIT_CODE,
-        crate::pr_rebase::REBASE_EXIT_CODE_CONFLICT,
-        crate::pr_rebase::REBASE_EXIT_CODE_REFUSED,
-        crate::queue_cmd::NO_REVIEW_VERDICT_EXIT_CODE,
-        crate::drain_signal::SIGTERM_EXIT_CODE,
-    ]
-    .into_iter()
-    .chain(
-        [
-            CiRed,
-            CiTimeout,
-            NotMergeable,
-            Review,
-            StaleDefinition,
-            MergeHold,
-        ]
-        .into_iter()
-        .map(|r| r as i32),
-    )
-    .collect();
-    for (i, code) in ours.iter().enumerate() {
-        assert!(
-            !existing.contains(code),
-            "exit code {code} is already in use"
+    ] {
+        assert_eq!(
+            table.iter().filter(|(c, _)| *c == code).count(),
+            1,
+            "exit code {code} must have exactly one row"
         );
-        assert!(!ours[..i].contains(code), "exit code {code} is used twice");
         let err = anyhow::Error::new(StandaloneImplementerExit {
-            code: *code,
+            code,
             message: "x".into(),
+            vendor_exit: false,
         })
         .context("queue work failed");
-        assert_eq!(crate::exit_code_for_error(&err), *code);
+        assert_eq!(crate::exit_code_for_error(&err), code);
+    }
+}
+
+/// TASK-2215: `exit_code_for_error` reads the table. A named code with no
+/// row exits 1; only a vendor pass-through skips the table.
+#[test]
+fn exit_code_for_error_reads_the_exit_code_table() {
+    let unlisted = 77;
+    assert!(!crate::orchestrator_leases::EXIT_CODES
+        .iter()
+        .any(|(c, _)| *c == unlisted));
+    let exit = |vendor_exit| {
+        crate::exit_code_for_error(&anyhow::Error::new(StandaloneImplementerExit {
+            code: unlisted,
+            message: "x".into(),
+            vendor_exit,
+        }))
+    };
+    assert_eq!(exit(false), 1, "an unregistered named code must not escape");
+    assert_eq!(exit(true), unlisted, "the vendor's own code passes through");
+    let rebase = anyhow::Error::new(crate::pr_rebase::RebaseFailureExit {
+        code: unlisted,
+        message: "x".into(),
+    });
+    assert_eq!(crate::exit_code_for_error(&rebase), 1);
+    for (code, _) in crate::orchestrator_leases::EXIT_CODES {
+        assert_eq!(crate::orchestrator_leases::named_exit_code(*code), *code);
     }
 }
 
@@ -740,6 +757,7 @@ fn the_launch_record_never_names_the_orchestrator_that_ran_it() {
                 &crate::seat_authority::HeadlessChildGrant::Baseline {
                     cause: "the launcher's grant does not delegate `implementer`".into(),
                 },
+                Some("g-advisor"),
             );
         })
     });
@@ -769,6 +787,37 @@ fn the_launch_record_never_names_the_orchestrator_that_ran_it() {
     assert_eq!(note.grant, "baseline");
     assert_eq!(note.reason, "launcher-did-not-delegate");
     assert!(note.detail.unwrap().contains("does not delegate"));
+}
+
+/// TASK-2154: the audit note tells a launcher with no grant apart from a
+/// granted launcher that did not delegate `implementer`.
+#[test]
+fn baseline_reason_distinguishes_no_grant_from_not_delegated() {
+    assert_eq!(baseline_reason(None), BASELINE_NO_GRANT);
+    assert_eq!(baseline_reason(Some("")), BASELINE_NO_GRANT);
+    assert_eq!(baseline_reason(Some("  ")), BASELINE_NO_GRANT);
+    assert_eq!(baseline_reason(Some("g-advisor")), BASELINE_NOT_DELEGATED);
+    assert_ne!(BASELINE_NO_GRANT, BASELINE_NOT_DELEGATED);
+
+    let root = tempfile::tempdir().unwrap();
+    let lease = implementer_lease(root.path().join("wt"));
+    let path = crate::lease_path(root.path(), &lease.id);
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(&path, toml::to_string_pretty(&lease).unwrap()).unwrap();
+    record_child_authority(
+        root.path(),
+        LEASE,
+        &crate::seat_authority::HeadlessChildGrant::Baseline {
+            cause: "no valid parent seat grant is active".into(),
+        },
+        None,
+    );
+    let note = crate::review_authority::load_ledger(root.path())
+        .into_iter()
+        .find_map(|r| r.launch)
+        .expect("a launch-authority record");
+    assert_eq!(note.grant, "baseline");
+    assert_eq!(note.reason, BASELINE_NO_GRANT);
 }
 
 // ── End to end, with a stub vendor ────────────────────────────────────────
