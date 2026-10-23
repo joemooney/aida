@@ -42,9 +42,16 @@ impl Readiness {
     }
 }
 
-fn update_command(change: &forge::Change) -> String {
+/// How to bring the branch up to date with a merge of its base: a rebase
+/// rewrites the change's own commits, and the TASK-1960 carry-over refuses
+/// that, so the advice never names one.
+// trace:TASK-1945 | ai:claude (TASK-2202)
+pub(super) fn update_command(change: &forge::Change) -> String {
     if change.gitlab {
-        format!("`glab mr rebase {}`", change.id)
+        format!(
+            "a merge of `{base}` into the source branch (`git merge origin/{base}` there, then a push)",
+            base = change.base
+        )
     } else {
         format!("`gh pr update-branch {}`", change.id)
     }
@@ -76,6 +83,9 @@ pub(super) trait Evidence {
     fn hold(&self, change: &forge::Change) -> Result<Option<String>>;
     /// Every CI check on `sha`.
     fn ci(&self, sha: &str) -> Result<crate::forge::CommitChecks>;
+    /// The checks that must be present and green beyond "every check
+    /// passed": the project's configured ones. An unreadable setting is `Err`.
+    fn required_checks(&self) -> Result<Vec<String>>;
     /// Commits behind the base, and whether the base's changes overlap the
     /// change's paths.
     fn base(&self, change: &forge::Change) -> Result<(u64, bool)>;
@@ -122,8 +132,13 @@ pub(super) fn evaluate(
             short(&checks.sha)
         ));
     }
+    let required = match evidence.required_checks() {
+        Ok(required) => required,
+        Err(error) => return not(format!("required CI checks unknown: {error:#}")),
+    };
+    let required: Vec<&str> = required.iter().map(String::as_str).collect();
     let names = |names: &[String]| bounded_diagnostic(&names.join(", "));
-    match crate::forge::judge_commit_checks(&checks, &[crate::forge::CI_AGGREGATOR_CHECK]) {
+    match crate::forge::judge_commit_checks(&checks, &required) {
         crate::forge::CommitCi::Green => {}
         crate::forge::CommitCi::NoChecks => return not("no CI checks on the head".into()),
         crate::forge::CommitCi::MissingRequired(name) => {
@@ -237,40 +252,19 @@ pub(super) struct Live<'a> {
 
 impl Evidence for Live<'_> {
     fn approval(&self, change: &forge::Change) -> std::result::Result<Approval, String> {
-        let head = change.head.as_str();
-        let (candidates, policy, ids) = crate::pr_cmd::merge_approval_subject(
-            &[self.root],
-            self.root,
-            change.id,
-            &[],
-            None,
-            Some(head),
-        );
-        let site = crate::review_carryover::CarryOverSite::quiet(self.root, Some(&change.base));
-        let approval = approval_at(change.id, &candidates, head, &policy, &site)?;
-        match crate::merge_hold::corpus_gate_decision(
-            self.root,
-            change.id,
-            &ids,
-            Some(&change.base),
-            || Some(head.to_string()),
-        ) {
-            Ok(crate::merge_hold::CorpusMergeGate::Clear) => {}
-            Ok(crate::merge_hold::CorpusMergeGate::Refuse { message, .. }) => return Err(message),
-            Err(error) => return Err(format!("{error:#}")),
-        }
-        Ok(approval)
+        live_approval(self.root, change)
     }
     fn under_review(&self, change: &forge::Change) -> Option<String> {
-        crate::review_marker::live_description(self.root, change.id, Some(&change.head))
+        live_under_review(self.root, change)
     }
     fn hold(&self, change: &forge::Change) -> Result<Option<String>> {
-        hold_at(self.root, change.id, || {
-            crate::merge_hold::label_present(self.root, change.id)
-        })
+        live_hold(self.root, change)
     }
     fn ci(&self, sha: &str) -> Result<crate::forge::CommitChecks> {
         self.repo.commit_checks(self.root, sha)
+    }
+    fn required_checks(&self) -> Result<Vec<String>> {
+        required_checks(self.root)
     }
     fn base(&self, change: &forge::Change) -> Result<(u64, bool)> {
         if let (Some(behind), Some(overlap)) = (change.behind, change.overlap) {
@@ -286,6 +280,86 @@ impl Evidence for Live<'_> {
     fn head(&self, change: &forge::Change) -> Result<String> {
         Ok(self.repo.change(self.root, change.id)?.head)
     }
+}
+
+// The Live adapters' bodies, free of the forge repository so tests drive
+// them on real fixtures. trace:TASK-1945 | ai:claude (TASK-2203)
+pub(super) fn live_approval(
+    root: &Path,
+    change: &forge::Change,
+) -> std::result::Result<Approval, String> {
+    let head = change.head.as_str();
+    let (candidates, policy, ids) =
+        crate::pr_cmd::merge_approval_subject(&[root], root, change.id, &[], None, Some(head));
+    let site = crate::review_carryover::CarryOverSite::quiet(root, Some(&change.base));
+    let approval = approval_at(change.id, &candidates, head, &policy, &site)?;
+    corpus_at(root, change, &ids)?;
+    Ok(approval)
+}
+
+/// The TASK-1968 verdict-corpus gate on the head, read-only. `Err` is its
+/// refusal, or the error that made the corpus unreadable.
+pub(super) fn corpus_at(
+    root: &Path,
+    change: &forge::Change,
+    ids: &[String],
+) -> std::result::Result<(), String> {
+    match crate::merge_hold::corpus_gate_decision(root, change.id, ids, Some(&change.base), || {
+        Some(change.head.clone())
+    }) {
+        Ok(crate::merge_hold::CorpusMergeGate::Clear) => Ok(()),
+        Ok(crate::merge_hold::CorpusMergeGate::Refuse { message, .. }) => Err(message),
+        Err(error) => Err(format!("{error:#}")),
+    }
+}
+
+pub(super) fn live_under_review(root: &Path, change: &forge::Change) -> Option<String> {
+    crate::review_marker::live_description(root, change.id, Some(&change.head))
+}
+
+pub(super) fn live_hold(root: &Path, change: &forge::Change) -> Result<Option<String>> {
+    hold_at(root, change.id, || {
+        crate::merge_hold::label_present(root, change.id)
+    })
+}
+
+/// The project's required CI checks, from `[review_watch] required_checks`
+/// in `.aida/config.toml`. A check's name is the forge's, so each project
+/// (and so its one forge repository) names its own; unset requires no named
+/// check beyond every check on the head passing. A config that cannot be
+/// read or parsed is `Err`, never "nothing required".
+// trace:TASK-1945 | ai:claude (TASK-2201)
+pub(super) fn required_checks(root: &Path) -> Result<Vec<String>> {
+    let path = root.join(".aida").join("config.toml");
+    let text = match std::fs::read_to_string(&path) {
+        Ok(text) => text,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(error) => return Err(error).context("read .aida/config.toml"),
+    };
+    let config: toml::Value = toml::from_str(&text).context("parse .aida/config.toml")?;
+    let Some(value) = config
+        .get("review_watch")
+        .and_then(|section| section.get("required_checks"))
+    else {
+        return Ok(Vec::new());
+    };
+    let names = value
+        .as_array()
+        .context("`[review_watch] required_checks` is not a list")?
+        .iter()
+        .map(|name| {
+            name.as_str()
+                .map(str::trim)
+                .filter(|name| !name.is_empty())
+                .map(str::to_string)
+                .context("`[review_watch] required_checks` holds a non-name")
+        })
+        .collect::<Result<Vec<_>>>()?;
+    anyhow::ensure!(
+        names.len() <= 32,
+        "`[review_watch] required_checks` names more than 32 checks"
+    );
+    Ok(names)
 }
 
 /// The approval gate `aida pr ship` applies, decided read-only: an

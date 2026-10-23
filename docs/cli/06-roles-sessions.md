@@ -462,23 +462,37 @@ read-only, and stops at the first refusal:
 - no merge hold of any kind is set (a marker, an unreadable marker, or the
   forge label). The report names the hold; the watcher never releases one;
 - the head is 0 commits behind its base. A head behind only on paths it does
-  not touch is "ready after its branch is updated" (`gh pr update-branch N`);
-  one behind with overlapping paths is not ready;
+  not touch is "ready after its branch is updated" (`gh pr update-branch N`,
+  or on GitLab a merge of the target branch into the source branch); one
+  behind with overlapping paths is not ready. The advice is always a merge:
+  a rebase rewrites the change's own commits, so its approval no longer
+  carries over;
 - an authorized, non-author approval covers the head, through the same
   decision `aida pr ship` makes, including the carry-over of an approval over
   clean merges of the base branch. The verdict corpus must not refuse the
   head;
 - every CI check on the head commit has finished and passed (success,
-  neutral or skipped), including the `Build (ubuntu-latest)` check that
-  requires every CI lane. CI is read by commit SHA: GitHub check runs and
-  commit statuses, or GitLab job statuses. No checks, a pending or failed
-  check, a missing required check, or a failed read is not ready;
+  neutral or skipped), and every check the project requires is among them.
+  A project names its required checks in `.aida/config.toml`; unset
+  requires none beyond every check passing. AIDA requires its
+  `Build (ubuntu-latest)` check, which requires every CI lane:
+
+  ```toml
+  [review_watch]
+  required_checks = ["Build (ubuntu-latest)"]
+  ```
+
+  CI is read by commit SHA: GitHub check runs and commit statuses, or GitLab
+  job statuses. No checks, a pending or failed check, a missing required
+  check, an unreadable config, or a failed read is not ready;
 - a final forge read finds the head unchanged.
 
 Each judgement prints `PR-N at <head>: ready | ready after its branch is
 updated | not ready: <reason>` on stderr. The last one per change is shown
 by `aida ps` (a "Review-watch readiness" section; `review_watch_ready` in
-`--json`). It is display only: `aida pr ship` checks everything again.
+`--json`). It is display only: `aida pr ship` checks everything again. A
+head with a wake still waiting for delivery is judged again on the next
+pass; otherwise it waits out the two minutes.
 
 When a change becomes ready, the watcher mails the advisor once per head,
 readiness and approval. The mail names the command to run (`aida pr ship N`,
@@ -488,6 +502,28 @@ and is recorded as sent only after both the mail and the event succeed, so a
 failure is retried without a duplicate mail. The watcher never merges, pushes
 or updates a branch; an active fire-mode mandate consumer acts through the
 ordinary `aida pr ship`.
+
+### Review notices
+<!-- trace:TASK-1945 | ai:claude -->
+
+The same pass sends two more notices, each once:
+
+- **Findings.** When a review of the current head requested changes (or
+  rejected it), and no approval of that head followed, the change author gets
+  one mail per verdict. It goes to the AIDA identity the forge login maps to
+  (the advisor when none does), the same mapping the merge-base notice uses.
+  The mail names the findings file (`.aida/review-verdicts/PR-N.json`, plus
+  the archived round file when the verdict was also archived), the round
+  number, and whether this was the last round under the two-round cap. A new
+  blocking verdict, on a new head or the same one, is a new mail.
+- **Round cap.** When a change has used both review rounds and its head has
+  no review, the watcher starts none, and mails the advisor once for the
+  change. The mail names the reviewed heads, the unreviewed head, and the
+  findings file.
+
+Like the ready wake, each notice has a deterministic ID and is recorded as
+sent only after delivery. A failed delivery is retried on a later pass and
+does not stop the readiness report.
 <!-- trace:TASK-1993 | ai:codex -->
 
 Launch setup keeps invocation receipts before Git allocation. Fresh worktrees
