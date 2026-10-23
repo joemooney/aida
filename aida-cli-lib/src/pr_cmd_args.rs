@@ -191,13 +191,11 @@ pub enum PrCommand {
         #[clap(long)]
         no_trailer_check: bool,
 
-        /// Ship even when the PR's green check completed before a
-        /// CI-definition file (a workflow, or a script it invokes directly)
-        /// changed on the base branch. Without this, ship refuses so a
-        /// green that no longer means what it looks like doesn't merge
-        /// unnoticed. A plain test-file change on the base branch only
-        /// warns and never needs this flag.
-        // trace:BUG-1468 | ai:claude — plain `//` keeps the marker out of `--help`.
+        /// Retired: ship now refuses any PR whose head is behind its base
+        /// branch, CI-definition change or not, and this flag does not
+        /// override that. Land a behind PR with `aida pr train N`, or merge
+        /// the base into the branch and wait for green.
+        // trace:BUG-1468 trace:STORY-1690 | ai:claude — plain `//` keeps the marker out of `--help`.
         #[clap(long)]
         override_stale_check: bool,
 
@@ -241,6 +239,63 @@ pub enum PrCommand {
         // trace:STORY-1663 | ai:antigravity
         #[clap(long, visible_alias = "complete-spec", conflicts_with = "no_complete")]
         final_slice: bool,
+    },
+
+    /// Land a batch of approved PRs together through a merge train, so two
+    /// PRs that are each green cannot break main together.
+    ///
+    /// Each PR must pass the same gates `aida pr ship` applies before a
+    /// merge: open, not a draft, on the default branch, no merge hold, an
+    /// approval recorded at its head (or carried over a clean merge from
+    /// main), a clear verdict corpus, no live drive owning it, and no spec
+    /// tagged `review:draft-only`. A spec whose execution mode needs
+    /// supervision merges only for a human at a terminal who named that PR,
+    /// or under an active mandate (always for one found by --all-ready). Drafts are refused with a reason, since CI does not run Build
+    /// on them. GitHub only for now.
+    ///
+    /// The train is main plus one squash commit per PR, each written with
+    /// the subject `aida pr ship` would use and checked to carry exactly the
+    /// PR's approved diff (by patch-id). A PR that conflicts, or whose diff
+    /// changes once stacked, is left out with its reason. The train is
+    /// opened as a `train/*` PR so the normal CI runs on exactly what main
+    /// will receive. When it is green and main has not moved, it is
+    /// rebase-merged pinned to its head, and each member PR is closed with a
+    /// pointer to its commit on main. When it is red, it is rerun once, then
+    /// split in halves (two at a time) until each bad PR is isolated and
+    /// left out with a comment.
+    ///
+    /// `--dry-run` gates and builds the train and prints the plan without
+    /// pushing anything; add `--local-ci <CMD>` to simulate the whole run
+    /// with a local command as CI, against a checkout of each train tip.
+    // trace:STORY-1690 | ai:claude
+    #[clap(group(ArgGroup::new("train_members").required(true).args(["prs", "all_ready"])))]
+    Train {
+        /// PR numbers to train, in landing order.
+        #[clap(value_name = "N")]
+        prs: Vec<u64>,
+
+        /// Train every open PR on the default branch that passes the gates,
+        /// oldest first.
+        #[clap(long, conflicts_with = "prs")]
+        all_ready: bool,
+
+        /// Gate and build the train and print the plan; push nothing.
+        #[clap(long)]
+        dry_run: bool,
+
+        /// With --dry-run: run CMD in a checkout of each train tip as the
+        /// CI, and simulate the full land / rerun / bisect run locally.
+        #[clap(long, value_name = "CMD", requires = "dry_run")]
+        local_ci: Option<String>,
+
+        /// At most this many PRs per train. With --all-ready the rest wait
+        /// for the next train; naming more PRs than this is refused.
+        #[clap(long, value_name = "N", default_value_t = 10)]
+        max: usize,
+
+        /// Skip the `aida pull` after a train lands.
+        #[clap(long)]
+        no_pull: bool,
     },
 
     /// Ship several PRs that need a human merge, one at a time, in order.
