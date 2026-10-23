@@ -1,0 +1,33 @@
+id: 01a169c0-b180-70d0-b100-b375798cc72b
+spec_id: TASK-2246
+agreed_id: TASK-2246
+title: 'NO_SLOT guard residuals: time/xargs prefixes and no-equals assignments (printf -v, read) then export'
+description: |
+  aida-core/templates/hooks/aida-git-guardrails.sh exits 0 (verified at 9415a864f4) on:
+  - printf 'AIDA_CARGO_NO_SLOT=1 make' > x.sh; time . ./x.sh   (time prefix before dot-source; NO_SLOT_CMD_START lacks time)
+  - printf 'AIDA_CARGO_NO_SLOT=1 make' > x.sh; xargs -a x.sh env   (env fed its assignment through xargs)
+  - printf -v AIDA_CARGO_NO_SLOT 1; export AIDA_CARGO_NO_SLOT   (no '=' anywhere)
+  - read AIDA_CARGO_NO_SLOT <<< 1; export AIDA_CARGO_NO_SLOT
+  None is named in TASK-2139/2140. Cover the time/xargs prefixes, and block a bare 'export AIDA_CARGO_NO_SLOT' (it exports a value set some other way), or record these as out of scope in the hook comment.
+
+  Raised in review of PR-2837: https://github.com/joemooney/aida/pull/2837#issuecomment-6370512179
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-23T17:13:18.464164551Z
+modified_at: 2026-10-23T17:13:18.464164551Z
+req_type: Task
+tags:
+- from-review:PR-2837
+- hooks
+- severity:minor
+filed_at:
+  code_sha: 9415a864f4e70991f81e26587d09474e779c431e
+  branch: pr-2837
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 017e4a4949
+  vendor: claude
+  session: 01a169bc14b2
+  harness_version: 2.1.309 (Claude Code)

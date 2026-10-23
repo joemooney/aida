@@ -1,0 +1,28 @@
+id: 01a169c0-8ece-7d30-b442-b87a4fe8a9dd
+spec_id: TASK-2245
+agreed_id: TASK-2245
+title: 'TASK-2001 ratchet: a remote verb held in a local args array is never checked (queue_cmd recover_push_branch)'
+description: |
+  task_2001_unrouted_remote_calls (aida-cli-lib/src/tests/bug_2181_host_remote_credentials_tests.rs) matches VERB only against a literal first element of .args([...]). queue_cmd.rs:14619 recover_push_branch builds let args = ["push", "-u", "--", "origin", branch] and calls .args(args).remote_credentials(repo, "origin") (14632-14636). The function has no remote parameter, so if its routing is dropped the ratchet stays green. It is the only such site in the workspace today. Fix: resolve a local array binding before matching VERB, or require a marker on .args(<ident>) builders.
+
+  Raised in review of PR-2837: https://github.com/joemooney/aida/pull/2837#issuecomment-6370512179
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-23T17:13:09.582222036Z
+modified_at: 2026-10-23T17:13:09.582222036Z
+req_type: Task
+tags:
+- from-review:PR-2837
+- guards
+- severity:minor
+filed_at:
+  code_sha: 9415a864f4e70991f81e26587d09474e779c431e
+  branch: pr-2837
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 017e4a4949
+  vendor: claude
+  session: 01a169bc14b2
+  harness_version: 2.1.309 (Claude Code)
