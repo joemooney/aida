@@ -30,6 +30,11 @@ use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+// The one commit-keyed CI reader. trace:TASK-1945 | ai:claude
+#[path = "forge_commit_ci.rs"]
+mod commit_ci;
+pub(crate) use commit_ci::*;
+
 /// A supervised merge-hold deliberately refused a merge.
 ///
 /// Keep this as a typed error so orchestrator callers can distinguish a human
@@ -872,6 +877,15 @@ pub trait Forge {
 
     /// `gh run` / `glab ci` / pure-git `CiState::None`.
     fn ci_status(&self, target: CiTarget) -> Result<CiStatus>;
+
+    /// Every CI check on one commit SHA, through the shared commit-keyed
+    /// reader. Any CLI, API or parse failure is an `Err`; a forge with no
+    /// commit-keyed CI (pure git) always errs, so a caller never reads it as
+    /// clean.
+    // trace:STORY-1689 | ai:claude
+    fn commit_checks(&self, sha: &str) -> Result<CommitChecks> {
+        anyhow::bail!("this forge has no commit-keyed CI to read for {sha}")
+    }
 
     /// STORY-516: branch-keyed CI probe (PR number + check rollup in one call)
     /// — the forge-neutral form of `probe_ci_state_for_branch`. Returns a
@@ -1825,9 +1839,12 @@ impl Forge for GitHubForge {
     }
 
     fn ci_status(&self, target: CiTarget) -> Result<CiStatus> {
+        // STORY-1689: a commit's CI is read by its SHA. `gh pr checks <sha>`
+        // finds no PR for a squash-merged main commit and so never answered.
+        // trace:STORY-1689 | ai:claude
         let r#ref = match target {
             CiTarget::Branch(b) => b,
-            CiTarget::Commit(c) => c,
+            CiTarget::Commit(c) => return Ok(ci_status_from_commit_checks(self.commit_checks(&c))),
             CiTarget::Change(c) => c.branch,
         };
         let out = self.gh(&[
@@ -1877,6 +1894,20 @@ impl Forge for GitHubForge {
             url: None,
             failing_checks: failing,
         })
+    }
+
+    fn commit_checks(&self, sha: &str) -> Result<CommitChecks> {
+        // trace:STORY-1689 | ai:claude
+        anyhow::ensure!(
+            crate::git_arg_guard::is_hex_sha(sha),
+            "invalid commit `{sha}` for a CI read"
+        );
+        let gh = crate::resolve_forge_cli(ForgeKind::GitHub).ok_or_else(|| {
+            anyhow::anyhow!("could not invoke `gh` — is the GitHub CLI installed?")
+        })?;
+        let mut api = |endpoint: &str| commit_ci_api(&gh, &self.project_root, endpoint);
+        // `gh api` fills `{owner}/{repo}` from this checkout's repository.
+        github_commit_checks("{owner}/{repo}", sha, &mut api)
     }
 
     fn ci_probe_for_branch(&self, branch: &str) -> Result<CiProbeResult> {
@@ -2458,13 +2489,30 @@ impl Forge for GitLabForge {
         // its source branch (the orchestrator merges branches, not commits). The
         // pure mapper degrades a missing CLI / no pipelines to CiState::None,
         // mirroring GitHubForge::ci_status. trace:STORY-510 | ai:claude
+        // STORY-1689: a commit target reads the job statuses on that SHA;
+        // `pipelines?ref=` takes only a branch or tag name.
+        // trace:STORY-1689 | ai:claude
         let r#ref = match target {
             CiTarget::Branch(b) => b,
-            CiTarget::Commit(c) => c,
+            CiTarget::Commit(c) => return Ok(ci_status_from_commit_checks(self.commit_checks(&c))),
             CiTarget::Change(c) => c.branch,
         };
         let out = self.glab_api_get("projects/:id/pipelines", &[("ref", &r#ref)]);
         Ok(ci_status_from_glab_pipelines(out))
+    }
+
+    fn commit_checks(&self, sha: &str) -> Result<CommitChecks> {
+        // trace:STORY-1689 | ai:claude
+        anyhow::ensure!(
+            crate::git_arg_guard::is_hex_sha(sha),
+            "invalid commit `{sha}` for a CI read"
+        );
+        let glab = crate::resolve_forge_cli(ForgeKind::GitLab).ok_or_else(|| {
+            anyhow::anyhow!("could not invoke `glab` — is the GitLab CLI installed?")
+        })?;
+        let mut api = |endpoint: &str| commit_ci_api(&glab, &self.project_root, endpoint);
+        // `glab api` resolves `:id` to this checkout's project.
+        gitlab_commit_checks(":id", sha, &mut api)
     }
 
     fn ci_probe_for_branch(&self, branch: &str) -> Result<CiProbeResult> {
@@ -3733,6 +3781,56 @@ pub(crate) fn stream_probe_needs_wait(probe: &CiProbeResult) -> bool {
 
 // trace:TASK-1424 | ai:claude — pub(crate) so gitlab_mirror_link can reuse this
 // mapper for a sha-filtered pipeline query instead of a second implementation.
+/// Bound on one commit-keyed CI API call.
+// trace:STORY-1689 | ai:claude
+const COMMIT_CI_API_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// Run `<cli> api -X GET <endpoint>` in `root` for the commit-keyed reader;
+/// a spawn failure, timeout or non-zero exit is an `Err`.
+// trace:STORY-1689 | ai:claude
+fn commit_ci_api(cli: &Path, root: &Path, endpoint: &str) -> Result<Vec<u8>> {
+    let mut command = Command::new(cli);
+    command
+        .args(["api", "-X", "GET", endpoint])
+        .current_dir(root)
+        .stdin(std::process::Stdio::null());
+    let out =
+        crate::command_output_with_timeout(command, COMMIT_CI_API_TIMEOUT).with_context(|| {
+            format!(
+                "`{} api {endpoint}` timed out or failed to spawn",
+                cli.display()
+            )
+        })?;
+    anyhow::ensure!(
+        out.status.success(),
+        "`{} api {endpoint}` failed ({}): {}",
+        cli.display(),
+        out.status,
+        String::from_utf8_lossy(&out.stderr).trim()
+    );
+    Ok(out.stdout)
+}
+
+/// `ci_status(CiTarget::Commit)`: the commit's checks judged with no
+/// required check. A failed read, or a commit with no checks, is
+/// `CiState::None` (no signal), never success.
+// trace:STORY-1689 | ai:claude
+pub(crate) fn ci_status_from_commit_checks(checks: Result<CommitChecks>) -> CiStatus {
+    let (state, failing_checks) = match checks.map(|c| judge_commit_checks(&c, &[])) {
+        Ok(CommitCi::Green) => (CiState::Success, Vec::new()),
+        Ok(CommitCi::Pending(_)) => (CiState::Pending, Vec::new()),
+        Ok(CommitCi::Failed(names)) => (CiState::Failed, names),
+        Ok(CommitCi::NoChecks | CommitCi::MissingRequired(_)) | Err(_) => {
+            (CiState::None, Vec::new())
+        }
+    };
+    CiStatus {
+        state,
+        url: None,
+        failing_checks,
+    }
+}
+
 pub(crate) fn ci_status_from_glab_pipelines(out: Result<std::process::Output>) -> CiStatus {
     let none = || CiStatus {
         state: CiState::None,
@@ -4329,6 +4427,10 @@ pub(crate) mod fake {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "tests/story_1689_commit_ci_status_tests.rs"]
+mod story_1689_commit_ci_status_tests;
 
 #[cfg(test)]
 mod tests {

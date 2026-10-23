@@ -2617,6 +2617,27 @@ pub(crate) fn ps_review_watch_held_toon(held: &[(String, String)]) -> String {
     crate::toon::table_raw("review_watch_held", &["change", "cause"], &rows)
 }
 
+/// The `review_watch_ready` field of `aida ps --json`: each reviewed
+/// change's last ship-readiness report. Display only; `aida pr ship`
+/// rechecks everything.
+// trace:TASK-1945 | ai:claude
+pub(crate) fn ps_review_watch_ready_json(ready: &[(String, String)]) -> serde_json::Value {
+    ready
+        .iter()
+        .map(|(change, report)| serde_json::json!({ "change": change, "readiness": report }))
+        .collect()
+}
+
+/// The agent-mode `review_watch_ready` table of `aida ps`.
+// trace:TASK-1945 | ai:claude
+pub(crate) fn ps_review_watch_ready_toon(ready: &[(String, String)]) -> String {
+    let rows: Vec<Vec<String>> = ready
+        .iter()
+        .map(|(change, report)| vec![change.clone(), report.clone()])
+        .collect();
+    crate::toon::table_raw("review_watch_ready", &["change", "readiness"], &rows)
+}
+
 pub(crate) fn handle_ps(json: bool, all: bool) -> Result<()> {
     let project_root =
         find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
@@ -2627,6 +2648,8 @@ pub(crate) fn handle_ps(json: bool, all: bool) -> Result<()> {
     // A review-watch slot held by a superseded review that cannot yet be
     // confirmed gone, with the cause. trace:TASK-1945 | ai:claude
     let watch_held = crate::review_watch::held_slots(&project_root);
+    // trace:TASK-1945 | ai:claude
+    let watch_ready = crate::review_watch::readiness_reports(&project_root);
 
     // STORY-769: the last-human-input presence oracle — "operator last seen Nm
     // ago" + an active/idle/stale verdict, from the per-turn `aida awaiting
@@ -2771,6 +2794,7 @@ pub(crate) fn handle_ps(json: bool, all: bool) -> Result<()> {
                 "operator": operator,
                 // trace:TASK-1945 | ai:claude
                 "review_watch_held": ps_review_watch_held_json(&watch_held),
+                "review_watch_ready": ps_review_watch_ready_json(&watch_ready),
                 "wave": live_wave.as_ref().map(|l| serde_json::json!({
                     "id": if l.wave_id.is_empty() { format!("pid-{}", l.pid) } else { l.wave_id.clone() },
                     "pid": l.pid,
@@ -3009,6 +3033,9 @@ pub(crate) fn handle_ps(json: bool, all: bool) -> Result<()> {
         // trace:TASK-1945 | ai:claude
         if !watch_held.is_empty() {
             println!("{}", ps_review_watch_held_toon(&watch_held));
+        }
+        if !watch_ready.is_empty() {
+            println!("{}", ps_review_watch_ready_toon(&watch_ready));
         }
         return Ok(());
     }
@@ -3464,6 +3491,14 @@ pub(crate) fn handle_ps(json: bool, all: bool) -> Result<()> {
         println!("{}", "Review-watch slots held".bold().yellow());
         for (change, cause) in &watch_held {
             println!("  {}  {}", change.yellow().bold(), cause.dimmed());
+        }
+    }
+    // trace:TASK-1945 | ai:claude
+    if !watch_ready.is_empty() {
+        println!();
+        println!("{}", "Review-watch readiness".bold());
+        for (change, report) in &watch_ready {
+            println!("  {}  {}", change.bold(), report.dimmed());
         }
     }
 
