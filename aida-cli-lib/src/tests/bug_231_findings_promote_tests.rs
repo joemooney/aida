@@ -1401,11 +1401,30 @@ fn resolve_comment_mentions_delivers_known_uppercase_and_drops_unknown_with_warn
     )
     .unwrap();
 
+    // Roles without a live reader now refuse; seed the two intended readers.
+    // trace:STORY-1843 | ai:codex
+    for (vendor, role) in [("codex", "qa"), ("claude", "advisor")] {
+        crate::agent_registry::register_existing_agent(
+            root,
+            vendor,
+            std::process::id(),
+            role.into(),
+            None,
+            root.to_path_buf(),
+            Some(format!("{vendor}-reader")),
+            None,
+        )
+        .unwrap();
+    }
     let text = "Ping @QA and @ADVISOR and unknown @CODEX_CI_GIT_URL and @nobody-here";
     let (recipients, warnings) =
         crate::punt_done::resolve_comment_mentions(&root.join(".aida-store"), "joe", text);
     assert_eq!(recipients, vec!["qa".to_string(), "advisor".to_string()]);
-    assert_eq!(warnings.len(), 2, "expected 2 warnings, got {warnings:?}");
+    assert_eq!(
+        warnings.len(),
+        4,
+        "two reader notices and two refusals: {warnings:?}"
+    );
     assert!(warnings.iter().any(|w| w.contains("@CODEX_CI_GIT_URL")));
     assert!(warnings.iter().any(|w| w.contains("@nobody-here")));
 }
@@ -1482,6 +1501,19 @@ fn resolve_comment_mentions_delivers_a_known_sha_shaped_agent() {
         "name = \"cafe1234\"\ncreated_at = \"2026-10-18T00:00:00Z\"\nlast_active_at = \"2026-10-18T00:00:00Z\"\n",
     )
     .unwrap();
+    // Registry liveness distinguishes a named reader from an empty role alias.
+    // trace:STORY-1843 | ai:codex
+    crate::agent_registry::register_existing_agent(
+        proj.path(),
+        "codex",
+        std::process::id(),
+        "cafe1234".into(),
+        None,
+        proj.path().to_path_buf(),
+        Some("sha-reader".into()),
+        None,
+    )
+    .unwrap();
     let (recipients, warnings) = crate::punt_done::resolve_comment_mentions(
         &proj.path().join(".aida-store"),
         "joe",
@@ -1489,8 +1521,8 @@ fn resolve_comment_mentions_delivers_a_known_sha_shaped_agent() {
     );
     assert_eq!(recipients, vec!["cafe1234".to_string()]);
     assert!(
-        warnings.is_empty(),
-        "an unknown SHA is not a mention: {warnings:?}"
+        warnings.len() == 1 && warnings[0].contains("sha-reader"),
+        "only the live-reader notice is expected; an unknown SHA is not a mention: {warnings:?}"
     );
 }
 

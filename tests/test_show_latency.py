@@ -87,7 +87,8 @@ def check_in(binary, temp):
     obj, = (store / "objects").rglob(f"{spec}.yaml")
     obj.write_text(obj.read_text().replace("original title", "canonical title"))
     require(run(["git", "add", "objects"], store, env))
-    require(run(["git", "commit", "-qm", "external title"], store, env))
+    # trace:TASK-1955 | ai:claude (TASK-2010)
+    require(run(["git", "-c", "maintenance.auto=false", "-c", "gc.auto=0", "commit", "-qm", "external title"], store, env))
     # A live foreign refresher forces the default 1500ms wait in the old
     # binary, even for a one-object store. Show reads the canonical object
     # while labeling the old cache used for its derived graph context.

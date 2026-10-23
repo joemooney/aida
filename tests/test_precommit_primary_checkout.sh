@@ -13,6 +13,10 @@
 # trace:STORY-1647 | ai:claude
 # trace:TASK-1728 | ai:antigravity
 set -euo pipefail
+# Fixture git runs with automatic maintenance off: a detached repack can
+# race the next object write (BUG-2191). `env -i` sites pass the -c pair.
+# trace:TASK-1955 | ai:claude (TASK-2010)
+export GIT_CONFIG_COUNT=2 GIT_CONFIG_KEY_0=maintenance.auto GIT_CONFIG_VALUE_0=false GIT_CONFIG_KEY_1=gc.auto GIT_CONFIG_VALUE_1=0
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -62,7 +66,7 @@ commit_in() {
     shift 2
     set +e
     (cd "$dir" && env -i PATH="$HOOK_PATH" HOME="$FAKEHOME" "$@" \
-        git -c user.email=t@t.t -c user.name=t commit -qm "$msg" \
+        git -c maintenance.auto=false -c gc.auto=0 -c user.email=t@t.t -c user.name=t commit -qm "$msg" \
         >"$STDOUT_LOG" 2>"$STDERR_LOG")
     local rc=$?
     set -e
@@ -137,7 +141,7 @@ amend_head=$(git -C "$A" rev-parse HEAD)
 amend_tree=$(git -C "$A" rev-parse 'HEAD^{tree}')
 set +e
 (cd "$A" && env -i PATH="$HOOK_PATH" HOME="$FAKEHOME" \
-    git -c user.email=t@t.t -c user.name=t commit --amend --no-edit -q \
+    git -c maintenance.auto=false -c gc.auto=0 -c user.email=t@t.t -c user.name=t commit --amend --no-edit -q \
     >"$STDOUT_LOG" 2>"$STDERR_LOG")
 rc=$?
 set -e
@@ -155,7 +159,7 @@ fi
 # proves the refusal wasn't caused by an invalid amend fixture.
 set +e
 (cd "$A" && env -i PATH="$HOOK_PATH" HOME="$FAKEHOME" AIDA_ALLOW_PRIMARY_COMMIT=1 \
-    git -c user.email=t@t.t -c user.name=t commit --amend --no-edit -q \
+    git -c maintenance.auto=false -c gc.auto=0 -c user.email=t@t.t -c user.name=t commit --amend --no-edit -q \
     >"$STDOUT_LOG" 2>"$STDERR_LOG")
 rc=$?
 set -e
@@ -323,7 +327,7 @@ stage_change "$R" main2.txt
 git -C "$R" commit --no-verify -qm "more main"
 set +e
 (cd "$R" && env -i PATH="$HOOK_PATH" HOME="$FAKEHOME" \
-    git -c user.email=t@t.t -c user.name=t rebase -q --no-ff side \
+    git -c maintenance.auto=false -c gc.auto=0 -c user.email=t@t.t -c user.name=t rebase -q --no-ff side \
     >"$STDOUT_LOG" 2>"$STDERR_LOG")
 rc=$?
 set -e

@@ -7839,7 +7839,7 @@ fn heal_doctor_completed_without_commit(
     })
 }
 
-fn heal_doctor_orphan_worktree(
+pub(crate) fn heal_doctor_orphan_worktree(
     project_root: &std::path::Path,
     finding: &DoctorFinding,
 ) -> Result<DoctorHealResult> {

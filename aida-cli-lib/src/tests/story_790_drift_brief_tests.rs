@@ -15,6 +15,7 @@ fn ended_entry(
         agent_type: "claude".into(),
         pid: 4_294_967_294,
         pid_start: None,
+        pid_namespace: crate::agent_registry::current_pid_namespace(),
         name: Some(name.to_string()),
         description: None,
         tty: None,
