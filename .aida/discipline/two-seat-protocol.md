@@ -83,7 +83,8 @@ batched form of `aida pr ship`:
    reviewer for re-review at that head, with a clear verdict corpus, not
    owned by a live drive, and with no spec tagged `review:draft-only`. A spec
    whose execution mode needs supervision lands only for a human at a
-   terminal or under an active mandate's cover, as with `aida pr ship`. The
+   terminal who named that PR, or under an active mandate's cover, as with
+   `aida pr ship`; a PR swept in by `--all-ready` always needs the mandate. The
    train never releases a hold. It is GitHub-only for now; it refuses a
    GitLab project.
 2. **Attestation carry-over by patch-id.** The train is main plus one squash

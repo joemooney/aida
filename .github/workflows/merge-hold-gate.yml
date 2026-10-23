@@ -82,12 +82,15 @@ jobs:
           check_labels "$LABELS" "This PR" || exit 1
           case "${HEAD_REF:-}" in
             train/*)
-              members=$(printf '%s\n' "${PR_BODY:-}" | sed -n 's/^[[:space:]]*aida-train-members:[[:space:]]*//p' | head -n 1)
+              # A web-edited body may end its lines in CRLF.
+              members=$(printf '%s\n' "${PR_BODY:-}" | tr -d '\r' | sed -n 's/^[[:space:]]*aida-train-members:[[:space:]]*//p' | head -n 1)
               if [ -z "$members" ]; then
                 echo "::error::Merge-train PR names no members (no aida-train-members: line); it cannot pass."
                 exit 1
               fi
+              count=0
               for entry in $(printf '%s' "$members" | tr ',' ' '); do
+                count=$((count + 1))
                 n=${entry%%@*}
                 n=${n#\#}
                 sha=${entry#*@}
@@ -96,7 +99,7 @@ jobs:
                   *) sha= ;;
                 esac
                 case "$n" in
-                  ''|*[!0-9]*)
+                  ''|0*|*[!0-9]*)
                     echo "::error::Malformed merge-train member entry: $entry"
                     exit 1
                     ;;
@@ -118,6 +121,10 @@ jobs:
                 fi
                 check_labels "$member_labels" "Train member #$n" || exit 1
               done
+              if [ "$count" -eq 0 ]; then
+                echo "::error::Merge-train PR's aida-train-members: line names no members; it cannot pass."
+                exit 1
+              fi
               echo "Merge-train members pass the merge-hold gate: $members"
               ;;
           esac

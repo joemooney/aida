@@ -158,5 +158,21 @@ expect_train 1 'a member entry with a non-hex sha fails' train/x "aida-train-mem
 expect_train 1 'a member entry with a sha under 7 chars fails' train/x "aida-train-members: 11@abc12" MEMBER_LABELS_11=
 expect_train 0 'a 7-char hex sha passes' train/x "aida-train-members: 11@abc1234" MEMBER_LABELS_11=
 expect_train 0 'a non-train PR ignores a members line' feature/x "$two"
+expect_train 0 'a CRLF body (a web edit) still parses' train/x \
+  "$(printf 'Train.\r\n\r\naida-train-members: 11@%s\r\n' "$a40")" MEMBER_LABELS_11=
+
+# The members-line cases shared with the Rust parser (pr_train
+# parse_members_line), so the binding bash parser and it cannot drift.
+members_fixture="$repo_root/tests/fixtures/train-members-lines.txt"
+shared_cases=0
+while IFS=$'\t' read -r want value; do
+  case "$want" in '' | '#'*) continue ;; esac
+  value=${value//<CR>/$'\r'}
+  expect_train "$want" "shared members line '$value'" train/x "Train.
+
+aida-train-members: $value" MEMBER_LABELS_11= MEMBER_LABELS_12=
+  shared_cases=$((shared_cases + 1))
+done <"$members_fixture"
+[ "$shared_cases" -ge 10 ] || fail "shared members-line fixture read only $shared_cases cases"
 
 echo "merge-hold gate fixtures passed (${#cases[@]} label states x 2 shipped gates, $train_cases train-mode cases)"

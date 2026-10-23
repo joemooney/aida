@@ -1440,3 +1440,115 @@ fn an_unreadable_ci_stops_the_run_instead_of_bisecting_it_as_red() {
     }
     assert_eq!(f.retired.len(), 1, "the open train PR is retired");
 }
+
+// ─────────────────────────── round-4 review fixes ───────────────────────────
+
+/// The bash gate in merge-hold-gate.yml is the binding members-line parser;
+/// `parse_members_line` must accept and refuse exactly the cases it does.
+/// tests/test_merge_hold_gate.sh runs the same fixture through the gate.
+#[test]
+fn parse_members_line_agrees_with_the_bash_gate_on_the_shared_fixture() {
+    let fixture =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../tests/fixtures/train-members-lines.txt");
+    let text = std::fs::read_to_string(fixture).unwrap();
+    let mut cases = 0;
+    for line in text
+        .lines()
+        .filter(|l| !l.is_empty() && !l.starts_with('#'))
+    {
+        let (want, value) = line.split_once('\t').expect("<want>\\t<value>");
+        let value = value.replace("<CR>", "\r");
+        let body = format!("Train.\n\n{MEMBERS_LINE} {value}");
+        let accepted = parse_members_line(&body).is_some();
+        assert_eq!(accepted, want == "0", "members line {value:?}");
+        cases += 1;
+    }
+    assert!(cases >= 10, "the fixture read only {cases} cases");
+}
+
+/// The reviewer's case: title `feat: X` with no ID, branch `claude/story-1`,
+/// head commit `feat: X (STORY-1)`. Ship's derivation equals the commit
+/// subject and returns `None`; the car must keep `(STORY-1)`.
+#[test]
+fn a_car_keeps_the_head_commits_spec_id_when_ship_derives_no_subject() {
+    let commit = "feat: X (STORY-1)\n\nthe work";
+    let derived = crate::pr_ship::derive_squash_subject_with_trailer(
+        "feat: X",
+        "claude/story-1",
+        "",
+        commit,
+        false,
+        |_| true,
+        |_| None,
+    )
+    .map(|(subject, _)| subject);
+    let head_subject = crate::pr_ship::derive_pr_title_from_commit(commit);
+    // derive_pr_ship_squash_subject_from's rule: equal to the commit's own
+    // subject, so it returns None and leaves the subject to the merge.
+    let returned = derived.filter(|s| *s != head_subject);
+    assert_eq!(returned, None, "the scenario must reach the fallback");
+    let subject = member_squash_subject(returned, commit, "feat: X");
+    assert_eq!(subject, "feat: X (STORY-1)");
+    let car = car_message(&Member {
+        pr: 9,
+        head: "a".repeat(40),
+        subject,
+        body: String::new(),
+    });
+    let first = car.lines().next().unwrap();
+    assert!(
+        first.contains("(STORY-1)") && first.ends_with("(#9)"),
+        "{first}"
+    );
+    // A derived subject still wins, and an unreadable head falls to the title.
+    assert_eq!(
+        member_squash_subject(Some("s (TASK-1)".into()), commit, "t"),
+        "s (TASK-1)"
+    );
+    assert_eq!(member_squash_subject(None, "", "feat: X"), "feat: X");
+}
+
+#[test]
+fn the_train_refuses_inside_a_standalone_implementer() {
+    crate::standalone_implementer::TEST_MARKER
+        .with(|m| *m.borrow_mut() = Some("01lease".to_string()));
+    let err = pr_train_handler(&TrainOptions {
+        prs: &[1],
+        all_ready: false,
+        dry_run: true,
+        local_ci: None,
+        max: 10,
+        no_pull: true,
+    })
+    .unwrap_err();
+    crate::standalone_implementer::TEST_MARKER.with(|m| *m.borrow_mut() = None);
+    let text = format!("{err:#}");
+    assert!(text.contains("`aida pr train` is refused"), "{text}");
+    assert!(
+        text.contains(crate::standalone_implementer::MARKER_ENV),
+        "{text}"
+    );
+}
+
+/// A human at a terminal consents only to the PRs they named; one swept in
+/// by `--all-ready` needs a mandate for a supervised spec.
+#[test]
+fn the_terminal_bypass_covers_named_prs_only() {
+    assert!(tty_consents(true, true));
+    assert!(
+        !tty_consents(true, false),
+        "--all-ready gets no TTY consent"
+    );
+    assert!(!tty_consents(false, true));
+    // What the gate sees for a swept-in supervised member with a human at
+    // the terminal and no mandate: refused.
+    let mut c = FakeChecks::shipping("TASK-9", &[], Some(aida_core::ExecutionMode::Guided));
+    c.tty = tty_consents(true, false);
+    let why = gate_member_with(&mut c, "main", 41).unwrap_err();
+    assert!(why.contains("TASK-9 is marked"), "{why}");
+    // The same member, swept in under a covering mandate, lands.
+    let mut c = FakeChecks::shipping("TASK-9", &[], Some(aida_core::ExecutionMode::Guided));
+    c.tty = tty_consents(true, false);
+    c.mandate = Ok(());
+    assert!(gate_member_with(&mut c, "main", 41).is_ok());
+}

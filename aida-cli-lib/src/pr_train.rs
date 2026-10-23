@@ -85,25 +85,32 @@ pub(crate) fn members_line(cars: &[Car]) -> String {
 }
 
 /// The members a train PR body names, in order. `None` when the body has no
-/// members line or any entry is malformed — the gate fails closed on it.
+/// members line, names no member, or any entry is malformed: the gate fails
+/// closed on it. It parses exactly as merge-hold-gate.yml's bash does (the
+/// binding parser); tests/fixtures/train-members-lines.txt holds the cases
+/// both are checked against.
 // trace:STORY-1690 | ai:claude
 pub(crate) fn parse_members_line(body: &str) -> Option<Vec<(u64, String)>> {
     let rest = body
         .lines()
-        .find_map(|l| l.trim().strip_prefix(MEMBERS_LINE))?
-        .trim();
-    if rest.is_empty() {
-        return None;
-    }
-    rest.split(',')
+        .find_map(|l| l.trim_start().strip_prefix(MEMBERS_LINE))?;
+    let members: Option<Vec<(u64, String)>> = rest
+        // The bash gate turns commas into spaces and word-splits.
+        .split(|c: char| c == ',' || c.is_whitespace())
+        .filter(|entry| !entry.is_empty())
         .map(|entry| {
-            let (n, sha) = entry.trim().split_once('@')?;
-            let n: u64 = n.trim().trim_start_matches('#').parse().ok()?;
-            let sha = sha.trim();
-            (n > 0 && sha.len() >= 7 && sha.bytes().all(|b| b.is_ascii_hexdigit()))
-                .then(|| (n, sha.to_string()))
+            let (n, sha) = entry.split_once('@')?;
+            let n = n.strip_prefix('#').unwrap_or(n);
+            let n_ok =
+                !n.is_empty() && !n.starts_with('0') && n.bytes().all(|b| b.is_ascii_digit());
+            let sha_ok = sha.len() >= 7 && sha.bytes().all(|b| b.is_ascii_hexdigit());
+            if !(n_ok && sha_ok) {
+                return None;
+            }
+            Some((n.parse().ok()?, sha.to_string()))
         })
-        .collect()
+        .collect();
+    members.filter(|m| !m.is_empty())
 }
 
 /// The commit message of a member's car: the squash subject (ending in
@@ -811,6 +818,8 @@ pub(crate) struct LiveChecks<'a> {
     pub main_worktree: &'a Path,
     pub forge: &'a dyn crate::forge::Forge,
     pub base: &'a str,
+    /// The PR was named on the command line, not swept in by `--all-ready`.
+    pub named: bool,
 }
 
 impl MemberChecks for LiveChecks<'_> {
@@ -892,7 +901,10 @@ impl MemberChecks for LiveChecks<'_> {
             false,
         )
         .map_err(|e| format!("its squash subject could not be derived ({e:#})"))?;
-        let subject = subject.unwrap_or_else(|| ship_meta.title.trim().to_string());
+        let head_msg =
+            crate::pr_cmd::branch_head_commit_message(self.project_root, meta.head_ref.trim())
+                .unwrap_or_default();
+        let subject = member_squash_subject(subject, &head_msg, &ship_meta.title);
         let body = member_body(self.project_root, self.base, head, &ship_meta.body)?;
         Ok((subject, body))
     }
@@ -903,7 +915,7 @@ impl MemberChecks for LiveChecks<'_> {
         crate::pr_cmd::ship_gate_spec_records_for_ids(self.project_root, ids.to_vec())
     }
     fn interactive_tty(&self) -> bool {
-        crate::pr_cmd::ship_interactive_tty()
+        tty_consents(crate::pr_cmd::ship_interactive_tty(), self.named)
     }
     fn mandate_cover(
         &mut self,
@@ -932,6 +944,37 @@ impl MemberChecks for LiveChecks<'_> {
     }
 }
 
+/// The squash subject a member's car carries. Ship's derivation returns
+/// `None` when its subject equals the branch head commit's own derived
+/// subject, and ship then lets the forge use that commit subject. The train
+/// does the same, so the car keeps the commit's `(SPEC-ID)` and `aida pull`
+/// completes the spec. The PR title is the last resort.
+// trace:STORY-1690 | ai:claude
+pub(crate) fn member_squash_subject(
+    derived: Option<String>,
+    head_commit_message: &str,
+    title: &str,
+) -> String {
+    if let Some(subject) = derived.filter(|s| !s.trim().is_empty()) {
+        return subject;
+    }
+    let from_commit = crate::pr_ship::derive_pr_title_from_commit(head_commit_message);
+    if from_commit.trim().is_empty() {
+        title.trim().to_string()
+    } else {
+        from_commit
+    }
+}
+
+/// BUG-727: in ship, a human at a terminal consents to the merge because
+/// they typed that PR's number. The train extends that consent only to the
+/// PRs named on its command line; a PR swept in by `--all-ready` needs a
+/// mandate's cover for a supervised spec.
+// trace:STORY-1690 trace:BUG-727 | ai:claude
+pub(crate) fn tty_consents(interactive_tty: bool, named: bool) -> bool {
+    interactive_tty && named
+}
+
 /// The member gate, live.
 // trace:STORY-1690 | ai:claude
 pub(crate) fn gate_member(
@@ -940,6 +983,7 @@ pub(crate) fn gate_member(
     forge: &dyn crate::forge::Forge,
     base: &str,
     pr: u64,
+    named: bool,
 ) -> std::result::Result<Member, String> {
     gate_member_with(
         &mut LiveChecks {
@@ -947,6 +991,7 @@ pub(crate) fn gate_member(
             main_worktree,
             forge,
             base,
+            named,
         },
         base,
         pr,
@@ -1053,6 +1098,8 @@ pub(crate) struct LiveTrainForge<'a> {
     pub main_worktree: PathBuf,
     pub base: String,
     pub forge: &'a dyn crate::forge::Forge,
+    /// Members were named on the command line (not `--all-ready`).
+    pub named: bool,
 }
 
 impl LiveTrainForge<'_> {
@@ -1095,6 +1142,7 @@ impl TrainForge for LiveTrainForge<'_> {
             self.forge,
             &self.base,
             pr,
+            self.named,
         )
     }
 
@@ -1535,6 +1583,9 @@ pub(crate) fn explicit_over_max_refusal(
 /// `aida pr train`.
 // trace:STORY-1690 | ai:claude
 pub(crate) fn pr_train_handler(opts: &TrainOptions<'_>) -> Result<()> {
+    // STORY-1662: a standalone implementer stops at an open PR; the train is
+    // a merge path like any other. trace:STORY-1690 | ai:claude
+    crate::standalone_implementer::refuse_under_marker("pr train")?;
     let project_root = crate::find_project_root()?;
     let main_worktree = crate::main_worktree_root_from(&project_root);
     let kind = crate::forge::resolve_forge_kind(&project_root);
@@ -1581,7 +1632,14 @@ pub(crate) fn pr_train_handler(opts: &TrainOptions<'_>) -> Result<()> {
             waiting.push(pr);
             continue;
         }
-        match gate_member(&project_root, &main_worktree, forge.as_ref(), &base, pr) {
+        match gate_member(
+            &project_root,
+            &main_worktree,
+            forge.as_ref(),
+            &base,
+            pr,
+            !opts.all_ready,
+        ) {
             Ok(m) => {
                 println!("  ✓ #{pr} ready at {}: {}", short(&m.head), m.subject);
                 members.push(m);
@@ -1641,6 +1699,7 @@ pub(crate) fn pr_train_handler(opts: &TrainOptions<'_>) -> Result<()> {
             main_worktree: main_worktree.clone(),
             base: base.clone(),
             forge: forge.as_ref(),
+            named: !opts.all_ready,
         };
         let mut rails = ForgeRails::new(
             &mut ports,
