@@ -47,7 +47,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T15:57:44.849505155Z
-modified_at: 2026-10-22T14:56:50.531030234Z
+modified_at: 2026-10-23T06:50:33.971053060Z
 req_type: Task
 tags:
 - contained
@@ -426,6 +426,17 @@ comments:
   created_at: 2026-10-22T14:56:50.531030234Z
   modified_at: 2026-10-22T14:56:50.531030234Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a16786-8e73-7733-9ebe-15b6924fe0db
+  author: joe
+  content: |-
+    TASK-1641 OPERATOR RUN 2026-10-22 23:50 MST, main @ origin/main (519bdccd6e or later), real claude, haiku. Result: FAILED, 0 passed / 1 failed, no 'skipping:'.
+    - Linked-worktree half: PASS. commondir, gitdir, config.worktree and <main>/.git/config were all denied; commit-failed; the branch did not move.
+    - Seat-clone half: FAIL at bug_1982_main_git_metadata_tests.rs:534 ('a contained seat must commit in its own tree'). The probe printed commit-failed. Before it, aida printed twice: '<cache>/aida-seat-fixture-1 is a contained seat's private clone, but its marker, alternates and lease do not agree on a main checkout, so it is not used as one.'
+    Advisor read: either (a) fixture drift, where the test calls seat_clone::create(main, clone, "seat-1", "main") with no lease record, so the TASK-2053 S3/S4 marker/alternates/lease agreement check rejects it; or (b) a real product gap, where the clone's alternates point into <main>/.git/objects, which BUG-1982 denies even for reads, so a contained commit in a real seat clone fails too. (b) would break the S4c default flip.
+    RULING: #2839 (S4c default flip) does NOT merge until this test passes on a real-claude run with a properly leased seat clone. Owner: TASK-2053 relay. First determine (a) vs (b): give the fixture a real lease, re-run headless with AIDA_TEST_REAL_CLAUDE=1 (the operator runs it). If (b), the fix is the S4 write/read roots for the clone's objects plus alternates.
+  created_at: 2026-10-23T06:50:33.971053060Z
+  modified_at: 2026-10-23T06:50:33.971053060Z
+  session_id: 37c635ef-7a29-44ab-b2b4-0e1dc247e5ce
 history:
 - id: 01a154e2-43c6-7962-8a7c-8c6c68d81e7d
   author: joe
