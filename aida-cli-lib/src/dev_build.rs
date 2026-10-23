@@ -595,6 +595,8 @@ pub(crate) fn run_dev_build(
                         PromotionPlan::Refuse { .. }
                     ),
                 promoted_at: chrono::Utc::now().to_rfc3339(),
+                // trace:STORY-1689 | ai:claude
+                repo: Some(canonical_or_self(&layout.repo).display().to_string()),
             };
             commit_staged(layout, &meta)?;
             drop(lock);
@@ -1040,6 +1042,12 @@ pub(crate) struct PromotionMeta {
     pub allow_dirty: bool,
     /// RFC 3339 promotion time.
     pub promoted_at: String,
+    /// The canonical checkout this pair was built from. A scheduled
+    /// `--if-main-green` run acts only from this checkout. Absent in a
+    /// record written before STORY-1689.
+    // trace:STORY-1689 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub repo: Option<String>,
 }
 
 /// Read a `.promoted` record from `dir` (the live dir or `prev/`).

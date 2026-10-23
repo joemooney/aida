@@ -3221,6 +3221,19 @@ fn command_table() -> &'static [(&'static [&'static str], ScheduledCommand)] {
                 hook_allowed: false,
             },
         ),
+        // STORY-1689: promote the live dev binary when main is green. The
+        // tick only decides and launches; the build runs detached, outside
+        // this child's timeout. It fetches and reads the forge, so never on
+        // the per-turn hook path.
+        // trace:STORY-1689 | ai:claude
+        (
+            &["dev build --if-main-green"],
+            ScheduledCommand {
+                display: "dev build --if-main-green",
+                args: &["dev", "build", "--if-main-green"],
+                hook_allowed: false,
+            },
+        ),
     ]
 }
 
@@ -4244,6 +4257,44 @@ mod tests {
         assert!(
             !commands.iter().any(|c| c.contains("allow-listed")),
             "extraction picked up the documentation placeholder, not a real job: {commands:?}"
+        );
+    }
+
+    /// STORY-1689: this repository's own config registers the live-binary
+    /// promote job and binds its failure route to the advisor; the route's
+    /// `CronJobFailed:<job>` binding names a real job, so it loads enabled.
+    // trace:STORY-1689 | ai:claude
+    #[test]
+    fn repo_config_registers_dev_autopromote_and_its_advisor_route() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo_config = Path::new(env!("CARGO_MANIFEST_DIR")).join("../.aida/config.toml");
+        std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
+        std::fs::copy(&repo_config, tmp.path().join(".aida/config.toml")).unwrap();
+        let mut config = load_config(tmp.path()).unwrap().expect("a [schedule]");
+        disable_unknown_bindings(&mut config);
+        let job = config
+            .tasks
+            .iter()
+            .find(|t| t.name == "dev-autopromote")
+            .expect("dev-autopromote job");
+        assert!(job.enabled && job.problem.is_none());
+        let command = job.command.as_ref().expect("a substrate command");
+        assert_eq!(command.args, ["dev", "build", "--if-main-green"]);
+        assert!(!command.hook_allowed, "it fetches; never on the hook path");
+        let route = config
+            .tasks
+            .iter()
+            .find(|t| t.name == "dev-autopromote-route")
+            .expect("dev-autopromote-route");
+        assert!(
+            route.enabled && route.problem.is_none(),
+            "{:?}",
+            route.problem
+        );
+        assert_eq!(route.seats, vec!["advisor".to_string()]);
+        assert_eq!(
+            route.on.iter().map(ToString::to_string).collect::<Vec<_>>(),
+            vec!["CronJobFailed:dev-autopromote".to_string()]
         );
     }
 

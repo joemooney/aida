@@ -29,12 +29,24 @@ pub(crate) fn handle_dev_command(cmd: &DevCommand) -> Result<()> {
         } => handle_dev_activate(repo.as_deref(), profile.as_deref(), *debug, *release, *auto),
         // trace:STORY-1646 | ai:claude
         DevCommand::Build {
+            if_main_green,
+            autopromote_child,
+            ..
+        } if *if_main_green || autopromote_child.is_some() => {
+            // trace:STORY-1689 | ai:claude
+            match autopromote_child {
+                Some(sha) => crate::dev_autopromote::handle_child(sha),
+                None => crate::dev_autopromote::handle_if_main_green(),
+            }
+        }
+        DevCommand::Build {
             clean,
             no_promote,
             allow_dirty,
             install_links,
             yes,
             after_wave,
+            ..
         } => crate::dev_build::handle_dev_build(&crate::dev_build::DevBuildOptions {
             clean: *clean,
             no_promote: *no_promote,
