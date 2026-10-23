@@ -1567,10 +1567,10 @@ fn pushed_branch_progress_ts(repo: &Path, branch: &str) -> Option<DateTime<Utc>>
     branch_latest_commit_ts(repo, branch)
 }
 
-fn branch_latest_commit_ts(repo: &Path, branch: &str) -> Option<DateTime<Utc>> {
-    let out = std::process::Command::new("git")
-        .arg("-C")
-        .arg(repo)
+/// `repo` may be a lease's tree; a seat clone is refused (BUG-2169).
+// trace:TASK-2053 | ai:claude
+pub(crate) fn branch_latest_commit_ts(repo: &Path, branch: &str) -> Option<DateTime<Utc>> {
+    let out = aida_core::git_ops::host_git_command(repo)
         .args(["log", "-1", "--format=%cI", branch])
         .output()
         .ok()?;
