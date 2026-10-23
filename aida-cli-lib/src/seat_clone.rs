@@ -927,6 +927,18 @@ fn run_sandboxed(
     args: &[&std::ffi::OsStr],
     cap: u64,
 ) -> std::result::Result<Vec<u8>, SandboxFailure> {
+    run_sandboxed_until(clone, main, program, args, cap, None)
+}
+
+// trace:TASK-2053 | ai:codex
+fn run_sandboxed_until(
+    clone: &Path,
+    main: &Path,
+    program: &str,
+    args: &[&std::ffi::OsStr],
+    cap: u64,
+    deadline: Option<std::time::Instant>,
+) -> std::result::Result<Vec<u8>, SandboxFailure> {
     let failed = |why: String| SandboxFailure::Failed(why);
     let repo_config = tempfile::NamedTempFile::new()
         .and_then(|mut file| {
@@ -946,7 +958,16 @@ fn run_sandboxed(
     .arg(program)
     .args(args)
     .stdin(std::process::Stdio::null());
-    match crate::command_output_with_timeout_capped(cmd, PROBE_TIMEOUT, cap) {
+    let timeout = deadline
+        .map(|end| {
+            end.saturating_duration_since(std::time::Instant::now())
+                .min(PROBE_TIMEOUT)
+        })
+        .unwrap_or(PROBE_TIMEOUT);
+    if timeout.is_zero() {
+        return Err(failed("the clone scan deadline elapsed".into()));
+    }
+    match crate::command_output_with_timeout_capped(cmd, timeout, cap) {
         crate::BoundedCommandOutput::Completed(mut out) if out.stdout.len() as u64 > cap => {
             out.stdout.truncate(cap as usize);
             Err(SandboxFailure::Truncated(out.stdout))
@@ -962,7 +983,7 @@ fn run_sandboxed(
         )),
         crate::BoundedCommandOutput::TimedOut => Err(failed(format!(
             "the sandboxed {program} did not finish within {}s",
-            PROBE_TIMEOUT.as_secs()
+            timeout.as_secs()
         ))),
     }
 }
@@ -983,7 +1004,7 @@ fn probe_run(
 /// The commit `refs/aida/seats/<dir>` pins in `main`: the clone's base, read
 /// from main (host-owned), never from the clone.
 // trace:TASK-2053 | ai:claude
-fn pinned_base(main: &Path, clone: &Path) -> Option<String> {
+pub(crate) fn pinned_base(main: &Path, clone: &Path) -> Option<String> {
     let pin = pin_ref(clone)?;
     let mut cmd = git(main);
     cmd.args([
@@ -1017,6 +1038,22 @@ pub(crate) fn probe(main: &Path, clone: &Path) -> Probe {
 /// still counts.
 // trace:TASK-2053 trace:TASK-2110 | ai:claude
 pub(crate) fn probe_with_shipped(main: &Path, clone: &Path, shipped: &[String]) -> Probe {
+    probe_until(main, clone, shipped, None)
+}
+
+// One deadline covers all three sandbox calls, rather than a fresh budget per call.
+// trace:TASK-2053 | ai:codex
+pub(crate) fn probe_until(
+    main: &Path,
+    clone: &Path,
+    shipped: &[String],
+    deadline: Option<std::time::Instant>,
+) -> Probe {
+    let probe_run = |clone: &Path, main: &Path, args: &[&std::ffi::OsStr], program: &str| {
+        run_sandboxed_until(clone, main, program, args, PROBE_OUTPUT_CAP, deadline)
+            .map(|out| String::from_utf8_lossy(&out).into_owned())
+            .map_err(|failure| failure.to_string())
+    };
     if !aida_core::seat_clone_detect::has_real_git_dir(clone) {
         return Probe::Unknown(format!(
             "{} has no .git directory of its own",
@@ -1170,15 +1207,24 @@ fn is_full_oid(oid: &str) -> bool {
 /// conservative.
 // trace:TASK-2110 | ai:claude
 pub(crate) fn merged_pr_heads(main: &Path, branch: &str) -> Vec<String> {
+    merged_pr_heads_with_timeout(main, branch, std::time::Duration::from_secs(20))
+}
+
+// trace:TASK-2053 | ai:codex
+pub(crate) fn merged_pr_heads_with_timeout(
+    main: &Path,
+    branch: &str,
+    timeout: std::time::Duration,
+) -> Vec<String> {
     if branch.is_empty() {
         return Vec::new();
     }
-    let Ok(out) = std::process::Command::new("gh")
-        .current_dir(main)
+    let mut cmd = std::process::Command::new("gh");
+    cmd.current_dir(main)
         .args(["pr", "list", "--state", "merged", "--head", branch])
         .args(["--json", "headRefOid", "--jq", ".[].headRefOid"])
-        .output()
-    else {
+        .stdin(std::process::Stdio::null());
+    let Some(out) = crate::command_output_with_timeout(cmd, timeout) else {
         return Vec::new();
     };
     if !out.status.success() {

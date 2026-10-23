@@ -39,11 +39,15 @@ The full workspace suite runs only in CI, at the PR head. Never run
 | Tier | Run locally |
 |------|-------------|
 | FASTTRACK (docs, one line; nothing compiled or embedded into a binary) | `make check-ci-fast` only, no cargo |
-| STANDARD | `make test-touched` (targeted `cargo test --profile agent -p <crate> <filter>` for the touched modules) plus `make check-ci-compile` |
-| STRICT, or heft >= 7 | STANDARD plus the area's integration test binaries (`cargo test --profile agent -p <crate> --test <name>`) |
+| LIGHT (the default) | ONE targeted `cargo test --profile agent -p <crate> <module filter>` run plus `make check-ci-fast`, then push; CI's full shards are the gate |
+| STRICT, or heft >= 7 | LIGHT plus the area's integration test binaries (`cargo test --profile agent -p <crate> --test <name>`) |
 
-`make check-ci-fast` runs before every push; `make check-ci-compile` after every
-merge from main. `make test-touched` exits nonzero (script exit 3) when a suspect filter (the file
+`make check-ci-fast` runs before every push. `make test-touched` and
+`make check-ci-compile` are conditional: run them only when the change touches
+shared test infra (`test_env`, `test_git`, ratchet baselines) or more than 10
+files. Reviewers run no cargo by default: they gate on green CI at the exact
+head and run one targeted test only to reproduce a specific suspected defect.
+`make test-touched` exits nonzero (script exit 3) when a suspect filter (the file
 holds `#[test]`/`mod tests`) matches 0 tests; a module (including a `#[path]` one)
 with no unit tests of its own falls back to its package's unfiltered unit tests (in `aida-cli-lib` the filter is dropped instead).
 It also exits nonzero (script exit 4) when workspace-root build config
