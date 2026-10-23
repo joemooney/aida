@@ -3,12 +3,12 @@ spec_id: TASK-2205
 agreed_id: TASK-2205
 title: 'aida list --fields: add an ''opened'' (creation time) field and accept whitespace as well as commas between fields'
 description: 'Operator request 2026-10-23. (1) Add a field ''opened'': the spec''s creation time (the timestamp in the spec record that filed_at / ''added'' events use), rendered like modified_at on the human table, TOON and JSON. Accept ''created_at'' and ''created'' as aliases. (2) The --fields value is split on commas AND/OR one or more whitespace characters, so a header line copied from existing output works, e.g. --fields ''id title status modified_at'' or ''id, title,  status''. Empty segments are ignored; an unknown field still errors with the valid list. (3) Fix the help-text drift: the --fields help must list exactly the valid set the parser accepts (modified_at, mode, origin, deferred_reason, driver, driver_kind are missing today). Generate it from the same const as the error message, and add a test that pins help == parser set. Tests for each item: the whitespace/comma mix, aliases, opened ordering, and the unknown-field error. Regenerate the golden help snapshot.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T11:32:27.459114078Z
-modified_at: 2026-10-23T14:41:54.338465963Z
+modified_at: 2026-10-23T14:42:01.143900620Z
 req_type: Task
 relationships:
 - rel_type:
@@ -22,6 +22,14 @@ history:
   timestamp: 2026-10-23T14:41:55.978034225Z
   session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
   changes: []
+- id: 01a16936-2f37-7ec2-89cd-4a3275152761
+  author: aida-pr-open
+  timestamp: 2026-10-23T14:42:01.143898011Z
+  session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 830f037b87a3f5da59c06b9b54f0929b0bf6555d
   branch: main
