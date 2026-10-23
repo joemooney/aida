@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T12:00:43.205703912Z
-modified_at: 2026-10-22T23:22:09.508555053Z
+modified_at: 2026-10-23T09:14:19.859901168Z
 req_type: Story
 tags:
 - ci
@@ -139,6 +139,12 @@ comments:
   created_at: 2026-10-22T23:22:09.508555053Z
   modified_at: 2026-10-22T23:22:09.508555053Z
   session_id: 4d679734-3be0-4ab2-8b88-dcf00e4a75d1
+- id: 01a1680a-2d53-7ac3-9ec4-e9efe4fbe175
+  author: joe
+  content: Commit 7ce0dc583b references this requirement
+  created_at: 2026-10-23T09:14:19.859901168Z
+  modified_at: 2026-10-23T09:14:19.859901168Z
+  session_id: b2c93c90-bd6d-4cdb-a1fa-5cc66ef09bab
 history:
 - id: 01a152ec-52a2-7801-ad7c-7dd74bedcf59
   author: joe
