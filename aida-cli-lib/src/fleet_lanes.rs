@@ -200,6 +200,25 @@ impl LaneEvidence {
             .map(String::as_str)
             .filter(|v| !v.is_empty())
     }
+
+    /// STORY-1706: the crash ending, and only it. The status file still
+    /// says running or queued, the run lock is provably free and the owner
+    /// provably dead, and no exit reason the trap writes is present. An
+    /// unknown exit code is `Crashed` too, but the trap ran, so it is not
+    /// this.
+    // trace:STORY-1706 | ai:claude
+    pub(crate) fn trap_never_ran(&self) -> bool {
+        matches!(self.field("state"), Some("running") | Some("queued"))
+            && self.lock_held == Some(false)
+            && self.owner_alive == Some(false)
+            && !self.field("reason").is_some_and(is_trap_reason)
+    }
+}
+
+/// An exit reason relay.sh's EXIT trap writes (STORY-1706).
+// trace:STORY-1706 | ai:claude
+pub(crate) fn is_trap_reason(reason: &str) -> bool {
+    reason.starts_with("signal:") || reason == "session-cap" || reason == "setup-error"
 }
 
 /// One relay run, classified.
@@ -285,36 +304,38 @@ pub(crate) fn classify_lanes(project_root: &Path, _now: DateTime<Utc>) -> Vec<La
         .collect();
     run_dirs.sort();
 
-    let mut lanes = Vec::new();
-    for run_dir in run_dirs {
-        let Ok(text) = std::fs::read_to_string(run_dir.join("relay.status")) else {
-            continue;
-        };
-        let status = parse_status(&text);
-        let evidence = LaneEvidence {
-            lock_held: lock_held(&run_dir),
-            owner_alive: owner_alive(&run_dir, &status),
-            acknowledged: is_acknowledged(&run_dir, &status),
-            status,
-        };
-        let run_id = evidence
-            .field("run")
-            .map(str::to_string)
-            .unwrap_or_else(|| {
-                run_dir
-                    .file_name()
-                    .map(|n| n.to_string_lossy().to_string())
-                    .unwrap_or_default()
-            });
-        lanes.push(Lane {
-            seat_kind: seat_kind_of(&evidence.status),
-            class: classify(&evidence),
-            run_id,
-            run_dir,
-            evidence,
+    run_dirs.into_iter().filter_map(probe_lane).collect()
+}
+
+/// One run directory, read and classified afresh; `None` without a
+/// readable `relay.status`. The drive tick re-probes a lane with this
+/// immediately before restarting it (STORY-1706).
+// trace:STORY-1706 | ai:claude
+pub(crate) fn probe_lane(run_dir: PathBuf) -> Option<Lane> {
+    let text = std::fs::read_to_string(run_dir.join("relay.status")).ok()?;
+    let status = parse_status(&text);
+    let evidence = LaneEvidence {
+        lock_held: lock_held(&run_dir),
+        owner_alive: owner_alive(&run_dir, &status),
+        acknowledged: is_acknowledged(&run_dir, &status),
+        status,
+    };
+    let run_id = evidence
+        .field("run")
+        .map(str::to_string)
+        .unwrap_or_else(|| {
+            run_dir
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_default()
         });
-    }
-    lanes
+    Some(Lane {
+        seat_kind: seat_kind_of(&evidence.status),
+        class: classify(&evidence),
+        run_id,
+        run_dir,
+        evidence,
+    })
 }
 
 #[cfg(test)]
