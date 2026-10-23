@@ -1,0 +1,29 @@
+id: 01a16a2a-4e5a-7c40-997f-ef8c29d5dd3e
+spec_id: TASK-2260
+agreed_id: TASK-2260
+title: Warn that untracked files in the primary checkout stop the scheduled promote
+description: |
+  checkout_skip (dev_autopromote.rs:259) counts any untracked file as dirty, per advisor condition C1. The real primary checkout has 7 untracked paths today (.claude/agents, .claude/launch.json, .claude/loop.md, .claude/output-styles, .claude/routines, .gitmodules, .vscode), so dev-autopromote would skip 'dirty' on every tick there, while ~/bin/aida-autobuild.sh still promotes. Tell the operator to clean or gitignore those paths before deleting the stopgap.
+
+  Raised in review of PR-2850: https://github.com/joemooney/aida/pull/2850#issuecomment-6372674647
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-23T19:08:39.898281749Z
+modified_at: 2026-10-23T19:08:39.898281749Z
+req_type: Task
+tags:
+- dev-build
+- docs
+- from-review:PR-2850
+- severity:cosmetic
+filed_at:
+  code_sha: 7cad1eaed816d876acbbbe345511e035eeb6ce29
+  branch: pr-2850
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c51da86593
+  vendor: claude
+  session: 01a16a12b64b
+  harness_version: 2.1.309 (Claude Code)

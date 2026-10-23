@@ -1,0 +1,28 @@
+id: 01a16a2a-3444-7c00-9ead-b705d6aa68ba
+spec_id: TASK-2258
+agreed_id: TASK-2258
+title: Autopromote child reports a checkout-moved refusal as a failed build
+description: |
+  run_child (aida-cli-lib/src/dev_autopromote.rs:581-599) marks every run_dev_build error as Phase::Failed. That includes the post-build re-probe refusal at dev_build.rs:560-570 ("the checkout changed during the build"), which fires whenever origin/main moves during the ~6-minute build, for example after a git fetch or aida pull in the primary checkout. The next tick then routes CronJobFailed:dev-autopromote to the advisor as a failed build, and the SHA is marked failed. Classify this case (and the HEAD-moved case) as a non-failure, and add a test.
+
+  Raised in review of PR-2850: https://github.com/joemooney/aida/pull/2850#issuecomment-6372674647
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-23T19:08:33.220408848Z
+modified_at: 2026-10-23T19:08:33.220408848Z
+req_type: Task
+tags:
+- dev-build
+- from-review:PR-2850
+- severity:minor
+filed_at:
+  code_sha: 7cad1eaed816d876acbbbe345511e035eeb6ce29
+  branch: pr-2850
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c51da86593
+  vendor: claude
+  session: 01a16a12b64b
+  harness_version: 2.1.309 (Claude Code)

@@ -1,0 +1,28 @@
+id: 01a16a2a-410a-7750-a5b2-0abae064da62
+spec_id: TASK-2259
+agreed_id: TASK-2259
+title: Autopromote child lock wait (5s) is shorter than the systemd-run launch bound (20s)
+description: |
+  The tick holds .autopromote.lock across systemd-run, which is bounded by WAVE_UNIT_RUN_TIMEOUT=20s (dev_autopromote.rs:535-545 and :794). The child waits only CHILD_LOCK_WAIT=5s (:39 and :569). If systemd-run returns more than 5s after the unit starts, the child exits 'lock held' without claiming the record. The record then expires after UNCLAIMED_GRACE_SECS and is reported as "the launched build never started", and that SHA is not retried until main moves. Make the child wait at least as long as the launch bound, or hand the lock off before the launch.
+
+  Raised in review of PR-2850: https://github.com/joemooney/aida/pull/2850#issuecomment-6372674647
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-23T19:08:36.490469218Z
+modified_at: 2026-10-23T19:08:36.490469218Z
+req_type: Task
+tags:
+- dev-build
+- from-review:PR-2850
+- severity:minor
+filed_at:
+  code_sha: 7cad1eaed816d876acbbbe345511e035eeb6ce29
+  branch: pr-2850
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c51da86593
+  vendor: claude
+  session: 01a16a12b64b
+  harness_version: 2.1.309 (Claude Code)

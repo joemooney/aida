@@ -25,7 +25,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T12:00:26.553324153Z
-modified_at: 2026-10-23T17:58:41.425026528Z
+modified_at: 2026-10-23T19:08:04.322251568Z
 req_type: Story
 tags:
 - dev-build
@@ -189,6 +189,12 @@ history:
   session_id: 01a169df8486
   harness_version: 2.1.309 (Claude Code)
   changes: []
+- id: 01a16a29-c3bd-7d23-af7a-31f143856ff7
+  author: joe
+  timestamp: 2026-10-23T19:08:04.413804205Z
+  session_id: 01a16a12b64b
+  harness_version: 2.1.309 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 71d04b3609f89ac607471a35013a0ad9962708f6
   branch: main
@@ -201,7 +207,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'Head does not compile: main''s TASK-2201 made forge::CI_AGGREGATOR_CHECK #[cfg(test)] and dev_autopromote.rs still uses it in non-test code, so every CI lane is red (main is green at a9e78d3491). Design, tests and docs otherwise meet the spec and the signed sketch.'
+  detail: Design matches the signed sketch and every acceptance criterion now has traced tests and docs, but CI lib-1 is red at the head twice in a row (main is green), so no criterion is verified green yet.
   recovery_hint: address the review findings, move STORY-1689 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-10-23T17:51:51.202630657Z
+  shelved_at: 2026-10-23T19:08:04.322251568Z
