@@ -6,16 +6,25 @@ description: |
   pr_cmd.rs pure_git_slice_refs prefers origin/<base> and does not fetch first (landed_commits_for_subjects does fetch). If origin/<base> is stale and behind the fork point, base commits are counted as slice subjects and confirm_rebase_merged refuses. It fails closed. Fix: fetch first, or prefer the local base when it contains origin/<base>.
 
   Raised in review of PR-2845: https://github.com/joemooney/aida/pull/2845#issuecomment-6371549385
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T18:08:10.380549694Z
-modified_at: 2026-10-23T18:08:10.380549694Z
+modified_at: 2026-10-23T18:16:40.551258610Z
 req_type: Task
 tags:
 - from-review:PR-2845
 - severity:minor
+history:
+- id: 01a169fa-b567-7bc3-88e8-57d448c35209
+  author: joe
+  timestamp: 2026-10-23T18:16:40.551253790Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 2eb88160b4f04d978d0e8ef387480fce08d11fac
   branch: pr-2845
