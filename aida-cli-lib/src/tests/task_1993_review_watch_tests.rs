@@ -1338,6 +1338,7 @@ fn task1993_watcher_never_signals_merges_or_runs_cargo() {
         "review_watch.rs",
         "review_watch_forge.rs",
         "review_watch_ready.rs",
+        "review_watch_notice.rs",
         "forge_commit_ci.rs",
     ] {
         let text = std::fs::read_to_string(src.join(file)).unwrap();
