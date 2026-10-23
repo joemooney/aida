@@ -12,18 +12,27 @@ description: |
   The TASK-1757 (2) sketch named a docs page; only the code docs were updated (rework_hold_release.rs module doc and release_with).
 
   Raised in review of PR-2845: https://github.com/joemooney/aida/pull/2845#issuecomment-6376661348
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T23:18:22.154118596Z
-modified_at: 2026-10-23T23:18:22.154118596Z
+modified_at: 2026-10-23T23:37:28.134345461Z
 req_type: Task
 tags:
 - docs
 - from-review:PR-2845
 - merge-hold
 - severity:cosmetic
+history:
+- id: 01a16b20-6746-7560-afda-04ef301ad810
+  author: joe
+  timestamp: 2026-10-23T23:37:28.134338583Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 5f1688f4583d1c28a6b4f556d0096e6244cdf822
   branch: pr-2845
