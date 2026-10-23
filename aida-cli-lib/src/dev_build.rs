@@ -1566,13 +1566,15 @@ impl BuildSteps for RealSteps {
 
 /// Locate the checkout `aida dev build` should build: the enclosing AIDA
 /// checkout of the cwd first (so a worktree builds itself even when
-/// `$AIDA_DEV_REPO` names the main checkout), then `$AIDA_DEV_REPO`.
+/// `$AIDA_DEV_REPO` names the main checkout), then `$AIDA_DEV_REPO` — or,
+/// when that names a removed worktree, `$AIDA_DEV_HOME_REPO`.
+// trace:TASK-2251 | ai:claude
 pub(crate) fn resolve_build_repo() -> Result<PathBuf> {
     let cwd = std::env::current_dir()?;
     if let Some(found) = cwd.ancestors().find(|p| crate::is_aida_repo(p)) {
         return Ok(found.canonicalize()?);
     }
-    if let Some(repo) = env_path("AIDA_DEV_REPO") {
+    if let Some(repo) = crate::dev_cmd::env_dev_repo() {
         if crate::is_aida_repo(&repo) {
             return Ok(repo.canonicalize()?);
         }

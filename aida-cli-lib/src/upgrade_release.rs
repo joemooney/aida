@@ -1418,6 +1418,11 @@ pub(crate) fn warn_if_pulled_binary_stale(project_root: &std::path::Path) {
     if !dev_activated {
         return;
     }
+    // No `$AIDA_DEV_HOME_REPO` fallback here: `$AIDA_DEV_REPO` names the
+    // checkout the active binary was built from, and a removed worktree's
+    // build is not comparable with the primary checkout's HEAD. A missing
+    // path fails the canonicalize below and stays silent.
+    // trace:TASK-2251 | ai:claude
     let (Ok(bin_dir), Ok(repo)) = (
         std::env::var("AIDA_DEV_BIN"),
         std::env::var("AIDA_DEV_REPO"),
@@ -1531,10 +1536,8 @@ pub(crate) fn handle_release(
         let target = preview_next_version(cur, bump).unwrap_or_else(|| "?".to_string());
         let repo = std::env::current_dir().ok().and_then(|cwd| {
             find_aida_repo_above(&cwd).or_else(|| {
-                std::env::var("AIDA_DEV_REPO")
-                    .ok()
-                    .map(std::path::PathBuf::from)
-                    .filter(|p| is_aida_repo(p))
+                // trace:TASK-2251 | ai:claude
+                crate::dev_cmd::env_dev_repo().filter(|p| is_aida_repo(p))
             })
         });
         println!(
@@ -1593,10 +1596,8 @@ pub(crate) fn handle_release(
     if let Some(n) = after_pr {
         let repo = std::env::current_dir().ok().and_then(|cwd| {
             find_aida_repo_above(&cwd).or_else(|| {
-                std::env::var("AIDA_DEV_REPO")
-                    .ok()
-                    .map(std::path::PathBuf::from)
-                    .filter(|p| is_aida_repo(p))
+                // trace:TASK-2251 | ai:claude
+                crate::dev_cmd::env_dev_repo().filter(|p| is_aida_repo(p))
             })
         });
         let merge_root = repo
@@ -1766,10 +1767,8 @@ pub(crate) fn handle_dev_release(bump: &str) -> Result<()> {
     let cwd = std::env::current_dir()?;
     let repo = find_aida_repo_above(&cwd)
         .or_else(|| {
-            std::env::var("AIDA_DEV_REPO")
-                .ok()
-                .map(std::path::PathBuf::from)
-                .filter(|p| is_aida_repo(p))
+            // trace:TASK-2251 | ai:claude
+            crate::dev_cmd::env_dev_repo().filter(|p| is_aida_repo(p))
         })
         .ok_or_else(|| {
             // trace:TASK-667 — wrapper-correct activate form.
