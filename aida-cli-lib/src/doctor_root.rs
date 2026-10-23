@@ -1790,6 +1790,12 @@ pub(crate) static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
         ],
         "main-checkout-drift",
     ),
+    // BUG-2211: an empty read-only config.lock left by a sandboxed shell.
+    // trace:BUG-2211 | ai:claude
+    (
+        &["sandbox-config-lock", "config-lock", "git-config-lock"],
+        "sandbox-config-lock",
+    ),
     // BUG-1229 / BUG-2140: store worktree gitdir/rebase/permission integrity.
     // trace:BUG-2140 | ai:antigravity
     (

@@ -429,12 +429,14 @@ mod mailbox_cmd;
 mod mailbox_store;
 // trace:STORY-1648 | ai:claude — read-only primary-checkout drift probe.
 mod main_checkout_drift;
+// trace:BUG-2211 | ai:claude — sandbox-left config.lock doctor check.
 mod maintenance_schedule;
 mod manual;
 mod mcp;
 mod mcp_translate;
 mod memories_cmd;
 mod merge_hold;
+mod sandbox_config_lock;
 // trace:STORY-1698 | ai:claude — the fire-fighting mandate.
 mod mandate;
 mod mandate_drive;
