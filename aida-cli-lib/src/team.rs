@@ -373,9 +373,11 @@ pub(crate) fn effective_role_for_user(store_root: &Path, user_id: &str) -> (Stri
 /// stale commit and retry. Solo (no `origin`) writes locally and lets the next
 /// `aida push` upload. Returns the canonicalized role written. trace:STORY-646
 pub(crate) fn set_role_cas(store_root: &Path, user_id: &str, role: &str) -> anyhow::Result<()> {
-    // Delegate to the shared aida-core implementation so the CLI and the REST
-    // `PUT /api/v2/team/:user/role` endpoint write team.toml identically.
-    // trace:STORY-650 | ai:claude
+    #[cfg(test)]
+    crate::seat_authority::test_support::assert_scratch_store(store_root); // trace:BUG-2209 | ai:claude
+                                                                           // Delegate to the shared aida-core implementation so the CLI and the REST
+                                                                           // `PUT /api/v2/team/:user/role` endpoint write team.toml identically.
+                                                                           // trace:STORY-650 | ai:claude
     aida_core::team::set_role_cas(store_root, user_id, role)
         .map_err(|e| anyhow::anyhow!("setting team role failed: {}", e))
 }
@@ -385,11 +387,15 @@ pub(crate) fn set_role_cas(store_root: &Path, user_id: &str, role: &str) -> anyh
 /// if absent (friendly no-op). Used by `aida team unset-role` to clean stray /
 /// duplicate keys. trace:STORY-654 | ai:claude
 pub(crate) fn unset_role_cas(store_root: &Path, user_id: &str) -> anyhow::Result<bool> {
+    #[cfg(test)]
+    crate::seat_authority::test_support::assert_scratch_store(store_root); // trace:BUG-2209 | ai:claude
     aida_core::team::unset_role_cas(store_root, user_id)
         .map_err(|e| anyhow::anyhow!("removing team role failed: {}", e))
 }
 
 pub(crate) fn allow_seat_cas(store_root: &Path, user_id: &str, seat: &str) -> anyhow::Result<()> {
+    #[cfg(test)]
+    crate::seat_authority::test_support::assert_scratch_store(store_root); // trace:BUG-2209 | ai:claude
     aida_core::team::allow_seat_cas(store_root, user_id, seat)
         .map_err(|e| anyhow::anyhow!("allowing team seat failed: {}", e))
 }
@@ -399,6 +405,8 @@ pub(crate) fn disallow_seat_cas(
     user_id: &str,
     seat: &str,
 ) -> anyhow::Result<bool> {
+    #[cfg(test)]
+    crate::seat_authority::test_support::assert_scratch_store(store_root); // trace:BUG-2209 | ai:claude
     aida_core::team::disallow_seat_cas(store_root, user_id, seat)
         .map_err(|e| anyhow::anyhow!("removing team seat failed: {}", e))
 }
