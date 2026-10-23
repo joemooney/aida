@@ -6,16 +6,25 @@ description: |-
   lane_env::fix_for (aida-cli-lib/src/lane_env.rs:108) and apply_in_process (MCP) replace any inherited AIDA_SESSION_ROLE, including least-privilege guest/requester (stakeholder_role.rs:6), with the lane lease role. Leave stakeholder roles unchanged and add a test.
 
   Raised in review of PR-2844 (STORY-1662 PR2): https://github.com/joemooney/aida/pull/2844#issuecomment-6365669702
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T13:11:44.866474167Z
-modified_at: 2026-10-23T13:11:44.866474167Z
+modified_at: 2026-10-23T13:31:23.647479596Z
 req_type: Task
 tags:
 - from-review:PR-2844
 - severity:minor
+history:
+- id: 01a168f5-867f-7932-b74d-2f5b514ae53b
+  author: joe
+  timestamp: 2026-10-23T13:31:23.647469372Z
+  session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 5d97a467c400301a4f830cd335a9732f0a75db87
   branch: pr-2844
