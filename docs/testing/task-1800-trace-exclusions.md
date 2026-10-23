@@ -316,3 +316,82 @@ incidental rate cannot fall without losing true touches.
 
 Iteration A (above) removed most of these two triggers safely, but its new
 fail-closed rules and the closure's own growth kept fallback above 290.
+
+## TASK-2067: resolving the unresolved trace IDs
+
+<!-- trace:TASK-2067 | ai:claude -->
+
+The 18-case audit judged 30 scoped (case, ID) pairs unresolved. They cover
+23 distinct IDs; with the full-only pairs, 30 IDs in all. Each ID was resolved
+by the production path (`resolve_exclusion_specs`) and judged by the
+production per-spec rules (`judge_exclusion_spec`, extracted unchanged from
+the mandate decision). The store was pinned at the frozen commit
+`a5dae7145a`: a shared clone whose only ref is that commit, so `--all` sees
+nothing later. The ledger was the frozen five-entry ledger, checked against
+its recorded digest.
+
+| Class | IDs | How they resolve |
+|---|---|---|
+| recorded alias (17) | TASK-123, -1327, -1328, -1331, -1335, -1338, -1363, -1364, -1365, -1366, -140, -141, -142, -152, -153, -176, CR-8 | the `agreed_id` of a current object (TASK-1-096, -219, -220, -223, -226, -229, -294, -297, -295, -296, -115, -117, -118, -128, -129, -152; CR-1-173) |
+| deleted with history (10) | BUG-1-040, BUG-1-051, BUG-1-069, EPIC-1-001, EPIC-1-052, FR-0259, FR-1-002, FR-1-043, FR-1-044, FR-1-071 | renumbered: history at the old path, linked to the new stem (BUG-26, BUG-21, BUG-22, EPIC-16, EPIC-11, FR-237, FR-272, FR-276, FR-279, FR-259) |
+| dangling (3) | FR-0042, FR-1-052, FR-1-074 | no current record, no history on any ref, no alias, no ledger entry; dropped as trace-derived |
+
+TASK-1364, -1365 and -1366 are full-mode pairs only. The scoped replay does
+not collect them, so their resolution comes from the plan's git evidence and
+the same rule as TASK-1363.
+
+The frozen census classed the recorded aliases as "history unreadable: no
+version of X" and the rest as "unresolved trace/spec id". Both predate the
+TASK-1800 ruling code that resolves an `agreed_id` to its stored object and
+drops a dangling trace-derived ID. No audited unresolved ID still refuses for
+an unreadable or missing history. Three of them still refuse, for a real
+policy class found in an earlier version of the renumbered spec: BUG-1-040
+and EPIC-1-001/-052 are keystone-class, and BUG-1-069 is identity metadata.
+
+### Before and after on the 50 frozen endpoints
+
+| Store | refusals | named |
+|---|---:|---:|
+| before: frozen per-ID policy classes | 49 | 22 |
+| after: production resolution, pinned at `a5dae7145a` | 48 | 22 |
+| after: production resolution, live store (informational) | 48 | 22 |
+
+One case changed. PR #2685 refused before only for TASK-1335 ("history
+unreadable"). TASK-1335 is the `agreed_id` of TASK-1-226, which is in no
+excluded class, so #2685 is no longer refused. Every other case keeps its
+decision. Per ID, 102 frozen classes read differently after resolution. Most
+of these are the IDs above, and the rest only reword the same refusal (for
+example, "…, in an earlier version" or "…, recorded <time>" for a sticky
+ledger entry). 82 IDs that refused before are allowed now; every one of them
+was classed "unresolved trace/spec id" or "history unreadable" by the frozen
+census. Beyond the audited 30, they resolve the same three ways. No ID that
+was allowed before refuses now.
+
+### The resolution-path fix: rename configuration
+
+The `-G` alias walk found a renumbered spec's new stem only through git's
+rename detection, which follows the user's `diff.renames` and
+`diff.renameLimit`. With `diff.renames=false`, or a renumbering commit larger
+than the rename limit, the walk saw a deletion plus an addition, and the old
+ID was judged by its old versions alone. Every one of the ten renumbered IDs
+above lost its new stem that way. The walk now passes `--find-renames -l0`. It
+reads a removed line at the old path and an added line at the new one, and
+links both stems of a rename. Linking only adds versions to judge. An
+unreadable version of the renamed-to stem refuses the old ID, and a hit at a
+non-canonical path still refuses (comment 24). The history walk passes
+`--no-renames`. Every store history call runs without system config and with
+`core.quotePath=false` (advisor C1). This machine's config detects renames,
+so the fix changes no decision on the corpus above. Its regressions fail
+under `diff.renames=false` and `diff.renameLimit=1` without the fix.
+
+### Reproduce
+
+```bash
+make task-1800-replay \
+  POLICY=<session4 all-id-policy-classes.json> \
+  LEDGER=~/.aida/mandates/exclusions.jsonl OUT=/tmp/replay.json
+```
+
+The report's `resolution` and `unresolved_ids` keys hold the per-case and
+per-ID results. The 18 audited cases also run in CI from the vendored bundle
+in `tests/fixtures/task-1800-replay/` (TASK-2068).

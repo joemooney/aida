@@ -1461,6 +1461,30 @@ pub(crate) fn grant_id(grant: &SeatGrant) -> &str {
 pub(crate) mod test_support {
     use super::*;
 
+    /// Panic unless `store` is a scratch store a test may write: under a
+    /// system temp root, or under this workspace's `target/` (fixtures that
+    /// must live outside `/tmp`). A test that resolves a real checkout's store
+    /// fails here instead of rewriting it (BUG-2209).
+    // trace:BUG-2209 | ai:claude
+    pub(crate) fn assert_scratch_store(store: &Path) {
+        if aida_core::team::is_under_temp_root(store) {
+            return;
+        }
+        let target = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .map(|workspace| workspace.join("target"));
+        let canonical = store.canonicalize().unwrap_or_else(|_| store.to_path_buf());
+        let in_target = target
+            .and_then(|t| t.canonicalize().ok())
+            .is_some_and(|t| canonical.starts_with(t));
+        assert!(
+            in_target,
+            "test wrote a roster to `{}`, which is neither under a temp directory nor under \
+             the workspace target/: the fixture resolved a real store",
+            store.display()
+        );
+    }
+
     /// Write the store plumbing (`.aida/config.toml`, `objects/`) plus a
     /// roster ceiling allowing `seat` ∪ `delegable` for `subject`, then mint
     /// a direct grant bound to `subject` and return its handle. The caller
@@ -1514,28 +1538,22 @@ pub(crate) mod test_support {
         let registry = store.join("registry");
         std::fs::create_dir_all(&registry).unwrap();
 
-        // Merge (never clobber) the roster ceiling for `subject`.
+        // Merge (never clobber) the roster ceiling for `subject`, and only
+        // into a scratch store: a fixture whose walk-up escaped to a real
+        // checkout once wrote this roster over the operator's (BUG-2209).
+        // trace:BUG-2209 | ai:claude
+        assert_scratch_store(&store);
         let seat = aida_core::team::canonical_role(seat);
-        let mut members: std::collections::BTreeMap<String, Vec<String>> =
-            aida_core::team::TeamRoster::load(&store)
-                .entries()
-                .into_iter()
-                .collect();
-        let seats = members.entry(subject.to_string()).or_default();
-        for requested in std::iter::once(seat.as_str()).chain(delegable.iter().copied()) {
-            let canonical = aida_core::team::canonical_role(requested);
-            if !seats.iter().any(|have| *have == canonical) {
-                seats.push(canonical);
+        aida_core::team::write_member_seats(&store, subject, None, |current| {
+            let mut seats = current.map(<[String]>::to_vec).unwrap_or_default();
+            for requested in std::iter::once(seat.as_str()).chain(delegable.iter().copied()) {
+                let canonical = aida_core::team::canonical_role(requested);
+                if !seats.iter().any(|have| *have == canonical) {
+                    seats.push(canonical);
+                }
             }
-        }
-        #[derive(serde::Serialize)]
-        struct RosterFile {
-            members: std::collections::BTreeMap<String, Vec<String>>,
-        }
-        std::fs::write(
-            registry.join("team.toml"),
-            toml::to_string(&RosterFile { members }).unwrap(),
-        )
+            Some(seats)
+        })
         .unwrap();
 
         let lifetime = ttl.unwrap_or(MAX_GRANT_AGE);
@@ -2126,3 +2144,8 @@ mod task_1752_grant_env_guard_tests;
 #[cfg(test)]
 #[path = "tests/bug_2200_roster_store_tests.rs"]
 mod bug_2200_roster_store_tests;
+
+// trace:BUG-2209 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_2209_roster_leak_tests.rs"]
+mod bug_2209_roster_leak_tests;

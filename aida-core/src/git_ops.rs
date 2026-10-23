@@ -1159,6 +1159,72 @@ pub fn init(path: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Keep a pending roster change that drops an advisor out of a sync commit.
+///
+/// The roster writers (`aida team ...`) commit their own change, so a pending
+/// `registry/team.toml` that removes an advisor seat was written by something
+/// else, as when a test wrote the hermetic user's roster over the operator's
+/// and a sync commit published it (BUG-2209). Before a sync stages the store,
+/// this saves the pending file to `<git-dir>/aida/rejected-team.toml`, restores
+/// the committed roster, and warns, naming the members it would have removed.
+/// Returns those members (empty when nothing was restored).
+// trace:BUG-2209 | ai:claude
+pub fn protect_roster_advisors(store: &Path) -> Result<Vec<String>> {
+    const REL: &str = "registry/team.toml";
+    if !is_git_repo(store) {
+        return Ok(Vec::new());
+    }
+    let head = git(store, &["show", &format!("HEAD:{REL}")])?;
+    if !head.success {
+        // No committed roster (or an unborn branch): nothing to protect.
+        return Ok(Vec::new());
+    }
+    let path = store.join(REL);
+    let pending = match std::fs::read_to_string(&path) {
+        Ok(text) => Some(text),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+        Err(e) => return Err(e).with_context(|| format!("cannot read {}", path.display())),
+    };
+    let lost = crate::team::advisors_lost(&head.stdout, pending.as_deref());
+    if lost.is_empty() {
+        return Ok(lost);
+    }
+    let saved = git(
+        store,
+        &["rev-parse", "--git-path", "aida/rejected-team.toml"],
+    )?;
+    let saved = Path::new(saved.stdout.trim());
+    let saved = if saved.is_absolute() {
+        saved.to_path_buf()
+    } else {
+        store.join(saved)
+    };
+    if let Some(text) = &pending {
+        if let Some(parent) = saved.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::write(&saved, text)?;
+    }
+    let restore = git(store, &["checkout", "-q", "HEAD", "--", REL])?;
+    anyhow::ensure!(
+        restore.success,
+        "git checkout HEAD -- {REL} failed: {}",
+        restore.stderr
+    );
+    eprintln!(
+        "WARNING: the pending store change to {REL} removes the advisor seat of {}; it was \
+         NOT committed. The committed roster is restored{}. Change seats with `aida team \
+         allow-seat` / `aida team disallow-seat`.",
+        lost.join(", "),
+        if pending.is_some() {
+            format!(" and the rejected file saved to {}", saved.display())
+        } else {
+            String::new()
+        }
+    );
+    Ok(lost)
+}
+
 /// Stage specific files.
 pub fn add(repo: &Path, paths: &[&str]) -> Result<()> {
     refuse_embedded_repos(repo)?; // trace:BUG-1929 | ai:claude
@@ -1862,6 +1928,7 @@ pub fn commit_pending_store_changes_on_host(store_path: &Path) -> Result<bool> {
     }
     crate::db::with_store_write_lock(store_path, || {
         refuse_embedded_repos(store_path)?;
+        protect_roster_advisors(store_path)?; // trace:BUG-2209 | ai:claude
         if !has_changes_checked(store_path)? {
             return Ok(false);
         }
@@ -10406,6 +10473,7 @@ mod tests {
         std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).unwrap();
     }
 
+    mod bug_2209_roster_sync_tests;
     mod store_hook_tests;
 
     /// Only space and tab are blanks around a commit-config line: the
