@@ -6,17 +6,26 @@ description: |
   handoff_settled in mandate_drive.rs refuses on TASK_COMPLETE or BLOCKED_ON_HUMAN. story_1706_relay_restart_tests::refusals_each_condition covers only TASK_COMPLETE. Add a BLOCKED_ON_HUMAN case (and a leading-blank-line case).
 
   Raised in review of PR-2834: https://github.com/joemooney/aida/pull/2834#issuecomment-6364063660
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T11:42:41.067262131Z
-modified_at: 2026-10-23T11:42:41.067262131Z
+modified_at: 2026-10-23T13:33:07.594362491Z
 req_type: Task
 tags:
 - from-review:PR-2834
 - severity:cosmetic
 - tests
+history:
+- id: 01a168f7-1c8a-7a93-b541-be4eb50e0f1b
+  author: joe
+  timestamp: 2026-10-23T13:33:07.594340854Z
+  session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 6a9d444081d2e07914ceb08700265b2b4a8401b2
   branch: pr-2834
