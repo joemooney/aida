@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T15:52:26.498332519Z
-modified_at: 2026-10-23T16:58:56.871731563Z
+modified_at: 2026-10-23T16:59:00.526777272Z
 req_type: Task
 relationships:
 - rel_type: Supersedes
@@ -147,6 +147,12 @@ comments:
   content: 'ADVISOR 09:47: two more members folded: TASK-2239 (test that ''aida list --format json --fields opened'' emits an ''opened'' key) and TASK-2240 (the toon_list_fields doc overstates ''copied header line works''; human headers like Modified are rejected). Take them in the same PR: a test for 2239, a doc fix for 2240.'
   created_at: 2026-10-23T16:45:47.572317527Z
   modified_at: 2026-10-23T16:45:47.572317527Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+- id: 01a169b3-9a2e-7f32-9bd0-821225ffd7bb
+  author: joe
+  content: 'ADVISOR 09:58: folded the four #2856 post-merge review-watch notes (TASK-1945 has merged): TASK-2241 (a stale pending ready wake disables READY_INTERVAL throttling for its head), TASK-2242 (the round-cap wake ignores a carried-over approval of the head), TASK-2243 (GitLab notice mails name MR-N.json when the verdict is in the PR-N.json alias), and TASK-2244 (no test drives a corpus refusal through live_approval). Each needs a fix plus a test. Read them with aida show <id> --full.'
+  created_at: 2026-10-23T16:59:00.526777272Z
+  modified_at: 2026-10-23T16:59:00.526777272Z
   session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
 history:
 - id: 01a16976-e631-7892-97cd-98e748de55a8
