@@ -10,6 +10,7 @@ pub(crate) struct RecipientDirectory {
     agents: Vec<AgentRegistryEntry>,
     roles: BTreeMap<String, String>,
     people: HashMap<String, String>,
+    operator: Option<String>,
     live_ids: BTreeSet<String>,
     unknown_ids: BTreeSet<String>,
     warnings: Vec<String>,
@@ -35,24 +36,51 @@ fn reader_liveness(
     entry: &AgentRegistryEntry,
     namespace: Option<u64>,
 ) -> Option<bool> {
-    if entry.ended_at.is_some() || entry.source == "role-enter" {
+    if entry.source == "role-enter" {
         return Some(false);
     }
-    match (entry.pid_namespace, namespace) {
-        (Some(recorded), Some(current)) if recorded == current => {}
-        (None, Some(0xEFFF_FFFC)) => {} // Linux initial PID namespace inode.
-        _ => {
-            let age = chrono::Utc::now().signed_duration_since(entry.last_active_at);
-            return if age >= chrono::Duration::zero()
-                && age <= chrono::Duration::seconds(UNKNOWN_READER_TTL_SECONDS)
-            {
-                None
-            } else {
-                Some(false)
-            };
-        }
+    agent_registry::observed_liveness(project, entry, namespace).or_else(|| {
+        let age = chrono::Utc::now().signed_duration_since(entry.last_active_at);
+        let fresh = age >= chrono::Duration::zero()
+            && age <= chrono::Duration::seconds(UNKNOWN_READER_TTL_SECONDS);
+        (!fresh).then_some(false)
+    })
+}
+
+// The operator is AIDA_USER when it names a known person, else the one person
+// holding an explicit `operator` seat in the team roster. Catalog order never
+// picks one: no unique answer means the hint names nobody.
+// trace:STORY-1843 | ai:claude
+fn select_operator(
+    aida_user: Option<&str>,
+    people: &HashMap<String, String>,
+    roster: &[(String, Vec<String>)],
+) -> Option<String> {
+    let usable = |person: &String| {
+        !person.chars().any(char::is_whitespace)
+            && aida_core::mailbox::recipient_id_rejection(person).is_none()
+    };
+    if let Some(person) = aida_user
+        .and_then(|name| people.get(&name.trim().to_lowercase()))
+        .filter(|p| usable(p))
+    {
+        return Some(person.clone());
     }
-    Some(agent_registry::registry_entry_is_live(project, entry))
+    let mut seated = roster
+        .iter()
+        .filter(|(_, seats)| {
+            seats
+                .iter()
+                .any(|s| s.trim().eq_ignore_ascii_case("operator"))
+        })
+        .filter_map(|(user, _)| people.get(&user.trim().to_lowercase()))
+        .filter(|p| usable(p))
+        .collect::<BTreeSet<_>>()
+        .into_iter();
+    match (seated.next(), seated.next()) {
+        (Some(only), None) => Some(only.clone()),
+        _ => None,
+    }
 }
 
 impl RecipientDirectory {
@@ -125,10 +153,17 @@ impl RecipientDirectory {
             roles.insert(role.name.to_lowercase(), role.name);
         }
         warnings.sort();
+        let people = crate::known_mailbox_people(store);
+        let operator = select_operator(
+            std::env::var("AIDA_USER").ok().as_deref(),
+            &people,
+            &aida_core::team::TeamRoster::load(store).entries(),
+        );
         Ok(Self {
             agents,
             roles,
-            people: crate::known_mailbox_people(store),
+            people,
+            operator,
             live_ids,
             unknown_ids,
             warnings,
@@ -150,16 +185,7 @@ impl RecipientDirectory {
     // also names a role. Environment text alone never invents a recipient.
     // trace:STORY-1843 | ai:codex
     fn refusal_hint(&self, mention: bool) -> String {
-        let usable = |person: &&String| {
-            !person.chars().any(char::is_whitespace)
-                && aida_core::mailbox::recipient_id_rejection(person).is_none()
-        };
-        let preferred = std::env::var("AIDA_USER")
-            .ok()
-            .and_then(|name| self.people.get(&name.trim().to_lowercase()))
-            .filter(usable);
-        let operator = preferred.or_else(|| self.people.values().filter(usable).min());
-        let hint = match operator {
+        let hint = match &self.operator {
             Some(person) => format!("mail the operator (--to person:{person})"),
             None => "contact the operator".to_string(),
         };
@@ -236,6 +262,8 @@ impl RecipientDirectory {
             });
         }
         if role.is_some() || vendor.is_some() {
+            // Live readers sort ahead of unverified ones so the five-name cap
+            // never hides a live reader. trace:STORY-1843 | ai:claude
             let readers: BTreeMap<_, _> = self
                 .agents
                 .iter()
@@ -255,7 +283,10 @@ impl RecipientDirectory {
                         .as_deref()
                         .map(|name| format!("{name} ({})", a.id))
                         .unwrap_or_else(|| a.id.clone());
-                    (label, !self.unknown_ids.contains(&a.id))
+                    (
+                        (self.unknown_ids.contains(&a.id), label),
+                        !self.unknown_ids.contains(&a.id),
+                    )
                 })
                 .collect();
             let address = role.cloned().unwrap_or_else(|| vendor.unwrap().to_string());
@@ -266,7 +297,7 @@ impl RecipientDirectory {
             let unknown = readers.len() - live_count;
             let mut live_labels = Vec::new();
             let mut unverified_labels = Vec::new();
-            for (label, live) in readers.iter().take(MAX_NOTICE_READERS) {
+            for ((_, label), live) in readers.iter().take(MAX_NOTICE_READERS) {
                 if *live {
                     live_labels.push(label.as_str());
                 } else {
@@ -414,6 +445,40 @@ mod tests {
         }
     }
 
+    // TASK-2177: from a sandbox every row is foreign, so a finished session
+    // that ran within 24h used to count as an unverified reader. Once a host
+    // observer's gc ends it, the sandboxed role send refuses.
+    // trace:STORY-1843 | ai:claude
+    #[test]
+    fn sandboxed_role_send_refuses_after_host_gc_ends_dead_resumable_reader() {
+        let Some(host) = agent_registry::current_pid_namespace() else {
+            return;
+        };
+        let tmp = tempfile::tempdir().unwrap();
+        registry(tmp.path(), "finished", "finished-worker", "reviewer", false);
+        let mut entry = agent_registry::load_entries(tmp.path()).remove(0).1;
+        entry.pid = u32::MAX;
+        entry.pid_namespace = Some(host);
+        entry.native_session_id = Some("native-1".to_string());
+        entry.last_active_at = chrono::Utc::now() - chrono::Duration::hours(1);
+        agent_registry::write_entry(tmp.path(), &entry).unwrap();
+        let sandbox = host ^ 1;
+
+        let before = observed_from(tmp.path(), sandbox);
+        assert!(
+            before.resolve("reviewer").is_ok(),
+            "fresh foreign row is unverified"
+        );
+
+        let report = agent_registry::gc_dead_agents(tmp.path(), false, None).unwrap();
+        assert_eq!(report.marked_ended, 1);
+
+        let after = observed_from(tmp.path(), sandbox);
+        let error = after.resolve("reviewer").unwrap_err().to_string();
+        assert!(error.contains("0 live readers"), "{error}");
+        assert!(after.resolve("finished-worker").is_err());
+    }
+
     // trace:STORY-1843 | ai:codex
     #[test]
     fn round2_fresh_unknown_readers_deliver_and_are_labeled_unverified() {
@@ -516,22 +581,14 @@ mod tests {
             .split(';')
             .next()
             .unwrap();
-        let unknown_list = notice
-            .split("; unverified: ")
-            .nth(1)
-            .unwrap()
-            .split(';')
-            .next()
-            .unwrap();
+        // Live readers (even indices) fill the cap before any unverified one.
+        // trace:STORY-1843 | ai:claude
+        assert!(!notice.contains("; unverified: "), "{notice}");
         for i in 0..20 {
             let name = format!("worker-{i:02}");
-            assert_eq!(notice.contains(&name), i < 5, "{notice}");
-            assert_eq!(live_list.contains(&name), i < 5 && i % 2 == 0, "{notice}");
-            assert_eq!(
-                unknown_list.contains(&name),
-                i < 5 && i % 2 == 1,
-                "{notice}"
-            );
+            let shown = i % 2 == 0 && i < 10;
+            assert_eq!(notice.contains(&name), shown, "{notice}");
+            assert_eq!(live_list.contains(&name), shown, "{notice}");
         }
         assert!(notice.contains("and 15 more"), "{notice}");
     }
@@ -542,22 +599,65 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let store = tmp.path().join(".aida-store");
         std::fs::create_dir_all(store.join("registry")).unwrap();
-        let directory = RecipientDirectory::load(tmp.path(), &store).unwrap();
+        let mut directory = RecipientDirectory::load(tmp.path(), &store).unwrap();
+        directory.operator = None;
         let error = directory.resolve("missing").unwrap_err().to_string();
         assert!(!error.contains("--to "), "{error}");
         std::fs::write(
             store.join("registry/team.toml"),
-            "[members]\nZara = []\nAdvisor = []\n",
+            "[members]\nZara = []\nAdvisor = [\"operator\"]\n",
         )
         .unwrap();
-        let directory = RecipientDirectory::load(tmp.path(), &store).unwrap();
+        let mut directory = RecipientDirectory::load(tmp.path(), &store).unwrap();
+        directory.operator = select_operator(
+            None,
+            &directory.people,
+            &aida_core::team::TeamRoster::load(&store).entries(),
+        );
         let error = directory.resolve("missing").unwrap_err().to_string();
         let hint = error
             .split("--to ")
             .nth(1)
-            .expect("catalog supplies an operator escape");
+            .expect("operator seat supplies an escape");
         let target = hint.split(')').next().unwrap();
+        assert_eq!(target, "person:Advisor", "{error}");
         assert!(directory.resolve(target).is_ok(), "{error}");
+    }
+
+    // TASK-2179: never the first catalog person; only AIDA_USER or a unique
+    // explicit operator seat. trace:STORY-1843 | ai:claude
+    #[test]
+    fn operator_comes_only_from_aida_user_or_a_unique_operator_seat() {
+        let people: HashMap<String, String> = ["aaron", "joe", "zara"]
+            .iter()
+            .map(|p| (p.to_string(), p.to_string()))
+            .collect();
+        let seats = |rows: &[(&str, &[&str])]| -> Vec<(String, Vec<String>)> {
+            rows.iter()
+                .map(|(u, s)| (u.to_string(), s.iter().map(|x| x.to_string()).collect()))
+                .collect()
+        };
+        let plain = seats(&[("aaron", &["advisor"]), ("zara", &["reviewer"])]);
+        assert_eq!(select_operator(None, &people, &plain), None);
+        assert_eq!(select_operator(Some("ghost"), &people, &plain), None);
+        assert_eq!(
+            select_operator(Some(" JOE "), &people, &plain).as_deref(),
+            Some("joe")
+        );
+        let one = seats(&[("aaron", &["advisor"]), ("zara", &["Operator"])]);
+        assert_eq!(
+            select_operator(None, &people, &one).as_deref(),
+            Some("zara")
+        );
+        assert_eq!(
+            select_operator(Some("joe"), &people, &one).as_deref(),
+            Some("joe"),
+            "a resolvable AIDA_USER wins over the roster"
+        );
+        let two = seats(&[("aaron", &["operator"]), ("zara", &["operator"])]);
+        assert_eq!(select_operator(None, &people, &two), None);
+        let unknown = seats(&[("nobody", &["operator"])]);
+        assert_eq!(select_operator(None, &people, &unknown), None);
     }
 
     // trace:STORY-1843 | ai:codex
@@ -707,6 +807,54 @@ mod tests {
             messages[0].to,
             aida_core::mailbox::Recipient::Agent("Case-Worker".into())
         );
+    }
+
+    // An old-layout send against a migrated clone exits nonzero and leaves
+    // the manifest and its directory exactly as they were.
+    // trace:STORY-1843 | ai:claude
+    #[test]
+    fn cli_send_refuses_at_a_layout_manifest_without_writing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = tmp.path().join(".aida-store");
+        std::fs::create_dir_all(store.join("registry")).unwrap();
+        std::fs::write(store.join("registry/team.toml"), "[members]\njoe = []\n").unwrap();
+        let aida = tmp.path().join(".aida");
+        std::fs::create_dir_all(&aida).unwrap();
+        let manifest = crate::mailbox_store::mailbox_dir(tmp.path());
+        let body = format!(
+            "{}\nlayout = 2\n",
+            aida_core::mailbox::MAILBOX_LAYOUT_MANIFEST_MARKER
+        );
+        std::fs::write(&manifest, &body).unwrap();
+        let listing = || {
+            let mut names: Vec<_> = std::fs::read_dir(&aida)
+                .unwrap()
+                .map(|e| e.unwrap().file_name())
+                .collect();
+            names.sort();
+            names
+        };
+        let before = listing();
+        let send = crate::cli::MailboxCommand::Send {
+            to: Some("person:joe".into()),
+            broadcast: false,
+            body: Some("layout probe".into()),
+            subject: None,
+            body_file: None,
+            stdin: false,
+            thread: None,
+            in_reply_to: None,
+            from: Some("sender".into()),
+            urgent: false,
+            intent: "fyi".into(),
+            relayed_from: None,
+            allow_second_person: false,
+        };
+        let error = crate::mailbox_cmd::handle_mailbox_command(&send, &store).unwrap_err();
+        let chain = format!("{error:#}");
+        assert!(chain.contains("migrated to layout 2"), "{chain}");
+        assert_eq!(std::fs::read_to_string(&manifest).unwrap(), body);
+        assert_eq!(listing(), before);
     }
 
     #[test]

@@ -3288,7 +3288,7 @@ pub(crate) const SCHEDULED_COMMAND_TIMEOUT: std::time::Duration =
     std::time::Duration::from_secs(120);
 
 /// Exit status a killed-at-timeout (or unspawnable) scheduled child reports.
-const TIMEOUT_EXIT_STATUS: i32 = 124;
+pub(crate) const TIMEOUT_EXIT_STATUS: i32 = 124;
 /// How a timed-out run's `CronJobFailed.error` starts, so a routed failure
 /// can say "did not finish" instead of presenting it as a finding.
 // trace:BUG-1655 | ai:claude
