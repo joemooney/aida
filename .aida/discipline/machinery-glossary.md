@@ -204,7 +204,6 @@ it. The launcher waits and ends with one `implementer:` result line and an
 exit code the caller branches on: 0 PR opened, 31 no PR, 32 punted, 33 held,
 34 refused at the concurrency cap (`[queue] standalone_implementer_cap`,
 default 3). See `docs/cli/03-work-autonomy.md`.
-<!-- trace:STORY-1662 | ai:claude -->
 
 ### worktree
 
