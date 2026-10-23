@@ -2843,6 +2843,57 @@ fn task_1458_drain_merge_with_a_stale_approval_never_calls_gh_merge() {
     assert_eq!(t1458_merge_argv(&calls), None, "no merge attempted");
 }
 
+/// STORY-1690: the drain's merge phase refuses a head behind its base, as
+/// `aida pr ship` does, and never reaches `gh pr merge`.
+// trace:STORY-1690 | ai:claude
+#[cfg(unix)]
+#[test]
+fn story_1690_drain_merge_refuses_a_head_behind_its_base() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let (tmp, root, gh, calls, head, _) = t1458_fixture();
+    // origin: a local bare repo where main has moved past the PR head.
+    git(&root, &["branch", "task-1458", &head]);
+    write_commit(&root, "guard.txt", "a whole-repo guard", "main moves on");
+    let origin = tmp.path().join("origin.git");
+    git(
+        &root,
+        &["clone", "--quiet", "--bare", ".", &origin.to_string_lossy()],
+    );
+    git(
+        &root,
+        &["remote", "set-url", "origin", &origin.to_string_lossy()],
+    );
+    let inherited = std::env::var_os("PATH").unwrap_or_default();
+    let path = std::env::join_paths(
+        std::iter::once(gh.parent().unwrap().to_path_buf())
+            .chain(std::env::split_paths(&inherited)),
+    )
+    .unwrap();
+    let path = path.to_string_lossy().into_owned();
+    let gh_bin = gh.to_string_lossy().into_owned();
+    let _env = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+        &root,
+        "reviewer",
+        &[],
+        &[
+            ("AIDA_TEST_GH_BINARY", Some(gh_bin.as_str())),
+            ("PATH", Some(path.as_str())),
+        ],
+    );
+    let mut d = driver(&root, "TASK-1458");
+    d.pr_number = Some(77);
+    d.branch = Some("task-1458".into());
+    let failure = d.merge().expect_err("a behind head must not merge");
+    assert!(
+        failure.reason.contains("behind main") && failure.reason.contains("aida pr train 77"),
+        "{}",
+        failure.reason
+    );
+    assert_eq!(t1458_merge_argv(&calls), None, "no merge attempted");
+}
+
 /// BUG-2180: a contained reviewer's request-changes shelve cannot commit
 /// (the sandbox denies the store's git directory), so it was left for the
 /// host — and the launcher that waited on the reviewer never committed it,

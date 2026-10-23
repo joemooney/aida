@@ -46,7 +46,8 @@ Each PR's CI ran against the main that existed then, so two PRs that are each
 green can break main together (#2599/#2597: one added a whole-repo guard, the
 other added code the guard rejects). `aida pr ship` therefore refuses a PR
 whose head is behind main and names `aida pr train N`; no flag overrides it.
-Do not re-record approvals after `gh pr update-branch`. Land approved PRs
+It fetches main and the PR head first, and refuses when it cannot tell. The
+drain's merge phase applies the same refusal. Do not re-record approvals after `gh pr update-branch`. Land approved PRs
 with the merge train:
 
 ```bash

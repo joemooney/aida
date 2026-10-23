@@ -891,6 +891,10 @@ pub(crate) const EXIT_CODES: &[(i32, &str)] = &[
         "pr ship: merge hold",
     ),
     (
+        pr_ship::ShipRefusal::BehindBase as i32,
+        "pr ship: head behind its base",
+    ),
+    (
         queue_cmd::NO_REVIEW_VERDICT_EXIT_CODE,
         "standalone reviewer: no verdict",
     ),

@@ -247,8 +247,11 @@ pub enum PrCommand {
     /// Each PR must pass the same gates `aida pr ship` applies before a
     /// merge: open, not a draft, on the default branch, no merge hold, an
     /// approval recorded at its head (or carried over a clean merge from
-    /// main), and a clear verdict corpus. Drafts are refused with a reason,
-    /// since CI does not run Build on them.
+    /// main), a clear verdict corpus, no live drive owning it, and no spec
+    /// tagged `review:draft-only`. A spec whose execution mode needs
+    /// supervision merges only for a human at a terminal or under an active
+    /// mandate. Drafts are refused with a reason, since CI does not run Build
+    /// on them. GitHub only for now.
     ///
     /// The train is main plus one squash commit per PR, each written with
     /// the subject `aida pr ship` would use and checked to carry exactly the
@@ -285,7 +288,8 @@ pub enum PrCommand {
         #[clap(long, value_name = "CMD", requires = "dry_run")]
         local_ci: Option<String>,
 
-        /// At most this many PRs per train; the rest wait for the next one.
+        /// At most this many PRs per train. With --all-ready the rest wait
+        /// for the next train; naming more PRs than this is refused.
         #[clap(long, value_name = "N", default_value_t = 10)]
         max: usize,
 

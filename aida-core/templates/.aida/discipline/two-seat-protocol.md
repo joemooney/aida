@@ -80,8 +80,12 @@ batched form of `aida pr ship`:
    Build on drafts, so a draft is refused with that reason), on the default
    branch, free of merge holds (marker and labels), approved at its head or
    carried over a clean merge from main (TASK-1960), not claimed by a
-   reviewer for re-review at that head, with a clear verdict corpus. The
-   train never releases a hold.
+   reviewer for re-review at that head, with a clear verdict corpus, not
+   owned by a live drive, and with no spec tagged `review:draft-only`. A spec
+   whose execution mode needs supervision lands only for a human at a
+   terminal or under an active mandate's cover, as with `aida pr ship`. The
+   train never releases a hold. It is GitHub-only for now; it refuses a
+   GitLab project.
 2. **Attestation carry-over by patch-id.** The train is main plus one squash
    commit per member, with the subject `aida pr ship` would write (including
    `(#N)` and the completing trailer). Each commit's patch-id must equal the
@@ -101,6 +105,8 @@ batched form of `aida pr ship`:
    PR is closed with a pointer to its commit on main, and `aida pull`
    completes specs from the trailers. A merge lease held by another merger
    means main is about to move, so the train rebuilds instead of aborting.
+   A forge error mid-run closes the open train PRs, comments on every member
+   left unlanded, and is reported in the run's summary.
 5. **Red trains bisect.** A red train is rerun once to rule out a flake, then
    split in halves, two sub-trains at a time. A green half lands at once,
    and the other half is rebuilt on the new main and retested. A one-member

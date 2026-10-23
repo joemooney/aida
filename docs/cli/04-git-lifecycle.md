@@ -194,11 +194,11 @@ merge lease. Each member PR is then closed with a pointer to its commit, and
 bisected in halves (two sub-trains at a time). A one-member red train leaves
 that PR open with a comment. `--dry-run` prints the gate verdicts and the
 plan; `--dry-run --local-ci <CMD>` simulates the whole run with a local CI
-command; `--max N` caps the batch (default 10). The command exits non-zero
-when a named PR was not landed. A GitLab merge request train works the same
-way, but GitLab's merge-hold gate checks only the train MR's own labels; the
-member holds are enforced by the train's client-side gate and its pre-land
-recheck.
+command; `--max N` caps the batch (default 10), and naming more PRs than
+`--max` is refused. The command exits non-zero when a named PR was not
+landed. The train is GitHub-only for now: GitLab's merge-hold gate has no
+train mode, so `aida pr train` refuses a GitLab project; ship its merge
+requests one at a time with `aida pr ship N`.
 <!-- trace:STORY-1690 | ai:claude -->
 
 **Chains with** — `aida queue done` (finish on a branch) → `aida pr` (open/ship the PR) → `aida review` (if reviewed) → merge → `aida pull` (auto-bump to Completed).

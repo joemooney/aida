@@ -198,67 +198,78 @@ pub(crate) fn stale_check_branch_ref(repo: &std::path::Path, branch: &str) -> St
 /// since divergence. Staleness is measured from `origin/<branch>` when that
 /// ref exists, else the local `branch` ref (see [`stale_check_branch_ref`]).
 /// `None` when the branch is not behind base (nothing to warn about) or on
-/// a git error — same fail-open convention as [`branch_behind_main`], so a
-/// git hiccup never blocks a ship.
+/// a git error: advisory callers only. A gate uses [`pr_stale_check`],
+/// which fails closed.
 // trace:BUG-1468 | ai:claude
 pub(crate) fn pr_stale_check_warning(
     repo: &std::path::Path,
     branch: &str,
     base_ref: &str,
 ) -> Option<StaleCheckWarning> {
+    pr_stale_check(repo, branch, base_ref).ok().flatten()
+}
+
+/// [`pr_stale_check_warning`] for a gate: `Err` when staleness cannot be
+/// computed (a missing ref, a git error), so the caller refuses instead of
+/// reading a failure as "up to date".
+// trace:BUG-1468 | ai:claude
+// trace:STORY-1690 | ai:claude
+pub(crate) fn pr_stale_check(
+    repo: &std::path::Path,
+    branch: &str,
+    base_ref: &str,
+) -> std::result::Result<Option<StaleCheckWarning>, String> {
     let branch_ref = stale_check_branch_ref(repo, branch);
-    let count_out = std::process::Command::new("git")
-        .arg("-C")
-        .arg(repo)
+    let run = |args: &[&str]| -> std::result::Result<String, String> {
+        let out = std::process::Command::new("git")
+            .arg("-C")
+            .arg(repo)
+            .args(args)
+            .output()
+            .map_err(|e| format!("git {}: {e}", args[0]))?;
+        if !out.status.success() {
+            return Err(format!(
+                "git {} failed: {}",
+                args[0],
+                String::from_utf8_lossy(&out.stderr).trim()
+            ));
+        }
+        Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+    };
+    let behind_commits: u64 = run(&[
+        "rev-list",
+        "--count",
         // trace:BUG-1622 | ai:claude
-        .args([
-            "rev-list",
-            "--count",
-            git_arg_guard::END_OF_OPTIONS,
-            &format!("{branch_ref}..{base_ref}"),
-        ])
-        .output()
-        .ok()?;
-    if !count_out.status.success() {
-        return None;
-    }
-    let behind_commits: u64 = String::from_utf8_lossy(&count_out.stdout)
-        .trim()
-        .parse()
-        .ok()?;
+        git_arg_guard::END_OF_OPTIONS,
+        &format!("{branch_ref}..{base_ref}"),
+    ])?
+    .trim()
+    .parse()
+    .map_err(|e| format!("git rev-list --count: {e}"))?;
     if behind_commits == 0 {
-        return None;
+        return Ok(None);
     }
-    let diff_out = std::process::Command::new("git")
-        .arg("-C")
-        .arg(repo)
+    let changed: Vec<String> = run(&[
+        "diff",
+        "--name-only",
         // trace:BUG-1622 | ai:claude
-        .args([
-            "diff",
-            "--name-only",
-            git_arg_guard::END_OF_OPTIONS,
-            &format!("{branch_ref}...{base_ref}"),
-            "--",
-        ])
-        .output()
-        .ok()?;
-    if !diff_out.status.success() {
-        return None;
-    }
-    let changed: Vec<String> = String::from_utf8_lossy(&diff_out.stdout)
-        .lines()
-        .map(|l| l.to_string())
-        .collect();
+        git_arg_guard::END_OF_OPTIONS,
+        &format!("{branch_ref}...{base_ref}"),
+        "--",
+    ])?
+    .lines()
+    .map(|l| l.to_string())
+    .collect();
     let (definition_files, test_files) = classify_changed_files(
         &changed,
         &|workflow_path| workflow_is_pr_triggered(repo, base_ref, workflow_path),
         &|script_path| script_referenced_by_pr_workflows(repo, base_ref, script_path),
     );
-    Some(StaleCheckWarning {
+    Ok(Some(StaleCheckWarning {
         behind_commits,
         definition_files,
         test_files,
-    })
+    }))
 }
 
 #[cfg(test)]

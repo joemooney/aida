@@ -262,6 +262,8 @@ pub(crate) trait Rails {
     fn land(&mut self, train: &Built) -> Result<Landing>;
     /// Told once per member that is not landing, after the run.
     fn ejected(&mut self, _e: &Ejected) {}
+    /// The run stopped on `error`: release whatever is still open.
+    fn abort(&mut self, _error: &str) {}
 }
 
 /// The result of a train run.
@@ -272,6 +274,9 @@ pub(crate) struct Outcome {
     pub ejected: Vec<Ejected>,
     /// CI runs spent.
     pub ci_runs: usize,
+    /// The error that stopped the run early; every member it left in flight
+    /// is in `ejected`.
+    pub error: Option<String>,
 }
 
 /// Drive `members` to main through `rails`: build on the current main, test,
@@ -281,11 +286,36 @@ pub(crate) struct Outcome {
 // trace:STORY-1690 | ai:claude
 pub(crate) fn drive(rails: &mut dyn Rails, members: Vec<Member>) -> Result<Outcome> {
     let mut out = Outcome::default();
+    // A forge or git error mid-run must not abort with train PRs left open
+    // and ejected members never told: release what is open, eject what was
+    // in flight, and report the error in the outcome.
+    if let Err(e) = drive_into(rails, &members, &mut out) {
+        let error = format!("{e:#}");
+        rails.abort(&error);
+        for m in &members {
+            let done = out.landed.iter().any(|(pr, _)| *pr == m.pr)
+                || out.ejected.iter().any(|x| x.pr == m.pr);
+            if !done {
+                out.ejected.push(Ejected {
+                    pr: m.pr,
+                    reason: format!("the train stopped before landing it ({error}); re-train"),
+                });
+            }
+        }
+        out.error = Some(error);
+    }
+    for e in &out.ejected {
+        rails.ejected(e);
+    }
+    Ok(out)
+}
+
+fn drive_into(rails: &mut dyn Rails, members: &[Member], out: &mut Outcome) -> Result<()> {
     if members.is_empty() {
-        return Ok(out);
+        return Ok(());
     }
     // (group, may this group's red be rerun once?)
-    let mut pending: VecDeque<(Vec<Member>, bool)> = VecDeque::from([(members.clone(), true)]);
+    let mut pending: VecDeque<(Vec<Member>, bool)> = VecDeque::from([(members.to_vec(), true)]);
     // A main that keeps moving under the train must not spin it forever.
     let mut waves_left = 4 * members.len() + 8;
     while !pending.is_empty() {
@@ -367,10 +397,7 @@ pub(crate) fn drive(rails: &mut dyn Rails, members: Vec<Member>) -> Result<Outco
             pending.push_front(g);
         }
     }
-    for e in &out.ejected {
-        rails.ejected(e);
-    }
-    Ok(out)
+    Ok(())
 }
 
 /// TASK-1378: the forge-metadata half of the member gate. A draft never runs
@@ -609,6 +636,86 @@ pub(crate) trait MemberChecks {
         meta: &crate::forge::ChangeMetadata,
         head: &str,
     ) -> std::result::Result<(String, String), String>;
+    /// TASK-1602: why a live drive owns this PR (or the caller is a drive
+    /// seat); `None` when ship's in-drive ownership gate passes.
+    fn drive_block(&mut self, pr: u64) -> Option<String>;
+    /// The specs the member ships, as ship's STORY-529/BUG-727 gates read them.
+    fn spec_records(&mut self, ids: &[String]) -> Vec<crate::pr_cmd::ShipGateSpecRecord>;
+    /// BUG-727: a human at an interactive terminal.
+    fn interactive_tty(&self) -> bool;
+    /// STORY-1698: whether an active mandate covers merging this member;
+    /// `Err(None)` when there is no mandate, `Err(Some(why))` when one
+    /// refuses.
+    fn mandate_cover(
+        &mut self,
+        pr: u64,
+        ids: &[String],
+        head_ref: &str,
+        head: &str,
+    ) -> std::result::Result<(), Option<String>>;
+}
+
+/// The spec IDs a member ships, read the way ship reads them: its branch and
+/// title, the trailing IDs of its squash subject and of each commit subject
+/// in its body.
+// trace:STORY-1690 | ai:claude
+pub(crate) fn member_spec_ids(
+    head_ref: &str,
+    title: &str,
+    subject: &str,
+    body: &str,
+) -> Vec<String> {
+    let mut ids = crate::pr_ship::extract_spec_ids_from_text(&format!("{head_ref} {title}"));
+    for line in std::iter::once(subject).chain(body.lines()) {
+        ids.extend(crate::pr_ship::extract_trailing_spec_ids_from_subject(line));
+    }
+    ids.sort();
+    ids.dedup();
+    ids
+}
+
+/// Ship's spec-policy gates for one member, through ship's own filters:
+/// STORY-529 `review:draft-only`, then the BUG-727 supervised-merge gate,
+/// which only a human at a terminal or (STORY-1698) an active mandate's
+/// cover passes. `Some` is the refusal.
+// trace:STORY-1690 trace:STORY-529 trace:BUG-727 trace:STORY-1698 | ai:claude
+pub(crate) fn member_spec_policy_refusal(
+    records: Vec<crate::pr_cmd::ShipGateSpecRecord>,
+    interactive_tty: bool,
+    mandate_cover: impl FnOnce() -> std::result::Result<(), Option<String>>,
+) -> Option<String> {
+    let draft_only = crate::pr_cmd::draft_only_specs_in(&records);
+    if !draft_only.is_empty() {
+        return Some(format!(
+            "{} tagged `{}`: a human reviews and merges it; the train does not",
+            draft_only.join(", "),
+            crate::pr_ship::DRAFT_ONLY_TAG
+        ));
+    }
+    // A human at a terminal needs no mandate; read one only when it matters.
+    // A covering mandate is ship's `interactive_tty || mandate_cover.is_ok()`,
+    // which passes the supervised gate outright.
+    let holds = crate::pr_cmd::supervised_specs_in(records, interactive_tty);
+    if holds.is_empty() {
+        return None;
+    }
+    let cover = mandate_cover();
+    if cover.is_ok() {
+        return None;
+    }
+    let marked: Vec<String> = holds
+        .iter()
+        .map(|(id, label)| format!("{id} is marked {label}"))
+        .collect();
+    let mandate = match cover {
+        Err(Some(why)) => format!(" The mandate does not cover it: {why}."),
+        _ => String::new(),
+    };
+    Some(format!(
+        "{}: its merge needs a human at a terminal or an active mandate; the train never \
+         auto-merges a supervised spec.{mandate}",
+        marked.join(", ")
+    ))
 }
 
 /// The member gate: everything `aida pr ship` checks before it merges a PR,
@@ -628,6 +735,12 @@ pub(crate) fn gate_member_with(
     let head_ref = meta.head_ref.trim().to_string();
     if head.is_empty() || head_ref.is_empty() {
         return Err("its head could not be read from the forge; failing closed".to_string());
+    }
+    // TASK-1602: ship's in-drive ownership gate. trace:STORY-1690 | ai:claude
+    if let Some(detail) = checks.drive_block(pr) {
+        return Err(format!(
+            "a live drive owns it ({detail}); its independent reviewer gates the merge"
+        ));
     }
     if let Some(reason) = checks.hold_marker(pr) {
         return Err(format!(
@@ -673,6 +786,16 @@ pub(crate) fn gate_member_with(
     let hints = crate::pr_ship::extract_spec_ids_from_text(&format!("{head_ref} {}", meta.title));
     checks.corpus(pr, &hints, &head)?;
     let (subject, body) = checks.message(pr, &meta, &head)?;
+    // STORY-529, BUG-727, STORY-1698: the spec-policy gates ship applies
+    // before it merges. trace:STORY-1690 | ai:claude
+    let ids = member_spec_ids(&head_ref, &meta.title, &subject, &body);
+    let records = checks.spec_records(&ids);
+    let tty = checks.interactive_tty();
+    if let Some(why) = member_spec_policy_refusal(records, tty, || {
+        checks.mandate_cover(pr, &ids, &head_ref, &head)
+    }) {
+        return Err(why);
+    }
     Ok(Member {
         pr,
         head,
@@ -772,6 +895,40 @@ impl MemberChecks for LiveChecks<'_> {
         let subject = subject.unwrap_or_else(|| ship_meta.title.trim().to_string());
         let body = member_body(self.project_root, self.base, head, &ship_meta.body)?;
         Ok((subject, body))
+    }
+    fn drive_block(&mut self, pr: u64) -> Option<String> {
+        crate::pr_cmd::probe_ship_drive_block(self.main_worktree, pr).map(|b| b.detail)
+    }
+    fn spec_records(&mut self, ids: &[String]) -> Vec<crate::pr_cmd::ShipGateSpecRecord> {
+        crate::pr_cmd::ship_gate_spec_records_for_ids(self.project_root, ids.to_vec())
+    }
+    fn interactive_tty(&self) -> bool {
+        crate::pr_cmd::ship_interactive_tty()
+    }
+    fn mandate_cover(
+        &mut self,
+        pr: u64,
+        ids: &[String],
+        head_ref: &str,
+        head: &str,
+    ) -> std::result::Result<(), Option<String>> {
+        crate::pr_cmd::mandate_ship_cover(
+            self.project_root,
+            self.main_worktree,
+            &crate::pr_cmd::pr_ship_hold_root(self.project_root),
+            pr,
+            ids,
+            Some(head_ref),
+            || Some(head.to_string()),
+            false,
+            crate::mandate::ship_decision,
+            true,
+        )
+        .map(|_| ())
+        .map_err(|r| match r {
+            crate::mandate::MandateRefusal::NoMandate => None,
+            r => Some(r.message(pr)),
+        })
     }
 }
 
@@ -1078,6 +1235,8 @@ pub(crate) struct ForgeRails<'a> {
     pub landed_on_main: Vec<(u64, String)>,
     /// Problems found after a merge, for the run's summary.
     pub warnings: Vec<String>,
+    /// Train PRs opened and neither retired nor merged yet.
+    live: Vec<crate::forge::ChangeRef>,
 }
 
 impl<'a> ForgeRails<'a> {
@@ -1089,7 +1248,13 @@ impl<'a> ForgeRails<'a> {
             count: 0,
             landed_on_main: Vec::new(),
             warnings: Vec::new(),
+            live: Vec::new(),
         }
+    }
+
+    fn retire(&mut self, change: &crate::forge::ChangeRef, why: &str) {
+        self.live.retain(|c| c.id != change.id);
+        self.ports.retire(change, why);
     }
 
     fn change_for(&self, tip: &str) -> Result<crate::forge::ChangeRef> {
@@ -1122,6 +1287,7 @@ impl Rails for ForgeRails<'_> {
             self.count += 1;
             let branch = format!("{BRANCH_PREFIX}{}-{}", self.stamp, self.count);
             let change = self.ports.open(t, &branch)?;
+            self.live.push(change.clone());
             let prs: Vec<String> = t.cars.iter().map(|c| format!("#{}", c.member.pr)).collect();
             println!(
                 "  train PR #{} opened for {} ({branch} at {})",
@@ -1141,7 +1307,7 @@ impl Rails for ForgeRails<'_> {
             };
             if let CiVerdict::Red(why) = &v {
                 println!("  train PR #{} is red: {why}", change.id);
-                self.ports.retire(
+                self.retire(
                     change,
                     &format!("Train CI red ({why}); the train reruns or bisects."),
                 );
@@ -1161,7 +1327,7 @@ impl Rails for ForgeRails<'_> {
             Ok(lease) => lease,
             Err(holder) => {
                 println!("  the merge lease is held ({holder}); the train rebuilds");
-                self.ports.retire(
+                self.retire(
                     &change,
                     "Another merger holds the merge lease; the train rebuilds.",
                 );
@@ -1169,7 +1335,7 @@ impl Rails for ForgeRails<'_> {
             }
         };
         if self.ports.fetch_main()? != train.base {
-            self.ports.retire(
+            self.retire(
                 &change,
                 "Main moved after this train was built; the train rebuilds.",
             );
@@ -1194,7 +1360,7 @@ impl Rails for ForgeRails<'_> {
             }
         }
         if !refused.is_empty() {
-            self.ports.retire(
+            self.retire(
                 &change,
                 "A member failed its pre-land recheck; the train rebuilds.",
             );
@@ -1205,7 +1371,7 @@ impl Rails for ForgeRails<'_> {
         // moved main meanwhile; strict is off, so the forge would rebase the
         // train onto an untested main. Look again right before merging.
         if self.ports.fetch_main()? != train.base {
-            self.ports.retire(
+            self.retire(
                 &change,
                 "Main moved while the train was re-checked; the train rebuilds.",
             );
@@ -1214,6 +1380,7 @@ impl Rails for ForgeRails<'_> {
         self.ports
             .merge(&change, &train.tip)
             .with_context(|| format!("train PR #{} was not merged", change.id))?;
+        self.live.retain(|c| c.id != change.id);
         let main = match self.ports.fetch_main() {
             Ok(main) => main,
             Err(e) => {
@@ -1255,6 +1422,15 @@ impl Rails for ForgeRails<'_> {
             e.pr,
             &format!("Not landed by the merge train: {}.", e.reason),
         );
+    }
+
+    fn abort(&mut self, error: &str) {
+        for change in std::mem::take(&mut self.live) {
+            self.ports.retire(
+                &change,
+                &format!("The train run stopped ({error}); re-train the members."),
+            );
+        }
     }
 }
 
@@ -1315,16 +1491,53 @@ fn shell_check(cmd: &str) -> impl FnMut(&Path) -> std::result::Result<(), String
     }
 }
 
+/// Why `aida pr train` refuses forge `kind`, if it does. GitLab's merge-hold
+/// gate template has no train mode, so a train MR's server-side gate would
+/// check only its own labels, never its members'.
+// trace:STORY-1690 | ai:claude
+pub(crate) fn forge_refusal(kind: crate::forge::ForgeKind) -> Option<String> {
+    use crate::forge::ForgeKind;
+    match kind {
+        ForgeKind::GitHub => None,
+        ForgeKind::GitLab => Some(
+            "`aida pr train` supports GitHub only for now: the GitLab merge-hold gate has no \
+             train mode, so a train MR's gate could not check its members' holds. Ship GitLab \
+             MRs one at a time with `aida pr ship N`."
+                .to_string(),
+        ),
+        ForgeKind::None => Some(
+            "`aida pr train` needs a forge (GitHub): a train is tested by CI on a train PR"
+                .to_string(),
+        ),
+    }
+}
+
+/// An explicit `aida pr train N...` naming more PRs than `--max` would leave
+/// some never attempted, so it is refused up front. `--all-ready` instead
+/// leaves the rest for the next train.
+// trace:STORY-1690 | ai:claude
+pub(crate) fn explicit_over_max_refusal(
+    named: usize,
+    max: usize,
+    all_ready: bool,
+) -> Option<String> {
+    let max = max.max(1);
+    (!all_ready && named > max).then(|| {
+        format!(
+            "{named} PRs named but --max is {max}: name at most {max}, or raise --max to {named}"
+        )
+    })
+}
+
 /// `aida pr train`.
 // trace:STORY-1690 | ai:claude
 pub(crate) fn pr_train_handler(opts: &TrainOptions<'_>) -> Result<()> {
     let project_root = crate::find_project_root()?;
     let main_worktree = crate::main_worktree_root_from(&project_root);
     let kind = crate::forge::resolve_forge_kind(&project_root);
-    anyhow::ensure!(
-        kind != crate::forge::ForgeKind::None,
-        "`aida pr train` needs a forge (GitHub or GitLab): a train is tested by CI on a train PR"
-    );
+    if let Some(why) = forge_refusal(kind) {
+        anyhow::bail!(why);
+    }
     let forge = crate::forge::forge_for(&project_root);
     let base = crate::review_carryover::protected_base(&main_worktree)
         .map_err(|e| anyhow::anyhow!("could not read origin's default branch: {}", e.reason()))?;
@@ -1349,6 +1562,9 @@ pub(crate) fn pr_train_handler(opts: &TrainOptions<'_>) -> Result<()> {
         !candidates.is_empty(),
         "no PRs to train: name them (`aida pr train 12 13`) or pass --all-ready"
     );
+    if let Some(why) = explicit_over_max_refusal(candidates.len(), opts.max, opts.all_ready) {
+        anyhow::bail!(why);
+    }
     println!(
         "merge train onto `{base}`: gating {} PR(s){}",
         candidates.len(),
@@ -1455,6 +1671,9 @@ pub(crate) fn pr_train_handler(opts: &TrainOptions<'_>) -> Result<()> {
         if !matches!(status, Ok(s) if s.success()) {
             eprintln!("  warning: `aida pull` after the train did not finish; run it by hand");
         }
+    }
+    if let Some(error) = &outcome.error {
+        println!("  the train stopped early: {error}");
     }
     let not_landed = refused.len() + outcome.ejected.len();
     if not_landed > 0 && !opts.all_ready {

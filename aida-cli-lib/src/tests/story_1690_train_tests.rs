@@ -677,6 +677,135 @@ fn ship_still_ships_a_head_that_contains_its_base() {
     );
 }
 
+/// A clone of a bare origin that has a `pr` branch. Returns (seed repo,
+/// the dir holding origin and clone, origin path, clone path).
+fn origin_and_clone() -> (
+    tempfile::TempDir,
+    tempfile::TempDir,
+    std::path::PathBuf,
+    std::path::PathBuf,
+) {
+    let tmp = repo();
+    let seed = tmp.path().to_path_buf();
+    pr_branch(&seed, "pr", |r| write(r, "pr.txt", "pr\n"));
+    let dir = tempfile::tempdir().unwrap();
+    let origin = dir.path().join("origin.git");
+    git(
+        &seed,
+        &["clone", "--quiet", "--bare", ".", &origin.to_string_lossy()],
+    );
+    let clone = origin.with_file_name("clone");
+    git(
+        &seed,
+        &[
+            "clone",
+            "--quiet",
+            &origin.to_string_lossy(),
+            &clone.to_string_lossy(),
+        ],
+    );
+    (tmp, dir, origin, clone)
+}
+
+// trace:STORY-1690.acb4ffd6 | ai:claude
+#[test]
+fn the_behind_base_gate_fetches_so_a_main_moved_elsewhere_still_refuses() {
+    let (tmp, _dir, origin, clone) = origin_and_clone();
+    // The clone's origin/main is current: the gate passes.
+    assert_eq!(
+        crate::pr_cmd::behind_base_gate_on(&clone, "pr", 7, "main", false),
+        Ok(())
+    );
+    // Another machine moves main on origin; the clone's ref is now stale.
+    let seed = tmp.path();
+    write(seed, "tests/guard.txt", "a new whole-repo guard\n");
+    commit(seed, "main moves on elsewhere");
+    git(
+        seed,
+        &["push", "--quiet", &origin.to_string_lossy(), "main"],
+    );
+    let (kind, why) = crate::pr_cmd::behind_base_gate_on(&clone, "pr", 7, "main", false)
+        .expect_err("the gate must fetch and see main moved");
+    assert_eq!(kind, crate::pr_ship::ShipRefusal::BehindBase);
+    assert!(why.contains("1 commit(s) behind main"), "{why}");
+    assert!(why.contains("aida pr train 7"), "{why}");
+}
+
+// trace:STORY-1690.acb4ffd6 | ai:claude
+#[test]
+fn the_behind_base_gate_fails_closed_when_staleness_cannot_be_computed() {
+    // No origin at all: nothing can be fetched or compared.
+    let tmp = behind_repo();
+    let r = tmp.path();
+    git(
+        r,
+        &[
+            "remote",
+            "add",
+            "origin",
+            &r.join("missing.git").to_string_lossy(),
+        ],
+    );
+    let (kind, why) = crate::pr_cmd::behind_base_gate_on(r, "pr", 7, "main", false)
+        .expect_err("an unknown staleness must refuse");
+    assert_eq!(kind, crate::pr_ship::ShipRefusal::BehindBase);
+    assert!(why.contains("could not be computed"), "{why}");
+    // A missing ref (the head branch never existed) refuses too.
+    assert!(crate::pr_stale_check(r, "no-such-branch", "origin/main").is_err());
+    assert!(crate::pr_cmd::behind_base_refusal(7, "main", Err("boom".into()), true).is_err());
+}
+
+// trace:STORY-1690 | ai:claude
+#[test]
+fn a_behind_head_with_no_definition_change_refuses_as_behind_base() {
+    let warning = |definition: Vec<String>| {
+        Ok(Some(crate::StaleCheckWarning {
+            behind_commits: 2,
+            definition_files: definition,
+            test_files: Vec::new(),
+        }))
+    };
+    let (kind, _) =
+        crate::pr_cmd::behind_base_refusal(7, "main", warning(vec![]), false).unwrap_err();
+    assert_eq!(kind, crate::pr_ship::ShipRefusal::BehindBase);
+    let (kind, why) = crate::pr_cmd::behind_base_refusal(
+        7,
+        "main",
+        warning(vec![".github/workflows/ci.yml".into()]),
+        false,
+    )
+    .unwrap_err();
+    assert_eq!(kind, crate::pr_ship::ShipRefusal::StaleDefinition);
+    assert!(why.contains("OLDER definition"), "{why}");
+    assert_eq!(
+        crate::pr_cmd::behind_base_refusal(7, "main", Ok(None), false),
+        Ok(())
+    );
+}
+
+// trace:STORY-1690 | ai:claude
+#[test]
+fn the_train_refuses_gitlab_and_pure_git_with_a_reason() {
+    use crate::forge::ForgeKind;
+    assert_eq!(forge_refusal(ForgeKind::GitHub), None);
+    let why = forge_refusal(ForgeKind::GitLab).unwrap();
+    assert!(
+        why.contains("GitHub only") && why.contains("aida pr ship N"),
+        "{why}"
+    );
+    assert!(forge_refusal(ForgeKind::None).is_some());
+}
+
+// trace:STORY-1690 | ai:claude
+#[test]
+fn naming_more_prs_than_max_is_refused_up_front() {
+    let why = explicit_over_max_refusal(3, 2, false).unwrap();
+    assert!(why.contains("3 PRs named but --max is 2"), "{why}");
+    assert_eq!(explicit_over_max_refusal(2, 2, false), None);
+    // --all-ready leaves the rest for the next train instead.
+    assert_eq!(explicit_over_max_refusal(30, 2, true), None);
+}
+
 // trace:STORY-1690.ac453d5b | ai:claude
 #[test]
 fn the_template_masters_document_the_train_and_the_ship_refusal() {
@@ -707,6 +836,12 @@ struct FakeChecks {
     pin: Option<String>,
     root: tempfile::TempDir,
     calls: Vec<&'static str>,
+    drive: Option<String>,
+    records: Vec<crate::pr_cmd::ShipGateSpecRecord>,
+    tty: bool,
+    mandate: std::result::Result<(), Option<String>>,
+    /// The IDs the spec-policy gates were asked about.
+    asked: Vec<String>,
 }
 
 impl FakeChecks {
@@ -718,7 +853,23 @@ impl FakeChecks {
             pin: Some("a".repeat(40)),
             root: tempfile::tempdir().unwrap(),
             calls: Vec::new(),
+            drive: None,
+            records: Vec::new(),
+            tty: false,
+            mandate: Err(None),
+            asked: Vec::new(),
         }
+    }
+
+    /// A member shipping `id`, with `tags` and execution `mode`.
+    fn shipping(id: &str, tags: &[&str], mode: Option<aida_core::ExecutionMode>) -> Self {
+        let mut c = FakeChecks::new();
+        c.records = vec![(
+            id.to_string(),
+            tags.iter().map(|t| t.to_string()).collect(),
+            mode,
+        )];
+        c
     }
 }
 
@@ -770,7 +921,32 @@ impl MemberChecks for FakeChecks {
         _head: &str,
     ) -> std::result::Result<(String, String), String> {
         self.calls.push("message");
-        Ok((format!("feat: x (#{pr})"), "body".into()))
+        Ok((
+            format!("feat: x (TASK-9) (#{pr})"),
+            "feat: y (TASK-8)\n".into(),
+        ))
+    }
+    fn drive_block(&mut self, _pr: u64) -> Option<String> {
+        self.calls.push("drive");
+        self.drive.clone()
+    }
+    fn spec_records(&mut self, ids: &[String]) -> Vec<crate::pr_cmd::ShipGateSpecRecord> {
+        self.calls.push("specs");
+        self.asked = ids.to_vec();
+        self.records.clone()
+    }
+    fn interactive_tty(&self) -> bool {
+        self.tty
+    }
+    fn mandate_cover(
+        &mut self,
+        _pr: u64,
+        _ids: &[String],
+        _head_ref: &str,
+        _head: &str,
+    ) -> std::result::Result<(), Option<String>> {
+        self.calls.push("mandate");
+        self.mandate.clone()
     }
 }
 
@@ -784,10 +960,102 @@ fn live_gate_passes_a_clean_member_with_ships_message() {
     let mut c = FakeChecks::new();
     let m = gate_member_with(&mut c, "main", 41).unwrap();
     assert_eq!(m.head, "a".repeat(40));
-    assert_eq!(m.subject, "feat: x (#41)");
+    assert_eq!(m.subject, "feat: x (TASK-9) (#41)");
     assert_eq!(
         c.calls,
-        vec!["metadata", "hold", "labels", "fetch", "approval", "corpus", "message"]
+        vec![
+            "metadata", "drive", "hold", "labels", "fetch", "approval", "corpus", "message",
+            "specs"
+        ]
+    );
+}
+
+// ─────────────── ship's spec-policy and drive gates, per member ───────────────
+
+#[test]
+fn live_gate_reads_specs_from_the_branch_title_subject_and_commit_subjects() {
+    let mut c = FakeChecks::new();
+    c.meta.head_ref = "claude/story-77".into();
+    c.meta.title = "feat: train (BUG-5)".into();
+    gate_member_with(&mut c, "main", 41).unwrap();
+    for id in ["STORY-77", "BUG-5", "TASK-9", "TASK-8"] {
+        assert!(
+            c.asked.iter().any(|a| a.eq_ignore_ascii_case(id)),
+            "{id} not in {:?}",
+            c.asked
+        );
+    }
+}
+
+#[test]
+fn live_gate_refuses_a_pr_a_live_drive_owns() {
+    let mut c = FakeChecks::new();
+    c.drive = Some("live drive PID 7 (wave w1); TASK-9 phase review".into());
+    let why = gate_member_with(&mut c, "main", 41).unwrap_err();
+    assert!(why.contains("live drive owns it"), "{why}");
+    assert!(why.contains("PID 7"), "{why}");
+    assert_eq!(c.calls, vec!["metadata", "drive"]);
+}
+
+#[test]
+fn live_gate_refuses_a_review_draft_only_spec_even_for_a_human() {
+    let mut c = FakeChecks::shipping(
+        "TASK-9",
+        &[crate::pr_ship::DRAFT_ONLY_TAG],
+        Some(aida_core::ExecutionMode::Drain),
+    );
+    c.tty = true;
+    c.mandate = Ok(());
+    let why = gate_member_with(&mut c, "main", 41).unwrap_err();
+    assert!(why.contains("TASK-9"), "{why}");
+    assert!(why.contains(crate::pr_ship::DRAFT_ONLY_TAG), "{why}");
+}
+
+#[test]
+fn live_gate_refuses_a_supervised_spec_without_a_human_or_a_mandate() {
+    for mode in [
+        Some(aida_core::ExecutionMode::Guided),
+        Some(aida_core::ExecutionMode::Drive),
+        None,
+    ] {
+        let mut c = FakeChecks::shipping("TASK-9", &[], mode);
+        let why = gate_member_with(&mut c, "main", 41).unwrap_err();
+        assert!(why.contains("TASK-9 is marked"), "{mode:?}: {why}");
+        assert!(why.contains("never auto-merges a supervised spec"), "{why}");
+        assert!(c.calls.contains(&"mandate"), "{:?}", c.calls);
+    }
+}
+
+#[test]
+fn live_gate_lands_a_drain_spec_unattended() {
+    let mut c = FakeChecks::shipping("TASK-9", &[], Some(aida_core::ExecutionMode::Drain));
+    assert!(gate_member_with(&mut c, "main", 41).is_ok());
+    assert!(
+        !c.calls.contains(&"mandate"),
+        "no mandate read for a drain spec"
+    );
+}
+
+#[test]
+fn live_gate_lets_a_human_at_a_terminal_land_a_supervised_spec() {
+    let mut c = FakeChecks::shipping("TASK-9", &[], Some(aida_core::ExecutionMode::Guided));
+    c.tty = true;
+    assert!(gate_member_with(&mut c, "main", 41).is_ok());
+    assert!(!c.calls.contains(&"mandate"), "a human needs no mandate");
+}
+
+#[test]
+fn live_gate_honours_the_mandate_cover_for_a_supervised_spec() {
+    let mut c = FakeChecks::shipping("TASK-9", &[], Some(aida_core::ExecutionMode::Guided));
+    c.mandate = Ok(());
+    assert!(gate_member_with(&mut c, "main", 41).is_ok());
+
+    let mut c = FakeChecks::shipping("TASK-9", &[], Some(aida_core::ExecutionMode::Guided));
+    c.mandate = Err(Some("the mandate excludes TASK-9".into()));
+    let why = gate_member_with(&mut c, "main", 41).unwrap_err();
+    assert!(
+        why.contains("The mandate does not cover it: the mandate excludes TASK-9"),
+        "{why}"
     );
 }
 
@@ -857,6 +1125,9 @@ struct FakeForge {
     merged: Vec<(u64, String)>,
     landed_members: Vec<u64>,
     comments: Vec<u64>,
+    /// Fail the open with this number (1-based), or every merge.
+    open_fails_at: Option<u64>,
+    merge_fails: bool,
 }
 
 impl FakeForge {
@@ -893,6 +1164,9 @@ impl TrainForge for FakeForge {
             .unwrap_or_else(|| Ok(member(pr, &format!("head{pr}"), "s")))
     }
     fn open(&mut self, _train: &Built, branch: &str) -> Result<crate::forge::ChangeRef> {
+        if self.open_fails_at == Some(self.opened + 1) {
+            anyhow::bail!("git push: connection reset");
+        }
         self.opened += 1;
         Ok(crate::forge::ChangeRef {
             id: 900 + self.opened,
@@ -909,6 +1183,9 @@ impl TrainForge for FakeForge {
         self.retired.push((change.id, why.to_string()));
     }
     fn merge(&mut self, change: &crate::forge::ChangeRef, tip: &str) -> Result<()> {
+        if self.merge_fails {
+            anyhow::bail!("gh pr merge: HTTP 502");
+        }
         self.merged.push((change.id, tip.to_string()));
         Ok(())
     }
@@ -1091,4 +1368,40 @@ fn lease_contention_rebuilds_the_train_instead_of_aborting_the_run() {
     assert_eq!(f.retired.len(), 1);
     assert!(f.retired[0].1.contains("merge lease"));
     assert_eq!(f.merged, vec![(902, "car1".to_string())]);
+}
+
+#[test]
+fn a_merge_error_retires_the_open_train_and_tells_every_member() {
+    let mut f = FakeForge::mains(&["m0"]);
+    f.merge_fails = true;
+    let mut rails = ForgeRails::new(&mut f, "t".into());
+    let out = drive(&mut rails, fms(&[1, 2])).unwrap();
+    let error = out.error.clone().expect("the error is in the outcome");
+    assert!(error.contains("HTTP 502"), "{error}");
+    assert!(out.landed.is_empty());
+    assert_eq!(
+        out.ejected.iter().map(|e| e.pr).collect::<Vec<_>>(),
+        vec![1, 2]
+    );
+    assert!(
+        out.ejected[0].reason.contains("stopped"),
+        "{:?}",
+        out.ejected
+    );
+    assert_eq!(f.retired.len(), 1, "{:?}", f.retired);
+    assert_eq!(f.retired[0].0, 901);
+    assert!(f.retired[0].1.contains("HTTP 502"), "{:?}", f.retired);
+    assert_eq!(f.comments, vec![1, 2]);
+}
+
+#[test]
+fn an_open_error_ejects_the_members_instead_of_aborting_the_run() {
+    let mut f = FakeForge::mains(&["m0"]);
+    f.open_fails_at = Some(1);
+    let mut rails = ForgeRails::new(&mut f, "t".into());
+    let out = drive(&mut rails, fms(&[1])).unwrap();
+    assert!(out.error.as_deref().unwrap().contains("connection reset"));
+    assert_eq!(out.ejected.len(), 1);
+    assert!(f.retired.is_empty(), "nothing was open");
+    assert_eq!(f.comments, vec![1]);
 }
