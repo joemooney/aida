@@ -723,6 +723,14 @@ const EXACT_LINUX_SCHEME: &str = "linux-starttime:";
 /// the same rfc3339 value [`process_start_identity_legacy`] returns, prefixed.
 const EXACT_SYSINFO_SCHEME: &str = "sysinfo-start:";
 
+/// The scheme [`process_start_identity`] records on this platform.
+// trace:TASK-1955 | ai:claude (TASK-2050)
+pub const NATIVE_EXACT_SCHEME: &str = if cfg!(target_os = "linux") {
+    EXACT_LINUX_SCHEME
+} else {
+    EXACT_SYSINFO_SCHEME
+};
+
 /// Scheme-prefixed kernel start identity of `pid`, or `None` when it cannot be
 /// read. Linux reads the `starttime` field (clock ticks since boot) from the
 /// process stat file, which is exact and never changes for a process's life:
@@ -2093,7 +2101,7 @@ mod tests {
     fn bug_2130_exact_start_identity_survives_btime_shift() {
         let me = std::process::id();
         let recorded = process_start_identity(me).expect("own identity");
-        assert!(recorded.starts_with("linux-starttime:"), "{recorded}");
+        assert!(recorded.starts_with(NATIVE_EXACT_SCHEME), "{recorded}");
         let shifted_legacy = |_: u32| Some("2026-09-18T12:00:02+00:00".to_string());
         // A legacy RFC3339 record written before the 2s btime drift fails against
         // the shifted legacy probe...

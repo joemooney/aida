@@ -1670,6 +1670,10 @@ pub(crate) fn edit_requirement_cli(
             }
             _ => anyhow::bail!("Invalid status '{}'. Use: draft, approved, planned, in_progress, done, completed, rejected, needs-attention", status_str),
         };
+        // trace:TASK-1955 | ai:claude
+        if let Some(msg) = deferred_status_edit_refusal(req) {
+            anyhow::bail!(msg);
+        }
         // STORY-332: enforce the NeedsAttention transition rules here too.
         if let Some(msg) = forbidden_attention_transition(&req.status, &new_status) {
             anyhow::bail!(msg);
@@ -7628,6 +7632,19 @@ pub(crate) struct EditArgs {
     pub no_human_only: bool,
 }
 
+/// The refusal for `aida edit --status` on a deferred spec, or `None`.
+// trace:TASK-1955 | ai:claude
+pub(crate) fn deferred_status_edit_refusal(req: &aida_core::Requirement) -> Option<String> {
+    req.deferred.then(|| {
+        let id = req.spec_id.clone().unwrap_or_else(|| req.id.to_string());
+        format!(
+            "{id} is deferred, and a deferred spec's status reads `deferred` until it is \
+             undeferred, so this edit would change nothing anyone sees. Run `aida undefer {id}` \
+             first, then set the status."
+        )
+    })
+}
+
 fn run_edit(
     matches: &clap::ArgMatches,
     ctx: &crate::command_registry::DispatchCtx,
@@ -8187,6 +8204,13 @@ fn run_edit(
                                 .or_else(|| req.spec_id.clone())
                                 .unwrap_or_else(|| req.id.to_string())
                         );
+                        }
+                        // A deferred spec reads `deferred` until it is undeferred,
+                        // so a status edit would print `Updated` and change nothing
+                        // anyone sees. Refuse it, --force included, and name the
+                        // undefer. trace:TASK-1955 | ai:claude
+                        if let Some(msg) = deferred_status_edit_refusal(&req) {
+                            anyhow::bail!(msg);
                         }
                         // STORY-332: enforce the NeedsAttention transition rules —
                         // into it only from In Progress (use `aida punt`), out of it

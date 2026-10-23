@@ -128,14 +128,45 @@ fn solo_human_mode_on_still_refuses_the_author_agent_end_to_end() {
     };
     let root = tempfile::tempdir().unwrap();
     global_config(&home, SOLO_ON);
-    let session = "cb4777a7-0000-4000-8000-000000016550";
+    let session = AUTHOR_SESSION;
+    record_author_lease(root.path());
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+        root.path(),
+        "reviewer",
+        &[],
+        &[("AIDA_SESSION_ID", Some(session))],
+    );
+    assert_eq!(global_value_quiet(), Ok(true), "the global key is on");
+    let err = crate::handle_review_record_at(
+        root.path().to_path_buf(),
+        SPEC,
+        "approved",
+        Some(HEAD),
+        Some("main"),
+        Some("lgtm"),
+        &[],
+        &[],
+        None,
+    )
+    .expect_err("solo mode never covers a session without the human floor");
+    assert!(
+        err.to_string().contains("cannot approve its own work"),
+        "{err}"
+    );
+    assert!(crate::review_verdict::read_recorded_verdict(root.path(), SPEC).is_none());
+}
+
+const AUTHOR_SESSION: &str = "cb4777a7-0000-4000-8000-000000016550";
+
+/// The solo human's own session claimed `SPEC` (an authoring lease).
+fn record_author_lease(root: &Path) {
     let lease = crate::SessionLease {
         tree_kind: Default::default(),
         id: "aaaabbbb1655".into(),
         scope: SPEC.into(),
         slug: SPEC.to_ascii_lowercase(),
         owner: "tester".into(),
-        worktree_path: root.path().join("elsewhere"),
+        worktree_path: root.join("elsewhere"),
         branch: "story-91655-work".into(),
         started_at: chrono::Utc::now(),
         hostname: "h".into(),
@@ -161,34 +192,102 @@ fn solo_human_mode_on_still_refuses_the_author_agent_end_to_end() {
         child_grant_id: None,
         interrupted_reason: None,
     };
-    {
-        let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_SESSION_ID", Some(session))]);
-        crate::review_authority::record_authoring_lease(root.path(), &lease);
-    }
-    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_SESSION_ID", Some(AUTHOR_SESSION))]);
+    crate::review_authority::record_authoring_lease(root, &lease);
+}
+
+/// TASK-1808: end to end through `aida review record`. A human at the
+/// terminal approving their own claim, with the global key on, types the
+/// challenge; the verdict JSON and the `~/.aida` receipt both carry
+/// `solo_human: true`, and the ship gate's `approval_authority_refusal`
+/// clears for that CLI-recorded approval. With the mode off at ship time the
+/// same verdict is refused.
+// trace:TASK-1955 | ai:claude (TASK-1808)
+#[test]
+fn solo_self_approval_recorded_through_the_cli_carries_solo_and_clears_the_ship_gate() {
+    let Some(home) = isolated_home() else {
+        return;
+    };
+    let root = tempfile::tempdir().unwrap();
+    global_config(&home, SOLO_ON);
+    record_author_lease(root.path());
+    let _ambient = crate::test_env::AmbientGuard::hermetic_and(
         root.path(),
-        "reviewer",
-        &[],
-        &[("AIDA_SESSION_ID", Some(session))],
-    );
-    assert_eq!(global_value_quiet(), Ok(true), "the global key is on");
-    let err = crate::handle_review_record_at(
-        root.path().to_path_buf(),
-        SPEC,
-        "approved",
-        Some(HEAD),
-        Some("main"),
-        Some("lgtm"),
-        &[],
-        &[],
         None,
-    )
-    .expect_err("solo mode never covers a session without the human floor");
-    assert!(
-        err.to_string().contains("cannot approve its own work"),
-        "{err}"
+        &[
+            ("AIDA_SESSION_ID", Some(AUTHOR_SESSION)),
+            ("AIDA_AGENT_NAME", None),
+            ("AIDA_AGENT_TYPE", None),
+        ],
     );
+    let subject = crate::ReviewPrSubject {
+        head_ref: "story-91655-work".into(),
+        commit_subjects: Vec::new(),
+    };
+    let record = |answer: &str| {
+        crate::with_review_pr_subject(subject.clone(), || {
+            with_test_human_terminal(answer, || {
+                crate::handle_review_record_at(
+                    root.path().to_path_buf(),
+                    SPEC,
+                    "approved",
+                    Some(HEAD),
+                    Some("story-91655-work"),
+                    Some("lgtm"),
+                    &[],
+                    &[],
+                    Some(PR),
+                )
+            })
+        })
+    };
+    let err = record("STORY-91655 1").expect_err("a wrong answer is refused");
+    assert!(err.to_string().contains("did not match"), "{err}");
     assert!(crate::review_verdict::read_recorded_verdict(root.path(), SPEC).is_none());
+
+    record(&format!("{SPEC} #{PR}")).expect("the solo human approves their own claim");
+    let raw: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(crate::review_verdict::verdict_path(root.path(), SPEC)).unwrap(),
+    )
+    .unwrap();
+    assert!(raw.to_string().contains("\"solo_human\":true"), "{raw}");
+    let v = crate::review_verdict::read_recorded_verdict(root.path(), SPEC).expect("verdict");
+    let att = v.attestation.clone().expect("attestation");
+    assert!(att.solo_human && att.human_at_tty, "{att:?}");
+    let receipt_id = att.receipt_id.clone().expect("a receipt");
+    let receipt = crate::review_authority::human_receipt_for(&receipt_id, HEAD).expect("receipt");
+    assert!(receipt.solo_human, "{receipt:?}");
+    assert!(
+        std::fs::read_to_string(
+            home.join(".aida")
+                .join("review-receipts")
+                .join(format!("{receipt_id}.json"))
+        )
+        .unwrap()
+        .contains("\"solo_human\": true"),
+        "the receipt file in ~/.aida carries the solo flag"
+    );
+
+    let candidates = [v];
+    let policy = |solo_on: bool| ShipApprovalPolicy {
+        author_sessions: vec![AuthorSession {
+            label: "claim by the solo human".into(),
+            tokens: att.identity.clone(),
+        }],
+        verified_authority: crate::review_authority::verified_authority_keys(
+            root.path(),
+            &candidates,
+        ),
+        reviewed_committed_at: Some(chrono::Utc::now() - chrono::Duration::hours(1)),
+        solo_human: solo_on,
+        verified_solo: crate::review_authority::verified_solo_keys(&candidates),
+        ..Default::default()
+    };
+    assert_eq!(approval_authority_refusal(&candidates, &policy(true)), None);
+    assert!(matches!(
+        approval_authority_refusal(&candidates, &policy(false)),
+        Some(ApprovalAuthorityRefusal::AuthorSession { .. })
+    ));
 }
 
 // ── S1: global user config only ─────────────────────────────────────────────

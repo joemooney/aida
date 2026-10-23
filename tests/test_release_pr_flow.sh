@@ -15,6 +15,10 @@
 #
 # trace:TASK-1721 | ai:claude
 set -euo pipefail
+# Fixture git runs with automatic maintenance off: a detached repack can
+# race the next object write (BUG-2191). `env -i` sites pass the -c pair.
+# trace:TASK-1955 | ai:claude (TASK-2010)
+export GIT_CONFIG_COUNT=2 GIT_CONFIG_KEY_0=maintenance.auto GIT_CONFIG_VALUE_0=false GIT_CONFIG_KEY_1=gc.auto GIT_CONFIG_VALUE_1=0
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -296,6 +300,25 @@ write_lease "$$" "$(( $(date +%s) - 4000 ))"
 run_release "$F4" patch --dry-run >/dev/null 2>&1 || fail "expired lease blocked the release"
 pass "stale leases (dead pid, past TTL) are not treated as an in-flight ship"
 
+info "Test 4b2: an empty, just-created lease blocks; an old empty one does not"
+# trace:TASK-1955 | ai:claude (TASK-1-421)
+: > "$F4/work/.aida/merge-locks/main"
+if out=$(run_release "$F4" patch --yes --skip-docs-check 2>&1); then
+    fail "release started over a fresh empty lease (read as acquired_at=0, TTL-stale)"
+fi
+[ -e "$F4/work/.aida/merge-locks/main" ] && [ ! -s "$F4/work/.aida/merge-locks/main" ] \
+    || fail "release stole or rewrote a fresh empty lease"
+touch -d "@$(( $(date +%s) - 120 ))" "$F4/work/.aida/merge-locks/main"
+run_release "$F4" patch --dry-run >/dev/null 2>&1 || fail "an empty lease past its grace blocked the release"
+pass "a fresh empty lease reads live; past its grace it is stale"
+# --dry-run only warns about a live lease, so read its warning.
+touch -d "@$(( $(date +%s) + 600 ))" "$F4/work/.aida/merge-locks/main"
+out=$(run_release "$F4" patch --dry-run 2>&1) || fail "dry run failed over a far-future empty lease: $out"
+if printf '%s' "$out" | grep -q "would refuse to start"; then
+    fail "an empty lease with a far-future mtime read live: $out"
+fi
+pass "an empty lease with a far-future mtime is stale, not live forever"
+
 info "Test 4c: the release holds the lease while it mutates the checkout"
 F5="$TEST_DIR/f5"; make_fixture "$F5"
 mkdir -p "$TEST_DIR/bin-lease"
@@ -390,7 +413,7 @@ mkdir -p "$F9/work/.aida/merge-locks"
 run_release "$F9" patch --yes --skip-docs-check >/dev/null 2>&1 || fail "release under the lease watcher failed"
 touch "$F9/state/stop-watch"; wait "$watcher"
 [ ! -e "$F9/state/partial-lease" ] || fail "a reader saw an empty or partial lease"
-[ -z "$(ls "$F9/work/.aida/merge-locks/" 2>/dev/null)" ] || fail "lease temp files left behind: $(ls "$F9/work/.aida/merge-locks/")"
+[ -z "$(ls -A "$F9/work/.aida/merge-locks/" 2>/dev/null)" ] || fail "lease temp files left behind: $(ls -A "$F9/work/.aida/merge-locks/")"
 pass "a concurrent reader never sees a partial lease; no temp files remain"
 
 # ─── 4f. the base moves while the confirmation prompt waits (TASK-1688) ───
