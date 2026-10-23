@@ -1,0 +1,20 @@
+id: 01a16aa6-a9ec-7613-8cb0-070d83e4f069
+spec_id: TASK-2270
+agreed_id: TASK-2270
+title: 'Sweep: config.lock self-heal follow-ups (post #2863)'
+description: 'Advisor 14:27. Members superseded into this sweep: TASK-2267 (route the git push -u call sites through the config.lock self-heal), TASK-2268 (move the misplaced BUG-2211 trace comment on mod sandbox_config_lock in lib.rs), TASK-2269 (branch -D under a re-created config.lock placeholder leaves a stale branch config section). Each needs a fix and a test. Start after #2863 merges.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-23T21:24:29.804361936Z
+modified_at: 2026-10-23T21:24:29.804361936Z
+req_type: Task
+filed_at:
+  code_sha: 3dfcf99117e6efbaa8259155a576276ab424a335
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c51da86593
+  vendor: claude
+  session: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
