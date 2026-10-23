@@ -1,0 +1,18 @@
+{
+  "id": "bf3888ad-a139-4c36-a6d8-5ecd13b6d053",
+  "thread_id": "bf3888ad-a139-4c36-a6d8-5ecd13b6d053",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792762685079,
+  "body": "Verified .github/workflows/ci.yml triggers push/main and pull_request/main only. #2839 still bases claude/task-2053-s4b2 as authorized stack; current3aaaa4b8b5 therefore has only successful merge-hold-gate39962740327, no Build run. After #2836 lands, #2839 needs main retarget plus current-head CI (and any clean base integration) before READY/independent PASS/operator merge. Relay has not retargeted early or claimed missing CI green. #2836 Build39960998119 is still running.",
+  "subject": "PR-2839 CI dependency: stacked base does not trigger Build",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "shell_user"
+}

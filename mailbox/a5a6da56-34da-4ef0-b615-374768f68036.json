@@ -1,0 +1,19 @@
+{
+  "id": "a5a6da56-34da-4ef0-b615-374768f68036",
+  "thread_id": "a5a6da56-34da-4ef0-b615-374768f68036",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792765202304,
+  "body": "All CI jobs pass on 2d386f052a (Build, lib-0/1, cli-0/1, gates, contracts, rest, merge-hold-gate). Ready for independent review.",
+  "subject": "CI GREEN: PR-2851 (BUG-2209)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

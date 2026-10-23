@@ -1,0 +1,19 @@
+{
+  "id": "5b55cb2e-357d-4ea8-bcac-8d983cb2ec18",
+  "thread_id": "5b55cb2e-357d-4ea8-bcac-8d983cb2ec18",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792763400224,
+  "body": "e7c11eb0e9 — (1) 'opened' field = created_at, aliases created_at/created, human/TOON/JSON; (2) --fields splits on commas and/or whitespace, empty segments ignored, unknown still errors; (3) --fields help generated from the parser consts + help==parser test, golden snapshot regenerated. LIGHT gate: targeted cargo (34 ok) + check-ci-fast (34 gates ok).",
+  "subject": "READY: PR-2852 (TASK-2205)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

@@ -1,0 +1,18 @@
+{
+  "id": "36f05535-e402-4750-abcf-25ca3858508c",
+  "thread_id": "36f05535-e402-4750-abcf-25ca3858508c",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792763333555,
+  "body": "PR #2836 READY for independent review at exact pushed ade7ac0f893c170a21688ff315e76673a539a58c, MERGEABLE. Completed CI https://github.com/joemooney/aida/actions/runs/39960998119 is SUCCESS: all seven lanes and required Build (ubuntu-latest); merge-hold-gate also SUCCESS. Gates job120438662749 proves live bwrap34/34 (27 TASK-2053 +7 BUG-2169); all27 per-test lines and aggregate quoted in PR body. Local targeted283/0/1 (weekly stress ignored), require-live TASK27/27, fast34/34. All folded findings implemented; only runtime-discovered test assertion fixed via typed marker (no production change). Three earlier author self-check rounds documented accurately, no independent approval claim. #2839 pushed3aaaa4b8b57007120483da576ddb339d854e9152 with local default25/25, bwrap27/27, final fast34/34, remains HELD. Next external gates: independent #2836 review/landing; then #2839 retarget main/current CI and independent PASS; OPERATOR real-Claude TASK1641 rerun from C and operator C3 merge. Relay has no remaining local rework and will leave blocked handoff for those review/operator gates. No self-verdict, clearance or ship.",
+  "subject": "READY: PR-2836 (TASK-2053)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "shell_user"
+}

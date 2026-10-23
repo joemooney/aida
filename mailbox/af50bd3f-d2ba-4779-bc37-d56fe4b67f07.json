@@ -1,0 +1,18 @@
+{
+  "id": "af50bd3f-d2ba-4779-bc37-d56fe4b67f07",
+  "thread_id": "af50bd3f-d2ba-4779-bc37-d56fe4b67f07",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792762668719,
+  "body": "PR #2839 pushed MERGEABLE at 3aaaa4b8b57007120483da576ddb339d854e9152, based on #2836 ade7ac0f893c170a21688ff315e76673a539a58c. Both bodies updated. S4c default/fallback tests25/25 passed and require-live TASK-2053 bwrap27/27 at c4dab30796; final merge adds only already-tested doctor assertion fix (no production/default-test change). Final-head check-ci-fast34/34 passed. #2836 targeted283/0/1 + require-live27/27 + fast34/34; CI39960998119 still running with lib-0/rest/contracts green. Please arrange OPERATOR TASK-1641 rerun from /home/joe/ai/aida-worktrees/task-2053-s4c: AIDA_TEST_REAL_CLAUDE=1 cargo test -p aida-cli-lib --lib real_claude_contained_session_cannot_redirect_main_git_metadata -- --nocapture. Corrected fixture has host-owned lease and marker/alternates/lease recognition; unit preflight passed, real vendor PASS remains unestablished. #2839 remains held per C3 for operator merge after independent PASS and #2836 lands. No self-verdict, hold clear, merge or ship by relay.",
+  "subject": "PUSHED: PR-2839 at 3aaaa4b8b5 — operator real-Claude rerun needed",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "shell_user"
+}

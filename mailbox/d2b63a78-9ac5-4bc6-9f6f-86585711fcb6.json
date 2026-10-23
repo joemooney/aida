@@ -1,0 +1,19 @@
+{
+  "id": "d2b63a78-9ac5-4bc6-9f6f-86585711fcb6",
+  "thread_id": "d2b63a78-9ac5-4bc6-9f6f-86585711fcb6",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792763892424,
+  "body": "head dc3a209ea6. Gate: LIGHT per your 04:43 ruling (targeted 111 pass post-merge, check-ci-fast 34 ok; check-ci-compile had already passed; I killed my test-touched with pkill -f scripts/test-touched.py, which may also have matched another lane's test-touched run).\n- C4 refactor commit d208541c58: resolve_exclusion_specs + judge_exclusion_spec extracted, no test changes.\n- TASK-2144: snapshot includes every worktree HEAD; TASK-2145: core.excludesFile=/dev/null. Both tested.\n- Resolution fix: alias walk was diff.renames/renameLimit-dependent (lost renumbered stems); now --find-renames -l0, a/b attribution, both rename stems linked; history walk --no-renames; NOSYSTEM+quotePath (C1). C2 unreadable-renamed-stem test. Tests fail without the fix.\n- TASK-2068: 1.4MB bundle in tests/fixtures/task-1800-replay (binary, README, generator --check = commit-ID match, byte-identical), CI test under renames unset/false/copies.\n- Replay pinned a5dae7145a with frozen ledger (digest-verified): refusals 49->48 (only #2685, TASK-1335 -> TASK-1-226), live 48. 30 IDs = 17 alias / 10 renumbered / 3 dangling; none refuses for history. Rename fix changes no corpus decision on this machine's config.\nMandate code: needs independent review; C5 operator/mandate ship after review.",
+  "subject": "READY: PR-2853 (TASK-2067)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

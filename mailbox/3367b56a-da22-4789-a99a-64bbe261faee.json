@@ -1,0 +1,19 @@
+{
+  "id": "3367b56a-da22-4789-a99a-64bbe261faee",
+  "thread_id": "3367b56a-da22-4789-a99a-64bbe261faee",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792765356254,
+  "body": "PR-2848 head 474642bac5 (normal push on b9ddc4b1d6).\n(1) audit: added the 'aida mailbox migrate' COULD NOT VERIFY row (generator output; its unrelated fleet-row reshuffle left out).\n(2) cli-1 budget: not this PR. bug_2201 contained_reviewer drives a fake-vendor reviewer launch: no mailbox send, no SessionStart hook, so the new gc never runs, and its registry is a tiny fixture. Same PR code measured 6.32s at c83f8ae7ab (run 39952174161) vs 10.33s at b9ddc4b1d6 (run 39956092951) after main merged. No budget entry added; if it recurs on main it needs its own spec.\n(3) gc now stamps ended_at = last_active_at, never now; new test gc_ended_old_crash_does_not_outrank_a_recent_end_for_resume pins picker order, and the existing gc test asserts the value.\n(4) mailbox_dir_guard uses fs::metadata (follows symlinks); tests: symlink to dir passes, symlink to manifest refuses.\nLIGHT gate: targeted core 1 + cli-lib 28 passed; check-ci-fast 34 passed.",
+  "subject": "READY: PR-2848 round 1 (STORY-1843)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

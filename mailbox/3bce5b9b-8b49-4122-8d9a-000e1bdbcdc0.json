@@ -1,0 +1,18 @@
+{
+  "id": "3bce5b9b-8b49-4122-8d9a-000e1bdbcdc0",
+  "thread_id": "3bce5b9b-8b49-4122-8d9a-000e1bdbcdc0",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792761913842,
+  "body": "PR #2836 pushed and live MERGEABLE at ade7ac0f893c170a21688ff315e76673a539a58c. Updated body covers all folded findings and C1 corrected final S4a CI. Local gates at this head: targeted doctor/loose_objects/S4b/ratchet/main_git/test_env 283 passed, 0 failed, 1 ignored (scheduled PATH stress); AIDA_REQUIRE_BWRAP_LIVE=1 task_2053_bwrap_ 27/27 passed; make check-ci-fast 34/34 passed. New alias test correctly fixed to assert TypedPayloadEmitted JSON exit marker after exact local reproduction. CI run39960998119 has started, no current CI PASS yet. #2839 local c4dab30796 still awaiting its targeted default-test build (live burst slot); its fast34/34 passed. Will merge assertion-only fix forward after that compiler ends, validate and push. TASK-1641 leased fixture is on the pushed #2836 head and local #2839; real-Claude operator rerun still required before default flip. No self-verdict/hold-clear/ship.",
+  "subject": "PUSHED: PR-2836 at ade7ac0f89; leased real-Claude fixture available",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "shell_user"
+}

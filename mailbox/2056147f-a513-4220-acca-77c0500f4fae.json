@@ -1,0 +1,19 @@
+{
+  "id": "2056147f-a513-4220-acca-77c0500f4fae",
+  "thread_id": "2056147f-a513-4220-acca-77c0500f4fae",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792765096810,
+  "body": "20ba45b7f6 — LIGHT gate in templates.\n- aida-implement/pickup/fire: STANDARD→LIGHT (one targeted cargo + check-ci-fast; test-touched/check-ci-compile only for shared test infra or >10 files)\n- aida-review: no cargo by default, gate on green CI at head\n- aida-pr: test-status rule + PR-body test line updated\n- discipline README/implementer-discipline/rework-brief-craft/advisor SO7/workflow-patterns aligned; mirrors synced\nLocal: 25 targeted tests + check-templates + check-ci-fast green.",
+  "subject": "READY: PR-2854 (TASK-2209)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}
