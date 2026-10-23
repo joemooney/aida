@@ -84,8 +84,14 @@ drain-eligible.
 
 #### b. IMPLEMENT — fan worktree-isolated implementers (PARK keystone)
 
-For each bounded ready spec, spawn **one worktree-isolated implementer
-subagent** — each takes ONE spec end-to-end to a PR:
+For each bounded ready spec, launch **one standalone implementer** from Bash
+(`aida queue work <SPEC> --role implementer --no-human --vendor claude`, a
+`run_in_background` job). It runs in its own worktree and implementer seat,
+opens its PR, stops, and ends with one `implementer:` line and an exit code
+(0 PR opened, 31 no PR, 32 punted, 33 held, 34 cap reached).
+<!-- trace:STORY-1662 | ai:claude -->
+Only where that launch is unavailable, fall back to one worktree-isolated
+implementer subagent per spec, each taking ONE spec end-to-end to a PR:
 
 > `Agent(subagent_type: "general-purpose", isolation: "worktree")` — read it
 > (`aida show <SPEC> -c`), implement to acceptance, add `// trace:<SPEC>` (plain

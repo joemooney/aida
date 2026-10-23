@@ -12957,6 +12957,7 @@ pub(crate) fn handle_queue_work(
                     &project_root,
                     &lease.id,
                     child_grant,
+                    crate::seat_authority::current_grant_id().as_deref(),
                 );
                 eprintln!();
                 return crate::standalone_implementer::run(crate::standalone_implementer::Launch {
