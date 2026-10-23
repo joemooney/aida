@@ -8,18 +8,27 @@ description: |
   Fix: also match an `agy` basename in cmdline_matches_agent's antigravity arm, and add a test pinning the agy cmdline.
 
   Raised in review of PR-2862: https://github.com/joemooney/aida/pull/2862#issuecomment-6375864421
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T22:19:12.155573512Z
-modified_at: 2026-10-23T22:19:12.155573512Z
+modified_at: 2026-10-23T22:29:12.572068769Z
 req_type: Task
 tags:
 - agent-registry
 - antigravity
 - from-review:PR-2862
 - severity:minor
+history:
+- id: 01a16ae1-e8fc-7c40-811b-eb34279816cf
+  author: joe
+  timestamp: 2026-10-23T22:29:12.572057405Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 4fc80506877d9d9cb9880e721f034448c73c16da
   branch: pr-2862
