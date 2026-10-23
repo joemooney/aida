@@ -178,6 +178,29 @@ leaves the owning spec's status unchanged by default unless `--final-slice`
 (`--complete-spec`) is passed to complete the spec on the final slice.
 <!-- trace:STORY-1663 | ai:antigravity -->
 
+**Merge train (`aida pr train <N...>` / `--all-ready`).** Lands several
+approved PRs together so that two PRs that are each green cannot break main
+together. Every member passes ship's gates (approval at head or carried over a
+clean merge from main, no merge hold, clear verdicts, open, on the default
+branch). Drafts are refused with a reason, since CI never runs Build on them.
+The train is main plus one squash commit per member, with the subject ship
+would write. Each commit's patch-id must equal the member's approved diff, and
+a member that conflicts or whose diff changes when stacked is dropped with its
+reason. The train opens as a `train/*` PR, and CI and merge-hold-gate (train
+mode: every listed member's labels) run on it. When it is green and main has
+not moved, it is rebase-merged with `--match-head-commit <tip>` under the
+merge lease. Each member PR is then closed with a pointer to its commit, and
+`aida pull` completes specs from the trailers. A red train is rerun once, then
+bisected in halves (two sub-trains at a time). A one-member red train leaves
+that PR open with a comment. `--dry-run` prints the gate verdicts and the
+plan; `--dry-run --local-ci <CMD>` simulates the whole run with a local CI
+command; `--max N` caps the batch (default 10), and naming more PRs than
+`--max` is refused. The command exits non-zero when a named PR was not
+landed. The train is GitHub-only for now: GitLab's merge-hold gate has no
+train mode, so `aida pr train` refuses a GitLab project; ship its merge
+requests one at a time with `aida pr ship N`.
+<!-- trace:STORY-1690 | ai:claude -->
+
 **Chains with** — `aida queue done` (finish on a branch) → `aida pr` (open/ship the PR) → `aida review` (if reviewed) → merge → `aida pull` (auto-bump to Completed).
 
 ---

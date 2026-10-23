@@ -1031,3 +1031,95 @@ fn pending_wake_is_never_throttled() {
     entry.wakes.values_mut().for_each(|w| w.sent = true);
     assert!(throttled(&entry, &head, now, interval));
 }
+
+// TASK-2241 (swept in TASK-2238): a pending wake superseded on the same head
+// (its readiness kind or approval changed) is pruned, so it no longer disables
+// throttling; the current pending wake and sent ones survive, and an earlier
+// head's wakes go.
+// trace:TASK-2238 | ai:claude
+#[test]
+fn a_superseded_pending_wake_is_pruned_and_throttling_resumes() {
+    let head = format!("{HEAD:040x}");
+    let now = chrono::Utc::now();
+    let interval = chrono::Duration::seconds(120);
+    let pending = |sent| Notice {
+        message: ready::wake_message(
+            "github:github.com/owner/repo",
+            &change(0, false),
+            &Readiness::Ready,
+            &approval(),
+        ),
+        sent,
+    };
+    let stale = format!("{head}:{}:{}", ready::WAKE_READY, notice::digest("old"));
+    let current = format!("{head}:{}:{}", ready::WAKE_READY, notice::digest("new"));
+    let delivered = format!("{head}:{}:{}", ready::WAKE_READY, notice::digest("sent"));
+    let earlier = format!("{:040x}:{}:{}", 0xe, ready::WAKE_READY, notice::digest("a"));
+    let mut entry = Entry {
+        readiness: Some(Reported {
+            head: head.clone(),
+            line: "ready".into(),
+            checked_at: now,
+        }),
+        ..Entry::default()
+    };
+    for (key, sent) in [(&stale, false), (&delivered, true), (&earlier, false)] {
+        entry.wakes.insert(key.clone(), pending(sent));
+    }
+    assert!(
+        !throttled(&entry, &head, now, interval),
+        "stale pending wake"
+    );
+
+    // The head is no longer wakeable: every unsent wake for it goes.
+    let mut none = entry.clone();
+    prune_wakes(&mut none.wakes, &format!("{head}:"), None);
+    assert_eq!(none.wakes.keys().collect::<Vec<_>>(), vec![&delivered]);
+    assert!(throttled(&none, &head, now, interval));
+
+    // A new wake supersedes the stale one; it alone stays pending.
+    entry.wakes.insert(current.clone(), pending(false));
+    prune_wakes(&mut entry.wakes, &format!("{head}:"), Some(&current));
+    let mut kept: Vec<_> = entry.wakes.keys().cloned().collect();
+    kept.sort();
+    let mut want = vec![current.clone(), delivered.clone()];
+    want.sort();
+    assert_eq!(kept, want);
+    entry.wakes.get_mut(&current).unwrap().sent = true;
+    assert!(throttled(&entry, &head, now, interval));
+}
+
+// TASK-2244 (swept in TASK-2238): the live approval composition. A real
+// corpus refusal at the head (read by `corpus_at` from a fixture) refuses
+// through it even when the approval gate passed; with no approval the corpus
+// is never read; a clear corpus returns the approval.
+// trace:TASK-2238 | ai:claude
+#[test]
+fn live_approval_composition_refuses_on_the_corpus_after_an_approval() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path();
+    let c = change(0, false);
+    record_verdict(root, "request-changes");
+    let refusal =
+        ready::approval_then_corpus(|| Ok(approval()), || ready::corpus_at(root, &c, &[]))
+            .unwrap_err();
+    assert!(refusal.contains("request-changes"), "{refusal}");
+
+    let mut read = false;
+    let refusal = ready::approval_then_corpus(
+        || Err("no approval covers the head".into()),
+        || {
+            read = true;
+            ready::corpus_at(root, &c, &[])
+        },
+    )
+    .unwrap_err();
+    assert_eq!(refusal, "no approval covers the head");
+    assert!(!read, "the corpus is not read without an approval");
+
+    record_verdict(root, "approved");
+    assert_eq!(
+        ready::approval_then_corpus(|| Ok(approval()), || ready::corpus_at(root, &c, &[])),
+        Ok(approval())
+    );
+}

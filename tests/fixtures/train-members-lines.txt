@@ -1,0 +1,26 @@
+# STORY-1690: aida-train-members: line values, shared by the bash gate test
+# (tests/test_merge_hold_gate.sh, against merge-hold-gate.yml) and the Rust
+# parser test (pr_train parse_members_line), so the two parsers cannot drift.
+# Format: <0 accepted | 1 refused><TAB><line value>; <CR> stands for a \r.
+0	11@abc1234
+0	11@abc1234,12@BBBBBBB
+0	#11@abc1234
+0	11@abc1234, 12@abc1234
+0	11@abc1234 12@abc1234
+0	11@abc1234,,12@abc1234
+0	11@abc1234<CR>
+0	11@abc1234,12@abc1234<CR>
+1	
+1	,
+1	x@abc1234
+1	11
+1	11@
+1	11@abc12
+1	11@zzzzzzz
+1	0@abc1234
+1	011@abc1234
+1	+11@abc1234
+1	-11@abc1234
+1	##11@abc1234
+1	11@ab@cdef123
+1	11@abc1234,x@abc1234

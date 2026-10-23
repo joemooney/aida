@@ -106,6 +106,19 @@ pub(crate) fn store_snapshot(store: &Path) -> Result<StoreSnapshot> {
         .is_empty(),
         StoreDirty
     );
+    // TASK-2238: status still honours $GIT_DIR/info/exclude and any
+    // .gitignore, which could hide an untracked object. `ls-files --others`
+    // with no exclude option applies none of them.
+    // trace:TASK-2238 | ai:claude
+    ensure!(
+        snapshot_git(
+            store,
+            &["ls-files", "--others", "-z", "--", "objects/"],
+            None
+        )?
+        .is_empty(),
+        StoreDirty
+    );
     let head = snapshot_git(store, &["rev-parse", "--verify", "HEAD^{commit}"], None)?;
     let head = String::from_utf8(head).context("non-text store HEAD")?;
     let head = head.trim().to_owned();
