@@ -4831,6 +4831,16 @@ mod tests {
             if line.contains("Agent(") {
                 violations.push(format!("{key}:{}: `Agent(`", idx + 1));
             }
+            // Rework routed to an implementer or fixer through `SendMessage`
+            // assumes an in-session subagent.
+            if lower.contains("sendmessage")
+                && (lower.contains("implementer") || lower.contains("fixer"))
+            {
+                violations.push(format!(
+                    "{key}:{}: `SendMessage` to an implementer",
+                    idx + 1
+                ));
+            }
             for pattern in AGENT_TOOL_LAUNCHES {
                 if lower.contains(pattern) {
                     violations.push(format!("{key}:{}: `{pattern}`", idx + 1));
@@ -4853,6 +4863,8 @@ mod tests {
             "a separate advisor subagent signs it off",
             "fan ONE worktree-isolated implementer subagent per spec",
             "every PR your fixer subagents wrote",
+            "- `RequestChanges` → resume the same implementer (`SendMessage`) with the",
+            "resume the same fixer (`SendMessage` to its agent id)",
         ];
         for line in refused {
             assert!(
@@ -4870,6 +4882,7 @@ mod tests {
             vec!["t.md:3: `Agent(`"]
         );
         assert!(agent_tool_launches("t.md", "launch a separate implementer process").is_empty());
+        assert!(agent_tool_launches("t.md", "  - SendMessage").is_empty());
     }
 
     /// Seat skills, commands and discipline launch implementers and fixers as

@@ -52,7 +52,7 @@ Follow the workflow in `.claude/skills/aida-orchestrate/SKILL.md`:
    commits behind ... overlaps", have the author merge main up first. Never review through the Agent tool,
    never write the reviewer's prompt, and never record a verdict yourself.
    Your seat must be entered with `--delegate-seat reviewer`. On
-   RequestChanges, return the findings to the same implementer, then launch a
+   RequestChanges, relaunch the implementer on its branch or mail its lane, then launch a
    new reviewer at the new head. <!-- trace:STORY-1654 | ai:claude -->
 6. Batch approved branches on top of origin/main, and run the project's full
    local check set (the same checks CI runs). Fix only mechanical integration

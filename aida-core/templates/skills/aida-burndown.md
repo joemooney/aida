@@ -259,8 +259,11 @@ from the previous round is there until the new launcher replaces it.
 - The burndown seat must have been entered with
   `aida role enter <seat> --delegate-seat reviewer`; without it the launch
   fails closed. Report that as a blocker; don't work around it.
-- `RequestChanges` → resume the same implementer (`SendMessage`) with the
-  findings, then launch a **new** reviewer at the new head. A stale approval
+- `RequestChanges` → route the findings back to the implementer: relaunch
+  `aida queue work <SPEC> --role implementer --no-human` on the existing
+  branch, or mail an interactive lane (`aida mailbox send --to <lane> ...`).
+  Then launch a **new** reviewer at the new head.
+  <!-- trace:STORY-1662 | ai:claude --> A stale approval
   also means a new reviewer; never use `--override-stale-approval`.
 <!-- trace:STORY-1654 | ai:claude -->
 
