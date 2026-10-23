@@ -141,3 +141,22 @@ fn team_module_has_no_far_column_trailing_comments() {
         );
     }
 }
+
+/// TASK-2235: only the SessionStart hook always runs outside the command
+/// sandbox; `aida agent gc`/`ls` run where they are invoked, so the mailbox
+/// doc must not say they run outside it, and must say host rows need a
+/// host-side run.
+#[test]
+fn mailbox_doc_says_only_the_start_hook_runs_outside_the_sandbox() {
+    let doc = read("docs/cli/06-roles-sessions.md");
+    let flat = doc.split_whitespace().collect::<Vec<_>>().join(" ");
+    assert!(
+        !flat.contains("start hook run outside the command sandbox"),
+        "gc/ls are still said to run outside the sandbox"
+    );
+    assert!(
+        flat.contains("Only the start hook always runs outside the command sandbox"),
+        "{flat}"
+    );
+    assert!(flat.contains("host-side `aida agent gc`"), "{flat}");
+}

@@ -241,12 +241,16 @@ fn malformed_findings_receipt_is_refused() {
     );
 }
 
-/// An approval carried over a clean base merge to the head; CI is never read,
-/// so no ready wake joins the mailbox.
+/// An approval carried over a clean base merge to the head, which the corpus
+/// gate still refuses for the capped earlier rounds: the full approval read
+/// fails, the approval gate alone passes. No ready wake joins the mailbox.
 // trace:TASK-2238 | ai:claude
 struct CarriedOver;
 impl Evidence for CarriedOver {
-    fn approval(&self, change: &forge::Change) -> std::result::Result<Approval, String> {
+    fn approval(&self, _: &forge::Change) -> std::result::Result<Approval, String> {
+        Err("the verdict corpus refuses: request-changes recorded at an earlier head".into())
+    }
+    fn approval_only(&self, change: &forge::Change) -> std::result::Result<Approval, String> {
         Ok(Approval {
             reviewed: sha(0xb),
             identity: "operator at 2026-10-23".into(),
@@ -275,7 +279,7 @@ impl Evidence for CarriedOver {
 
 /// TASK-2242 (swept in TASK-2238): a capped change whose head is approved
 /// through a carried-over approval does not wake the advisor with "its head
-/// has no review".
+/// has no review", even while the corpus gate still refuses that head.
 // trace:TASK-2238 | ai:claude
 #[test]
 fn round_cap_wake_respects_a_carried_over_approval() {

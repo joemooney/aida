@@ -20,8 +20,11 @@ pub(super) fn digest(text: &str) -> String {
 /// recorded with, so a retry re-delivers it under the same ID.
 ///
 /// The round-cap wake is for a head nobody approved: an approval that covers
-/// the head through `evidence` (including one carried over a clean merge of
-/// the base) suppresses it. That read runs only when the cap would fire.
+/// the head (including one carried over a clean merge of the base)
+/// suppresses it. It asks the approval gate alone: the corpus gate can still
+/// refuse such a head for the capped earlier rounds, which is the ready
+/// report's business, not a reason to say the head has no review. That read
+/// runs only when the cap would fire.
 // trace:TASK-2238 | ai:claude
 pub(super) fn send(
     root: &Path,
@@ -34,7 +37,7 @@ pub(super) fn send(
     let blocking = findings_due(change, history);
     let cap = history.blocking() >= 2
         && !history.contains(&change.head)
-        && evidence.approval(change).is_err();
+        && evidence.approval_only(change).is_err();
     if blocking.is_empty() && !cap {
         return Ok(());
     }
