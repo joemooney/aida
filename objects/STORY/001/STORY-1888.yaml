@@ -11,12 +11,12 @@ description: |-
   3. Tests cover: an operator-layer path refuses a mandate ship; a branch-only edit to the committed layer has no effect; a directory prefix matches nested files; the floor cannot be shrunk by any layer.
 
   This change edits mandate_gates.rs, so it needs a sketch with advisor signoff, and a human must merge it (it is self-protected).
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T15:30:48.862626134Z
-modified_at: 2026-10-23T07:00:53.852003725Z
+modified_at: 2026-10-23T18:01:00.113584473Z
 req_type: Story
 tags:
 - authority
@@ -155,6 +155,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a169ec-5bd1-7d32-9278-32fe601c1771
+  author: aida-orchestrator
+  timestamp: 2026-10-23T18:01:00.113612324Z
+  session_id: 01a169ea45f1
+  harness_version: 2.1.309 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 7be4321436b8f93b2daba2bd71b649046818e35f
   branch: main
@@ -163,3 +172,11 @@ filed_at:
   aida_build_sha: 7be4321436
   vendor: claude
   session: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Tighten-only protected_paths and drift ratchet are sound and CI is green at head, but AC3's operator-layer ship refusal has no end-to-end test, criteria are untraced, status text is untested, and the ratchet's test-item skipper can fail open.
+  recovery_hint: address the review findings, move STORY-1888 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-10-23T18:01:00.113584473Z
