@@ -598,6 +598,10 @@ EOM
     exit 0
 fi
 
+# The bump, CHANGELOG and tag notes were computed on this commit. The lease is
+# not held during the prompt, so a ship can move HEAD meanwhile.
+# trace:TASK-1955 | ai:claude (TASK-2090)
+prep_head=$(git rev-parse HEAD)
 lease_release  # trace:TASK-1721 | ai:claude
 
 if [ "$auto_yes" = "1" ]; then
@@ -663,6 +667,18 @@ if ! lease_acquire "${AIDA_RELEASE_LEASE_WAIT_SECS:-180}"; then
 error: the '$release_base' merge-lease is held by $(lease_describe).
 The version bump is still in your working tree; re-run the publish steps once it
 finishes, or discard with: git restore ${manifest_paths[*]}
+Tag notes saved at: $notes_file
+EOM
+    exit 1
+fi
+# trace:TASK-1955 | ai:claude (TASK-2090)
+if [ "$(git rev-parse HEAD)" != "$prep_head" ]; then
+    cat <<EOM >&2
+error: HEAD moved from $prep_head to $(git rev-parse HEAD) while the release
+waited for confirmation (a merge landed). The version bump, CHANGELOG and tag
+notes were computed on the old commit, so nothing was committed, pushed or
+tagged. Discard the bump and re-run:
+  git restore ${manifest_paths[*]}
 Tag notes saved at: $notes_file
 EOM
     exit 1

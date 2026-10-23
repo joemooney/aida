@@ -199,10 +199,12 @@ fn store_allows(store: &Path, principal: &str, seat: &str) -> bool {
         })
 }
 
-/// Why [`roster_check`] refused a seat. `note`, when set, names an
-/// `AIDA_STORE` that resolves to another store than the one checked: `aida
-/// team` reads that store's roster instead, so the two can disagree.
+/// Why [`roster_check`] refused a seat. `note`, when set, names the
+/// `AIDA_STORE` the check did not use: one that resolves to another store
+/// than the one checked (`aida team` reads that store's roster instead, so
+/// the two can disagree), or a set value that is unusable, with the reason.
 // trace:TASK-2072, TASK-1667, TASK-2054 | ai:claude
+// trace:TASK-1955 | ai:claude (TASK-2188)
 #[derive(Debug)]
 pub(crate) enum RosterRefusal {
     /// No roster could be read at all.
@@ -1205,12 +1207,37 @@ pub(crate) fn validate_child_delegation(
     Ok(parent)
 }
 
+/// A child grant could not be minted: the launcher's grant is missing,
+/// expired, or does not delegate the seat. No child was launched with it, so
+/// a launcher that already took a lease for that child can release it.
+/// Displays exactly as the refusal it wraps.
+// trace:TASK-1955 | ai:claude (advisor comment 35)
+#[derive(Debug)]
+pub(crate) struct ChildGrantRefused(pub(crate) anyhow::Error);
+
+impl std::fmt::Display for ChildGrantRefused {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:#}", self.0)
+    }
+}
+
+impl std::error::Error for ChildGrantRefused {}
+
+impl ChildGrantRefused {
+    /// Whether `err`'s chain carries a [`ChildGrantRefused`].
+    pub(crate) fn is_in(err: &anyhow::Error) -> bool {
+        err.chain().any(|cause| cause.is::<ChildGrantRefused>())
+    }
+}
+
 pub(crate) fn issue_child(
     project_root: &Path,
     requested_seat: &str,
     child_subject: &str,
 ) -> Result<SeatGrant> {
-    let parent = validate_child_delegation(project_root, requested_seat)?;
+    // trace:TASK-1955 | ai:claude (advisor comment 35)
+    let parent = validate_child_delegation(project_root, requested_seat)
+        .map_err(|refusal| anyhow::Error::new(ChildGrantRefused(refusal)))?;
     let now = Utc::now();
     let grant = SeatGrant {
         id: Uuid::new_v4().to_string(),
@@ -1318,7 +1345,10 @@ pub(crate) fn issue_headless_child(
     child_subject: &str,
 ) -> Result<HeadlessChildGrant> {
     let seat = aida_core::team::canonical_role(seat.trim());
-    match preflight_headless_child(project_root, &seat)? {
+    // trace:TASK-1955 | ai:claude (advisor comment 35)
+    let authority = preflight_headless_child(project_root, &seat)
+        .map_err(|refusal| anyhow::Error::new(ChildGrantRefused(refusal)))?;
+    match authority {
         HeadlessChildAuthority::Delegated => Ok(HeadlessChildGrant::Issued(issue_child(
             project_root,
             &seat,
@@ -1658,8 +1688,33 @@ mod tests {
                 child.delegable_seats.is_empty(),
                 "children default to an empty delegation set"
             );
-            issue_child(root, "reviewer", "child-subject")
+            let refused = issue_child(root, "reviewer", "child-subject")
                 .expect_err("a seat outside the delegation set must refuse");
+            // Advisor comment 35 (TASK-1955): the refusal is typed, so a
+            // launcher can release the lease it took, and reads unchanged.
+            assert!(ChildGrantRefused::is_in(&refused), "{refused:?}");
+            assert!(
+                crate::queue_cmd::refused_review_launch_releases_lease(true, &refused),
+                "a refused reviewer child releases its PR-N lease"
+            );
+            assert!(
+                !crate::queue_cmd::refused_review_launch_releases_lease(false, &refused),
+                "an implementer lease stays for the manual continuation"
+            );
+            assert!(
+                !crate::queue_cmd::refused_review_launch_releases_lease(
+                    true,
+                    &anyhow::anyhow!("reviewer exited 1")
+                ),
+                "any other failure keeps the lease"
+            );
+            assert_eq!(
+                format!("{refused:#}"),
+                format!(
+                    "{:#}",
+                    validate_child_delegation(root, "reviewer").unwrap_err()
+                )
+            );
 
             // Revocation fails closed.
             assert!(revoke_current().unwrap());

@@ -2046,6 +2046,43 @@ fn probe_ref_names_parse_pid_and_creation_time_only_from_their_own_shapes() {
     }
 }
 
+/// TASK-2176 (2): a probe ref dated in the future is not "young" forever; past
+/// the pid check it is swept like any old timestamped ref.
+// trace:TASK-1955 | ai:claude (TASK-2176)
+#[test]
+fn a_future_dated_probe_ref_is_not_kept_forever() {
+    use forge::{probe_ref_in_use, ProbeName};
+    let now = 1_800_000_000;
+    let named = |created| ProbeName {
+        pid: Some(1),
+        created: Some(created),
+    };
+    let alive = |_| true;
+    assert!(
+        probe_ref_in_use(&named(now - 5), now, None, alive),
+        "young ref kept"
+    );
+    assert!(
+        probe_ref_in_use(&named(now), now, None, alive),
+        "a ref made now is kept"
+    );
+    assert!(
+        !probe_ref_in_use(&named(now - 3_600), now, None, alive),
+        "old ref swept"
+    );
+    assert!(
+        !probe_ref_in_use(&named(now + 86_400), now, None, alive),
+        "a future-dated ref is swept"
+    );
+    // A future loose-ref mtime on a pid-less legacy ref is swept too.
+    let legacy = ProbeName {
+        pid: None,
+        created: None,
+    };
+    assert!(!probe_ref_in_use(&legacy, now, Some(now + 86_400), alive));
+    assert!(probe_ref_in_use(&legacy, now, Some(now - 1), alive));
+}
+
 /// TASK-1-410 / TASK-2109: a stale-head notice goes to the AIDA identity the
 /// author's forge login names, in its stored spelling, and a pending notice
 /// survives a roster change before it is sent.

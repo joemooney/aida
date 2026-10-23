@@ -221,6 +221,21 @@ mk_case venv '.venv: requirements.txt' $'\tpython3 -m venv .venv' 'hello: notes.
 expect_silent ".venv is no suffix rule" 'timeout 1h make hello'
 mk_case dotenv '.env:' $'\t@touch .env' 'hello: notes.txt' $'\t@echo hi'
 expect_silent ".env is no suffix rule" 'timeout 1h make hello'
+# TASK-2185: the colon of `:=` / `::=` is no rule colon.
+mk_case computedimm 'N := A' '$(N)_FLAGS := -O2' '$(N)_LIBS ::= -lm' 'hello: notes.txt' $'\t@echo hi'
+expect_silent "a computed name assigned with := or ::= is still an assignment" 'timeout 1h make hello'
+# TASK-2173: make runs $(shell ...) and != while it parses the Makefile.
+mk_case shellimm 'X := $(shell cargo build)' 'hello: notes.txt' $'\t@echo hi'
+expect_warn "an immediate \$(shell cargo) assignment fails closed" 'timeout 1h make hello' 'AIDA_CARGO_TIMEOUT=1h make'
+mk_case shellbang 'X != cargo build' 'hello: notes.txt' $'\t@echo hi'
+expect_warn "a != shell assignment fails closed" 'timeout 1h make hello' 'AIDA_CARGO_TIMEOUT=1h make'
+mk_case shellrec 'X = $(shell cargo build)' 'hello: $(X)' $'\t@echo hi'
+expect_warn "a recursive \$(shell cargo) expanded in a prerequisite fails closed" 'timeout 1h make hello' 'AIDA_CARGO_TIMEOUT=1h make'
+mk_case shelldef 'define X :=' '$(shell cargo build)' 'endef' 'hello: notes.txt' $'\t@echo hi'
+expect_warn "a \$(shell cargo) in a define body fails closed" 'timeout 1h make hello' 'AIDA_CARGO_TIMEOUT=1h make'
+# TASK-2186: an empty .SUFFIXES still clears the suffix list.
+mk_case sfxclear '.SUFFIXES:' '.c.o:' $'\tcargo run' 'hello: page.c' $'\t@echo hi'
+expect_silent "an empty .SUFFIXES clears the default suffixes" 'timeout 1h make hello'
 RUN_DIR="$ROOT"
 
 # Malformed input never blocks.

@@ -190,6 +190,7 @@ echo ""
 
 # ─── 0. the fixture really refuses a direct push to main ──────────────────
 info "Test 0: the bare remote rejects a direct push to main"
+# trace:TASK-1721.acd8fb85 | ai:claude
 F0="$TEST_DIR/f0"; make_fixture "$F0"
 (
     cd "$F0/work"
@@ -200,6 +201,7 @@ pass "direct push to main is rejected by the fixture remote"
 
 # ─── 1. --dry-run prints the PR sequence and changes nothing ──────────────
 info "Test 1: --dry-run prints the planned PR sequence, pushes nothing"
+# trace:TASK-1721.aced1599 | ai:claude
 F1="$TEST_DIR/f1"; make_fixture "$F1"
 before=$(remote_refs "$F1")
 out=$(run_release "$F1" patch --dry-run 2>&1) || fail "dry run exited non-zero: $out"
@@ -218,6 +220,7 @@ fi
 pass "--dry-run prints the sequence and leaves remote, tree and branches unchanged"
 
 info "Test 1b: no direct push of main remains in release.sh, including fallback text"
+# trace:TASK-1721.aced1599 | ai:claude
 if grep -nE 'git push (origin|"\$release_remote"|\$release_remote) (HEAD|main)\b' "$RELEASE"; then
     fail "release.sh still pushes main directly"
 fi
@@ -225,6 +228,8 @@ pass "release.sh has no 'git push origin HEAD|main'"
 
 # ─── 2. end-to-end release against the PR-required remote ─────────────────
 info "Test 2: release completes end to end through the PR"
+# trace:TASK-1721.acd8fb85 | ai:claude
+# trace:TASK-1721.acfe2a84 | ai:claude
 F2="$TEST_DIR/f2"; make_fixture "$F2"
 out=$(run_release "$F2" patch --yes --skip-docs-check 2>&1) || fail "release failed: $out"
 merged=$(cat "$F2/state/merged")
@@ -250,6 +255,7 @@ info "Test 2b: local state after the release"
 pass "checkout back on fast-forwarded main, branches cleaned up, lease released"
 
 info "Test 2c: the bump commit keeps AIDA_RELEASE=1"
+# trace:TASK-1721.ac8f0bcb | ai:claude
 grep -qx "AIDA_RELEASE=1" "$F2/state/commit-env" || fail "bump commit ran without AIDA_RELEASE=1: $(cat "$F2/state/commit-env")"
 pass "AIDA_RELEASE=1 reached the commit-msg hook"
 
@@ -343,26 +349,120 @@ grep -q "note=scripts/release.sh v0.15.1" "$F5/state/lease-at-commit" 2>/dev/nul
     || fail "the main merge-lease was not retaken for the release commit"
 pass "release.sh retakes the main merge-lease for the release commit"
 
-info "Test 4d: no prompt runs while the lease is held"
-first_acquire=$(grep -n '^if ! lease_acquire 0; then' "$RELEASE" | head -n1 | cut -d: -f1)
-last_eco_prompt=$(grep -n 'read -r -p ".*\[y/N\]: " eco_answer' "$RELEASE" | tail -n1 | cut -d: -f1)
-pre_confirm_release=$(grep -nE '^lease_release( |$)' "$RELEASE" | head -n1 | cut -d: -f1)
-confirm_prompt=$(grep -n 'read -r -p "Open release PR' "$RELEASE" | head -n1 | cut -d: -f1)
-second_acquire=$(grep -n 'lease_acquire "\${AIDA_RELEASE_LEASE_WAIT_SECS:-180}"' "$RELEASE" | head -n1 | cut -d: -f1)
-for v in "$first_acquire" "$last_eco_prompt" "$pre_confirm_release" "$confirm_prompt" "$second_acquire"; do
-    [ -n "$v" ] || fail "could not locate the lease/prompt lines in release.sh"
-done
-[ "$last_eco_prompt" -lt "$first_acquire" ] || fail "lease is taken before the ecosystem-watch prompt"
-[ "$first_acquire" -lt "$pre_confirm_release" ] && [ "$pre_confirm_release" -lt "$confirm_prompt" ] \
-    || fail "lease is not released before the confirmation prompt"
-[ "$confirm_prompt" -lt "$second_acquire" ] || fail "lease is retaken before the confirmation prompt"
-pass "lease is taken after the ecosystem prompt, dropped before confirmation, retaken after"
+# Tests 4d, 4e and 4f drive release.sh on a pseudo-terminal, so its prompts
+# really run: at each `[y/N]:` prompt the driver runs a hook, then answers y.
+# trace:TASK-1955 | ai:claude (TASK-2093, TASK-2090)
+cat > "$TEST_DIR/pty_drive.py" <<'PY'
+import os, pty, select, subprocess, sys, time
+hook, argv = sys.argv[1], sys.argv[2:]
+pid, fd = pty.fork()
+if pid == 0:
+    os.execvp(argv[0], argv)
+out, pending, deadline = b"", b"", time.time() + 120
+while time.time() < deadline:
+    r, _, _ = select.select([fd], [], [], 1)
+    if not r:
+        continue
+    try:
+        chunk = os.read(fd, 4096)
+    except OSError:
+        break
+    if not chunk:
+        break
+    out += chunk
+    pending += chunk
+    if b"[y/N]: " in pending:
+        line = pending.split(b"[y/N]: ")[0].splitlines()[-1].decode(errors="replace")
+        subprocess.run(["bash", hook, line.strip()], check=True)
+        pending = b""
+        os.write(fd, b"y\n")
+sys.stdout.write(out.decode(errors="replace"))
+_, status = os.waitpid(pid, 0)
+sys.exit(os.waitstatus_to_exitcode(status))
+PY
+# Release on a terminal: $1 fixture root, $2 prompt hook, then release.sh args.
+run_release_tty() {
+    local root=$1 hook=$2; shift 2
+    (
+        cd "$root/work"
+        PATH="$FAKE_BIN:$PATH" FAKE_GH_REMOTE="$root/remote.git" FAKE_GH_STATE="$root/state" \
+            AIDA_RELEASE_CHECKS_INTERVAL_SECS=0 python3 -I "$TEST_DIR/pty_drive.py" "$hook" bash "$RELEASE" "$@"
+    )
+}
 
-info "Test 4e: the lease is claimed atomically, never visible empty"
-if grep -n 'noclobber' "$RELEASE"; then fail "lease is still created empty via noclobber"; fi
-grep -q 'ln "\$tmp" "\$lease_file"' "$RELEASE" || fail "lease is not hard-linked into place from a full temp file"
-[ -z "$(ls -A "$F5/work/.aida/merge-locks/" 2>/dev/null)" ] || fail "lease temp files left behind: $(ls -A "$F5/work/.aida/merge-locks/")"
-pass "lease is written to a temp file and linked into place; no temp files remain"
+info "Test 4d: no prompt runs while the lease is held"
+F8="$TEST_DIR/f8"; make_fixture "$F8"
+cat > "$TEST_DIR/prompt-hook-lease" <<EOF
+#!/usr/bin/env bash
+if [ -e "$F8/work/.aida/merge-locks/main" ]; then held=held; else held=free; fi
+printf '%s|%s\n' "\$held" "\$1" >> "$F8/state/prompts"
+EOF
+# A minor release with no ecosystem-watch file asks before the bump too.
+out=$(run_release_tty "$F8" "$TEST_DIR/prompt-hook-lease" minor --skip-docs-check 2>&1) \
+    || fail "interactive release failed: $out"
+grep -q "|Override and release anyway?" "$F8/state/prompts" || fail "the ecosystem prompt did not run: $(cat "$F8/state/prompts" 2>/dev/null)"
+grep -q "|Open release PR for v0.16.0" "$F8/state/prompts" || fail "the confirmation prompt did not run: $(cat "$F8/state/prompts" 2>/dev/null)"
+if grep -q '^held|' "$F8/state/prompts"; then
+    fail "a prompt waited on the operator while the merge-lease was held: $(cat "$F8/state/prompts")"
+fi
+grep -q "note=scripts/release.sh v0.16.0" "$F8/state/lease-at-commit" 2>/dev/null \
+    || fail "the lease was not retaken after the confirmation prompt"
+[ "$(git --git-dir="$F8/remote.git" rev-parse 'refs/tags/v0.16.0^{commit}')" = "$(cat "$F8/state/merged")" ] \
+    || fail "the interactive release did not tag the merged commit: $out"
+pass "both prompts run with the lease free; it is retaken for the commit"
+
+info "Test 4e: the lease is claimed atomically, never visible empty or partial"
+# Every lease field is computed (date, /proc) before anything is visible at the
+# lease path, so a shim date that looks at the path catches a lease created
+# first and filled after.
+F9="$TEST_DIR/f9"; make_fixture "$F9"
+mkdir -p "$TEST_DIR/bin-date"
+cat > "$TEST_DIR/bin-date/date" <<EOF
+#!/usr/bin/env bash
+lease="$F9/work/.aida/merge-locks/main"
+if [ -e "\$lease" ] && ! grep -q '^ttl_secs=' "\$lease" 2>/dev/null; then
+    echo "incomplete lease visible" >> "$F9/state/lease-violations"
+fi
+exec "$(command -v date)" "\$@"
+EOF
+chmod +x "$TEST_DIR/bin-date/date"
+(
+    cd "$F9/work"
+    PATH="$TEST_DIR/bin-date:$FAKE_BIN:$PATH" FAKE_GH_REMOTE="$F9/remote.git" FAKE_GH_STATE="$F9/state" \
+        AIDA_RELEASE_CHECKS_INTERVAL_SECS=0 bash "$RELEASE" patch --yes --skip-docs-check >/dev/null 2>&1
+) || fail "release with the date probe failed"
+[ ! -e "$F9/state/lease-violations" ] || fail "an empty or partial lease was visible: $(cat "$F9/state/lease-violations")"
+grep -q "note=scripts/release.sh v0.15.1" "$F9/state/lease-at-commit" 2>/dev/null \
+    || fail "the date probe run never held the lease"
+for f in "$F5" "$F8" "$F9"; do
+    [ -z "$(ls -A "$f/work/.aida/merge-locks/" 2>/dev/null)" ] \
+        || fail "lease or temp files left behind: $(ls -A "$f/work/.aida/merge-locks/")"
+done
+pass "no empty or partial lease is ever visible; no temp files remain"
+
+info "Test 4f: HEAD moving during the confirmation prompt aborts before any commit"
+# trace:TASK-1955 | ai:claude (TASK-2090)
+F10="$TEST_DIR/f10"; make_fixture "$F10"
+cat > "$TEST_DIR/prompt-hook-move" <<EOF
+#!/usr/bin/env bash
+# A ship fast-forwards the primary checkout while the operator decides.
+case "\$1" in
+    "Open release PR"*) git -C "$F10/work" commit -q --allow-empty -m "concurrent ship" ;;
+esac
+EOF
+moved_from=$(git -C "$F10/work" rev-parse HEAD)
+remote_before=$(remote_refs "$F10")
+if out=$(run_release_tty "$F10" "$TEST_DIR/prompt-hook-move" patch --skip-docs-check 2>&1); then
+    fail "release went on after HEAD moved during the prompt: $out"
+fi
+printf '%s' "$out" | grep -q "HEAD moved from $moved_from" || fail "abort does not say HEAD moved: $out"
+printf '%s' "$out" | grep -qF "git restore" || fail "abort lacks the git restore hint: $out"
+[ -z "$(git -C "$F10/work" branch --list 'release/*')" ] || fail "a release branch was created after HEAD moved"
+[ "$(git -C "$F10/work" log -1 --format=%s)" = "concurrent ship" ] || fail "a bump commit was made after HEAD moved"
+[ "$remote_before" = "$(remote_refs "$F10")" ] || fail "the remote changed after HEAD moved"
+[ ! -s "$F10/state/calls" ] || fail "gh was called after HEAD moved: $(cat "$F10/state/calls")"
+[ ! -e "$F10/work/.aida/merge-locks/main" ] || fail "the abort left the merge-lease behind"
+pass "a HEAD move under the prompt aborts with the restore hint; nothing is committed or pushed"
 
 # ─── 6. gh pr create fails after the branch push ──────────────────────────
 info "Test 6: a failed gh pr create prints recovery, and a re-run names the leftover branch"
@@ -384,6 +484,7 @@ pass "gh pr create failure and the re-run both print the exact recovery"
 
 # ─── 5. --prepare-only fallback text routes through a PR ──────────────────
 info "Test 5: --prepare-only manual steps open a PR instead of pushing main"
+# trace:TASK-1721.aced1599 | ai:claude
 F6="$TEST_DIR/f6"; make_fixture "$F6"
 out=$(run_release "$F6" patch --prepare-only --skip-docs-check 2>&1) || fail "prepare-only failed: $out"
 printf '%s' "$out" | grep -qF "gh pr create" || fail "prepare-only steps lack gh pr create: $out"

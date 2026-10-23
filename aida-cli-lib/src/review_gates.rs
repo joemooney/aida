@@ -976,6 +976,61 @@ pub(crate) fn auto_queue_working_dir(
         .map(|p| p.to_path_buf())
 }
 
+/// The specs a PR's commit range names, split by what the PR does to them.
+// trace:TASK-1955 | ai:claude (BUG-2208)
+#[derive(Debug, Default, PartialEq, Eq)]
+pub(crate) struct ReviewCoverage {
+    /// Subject `(SPEC-ID)` trailers: the PR delivers (completes) these.
+    pub(crate) delivered: Vec<String>,
+    /// Subject `(Refs SPEC-ID)` trailers not delivered by another commit:
+    /// the PR is one slice of these and a later PR completes them.
+    pub(crate) slice_refs: Vec<String>,
+    /// Body-only mentions: informational (BUG-85).
+    pub(crate) referenced: Vec<String>,
+}
+
+/// BUG-85 / BUG-2208: classify every spec id in a PR's commit messages.
+/// Lists are disjoint, in first-seen order: delivered wins over a slice
+/// reference, and either wins over a body mention.
+// trace:TASK-1955 | ai:claude (BUG-2208)
+pub(crate) fn review_coverage_from_commits(messages: &[String]) -> ReviewCoverage {
+    let push = |v: &mut Vec<String>, id: String| {
+        if !v.iter().any(|x| x.eq_ignore_ascii_case(&id)) {
+            v.push(id);
+        }
+    };
+    let mut cov = ReviewCoverage::default();
+    for msg in messages {
+        for id in extract_spec_ids_from_commit(msg) {
+            push(&mut cov.delivered, id);
+        }
+        let subject = msg.lines().find(|l| !l.trim().is_empty()).unwrap_or("");
+        for id in crate::pr_ship::extract_trailing_refs_spec_ids_from_subject(subject) {
+            push(&mut cov.slice_refs, id);
+        }
+        for id in extract_referenced_spec_ids_from_commit(msg) {
+            push(&mut cov.referenced, id);
+        }
+    }
+    // A referenced ID delivered by ANOTHER commit in the same range is
+    // still delivered overall — drop it from references to keep the lists
+    // disjoint across the range. trace:BUG-85 | ai:claude
+    let delivered = std::mem::take(&mut cov.delivered);
+    cov.slice_refs
+        .retain(|r| !delivered.iter().any(|d| d.eq_ignore_ascii_case(r)));
+    let slice_refs = &cov.slice_refs;
+    cov.referenced.retain(|r| {
+        !delivered.iter().any(|d| d.eq_ignore_ascii_case(r))
+            && !slice_refs.iter().any(|d| d.eq_ignore_ascii_case(r))
+    });
+    cov.delivered = delivered;
+    cov
+}
+
+#[cfg(test)]
+#[path = "tests/bug_2208_refs_only_review_tests.rs"]
+mod bug_2208_refs_only_review_tests;
+
 // BUG-1944: callers use `live_work::try_auto_queue_pr_review`, which wraps
 // this and moves the PR's specs to In Progress. trace:BUG-1944 | ai:claude
 pub(crate) fn try_auto_queue_pr_review_unbumped(
@@ -1073,30 +1128,23 @@ pub(crate) fn try_auto_queue_pr_review_unbumped(
     let (base, head) = pr_base_head(project_root, review_forge, pr.number)
         .unwrap_or_else(|_| ("main".to_string(), branch.to_string()));
     let messages = git_log_messages(project_root, &base, &head).unwrap_or_default();
-    let mut spec_ids: Vec<String> = Vec::new();
-    let mut referenced_ids: Vec<String> = Vec::new();
-    for msg in &messages {
-        for id in extract_spec_ids_from_commit(msg) {
-            if !spec_ids.iter().any(|x| x.eq_ignore_ascii_case(&id)) {
-                spec_ids.push(id);
-            }
-        }
-        for id in extract_referenced_spec_ids_from_commit(msg) {
-            if !referenced_ids.iter().any(|x| x.eq_ignore_ascii_case(&id)) {
-                referenced_ids.push(id);
-            }
-        }
-    }
-    // A referenced ID delivered by ANOTHER commit in the same range is
-    // still delivered overall — drop it from references to keep the lists
-    // disjoint across the range. trace:BUG-85 | ai:claude
-    referenced_ids.retain(|r| !spec_ids.iter().any(|d| d.eq_ignore_ascii_case(r)));
+    let ReviewCoverage {
+        delivered: spec_ids,
+        slice_refs,
+        referenced: referenced_ids,
+    } = review_coverage_from_commits(&messages);
 
     // BUG-776: a story that covers no specs is unlinked noise in the reviewer
     // queue — the reviewer has nothing to check acceptance against, and the
     // row has to be dequeued and rejected by hand. Skip it and say why, so the
     // fix ("add a `(REQ-ID)` trailer") is obvious. trace:BUG-776 | ai:claude
-    if let Some(reason) = auto_queue_skip_reason(true, Some(pr.number), Some(spec_ids.len())) {
+    // BUG-2208: a Refs-only slice of a multi-PR spec still has a spec to
+    // review against, so it counts here. trace:TASK-1955 | ai:claude (BUG-2208)
+    if let Some(reason) = auto_queue_skip_reason(
+        true,
+        Some(pr.number),
+        Some(spec_ids.len() + slice_refs.len()),
+    ) {
         return AutoQueueOutcome::skipped_by_design(reason);
     }
 
@@ -1177,6 +1225,17 @@ pub(crate) fn try_auto_queue_pr_review_unbumped(
         }
         desc.push('\n');
     }
+    if !slice_refs.is_empty() {
+        // trace:TASK-1955 | ai:claude (BUG-2208)
+        desc.push_str("## Slice of (Refs only — not completed by this PR)\n\n");
+        desc.push_str(
+            "Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.\n\n",
+        );
+        for id in &slice_refs {
+            desc.push_str(&format!("- {}\n", id));
+        }
+        desc.push('\n');
+    }
     if !referenced_ids.is_empty() {
         desc.push_str("## References (not delivered)\n\n");
         desc.push_str(
@@ -1221,6 +1280,12 @@ pub(crate) fn try_auto_queue_pr_review_unbumped(
     for id in &spec_ids {
         aida_subcmd_rel_add_implements(project_root, &new_id, id);
     }
+    // BUG-2208: `covers`, never `implements`, so the slice links the story
+    // to its spec (and `queue work PR-N` resolves it) without completing it.
+    // trace:TASK-1955 | ai:claude (BUG-2208)
+    for id in &slice_refs {
+        aida_subcmd_rel_add(project_root, &new_id, id, "covers");
+    }
 
     let origin_short = match origin {
         AutoQueueOrigin::PrSkill => "aida pr",
@@ -1243,10 +1308,15 @@ pub(crate) fn try_auto_queue_pr_review_unbumped(
         .with_review_spec(new_id);
     }
 
-    let covers = if spec_ids.is_empty() {
-        "no specs".to_string()
-    } else {
-        spec_ids.join(", ")
+    let covers = match (spec_ids.is_empty(), slice_refs.is_empty()) {
+        (true, true) => "no specs".to_string(),
+        (true, false) => format!("slice of {}", slice_refs.join(", ")),
+        (false, true) => spec_ids.join(", "),
+        (false, false) => format!(
+            "{}; slice of {}",
+            spec_ids.join(", "),
+            slice_refs.join(", ")
+        ),
     };
     AutoQueueOutcome::filed(format!(
         "filed {} (covers {}) → reviewer queue ({noun}-{})",

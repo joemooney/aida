@@ -123,18 +123,17 @@ fn rust_code_only(text: &str) -> String {
     let mut i = 0;
     while i < c.len() {
         let next = c.get(i + 1).copied();
-        let ident_before = i > 0 && (c[i - 1].is_alphanumeric() || c[i - 1] == '_');
+        let ident = |k: usize| c[k].is_alphanumeric() || c[k] == '_';
+        // `br"…"`: the `b` is the literal's prefix, not an identifier.
+        // trace:TASK-1955 | ai:claude (TASK-2176)
+        let byte_prefix = i > 0 && c[i - 1] == 'b' && (i < 2 || !ident(i - 2));
+        let ident_before = i > 0 && ident(i - 1) && !byte_prefix;
         i = match c[i] {
             '/' if next == Some('/') => {
                 let end = (i..c.len()).find(|&j| c[j] == '\n').unwrap_or(c.len());
                 skip(&mut out, i, end)
             }
-            '/' if next == Some('*') => {
-                let end = (i + 2..c.len())
-                    .find(|&j| c[j] == '*' && c.get(j + 1) == Some(&'/'))
-                    .map_or(c.len(), |j| j + 2);
-                skip(&mut out, i, end)
-            }
+            '/' if next == Some('*') => skip(&mut out, i, block_comment_end(&c, i)),
             'r' if !ident_before && matches!(next, Some('"' | '#')) => {
                 let hashes = c[i + 1..].iter().take_while(|&&ch| ch == '#').count();
                 let open = i + 1 + hashes;
@@ -255,6 +254,29 @@ fn early_exits(window: &str) -> (Vec<String>, Vec<String>) {
     (exits, unledgered)
 }
 
+/// The index just past the (possibly nested) block comment opening at `i`,
+/// or the end of `c` when it never closes.
+// trace:TASK-1955 | ai:claude (TASK-1695)
+fn block_comment_end(c: &[char], i: usize) -> usize {
+    let mut depth = 0usize;
+    let mut j = i;
+    while j < c.len() {
+        if c[j] == '/' && c.get(j + 1) == Some(&'*') {
+            depth += 1;
+            j += 2;
+        } else if c[j] == '*' && c.get(j + 1) == Some(&'/') {
+            depth -= 1;
+            j += 2;
+            if depth == 0 {
+                return j;
+            }
+        } else {
+            j += 1;
+        }
+    }
+    c.len()
+}
+
 /// Replaces the contents of string and char literals and comments with
 /// spaces, keeping line breaks so line numbers still match the source.
 fn blank_strings_and_comments(src: &str) -> String {
@@ -264,7 +286,12 @@ fn blank_strings_and_comments(src: &str) -> String {
     let mut i = 0;
     while i < chars.len() {
         let c = chars[i];
-        if c == '/' && chars.get(i + 1) == Some(&'/') {
+        if c == '/' && chars.get(i + 1) == Some(&'*') {
+            // trace:TASK-1955 | ai:claude (TASK-1695)
+            let end = block_comment_end(&chars, i);
+            out.extend(chars[i..end].iter().map(|&c| blank(c)));
+            i = end;
+        } else if c == '/' && chars.get(i + 1) == Some(&'/') {
             while i < chars.len() && chars[i] != '\n' {
                 out.push(' ');
                 i += 1;
@@ -311,4 +338,51 @@ fn blank_strings_and_comments(src: &str) -> String {
         }
     }
     out
+}
+
+/// The ship-window scanner's blanker hides block comments, nested ones
+/// included, keeping their line breaks: a `?` or `return` inside one is no
+/// exit, one after it still is.
+// trace:TASK-1955 | ai:claude (TASK-1695)
+#[test]
+fn blank_strings_and_comments_hides_nested_block_comments() {
+    let src = "a /* x? /* return */ y? */ b?\n/* multi\nline return */ c?;\n";
+    let out = blank_strings_and_comments(src);
+    assert_eq!(out.lines().count(), src.lines().count(), "{out}");
+    assert_eq!(out.chars().count(), src.chars().count());
+    let lines: Vec<&str> = out.lines().collect();
+    assert!(
+        lines[0].starts_with("a ") && lines[0].ends_with(" b?"),
+        "{out}"
+    );
+    assert_eq!(lines[0].matches('?').count(), 1, "{out}");
+    assert!(!lines[0].contains("return"), "{out}");
+    assert!(!lines[1].contains("return") && !lines[1].contains('?'));
+    assert_eq!(lines[2].trim(), "c?;");
+}
+
+/// The `?` pin's stripper reads `br"…"` / `br#"…"#` as raw byte strings and
+/// nested block comments as one comment; an identifier ending in `br` is
+/// still an identifier.
+// trace:TASK-1955 | ai:claude (TASK-2176)
+#[test]
+fn the_question_mark_stripper_reads_raw_byte_strings_and_nested_comments() {
+    let text = concat!(
+        "let a = br\"raw?\";\n",
+        "let b = br#\"raw \"?\" body\"#;\n",
+        "/* outer /* inner? */ still comment? */ let c = x?;\n",
+        "let abr = 1; let d = y?;\n",
+    );
+    let code = rust_code_only(text);
+    let flagged: Vec<usize> = code
+        .lines()
+        .enumerate()
+        .filter(|(_, l)| l.contains('?'))
+        .map(|(n, _)| n)
+        .collect();
+    assert_eq!(flagged, [2, 3], "{code}");
+    assert!(
+        code.lines().nth(2).unwrap().contains("let c = x?"),
+        "{code}"
+    );
 }

@@ -49,7 +49,7 @@ fn preview_next_version_tolerates_prerelease_suffix_and_rejects_garbage() {
 
 // The artifact wait follows the merged release PR, so it must outlast the
 // release workflow plus runner queueing, not the old 10-minute cap.
-// trace:TASK-1721 | ai:claude
+// trace:TASK-1721.ace581bd | ai:claude
 #[test]
 fn release_artifact_timeout_covers_ci_and_honours_override() {
     let default = release_artifact_timeout(None);
@@ -67,7 +67,7 @@ fn release_artifact_timeout_covers_ci_and_honours_override() {
 
 // release.sh tags the squash-merged commit, which may not be HEAD of the
 // checkout, so the wrapper reads the tag release.sh reports.
-// trace:TASK-1721 | ai:claude
+// trace:TASK-1721.ace581bd | ai:claude
 #[test]
 fn released_tag_prefers_the_tag_release_sh_reports() {
     let dir = tempfile::tempdir().unwrap();
