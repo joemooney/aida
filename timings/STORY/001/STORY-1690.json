@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-1690",
+  "publishes": [
+    {
+      "at": "2026-10-23T23:36:48.124415152Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-19T06:49:43.064531535Z",
+      "spec": "STORY-1690",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-19T06:52:34.668988100Z",
+      "spec": "STORY-1690",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-23T23:36:08.639141991Z",
+      "spec": "STORY-1690",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-23T23:36:23.062571638Z",
+      "spec": "STORY-1690",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2843
+      }
+    },
+    {
+      "ts": "2026-10-23T23:36:47.856084294Z",
+      "spec": "STORY-1690",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "c38043228df6044c6c523a3c6a16805f359d3083",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
