@@ -1728,9 +1728,9 @@ pub(crate) fn worktree_last_activity(
     };
 
     // Leg 1: last commit time (epoch seconds) via `git log -1 --format=%ct`.
-    if let Ok(output) = std::process::Command::new("git")
-        .arg("-C")
-        .arg(worktree)
+    // Through the host git builder: a seat clone is refused, and only the
+    // mtime leg below answers for it (BUG-2169). trace:TASK-2053 | ai:claude
+    if let Ok(output) = aida_core::git_ops::host_git_command(worktree)
         .args(["log", "-1", "--format=%ct"])
         .output()
     {
