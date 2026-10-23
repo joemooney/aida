@@ -1,5 +1,6 @@
 id: 01a16883-f849-7d80-92a0-66a61c402502
 spec_id: TASK-1-437
+agreed_id: TASK-1707
 title: 'non-blocking (minor): no test pins TASK-2170''s whitespace-only AIDA_STORE case …'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-2170, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -18,6 +19,12 @@ tags:
 - finding-hash:8ede2ff3
 - from-review:TASK-2170
 - kind:carried-forward
+history:
+- id: 01a16891-8a40-7b32-a9c9-1079a5f7e6d2
+  author: joe
+  timestamp: 2026-10-23T11:42:11.008605229Z
+  session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
+  changes: []
 filed_at:
   code_sha: 830f037b87a3f5da59c06b9b54f0929b0bf6555d
   branch: main
