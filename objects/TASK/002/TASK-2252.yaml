@@ -1,0 +1,28 @@
+id: 01a169fe-7fe4-77b3-8f1e-38d7d87b8b3f
+spec_id: TASK-2252
+agreed_id: TASK-2252
+title: 'Review watch: round-cap wake says ''head has no review'' when the head is approved but the corpus refuses'
+description: |
+  aida-cli-lib/src/review_watch_notice.rs send(): the round-cap gate is evidence.approval(change).is_err(). The live Evidence::approval is live_approval (review_watch_ready.rs:255), which composes the approval gate with the corpus gate (approval_then_corpus). So an approved head that the corpus refuses still gets the cap wake saying 'Its head has no review', which is false for that head. Gate the cap on the approval alone (approval_at), or word the message for the corpus-refused case. Add a test.
+
+  Raised in review of PR-2858: https://github.com/joemooney/aida/pull/2858#issuecomment-6371790818
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-23T18:20:48.996039578Z
+modified_at: 2026-10-23T18:20:48.996039578Z
+req_type: Task
+tags:
+- from-review:PR-2858
+- review-watch
+- severity:minor
+filed_at:
+  code_sha: c450d41cd9132e99aa40d8363c0a4f332a78a2c7
+  branch: pr-2858
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: a9e78d3491
+  vendor: claude
+  session: 01a169fb1290
+  harness_version: 2.1.309 (Claude Code)
