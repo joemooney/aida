@@ -1,14 +1,14 @@
 id: 01a1679b-090a-7951-91b6-e9ed0371c73e
 spec_id: STORY-1900
 agreed_id: STORY-1900
-title: 'Review PR-2847: TASK-2053 S5 doctor loose-objects check'
+title: 'Review PR-2847 and PR-2836: TASK-2053 S5 doctor check and S4b seat-clone visibility'
 description: 'Hand-filed review story: #2847 is Refs-only, so auto-queue-review filed none (BUG-2208, folded into TASK-1955). Covers TASK-2053.'
 status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T07:12:56.074590432Z
-modified_at: 2026-10-23T11:42:20.547550792Z
+modified_at: 2026-10-23T13:50:27.082142814Z
 req_type: Story
 relationships:
 - rel_type:
@@ -37,6 +37,11 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a16906-fe26-7350-bef4-267af4155b31
+  author: joe
+  timestamp: 2026-10-23T13:50:28.390689091Z
+  session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
+  changes: []
 filed_at:
   code_sha: 597ea98e77150b4819f186a5d652b9855d5ee3cb
   branch: main
