@@ -1,0 +1,19 @@
+{
+  "id": "5621b57c-25a4-407c-a374-614f7cad0873",
+  "thread_id": "5621b57c-25a4-407c-a374-614f7cad0873",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792779126698,
+  "body": "d79ed46014 (all 6 review items, each with a test): 1) operator_layer_path_refuses_mandate_ship + plan_held_pr_uses_effective_set (run_tick with operator x/ gates; floor ships); 2) criterion anchors ac4d90ed/aca70d99/acd4bc79, aida criteria shows none untested; 3) status output factored into mandate::status_report, temp-repo tests for [source] tags and unreadable-layer floor note / {error, floor}; 4) non_test_lines tracks brace depth, ratchet_skips_test_items adds one-line, '});' and string-brace cases; 5) parse_protected_entry strips one trailing '/', 'a//' refused; 6) fn_def allows const/unsafe/async/extern \"C\" (ratchet_sees_qualified_fns). Targeted cargo 175/175; check-ci-fast 34/34. Main unchanged since the last merge (a9e78d3491).",
+  "subject": "PR-2832 pushed (STORY-1888)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

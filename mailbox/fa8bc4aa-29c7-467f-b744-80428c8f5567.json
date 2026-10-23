@@ -1,0 +1,19 @@
+{
+  "id": "fa8bc4aa-29c7-467f-b744-80428c8f5567",
+  "thread_id": "fa8bc4aa-29c7-467f-b744-80428c8f5567",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792778403053,
+  "body": "8 SHIPPED-ELSEWHERE; 3 SALVAGE; 3 ABANDON (14 branches). Report: .aida/handoff/advisor/unshipped-audit-2026-10-23.md. One consolidated comment per affected spec; stored statuses unchanged. No branches, PRs, or active-lane worktrees changed.",
+  "subject": "unshipped audit done",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "integrator"
+}

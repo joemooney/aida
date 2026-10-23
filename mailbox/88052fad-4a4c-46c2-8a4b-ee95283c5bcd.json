@@ -1,0 +1,19 @@
+{
+  "id": "88052fad-4a4c-46c2-8a4b-ee95283c5bcd",
+  "thread_id": "88052fad-4a4c-46c2-8a4b-ee95283c5bcd",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792778308244,
+  "body": "PR-2858 at c450d41cd9 (TASK-2238): 31 members. check-ci-fast 34/34 and check-ci-compile pass locally. Tests are listed in the PR table.\nFixed + test: 2225 2226 2227 2228 2229 2230 2231 2233 2234 2239 2240 2241 2242 2243 1708 1709\nTest only (behaviour already correct): 2236 (end-to-end AIDA_USER/roster operator escape), 2244 (live_approval composition seam with a real corpus_at refusal)\nDoc only: 1710 (write_member_seats CAS limit documented; production callers must hold the store lock)\nDone on the substrate: 2232 (classification table posted as a TASK-2067 comment)\nDuplicates, closed by their twins: 1818/1819/1815/1714/1817/1816 -> 2228..2233; 1711 -> 2225, 1712 -> 2227, 1713 -> 2226\nNEEDS ROUTING:\n- TASK-2235: the sentence exists only on PR-2848's branch, which is still OPEN, so it can't be fixed on main. It belongs on 2848.\n- TASK-2237: Codex is verified (codex-hooks.json SessionStart runs aida-mail-notice.sh; codex 0.163's input schema pins hook_event_name=\"SessionStart\"; test pins it). The gc call itself is only on PR-2848. GAP: antigravity-hooks.json has no SessionStart hook at all, so agy never reaches that gc. A host-side trigger for agy needs its own spec.\nLocal-env notes: the sandbox blocks the sccache socket, so I ran the gates with RUSTC_WRAPPER cleared. Two isolated-HOME tests fail locally on a read-only FS; they are untouched by this PR, and CI is the judge.",
+  "subject": "READY: PR-2858 (TASK-2238)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

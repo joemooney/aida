@@ -1,0 +1,19 @@
+{
+  "id": "b1f58e00-0b82-46c0-a57d-8a8df5040651",
+  "thread_id": "b1f58e00-0b82-46c0-a57d-8a8df5040651",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792778560436,
+  "body": "PR-2850 head 52e2858589. main is merged in (no force).\n- (1) Blocker: the required checks now come from [review_watch] required_checks, read through review_watch_ready::required_checks (made pub(crate) and re-exported from review_watch). CI_AGGREGATOR_CHECK stays gated, and the dev_autopromote code no longer references it.\n- (2) The test the_configured_required_checks_gate_the_promote drives the config-based reader: with the configured aggregator absent the result is MissingRequired, and GitLab may require none. The new test a_github_repo_with_no_configured_required_checks_skips_as_ci_unknown covers an unset, an empty and a malformed list.\n- (3) docs/cli/11-dev.md and the guide's dev-build paragraph now name [review_watch] required_checks (today 'Build (ubuntu-latest)').\nGates: cargo check -p aida-cli-lib is clean, the targeted tests pass (39), and make check-ci-fast is green (34 gates).",
+  "subject": "PR-2850 pushed (STORY-1689)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

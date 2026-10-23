@@ -1,0 +1,19 @@
+{
+  "id": "6d438a57-5f3c-43d6-8498-7e0fd41a5339",
+  "thread_id": "6d438a57-5f3c-43d6-8498-7e0fd41a5339",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792776383607,
+  "body": "4f25dc727b, round 1 (all 8): 1 help snapshot regenerated (review_lens). 2 TASK-2131 pure-git reads base..slice branch, empty range refused, plus a test. 3 TASK-2132 walk bounded at the fork point, oldest run taken; tests for n=1 and a repeated run. 4 review_lens cell and Review header in the human --fields table, plus a test. 5 option A ruling in the PR body. 6 with_hold_lock Drop guard, plus a catch_unwind test. 7 clear_hold doc moved back. 8 Test 4e sleep 0.01. Light gate: targeted 177 passed, check-ci-fast 34/34.",
+  "subject": "PR-2845 pushed (TASK-1951)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

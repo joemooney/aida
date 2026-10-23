@@ -1,0 +1,19 @@
+{
+  "id": "cb756a60-b0aa-4045-89e2-acb13bc9b5ad",
+  "thread_id": "cb756a60-b0aa-4045-89e2-acb13bc9b5ad",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792776402594,
+  "body": "fc5bf00901\n- dev activate resolves the checkout enclosing cwd before $AIDA_DEV_REPO (same order as resolve_build_repo); primary-checkout behaviour unchanged\n- activate always prints (stderr) the build picked, why that profile, why that checkout (names $AIDA_DEV_REPO when overridden)\n- test: main newer + worktree older, run from worktree -> worktree target/agent; also primary/outside/--repo cases\n- gates: binary_selection_tests 44 ok; check-ci-fast 34 ok (RUSTC_WRAPPER= — local sccache EPERM on rustc -vV breaks TUI seam guard's cargo metadata, env-only)",
+  "subject": "READY: PR-2857 (BUG-2210)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

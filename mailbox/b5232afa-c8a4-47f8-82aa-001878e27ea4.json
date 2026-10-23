@@ -1,0 +1,19 @@
+{
+  "id": "b5232afa-c8a4-47f8-82aa-001878e27ea4",
+  "thread_id": "b5232afa-c8a4-47f8-82aa-001878e27ea4",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792777305568,
+  "body": "0dbfac2ac4: merged origin/main (thru a9e78d3491). The only conflict was in the generated docs/cli-format-json-audit.md: kept the PR's mandate-status protected_paths row and dropped the duplicate fleet rows (main moved them). No conflicts in the protected-paths floor or ratchet baseline. Targeted story_1888/1706/1662 tests passed 81/81; check-ci-fast passed 34/34.",
+  "subject": "PR-2832 pushed (STORY-1888)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

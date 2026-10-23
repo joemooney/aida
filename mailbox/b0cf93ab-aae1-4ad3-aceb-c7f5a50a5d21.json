@@ -1,0 +1,19 @@
+{
+  "id": "b0cf93ab-aae1-4ad3-aceb-c7f5a50a5d21",
+  "thread_id": "b0cf93ab-aae1-4ad3-aceb-c7f5a50a5d21",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792777276615,
+  "body": "e3caa54d09 (main merged aa3cd52443; session.rs conflict resolved keeping the CI-fix grant key and wrapping set_lease_grant_key_at in main's with_lease_write_lock).\n1 TASK-1798: all drain-lock removals revoke the recorded child grant first; burndown SIGTERM handler revokes+releases+exits 143; 3 tests.\n2 TASK-1926: ac49e4ec/ac778555 anchors added; criteria untested: none.\n3 TASK-2111: forged-main clone test now expect_err 'not a seat clone the host recorded'.\n4 Merge order: #2837 still OPEN. Re-merge of main after #2837 lands is pending; this session will not be watching, so it needs a follow-up fixer (one 'git merge origin/main' + push).\nGates: targeted cargo test (16 pass), make check-ci-fast 34/34.",
+  "subject": "PR-2838 pushed (TASK-1952)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}
