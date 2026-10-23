@@ -3,12 +3,12 @@ spec_id: STORY-1900
 agreed_id: STORY-1900
 title: 'Review PR-2847: TASK-2053 S5 doctor loose-objects check'
 description: 'Hand-filed review story: #2847 is Refs-only, so auto-queue-review filed none (BUG-2208, folded into TASK-1955). Covers TASK-2053.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T07:12:56.074590432Z
-modified_at: 2026-10-23T07:13:23.576903873Z
+modified_at: 2026-10-23T11:42:20.547550792Z
 req_type: Story
 relationships:
 - rel_type:
@@ -16,12 +16,27 @@ relationships:
   target_id: 01a15de1-12c4-7930-aae4-997df5a459ef
   created_at: 2026-10-23T07:13:23.576898854Z
   created_by: joe
+comments:
+- id: 01a16891-af83-7050-afd4-19792927d498
+  author: aida-auto-bump
+  content: 'Auto-completed: PR #2847 is merged on the forge (its merge commit was outside the local scan window).'
+  created_at: 2026-10-23T11:42:20.547692292Z
+  modified_at: 2026-10-23T11:42:20.547692292Z
+  session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
 history:
 - id: 01a1679b-7bcc-7373-8eba-668369048b4a
   author: joe
   timestamp: 2026-10-23T07:13:25.452081088Z
   session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
   changes: []
+- id: 01a16891-af83-7050-afd4-198c2bd402eb
+  author: aida-auto-bump
+  timestamp: 2026-10-23T11:42:20.547699641Z
+  session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
 filed_at:
   code_sha: 597ea98e77150b4819f186a5d652b9855d5ee3cb
   branch: main
@@ -30,3 +45,6 @@ filed_at:
   aida_build_sha: 64c2153d82
   vendor: claude
   session: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-23T11:42:20.547690966Z
