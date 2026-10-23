@@ -12,7 +12,6 @@
 2 aida-cli-lib/src/regen/score/report/cache.rs
 2 aida-cli-lib/src/remote_create.rs
 1 aida-cli-lib/src/tests/bug_1929_contained_store_tests.rs
-5 aida-cli-lib/src/tests/bug_1982_main_git_metadata_tests.rs
 3 aida-cli-lib/src/tests/bug_1993_show_deadline_tests.rs
 1 aida-cli-lib/src/tests/bug_2181_host_remote_credentials_tests.rs
 1 aida-cli-lib/src/tests/real_phase_driver_wiring_tests.rs

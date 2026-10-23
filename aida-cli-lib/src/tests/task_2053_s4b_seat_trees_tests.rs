@@ -126,7 +126,7 @@ fn task_2053_bwrap_status_and_unshipped_report_a_seat_clones_work() {
     let fx = fixture();
     let clone = leased_clone(&fx, "unshipped", "c0ffee000054");
     let git = |args: &[&str]| {
-        let out = std::process::Command::new("git")
+        let out = crate::test_git::git_command()
             .arg("-C")
             .arg(&clone)
             .args([
@@ -199,7 +199,7 @@ fn task_2053_bwrap_a_merged_heads_commits_count_as_shipped() {
     let commit = |file: &str| {
         std::fs::write(clone.join(file), "work\n").unwrap();
         for args in [vec!["add", file], vec!["commit", "--no-verify", "-m", file]] {
-            let out = std::process::Command::new("git")
+            let out = crate::test_git::git_command()
                 .arg("-C")
                 .arg(&clone)
                 .args([
@@ -257,7 +257,7 @@ fn task_2053_bwrap_phase_two_accepts_a_pushed_clone_and_never_pushes_it() {
     // Base-only clones carry no new work; a committed change must be pushed.
     std::fs::write(clone.join("phase2.txt"), "work\n").unwrap();
     let git = |args: &[&str]| {
-        let out = std::process::Command::new("git")
+        let out = crate::test_git::git_command()
             .arg("-C")
             .arg(&clone)
             .args(args)

@@ -22,7 +22,12 @@ use std::path::{Path, PathBuf};
 
 /// Run `program` in `dir`; panics on failure, returns stdout + stderr.
 fn run(dir: &Path, program: &str, args: &[&str]) -> String {
-    let out = std::process::Command::new(program)
+    let mut command = if program == "git" {
+        crate::test_git::git_command()
+    } else {
+        std::process::Command::new(program)
+    };
+    let out = command
         .args(args)
         .current_dir(dir)
         .output()
