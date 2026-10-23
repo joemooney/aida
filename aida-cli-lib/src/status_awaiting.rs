@@ -1054,10 +1054,12 @@ pub(crate) fn collect_awaiting_report_inner(
 /// time line with no session key. Fail-open throughout.
 pub(crate) fn emit_notice_time_line() {
     // trace:BUG-1239 | ai:codex
-    let (session_id, is_session_start) = std::env::var("AIDA_HOOK_PAYLOAD")
-        .ok()
-        .map(|payload| presence::parse_hook_payload(&payload))
-        .unwrap_or((None, false));
+    // trace:TASK-2253 | ai:claude — an agy relay names the event in env.
+    let event = std::env::var("AIDA_HOOK_EVENT").ok();
+    let (session_id, is_session_start) = presence::parse_hook_payload_with_event(
+        &std::env::var("AIDA_HOOK_PAYLOAD").unwrap_or_default(),
+        event.as_deref(),
+    );
     if is_session_start {
         // BUG-2167: the row records the hook's own worktree, not the main
         // checkout. trace:TASK-1955 | ai:claude (BUG-2167)
