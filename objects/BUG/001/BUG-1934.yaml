@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T00:51:06.094986066Z
-modified_at: 2026-10-23T11:17:30.978023388Z
+modified_at: 2026-10-23T16:08:44.391461816Z
 req_type: Bug
 tags:
 - batch:2026-10-11
@@ -326,6 +326,12 @@ comments:
   content: 'ADVISOR 00:50: #2830 PASS at dfc7a78a2c. All in-scope minors are folded into BUG-1934 for a round 3 (no deferrals), because the merge waits on the operator''s C4 probe anyway: (1) TASK-2195: issue_child joins a new session keyring per launch; on EDQUOT the error is discarded and a proc-only child grant is minted, a silent fail-close. Reuse or revoke keyrings per launcher, and surface EDQUOT as a refusal or warning, never discard it; add a test. (2) the doctor_scan action text in seat_authority.rs still steers to --bind-pid; fix it to match round 2. (3) bug_1934_bwrap_presenter.rs''s silent SKIP: make the skip visible on CI (assert bwrap presence on the linux CI lane or emit a counted skip) so the real-namespace evidence is not a silent pass. The xtrace residual stays a documented residual (already ruled). After round 3 the operator runs the C4 probe at the FINAL head.'
   created_at: 2026-10-23T07:49:02.556075328Z
   modified_at: 2026-10-23T07:49:02.556075328Z
+  session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
+- id: 01a16985-9467-7b80-9ffd-06564664d78d
+  author: joe
+  content: 'ADVISOR 09:10: C4 operator probe PASSED at 08d07ea961 (sandboxed, NSpid 3, via key, harness_pid null; evidence is in the #2830 body). The operator cleared the hold, but ship refused: the PR now CONFLICTS with main. Ruling: a merge-main conflict resolution does NOT need a new C4 probe IF the independent re-review confirms the BUG-1934 delta is unchanged (range-diff over the BUG-1934 files is empty). Any change to grant_keyring/seat_authority beyond conflict resolution requires a fresh probe. After the re-review PASSes, a human merges (mandate_drive.rs is touched): aida pr ship 2830 (and merge-hold clear again if a new hold was placed).'
+  created_at: 2026-10-23T16:08:44.391461816Z
+  modified_at: 2026-10-23T16:08:44.391461816Z
   session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
 history:
 - id: 01a12b8d-6820-7292-ac96-3f451518bfcd
