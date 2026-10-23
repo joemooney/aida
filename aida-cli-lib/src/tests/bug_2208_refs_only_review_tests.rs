@@ -111,10 +111,8 @@ fn a_spec_superseded_into_another_candidate_is_dropped() {
 
 /// A fake `gh` whose `pr view --json title,commits` answer is `tsv`.
 fn fake_gh(dir: &std::path::Path, tsv: &str) -> std::path::PathBuf {
-    use std::os::unix::fs::PermissionsExt;
     let path = dir.join("gh");
-    std::fs::write(&path, format!("#!/bin/sh\nprintf '%s\\n' '{tsv}'\n")).unwrap();
-    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+    crate::test_exec::write_executable(&path, format!("#!/bin/sh\nprintf '%s\\n' '{tsv}'\n"));
     path
 }
 
