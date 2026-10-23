@@ -388,8 +388,10 @@ fn audit_gate(
 /// `scripts/task-1800-replay-fixture.py`) holds a synthetic base and head per
 /// audited case with exactly the real diff, so the production collector must
 /// reproduce each recorded scoped digest, fallback set and changed-path list,
-/// every audited blob, and the zero-loss gate. It runs under every rename
-/// configuration (advisor C1): the collector's diff must not depend on it.
+/// every audited blob, and the zero-loss gate. Advisor C1: under
+/// `diff.renames` false and copies, the collector's one git diff call
+/// ([`diff_tree_args`]) must return the same bytes, so its evidence cannot
+/// depend on the rename config (the collector itself runs once: it is slow).
 // trace:TASK-2067 | ai:claude
 #[test]
 fn task_1800_audited_cases_replay_from_the_vendored_bundle() {
@@ -397,74 +399,87 @@ fn task_1800_audited_cases_replay_from_the_vendored_bundle() {
     let frozen = load(repo, "docs/testing/task-1800-trace-exclusions.json");
     let audit = load(repo, "docs/testing/task-1800-semantic-audit.json");
     let bundle = repo.join("tests/fixtures/task-1800-replay/audited-cases.bundle");
-    for renames in [None, Some("false"), Some("copies")] {
-        let dir = tempfile::tempdir().unwrap();
-        let run = |args: &[&str]| {
-            let out = crate::test_git::git_command()
-                .current_dir(dir.path())
-                .env("GIT_CONFIG_NOSYSTEM", "1")
-                .env("GIT_CONFIG_GLOBAL", "/dev/null")
-                .args(args)
-                .output()
-                .unwrap();
-            assert!(out.status.success(), "git {args:?}: {out:?}");
-        };
-        run(&["init", "-q", "--bare"]);
-        if let Some(renames) = renames {
-            run(&["config", "diff.renames", renames]);
-        }
-        run(&[
-            "fetch",
-            "-q",
-            bundle.to_str().unwrap(),
-            "refs/task-1800/*:refs/task-1800/*",
-        ]);
-        let commit = |row: &Value, side: &str| {
-            let name = format!("refs/task-1800/{}/{side}^{{commit}}", row["pr"]);
-            let sha = git(dir.path(), &["rev-parse", "--verify", &name]).unwrap();
-            String::from_utf8(sha).unwrap().trim().to_owned()
-        };
-        let (mut drift, mut lost) = (Vec::new(), Vec::new());
-        let mut scoped = BTreeMap::new();
-        for row in audit["rows"].as_array().unwrap() {
-            let pr = row["pr"].as_u64().unwrap();
-            let record = frozen["rows"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .find(|r| r["pr"] == pr)
-                .unwrap_or_else(|| panic!("PR {pr} is not a frozen case"));
-            let items = collect(
-                dir.path(),
-                &commit(row, "base"),
-                &commit(row, "head"),
-                Scope::ChangedItems,
-            )
+    let dir = tempfile::tempdir().unwrap();
+    let run = |args: &[&str]| {
+        let out = crate::test_git::git_command()
+            .current_dir(dir.path())
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .args(args)
+            .output()
             .unwrap();
-            if digest(&items.ids) != record["scoped"]["ids_sha256"].as_str().unwrap() {
-                drift.push(format!(
-                    "PR {pr}: scoped set differs from the recorded digest"
-                ));
-            }
-            if items.full_file_fallbacks != strings(&record["scoped"]["fallbacks"]) {
-                drift.push(format!(
-                    "PR {pr}: scoped fallback paths differ from the record"
-                ));
-            }
-            let audited: BTreeSet<String> = row["changed_paths"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .map(|p| p["path"].as_str().unwrap().to_owned())
-                .collect();
-            if items.paths != audited {
-                drift.push(format!("PR {pr}: changed paths differ from the audit"));
-            }
-            scoped.insert(pr, items.ids);
-        }
-        audit_gate(dir.path(), &audit, &scoped, commit, &mut drift, &mut lost);
-        assert_eq!(scoped.len(), 18, "the audit covers 18 cases");
-        assert!(drift.is_empty(), "diff.renames={renames:?}: {drift:#?}");
-        assert!(lost.is_empty(), "diff.renames={renames:?}: {lost:#?}");
+        assert!(out.status.success(), "git {args:?}: {out:?}");
+    };
+    run(&["init", "-q", "--bare"]);
+    run(&[
+        "fetch",
+        "-q",
+        bundle.to_str().unwrap(),
+        "refs/task-1800/*:refs/task-1800/*",
+    ]);
+    let commit = |row: &Value, side: &str| {
+        let name = format!("refs/task-1800/{}/{side}^{{commit}}", row["pr"]);
+        let sha = git(dir.path(), &["rev-parse", "--verify", &name]).unwrap();
+        String::from_utf8(sha).unwrap().trim().to_owned()
+    };
+    let rows = audit["rows"].as_array().unwrap();
+    let listings = || -> Vec<Vec<u8>> {
+        rows.iter()
+            .map(|row| {
+                let (base, head) = (commit(row, "base"), commit(row, "head"));
+                git(dir.path(), &diff_tree_args(&base, &head)).unwrap()
+            })
+            .collect()
+    };
+    let unset = listings();
+    for renames in ["false", "copies"] {
+        run(&["config", "diff.renames", renames]);
+        assert!(
+            listings() == unset,
+            "diff.renames={renames} changes the diff"
+        );
     }
+    run(&["config", "--unset", "diff.renames"]);
+    let (mut drift, mut lost) = (Vec::new(), Vec::new());
+    let mut scoped = BTreeMap::new();
+    for row in rows {
+        let pr = row["pr"].as_u64().unwrap();
+        let record = frozen["rows"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|r| r["pr"] == pr)
+            .unwrap_or_else(|| panic!("PR {pr} is not a frozen case"));
+        let items = collect(
+            dir.path(),
+            &commit(row, "base"),
+            &commit(row, "head"),
+            Scope::ChangedItems,
+        )
+        .unwrap();
+        if digest(&items.ids) != record["scoped"]["ids_sha256"].as_str().unwrap() {
+            drift.push(format!(
+                "PR {pr}: scoped set differs from the recorded digest"
+            ));
+        }
+        if items.full_file_fallbacks != strings(&record["scoped"]["fallbacks"]) {
+            drift.push(format!(
+                "PR {pr}: scoped fallback paths differ from the record"
+            ));
+        }
+        let audited: BTreeSet<String> = row["changed_paths"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|p| p["path"].as_str().unwrap().to_owned())
+            .collect();
+        if items.paths != audited {
+            drift.push(format!("PR {pr}: changed paths differ from the audit"));
+        }
+        scoped.insert(pr, items.ids);
+    }
+    audit_gate(dir.path(), &audit, &scoped, commit, &mut drift, &mut lost);
+    assert_eq!(scoped.len(), 18, "the audit covers 18 cases");
+    assert!(drift.is_empty(), "{drift:#?}");
+    assert!(lost.is_empty(), "{lost:#?}");
 }

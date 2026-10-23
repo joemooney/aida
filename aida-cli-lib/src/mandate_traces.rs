@@ -338,23 +338,7 @@ pub(crate) fn collect(repo: &Path, base: &str, head: &str, scope: Scope) -> Resu
         let ty = git(repo, &["cat-file", "-t", commit])?;
         ensure!(ty == b"commit\n", "mandate trace endpoint is not a commit");
     }
-    let raw = git(
-        repo,
-        &[
-            "diff-tree",
-            "--raw",
-            "-z",
-            "-r",
-            "--no-abbrev",
-            "--no-renames",
-            "--no-ext-diff",
-            "--no-textconv",
-            "--ignore-submodules=none",
-            base,
-            head,
-            "--",
-        ],
-    )?;
+    let raw = git(repo, &diff_tree_args(base, head))?;
     let mut fields = raw.split(|b| *b == 0);
     let mut out = Evidence::default();
     while let Some(header) = fields.next() {
@@ -426,6 +410,27 @@ pub(crate) fn collect(repo: &Path, base: &str, head: &str, scope: Scope) -> Resu
         }
     }
     Ok(out)
+}
+
+/// The one `diff-tree` call [`collect`] reads its changed paths and blobs
+/// from. Renames are off explicitly, so no rename config changes it.
+// trace:TASK-1790 | ai:codex
+// trace:TASK-2067 | ai:claude
+fn diff_tree_args<'a>(base: &'a str, head: &'a str) -> [&'a str; 12] {
+    [
+        "diff-tree",
+        "--raw",
+        "-z",
+        "-r",
+        "--no-abbrev",
+        "--no-renames",
+        "--no-ext-diff",
+        "--no-textconv",
+        "--ignore-submodules=none",
+        base,
+        head,
+        "--",
+    ]
 }
 
 fn trace_ids(text: &str) -> BTreeSet<String> {
