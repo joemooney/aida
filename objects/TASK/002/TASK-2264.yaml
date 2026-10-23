@@ -1,0 +1,28 @@
+id: 01a16a39-b2b3-7231-adb8-004e58781615
+spec_id: TASK-2264
+agreed_id: TASK-2264
+title: disk-headroom light check runs a full reclaim dry run (gh + offline scan + cache walk) when below the floor
+description: |
+  escalate_stuck_floor (doctor_cmd.rs, STORY-1916) calls disk_emergency::reclaimable_on, which runs worktree_reclaim::survey_from_env. That means a `gh pr list` network call, up to a 60s offline git merge scan when gh is unreachable, and a walk of every cache tree. It runs on every manual `aida doctor check disk-headroom` while below the floor, on a path BUG-1675 keeps light. In a scheduled run it repeats the cache walk that run_emergency has just done. Consider running the dry run only in the scheduled run, or reusing the emergency survey.
+
+  Raised in review of PR-2859: https://github.com/joemooney/aida/pull/2859#issuecomment-6372979895
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-23T19:25:28.627275274Z
+modified_at: 2026-10-23T19:25:28.627275274Z
+req_type: Task
+tags:
+- from-review:PR-2859
+- perf
+- severity:minor
+filed_at:
+  code_sha: 1cbe0b4d24e7b25abf9cdc14e22164d09c25cc80
+  branch: pr-2859
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c51da86593
+  vendor: claude
+  session: 01a16a2b368f
+  harness_version: 2.1.309 (Claude Code)
