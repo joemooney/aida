@@ -7,12 +7,12 @@ description: |-
 
   minor (non-blocking): the TASK-2252 fix (Evidence::approval_only, live_approval_only, the CarriedOver test, review_watch_notice doc) was committed inside merge commit ea7c9dc706 ('Merge remote-tracking branch origin/main'), not in a trailered commit. git show --cc ea7c9dc706 shows the change. A squash merge makes the result identical, but per-commit review and spec linkage cannot see it. Put code changes in their own [AI:tool] ... (SPEC-ID) commit, not in a merge resolution.
   Reviewed sha: e5e9db3f6b3188113eaea3e8f47c4447fff4591b
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-23T23:30:36.167139988Z
-modified_at: 2026-10-23T23:30:36.167139988Z
+modified_at: 2026-10-23T23:38:22.800020267Z
 req_type: Task
 tags:
 - carried-from:TASK-2238
@@ -24,6 +24,14 @@ history:
   author: joe
   timestamp: 2026-10-23T23:36:32.217592635Z
   changes: []
+- id: 01a16b21-3cd0-72a2-9c4c-ab54d163b7eb
+  author: joe
+  timestamp: 2026-10-23T23:38:22.800011458Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: a62f57fbac4874cf7d668cc6c9e3841787a8a838
   branch: main
