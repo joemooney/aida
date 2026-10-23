@@ -57,7 +57,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T16:03:34.769123409Z
-modified_at: 2026-10-23T07:12:05.129520419Z
+modified_at: 2026-10-23T07:12:09.262717609Z
 req_type: Task
 tags:
 - launch
@@ -668,6 +668,12 @@ comments:
   created_at: 2026-10-22T22:01:02.176629901Z
   modified_at: 2026-10-22T22:01:02.176629901Z
   session_id: 37c635ef-7a29-44ab-b2b4-0e1dc247e5ce
+- id: 01a1679a-522e-7e60-a881-c540a976f0ef
+  author: joe
+  content: 'ADVISOR 00:15: folded TASK-2188 (PR-2840 cosmetic: the RosterRefusal doc comment at seat_authority.rs:225-227 must name the unusable-AIDA_STORE note). Take it in slice 8.'
+  created_at: 2026-10-23T07:12:09.262717609Z
+  modified_at: 2026-10-23T07:12:09.262717609Z
+  session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
 history:
 - id: 01a154e7-9a9e-7f53-9dba-5dc0d8e33566
   author: joe
