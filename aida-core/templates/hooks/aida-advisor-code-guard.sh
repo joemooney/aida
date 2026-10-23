@@ -16,6 +16,9 @@
 #
 # Suppressed (exit 0, silent) when ANY of:
 #   - the session role is not advisor
+#   - the session is a lane whose worktree lease names another seat
+#     (`aida internal lane-env`): a `claude --bg` lane runs with the daemon's
+#     environment, often the advisor's, which hooks see uncorrected
 #   - AIDA_AUTO_COMPLETE is set (orchestrator / drain implementer child)
 #   - solo mode is active within its TTL, as resolved by `aida internal solo-active` —
 #     operator-sanctioned coding here
@@ -175,6 +178,21 @@ if __aida_guard_target_outside_repo "$FILE_PATH"; then
     exit 0
 fi
 
+# trace:STORY-1662 | ai:claude
+# ── A lane's seat comes from its worktree lease, not the inherited env ──
+# The SessionStart correction reaches Bash commands through $CLAUDE_ENV_FILE,
+# never hooks, so the guard asks for the lane's role itself. Only a lane-env
+# answer naming a seat other than advisor clears it; anything else (no
+# binary, an error, no lane) leaves the guard in force.
+__aida_guard_bin=$(command -v aida 2>/dev/null || true)
+if [ -n "$__aida_guard_bin" ] \
+    && __aida_lane=$("$__aida_guard_bin" internal lane-env --cwd "$PWD" 2>/dev/null); then
+    case "$__aida_lane" in
+        *"export AIDA_SESSION_ROLE='advisor'"*) ;;
+        *"export AIDA_SESSION_ROLE='"*) exit 0 ;;
+    esac
+fi
+
 # ── Per-session fire-once marker, keyed by the Claude session id ──
 SESSION_ID=$(printf '%s' "$INPUT" | __aida_json_field session_id)
 SESSION_ID=${SESSION_ID:-nosession}
@@ -187,7 +205,6 @@ fi
 # Ask the same TTL-aware resolver used by the commit-boundary gate. Resolve
 # only on a code edit that would otherwise fire; missing/stale binaries fail
 # safe by treating solo as off.
-__aida_guard_bin=$(command -v aida 2>/dev/null || true)
 if [ -n "$__aida_guard_bin" ] && "$__aida_guard_bin" internal solo-active --help >/dev/null 2>&1; then
     if "$__aida_guard_bin" internal solo-active >/dev/null 2>&1; then
         exit 0
