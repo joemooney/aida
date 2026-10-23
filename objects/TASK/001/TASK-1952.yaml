@@ -42,12 +42,12 @@ description: |-
   3) A checked-out submodule whose `.git` was removed is skipped (the documented TOCTOU choice), and the toplevel status never lists files inside a gitlink path. Edits left inside such a directory are therefore invisible to the destructive gates. This is only reachable by a session tampering with its own submodule, but it is worth a line in OVERVIEW.
 
   Raised in review of PR-2753: https://github.com/joemooney/aida/pull/2753
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T15:57:44.849505155Z
-modified_at: 2026-10-23T07:00:05.841374571Z
+modified_at: 2026-10-23T07:00:12.195881045Z
 req_type: Task
 tags:
 - contained
@@ -683,6 +683,14 @@ history:
   timestamp: 2026-10-23T07:00:07.249079294Z
   session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
   changes: []
+- id: 01a1678f-6123-7342-a51c-071970c67dd5
+  author: aida-pr-open
+  timestamp: 2026-10-23T07:00:12.195880344Z
+  session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 processing_record:
 - id: 01a15cd6-7d71-7962-8b84-e2ae16b3e1d0
   timestamp: 2026-10-21T05:02:03.121912504Z
