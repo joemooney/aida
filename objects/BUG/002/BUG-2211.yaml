@@ -1,0 +1,20 @@
+id: 01a169c7-0777-79a1-ada3-89eeef94de78
+spec_id: BUG-2211
+agreed_id: BUG-2211
+title: A sandboxed git command in the primary checkout leaves a stale read-only .git/config.lock that blocks every worktree add and branch -D
+description: 'Seen twice on 2026-10-23 (09:06:59 and 09:44:23). The advisor seat ran under Claude Code''s Bash sandbox (bubblewrap), where .git/config is write-denied. A git fetch from that shell created .git/config.lock (empty, mode r--r--r--) and could not complete or remove it. Every later git worktree add -b and branch -D failed with ''could not lock config file .git/config: File exists'' until a human removed it. That blocked takeover fixers, new lanes and reviewer cleanup. Fix direction: (1) aida doctor detects a config.lock that is empty and older than N minutes, with no git process holding it, and offers or does a safe removal; launch paths (aida agent new, queue work, worktree add) run the same check first. (2) The guardrails hook warns or refuses git writes (fetch, config, branch, worktree) from a sandboxed shell in the primary checkout. The stopgap in the advisor helper scripts removes a lock older than 2 min.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-23T17:20:13.687947949Z
+modified_at: 2026-10-23T17:20:13.687947949Z
+req_type: Bug
+filed_at:
+  code_sha: a9e78d34914e43b30fc9d2b590d83ab96feb48b2
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c6bb0dc4f1
+  vendor: claude
+  session: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
