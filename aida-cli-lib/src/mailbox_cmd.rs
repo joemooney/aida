@@ -881,6 +881,21 @@ pub(crate) struct PhantomGcReport {
 // trace:TASK-1766 | ai:claude
 // trace:TASK-1955 | ai:claude (TASK-1918)
 pub(crate) fn archive_phantom_inboxes(store_root: &std::path::Path) -> Result<PhantomGcReport> {
+    archive_phantom_inboxes_for(store_root, &crate::inbox_identities())
+}
+
+/// [`archive_phantom_inboxes`] judged against `readers`, this machine's inbox
+/// identities. Re-addressing a case variant has a defined precedence: a
+/// spelling a local reader reads under, or the roster's own spelling, is never
+/// moved, and any other variant moves to a local reader's spelling before the
+/// roster's first-registered one. So team.toml `Joe` with `USER=joe` keeps
+/// `joe` mail readable here, and mail to `Joe` stays where every machine
+/// agrees it belongs.
+// trace:TASK-1955 | ai:claude (TASK-2122)
+pub(crate) fn archive_phantom_inboxes_for(
+    store_root: &std::path::Path,
+    readers: &[String],
+) -> Result<PhantomGcReport> {
     use aida_core::mailbox::{merge_dedup, Message, Recipient};
     use anyhow::Context as _;
 
@@ -899,7 +914,14 @@ pub(crate) fn archive_phantom_inboxes(store_root: &std::path::Path) -> Result<Ph
             continue;
         };
         let trimmed = r.trim();
-        let known_spelling = known.get(&trimmed.to_lowercase()).cloned();
+        let roster_spelling = known.get(&trimmed.to_lowercase()).cloned();
+        let known_spelling = roster_spelling.clone().map(|k| {
+            readers
+                .iter()
+                .find(|r| r.eq_ignore_ascii_case(&k))
+                .cloned()
+                .unwrap_or(k)
+        });
         // The roster wins over the SHA shape. trace:TASK-1955 | ai:claude (TASK-1918)
         let junk = trimmed.is_empty()
             || aida_core::mailbox::recipient_id_rejection(trimmed).is_some()
@@ -910,7 +932,12 @@ pub(crate) fn archive_phantom_inboxes(store_root: &std::path::Path) -> Result<Ph
         // Mail stored to a known id in another spelling (`ADVISOR`, as MCP
         // send_message wrote before TASK-1928) reaches no inbox: `addressed_to`
         // is exact. trace:TASK-1955 | ai:claude (TASK-2085)
-        let misspelled = known_spelling.as_deref().is_some_and(|k| k != trimmed);
+        // Mail already under the roster spelling is never moved: another
+        // machine's reader spelling would only move it back.
+        // trace:TASK-1955 | ai:claude (TASK-2122)
+        let misspelled = known_spelling.as_deref().is_some_and(|k| k != trimmed)
+            && roster_spelling.as_deref() != Some(trimmed)
+            && !readers.iter().any(|r| r == trimmed);
         if !(padded || misspelled || junk || unknown_mention) {
             continue;
         }
@@ -2068,7 +2095,7 @@ mod tests {
 
         // A padded real recipient is re-addressed to the trimmed, stored id;
         // every other shape is archived.
-        let report = archive_phantom_inboxes(&store).unwrap();
+        let report = archive_phantom_inboxes_for(&store, &[]).unwrap();
         assert_eq!(report.archived, phantoms.len() - 2);
         assert_eq!(report.readdressed, 2);
         assert_eq!(report.lines.len(), phantoms.len(), "{:?}", report.lines);
@@ -2093,7 +2120,7 @@ mod tests {
         );
 
         // Idempotent: a second pass finds nothing left to touch.
-        let again = archive_phantom_inboxes(&store).unwrap();
+        let again = archive_phantom_inboxes_for(&store, &[]).unwrap();
         assert_eq!((again.archived, again.readdressed), (0, 0));
     }
 
@@ -2133,7 +2160,7 @@ mod tests {
             mailbox_store::write_message(project.path(), &m).unwrap();
         }
 
-        let report = archive_phantom_inboxes(&store).unwrap();
+        let report = archive_phantom_inboxes_for(&store, &[]).unwrap();
         assert_eq!(
             (report.archived, report.readdressed),
             (2, 1),
@@ -2168,7 +2195,7 @@ mod tests {
         m.body = "direct hi".into();
         mailbox_store::write_message(project.path(), &m).unwrap();
 
-        let report = archive_phantom_inboxes(&store).unwrap();
+        let report = archive_phantom_inboxes_for(&store, &[]).unwrap();
         assert_eq!(
             (report.archived, report.readdressed),
             (0, 1),
@@ -2184,8 +2211,57 @@ mod tests {
             1
         );
         // Idempotent: the stored-spelling copy is left alone.
-        let again = archive_phantom_inboxes(&store).unwrap();
+        let again = archive_phantom_inboxes_for(&store, &[]).unwrap();
         assert_eq!((again.archived, again.readdressed), (0, 0));
+    }
+
+    /// TASK-2122: a case variant a local reader reads under stays put, and
+    /// another variant moves to that reader's spelling, not the roster's, and
+    /// mail under the roster spelling itself is never moved.
+    // trace:TASK-1955 | ai:claude (TASK-2122)
+    #[test]
+    fn archive_phantom_inboxes_never_moves_mail_away_from_a_local_reader_spelling() {
+        let (project, store) = store_with_person_joe();
+        for (id, to) in [("lower", "joe"), ("upper", "JOE"), ("roster", "Joe")] {
+            let mut m = message(id, &format!("thread-{id}"));
+            m.to = aida_core::mailbox::Recipient::Agent(to.into());
+            m.body = "direct hi".into();
+            mailbox_store::write_message(project.path(), &m).unwrap();
+        }
+        let report = archive_phantom_inboxes_for(&store, &["joe".to_string()]).unwrap();
+        assert_eq!(
+            (report.archived, report.readdressed),
+            (0, 1),
+            "{:?}",
+            report.lines
+        );
+        assert!(
+            report.lines.iter().any(|l| l.contains("'JOE' -> 'joe'")),
+            "{:?}",
+            report.lines
+        );
+        assert!(
+            !report.lines.iter().any(|l| l.contains("roster")),
+            "mail under the roster spelling `Joe` is never moved: {:?}",
+            report.lines
+        );
+        let merged = aida_core::mailbox::merge_dedup(
+            &mailbox_store::read_local_messages(project.path()).unwrap(),
+            &mailbox_store::read_canonical_messages(&store).unwrap(),
+        );
+        assert_eq!(
+            aida_core::mailbox::unread_inbox("joe", &merged, None).len(),
+            2,
+            "the local reader `joe` reads its own mail and the re-addressed `JOE` copy"
+        );
+        assert_eq!(
+            aida_core::mailbox::unread_inbox("Joe", &merged, None)
+                .iter()
+                .map(|m| m.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["roster"],
+            "the roster-spelled mail stays under `Joe`, unarchived"
+        );
     }
 
     // F1: a human's existing mention mail is never archived as a phantom.
@@ -2201,7 +2277,7 @@ mod tests {
         // Never archived as a phantom; since TASK-2085 the lower-case copy is
         // re-addressed to the roster spelling `Joe`, whose inbox reads it.
         // trace:TASK-1955 | ai:claude (TASK-2085)
-        let report = archive_phantom_inboxes(&store).unwrap();
+        let report = archive_phantom_inboxes_for(&store, &[]).unwrap();
         assert_eq!((report.archived, report.readdressed), (0, 1));
         let merged = aida_core::mailbox::merge_dedup(
             &mailbox_store::read_local_messages(project.path()).unwrap(),
