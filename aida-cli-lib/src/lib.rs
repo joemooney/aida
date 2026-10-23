@@ -192,6 +192,7 @@ mod lane_liveness;
 // trace:TASK-2053 | ai:claude
 mod loose_objects;
 mod rel_cards;
+mod relay_launch; // trace:STORY-1706 | ai:claude
 mod relay_stall;
 mod remote_cmd;
 mod requirements_cli;
