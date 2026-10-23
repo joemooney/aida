@@ -109,7 +109,8 @@ pub enum RemoteCommand {
         /// Install the main guard and chain it in front of the pre-push hook.
         #[clap(long, conflicts_with = "remote")]
         install_guard: bool,
-        /// With --install-guard: chain in front of a custom pre-push hook too.
+        /// With --install-guard: chain in front of a custom pre-push hook too
+        /// (shell hooks only; a Python or Node hook is refused).
         #[clap(long, requires = "install_guard")]
         force: bool,
     },

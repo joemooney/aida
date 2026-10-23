@@ -82,7 +82,8 @@ pub(crate) fn collect_pr(
 /// with a historical exclusion read. Ref tips bind the existing --all history
 /// reader, including sticky versions not reachable from the store's HEAD.
 ///
-/// BUG-2195: the snapshot is the store HEAD plus every ref's tip, compared by
+/// BUG-2195: the snapshot is the store HEAD plus every ref's tip (and, for
+/// TASK-2144, every worktree's HEAD, which `--all` also walks), compared by
 /// [`store_snapshot_stable`] rather than byte for byte, so an unrelated ref move
 /// in the shared code repository no longer discards a collection attempt. A
 /// dirty store is a [`StoreDirty`] error, which the caller may retry
@@ -122,6 +123,26 @@ pub(crate) fn store_snapshot(store: &Path) -> Result<StoreSnapshot> {
         let (tip, name) = line.split_once(' ').context("invalid store ref listing")?;
         ensure!(oid(tip), "invalid store ref tip for {name}");
         refs.insert(name.to_owned(), tip.to_owned());
+    }
+    // TASK-2144: `git log --all` also walks every worktree's HEAD, including a
+    // detached one no ref names, so each is part of the snapshot. An unborn
+    // HEAD (all zeros) holds no history.
+    // trace:TASK-2067 | ai:claude
+    let worktrees = snapshot_git(store, &["worktree", "list", "--porcelain", "-z"], None)?;
+    let mut path = None;
+    for field in String::from_utf8(worktrees)
+        .context("non-text store worktree listing")?
+        .split('\0')
+    {
+        if let Some(p) = field.strip_prefix("worktree ") {
+            path = Some(p.to_owned());
+        } else if let Some(tip) = field.strip_prefix("HEAD ") {
+            let path = path.as_deref().context("invalid store worktree listing")?;
+            ensure!(oid(tip), "invalid HEAD for store worktree {path}");
+            if !tip.bytes().all(|b| b == b'0') {
+                refs.insert(format!("HEAD of worktree {path}"), tip.to_owned());
+            }
+        }
     }
     Ok(StoreSnapshot { head, refs })
 }
@@ -253,12 +274,19 @@ fn snapshot_status(store: &Path, args: &[&str]) -> Option<bool> {
 // trace:TASK-2067 | ai:antigravity
 fn snapshot_command(store: &Path) -> std::process::Command {
     let mut cmd = aida_core::git_ops::host_git_command(store);
-    cmd.args(["-c", "core.quotePath=false"])
-        .env("GIT_NO_REPLACE_OBJECTS", "1")
-        .env("GIT_CONFIG_NOSYSTEM", "1")
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped());
+    // TASK-2145: the user's global excludes must not hide an untracked object
+    // from the dirty check. trace:TASK-2067 | ai:claude
+    cmd.args([
+        "-c",
+        "core.quotePath=false",
+        "-c",
+        "core.excludesFile=/dev/null",
+    ])
+    .env("GIT_NO_REPLACE_OBJECTS", "1")
+    .env("GIT_CONFIG_NOSYSTEM", "1")
+    .stdin(std::process::Stdio::null())
+    .stdout(std::process::Stdio::piped())
+    .stderr(std::process::Stdio::piped());
     cmd
 }
 
@@ -311,23 +339,7 @@ pub(crate) fn collect(repo: &Path, base: &str, head: &str, scope: Scope) -> Resu
         let ty = git(repo, &["cat-file", "-t", commit])?;
         ensure!(ty == b"commit\n", "mandate trace endpoint is not a commit");
     }
-    let raw = git(
-        repo,
-        &[
-            "diff-tree",
-            "--raw",
-            "-z",
-            "-r",
-            "--no-abbrev",
-            "--no-renames",
-            "--no-ext-diff",
-            "--no-textconv",
-            "--ignore-submodules=none",
-            base,
-            head,
-            "--",
-        ],
-    )?;
+    let raw = git(repo, &diff_tree_args(base, head))?;
     let mut fields = raw.split(|b| *b == 0);
     let mut out = Evidence::default();
     while let Some(header) = fields.next() {
@@ -399,6 +411,27 @@ pub(crate) fn collect(repo: &Path, base: &str, head: &str, scope: Scope) -> Resu
         }
     }
     Ok(out)
+}
+
+/// The one `diff-tree` call [`collect`] reads its changed paths and blobs
+/// from. Renames are off explicitly, so no rename config changes it.
+// trace:TASK-1790 | ai:codex
+// trace:TASK-2067 | ai:claude
+fn diff_tree_args<'a>(base: &'a str, head: &'a str) -> [&'a str; 12] {
+    [
+        "diff-tree",
+        "--raw",
+        "-z",
+        "-r",
+        "--no-abbrev",
+        "--no-renames",
+        "--no-ext-diff",
+        "--no-textconv",
+        "--ignore-submodules=none",
+        base,
+        head,
+        "--",
+    ]
 }
 
 fn trace_ids(text: &str) -> BTreeSet<String> {
