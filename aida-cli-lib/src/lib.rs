@@ -187,6 +187,8 @@ mod queue_cmd;
 mod queue_misc;
 // trace:STORY-1688 | ai:antigravity
 mod lane_liveness;
+// trace:TASK-2053 | ai:claude
+mod loose_objects;
 mod rel_cards;
 mod relay_stall;
 mod remote_cmd;

@@ -224,6 +224,14 @@ pub fn is_store_attached(project_root: &Path) -> bool {
 /// resolution.
 // trace:BUG-331 | ai:claude
 fn main_worktree_store(current: &Path, rel_store: &str) -> Option<PathBuf> {
+    main_worktree_candidate(current, rel_store).filter(|store| store.exists() && store.is_dir())
+}
+
+/// Where [`main_worktree_store`] looks for `rel_store`, whether or not it
+/// exists there: `rel_store` under the main worktree of the repo holding
+/// `current`, or `None` outside a git repo.
+// trace:BUG-331, TASK-2169 | ai:claude
+fn main_worktree_candidate(current: &Path, rel_store: &str) -> Option<PathBuf> {
     // trace:TASK-1952 | trace:BUG-1992 | ai:claude
     // raw-git-ok(BUG-1929): a read-only rev-parse in the code checkout; the
     // hardened builder's own store lookup reaches here, so routing it recurses.
@@ -248,13 +256,7 @@ fn main_worktree_store(current: &Path, rel_store: &str) -> Option<PathBuf> {
         current.join(common_dir)
     };
     let common_dir = common_dir.canonicalize().ok()?;
-    let main_worktree = common_dir.parent()?;
-    let store = main_worktree.join(rel_store);
-    if store.exists() && store.is_dir() {
-        Some(store)
-    } else {
-        None
-    }
+    Some(common_dir.parent()?.join(rel_store))
 }
 
 /// Walk up from `start` and return the store path declared by the nearest
@@ -295,13 +297,33 @@ pub enum StoreMiss {
     NoConfig,
     /// The walk reached a system temp directory before any config.
     TempRoot { root: PathBuf },
-    /// The nearest config naming a store lists `stores`; none exists.
+    /// The nearest config naming a store lists `stores`; none is a
+    /// directory, and neither is any `main_worktree` store the walk tried in
+    /// its stead (empty outside a linked worktree).
+    // trace:TASK-2169 | ai:claude
     StoreMissing {
         config: PathBuf,
-        stores: Vec<PathBuf>,
+        stores: Vec<MissedStore>,
+        main_worktree: Vec<MissedStore>,
     },
     /// The nearest config names no `store_path` at all.
     NoStorePath { config: PathBuf },
+}
+
+/// A store path a [`StoreMiss::StoreMissing`] walk tried. `exists` tells a
+/// path that exists but is not a directory from one that does not exist.
+// trace:TASK-2169 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MissedStore {
+    pub path: PathBuf,
+    pub exists: bool,
+}
+
+impl MissedStore {
+    fn at(path: PathBuf) -> Self {
+        let exists = path.exists();
+        Self { path, exists }
+    }
 }
 
 /// [`detect_distributed_store_from`], but on a miss says why. One walk serves
@@ -355,9 +377,25 @@ fn locate_distributed_store_from_with_roots(
                 bare.get_or_insert(StoreMiss::NoStorePath {
                     config: config_path,
                 });
-            } else {
-                named.get_or_insert(StoreMiss::StoreMissing {
-                    stores: candidates.iter().map(|val| current.join(val)).collect(),
+            } else if named.is_none() {
+                // trace:TASK-2169 | ai:claude — name every path tried, and a
+                // main-worktree store only where it is not the one named.
+                let here = current
+                    .canonicalize()
+                    .unwrap_or_else(|_| current.to_path_buf());
+                named = Some(StoreMiss::StoreMissing {
+                    stores: candidates
+                        .iter()
+                        .map(|val| MissedStore::at(current.join(val)))
+                        .collect(),
+                    main_worktree: candidates
+                        .iter()
+                        .filter_map(|val| {
+                            main_worktree_candidate(current, val)
+                                .filter(|main| *main != here.join(val))
+                        })
+                        .map(MissedStore::at)
+                        .collect(),
                     config: config_path,
                 });
             }
@@ -939,7 +977,8 @@ mod tests {
             locate_distributed_store_from_with_roots(&inner, &[]),
             Err(StoreMiss::StoreMissing {
                 config: outer.join(".aida/config.toml"),
-                stores: vec![outer.join("one"), outer.join("two")],
+                stores: vec![missed(outer.join("one")), missed(outer.join("two"))],
+                main_worktree: vec![],
             })
         );
 
@@ -948,6 +987,66 @@ mod tests {
         assert_eq!(
             locate_distributed_store_from_with_roots(&inner, &[]),
             Ok(outer.join("two"))
+        );
+    }
+
+    fn missed(path: PathBuf) -> MissedStore {
+        MissedStore {
+            path,
+            exists: false,
+        }
+    }
+
+    /// A miss in a linked worktree names the main-worktree store the walk
+    /// also tried, and tells a store path that exists as a file apart from
+    /// one that does not exist.
+    // trace:TASK-2169 | ai:claude
+    #[test]
+    fn task_2169_miss_names_the_main_worktree_candidate_and_a_non_directory() {
+        let tmp = TempDir::new().unwrap();
+        let main_root = tmp.path().join("main");
+        std::fs::create_dir_all(main_root.join(".aida")).unwrap();
+        git(&main_root, &["init", "-q", "-b", "main"]);
+        git(&main_root, &["config", "user.email", "t@t.t"]);
+        git(&main_root, &["config", "user.name", "t"]);
+        std::fs::write(
+            main_root.join(".aida/config.toml"),
+            "store_path = \".aida-store\"\n",
+        )
+        .unwrap();
+        git(&main_root, &["add", "."]);
+        git(&main_root, &["commit", "-q", "-m", "init"]);
+        let linked = tmp.path().join("linked");
+        git(
+            &main_root,
+            &["worktree", "add", "--detach", linked.to_str().unwrap()],
+        );
+        // The linked worktree's store path is a file; the main one is absent.
+        std::fs::write(linked.join(".aida-store"), "").unwrap();
+
+        assert_eq!(
+            locate_distributed_store_from_with_roots(&linked, &[]),
+            Err(StoreMiss::StoreMissing {
+                config: linked.join(".aida/config.toml"),
+                stores: vec![MissedStore {
+                    path: linked.join(".aida-store"),
+                    exists: true,
+                }],
+                main_worktree: vec![missed(
+                    main_root.canonicalize().unwrap().join(".aida-store")
+                )],
+            })
+        );
+
+        // From the main worktree itself the candidate is the store path
+        // already named, so it is not repeated.
+        assert_eq!(
+            locate_distributed_store_from_with_roots(&main_root, &[]),
+            Err(StoreMiss::StoreMissing {
+                config: main_root.join(".aida/config.toml"),
+                stores: vec![missed(main_root.join(".aida-store"))],
+                main_worktree: vec![],
+            })
         );
     }
 
