@@ -42,12 +42,12 @@ description: |-
   3) A checked-out submodule whose `.git` was removed is skipped (the documented TOCTOU choice), and the toplevel status never lists files inside a gitlink path. Edits left inside such a directory are therefore invisible to the destructive gates. This is only reachable by a session tampering with its own submodule, but it is worth a line in OVERVIEW.
 
   Raised in review of PR-2753: https://github.com/joemooney/aida/pull/2753
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T15:57:44.849505155Z
-modified_at: 2026-10-23T07:00:12.195881045Z
+modified_at: 2026-10-23T07:03:30.450240527Z
 req_type: Task
 tags:
 - contained
@@ -691,6 +691,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a16792-6792-7753-a484-ecf26236a93c
+  author: aida-orchestrator
+  timestamp: 2026-10-23T07:03:30.450261420Z
+  session_id: 01a1678e405b
+  harness_version: 2.1.309 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 processing_record:
 - id: 01a15cd6-7d71-7962-8b84-e2ae16b3e1d0
   timestamp: 2026-10-21T05:02:03.121912504Z
@@ -713,7 +722,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'Round 2: store-commit, store-hooks and store-pair items pass (CI green at cb7c3b72); the reworked NO_SLOT guard now lets common executable forms through that the old guard blocked. AC: TASK-2009 verified by task_2009_a_host_staged_path_the_child_deleted_does_not_abort_the_commit; TASK-2126 verified by code (rev-parse --verify HEAD^{commit}, other errors propagate), unborn/error branches untested; TASK-1759 verified by bug_1929_only_owner_may_write_matrix + task_1759_user_private_group_rule + host-dependent 0775 test; BUG-2117(i) verified by bug_2117_store_toplevel_skips_commit_config_and_trailer; BUG-2117(ii) verified by the same test; TASK-1643/TASK-2123 prose cases verified by tests/test_git_guardrails_parse.sh (all pass), executable compound payloads FAIL (finding 1); TASK-2125/TASK-2127 not-applicable-because deferred to the next slice in the PR body; other sweep members not-applicable-because covered by other slices.'
+  detail: 'S5 items TASK-1924, BUG-1992(1,4), TASK-1976/1977, 2125, 2127, 2139, 2140, 2146-2149, 2113 pass. TASK-2001 is PARTIAL: the remote-credentials ratchet does not flag dropped routing at several sites the spec names. Minor guard gaps are also listed. CI is green at the reviewed head.'
   recovery_hint: address the review findings, move TASK-1952 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-10-22T03:29:48.627409804Z
+  shelved_at: 2026-10-23T07:03:30.450240527Z
