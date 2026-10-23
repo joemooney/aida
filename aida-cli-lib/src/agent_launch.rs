@@ -5853,6 +5853,8 @@ mod task_1806_launch_mandate_tests {
             agent_type: "claude".into(),
             pid: 4_000_123,
             pid_start: None,
+            // trace:STORY-1843 | ai:codex
+            pid_namespace: None,
             name: Some("fix-task-1784".into()),
             description: None,
             tty: None,

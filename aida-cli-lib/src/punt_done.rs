@@ -389,36 +389,51 @@ pub(crate) fn resolve_comment_mentions(
 ) -> (Vec<String>, Vec<String>) {
     // trace:TASK-1766 | ai:claude — people (team roster, user handles, aliases)
     // are known too, and delivery uses the identity's stored spelling.
+    // Resolve known raw tokens before shape filtering, preserving SHA-shaped
+    // live names while still dropping unknown code-like tokens.
+    // trace:STORY-1843 trace:TASK-1955 | ai:codex
+    let candidates = extract_raw_mention_tokens(text);
+    if candidates.is_empty() {
+        return (Vec::new(), Vec::new());
+    }
     let known = crate::known_mailbox_recipients(store_root);
+    let project_root = store_root.parent().unwrap_or(store_root);
+    let directory =
+        match crate::mailbox_resolver::RecipientDirectory::load(project_root, store_root) {
+            Ok(directory) => directory,
+            Err(error) => {
+                return (
+                    Vec::new(),
+                    vec![format!("mention delivery refused: {error}")],
+                )
+            }
+        };
     let author_trimmed = comment_author.trim();
     let mut deliverable = Vec::new();
-    let mut warnings = Vec::new();
-    // The roster is consulted before the shape filters, so a registered agent
-    // named like a SHA (`@cafe1234`) is still a mention.
-    // trace:TASK-1955 | ai:claude (TASK-1918)
-    for handle in extract_raw_mention_tokens(text) {
+    let mut warnings = directory.warnings().to_vec();
+    for handle in candidates {
         let trimmed = handle.trim();
-        if trimmed.eq_ignore_ascii_case(author_trimmed) {
+        if trimmed.eq_ignore_ascii_case(author_trimmed)
+            || (!known.contains_key(&trimmed.to_lowercase()) && !is_mention_candidate(trimmed))
+        {
             continue;
         }
-        let known_spelling = known.get(&trimmed.to_lowercase());
-        if known_spelling.is_none() && !is_mention_candidate(trimmed) {
-            continue;
-        }
-        if let Some(canonical) = known_spelling {
-            if !deliverable.contains(canonical) {
-                deliverable.push(canonical.clone());
+        match directory.resolve_mention(trimmed) {
+            Ok(resolved) => {
+                if let Some(note) = resolved.reader_notice {
+                    warnings.push(note);
+                }
+                if !deliverable.contains(&resolved.address) {
+                    deliverable.push(resolved.address);
+                }
             }
-        } else if !trimmed.chars().any(|c| c.is_lowercase()) {
-            warnings.push(format!(
-                "@{} is an all-uppercase handle matching no known person, role or registered agent — mention dropped",
-                trimmed
-            ));
-        } else {
-            warnings.push(format!(
-                "@{} matches no known person, role or registered agent — mention dropped",
-                trimmed
-            ));
+            Err(error) => {
+                // Presentation only: a comment mention is not an explicit send.
+                // trace:STORY-1843 | ai:codex
+                let message = error.to_string();
+                let detail = message.strip_prefix("send refused: ").unwrap_or(&message);
+                warnings.push(format!("@{trimmed}: {detail}; mention dropped"));
+            }
         }
     }
     (deliverable, warnings)
