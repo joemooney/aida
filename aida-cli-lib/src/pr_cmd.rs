@@ -5258,8 +5258,8 @@ fn fetch_merged_pr_refs(
             ship_branch != base && crate::git_arg_guard::is_shell_safe_branch_name(ship_branch),
             "a pure-git project has no merged change record; re-run `aida pr ship --rebase` from the slice branch"
         );
-        let head = std::process::Command::new("git")
-            .current_dir(project_root)
+        // trace:TASK-1951 | ai:claude
+        let head = aida_core::git_ops::host_git_command(project_root)
             .args(["rev-parse", "--verify", "--quiet", ship_branch])
             .output()
             .ok()

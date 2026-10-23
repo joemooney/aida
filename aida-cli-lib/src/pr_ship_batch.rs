@@ -466,6 +466,10 @@ fn wait_for_review(
     let started = ports.elapsed_secs();
     let mut last_line: Option<u64> = None;
     let mut enqueued = false;
+    // TASK-2194: a CI read error while waiting is said when it starts or
+    // changes, and the timeout names it, so a stalled wait says why.
+    // trace:TASK-1951 trace:TASK-2194 | ai:claude
+    let mut ci_error: Option<String> = None;
     loop {
         let note = match ports.review_at_head(pr, view) {
             ReviewAtHead::Approved(who) => return Ok(who),
@@ -481,10 +485,14 @@ fn wait_for_review(
         let now = ports.elapsed_secs();
         let waited = now.saturating_sub(started);
         if waited >= timeout_secs {
-            return Err(Wait::Stop(format!(
+            let mut why = format!(
                 "no independent approval of PR #{pr} at {head} within {}m; the batch stops here (re-run once it is reviewed)",
                 timeout_secs / 60
-            )));
+            );
+            if let Some(err) = &ci_error {
+                why.push_str(&format!("; the last CI read failed: {err}"));
+            }
+            return Err(Wait::Stop(why));
         }
         if last_line.is_none_or(|t| now.saturating_sub(t) >= AWAITING_LINE_SECS) {
             let mut line = format!(
@@ -504,7 +512,13 @@ fn wait_for_review(
                     "PR #{pr}'s CI went red at {head}: {why}"
                 )))
             }
-            _ => {}
+            Ok(_) => ci_error = None,
+            Err(why) => {
+                if ci_error.as_deref() != Some(why.as_str()) {
+                    ports.say(&format!("  {why}; retrying while the review is awaited"));
+                }
+                ci_error = Some(why);
+            }
         }
         ports.sleep(POLL_SECS);
     }
@@ -980,6 +994,8 @@ mod tests {
         forge_calls: u32,
         updates: Vec<(u64, String)>,
         ci_heads: Vec<(u64, String)>,
+        ci_held: Vec<(u64, bool)>,
+        ci_unreadable_after: Option<usize>,
         enqueued: Vec<(u64, String)>,
         cleared: Vec<u64>,
         shipped: Vec<(u64, ShipOverrides)>,
@@ -1051,9 +1067,16 @@ mod tests {
             self.updates.push((pr, expected_head.to_string()));
             Ok(())
         }
-        fn ci_at_head(&mut self, pr: u64, head: &str, _held: bool) -> Result<CiAtHead> {
+        fn ci_at_head(&mut self, pr: u64, head: &str, held: bool) -> Result<CiAtHead> {
             self.forge_calls += 1;
+            if self
+                .ci_unreadable_after
+                .is_some_and(|n| self.ci_heads.len() >= n)
+            {
+                anyhow::bail!("rollup unavailable");
+            }
             self.ci_heads.push((pr, head.to_string()));
+            self.ci_held.push((pr, held));
             Ok(self
                 .ci
                 .get_mut(head)
@@ -1669,6 +1692,58 @@ mod tests {
             f.ci_heads.is_empty(),
             "CI is not read without the hold state"
         );
+        assert!(f.shipped.is_empty());
+    }
+
+    // TASK-2193: the dry-run plan judges CI with the PR's hold state, so a
+    // held PR's red merge-hold-gate is not shown as red CI.
+    // trace:TASK-1951 trace:TASK-2193 | ai:claude
+    #[test]
+    fn task_2193_dry_run_passes_the_hold_state_to_ci() {
+        let dry = BatchOptions {
+            dry_run: true,
+            ..OPTS
+        };
+        let mut f = ready(Fake::human(), 9, "999999999999a");
+        f.holds.insert(9, "supervised".to_string());
+        let out = run_batch(&mut f, &[9], dry).unwrap();
+        assert!(
+            matches!(&out[0].1, PrOutcome::Planned(p) if p.contains("merge-hold: supervised")),
+            "{out:?}"
+        );
+        assert_eq!(f.ci_held, vec![(9, true)]);
+
+        let mut f = ready(Fake::human(), 9, "999999999999a");
+        run_batch(&mut f, &[9], dry).unwrap();
+        assert_eq!(f.ci_held, vec![(9, false)]);
+    }
+
+    // TASK-2194: a CI read error while the review is awaited is said once,
+    // not retried silently, and the timeout names it.
+    // trace:TASK-1951 trace:TASK-2194 | ai:claude
+    #[test]
+    fn task_2194_review_wait_surfaces_ci_read_errors() {
+        let head = "999999999999a";
+        let mut f = Fake::human()
+            .views(9, vec![open(head)])
+            .ci(head, vec![CiAtHead::Passing])
+            .answers(&["go", "9"]);
+        f.ci_unreadable_after = Some(1);
+        let out = run_batch(&mut f, &[9], OPTS).unwrap();
+        assert!(
+            matches!(&out[0].1, PrOutcome::Stopped(why)
+                if why.contains("no independent approval")
+                    && why.contains("the last CI read failed")
+                    && why.contains("rollup unavailable")),
+            "{out:?}"
+        );
+        let said: Vec<_> = f
+            .said
+            .iter()
+            .filter(|l| l.contains("rollup unavailable"))
+            .collect();
+        assert_eq!(said.len(), 1, "the same error is said once: {:?}", f.said);
+        assert!(said[0].contains("retrying"), "{said:?}");
         assert!(f.shipped.is_empty());
     }
 }
