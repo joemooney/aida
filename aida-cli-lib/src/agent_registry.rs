@@ -88,6 +88,11 @@ pub(crate) struct AgentRegistryEntry {
     // trace:TASK-1750 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) pid_start: Option<String>,
+    // Namespace in which the stored numeric PID was observed. Mail routing
+    // treats a different or unobservable namespace as unknown, never dead.
+    // trace:STORY-1843 | ai:codex
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) pid_namespace: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -520,6 +525,7 @@ pub(crate) fn touch_mcp_agent(
             agent_type: agent_type.clone(),
             pid,
             pid_start: crate::process_probe::process_start_identity(pid),
+            pid_namespace: current_pid_namespace(),
             name: None,
             description: None,
             tty: current_tty(),
@@ -548,6 +554,7 @@ pub(crate) fn touch_mcp_agent(
         entry.agent_type = agent_type;
         if entry.pid != pid || entry.pid_start.is_none() {
             entry.pid_start = crate::process_probe::process_start_identity(pid);
+            entry.pid_namespace = current_pid_namespace();
         }
         entry.pid = pid;
     }
@@ -660,6 +667,7 @@ pub(crate) fn touch_session_start_agent(
             agent_type: agent_type.clone(),
             pid,
             pid_start: crate::process_probe::process_start_identity(pid),
+            pid_namespace: current_pid_namespace(),
             name: env_name.clone(),
             description: None,
             tty: process_tty(pid).or_else(current_tty),
@@ -687,6 +695,7 @@ pub(crate) fn touch_session_start_agent(
     entry.agent_type = agent_type;
     if entry.pid != pid || entry.pid_start.is_none() {
         entry.pid_start = crate::process_probe::process_start_identity(pid);
+        entry.pid_namespace = current_pid_namespace();
     }
     entry.pid = pid;
     entry.last_active_at = now;
@@ -788,6 +797,7 @@ pub(crate) fn register_spawned_agent(
         agent_type,
         pid,
         pid_start: crate::process_probe::process_start_identity(pid),
+        pid_namespace: current_pid_namespace(),
         name,
         description,
         tty: current_tty(),
@@ -834,6 +844,7 @@ pub(crate) fn register_role_enter_agent(
         agent_type,
         pid,
         pid_start: crate::process_probe::process_start_identity(pid),
+        pid_namespace: current_pid_namespace(),
         name: Some(format!("role:{role}")),
         description: Some("aida role enter shell".to_string()),
         tty,
@@ -1065,6 +1076,7 @@ pub(crate) fn register_existing_agent(
         agent_type,
         pid,
         pid_start: crate::process_probe::process_start_identity(pid),
+        pid_namespace: current_pid_namespace(),
         name,
         description,
         tty,
@@ -1834,6 +1846,14 @@ pub(crate) fn named_agent_liveness(project_root: &Path, name: &str) -> Option<bo
     seen.then_some(false)
 }
 
+// Namespace of the observer, not /proc/<target>/ns/pid: a host observer
+// records the host-visible PID even when the target itself is namespaced.
+// trace:STORY-1843 | ai:codex
+pub(crate) fn current_pid_namespace() -> Option<u64> {
+    use std::os::unix::fs::MetadataExt;
+    std::fs::metadata("/proc/self/ns/pid").ok().map(|m| m.ino())
+}
+
 /// The entry's process is still running: pid plus recorded start time, so a
 /// recycled pid reads dead.
 // trace:TASK-1750 | ai:claude
@@ -2582,6 +2602,7 @@ mod tests {
             agent_type: "codex".to_string(),
             pid,
             pid_start: None,
+            pid_namespace: current_pid_namespace(),
             name: None,
             description: None,
             tty: Some("/dev/pts/1".to_string()),
