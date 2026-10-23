@@ -348,10 +348,13 @@ wait → red → re-trigger. The floor:
    by the spec's testing tier. The full workspace suite runs only in CI;
    never run `cargo test --workspace` locally.
    - FASTTRACK (docs, one line; nothing compiled or embedded into a binary): `make check-ci-fast` only, no cargo.
-   - STANDARD: `make test-touched` (targeted `cargo test --profile agent
-     -p <crate> <filter>` for the touched modules) plus
-     `make check-ci-compile`.
-   - STRICT or heft >= 7: STANDARD plus the area's integration test
+   - LIGHT (the default): ONE targeted `cargo test --profile agent -p
+     <crate> <module filter>` run plus `make check-ci-fast`, then push;
+     CI's full shards are the gate. Run `make test-touched` /
+     `make check-ci-compile` only when the change touches shared test
+     infra (`test_env`, `test_git`, ratchet baselines) or more than 10
+     files. trace:TASK-2209 | ai:claude
+   - STRICT or heft >= 7: LIGHT plus the area's integration test
      binaries (`cargo test --profile agent -p <crate> --test <name>`).
    Use `--profile agent`: a fresh worktree's target is seeded from the
    main checkout's warm agent-profile build. trace:TASK-1780 | ai:claude
