@@ -1472,20 +1472,17 @@ fn parse_members_line_agrees_with_the_bash_gate_on_the_shared_fixture() {
 #[test]
 fn a_car_keeps_the_head_commits_spec_id_when_ship_derives_no_subject() {
     let commit = "feat: X (STORY-1)\n\nthe work";
-    let derived = crate::pr_ship::derive_squash_subject_with_trailer(
-        "feat: X",
+    let tmp = repo_with_specs(&["STORY-1"]);
+    // Ship's own derivation (TASK-2272: driven, not re-implemented): equal to
+    // the commit's subject, so it returns None and leaves it to the merge.
+    let (returned, _) = crate::pr_cmd::derive_pr_ship_squash_subject_from_message(
+        tmp.path(),
+        &ship_meta("feat: X"),
         "claude/story-1",
-        "",
         commit,
         false,
-        |_| true,
-        |_| None,
     )
-    .map(|(subject, _)| subject);
-    let head_subject = crate::pr_ship::derive_pr_title_from_commit(commit);
-    // derive_pr_ship_squash_subject_from's rule: equal to the commit's own
-    // subject, so it returns None and leaves the subject to the merge.
-    let returned = derived.filter(|s| *s != head_subject);
+    .unwrap();
     assert_eq!(returned, None, "the scenario must reach the fallback");
     let subject = member_squash_subject(returned, commit, "feat: X");
     assert_eq!(subject, "feat: X (STORY-1)");
@@ -1506,6 +1503,84 @@ fn a_car_keeps_the_head_commits_spec_id_when_ship_derives_no_subject() {
         "s (TASK-1)"
     );
     assert_eq!(member_squash_subject(None, "", "feat: X"), "feat: X");
+}
+
+/// `main` plus an `.aida-store` holding `ids`, so ship's derivation can
+/// recognise them.
+fn repo_with_specs(ids: &[&str]) -> tempfile::TempDir {
+    let tmp = repo();
+    let requirements = ids
+        .iter()
+        .map(|id| {
+            let mut req = aida_core::Requirement::new(id.to_string(), String::new());
+            req.spec_id = Some(id.to_string());
+            req.req_type = aida_core::RequirementType::Story;
+            req.status = aida_core::RequirementStatus::InProgress;
+            req
+        })
+        .collect();
+    let backend = aida_core::GitBackend::new(&tmp.path().join(".aida-store")).unwrap();
+    aida_core::DatabaseBackend::save(
+        &backend,
+        &aida_core::RequirementsStore {
+            requirements,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    tmp
+}
+
+fn ship_meta(title: &str) -> crate::pr_cmd::PrShipMetadata {
+    crate::pr_cmd::PrShipMetadata {
+        title: title.to_string(),
+        body: String::new(),
+    }
+}
+
+/// TASK-2272 (TASK-2271): the merge seat's checkout holds a stale local
+/// branch of the same name. The car subject comes from the gated head sha,
+/// so it carries that commit's `(STORY-1)`, never the stale `(STORY-2)`.
+// trace:TASK-2272 | ai:claude
+#[test]
+fn a_car_reads_its_subject_at_the_approved_head_not_a_stale_local_branch() {
+    let tmp = repo_with_specs(&["STORY-1", "STORY-2"]);
+    let r = tmp.path();
+    git(r, &["checkout", "--quiet", "-b", "feature-x", "main"]);
+    write(r, "f.txt", "old\n");
+    let stale = commit(r, "feat: old (STORY-2)");
+    write(r, "f.txt", "new\n");
+    let head = commit(r, "feat: X (STORY-1)");
+    git(r, &["checkout", "--quiet", "main"]);
+    git(r, &["branch", "--quiet", "-f", "feature-x", &stale]);
+
+    let subject = member_subject_at_head(r, r, &ship_meta("feat: X"), "feature-x", &head).unwrap();
+    assert!(subject.contains("(STORY-1)"), "{subject}");
+    assert!(!subject.contains("STORY-2"), "{subject}");
+
+    // An unreadable head fails closed instead of falling back to the branch.
+    let err = member_subject_at_head(r, r, &ship_meta("feat: X"), "feature-x", &"0".repeat(40))
+        .unwrap_err();
+    assert!(err.contains("could not be read"), "{err}");
+}
+
+/// TASK-2272 (TASK-1-468): the PRs named on the command line are the ones a
+/// terminal's consent covers; `--all-ready` names none.
+// trace:TASK-2272 | ai:claude
+#[test]
+fn only_prs_named_on_the_command_line_get_terminal_consent() {
+    let opts = |all_ready| TrainOptions {
+        prs: &[1],
+        all_ready,
+        dry_run: true,
+        local_ci: None,
+        max: 10,
+        no_pull: true,
+    };
+    assert!(prs_named_on_command_line(&opts(false)));
+    assert!(!prs_named_on_command_line(&opts(true)));
+    assert!(tty_consents(true, prs_named_on_command_line(&opts(false))));
+    assert!(!tty_consents(true, prs_named_on_command_line(&opts(true))));
 }
 
 #[test]

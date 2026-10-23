@@ -4977,6 +4977,20 @@ pub(crate) fn derive_pr_ship_squash_subject_from(
              to derive the squash subject"
         )
     })?;
+    derive_pr_ship_squash_subject_from_message(project_root, pr, branch, &commit_msg, no_complete)
+}
+
+/// [`derive_pr_ship_squash_subject_from`] given the head commit's message,
+/// so a caller that holds the exact gated head (the merge train) reads the
+/// subject at that commit, not at whatever a same-named local branch names.
+// trace:TASK-2272 | ai:claude
+pub(crate) fn derive_pr_ship_squash_subject_from_message(
+    project_root: &std::path::Path,
+    pr: &PrShipMetadata,
+    branch: &str,
+    commit_msg: &str,
+    no_complete: bool,
+) -> Result<(Option<String>, pr_ship::SquashTrailer)> {
     let current_subject = pr_ship::derive_pr_title_from_commit(&commit_msg);
     // A store read is required before granting an ID completion authority.
     // trace:TASK-1600 | ai:codex
@@ -4992,7 +5006,7 @@ pub(crate) fn derive_pr_ship_squash_subject_from(
         &pr.title,
         branch,
         &pr.body,
-        &commit_msg,
+        commit_msg,
         no_complete,
         |id| matches!(store.get_requirement_unambiguous(id), Ok(Some(_))),
         |id| pr_ship::spec_completion_hold_reason(&store, id),

@@ -250,8 +250,9 @@ pub enum PrCommand {
     /// main), a clear verdict corpus, no live drive owning it, and no spec
     /// tagged `review:draft-only`. A spec whose execution mode needs
     /// supervision merges only for a human at a terminal who named that PR,
-    /// or under an active mandate (always for one found by --all-ready). Drafts are refused with a reason, since CI does not run Build
-    /// on them. GitHub only for now.
+    /// or under an active mandate (always for one found by --all-ready).
+    /// Drafts are refused with a reason, since CI does not run Build on
+    /// them. GitHub only for now.
     ///
     /// The train is main plus one squash commit per PR, each written with
     /// the subject `aida pr ship` would use and checked to carry exactly the
