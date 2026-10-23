@@ -14703,9 +14703,10 @@ mod loose_objects_followup_tests {
             };
             let error =
                 handle_doctor_command(false, false, None, true, false, false, None, Some(&check))
-                    .unwrap_err()
-                    .to_string();
-            assert!(error.contains("fail-on-findings"), "{error}");
+                    .unwrap_err();
+            // JSON output owns the diagnostic; the dispatcher receives its
+            // typed nonzero-exit marker. trace:TASK-2197 | ai:codex
+            assert!(error.downcast_ref::<crate::TypedPayloadEmitted>().is_some());
         }
     }
 
