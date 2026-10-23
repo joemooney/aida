@@ -1,0 +1,43 @@
+id: 01a169c7-c3f5-78e0-8f21-153b3bf1c73b
+spec_id: FAQ-61
+agreed_id: FAQ-61
+title: How do I check that the disk-headroom guard is running, and when does it fire?
+description: |
+  **Run `aida schedule status` and read the `disk-headroom-guard` row: it shows the last run and the next due time (every 30 min). It fires only when free space drops below `[doctor.disk_headroom] min_free_gib` in `.aida/config.toml` (60 GiB in this repo).**
+
+  ## Why
+  The guard is a substrate job driven by the scheduler tick (cron or systemd), so no agent has to be running. A quiet guard means free space is above the floor, not that the guard is dead. When it fires, it routes a due item to the advisor seat (`disk-headroom-guard-route`). On its own it deletes nothing.
+
+  ## How
+  - Is it running: `aida schedule status | grep disk-headroom`
+  - Current reading: `aida doctor check disk-headroom` (`total: 0` means no findings: above the floor)
+  - The floor: `grep -A1 'doctor.disk_headroom' .aida/config.toml`
+  - Free space: `df -h /mnt/build`
+
+  ## Caveat
+  While free space stays below the floor and nothing can be reclaimed, the guard keeps firing every 30 min and frees nothing. STORY-1916 adds an automatic emergency tier (default 95% used), a stuck-escalation notice, and visible last-run and last-reclaim status.
+
+  ## See also
+  STORY-1916, BUG-1675, TASK-1298
+status: Completed
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-23T17:21:01.941802389Z
+modified_at: 2026-10-23T17:21:01.941802389Z
+req_type: Faq
+tags:
+- audience:dev
+- topic:build
+- topic:disk
+filed_at:
+  code_sha: a9e78d34914e43b30fc9d2b590d83ab96feb48b2
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c6bb0dc4f1
+  vendor: claude
+  session: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-23T17:21:01.941843988Z
