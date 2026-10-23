@@ -6,16 +6,25 @@ description: |
   PidNamespaceProbe::is_isolated (agent_registry.rs) treats any pid 1 whose comm is not in [systemd, init, tini, dumb-init, docker-init, catatonit] as an isolated sandbox. Hosts running runit, openrc-init, s6-svscan or busybox init fail that check. On them an ordinary host shell gets observer.isolated = true, so unstamped legacy registry rows go unobserved (gc skips them, agent ls shows them heartbeat-based) and agent ls prints "run outside the sandbox" when there is no sandbox. Consider dropping the comm heuristic or widening the list.
 
   Raised in review of PR-2860: https://github.com/joemooney/aida/pull/2860#issuecomment-6375776160
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T22:12:58.844476135Z
-modified_at: 2026-10-23T22:12:58.844476135Z
+modified_at: 2026-10-23T22:29:30.505247537Z
 req_type: Task
 tags:
 - from-review:PR-2860
 - severity:minor
+history:
+- id: 01a16ae2-2f09-7af3-b0b9-ef4686aa4a0b
+  author: joe
+  timestamp: 2026-10-23T22:29:30.505236826Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: f8a98e8a2435a3cd4f06b01138f57d7a6a87d65d
   branch: pr-2860
