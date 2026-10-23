@@ -1,0 +1,29 @@
+id: 01a167b9-0869-7152-ac40-a79206a8aa8e
+spec_id: TASK-2198
+agreed_id: TASK-2198
+title: 'Loose-objects doctor nits: misplaced BUG-1700 comment, single-quoted remediation path'
+description: |
+  1) doctor_cmd.rs:743-752: the BUG-1700 comment (it belongs to the agent-launch block) now sits directly above the new loose-objects block. Move it to the agent-launch check.
+  2) loose_objects.rs:43: the remediation wraps the root in single quotes, so a path that contains ' gives a broken command. Use shell-safe quoting.
+
+  Raised in review of PR-2847: https://github.com/joemooney/aida/pull/2847#issuecomment-6360081887
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-23T07:45:41.993800162Z
+modified_at: 2026-10-23T07:45:41.993800162Z
+req_type: Task
+tags:
+- doctor
+- from-review:PR-2847
+- severity:cosmetic
+filed_at:
+  code_sha: 8f554d49b46a377e8b4dc31b690e38e275f97925
+  branch: pr-2847
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 597ea98e77
+  vendor: claude
+  session: 01a167b1fceb
+  harness_version: 2.1.309 (Claude Code)

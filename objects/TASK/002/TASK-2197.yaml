@@ -1,0 +1,28 @@
+id: 01a167b8-b8bb-7db1-9f24-fd6a3bc27651
+spec_id: TASK-2197
+agreed_id: TASK-2197
+title: Store-free light path for 'aida doctor check loose-objects'
+description: |
+  'aida doctor check loose-objects' falls through to doctor_multi_agent (doctor_cmd.rs:148), which loads the whole store. BUG-1675 measured that at 44 s under load. disk-headroom, relay-stall and remote-drift each have a light path. Add one here before this check runs as a scheduled guard. Also add tests for the alias normalization (loose-object, git-objects and repack all map to loose-objects; doctor_root.rs:1613), and warn when [doctor.loose_objects] max is not an integer.
+
+  Raised in review of PR-2847: https://github.com/joemooney/aida/pull/2847#issuecomment-6360081887
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-23T07:45:21.595507724Z
+modified_at: 2026-10-23T07:45:21.595507724Z
+req_type: Task
+tags:
+- doctor
+- from-review:PR-2847
+- severity:minor
+filed_at:
+  code_sha: 8f554d49b46a377e8b4dc31b690e38e275f97925
+  branch: pr-2847
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 597ea98e77
+  vendor: claude
+  session: 01a167b1fceb
+  harness_version: 2.1.309 (Claude Code)
