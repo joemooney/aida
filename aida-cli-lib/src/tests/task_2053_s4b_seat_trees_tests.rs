@@ -281,20 +281,20 @@ fn task_2053_bwrap_phase_two_accepts_a_pushed_clone_and_never_pushes_it() {
     ]);
     // Setup is allowed to run git; only gate invocations are under inspection.
     std::fs::write(&log, "").unwrap();
-    assert!(gate("feat").unwrap_err().to_string().contains("unpushed"));
+    assert!(gate("feat").unwrap_err().reason.contains("unpushed"));
     assert!(untagged_in(&log, &clone).is_empty());
     git(&["push", "-u", "origin", "feat"]);
     std::fs::write(&log, "").unwrap();
     gate("feat").unwrap();
     assert!(gate("wrong")
         .unwrap_err()
-        .to_string()
+        .reason
         .contains("phase 2 is driving"));
     git(&["checkout", "--detach"]);
     std::fs::write(&log, "").unwrap();
-    assert!(gate("feat").unwrap_err().to_string().contains("DETACHED"));
+    assert!(gate("feat").unwrap_err().reason.contains("DETACHED"));
     std::fs::write(clone.join(".gitmodules"), "submodule evidence").unwrap();
-    assert!(gate("feat").unwrap_err().to_string().contains("submodules"));
+    assert!(gate("feat").unwrap_err().reason.contains("submodules"));
     std::fs::remove_file(clone.join(".gitmodules")).unwrap();
     std::fs::rename(clone.join(".git"), clone.join("old-git")).unwrap();
     std::fs::write(clone.join(".git"), "gitdir: old-git\n").unwrap();
