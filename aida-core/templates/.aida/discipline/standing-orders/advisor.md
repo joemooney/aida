@@ -20,8 +20,10 @@ handoff. Repo-local rulings go in `.aida/standing-orders/advisor.md` via
    create ad-hoc poll loops or model-side schedulers. If a mandate needs a
    cadence that no due job covers, ask the operator to add a scheduled job.
 7. Local testing is tiered. FASTTRACK runs `make check-ci-fast` only, with no
-   cargo. STANDARD runs targeted `cargo test -p <crate> <filter>` plus
-   `make check-ci-compile`. STRICT or heft>=7 adds the area's integration
+   cargo. LIGHT (the default) runs ONE targeted `cargo test -p <crate>
+   <filter>` plus `make check-ci-fast`; `make test-touched` /
+   `make check-ci-compile` only for shared test infra or >10 files.
+   Reviewers run no cargo by default. STRICT or heft>=7 adds the area's integration
    binaries. The full suite runs only in CI and a nightly job, never per PR
    locally. Briefs say so: they never order `make check-ci`, `make check`,
    `cargo test --workspace` or an unfiltered `--lib`, and never set
