@@ -8,7 +8,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T05:47:44.689506175Z
-modified_at: 2026-10-08T16:52:02.531307999Z
+modified_at: 2026-10-23T17:58:20.133487074Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -43,6 +43,18 @@ comments:
   created_at: 2026-10-08T16:52:02.531307999Z
   modified_at: 2026-10-08T16:52:02.531307999Z
   relayed_from: task1329-final-independent-review
+- id: 01a169e9-eae5-72d0-9aee-d80611e11c44
+  author: ai:codex:joe
+  content: |-
+    UNSHIPPED AUDIT 2026-10-23 (integrator)
+
+    Pinned origin/main: a9e78d34914e43b30fc9d2b590d83ab96feb48b2.
+
+    task-1329: ABANDON. Head `3699bb109836`; cherry **1+**; aggregate PID `390bd55d892c2b3f4964aa81b43be6a8c3c45b64`. This adds a 45-minute Windows test-step timeout and weekly Windows contract assertions. Superseded by the Linux-only ADR-72 policy, main [c6c0d9c3b23f](https://github.com/joemooney/aida/commit/c6c0d9c3b23f258ab5ade50283f8c204dac9eff2) / merged [#2487](https://github.com/joemooney/aida/pull/2487) (TASK-1723 Completed). Current cross-platform workflow is manual-only and explicitly forbids Windows fix work. TASK-1329 remains Done; no status change is proposed by this branch verdict.
+
+    These are branch-artifact verdicts, not completion or dispatch/merge authority. No spec status, branch, PR or active worktree changed. Full 14-branch table: .aida/handoff/advisor/unshipped-audit-2026-10-23.md (8 SHIPPED-ELSEWHERE, 3 SALVAGE, 3 ABANDON).
+  created_at: 2026-10-23T17:58:20.133487074Z
+  modified_at: 2026-10-23T17:58:20.133487074Z
 history:
 - id: 01a1189e-6dce-7be3-ab02-05713cfac939
   author: joe
