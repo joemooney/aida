@@ -836,3 +836,69 @@ fn activate_falls_back_to_the_primary_checkout_once_the_worktree_in_aida_dev_rep
         (worktree.clone(), ActivateRepoSource::EnvRepo)
     );
 }
+
+// trace:TASK-2251 | ai:claude
+#[test]
+fn home_repo_fallback_fires_only_for_a_set_but_missing_aida_dev_repo() {
+    use crate::dev_cmd::{choose_activate_repo, choose_env_dev_repo, ActivateRepoSource};
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path().join("aida");
+    std::fs::create_dir_all(&home).unwrap();
+    let home_str = home.display().to_string();
+    let gone = temp.path().join("aida-worktrees/removed");
+    let gone_str = gone.display().to_string();
+    let outside = temp.path().join("elsewhere");
+    std::fs::create_dir_all(&outside).unwrap();
+
+    // Unset (or empty) $AIDA_DEV_REPO: no dev checkout, so no fallback and
+    // no "(?) no longer exists" note.
+    assert_eq!(choose_env_dev_repo(None, Some(&home_str)), None);
+    assert_eq!(choose_env_dev_repo(Some(""), Some(&home_str)), None);
+    assert_eq!(
+        choose_activate_repo(None, None, Some(&home_str), &outside),
+        (outside.clone(), ActivateRepoSource::Cwd)
+    );
+    // Set but missing: the recorded primary checkout.
+    assert_eq!(
+        choose_env_dev_repo(Some(&gone_str), Some(&home_str)),
+        Some((home.clone(), ActivateRepoSource::HomeRepo))
+    );
+    // Set and present: used as is, even with a home recorded.
+    assert_eq!(
+        choose_env_dev_repo(Some(&home_str), Some(&gone_str)),
+        Some((home.clone(), ActivateRepoSource::EnvRepo))
+    );
+}
+
+// trace:TASK-2251 | ai:claude
+#[test]
+fn dev_build_and_release_fall_back_to_the_home_repo_for_a_removed_worktree() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path().join("aida");
+    std::fs::create_dir_all(&home).unwrap();
+    let home_str = home.display().to_string();
+    let gone_str = temp.path().join("removed").display().to_string();
+
+    // `aida dev build` / `aida dev release` read the env through this.
+    let env = crate::test_env::EnvVarsGuard::apply(&[
+        ("AIDA_DEV_REPO", Some(&gone_str)),
+        ("AIDA_DEV_HOME_REPO", Some(&home_str)),
+    ]);
+    assert_eq!(crate::dev_cmd::env_dev_repo(), Some(home.clone()));
+    drop(env);
+
+    // No fallback recorded: the stale path is dropped, not returned.
+    let env = crate::test_env::EnvVarsGuard::apply(&[
+        ("AIDA_DEV_REPO", Some(&gone_str)),
+        ("AIDA_DEV_HOME_REPO", None),
+    ]);
+    assert_eq!(crate::dev_cmd::env_dev_repo(), None);
+    drop(env);
+
+    // Unset $AIDA_DEV_REPO: nothing, even with a home recorded.
+    let _env = crate::test_env::EnvVarsGuard::apply(&[
+        ("AIDA_DEV_REPO", None),
+        ("AIDA_DEV_HOME_REPO", Some(&home_str)),
+    ]);
+    assert_eq!(crate::dev_cmd::env_dev_repo(), None);
+}
