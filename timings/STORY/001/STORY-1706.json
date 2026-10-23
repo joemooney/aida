@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-1706",
+  "publishes": [
+    {
+      "at": "2026-10-23T12:26:46.357718420Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-22T01:46:19.693342140Z",
+      "spec": "STORY-1706",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-23T11:43:49.132282887Z",
+      "spec": "STORY-1706",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-23T12:26:06.602310432Z",
+      "spec": "STORY-1706",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-23T12:26:22.639421679Z",
+      "spec": "STORY-1706",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2834
+      }
+    },
+    {
+      "ts": "2026-10-23T12:26:46.107423264Z",
+      "spec": "STORY-1706",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "898e1a849c2c30f5418de17276f3e61573afc83b",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
