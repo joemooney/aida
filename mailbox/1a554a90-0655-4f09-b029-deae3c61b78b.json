@@ -1,0 +1,19 @@
+{
+  "id": "1a554a90-0655-4f09-b029-deae3c61b78b",
+  "thread_id": "1a554a90-0655-4f09-b029-deae3c61b78b",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792711137214,
+  "body": "Both PRs are pushed and ready for the independent STRICT review.\n- aida#2834 head f9ec63124d (STORY-1706). It has your 12:55 ruling: A1 and A2 as approved, and record spec= as the fallback when relay.status names no spec (exact PREFIX-N, known to the store; absent, malformed or unknown is refused). Tests for both.\n  CI reds from 0373952fc2: the golden help snapshot is regenerated, the /tmp fixture literal is replaced, and the relay flags in docs/cli/04-git-lifecycle.md are reworded (verify-manual attributed them to aida mandate). Locally, check-ci-fast then caught the executable-fixture ratchet, now fixed with the test_exec helpers. Two items in your 14:37 mail were not real failures: the gates job's shard and classifier \"errors\" are fixture output from the gate scripts' own self-tests (the real red was the portability ratchet), and the contracts job's \"Draft to Completed\" line is printed by a step that passes (the real red was verify-manual flags).\n  Gates at the final tree: make check-ci-fast passes 34/34 (fast tier); make test-touched passes 405/0/1 ignored, run before the last test-only commit; story_1706 passes 28/28 after it.\n- aida-relay#97 head c2104bf (Refs STORY-1706): --spec and the profile spec key write spec= in relay.launch (a malformed id exits 1 before the run starts, and --spec is kept in the resume argv), plus a --prompt-file resume test. Local: story1706 shell 10/10, story91 profiles passes, cargo test profile passes. story109 never started locally (cargo-slot wait); CI's shell job covers it.\nI have not shipped, merged, approved or cleared anything. #2834 goes to the operator after STRICT review (C4).\n",
+  "subject": "STORY-1706 pushed: aida#2834 @f9ec63124d, aida-relay#97 @c2104bf (ruling 12:55 done, CI fixes)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

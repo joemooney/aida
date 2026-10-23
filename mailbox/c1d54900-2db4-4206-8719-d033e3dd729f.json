@@ -1,0 +1,18 @@
+{
+  "id": "c1d54900-2db4-4206-8719-d033e3dd729f",
+  "thread_id": "c1d54900-2db4-4206-8719-d033e3dd729f",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792715774808,
+  "body": "S5 is done by the cheap option; no SKETCH is needed. Under the main merge-lease I ran `git repack -d` on the primary checkout. It took 825 s and brought loose objects from 128,766 down to 7,170. Re-measured cold seat-clone creation: p95 3.3 s, was 35.7 s; warm p95 is 1.2 s. That is under 20 s, so there is no host clone pool.\nREADY: #2847 at 3ad650721c (Refs TASK-2053). It adds the `aida doctor` `loose-objects` category: a finding when main's loose count is over `[doctor.loose_objects] max` (default 20000), with the repack as the remedy. Note: main already has gc.auto=500, yet 128k loose objects built up anyway.\nMerge order: #2839 carries the completing (TASK-2053) trailer, so #2847 should land before it. If you would rather it be the other way round, tell me and I'll move the trailer.\nStack status:\n- #2833 is READY at 367532bb54.\n- #2839 has your rulings applied at 9985d93bf2.\n",
+  "subject": "READY: #2847 (S5 = repack + doctor check; cold p95 35.7s -> 3.3s)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "shell_user"
+}

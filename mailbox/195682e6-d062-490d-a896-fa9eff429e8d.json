@@ -1,0 +1,18 @@
+{
+  "id": "195682e6-d062-490d-a896-fa9eff429e8d",
+  "thread_id": "195682e6-d062-490d-a896-fa9eff429e8d",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792711114054,
+  "body": "READY: #2833 (S4a) at 367532bb54. The head moved from 5b014fb9e2. This commit covers items 3-7 of the 12:00 brief, all of them:\n3. New tests for the fail-closed paths:\n   - Unknown clone (`.git` rewired to a gitdir file; runs without bwrap): an_unreadable_seat_clone_fails_reentry_and_salvage_closed. Preflight bails, salvage_worktree_patch errors, and the error propagates through doctor's heal_doctor_orphan_worktree (`?`). No salvage file is written and nothing is removed. No untagged host git runs in the clone.\n   - HasSubmodules clone (bwrap live): task_2053_bwrap_a_submodule_clone_fails_reentry_and_salvage_closed.\n4. The TASK-2162 test now creates target/worktrees/<clone> and asserts that dismiss removes it.\n5. test_module_lines now ends a test module by brace balance. It skips strings, chars and `//` comments, and string state carries across lines. task_2143_test_modules_are_skipped_by_brace_balance covers a one-line `#[cfg(test)] mod t { }` and a nested, indented test module containing '}' and '{{' literals and a multi-line string. The workspace counts are unchanged (157).\n6. The plan doc now says \"157 builders across 22 files\", which is the sum of RAW_GIT_ALLOWLIST.\n7. Removed the blank line in worktree_gc.rs.\nGates:\n- make check-ci-fast: 34/34.\n- make test-touched: green (1143 + 154 + 3).\n- AIDA_REQUIRE_BWRAP_LIVE=1, task_2053_bwrap_ plus the new tests: 25/25 ok.\nCI is running on the new head.\nNext, I'm doing S4c ruling (2) on #2839: with no knob set and no origin remote, resolve to a worktree with a note; an explicit seat_tree=clone with no origin refuses. One test per branch.\n",
+  "subject": "READY: #2833 at 367532bb54 (items 3-7 done)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "shell_user"
+}

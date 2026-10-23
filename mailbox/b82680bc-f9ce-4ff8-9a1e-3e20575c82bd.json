@@ -1,0 +1,19 @@
+{
+  "id": "b82680bc-f9ce-4ff8-9a1e-3e20575c82bd",
+  "thread_id": "b82680bc-f9ce-4ff8-9a1e-3e20575c82bd",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792720205996,
+  "body": "AC2 measured at last (first quiet window in 45 hourly checks): make test on main @519bdccd6e, 18:17-18:49, start load 1.92 with no builds. rc=0, 12,327 passed + 11 ignored, 0 failed. Wall 31:43, +21.7 min over target. BUT cargo-nextest is NOT installed on the host, so make test fell back to serial cargo test, the pre-S2 structure. Split: compile ~14.2 min (4 cargo invocations, incremental from a stale target/), test execution ~17.1 min serial. Dominant binaries: aida-cli-lib unittests 485s (9,783 tests), task_1717_store_writer_lock 62s, aida-core unittests 53s, bug_1502 23s. Two rulings needed: (1) operator to install cargo-nextest (cargo install cargo-nextest --locked) so AC2 measures the real architecture; (2) does AC2 include compile? Compile alone is >10 min unless the build is warm (S5 lib split territory). Full table on the spec. I'll re-measure with nextest in the next quiet window once it's installed.",
+  "subject": "STORY-1853 AC2: MISSED, 31:43 (cargo-test fallback, nextest not installed)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

@@ -1,0 +1,18 @@
+{
+  "id": "3b82b4e2-8124-461b-b01c-20948d9ab6da",
+  "thread_id": "3b82b4e2-8124-461b-b01c-20948d9ab6da",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792706890225,
+  "body": "READY for independent review:\n- #2833 S4a (5b014fb9e2). Covers TASK-2161 live-gate proof (30 of 30), the TASK-2143 ratchet, TASK-2162 and TASK-2160.\n- #2836 S4b (f12a060047), stacked on S4a. Includes the TASK-2110 port.\n- #2839 S4c, the default flip, stacked on S4b. Per C3 the OPERATOR merges it after a PASS.\n\nPlease rule on two points in S4c:\n(1) With no knob set, a contained review, an existing --path re-entry, or an explicit --path outside the parent keeps a worktree. An explicit seat_tree=clone still refuses.\n(2) A contained launch now needs an origin remote.\n\nS5 decision: cold p95 is 35.7s, warm p95 is 2.6s. That is over 20s, so S5 is filed as TASK-2181 (Draft); please promote it. Packing main's 128k loose objects may be cheaper, and TASK-2181 asks for that to be ruled on first.\n#2694 was already closed. The merge-hold-gate on #2833 needs the human clear.\n",
+  "subject": "TASK-2053 S4 stack ready: #2833 → #2836 → #2839; S5 = TASK-2181",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "shell_user"
+}

@@ -1,0 +1,18 @@
+{
+  "id": "979d8222-4a5c-444a-8031-798e42591659",
+  "thread_id": "979d8222-4a5c-444a-8031-798e42591659",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792713441357,
+  "body": "#2839 (S4c) now at 9985d93bf2 with your 15:12 rulings applied:\n(1) As approved. Each no-knob fallback (review, --path re-entry, --path outside the parent) now prints a one-line `note:` naming its reason, so no downgrade is silent.\n(2) As modified:\n- No knob and no origin: the seat resolves to a linked worktree and prints a note (\"this checkout has no `origin` remote to clone from\").\n- Explicit seat_tree = \"clone\" with no origin: refuses up front with \"add an origin remote or set seat_tree = \\\"worktree\\\"\".\n- The logic is one pure function, seat_clone::default_clone_fallback.\nTests:\n- default_clone_fallback_notes_each_reason_and_explicit_never_downgrades: unit test of every branch, both explicit and default.\n- the_default_without_an_origin_keeps_a_worktree: end-to-end session start.\n- session_start_refuses_a_contained_seat_it_cannot_clone_for: now covers both explicit-no-origin (the actionable message) and an origin that cannot be cloned (the O1 message). Both cases write no lease and create no worktree.\nDocs: 03-work-autonomy.md updated.\nGates: check-ci-fast 34/34; test-touched 2880 + 165 + 3 green.\n#2836 and #2839 are still stacked on #2833 (at 367532bb54, READY). After #2833 merges I'll retarget and rebase them. The operator merges #2839 (C3).\n",
+  "subject": "#2839 S4c rulings applied at 9985d93bf2",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "shell_user"
+}

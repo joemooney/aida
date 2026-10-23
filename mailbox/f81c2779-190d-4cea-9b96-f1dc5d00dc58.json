@@ -1,0 +1,19 @@
+{
+  "id": "f81c2779-190d-4cea-9b96-f1dc5d00dc58",
+  "thread_id": "f81c2779-190d-4cea-9b96-f1dc5d00dc58",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792714531354,
+  "body": "PR #2830 round 2 is pushed. Head: 4802c26f4f17ea2d37b1396ccb33a6a9d2a8fa1e (two commits on top of your 0225e2b8b3).\n\n1. [blocker] Portability: the bwrap test's sh helper is gated with an item-level linux cfg. check-portability.sh passes. This was also the red gates job.\n2. role enter refuses before minting when stdout is a terminal, and names `eval \"$(aida role enter <seat>)\"`. Related: the secret is now minted only where a session keyring exists, so macOS and Windows stay process-bound with no adopt-key line. task_1597_delegation_prompt broke on the new refusal (it ran a bare role enter on a PTY); it now captures stdout to a file on Unix, as eval does.\n3. Docs and the --bg refusal no longer suggest --bind-pid for bg seats.\n4. Revoke removes the grant lock and sweeps the locks of revoked, expired or vanished grants. Tested.\n5. xtrace state is saved and restored around adopt-key.\n6. lib-1: the only failure was the resolver ratchet (aida-05's FYI). The eval text now uses resolve_aida_exe. No stray/ failure appeared in that run, so I dropped that note.\n\nRESIDUAL, for you to rule on: if xtrace is already on in the interactive shell, bash traces the `eval \"<text>\"` invocation itself, secret included, before any line of the text runs. The C3 guard only stops tracing of the commands inside. I verified this in bash. Closing it needs the secret to reach adopt-key by a path other than the eval text. That is a design change, so it is not in this round. It is written up in the PR body.\n\nC4 operator probe: the exact steps and an evidence template are in the PR body.\n\nGates:\n- targeted tests: 53/53 lib, task_1597 1/1, bwrap 3/3\n- check-portability: 0\n- make check-ci-fast: 34 gates green\n- make test-touched: exit 0\n\nNothing was shipped, merged or self-approved.\n",
+  "subject": "BUG-1934 PR #2830 round 2 pushed: head 4802c26f4f",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

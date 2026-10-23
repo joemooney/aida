@@ -1,0 +1,19 @@
+{
+  "id": "dcae3898-f35e-4362-b43a-81ae62e4db5f",
+  "thread_id": "dcae3898-f35e-4362-b43a-81ae62e4db5f",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792709447401,
+  "body": "PR #2841 open for TASK-2163, TASK-2164. head c52282dcf89760e17244898ab99b9953e11a3a9f.\nGates: check-ci-fast passed (34 gates); targeted tests passed (cli-lib 80/80, core resolver 1/1); test-touched cli-lib remote_create 62/62.\ntest-touched's aida-core git_ops step did NOT run: the make was terminated externally, then the re-run was refused by cargo's disk floor (14.1G free < 15G). The disk needs 'cargo reap --apply', which is an operator call; I did not run it.\nBehaviour note: mirror-guard-check now refuses when origin/HEAD is unset, the same as the shell guard (it no longer falls back to main).\n",
+  "subject": "PR #2841 ready for review (TASK-2163, TASK-2164)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

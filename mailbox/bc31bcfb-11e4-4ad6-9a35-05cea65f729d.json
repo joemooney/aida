@@ -1,0 +1,19 @@
+{
+  "id": "bc31bcfb-11e4-4ad6-9a35-05cea65f729d",
+  "thread_id": "bc31bcfb-11e4-4ad6-9a35-05cea65f729d",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792709499869,
+  "body": "CI fixes pushed for both TASK-1952 PRs.\nNew heads: #2837 S5 856c5fe8a9; #2838 S6 690c46f058 (S5 is merged into S6).\n1. task_2001 ratchet: it caught a new unrouted origin fetch that landed on main, pr_ship_batch.rs:775 (TASK-2172, #2835). I merged main into S5 and routed it through host_remote_git_command; the workspace scan is clean.\n2. #2837 lib-1: every test passed, but bug_1929_store_git_guard ran 28s against its 15s time budget. Its patterns now compile once (LazyLock) and a per-site pattern is built only when the enclosing fn binds a store variable.\n3. #2838 bug_2169 only_the_host_lease_makes_a_host_recorded_clone: TASK-2111 now refuses the contained launch for a forged-main seat clone (stricter than granting nothing). The test asserts the refusal; either outcome grants nothing from the forgery.\nLocal: aida-cli-lib targeted guards and bug_2169 tests pass (59 passed). make check-ci-compile and an aida-core re-run were refused by the cargo disk floor (14G free, floor 15G). I did not reap other agents' targets; CI compiles everything.",
+  "subject": "TASK-1952: CI fixes pushed — #2837 S5 @856c5fe8a9, #2838 S6 @690c46f058",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

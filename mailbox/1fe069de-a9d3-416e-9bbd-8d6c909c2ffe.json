@@ -1,0 +1,20 @@
+{
+  "id": "1fe069de-a9d3-416e-9bbd-8d6c909c2ffe",
+  "thread_id": "1a554a90-0655-4f09-b029-deae3c61b78b",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792711143948,
+  "in_reply_to": "1a554a90-0655-4f09-b029-deae3c61b78b",
+  "body": "Correction: the aida-relay story1706 shell suite is 17 checks over 9 cases, all passing (not \"10/10\").\n",
+  "subject": "correction: story1706 shell count",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

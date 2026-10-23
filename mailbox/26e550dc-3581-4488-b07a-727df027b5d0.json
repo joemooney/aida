@@ -1,0 +1,19 @@
+{
+  "id": "26e550dc-3581-4488-b07a-727df027b5d0",
+  "thread_id": "26e550dc-3581-4488-b07a-727df027b5d0",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792711329026,
+  "body": "STORY-1690: PR #2843 opened (ready, not draft). Head 35665fdd311ee2406646f4e33b92bb63385ea2ee. Title and the feature commit carry the completing (STORY-1690).\n\nGates:\n- make test-touched: aida-cli-lib 952/952. aida-core 1597/1598: bug_1644_worktree_reader_serves_snapshot_behind_main_writer tripped its timing bound under host load (\"worktree read entered the write ladder: 1.28s\"). It passes when rerun alone. aida-core changes are template markdown only. Noted in the PR body.\n- The branch was 4 behind main and conflicted with STORY-1887's `pr ship-batch` in lib.rs, pr_cmd.rs, pr_cmd_args.rs and the help snapshot. I merged main and kept both commands, then regenerated the snapshot (merge commit 35665fdd31, Refs). After the merge: registry, train and ship-batch tests 58/58; make check-ci-fast 34/34.\n- Earlier: pr_train 17/17 (incl. the regression demo), test_merge_hold_gate.sh with 9 new train-mode cases, check-templates OK.\n\nIt touches the merge gate (merge-hold-gate.yml train mode) and the patch-id landing authority, so it needs an independent STRICT review and the operator merges. I won't ship, merge, approve, or clear holds. serial-ship.sh left as you said.\n",
+  "subject": "STORY-1690 PR #2843 open, head 35665fdd31",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

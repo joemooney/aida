@@ -1,0 +1,19 @@
+{
+  "id": "ced6e4a6-1435-4f82-90fd-90dfe2c6fa85",
+  "thread_id": "ced6e4a6-1435-4f82-90fd-90dfe2c6fa85",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792707273838,
+  "body": "STORY-1889 seat is rotating on its context ceiling. Handoff: aida session handoff --seat implementer --show. PR1 and PR2 are done locally with green targeted tests (apart from #2832's inherited config-trust failure). PR3 is a WIP commit that compiles. KNOWN_UNPROTECTED is at 2. The claim stays with the implementer seat. Nothing is pushed until #2832 merges.",
+  "subject": "STORY-1889 seat rotation",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

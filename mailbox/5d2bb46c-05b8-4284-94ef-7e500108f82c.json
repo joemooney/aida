@@ -1,0 +1,19 @@
+{
+  "id": "5d2bb46c-05b8-4284-94ef-7e500108f82c",
+  "thread_id": "5d2bb46c-05b8-4284-94ef-7e500108f82c",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792707279119,
+  "body": "STORY-1889 handoff (implementer, claude). Claimed by this seat. SKETCH v1 SIGNED 09:58, plus the PR2 ruling 13:49 (spec comments).\nWorktree /home/joe/ai/aida-worktrees/impl-story-1889. Local stacked branches, NOTHING PUSHED: PR1 waits for #2832 (STORY-1888) to merge.\n- claude/story-1889 = PR1 seat/role (4797e79fb9). Based on #2832 head 5d2a301.\n- claude/story-1889-hold = PR2 hold/defer (33ac1600d5). Targeted tests green; check-ci-fast green.\n- claude/story-1889-review = PR3 review/verdict, WIP commit (compiles clean; amend it after tests). Moved: lib_part5 review author items -> gate/review_author.rs; review_marker.rs, review_authority.rs, solo_review.rs and review_verdict.rs -> gate/ (git mv), with their tests in gate/tests/; queue_cmd::evaluate_review_verdict_gate -> gate/review_verdict.rs; display helpers -> src/review_verdict_display.rs, with tests in src/tests/review_verdict_display_tests.rs; floor and KNOWN_UNPROTECTED updated. Next: targeted tests (review, verdict, bug_1918, story_1655, bug_775, review_marker, story_1405, bug_1978, story_1888, bug_1723) -> strinv -> check-ci-fast -> commit \"(Refs STORY-1889)\".\n- PR4 approval/ship (carries STORY-1889):\n  - pr_merge_gate drain gate and the pr_cmd approval gates (pr_ship_approval_gate, merge_path_approval_*, merge_approval_inputs, ship_approval_policy, ship_stale_definition_gate) -> gate/;\n  - pr_ship.rs decisions plus tests; mandate*.rs, fleet_lanes.rs, rework_hold_release.rs -> gate/;\n  - repoint EVERY caller and remove all re-exports from unprotected files (TRANSITIONAL_GATE_REEXPORTS -> delete);\n  - delete KNOWN_UNPROTECTED; drop the exact floor entries.\nKnown inherited failure: bug_1723 config-trust \"mandate_gates.rs 6 sites vs 4\" is #2832's bug, reported to the advisor; it is not ours.\nTools in /home/joe/ai/aida-worktrees/story-1889-tools: items.py (item splitter), extract_mod.py (inline mod -> path file), strinv.py BASE (non-test string-literal diff; base for PR3 = claude/story-1889-hold).\nPitfalls:\n- include_str! paths change when test files move dirs.\n- #[path] in an include!d lib_partN resolves relative to src/.\n- rg needs an explicit path (no stdin).\n- The cargo queue is long: use background runs.\nAfter #2832 merges: rebase the stack onto origin/main (git rebase --onto origin/main 5d2a301 for PR1; then each branch onto its predecessor), push PR1, open it with the refusal-string inventory in the body. Human merge only; never ship/merge/self-approve.\n",
+  "subject": "STORY-1889 seat rotation",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

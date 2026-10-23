@@ -1,0 +1,19 @@
+{
+  "id": "2e9e2854-1f71-4bc9-822d-737717020913",
+  "thread_id": "2e9e2854-1f71-4bc9-822d-737717020913",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792709021561,
+  "body": "PR #2832 pushed at head af034d76cc. It is now current with main (both new main commits merged, including #2835).\nChanges since 5d2a30175d:\n(1) Floor-list conflict resolved: the list keeps main's pr_ship_batch.rs and this branch's ratchet test file, and pr_ship_batch.rs carries the mandate-gate marker.\n(2) Main's pr_ship_batch T8 test now uses the two-argument touches_gates.\n(3) scripts/config-trust.toml: mandate_gates.rs now has 6 sites; the two PathSource labels are classified prose; trusted (origin/main) and home (~/.aida) are unchanged.\nGates: 160 targeted tests, then ship-batch + ratchet + config-trust 42/42 after the second merge; make check-ci-compile passed; make check-ci-fast passed all 34 gates. This is a human merge; I have not shipped or cleared anything.",
+  "subject": "STORY-1888 #2832 new head af034d76cc",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

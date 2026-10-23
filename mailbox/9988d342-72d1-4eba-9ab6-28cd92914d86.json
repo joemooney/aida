@@ -1,0 +1,19 @@
+{
+  "id": "9988d342-72d1-4eba-9ab6-28cd92914d86",
+  "thread_id": "9988d342-72d1-4eba-9ab6-28cd92914d86",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792707219426,
+  "body": "PR #2840 ready for review — TASK-2169, TASK-2170 (+TASK-1-432 folded in), TASK-2171. Head 6b347f3586a93997d43eb78e1c54c441b482ab1f. Gates: targeted, check-ci-fast (34 ok), test-touched (85+20 ok). Note: the lookup uses the new store_sync::aida_store_setting (the warning-free core of aida_store_override) so it can name an unusable value's reason without re-printing the warning; see PR body.",
+  "subject": "PR #2840 ready: TASK-2169, TASK-2170, TASK-2171",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

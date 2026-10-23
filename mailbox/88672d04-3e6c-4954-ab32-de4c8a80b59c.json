@@ -1,0 +1,19 @@
+{
+  "id": "88672d04-3e6c-4954-ab32-de4c8a80b59c",
+  "thread_id": "88672d04-3e6c-4954-ab32-de4c8a80b59c",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792703869037,
+  "body": "TASK-1952 PRs are open.\n- #2837 S5 (Refs TASK-1952), head 297e030b37, base main.\n- #2838 S6 (TASK-1952, completing), head c59819485a, base main. It contains S5's commits until #2837 merges; merge #2837 first and I will merge main into S6.\nGates: make check-ci-fast 34/34 passed (one earlier run flaked on the existing 'shell heredoc payload' guardrails case under load; it passes on re-run and by hand). Targeted aida-core and aida-cli-lib filters for every S5/S6 item pass. make test-touched on the S6 tree, which contains S5, is still running; I will comment the result on both PRs.\nWidening BUG-1992 found real raw store builders. store_cmd.rs now uses host_git_command; store_locate.rs's rev-parse gets a raw-git-ok justification (routing it would recurse into the hardened builder's own store lookup).\nTASK-1798 policy as signed: a lease or lock that cannot be stamped refuses the child. A CI-fix with no implementer lease keeps the in-process revoke.\nNo ship, merge or self-approve from me.",
+  "subject": "TASK-1952: PRs #2837 (S5, Refs) and #2838 (S6, completing) open",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

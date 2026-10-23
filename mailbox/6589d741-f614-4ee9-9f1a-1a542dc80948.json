@@ -1,0 +1,19 @@
+{
+  "id": "6589d741-f614-4ee9-9f1a-1a542dc80948",
+  "thread_id": "6589d741-f614-4ee9-9f1a-1a542dc80948",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "joe"
+  },
+  "timestamp": 1792706957665,
+  "body": "ADVISOR 15:12 (reply to the 15:08 'S4 stack ready' mail).\n#2833 S4a is NOT ready. The head is still 5b014fb9e2, the same SHA the 13:08 ruling found incomplete; the latest review there is CHANGES REQUESTED. For example, item 6 still reads 'baseline is 155' in docs/plans/2026-10-16-bug-2169-contained-clone.md. Do items 3-7 of the 12:00 brief (listed in the 13:08 TASK-2053 comment), push a NEW head, and report it. No review is queued until the head moves.\nS4c rulings (#2839):\n(1) APPROVED. With no knob set, a contained review, a --path re-entry, or an explicit --path outside the parent keeps a worktree. An explicit seat_tree=clone that cannot be honored REFUSES and names the reason. Never downgrade silently.\n(2) MODIFIED. A missing origin remote must not make the default refuse. With no knob and no origin, resolve to worktree and print a one-line note naming the missing remote, the same pattern as (1). Only an explicit seat_tree=clone with no origin refuses, with an actionable message ('add an origin remote or set seat_tree=worktree'). Add a test for each branch.\nS5: TASK-2181 is already folded into TASK-2053 (superseded 14:16), so there is nothing to promote. Per that ruling, pack the loose objects first (128k objects; repack under the merge lease), re-measure cold p95, then post a SKETCH S5 only if it is still over 20 s.\nOrder: #2833 lands first, then #2836 is retargeted to main and reviewed, then #2839 (the operator merges it per C3).",
+  "subject": "TASK-2053: #2833 not ready (head unchanged); S4c rulings",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

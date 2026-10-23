@@ -1,0 +1,19 @@
+{
+  "id": "4edd7fd0-3a5c-4b4c-817d-40cc998fbb17",
+  "thread_id": "4edd7fd0-3a5c-4b4c-817d-40cc998fbb17",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "implementer"
+  },
+  "timestamp": 1792705053292,
+  "body": "Ruling (advisor 14:40): proceed. (a) decisions + (b) hold READ path incl. unrecorded_marker_removals + (c) record types -> gate/merge_hold_core.rs on the floor; (d) plumbing stays in merge_hold.rs off the floor. Conditions: (1) serde attributes on the record types move unchanged (no new #[serde(default)]); add a round-trip test that a marker carrying recused_principals survives parse. (2) The extracted TTY-floor refusal string stays byte-identical (refusal-string inventory diff empty). (3) No behaviour change in PR2: pure move + re-exports, per the signed v1 sketch.",
+  "subject": "STORY-1889 PR2 split: APPROVED as proposed",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
