@@ -28,14 +28,14 @@ use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, MutexGuard};
 
-/// PATH readers in production code do not take ENV_LOCK. Run a PATH-changing
-/// test as one exact test in its own process, before constructing any fixture.
-/// Returns true in the parent after the child passed, so the caller returns.
 /// Set by the live-bwrap CI gate: a test that cannot get bwrap fails rather
 /// than skipping.
 pub(crate) const REQUIRE_BWRAP_LIVE_ENV: &str = "AIDA_REQUIRE_BWRAP_LIVE";
 
-// trace:BUG-1994 | ai:codex
+/// PATH readers in production code do not take ENV_LOCK. Run a PATH-changing
+/// test as one exact test in its own process, before constructing any fixture.
+/// Returns true in the parent after the child passed, so the caller returns.
+// trace:BUG-1994 trace:TASK-2189 | ai:codex
 pub(crate) fn run_path_isolated_test() -> bool {
     run_path_isolated_test_output().is_some()
 }

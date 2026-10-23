@@ -1071,6 +1071,37 @@ pub(crate) fn ensure_implementer_branch_pushed(
     branch: &str,
     json: bool,
 ) -> Result<(), auto_complete::PhaseFailure> {
+    // The seat pushes its private clone; the host only reads it through
+    // the sandboxed probe, including refusal on unknown/submodule evidence.
+    // trace:TASK-2191 | ai:codex
+    if aida_core::seat_clone_detect::seat_clone_root(worktree).is_some() {
+        let crate::seat_clone::MainFor::Verified(main) = crate::seat_clone::main_for(worktree)
+        else {
+            return Err(auto_complete::PhaseFailure::new(
+                "could not verify the implementer seat clone's main checkout before phase-2 CI/teardown",
+            ));
+        };
+        return match crate::seat_clone::probe(&main, worktree) {
+            crate::seat_clone::Probe::Known(facts) if facts.branch.as_deref() != Some(branch) => {
+                Err(auto_complete::PhaseFailure::new(format!(
+                    "implementer seat clone is on `{}` but phase 2 is driving `{branch}` — refusing to continue",
+                    facts.branch.as_deref().unwrap_or("DETACHED"),
+                )))
+            }
+            crate::seat_clone::Probe::Known(facts) if facts.unpushed > 0 => {
+                Err(auto_complete::PhaseFailure::new(format!(
+                    "implementer seat clone has {} unpushed commit(s); the seat must push `{branch}` before phase-2 CI/teardown (the host never pushes from a clone)",
+                    facts.unpushed,
+                )))
+            }
+            crate::seat_clone::Probe::Known(_) => Ok(()),
+            crate::seat_clone::Probe::Unknown(why) | crate::seat_clone::Probe::HasSubmodules(why) => {
+                Err(auto_complete::PhaseFailure::new(format!(
+                    "could not verify implementer seat clone before phase-2 CI/teardown: {why}",
+                )))
+            }
+        };
+    }
     // trace:BUG-878 | ai:codex
     let current = git_output_checked(worktree, &["branch", "--show-current"]).map_err(|e| {
         auto_complete::PhaseFailure::new(format!(

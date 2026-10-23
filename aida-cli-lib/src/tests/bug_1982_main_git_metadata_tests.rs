@@ -57,6 +57,33 @@ fn probe_script(tree: &Path, metadata: &[PathBuf], out: &Path) -> String {
     script
 }
 
+/// Give the fixture the same host-owned lease required of a production seat.
+/// An unleased clone is deliberately denied its own .git write permission.
+// trace:TASK-2053 | ai:codex
+fn lease_contained_clone(main: &Path, clone: &Path) {
+    aida_core::seat_clone_detect::note_host_main(main);
+    let lease = crate::lease_path(main, "c0ffee001641");
+    std::fs::create_dir_all(lease.parent().unwrap()).unwrap();
+    std::fs::write(
+        lease,
+        format!(
+        "id = \"c0ffee001641\"\nscope = \"TASK-1641\"\nslug = \"task-1641\"\nowner = \"test\"\n\
+         worktree_path = {}\nbranch = \"seat-1\"\nstarted_at = \"2026-10-23T00:00:00Z\"\n\
+         hostname = \"test\"\ntree_kind = \"clone\"\n",
+        aida_core::toml_quote::toml_string(&clone.display().to_string()),
+    ),
+    )
+    .unwrap();
+    assert!(matches!(
+        crate::seat_clone::main_for(clone),
+        crate::seat_clone::MainFor::Verified(_)
+    ));
+    assert!(
+        crate::seat_clone::host_recorded_clone(clone).is_some(),
+        "fixture must model a leased seat"
+    );
+}
+
 /// Run one contained `claude -p` in `tree` that executes `script`.
 fn run_contained(tree: &Path, home: &Path, script: &str) -> String {
     use std::io::Write as _;
@@ -525,6 +552,7 @@ fn real_claude_contained_session_cannot_redirect_main_git_metadata() {
         aida_core::seat_clone_detect::CLONE_DIR_PREFIX
     ));
     crate::seat_clone::create(&main, &clone, "seat-1", "main").expect("create the seat clone");
+    lease_contained_clone(&main, &clone);
     let head_before = run(&clone, "git", &["rev-parse", "HEAD"]);
     let clone_out = clone.join("probe.out");
     run_contained(&clone, &home, &probe_script(&clone, &metadata, &clone_out));
@@ -537,4 +565,71 @@ fn real_claude_contained_session_cannot_redirect_main_git_metadata() {
     );
     assert_ne!(run(&clone, "git", &["rev-parse", "HEAD"]), head_before);
     assert_unchanged("seat clone", &probe);
+}
+
+// trace:TASK-2053 | ai:codex
+#[test]
+fn task_1641_fixture_requires_a_lease_to_keep_clone_git_writable() {
+    let tmp = tempfile::tempdir().unwrap();
+    let main = tmp.path().join("main");
+    std::fs::create_dir(&main).unwrap();
+    run(&main, "git", &["init", "-q", "-b", "main"]);
+    run(
+        &main,
+        "git",
+        &[
+            "-c",
+            "user.name=t",
+            "-c",
+            "user.email=t@example.invalid",
+            "commit",
+            "--allow-empty",
+            "-qm",
+            "init",
+        ],
+    );
+    let origin = tmp.path().join("origin.git");
+    run(
+        tmp.path(),
+        "git",
+        &[
+            "clone",
+            "--bare",
+            main.to_str().unwrap(),
+            origin.to_str().unwrap(),
+        ],
+    );
+    run(
+        &main,
+        "git",
+        &["remote", "add", "origin", origin.to_str().unwrap()],
+    );
+    let clone = tmp.path().join("aida-seat-fixture-1");
+    crate::seat_clone::create(&main, &clone, "seat-1", "main").unwrap();
+    let roots = crate::contained_boundary::contained_write_roots(&clone);
+    assert!(
+        crate::contained_boundary::contained_main_checkout_git_deny_paths(&roots)
+            .contains(&clone.join(".git"))
+    );
+    lease_contained_clone(&main, &clone);
+    assert!(
+        !crate::contained_boundary::contained_main_checkout_git_deny_paths(&roots)
+            .contains(&clone.join(".git"))
+    );
+    let settings: serde_json::Value =
+        serde_json::from_str(&crate::session::claude_contained_settings_json(&roots).unwrap())
+            .unwrap();
+    let (write_denies, _) = denies(&settings);
+    assert!(
+        write_denies.contains(&format!("/{}", main.join(".git").display())),
+        "{settings}"
+    );
+    assert!(
+        !write_denies.contains(&format!("/{}", clone.join(".git").display())),
+        "{settings}"
+    );
+    assert!(
+        settings["sandbox"]["filesystem"]["denyRead"].is_null(),
+        "{settings}"
+    );
 }

@@ -238,3 +238,69 @@ fn task_2053_bwrap_a_merged_heads_commits_count_as_shipped() {
     commit("three.txt");
     assert_eq!(facts(&[merged_head]).unpushed, 1);
 }
+
+// trace:TASK-2191 | ai:codex
+#[test]
+fn task_2053_bwrap_phase_two_accepts_a_pushed_clone_and_never_pushes_it() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    if !bwrap_live() {
+        return;
+    }
+    let fx = fixture();
+    let clone = leased_clone(&fx, "phase2", "c0ffee000059");
+    let (shim_dir, log, _) = git_shim(&fx);
+    let _path = crate::test_env::EnvVarGuard::prepend_path(&shim_dir);
+    let gate =
+        |branch| crate::orchestrator_leases::ensure_implementer_branch_pushed(&clone, branch, true);
+    // Base-only clones carry no new work; a committed change must be pushed.
+    std::fs::write(clone.join("phase2.txt"), "work\n").unwrap();
+    let git = |args: &[&str]| {
+        let out = std::process::Command::new("git")
+            .arg("-C")
+            .arg(&clone)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    };
+    git(&["add", "phase2.txt"]);
+    git(&[
+        "-c",
+        "user.name=Test",
+        "-c",
+        "user.email=test@example.invalid",
+        "commit",
+        "-qm",
+        "work",
+    ]);
+    // Setup is allowed to run git; only gate invocations are under inspection.
+    std::fs::write(&log, "").unwrap();
+    assert!(gate("feat").unwrap_err().to_string().contains("unpushed"));
+    assert!(untagged_in(&log, &clone).is_empty());
+    git(&["push", "-u", "origin", "feat"]);
+    std::fs::write(&log, "").unwrap();
+    gate("feat").unwrap();
+    assert!(gate("wrong")
+        .unwrap_err()
+        .to_string()
+        .contains("phase 2 is driving"));
+    git(&["checkout", "--detach"]);
+    std::fs::write(&log, "").unwrap();
+    assert!(gate("feat").unwrap_err().to_string().contains("DETACHED"));
+    std::fs::write(clone.join(".gitmodules"), "submodule evidence").unwrap();
+    assert!(gate("feat").unwrap_err().to_string().contains("submodules"));
+    std::fs::remove_file(clone.join(".gitmodules")).unwrap();
+    std::fs::rename(clone.join(".git"), clone.join("old-git")).unwrap();
+    std::fs::write(clone.join(".git"), "gitdir: old-git\n").unwrap();
+    assert!(gate("feat").is_err());
+    assert!(
+        untagged_in(&log, &clone).is_empty(),
+        "the host ran git in the clone"
+    );
+}
