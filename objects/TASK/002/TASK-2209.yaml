@@ -3,12 +3,12 @@ spec_id: TASK-2209
 agreed_id: TASK-2209
 title: 'Adopt the LIGHT local test gate in the skill templates (implementers: one targeted run + check-ci-fast; reviewers: no cargo by default)'
 description: 'Operator ruling 2026-10-23 (advisor standing order 11:43Z). The STANDARD tier in aida-core/templates/skills (aida-implement.md:351, aida-pickup.md:481, aida-fire.md:139, aida-pr/SKILL.md:295,365, aida-review.md:527) and any discipline doc that names make test-touched as the default gate change to LIGHT: ONE targeted ''cargo test --profile agent -p <crate> <module filter>'' run plus ''make check-ci-fast'', then push. CI''s full shards are the gate. make test-touched / make check-ci-compile become conditional: only when the change touches shared test infra (test_env, test_git, ratchet baselines) or >10 files. aida-review: the reviewer runs no cargo by default; it gates on green CI at the exact head and runs one targeted test only to reproduce a specific suspected defect. The aida-pr PR-body template''s test line follows suit. Edit the template masters only, then make sync-templates + make check-templates; update any test that pins the old wording. Reason: 2 cargo slots, queue 6-11 deep, ~25 slot-hours/day of mostly redundant local runs.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T11:43:05.323831033Z
-modified_at: 2026-10-23T14:40:52.036265416Z
+modified_at: 2026-10-23T14:40:57.945630193Z
 req_type: Task
 relationships:
 - rel_type:
@@ -22,6 +22,14 @@ history:
   timestamp: 2026-10-23T14:40:53.775478672Z
   session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
   changes: []
+- id: 01a16935-3859-7660-945b-9903a15bd0f8
+  author: aida-pr-open
+  timestamp: 2026-10-23T14:40:57.945629233Z
+  session_id: eec35e7d-2638-4916-ac4d-2a0c5f53a50f
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 51e59ef00d8527eb72bef58bf6f1a6018b9fbd70
   branch: main
