@@ -19,12 +19,12 @@ description: |
 
   ## Handoff
   Inspect aida ship implementation and its --no-merge behavior before writing the redirect. Use existing skill/CLI symmetry discipline. Implementation must occur in an isolated claimed session; advisor review remains independent. This task is a compatibility/documentation update, not a redesign of ship semantics.
-status: Done
+status: Approved
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-08T04:15:57.651449326Z
-modified_at: 2026-10-23T17:58:22.284093107Z
+modified_at: 2026-10-23T23:15:09.489299875Z
 req_type: Task
 tags:
 - docs:impacted
@@ -485,6 +485,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a16b0b-fa31-7ce3-8a48-067ac0ad3fff
+  author: joe
+  timestamp: 2026-10-23T23:15:09.489289608Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Approved
 filed_at:
   code_sha: 5d4180e5ded8a55ad1b02beac5571c190d3da0ac
   branch: main
@@ -492,3 +499,6 @@ filed_at:
   aida_version: 0.15.0
   aida_build_sha: e1422ae139
   vendor: codex
+implementation_info:
+  implemented: false
+  reopened_at_sha: bdd2846897925f4f2a5ab7cd6fe9560fedf8b6e4
