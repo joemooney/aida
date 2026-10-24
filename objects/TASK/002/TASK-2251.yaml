@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T18:16:23.129102755Z
-modified_at: 2026-10-24T05:44:41.430176882Z
+modified_at: 2026-10-24T06:36:23.870565748Z
 req_type: Task
 relationships:
 - rel_type: Supersedes
@@ -101,6 +101,12 @@ history:
   timestamp: 2026-10-24T05:44:43.110299303Z
   session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
   changes: []
+- id: 01a16c9f-f26e-73c1-88cc-f71893406b38
+  author: joe
+  timestamp: 2026-10-24T06:36:24.046083183Z
+  session_id: 01a16c9db104
+  harness_version: 2.1.310 (Claude Code)
+  changes: []
 filed_at:
   code_sha: c51da8659361da4ae9a01c41f86ea6d28d00e948
   branch: main
@@ -109,3 +115,11 @@ filed_at:
   aida_build_sha: a9e78d3491
   vendor: claude
   session: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: TASK-2248 fast-forward fallback confirms a no-commit branch that was synced onto the base (merge --ff-only / pull / rebase / reset), attributing base commits to the slice; other members pass, CI green
+  recovery_hint: address the review findings, move TASK-2251 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-10-24T06:36:23.870565748Z
