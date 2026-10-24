@@ -1,0 +1,37 @@
+id: 01a16e52-86a7-7003-a6ea-b053357d2176
+spec_id: STORY-1921
+agreed_id: STORY-1921
+title: 'Review PR-2899: [AI:claude] fix(review,ship): a passing re-review releases the refusal hold; ship --no-merge files the reviewer story (BUG-2216 BUG-2217)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `claude/bug-2216-2217`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2899>
+  - Branch: `claude/bug-2216-2217` → `claude/bug-2214-train`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - BUG-2217
+  - BUG-2216
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2899` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-24T14:31:04.615921712Z
+modified_at: 2026-10-24T14:31:04.615921712Z
+req_type: Story
+filed_at:
+  code_sha: c68e0c591ac5131d396b2150aa640d6998b0a85e
+  branch: claude/bug-2216-2217
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 194492a69f
+  vendor: claude
+  session: 16800bb8-6bb5-4aad-a6bd-ab9e4ef96b8b
