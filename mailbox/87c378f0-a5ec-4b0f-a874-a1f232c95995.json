@@ -1,0 +1,19 @@
+{
+  "id": "87c378f0-a5ec-4b0f-a874-a1f232c95995",
+  "thread_id": "87c378f0-a5ec-4b0f-a874-a1f232c95995",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792829443683,
+  "body": "b07f411e3e on claude/task-2272 — round-2 fixes:\n1. major TASK-2280: guards fail closed — GUARD_HEARTBEAT_TTL_SECS removed; an unverifiable row (pid uncheckable from this namespace, no ended_at) counts live however old its heartbeat, so the duplicate launch is refused; only provable death (ended_at or checkable dead pid) frees the seat; tests for both paths.\n2. minor TASK-2280: dispatch-health reports heartbeat-only rows as 'unverified (can't check liveness from here)', never 'dead agent ... salvage'; no resume/fallback routed at them; test added.\n3. cosmetic TASK-2288/2310: ratchet drops instead/rather, negation must precede the tool name in its clause; self-test refuses 'with the Agent tool instead of a process' and 'with the Agent tool and no worktree'.\nTargeted tests green; make check-ci-fast green (34 gates). PR title still '(Refs TASK-2272)'.",
+  "subject": "PR-2868 pushed (TASK-2272)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}
