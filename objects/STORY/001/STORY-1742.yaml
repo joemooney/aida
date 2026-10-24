@@ -38,7 +38,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T22:02:03.191649035Z
-modified_at: 2026-10-24T23:29:40.635245960Z
+modified_at: 2026-10-24T23:29:47.678090970Z
 req_type: Story
 tags:
 - docs:impacted
@@ -145,6 +145,11 @@ comments:
     Remaining signed slice 3: refusal-only history/object scanner, local deny list, sanitized intake/template and end-to-end fixtures. Pull stays plan-only; this slice does not establish a safe WORK export path.
   created_at: 2026-10-24T22:13:50.461151322Z
   modified_at: 2026-10-24T22:13:50.461151322Z
+- id: 01a1703f-bc9e-76d2-9abc-1e2564004049
+  author: joe
+  content: 'PR-2910 reviewer finding 6 reconciliation: clarified the hook constraint and non-goal to name the existing mandatory verified host-owned store Git hook profile (identity gate included). Project code/mirror hooks stay excluded, consistent with existing store hardening and the documented slice-2 behavior; no hook bypass or new executable policy was introduced. Other review findings are being corrected with the credential-routing CI fix; the next head remains non-completing and requires re-review before Slice 3.'
+  created_at: 2026-10-24T23:29:47.678090970Z
+  modified_at: 2026-10-24T23:29:47.678090970Z
 history:
 - id: 01a16ee2-ad7a-7b30-aaeb-ec8f892fbe76
   author: joe
