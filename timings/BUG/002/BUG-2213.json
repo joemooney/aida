@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2213",
+  "publishes": [
+    {
+      "at": "2026-10-24T07:53:44.729269663Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-24T06:21:08.725561213Z",
+      "spec": "BUG-2213",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-24T06:23:24.920673738Z",
+      "spec": "BUG-2213",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-24T07:33:53.506223844Z",
+      "spec": "BUG-2213",
+      "kind": {
+        "event": "PhaseDonePr",
+        "pr": 2892
+      }
+    },
+    {
+      "ts": "2026-10-24T07:34:56.769855747Z",
+      "spec": "BUG-2213",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "Done"
+      }
+    },
+    {
+      "ts": "2026-10-24T07:53:17.015894495Z",
+      "spec": "BUG-2213",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-24T07:53:30.542545997Z",
+      "spec": "BUG-2213",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2892
+      }
+    },
+    {
+      "ts": "2026-10-24T07:53:44.526684749Z",
+      "spec": "BUG-2213",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "7ce52440de8776de3e9ce50060344a2bdbb6e8f4",
+        "pr": 2892,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
