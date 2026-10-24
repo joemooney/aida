@@ -2490,26 +2490,19 @@ pub(crate) mod test_support {
         // trace:BUG-2209 | ai:claude
         assert_scratch_store(&store);
         let seat = aida_core::team::canonical_role(seat);
-        // The primitive guards the write itself and takes the store write
-        // lock (TASK-2223, TASK-2224); `target/` stays an allowed scratch root.
-        // trace:TASK-1955 | ai:claude
-        let target = workspace_target();
-        aida_core::team::write_member_seats_allowing(
-            &store,
-            target.as_deref(),
-            subject,
-            None,
-            |current| {
-                let mut seats = current.map(<[String]>::to_vec).unwrap_or_default();
-                for requested in std::iter::once(seat.as_str()).chain(delegable.iter().copied()) {
-                    let canonical = aida_core::team::canonical_role(requested);
-                    if !seats.iter().any(|have| *have == canonical) {
-                        seats.push(canonical);
-                    }
+        // The primitive guards the write itself, accepting the workspace
+        // `target/`, and takes the store write lock (TASK-2223, TASK-2224).
+        // trace:TASK-1955 | ai:claude (TASK-2292)
+        aida_core::team::write_member_seats(&store, subject, None, |current| {
+            let mut seats = current.map(<[String]>::to_vec).unwrap_or_default();
+            for requested in std::iter::once(seat.as_str()).chain(delegable.iter().copied()) {
+                let canonical = aida_core::team::canonical_role(requested);
+                if !seats.iter().any(|have| *have == canonical) {
+                    seats.push(canonical);
                 }
-                Some(seats)
-            },
-        )
+            }
+            Some(seats)
+        })
         .unwrap();
 
         let lifetime = ttl.unwrap_or(MAX_GRANT_AGE);

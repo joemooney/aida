@@ -263,13 +263,6 @@ fn is_under_workspace_target(path: &Path) -> bool {
 /// their roster (BUG-2209).
 // trace:BUG-2209 | ai:claude
 pub fn guard_roster_write(store_root: &Path) {
-    guard_roster_write_allowing(store_root, None);
-}
-
-/// [`guard_roster_write`], also accepting a store under `scratch_root` (a
-/// test crate's own `target/`, where its fixtures may live).
-// trace:TASK-1955 | ai:claude (TASK-2223)
-pub fn guard_roster_write_allowing(store_root: &Path, scratch_root: Option<&Path>) {
     let hermetic = std::env::var("AIDA_USER").is_ok_and(|user| user == HERMETIC_TEST_USER);
     if !(hermetic || cfg!(test))
         || is_under_temp_root(store_root)
@@ -277,16 +270,11 @@ pub fn guard_roster_write_allowing(store_root: &Path, scratch_root: Option<&Path
     {
         return;
     }
-    let canonical = |p: &Path| p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
-    let in_scratch =
-        scratch_root.is_some_and(|root| canonical(store_root).starts_with(canonical(root)));
-    if !in_scratch {
-        panic!(
-            "refusing a test roster write to `{}`: the store is not under a temp directory \
-             (AIDA_USER hermetic: {hermetic}); a test resolved a real store",
-            store_root.display()
-        );
-    }
+    panic!(
+        "refusing a test roster write to `{}`: the store is not under a temp directory \
+         (AIDA_USER hermetic: {hermetic}); a test resolved a real store",
+        store_root.display()
+    );
 }
 
 /// Read the roster for a writer. A missing file is an empty roster; an
@@ -330,27 +318,15 @@ fn load_for_write(path: &Path) -> std::io::Result<(Option<Vec<u8>>, TeamRoster)>
 /// stage and commit the file.
 // trace:BUG-2209 | ai:claude
 // trace:TASK-2238 | ai:claude
+// trace:TASK-1955 | ai:claude (TASK-2223, TASK-2224, TASK-2292)
 pub fn write_member_seats(
     store_root: &Path,
     user_id: &str,
     nodes: Option<&NodeRegistry>,
     edit: impl Fn(Option<&[String]>) -> Option<Vec<String>>,
 ) -> std::io::Result<bool> {
-    write_member_seats_allowing(store_root, None, user_id, nodes, edit)
-}
-
-/// [`write_member_seats`] whose test guard also accepts a store under
-/// `scratch_root` (see [`guard_roster_write_allowing`]).
-// trace:TASK-1955 | ai:claude (TASK-2223, TASK-2224)
-pub fn write_member_seats_allowing(
-    store_root: &Path,
-    scratch_root: Option<&Path>,
-    user_id: &str,
-    nodes: Option<&NodeRegistry>,
-    edit: impl Fn(Option<&[String]>) -> Option<Vec<String>>,
-) -> std::io::Result<bool> {
     const MAX_ATTEMPTS: u32 = 20;
-    guard_roster_write_allowing(store_root, scratch_root);
+    guard_roster_write(store_root);
     let _lock = crate::db::acquire_store_write_lock(store_root).map_err(std::io::Error::other)?;
     let path = TeamRoster::path(store_root);
     if let Some(parent) = path.parent() {
@@ -1690,22 +1666,15 @@ ttl_secs = 1800
         );
     }
 
-    /// TASK-2223: a named scratch root (a test crate's `target/`) is still
-    /// accepted outside the temp roots; anything else under it is not.
-    // trace:TASK-1955 | ai:claude
+    /// TASK-2223: a store under the workspace `target/` (where a test crate's
+    /// fixtures may live) passes the guard outside the temp roots.
+    // trace:TASK-1955 | ai:claude (TASK-2292)
     #[test]
-    fn task_2223_a_named_scratch_root_passes_the_guard() {
-        let scratch = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let store = scratch.join("not-a-store-task-2223/.aida-store");
+    fn task_2223_the_workspace_target_passes_the_guard() {
+        let target = Path::new(env!("CARGO_MANIFEST_DIR")).join("../target");
+        let store = target.join("not-a-store-task-2223/.aida-store");
         assert!(!is_under_temp_root(&store));
-        guard_roster_write_allowing(&store, Some(scratch));
-        let outside = std::panic::catch_unwind(|| {
-            guard_roster_write_allowing(Path::new("/nonexistent-task-2223/s"), Some(scratch))
-        });
-        assert!(
-            outside.is_err(),
-            "a store outside the scratch root is refused"
-        );
+        guard_roster_write(&store);
     }
 
     /// TASK-2224: the write holds the store write lock across the CAS re-read
