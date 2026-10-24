@@ -441,13 +441,21 @@ fn bug_1929_only_owner_may_write_matrix() {
 #[test]
 fn task_1759_user_private_group_rule() {
     use crate::store_hooks::is_user_private_group as upg;
-    assert!(upg("joe", "joe", &[]));
-    assert!(!upg("joe", "users", &[]), "shared primary group");
+    let me = ["joe".to_string()];
+    assert!(upg("joe", "joe", &[], &me));
+    assert!(upg("joe", "joe", &[], &[]));
+    assert!(!upg("joe", "users", &[], &me), "shared primary group");
     assert!(
-        !upg("joe", "joe", &["eve".to_string()]),
+        !upg("joe", "joe", &["eve".to_string()], &me),
         "a member could write"
     );
-    assert!(!upg("", "", &[]));
+    assert!(!upg("", "", &[], &[]));
+    // TASK-2125: another account whose primary gid is the group never shows
+    // in gr_mem, but it could write. trace:TASK-1952 | trace:TASK-2125 | ai:claude
+    assert!(
+        !upg("joe", "joe", &[], &["joe".to_string(), "eve".to_string()]),
+        "another account's primary group"
+    );
 }
 
 // Reproduces the r8 blocker: on a host whose checkout and .git are 0775
@@ -1075,16 +1083,19 @@ fn task_1942_linked_worktree_gitmodules_lookup_is_memoised() {
     assert_eq!(file_second, 0, "an unchanged .gitmodules is not re-read");
     assert!(args(&cmd).contains(&"submodule.one.ignore=dirty".to_string()));
 
-    // Replacing it (new inode) re-reads it.
+    // Replacing it re-reads it. TASK-2148: the new content has a different
+    // length, so the stamp changes even when the inode is reused within one
+    // coarse ctime tick under ALWAYS_SETTLED.
+    // trace:TASK-1952 | trace:TASK-2148 | ai:claude
     std::fs::remove_file(wt.join(".gitmodules")).unwrap();
     std::fs::write(
         wt.join(".gitmodules"),
-        "[submodule \"two\"]\n\tpath = two\n\turl = ./x\n",
+        "[submodule \"second\"]\n\tpath = second\n\turl = ./xyz\n",
     )
     .unwrap();
     let (cmd, after) = bug_2192_settled_spawns(|| host_git_command(&wt));
     assert_eq!(after, 1);
-    assert!(args(&cmd).contains(&"submodule.two.ignore=dirty".to_string()));
+    assert!(args(&cmd).contains(&"submodule.second.ignore=dirty".to_string()));
 }
 
 // TASK-1943: an edited submodule whose path git C-quotes in porcelain v1 is
@@ -1117,4 +1128,50 @@ fn task_1943_quoted_porcelain_path_is_listed_once() {
     let mut plain = String::new();
     note_edited_submodule(&mut plain, "plain/sub");
     assert_eq!(plain, " M plain/sub\n");
+}
+
+// TASK-2146: the contained safety scan pins `core.quotePath=true`, so a
+// non-ASCII path is C-quoted the way `porcelain_quote` quotes the added
+// submodule line, even when the operator set `core.quotePath=false`.
+// trace:TASK-1952 | trace:TASK-2146 | ai:claude
+#[cfg(unix)]
+#[test]
+fn task_2146_contained_scan_quotes_paths_whatever_the_user_quote_path() {
+    let dir = tempfile::tempdir().unwrap();
+    let (main, _store) = bug_1929_main_with_store(dir.path());
+    let wt = dir.path().join("wt");
+    run_git(
+        &main,
+        &["worktree", "add", "-q", "-b", "wt", wt.to_str().unwrap()],
+    );
+    run_git(&main, &["config", "core.quotePath", "false"]);
+    let name = "d\u{ef}r";
+    std::fs::write(wt.join(name), "x").unwrap();
+    let lines = worktree_status_porcelain_lines(&wt).unwrap();
+    assert_eq!(lines, vec![format!("?? {}", porcelain_quote(name))]);
+}
+
+// TASK-2125 (PR-2837 review): the password-database walk itself. Every
+// account /etc/passwd lists with this process's primary gid is found (local
+// accounts are always enumerable), and a second call is served from the
+// per-process memo with the same answer.
+// trace:TASK-1952 | trace:TASK-2125 | ai:claude
+#[cfg(unix)]
+#[test]
+fn task_2125_primary_gid_walk_finds_local_accounts() {
+    // SAFETY: getgid has no preconditions and cannot fail.
+    let gid = unsafe { libc::getgid() };
+    let local: Vec<String> = std::fs::read_to_string("/etc/passwd")
+        .unwrap_or_default()
+        .lines()
+        .filter_map(|l| {
+            let f: Vec<&str> = l.split(':').collect();
+            (f.len() > 3 && f[3] == gid.to_string()).then(|| f[0].to_string())
+        })
+        .collect();
+    let found = crate::store_hooks::accounts_with_primary_gid(gid);
+    for name in &local {
+        assert!(found.contains(name), "{name} missing from {found:?}");
+    }
+    assert_eq!(crate::store_hooks::accounts_with_primary_gid(gid), found);
 }
