@@ -5,8 +5,8 @@ description: Run /aida-orchestrate.
 
 Act as the operator's proxy orchestrator. The goal is an empty `aida list`,
 with every item approved, implemented, reviewed and merged. Items that
-genuinely need a human are reported rather than faked. You coordinate and
-subagents implement. Every branch gets a fresh reviewer, and approved work
+genuinely need a human are reported rather than faked. You coordinate; each
+implementer runs as its own process in its own seat. Every branch gets a fresh reviewer, and approved work
 lands through batched integration PRs that are merged on the exact commit and
 then verified.
 
@@ -25,12 +25,19 @@ Follow the workflow in `.claude/skills/aida-orchestrate/SKILL.md`:
    Anything that touches authority or product direction stays a draft, recorded
    with `aida questions ask`.
 3. Architecture, authority, autonomy and store-integrity specs go through a
-   sketch gate: an architect subagent writes the sketch, a separate advisor
-   subagent signs it off, and only then is it implemented as amended.
-4. Dispatch one implementer session per spec, each with its own
-   `aida worktree add <SPEC>`, which takes the lease. Tests use fixtures only,
-   no polling loops, and Python never runs as a shell script. The implementer
-   pushes its branch and opens no PR. Keep at most 3 child sessions live at
+   sketch gate: an architect session writes the sketch, a different advisor
+   session signs it off, and only then is it implemented as amended.
+4. Launch one implementer per spec as a separate process from Bash:
+   `aida queue work <SPEC> --role implementer --no-human --vendor claude`. It
+   takes the worktree and implementer lease (never your grant), opens its own
+   PR and stops, and ends with one `implementer:` line whose exit code you
+   branch on (0 PR opened, 31 no PR, 32 punted, 33 held, 34 cap reached). For
+   an interactive lane you will steer, run
+   `aida worktree add <SPEC> --role implementer` and start the session from
+   inside that worktree. Never implement through the Agent tool. Tests use
+   fixtures only, no polling loops, and Python never runs as a shell script.
+   <!-- trace:STORY-1662 | ai:claude -->
+   Keep at most 3 child sessions live at
    once, give each a wall-clock and token budget in its brief, and state the
    child's model explicitly; a child that runs out is stopped and re-dispatched
    once, never retried silently. <!-- trace:BUG-1816 | ai:claude -->
@@ -45,7 +52,7 @@ Follow the workflow in `.claude/skills/aida-orchestrate/SKILL.md`:
    commits behind ... overlaps", have the author merge main up first. Never review through the Agent tool,
    never write the reviewer's prompt, and never record a verdict yourself.
    Your seat must be entered with `--delegate-seat reviewer`. On
-   RequestChanges, return the findings to the same implementer, then launch a
+   RequestChanges, relaunch the implementer on its branch or mail its lane, then launch a
    new reviewer at the new head. <!-- trace:STORY-1654 | ai:claude -->
 6. Batch approved branches on top of origin/main, and run the project's full
    local check set (the same checks CI runs). Fix only mechanical integration
