@@ -9933,6 +9933,7 @@ which exits non-zero only when that one category has findings
 Usage: aida doctor [OPTIONS] [COMMAND]
 
 Commands:
+  rustc-cache               Diagnose cached compiler-wrapper failures; remove only with --fix
   shell-substitution-holes  Find prose that may have lost backticked text to shell command
                             substitution. Reports only; candidates require human inspection
   check                     Focused multi-agent drift diagnostic for one category
@@ -10024,6 +10025,27 @@ Options:
           --all
           
           [default: 0]
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida doctor rustc-cache
+Diagnose cached compiler-wrapper failures; remove only with --fix
+
+Usage: aida doctor rustc-cache [OPTIONS]
+
+Options:
+      --fix
+          Remove a cache that still contains a failed wrapper probe
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
 
   -h, --help
           Print help (see a summary with '-h')
@@ -24493,6 +24515,9 @@ Options:
           
           [possible values: claude, codex, agy]
 
+      --json
+          Print the queued (or deduplicated) request as JSON
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -24519,6 +24544,9 @@ Options:
           Vendor harness for the reviewer (`claude`, `codex`, `agy`)
           
           [possible values: claude, codex, agy]
+
+      --json
+          Print the queued (or deduplicated) request as JSON
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -24547,7 +24575,7 @@ Options:
           Head branch name on origin
 
       --spec <SPEC>
-          Target spec ID (e.g. `TASK-2168`)
+          Target spec ID (e.g. `<SPEC-ID>`)
 
       --brief <BRIEF>
           Path to the markdown brief file to freeze (`<= 64 KiB`)
@@ -24556,6 +24584,9 @@ Options:
           Vendor harness for the implementer (`claude`, `codex`, `agy`)
           
           [possible values: claude, codex, agy]
+
+      --json
+          Print the queued (or deduplicated) request as JSON
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -24583,7 +24614,7 @@ Options:
           Branch name to create or reuse
 
       --spec <SPEC>
-          Target spec ID (e.g. `STORY-1917`)
+          Target spec ID (e.g. `<SPEC-ID>`)
 
       --brief <BRIEF>
           Path to the markdown brief file to freeze (`<= 64 KiB`)
@@ -24592,6 +24623,9 @@ Options:
           Vendor harness for the implementer (`claude`, `codex`, `agy`)
           
           [possible values: claude, codex, agy]
+
+      --json
+          Print the queued (or deduplicated) request as JSON
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -24615,6 +24649,9 @@ Arguments:
           Pull request numbers (1..=16 items)
 
 Options:
+      --json
+          Print the queued (or deduplicated) request as JSON
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -34098,6 +34135,32 @@ Working on aida itself
         "name": "yes",
         "takes_value": false,
         "help": "Skip per-category confirmation prompts while healing"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "doctor",
+      "rustc-cache"
+    ],
+    "about": "Diagnose cached compiler-wrapper failures; remove only with --fix",
+    "flags": [
+      {
+        "name": "fix",
+        "takes_value": false,
+        "help": "Remove a cache that still contains a failed wrapper probe"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
       }
     ],
     "hidden": false
@@ -48283,6 +48346,11 @@ Working on aida itself
         "help": "Print help (see more with '--help')"
       },
       {
+        "name": "json",
+        "takes_value": false,
+        "help": "Print the queued (or deduplicated) request as JSON"
+      },
+      {
         "name": "no-ship",
         "takes_value": false,
         "help": "Stop after review without shipping"
@@ -48313,6 +48381,11 @@ Working on aida itself
         "name": "help",
         "takes_value": false,
         "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Print the queued (or deduplicated) request as JSON"
       },
       {
         "name": "vendor",
@@ -48352,9 +48425,14 @@ Working on aida itself
         "help": "Print help (see more with '--help')"
       },
       {
+        "name": "json",
+        "takes_value": false,
+        "help": "Print the queued (or deduplicated) request as JSON"
+      },
+      {
         "name": "spec",
         "takes_value": true,
-        "help": "Target spec ID (e.g. `TASK-2168`)"
+        "help": "Target spec ID (e.g. `<SPEC-ID>`)"
       },
       {
         "name": "vendor",
@@ -48394,6 +48472,11 @@ Working on aida itself
         "help": "Print help (see more with '--help')"
       },
       {
+        "name": "json",
+        "takes_value": false,
+        "help": "Print the queued (or deduplicated) request as JSON"
+      },
+      {
         "name": "name",
         "takes_value": true,
         "help": "Short worktree/session name (`^[A-Za-z0-9._-]{1,60}$`)"
@@ -48401,7 +48484,7 @@ Working on aida itself
       {
         "name": "spec",
         "takes_value": true,
-        "help": "Target spec ID (e.g. `STORY-1917`)"
+        "help": "Target spec ID (e.g. `<SPEC-ID>`)"
       },
       {
         "name": "vendor",
@@ -48429,6 +48512,11 @@ Working on aida itself
         "name": "help",
         "takes_value": false,
         "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Print the queued (or deduplicated) request as JSON"
       }
     ],
     "hidden": false

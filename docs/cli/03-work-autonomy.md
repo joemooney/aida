@@ -145,6 +145,8 @@ drops the inherited grant and purpose and sets no role. Outside a lane
 nothing changes. This corrects the lane's commands; it is not an authority
 boundary, since grants are validated wherever they are used.
 
+`aida claim <SPEC>` and successful `aida queue work <SPEC>` move Approved work to In Progress and record its claimant. Claiming Draft work never approves it. `aida unclaim <SPEC>` returns In Progress work to Approved only after confirming that no open PR and no other live lease retain it; an unavailable forge lookup keeps it In Progress. Done and Completed states retain their merge lifecycle. <!-- trace:BUG-2215 | ai:codex -->
+
 The root fix is operator-side: start the claude daemon from a shell with no
 `AIDA_SESSION_*` variables. `aida doctor` (category `claude-daemon-grant`)
 warns when a running daemon's environment holds `AIDA_SESSION_GRANT`.
@@ -415,7 +417,7 @@ Verbs: `aida schedule list [--seat advisor] [--json]` (the merged registry, with
 
 **One line** — queue validated, mandate-authorized `flow`, `review`, `take`, `impl`, and `train` requests from a sandboxed advisor seat for unsandboxed execution.
 
-**Mental model.** Under an OS or harness sandbox, an advisor seat cannot write sibling worktrees or `.git/config` directly. `aida dispatch request <verb>` lets a bound advisor seat write a typed request into `.aida/dispatch/` after verifying an active mandate covering `dispatch` (`aida mandate start --ship-held --scope dispatch` or `--drive`), the human gates, the `operator-only` / `decide` floor, and the caller's bound `advisor` seat grant (`eval "$(aida role enter advisor --delegate-seat reviewer --delegate-seat implementer)"`). Markdown briefs passed via `--brief` are validated and frozen by SHA-256 under `.aida/dispatch/briefs/`.
+**Mental model.** Under an OS or harness sandbox, an advisor seat cannot write sibling worktrees or `.git/config` directly. `aida dispatch request <verb>` lets a bound advisor seat write a typed request into `.aida/dispatch/` after verifying an active mandate covering `dispatch` (`aida mandate start --scope dispatch`, `aida mandate start --ship-held --scope dispatch`, or `aida mandate start --drive`), the human gates, the `operator-only` / `decide` floor, and the caller's bound `advisor` seat grant (`aida role enter advisor --delegate-seat reviewer --delegate-seat implementer`). Markdown briefs passed via `--brief` are validated and frozen by SHA-256 under `.aida/dispatch/briefs/`.
 
 **Subcommands.** `aida dispatch request <flow|review|take|impl|train> [--json]` queues a request (idempotent on duplicate `dedupe_key`; refuses conflicting in-flight requests on the same `target_key`), `aida dispatch list [--status <status>] [--json]` inspects the queue (marking pending `review`, `flow`, and `train` items as `waiting for serve`), `aida dispatch show <id> [--json]` prints one request and result record, and `aida dispatch cancel <id>` cancels a pending request.
 <!-- trace:STORY-1917 | ai:agy -->

@@ -1,5 +1,6 @@
 //! `aida dispatch` clap types, owned by `dispatch.rs` and re-exported from
-//! `cli.rs`. trace:STORY-1917 | ai:agy
+//! `cli.rs`.
+// trace:STORY-1917 | ai:agy
 
 use clap::{Subcommand, ValueEnum};
 use std::path::PathBuf;
@@ -71,7 +72,7 @@ pub enum DispatchRequestVerb {
         /// Head branch name on origin.
         #[clap(long)]
         branch: String,
-        /// Target spec ID (e.g. `TASK-2168`).
+        /// Target spec ID (e.g. `<SPEC-ID>`).
         #[clap(long)]
         spec: String,
         /// Path to the markdown brief file to freeze (`<= 64 KiB`).
@@ -91,7 +92,7 @@ pub enum DispatchRequestVerb {
         /// Branch name to create or reuse.
         #[clap(long)]
         branch: String,
-        /// Target spec ID (e.g. `STORY-1917`).
+        /// Target spec ID (e.g. `<SPEC-ID>`).
         #[clap(long)]
         spec: String,
         /// Path to the markdown brief file to freeze (`<= 64 KiB`).
@@ -118,7 +119,7 @@ pub enum DispatchAction {
         #[clap(subcommand)]
         verb: DispatchRequestVerb,
         /// Print the queued (or deduplicated) request as JSON.
-        #[clap(long)]
+        #[clap(long, global = true)]
         json: bool,
     },
     /// List queued, running, and completed dispatch requests.

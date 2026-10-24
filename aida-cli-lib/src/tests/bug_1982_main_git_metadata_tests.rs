@@ -224,12 +224,53 @@ fn bug_1982_main_git_denied_whatever_the_store_grant() {
             );
             let granted = settings["sandbox"]["filesystem"]["allowWrite"]
                 .as_array()
-                .is_some_and(|a| !a.is_empty());
+                .is_some_and(|a| {
+                    a.iter().any(|entry| {
+                        entry.as_str()
+                            == Some(format!("/{}", main.join(".aida-store").display()).as_str())
+                    })
+                });
             assert_eq!(
                 granted,
                 version == "git version 2.43.0",
                 "{version}: store grant only on a supported git: {settings}"
             );
+            // The separate mailbox grant remains narrow on every Git version.
+            // trace:BUG-2218 | ai:codex
+            let entries = |key: &str| {
+                settings["sandbox"]["filesystem"][key]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|v| v.as_str().unwrap().to_string())
+                    .collect::<Vec<_>>()
+            };
+            let allows = entries("allowWrite");
+            let denies = entries("denyWrite");
+            let covers = |entries: &[String], target: &Path| {
+                entries.iter().any(|entry| {
+                    entry
+                        .strip_prefix('/')
+                        .is_some_and(|path| target.starts_with(path))
+                })
+            };
+            let writable = |path: &Path| covers(&allows, path) && !covers(&denies, path);
+            assert!(writable(&main.join(".aida/mailbox/message.json")));
+            for path in [
+                main_git.join("config"),
+                main_git.join("worktrees/wt/commondir"),
+                main_git.join("worktrees/wt/gitdir"),
+                main_git.join("worktrees/wt/config.worktree"),
+            ] {
+                assert!(
+                    !writable(&path),
+                    "{version}: metadata writable: {}",
+                    path.display()
+                );
+                assert!(!crate::contained_boundary::evaluator::allowed(
+                    &settings, "Edit", &path, &worktree, &parent
+                ));
+            }
         });
     }
     // Every redirect target lies under the denied directory.

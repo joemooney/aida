@@ -584,6 +584,10 @@ pub(crate) fn handle_burndown_run(
             run_burndown_verbose(&current_prompt, mode, contained)?
         } else {
             // trace:BUG-2165 | ai:antigravity
+            // trace:BUG-2218 TASK-2328 | ai:codex
+            if contained {
+                session::prepare_contained_mailbox_for_launch(&project_root)?;
+            }
             let child_grant = seat_authority::issue_headless_child(
                 &project_root,
                 "implementer",
@@ -2030,6 +2034,11 @@ pub(crate) fn run_burndown_verbose(
 ) -> Result<std::process::ExitStatus> {
     let project_root =
         find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+    // Prepare before logs/tee and child authority are allocated.
+    // trace:BUG-2218 TASK-2328 | ai:codex
+    if contained {
+        session::prepare_contained_mailbox_for_launch(&project_root)?;
+    }
     // TASK-1169 / ADR-22: same bounded ceiling the quiet launch sets.
     // trace:TASK-1169 | ai:claude
     let (ceiling_key, ceiling_value) = bg_wait_ceiling_env(Some(&project_root));

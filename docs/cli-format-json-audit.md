@@ -308,6 +308,7 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida driver deregister` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida driver list` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida doctor` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
+| `aida doctor rustc-cache` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida doctor shell-substitution-holes` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida doctor check` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida doctor heal` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
@@ -688,3 +689,13 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida alias remove` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida fleet` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida fleet drive` | JSON honoured | fleet drive (preview; changes nothing without --tick) |
+| `aida dispatch` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida dispatch request` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
+| `aida dispatch request flow` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
+| `aida dispatch request review` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
+| `aida dispatch request take` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
+| `aida dispatch request impl` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
+| `aida dispatch request train` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
+| `aida dispatch list` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
+| `aida dispatch show` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
+| `aida dispatch cancel` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |

@@ -155,7 +155,7 @@ fn mandate_start_scope_dispatch_is_explicit_and_not_default() {
     let f = Fixture::new(&["reviewer", "implementer"]);
     let now = Utc::now();
 
-    // Default `start` (--ship-held only) does NOT cover Scope::Dispatch.
+    // 1. Default `start` (--ship-held only) covers ShipHeld and NOT Dispatch.
     let ship_only = mandate::start(
         &f.mandate_dir,
         &|| Ok(()),
@@ -173,8 +173,9 @@ fn mandate_start_scope_dispatch_is_explicit_and_not_default() {
     );
     mandate::stop(&f.mandate_dir, &|| Ok(()), &f.principal, now).unwrap();
 
-    // Explicit `--scope dispatch` adds Scope::Dispatch alongside ShipHeld.
-    let with_dispatch = mandate::start_with_scopes(
+    // 2. Scope-only `--scope dispatch` (without `--ship-held` or `--drive`) covers
+    //    Dispatch ONLY and does NOT imply ShipHeld.
+    let dispatch_only = mandate::start_with_scopes(
         &f.mandate_dir,
         &|| Ok(()),
         &f.principal,
@@ -186,16 +187,123 @@ fn mandate_start_scope_dispatch_is_explicit_and_not_default() {
         now,
     )
     .unwrap();
-    assert!(with_dispatch.covers(Scope::ShipHeld));
-    assert!(with_dispatch.covers(Scope::Dispatch));
-    assert!(!with_dispatch.is_drive());
+    assert!(dispatch_only.covers(Scope::Dispatch));
+    assert!(
+        !dispatch_only.covers(Scope::ShipHeld),
+        "`aida mandate start --scope dispatch` without --ship-held must not cover ship-held"
+    );
+    assert!(!dispatch_only.is_drive());
+
+    // `mandate::ship_decision` must also refuse a `--scope dispatch`-only mandate with ScopeNotCovered.
+    let ship_state = MandateState::Active(dispatch_only.clone());
+    let ship_policy = Default::default();
+    let ship_ledger = Ok(Default::default());
+    let ship_hold = mandate::HoldFacts::ClearedByHuman;
+    let ship_paths = vec!["README.md".to_string()];
+    let ship_head = "a".repeat(40);
+    let ship_check = mandate::ShipCheck {
+        state: &ship_state,
+        grant: Some(("advisor", &f.principal)),
+        now,
+        override_stale_approval: false,
+        hold: &ship_hold,
+        specs_resolved: true,
+        specs: &[],
+        ledger: &ship_ledger,
+        candidates: &[],
+        policy: &ship_policy,
+        head: Some(ship_head.as_str()),
+        carry_over: None,
+        changed_paths: Some(&ship_paths),
+        protected: crate::mandate_gates::ProtectedPaths::floor_ref(),
+        ship_gate: None,
+        hold_clear_gate: None,
+    };
+    assert_eq!(
+        mandate::ship_decision(&ship_check),
+        Err(mandate::MandateRefusal::ScopeNotCovered {
+            id: dispatch_only.id.clone(),
+            scope: mandate::SCOPE_SHIP_HELD,
+        })
+    );
+
+    // Under a dispatch-only mandate, non-shipping verbs (`review`, `flow --no-ship`) succeed,
+    // while shipping verbs (`flow` without `--no-ship`, `train`) refuse with `ship-held`.
+    let no_ship_flow = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Flow {
+            pr: 101,
+            no_ship: true,
+            vendor: None,
+        },
+        now,
+    )
+    .unwrap();
+    assert_eq!(
+        no_ship_flow.request.action,
+        DispatchVerb::Flow {
+            pr: 101,
+            no_ship: true,
+            vendor: None,
+        }
+    );
+    let ship_flow_err = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Flow {
+            pr: 102,
+            no_ship: false,
+            vendor: None,
+        },
+        now,
+    )
+    .unwrap_err();
+    assert!(
+        ship_flow_err
+            .to_string()
+            .contains("does not cover `ship-held`"),
+        "expected ship-held refusal for shipping flow, got: {ship_flow_err:#}"
+    );
+    let train_err = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Train { prs: vec![102] },
+        now,
+    )
+    .unwrap_err();
+    assert!(
+        train_err.to_string().contains("does not cover `ship-held`"),
+        "expected ship-held refusal for train, got: {train_err:#}"
+    );
+    mandate::stop(&f.mandate_dir, &|| Ok(()), &f.principal, now).unwrap();
+
+    // 3. Explicit `--ship-held --scope dispatch` covers BOTH ShipHeld and Dispatch.
+    let with_both = mandate::start_with_scopes(
+        &f.mandate_dir,
+        &|| Ok(()),
+        &f.principal,
+        Duration::hours(2),
+        None,
+        false,
+        false,
+        [Scope::ShipHeld, Scope::Dispatch].into_iter().collect(),
+        now,
+    )
+    .unwrap();
+    assert!(with_both.covers(Scope::ShipHeld));
+    assert!(with_both.covers(Scope::Dispatch));
+    assert!(!with_both.is_drive());
 }
 
 // trace:STORY-1917 | ai:agy
 #[test]
 fn valid_requests_succeed_freeze_brief_and_keep_git_status_clean() {
     let f = Fixture::new(&["reviewer", "implementer"]);
-    let m = f.start_mandate(&[Scope::Dispatch], false);
+    let m = f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
     let now = Utc::now();
 
     // 1. flow
@@ -352,7 +460,7 @@ fn refuses_without_active_dispatch_mandate_or_bound_advisor_grant() {
     );
 
     // 2. Mandate without Scope::Dispatch
-    f.start_mandate(&[], false);
+    f.start_mandate(&[Scope::ShipHeld], false);
     let err = submit_request(&f.root, &f.mandate_dir, &f.principal, &verb, now).unwrap_err();
     assert!(
         err.to_string().contains("does not cover `dispatch`"),
@@ -529,7 +637,7 @@ fn refuses_malformed_arguments_and_operator_only_or_tampered_briefs() {
 #[test]
 fn dedupe_idempotency_target_collision_and_cancel_lifecycle() {
     let f = Fixture::new(&["reviewer", "implementer"]);
-    f.start_mandate(&[Scope::Dispatch], false);
+    f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
     let now = Utc::now();
 
     // First flow request on PR 500
@@ -607,4 +715,162 @@ fn dedupe_idempotency_target_collision_and_cancel_lifecycle() {
     .unwrap();
     assert!(!after_cancel.deduplicated);
     assert_ne!(after_cancel.request.id, first.request.id);
+}
+
+// trace:STORY-1917 | ai:agy
+#[test]
+fn human_gates_gate_dispatch_and_ship_with_gated_audit_rows() {
+    let f = Fixture::new(&["reviewer", "implementer"]);
+    let m = f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
+    let now = Utc::now();
+
+    // 1. Gate `ship` in origin/main:.aida/config.toml -> `review` and `flow --no-ship`
+    //    succeed, while shipping `flow` and `train` refuse with Outcome::Gated.
+    std::fs::write(
+        f.root.join(".aida/config.toml"),
+        "store_path = \".aida-store\"\n\n[mandate.human_gates]\nops = [\"ship\"]\n",
+    )
+    .unwrap();
+    git(&f.root, &["add", ".aida/config.toml"]);
+    git(&f.root, &["commit", "-qm", "gate ship"]);
+    let head = crate::test_git::git_command()
+        .arg("-C")
+        .arg(&f.root)
+        .args(["rev-parse", "HEAD"])
+        .output()
+        .unwrap();
+    let sha = String::from_utf8(head.stdout).unwrap().trim().to_string();
+    git(&f.root, &["update-ref", "refs/remotes/origin/main", &sha]);
+
+    let no_ship = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Flow {
+            pr: 601,
+            no_ship: true,
+            vendor: None,
+        },
+        now,
+    )
+    .unwrap();
+    assert_eq!(no_ship.result.status, DispatchStatus::Pending);
+
+    let ship_err = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Flow {
+            pr: 602,
+            no_ship: false,
+            vendor: None,
+        },
+        now,
+    )
+    .unwrap_err();
+    assert!(
+        ship_err
+            .to_string()
+            .contains("shipping is gated by human gates"),
+        "expected GateOp::Ship refusal, got: {ship_err:#}"
+    );
+
+    // 2. Gate `dispatch` in origin/main:.aida/config.toml -> even `review` refuses with Outcome::Gated.
+    std::fs::write(
+        f.root.join(".aida/config.toml"),
+        "store_path = \".aida-store\"\n\n[mandate.human_gates]\nops = [\"dispatch\"]\n",
+    )
+    .unwrap();
+    git(&f.root, &["add", ".aida/config.toml"]);
+    git(&f.root, &["commit", "-qm", "gate dispatch"]);
+    let head = crate::test_git::git_command()
+        .arg("-C")
+        .arg(&f.root)
+        .args(["rev-parse", "HEAD"])
+        .output()
+        .unwrap();
+    let sha = String::from_utf8(head.stdout).unwrap().trim().to_string();
+    git(&f.root, &["update-ref", "refs/remotes/origin/main", &sha]);
+
+    let disp_err = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Review {
+            pr: 603,
+            vendor: None,
+        },
+        now,
+    )
+    .unwrap_err();
+    assert!(
+        disp_err
+            .to_string()
+            .contains("dispatch is gated by human gates"),
+        "expected GateOp::Dispatch refusal, got: {disp_err:#}"
+    );
+
+    let rows = crate::mandate_drive::ledger_rows(&f.root, &m.id);
+    let gated_count = rows
+        .iter()
+        .filter(|r| r.2.outcome == Outcome::Gated)
+        .count();
+    assert_eq!(
+        gated_count, 2,
+        "both GateOp::Ship and GateOp::Dispatch refusals must emit Outcome::Gated audit rows"
+    );
+}
+
+// trace:STORY-1917 | ai:agy
+#[test]
+fn load_all_pairs_skips_and_warns_on_malformed_or_orphan_entries() {
+    let f = Fixture::new(&["reviewer", "implementer"]);
+    f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
+    let now = Utc::now();
+
+    let good = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Review {
+            pr: 700,
+            vendor: None,
+        },
+        now,
+    )
+    .unwrap();
+
+    // Write a corrupt JSON request file with a UUID stem and an orphan request
+    // file with no companion result file (simulating a crash mid-submit).
+    let corrupt_id = Uuid::new_v4().to_string();
+    write_private_atomic(&request_path(&f.root, &corrupt_id), b"{not valid json").unwrap();
+
+    let orphan_id = Uuid::new_v4().to_string();
+    let mut orphan_req = good.request.clone();
+    orphan_req.id = orphan_id.clone();
+    write_private_atomic(
+        &request_path(&f.root, &orphan_id),
+        &serde_json::to_vec_pretty(&orphan_req).unwrap(),
+    )
+    .unwrap();
+
+    // `load_all_pairs` must skip both broken records and still return the valid one,
+    // and subsequent `submit_request` / `cancel_request` calls must not wedge.
+    let pairs = load_all_pairs(&f.root).unwrap();
+    assert_eq!(pairs.len(), 1);
+    assert_eq!(pairs[0].0.id, good.request.id);
+
+    let second = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Review {
+            pr: 701,
+            vendor: None,
+        },
+        now,
+    )
+    .unwrap();
+    let cancelled = cancel_request(&f.root, &second.request.id, now).unwrap();
+    assert_eq!(cancelled.status, DispatchStatus::Cancelled);
 }

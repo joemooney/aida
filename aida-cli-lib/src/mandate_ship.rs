@@ -295,12 +295,17 @@ pub(crate) fn mandate_ship_cover(
 ) -> std::result::Result<MandateCover, crate::mandate::MandateRefusal> {
     use crate::mandate::{HoldFacts, MandateRefusal, MandateState, ShipCheck};
     let state = crate::mandate::current_state_reporting(true);
-    if !matches!(state, MandateState::Active(_)) {
-        return Err(match state {
-            MandateState::Expired(m) => MandateRefusal::Expired { id: m.id },
-            MandateState::Stopped(m) => MandateRefusal::Stopped { id: m.id },
-            _ => MandateRefusal::NoMandate,
-        });
+    match &state {
+        MandateState::Active(m) if !m.covers(crate::mandate::Scope::ShipHeld) => {
+            return Err(MandateRefusal::ScopeNotCovered {
+                id: m.id.clone(),
+                scope: crate::mandate::SCOPE_SHIP_HELD,
+            });
+        }
+        MandateState::Active(_) => {}
+        MandateState::Expired(m) => return Err(MandateRefusal::Expired { id: m.id.clone() }),
+        MandateState::Stopped(m) => return Err(MandateRefusal::Stopped { id: m.id.clone() }),
+        MandateState::None => return Err(MandateRefusal::NoMandate),
     }
     let grant = crate::seat_authority::current_grant(project_root).map(|g| {
         (

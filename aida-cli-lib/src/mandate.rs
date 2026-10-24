@@ -149,11 +149,19 @@ impl Mandate {
         self.kind.as_deref() == Some(KIND_DRIVE)
     }
 
-    /// STORY-1700: `scope` (always ship-held) plus `scopes`.
+    /// STORY-1700 / STORY-1917: `ShipHeld` is implied only for a legacy/default
+    /// mandate with no explicit `scopes` (or a `--drive` mandate); an explicit
+    /// `scopes` set on a non-drive mandate is returned verbatim.
     // trace:STORY-1700 | ai:claude
+    // trace:STORY-1917 | ai:agy
     pub(crate) fn effective_scopes(&self) -> BTreeSet<Scope> {
+        if self.scopes.is_empty() {
+            return BTreeSet::from([Scope::ShipHeld]);
+        }
         let mut out = self.scopes.clone();
-        out.insert(Scope::ShipHeld);
+        if self.is_drive() {
+            out.insert(Scope::ShipHeld);
+        }
         out
     }
 
@@ -478,12 +486,12 @@ pub(crate) fn start_with(
         reason,
         include_supervised,
         drive,
-        BTreeSet::new(),
+        BTreeSet::from([Scope::ShipHeld]),
         now,
     )
 }
 
-/// [`start_with`], plus explicit extra [`Scope`]s (`--scope dispatch`).
+/// [`start_with`], with explicit [`Scope`]s (e.g. `Scope::ShipHeld`, `Scope::Dispatch`).
 // trace:STORY-1917 | ai:agy
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn start_with_scopes(
@@ -494,7 +502,7 @@ pub(crate) fn start_with_scopes(
     reason: Option<String>,
     include_supervised: bool,
     drive: bool,
-    extra_scopes: BTreeSet<Scope>,
+    requested_scopes: BTreeSet<Scope>,
     now: DateTime<Utc>,
 ) -> Result<Mandate> {
     if let Err(err) = human() {
@@ -514,12 +522,15 @@ pub(crate) fn start_with_scopes(
             active.expires_at.to_rfc3339()
         );
     }
-    let mut scopes = if drive {
-        Scope::ALL.into_iter().collect()
+    let scopes = if drive {
+        let mut s: BTreeSet<Scope> = Scope::ALL.into_iter().collect();
+        s.remove(&Scope::ShipHeld);
+        s
+    } else if requested_scopes == BTreeSet::from([Scope::ShipHeld]) || requested_scopes.is_empty() {
+        BTreeSet::new()
     } else {
-        extra_scopes
+        requested_scopes
     };
-    scopes.remove(&Scope::ShipHeld);
     let mandate = Mandate {
         id: Uuid::new_v4().to_string(),
         principal: principal.to_string(),
@@ -1418,6 +1429,8 @@ pub(crate) enum MandateRefusal {
     TouchesGates(crate::mandate_gates::GateMatch), // trace:STORY-1888 | ai:claude
     HumanGated { why: String },
     SoloSelfApproval,
+    // trace:STORY-1917 | ai:agy
+    ScopeNotCovered { id: String, scope: &'static str },
 }
 
 impl MandateRefusal {
@@ -1486,6 +1499,9 @@ impl MandateRefusal {
             ),
             Self::HumanGated { why } => format!("shipping is a human gate ({why})"),
             Self::SoloSelfApproval => "the approval is a solo-human self-approval, not an independent review; a human must ship it".to_string(),
+            Self::ScopeNotCovered { id, scope } => {
+                format!("mandate {id} does not cover `{scope}`")
+            }
         };
         format!("PR-{pr}: the fire-fighting mandate does not cover this ship: {why}")
     }
@@ -1718,6 +1734,12 @@ fn hold_cover<'a>(c: &ShipCheck<'a>) -> std::result::Result<&'a Mandate, Mandate
             id: mandate.id.clone(),
         });
     }
+    if !mandate.covers(Scope::ShipHeld) {
+        return Err(MandateRefusal::ScopeNotCovered {
+            id: mandate.id.clone(),
+            scope: SCOPE_SHIP_HELD,
+        });
+    }
     match c.grant {
         Some((seat, principal)) if seat == MANDATE_SEAT => {
             if principal.trim() != mandate.principal {
@@ -1942,8 +1964,14 @@ pub(crate) fn status_line(state: &MandateState, now: DateTime<Utc>, gates: &str)
             "MANDATE {}",
             if m.is_drive() {
                 KIND_DRIVE
-            } else {
+            } else if m.covers(Scope::ShipHeld) {
                 SCOPE_SHIP_HELD
+            } else {
+                m.effective_scopes()
+                    .iter()
+                    .next()
+                    .map(|s| s.as_str())
+                    .unwrap_or(SCOPE_SHIP_HELD)
             }
         ),
         format!(
@@ -2050,8 +2078,17 @@ fn status_text(state: &MandateState, now: DateTime<Utc>) -> String {
                         .collect::<Vec<_>>()
                         .join(", ")
                 )
-            } else {
+            } else if m.effective_scopes() == BTreeSet::from([Scope::ShipHeld]) {
                 "  covers:    the advisor seat shipping held PRs".to_string()
+            } else {
+                format!(
+                    "  covers:    {}",
+                    m.effective_scopes()
+                        .iter()
+                        .map(|s| s.as_str())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
             },
             format!(
                 "  includes sensitive specs: {}",
@@ -2132,10 +2169,13 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
             exclude_supervised,
         } => {
             let mut parsed_scopes = BTreeSet::new();
+            if *ship_held {
+                parsed_scopes.insert(Scope::ShipHeld);
+            }
             for raw in scopes {
                 parsed_scopes.insert(Scope::parse(raw)?);
             }
-            if !ship_held && !drive && parsed_scopes.is_empty() {
+            if !drive && parsed_scopes.is_empty() {
                 bail!("say what the mandate covers: `aida mandate start --ship-held`, `--scope dispatch`, or `--drive` for a drive mandate");
             }
             let ttl = match ttl {
@@ -2171,10 +2211,23 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
                         eprintln!("warning: {warning}");
                     }
                 }
-            } else {
+            } else if m.covers(Scope::ShipHeld) {
                 println!(
                     "Mandate {} started: the advisor seat may ship held PRs with an attested, independent approval and green CI until {}.",
                     m.id,
+                    m.expires_at.to_rfc3339()
+                );
+            } else {
+                let scope_list = m
+                    .effective_scopes()
+                    .iter()
+                    .map(|s| s.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                println!(
+                    "Mandate {} started ({}): active until {}.",
+                    m.id,
+                    scope_list,
                     m.expires_at.to_rfc3339()
                 );
             }

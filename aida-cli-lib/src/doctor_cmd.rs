@@ -52,6 +52,11 @@ pub(crate) fn handle_doctor_command(
         });
     };
     match cmd {
+        // trace:TASK-2324 | ai:codex
+        cli::DoctorCommand::RustcCache { fix } => {
+            let root = find_project_root()?;
+            crate::rustc_cache::run(&root, *fix)
+        }
         cli::DoctorCommand::Check {
             category,
             all: sub_all,
@@ -651,6 +656,15 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
     )? {
         findings.extend(crate::sandbox_config_lock::scan(&project_root));
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
+    }
+
+    // Report only: general --heal never removes compiler caches.
+    // trace:TASK-2324 | ai:codex
+    if doctor_category_selected(opts.category.as_deref(), crate::rustc_cache::CATEGORY)? {
+        // Coordination scans use main; build artifacts belong to the invoked
+        // worktree, matching the dedicated rustc-cache command.
+        let build_root = find_project_root()?;
+        findings.extend(crate::rustc_cache::scan(&build_root));
     }
 
     // TASK-1095: remote-drift scan — do the shared branches (trunk + store) hold

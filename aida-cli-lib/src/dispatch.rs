@@ -1,4 +1,4 @@
-//! STORY-1917: typed dispatch requests (`aida dispatch`).
+//! Typed dispatch requests (`aida dispatch`).
 //!
 //! A sandboxed advisor seat queues closed, validated requests (`flow`,
 //! `review`, `take`, `impl`, `train`) under `<main_worktree>/.aida/dispatch/`.
@@ -155,6 +155,12 @@ impl DispatchVerb {
     pub(crate) fn dedupe_key(&self) -> String {
         match self {
             Self::Flow { pr, no_ship, .. } => format!("flow:pr:{pr}:noship:{no_ship}"),
+            // Request queueing runs offline/store-less inside a sandboxed
+            // advisor seat where forge/network queries for the current PR head
+            // OID may be unavailable, so review deduplicates on active
+            // (`Pending`/`Running`) requests for `pr:<pr>`; once a review
+            // finishes (`Done`/`Failed`/`Refused`/`Cancelled`), a new review
+            // request for a newer head queues immediately.
             Self::Review { pr, .. } => format!("review:pr:{pr}"),
             Self::Take {
                 pr,
@@ -946,7 +952,7 @@ pub(crate) fn check_request_authority(
     let grant = match seat_authority::grant_check_at(main_worktree, now) {
         GrantCheck::Valid(grant) => grant,
         GrantCheck::Absent => {
-            let msg = "dispatch requests require a bound `advisor` seat grant (`AIDA_SESSION_GRANT` is not set); enter the role before starting the advisor session with `eval \"$(aida role enter advisor --delegate-seat reviewer --delegate-seat implementer)\"`".to_string();
+            let msg = "dispatch requests require a bound `advisor` seat grant (no session grant is set); enter the role before starting the advisor session with `eval \"$(aida role enter advisor --delegate-seat reviewer --delegate-seat implementer)\"`".to_string();
             emit_dispatch_event(
                 main_worktree,
                 &mandate.id,
@@ -1401,7 +1407,16 @@ pub(crate) fn load_all_pairs(
     };
     let mut pairs = Vec::new();
     for entry in entries {
-        let entry = entry?;
+        let entry = match entry {
+            Ok(entry) => entry,
+            Err(err) => {
+                eprintln!(
+                    "warning: ignoring unreadable entry in {}: {err}",
+                    req_dir.display()
+                );
+                continue;
+            }
+        };
         let path = entry.path();
         let (Some(stem), Some(ext)) = (
             path.file_stem().and_then(|s| s.to_str()),
@@ -1412,8 +1427,12 @@ pub(crate) fn load_all_pairs(
         if ext != "json" || stem.starts_with('.') || Uuid::parse_str(stem).is_err() {
             continue;
         }
-        let pair = load_pair(main_worktree, stem)?;
-        pairs.push(pair);
+        match load_pair(main_worktree, stem) {
+            Ok(pair) => pairs.push(pair),
+            Err(err) => {
+                eprintln!("warning: ignoring malformed dispatch record {stem}: {err:#}");
+            }
+        }
     }
     pairs.sort_by(|(a, _), (b, _)| a.requested_at.cmp(&b.requested_at).then(a.id.cmp(&b.id)));
     Ok(pairs)
