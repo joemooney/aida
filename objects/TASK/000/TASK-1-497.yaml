@@ -14,7 +14,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-24T20:56:03.649607123Z
-modified_at: 2026-10-24T22:29:03.622407145Z
+modified_at: 2026-10-24T22:29:07.499018500Z
 req_type: Task
 tags:
 - carried-from:BUG-2220
@@ -26,6 +26,13 @@ relationships:
   target_id: 01a16fb2-eea1-7e10-9bba-14aab90a2b71
   created_at: 2026-10-24T22:29:03.622403625Z
   created_by: joe
+comments:
+- id: 01a17008-312b-73f1-9289-4933205a0048
+  author: joe
+  content: 'ADVISOR 15:30: same rider-gate area; fix the parse_members_line doc together with the fail-open fix.'
+  created_at: 2026-10-24T22:29:07.499018500Z
+  modified_at: 2026-10-24T22:29:07.499018500Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
 history:
 - id: 01a16fcb-a948-7c73-8b54-378fe9a90d8a
   author: joe
