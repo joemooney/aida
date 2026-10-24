@@ -3,12 +3,12 @@ spec_id: BUG-2218
 agreed_id: BUG-2218
 title: 'aida mailbox send fails from a sandboxed agent session: mailbox store not writable'
 description: 'Observed 2026-10-24: an implementer in the Claude Code sandbox got ''error: writing message <id>'' from aida mailbox send, so lanes report to the advisor by other routes. ACCEPTANCE: a sandboxed agent can send mail. Either the mailbox write target is inside the sandbox-writable area or the send goes through a path the sandbox allows, without widening the sandbox to sensitive paths. When the send really cannot be written, the error names the path and the reason. Test with a read-only mailbox root.'
-status: InProgress
+status: Done
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-24T12:27:08.977771549Z
-modified_at: 2026-10-24T13:44:17.510269596Z
+modified_at: 2026-10-24T13:45:00.819387504Z
 req_type: Bug
 comments:
 - id: 01a16e27-b166-70b2-8c60-d96e54c79da2
@@ -36,6 +36,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a16e28-5a93-7ac2-8572-843a002ed50d
+  author: ai:codex:joe
+  timestamp: 2026-10-24T13:45:00.819381759Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 6980be3ace8b7b9ae795e4347b8a9d4be01a287e
   branch: main
