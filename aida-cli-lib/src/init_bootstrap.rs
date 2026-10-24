@@ -248,6 +248,13 @@ fn run_in(dir: &Path, program: &str, args: &[&str]) -> Result<()> {
 /// credentials kept out of argv.
 // trace:BUG-2181 | ai:claude
 fn git_push_in(dir: &Path, remote: &str, args: &[&str]) -> Result<()> {
+    // A `push -u` records the upstream in the shared config; clear a sandbox
+    // placeholder first and repair the upstream if the write still failed.
+    // trace:TASK-2270 | ai:claude
+    let upstream_branch = args.contains(&"-u").then(|| args.last().copied()).flatten();
+    if upstream_branch.is_some() {
+        aida_core::git_ops::clear_sandbox_config_lock(dir);
+    }
     let status = std::process::Command::new("git")
         .args(args)
         .current_dir(dir)
@@ -256,6 +263,9 @@ fn git_push_in(dir: &Path, remote: &str, args: &[&str]) -> Result<()> {
         .context("could not launch `git`")?;
     if !status.success() {
         bail!("`git {}` failed in {}", args.join(" "), dir.display());
+    }
+    if let Some(branch) = upstream_branch {
+        aida_core::git_ops::repair_push_upstream(dir, remote, Some(branch), branch);
     }
     Ok(())
 }
@@ -613,5 +623,56 @@ fn emit_enter_dir(plan_dir: &Path) {
             println!("{payload}");
         }
         EnterDirChannel::Hint => println!("      cd {}", plan_dir.display()),
+    }
+}
+
+#[cfg(all(test, unix))]
+mod config_lock_push_tests {
+    use super::*;
+    use std::os::unix::fs::PermissionsExt;
+
+    fn git_ok(dir: &Path, args: &[&str]) -> String {
+        let out = crate::test_git::git_command()
+            .current_dir(dir)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "git {args:?}: {out:?}");
+        String::from_utf8_lossy(&out.stdout).trim().to_string()
+    }
+
+    /// A bootstrap `push -u` under the sandbox placeholder still leaves the
+    /// branch tracking the pushed branch, even one that tracked `origin/main`.
+    // trace:TASK-2270 | ai:claude
+    #[test]
+    fn push_u_under_the_config_lock_placeholder_sets_the_upstream() {
+        let root = tempfile::tempdir().unwrap();
+        git_ok(root.path(), &["init", "-q", "--bare", "remote.git"]);
+        let work = root.path().join("work");
+        std::fs::create_dir(&work).unwrap();
+        git_ok(&work, &["init", "-q", "-b", "main"]);
+        git_ok(&work, &["config", "user.email", "t@example.invalid"]);
+        git_ok(&work, &["config", "user.name", "t"]);
+        git_ok(&work, &["commit", "-q", "--allow-empty", "-m", "init"]);
+        git_ok(&work, &["remote", "add", "origin", "../remote.git"]);
+        git_ok(&work, &["push", "-q", "origin", "main"]);
+        git_ok(
+            &work,
+            &["checkout", "-q", "--track", "-b", "feat", "origin/main"],
+        );
+        let lock = work.join(".git/config.lock");
+        std::fs::write(&lock, b"").unwrap();
+        std::fs::set_permissions(&lock, std::fs::Permissions::from_mode(0o444)).unwrap();
+        let push = [
+            &aida_core::git_ops::NO_AUTO_MAINTENANCE[..],
+            &["push", "-q", "-u", "origin", "feat"],
+        ]
+        .concat();
+        git_push_in(&work, "origin", &push).unwrap();
+        assert_eq!(
+            git_ok(&work, &["rev-parse", "--abbrev-ref", "feat@{upstream}"]),
+            "origin/feat"
+        );
+        assert!(!lock.exists());
     }
 }

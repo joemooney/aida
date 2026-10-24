@@ -1,4 +1,3 @@
-use aida_core::git_ops::RemoteCredentialsExt as _;
 // `aida init` command cluster, lifted verbatim out of `main.rs`
 // (SPIKE-78 pure-movement extraction). The four init handlers
 // (`handle_init_command`, `handle_init_distributed_worktree`,
@@ -4267,6 +4266,23 @@ pub(crate) fn distributed_worktree_config_head(worktree_dir: &str, branch_name: 
     )
 }
 
+/// `git push -u origin <branch>` in `dir`, with origin's credentials kept
+/// out of argv. The `-u` writes the shared config, so a sandbox placeholder
+/// is cleared first and the upstream repaired if the write still failed.
+/// Returns whether the push succeeded.
+// trace:BUG-2181 trace:TASK-2270 | ai:claude
+pub(crate) fn push_set_upstream(dir: &std::path::Path, branch: &str) -> bool {
+    aida_core::git_ops::clear_sandbox_config_lock(dir);
+    let pushed = aida_core::git_ops::host_remote_git_command(dir, "origin")
+        .args(["push", "-u", "origin", branch])
+        .output()
+        .is_ok_and(|o| o.status.success());
+    if pushed {
+        aida_core::git_ops::repair_push_upstream(dir, "origin", Some(branch), branch);
+    }
+    pushed
+}
+
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn handle_init_distributed_worktree(
     force: bool,
@@ -4635,53 +4651,38 @@ pub(crate) fn handle_init_distributed_worktree(
         //     it as default rather than the orphan store.
         if origin_empty {
             if let InitPushPlan::CodeBranchFirst(cb) = &plan {
-                let out = std::process::Command::new("git")
-                    .arg("-C")
-                    .arg(&cwd)
-                    .args(["push", "-u", "origin", cb])
-                    // trace:BUG-2181 | ai:claude
-                    .remote_credentials(&cwd, "origin")
-                    .output();
-                match out {
-                    Ok(o) if o.status.success() => {
-                        println!("  {} pushed code branch to origin/{}", "Done".green(), cb);
-                    }
-                    _ => {
-                        eprintln!(
-                            "  {} could not push code branch to origin/{} \
-                             (run `git push -u origin {}` later)",
-                            "Note:".dimmed(),
-                            cb,
-                            cb
-                        );
-                    }
+                // trace:TASK-2270 | ai:claude
+                if push_set_upstream(&cwd, cb) {
+                    println!("  {} pushed code branch to origin/{}", "Done".green(), cb);
+                } else {
+                    eprintln!(
+                        "  {} could not push code branch to origin/{} \
+                         (run `git push -u origin {}` later)",
+                        "Note:".dimmed(),
+                        cb,
+                        cb
+                    );
                 }
             }
         }
 
         // The orphan-store push (unchanged behavior).
-        // trace:BUG-2181 | ai:claude
-        let push_result = aida_core::git_ops::host_remote_git_command(&store_path, "origin")
-            .args(["push", "-u", "origin", branch_name])
-            .output();
-        match push_result {
-            Ok(out) if out.status.success() => {
-                println!(
-                    "  {} pushed orphan branch to origin/{}",
-                    "Done".green(),
-                    branch_name
-                );
-            }
-            _ => {
-                eprintln!(
-                    "  {} could not push orphan branch to origin/{} \
-                     (run `git -C {} push -u origin {}` later)",
-                    "Note:".dimmed(),
-                    branch_name,
-                    worktree_dir,
-                    branch_name
-                );
-            }
+        // trace:TASK-2270 | ai:claude
+        if push_set_upstream(&store_path, branch_name) {
+            println!(
+                "  {} pushed orphan branch to origin/{}",
+                "Done".green(),
+                branch_name
+            );
+        } else {
+            eprintln!(
+                "  {} could not push orphan branch to origin/{} \
+                 (run `git -C {} push -u origin {}` later)",
+                "Note:".dimmed(),
+                branch_name,
+                worktree_dir,
+                branch_name
+            );
         }
 
         // (b) Explicitly assert the forge default branch = the code branch, so
