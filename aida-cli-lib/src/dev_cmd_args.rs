@@ -28,7 +28,8 @@ pub enum DevCommand {
     // trace:TASK-1158 | ai:claude
     Activate {
         /// Override the AIDA repo path (defaults to current directory if it
-        /// looks like the aida repo, or $AIDA_DEV_REPO if set).
+        /// looks like the aida repo, or $AIDA_DEV_REPO if set; when that
+        /// names a removed worktree, $AIDA_DEV_HOME_REPO).
         #[clap(long)]
         repo: Option<String>,
 

@@ -22,7 +22,8 @@ pub(crate) fn agent_ls(show_all: bool, stale_only: bool, ended_only: bool) -> Re
         let _ = agent_registry::gc_dead_agents(&project_root, false, None);
     }
     let leases = list_leases(&project_root);
-    let agent_ctx = build_agent_classify_context(&project_root, &leases);
+    // trace:TASK-2272 | ai:claude
+    let agent_ctx = build_agent_classify_context(&project_root, &leases).for_display();
     let observer = agent_ctx.observer;
     let mut agents = if ended_only {
         agent_registry::ended_resumable_agent_views(&project_root, &agent_ctx)

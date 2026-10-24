@@ -186,6 +186,44 @@ pub(crate) fn write_state(live: &Path, state: &State) -> Result<()> {
         .with_context(|| format!("writing {}", live.join(STATE_FILE).display()))
 }
 
+/// Why [`pin_rolled_back`] pinned a SHA, as the state record's `error`.
+pub(crate) const ROLLED_BACK_ERROR: &str = "the operator rolled the live binary back from it";
+
+/// `aida dev rollback` pins the SHA it rolled away from as an already
+/// reported failure, so the next tick skips it (`failed-sha`) until
+/// origin/main moves instead of rebuilding and re-promoting it. Under the
+/// autopromote lock, and never over a failure not yet reported: that report
+/// still has to reach the advisor. `Some(why)` when nothing was pinned.
+// trace:TASK-2272 | ai:claude
+pub(crate) fn pin_rolled_back(live: &Path, sha: &str) -> Result<Option<String>> {
+    let Some(_lock) = try_lock(live, Duration::from_secs(2))? else {
+        return Ok(Some(
+            "a scheduled autopromote tick or build holds its lock".to_string(),
+        ));
+    };
+    if let Some(state) = read_state(live) {
+        if state.phase == Phase::Failed && !state.reported && state.sha != sha {
+            return Ok(Some(format!(
+                "the failed build of {} is not reported yet",
+                state.sha
+            )));
+        }
+    }
+    write_state(
+        live,
+        &State {
+            sha: sha.to_string(),
+            phase: Phase::Failed,
+            pid: None,
+            log: String::new(),
+            reported: true,
+            at: chrono::Utc::now().to_rfc3339(),
+            error: Some(ROLLED_BACK_ERROR.to_string()),
+        },
+    )?;
+    Ok(None)
+}
+
 /// Paths the tick and the child use besides the live dir.
 #[derive(Debug, Clone)]
 pub(crate) struct Paths {
@@ -520,9 +558,14 @@ pub(crate) fn run_tick(
     }
     if let Some(prev) = read_state(live) {
         if prev.phase == Phase::Failed && prev.sha == target {
-            return skipped(Skip::FailedSha(format!(
-                "the build of {target} already failed; waiting for origin/main to move"
-            )));
+            // trace:TASK-2272 | ai:claude
+            return skipped(Skip::FailedSha(
+                if prev.error.as_deref() == Some(ROLLED_BACK_ERROR) {
+                    format!("{ROLLED_BACK_ERROR} ({target}); waiting for origin/main to move")
+                } else {
+                    format!("the build of {target} already failed; waiting for origin/main to move")
+                },
+            ));
         }
     }
     if let Some(skip) = budget_skip(

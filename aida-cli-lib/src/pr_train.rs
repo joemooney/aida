@@ -894,17 +894,13 @@ impl MemberChecks for LiveChecks<'_> {
                 body: String::new(),
             }
         };
-        let (subject, _trailer) = crate::pr_cmd::derive_pr_ship_squash_subject_from(
+        let subject = member_subject_at_head(
             self.project_root,
+            self.main_worktree,
             &ship_meta,
             meta.head_ref.trim(),
-            false,
-        )
-        .map_err(|e| format!("its squash subject could not be derived ({e:#})"))?;
-        let head_msg =
-            crate::pr_cmd::branch_head_commit_message(self.project_root, meta.head_ref.trim())
-                .unwrap_or_default();
-        let subject = member_squash_subject(subject, &head_msg, &ship_meta.title);
+            head,
+        )?;
         let body = member_body(self.project_root, self.base, head, &ship_meta.body)?;
         Ok((subject, body))
     }
@@ -944,6 +940,35 @@ impl MemberChecks for LiveChecks<'_> {
     }
 }
 
+/// The car subject for a member, read at its gated, approved head sha (the
+/// gate fetched it into `repo`). A same-named local branch in the merge
+/// seat's checkout may be stale, so the branch is never consulted for the
+/// commit message.
+// trace:TASK-2272 | ai:claude
+pub(crate) fn member_subject_at_head(
+    project_root: &Path,
+    repo: &Path,
+    ship_meta: &crate::pr_cmd::PrShipMetadata,
+    head_ref: &str,
+    head: &str,
+) -> std::result::Result<String, String> {
+    let head_msg = git(repo, &["log", "-1", "--format=%B", head, "--"]).map_err(|e| {
+        format!(
+            "its approved head {} could not be read ({e:#})",
+            short(head)
+        )
+    })?;
+    let (subject, _trailer) = crate::pr_cmd::derive_pr_ship_squash_subject_from_message(
+        project_root,
+        ship_meta,
+        head_ref,
+        &head_msg,
+        false,
+    )
+    .map_err(|e| format!("its squash subject could not be derived ({e:#})"))?;
+    Ok(member_squash_subject(subject, &head_msg, &ship_meta.title))
+}
+
 /// The squash subject a member's car carries. Ship's derivation returns
 /// `None` when its subject equals the branch head commit's own derived
 /// subject, and ship then lets the forge use that commit subject. The train
@@ -964,6 +989,13 @@ pub(crate) fn member_squash_subject(
     } else {
         from_commit
     }
+}
+
+/// Whether the train's PRs were named on its command line: every one is,
+/// unless `--all-ready` swept them in. Feeds [`tty_consents`].
+// trace:TASK-2272 | ai:claude
+pub(crate) fn prs_named_on_command_line(opts: &TrainOptions) -> bool {
+    !opts.all_ready
 }
 
 /// BUG-727: in ship, a human at a terminal consents to the merge because
@@ -1638,7 +1670,7 @@ pub(crate) fn pr_train_handler(opts: &TrainOptions<'_>) -> Result<()> {
             forge.as_ref(),
             &base,
             pr,
-            !opts.all_ready,
+            prs_named_on_command_line(opts),
         ) {
             Ok(m) => {
                 println!("  ✓ #{pr} ready at {}: {}", short(&m.head), m.subject);
@@ -1699,7 +1731,7 @@ pub(crate) fn pr_train_handler(opts: &TrainOptions<'_>) -> Result<()> {
             main_worktree: main_worktree.clone(),
             base: base.clone(),
             forge: forge.as_ref(),
-            named: !opts.all_ready,
+            named: prs_named_on_command_line(opts),
         };
         let mut rails = ForgeRails::new(
             &mut ports,

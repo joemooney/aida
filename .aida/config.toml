@@ -394,7 +394,7 @@ enabled = true
 name = "dev-autopromote-route"
 seats = ["advisor"]
 on = ["CronJobFailed:dev-autopromote"]
-prompt = "The scheduled live-binary build failed; the live binary was not changed and that commit is not retried until main moves. The routed error's last line names the commit, the full build log path and the log's tail. Read them, decide whether main is broken or the build host is (disk, toolchain, incremental cache), and fix or file it. `aida dev status` shows the live SHA; `aida dev build --clean` from a clean primary main retries by hand."
+prompt = "The scheduled dev-autopromote job failed: either the live-binary build failed (that commit is not retried until main moves; the routed error's last line names the commit, the full build log path and the log's tail), or the tick itself errored or timed out before any fast-forward (the error says so, and the next tick retries). Either way the live binary was not changed. Read the error and any build log, decide whether main is broken or the build host is (disk, toolchain, incremental cache), and fix or file it. `aida dev status` shows the live SHA; `aida dev build --clean` from a clean primary main retries by hand."
 enabled = true
 
 # Effort-balance intent-capture target (TASK-1522): advisory floor on the
