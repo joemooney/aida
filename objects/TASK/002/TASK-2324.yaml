@@ -3,12 +3,12 @@ spec_id: TASK-2324
 agreed_id: TASK-2324
 title: 'aida doctor: detect a stale target/.rustc_info.json that replays a cached sccache error'
 description: 'Observed 2026-10-24: a stale target/.rustc_info.json cached an sccache EPERM, and every cargo tree/metadata call repeated it until the file was deleted. ACCEPTANCE: aida doctor (or the aida dev build preflight) flags a rustc_info.json whose cached output holds a wrapper error, and offers removing it as the fix (no deletion without --fix). Test with a fixture file.'
-status: InProgress
+status: Done
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-24T12:27:19.917135686Z
-modified_at: 2026-10-24T13:44:29.435788409Z
+modified_at: 2026-10-24T13:45:15.817445290Z
 req_type: Task
 comments:
 - id: 01a16e27-dffb-70e0-a911-77f21d9acdbc
@@ -36,6 +36,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a16e28-9529-7783-97e8-30f3385badad
+  author: ai:codex:joe
+  timestamp: 2026-10-24T13:45:15.817438969Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 6980be3ace8b7b9ae795e4347b8a9d4be01a287e
   branch: main
