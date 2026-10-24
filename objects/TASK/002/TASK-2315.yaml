@@ -1,0 +1,27 @@
+id: 01a16c93-d808-7033-b6a4-bc9edc7678e2
+spec_id: TASK-2315
+agreed_id: TASK-2315
+title: 'stage_resume_transcript: open the source O_NOFOLLOW and fstat it instead of symlink_metadata then read'
+description: |
+  aida-cli-lib/src/session.rs stage_resume_transcript checks the source transcript with symlink_metadata (regular file, owned by this uid), then reads it with std::fs::read, which follows symlinks. A swap between the check and the read gets past the signoff condition 'never a symlinked source'. Open the source with O_NOFOLLOW, fstat the handle and read from it. The source dir (~/.claude/projects/<main slug>) is host-owned, so the risk is low.
+
+  Raised in review of PR-2838: https://github.com/joemooney/aida/pull/2838#issuecomment-6380858550
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-24T06:23:10.856248618Z
+modified_at: 2026-10-24T06:23:10.856248618Z
+req_type: Task
+tags:
+- from-review:PR-2838
+- severity:minor
+filed_at:
+  code_sha: 1a6c419d58caf00e9a71b07d268518c32f057604
+  branch: pr-2838
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 43a38f38d2
+  vendor: claude
+  session: 01a16c914468
+  harness_version: 2.1.310 (Claude Code)

@@ -1,0 +1,27 @@
+id: 01a16c93-fde6-7251-abdf-f45bee606ecb
+spec_id: TASK-2317
+agreed_id: TASK-2317
+title: 'TASK-1781 (b) test: cover the agent_new_claude call site, not only the helper'
+description: |
+  task_1781_contained_parent_refuses_no_default_flags (bug_2151_contained_parent_agent_new_tests.rs:401) unit-tests refuse_no_default_flags_under_contained_parent, but not that agent_new_claude calls it. Add a case that runs agent_new_claude with AIDA_CONTAINED=1 and --no-default-flags and expects the refusal.
+
+  Raised in review of PR-2838: https://github.com/joemooney/aida/pull/2838#issuecomment-6380858550
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-24T06:23:20.550480591Z
+modified_at: 2026-10-24T06:23:20.550480591Z
+req_type: Task
+tags:
+- from-review:PR-2838
+- severity:cosmetic
+filed_at:
+  code_sha: 1a6c419d58caf00e9a71b07d268518c32f057604
+  branch: pr-2838
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 43a38f38d2
+  vendor: claude
+  session: 01a16c914468
+  harness_version: 2.1.310 (Claude Code)
