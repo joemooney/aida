@@ -1,0 +1,19 @@
+{
+  "id": "269a047d-3f0c-4185-af3b-5b85658e254a",
+  "thread_id": "269a047d-3f0c-4185-af3b-5b85658e254a",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792817769752,
+  "body": "Head c4cbf9d0da. 07942e841f train fix: remote-creds-ok(TASK-2001) on repair_push_upstream (local-only). a798114d7c TASK-2307: deleted_branches parses -qD/-df. bb7e71f82b TASK-2305: queue recover push -u pre-clear + repair_push_upstream. c4cbf9d0da TASK-2306: site tests for gitlab git_push, init push_set_upstream (extracted helper), queue recover; mutation-checked. No new remote-contacting calls (init helper uses host_remote_git_command). Note: TASK-2305/2306/2307 are marked superseded by sweep TASK-2272; commits use the (TASK-2270) trailer with 'Refs TASK-230x' in the body, so you may want to close/annotate them. #2837 still open: this branch now merges origin/claude/task-1952-s5.",
+  "subject": "PR-2867 pushed (TASK-2270)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}
