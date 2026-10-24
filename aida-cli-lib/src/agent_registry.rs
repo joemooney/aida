@@ -777,9 +777,11 @@ pub(crate) fn adopt_bg_session_identity(
             continue;
         }
         // The launch reserved `name`; bind it to this session so the
-        // generated handle its SessionStart took is released.
+        // generated handle its SessionStart took is released. This runs in
+        // the launcher, which holds the reservation's token.
         // trace:STORY-1843 | ai:claude
-        let _ = crate::agent_handle::reserve_handle(
+        let token = crate::agent_handle::launch_token_for(project_root, name);
+        let reserved = crate::agent_handle::reserve_handle(
             project_root,
             &crate::agent_handle::HandleRequest {
                 agent_type: &entry.agent_type,
@@ -787,9 +789,19 @@ pub(crate) fn adopt_bg_session_identity(
                 explicit: Some(name),
                 native_session_id: entry.claude_session_id.as_deref(),
                 registry_id: Some(&entry.id),
+                launch_token: token.as_deref(),
+                launcher: false,
             },
         );
-        entry.name = Some(name.to_string());
+        // Never write a name the namespace refused: the session keeps the
+        // handle its SessionStart took, so two sessions never share one.
+        match reserved {
+            Ok(_) => entry.name = Some(name.to_string()),
+            Err(err) => eprintln!(
+                "  warning: the launched session keeps its handle `{}`: {err:#}",
+                entry.name.as_deref().unwrap_or("-")
+            ),
+        }
         entry.current_spec = spec.map(str::to_string);
         entry.role = role.map(str::to_string).or(entry.role);
         entry.worktree_path = worktree.to_path_buf();
@@ -925,30 +937,6 @@ pub(crate) fn generate_or_validate_name(
         }
         let reserved = crate::agent_handle::reserved_addresses(project_root);
         crate::agent_handle::validate_explicit_handle(name_trimmed, &reserved)?;
-
-        // A name shaped like a generated `<vendor>-<role>-NN` handle would
-        // collide with the allocator's namespace.
-        let name_lower = name_trimmed.to_lowercase();
-        let is_type_role_prefix = ["claude-", "codex-", "antigravity-", "agy-", "web-"]
-            .iter()
-            .any(|prefix| {
-                if let Some(remainder) = name_lower.strip_prefix(prefix) {
-                    if let Some(dash_idx) = remainder.rfind('-') {
-                        let suffix = &remainder[dash_idx + 1..];
-                        !suffix.chars().all(|c| c.is_ascii_digit()) || suffix.is_empty()
-                    } else {
-                        true
-                    }
-                } else {
-                    false
-                }
-            });
-        if is_type_role_prefix {
-            anyhow::bail!(
-                "invalid agent name `{}`: conflicts with agent type+role prefix",
-                name_trimmed
-            );
-        }
     }
 
     let request = crate::agent_handle::HandleRequest {
@@ -957,6 +945,8 @@ pub(crate) fn generate_or_validate_name(
         explicit: custom_name.map(str::trim),
         native_session_id: None,
         registry_id: None,
+        launch_token: None,
+        launcher: true,
     };
     if reserve {
         return Ok(crate::agent_handle::reserve_handle(project_root, &request)?.handle);
@@ -2763,6 +2753,37 @@ fn session_start_agent_pid(_child_pid: u32, _agent_type: &str) -> Option<u32> {
 #[cfg(not(unix))]
 fn pid_has_ancestor(_child_pid: u32, _ancestor_pid: u32) -> bool {
     false
+}
+
+/// The parent of `pid`, when this process can see it.
+// trace:STORY-1843 | ai:claude
+pub(crate) fn parent_pid_of(pid: u32) -> Option<u32> {
+    #[cfg(unix)]
+    {
+        parent_pid(pid)
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = pid;
+        None
+    }
+}
+
+/// How many generations `ancestor` sits above `pid` (0 when they are the
+/// same process), or `None` when it is not an ancestor.
+// trace:STORY-1843 | ai:claude
+pub(crate) fn ancestor_depth(pid: u32, ancestor: u32) -> Option<usize> {
+    let mut current = pid;
+    for depth in 0..64 {
+        if current == ancestor {
+            return Some(depth);
+        }
+        match parent_pid_of(current) {
+            Some(parent) if parent != current && parent > 0 => current = parent,
+            _ => return None,
+        }
+    }
+    None
 }
 
 #[cfg(not(unix))]

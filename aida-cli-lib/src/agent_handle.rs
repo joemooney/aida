@@ -16,9 +16,16 @@
 //!
 //! Lifetime: a reservation is held while a registry entry carrying the
 //! handle may still be live, or, before the launched process registers,
-//! for [`UNBOUND_RESERVATION_TTL_SECS`]. The same native session (resume,
-//! `/clear` in the same process) reconnects to its UUID; a different session
-//! that reuses a retired spelling gets a new UUID.
+//! for [`UNBOUND_RESERVATION_TTL_SECS`]. The same native session (a resume
+//! of that session) reconnects to its UUID; a session with a new native id
+//! (including `/clear`, which starts a new client session) and any session
+//! that reuses a retired spelling get a new UUID.
+//!
+//! Only the process a launcher started may bind that launcher's unbound
+//! reservation: the reservation records a launch token the launcher hands
+//! its child in [`LAUNCH_TOKEN_ENV`], and binding requires it. A reservation
+//! without a live, matching token (released, expired, never launched) is a
+//! retired spelling.
 // trace:STORY-1843 | ai:claude
 
 use crate::agent_registry::{self, AgentRegistryEntry};
@@ -39,6 +46,21 @@ pub(crate) const UNBOUND_RESERVATION_TTL_SECS: i64 = 10 * 60;
 /// Unverified (PID namespace unobservable) holders keep their handle only
 /// while their heartbeat is this recent, matching the mail resolver.
 const UNVERIFIED_HOLDER_TTL_SECS: i64 = 24 * 60 * 60;
+
+/// Carries a launcher's reservation token to the process it launches.
+pub(crate) const LAUNCH_TOKEN_ENV: &str = "AIDA_HANDLE_LAUNCH_TOKEN";
+
+/// Session identity a client sets for its own children. A launched agent of
+/// any vendor must not inherit its parent's: it would resolve the parent's
+/// handle and read the parent's mail.
+pub(crate) const INHERITED_SESSION_ENV: &[&str] = &[
+    "CLAUDE_CODE_SESSION_ID",
+    "CLAUDE_PID",
+    "CODEX_THREAD_ID",
+    "CODEX_SESSION_ID",
+    "AIDA_HOOK_PAYLOAD",
+    LAUNCH_TOKEN_ENV,
+];
 
 /// Vendor names and aliases. A handle may not be one: `--to codex` must
 /// keep meaning the vendor group.
@@ -64,6 +86,14 @@ pub(crate) struct HandleReservation {
     /// Earlier recipients that held this spelling, oldest first.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub(crate) previous_recipients: Vec<String>,
+    /// A launcher's proof token: only a requester presenting it may bind
+    /// this unbound reservation. Cleared once bound or released.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) launch_token: Option<String>,
+    /// The launcher process holding the unbound reservation, so it can hand
+    /// the token to its child and release the name if the launch fails.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) launcher_pid: Option<u32>,
 }
 
 /// What a caller wants allocated or bound.
@@ -78,6 +108,11 @@ pub(crate) struct HandleRequest<'a> {
     /// The registry entry asking, so a re-registering process keeps its own
     /// handle instead of colliding with itself.
     pub(crate) registry_id: Option<&'a str>,
+    /// The launch token the requester's launcher handed it, when any.
+    pub(crate) launch_token: Option<&'a str>,
+    /// A launcher reserving for a process it is about to start: the new
+    /// reservation records a fresh launch token and this process's pid.
+    pub(crate) launcher: bool,
 }
 
 /// Why `name` is not a valid handle spelling, or `None` when it is.
@@ -144,6 +179,18 @@ pub(crate) fn validate_explicit_handle(name: &str, reserved: &BTreeSet<String>) 
             "invalid agent name `{name}`: it names a role, vendor or person; \
              try `{name}-01` or another name"
         );
+    }
+    // A name shaped like a generated `<vendor>-<role>` handle without its
+    // number would collide with the allocator's namespace.
+    let in_generated_namespace = ["claude-", "codex-", "antigravity-", "agy-", "web-"]
+        .iter()
+        .filter_map(|prefix| name.strip_prefix(prefix))
+        .any(|rest| match rest.rsplit_once('-') {
+            Some((_, suffix)) => suffix.is_empty() || !suffix.chars().all(|c| c.is_ascii_digit()),
+            None => true,
+        });
+    if in_generated_namespace {
+        bail!("invalid agent name `{name}`: conflicts with agent type+role prefix");
     }
     Ok(())
 }
@@ -216,15 +263,39 @@ fn write_reservation(project_root: &Path, r: &HandleReservation) -> Result<()> {
 /// Whether a registry entry may still be a live holder: observably alive,
 /// or unobservable from here with a recent heartbeat.
 fn entry_may_hold(project_root: &Path, entry: &AgentRegistryEntry, now: DateTime<Utc>) -> bool {
+    entry_may_hold_from(
+        project_root,
+        entry,
+        now,
+        agent_registry::PidObserver::current(),
+    )
+}
+
+/// [`entry_may_hold`] from an explicit observer. An isolated sandbox cannot
+/// vouch for rows it cannot see (BUG-2212), so they hold on heartbeat.
+fn entry_may_hold_from(
+    project_root: &Path,
+    entry: &AgentRegistryEntry,
+    now: DateTime<Utc>,
+    observer: agent_registry::PidObserver,
+) -> bool {
     if entry.source == "role-enter" {
         return false;
     }
-    let observer = agent_registry::current_pid_namespace();
-    agent_registry::observed_liveness(project_root, entry, observer).unwrap_or_else(|| {
+    agent_registry::observed_liveness_from(project_root, entry, observer).unwrap_or_else(|| {
         let age = now.signed_duration_since(entry.last_active_at);
         age >= chrono::Duration::zero()
             && age <= chrono::Duration::seconds(UNVERIFIED_HOLDER_TTL_SECS)
     })
+}
+
+/// Whether `req` proves it is the process the launcher reserved `r` for.
+fn proves_launch(r: &HandleReservation, req: &HandleRequest<'_>) -> bool {
+    r.native_session_id.is_none()
+        && r.launch_token.as_deref().is_some_and(|own| {
+            req.launch_token
+                .is_some_and(|token| !token.is_empty() && token == own)
+        })
 }
 
 /// The ways a holder of `handle` other than the requester may still be live.
@@ -238,8 +309,7 @@ fn other_live_holder(
 ) -> Option<String> {
     // The launched session binding its launcher's reservation: the
     // launcher's own registry row for it is not a competing holder.
-    let binding_launch = req.native_session_id.is_some()
-        && reservation.is_some_and(|r| r.native_session_id.is_none());
+    let binding_launch = reservation.is_some_and(|r| proves_launch(r, req));
     for entry in entries {
         if binding_launch && entry.source == "agent-launcher" {
             continue;
@@ -259,7 +329,8 @@ fn other_live_holder(
         }
     }
     let r = reservation?;
-    if session_matches(r, req.native_session_id)
+    if binding_launch
+        || session_matches(r, req.native_session_id)
         || (req.registry_id.is_some() && r.registry_id.as_deref() == req.registry_id)
     {
         return None;
@@ -271,12 +342,12 @@ fn other_live_holder(
     }
     match r.native_session_id.as_deref() {
         // An unbound reservation is the launcher's promise to the process it
-        // is about to start; only a session-bearing request (that process's
-        // own startup) may bind it.
-        None => req
-            .native_session_id
-            .is_none()
-            .then(|| format!("a launch reserved it at {}", r.reserved_at.to_rfc3339())),
+        // is about to start; only that process (its launch token, handled
+        // above) may bind it. Every other requester sees it held.
+        None => Some(format!(
+            "a launch reserved it at {}",
+            r.reserved_at.to_rfc3339()
+        )),
         // A session that bound it but has not written its registry row yet
         // still holds it; once it has a row, the rows above decide.
         Some(sid) => {
@@ -323,12 +394,24 @@ fn take(
     now: DateTime<Utc>,
 ) -> Result<HandleReservation> {
     let sid = req.native_session_id.filter(|s| !s.is_empty());
+    let (launch_token, launcher_pid) = if req.launcher {
+        (
+            Some(uuid::Uuid::new_v4().to_string()),
+            Some(std::process::id()),
+        )
+    } else {
+        (None, None)
+    };
     let reservation = match existing {
         Some(r) if session_matches(&r, sid) => r,
-        // The launcher reserved it for the process now binding it.
-        Some(mut r) if r.native_session_id.is_none() && sid.is_some() => {
+        // The launcher reserved it for this process, which proved it with
+        // the launch token. A released or expired reservation carries no
+        // token and falls through to a new recipient below.
+        Some(mut r) if proves_launch(&r, req) => {
             r.native_session_id = sid.map(str::to_string);
-            r.registry_id = r.registry_id.or(req.registry_id.map(str::to_string));
+            r.registry_id = req.registry_id.map(str::to_string).or(r.registry_id);
+            r.launch_token = None;
+            r.launcher_pid = None;
             r
         }
         // The same registry entry re-registering without a session id.
@@ -352,6 +435,8 @@ fn take(
                 prev.push(old.recipient_id);
                 prev
             },
+            launch_token,
+            launcher_pid,
         },
         None => HandleReservation {
             handle: handle.to_string(),
@@ -362,6 +447,8 @@ fn take(
             native_session_id: sid.map(str::to_string),
             registry_id: req.registry_id.map(str::to_string),
             previous_recipients: Vec::new(),
+            launch_token,
+            launcher_pid,
         },
     };
     write_reservation(project_root, &reservation)?;
@@ -460,12 +547,110 @@ fn release_other_bindings(project_root: &Path, taken: &HandleReservation) -> Res
         if r.handle != taken.handle && session_matches(&r, Some(sid)) {
             r.native_session_id = None;
             // Not a fresh launch promise: an unbound reservation older than
-            // the TTL holds nothing.
+            // the TTL holds nothing, and with no token nothing can re-bind it.
             r.reserved_at = DateTime::<Utc>::UNIX_EPOCH;
+            r.launch_token = None;
+            r.launcher_pid = None;
             write_reservation(project_root, &r)?;
         }
     }
     Ok(())
+}
+
+/// The token for `handle` when this process is the launcher still holding
+/// its unbound reservation; the launcher hands it to the child it spawns.
+pub(crate) fn launch_token_for(project_root: &Path, handle: &str) -> Option<String> {
+    load_reservation(project_root, handle)
+        .filter(|r| r.native_session_id.is_none() && r.launcher_pid == Some(std::process::id()))
+        .and_then(|r| r.launch_token)
+}
+
+/// Point `command` at this launcher's reservation for `handle`, and never
+/// hand it a token (or session identity) inherited from this process.
+pub(crate) fn apply_launch_env(
+    command: &mut std::process::Command,
+    project_root: &Path,
+    handle: &str,
+) {
+    for key in INHERITED_SESSION_ENV {
+        command.env_remove(key);
+    }
+    if let Some(token) = launch_token_for(project_root, handle) {
+        command.env(LAUNCH_TOKEN_ENV, token);
+    }
+}
+
+/// Compare-release: drop `reservation` only while it is still unbound and
+/// still the same recipient, so a session that bound it meanwhile keeps it.
+/// A spelling with history stays as a retired (tokenless, expired) record.
+pub(crate) fn release_unbound(project_root: &Path, reservation: &HandleReservation) -> Result<()> {
+    let _lock = lock_namespace(project_root)?;
+    release_unbound_locked(project_root, reservation)
+}
+
+fn release_unbound_locked(project_root: &Path, reservation: &HandleReservation) -> Result<()> {
+    let Some(mut current) = load_reservation(project_root, &reservation.handle) else {
+        return Ok(());
+    };
+    if current.native_session_id.is_some() || current.recipient_id != reservation.recipient_id {
+        return Ok(());
+    }
+    if current.previous_recipients.is_empty() {
+        let path = reservation_path(project_root, &current.handle);
+        return std::fs::remove_file(&path)
+            .or_else(|e| {
+                if e.kind() == std::io::ErrorKind::NotFound {
+                    Ok(())
+                } else {
+                    Err(e)
+                }
+            })
+            .with_context(|| format!("removing handle reservation {}", path.display()));
+    }
+    current.reserved_at = DateTime::<Utc>::UNIX_EPOCH;
+    current.launch_token = None;
+    current.launcher_pid = None;
+    write_reservation(project_root, &current)
+}
+
+/// Releases every unbound reservation this launcher process made when it is
+/// dropped armed, so a launch that fails before its child starts leaves no
+/// name held. Disarm once the child is spawned: the child binds the name.
+pub(crate) struct LaunchReservationGuard {
+    project_root: PathBuf,
+    armed: bool,
+}
+
+impl LaunchReservationGuard {
+    pub(crate) fn new(project_root: &Path) -> Self {
+        Self {
+            project_root: project_root.to_path_buf(),
+            armed: true,
+        }
+    }
+
+    pub(crate) fn disarm(&mut self) {
+        self.armed = false;
+    }
+}
+
+impl Drop for LaunchReservationGuard {
+    fn drop(&mut self) {
+        // Nothing reserved means nothing to release (and no directory to
+        // create for the lock).
+        if !self.armed || !handles_dir(&self.project_root).is_dir() {
+            return;
+        }
+        let Ok(_lock) = lock_namespace(&self.project_root) else {
+            return;
+        };
+        let me = Some(std::process::id());
+        for r in list_reservations(&self.project_root) {
+            if r.launcher_pid == me && r.launch_token.is_some() {
+                let _ = release_unbound_locked(&self.project_root, &r);
+            }
+        }
+    }
 }
 
 /// Give a registering session its handle, in place on `entry.name`.
@@ -490,12 +675,19 @@ pub(crate) fn assign_session_handle(
     let agent_type = entry.agent_type.clone();
     let role = entry.role.clone();
     let id = entry.id.clone();
+    // The token a launcher handed this process proves it may bind that
+    // launcher's reservation.
+    let token = std::env::var(LAUNCH_TOKEN_ENV)
+        .ok()
+        .filter(|t| !t.trim().is_empty());
     let base = HandleRequest {
         agent_type: &agent_type,
         role: role.as_deref(),
         explicit: None,
         native_session_id,
         registry_id: Some(&id),
+        launch_token: token.as_deref(),
+        launcher: false,
     };
     if let Some(name) = explicit.as_deref() {
         if handle_spelling_rejection(name).is_some() {
@@ -535,22 +727,34 @@ pub(crate) fn list_reservations(project_root: &Path) -> Vec<HandleReservation> {
 }
 
 /// The native session id of the process asking, from the hook payload the
-/// hook relay exported, else the client's own per-session environment.
-/// A shared daemon's inherited role or name is never consulted.
+/// hook relay exported, else the running client's own per-session
+/// environment. A shared daemon's inherited role or name is never consulted.
 pub(crate) fn current_native_session_id() -> Option<String> {
+    current_native_session_id_for(&agent_registry::detect_agent_type())
+}
+
+/// [`current_native_session_id`] for a known client vendor. Only that
+/// vendor's session variable counts: a Codex or Agy process launched from a
+/// Claude session may still carry the parent's `CLAUDE_CODE_SESSION_ID`.
+/// Agy exports no session variable; its id comes from its payload only.
+pub(crate) fn current_native_session_id_for(vendor: &str) -> Option<String> {
     if let Some(sid) = std::env::var("AIDA_HOOK_PAYLOAD")
         .ok()
         .and_then(|raw| session_id_from_payload(&raw))
     {
         return Some(sid);
     }
-    [
-        "CLAUDE_CODE_SESSION_ID",
-        "CODEX_THREAD_ID",
-        "CODEX_SESSION_ID",
-    ]
-    .iter()
-    .find_map(|key| std::env::var(key).ok().filter(|v| !v.trim().is_empty()))
+    native_session_env_keys(vendor)
+        .iter()
+        .find_map(|key| std::env::var(key).ok().filter(|v| !v.trim().is_empty()))
+}
+
+fn native_session_env_keys(vendor: &str) -> &'static [&'static str] {
+    match agent_registry::normalize_agent_type(vendor.to_string()).as_str() {
+        "claude" => &["CLAUDE_CODE_SESSION_ID"],
+        "codex" => &["CODEX_THREAD_ID", "CODEX_SESSION_ID"],
+        _ => &[],
+    }
 }
 
 /// A client payload's session id: Claude/Codex `session_id`, Agy
@@ -568,25 +772,47 @@ pub(crate) fn session_id_from_payload(raw: &str) -> Option<String> {
     .filter(|s| !s.trim().is_empty())
 }
 
+fn live_session_entries(project_root: &Path) -> Vec<AgentRegistryEntry> {
+    agent_registry::load_entries(project_root)
+        .into_iter()
+        .map(|(_, e)| e)
+        .filter(|e| e.ended_at.is_none() && e.source != "role-enter")
+        .collect()
+}
+
+fn valid_handle(e: &AgentRegistryEntry) -> Option<String> {
+    e.name
+        .as_deref()
+        .filter(|n| handle_spelling_rejection(n).is_none())
+        .map(str::to_string)
+}
+
 /// The handle of the session this process runs in: matched by native
-/// session id, else by the client's pid (`CLAUDE_PID` is a recorded value,
-/// so it matches even inside a PID-namespaced sandbox). `None` when nothing
-/// identifies it: a session never borrows another session's handle.
+/// session id, else, for a Claude process, by the client's pid
+/// (`CLAUDE_PID` is a recorded value, so it matches even inside a
+/// PID-namespaced sandbox). `None` when nothing identifies it: a session
+/// never borrows another session's handle.
 pub(crate) fn current_session_handle(
     project_root: &Path,
     native_session_id: Option<&str>,
 ) -> Option<String> {
-    let entries: Vec<AgentRegistryEntry> = agent_registry::load_entries(project_root)
-        .into_iter()
-        .map(|(_, e)| e)
-        .filter(|e| e.ended_at.is_none() && e.source != "role-enter")
-        .collect();
-    let valid = |e: &AgentRegistryEntry| {
-        e.name
-            .as_deref()
-            .filter(|n| handle_spelling_rejection(n).is_none())
-            .map(str::to_string)
-    };
+    current_session_handle_for(
+        project_root,
+        native_session_id,
+        &agent_registry::detect_agent_type(),
+    )
+}
+
+/// [`current_session_handle`] for a known client vendor. `CLAUDE_PID` is
+/// consulted only for a Claude process: any other vendor's copy was
+/// inherited from a parent Claude session.
+pub(crate) fn current_session_handle_for(
+    project_root: &Path,
+    native_session_id: Option<&str>,
+    vendor: &str,
+) -> Option<String> {
+    let entries = live_session_entries(project_root);
+    let valid = valid_handle;
     if let Some(sid) = native_session_id.filter(|s| !s.trim().is_empty()) {
         let req = HandleRequest {
             native_session_id: Some(sid),
@@ -601,8 +827,10 @@ pub(crate) fn current_session_handle(
             return Some(h);
         }
     }
+    let claude = agent_registry::normalize_agent_type(vendor.to_string()) == "claude";
     if let Some(pid) = std::env::var("CLAUDE_PID")
         .ok()
+        .filter(|_| claude)
         .and_then(|p| p.trim().parse::<u32>().ok())
     {
         if let Some(h) = entries
@@ -613,6 +841,41 @@ pub(crate) fn current_session_handle(
         {
             return Some(h);
         }
+    }
+    None
+}
+
+/// The handle of the agent session running in a tmux pane, found from the
+/// pane's shell pid: the live registry entry whose process descends from
+/// it, nearest the pane first. A `#(aida statusline)` render runs in tmux's
+/// own environment, where no client session variable exists.
+pub(crate) fn session_handle_in_pane(project_root: &Path, pane_pid: u32) -> Option<String> {
+    live_session_entries(project_root)
+        .into_iter()
+        .filter_map(|e| {
+            let depth = agent_registry::ancestor_depth(e.pid, pane_pid)?;
+            Some((depth, e))
+        })
+        .filter(|(_, e)| valid_handle(e).is_some())
+        .min_by_key(|(depth, e)| (*depth, std::cmp::Reverse(e.last_active_at)))
+        .and_then(|(_, e)| valid_handle(&e))
+}
+
+/// The handle of the nearest agent session among `pid` and its ancestors:
+/// a client that spawns `aida statusline` itself is its parent.
+pub(crate) fn session_handle_by_ancestry(project_root: &Path, pid: u32) -> Option<String> {
+    let entries = live_session_entries(project_root);
+    let mut current = Some(pid);
+    while let Some(p) = current.filter(|p| *p > 1) {
+        if let Some(h) = entries
+            .iter()
+            .filter(|e| e.pid == p)
+            .max_by_key(|e| e.last_active_at)
+            .and_then(valid_handle)
+        {
+            return Some(h);
+        }
+        current = agent_registry::parent_pid_of(p);
     }
     None
 }
@@ -673,6 +936,16 @@ mod tests {
             explicit,
             native_session_id: sid,
             registry_id: None,
+            launch_token: None,
+            launcher: false,
+        }
+    }
+
+    /// What `aida agent new` reserves before it spawns.
+    fn launcher_req(explicit: Option<&str>) -> HandleRequest<'_> {
+        HandleRequest {
+            launcher: true,
+            ..req(explicit, None)
         }
     }
 
@@ -743,15 +1016,24 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let project = tmp.path();
         // The launcher reserves before spawn.
-        let launched = reserve_handle(project, &req(Some("impl-1700"), None)).unwrap();
+        let launched = reserve_handle(project, &launcher_req(Some("impl-1700"))).unwrap();
         assert!(launched.native_session_id.is_none());
+        let token = launch_token_for(project, "impl-1700").expect("launcher holds the token");
         // A concurrent launch asking for the same name is refused.
-        let err = reserve_handle(project, &req(Some("impl-1700"), None)).unwrap_err();
+        let err = reserve_handle(project, &launcher_req(Some("impl-1700"))).unwrap_err();
         assert!(err.to_string().contains("already in use"), "{err}");
         // The launched session's own startup binds the reservation.
-        let bound = reserve_handle(project, &req(Some("impl-1700"), Some("s-1"))).unwrap();
+        let bound = reserve_handle(
+            project,
+            &HandleRequest {
+                launch_token: Some(&token),
+                ..req(Some("impl-1700"), Some("s-1"))
+            },
+        )
+        .unwrap();
         assert_eq!(bound.recipient_id, launched.recipient_id);
         assert_eq!(bound.native_session_id.as_deref(), Some("s-1"));
+        assert!(bound.launch_token.is_none(), "a bound name keeps no token");
         // A live registry holder refuses another session's explicit claim.
         agent_registry::write_entry(
             project,
@@ -859,6 +1141,7 @@ mod tests {
                 ("AIDA_SESSION_ROLE", Some("reviewer")),
                 ("AIDA_SESSION_SCOPE", None),
                 ("AIDA_AGENT_NAME", None),
+                (LAUNCH_TOKEN_ENV, None),
             ]);
             let raw = agent_registry::touch_session_start_agent(
                 project,
@@ -891,6 +1174,7 @@ mod tests {
             ("AIDA_SESSION_ROLE", Some("implementer")),
             ("AIDA_SESSION_SCOPE", None),
             ("AIDA_AGENT_NAME", Some("impl-1700")),
+            (LAUNCH_TOKEN_ENV, None),
         ]);
         let launched =
             agent_registry::touch_session_start_agent(project, project, Some("thread-9"), &binary)
@@ -1004,6 +1288,7 @@ mod tests {
                 ("AIDA_SESSION_ROLE", Some(role)),
                 ("AIDA_SESSION_SCOPE", Some(spec)),
                 ("AIDA_AGENT_NAME", None),
+                (LAUNCH_TOKEN_ENV, None),
             ]);
             agent_registry::touch_session_start_agent(project, project, Some(sid), &binary)
                 .unwrap();
@@ -1038,5 +1323,307 @@ mod tests {
         // A dead row is marked, never passed off as live.
         let dead = row("claude-implementer-09").expect("dead row listed under --all");
         assert_eq!(dead.status, agent_registry::AgentStatus::Stale);
+    }
+    // Review item 1: only the process a launcher started may bind its
+    // reservation. trace:STORY-1843.aca8ca0d | ai:claude
+    #[test]
+    fn an_unrelated_session_cannot_bind_a_launchers_reservation() {
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path();
+        // `aida agent new` without -n reserves claude-implementer-01.
+        let launched = reserve_handle(project, &launcher_req(None)).unwrap();
+        assert_eq!(launched.handle, "claude-implementer-01");
+        let token = launch_token_for(project, &launched.handle).unwrap();
+        // An unrelated session's generated allocation skips it.
+        let unrelated = reserve_handle(project, &req(None, Some("s-unrelated"))).unwrap();
+        assert_eq!(unrelated.handle, "claude-implementer-02");
+        // Naming it explicitly without the token is refused, even with a
+        // session id or a forged token.
+        let err =
+            reserve_handle(project, &req(Some("claude-implementer-01"), Some("s-x"))).unwrap_err();
+        assert!(err.to_string().contains("a launch reserved it"), "{err}");
+        let forged = HandleRequest {
+            launch_token: Some("not-the-token"),
+            ..req(Some("claude-implementer-01"), Some("s-x"))
+        };
+        assert!(reserve_handle(project, &forged).is_err());
+        // The launched child, carrying the token, binds the same recipient.
+        let child = HandleRequest {
+            launch_token: Some(&token),
+            ..req(Some("claude-implementer-01"), Some("s-child"))
+        };
+        let bound = reserve_handle(project, &child).unwrap();
+        assert_eq!(bound.recipient_id, launched.recipient_id);
+        // A grandchild inheriting the spent token cannot take it over.
+        let grandchild = HandleRequest {
+            launch_token: Some(&token),
+            ..req(Some("claude-implementer-01"), Some("s-grandchild"))
+        };
+        let err = reserve_handle(project, &grandchild).unwrap_err();
+        assert!(err.to_string().contains("already in use"), "{err}");
+    }
+
+    // Review item 1 (launcher row): a live launcher row keeps its name even
+    // after the reservation TTL when no token is presented.
+    // trace:STORY-1843.aca8ca0d | ai:claude
+    #[test]
+    fn a_live_launcher_row_is_not_skipped_for_a_session_without_the_token() {
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path();
+        let launched = reserve_handle(project, &launcher_req(Some("impl-7"))).unwrap();
+        let mut row = entry(project, "claude-launch", Some("impl-7"), None);
+        row.source = "agent-launcher".to_string();
+        agent_registry::write_entry(project, &row).unwrap();
+        let mut expired = launched.clone();
+        expired.reserved_at =
+            Utc::now() - chrono::Duration::seconds(UNBOUND_RESERVATION_TTL_SECS + 60);
+        write_reservation(project, &expired).unwrap();
+        let err = reserve_handle(project, &req(Some("impl-7"), Some("s-other"))).unwrap_err();
+        assert!(err.to_string().contains("claude-launch"), "{err}");
+    }
+
+    // Review item 3: an unbound (released or expired) reservation is a
+    // retired spelling, never re-bound with its old recipient.
+    // trace:STORY-1843.aca8ca0d | ai:claude
+    #[test]
+    fn released_and_expired_reservations_mint_a_new_recipient() {
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path();
+        // Released: s-old held rework-1 then took another name.
+        let old = reserve_handle(project, &req(Some("rework-1"), Some("s-old"))).unwrap();
+        reserve_handle(project, &req(Some("rework-2"), Some("s-old"))).unwrap();
+        let released = load_reservation(project, "rework-1").unwrap();
+        assert!(released.native_session_id.is_none());
+        let new = reserve_handle(project, &req(Some("rework-1"), Some("s-new"))).unwrap();
+        assert_ne!(new.recipient_id, old.recipient_id);
+        assert_eq!(new.previous_recipients, vec![old.recipient_id]);
+        // Expired: a failed launch's reservation, past its TTL.
+        let launched = reserve_handle(project, &launcher_req(Some("impl-9"))).unwrap();
+        let mut expired = launched.clone();
+        expired.reserved_at =
+            Utc::now() - chrono::Duration::seconds(UNBOUND_RESERVATION_TTL_SECS + 60);
+        write_reservation(project, &expired).unwrap();
+        let taker = reserve_handle(project, &req(Some("impl-9"), Some("s-late"))).unwrap();
+        assert_ne!(taker.recipient_id, launched.recipient_id);
+        assert_eq!(taker.previous_recipients, vec![launched.recipient_id]);
+    }
+
+    // Review item 4: a failed launch or register releases its reservation,
+    // and only while it is still unbound and still its own.
+    // trace:STORY-1843.aca8ca0d | ai:claude
+    #[test]
+    fn a_failed_launch_releases_its_reservation_for_an_immediate_retry() {
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path();
+        {
+            let _guard = LaunchReservationGuard::new(project);
+            reserve_handle(project, &launcher_req(Some("foo"))).unwrap();
+            // The launch fails here; the guard drops armed.
+        }
+        assert!(load_reservation(project, "foo").is_none());
+        let retry = reserve_handle(project, &launcher_req(Some("foo"))).unwrap();
+        // A spawned launch disarms, and its child keeps the name.
+        {
+            let mut guard = LaunchReservationGuard::new(project);
+            guard.disarm();
+        }
+        assert_eq!(
+            load_reservation(project, "foo").unwrap().recipient_id,
+            retry.recipient_id
+        );
+        // Compare-release leaves a reservation a session bound meanwhile.
+        let token = launch_token_for(project, "foo").unwrap();
+        reserve_handle(
+            project,
+            &HandleRequest {
+                launch_token: Some(&token),
+                ..req(Some("foo"), Some("s-1"))
+            },
+        )
+        .unwrap();
+        release_unbound(project, &retry).unwrap();
+        assert_eq!(
+            load_reservation(project, "foo")
+                .unwrap()
+                .native_session_id
+                .as_deref(),
+            Some("s-1")
+        );
+    }
+
+    // Review item 2: a child of another vendor never resolves its parent
+    // Claude session's handle from inherited env, and the launcher scrubs
+    // that env. trace:STORY-1843.aceb5213 | ai:claude
+    #[test]
+    fn inherited_claude_session_env_does_not_identify_a_codex_or_agy_child() {
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path();
+        let mut parent = entry(
+            project,
+            "claude-parent",
+            Some("claude-implementer-01"),
+            Some("parent-s"),
+        );
+        parent.pid = 4_000_001;
+        parent.pid_start = None;
+        agent_registry::write_entry(project, &parent).unwrap();
+        let _env = crate::test_env::EnvVarsGuard::apply(&[
+            ("AIDA_HOOK_PAYLOAD", None),
+            ("CLAUDE_CODE_SESSION_ID", Some("parent-s")),
+            ("CLAUDE_PID", Some("4000001")),
+            ("CODEX_THREAD_ID", None),
+            ("CODEX_SESSION_ID", None),
+        ]);
+        for vendor in ["codex", "antigravity"] {
+            let sid = current_native_session_id_for(vendor);
+            assert_eq!(sid, None, "{vendor}");
+            assert_eq!(
+                current_session_handle_for(project, sid.as_deref(), vendor),
+                None,
+                "{vendor}"
+            );
+        }
+        // The parent itself still resolves.
+        let sid = current_native_session_id_for("claude");
+        assert_eq!(
+            current_session_handle_for(project, sid.as_deref(), "claude").as_deref(),
+            Some("claude-implementer-01")
+        );
+        // The launcher hands a child none of it.
+        let mut command = std::process::Command::new("true");
+        apply_launch_env(&mut command, project, "no-such-handle");
+        let removed: BTreeSet<String> = command
+            .get_envs()
+            .filter(|(_, v)| v.is_none())
+            .map(|(k, _)| k.to_string_lossy().into_owned())
+            .collect();
+        for key in [
+            "CLAUDE_CODE_SESSION_ID",
+            "CLAUDE_PID",
+            "CODEX_THREAD_ID",
+            LAUNCH_TOKEN_ENV,
+        ] {
+            assert!(removed.contains(key), "{key} not scrubbed: {removed:?}");
+        }
+    }
+
+    // Review item 5: the Codex tmux integration renders the pane's handle,
+    // and a client-spawned render (Agy, whose statusline payload is not
+    // documented upstream) finds its session by process ancestry.
+    // trace:STORY-1843.aceb5213 | ai:claude
+    #[test]
+    fn statusline_handle_resolves_from_a_tmux_pane_and_from_the_spawning_client() {
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path();
+        let mut codex = entry(project, "codex-1", Some("codex-implementer-01"), None);
+        codex.agent_type = "codex".to_string();
+        agent_registry::write_entry(project, &codex).unwrap();
+        let _env = crate::test_env::EnvVarsGuard::apply(&[
+            ("AIDA_HOOK_PAYLOAD", None),
+            ("AIDA_AGENT_TYPE", Some("codex")),
+            ("CODEX_THREAD_ID", None),
+            ("CODEX_SESSION_ID", None),
+            ("CLAUDE_PID", None),
+        ]);
+        // tmux's env has no session variable: no pane, no handle.
+        assert_eq!(
+            crate::statusline_cmd::statusline_session_handle(project, None, None, None),
+            None
+        );
+        // The pane's shell is the agent's ancestor.
+        let pane = agent_registry::parent_pid_of(std::process::id()).unwrap();
+        assert_eq!(
+            crate::statusline_cmd::statusline_session_handle(project, None, None, Some(pane))
+                .as_deref(),
+            Some("codex-implementer-01")
+        );
+        // A pane running no agent shows none.
+        assert_eq!(
+            crate::statusline_cmd::statusline_session_handle(project, None, None, Some(4_000_002)),
+            None
+        );
+        // A client-spawned render with a payload lacking a session id.
+        assert_eq!(
+            crate::statusline_cmd::statusline_session_handle(
+                project,
+                Some("agy"),
+                Some("{}"),
+                None
+            )
+            .as_deref(),
+            Some("codex-implementer-01")
+        );
+    }
+
+    // Review item 6: an isolated sandbox cannot vouch that an unstamped row
+    // is dead, so its holder keeps the name. trace:STORY-1843.aca8ca0d | ai:claude
+    #[test]
+    fn an_isolated_observer_keeps_an_unstamped_holder_on_its_heartbeat() {
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path();
+        let mut legacy = entry(project, "claude-legacy", Some("impl-3"), None);
+        legacy.pid = 4_000_003;
+        legacy.pid_start = None;
+        legacy.pid_namespace = None;
+        let now = Utc::now();
+        let initial = Some(agent_registry::INITIAL_PID_NAMESPACE);
+        let isolated = agent_registry::PidObserver {
+            namespace: initial,
+            isolated: true,
+        };
+        let host = agent_registry::PidObserver {
+            namespace: initial,
+            isolated: false,
+        };
+        assert!(entry_may_hold_from(project, &legacy, now, isolated));
+        assert!(!entry_may_hold_from(project, &legacy, now, host));
+    }
+
+    // Second review F2: `--bg` adoption never writes a name the namespace
+    // refused. trace:STORY-1843.aca8ca0d | ai:claude
+    #[test]
+    fn bg_adoption_keeps_the_sessions_handle_when_the_name_is_held() {
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path();
+        reserve_handle(project, &req(Some("impl-1"), Some("s-b"))).unwrap();
+        agent_registry::write_entry(
+            project,
+            &entry(project, "claude-9", Some("impl-1"), Some("s-b")),
+        )
+        .unwrap();
+        let mut adoptee = entry(
+            project,
+            "claude-10",
+            Some("claude-implementer-01"),
+            Some("s-a"),
+        );
+        adoptee.pid = 4_000_004;
+        adoptee.pid_start = None;
+        agent_registry::write_entry(project, &adoptee).unwrap();
+        agent_registry::adopt_bg_session_identity(project, "s-a", "impl-1", None, None, project);
+        let rows = agent_registry::load_entries(project);
+        let named: Vec<_> = rows
+            .iter()
+            .filter(|(_, e)| e.name.as_deref() == Some("impl-1"))
+            .map(|(_, e)| e.id.clone())
+            .collect();
+        assert_eq!(named, vec!["claude-9".to_string()]);
+    }
+
+    // Second review F5/F6: one validator for every entry point, and the
+    // HANDLE column never shows a non-address. trace:STORY-1843.aca8ca0d | ai:claude
+    #[test]
+    fn one_validator_refuses_generated_namespace_names_and_ls_marks_no_handle() {
+        let reserved = BTreeSet::new();
+        for bad in ["claude-implementer", "agy-foo", "codex-reviewer-x"] {
+            let err = validate_explicit_handle(bad, &reserved).unwrap_err();
+            assert!(err.to_string().contains("type+role prefix"), "{err}");
+        }
+        assert!(validate_explicit_handle("claude-implementer-01", &reserved).is_ok());
+        assert_eq!(crate::agent_registry_root::ls_handle_cell(None), "-");
+        assert_eq!(
+            crate::agent_registry_root::ls_handle_cell(Some("impl-1")),
+            "impl-1"
+        );
     }
 }

@@ -250,7 +250,7 @@ ownership), and the recommended companion surface for the full AIDA segment:
 
 ```bash
 # tmux
-set -g status-right '#(aida statusline --color=never)'
+set -g status-right '#(cd #{q:pane_current_path} && aida statusline --color=never --tmux-pane-pid #{pane_pid})'
 set -g status-interval 15
 ```
 
