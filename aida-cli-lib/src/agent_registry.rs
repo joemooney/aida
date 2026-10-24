@@ -293,10 +293,13 @@ pub(crate) struct AgentClassifyContext {
     // trace:BUG-2212 | ai:claude
     pub(crate) observer: PidObserver,
     /// How long a heartbeat-only row (process unobservable) counts as live.
-    /// Defaults to the short guard bound; display surfaces opt into the
-    /// longer window with [`Self::for_display`].
+    /// `None` — the guard default — means no bound: a row this observer
+    /// cannot verify stays live however old its heartbeat, so guards fail
+    /// CLOSED (session-start-hook rows heartbeat only once, at SessionStart).
+    /// Display surfaces opt into a finite listing window with
+    /// [`Self::for_display`].
     // trace:TASK-2272 | ai:claude
-    pub(crate) heartbeat_ttl_secs: i64,
+    pub(crate) heartbeat_ttl_secs: Option<i64>,
 }
 
 impl AgentClassifyContext {
@@ -312,17 +315,18 @@ impl AgentClassifyContext {
             proc_tree: None,
             work_grace_secs: 10,
             observer: PidObserver::current(),
-            heartbeat_ttl_secs: GUARD_HEARTBEAT_TTL_SECS,
+            heartbeat_ttl_secs: None,
         }
     }
 
-    /// A listing a human reads: a heartbeat-only row stays listed for the
-    /// full `UNOBSERVED_HEARTBEAT_TTL_SECS`. Guards (launch dedupe, nudge
-    /// routing, reaping) keep the short default, so a crashed host session
-    /// seen from a sandbox stops counting as live within minutes.
+    /// A listing a human reads: a heartbeat-only row ages out of the listing
+    /// after `UNOBSERVED_HEARTBEAT_TTL_SECS`. Guards (launch dedupe, nudge
+    /// routing, reaping) keep the unbounded default: a row they cannot verify
+    /// counts as live, so a duplicate launch is refused rather than allowed
+    /// over a possibly-live host session.
     // trace:TASK-2272 | ai:claude
     pub(crate) fn for_display(mut self) -> Self {
-        self.heartbeat_ttl_secs = UNOBSERVED_HEARTBEAT_TTL_SECS;
+        self.heartbeat_ttl_secs = Some(UNOBSERVED_HEARTBEAT_TTL_SECS);
         self
     }
 
@@ -1913,16 +1917,14 @@ pub(crate) fn observed_liveness_from(
 // trace:STORY-1843 | ai:claude
 pub(crate) const INITIAL_PID_NAMESPACE: u64 = 0xEFFF_FFFC;
 
-/// How long a row whose process this observer cannot see still counts as a
-/// live agent, from its last heartbeat. Same window the mail resolver gives
-/// unverified readers.
+/// How long a row whose process this observer cannot see stays in a human
+/// LISTING, from its last heartbeat. Display only: guards never apply a
+/// heartbeat bound, because session-start-hook rows heartbeat exactly once
+/// (at SessionStart), so any finite bound makes every live host session look
+/// stale from a sandbox eventually — the guard must fail closed instead.
 // trace:BUG-2212 | ai:claude
-pub(crate) const UNOBSERVED_HEARTBEAT_TTL_SECS: i64 = 24 * 60 * 60;
-
-/// The bound a guard (duplicate-launch refusal, advisor nudge routing) gives a
-/// heartbeat-only row: past it the row is unverified, not live.
 // trace:TASK-2272 | ai:claude
-pub(crate) const GUARD_HEARTBEAT_TTL_SECS: i64 = 10 * 60;
+pub(crate) const UNOBSERVED_HEARTBEAT_TTL_SECS: i64 = 24 * 60 * 60;
 
 /// Raw `/proc` facts that say whether this process sits in a PID namespace
 /// of its own (a sandboxed shell sees only its own few pids).
@@ -2043,8 +2045,9 @@ impl LivenessBasis {
 }
 
 /// Liveness as `observer` sees it. Process-observed when the observer can see
-/// the row's pid; otherwise a heartbeat within `heartbeat_ttl_secs` counts as
-/// live, never a process absence the observer cannot see.
+/// the row's pid. Otherwise the row is only PROVABLY dead via `ended_at`, so
+/// it counts as live (unverified) — `heartbeat_ttl_secs: None`, the guard
+/// default — unless a display caller passes a finite listing window.
 // trace:BUG-2212 | ai:claude
 // trace:TASK-2272 | ai:claude
 pub(crate) fn observer_liveness(
@@ -2052,7 +2055,7 @@ pub(crate) fn observer_liveness(
     entry: &AgentRegistryEntry,
     observer: PidObserver,
     now: DateTime<Utc>,
-    heartbeat_ttl_secs: i64,
+    heartbeat_ttl_secs: Option<i64>,
 ) -> (bool, LivenessBasis) {
     if entry.ended_at.is_some() {
         return (false, LivenessBasis::Process);
@@ -2066,7 +2069,10 @@ pub(crate) fn observer_liveness(
     let age = now
         .signed_duration_since(entry.last_active_at)
         .num_seconds();
-    (age <= heartbeat_ttl_secs, LivenessBasis::Heartbeat)
+    (
+        heartbeat_ttl_secs.is_none_or(|ttl| age <= ttl),
+        LivenessBasis::Heartbeat,
+    )
 }
 
 /// The entry's process is still running: pid plus recorded start time, so a
@@ -4049,7 +4055,7 @@ mod tests {
 
     // BUG-2212: from a sandboxed shell a live host session's pid is invisible.
     // agent ls must list it on its fresh heartbeat, labelled as such, and only
-    // age it out once the heartbeat is past the window.
+    // age it out of the DISPLAY listing once the heartbeat is past the window.
     // trace:BUG-2212 | ai:claude
     #[test]
     fn list_agent_views_falls_back_to_heartbeat_for_unobservable_rows() {
@@ -4063,7 +4069,10 @@ mod tests {
         write_entry(tmp.path(), &old).unwrap();
         let sandbox = PidObserver::from_probe(&probe(7, None, 1, "bwrap"));
 
-        let views = list_agent_views(tmp.path(), &ctx(now, 30, vec![]).with_observer(sandbox));
+        let views = list_agent_views(
+            tmp.path(),
+            &ctx(now, 30, vec![]).with_observer(sandbox).for_display(),
+        );
         let by_pid: std::collections::HashMap<u32, &AgentRegistryView> =
             views.iter().map(|v| (v.pid, v)).collect();
         assert_eq!(by_pid[&(u32::MAX - 1)].status, AgentStatus::Idle);
@@ -4082,56 +4091,59 @@ mod tests {
             .all(|v| v.status == AgentStatus::Stale && v.liveness == LivenessBasis::Process));
     }
 
-    // TASK-2272 (TASK-2280): a host session that crashed without `ended_at`
-    // keeps its last heartbeat. From a sandbox, the display listing still shows
-    // it for the 24h window, but guards (launch dedupe, advisor nudge routing)
-    // stop counting it live once its heartbeat is past the short guard bound.
+    // TASK-2272 (TASK-2280): guards FAIL CLOSED. A session-start-hook row
+    // heartbeats exactly once, so from a sandboxed launcher every live host
+    // session's heartbeat goes arbitrarily old. A row whose pid this observer
+    // cannot check and that has no `ended_at` therefore counts as live
+    // (unverified) however old its heartbeat — the duplicate launch is
+    // refused. Only a PROVABLY dead row (ended_at, or a checkable dead pid)
+    // frees the seat.
     // trace:TASK-2272 | ai:claude
     #[test]
-    fn guards_give_heartbeat_only_rows_a_short_bound_and_display_the_full_window() {
+    fn guards_fail_closed_on_unverifiable_rows_and_open_only_on_provable_death() {
         let tmp = TempDir::new().unwrap();
         let now = Utc::now();
-        let mut fresh = entry_with(u32::MAX - 1, now - chrono::Duration::minutes(2));
-        fresh.pid_namespace = Some(INITIAL_PID_NAMESPACE);
-        fresh.role = Some("advisor".to_string());
-        write_entry(tmp.path(), &fresh).unwrap();
-        let mut crashed = entry_with(u32::MAX - 2, now - chrono::Duration::hours(1));
-        crashed.pid_namespace = Some(INITIAL_PID_NAMESPACE);
-        crashed.role = Some("advisor".to_string());
-        write_entry(tmp.path(), &crashed).unwrap();
+        // A host row whose only heartbeat is its session start, 17h ago.
+        let mut unverifiable = entry_with(u32::MAX - 1, now - chrono::Duration::hours(17));
+        unverifiable.pid_namespace = Some(INITIAL_PID_NAMESPACE);
+        unverifiable.role = Some("advisor".to_string());
+        write_entry(tmp.path(), &unverifiable).unwrap();
         let sandbox = PidObserver::from_probe(&probe(7, None, 1, "bwrap"));
 
-        let status = |views: &[AgentRegistryView], pid: u32| {
-            views.iter().find(|v| v.pid == pid).unwrap().status
-        };
         let guard = list_agent_views(tmp.path(), &ctx(now, 30, vec![]).with_observer(sandbox));
-        assert_eq!(status(&guard, u32::MAX - 1), AgentStatus::Idle);
-        assert_eq!(status(&guard, u32::MAX - 2), AgentStatus::Stale);
-        assert!(guard.iter().all(|v| v.liveness == LivenessBasis::Heartbeat));
-
-        let display = list_agent_views(
-            tmp.path(),
-            &ctx(now, 30, vec![]).with_observer(sandbox).for_display(),
-        );
-        assert_eq!(status(&display, u32::MAX - 1), AgentStatus::Idle);
-        assert_eq!(status(&display, u32::MAX - 2), AgentStatus::Idle);
-
-        // The launch guard refuses only for the freshly heartbeating row.
+        let row = guard.iter().find(|v| v.pid == u32::MAX - 1).unwrap();
+        assert_ne!(row.status, AgentStatus::Stale);
+        assert_eq!(row.liveness, LivenessBasis::Heartbeat);
         let dup = crate::agent_launch::matching_live_duplicate(
             &guard,
-            &crashed.agent_type,
+            &unverifiable.agent_type,
             Some("advisor"),
             None,
         )
-        .expect("the fresh row is a live duplicate");
+        .expect("an unverifiable host row refuses the duplicate launch");
         assert_eq!(dup.pid, u32::MAX - 1);
-        let only_crashed: Vec<_> = guard
+
+        // An ended row is provably dead from any namespace: launch allowed.
+        let mut ended = entry_with(u32::MAX - 2, now - chrono::Duration::minutes(1));
+        ended.pid_namespace = Some(INITIAL_PID_NAMESPACE);
+        ended.role = Some("advisor".to_string());
+        ended.ended_at = Some(now);
+        write_entry(tmp.path(), &ended).unwrap();
+        // A checkable dead pid (our own namespace) is provably dead too.
+        let mut dead = entry_with(u32::MAX - 3, now - chrono::Duration::minutes(1));
+        dead.pid_namespace = Some(7);
+        dead.role = Some("advisor".to_string());
+        write_entry(tmp.path(), &dead).unwrap();
+
+        let sandbox_ctx = ctx(now, 30, vec![]).with_observer(sandbox);
+        let provably_dead: Vec<_> = list_agent_views(tmp.path(), &sandbox_ctx)
             .into_iter()
-            .filter(|v| v.pid == u32::MAX - 2)
+            .filter(|v| v.pid != u32::MAX - 1)
             .collect();
+        assert!(provably_dead.iter().all(|v| v.status == AgentStatus::Stale));
         assert!(crate::agent_launch::matching_live_duplicate(
-            &only_crashed,
-            &crashed.agent_type,
+            &provably_dead,
+            &unverifiable.agent_type,
             Some("advisor"),
             None,
         )
@@ -4148,13 +4160,7 @@ mod tests {
         ended.ended_at = Some(now);
         let sandbox = PidObserver::from_probe(&probe(7, None, 1, "bwrap"));
         assert_eq!(
-            observer_liveness(
-                tmp.path(),
-                &ended,
-                sandbox,
-                now,
-                UNOBSERVED_HEARTBEAT_TTL_SECS
-            ),
+            observer_liveness(tmp.path(), &ended, sandbox, now, None),
             (false, LivenessBasis::Process)
         );
     }

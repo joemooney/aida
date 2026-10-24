@@ -6,6 +6,7 @@ fn input(status: agent_registry::AgentStatus, dirty: bool) -> DispatchReportInpu
         agent_type: "codex".to_string(),
         spec: Some("STORY-759".to_string()),
         status,
+        liveness: agent_registry::LivenessBasis::Process,
         liveness_stalled: if status == agent_registry::AgentStatus::Stale {
             Some(true)
         } else {
@@ -29,6 +30,31 @@ fn dispatch_report_marks_dead_agent_dirty_worktree_salvageable() {
     assert!(row.guidance.contains("salvage"));
     assert!(row.guidance.contains("dirty worktree"));
     assert!(!row.guidance.contains("delete"));
+}
+
+// TASK-2272 (TASK-2280): a heartbeat-only row's process cannot be checked
+// from this shell, so the report says "unverified", never "dead … salvage",
+// and routes no resume or fallback at the seat — even when the branch looks
+// resumable.
+// trace:TASK-2272 | ai:claude
+#[test]
+fn dispatch_report_calls_unverifiable_rows_unverified_never_dead() {
+    let mut facts = input(agent_registry::AgentStatus::Idle, true);
+    facts.liveness = agent_registry::LivenessBasis::Heartbeat;
+    facts.ahead_main = Some(2);
+    facts.has_upstream = true;
+    facts.ahead_upstream = Some(0);
+    let row = dispatch_report_row(&facts, &[], false);
+    assert_eq!(row.state, DispatchHealthState::Unverified);
+    assert!(
+        row.guidance
+            .contains("unverified (can't check liveness from here)"),
+        "{}",
+        row.guidance
+    );
+    assert!(!row.guidance.contains("salvage"));
+    assert!(!row.guidance.contains("dead"));
+    assert!(!row.guidance.contains("aida agent new"));
 }
 
 #[test]

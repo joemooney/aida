@@ -367,6 +367,10 @@ pub(crate) enum DispatchHealthState {
     Moving,
     Stalled,
     Salvageable,
+    /// The row's process lives in a PID namespace this shell cannot check,
+    /// so nothing here may call it dead or route salvage at it.
+    // trace:TASK-2272 | ai:claude
+    Unverified,
 }
 
 impl DispatchHealthState {
@@ -375,6 +379,7 @@ impl DispatchHealthState {
             Self::Moving => "moving",
             Self::Stalled => "stalled",
             Self::Salvageable => "salvageable",
+            Self::Unverified => "unverified",
         }
     }
 }
@@ -385,6 +390,8 @@ pub(crate) struct DispatchReportInput {
     pub(crate) agent_type: String,
     pub(crate) spec: Option<String>,
     pub(crate) status: agent_registry::AgentStatus,
+    // trace:TASK-2272 | ai:claude
+    pub(crate) liveness: agent_registry::LivenessBasis,
     pub(crate) liveness_stalled: Option<bool>,
     pub(crate) paused: bool,
     pub(crate) worktree: std::path::PathBuf,
@@ -416,7 +423,12 @@ pub(crate) fn dispatch_report_row(
     paused_vendor_types: &[String],
     force_fallback: bool,
 ) -> DispatchReportRow {
-    let state = if input.status == agent_registry::AgentStatus::Stale && input.dirty {
+    // A heartbeat-only row is not provably dead: this shell cannot check its
+    // pid, so "dead agent … salvage" advice would be harmful if it is alive.
+    // trace:TASK-2272 | ai:claude
+    let state = if !input.liveness.is_process() {
+        DispatchHealthState::Unverified
+    } else if input.status == agent_registry::AgentStatus::Stale && input.dirty {
         DispatchHealthState::Salvageable
     } else if input.liveness_stalled == Some(true) {
         DispatchHealthState::Stalled
@@ -452,8 +464,15 @@ pub(crate) fn dispatch_report_row(
         DispatchHealthState::Stalled => {
             "dead agent with no worktree progress; resume from durable branch state".to_string()
         }
+        // trace:TASK-2272 | ai:claude
+        DispatchHealthState::Unverified => {
+            "unverified (can't check liveness from here); run `aida agent ls` outside the sandbox"
+                .to_string()
+        }
     };
-    if pushed && spec != "(none)" {
+    // An unverified seat may be alive: never route a resume or fallback at it.
+    // trace:TASK-2272 | ai:claude
+    if state != DispatchHealthState::Unverified && pushed && spec != "(none)" {
         guidance = format!(
             "fresh-launch resume: aida agent new {} --spec {} --cwd {}",
             input.agent_type,
@@ -687,6 +706,8 @@ pub(crate) fn agent_dispatch_health(force_fallback: bool) -> Result<()> {
                 agent_type: agent.agent_type.clone(),
                 spec: agent.current_spec.clone(),
                 status: agent.status,
+                // trace:TASK-2272 | ai:claude
+                liveness: agent.liveness,
                 liveness_stalled,
                 paused: agent.availability.is_paused(),
                 worktree: worktree.clone(),

@@ -4819,38 +4819,40 @@ mod tests {
     // trace:TASK-2272 | ai:claude
     const AGENT_TOOL_NAMES: &[&str] = &["agent tool", "task tool", "via task", "with task"];
 
-    /// Words that turn a line naming the Agent tool into a prohibition.
-    const AGENT_TOOL_NEGATIONS: &[&str] = &[
-        "never", "not", "no", "don't", "without", "instead", "rather", "nor",
-    ];
+    /// Words that, BEFORE the tool name in its clause, turn the mention into
+    /// a prohibition. "instead"/"rather" are not negations: "with the Agent
+    /// tool instead of a process" is a launch.
+    const AGENT_TOOL_NEGATIONS: &[&str] = &["never", "not", "no", "don't", "without", "nor"];
 
     /// `lower` names seat work, and a clause of it names the Agent/Task tool
-    /// (as a whole word) with no negation in that clause: "launch the
-    /// implementer with the Agent tool; no worktree needed" is a launch, "the
-    /// implementer runs as a process, not with the Agent tool" is not.
+    /// (as a whole word) with no negation word before the tool name in that
+    /// clause: "launch the implementer with the Agent tool and no worktree"
+    /// is a launch (the negation trails the tool), "the implementer runs as
+    /// a process, not with the Agent tool" is not.
     // trace:TASK-2272 | ai:claude
     fn names_agent_tool_for_seat_work(lower: &str) -> bool {
         let seat = ["implementer", "fixer", "architect", "advisor"]
             .iter()
             .any(|w| lower.contains(w));
-        let names_tool = |clause: &str| {
+        let negated_before = |prefix: &str| {
+            prefix
+                .split(|c: char| !(c.is_alphanumeric() || c == '\''))
+                .any(|w| AGENT_TOOL_NEGATIONS.contains(&w))
+        };
+        let names_tool_unnegated = |clause: &str| {
             AGENT_TOOL_NAMES.iter().any(|needle| {
                 clause.match_indices(needle).any(|(at, _)| {
                     let before = clause[..at].chars().next_back();
                     let after = clause[at + needle.len()..].chars().next();
                     !before.is_some_and(|c| c.is_alphanumeric())
                         && !after.is_some_and(|c| c.is_alphanumeric() || c == '-')
+                        && !negated_before(&clause[..at])
                 })
             })
         };
-        let negated = |clause: &str| {
-            clause
-                .split(|c: char| !(c.is_alphanumeric() || c == '\''))
-                .any(|w| AGENT_TOOL_NEGATIONS.contains(&w))
-        };
         seat && lower
             .split([';', ',', '.', ':', '(', ')', '—'])
-            .any(|clause| names_tool(clause) && !negated(clause))
+            .any(names_tool_unnegated)
     }
 
     /// Every `key:line: pattern` in `body` that launches seat work through
@@ -4933,6 +4935,8 @@ mod tests {
             "spawn each fixer via Task",
             "the advisor starts an architect with the Task tool",
             "launch the implementer with the Agent tool; no worktree needed",
+            "launch the fixer with the Agent tool instead of a process",
+            "launch the implementer with the Agent tool and no worktree",
         ] {
             assert!(
                 !agent_tool_launches("t.md", line).is_empty(),
