@@ -1,0 +1,110 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-1613",
+  "publishes": [
+    {
+      "at": "2026-10-24T06:44:37.170921499Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-08T16:16:30.024934859Z",
+      "spec": "TASK-1613",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-08T16:44:48.471155827Z",
+      "spec": "TASK-1613",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-1613",
+        "branch": "task-1613",
+        "first_seen": "2026-10-08T16:44:48.471131397+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-11T01:47:50.153486034Z",
+      "spec": "TASK-1613",
+      "kind": {
+        "event": "PuntFiled",
+        "spec": "TASK-1613"
+      }
+    },
+    {
+      "ts": "2026-10-23T23:15:15.339338125Z",
+      "spec": "TASK-1613",
+      "seat": "integrator",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Done",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-23T23:15:49.889439480Z",
+      "spec": "TASK-1613",
+      "seat": "integrator",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-23T23:37:16.556727301Z",
+      "spec": "TASK-1613",
+      "seat": "integrator",
+      "kind": {
+        "event": "PhaseDonePr",
+        "pr": 2869
+      }
+    },
+    {
+      "ts": "2026-10-24T01:55:01.756576105Z",
+      "spec": "TASK-1613",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-1613",
+        "branch": "claude/task-1613-salvage",
+        "first_seen": "2026-10-24T01:55:01.756523401+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-24T01:55:01.783749093Z",
+      "spec": "TASK-1613",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-1613",
+        "branch": "pr-2869",
+        "first_seen": "2026-10-24T01:55:01.783701991+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-24T06:44:02.273716068Z",
+      "spec": "TASK-1613",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2869
+      }
+    },
+    {
+      "ts": "2026-10-24T06:44:36.859419999Z",
+      "spec": "TASK-1613",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "0642f7620d159e9fde82d47651b8698515eab681",
+        "pr": 2869,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
