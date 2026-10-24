@@ -6,12 +6,12 @@ description: |
   aida-cli-lib/src/disk_emergency.rs run_emergency_probed (TASK-1-484 fix, PR-2893): the dedupe state block is gated on outcome.deleted.is_empty(), so a run that deleted something AND ended Stop::Refused never records last_emergency_refusal. The next nothing-deleted tick carrying the same refusal compares against the stale/None value and notifies again as a "new" refusal. One extra notification; arguably still news. A one-line gate tweak (save last_emergency_refusal whenever outcome.refusal.is_some()) closes it if it ever annoys.
 
   Raised in review of PR-2893: https://github.com/joemooney/aida/pull/2893#issuecomment-6382019618
-status: Draft
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-24T08:31:00.799754234Z
-modified_at: 2026-10-24T09:07:00.321666514Z
+modified_at: 2026-10-24T09:15:27.874730762Z
 req_type: Task
 tags:
 - from-review:PR-2893
@@ -22,12 +22,25 @@ relationships:
   target_id: 01a16d29-a8a6-71a2-9e4b-b4be2ba9c996
   created_at: 2026-10-24T09:07:00.321662854Z
   created_by: joe
+comments:
+- id: 01a16d31-9302-7860-aa67-402949111f43
+  author: aida-auto-bump
+  content: 'Flipped Draft → Done: a trailered commit (6980be3) referencing this spec is already on the default branch, though it skipped the intermediate approval states. Confirm it, then move to Completed.'
+  created_at: 2026-10-24T09:15:27.874728325Z
+  modified_at: 2026-10-24T09:15:27.874728325Z
 history:
 - id: 01a16d29-d898-7403-956f-94bccc427d01
   author: joe
   timestamp: 2026-10-24T09:07:01.400060879Z
   session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
   changes: []
+- id: 01a16d31-9302-7860-aa67-4016ad1f3ea6
+  author: aida-auto-bump
+  timestamp: 2026-10-24T09:15:27.874726712Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Done
 filed_at:
   code_sha: 7551db72771f959b7365064c267d16e7657be1a3
   branch: pr-2893
