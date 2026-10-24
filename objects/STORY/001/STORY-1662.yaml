@@ -35,12 +35,12 @@ description: |
   AC18: `aida claim` in a lane whose lease role is malformed records no role rather than the inherited seat.
   AC19: Lease role stamps take the lease-write lock and refuse a lease a live session holds.
   AC20: The SessionStart hook fails closed: if lane-env errors, times out or prints a foreign line inside a linked worktree, it unsets the grant and purpose and sets no role.
-status: NeedsAttention
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T13:18:03.093067119Z
-modified_at: 2026-10-23T22:57:10.645824396Z
+modified_at: 2026-10-24T02:53:51.939435780Z
 req_type: Story
 tags:
 - groom:needs-decision
@@ -318,6 +318,20 @@ history:
   session_id: 01a16afa17d3
   harness_version: 2.1.309 (Claude Code)
   changes: []
+- id: 01a16bd4-3596-7a63-9c40-52d63a567cc1
+  author: aida-auto-bump
+  timestamp: 2026-10-24T02:53:51.894730937Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a16bd4-35c3-7f30-94c3-fbf788825bbc
+  timestamp: 2026-10-24T02:53:51.939426839Z
+  agent: aida
+  commit_sha: 523740d360ffc162bc958e2a25e8f14e4b4b1938
+  summary: 'Final STORY-1662 slice: Agent-tool implementer/fixer fallbacks removed from burndown/solo/orchestrate/fire templates; C5 ratchet (seat_templates_never_launch_implementers_through_the_agent_tool + scan unit test with marker) enforces AC4; AC1-AC20 now anchored (aida criteria: untested none, unanchored none; AC3 post-deployment). No authority code changed; CI green at head. Three non-blocking doc follow-ups.'
+  review_verdict: approved
 filed_at:
   code_sha: fba16d9c884b16090b3c2d079a53a1def8aa9a36
   branch: main
@@ -326,11 +340,7 @@ filed_at:
   aida_build_sha: 9116ba7f23
   vendor: antigravity
   session: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: AC1-AC20 all traced and CI green at head (AC3 post-deploy); AC4 ratchet works, but two seat skills still route rework/briefs as if implementers were in-session subagents
-  recovery_hint: address the review findings, move STORY-1662 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-23T22:57:10.645824396Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-24T02:53:51.894726309Z
+  completion_sha: 523740d360ffc162bc958e2a25e8f14e4b4b1938
