@@ -37,7 +37,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T22:12:54.027870933Z
-modified_at: 2026-10-24T16:53:53.952703839Z
+modified_at: 2026-10-24T17:04:24.846777056Z
 req_type: Bug
 tags:
 - id-allocation
@@ -49,6 +49,38 @@ comments:
   created_at: 2026-10-24T16:53:53.952703839Z
   modified_at: 2026-10-24T16:53:53.952703839Z
   session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+- id: 01a16ede-e90e-7783-99dd-844b09a741ff
+  author: codex
+  content: |
+    SKETCH v1 (BUG-2017)
+
+    Problem
+    A partitioned store can reserve node IDs and numeric ranges locally while presenting them as global, even though another partition can reserve the same identities. Successful push to a reachable forge proves acceptance there, not agreement by the allocation authority. The WORK clone files generic AIDA defects through the GitLab hub into a store that can reach PUBLIC GitHub; direct work connectivity to the public forge is unnecessary. Per the 09:53 OPERATOR DECISION, neither grants nor node/block metadata may contain work email addresses, IPs, hostnames, or other work-identifying data. STORY-1742 owns the outbound sanitization gate.
+
+    Design
+    1. Introduce an explicit allocation scope/verdict: coordinated-global, authority-granted partition, or uncoordinated/local. Resolve authority from a locally trusted pinned authority identity and verified registry lineage, never merely the forge URL or a claim inside an imported store. Expose scope, authority identity/revision, grant validity, and remaining authorized ranges in human and machine output. Unknown proof does not become global because no overlap is observed.
+    2. Define a small versioned, canonical, signed grant envelope: opaque authority and domain identifiers, opaque node/clone binding, type-specific disjoint ranges, issuance revision/sequence, unique request/grant identity, supersession link where applicable, and integrity signature. Public verification keys/trust anchors are explicitly enrolled; signing secrets remain authority-local. A checksum alone is not authority proof. Export/import only this allocation artifact, without objects, comments, queues, coordination records, local paths, or credentials. Use pseudonyms, never inferred USER/hostname/git email. Keep WORK identity mappings local.
+    3. A single serialized authority ledger reserves each request idempotently and validates all issued ranges before publication. A grant is exportable only after its reservation is durably accepted at the configured authority registry; rejected or ambiguous publication cannot produce a spendable duplicate. Use existing store-writer then block/dispense lock ordering. Retry with the same request identity returns the same reservation. Grants are append-only; supersession cannot reassign previously issued numeric space. Split-brain authority writers fail closed unless they share the same serialization/publication boundary.
+    4. Import verifies signature, expected authority/domain/node/type binding, schema, ranges, and issuance lineage before atomic persistence. Persist a monotonic grant high-water mark and local consumption frontier outside refreshable derived caches; exact re-import is idempotent and cannot reset next-ID state. A verified pre-issued range works offline until exhausted. All node/block acquisition and implicit auto-claim/dispense paths consult the same verdict. Without proof, refuse bare global display-ID allocation initially; UUID-based durable identities remain intact. A future namespaced-local fallback needs its own unambiguous syntax, not a bare BUG-N lookalike. Transport-only push performs no allocation.
+    5. Preflight both sides of store reconciliation before union: compare opaque node bindings, authority/domain identities, type/range overlaps, conflicting grant records and issuance lineages, and conflicting consumption/object evidence. Report the complete conflict set and refuse choosing a winner or advancing the merged ref. Valid matching identity/registry ancestry can retain the existing converged-store path; common ancestry alone must not excuse incompatible later claims.
+    6. Read-only audit classifies authority-proven allocations, uncoordinated local-only claims, invalid/unknown grants, overlap, and exhausted ranges. Emit an explicit repair plan: obtain a fresh disjoint grant, preserve UUID/origin identity, map legacy handles with reviewed aliases, then re-audit. No automatic range reuse, renumbering, history rewrite, or full-store import. STORY-1741 supplies versioned public-safe policy plus local identity separation; STORY-1742 checks grant/registry metadata along with all other outgoing content.
+
+    Files touched (proposed only)
+    aida-core/src/node.rs, registry.rs, block_allocation.rs, git_ops.rs and allocation/dispense backend call sites; a new allocation_authority/grant module; aida-cli-lib/src/node_cmd.rs, db_block.rs and node_cmd_args.rs; store reconciliation preflight in aida-core/src/git_ops.rs and relevant backend paths; status/reporting adapters; tests extending block_allocation_reader_tests.rs, bug_1969_allocation_push_tests.rs and isolated multi-store fixtures; docs/cli/10-storage.md and allocation guidance. Inventory all explicit and implicit allocators before implementation so CLI-only checks cannot be bypassed by MCP/backend writers.
+
+    Failure modes
+    Forged grants; wrong issuer/domain/clone/type; overlapping authority reservations; stale/replayed grant import; rejected/ambiguous publication; offline exhaustion; legacy ambiguous registry ancestry; cloned grant plus copied counter state; rollback of local consumption state; identifiers leaking through owner/provenance fields. Signatures authorize ranges but cannot alone prevent two offline copies spending the same copied node grant. Require distinct grant binding for a new clone and refuse detected duplicate bindings. Full disk rollback/offline cloning requires an explicit operational trust assumption or stronger external monotonic authority; do not claim signatures solve it.
+
+    Test plan
+    Two disconnected stores claiming the same node/range must refuse global allocation; an authority-issued disjoint grant imports inward without any requirement content and dispenses offline only within its range. Test forged/tampered/wrong-scope grants, exact replays, conflicting supersessions, sequence rollback, exhausted grants, concurrent grant requests/retries, authority push rejection and ambiguous responses. Exercise explicit node/block commands plus add/auto-claim/backend/MCP paths. Reconciliation fixtures combine multiple node/range conflicts and verify complete diagnostics with no union/ref advancement. Audit is mutation-free and repair preserves UUIDs. Existing verifiably converged fixtures retain behavior. Synthetic work identifiers in grants/registry/provenance must be rejected by STORY-1742 before export.
+
+    PR slicing
+    (1) Scope/verdict model, allocator inventory, audit and fail-closed unproven-global guard. (2) Signed grant schema plus serialized authority issue/export and atomic verified import. (3) Shared enforcement across all acquisition/dispense paths, replay/consumption persistence, offline use. (4) Reconciliation conflict preflight, compatibility fixtures, docs and cross-story end-to-end coverage. Keep slices gated until compatibility and offline-grant acceptance are complete.
+
+    Open questions
+    Select the authority host/serialization owner and signature/key-enrollment mechanism without encoding a forge as identity authority. Define evidence sufficient to grandfather existing converged registries. Confirm refusal instead of a new local-handle syntax for v1. Agree the offline clone/rollback threat boundary and safe recovery procedure; counter rollback is a separate issue from grant replay. All remain design-review questions. Spec stays Draft; no claim, branch, or implementation performed.
+  created_at: 2026-10-24T17:04:24.846777056Z
+  modified_at: 2026-10-24T17:04:24.846777056Z
 filed_at:
   code_sha: 3dfcf99117e6efbaa8259155a576276ab424a335
   branch: main
