@@ -234,6 +234,7 @@ fn drain_lock_serializes_bypass_only_when_set() {
         binary_path: String::new(),
         launched_stale: false,
         specs: vec![],
+        child_grant_id: None,
     };
     let json = serde_json::to_string(&lock).unwrap();
     assert!(!json.contains("launched_stale"));

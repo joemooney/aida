@@ -110,6 +110,7 @@ fn sample_lock(pid: u32) -> crate::drain_lock::DrainLock {
         launched_stale: false,
         // trace:BUG-759 | ai:claude
         specs: Vec::new(),
+        child_grant_id: None,
     }
 }
 
