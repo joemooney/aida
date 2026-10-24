@@ -170,6 +170,7 @@ pub(crate) fn deleted_branches(args: &[OsString]) -> Option<Vec<OsString>> {
 /// upstream already matches or the remote-tracking ref is missing. Returns
 /// whether it set the upstream.
 // trace:TASK-2270 | ai:claude
+// remote-creds-ok(TASK-2001): sets local upstream config from an existing remote-tracking ref; contacts no remote
 pub fn repair_push_upstream(
     repo: &Path,
     remote: &str,
