@@ -1079,6 +1079,10 @@ pub(crate) fn build_compete_arm_command(
     } else {
         (command.to_string(), args)
     };
+    // trace:BUG-2218 TASK-2328 | ai:codex
+    if contained {
+        session::prepare_contained_mailbox_for_launch(worktree_dir)?;
+    }
     let mut cmd = std::process::Command::new(program);
     cmd.args(args).current_dir(worktree_dir);
     if headless_vendor.is_some_and(|v| session::containment_applied(v, contained)) {

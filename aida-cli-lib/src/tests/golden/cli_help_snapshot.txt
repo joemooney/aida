@@ -9928,6 +9928,7 @@ which exits non-zero only when that one category has findings
 Usage: aida doctor [OPTIONS] [COMMAND]
 
 Commands:
+  rustc-cache               Diagnose cached compiler-wrapper failures; remove only with --fix
   shell-substitution-holes  Find prose that may have lost backticked text to shell command
                             substitution. Reports only; candidates require human inspection
   check                     Focused multi-agent drift diagnostic for one category
@@ -10019,6 +10020,27 @@ Options:
           --all
           
           [default: 0]
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida doctor rustc-cache
+Diagnose cached compiler-wrapper failures; remove only with --fix
+
+Usage: aida doctor rustc-cache [OPTIONS]
+
+Options:
+      --fix
+          Remove a cache that still contains a failed wrapper probe
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
 
   -h, --help
           Print help (see a summary with '-h')
@@ -33804,6 +33826,32 @@ Working on aida itself
         "name": "yes",
         "takes_value": false,
         "help": "Skip per-category confirmation prompts while healing"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "doctor",
+      "rustc-cache"
+    ],
+    "about": "Diagnose cached compiler-wrapper failures; remove only with --fix",
+    "flags": [
+      {
+        "name": "fix",
+        "takes_value": false,
+        "help": "Remove a cache that still contains a failed wrapper probe"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
       }
     ],
     "hidden": false

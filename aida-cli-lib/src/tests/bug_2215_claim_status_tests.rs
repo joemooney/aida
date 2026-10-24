@@ -173,3 +173,19 @@ fn bug_2215_real_claim_and_unclaim_legacy_project_round_trip() {
     handle_unclaim("BUG-1").unwrap();
     std::env::set_current_dir(original).unwrap();
 }
+
+#[test]
+fn bug_2215_unclaim_retains_a_claim_written_during_forge_lookup() {
+    let dir = tempfile::tempdir().unwrap();
+    let storage = Storage::new(dir.path().join("requirements.yaml"));
+    let mut target = requirement(RequirementStatus::InProgress);
+    target.owner = "first-claimant".into();
+    let mut store = aida_core::RequirementsStore::default();
+    store.requirements.push(target.clone());
+    storage.save(&store).unwrap();
+    persist_claim_status(dir.path(), &target, "later-claimant").unwrap();
+    persist_unclaim_status(dir.path(), &target, &PrLookup::NoOpenPr).unwrap();
+    let actual = storage.load().unwrap().requirements.remove(0);
+    assert_eq!(actual.status, RequirementStatus::InProgress);
+    assert_eq!(actual.owner, "later-claimant");
+}

@@ -356,10 +356,73 @@ pub(crate) fn persist_claim_status(
     target: &Requirement,
     claimant: &str,
 ) -> Result<bool> {
+    Ok(persist_claim_status_with_receipt(project_root, target, claimant)?.bumped)
+}
+
+// Keep the locked before/after values for a failed launch's conditional undo.
+// trace:BUG-2215 TASK-2326 | ai:codex
+pub(crate) struct ClaimStatusChange {
+    before: Requirement,
+    after: Requirement,
+    pub(crate) bumped: bool,
+}
+
+impl ClaimStatusChange {
+    pub(crate) fn changed(&self) -> bool {
+        self.before.status != self.after.status || self.before.owner != self.after.owner
+    }
+}
+
+// trace:BUG-2215 TASK-2326 | ai:codex
+pub(crate) fn persist_claim_status_with_receipt(
+    project_root: &std::path::Path,
+    target: &Requirement,
+    claimant: &str,
+) -> Result<ClaimStatusChange> {
     let storage = claim_storage(project_root)?;
+    let mut before = None;
     let mut bumped = false;
-    storage.update_spec_atomically(target, |req| bumped = claim_status(req, claimant))?;
-    Ok(bumped)
+    let after = storage
+        .update_spec_atomically(target, |req| {
+            before = Some(req.clone());
+            bumped = claim_status(req, claimant);
+        })?
+        .context("claimed requirement disappeared before status write")?;
+    Ok(ClaimStatusChange {
+        before: before.context("claim write did not read its target")?,
+        after,
+        bumped,
+    })
+}
+
+// Restore only the values this write still owns. A later owner/status/edit
+// retains its state; never save a pre-launch whole-store snapshot.
+// trace:BUG-2215 TASK-2326 | ai:codex
+pub(crate) fn rollback_claim_status(
+    root: &std::path::Path,
+    change: &ClaimStatusChange,
+) -> Result<bool> {
+    let mut restored = false;
+    claim_storage(root)?.update_spec_atomically(&change.after, |req| {
+        if !change.changed()
+            || req.status != change.after.status
+            || req.owner != change.after.owner
+            || req.modified_at != change.after.modified_at
+        {
+            return;
+        }
+        if req.status != change.before.status {
+            aida_core::conflict::set_status_recorded(
+                req,
+                change.before.status.clone(),
+                aida_core::conflict::SESSION_START_AUTHOR,
+            );
+        }
+        req.owner = change.before.owner.clone();
+        req.modified_at = chrono::Utc::now();
+        restored = true;
+    })?;
+    Ok(restored)
 }
 
 // trace:BUG-2215 | ai:codex
@@ -382,8 +445,32 @@ fn persist_unclaim_status(
     target: &Requirement,
     pr: &PrLookup,
 ) -> Result<()> {
+    let live_sessions = process_probe::probe_live_claude_sessions();
+    let scope = claim_scope_id(target);
     claim_storage(project_root)?.update_spec_atomically(target, |req| {
-        unclaim_status(req, pr);
+        // A new claim can arrive during the forge lookup. Its locked write
+        // must not be demoted by the earlier unclaim's stale observation.
+        // trace:BUG-2215 | ai:codex
+        if req.owner != target.owner || req.modified_at != target.modified_at {
+            return;
+        }
+        let held = list_leases(project_root).iter().any(|lease| {
+            lease.scope.eq_ignore_ascii_case(&scope)
+                && ((lease.claim_verb
+                    && lease.creator_pid.is_some_and(|pid| {
+                        process_probe::process_identity_is_alive(
+                            pid,
+                            lease.creator_pid_start_time.as_deref(),
+                        )
+                    }))
+                    || matches!(
+                        lease_state_for(lease, &live_sessions, chrono::Utc::now()),
+                        LeaseState::Live
+                    ))
+        });
+        if !held {
+            unclaim_status(req, pr);
+        }
     })?;
     Ok(())
 }

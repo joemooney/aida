@@ -308,6 +308,7 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida driver deregister` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida driver list` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida doctor` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
+| `aida doctor rustc-cache` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida doctor shell-substitution-holes` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida doctor check` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida doctor heal` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |

@@ -157,9 +157,17 @@ pub(crate) fn contained_mailbox_write_paths(main: &Path) -> anyhow::Result<Vec<P
         "cannot express sandbox mailbox path {}",
         mailbox.display()
     );
-    std::fs::create_dir_all(&mailbox)
-        .map_err(|e| anyhow::anyhow!("creating sandbox mailbox {}: {e}", mailbox.display()))?;
     Ok(vec![mailbox])
+}
+
+/// Prime the exact directory at launch, after the path calculation validated it.
+// trace:BUG-2218 TASK-2328 | ai:codex
+pub(crate) fn prepare_mailbox(main: &Path) -> anyhow::Result<()> {
+    for mailbox in contained_mailbox_write_paths(main)? {
+        std::fs::create_dir_all(&mailbox)
+            .map_err(|e| anyhow::anyhow!("creating sandbox mailbox {}: {e}", mailbox.display()))?;
+    }
+    Ok(())
 }
 
 /// The `sandbox.filesystem` path entries (`allowWrite` or `denyWrite`) for
