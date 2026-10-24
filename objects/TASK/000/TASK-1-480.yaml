@@ -1,0 +1,27 @@
+id: 01a16c7a-ea79-7ca3-9a99-c5f3e99e67ea
+spec_id: TASK-1-480
+title: 'minor: aida-core/src/team.rs task_2223_the_workspace_target_passes_the_guard re…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1955, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  minor: aida-core/src/team.rs task_2223_the_workspace_target_passes_the_guard relies on <workspace>/target existing, because is_under_workspace_target canonicalizes it and returns false otherwise; with CARGO_TARGET_DIR pointing elsewhere on a fresh checkout the guard panics and the test fails. The removed version used CARGO_MANIFEST_DIR, which always exists. Create the dir in the test or skip when it is absent.
+  Reviewed sha: cdd63dab76396e2da81e6cb499d452cd38fad96d
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-24T05:55:57.177089929Z
+modified_at: 2026-10-24T05:55:57.177089929Z
+req_type: Task
+tags:
+- carried-from:TASK-1955
+- finding-hash:1a7c83a4
+- from-review:TASK-1955
+- kind:carried-forward
+filed_at:
+  code_sha: 71143a2a03adef3676ff786c52912324b3813bdd
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 43a38f38d2
+  vendor: claude
