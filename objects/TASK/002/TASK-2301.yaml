@@ -1,0 +1,30 @@
+id: 01a16b85-8cca-70e0-af82-91d2611e28c2
+spec_id: TASK-2301
+agreed_id: TASK-2301
+title: Scheduled dev-autopromote re-promotes a commit the operator just rolled back
+description: |
+  `aida dev rollback` (aida-cli-lib/src/dev_build.rs:1192, rollback_with_steps) swaps the live and prev `.promoted` records but does not touch `<live>/autopromote.json`, which still says `phase: promoted` for the bad SHA. On the next `dev-autopromote` tick (dev_autopromote.rs run_tick) the live SHA no longer equals origin/main, the FailedSha guard only matches `phase: failed`, and HEAD is already origin/main. With CI green, the tick launches a rebuild and re-promotes the commit the operator rolled away from, within about 15 minutes. So an emergency rollback is undone automatically.
+
+  Fix options: (a) have rollback write autopromote.json with the rolled-away SHA as `failed, reported: true`, so the tick skips it as `failed-sha` until main moves; (b) have the tick skip when the live record equals prev's rolled-back pair; (c) at minimum, document in docs/cli/11-dev.md that you disable the job before a rollback.
+
+  Raised in review of PR-2850: https://github.com/joemooney/aida/pull/2850#issuecomment-6378162260
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-24T01:27:56.874935706Z
+modified_at: 2026-10-24T01:27:56.874935706Z
+req_type: Task
+tags:
+- dev-build
+- from-review:PR-2850
+- severity:minor
+filed_at:
+  code_sha: 30961c5fd6bb36b083181ce0c296419dbed1d10e
+  branch: pr-2850
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c38043228d
+  vendor: claude
+  session: 01a16b828109
+  harness_version: 2.1.310 (Claude Code)
