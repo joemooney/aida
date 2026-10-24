@@ -1,0 +1,29 @@
+id: 01a16c4b-444f-7de3-b099-f910ff4a2de8
+spec_id: TASK-1-477
+title: '[cosmetic, non-blocking, carried from ad7f4260d8] needs_attention_lens.rs:70-95…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1951, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  [cosmetic, non-blocking, carried from ad7f4260d8] needs_attention_lens.rs:70-95 rework_holds_by_spec keys a HashMap by spec, so a spec with Rework holds on two PRs shows whichever hold list_holds yields last (display-only); prefer the newest hold or the one with a ready head.
+
+  PR: #2845
+  Reviewed sha: 32aac566c22a161a2ab11f1c45bd18d6a7cbb386
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-24T05:03:54.447334773Z
+modified_at: 2026-10-24T05:03:54.447334773Z
+req_type: Task
+tags:
+- carried-from:TASK-1951
+- finding-hash:2aa20740
+- from-review:PR-2845
+- kind:carried-forward
+filed_at:
+  code_sha: 43a38f38d2ba2b6794ea3c74d8bb69f15a54f040
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: d14a20aaae
+  vendor: claude
