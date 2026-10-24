@@ -1,5 +1,6 @@
 id: 01a16ce6-c7ba-78d1-aaed-c2f7ebf0eb43
 spec_id: TASK-1-489
+agreed_id: TASK-1858
 title: 'cosmetic, non-blocking: bug_2213_inherited_pathspec_modes_cannot_hide_object_di…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on BUG-2213, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -38,6 +39,10 @@ history:
   author: joe
   timestamp: 2026-10-24T07:55:15.282901490Z
   session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+  changes: []
+- id: 01a16d0a-c40c-7c01-ad3f-09d052798958
+  author: joe
+  timestamp: 2026-10-24T08:33:04.524168270Z
   changes: []
 filed_at:
   code_sha: 7ce52440de8776de3e9ce50060344a2bdbb6e8f4
