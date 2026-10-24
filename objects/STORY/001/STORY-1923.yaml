@@ -1,0 +1,33 @@
+id: 01a16f08-9dbe-7361-8b2e-4f138651fb23
+spec_id: STORY-1923
+agreed_id: STORY-1923
+title: 'Review PR-2905: [AI:agy] feat(dispatch): typed dispatch request schema, validators, and CLI (STORY-1917)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `claude/story-1917-slice1`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2905>
+  - Branch: `claude/story-1917-slice1` → `main`
+
+  ## Covers
+
+  - STORY-1917
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2905` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-24T17:49:58.078676714Z
+modified_at: 2026-10-24T17:49:58.078676714Z
+req_type: Story
+filed_at:
+  code_sha: d103d49208c460fdb1dbb9fc12785d82d541c237
+  branch: claude/story-1917-slice1
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c7e5160ce3
+  vendor: antigravity
