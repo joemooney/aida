@@ -240,3 +240,105 @@ fn malformed_findings_receipt_is_refused() {
         "{error:#}"
     );
 }
+
+/// An approval carried over a clean base merge to the head, which the corpus
+/// gate still refuses for the capped earlier rounds: the full approval read
+/// fails, the approval gate alone passes. No ready wake joins the mailbox.
+// trace:TASK-2238 | ai:claude
+struct CarriedOver;
+impl Evidence for CarriedOver {
+    fn approval(&self, _: &forge::Change) -> std::result::Result<Approval, String> {
+        Err("the verdict corpus refuses: request-changes recorded at an earlier head".into())
+    }
+    fn approval_only(&self, change: &forge::Change) -> std::result::Result<Approval, String> {
+        Ok(Approval {
+            reviewed: sha(0xb),
+            identity: "operator at 2026-10-23".into(),
+            carried: Some(format!("carried over clean merges of `{}`", change.base)),
+        })
+    }
+    fn under_review(&self, change: &forge::Change) -> Option<String> {
+        Unapproved.under_review(change)
+    }
+    fn hold(&self, change: &forge::Change) -> Result<Option<String>> {
+        Unapproved.hold(change)
+    }
+    fn ci(&self, sha: &str) -> Result<crate::forge::CommitChecks> {
+        Unapproved.ci(sha)
+    }
+    fn required_checks(&self) -> Result<Vec<String>> {
+        Unapproved.required_checks()
+    }
+    fn base(&self, change: &forge::Change) -> Result<(u64, bool)> {
+        Unapproved.base(change)
+    }
+    fn head(&self, change: &forge::Change) -> Result<String> {
+        Unapproved.head(change)
+    }
+}
+
+/// TASK-2242 (swept in TASK-2238): a capped change whose head is approved
+/// through a carried-over approval does not wake the advisor with "its head
+/// has no review", even while the corpus gate still refuses that head.
+// trace:TASK-2238 | ai:claude
+#[test]
+fn round_cap_wake_respects_a_carried_over_approval() {
+    let (temp, store) = fixture();
+    let root = temp.path();
+    let mut second = verdict(0xb, "request-changes");
+    second["rounds"] = serde_json::json!([verdict(0xa, "request-changes")]);
+    write(root, "PR-7.json", &second);
+    report(root, &store, &change(0xc), &CarriedOver).unwrap();
+    assert!(mailbox(root).is_empty(), "{:#?}", mailbox(root));
+    assert!(store
+        .load()
+        .unwrap()
+        .entries
+        .get("PR-7")
+        .is_none_or(|e| e.cap.is_none()));
+    // Without the approval the same change wakes the advisor.
+    report(root, &store, &change(0xc), &Unapproved).unwrap();
+    assert_eq!(mailbox(root).len(), 1);
+}
+
+/// TASK-2243 (swept in TASK-2238): a GitLab MR whose verdicts were read from
+/// the historical `PR-N.json` alias names that file, not a missing
+/// `MR-N.json`, in both the findings mail and the round-cap wake.
+// trace:TASK-2238 | ai:claude
+#[test]
+fn gitlab_notices_name_the_pr_alias_file_they_were_read_from() {
+    let mr = |head| forge::Change {
+        gitlab: true,
+        ..change(head)
+    };
+    let (temp, store) = fixture();
+    let root = temp.path();
+    write(root, "PR-7.json", &verdict(0xa, "request-changes"));
+    report(root, &store, &mr(0xa), &Unapproved).unwrap();
+    let mail = mailbox(root);
+    assert_eq!(mail.len(), 1, "{mail:#?}");
+    assert!(
+        mail[0].body.contains("`.aida/review-verdicts/PR-7.json`"),
+        "{}",
+        mail[0].body
+    );
+    assert!(!mail[0].body.contains("MR-7.json"), "{}", mail[0].body);
+
+    let (temp, store) = fixture();
+    let root = temp.path();
+    let mut second = verdict(0xb, "request-changes");
+    second["rounds"] = serde_json::json!([verdict(0xa, "request-changes")]);
+    write(root, "PR-7.json", &second);
+    report(root, &store, &mr(0xc), &Unapproved).unwrap();
+    let mail = mailbox(root);
+    let cap = mail
+        .iter()
+        .find(|m| m.to == agent("advisor"))
+        .expect("cap wake");
+    assert!(
+        cap.body.contains("`.aida/review-verdicts/PR-7.json`"),
+        "{}",
+        cap.body
+    );
+    assert!(!cap.body.contains("MR-7.json"), "{}", cap.body);
+}
