@@ -1,0 +1,27 @@
+id: 01a16b87-e60b-7d61-8dc6-776a6a4cfd52
+spec_id: TASK-1-471
+title: 'non-blocking, minor: with no seat_tree knob, a contained launch now runs ''git c…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-2053, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  non-blocking, minor: with no seat_tree knob, a contained launch now runs 'git clone --reference <main> <origin_url>' (seat_clone.rs:422-429), so an unreachable origin (offline host, bad URL, credential failure) refuses a contained launch that a worktree served before the flip. The plan doc's 'The flip never turns a working contained launch into a refusal' (docs/plans/2026-10-16-bug-2169-contained-clone.md S4c as built) overclaims, and the release note does not say clone seats need origin reachable at launch. The advisor decides: a default fallback like ruling 2, or a doc fix.
+  Reviewed sha: 42cef5f69f1795e85e1dbe91fcd8c83ba0239b72
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-24T01:30:30.795487315Z
+modified_at: 2026-10-24T01:30:30.795487315Z
+req_type: Task
+tags:
+- carried-from:TASK-2053
+- finding-hash:63da336d
+- from-review:TASK-2053
+- kind:carried-forward
+filed_at:
+  code_sha: c016980d0323594b27f6bce8a0019a172a3aa089
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c38043228d
+  vendor: claude
