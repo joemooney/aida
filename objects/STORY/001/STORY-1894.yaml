@@ -3,12 +3,12 @@ spec_id: STORY-1894
 agreed_id: STORY-1894
 title: 'Review PR-2837: TASK-1952 S5 per-host credential scope and git hardening'
 description: 'Hand-filed review story: Refs-only PR (BUG-2208 gap). Covers TASK-1952.'
-status: Approved
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-22T21:18:25.730592361Z
-modified_at: 2026-10-22T21:18:34.987758852Z
+modified_at: 2026-10-24T04:55:32.002350807Z
 req_type: Story
 relationships:
 - rel_type:
@@ -16,12 +16,25 @@ relationships:
   target_id: 01a154e2-1411-71b0-9344-2a78faddcce9
   created_at: 2026-10-22T21:18:34.987755693Z
   created_by: joe
+comments:
+- id: 01a16c43-99a2-7fb2-9109-ae04c0f7dfe2
+  author: aida-auto-bump
+  content: 'Auto-rejected: PR #2837 closed on the forge without merging.'
+  created_at: 2026-10-24T04:55:32.002470447Z
+  modified_at: 2026-10-24T04:55:32.002470447Z
 history:
 - id: 01a1657a-ea7d-7883-9577-3b8178c90c95
   author: joe
   timestamp: 2026-10-22T21:18:36.669858304Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
   changes: []
+- id: 01a16c43-99a2-7fb2-9109-ae1bb2c0e4fa
+  author: aida-auto-bump
+  timestamp: 2026-10-24T04:55:32.002476070Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Rejected
 filed_at:
   code_sha: 519bdccd6ea180fd65fb2313aa0bb1641f257f28
   branch: main
