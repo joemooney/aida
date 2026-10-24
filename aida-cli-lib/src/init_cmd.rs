@@ -4635,6 +4635,8 @@ pub(crate) fn handle_init_distributed_worktree(
         //     it as default rather than the orphan store.
         if origin_empty {
             if let InitPushPlan::CodeBranchFirst(cb) = &plan {
+                // trace:TASK-2270 | ai:claude
+                aida_core::git_ops::clear_sandbox_config_lock(&cwd);
                 let out = std::process::Command::new("git")
                     .arg("-C")
                     .arg(&cwd)
@@ -4644,6 +4646,7 @@ pub(crate) fn handle_init_distributed_worktree(
                     .output();
                 match out {
                     Ok(o) if o.status.success() => {
+                        aida_core::git_ops::repair_push_upstream(&cwd, "origin", Some(cb), cb);
                         println!("  {} pushed code branch to origin/{}", "Done".green(), cb);
                     }
                     _ => {
@@ -4661,11 +4664,19 @@ pub(crate) fn handle_init_distributed_worktree(
 
         // The orphan-store push (unchanged behavior).
         // trace:BUG-2181 | ai:claude
+        // trace:TASK-2270 | ai:claude
+        aida_core::git_ops::clear_sandbox_config_lock(&store_path);
         let push_result = aida_core::git_ops::host_remote_git_command(&store_path, "origin")
             .args(["push", "-u", "origin", branch_name])
             .output();
         match push_result {
             Ok(out) if out.status.success() => {
+                aida_core::git_ops::repair_push_upstream(
+                    &store_path,
+                    "origin",
+                    Some(branch_name),
+                    branch_name,
+                );
                 println!(
                     "  {} pushed orphan branch to origin/{}",
                     "Done".green(),
