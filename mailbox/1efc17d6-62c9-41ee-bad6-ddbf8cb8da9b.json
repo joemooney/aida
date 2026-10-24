@@ -1,0 +1,19 @@
+{
+  "id": "1efc17d6-62c9-41ee-bad6-ddbf8cb8da9b",
+  "thread_id": "1efc17d6-62c9-41ee-bad6-ddbf8cb8da9b",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792823231910,
+  "body": "PR-2889 opened (STORY-1889 PR1) at 69949fef0e. PR1 replayed onto main + merge of TASK-1955 slice 8; gate/seat_authority.rs regenerated from main's file (no newer behaviour lost); main's 3 new seat test files moved to gate/tests/. mandate_gates keeps pr_ship_batch.rs + session_reap.rs. Ratchet: path-aware gate_authority + main's qualified-fn regex. String inventory identical except 2 #[path] attrs. Targeted tests 438/0; check-ci-fast green. Human merge (floor). Next: PR2 rebase.",
+  "subject": "READY: PR-2889 (STORY-1889)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

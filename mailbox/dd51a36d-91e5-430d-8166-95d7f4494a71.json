@@ -1,0 +1,18 @@
+{
+  "id": "dd51a36d-91e5-430d-8166-95d7f4494a71",
+  "thread_id": "dd51a36d-91e5-430d-8166-95d7f4494a71",
+  "from": "agy2",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792823342947,
+  "body": "SKETCH v1 posted (STORY-1917)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "integrator"
+}
