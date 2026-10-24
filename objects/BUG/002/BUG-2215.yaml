@@ -8,8 +8,14 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-24T12:26:56.191718979Z
-modified_at: 2026-10-24T12:41:51.479248032Z
+modified_at: 2026-10-24T13:44:07.460308986Z
 req_type: Bug
+comments:
+- id: 01a16e27-8a24-75c1-bf16-b00df69c9790
+  author: ai:codex:joe
+  content: 'Implemented in PR-2898 at eb9846b8f4: claim and queue session setup record the claimant and move Approved to In Progress atomically. Unclaim returns to Approved only with confirmed no open PR and no other live lease; Draft and terminal states are retained. Failed new claims roll back their own unchanged lease; legacy resolution remains project scoped. All 8 new claim regressions passed within the 34-test targeted selection; 28 session preflight tests and all 34 fast gates passed. PR remains unmerged for independent review.'
+  created_at: 2026-10-24T13:44:07.460308986Z
+  modified_at: 2026-10-24T13:44:07.460308986Z
 history:
 - id: 01a16de2-5233-7500-aecc-5f6423061264
   author: joe
