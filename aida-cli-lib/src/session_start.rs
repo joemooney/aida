@@ -1856,7 +1856,7 @@ pub(crate) fn session_start_with_receipt(
     // The launch facts (a git call, a config read, a canonicalize) are read
     // only for a clone; a worktree launch has nothing to fall back from.
     // trace:TASK-2053 | ai:claude
-    let tree_kind = if tree_kind != crate::seat_clone::TreeKind::Clone {
+    let mut tree_kind = if tree_kind != crate::seat_clone::TreeKind::Clone {
         tree_kind
     } else {
         match crate::seat_clone::default_clone_fallback(
@@ -2140,10 +2140,11 @@ pub(crate) fn session_start_with_receipt(
     // error in between removes the clone and releases its pin.
     // trace:BUG-2169 | ai:claude
     let mut clone_cleanup: Option<crate::seat_clone::CloneCleanupGuard> = None;
-    if tree_kind == crate::seat_clone::TreeKind::Clone {
-        // BUG-2169: a contained seat gets a private clone. There is no
-        // worktree fallback: any failure refuses the launch.
-        // trace:BUG-2169 | ai:claude
+    // Keep the original worktree placement if the default clone cannot reach
+    // origin. No lease exists yet; create cleans its clone and pin first.
+    // trace:TASK-2300 | ai:codex
+    let fallback_worktree_path = worktree_path.clone();
+    let created_clone = if tree_kind == crate::seat_clone::TreeKind::Clone {
         if reuse_existing_worktree_path || review_target.is_some() {
             anyhow::bail!(
                 "a contained seat with `[contained] seat_tree = \"clone\"` cannot {} yet; \
@@ -2185,8 +2186,37 @@ pub(crate) fn session_start_with_receipt(
                 worktree_path.display()
             );
         }
-        let created =
-            crate::seat_clone::create(&project_root, &worktree_path, &branch_name, &base_ref)?;
+        match crate::seat_clone::create(&project_root, &worktree_path, &branch_name, &base_ref) {
+            Ok(created) => Some(created),
+            Err(error) => {
+                let Some(note) = crate::seat_clone::origin_failure_fallback(
+                    crate::seat_clone::seat_tree_is_explicit(&project_root),
+                    &error,
+                ) else {
+                    return Err(error);
+                };
+                // An explicit clone location has a reserved aida-seat-* name.
+                // Host git refuses even a linked worktree under that name, so
+                // do not create one or silently ignore the requested --path.
+                // trace:TASK-2300 | ai:codex
+                if explicit_path.is_some() {
+                    anyhow::bail!(
+                        "cloning from origin failed or timed out, but --path {} is reserved for \
+                         private seat clones and cannot host a worktree fallback; drop --path \
+                         to use an automatic worktree, or choose an ordinary worktree path",
+                        worktree_path.display()
+                    );
+                }
+                eprintln!("note: {note}");
+                tree_kind = crate::seat_clone::TreeKind::Worktree;
+                worktree_path = fallback_worktree_path;
+                None
+            }
+        }
+    } else {
+        None
+    };
+    if let Some(created) = created_clone {
         eprintln!(
             "{} private clone for this contained seat: {} [{}] at {}",
             crate::glyph(crate::glyphs::Glyph::Check).green(),
