@@ -27,6 +27,14 @@ pub(crate) const LOCK_FILE: &str = ".autopromote.lock";
 pub(crate) const STATE_FILE: &str = "autopromote.json";
 /// Bound on `git fetch origin main`.
 const FETCH_TIMEOUT: Duration = Duration::from_secs(40);
+/// Bound on `git merge-base --is-ancestor`.
+const IS_ANCESTOR_TIMEOUT: Duration = Duration::from_secs(30);
+/// Bound on `git rev-parse`.
+const REV_PARSE_TIMEOUT: Duration = Duration::from_secs(10);
+/// What must remain of the budget to read CI: two `gh api` calls (check
+/// runs and statuses), each bounded at 30s.
+// trace:STORY-1689 | ai:claude
+pub(crate) const CI_READ_RESERVE: Duration = Duration::from_secs(60);
 /// Bound on `git merge --ff-only`.
 const FF_TIMEOUT: Duration = Duration::from_secs(20);
 /// The whole tick's budget, kept inside the scheduler's per-job kill
@@ -446,6 +454,20 @@ fn settle_previous(
     }))
 }
 
+/// An out-of-time skip when less than `need` of the tick's budget is left
+/// to `what`.
+// trace:STORY-1689 | ai:claude
+pub(crate) fn budget_skip(deadline: Instant, need: Duration, what: &str) -> Option<Skip> {
+    let left = deadline.saturating_duration_since(Instant::now());
+    (left < need).then(|| {
+        Skip::OutOfTime(format!(
+            "{}s of the tick's budget left, {}s needed to {what}; retrying next tick",
+            left.as_secs(),
+            need.as_secs()
+        ))
+    })
+}
+
 /// One scheduled tick. Never builds: it decides, fast-forwards and
 /// launches the detached child. `deadline` ends the tick's budget; the
 /// fast-forward starts only with [`FF_RESERVE`] of it left.
@@ -478,6 +500,13 @@ pub(crate) fn run_tick(
     if let Some(skip) = checkout_skip(&checkout) {
         return skipped(skip);
     }
+    // Every read-only step starts only when its own bound still fits in the
+    // budget, so a slow network ends as an honest out-of-time skip rather
+    // than a scheduler kill routed as a failed build.
+    // trace:STORY-1689 | ai:claude
+    if let Some(skip) = budget_skip(deadline, FETCH_TIMEOUT, "fetch origin/main") {
+        return skipped(skip);
+    }
     if let Err(e) = steps.fetch(repo) {
         return skipped(Skip::FetchFailed(format!("{e:#}")));
     }
@@ -496,6 +525,13 @@ pub(crate) fn run_tick(
             )));
         }
     }
+    if let Some(skip) = budget_skip(
+        deadline,
+        REV_PARSE_TIMEOUT + IS_ANCESTOR_TIMEOUT,
+        "check the fast-forward",
+    ) {
+        return skipped(skip);
+    }
     let head = match steps.rev_parse(repo, "HEAD") {
         Ok(sha) => sha,
         Err(e) => return skipped(Skip::NonFf(format!("could not read HEAD: {e:#}"))),
@@ -508,6 +544,9 @@ pub(crate) fn run_tick(
             )))
         }
         Err(e) => return skipped(Skip::NonFf(format!("{e:#}"))),
+    }
+    if let Some(skip) = budget_skip(deadline, CI_READ_RESERVE, "read CI") {
+        return skipped(skip);
     }
     if let Some(skip) = ci_skip(&target, steps.commit_ci(repo, &target)) {
         return skipped(skip);
@@ -524,14 +563,8 @@ pub(crate) fn run_tick(
         }
         Err(e) => return skipped(Skip::Dirty(format!("could not read the checkout: {e:#}"))),
     }
-    let left = deadline.saturating_duration_since(Instant::now());
-    if left < FF_RESERVE {
-        return skipped(Skip::OutOfTime(format!(
-            "{}s of the tick's budget left, {}s needed to fast-forward and launch; \
-             retrying next tick",
-            left.as_secs(),
-            FF_RESERVE.as_secs()
-        )));
+    if let Some(skip) = budget_skip(deadline, FF_RESERVE, "fast-forward and launch") {
+        return skipped(skip);
     }
     if let Err(e) = steps.ff_only(repo, &target) {
         return skipped(Skip::NonFf(format!("fast-forward refused: {e:#}")));
@@ -639,10 +672,13 @@ pub(crate) fn is_refusal(e: &anyhow::Error) -> bool {
 }
 
 /// Append `line` to the autopromote log. A skip is written only when its
-/// reason differs from the last line's; `unchanged` never is.
+/// reason differs from the last line's; `unchanged` and `not-live-source`
+/// never are.
 pub(crate) fn log_outcome(log: &Path, outcome: &TickOutcome) -> Result<()> {
     let (token, line) = match outcome {
-        TickOutcome::Skipped(Skip::Unchanged) => return Ok(()),
+        // Neither is about the live binary: `not-live-source` comes from
+        // every other clone of the repo. trace:STORY-1689 | ai:claude
+        TickOutcome::Skipped(Skip::Unchanged | Skip::NotLiveSource(_)) => return Ok(()),
         TickOutcome::Skipped(skip) => (
             format!("skip {}", skip.reason()),
             format!("skip {}: {}", skip.reason(), skip.detail()),
@@ -721,7 +757,7 @@ impl AutopromoteSteps for RealAutopromoteSteps {
     fn rev_parse(&mut self, repo: &Path, rev: &str) -> Result<String> {
         let mut cmd = git(repo);
         cmd.args(["rev-parse", "--verify", "-q", &format!("{rev}^{{commit}}")]);
-        let sha = git_ok(cmd, "git rev-parse", Duration::from_secs(10))?;
+        let sha = git_ok(cmd, "git rev-parse", REV_PARSE_TIMEOUT)?;
         anyhow::ensure!(
             crate::git_arg_guard::is_hex_sha(&sha),
             "`{rev}` did not resolve to a commit"
@@ -732,7 +768,7 @@ impl AutopromoteSteps for RealAutopromoteSteps {
     fn is_ancestor(&mut self, repo: &Path, ancestor: &str, descendant: &str) -> Result<bool> {
         let mut cmd = git(repo);
         cmd.args(["merge-base", "--is-ancestor", ancestor, descendant]);
-        let out = crate::command_output_with_timeout(cmd, Duration::from_secs(30))
+        let out = crate::command_output_with_timeout(cmd, IS_ANCESTOR_TIMEOUT)
             .context("`git merge-base --is-ancestor` timed out")?;
         match out.status.code() {
             Some(0) => Ok(true),
@@ -871,8 +907,22 @@ pub(crate) fn handle_if_main_green() -> Result<()> {
             println!("launched the build of {sha} ({how})");
             Ok(())
         }
-        TickOutcome::Failure { message, .. } => bail!("{message}"),
+        TickOutcome::Failure { message, .. } => {
+            Err(report_failure(&message, &mut std::io::stderr()))
+        }
     }
+}
+
+/// Write a failure's `message` to `err` and return the error that exits
+/// non-zero without printing it again. The scheduler pipes the job's stdout,
+/// which puts the error renderer in agent mode (stdout), while the routed
+/// `CronJobFailed` carries only the last stderr line: the commit, log path
+/// and tail must land on stderr whatever the output mode.
+// trace:STORY-1689 | ai:claude
+pub(crate) fn report_failure(message: &str, err: &mut dyn Write) -> anyhow::Error {
+    let _ = writeln!(err, "{message}");
+    let _ = err.flush();
+    crate::TypedPayloadEmitted.into()
 }
 
 /// `aida dev build --autopromote-child <sha>` (hidden; launched by a tick).
@@ -906,7 +956,20 @@ pub(crate) fn handle_child(sha: &str) -> Result<()> {
     if let Err(e) = append_line(&paths.log, &line) {
         eprintln!("warning: could not write {}: {e:#}", paths.log.display());
     }
-    result
+    child_exit(result)
+}
+
+/// The child's exit: a refusal is recorded (state and log) and retried by
+/// the next tick, not a failure, so its unit must not end `failed`.
+// trace:STORY-1689 | ai:claude
+pub(crate) fn child_exit(result: Result<()>) -> Result<()> {
+    match result {
+        Err(e) if is_refusal(&e) => {
+            eprintln!("{e:#}");
+            Ok(())
+        }
+        other => other,
+    }
 }
 
 #[cfg(test)]

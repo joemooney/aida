@@ -3386,13 +3386,7 @@ fn record_outcome_local(
                     job: task.name.clone(),
                     seat: task.seats.join(","),
                     error: trip.and_then(|t| t.audit_error.as_deref()).map_or_else(
-                        || {
-                            format!(
-                                "exit {}: {}",
-                                outcome.status,
-                                outcome.stderr.trim().lines().last().unwrap_or("")
-                            )
-                        },
+                        || routed_failure_error(outcome.status, &outcome.stderr),
                         |error| {
                             format!(
                                 "exit {}: performance audit unavailable: {error}",
@@ -3406,6 +3400,16 @@ fn record_outcome_local(
             ),
         );
     }
+}
+
+/// The error a failed job's `CronJobFailed` carries: its exit status and
+/// its last stderr line.
+// trace:STORY-1689 | ai:claude
+pub(crate) fn routed_failure_error(status: i32, stderr: &str) -> String {
+    format!(
+        "exit {status}: {}",
+        stderr.trim().lines().last().unwrap_or("")
+    )
 }
 
 // trace:TASK-1280 | ai:codex

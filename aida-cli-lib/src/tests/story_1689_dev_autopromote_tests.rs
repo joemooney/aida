@@ -774,7 +774,7 @@ fn if_main_green_refuses_the_manual_build_flags() {
 
 // trace:STORY-1689.ac3e63c0 | ai:claude
 #[test]
-fn too_little_budget_left_skips_before_the_fast_forward() {
+fn too_little_budget_left_skips_before_the_ci_read() {
     let f = fixture();
     let mut fake = Fake::green();
     let outcome = run_tick(
@@ -785,7 +785,8 @@ fn too_little_budget_left_skips_before_the_fast_forward() {
     )
     .unwrap();
     assert_eq!(skip_reason(&outcome), "out-of-time");
-    assert!(fake.called("ci"), "the checks still ran: {:?}", fake.calls);
+    assert!(fake.called("fetch"), "the fetch fit: {:?}", fake.calls);
+    assert!(!fake.called("ci"), "the CI read did not: {:?}", fake.calls);
     assert_untouched(&fake);
     assert!(read_state(&f.layout.live_dir).is_none());
 }
@@ -973,4 +974,79 @@ fn an_untracked_file_skip_says_it_stops_the_scheduled_promote() {
     let detail = skip.detail();
     assert!(detail.contains("7 untracked"), "{detail}");
     assert!(detail.contains("remove or ignore them"), "{detail}");
+}
+
+// --- review round 3 (C2, TASK-2289, TASK-2291) ---------------------------
+
+// trace:STORY-1689 | ai:claude
+#[test]
+fn a_reported_failure_reaches_the_routed_cron_error_on_stderr() {
+    let f = fixture();
+    fs::create_dir_all(&f.paths.build_logs).unwrap();
+    fs::write(
+        f.paths.build_logs.join("b.log"),
+        "compiling\nerror[E0425]: cannot find value `x`\n",
+    )
+    .unwrap();
+    put_state(&f, Phase::Failed, None, false, "2026-10-22T00:00:00Z");
+    let TickOutcome::Failure { message, .. } = tick(&f, &mut Fake::green()) else {
+        panic!("expected the failure to be reported");
+    };
+    let mut stderr = Vec::new();
+    let e = report_failure(&message, &mut stderr);
+    // Nothing more is printed on stdout (agent mode under the scheduler).
+    assert!(e.downcast_ref::<crate::TypedPayloadEmitted>().is_some());
+    let stderr = String::from_utf8(stderr).unwrap();
+    let routed = crate::maintenance_schedule::routed_failure_error(1, &stderr);
+    assert!(routed.starts_with("exit 1: "), "{routed}");
+    assert!(routed.contains(TARGET), "{routed}");
+    assert!(
+        routed.contains(&f.paths.build_logs.join("b.log").display().to_string()),
+        "{routed}"
+    );
+    assert!(routed.contains("error[E0425]"), "{routed}");
+}
+
+// trace:STORY-1689 | ai:claude
+#[test]
+fn a_tick_with_no_budget_left_skips_before_the_fetch() {
+    let f = fixture();
+    let mut fake = Fake::green();
+    let outcome = run_tick(&f.layout, &f.paths, &mut fake, Instant::now()).unwrap();
+    assert_eq!(skip_reason(&outcome), "out-of-time");
+    assert!(!fake.called("fetch"), "{:?}", fake.calls);
+    assert!(read_state(&f.layout.live_dir).is_none());
+}
+
+// trace:STORY-1689 | ai:claude
+#[test]
+fn the_read_only_phase_fits_the_budget() {
+    // Each step starts only with its own bound left, so the reads end by
+    // the deadline, which itself ends before the scheduler's kill.
+    assert!(FETCH_TIMEOUT + REV_PARSE_TIMEOUT * 2 + IS_ANCESTOR_TIMEOUT <= TICK_BUDGET);
+    assert!(budget_skip(Instant::now() + TICK_BUDGET, CI_READ_RESERVE, "read CI").is_none());
+    let skip = budget_skip(Instant::now(), CI_READ_RESERVE, "read CI").unwrap();
+    assert_eq!(skip.reason(), "out-of-time");
+    assert!(skip.detail().contains("read CI"), "{}", skip.detail());
+}
+
+// trace:STORY-1689 | ai:claude
+#[test]
+fn a_not_live_source_skip_is_never_logged() {
+    let f = fixture();
+    log_outcome(
+        &f.paths.log,
+        &TickOutcome::Skipped(Skip::NotLiveSource("another clone".into())),
+    )
+    .unwrap();
+    assert!(!f.paths.log.exists());
+}
+
+// trace:STORY-1689 | ai:claude
+#[test]
+fn a_refused_child_exits_zero_and_a_failed_one_does_not() {
+    let refused: Result<()> = Err(crate::dev_build::PromotionRefused("HEAD moved".into()).into());
+    assert!(child_exit(refused).is_ok());
+    assert!(child_exit(Err(anyhow::anyhow!("cargo build failed"))).is_err());
+    assert!(child_exit(Ok(())).is_ok());
 }
