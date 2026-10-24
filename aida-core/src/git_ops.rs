@@ -1582,7 +1582,7 @@ mod remote_credentials;
 pub use crate::hypothesis::{is_evidence_refusal, EvidenceRefusal};
 pub use config_lock::{
     clear_sandbox_config_lock, config_lock_path, is_sandbox_placeholder,
-    output_healing_config_lock, sandbox_config_lock,
+    output_healing_config_lock, repair_push_upstream, sandbox_config_lock,
 };
 pub use remote_credentials::{
     configure_remote_credentials, configure_remote_credentials_with, host_remote_git_command,
