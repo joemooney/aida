@@ -1,0 +1,28 @@
+id: 01a16ce5-0167-7b72-b43b-368c888a7369
+spec_id: TASK-2320
+agreed_id: TASK-2320
+title: BUG-2213 pathspec-mode test omits --ignore-submodules=none from production status args
+description: |
+  bug_2213_inherited_pathspec_modes_cannot_hide_object_dirt (aida-cli-lib/src/tests/bug_2195_store_snapshot_tests.rs) exercises the snapshot status query under the four GIT_*_PATHSPECS env modes, but its status arg vector omits --ignore-submodules=none, which the production call in store_snapshot (aida-cli-lib/src/mandate_traces.rs:~105) includes. A hypothetical interaction between an inherited pathspec mode and the submodule flag would escape the matrix. Fix: use the exact production arg vector (ideally shared via a constant) in the test.
+
+  Raised in review of PR-2892: https://github.com/joemooney/aida/pull/2892#issuecomment-6381660547
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-24T07:51:49.863580713Z
+modified_at: 2026-10-24T07:51:49.863580713Z
+req_type: Task
+tags:
+- from-review:PR-2892
+- kind:test-gap
+- severity:cosmetic
+filed_at:
+  code_sha: c2fc72576ad1f007e3c44e4cf09481b4a169f0b9
+  branch: pr-2892
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 14065b6254
+  vendor: claude
+  session: 01a16ce0f411
+  harness_version: 2.1.310 (Claude Code)
