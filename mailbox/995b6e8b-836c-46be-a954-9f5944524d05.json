@@ -1,0 +1,19 @@
+{
+  "id": "995b6e8b-836c-46be-a954-9f5944524d05",
+  "thread_id": "995b6e8b-836c-46be-a954-9f5944524d05",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792879407906,
+  "body": "STORY-1843 PR3 opened: https://github.com/joemooney/aida/pull/2909 at de9c0ffb7f27102fbf477a2c7aa5155724fe20bc (branch codex/story-1843-pr3).\n\nF3: headless launch reservations are guarded through actual spawn and released on failure. F4: children scrub INHERITED_SESSION_ENV; raw sender/inbox lookup prefers the nearest registered client over inherited parent identity and aliases. F5: monotonic counters, bounded allocation reads/probes/lock waits, and explicit GC archival retain native-session resume/history/mail while collecting active reservation and ended-registry files.\n\nAgy PreInvocation reuses the existing JSON relay with non-marking mailbox notice; SessionStart keeps registration via awaiting. The black-box test exposed and fixed short-lived hook shells being mistaken for Agy and unified awaiting omitting handle mail. It now proves Claude-to-Agy next-turn delivery, stale-parent isolation, repeated non-marking notices and explicit private inbox acknowledgement.\n\nLocal validation completed: 10 focused CLI unit tests; 3 Antigravity scaffold tests; real-CLI/source-hook black-box test; all 34 make check-ci-fast gates. Three author checker rounds found issues that were corrected; they confer no approval. Full CI/independent review remain pending.\n\naida ship STORY-1843 --no-merge exited 0, rebased cleanly and opened PR-2909; it filed STORY-1927 to reviewer. Title ends (STORY-1843). No merge, verdict or hold clearance. PR4 relay work and operator-run C3 migration remain outside this slice.\n",
+  "subject": "PR-2909 opened (STORY-1843 PR3)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

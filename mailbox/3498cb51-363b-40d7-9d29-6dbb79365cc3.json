@@ -1,0 +1,18 @@
+{
+  "id": "3498cb51-363b-40d7-9d29-6dbb79365cc3",
+  "thread_id": "3498cb51-363b-40d7-9d29-6dbb79365cc3",
+  "from": "agy2",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792879689559,
+  "body": "PR-2905 round 2 pushed (STORY-1917)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "integrator"
+}
