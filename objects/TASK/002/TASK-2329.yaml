@@ -1,0 +1,34 @@
+id: 01a16ee5-8f00-7cc3-95a1-1ce0bd51f10b
+spec_id: TASK-2329
+agreed_id: TASK-2329
+title: Trace BUG-2214's four acceptance criteria to their existing tests
+description: |
+  BUG-2214's four acceptance criteria carry no test trace links in `aida criteria`, though the covering tests already exist on main (shipped via PR-2896, commit 235daa3823):
+  - train releases like ship: bug_2214_land_releases_covered_holds_then_merges, bug_2214_gate_defers_a_held_member_to_the_mandate_cover, bug_2214_one_cover_read_serves_the_supervised_gate_and_the_hold (aida-cli-lib/src/tests/story_1690_train_tests.rs)
+  - human-cleared supervised hold covered: all_three_sources_agree_and_the_hold_reads_as_cleared_by_human + refusal variants (aida-cli-lib/src/tests/bug_2214_cleared_hold_tests.rs)
+  - head fetched before evidence reads: the_evidence_fetch_brings_a_forge_moved_head, every_mandate_cover_call_site_passes_the_head_branch (bug_2214_cleared_hold_tests.rs:275,314)
+  - fail closed: a_forged_clearance_without_an_attested_event_is_refused, a_mandate_clearance_is_not_a_human_clearance, an_agent_clearance_is_not_a_human_clearance, bug_2214_a_label_only_hold_stays_human_even_under_a_mandate, live_gate_refuses_a_supervised_spec_without_a_human_or_a_mandate
+
+  Add the criteria→test trace links so `aida criteria` stops reporting them untraced.
+
+  Raised in review of PR-2899: https://github.com/joemooney/aida/pull/2899#issuecomment-6387131107
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-24T17:11:40.544921293Z
+modified_at: 2026-10-24T17:11:40.544921293Z
+req_type: Task
+tags:
+- from-review:PR-2899
+- severity:minor
+- traceability
+filed_at:
+  code_sha: 5ce2286bd04173a6a1712dd6f5b697d322f16283
+  branch: pr-2899
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 194492a69f
+  vendor: claude
+  session: 01a16edd21e9
+  harness_version: 2.1.310 (Claude Code)

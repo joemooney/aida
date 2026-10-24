@@ -1,0 +1,28 @@
+id: 01a16ee5-f833-7653-b246-6e3365b70359
+spec_id: TASK-2330
+agreed_id: TASK-2330
+title: Add a direct label-only-hold case to the BUG-2216 auto-release fallback suite
+description: |
+  BUG-2216's acceptance names label-only among the hold kinds the no-history fallback must never release. The auto-release fallback suite (aida-cli-lib/src/tests/bug_2186_archived_history_release_tests.rs, only_rework_holds_release_on_the_markers_evidence) covers Recusal, Supervision, Decision and legacy markers, but has no direct label-only case. It is safe by construction today (a label with no typed marker never reaches eligible() — auto_release finds no hold record) and the train-side bug_2214_a_label_only_hold_stays_human_even_under_a_mandate covers the stance, but a direct auto-release test would pin the behavior against future marker-less paths.
+
+  Raised in review of PR-2899: https://github.com/joemooney/aida/pull/2899#issuecomment-6387131107
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-24T17:12:07.475652758Z
+modified_at: 2026-10-24T17:12:07.475652758Z
+req_type: Task
+tags:
+- from-review:PR-2899
+- severity:cosmetic
+- test-coverage
+filed_at:
+  code_sha: 5ce2286bd04173a6a1712dd6f5b697d322f16283
+  branch: pr-2899
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 194492a69f
+  vendor: claude
+  session: 01a16edd21e9
+  harness_version: 2.1.310 (Claude Code)
