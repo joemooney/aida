@@ -14,16 +14,25 @@ description: |
   `gate::<path> as` closes the gap cheaply.
 
   Raised in review of PR-2889: https://github.com/joemooney/aida/pull/2889#issuecomment-6381258221
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-24T07:07:14.208443175Z
-modified_at: 2026-10-24T07:07:14.208443175Z
+modified_at: 2026-10-24T07:12:29.636096688Z
 req_type: Task
 tags:
 - from-review:PR-2889
 - severity:minor
+history:
+- id: 01a16cc0-fdc4-7be3-9078-1bcd072ef73e
+  author: joe
+  timestamp: 2026-10-24T07:12:29.636091788Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: b3707363492b655acc3ca632d06956c6179ef536
   branch: pr-2889
