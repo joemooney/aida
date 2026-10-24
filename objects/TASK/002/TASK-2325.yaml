@@ -1,0 +1,20 @@
+id: 01a16e0e-9684-72c1-b7cd-520b73aef54e
+spec_id: TASK-2325
+agreed_id: TASK-2325
+title: 'Disk reclaim: scan agent scratch outside target/ (~/.claude/jobs/*/tmp, $TMPDIR scratch, stale aida build caches)'
+description: 'Observed 2026-10-24: root hit 95% though the worktree reclaim saw only target/ dirs. The rest was agent scratch the disk guard (STORY-1916) never scans: ~/.claude/jobs/<id>/tmp (127 GiB, 103 GiB of it from jobs older than 3 days: per-job TMPDIR build output), /tmp/claude-1000/* (74 GiB of old session scratch) and ~/.cache/aida-impl-target (23 GiB, untouched since Oct 13). ACCEPTANCE: aida worktree reclaim (dry run by default) also lists (a) ~/.claude/jobs/<id>/tmp of jobs whose state is terminal and older than N days, NEVER touching state.json, timeline.jsonl or ~/.claude/projects transcripts, which are the source for intent harvesting; (b) TMPDIR-root scratch entries older than N days, excluding live session dirs; (c) aida build caches not used in N days. Each row shows its size and reason, and --apply deletes only the listed rows. The emergency path from STORY-1916 may include (a) and (b) at the hard ceiling. A live job (non-terminal state or recently updated) is never listed. Tests use fixture job dirs.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-24T13:16:52.228043273Z
+modified_at: 2026-10-24T13:16:52.228043273Z
+req_type: Task
+filed_at:
+  code_sha: 194492a69f7358b90006afe525d62056b42d30ce
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 194492a69f
+  vendor: claude
+  session: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
