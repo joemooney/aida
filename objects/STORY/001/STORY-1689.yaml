@@ -20,12 +20,12 @@ description: |
   - tests for each skip reason (dirty, off-main, unchanged, CI red, CI pending, non-ff) and for the promote path with a fake forge;
   - a schedule job entry plus a route job;
   - docs in the dev-build section of the repository guide.
-status: NeedsAttention
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T12:00:26.553324153Z
-modified_at: 2026-10-24T00:50:35.895860814Z
+modified_at: 2026-10-24T02:53:53.464107846Z
 req_type: Story
 tags:
 - dev-build
@@ -246,6 +246,20 @@ history:
   session_id: 01a16b5f9e9c
   harness_version: 2.1.310 (Claude Code)
   changes: []
+- id: 01a16bd4-3bb3-78b1-b996-8464cc3c3117
+  author: aida-auto-bump
+  timestamp: 2026-10-24T02:53:53.459586334Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a16bd4-3bb8-7cb1-8960-d937f4f113c9
+  timestamp: 2026-10-24T02:53:53.464099489Z
+  agent: aida
+  commit_sha: d14a20aaaea1d58be05fdacf97e1ef60c46d02fb
+  summary: 'All three STORY-1689 acceptance criteria are met and traced in the diff: per-reason skip tests plus the fake-forge promote path, the dev-autopromote job with its advisor route, and the guide docs. Advisor conditions C1-C4 and the TASK-1510 ruling are honoured. CI is green at the head. One non-blocking finding: a manual rollback gets re-promoted by the next tick.'
+  review_verdict: approved
 filed_at:
   code_sha: 71d04b3609f89ac607471a35013a0ad9962708f6
   branch: main
@@ -254,11 +268,7 @@ filed_at:
   aida_build_sha: 3163cc1b21
   vendor: claude
   session: 3d8fc102-1166-4ecc-afbc-275650aca76e
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'All three ACs are met and tested (CI green at ca8515c). Blocking: the failure route to the advisor loses the commit, log path and tail, because the scheduled child''s error goes to stdout (agent mode) while the scheduler routes only the last stderr line (advisor condition C2).'
-  recovery_hint: address the review findings, move STORY-1689 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-24T00:50:35.895860814Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-24T02:53:53.459581448Z
+  completion_sha: d14a20aaaea1d58be05fdacf97e1ef60c46d02fb
