@@ -2696,6 +2696,14 @@ enabled = true
 #
 # [doctor.disk_headroom]
 # min_free_gib = 60
+# # STORY-1916: at or above this used % of the build-cache filesystem, the
+# # scheduled guard deletes per-worktree caches (target/worktrees/<name>)
+# # idle for emergency_idle_hours, until usage drops below the ceiling minus
+# # emergency_margin_pct; each delete is ledgered and the operator notified.
+# # 0 turns the emergency tier off.
+# emergency_used_pct = 95
+# emergency_margin_pct = 5
+# emergency_idle_hours = 2
 #
 # [[schedule.jobs]]
 # name = "disk-headroom-guard"
