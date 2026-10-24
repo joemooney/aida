@@ -953,7 +953,8 @@ fn task_1_482_run_emergency_glue_locks_ledgers_and_dedupes() {
 
     // Nothing left to delete and still over the margin: the notice dedupe
     // state is written, and a tick 30 m later stays quiet (state unchanged).
-    run_emergency_probed(&main, &root, &cfg, || Some(97)).expect("ran");
+    run_emergency_probed(&main, &root, &cfg, || Some(97))
+        .expect("ran (None here means the tempdir-private lock open/flock failed — a host-level fs error such as EMFILE, not shared test state)");
     let stuck_at = load_guard_state(&main)
         .last_emergency_stuck_at
         .expect("stuck state written");
