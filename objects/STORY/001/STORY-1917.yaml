@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T17:15:51.947160848Z
-modified_at: 2026-10-24T05:24:43.076142714Z
+modified_at: 2026-10-24T06:28:23.288758003Z
 req_type: Story
 comments:
 - id: 01a16c5c-c849-7771-b14f-e58f209acc0a
@@ -27,6 +27,265 @@ comments:
   created_at: 2026-10-24T05:23:02.345531522Z
   modified_at: 2026-10-24T05:23:02.345531522Z
   session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+- id: 01a16c98-9c78-7001-9127-45b2968c786c
+  author: joe
+  content: |-
+    SKETCH v1: Typed dispatch requests (`aida dispatch`) — STORY-1917 (author: agy2)
+
+    Replaces the ad-hoc scratchpad scripts (`dispatcher.sh`, `flow.sh`, `ship-queue.sh`, `take.sh`, `impl.sh`, `wait-review.sh`, `review-one.sh`) with a typed, mandate-gated, ledgered substrate dispatch queue that a sandboxed `advisor` seat can write to and the unsandboxed scheduler tick executes.
+
+    ---
+
+    ### (1) Request Schema, Closed Verbs (`flow` / `review` / `take` / `impl` / `train`), and Dual-End Validation
+
+    CLI surface:
+    - `aida dispatch request <verb> ...` (writes one validated request)
+    - `aida dispatch list [--status pending|running|done|refused|failed] [--json]`
+    - `aida dispatch show <id> [--json]`
+    - `aida dispatch cancel <id>`
+    - `aida dispatch tick` (substrate scheduler entrypoint; spawns bounded per-request `aida dispatch run <id>` workers)
+
+    On-disk request record (`#[serde(deny_unknown_fields)]`, `schema_version: 1`):
+    ```rust
+    pub(crate) struct DispatchRequest {
+        pub schema_version: u32,           // always 1
+        pub id: String,                    // UUID v7 / v4
+        pub requested_at: DateTime<Utc>,
+        pub principal: String,             // current_user_id(None) at request time
+        pub requester_seat: String,        // must be "advisor"
+        pub requester_grant_id: String,    // full UUID of the advisor SeatGrant
+        pub matched_binding: Vec<String>,  // BUG-1934 presenter proof (key:<sha256> or proc:/sid:)
+        pub mandate_id: String,            // active Mandate ID at request time
+        pub dedupe_key: String,            // canonical idempotency key
+        pub target_key: String,            // active-target mutex key (e.g. "pr:2886", "lane:fix-1")
+        pub action: DispatchVerb,
+    }
+
+    #[derive(Serialize, Deserialize)]
+    #[serde(tag = "verb", rename_all = "kebab-case", deny_unknown_fields)]
+    pub(crate) enum DispatchVerb {
+        /// Replaces `flow.sh N [noship]`: if already approved at current head and !no_ship,
+        /// goes straight to ship/train; otherwise bounded loop (max 4 tries) of
+        /// non-force branch update -> CI wait -> headless review -> ship/train.
+        #[serde(alias = "pr-flow")]
+        Flow {
+            pr: u64,
+            #[serde(default)]
+            no_ship: bool,
+            #[serde(default)]
+            vendor: Option<DispatchVendor>, // claude (default) | codex | agy
+        },
+        /// Replaces `review-one.sh N`: reaps any dead `aida-pr-<pr>` reviewer worktree
+        /// (preserving `.aida/merge-holds/PR-<pr>`), then runs
+        /// `aida queue work PR-<pr> --role reviewer --no-human [--vendor <v>]`.
+        Review {
+            pr: u64,
+            #[serde(default)]
+            vendor: Option<DispatchVendor>,
+        },
+        /// Replaces `take.sh N BRANCH SPEC BRIEF.md`: creates/reuses takeover worktree
+        /// on `origin/<branch>`, renders the takeover brief (verified by sha256), and
+        /// launches a background implementer session with grant/purpose env scrubbed.
+        #[serde(alias = "takeover")]
+        Take {
+            pr: u64,
+            branch: String,
+            spec: String,
+            brief_relpath: String, // always "briefs/<id>.md" inside .aida/dispatch/
+            brief_sha256: String,  // 64-char lowercase hex
+            #[serde(default)]
+            vendor: Option<DispatchVendor>,
+        },
+        /// Replaces `impl.sh NAME BRANCH SPEC BRIEF.md`: creates/reuses worktree
+        /// `<worktrees>/<name>` on `<branch>` off `origin/main`, renders the implementer
+        /// brief (verified by sha256), and launches a background implementer session.
+        #[serde(alias = "lane")]
+        Impl {
+            name: String,
+            branch: String,
+            spec: String,
+            brief_relpath: String,
+            brief_sha256: String,
+            #[serde(default)]
+            vendor: Option<DispatchVendor>,
+        },
+        /// Replaces `ship-queue.sh N...`: serialized under `.aida/dispatch/train.lock`,
+        /// verifies `.aida-store` is clean, runs `aida pr ship <n> --wait 3600` per PR,
+        /// and falls back to `aida pr train <n>` only when refused as behind base.
+        Train {
+            prs: Vec<u64>, // 1..=16 PR numbers
+        },
+    }
+    ```
+
+    **Strict Validation (enforced identically at `request` write time AND again in `tick`/`run` before execution — any mismatch fails closed):**
+    - `pr` / `prs`: `1..=999_999` (`^[1-9][0-9]{0,5}$`); `prs` in `Train` must be non-empty (`1..=16` items) and deduplicated.
+    - `spec`: `^[A-Z][A-Z0-9]*-[0-9]{1,6}$`, must resolve to an existing requirement in the project's canonical store (`locate_distributed_store_from`), and must not be `operator-only` or `ExecutionMode::Decide` (checked against both current spec and sticky `exclusions.jsonl`).
+    - `branch`: `^[A-Za-z0-9._/-]{1,80}$`, plus Git ref-format hardening: no leading/trailing `/` or `.`, no leading `-`, no `..`, no `@{`, no `.lock` suffix, and must not be `main`, `master`, or the repo's default branch.
+    - `name` (`Impl` worktree/session name): `^[A-Za-z0-9._-]{1,60}$` (no `/`, no leading `.` or `-`, no `..`), preventing path traversal when joined onto `<project_root>-worktrees/<name>`.
+    - `brief` (`--brief <path>` on `take` / `impl`):
+      - At request time: opened with `O_NOFOLLOW | O_NONBLOCK`, must be a regular UTF-8 file, non-empty, `<= 64 KiB`, no NUL bytes. Copied atomically into `.aida/dispatch/briefs/<id>.md` (mode `0600`) with its SHA-256 recorded in `brief_sha256` and `brief_relpath = "briefs/<id>.md"`.
+      - At execution time: `brief_relpath` must equal `"briefs/<id>.md"` (plain relative path under `.aida/dispatch/briefs/`, never `..` or absolute). Opened with `O_NOFOLLOW | O_NONBLOCK`, verified regular file + mode `0600` + owned by current uid + `<= 64 KiB` + `sha256(bytes) == req.brief_sha256`.
+
+    ---
+
+    ### (2) Where Requests Live and Who May Write Them
+
+    **Storage layout (under `<main_worktree>/.aida/dispatch/`, writable from inside the Claude Code worktree sandbox and outside git tracking):**
+    - `.aida/dispatch/requests/<id>.json` — immutable request record (mode `0600`, written once via temp + rename, read via `O_NOFOLLOW | O_NONBLOCK` regular-file check).
+    - `.aida/dispatch/briefs/<id>.md` — frozen brief body for `take` / `impl` (mode `0600`).
+    - `.aida/dispatch/results/<id>.json` — mutable execution state and outcome record (mode `0600`, atomic temp + rename).
+    - `.aida/dispatch/logs/<id>.log` — captured stdout/stderr for the request's execution (mode `0600`, capped at 1 MiB).
+    - `.aida/dispatch/tick.lock` & `.aida/dispatch/train.lock` — `flock` coordination locks (explicitly unlocked on `Drop` before closing the fd, per the BUG-2160 `DriveLock` pattern, so spawned children never hold the lock across `exec`).
+
+    **Who may write (`aida dispatch request`)**:
+    1. **Active Mandate**: `mandate::load_valid` in `~/.aida/mandates/` must find an active, unstopped, unexpired mandate for `current_user_id(None)` that covers `Scope::Dispatch` (required for all verbs) AND `Scope::ShipHeld` (additionally required for `Flow { no_ship: false, .. }` and `Train`).
+    2. **Human Gates (`HumanGates`)**: `.aida/mandate-gates.toml` must not gate `GateOp::Dispatch` (or `GateOp::Ship` for shipping `flow` / `train`).
+    3. **Requester Seat Grant (`advisor`)**: The caller must hold a valid `advisor` seat grant (`SeatGrant.seat == "advisor"`, `principal == mandate.principal`), and for `review` / `flow` `grant.delegable_seats` must include `"reviewer"`.
+    4. **Who executes (`aida dispatch tick`)**: Registered as a substrate schedule job (`command = "dispatch tick"`, `every = "1m"`, `when = "mandate.dispatch_active == true && dispatch.pending > 0"`) run by the host cron/systemd schedule driver outside any agent sandbox.
+
+    ---
+
+    ### (3) How the Executor Presents the Right Grant (BUG-1934 Process-Bound Grants)
+
+    BUG-1934 binds every `SeatGrant` to the process tree (`proc:<pid>@<start>`, `sid:<pid>@<start>`) and kernel session keyring (`key:<sha256>`) of the shell that entered the role. This creates two distinct boundaries to cross safely without weakening BUG-1934:
+
+    1. **Boundary A — Proving the sandboxed requester owns the `advisor` grant at write time (`aida dispatch request`)**:
+       - When the advisor terminal entered its role via `eval "$(aida role enter advisor --delegate-seat reviewer --delegate-seat implementer)"`, `adopt_key` installed the secret into the session keyring, which Linux `bwrap` inherits across PID namespace unsharing (`bug_1934_bwrap_presenter.rs`). Inside the sandbox, `seat_authority::grant_check(&project_root)` succeeds with `via = "key"`, and `matched_binding(&grant, &presenter_tokens_for(&grant))` returns `["key:<sha256>"]`.
+       - `aida dispatch request` records `requester_grant_id` and that non-empty `matched_binding` vector in `requests/<id>.json`. An implementer in another session that merely exports `AIDA_SESSION_GRANT=<advisor-uuid>` holds neither the `key:` secret nor a matching `proc:`/`sid:` ancestor, so `grant_check` refuses at write time with `PresenterNotBound` / `ForeignNamespace`.
+       - *(See Open Question Q1 regarding `--bind-pid` advisor sessions that lack a session keyring inside `bwrap`.)*
+
+    2. **Boundary B — Presenting the grant from the unsandboxed executor (`aida dispatch tick` / `run`)**:
+       - `dispatch-tick` runs under cron/systemd in a separate process tree and session keyring from the advisor terminal, and scrubs its own inherited `SESSION_ENV` (`AIDA_SESSION_GRANT`, `AIDA_SESSION_ROLE`, `AIDA_SESSION_PURPOSE`) on entry.
+       - Before running request `<id>`, the executor re-validates on disk:
+         1. `seat_authority::grant_authorized_at(&project_root, &req.requester_grant_id, "advisor", now, &req.matched_binding)` is `true` (confirming the grant is still unexpired, unrevoked, roster-allowed, and `req.matched_binding` matches `grant.binding`), and for `review`/`flow` that `grant.delegable_seats` contains `"reviewer"`.
+         2. `mandate::recheck` confirms the mandate is still active and covers the verb's scopes.
+       - **Per-verb grant presentation**:
+         - **`take` and `impl`**: The target worker is `implementer` (`seat_authority::is_baseline_seat("implementer") == true`). The executor passes `AIDA_SESSION_GRANT=""`, `AIDA_SESSION_PURPOSE=""`, and `AIDA_SESSION_ROLE=implementer`. No grant is ever bound to or inherited by an implementer worker.
+         - **`review`, `flow`, and `train`**: Child commands (`aida queue work PR-<N> --role reviewer --no-human`, `aida pr ship <N>`, `aida pr train <N>`) require `AIDA_SESSION_GRANT` to be the root `advisor` grant — both `grant_check_for_at` (`seat_authority.rs:1017`) and `grant_authorized_at` (`seat_authority.rs:2235`) enforce a **single-hop** `parent_grant_id` chain (`reviewer child -> advisor parent`), so minting an intermediate `advisor` child grant would break `issue_child("reviewer")` (creating a 2-hop grandchild).
+         - Instead, the executor acquires an RAII **`DispatchGrantBindGuard`** on `req.requester_grant_id`:
+           - On acquisition: calls `seat_authority::bind_grant_to_pid(&req.requester_grant_id, std::process::id())` (which uses `update_grant` under `session-grant-locks/<id>.lock` to append `proc:<executor_pid>@<starttime>` to `grant.binding`) and sets `AIDA_SESSION_GRANT=<req.requester_grant_id>` on the child `Command`.
+           - During execution: `aida queue work`, `aida pr ship`, and `aida pr train` are direct descendants of `<executor_pid>`, so their `IdentitySource::live()` ancestry contains `proc:<executor_pid>@<starttime>`. `current_grant` succeeds via `proc`, and `aida queue work --role reviewer` mints a normal 1-hop `reviewer` child grant (`parent_grant_id = Some(req.requester_grant_id)`).
+           - On completion (`Drop`): removes `proc:<executor_pid>@<starttime>` from `grant.binding` under `update_grant`. Even if the executor is `SIGKILL`ed, `proc:<executor_pid>@<starttime>` is pinned to that dead process's kernel start-time (so no future process can ever match it), and the next `dispatch-tick` sweeps dead `proc:` tokens.
+
+    ---
+
+    ### (4) Idempotency, Dedupe, Concurrency, and the Result Record
+
+    **Canonical keys**:
+    - `target_key` (active mutex per subject) and `dedupe_key` (exact operation):
+      - `Flow { pr, no_ship, .. }` -> `target_key = "pr:<pr>"`, `dedupe_key = "flow:pr:<pr>:noship:<no_ship>"`
+      - `Review { pr, .. }` -> `target_key = "pr:<pr>"`, `dedupe_key = "review:pr:<pr>:head:<current_head_oid>"`
+      - `Take { pr, branch, spec, brief_sha256, .. }` -> `target_key = "pr:<pr>"`, `dedupe_key = "take:pr:<pr>:branch:<branch>:spec:<spec>:brief:<brief_sha256>"`
+      - `Impl { name, branch, spec, .. }` -> `target_key = "lane:<name>:spec:<spec>"`, `dedupe_key = "impl:name:<name>:branch:<branch>:spec:<spec>"`
+      - `Train { prs }` -> `target_key = "train"`, `dedupe_key = "train:prs:<sorted_csv>"`
+
+    **Idempotency & collision rules**:
+    1. **Exact duplicate while `Pending` or `Running`**: If an existing request has the same `dedupe_key` and is in `Pending` or `Running` (with a live worker PID), `aida dispatch request` returns that existing request record (exit `0`, prints `already active: <id> (<status>)`) without writing a duplicate file.
+    2. **Conflicting active target**: If an existing `Pending` or `Running` request shares the same `target_key` with a *different* `dedupe_key` (e.g. `take` requested on `PR-N` while `flow` is `Running` on `PR-N`), `aida dispatch request` refuses with exit non-zero naming the active `<id>` (and suggesting `aida dispatch cancel <id>`).
+    3. **Live-worktree / lease preflight at execution time**:
+       - Before `take` or `impl` creates/reuses a worktree, the executor checks `.aida/leases/` and live processes (`pgrep` / `fleet_lanes`); if a live implementer already owns that worktree/branch, the request is refused (`Refused`) rather than clobbering the branch.
+       - Before `review` removes an existing `aida-pr-<pr>` worktree, it verifies no live reviewer process holds it (and checks `review_watch` state).
+    4. **Claim-before-spawn & crash recovery**:
+       - `dispatch-tick` transitions `.aida/dispatch/results/<id>.json` from `Pending` to `Running` (recording `worker_pid` and `worker_start` identity) *before* running the verb.
+       - On subsequent ticks, any `Running` record whose `(worker_pid, worker_start)` is no longer alive is marked `Failed` (`"worker exited unexpectedly without recording completion"`), logged, and mailed to `advisor`.
+
+    **Result record (`.aida/dispatch/results/<id>.json`)**:
+    ```rust
+    pub(crate) struct DispatchResult {
+        pub id: String,
+        pub verb: String,
+        pub target: String,
+        pub dedupe_key: String,
+        pub status: DispatchStatus, // Pending | Running | Done | Refused | Failed | Cancelled
+        pub requested_at: DateTime<Utc>,
+        pub started_at: Option<DateTime<Utc>>,
+        pub finished_at: Option<DateTime<Utc>>,
+        pub requester_grant_prefix: String,
+        pub mandate_id: String,
+        pub worker_pid: Option<u32>,
+        pub worker_start: Option<String>,
+        pub spawned_session: Option<String>, // e.g. claude bg log id / lease id for take/impl
+        pub exit_code: Option<i32>,
+        pub summary: String,
+        pub refusal_reason: Option<String>,
+        pub log_path: String,
+        pub notified_at: Option<DateTime<Utc>>,
+    }
+    ```
+    When `status` enters `Done`, `Refused`, or `Failed`, the worker sends one mailbox message to `advisor` (`aida mailbox send --to advisor --from dispatch`) and stamps `notified_at`.
+
+    ---
+
+    ### (5) Refusals and Safety: No Force-Push, Mandate Hold Floors, and Audit Trail
+
+    1. **No shell helpers & no force-push**:
+       - Every git, gh, and aida invocation uses `std::process::Command` with explicit argument arrays (`scrubbed_command`) — never `sh -c` or external `.sh` scripts.
+       - **Never force-pushes**:
+         - `take` uses `git fetch origin` + `git -C <W> checkout -B <branch> origin/<branch>`, and the generated takeover brief instructs `git merge origin/main` and forbids `--force` / `--force-with-lease`.
+         - `flow` updates stale branches via `gh pr update-branch <pr>` (non-force merge of base into head) and lands behind PRs via `aida pr train <pr>` (which builds a separate `train/*` branch and rebase-merges only after green CI + patch-id carry-over proof).
+       - **Safe BUG-2211 `.git/config.lock` cleanup**:
+         - Replaces the unguarded `rm -f` in `dispatcher.sh` with a strict check: unlinks `<main_worktree>/.git/config.lock` *only* when `symlink_metadata` confirms a regular file (never a symlink), `len() == 0`, mode `0o444`, and `mtime >= 120s`.
+
+    2. **No hold release or gate bypass beyond what the mandate allows**:
+       - The dispatcher **never** deletes `.aida/merge-holds/PR-<N>` or strips `aida:merge-hold` labels. When `review` cleans up a dead `aida-pr-<N>` worktree, it first copies any `<worktree>/.aida/merge-holds/PR-<N>` into `<main_worktree>/.aida/merge-holds/PR-<N>` (no-clobber) before `git worktree remove --force`.
+       - Every `ship` and `train` runs through `aida pr ship` / `aida pr train`, which call `mandate_ship_cover` (`mandate_ship.rs:230`):
+         - Re-reads the mandate from disk (never cached).
+         - Enforces `HumanGates` (`GateOp::Ship`, `GateOp::HoldClear`) and `ProtectedPaths` (`mandate_gates.rs`) against the PR's changed files (`mandate_traces::collect_pr`).
+         - Enforces `AlwaysHuman` (`operator-only`, `ExecutionMode::Decide`) and `SensitiveSpec` (`guided`, `operator`, `keystone`, `security`, `release` unless `include_supervised == true`) across named specs, committed hunk/item trace IDs, and the sticky `exclusions.jsonl` ledger.
+         - Requires an attested, independent `approved` verdict covering the current head (or patch-id carry-over).
+       - Mid-run revocation check: in multi-step `flow` (`update-branch` -> `wait-ci` -> `review` -> `ship`/`train`) and `train`, the worker re-runs `mandate::recheck` and `grant_authorized_at` before **every** step. Stopping the mandate (`aida mandate stop`) or revoking the advisor grant mid-flow immediately aborts the remaining steps and records `Refused`.
+
+    3. **Audit trail**:
+       - Every request write, start, completion, and refusal appends an audit event to `<main_worktree>/.aida/events.jsonl` (`EventKind::MandateDriveAction` with `lane = "dispatch:<verb>"`, `subject = target`, `action = verb`, `outcome = Done|Refused|Gated`, `mandate_id`, `why`), so `aida mandate status` and `aida digest` report all dispatch activity under the mandate automatically.
+       - Substrate tick runs are ledgered at `schedule/dispatch-tick.yaml` on `aida-store` (`aida schedule status`).
+       - `aida-cli-lib/src/dispatch.rs` is added to `DEFAULT_PROTECTED` in `aida-cli-lib/src/mandate_gates.rs` (`// mandate-gate`), so any future PR modifying dispatch authority or execution is itself human-gated under a mandate.
+
+    ---
+
+    ### (6) PR Slicing Plan (3 PRs) with Tests per Slice
+
+    - **Slice 1 (PR 1): Request schema, dual-end validation, `.aida/dispatch/` store, and CLI (`request` / `list` / `show` / `cancel`)**
+      - *Files*: `aida-cli-lib/src/dispatch.rs`, `aida-cli-lib/src/dispatch_args.rs`, CLI wiring in `cli.rs` / `command_registry.rs`, `mandate_gates.rs` (`DEFAULT_PROTECTED`).
+      - *Deliverables*: `DispatchRequest` / `DispatchVerb` / `DispatchResult` types; regex + git-ref + path-traversal + brief `O_NOFOLLOW`/size/sha256 validators; write-time `Mandate` (`Scope::Dispatch` / `Scope::ShipHeld`), `HumanGates`, `always_human`, and `seat_authority::grant_check` (`advisor` + `matched_binding`) enforcement; idempotent `dedupe_key` and conflicting `target_key` handling; `aida dispatch request|list|show|cancel`.
+      - *Tests (`story_1917_dispatch_request_tests.rs`)*:
+        1. Valid `flow`, `review`, `take`, `impl`, and `train` requests succeed under an active `dispatch` (+ `ship-held`) mandate and bound `advisor` grant, freezing `--brief` with SHA-256 and emitting an audit row.
+        2. Refuses when no mandate is active, when mandate is expired/stopped, when `Scope::Dispatch` (or `Scope::ShipHeld` for shipping `flow`/`train`) is missing, or when the caller has no valid bound `advisor` grant (including an unbound/foreign-process grant handle).
+        3. Refuses malformed `pr`, `branch` (`..`, `.lock`, `-flag`, `main`), `name` (`../x`, `a/b`), unknown or `operator-only` `spec`, and missing/symlinked/oversized `--brief`.
+        4. Dedupe idempotency returns the existing `Pending`/`Running` request for an identical `dedupe_key` and refuses conflicting in-flight requests on the same `target_key`.
+
+    - **Slice 2 (PR 2): Executor core (`aida dispatch tick` / `run`), BUG-1934 `DispatchGrantBindGuard`, and `review` / `take` / `impl` runners**
+      - *Files*: `aida-cli-lib/src/dispatch_exec.rs` (or `dispatch.rs`), `aida-cli-lib/src/seat_authority.rs` (scoped unbind helper on `update_grant`).
+      - *Deliverables*: `tick.lock` acquisition; `SESSION_ENV` scrub; execution-time re-validation of request JSON, brief SHA-256, `Mandate`, and `grant_authorized_at`; `DispatchGrantBindGuard` (`bind_grant_to_pid` + unbind on `Drop` + dead-`proc:` token sweep); safe BUG-2211 0-byte `0444` `.git/config.lock` cleanup; `review` runner (with hold-marker preservation on dead worktree cleanup), `take` runner, and `impl` runner; result record updates, `.aida/events.jsonl` audit rows, and `advisor` mailbox notifications.
+      - *Tests (`story_1917_dispatch_exec_tests.rs`)*:
+        1. Tampered request JSON or brief file on disk (SHA-256 mismatch or symlink swap) is refused by the executor before any spawn.
+        2. Mandate stopped/expired or `advisor` grant revoked between `request` and `tick` transitions the request to `Refused`, emits a `MandateDriveAction` refusal row, and mails `advisor`.
+        3. BUG-1934 executor grant test: `dispatch-tick` running in an unrelated process tree binds its own `proc:<pid>@<start>` token for `review` so `issue_child("reviewer")` succeeds (1-hop parent = `advisor` grant), and unbinds on drop; `take` and `impl` spawn with `AIDA_SESSION_GRANT=""` and `AIDA_SESSION_ROLE=implementer`.
+        4. Reviewer worktree cleanup preserves `.aida/merge-holds/PR-<N>` in the main worktree; BUG-2211 lock cleanup removes only an empty `0444` `.git/config.lock` older than 120s and leaves non-empty or writable locks untouched.
+
+    - **Slice 3 (PR 3): `flow` and `train` runners, schedule integration (`dispatch-tick`), and `aida init` scaffolding**
+      - *Files*: `aida-cli-lib/src/dispatch_flow.rs`, `aida-cli-lib/src/schedule_predicate.rs`, `aida-cli-lib/src/maintenance_schedule.rs`, `aida-cli-lib/src/init_cmd.rs`.
+      - *Deliverables*: `train` runner under `.aida/dispatch/train.lock` (`aida pr ship <N> --wait 3600` -> `aida pr train <N>` fallback on behind-base refusal, dirty-store skip); `flow` runner (approved-at-head fast path + max-4-try `update-branch` -> CI wait -> `review` -> `ship`/`train` loop with pre-step mandate/grant rechecks); schedule allow-list `"dispatch tick"`, predicate fields `mandate.dispatch_active` and `dispatch.pending`, and default-enabled `[[schedule.jobs]] name = "dispatch-tick"` in `aida init` (`aida schedule status`).
+      - *Tests (`story_1917_dispatch_flow_schedule_tests.rs`)*:
+        1. `flow` and `train` respect all ship/hold/mandate gates: an `operator-only` PR or un-covered supervised PR is refused by `mandate_ship_cover`, keeps its merge hold intact, records `Refused`, and mails `advisor`.
+        2. Mid-flow `aida mandate stop` between `review` and `ship` aborts before `ship` and records `Refused`.
+        3. Schedule predicate & `aida init` test: `dispatch-tick` fires when `mandate.dispatch_active == true && dispatch.pending > 0`, is a silent no-op otherwise, and appears in `aida schedule status`.
+
+    ---
+
+    ### Open Questions for the Advisor
+
+    1. **Q1 — Sandboxed advisor sessions bound via `--bind-pid` (no session key in `bwrap`)**:
+       When an advisor session is started *after* `eval "$(aida role enter advisor --delegate-seat reviewer --delegate-seat implementer)"`, the kernel session keyring (`key:<sha256>`) is inherited into `bwrap` and `aida dispatch request` validates the grant directly. However, if an already-running advisor was bound retroactively with `aida role enter advisor --bind-pid <claude_pid>` (where `bwrap` tool calls cannot see `<claude_pid>` across the PID namespace, as noted in comment 1), only unsandboxed hooks (`stamp_grant_turn`) and the MCP server see `<claude_pid>`.
+       - Should Slice 1 also expose an MCP tool (`aida_dispatch_request`, which runs in the unsandboxed MCP server under `<claude_pid>`) and/or allow `aida dispatch request` inside a foreign PID namespace to accept a fresh turn-clock stamp (`turn_clock_binding_in` stamped within the last 5 minutes by the unsandboxed `UserPromptSubmit` hook for `AIDA_SESSION_GRANT`), or require `eval "$(aida role enter advisor ...)"` before starting the advisor?
+    2. **Q2 — Non-blocking `dispatch-tick` worker detachment**:
+       `aida schedule tick` holds `.aida/schedule-tick.lock` while running substrate jobs, whereas `flow`, `train`, and `review` wait on CI/reviewers for minutes. Confirm that `aida dispatch tick` should hold `.aida/dispatch/tick.lock` only briefly to claim `Pending -> Running` and spawn detached per-request `aida dispatch run <id>` worker processes (capped at e.g. 2 concurrent reviews, 4 concurrent flows, and 1 serialized train), rather than blocking `aida schedule tick`?
+    3. **Q3 — `Mandate` scope ergonomics (`--drive` vs `--scope dispatch`)**:
+       Currently `Scope::Dispatch` is minted on drive mandates (`aida mandate start --drive`). Should `aida mandate start` also accept `--scope dispatch` (or include `Scope::Dispatch` by default on standard fire-fighting mandates so a single `aida mandate start` covers both shipping held PRs and dispatching reviews/fixes), or keep `Scope::Dispatch` tied to `--drive` / explicit `--scope dispatch`?
+    4. **Q4 — `take` / `impl` prompt wrapper source**:
+       Should the standard instructions wrapped around `--brief <file>` for `take` and `impl` (git merge origin/main, no force-push, `test_git::git_command()`, light gate rules, PR/mailbox reporting) live as a versioned template under `aida-core/templates/dispatch/` (synced via `make sync-templates`) or as a compiled constant in `dispatch.rs`?
+  created_at: 2026-10-24T06:28:23.288758003Z
+  modified_at: 2026-10-24T06:28:23.288758003Z
 history:
 - id: 01a16c5e-51c4-73b2-b8a3-3b764dc7e5cd
   author: joe
