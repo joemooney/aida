@@ -150,9 +150,16 @@ pub(crate) fn deleted_branches(args: &[OsString]) -> Option<Vec<OsString>> {
             names.push(arg.clone());
         } else if text == "--" {
             options_ended = true;
-        } else if matches!(text.as_ref(), "-d" | "-D" | "--delete") {
+        } else if let Some(short) = text.strip_prefix('-').filter(|s| !s.starts_with('-')) {
+            // A short-flag cluster (`-qD`, `-df`) counts each letter.
+            // trace:TASK-2307 | ai:claude
+            if short.contains(['r', 'a']) {
+                return None;
+            }
+            deleting |= short.contains(['d', 'D']);
+        } else if text == "--delete" {
             deleting = true;
-        } else if matches!(text.as_ref(), "-r" | "--remotes" | "-a" | "--all") {
+        } else if matches!(text.as_ref(), "--remotes" | "--all") {
             return None;
         }
     }
@@ -448,6 +455,22 @@ mod tests {
         );
         assert_eq!(deleted_branches(&os(&["branch", "a"])), None);
         assert_eq!(deleted_branches(&os(&["worktree", "add", "-d", "a"])), None);
+    }
+
+    // trace:TASK-2307 | ai:claude
+    #[test]
+    fn deleted_branches_reads_combined_short_flags() {
+        let os = |v: &[&str]| v.iter().map(OsString::from).collect::<Vec<_>>();
+        assert_eq!(
+            deleted_branches(&os(&["branch", "-qD", "a"])),
+            Some(os(&["a"]))
+        );
+        assert_eq!(
+            deleted_branches(&os(&["branch", "-df", "a", "b"])),
+            Some(os(&["a", "b"]))
+        );
+        assert_eq!(deleted_branches(&os(&["branch", "-rd", "origin/a"])), None);
+        assert_eq!(deleted_branches(&os(&["branch", "-qf", "a"])), None);
     }
 
     /// A clone of a bare remote, on branch `feat`, with the placeholder
