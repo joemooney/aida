@@ -1176,19 +1176,24 @@ pub(crate) fn apply_reversal(
                 if let Some(msg) = current.as_deref().and_then(revert_blocked_by_status) {
                     anyhow::bail!("{spec_id}: {msg}");
                 }
-                crate::edit_requirement_cli(
+                // A reversal restores the stored status it overwrote, even on
+                // a spec deferred since. trace:TASK-1955 | ai:claude (slice 7 round-1 finding 5)
+                crate::requirements_cli::edit_requirement_cli_with(
                     &storage,
                     spec_id,
-                    &None,
-                    &None,
-                    &Some(status.clone()),
-                    &None,
-                    &None,
-                    &None,
-                    &None,
-                    &None,
-                    &[],
-                    &[],
+                    &crate::requirements_cli::EditFields {
+                        title: &None,
+                        description: &None,
+                        status: &Some(status.clone()),
+                        priority: &None,
+                        req_type: &None,
+                        owner: &None,
+                        feature: &None,
+                        tags: &None,
+                        add_tag: &[],
+                        remove_tag: &[],
+                    },
+                    crate::requirements_cli::DeferredStatus::Restore,
                 )?;
             }
             ReversalStep::AddTags { spec_id, tags } => {

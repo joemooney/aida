@@ -9428,12 +9428,22 @@ pub(crate) fn resolve_queue_work_plan(
         // reviews the PR against its backing spec directly — the review
         // lease is PR-scoped, so it needs neither a queue entry nor the
         // implementer's spec lease released. trace:BUG-2150 | ai:claude
+        // BUG-2208: a fallback that cannot resolve the backing spec says why
+        // (ambiguous, none) instead of only "no queued review story".
+        // trace:TASK-1955 | ai:claude (BUG-2208)
+        let mut fallback_refusal: Option<String> = None;
         if matches.is_empty() && reviewer_pickup_keeps_pr_scope(role_hint) {
             if let Some(project_root) = storage.path().parent() {
-                if let Ok(spec) = resolve_pr_to_spec(project_root, n as u32, &store) {
-                    if let Some(req) = store.requirements.iter().find(|r| spec_matches(r, &spec)) {
-                        return Ok(standalone_review_plan(forge, n, req, user_id));
+                match resolve_pr_to_spec(project_root, n as u32, &store) {
+                    Ok(spec) => {
+                        if let Some(req) =
+                            store.requirements.iter().find(|r| spec_matches(r, &spec))
+                        {
+                            return Ok(standalone_review_plan(forge, n, req, user_id));
+                        }
+                        fallback_refusal = Some(format!("backing spec {spec} is not in the store"));
                     }
+                    Err(err) => fallback_refusal = Some(format!("{err:#}")),
                 }
             }
         }
@@ -9453,11 +9463,15 @@ pub(crate) fn resolve_queue_work_plan(
                         identities.join(", ")
                     )
                 };
+                let fallback = fallback_refusal
+                    .map(|why| format!("; reviewing without a story failed too: {why}"))
+                    .unwrap_or_default();
                 anyhow::bail!(
-                    "no queued review story for {} ({}) after searching {}; check `gh pr view {}` (or `glab mr view {}`) and run `aida pr auto-queue-review --branch <branch>` if needed",
+                    "no queued review story for {} ({}) after searching {}{}; check `gh pr view {}` (or `glab mr view {}`) and run `aida pr auto-queue-review --branch <branch>` if needed",
                     label,
                     why,
                     searched,
+                    fallback,
                     n,
                     n
                 );
@@ -12606,6 +12620,8 @@ pub(crate) fn handle_queue_work(
         crate::review_authority::as_launcher(start)?;
     }
 
+    // The lease this pickup minted, for the refused-delegation release below.
+    let mut minted_lease_id: Option<String> = None;
     // trace:TASK-1337 | ai:codex
     let setup_result = (|| -> Result<()> {
         // Look up the lease we just minted: by scope, by owner=us, freshest.
@@ -12619,6 +12635,7 @@ pub(crate) fn handle_queue_work(
                 plan.scope
             )
         })?;
+        minted_lease_id = Some(lease.id.clone());
 
         // STORY-1386: opt-in pre-implementation red run, in this lane's own
         // freshly created worktree and BEFORE the implementer agent launches.
@@ -13210,6 +13227,22 @@ pub(crate) fn handle_queue_work(
             }
         }
     })();
+    // Advisor comment 35: a reviewer launch refused at child-seat delegation
+    // launched nobody, so its PR-N lease would only block the next pickup
+    // until --force-claim. Release it (the worktree stays).
+    // trace:TASK-1955 | ai:claude (advisor comment 35)
+    if release_refused_review_lease(
+        &project_root,
+        plan.review_target.is_some(),
+        minted_lease_id.as_deref(),
+        &setup_result,
+    ) {
+        eprintln!(
+            "  released the {} review lease: no reviewer was launched",
+            plan.scope
+        );
+        return setup_result;
+    }
     // A standalone implementer's outcome (punted, held, no PR) is a result,
     // not a failed setup to continue by hand. trace:STORY-1662 | ai:claude
     if setup_result.as_ref().is_err_and(|e| {
@@ -13222,6 +13255,37 @@ pub(crate) fn handle_queue_work(
         );
     }
     setup_result
+}
+
+/// Advisor comment 35: release the lease `lease_id` a failed pickup minted
+/// when [`refused_review_launch_releases_lease`] says so. Returns whether it
+/// was released.
+// trace:TASK-1955 | ai:claude (TASK-2256)
+pub(crate) fn release_refused_review_lease(
+    project_root: &std::path::Path,
+    review_scoped: bool,
+    lease_id: Option<&str>,
+    setup_result: &Result<()>,
+) -> bool {
+    let (Err(err), Some(lease_id)) = (setup_result, lease_id) else {
+        return false;
+    };
+    if !refused_review_launch_releases_lease(review_scoped, err) {
+        return false;
+    }
+    crate::session_reap::release_lease_files(project_root, lease_id);
+    true
+}
+
+/// Advisor comment 35: whether a failed pickup's lease is released — only a
+/// PR-scoped review pickup whose child grant was refused. An implementer's
+/// lease stays for the manual continuation.
+// trace:TASK-1955 | ai:claude (advisor comment 35)
+pub(crate) fn refused_review_launch_releases_lease(
+    review_scoped: bool,
+    err: &anyhow::Error,
+) -> bool {
+    review_scoped && crate::seat_authority::ChildGrantRefused::is_in(err)
 }
 
 /// The specs a reviewed PR credits for calibration: the same title / branch

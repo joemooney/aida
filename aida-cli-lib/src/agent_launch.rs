@@ -5852,6 +5852,8 @@ mod task_1806_launch_mandate_tests {
     /// PR-2809 r1: the body every vendor receives (Antigravity included)
     /// carries the `## Mandate` section while a mandate is active.
     // trace:TASK-1955 | ai:claude (TASK-1806)
+    // trace:TASK-1955.ac81e033 | ai:claude
+    // trace:TASK-1955.ace9d610 | ai:claude
     #[test]
     fn rendered_launch_context_carries_the_active_mandate() {
         let tmp = tempfile::tempdir().unwrap();
@@ -5965,6 +5967,8 @@ mod task_1806_launch_mandate_tests {
         assert_eq!(load("leaseb00000004").agent_name, None);
     }
 
+    // trace:TASK-1955.ac81e033 | ai:claude
+    // trace:TASK-1955.ace9d610 | ai:claude
     #[test]
     fn launch_context_shows_the_mandate_only_while_one_is_active() {
         let tmp = tempfile::tempdir().unwrap();

@@ -414,6 +414,7 @@ pub(crate) fn scan_tests_for_criteria(root: &Path, spec: &str) -> Result<Vec<Tra
             "py" => scan_python_test_file(root, &path, &content, spec),
             "js" | "jsx" | "ts" | "tsx" => scan_javascript_test_file(root, &path, &content, spec),
             "go" => scan_go_test_file(root, &path, &content, spec),
+            "sh" => scan_shell_test_file(root, &path, &content, spec),
             _ => scan_rust_test_file(root, &path, &content, spec),
         };
         tests.extend(found);
@@ -535,7 +536,84 @@ pub(crate) fn collect_rust_files(root: &Path, out: &mut Vec<PathBuf>) {
 }
 
 fn collect_test_files(root: &Path, out: &mut Vec<PathBuf>) {
-    collect_files(root, out, &["rs", "py", "js", "jsx", "ts", "tsx", "go"]);
+    collect_files(
+        root,
+        out,
+        &["rs", "py", "js", "jsx", "ts", "tsx", "go", "sh"],
+    );
+    // A shell file is a test only by its `test_*.sh` name (TASK-2089).
+    out.retain(|path| {
+        path.extension().and_then(|value| value.to_str()) != Some("sh")
+            || path
+                .file_name()
+                .and_then(|value| value.to_str())
+                .is_some_and(|name| name.starts_with("test_"))
+    });
+}
+
+/// TASK-2089: a `tests/test_*.sh` script is a sequence of sections, each
+/// opened by an `info "Test <label>: …"` / `echo "Test <label>: …"` line (the
+/// repo's shell convention) or a `test_*()` function. A section is named
+/// `Test <label>` (or the function name) and carries the markers in its
+/// `#` comments: those directly above its header and those inside it, up to
+/// the next header.
+// trace:TASK-1955 | ai:claude (TASK-2089)
+fn scan_shell_test_file(root: &Path, path: &Path, content: &str, spec: &str) -> Vec<TracedTest> {
+    let mut out = Vec::new();
+    let mut pending = Vec::new();
+    let mut current: Option<(String, usize, Vec<String>)> = None;
+    for (index, line) in content.lines().enumerate() {
+        if let Some(name) = shell_test_name(line.trim_start()) {
+            if let Some((name, start, traces)) = current.take() {
+                push_traced_test(&mut out, root, path, name, start, traces);
+            }
+            let mut traces = std::mem::take(&mut pending);
+            traces.extend(traces_in_line(line, spec));
+            current = Some((name, index + 1, traces));
+            continue;
+        }
+        let trimmed = line.trim_start();
+        // A comment block directly above the next header is that header's;
+        // the same block inside a section also counts for the section.
+        if trimmed.starts_with('#') {
+            pending.extend(traces_in_line(line, spec));
+        } else {
+            if let Some((_, _, traces)) = current.as_mut() {
+                traces.append(&mut pending);
+            }
+            pending.clear();
+        }
+    }
+    if let Some((name, start, mut traces)) = current.take() {
+        traces.append(&mut pending);
+        push_traced_test(&mut out, root, path, name, start, traces);
+    }
+    out
+}
+
+fn shell_test_name(trimmed: &str) -> Option<String> {
+    for lead in ["info \"", "echo \""] {
+        if let Some(rest) = trimmed.strip_prefix(lead) {
+            // A section header is `Test <label>:` with a numbered label
+            // (`0`, `1b`, `4b2`). A status line such as `Test failed: …` or
+            // `Test dir: …` is not one. trace:TASK-1955 | ai:claude (TASK-2257)
+            let rest = rest.strip_prefix("Test ")?;
+            let label: String = rest
+                .chars()
+                .take_while(|ch| ch.is_ascii_alphanumeric())
+                .collect();
+            let numbered = label.starts_with(|ch: char| ch.is_ascii_digit());
+            return (numbered && rest[label.len()..].starts_with(':'))
+                .then(|| format!("Test {label}"));
+        }
+    }
+    let name = trimmed.strip_prefix("function ").unwrap_or(trimmed);
+    let ident: String = name
+        .chars()
+        .take_while(|ch| ch.is_ascii_alphanumeric() || *ch == '_')
+        .collect();
+    (ident.starts_with("test") && name[ident.len()..].trim_start().starts_with("()"))
+        .then_some(ident)
 }
 
 fn collect_files(root: &Path, out: &mut Vec<PathBuf>, extensions: &[&str]) {
@@ -1112,6 +1190,90 @@ mod tests {
             assert_eq!(tests[0].traces, vec!["STORY-1.A1"]);
             assert_eq!(tests[1].traces, vec!["STORY-1.A2"]);
         }
+    }
+
+    // TASK-2089: shell test sections carry the markers above and inside them.
+    // trace:TASK-1955 | ai:claude (TASK-2089)
+    #[test]
+    fn shell_test_sections_carry_their_criterion_markers() {
+        let root = Path::new("/repo");
+        let path = root.join("tests/test_sample.sh");
+        let content = "\
+# trace:STORY-1.A9 | ai:claude
+set -e
+info \"Test 0: the fixture refuses\"
+# trace:STORY-1.A1 | ai:claude
+run_it
+
+info \"Test 1b: dry run\"
+# trace:STORY-1.A2 | ai:claude
+# trace:STORY-1.A3 | ai:claude
+other
+
+# trace:STORY-1.A4 | ai:claude
+echo \"Test 2c: echo form\"
+done_it
+info \"no marker here\"
+test_helper() {
+  # trace:STORY-1.A5 | ai:claude
+  true
+}
+";
+        let tests = scan_shell_test_file(root, &path, content, "STORY-1");
+        let got: Vec<(&str, Vec<&str>)> = tests
+            .iter()
+            .map(|t| {
+                (
+                    t.name.as_str(),
+                    t.traces.iter().map(String::as_str).collect(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            got,
+            vec![
+                ("Test 0", vec!["STORY-1.A1"]),
+                ("Test 1b", vec!["STORY-1.A2", "STORY-1.A3"]),
+                ("Test 2c", vec!["STORY-1.A4"]),
+                ("test_helper", vec!["STORY-1.A5"]),
+            ]
+        );
+        assert_eq!(tests[0].path, "tests/test_sample.sh");
+        assert_eq!(tests[0].line, 3);
+    }
+
+    // TASK-2257: a status line inside a section is not a section header, so
+    // the markers after it stay with the section they sit in.
+    // trace:TASK-1955 | ai:claude
+    #[test]
+    fn a_shell_status_line_does_not_open_a_section() {
+        let root = Path::new("/repo");
+        let path = root.join("tests/test_sample.sh");
+        let content = "\
+info \"Test 1: the real section\"
+echo \"Test failed: expected 0, got 1\"
+echo \"Test dir: $DIR\"
+info \"Test passed.\"
+# trace:STORY-1.A1 | ai:claude
+run_it
+";
+        let tests = scan_shell_test_file(root, &path, content, "STORY-1");
+        let got: Vec<(&str, Vec<&str>)> = tests
+            .iter()
+            .map(|t| {
+                (
+                    t.name.as_str(),
+                    t.traces.iter().map(String::as_str).collect(),
+                )
+            })
+            .collect();
+        assert_eq!(got, vec![("Test 1", vec!["STORY-1.A1"])]);
+        assert_eq!(shell_test_name("echo \"Test failed: x\""), None);
+        assert_eq!(
+            shell_test_name("echo \"Test 4b2: x\""),
+            Some("Test 4b2".into())
+        );
+        assert_eq!(shell_test_name("info \"Test 3 without colon\""), None);
     }
 
     #[test]
