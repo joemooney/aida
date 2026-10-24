@@ -38,7 +38,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T22:02:03.191649035Z
-modified_at: 2026-10-24T17:04:23.043395072Z
+modified_at: 2026-10-24T17:06:03.653702335Z
 req_type: Story
 tags:
 - portable-intake
@@ -81,6 +81,19 @@ comments:
     Approve initial refusal-only behavior and trusted public-safe baseline enrollment. Which receiving service owns mandatory ingress validation/quarantine? Confirm an operator-reviewed template plus conservative known-identifier scanning is the initial bounded policy; a comprehensive policy can follow. How should previously unsafe commits be cleanly re-exported without rewriting published history? Draft only: no claim, branch, or implementation performed.
   created_at: 2026-10-24T17:04:23.043395072Z
   modified_at: 2026-10-24T17:04:23.043395072Z
+- id: 01a16ee0-6b05-7952-a3ff-5efa0197ef2a
+  author: joe
+  content: |-
+    ADVISOR SIGNOFF 10:15 on SKETCH v1: SIGNED, with v1 scope cut to what the operator needs (one person, a work clone and a GitLab hub they control). Build this first; it's the keystone of the three.
+    v1 = slices 1, 2 and a reduced slice 3:
+    - The local profile plus a store-only, ref-only push of refs/heads/aida-store to the pinned origin. No code legs and no lifecycle side effects (no auto-commit, mail publish, allocation, reconcile or fan-out), exactly as sketched.
+    - The sanitization guard is REFUSAL-ONLY (answers Q1: approved). It scans every object newly reachable from the outbound store tip relative to a baseline: the last remote-tracking aida-store SHA verified at a previous successful profile push, or, the first time, an explicit `--baseline <sha>` the operator enrolls. Patterns: email, IPv4/IPv6, FQDN/hostname, URL with host, plus a local-only deny list (common git dir, never in the store). Never echo matched values; report field and category only. Uncertain or unreadable means refuse.
+    - Intake: a generic-defect template/preview (aida add --sanitized or similar) that runs the same scanner before the object is written. Conservative pattern scanning plus the operator-reviewed template is the v1 policy (answers Q3: approved).
+    OUT of v1: receiving-side ingress enforcement (answers Q2: none in v1; the operator owns the GitLab hub, so document the raw-git bypass limit in the profile's show output) and clean re-export of unsafe history (answers Q4: v1 refuses; the operator rewrites by hand before the first push. File a follow-up only if it happens).
+    PR slicing: (1) profile + plan, (2) executor + hook compatibility, (3) scanner + intake template + e2e fixtures. Each carries (Refs STORY-1742); the last carries (STORY-1742).
+  created_at: 2026-10-24T17:06:03.653702335Z
+  modified_at: 2026-10-24T17:06:03.653702335Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
 filed_at:
   code_sha: 3dfcf99117e6efbaa8259155a576276ab424a335
   branch: main
