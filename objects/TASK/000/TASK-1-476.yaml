@@ -1,5 +1,6 @@
 id: 01a16c4b-3a7c-7993-9e23-0f335e2b54db
 spec_id: TASK-1-476
+agreed_id: TASK-1846
 title: '[minor, non-blocking, carried from ad7f4260d8] rework_hold_release.rs release_w…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-1951, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -38,6 +39,10 @@ history:
   author: joe
   timestamp: 2026-10-24T05:44:17.913462608Z
   session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+  changes: []
+- id: 01a16c7a-8af7-7fb0-b3e3-646b476d5d4c
+  author: joe
+  timestamp: 2026-10-24T05:55:32.727524219Z
   changes: []
 filed_at:
   code_sha: 43a38f38d2ba2b6794ea3c74d8bb69f15a54f040
