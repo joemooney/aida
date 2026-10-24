@@ -1,0 +1,20 @@
+id: 01a16de1-2db8-75e3-b99d-afa3c62c66f4
+spec_id: BUG-2220
+agreed_id: BUG-2220
+title: Two concurrent merge trains can carry the same PR
+description: 'Found reading pr_train.rs (2026-10-23): the merge lease serializes landings, but nothing stops a second aida pr train from building a train PR that includes a PR already riding another live train. That wastes CI and can confuse who landed a PR. ACCEPTANCE: a PR in a live train (an open train PR or a held train lease) is refused by a second train with a message naming the other train; a stale entry (train PR closed or lease expired) does not block. Tests.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-24T12:27:16.280233237Z
+modified_at: 2026-10-24T12:27:16.280233237Z
+req_type: Bug
+filed_at:
+  code_sha: 6980be3ace8b7b9ae795e4347b8a9d4be01a287e
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6980be3ace
+  vendor: claude
+  session: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
