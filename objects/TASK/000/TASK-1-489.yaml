@@ -1,0 +1,29 @@
+id: 01a16ce6-c7ba-78d1-aaed-c2f7ebf0eb43
+spec_id: TASK-1-489
+title: 'cosmetic, non-blocking: bug_2213_inherited_pathspec_modes_cannot_hide_object_di…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2213, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  cosmetic, non-blocking: bug_2213_inherited_pathspec_modes_cannot_hide_object_dirt omits --ignore-submodules=none from its status args, so the env-mode matrix does not exercise the exact production arg vector
+
+  PR: #2892
+  Reviewed sha: c2fc72576ad1f007e3c44e4cf09481b4a169f0b9
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-24T07:53:46.170486825Z
+modified_at: 2026-10-24T07:53:46.170486825Z
+req_type: Task
+tags:
+- carried-from:BUG-2213
+- finding-hash:c9ed24ff
+- from-review:PR-2892
+- kind:carried-forward
+filed_at:
+  code_sha: 7ce52440de8776de3e9ce50060344a2bdbb6e8f4
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 14065b6254
+  vendor: claude
