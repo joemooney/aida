@@ -1,0 +1,35 @@
+id: 01a16ff9-9a83-7f93-bc26-3cfb00c45d2e
+spec_id: STORY-1928
+agreed_id: STORY-1928
+title: 'Review PR-2910: [AI:codex] feat(transport): add pinned store-ref executor (Refs STORY-1742)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a16fd0`) for branch `story-1742-slice-2`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2910>
+  - Branch: `story-1742-slice-2` → `main`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - STORY-1742
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2910` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-24T22:13:11.427277860Z
+modified_at: 2026-10-24T22:13:11.427277860Z
+req_type: Story
+filed_at:
+  code_sha: 7ab3014e59078fcac2be58e879c406d1a8438ea6
+  branch: story-1742-slice-2
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 8b523a4422
+  vendor: codex
