@@ -929,6 +929,29 @@ pub(crate) fn should_notify_emergency(
         .is_none_or(|last| now - last >= chrono::Duration::hours(STUCK_REESCALATE_HOURS))
 }
 
+/// Update the notice dedupe state after an emergency run notified. A
+/// nothing-deleted run stamps the stuck cadence; ANY refusal is recorded,
+/// including a partial run's (deletes, then the refusal), or the next stuck
+/// tick would re-notify the same refusal as new. Returns whether the state
+/// changed and needs saving. Pure.
+// trace:TASK-2272 | ai:claude (TASK-1-484)
+// trace:TASK-2322 | ai:claude
+pub(crate) fn note_emergency_notified(
+    state: &mut GuardState,
+    now: DateTime<Utc>,
+    outcome: &RunOutcome,
+) -> bool {
+    let stuck = outcome.deleted.is_empty();
+    if !stuck && outcome.refusal.is_none() {
+        return false;
+    }
+    if stuck {
+        state.last_emergency_stuck_at = Some(now);
+    }
+    state.last_emergency_refusal = outcome.refusal.clone();
+    true
+}
+
 /// The stuck sentence the finding and the notice carry. Pure.
 // trace:STORY-1916 | ai:claude
 pub(crate) fn stuck_summary(reclaimable: u64, deficit: u64, top: &[(PathBuf, u64)]) -> String {
@@ -1347,10 +1370,8 @@ pub(crate) fn run_emergency_probed(
     if let Some((title, body)) = emergency_notice(&outcome, cfg) {
         if should_notify_emergency(&state, now_utc, &outcome) {
             let _ = crate::notify::send_direct(main_root, "disk-emergency", &title, &body);
-            if outcome.deleted.is_empty() {
-                state.last_emergency_stuck_at = Some(now_utc);
-                // trace:TASK-2272 | ai:claude (TASK-1-484)
-                state.last_emergency_refusal = outcome.refusal.clone();
+            // trace:TASK-2272 | ai:claude (TASK-1-484)
+            if note_emergency_notified(&mut state, now_utc, &outcome) {
                 let _ = save_guard_state(main_root, &state);
             }
         }

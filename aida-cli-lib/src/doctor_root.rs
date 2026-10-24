@@ -896,7 +896,11 @@ pub(crate) fn collect_doctor_findings_at(
     {
         let agent_ctx = agent_registry::AgentClassifyContext::new(now, 30, Vec::new());
         for view in agent_registry::list_agent_views(project_root, &agent_ctx) {
-            if view.status == agent_registry::AgentStatus::Stale {
+            // A heartbeat-only row's process is invisible from here: unknown,
+            // never proof it is dead. trace:TASK-2272 | ai:claude
+            if view.status == agent_registry::AgentStatus::Stale
+                && view.liveness == agent_registry::LivenessBasis::Process
+            {
                 push(DoctorFinding {
                     category: "dead-agents".to_string(),
                     id: format!("{}#{}", view.agent_type, view.pid),

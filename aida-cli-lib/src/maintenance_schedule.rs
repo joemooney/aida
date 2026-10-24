@@ -4301,6 +4301,15 @@ mod tests {
             route.on.iter().map(ToString::to_string).collect::<Vec<_>>(),
             vec!["CronJobFailed:dev-autopromote".to_string()]
         );
+        // TASK-2272 (TASK-2291): the route also fires for a tick that errored
+        // or was killed on the scheduler's timeout, not only a failed build.
+        // trace:TASK-2272 | ai:claude
+        let prompt = route.prompt.as_deref().unwrap_or_default();
+        assert!(prompt.contains("errored or timed out"), "{prompt}");
+        assert!(
+            !prompt.starts_with("The scheduled live-binary build failed"),
+            "{prompt}"
+        );
     }
 
     #[test]

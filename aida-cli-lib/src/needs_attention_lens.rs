@@ -66,8 +66,10 @@ fn is_needs_attention(status: &str) -> bool {
 }
 
 /// Rework holds keyed by upper-cased spec id, read from the primary's
-/// markers.
-fn rework_holds_by_spec(root: &Path) -> HashMap<String, SpecHold> {
+/// markers. A spec held on several PRs shows one hold: the one whose rework
+/// head is ready for review, else the newest PR ([`prefer_hold`]).
+// trace:TASK-2251 | ai:claude
+fn rework_holds_by_spec(root: &Path, ready: &BTreeMap<u64, String>) -> HashMap<String, SpecHold> {
     let mut out = HashMap::new();
     for (pr, _) in crate::merge_hold::list_holds(root) {
         let Some(record) = crate::merge_hold::read_hold_record(root, pr) else {
@@ -83,16 +85,28 @@ fn rework_holds_by_spec(root: &Path) -> HashMap<String, SpecHold> {
             .verdict_ref
             .as_ref()
             .map_or_else(|| spec.to_string(), |r| r.key.clone());
-        out.insert(
-            spec.to_ascii_uppercase(),
-            SpecHold {
-                pr,
-                target_head: record.target_head_sha.clone(),
-                verdict_key,
-            },
-        );
+        let candidate = SpecHold {
+            pr,
+            target_head: record.target_head_sha.clone(),
+            verdict_key,
+        };
+        out.entry(spec.to_ascii_uppercase())
+            .and_modify(|current: &mut SpecHold| {
+                if prefer_hold(&candidate, current, ready) {
+                    *current = candidate.clone();
+                }
+            })
+            .or_insert(candidate);
     }
     out
+}
+
+/// Whether `candidate` should replace `current` as a spec's displayed hold:
+/// a hold with a ready rework head beats one without, then the newer PR wins.
+// trace:TASK-2251 | ai:claude
+fn prefer_hold(candidate: &SpecHold, current: &SpecHold, ready: &BTreeMap<u64, String>) -> bool {
+    let rank = |h: &SpecHold| (ready.contains_key(&h.pr), h.pr);
+    rank(candidate) > rank(current)
 }
 
 /// The lens label of every NeedsAttention row, keyed by requirement id.
@@ -109,8 +123,8 @@ pub(crate) fn lens_map(
         return out;
     }
     let root = crate::merge_hold::hold_store_root(project_root);
-    let holds = rework_holds_by_spec(&root);
     let new_heads = crate::lane_liveness::unpicked_ready_heads(&root);
+    let holds = rework_holds_by_spec(&root, &new_heads);
     let now = Utc::now();
     for r in reqs.iter().filter(|r| is_needs_attention(&r.status)) {
         let hold = [r.agreed_id.as_deref(), r.spec_id.as_deref()]
@@ -172,6 +186,22 @@ mod tests {
             Some("last activity 5h ago")
         );
         assert_eq!(lens_label(None, &BTreeMap::new(), 0, None, now), None);
+    }
+
+    /// A spec held on two PRs shows the hold whose rework head is ready,
+    /// else the newer PR, whatever order the markers are listed in.
+    // trace:TASK-2251 | ai:claude
+    #[test]
+    fn a_spec_held_on_two_prs_shows_the_ready_or_newest_hold() {
+        let older = hold();
+        let newer = SpecHold { pr: 2700, ..hold() };
+        let none = BTreeMap::new();
+        assert!(prefer_hold(&newer, &older, &none));
+        assert!(!prefer_hold(&older, &newer, &none));
+        let mut ready = BTreeMap::new();
+        ready.insert(2638, "c0bad0b0".to_string());
+        assert!(prefer_hold(&older, &newer, &ready));
+        assert!(!prefer_hold(&newer, &older, &ready));
     }
 
     /// The map reads the hold marker, lane-liveness's routed findings and the
