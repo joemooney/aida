@@ -1506,6 +1506,12 @@ pub(crate) fn run_human_finish_ceremony(opts: HumanFinishOptions) -> Result<()> 
                     n
                 }
             };
+            // BUG-2217: an open PR without a reviewer story never enters
+            // review (PR-2895 stalled with "no queued review story"). File
+            // it here, whatever the spec status; a skip says why and prints
+            // the re-run command, and never fails the ship — the PR is open.
+            // trace:BUG-2217 | ai:claude
+            let _ = queue_review_for_open_pr(&project_root, &branch);
             eprintln!(
                 "{} aida ship — PR-{} open for {} (--no-merge; not merged). Review + merge it, \
                  or finish with `aida ship`.",
@@ -7739,24 +7745,45 @@ pub(crate) fn pr_auto_queue_review(branch_override: Option<&str>) -> Result<()> 
     if branch.is_empty() {
         anyhow::bail!("could not resolve current branch — pass `--branch <name>` explicitly");
     }
+    let outcome = queue_review_for_open_pr(&project_root, &branch);
 
+    // Exit non-zero for the "needs attention" bucket so /aida-pr can
+    // detect the failure mode and tell the user to install gh / re-auth
+    // / etc. Filed, already-filed, and by-design skips all return 0 —
+    // they're all expected outcomes the skill should treat as success.
+    match outcome.status {
+        AutoQueueStatus::SkippedNeedsAttention => {
+            anyhow::bail!("{}", outcome.summary)
+        }
+        _ => Ok(()),
+    }
+}
+
+/// The one shared file-the-reviewer-story step for a PR that is open on
+/// `branch`: file (or skip, if already filed) the review story, render the
+/// outcome, clear a satisfied PR-hold marker, bump the covered specs to In
+/// Progress, and on every skip print the exact re-run command. `aida pr
+/// auto-queue-review` and `aida ship --no-merge` (BUG-2217) both run it, so
+/// a PR opened by either path gets its reviewer story whatever the spec
+/// status — the auto-queue has no status gate.
+// trace:BUG-2217 | ai:claude
+pub(crate) fn queue_review_for_open_pr(
+    project_root: &std::path::Path,
+    branch: &str,
+) -> crate::AutoQueueOutcome {
     // Try to associate this run with the active session lease so the
     // review-story description records who opened the PR. Falls back to
     // a synthetic "(no-session)" id if no lease covers the cwd.
     let lease = std::env::current_dir()
         .ok()
-        .and_then(|cwd| active_lease_for_cwd(&project_root, &cwd));
+        .and_then(|cwd| active_lease_for_cwd(project_root, &cwd));
     let lease_scope = lease.as_ref().map(|l| l.scope.clone());
     let session_id = lease
         .map(|l| l.id)
         .unwrap_or_else(|| "(no-sess)".to_string());
 
-    let outcome = try_auto_queue_pr_review(
-        &project_root,
-        &branch,
-        &session_id,
-        AutoQueueOrigin::PrSkill,
-    );
+    let outcome =
+        try_auto_queue_pr_review(project_root, branch, &session_id, AutoQueueOrigin::PrSkill);
     render_auto_queue_outcome(&outcome);
 
     // TASK-630: opening the PR is the event that ends a deliberate PR-hold
@@ -7772,7 +7799,8 @@ pub(crate) fn pr_auto_queue_review(branch_override: Option<&str>) -> Result<()> 
         AutoQueueStatus::Filed | AutoQueueStatus::AlreadyExists
     ) {
         if let Some(spec) = &lease_scope {
-            let main_root = find_main_worktree_root().unwrap_or_else(|_| project_root.clone());
+            let main_root =
+                find_main_worktree_root().unwrap_or_else(|_| project_root.to_path_buf());
             let marker = punt::hold_signal_path(&main_root, spec);
             if punt::read_hold_signal(&marker).is_some() {
                 let _ = std::fs::remove_file(&marker);
@@ -7785,7 +7813,8 @@ pub(crate) fn pr_auto_queue_review(branch_override: Option<&str>) -> Result<()> 
             .as_deref()
             .and_then(crate::worktree_lease::spec_id_from_branch)
         {
-            let main_root = find_main_worktree_root().unwrap_or_else(|_| project_root.clone());
+            let main_root =
+                find_main_worktree_root().unwrap_or_else(|_| project_root.to_path_buf());
             crate::live_work::bump_spec_in_progress(
                 &main_root,
                 &spec,
@@ -7818,16 +7847,7 @@ pub(crate) fn pr_auto_queue_review(branch_override: Option<&str>) -> Result<()> 
         }
     }
 
-    // Exit non-zero for the "needs attention" bucket so /aida-pr can
-    // detect the failure mode and tell the user to install gh / re-auth
-    // / etc. Filed, already-filed, and by-design skips all return 0 —
-    // they're all expected outcomes the skill should treat as success.
-    match outcome.status {
-        AutoQueueStatus::SkippedNeedsAttention => {
-            anyhow::bail!("{}", outcome.summary)
-        }
-        _ => Ok(()),
-    }
+    outcome
 }
 
 /// BUG-1944: the specs an opened PR starts work on — the session's spec scope,
@@ -8225,6 +8245,44 @@ mod task_1458_pr_ship_wiring_guard {
             .find(concat!(".merge_", "change("))
             .expect("the handler merges");
         assert!(gate < opts && opts < merge, "gate → pin → merge order");
+    }
+}
+
+// BUG-2217: `aida ship --no-merge` opens the PR and must file its reviewer
+// story — PR-2895 stalled with "no queued review story" because the StopAtPr
+// arm never queued one. trace:BUG-2217 | ai:claude
+#[cfg(test)]
+mod bug_2217_ship_no_merge_files_review_story {
+    #[test]
+    fn stop_at_pr_queues_the_review_story() {
+        let src = include_str!("pr_cmd.rs");
+        let arm = src
+            .find(concat!("FinishMode::StopAt", "Pr => {"))
+            .expect("the --no-merge arm");
+        let body = &src[arm..];
+        let queue = body
+            .find(concat!("queue_review_for_", "open_pr("))
+            .expect("the StopAtPr arm files the reviewer story");
+        let banner = body
+            .find(concat!("--no-merge; not ", "merged"))
+            .expect("the pause banner");
+        assert!(queue < banner, "the story is filed before the pause banner");
+    }
+
+    #[test]
+    fn every_skip_prints_the_rerun_command() {
+        let src = include_str!("pr_cmd.rs");
+        let start = src
+            .find(concat!("pub(crate) fn queue_review_for_", "open_pr("))
+            .expect("the shared step");
+        let end = src[start..].find("\n}\n").map(|e| start + e).unwrap();
+        let body = &src[start..end];
+        assert_eq!(
+            body.matches(concat!("aida pr auto-queue-review --", "branch"))
+                .count(),
+            2,
+            "both skip arms print the re-run command"
+        );
     }
 }
 
