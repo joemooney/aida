@@ -1,0 +1,27 @@
+id: 01a16b48-1447-7e61-b1a1-87153506f216
+spec_id: TASK-2291
+agreed_id: TASK-2291
+title: 'dev-autopromote tick: bound the pre-ff steps, or route a timed-out tick honestly'
+description: |
+  run_tick (aida-cli-lib/src/dev_autopromote.rs:452-538) checks its TICK_BUDGET only right before the fast-forward. Before that it can spend fetch 40s + rev-parse 2x10s + is_ancestor 30s + gh api commit_checks (30s per page) + the wave guard, which can pass the scheduler's 120s SCHEDULED_COMMAND_TIMEOUT on a slow network. The kill itself is safe because no ff has run yet. But the timeout becomes CronJobFailed:dev-autopromote (maintenance_schedule.rs:3385), and the advisor route prompt calls it 'the scheduled live-binary build failed'. A tick-level Err (for example a write_state failure) is misrouted the same way. Check the deadline before commit_ci as well, and/or reword the route prompt to cover a tick that timed out or errored.
+
+  Raised in review of PR-2850: https://github.com/joemooney/aida/pull/2850#issuecomment-6377435068
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-24T00:20:48.327697526Z
+modified_at: 2026-10-24T00:20:48.327697526Z
+req_type: Task
+tags:
+- from-review:PR-2850
+- severity:minor
+filed_at:
+  code_sha: ca8515c11c9a5d520ee5c89e5c8861e267167476
+  branch: pr-2850
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c51da86593
+  vendor: claude
+  session: 01a16b45e26d
+  harness_version: 2.1.310 (Claude Code)
