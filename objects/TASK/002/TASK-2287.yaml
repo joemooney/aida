@@ -6,17 +6,26 @@ description: |
   aida-core/templates/skills/aida-fire.md, fixer prompt template: "Claim the spec first (`aida claim <SPEC-ID>`). If it is already claimed or has a branch or PR, STOP and report." PR-2865 has the advisor pre-create the fixer's worktree with `aida worktree add <SPEC-ID> --role implementer`, which creates the branch. A fixer that follows the prompt literally stops on its own branch. Reword it to "an unmerged branch or open PR other than this worktree's branch".
 
   Raised in review of PR-2865: https://github.com/joemooney/aida/pull/2865#issuecomment-6377323914
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-24T00:11:32.515522227Z
-modified_at: 2026-10-24T00:11:32.515522227Z
+modified_at: 2026-10-24T00:13:18.137829852Z
 req_type: Task
 tags:
 - from-review:PR-2865
 - severity:minor
 - templates
+history:
+- id: 01a16b41-35b9-7421-a89c-f61d2bc92614
+  author: joe
+  timestamp: 2026-10-24T00:13:18.137823996Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: cb0a96cfe5cc4d4b53592feab097d355858d53c8
   branch: pr-2865
