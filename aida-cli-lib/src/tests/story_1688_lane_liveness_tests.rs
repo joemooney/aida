@@ -1563,6 +1563,8 @@ fn linked_worktree_hold_waits_from_the_primary_placement_event() {
             pr: 2712,
             placed: true,
             reason: Some("supervised spec needs a human".into()),
+            principal: None,
+            human_attested: false,
         },
     );
     early.ts = placed_at;
