@@ -1,0 +1,29 @@
+id: 01a16c4b-4eec-7f31-a578-afed15508d7f
+spec_id: TASK-1-478
+title: '[cosmetic, non-blocking] PR #2845 body TASK-1757(3) bullet still says ''If the s…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1951, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  [cosmetic, non-blocking] PR #2845 body TASK-1757(3) bullet still says 'If the second pass refuses, or the lock is busy, the clearance is moved to PR-N.superseded-<ts>.json'; after TASK-2285 a busy refusal writes and supersedes nothing. TASK-2285/2286 are also not listed in the body. Update the body before merge so the squash message is accurate.
+
+  PR: #2845
+  Reviewed sha: 32aac566c22a161a2ab11f1c45bd18d6a7cbb386
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-24T05:03:57.164358030Z
+modified_at: 2026-10-24T05:03:57.164358030Z
+req_type: Task
+tags:
+- carried-from:TASK-1951
+- finding-hash:c8ad7184
+- from-review:PR-2845
+- kind:carried-forward
+filed_at:
+  code_sha: 43a38f38d2ba2b6794ea3c74d8bb69f15a54f040
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: d14a20aaae
+  vendor: claude
