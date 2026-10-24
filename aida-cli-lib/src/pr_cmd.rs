@@ -8179,12 +8179,11 @@ mod task_1458_pr_ship_wiring_guard {
     }
 }
 
-/// Pull-request side-effects intended to fire from the /aida-pr
-/// skill. Today: `auto-queue-review` files the reviewer story right
-/// after `gh pr create` so the trigger lives where context is
-/// freshest. `aida session end` keeps the same logic as an
-/// idempotent backup for PRs opened outside the skill.
-// trace:STORY-90 | ai:claude
+/// Pull-request side-effects. Today: `auto-queue-review` files the
+/// reviewer story right after a change opens, so the trigger lives
+/// where context is freshest. `aida session end` keeps the same logic
+/// as an idempotent backup for changes opened without it.
+// trace:STORY-90 trace:TASK-2251 | ai:claude
 #[derive(clap::Parser, Debug)]
 #[clap(name = "pr")]
 pub(crate) struct PrArgs {
