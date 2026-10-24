@@ -37,11 +37,18 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T22:12:54.027870933Z
-modified_at: 2026-10-23T22:12:54.027870933Z
+modified_at: 2026-10-24T16:53:53.952703839Z
 req_type: Bug
 tags:
 - id-allocation
 - partitioned-store
+comments:
+- id: 01a16ed5-48a0-7981-8732-4065c5053ecb
+  author: joe
+  content: 'OPERATOR DECISION 2026-10-24 09:53 (relayed by advisor): defects filed from the work clone must be sanitized generic AIDA defects — never work email addresses, IP addresses, hostnames or other work-identifying data. With that rule they may reach the public GitHub store. A sanitization guard (refuse or strip on the work-to-store path) is in scope for sketching; a full policy can be revisited later.'
+  created_at: 2026-10-24T16:53:53.952703839Z
+  modified_at: 2026-10-24T16:53:53.952703839Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
 filed_at:
   code_sha: 3dfcf99117e6efbaa8259155a576276ab424a335
   branch: main
