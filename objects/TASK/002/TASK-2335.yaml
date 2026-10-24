@@ -20,13 +20,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-24T19:10:24.135843668Z
-modified_at: 2026-10-24T19:44:08.522271221Z
+modified_at: 2026-10-24T19:44:09.419434544Z
 req_type: Task
 tags:
 - authority
 - from-review:PR-2907
 - ratchet
 - severity:minor
+relationships:
+- rel_type: SupersededBy
+  target_id: 01a15f18-ed08-7922-ac1d-114f0fa53917
+  created_at: 2026-10-24T19:44:09.419430890Z
+  created_by: joe
 history:
 - id: 01a16f71-254a-7e11-979a-6ec52e471b25
   author: joe
@@ -36,6 +41,11 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Superseded
+- id: 01a16f71-2c3c-7592-8b71-3a30d5d5b775
+  author: joe
+  timestamp: 2026-10-24T19:44:10.300450033Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+  changes: []
 filed_at:
   code_sha: df12b9c279302946947760ab534411087d561f89
   branch: pr-2907
