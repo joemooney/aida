@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2218",
+  "publishes": [
+    {
+      "at": "2026-10-24T18:50:10.582938435Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-24T12:28:37.053340956Z",
+      "spec": "BUG-2218",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-24T12:29:38.052215167Z",
+      "spec": "BUG-2218",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-24T13:43:35.396836759Z",
+      "spec": "BUG-2218",
+      "kind": {
+        "event": "PhaseDonePr",
+        "pr": 2898
+      }
+    },
+    {
+      "ts": "2026-10-24T18:49:51.151311261Z",
+      "spec": "BUG-2218",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2898
+      }
+    },
+    {
+      "ts": "2026-10-24T18:50:10.429297824Z",
+      "spec": "BUG-2218",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "00da9622dfb5f7b721b164e2516a102cf22b9824",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
