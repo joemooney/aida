@@ -1,0 +1,29 @@
+id: 01a16bd4-8f74-73a1-aa79-c2d6326c5c25
+spec_id: TASK-1-475
+title: 'non-blocking (minor): aida dev rollback (dev_build.rs:1192) swaps .promoted but…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on STORY-1689, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  non-blocking (minor): aida dev rollback (dev_build.rs:1192) swaps .promoted but leaves autopromote.json at phase=promoted. The next dev-autopromote tick sees live SHA != origin/main and rebuilds and re-promotes the commit the operator just rolled away from, within 15 min. Fix: have rollback record the rolled-away SHA so the tick skips it (failed-sha) until main moves, or document disabling the job before a rollback.
+
+  PR: #2850
+  Reviewed sha: 30961c5fd6bb36b083181ce0c296419dbed1d10e
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-24T02:54:14.900094798Z
+modified_at: 2026-10-24T02:54:14.900094798Z
+req_type: Task
+tags:
+- carried-from:STORY-1689
+- finding-hash:598a460f
+- from-review:PR-2850
+- kind:carried-forward
+filed_at:
+  code_sha: d14a20aaaea1d58be05fdacf97e1ef60c46d02fb
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c016980d03
+  vendor: claude
