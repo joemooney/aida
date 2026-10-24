@@ -4037,21 +4037,72 @@ pub(crate) fn apply_headless_child_seat_env(
 ///
 /// Every seat gets it, not only the reviewer, deliberately: an implementer
 /// child launched from an `aida agent new` lane is labelled
-/// `<vendor>-implementer` rather than inheriting the lane's name. Inheriting
+/// `<vendor>-implementer-NN` rather than inheriting the lane's name. Inheriting
 /// would attribute the child's writes to whatever seat launched it (an
 /// advisor's `queue work`, say). Lane attribution in `aida ps` does not
 /// depend on this label: BUG-2010 binds a lane by the lease the child
 /// claims itself, and skips children that claim none.
 // trace:BUG-2187 | ai:codex
 // trace:TASK-1955 | ai:claude (TASK-2066, TASK-1672)
-fn apply_child_agent_identity(cmd: &mut std::process::Command, vendor: HeadlessVendor, seat: &str) {
+pub(crate) fn apply_child_agent_identity(
+    cmd: &mut std::process::Command,
+    vendor: HeadlessVendor,
+    seat: &str,
+) {
     let agent_type = match vendor {
         HeadlessVendor::Claude => "claude",
         HeadlessVendor::Codex => "codex",
         HeadlessVendor::Agy => "antigravity",
     };
+    // Each child gets its own handle, reserved here and bound by the child
+    // with the launch token, so concurrent children of one seat never share
+    // the From address their mail is sent under. Without a project to
+    // reserve in, the bare seat label stays (not an address).
+    // trace:STORY-1843 | ai:claude
+    cmd.env_remove(crate::agent_handle::LAUNCH_TOKEN_ENV);
+    let name = reserve_child_handle(cmd, agent_type, seat)
+        .unwrap_or_else(|| format!("{agent_type}-{seat}"));
     cmd.env("AIDA_AGENT_TYPE", agent_type)
-        .env("AIDA_AGENT_NAME", format!("{agent_type}-{seat}"));
+        .env("AIDA_AGENT_NAME", name);
+}
+
+/// Reserve a generated `<vendor>-<seat>-NN` handle for a child about to be
+/// launched and hand it the launch token. Fail-open: `None` when no project
+/// namespace is reachable.
+// trace:STORY-1843 | ai:claude
+fn reserve_child_handle(
+    cmd: &mut std::process::Command,
+    agent_type: &str,
+    seat: &str,
+) -> Option<String> {
+    let root = child_handle_root()?;
+    let reservation = crate::agent_handle::reserve_handle(
+        &root,
+        &crate::agent_handle::HandleRequest {
+            agent_type,
+            role: Some(seat),
+            launcher: true,
+            ..Default::default()
+        },
+    )
+    .ok()?;
+    let token = crate::agent_handle::launch_token_for(&root, &reservation.handle)?;
+    cmd.env(crate::agent_handle::LAUNCH_TOKEN_ENV, token);
+    Some(reservation.handle)
+}
+
+/// The handle namespace a headless child is reserved in: the main checkout
+/// of the launch's project. Tests reserve only in a pinned project.
+fn child_handle_root() -> Option<PathBuf> {
+    #[cfg(test)]
+    {
+        contained_cwd_seam::cwd()
+    }
+    #[cfg(not(test))]
+    {
+        let root = crate::find_aida_project_root_from(&headless_worktree_root()).ok()?;
+        Some(crate::main_worktree_root_from(&root))
+    }
 }
 
 /// Stamp `AIDA_HARNESS_VERSION` on a headless child from its own vendor

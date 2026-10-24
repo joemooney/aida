@@ -1207,8 +1207,9 @@ pub(crate) fn statusline_session_handle(
     let vendor = client
         .map(str::to_string)
         .unwrap_or_else(crate::agent_registry::detect_agent_type);
-    let session_id = raw_payload
-        .and_then(crate::agent_handle::session_id_from_payload)
+    let payload_session_id = raw_payload.and_then(crate::agent_handle::session_id_from_payload);
+    let session_id = payload_session_id
+        .clone()
         .or_else(|| crate::agent_handle::current_native_session_id_for(&vendor));
     if let Some(handle) = crate::agent_handle::current_session_handle_for(
         project_root,
@@ -1221,10 +1222,14 @@ pub(crate) fn statusline_session_handle(
         return crate::agent_handle::session_handle_in_pane(project_root, pane);
     }
     // A client renders through a child process it spawned; a session id it
-    // did not supply means no ancestry guess for Codex/plain renders.
-    client.and_then(|_| {
-        crate::agent_handle::session_handle_by_ancestry(project_root, std::process::id())
-    })
+    // did not supply means no ancestry guess for Codex/plain renders. A
+    // payload session id that matched no row is a session not registered
+    // yet: ancestry would find its parent's handle. trace:STORY-1843 | ai:claude
+    client
+        .filter(|_| payload_session_id.is_none())
+        .and_then(|_| {
+            crate::agent_handle::session_handle_by_ancestry(project_root, std::process::id())
+        })
 }
 
 fn run_statusline(

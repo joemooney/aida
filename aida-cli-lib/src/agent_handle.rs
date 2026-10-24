@@ -113,10 +113,6 @@ pub(crate) struct HandleRequest<'a> {
     /// A launcher reserving for a process it is about to start: the new
     /// reservation records a fresh launch token and this process's pid.
     pub(crate) launcher: bool,
-    /// `explicit` is the `<vendor>-<seat>` name a headless launcher exported
-    /// as this process's `AIDA_AGENT_NAME`: its mail goes out under that name,
-    /// so the name must stay its address.
-    pub(crate) child_seat: bool,
 }
 
 /// Why `name` is not a valid handle spelling, or `None` when it is.
@@ -203,36 +199,6 @@ fn validate_address(name: &str, reserved: &BTreeSet<String>) -> Result<()> {
         );
     }
     Ok(())
-}
-
-/// Whether `name` is the `<vendor>-<seat>` identity a headless launcher
-/// gives its child (`claude-reviewer`): one seat word after the vendor, so
-/// it never takes a generated `<vendor>-<role>-NN` spelling.
-// trace:STORY-1843 | ai:claude
-pub(crate) fn is_child_seat_name(name: &str, agent_type: &str) -> bool {
-    let vendor = agent_registry::normalize_agent_type(agent_type.to_string());
-    name.strip_prefix(vendor.as_str())
-        .and_then(|rest| rest.strip_prefix('-'))
-        .is_some_and(|seat| {
-            !seat.is_empty()
-                && !seat.contains('-')
-                && seat
-                    .chars()
-                    .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
-        })
-}
-
-/// [`validate_explicit_handle`] for `req`: a launcher-exported child seat
-/// name is exempt only from the generated-namespace check.
-fn validate_request_name(
-    name: &str,
-    req: &HandleRequest<'_>,
-    reserved: &BTreeSet<String>,
-) -> Result<()> {
-    if req.child_seat && is_child_seat_name(name, req.agent_type) {
-        return validate_address(name, reserved);
-    }
-    validate_explicit_handle(name, reserved)
 }
 
 /// The display alias of a vendor inside a generated handle.
@@ -507,7 +473,7 @@ pub(crate) fn reserve_handle(
 ) -> Result<HandleReservation> {
     let reserved = reserved_addresses(project_root);
     if let Some(name) = req.explicit {
-        validate_request_name(name, req, &reserved)?;
+        validate_explicit_handle(name, &reserved)?;
     }
     let _lock = lock_namespace(project_root)?;
     let now = Utc::now();
@@ -522,7 +488,7 @@ pub(crate) fn reserve_handle(
 pub(crate) fn preview_handle(project_root: &Path, req: &HandleRequest<'_>) -> Result<String> {
     let reserved = reserved_addresses(project_root);
     if let Some(name) = req.explicit {
-        validate_request_name(name, req, &reserved)?;
+        validate_explicit_handle(name, &reserved)?;
     }
     Ok(decide(project_root, req, &reserved, Utc::now())?.0)
 }
@@ -560,6 +526,16 @@ fn decide(
             bail!("cannot generate a valid handle for `{}`", req.agent_type);
         }
         let existing = load_reservation(project_root, &candidate);
+        // Mail is keyed by the spelling, so a generated spelling another
+        // recipient held is never handed out again: the next session would
+        // read that holder's unread mail. Numbers grow instead.
+        // trace:STORY-1843 | ai:claude
+        if existing
+            .as_ref()
+            .is_some_and(|r| !held_by_requester(r, req))
+        {
+            continue;
+        }
         if other_live_holder(
             project_root,
             &entries,
@@ -574,6 +550,14 @@ fn decide(
         }
     }
     unreachable!("the handle sequence is unbounded")
+}
+
+/// Whether `r` is already the requester's: its session, its launcher's
+/// promise to it, or its own registry entry.
+fn held_by_requester(r: &HandleReservation, req: &HandleRequest<'_>) -> bool {
+    session_matches(r, req.native_session_id)
+        || proves_launch(r, req)
+        || (req.registry_id.is_some() && r.registry_id.as_deref() == req.registry_id)
 }
 
 /// A session holds one handle: binding it to `taken` unbinds any other
@@ -741,13 +725,6 @@ pub(crate) fn assign_session_handle(
     let token = std::env::var(LAUNCH_TOKEN_ENV)
         .ok()
         .filter(|t| !t.trim().is_empty());
-    // A headless child's `<vendor>-<seat>` name is the From address its mail
-    // carries, so a reply to the sender must reach this session.
-    // trace:STORY-1843 | ai:claude
-    let child_seat = explicit.as_deref().is_some_and(|name| {
-        std::env::var("AIDA_AGENT_NAME").is_ok_and(|env| env.trim() == name)
-            && is_child_seat_name(name, &agent_type)
-    });
     let base = HandleRequest {
         agent_type: &agent_type,
         role: role.as_deref(),
@@ -756,7 +733,6 @@ pub(crate) fn assign_session_handle(
         registry_id: Some(&id),
         launch_token: token.as_deref(),
         launcher: false,
-        child_seat,
     };
     if let Some(name) = explicit.as_deref() {
         if handle_spelling_rejection(name).is_some() {
@@ -844,13 +820,20 @@ pub(crate) fn session_id_from_payload(raw: &str) -> Option<String> {
 /// Unended session rows whose process may still be live, so a stale row
 /// whose pid was reused never lends its handle.
 // trace:STORY-1843 | ai:claude
-fn live_session_entries(project_root: &Path) -> Vec<AgentRegistryEntry> {
+///
+/// Only rows `candidate` accepts, with a valid handle, are probed: a render
+/// probes the few rows that could be its session, not the whole registry.
+fn live_session_entries(
+    project_root: &Path,
+    candidate: impl Fn(&AgentRegistryEntry) -> bool,
+) -> Vec<AgentRegistryEntry> {
     let now = Utc::now();
     let observer = agent_registry::PidObserver::current();
     agent_registry::load_entries(project_root)
         .into_iter()
         .map(|(_, e)| e)
-        .filter(|e| e.ended_at.is_none() && entry_may_hold_from(project_root, e, now, observer))
+        .filter(|e| e.ended_at.is_none() && valid_handle(e).is_some() && candidate(e))
+        .filter(|e| entry_may_hold_from(project_root, e, now, observer))
         .collect()
 }
 
@@ -885,38 +868,25 @@ pub(crate) fn current_session_handle_for(
     native_session_id: Option<&str>,
     vendor: &str,
 ) -> Option<String> {
-    let entries = live_session_entries(project_root);
-    let valid = valid_handle;
-    if let Some(sid) = native_session_id.filter(|s| !s.trim().is_empty()) {
-        let req = HandleRequest {
-            native_session_id: Some(sid),
-            ..Default::default()
-        };
-        if let Some(h) = entries
-            .iter()
-            .filter(|e| same_session(e, &req))
-            .max_by_key(|e| e.last_active_at)
-            .and_then(valid)
-        {
-            return Some(h);
-        }
-    }
+    let req = HandleRequest {
+        native_session_id: native_session_id.filter(|s| !s.trim().is_empty()),
+        ..Default::default()
+    };
     let claude = agent_registry::normalize_agent_type(vendor.to_string()) == "claude";
-    if let Some(pid) = std::env::var("CLAUDE_PID")
+    let claude_pid = std::env::var("CLAUDE_PID")
         .ok()
         .filter(|_| claude)
-        .and_then(|p| p.trim().parse::<u32>().ok())
-    {
-        if let Some(h) = entries
+        .and_then(|p| p.trim().parse::<u32>().ok());
+    let by_pid = |e: &AgentRegistryEntry| Some(e.pid) == claude_pid && e.agent_type == "claude";
+    let entries = live_session_entries(project_root, |e| same_session(e, &req) || by_pid(e));
+    let newest = |hit: &dyn Fn(&AgentRegistryEntry) -> bool| {
+        entries
             .iter()
-            .filter(|e| e.pid == pid && e.agent_type == "claude")
+            .filter(|e| hit(e))
             .max_by_key(|e| e.last_active_at)
-            .and_then(valid)
-        {
-            return Some(h);
-        }
-    }
-    None
+            .and_then(valid_handle)
+    };
+    newest(&|e| same_session(e, &req)).or_else(|| newest(&by_pid))
 }
 
 /// The handle of the agent session running in a tmux pane, found from the
@@ -924,34 +894,35 @@ pub(crate) fn current_session_handle_for(
 /// it, nearest the pane first. A `#(aida statusline)` render runs in tmux's
 /// own environment, where no client session variable exists.
 pub(crate) fn session_handle_in_pane(project_root: &Path, pane_pid: u32) -> Option<String> {
-    live_session_entries(project_root)
-        .into_iter()
-        .filter_map(|e| {
-            let depth = agent_registry::ancestor_depth(e.pid, pane_pid)?;
-            Some((depth, e))
-        })
-        .filter(|(_, e)| valid_handle(e).is_some())
-        .min_by_key(|(depth, e)| (*depth, std::cmp::Reverse(e.last_active_at)))
-        .and_then(|(_, e)| valid_handle(&e))
+    live_session_entries(project_root, |e| {
+        agent_registry::ancestor_depth(e.pid, pane_pid).is_some()
+    })
+    .into_iter()
+    .filter_map(|e| {
+        let depth = agent_registry::ancestor_depth(e.pid, pane_pid)?;
+        Some((depth, e))
+    })
+    .min_by_key(|(depth, e)| (*depth, std::cmp::Reverse(e.last_active_at)))
+    .and_then(|(_, e)| valid_handle(&e))
 }
 
 /// The handle of the nearest agent session among `pid` and its ancestors:
 /// a client that spawns `aida statusline` itself is its parent.
 pub(crate) fn session_handle_by_ancestry(project_root: &Path, pid: u32) -> Option<String> {
-    let entries = live_session_entries(project_root);
+    let mut chain = Vec::new();
     let mut current = Some(pid);
-    while let Some(p) = current.filter(|p| *p > 1) {
-        if let Some(h) = entries
-            .iter()
-            .filter(|e| e.pid == p)
-            .max_by_key(|e| e.last_active_at)
-            .and_then(valid_handle)
-        {
-            return Some(h);
-        }
+    while let Some(p) = current.filter(|p| *p > 1 && !chain.contains(p)) {
+        chain.push(p);
         current = agent_registry::parent_pid_of(p);
     }
-    None
+    let entries = live_session_entries(project_root, |e| chain.contains(&e.pid));
+    chain.iter().find_map(|p| {
+        entries
+            .iter()
+            .filter(|e| e.pid == *p)
+            .max_by_key(|e| e.last_active_at)
+            .and_then(valid_handle)
+    })
 }
 
 /// [`current_session_handle`] for the project containing the cwd, using
@@ -1012,7 +983,6 @@ mod tests {
             registry_id: None,
             launch_token: None,
             launcher: false,
-            child_seat: false,
         }
     }
 
@@ -1702,39 +1672,253 @@ mod tests {
         );
     }
 
-    // Third review: a headless child seat keeps the `<vendor>-<seat>` name
-    // its mail is sent from, so a reply to that sender reaches it.
+    fn unread_mail_to(handle: &str) -> aida_core::mailbox::Message {
+        use aida_core::mailbox::{Intent, Message, Recipient, SenderSource};
+        Message {
+            subject: None,
+            id: format!("m-{handle}"),
+            thread_id: "t1".to_string(),
+            from: "advisor".to_string(),
+            to: Recipient::Agent(handle.to_string()),
+            timestamp: 100,
+            in_reply_to: None,
+            body: "stale instruction".to_string(),
+            urgent: false,
+            intent: Intent::Request,
+            retracted: false,
+            deleted: false,
+            archived: false,
+            from_source: SenderSource::Explicit,
+            from_role: None,
+            relayed_from: None,
+        }
+    }
+
+    // Round 4 F1/F7: concurrent headless children of one seat each get a
+    // launcher-reserved handle, bound by that child's launch token, and a
+    // reply to each sender reaches only that child.
     // trace:STORY-1843 | ai:claude
     #[test]
-    fn a_headless_child_seat_keeps_its_sender_name_so_replies_resolve() {
+    fn concurrent_children_of_one_seat_get_distinct_handles_and_replies_reach_each() {
         let tmp = tempfile::tempdir().unwrap();
         let project = tmp.path();
-        let binary = agent_registry::AgentBinaryIdentity::new("0.16.0".into(), "abc".into());
-        let _env = crate::test_env::EnvVarsGuard::apply(&[
-            ("AIDA_AGENT_TYPE", Some("claude")),
-            ("AIDA_SESSION_ROLE", Some("reviewer")),
-            ("AIDA_SESSION_SCOPE", None),
-            ("AIDA_AGENT_NAME", Some("claude-reviewer")),
-            (LAUNCH_TOKEN_ENV, None),
-        ]);
-        let child =
-            agent_registry::touch_session_start_agent(project, project, Some("child-s"), &binary)
-                .unwrap();
-        assert_eq!(child.name.as_deref(), Some("claude-reviewer"));
-        let (from, _) = crate::queue_misc::resolve_mail_sender_identity(None);
-        assert_eq!(from, "claude-reviewer");
+        let _cwd = crate::session::contained_cwd_seam::pin(project);
+        let launch = || {
+            let mut cmd = std::process::Command::new("true");
+            crate::session::apply_child_agent_identity(
+                &mut cmd,
+                crate::session::HeadlessVendor::Claude,
+                "reviewer",
+            );
+            let env = |key: &str| {
+                cmd.get_envs()
+                    .find(|(k, _)| *k == key)
+                    .and_then(|(_, v)| v)
+                    .map(|v| v.to_string_lossy().into_owned())
+                    .unwrap()
+            };
+            (env("AIDA_AGENT_NAME"), env(LAUNCH_TOKEN_ENV))
+        };
+        let children = [launch(), launch()];
+        assert_eq!(children[0].0, "claude-reviewer-01");
+        assert_eq!(children[1].0, "claude-reviewer-02");
+        for (i, (name, token)) in children.iter().enumerate() {
+            let sid = format!("child-{i}");
+            let _env = crate::test_env::EnvVarsGuard::apply(&[
+                ("AIDA_AGENT_NAME", Some(name.as_str())),
+                (LAUNCH_TOKEN_ENV, Some(token.as_str())),
+            ]);
+            let mut child = entry(
+                project,
+                &format!("claude-child-{i}"),
+                Some(name),
+                Some(&sid),
+            );
+            child.role = Some("reviewer".to_string());
+            assign_session_handle(project, &mut child, Some(&sid));
+            assert_eq!(child.name.as_deref(), Some(name.as_str()));
+            assert_eq!(
+                load_reservation(project, name)
+                    .unwrap()
+                    .native_session_id
+                    .as_deref(),
+                Some(sid.as_str())
+            );
+            // The From address the child's mail carries is its handle.
+            let (from, _) = crate::queue_misc::resolve_mail_sender_identity(None);
+            assert_eq!(&from, name);
+            agent_registry::write_entry(project, &child).unwrap();
+        }
         let dir = crate::mailbox_resolver::RecipientDirectory::load(
             project,
             &project.join(".aida-store"),
         )
         .unwrap();
-        assert_eq!(dir.resolve(&from).unwrap().address, "claude-reviewer");
-        // Only the launcher-exported seat shape is exempt; a typed name in
-        // the generated namespace is still refused.
-        assert!(is_child_seat_name("claude-reviewer", "claude"));
-        assert!(!is_child_seat_name("claude-reviewer-x", "claude"));
-        assert!(!is_child_seat_name("codex-reviewer", "claude"));
-        assert!(validate_explicit_handle("claude-reviewer", &BTreeSet::new()).is_err());
+        for (i, (name, _)) in children.iter().enumerate() {
+            assert_eq!(&dir.resolve(name).unwrap().address, name);
+            let mine = current_session_handle_for(project, Some(&format!("child-{i}")), "claude");
+            assert_eq!(mine.as_ref(), Some(name));
+            let other = &children[1 - i].0;
+            let notice = aida_core::mailbox::build_notice(
+                mine.iter().map(String::as_str),
+                &[unread_mail_to(other)],
+                &std::collections::HashMap::new(),
+                aida_core::mailbox::NOTICE_DEFAULT_CAP,
+            );
+            assert_eq!(notice.total, 0, "child {i} must not see {other}'s mail");
+        }
+    }
+
+    // Round 4 F2: a dead holder's generated spelling is never handed out
+    // again, so its unread mail is not shown to the next session.
+    // trace:STORY-1843 | ai:claude
+    #[test]
+    fn a_dead_holders_generated_spelling_is_not_reused_for_its_unread_mail() {
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path();
+        let first = reserve_handle(project, &req(None, Some("s-dead"))).unwrap();
+        assert_eq!(first.handle, "claude-implementer-01");
+        let mut dead = entry(project, "claude-dead", Some(&first.handle), Some("s-dead"));
+        dead.ended_at = Some(Utc::now());
+        agent_registry::write_entry(project, &dead).unwrap();
+        let next = reserve_handle(project, &req(None, Some("s-next"))).unwrap();
+        assert_eq!(next.handle, "claude-implementer-02");
+        agent_registry::write_entry(
+            project,
+            &entry(project, "claude-next", Some(&next.handle), Some("s-next")),
+        )
+        .unwrap();
+        let identities: Vec<String> = current_session_handle_for(project, Some("s-next"), "claude")
+            .into_iter()
+            .collect();
+        assert_eq!(identities, vec![next.handle.clone()]);
+        let notice = aida_core::mailbox::build_notice(
+            identities.iter().map(String::as_str),
+            &[unread_mail_to(&first.handle)],
+            &std::collections::HashMap::new(),
+            aida_core::mailbox::NOTICE_DEFAULT_CAP,
+        );
+        assert_eq!(notice.total, 0, "{notice:?}");
+        // The same session resuming still reconnects to its own spelling.
+        let again = reserve_handle(project, &req(None, Some("s-next"))).unwrap();
+        assert_eq!(again.handle, next.handle);
+    }
+
+    // Round 4 F3: a payload session id that matched no row never falls back
+    // to ancestry, which would render the parent session's handle.
+    // trace:STORY-1843 | ai:claude
+    #[test]
+    fn an_unregistered_payload_session_never_borrows_its_parents_handle() {
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path();
+        agent_registry::write_entry(
+            project,
+            &entry(
+                project,
+                "claude-parent",
+                Some("claude-implementer-01"),
+                Some("parent-s"),
+            ),
+        )
+        .unwrap();
+        let _env = crate::test_env::EnvVarsGuard::apply(&[
+            ("AIDA_HOOK_PAYLOAD", None),
+            ("CLAUDE_CODE_SESSION_ID", None),
+            ("CLAUDE_PID", None),
+        ]);
+        assert_eq!(
+            crate::statusline_cmd::statusline_session_handle(
+                project,
+                Some("claude"),
+                Some(r#"{"session_id":"child-not-registered-yet"}"#),
+                None
+            ),
+            None
+        );
+        // Without a payload session id, the spawning client's row is found.
+        assert_eq!(
+            crate::statusline_cmd::statusline_session_handle(
+                project,
+                Some("claude"),
+                Some("{}"),
+                None
+            )
+            .as_deref(),
+            Some("claude-implementer-01")
+        );
+    }
+
+    // Round 4 F4 (sketch-mandatory): a handle confers no authority. A bound
+    // handle spelling a reviewer or advisor seat, or a launch `-n` name, as
+    // this process's agent name changes no grant, commit authority or
+    // review-record identity, and an author stays refused.
+    // trace:STORY-1843 | ai:claude
+    #[test]
+    fn a_handle_spelling_a_seat_or_launch_name_confers_no_authority() {
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path();
+        let leases: Vec<crate::leases::SessionLease> = Vec::new();
+        let baseline = {
+            let _env = crate::test_env::EnvVarsGuard::apply(&[
+                ("AIDA_AGENT_NAME", None),
+                (crate::seat_authority::GRANT_ENV, None),
+            ]);
+            crate::review_authority::RecorderIdentity::current(&leases)
+        };
+        let reviewer = reserve_handle(
+            project,
+            &HandleRequest {
+                role: Some("reviewer"),
+                ..req(None, Some("s-rev"))
+            },
+        )
+        .unwrap();
+        let advisor = reserve_handle(project, &req(Some("advisor-01"), Some("s-adv"))).unwrap();
+        let launched = reserve_handle(project, &launcher_req(Some("reviewer-2864"))).unwrap();
+        for (i, handle) in [&reviewer.handle, &advisor.handle, &launched.handle]
+            .into_iter()
+            .enumerate()
+        {
+            agent_registry::write_entry(
+                project,
+                &entry(project, &format!("claude-h{i}"), Some(handle), None),
+            )
+            .unwrap();
+            let _env = crate::test_env::EnvVarsGuard::apply(&[
+                ("AIDA_AGENT_NAME", Some(handle.as_str())),
+                (crate::seat_authority::GRANT_ENV, None),
+            ]);
+            assert!(
+                matches!(
+                    crate::seat_authority::grant_check(project),
+                    crate::seat_authority::GrantCheck::Absent
+                ),
+                "{handle}"
+            );
+            assert!(crate::seat_authority::current_seat(project).is_none());
+            assert!(
+                crate::seat_authority::resolve_commit_authority(&project.join(".aida-store"))
+                    .is_none(),
+                "{handle}"
+            );
+            let recorder = crate::review_authority::RecorderIdentity::current(&leases);
+            assert_eq!(recorder.tokens, baseline.tokens, "{handle}");
+            assert!(!recorder.tokens.iter().any(|t| t.contains(handle.as_str())));
+            // The author gate keys on session identity: the author recording
+            // under a seat-shaped handle is still refused.
+            let mut tokens = recorder.tokens.clone();
+            tokens.push("session:author-s".to_string());
+            let recorder =
+                crate::review_authority::RecorderIdentity::with_context(tokens, &[], &[], None);
+            let author = crate::pr_ship::AuthorSession {
+                label: "implementer".to_string(),
+                tokens: vec!["session:author-s".to_string()],
+            };
+            assert!(matches!(
+                crate::review_author_gate(&[author], &recorder, true, false, || true),
+                crate::ReviewAuthorGate::Refused(_)
+            ));
+        }
     }
 
     // trace:STORY-1843 | ai:claude (TASK-2302)

@@ -479,7 +479,6 @@ pub(crate) fn agent_register(
             registry_id: Some(&registry_id),
             launch_token: None,
             launcher: false,
-            child_seat: false,
         },
     )?;
     let name = Some(reservation.handle.clone());
