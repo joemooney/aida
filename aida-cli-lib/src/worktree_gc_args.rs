@@ -161,6 +161,19 @@ pub enum WorktreeCommand {
         /// Emit machine-readable JSON.
         #[clap(long)]
         json: bool,
+
+        /// Treat agent scratch (terminal jobs' tmp dirs, session scratch,
+        /// idle build caches) younger than this many days as live and keep
+        /// it.
+        // trace:TASK-2325 | ai:claude
+        #[clap(long, value_name = "DAYS", default_value_t = 3)]
+        scratch_age_days: u64,
+
+        /// Skip the agent-scratch scan (jobs tmp, TMPDIR scratch, build
+        /// caches) and consider only this repository's worktree caches.
+        // trace:TASK-2325 | ai:claude
+        #[clap(long)]
+        no_scratch: bool,
     },
 
     /// Manage the warm-pool of recycled worktrees — kept warm (reset-not-delete

@@ -489,6 +489,8 @@ fn task_1562_reclaim_is_dry_run_by_default() {
                     include_live,
                     include_open_prs,
                     json,
+                    scratch_age_days,
+                    no_scratch,
                 },
         } => {
             assert!(!apply, "reclaim must be DRY RUN by default");
@@ -497,6 +499,9 @@ fn task_1562_reclaim_is_dry_run_by_default() {
             assert!(!include_live);
             assert!(!include_open_prs);
             assert!(!json);
+            // trace:TASK-2325 | ai:claude
+            assert_eq!(scratch_age_days, 3);
+            assert!(!no_scratch);
         }
         other => panic!("expected Worktree::Reclaim, got {other:?}"),
     }
@@ -520,6 +525,9 @@ fn task_1562_reclaim_parses_every_rail_override() {
         "--include-live",
         "--include-open-prs",
         "--json",
+        "--scratch-age-days",
+        "5",
+        "--no-scratch",
     ])
     .expect("every reclaim flag should parse");
     match cli.command.registered::<crate::worktree_gc::WorktreeArgs>() {
@@ -532,9 +540,14 @@ fn task_1562_reclaim_parses_every_rail_override() {
                     include_live,
                     include_open_prs,
                     json,
+                    scratch_age_days,
+                    no_scratch,
                 },
         } => {
             assert!(apply);
+            // trace:TASK-2325 | ai:claude
+            assert_eq!(scratch_age_days, 5);
+            assert!(no_scratch);
             assert_eq!(min_age_mins, 180);
             assert_eq!(target_pct, Some(80));
             assert!(include_live);
