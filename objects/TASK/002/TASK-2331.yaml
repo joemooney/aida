@@ -11,7 +11,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-24T17:19:43.476996262Z
-modified_at: 2026-10-24T19:43:16.414829280Z
+modified_at: 2026-10-24T19:43:31.069633736Z
 req_type: Task
 tags:
 - from-review:PR-2900
@@ -21,6 +21,13 @@ relationships:
   target_id: 01a16de1-2db8-75e3-b99d-afa3c62c66f4
   created_at: 2026-10-24T19:43:16.414824750Z
   created_by: joe
+comments:
+- id: 01a16f70-92fd-7420-ad19-47143d6d5d75
+  author: joe
+  content: 'ADVISOR 12:50: fixed in PR-2900 round 2 (--limit 1000).'
+  created_at: 2026-10-24T19:43:31.069633736Z
+  modified_at: 2026-10-24T19:43:31.069633736Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
 history:
 - id: 01a16f70-55d3-7342-bbfc-ca330a59054a
   author: joe
