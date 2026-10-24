@@ -2474,11 +2474,13 @@ mod tests {
             return;
         }
         let name = "agent_handle::tests::story_1843_pr3_allocation_refuses_fifo_without_blocking";
-        let mut child = std::process::Command::new(std::env::current_exe().unwrap())
-            .args(["--exact", name])
-            .env("AIDA_TEST_HANDLE_FIFO_CHILD", "1")
-            .spawn()
-            .unwrap();
+        let mut child = std::process::Command::new(
+            crate::aida_bin::current_executable_path().expect("resolve current test executable"),
+        )
+        .args(["--exact", name])
+        .env("AIDA_TEST_HANDLE_FIFO_CHILD", "1")
+        .spawn()
+        .unwrap();
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
         loop {
             if let Some(status) = child.try_wait().unwrap() {
