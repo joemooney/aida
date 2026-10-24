@@ -1,0 +1,28 @@
+id: 01a16b77-1dc0-71c3-8797-3f8959aebbb7
+spec_id: TASK-2299
+agreed_id: TASK-2299
+title: 'protected_paths: a directory entry without a trailing ''/'' silently protects nothing'
+description: |
+  aida-cli-lib/src/mandate_gates.rs ProtectedEntry::matches: an entry like "aida-cli-lib/src/gate" (a directory, no trailing '/') is treated as an exact path. PR changed paths are always files, so the entry never matches, and `aida mandate status` lists it with no warning. The operator thinks the directory is protected, but it is not. The signed sketch accepts this ("trailing-slash typo accepted, matches nothing"), so it is not a fail-open of the floor. Suggested fix: in `aida mandate status`, warn when an exact entry names a directory on origin/main.
+
+  Raised in review of PR-2832: https://github.com/joemooney/aida/pull/2832
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-24T01:12:10.944778912Z
+modified_at: 2026-10-24T01:12:10.944778912Z
+req_type: Task
+tags:
+- from-review:PR-2832
+- mandate
+- severity:minor
+filed_at:
+  code_sha: 418fc61a92c01955ef14d9d53baa6b536e4d1e5a
+  branch: pr-2832
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c38043228d
+  vendor: claude
+  session: 01a16b74eb80
+  harness_version: 2.1.310 (Claude Code)
