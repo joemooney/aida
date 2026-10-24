@@ -92,12 +92,13 @@ and `aida pull --dry-run` inspect local metadata without fetching, opening a
 store cache, or running lifecycle actions. `--json` also selects planning.
 Plans name origin, exact store refspecs, locally known source SHA, refs that
 execution could move, flag dispositions, and missing prerequisites. Code legs
-are forbidden even when `AIDA_PUSH_DEFAULT=code`; `--store-only` is redundant.
-`--message` on push and `--auto` on pull refuse. Actual push/pull refuses until
+are forbidden even when `AIDA_PUSH_DEFAULT=code`; `aida push --store-only` and
+`aida pull --store-only` are redundant. `aida push --message <text>` and
+`aida pull --auto` refuse. Actual push/pull refuses until
 the executor and sanitization slices are available. Ordinary clones with no
 profile retain their existing behavior, including pull dry-run fetching.
-Explicit `--file` store overrides refuse when either clone has an enabled
-profile; run from the intended clone without the override.
+Explicit store overrides such as `aida --file <path> push` refuse when either
+clone has an enabled profile; run from the intended clone without the override.
 
 The intended transport is a ref-only store push and a store-only fetch followed
 by fast-forward. These plans do not yet validate cleanliness, fast-forward
