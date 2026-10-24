@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T09:53:13.924066900Z
-modified_at: 2026-10-24T01:57:18.648628941Z
+modified_at: 2026-10-24T01:57:25.189969370Z
 req_type: Task
 relationships:
 - rel_type: References
@@ -309,6 +309,12 @@ comments:
   content: 'ADVISOR 18:28: #2839 (S4c) PASSED round 2; the operator merges it. Folded TASK-2300 from that review (the default clone seat refuses a contained launch when origin is unreachable; the plan doc overclaims ''no new refusals''; minor). Take it first in S5: fall back to a worktree with a note when origin is unreachable, as the missing-origin ruling does, and fix the doc.'
   created_at: 2026-10-24T01:28:14.530001367Z
   modified_at: 2026-10-24T01:28:14.530001367Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+- id: 01a16ba0-8845-7110-89ba-435128842459
+  author: joe
+  content: 'ADVISOR 18:57: Folded TASK-1-471 (carried forward from #2839: with no seat_tree knob, a contained launch now runs a git clone step) into S5.'
+  created_at: 2026-10-24T01:57:25.189969370Z
+  modified_at: 2026-10-24T01:57:25.189969370Z
   session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
 history:
 - id: 01a15de1-409d-7c42-b18e-94acbd5eb19d
