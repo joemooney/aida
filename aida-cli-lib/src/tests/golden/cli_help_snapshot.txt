@@ -9571,6 +9571,12 @@ Options:
       --after-wave
           Wait for a live drain wave pinned to the current binary to finish instead of refusing
 
+      --if-main-green
+          For a schedule: promote only when origin/main has moved past the live binary and every CI
+          check on that commit passed. Fetches, fast-forwards a clean primary `main`, and launches
+          the build in the background; skips quietly otherwise. Acts only from the checkout the live
+          binary was built from
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -33320,6 +33326,11 @@ Working on aida itself
         "help": "Promote even when the checkout is dirty, off `main`, or not at `origin/main` (`aida dev status` then shows the dirty SHA)"
       },
       {
+        "name": "autopromote-child",
+        "takes_value": true,
+        "help": "Internal: the background build an `--if-main-green` run launched"
+      },
+      {
         "name": "clean",
         "takes_value": true,
         "help": "Clear the incremental cache first. Bare `--clean` deletes only `target/agent/incremental` (keeps compiled dependencies); `--clean=full` runs `cargo clean --profile agent`"
@@ -33333,6 +33344,11 @@ Working on aida itself
         "name": "help",
         "takes_value": false,
         "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "if-main-green",
+        "takes_value": false,
+        "help": "For a schedule: promote only when origin/main has moved past the live binary and every CI check on that commit passed. Fetches, fast-forwards a clean primary `main`, and launches the build in the background; skips quietly otherwise. Acts only from the checkout the live binary was built from"
       },
       {
         "name": "install-links",
