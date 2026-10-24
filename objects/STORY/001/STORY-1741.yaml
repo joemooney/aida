@@ -35,10 +35,17 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T21:07:20.910348370Z
-modified_at: 2026-10-23T21:08:26.503866126Z
+modified_at: 2026-10-24T16:53:50.365893969Z
 req_type: Story
 tags:
 - portable-intake
+comments:
+- id: 01a16ed5-3a9d-7e01-8590-eddc7b79e117
+  author: joe
+  content: 'OPERATOR DECISION 2026-10-24 09:53 (relayed by advisor): defects filed from the work clone must be sanitized generic AIDA defects — never work email addresses, IP addresses, hostnames or other work-identifying data. With that rule they may reach the public GitHub store. A sanitization guard (refuse or strip on the work-to-store path) is in scope for sketching; a full policy can be revisited later.'
+  created_at: 2026-10-24T16:53:50.365893969Z
+  modified_at: 2026-10-24T16:53:50.365893969Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
 history:
 - id: 01a16a97-f720-7ad0-b09e-3e490758eade
   author: joe.mooney
