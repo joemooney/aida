@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-2270",
+  "publishes": [
+    {
+      "at": "2026-10-24T06:44:38.851745649Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-23T21:25:07.041328104Z",
+      "spec": "TASK-2270",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-24T01:55:01.715629983Z",
+      "spec": "TASK-2270",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-2270",
+        "branch": "pr-2867",
+        "first_seen": "2026-10-24T01:55:01.707292367+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-24T06:44:04.666028219Z",
+      "spec": "TASK-2270",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2867
+      }
+    },
+    {
+      "ts": "2026-10-24T06:44:38.592151419Z",
+      "spec": "TASK-2270",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "4f811f287733604c76e19884b3c173875801bfe5",
+        "pr": 2867,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
