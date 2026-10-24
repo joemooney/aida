@@ -238,7 +238,7 @@ Different agent types have different conventions for invoking AIDA workflows (th
 | Workflow | Claude Code (slash) | Codex CLI | Antigravity CLI / MCP agents | What it does |
 |---|---|---|---|---|
 | **aida-pickup** | `/aida-pickup [SPEC]` | `aida queue work [SPEC]` (or `$aida-pickup` / `/skills` when `.codex/skills/` is scaffolded) | `aida queue work [SPEC]` | Read spec + transition to in-progress + drive implementation |
-| **aida-pr / pr ship** | `/aida-pr` | `aida pr ship` | `aida pr ship` | Commit + push + open PR + auto-queue reviewer story |
+| **aida-pr / ship** | `/aida-pr` | `aida ship <SPEC> --no-merge`, then `aida pr auto-queue-review` | Same CLI sequence | Commit + rebase + push + open PR; explicitly queue independent review |
 | **aida-req** | `/aida-req` | `aida add --type <T> --title <S>` | `aida add ...` (or MCP `add_requirement`) | File a new spec |
 | **aida-commit** | `/aida-commit` | `git commit` with trailer | `git commit` with trailer | Enforce `[AI:tool] type(scope): subject (SPEC-ID)` format |
 | **aida-implement** | `/aida-implement [SPEC]` | `aida show <SPEC>` + edit + ship | `aida show <SPEC>` + edit + ship | Implement a spec end-to-end |

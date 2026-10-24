@@ -1352,4 +1352,35 @@ mod tests {
              do not exist on disk: {dead:?}"
         );
     }
+
+    // trace:TASK-1613.accaf23d | ai:agy
+    // trace:TASK-1613.ac0a656e | ai:agy
+    // trace:TASK-1613.ac1eafcd | ai:agy
+    // trace:TASK-1613.acbb1ae4 | ai:agy
+    // trace:TASK-1613.aca8b383 | ai:agy
+    // trace:TASK-1613.ac35e6e8 | ai:agy
+    #[test]
+    fn aida_pr_templates_pin_ship_redirect_and_orchestrated_sentinel() {
+        for key in ["skills/aida-pr/SKILL.md", "commands/aida-pr.md"] {
+            let body = EMBEDDED_TEMPLATES
+                .get(key)
+                .copied()
+                .unwrap_or_else(|| panic!("embedded template {key} missing"));
+            for required in [
+                "aida ship <SPEC> --no-merge",
+                "--dry-run",
+                "aida pr auto-queue-review",
+                "aida ship <SPEC> --no-pr",
+                "[ -n \"${AIDA_EXIT_SENTINEL:-}\" ] && touch \"$AIDA_EXIT_SENTINEL\"",
+            ] {
+                assert!(body.contains(required), "{key} must contain `{required}`");
+            }
+            for forbidden in ["--complexity", "gh pr create"] {
+                assert!(
+                    !body.contains(forbidden),
+                    "{key} must not contain legacy ceremony token `{forbidden}`"
+                );
+            }
+        }
+    }
 }

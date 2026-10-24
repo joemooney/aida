@@ -1455,6 +1455,8 @@ pub(crate) fn run_human_finish_ceremony(opts: HumanFinishOptions) -> Result<()> 
 
     // ---- Step 3: push (force-with-lease — the rebase may have rewritten history). ----
     eprintln!("  step 3: pushing {} to origin", branch);
+    // trace:TASK-2270 | ai:claude
+    aida_core::git_ops::clear_sandbox_config_lock(&project_root);
     let push = std::process::Command::new("git")
         .current_dir(&project_root)
         .args(["push", "--force-with-lease", "-u", "origin", &branch])
@@ -1467,6 +1469,7 @@ pub(crate) fn run_human_finish_ceremony(opts: HumanFinishOptions) -> Result<()> 
             "`git push --force-with-lease -u origin {branch}` failed — investigate before retrying"
         );
     }
+    aida_core::git_ops::repair_push_upstream(&project_root, "origin", Some(&branch), &branch);
     eprintln!(
         "  {} pushed {}",
         crate::glyph(crate::glyphs::Glyph::Check).green(),
@@ -4622,6 +4625,8 @@ pub(crate) fn pr_ship_create_pr(project_root: &std::path::Path, branch: &str) ->
 
     // Push first so `gh pr create` doesn't error with "no commits between".
     eprintln!("  pushing {} to origin", branch);
+    // trace:TASK-2270 | ai:claude
+    aida_core::git_ops::clear_sandbox_config_lock(project_root);
     let push_status = std::process::Command::new("git")
         .current_dir(project_root)
         .args(["push", "-u", "origin", branch])
@@ -4632,6 +4637,7 @@ pub(crate) fn pr_ship_create_pr(project_root: &std::path::Path, branch: &str) ->
     if !push_status.success() {
         anyhow::bail!("`git push -u origin {branch}` failed — investigate before retrying");
     }
+    aida_core::git_ops::repair_push_upstream(project_root, "origin", Some(branch), branch);
 
     let commit_msg_out = std::process::Command::new("git")
         .current_dir(project_root)

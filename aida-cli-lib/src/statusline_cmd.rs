@@ -23,6 +23,7 @@ pub(crate) fn handle_statusline_command(
     color: &str,
     title: bool,
     client: Option<&str>,
+    tmux_pane_pid: Option<u32>,
 ) -> Result<()> {
     // trace:FR-1-041 | ai:claude
     // trace:TASK-896 — an OSC terminal-title string carries no ANSI, so
@@ -153,6 +154,20 @@ pub(crate) fn handle_statusline_command(
         "αιδα".dimmed().to_string(),
         project_label.green().bold().to_string(),
     ];
+    // STORY-1843: the session's handle, the name an operator reads off and
+    // relays (`aida mailbox send --to <handle>`). Read the client payload
+    // up front: it names the session (Claude `session_id`, Agy
+    // `conversationId`); Codex and plain renders fall back to the client's
+    // per-session env. trace:STORY-1843 | ai:claude
+    let raw_payload = client.and_then(|_| statusline_contract::read_stdin_payload());
+    if let Some(handle) = statusline_session_handle(
+        &main_worktree_root_from(&project_root),
+        client,
+        raw_payload.as_deref(),
+        tmux_pane_pid,
+    ) {
+        parts.push(handle.blue().bold().to_string());
+    }
     let drain_root = find_main_worktree_root().unwrap_or_else(|_| project_root.clone());
     if let Some(segment) = crate::drain_state::status_segment(&drain_root) {
         parts.push(segment.cyan().bold().to_string());
@@ -468,7 +483,7 @@ pub(crate) fn handle_statusline_command(
     // AIDA-only segment, and the raw payload is never logged.
     let line = match client {
         Some(name) => {
-            let live = statusline_contract::read_stdin_payload().map(|raw| match name {
+            let live = raw_payload.map(|raw| match name {
                 "claude" => statusline_claude_adapter::parse_claude_payload(&raw),
                 "antigravity" | "agy" => statusline_agy_adapter::parse_agy_payload(&raw),
                 _ => Default::default(),
@@ -771,7 +786,7 @@ pub(crate) fn codex_statusline_setup_text() -> String {
         "  session:",
         "",
         "    # tmux",
-        "    set -g status-right '#(aida statusline --color=never)'",
+        "    set -g status-right '#(cd #{q:pane_current_path} && aida statusline --color=never --tmux-pane-pid #{pane_pid})'",
         "    set -g status-interval 15",
         "",
         "  `aida statusbar --plain` is the lower-cost ambient meter variant for",
@@ -1155,6 +1170,13 @@ pub(crate) struct StatuslineArgs {
     #[clap(long, value_parser = ["claude", "antigravity", "agy"])]
     pub client: Option<String>,
 
+    /// The tmux pane's shell pid (`#{pane_pid}`). A tmux `#(...)` render
+    /// runs in tmux's own environment, so this is how it finds the agent
+    /// session running in that pane and shows its handle.
+    // trace:STORY-1843 | ai:claude
+    #[clap(long, hide = true)]
+    pub tmux_pane_pid: Option<u32>,
+
     /// Opt-in bootstrap helper. With no subcommand, `aida statusline`
     /// renders the one-liner (the default, quiet behavior); the
     /// `setup` subcommand prints (or installs) client-appropriate
@@ -1162,6 +1184,52 @@ pub(crate) struct StatuslineArgs {
     // trace:TASK-0414
     #[clap(subcommand)]
     pub action: Option<crate::cli::StatuslineAction>,
+}
+
+/// The handle segment's value: the session named by the client payload or
+/// the running client's own session variable, else the agent session that
+/// spawned this render (Claude and Agy run the command themselves), else,
+/// for a tmux `#(aida statusline --tmux-pane-pid #{pane_pid})` render that
+/// runs in tmux's environment (the Codex integration), the agent running in
+/// that pane. `None` when nothing identifies a session.
+///
+/// Agy's `conversationId` is documented for hook payloads (Antigravity CLI
+/// 1.4.2 builtin `agy-customizations/docs/hooks.md`, "Common Input
+/// Fields"); its statusline payload is not documented upstream, so an Agy
+/// render that carries no id resolves by ancestry instead.
+// trace:STORY-1843 | ai:claude
+pub(crate) fn statusline_session_handle(
+    project_root: &std::path::Path,
+    client: Option<&str>,
+    raw_payload: Option<&str>,
+    tmux_pane_pid: Option<u32>,
+) -> Option<String> {
+    let vendor = client
+        .map(str::to_string)
+        .unwrap_or_else(crate::agent_registry::detect_agent_type);
+    let payload_session_id = raw_payload.and_then(crate::agent_handle::session_id_from_payload);
+    let session_id = payload_session_id
+        .clone()
+        .or_else(|| crate::agent_handle::current_native_session_id_for(&vendor));
+    if let Some(handle) = crate::agent_handle::current_session_handle_for(
+        project_root,
+        session_id.as_deref(),
+        &vendor,
+    ) {
+        return Some(handle);
+    }
+    if let Some(pane) = tmux_pane_pid {
+        return crate::agent_handle::session_handle_in_pane(project_root, pane);
+    }
+    // A client renders through a child process it spawned; a session id it
+    // did not supply means no ancestry guess for Codex/plain renders. A
+    // payload session id that matched no row is a session not registered
+    // yet: ancestry would find its parent's handle. trace:STORY-1843 | ai:claude
+    client
+        .filter(|_| payload_session_id.is_none())
+        .and_then(|_| {
+            crate::agent_handle::session_handle_by_ancestry(project_root, std::process::id())
+        })
 }
 
 fn run_statusline(
@@ -1173,6 +1241,7 @@ fn run_statusline(
         color,
         title,
         client,
+        tmux_pane_pid,
         action,
     } = &args;
     // trace:TASK-0414 — the opt-in `setup` subcommand bootstraps the
@@ -1186,7 +1255,7 @@ fn run_statusline(
     // segment; omitted, behavior is unchanged (no stdin read).
     match action {
         Some(cli::StatuslineAction::Title) => {
-            return self::handle_statusline_command(color, true, client.as_deref());
+            return self::handle_statusline_command(color, true, client.as_deref(), *tmux_pane_pid);
         }
         Some(act) => return self::handle_statusline_setup_command(act),
         None => {
@@ -1196,7 +1265,12 @@ fn run_statusline(
                     "aida statusline title",
                 );
             }
-            return self::handle_statusline_command(color, *title, client.as_deref());
+            return self::handle_statusline_command(
+                color,
+                *title,
+                client.as_deref(),
+                *tmux_pane_pid,
+            );
         }
     }
 }

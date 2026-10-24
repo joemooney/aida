@@ -3394,6 +3394,7 @@ mod tests {
             binary_path: "/repo/target/release/aida".to_string(),
             launched_stale: false,
             specs: vec!["BUG-101".to_string(), "TASK-202".to_string()],
+            child_grant_id: None,
         }
     }
 
