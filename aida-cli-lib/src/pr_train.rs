@@ -1236,8 +1236,10 @@ fn live_trains(
             "list",
             "--state",
             "open",
+            // High enough that a busy repo's open PRs never hide a live
+            // train from the rider gate (PR-2900 round 1).
             "--limit",
-            "100",
+            "1000",
             "--json",
             "number,headRefName,body",
         ],

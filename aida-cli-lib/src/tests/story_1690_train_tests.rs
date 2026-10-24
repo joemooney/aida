@@ -1708,7 +1708,7 @@ fn covered_member(pr: u64) -> Member {
     m
 }
 
-// trace:BUG-2214 | ai:claude
+// trace:BUG-2214.ac2ec1b2 | ai:claude
 #[test]
 fn bug_2214_gate_defers_a_held_member_to_the_mandate_cover() {
     // No active mandate: the refusal is byte-identical to before.
@@ -1742,7 +1742,7 @@ fn bug_2214_gate_defers_a_held_member_to_the_mandate_cover() {
     assert!(why.contains("TASK-9 is in an excluded class"), "{why}");
 }
 
-// trace:BUG-2214 | ai:claude
+// trace:BUG-2214.ac2ec1b2 | ai:claude
 #[test]
 fn bug_2214_one_cover_read_serves_the_supervised_gate_and_the_hold() {
     let mut c = FakeChecks::shipping("TASK-9", &[], Some(aida_core::ExecutionMode::Guided));
@@ -1754,7 +1754,7 @@ fn bug_2214_one_cover_read_serves_the_supervised_gate_and_the_hold() {
     assert_eq!(c.calls.iter().filter(|s| **s == "mandate").count(), 1);
 }
 
-// trace:BUG-2214 | ai:claude
+// trace:BUG-2214.acd6c45c | ai:claude
 #[test]
 fn bug_2214_a_label_only_hold_stays_human_even_under_a_mandate() {
     let mut c = FakeChecks::new();
@@ -1772,7 +1772,7 @@ fn bug_2214_a_label_only_hold_stays_human_even_under_a_mandate() {
     assert!(why.contains("the train never releases a hold"), "{why}");
 }
 
-// trace:BUG-2214 | ai:claude
+// trace:BUG-2214.acd6c45c | ai:claude
 #[test]
 fn bug_2214_train_ci_tolerates_only_a_covered_hold_gate_red() {
     use crate::ci_gate::CheckRow;
@@ -1834,7 +1834,7 @@ fn bug_2214_train_ci_tolerates_only_a_covered_hold_gate_red() {
     ))));
 }
 
-// trace:BUG-2214 | ai:claude
+// trace:BUG-2214.ac2ec1b2 | ai:claude
 #[test]
 fn bug_2214_land_releases_covered_holds_then_merges() {
     let covered = covered_member(7);
@@ -1852,7 +1852,7 @@ fn bug_2214_land_releases_covered_holds_then_merges() {
     assert!(f.rearmed.is_empty(), "{:?}", f.rearmed);
 }
 
-// trace:BUG-2214 | ai:claude
+// trace:BUG-2214.ac2ec1b2 | ai:claude
 #[test]
 fn bug_2214_a_failed_release_rearms_the_already_released_and_ejects() {
     let (seven, eight) = (covered_member(7), covered_member(8));
@@ -1886,7 +1886,7 @@ fn bug_2214_a_failed_release_rearms_the_already_released_and_ejects() {
     assert!(f.rearmed.contains(&7), "{:?}", f.rearmed);
 }
 
-// trace:BUG-2214 | ai:claude
+// trace:BUG-2214.ac2ec1b2 | ai:claude
 #[test]
 fn bug_2214_a_red_hold_gate_after_release_rearms_and_rebuilds() {
     let covered = covered_member(7);
@@ -1901,7 +1901,7 @@ fn bug_2214_a_red_hold_gate_after_release_rearms_and_rebuilds() {
     assert!(f.merged.is_empty(), "{:?}", f.merged);
 }
 
-// trace:BUG-2214 | ai:claude
+// trace:BUG-2214.ac2ec1b2 | ai:claude
 #[test]
 fn bug_2214_main_moving_after_the_release_rearms_then_lands_on_rebuild() {
     let covered = covered_member(7);
@@ -1918,7 +1918,7 @@ fn bug_2214_main_moving_after_the_release_rearms_then_lands_on_rebuild() {
     assert_eq!(f.rearmed, [7]);
 }
 
-// trace:BUG-2214 | ai:claude
+// trace:BUG-2214.ac2ec1b2 | ai:claude
 #[test]
 fn bug_2214_a_merge_failure_after_the_release_rearms() {
     let covered = covered_member(7);
