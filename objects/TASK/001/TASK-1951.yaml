@@ -64,7 +64,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T15:55:48.750553278Z
-modified_at: 2026-10-24T00:35:53.750186351Z
+modified_at: 2026-10-24T02:47:08.585428126Z
 req_type: Task
 tags:
 - reconcile
@@ -887,6 +887,12 @@ history:
   session_id: 01a16b4e18c0
   harness_version: 2.1.310 (Claude Code)
   changes: []
+- id: 01a16bce-0e84-70a2-86c0-df3dc5657913
+  author: joe
+  timestamp: 2026-10-24T02:47:08.676522374Z
+  session_id: 01a16bbc5093
+  harness_version: 2.1.310 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 6d590ed914dea5135a126f7dae6abb403adec66d
   branch: main
@@ -899,7 +905,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'CI red at head 704570b7 from this PR''s merge with main: lib-0 (stale search --fields help snapshot) and contracts (manual cites --include-supervised under merge-hold); plus a residual TASK-2285 busy-lock race and an empty search review_lens column'
+  detail: 'CI lib-0 red at ad7f4260d8: the new TASK-2285 busy-lock test fails every run (its hook fires before the loser''s first head check), so the busy branch of release_with is still untested; every other TASK-1951 item is verified'
   recovery_hint: address the review findings, move TASK-1951 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-10-24T00:35:53.750186351Z
+  shelved_at: 2026-10-24T02:47:08.585428126Z
