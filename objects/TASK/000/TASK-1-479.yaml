@@ -1,5 +1,6 @@
 id: 01a16c7a-db88-7990-891b-0ea98776f711
 spec_id: TASK-1-479
+agreed_id: TASK-1849
 title: 'cosmetic: PR body is stale after cdd63dab76 (TASK-2292): the TASK-2223 row stil…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-1955, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -18,6 +19,11 @@ tags:
 - finding-hash:9be4003c
 - from-review:TASK-1955
 - kind:carried-forward
+history:
+- id: 01a16c96-7c59-7b12-a1df-f93dc0836c1d
+  author: joe
+  timestamp: 2026-10-24T06:26:03.993423359Z
+  changes: []
 filed_at:
   code_sha: 71143a2a03adef3676ff786c52912324b3813bdd
   branch: main
