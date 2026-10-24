@@ -5520,10 +5520,13 @@ fn fetch_merged_pr_refs(
 /// merge rewrites the slice's commits onto the base, so the slice branch
 /// still holds the originals and `<base>..<slice branch>` lists their
 /// subjects, newest first, which [`confirm_rebase_merged`] then finds on the
-/// base. The remote tracking base is read first, then the local one. An
-/// empty range (the branch was fast-forwarded, or never had commits) is
-/// refused, because there is nothing to confirm.
-// trace:TASK-1951 trace:TASK-2131 | ai:claude
+/// base. `origin/<base>` is fetched first and the newer of it and the local
+/// base is read, so a stale tracking ref cannot count base commits as the
+/// slice's (TASK-2251). A fast-forward merge leaves the range empty; its
+/// commits are then read from the slice's fork point (see
+/// [`fast_forward_slice_fork`]). A branch that never had commits is refused,
+/// because there is nothing to confirm.
+// trace:TASK-1951 trace:TASK-2131 trace:TASK-2251 | ai:claude
 fn pure_git_slice_refs(
     project_root: &std::path::Path,
     ship_branch: &str,
@@ -5541,20 +5544,42 @@ fn pure_git_slice_refs(
         .map(|out| out.trim().to_owned())
         .filter(|sha| !sha.is_empty())
         .with_context(|| format!("the slice branch `{ship_branch}` does not exist locally"))?;
-    let subjects = [format!("origin/{base}"), base.to_owned()]
-        .iter()
-        .find_map(|base_ref| git_out(&["log", "--format=%s", &format!("{base_ref}..{head}")]))
-        .map(|out| {
-            out.lines()
-                .map(str::trim)
-                .filter(|s| !s.is_empty())
-                .map(str::to_owned)
-                .collect::<Vec<_>>()
-        })
-        .unwrap_or_default();
+    // No `origin` remote (a local-only pure-git project): nothing to fetch.
+    // trace:TASK-2251 | ai:claude
+    let has_origin = git_out(&["remote", "get-url", "origin"]).is_some();
+    let fetched = has_origin
+        && aida_core::git_ops::host_git_command(project_root)
+            .args(["fetch", "--quiet", "origin", base])
+            .remote_credentials(project_root, "origin")
+            .output()
+            .is_ok_and(|out| out.status.success());
+    if has_origin && !fetched {
+        eprintln!(
+            "  warning: could not fetch origin/{base}; reading the slice range from the newer of the local refs"
+        );
+    }
+    let base_ref = freshest_base_ref(&git_out, base)
+        .with_context(|| format!("neither `origin/{base}` nor `{base}` exists locally"))?;
+    let subjects_in = |range: String| -> Vec<String> {
+        git_out(&["log", "--format=%s", &range])
+            .map(|out| {
+                out.lines()
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .map(str::to_owned)
+                    .collect()
+            })
+            .unwrap_or_default()
+    };
+    let mut subjects = subjects_in(format!("{base_ref}..{head}"));
+    if subjects.is_empty() {
+        if let Some(fork) = fast_forward_slice_fork(&git_out, ship_branch, &base_ref, &head) {
+            subjects = subjects_in(format!("{fork}..{head}"));
+        }
+    }
     anyhow::ensure!(
         !subjects.is_empty(),
-        "`{base}..{ship_branch}` holds no commits, so the rebase merge of `{ship_branch}` cannot be confirmed in a pure-git project"
+        "`{base}..{ship_branch}` holds no commits, and the branch's reflog shows none it was fast-forwarded with, so the rebase merge of `{ship_branch}` cannot be confirmed in a pure-git project"
     );
     Ok(RebaseSliceInputs {
         branch: ship_branch.to_owned(),
@@ -5562,6 +5587,122 @@ fn pure_git_slice_refs(
         head_sha: Some(head),
         subjects,
     })
+}
+
+/// TASK-2251 (TASK-2249): the base ref a pure-git slice range is read from:
+/// the local base when it contains `origin/<base>` (it is at least as new),
+/// else `origin/<base>`, else the local base. `None` when neither exists.
+// trace:TASK-2251 | ai:claude
+fn freshest_base_ref(git_out: &dyn Fn(&[&str]) -> Option<String>, base: &str) -> Option<String> {
+    let exists = |r: &str| {
+        git_out(&[
+            "rev-parse",
+            "--verify",
+            "--quiet",
+            &format!("{r}^{{commit}}"),
+        ])
+        .is_some()
+    };
+    let remote = format!("origin/{base}");
+    match (exists(&remote), exists(base)) {
+        (true, true) => {
+            let local_is_newer = git_out(&["merge-base", "--is-ancestor", &remote, base]).is_some();
+            Some(if local_is_newer {
+                base.to_owned()
+            } else {
+                remote
+            })
+        }
+        (true, false) => Some(remote),
+        (false, true) => Some(base.to_owned()),
+        (false, false) => None,
+    }
+}
+
+/// TASK-2251 (TASK-2248): where a fast-forwarded slice forked from the base.
+/// A fast-forward puts the slice head on the base, so `<base>..<head>` is
+/// empty. The fork comes from the slice's own reflog ([`authored_slice_start`]):
+/// where the branch was created, or where its latest rebase replayed it onto.
+/// When the base's reflog shows it stood later than that before it moved onto
+/// the head, that position is the fork. `None` when the head is not on the
+/// base, the reflog does not show the branch authoring its own tip, or the
+/// fork is the head itself.
+// trace:TASK-2251 | ai:claude
+fn fast_forward_slice_fork(
+    git_out: &dyn Fn(&[&str]) -> Option<String>,
+    ship_branch: &str,
+    base_ref: &str,
+    head: &str,
+) -> Option<String> {
+    let is_ancestor = |a: &str, b: &str| git_out(&["merge-base", "--is-ancestor", a, b]).is_some();
+    if !is_ancestor(head, base_ref) {
+        return None;
+    }
+    let reflog = |r: &str| -> Vec<(String, String)> {
+        git_out(&["log", "-g", "--format=%H %gs", r])
+            .map(|out| {
+                out.lines()
+                    .filter_map(|l| l.trim().split_once(' '))
+                    .map(|(sha, msg)| (sha.to_owned(), msg.to_owned()))
+                    .collect()
+            })
+            .unwrap_or_default()
+    };
+    let start = authored_slice_start(
+        &reflog(&format!("refs/heads/{ship_branch}")),
+        ship_branch,
+        head,
+    )?;
+    let base_before = reflog(base_ref)
+        .into_iter()
+        .map(|(sha, _)| sha)
+        .find(|sha| !is_ancestor(head, sha));
+    let fork = match base_before {
+        Some(before) if is_ancestor(&start, &before) && is_ancestor(&before, head) => before,
+        _ => start,
+    };
+    (fork != head && is_ancestor(&fork, head)).then_some(fork)
+}
+
+/// TASK-2251 review round 1: fail closed. The slice's reflog (newest first)
+/// must show the branch created, then only entries that author its tip: a
+/// commit, an amend, a cherry-pick, or a rebase that replayed commits onto
+/// a base (its new tip is not the `onto` commit itself). Any other entry —
+/// a fast-forward merge or pull, a reset, a rebase that picked nothing —
+/// may have moved the tip onto commits others made, so nothing is
+/// confirmed. Returns where the slice's own commits start: the `onto` of its
+/// latest rebase, else its creation point.
+// trace:TASK-2251 | ai:claude
+fn authored_slice_start(
+    branch_log: &[(String, String)],
+    ship_branch: &str,
+    head: &str,
+) -> Option<String> {
+    let ((created, created_msg), authored) = branch_log.split_last()?;
+    if !created_msg.starts_with("branch: Created from") || authored.is_empty() {
+        return None;
+    }
+    if authored.first().map(|(sha, _)| sha.as_str()) != Some(head) {
+        return None;
+    }
+    let rebase_marker = format!("(finish): refs/heads/{ship_branch} onto ");
+    let mut start = created.clone();
+    for (sha, msg) in authored.iter().rev() {
+        let authoring = ["commit: ", "commit (amend): ", "cherry-pick: "]
+            .iter()
+            .any(|prefix| msg.starts_with(prefix));
+        let onto = (msg.starts_with("rebase") || msg.starts_with("pull"))
+            .then(|| msg.split_once(rebase_marker.as_str()))
+            .flatten()
+            .map(|(_, onto)| onto.trim())
+            .filter(|onto| !onto.is_empty() && onto != sha);
+        match onto {
+            Some(onto) => start = onto.to_owned(),
+            None if authoring => {}
+            None => return None,
+        }
+    }
+    Some(start)
 }
 
 /// What a run of `aida pr ship` needs to do the rebase slice bookkeeping.
@@ -8084,12 +8225,11 @@ mod task_1458_pr_ship_wiring_guard {
     }
 }
 
-/// Pull-request side-effects intended to fire from the /aida-pr
-/// skill. Today: `auto-queue-review` files the reviewer story right
-/// after `gh pr create` so the trigger lives where context is
-/// freshest. `aida session end` keeps the same logic as an
-/// idempotent backup for PRs opened outside the skill.
-// trace:STORY-90 | ai:claude
+/// Pull-request side-effects. Today: `auto-queue-review` files the
+/// reviewer story right after a change opens, so the trigger lives
+/// where context is freshest. `aida session end` keeps the same logic
+/// as an idempotent backup for changes opened without it.
+// trace:STORY-90 trace:TASK-2251 | ai:claude
 #[derive(clap::Parser, Debug)]
 #[clap(name = "pr")]
 pub(crate) struct PrArgs {
@@ -8885,6 +9025,189 @@ mod story_1663_rebase_ship_tests {
         git(&["branch", "-f", "claude/story-93-part2", "main"]);
         let err = fetch_merged_pr_refs(root, 93, "claude/story-93-part2", "main").unwrap_err();
         assert!(format!("{err:#}").contains("holds no commits"), "{err:#}");
+    }
+
+    /// TASK-2251 (TASK-2248): a pure-git slice merged by fast-forward (the
+    /// base had not moved) leaves `<base>..<slice>` empty; its commits are read
+    /// from the fork point the reflogs record, and the merge is confirmed. A
+    /// branch that never had commits is still refused.
+    // trace:TASK-2251 | ai:claude
+    #[test]
+    fn task_2251_pure_git_already_merged_rerun_confirms_a_fast_forwarded_slice() {
+        let (tmp, git) = task_1951_repo();
+        let root = tmp.path();
+        git(&["switch", "-q", "-c", "claude/story-94-part1"]);
+        for (file, subject) in [("a", "feat: one (STORY-94)"), ("b", "feat: two (STORY-94)")] {
+            std::fs::write(root.join(file), "x\n").unwrap();
+            git(&["add", file]);
+            git(&["commit", "-q", "-m", subject]);
+        }
+        let slice_head = git(&["rev-parse", "HEAD"]);
+        git(&["switch", "-q", "main"]);
+        git(&["merge", "-q", "--ff-only", "claude/story-94-part1"]);
+        assert_eq!(git(&["rev-parse", "main"]), slice_head);
+
+        let inputs = fetch_merged_pr_refs(root, 94, "claude/story-94-part1", "main").unwrap();
+        assert_eq!(
+            inputs.subjects,
+            vec![
+                "feat: two (STORY-94)".to_string(),
+                "feat: one (STORY-94)".to_string()
+            ]
+        );
+        confirm_rebase_merged(root, 94, &inputs).unwrap();
+
+        // Created at the base tip and never committed to: nothing to confirm.
+        git(&["branch", "claude/story-94-part2", "main"]);
+        let err = fetch_merged_pr_refs(root, 94, "claude/story-94-part2", "main").unwrap_err();
+        assert!(format!("{err:#}").contains("holds no commits"), "{err:#}");
+    }
+
+    /// TASK-2251 review round 1: a branch with no commits of its own, synced
+    /// onto a base that others moved (fast-forward merge, pull, reset), is on
+    /// the base like a fast-forwarded slice, but its reflog shows no authoring
+    /// entry: refused, so the others' commits are never confirmed as the
+    /// slice's. A slice rebased before the merge forks where it was replayed.
+    // trace:TASK-2251 | ai:claude
+    #[test]
+    fn task_2251_fast_forward_confirmation_requires_the_branch_to_author_its_tip() {
+        let (tmp, git) = task_1951_repo();
+        let root = tmp.path();
+        let others_commit = |file: &str, subject: &str| {
+            git(&["switch", "-q", "main"]);
+            std::fs::write(root.join(file), "x\n").unwrap();
+            git(&["add", file]);
+            git(&["commit", "-q", "-m", subject]);
+        };
+        for (n, sync) in [
+            (1, &["merge", "-q", "--ff-only", "main"][..]),
+            (2, &["pull", "-q", "--ff-only", ".", "main"][..]),
+            (3, &["reset", "-q", "--hard", "main"][..]),
+        ] {
+            let branch = format!("claude/story-96-part{n}");
+            git(&["branch", &branch, "main"]);
+            others_commit(&format!("o{n}"), &format!("feat: someone else {n}"));
+            git(&["switch", "-q", &branch]);
+            git(sync);
+            assert_eq!(git(&["rev-parse", "HEAD"]), git(&["rev-parse", "main"]));
+            let err = fetch_merged_pr_refs(root, 96, &branch, "main").unwrap_err();
+            assert!(
+                format!("{err:#}").contains("holds no commits"),
+                "{sync:?}: {err:#}"
+            );
+        }
+
+        // Rebased onto a moved base, then fast-forwarded: only its own commit.
+        git(&["switch", "-q", "-c", "claude/story-97-part1", "main"]);
+        std::fs::write(root.join("r"), "x\n").unwrap();
+        git(&["add", "r"]);
+        git(&["commit", "-q", "-m", "feat: rebased slice (STORY-97)"]);
+        others_commit("o4", "feat: someone else 4");
+        git(&["switch", "-q", "claude/story-97-part1"]);
+        git(&["rebase", "-q", "main"]);
+        git(&["switch", "-q", "main"]);
+        git(&["merge", "-q", "--ff-only", "claude/story-97-part1"]);
+        let inputs = fetch_merged_pr_refs(root, 97, "claude/story-97-part1", "main").unwrap();
+        assert_eq!(
+            inputs.subjects,
+            vec!["feat: rebased slice (STORY-97)".to_string()]
+        );
+        confirm_rebase_merged(root, 97, &inputs).unwrap();
+
+        // A rebase that replayed nothing leaves the tip on `onto`: refused.
+        let log = |entries: &[(&str, &str)]| -> Vec<(String, String)> {
+            entries
+                .iter()
+                .map(|(sha, msg)| (sha.to_string(), msg.to_string()))
+                .collect()
+        };
+        let b = "claude/x";
+        assert_eq!(
+            authored_slice_start(
+                &log(&[
+                    ("bbb", "rebase (finish): refs/heads/claude/x onto bbb"),
+                    ("aaa", "branch: Created from main"),
+                ]),
+                b,
+                "bbb"
+            ),
+            None
+        );
+        assert_eq!(
+            authored_slice_start(
+                &log(&[
+                    ("ddd", "commit: two"),
+                    ("ccc", "rebase (finish): refs/heads/claude/x onto bbb"),
+                    ("aaa", "commit (amend): one"),
+                    ("a00", "cherry-pick: zero"),
+                    ("000", "branch: Created from main"),
+                ]),
+                b,
+                "ddd"
+            ),
+            Some("bbb".to_string())
+        );
+        assert_eq!(
+            authored_slice_start(
+                &log(&[
+                    ("ccc", "commit: two"),
+                    ("bbb", "commit (merge): m"),
+                    ("aaa", "branch: Created from main")
+                ]),
+                b,
+                "ccc"
+            ),
+            None,
+            "a merge commit is not on the allowlist"
+        );
+    }
+
+    /// TASK-2251 (TASK-2249): a stale `origin/<base>` behind the slice's fork
+    /// point would count base commits as slice subjects, and the confirmation
+    /// would refuse. `origin/<base>` is fetched first, so the range holds only
+    /// the slice's own commit.
+    // trace:TASK-2251 | ai:claude
+    #[test]
+    fn task_2251_pure_git_already_merged_rerun_fetches_a_stale_origin_base() {
+        let (tmp, git) = task_1951_repo();
+        let root = tmp.path();
+        let remote = tempfile::tempdir().unwrap();
+        crate::test_git::git_command()
+            .args(["init", "-q", "--bare", "-b", "main"])
+            .arg(remote.path())
+            .output()
+            .unwrap();
+        git(&[
+            "remote",
+            "add",
+            "origin",
+            &remote.path().display().to_string(),
+        ]);
+        let initial = git(&["rev-parse", "HEAD"]);
+        std::fs::write(root.join("m"), "x\n").unwrap();
+        git(&["add", "m"]);
+        git(&["commit", "-q", "-m", "chore: base moved"]);
+        git(&["switch", "-q", "-c", "claude/story-95-part1"]);
+        std::fs::write(root.join("s"), "x\n").unwrap();
+        git(&["add", "s"]);
+        git(&["commit", "-q", "-m", "feat: the slice (STORY-95)"]);
+        let slice_head = git(&["rev-parse", "HEAD"]);
+        // The remote rebase-merges the slice onto its main.
+        git(&["switch", "-q", "-c", "landing", "main"]);
+        git(&["cherry-pick", &slice_head]);
+        git(&["push", "-q", "origin", "landing:main"]);
+        git(&["switch", "-q", "claude/story-95-part1"]);
+        git(&["branch", "-D", "-q", "landing"]);
+        // Both local views of the base predate the fork point.
+        git(&["branch", "-f", "main", &initial]);
+        git(&["update-ref", "refs/remotes/origin/main", &initial]);
+
+        let inputs = fetch_merged_pr_refs(root, 95, "claude/story-95-part1", "main").unwrap();
+        assert_eq!(
+            inputs.subjects,
+            vec!["feat: the slice (STORY-95)".to_string()]
+        );
+        confirm_rebase_merged(root, 95, &inputs).unwrap();
     }
 
     /// TASK-1765: a non-completing squash ship writes the declaration into

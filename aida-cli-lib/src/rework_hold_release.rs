@@ -342,7 +342,15 @@ pub(crate) fn approval_attested(
 /// removed only while the clearance it answers still exists. No interleaving
 /// leaves the marker gone without a clearance, which the tamper check would
 /// report as a hand-deletion.
-// trace:TASK-1951 trace:TASK-1757 trace:TASK-2285 | ai:claude
+///
+/// Trade-off (TASK-2251): the audit comment, the second head validation and
+/// the label drop are forge calls made while the per-PR hold lock is held,
+/// because moving any of them out would let a re-arm land between the
+/// recorded clearance and the marker removal. A slow forge (longer than
+/// `HOLD_LOCK_WAIT`) therefore makes a concurrent placement, re-arm or human
+/// `aida merge-hold clear` refuse busy. That fails closed: the caller
+/// re-runs, and nothing was half-written.
+// trace:TASK-1951 trace:TASK-1757 trace:TASK-2285 trace:TASK-2251 | ai:claude
 fn release_with(
     root: &Path,
     hold: &mh::MergeHoldRecord,

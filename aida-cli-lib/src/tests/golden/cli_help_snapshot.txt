@@ -257,10 +257,9 @@ Commands:
                 with the (SPEC-ID) trailer, rebase onto current origin/main, push, open the PR, wait
                 for CI green, squash-merge, run `aida pull` (Done → Completed auto-bump), and remove
                 the worktree
-  pr            Pull-request side-effects intended to fire from the /aida-pr skill. Today:
-                `auto-queue-review` files the reviewer story right after `gh pr create` so the
-                trigger lives where context is freshest. `aida session end` keeps the same logic as
-                an idempotent backup for PRs opened outside the skill
+  pr            Pull-request side-effects. Today: `auto-queue-review` files the reviewer story right
+                after a change opens, so the trigger lives where context is freshest. `aida session
+                end` keeps the same logic as an idempotent backup for changes opened without it
   zen           One-shot AUTONOMOUS implement + ship from a spec OR a one-line thought. Pass an
                 approved spec id to drive it; pass free text to draft a spec from the thought, file
                 it, and drive that — thought to (gated) merged in one line. Auto-queues the spec,
@@ -12793,9 +12792,9 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 ===== aida pr
-Pull-request side-effects intended to fire from the /aida-pr skill. Today: `auto-queue-review` files
-the reviewer story right after `gh pr create` so the trigger lives where context is freshest. `aida
-session end` keeps the same logic as an idempotent backup for PRs opened outside the skill
+Pull-request side-effects. Today: `auto-queue-review` files the reviewer story right after a change
+opens, so the trigger lives where context is freshest. `aida session end` keeps the same logic as an
+idempotent backup for changes opened without it
 
 Usage: aida pr [OPTIONS] <COMMAND>
 
@@ -12849,13 +12848,12 @@ for it. Detects the change through the configured Forge — GitHub via `gh` (loo
 open PR), GitLab via `glab` (looks up the branch's open MR) — so that provider's CLI must be on PATH
 and authenticated.
 
-Intended trigger: `/aida-pr` runs this right after the change opens (`gh pr create` / `glab mr
-create`) — the agent already has it open, the commit range, and the spec list cached, but the
-auto-queue logic does its own forge detection so the call is self-contained.
+Intended trigger: right after the change opens, while the agent has the branch, commit range and
+spec list at hand. The auto-queue logic does its own forge detection, so the call is self-contained.
 
-`aida session end` also fires this as a backup, so a forgotten /aida-pr (or a raw `gh pr create` /
-`glab mr create`) still ends up routed to the reviewer. The idempotency guard means both firing is
-fine.
+`aida session end` also fires this as a backup, so a change opened without it (a raw `gh pr create`
+/ `glab mr create`, or `aida ship --no-merge`) still ends up routed to the reviewer. The idempotency
+guard means both firing is fine.
 
 Usage: aida pr auto-queue-review [OPTIONS]
 
@@ -36536,7 +36534,7 @@ Working on aida itself
       "aida",
       "pr"
     ],
-    "about": "Pull-request side-effects intended to fire from the /aida-pr skill. Today: `auto-queue-review` files the reviewer story right after `gh pr create` so the trigger lives where context is freshest. `aida session end` keeps the same logic as an idempotent backup for PRs opened outside the skill",
+    "about": "Pull-request side-effects. Today: `auto-queue-review` files the reviewer story right after a change opens, so the trigger lives where context is freshest. `aida session end` keeps the same logic as an idempotent backup for changes opened without it",
     "flags": [
       {
         "name": "format",
