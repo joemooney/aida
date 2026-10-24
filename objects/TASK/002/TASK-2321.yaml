@@ -8,12 +8,12 @@ description: |
   Fix: add libc::O_NONBLOCK to the custom open flags (harmless for regular files; fstat then confirms is_file and refuses a FIFO), or pre-probe with symlink_metadata before the O_NOFOLLOW open.
 
   Raised in review of PR-2893: https://github.com/joemooney/aida/pull/2893#issuecomment-6382019618
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-24T08:30:56.582861652Z
-modified_at: 2026-10-24T12:34:08.316976677Z
+modified_at: 2026-10-24T14:20:47.281270989Z
 req_type: Task
 tags:
 - from-review:PR-2893
@@ -52,6 +52,20 @@ history:
   timestamp: 2026-10-24T12:34:09.317841096Z
   session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
   changes: []
+- id: 01a16e49-1b2d-7c02-8bd0-11c560d45682
+  author: aida-auto-bump
+  timestamp: 2026-10-24T14:20:47.277395318Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a16e49-1b31-7ce1-8847-257614c9322e
+  timestamp: 2026-10-24T14:20:47.281266505Z
+  agent: aida
+  commit_sha: 6980be3ace8b7b9ae795e4347b8a9d4be01a287e
+  summary: O_NONBLOCK added to the O_NOFOLLOW open (session.rs:744); FIFO source refuses immediately via the fstat is_file gate, O_NONBLOCK dropped post-confirm; verified by task_2321_fifo_source_transcript_refuses_without_hanging, CI green at head
+  review_verdict: approved
 filed_at:
   code_sha: 7551db72771f959b7365064c267d16e7657be1a3
   branch: pr-2893
@@ -61,3 +75,7 @@ filed_at:
   vendor: claude
   session: 01a16d025b72
   harness_version: 2.1.310 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-24T14:20:47.277389394Z
+  completion_sha: 6980be3ace8b7b9ae795e4347b8a9d4be01a287e
