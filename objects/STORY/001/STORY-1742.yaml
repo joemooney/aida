@@ -38,9 +38,10 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T22:02:03.191649035Z
-modified_at: 2026-10-24T17:09:32.801851301Z
+modified_at: 2026-10-24T17:36:50.452862557Z
 req_type: Story
 tags:
+- docs:impacted
 - portable-intake
 comments:
 - id: 01a16ed5-427a-7913-ae77-3665518083eb
@@ -109,6 +110,10 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a16efc-99b4-7bd3-bb36-5d9363ba0ff4
+  author: joe
+  timestamp: 2026-10-24T17:36:50.612960574Z
+  changes: []
 filed_at:
   code_sha: 3dfcf99117e6efbaa8259155a576276ab424a335
   branch: main
