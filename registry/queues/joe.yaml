@@ -38,9 +38,9 @@
   added_by_machine: imac
 - user_id: joe
   requirement_id: 01a16b60-0eb7-7192-9c14-23d414eab0f2
-  position: 70000
+  position: 67000
   added_by: joe
-  note: auto-queued by `session end` (01a16b0c); covers 1 spec
-  added_at: 2026-10-24T00:48:01.319452623Z
+  note: auto-queue retry reused canonical review story; covers 1 spec
+  added_at: 2026-10-24T04:56:00.177165440Z
   for_role: reviewer
   added_by_machine: imac
