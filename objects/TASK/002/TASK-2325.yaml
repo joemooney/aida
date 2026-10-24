@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-24T13:16:52.228043273Z
-modified_at: 2026-10-24T19:44:01.956736046Z
+modified_at: 2026-10-24T21:45:59.599746803Z
 req_type: Task
 relationships:
 - rel_type:
@@ -73,6 +73,12 @@ history:
   timestamp: 2026-10-24T19:44:02.846109327Z
   session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
   changes: []
+- id: 01a16fe0-b4fa-7f01-8252-7a4306cb9219
+  author: joe
+  timestamp: 2026-10-24T21:45:59.802177963Z
+  session_id: 01a16fdb2e4e
+  harness_version: 2.1.310 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 194492a69f7358b90006afe525d62056b42d30ce
   branch: main
@@ -85,7 +91,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'Acceptance substantially implemented with solid rails+tests, but CI is red and PR-caused: portability ratchet (8 /tmp literals in the new test file) and a stale golden help snapshot (new reclaim flags); plus a test-isolation hazard where the emergency scratch path reads the real TMPDIR inside unit tests.'
+  detail: 'Round 2: no rework since round 1 — the only new commit is a merge of main (a2ec44d148). All four round-1 blockers persist, CI red in the same PR-caused lanes (gates: portability ratchet reproduced locally; lib-1: golden help snapshot still missing the new reclaim flags).'
   recovery_hint: address the review findings, move TASK-2325 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-10-24T18:55:43.097030446Z
+  shelved_at: 2026-10-24T21:45:59.599746803Z
