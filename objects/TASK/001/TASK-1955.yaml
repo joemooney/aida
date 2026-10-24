@@ -52,12 +52,12 @@ description: |-
   mandate_drive.rs preview_hold reports only forced_gate and an unreadable store; run_tick additionally applies [mandate.human_gates] (gate_reason, ~:1074) and the operator-only/sticky floor (~:1083). The preview (human and --json) can show a lane as routed (held: null) that the tick would gate. Also cli.rs FleetAction::Drive json doc says "Print the tick report as JSON" but now governs the preview too.
 
   Raised in review of PR-2725: https://github.com/joemooney/aida/pull/2725#issuecomment-6260881377
-status: NeedsAttention
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T16:03:34.769123409Z
-modified_at: 2026-10-24T04:25:39.330684947Z
+modified_at: 2026-10-24T05:55:39.005713423Z
 req_type: Task
 tags:
 - launch
@@ -1329,6 +1329,20 @@ history:
   timestamp: 2026-10-24T04:25:37.405727594Z
   session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
   changes: []
+- id: 01a16c7a-a379-7781-9f0f-428146801252
+  author: aida-auto-bump
+  timestamp: 2026-10-24T05:55:39.001094165Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a16c7a-a37d-7080-979c-f7378c859ea7
+  timestamp: 2026-10-24T05:55:39.005707791Z
+  agent: aida
+  commit_sha: 71143a2a03adef3676ff786c52912324b3813bdd
+  summary: 'TASK-1955 slice 8 at cdd63dab: both criteria (ac81e033, ace9d610) verified by agent_launch.rs rendered_launch_context_carries_the_active_mandate (Antigravity config, before/after mandate) and launch_context_shows_the_mandate_only_while_one_is_active (none/active/expired), both now anchored (aida criteria: untested none); all 104 superseded members accounted for in the PR body; drive backoff/prune/due-dedup, Refs-only review filing, typed ChildGrantRefused lease release, deferred-status gates, roster guard+lock (TASK-2292 simplification sound: same CARGO_MANIFEST_DIR/../target rule), keyring/turn-stamp, test_git in-place repair and hook fixtures each tested; CI green (all 9 checks SUCCESS, mergeState CLEAN). Two non-blocking nits only.'
+  review_verdict: approved
 filed_at:
   code_sha: 6d590ed914dea5135a126f7dae6abb403adec66d
   branch: main
@@ -1337,11 +1351,7 @@ filed_at:
   aida_build_sha: 6d590ed914
   vendor: claude
   session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Slice 8 code is sound and CI is green, but its (TASK-1955) trailers complete the sweep while six superseded members remain unaddressed (TASK-2210/2211/2212 wait on open #2830; TASK-2222/2223/2224 are not mentioned). The PR body itself says it stays draft until #2830 merges.'
-  recovery_hint: address the review findings, move TASK-1955 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-23T18:45:43.754306167Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-24T05:55:39.001044671Z
+  completion_sha: 71143a2a03adef3676ff786c52912324b3813bdd
