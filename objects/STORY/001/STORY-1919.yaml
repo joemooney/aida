@@ -1,0 +1,35 @@
+id: 01a16d29-a8a6-71a2-9e4b-b4be2ba9c996
+spec_id: STORY-1919
+agreed_id: STORY-1919
+title: 'Review PR-2895: [AI:claude] fix(session,disk): resume FIFO open and partial-run refusal dedupe (TASK-2321, TASK-2322)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `claude/task-2321`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2895>
+  - Branch: `claude/task-2321` → `main`
+
+  ## Covers
+
+  - TASK-2321
+  - TASK-2322
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2895` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-24T09:06:49.126942730Z
+modified_at: 2026-10-24T09:06:49.126942730Z
+req_type: Story
+filed_at:
+  code_sha: c4f51a0d08efe483c48e4a799180bb1291a83ca2
+  branch: claude/task-2321
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 2d8eebbebc
+  vendor: claude
+  session: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
