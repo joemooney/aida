@@ -278,9 +278,14 @@ pub(crate) fn resolve_mail_sender_identity(
     let shell_user = std::env::var("USER")
         .or_else(|_| std::env::var("USERNAME"))
         .ok();
+    // A headless child sends as its own handle, not its shared seat name.
+    // trace:STORY-1843 | ai:claude
+    let agent_name = [crate::agent_handle::HANDLE_ENV, "AIDA_AGENT_NAME"]
+        .iter()
+        .find_map(|key| std::env::var(key).ok().filter(|v| !v.trim().is_empty()));
     aida_core::mailbox::resolve_sender(
         explicit,
-        std::env::var("AIDA_AGENT_NAME").ok().as_deref(),
+        agent_name.as_deref(),
         std::env::var("AIDA_USER").ok().as_deref(),
         std::env::var("AIDA_SESSION_ROLE").ok().as_deref(),
         shell_user.as_deref(),
