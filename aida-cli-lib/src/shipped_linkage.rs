@@ -363,6 +363,42 @@ pub(crate) fn scan_default_branch_linkage(
     scan_default_branch_linkage_within(project_root, ids, SHIPPED_SCAN_BUDGET)
 }
 
+/// TASK-2314: does any default-branch ref (`origin/<default>` or local
+/// `<default>`) carry a merged commit referencing any of `ids`? Unlike
+/// [`DefaultBranchLinkage::corroborated`], a `trace:` comment in a tracked
+/// file on the default branch does not count here — a trace-derived mandate
+/// exclusion already has a `trace:` comment in the touched file, so only a
+/// referencing commit on the default branch proves the spec shipped. Fails
+/// closed (`false`) when no default branch resolves or the scan times out.
+// trace:TASK-2314 | ai:agy
+pub(crate) fn has_shipped_commit_on_default_branch(
+    project_root: &std::path::Path,
+    ids: &[String],
+) -> bool {
+    let deadline = std::time::Instant::now() + SHIPPED_SCAN_BUDGET;
+    let wanted: HashSet<String> = ids
+        .iter()
+        .map(|id| id.trim().to_ascii_uppercase())
+        .filter(|id| !id.is_empty())
+        .collect();
+    if wanted.is_empty() {
+        return false;
+    }
+    let Ok(branch_refs) = default_branch_refs_until(project_root, deadline) else {
+        return false;
+    };
+    for git_ref in refs_worth_scanning(project_root, &branch_refs, deadline) {
+        let Ok(commits) = referencing_commits_on_ref(project_root, &git_ref, &wanted, deadline)
+        else {
+            return false;
+        };
+        if !commits.is_empty() {
+            return true;
+        }
+    }
+    false
+}
+
 /// [`scan_default_branch_linkage`] with an explicit budget. Default-branch
 /// resolution stays unbounded: this serves the completion warning, not only
 /// `aida show`.

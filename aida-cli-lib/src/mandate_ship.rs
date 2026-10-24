@@ -103,6 +103,7 @@ pub(crate) fn resolve_exclusion_specs(
             id: id.to_owned(),
             aliases,
             named: is_named,
+            shipped: false,
             current: req,
             history: Ok(Vec::new()),
         }
@@ -142,6 +143,11 @@ pub(crate) fn resolve_exclusion_specs(
     }
     let all_keys: Vec<String> = history_keys_of.iter().flatten().cloned().collect();
     let batch = crate::mandate::StoreHistoryBatch::read(store_root, &all_keys);
+    let code_root = store_root
+        .file_name()
+        .filter(|name| *name == ".aida-store")
+        .and_then(|_| store_root.parent())
+        .unwrap_or(store_root);
     for (spec, keys) in specs.iter_mut().zip(&history_keys_of) {
         // STORY-1698 / TASK-1800: sticky exclusion reads every stored version
         // across the ID and any resolved alias object path.
@@ -159,6 +165,17 @@ pub(crate) fn resolve_exclusion_specs(
             }
             Ok(all_versions)
         })();
+        // TASK-2314: a trace-derived operator-only exclusion expires only when
+        // the traced spec is Completed AND its git linkage shows a merged
+        // commit on the default branch. Check default-branch commit linkage
+        // only for non-named Completed specs.
+        // trace:TASK-2314 | ai:agy
+        spec.shipped = !spec.named
+            && spec
+                .current
+                .as_ref()
+                .is_some_and(|req| matches!(req.status, aida_core::RequirementStatus::Completed))
+            && crate::shipped_linkage::has_shipped_commit_on_default_branch(code_root, keys);
     }
     specs
 }
@@ -318,7 +335,29 @@ pub(crate) fn mandate_ship_cover(
     // commit. Fetch the base and head first; a fetch that still fails falls
     // through to `collect_pr`, which fails closed. trace:BUG-2214 | ai:claude
     if let Some(branch) = head_branch {
-        let _ = crate::pr_cmd::fetch_ship_refs(main_worktree, &info.base_ref, branch);
+        let have_head = !info.head_oid.is_empty()
+            && std::process::Command::new("git")
+                .arg("-C")
+                .arg(main_worktree)
+                .args(["cat-file", "-e", &format!("{}^{{commit}}", info.head_oid)])
+                .status()
+                .map(|s| s.success())
+                .unwrap_or(false);
+        let have_base = std::process::Command::new("git")
+            .arg("-C")
+            .arg(main_worktree)
+            .args([
+                "rev-parse",
+                "--verify",
+                "--quiet",
+                &format!("refs/remotes/origin/{}^{{commit}}", info.base_ref),
+            ])
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+        if !(have_head && have_base) {
+            let _ = crate::pr_cmd::fetch_ship_refs(main_worktree, &info.base_ref, branch);
+        }
     }
     let trace_evidence = crate::mandate_traces::collect_pr(
         main_worktree,
@@ -445,6 +484,83 @@ pub(crate) fn mandate_ship_cover(
         id,
         principal: grant.map(|(_, p)| p).unwrap_or_default(),
     })
+}
+
+/// BUG-2214: the one mandate hold release — ship's exact sequence, shared by
+/// `aida pr ship` and the train's land step so the train never re-implements
+/// it: the release note, the marker clear, the ledger clearance
+/// (`advisor:<principal>` under the mandate id), the PR comment, the
+/// `MergeHoldChanged` event and the label removal. Each half is best-effort
+/// exactly as ship's was; the caller owns the post-release hold-gate wait and
+/// the re-arm on any later failure ([`rearm_after_mandate_failure`]).
+// trace:BUG-2214 | ai:claude
+// trace:STORY-1698 | ai:claude
+pub(crate) fn release_hold_under_mandate(
+    hold_root: &std::path::Path,
+    change: &crate::forge::ChangeRef,
+    cover: &MandateCover,
+    hold_record: &crate::merge_hold::MergeHoldRecord,
+    released_by_verdict: Option<crate::merge_hold::VerdictRef>,
+    head_sha: Option<&str>,
+    reason: &str,
+) {
+    use colored::Colorize;
+    let pr = hold_record.pr;
+    eprintln!(
+        "  {} PR-{pr}: merge-hold {}",
+        crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+        crate::mandate::release_note(&cover.id)
+    );
+    let _ = crate::merge_hold::clear_hold(hold_root, pr);
+    if let Err(err) = crate::merge_hold::record_mandate_clearance(
+        hold_root,
+        hold_record,
+        &cover.principal,
+        &cover.id,
+        released_by_verdict,
+    ) {
+        eprintln!(
+            "  {} could not record the mandate release on PR-{pr}: {err}",
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+        );
+    }
+    let _ = crate::forge::forge_for(hold_root).comment(
+        change,
+        &format!(
+            "Merge-hold {} (`{}`). Approval at `{}`; CI green.",
+            crate::mandate::release_note(&cover.id),
+            cover.principal,
+            head_sha.unwrap_or("?"),
+        ),
+    );
+    // BUG-1423: the coordination-seat release, in the event taxonomy.
+    // trace:BUG-1423 | ai:claude
+    let mut hold_event = crate::events::Event::new(
+        None,
+        "",
+        crate::events::EventKind::MergeHoldChanged {
+            pr: pr as u32,
+            placed: false,
+            // STORY-1698: a mandate release names the mandate.
+            reason: Some(format!(
+                "{} — {reason}",
+                crate::mandate::release_note(&cover.id)
+            )),
+            // BUG-2214: a mandate release is an advisor action and never
+            // attests as human.
+            principal: Some(format!("advisor:{}", cover.principal)),
+            human_attested: false,
+        },
+    );
+    hold_event.seat = crate::events::active_seat();
+    crate::events::emit(hold_root, &hold_event);
+    if let Err(err) = crate::merge_hold::sync_label(hold_root, pr, false) {
+        eprintln!(
+            "  {} {}",
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+            crate::pr_cmd::ship_unlabel_failure(pr, &err),
+        );
+    }
 }
 
 /// TASK-1960: the carry-over a mandate ship may rely on — `None` when the
