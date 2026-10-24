@@ -264,14 +264,17 @@ pub(crate) fn toon_list_cell(
 /// Print the human `aida list --fields <csv>` table. Thin wrapper over
 /// [`build_list_fields_lines`].
 // trace:STORY-734 | ai:claude — plain `//` keeps the marker out of any doc/help.
-pub(crate) fn render_list_fields_table<F>(
+pub(crate) fn render_list_fields_table<F, C>(
     reqs: &[aida_core::RequirementSummary],
     fields: &[String],
     routing_of: F,
+    cell_of: C,
 ) where
     F: Fn(&aida_core::RequirementSummary) -> (bool, bool, bool),
+    C: Fn(&aida_core::RequirementSummary, &str) -> Option<String>,
 {
-    for line in build_list_fields_lines(reqs, fields, routing_of) {
+    // trace:TASK-1951 trace:TASK-2003 | ai:claude
+    for line in build_list_fields_lines_with(reqs, fields, routing_of, cell_of) {
         println!("{line}");
     }
 }
