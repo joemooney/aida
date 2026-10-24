@@ -222,6 +222,7 @@ impl Case {
                     })
                     .map_err(|refusal| anyhow::anyhow!("{}", refusal.message(PR)))
                 },
+                refusal_release: &|_, _| held_check(),
                 comment: &|body| {
                     comments.borrow_mut().push(body.to_string());
                     Ok(())
@@ -467,6 +468,7 @@ fn the_mandate_is_consulted_only_for_a_sensitive_spec() {
         &[Some(&case.req)],
         &sa::GrantCheck::Valid(case.grant.clone()),
         &|| panic!("an ordinary spec must not consult the mandate"),
+        &held_check(),
     )
     .unwrap();
     assert_eq!(release.mandate, None);
