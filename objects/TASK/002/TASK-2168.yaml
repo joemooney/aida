@@ -11,12 +11,12 @@ description: |
   1. A trace-derived operator-only exclusion stops applying once the traced spec is Completed (or Rejected/Superseded). Exclusions named directly on the PR's specs and the sticky exclusion ledger are unchanged.
   2. Fail closed: if the traced spec's status cannot be read, the exclusion still applies.
   3. Tests: a completed operator-only trace no longer excludes; an approved or in-progress one still excludes; an unreadable store still excludes.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-22T11:48:02.632271305Z
-modified_at: 2026-10-24T06:55:01.168687315Z
+modified_at: 2026-10-24T17:11:33.300616523Z
 req_type: Task
 tags:
 - authority
@@ -71,6 +71,20 @@ history:
   timestamp: 2026-10-24T06:55:02.916820927Z
   session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
   changes: []
+- id: 01a16ee5-7299-78f1-a18b-ccafee5d54d1
+  author: aida-auto-bump
+  timestamp: 2026-10-24T17:11:33.273175484Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a16ee5-72b4-7c83-afdd-db93d8a037f3
+  timestamp: 2026-10-24T17:11:33.300611379Z
+  agent: aida
+  commit_sha: 62287fd361ad2ac2096236d2e222d037c0f60fbd
+  summary: 'TASK-2168 PASS: trace-derived operator-only exclusions expire only on Completed+shipped (fail-closed on Rejected/Superseded, unshipped, unreadable store per folded TASK-2314); folded TASK-2299 directory matching tested; CI green at head'
+  review_verdict: approved
 filed_at:
   code_sha: e33fec11d936d4cc6ce450719a506a68932915eb
   branch: claude/story-1888
@@ -79,11 +93,7 @@ filed_at:
   aida_build_sha: e33fec11d9
   vendor: claude
   session: b0e26e8c-07b4-4b00-80ad-40571d0bfb76
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Expiry logic is correct and behaviourally tested (CI green at 6741b98), but no test anchors the three TASK-2168 criteria (aida criteria reports all untraced) and the ledger non-operator always-human path for a terminal trace is untested
-  recovery_hint: address the review findings, move TASK-2168 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-24T06:21:48.049724501Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-24T17:11:33.273164295Z
+  completion_sha: 62287fd361ad2ac2096236d2e222d037c0f60fbd
