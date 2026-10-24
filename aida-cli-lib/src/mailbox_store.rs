@@ -33,6 +33,7 @@ pub(crate) fn canonical_dir(store_root: &Path) -> PathBuf {
 /// Write one message as an atomically-written JSON file under `dir`, named by
 /// id. Append-only: ids are unique, so this never clobbers an existing message.
 fn write_message_in(dir: &Path, msg: &Message) -> Result<()> {
+    aida_core::mailbox::mailbox_dir_guard(dir)?; // trace:STORY-1843 | ai:claude
     std::fs::create_dir_all(dir)
         .with_context(|| format!("creating mailbox dir {}", dir.display()))?;
     let path = dir.join(format!("{}.json", sanitize_id(&msg.id)));
@@ -55,6 +56,7 @@ pub(crate) fn write_message(project_root: &Path, msg: &Message) -> Result<()> {
 /// how the spec store treats an unreadable object defensively. Empty when the
 /// dir is absent.
 fn read_messages_in(dir: &Path) -> Result<Vec<Message>> {
+    aida_core::mailbox::mailbox_dir_guard(dir)?; // trace:STORY-1843 | ai:claude
     if !dir.exists() {
         return Ok(Vec::new());
     }
@@ -82,6 +84,7 @@ fn read_messages_in(dir: &Path) -> Result<Vec<Message>> {
 // trace:TASK-1717 | ai:claude
 fn read_canonical_messages_strict(store_root: &Path) -> Result<Vec<Message>> {
     let dir = canonical_dir(store_root);
+    aida_core::mailbox::mailbox_dir_guard(&dir)?; // trace:STORY-1843 | ai:claude
     let entries = match std::fs::read_dir(&dir) {
         Ok(entries) => entries,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
@@ -343,7 +346,8 @@ pub(crate) fn read_all_watermarks(
 
 /// Keep a message id safe as a filename component (ids are uuid/HLC strings, but
 /// be defensive against path separators / traversal in a hand-set id).
-fn sanitize_id(id: &str) -> String {
+// trace:STORY-1843 | ai:codex
+pub(crate) fn sanitize_id(id: &str) -> String {
     id.chars()
         .map(|c| {
             if c.is_ascii_alphanumeric() || c == '-' || c == '_' {

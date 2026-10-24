@@ -1359,6 +1359,7 @@ fn meta(sha: &str, allow_dirty: bool) -> PromotionMeta {
         sha: sha.into(),
         allow_dirty,
         promoted_at: "2026-10-12T00:00:00Z".into(),
+        repo: None,
     }
 }
 
@@ -1968,4 +1969,25 @@ fn sccache_missing_tmpdir_ignores_non_sccache() {
 
     let found = sccache_missing_tmpdir_in(&proc_dir, Some("67890"));
     assert_eq!(found, None);
+}
+
+// TASK-2272 (TASK-2301, TASK-1-475): a rollback pins the SHA it rolled away
+// from, so the scheduled autopromote skips it as `failed-sha` until main moves.
+// trace:TASK-2272 | ai:claude
+#[test]
+fn rollback_pins_the_rolled_away_sha_against_the_autopromote_tick() {
+    let f = fixture();
+    let (a, _) = pairs_a_b(&f, true, true);
+    rollback(&f.layout).unwrap();
+    let state = crate::dev_autopromote::read_state(&f.layout.live_dir).expect("pinned");
+    assert_eq!(state.sha, a.unwrap().sha);
+    assert_eq!(state.phase, crate::dev_autopromote::Phase::Failed);
+    assert!(
+        state.reported,
+        "a rollback is never routed as a build failure"
+    );
+    assert_eq!(
+        state.error.as_deref(),
+        Some(crate::dev_autopromote::ROLLED_BACK_ERROR)
+    );
 }

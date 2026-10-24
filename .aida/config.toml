@@ -378,6 +378,25 @@ command = "shift tick"
 every = "10m"
 enabled = true
 
+# STORY-1689: promote the live dev binary when origin/main moves and every CI
+# check on that exact commit passed. A no-op except in the checkout the live
+# binary was built from (on a clean primary `main`); every other clone skips
+# before it fetches. The tick decides and launches; the build runs detached.
+# A failed build is reported once, with its log tail, to the advisor.
+# trace:STORY-1689 | ai:claude
+[[schedule.jobs]]
+name = "dev-autopromote"
+command = "dev build --if-main-green"
+every = "15m"
+enabled = true
+
+[[schedule.jobs]]
+name = "dev-autopromote-route"
+seats = ["advisor"]
+on = ["CronJobFailed:dev-autopromote"]
+prompt = "The scheduled dev-autopromote job failed: either the live-binary build failed (that commit is not retried until main moves; the routed error's last line names the commit, the full build log path and the log's tail), or the tick itself errored or timed out before any fast-forward (the error says so, and the next tick retries). Either way the live binary was not changed. Read the error and any build log, decide whether main is broken or the build host is (disk, toolchain, incremental cache), and fix or file it. `aida dev status` shows the live SHA; `aida dev build --clean` from a clean primary main retries by hand."
+enabled = true
+
 # Effort-balance intent-capture target (TASK-1522): advisory floor on the
 # share of newly completed specs with at least one traced test criterion.
 # Reported by `aida criteria coverage` and `aida status`; not enforced.
@@ -419,3 +438,10 @@ worktree_parent = "../aida-worktrees"
 # trace:TASK-1728 | ai:antigravity
 [hooks]
 block_primary_commits = true
+
+# TASK-1945: `aida review watch` reports a change ready to ship only when
+# every CI check on its head passed AND these named checks are present and
+# green. Names are this project's own: AIDA's `build-result` job, which
+# requires every CI lane. A test pins it to .github/workflows/ci.yml.
+[review_watch]
+required_checks = ["Build (ubuntu-latest)"]

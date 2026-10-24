@@ -257,10 +257,9 @@ Commands:
                 with the (SPEC-ID) trailer, rebase onto current origin/main, push, open the PR, wait
                 for CI green, squash-merge, run `aida pull` (Done → Completed auto-bump), and remove
                 the worktree
-  pr            Pull-request side-effects intended to fire from the /aida-pr skill. Today:
-                `auto-queue-review` files the reviewer story right after `gh pr create` so the
-                trigger lives where context is freshest. `aida session end` keeps the same logic as
-                an idempotent backup for PRs opened outside the skill
+  pr            Pull-request side-effects. Today: `auto-queue-review` files the reviewer story right
+                after a change opens, so the trigger lives where context is freshest. `aida session
+                end` keeps the same logic as an idempotent backup for changes opened without it
   zen           One-shot AUTONOMOUS implement + ship from a spec OR a one-line thought. Pass an
                 approved spec id to drive it; pass free text to draft a spec from the thought, file
                 it, and drive that — thought to (gated) merged in one line. Auto-queues the spec,
@@ -954,13 +953,16 @@ Options:
           subtree. The focus-specific escape hatch (`--all` also widens, but additionally reveals
           archived/deferred); no-op when no focus is set or when `--parent` was passed explicitly
 
-      --fields <CSV>
-          Select AND order the displayed columns, e.g. `--fields id,title,status,priority,tags`.
-          Renders exactly those columns in that order — on the human table AND the token-efficient
-          agent output (a real token win for agents). Valid fields: id, title, status, type,
-          priority, feature, owner, assignee, tags, heft, weight, queued, in_flight, blocked.
-          Default (no `--fields`) keeps the standard columns; agent mode defaults to the minimal
-          id,title,status,type set
+      --fields <FIELDS>
+          Select AND order the displayed columns, e.g. `--fields id,title,status,priority,tags` or
+          `--fields 'id title opened'`; entries are separated by commas and/or whitespace. Renders
+          exactly those columns in that order — on the human table AND the token-efficient agent
+          output (a real token win for agents). Valid fields: id, title, status, type, priority,
+          feature, owner, assignee, tags, heft, modified_at, opened, weight, queued, in_flight,
+          blocked, mode, origin, deferred_reason, driver, driver_kind, review_lens. `opened` is the
+          creation time. Aliases: req_type = type, created_at = opened, created = opened. Default
+          (no `--fields`) keeps the standard columns; agent mode defaults to the minimal
+          id,title,status,type,modified_at set
 
       --topics
           List the topics (tags) in use on live FAQs, with how many FAQs carry each, most-used
@@ -4426,6 +4428,7 @@ Inter-agent mailbox: peer↔peer messaging (send / inbox / thread)
 Usage: aida mailbox [OPTIONS] <COMMAND>
 
 Commands:
+  migrate  Preview legacy mailbox reconciliation before recipient migration
   latency  Show mailbox read latency for the active identity (or an explicit recipient)
   send     Send a message to another agent, or `--broadcast` to all
   inbox    Show an agent's inbox: messages addressed to it + broadcasts, oldest-first. Reading marks
@@ -4448,6 +4451,30 @@ Commands:
   help     Print this message or the help of the given subcommand(s)
 
 Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida mailbox migrate
+Preview legacy mailbox reconciliation before recipient migration
+
+Usage: aida mailbox migrate [OPTIONS] --dry-run
+
+Options:
+      --dry-run
+          Produce a read-only report. Write-mode migration is not available
+
+      --json
+          Print the reconciliation report as JSON
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -5725,7 +5752,9 @@ Options:
       --drive
           A DRIVE mandate: also covers advisor signoff of sketches and dispatching fixers, and turns
           on the 15-minute drive tick that routes every stalled lane. Implies --ship-held and covers
-          sensitive specs unless --exclude-supervised
+          sensitive specs unless --exclude-supervised. It also covers relay-restart: the tick may
+          restart a crashed relay a human started at a terminal (a drive mandate started before this
+          scope existed does not; start a new one)
 
       --exclude-supervised
           With --drive: keep sensitive specs human-only
@@ -7230,6 +7259,41 @@ Options:
 
   -h, --help
           Print help (see a summary with '-h')
+===== aida remote mirror-guard-check
+(plumbing) Ask whether a push to the default branch is an attested `aida remote mirror-sync` of
+origin's reviewed tip. A project's pre-push main guard pipes its stdin ref lines here before
+refusing; exit 0 allows the push only when the remote is a registered mirror (never origin), every
+default-branch sha equals origin's tip, and mirror-sync attested exactly that push. Anything else
+exits non-zero with the reason, so the guard keeps refusing. Guard snippet: `printf '%s\n' "$refs" |
+aida remote mirror-guard-check "$1" && exit 0` `--install-guard` installs AIDA's opt-in main guard,
+which already consults this check, chained in front of the existing pre-push hook
+
+Usage: aida remote mirror-guard-check [OPTIONS] [REMOTE]
+
+Arguments:
+  [REMOTE]
+          The remote the push targets (pre-push hook argument $1)
+
+Options:
+      --install-guard
+          Install the main guard and chain it in front of the pre-push hook
+
+      --force
+          With --install-guard: chain in front of a custom pre-push hook too (shell hooks only; a
+          Python or Node hook is refused)
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+  -h, --help
+          Print help (see a summary with '-h')
 ===== aida remote mirror-sync
 Push origin's tips of the default branch and the spec store to every mirror hub, by sha. The
 pre-push hook only mirrors what this machine pushes; a merge performed on the forge and a store push
@@ -7403,6 +7467,14 @@ Commands:
   solo-active              Query effective solo mode for the Claude advisor-code-guard PreToolUse
                            hook. Exits 0 when solo mode is active and 1 when it is off; prints
                            nothing
+  lane-env                 Print the environment correction for a session inside a lane worktree:
+                           shell lines setting AIDA_SESSION_ROLE to the role its lease records, and
+                           exporting the lease's child grant or unsetting an inherited grant for
+                           another seat (and the inherited purpose). Prints nothing outside a lane
+                           or when the environment already matches. Read-only. Called by the
+                           SessionStart hook, which appends the lines to $CLAUDE_ENV_FILE. Exits
+                           non-zero, printing nothing, when the lease cannot be turned into safe
+                           lines
   help                     Print this message or the help of the given subcommand(s)
 
 Options:
@@ -7510,6 +7582,32 @@ is active and 1 when it is off; prints nothing
 Usage: aida internal solo-active [OPTIONS]
 
 Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida internal lane-env
+Print the environment correction for a session inside a lane worktree: shell lines setting
+AIDA_SESSION_ROLE to the role its lease records, and exporting the lease's child grant or unsetting
+an inherited grant for another seat (and the inherited purpose). Prints nothing outside a lane or
+when the environment already matches. Read-only. Called by the SessionStart hook, which appends the
+lines to $CLAUDE_ENV_FILE. Exits non-zero, printing nothing, when the lease cannot be turned into
+safe lines
+
+Usage: aida internal lane-env [OPTIONS]
+
+Options:
+      --cwd <PATH>
+          The session directory to resolve the lane for (default: cwd)
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -8899,6 +8997,10 @@ Options:
       --branch <BRANCH>
           Override the branch name (default `<id>-work`)
 
+      --role <ROLE>
+          The role recorded on the worktree's lease (default `implementer`). A session started
+          inside the worktree takes its identity from the lease, not from an inherited environment
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -9406,7 +9508,7 @@ Arguments:
 Options:
       --repo <REPO>
           Override the AIDA repo path (defaults to current directory if it looks like the aida repo,
-          or $AIDA_DEV_REPO if set)
+          or $AIDA_DEV_REPO if set; when that names a removed worktree, $AIDA_DEV_HOME_REPO)
 
       --debug
           Pin to the debug build (target/debug). Sticky — subsequent plain `aida dev activate`
@@ -9467,6 +9569,12 @@ Options:
 
       --after-wave
           Wait for a live drain wave pinned to the current binary to finish instead of refusing
+
+      --if-main-green
+          For a schedule: promote only when origin/main has moved past the live binary and every CI
+          check on that commit passed. Fetches, fast-forwards a clean primary `main`, and launches
+          the build in the background; skips quietly otherwise. Acts only from the checkout the live
+          binary was built from
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -10615,7 +10723,8 @@ Commands:
             of the project's roles; non-interactively it errors. Outputs shell code that must run in
             the calling shell: raw binary: `eval "$(aida role enter advisor)"` via the shell helper
             (`aida dev shell-init`): just `aida role enter advisor` The helper auto-evals it, so the
-            bare form is correct there
+            bare form is correct there. The seat grant is bound to this terminal session: any
+            process in this terminal session can use this grant, and no process outside it can
   add       Add a new role, then enter it. Errors if the name already exists (use `aida role enter`
             to resume an existing one)
   list      List all roles for this project (and any global roles), sorted by last activity. Active
@@ -10635,6 +10744,10 @@ Commands:
             session; it also exits 3 when `AIDA_SESSION_GRANT` is set but its grant can't be used
             (missing, malformed, or revoked). No grant at all, or an implementer grant, is never
             refused
+  status    Show this session's seat grant (seat, expiry, the processes it is bound to, and whether
+            and how this process may present it: by its session key or by process) and this
+            session's agent harness pid for `aida role enter <seat> --bind-pid`. Read-only; always
+            exits 0
   end       Deactivate the current role (state preserved). Outputs shell code: `eval "$(aida role
             end)"`
   delete    Delete a role's state file permanently. Confirms before deleting unless --yes is passed
@@ -10667,7 +10780,9 @@ Options:
 Enter (resume) an existing role. With no name on an interactive terminal, shows a picker of the
 project's roles; non-interactively it errors. Outputs shell code that must run in the calling shell:
 raw binary: `eval "$(aida role enter advisor)"` via the shell helper (`aida dev shell-init`): just
-`aida role enter advisor` The helper auto-evals it, so the bare form is correct there
+`aida role enter advisor` The helper auto-evals it, so the bare form is correct there. The seat
+grant is bound to this terminal session: any process in this terminal session can use this grant,
+and no process outside it can
 
 Usage: aida role enter [OPTIONS] [NAME]
 
@@ -10692,6 +10807,14 @@ Options:
       --ttl <TTL>
           Grant time-to-live duration (e.g. 72h), capped by [seat] max_grant_hours (default 24, hard
           ceiling 168h)
+
+      --bind-pid <PID>
+          Bind the grant to another running session instead of this terminal: the pid of that
+          session's agent harness (claude, codex, agy) or shell, owned by you (`aida role status`
+          shows a session's harness pid). Prints the grant id for that session to export and leaves
+          this shell's role unchanged. Binds the process only: that session's hooks and MCP server
+          can present the grant, but not its sandboxed tool calls, which need a session started from
+          a role shell
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -10863,6 +10986,52 @@ Options:
       --refuse-within <REFUSE_WITHIN>
           Exit 3 with a refusal when less than this span is left
 
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida role status
+Show this session's seat grant (seat, expiry, the processes it is bound to, and whether and how this
+process may present it: by its session key or by process) and this session's agent harness pid for
+`aida role enter <seat> --bind-pid`. Read-only; always exits 0
+
+Usage: aida role status [OPTIONS]
+
+Options:
+      --json
+          Emit JSON instead of text
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida role adopt-key
+Install a seat grant's session key into the calling shell's session keyring. Run by the `aida role
+enter` eval text with the secret on stdin; not for direct use
+
+Usage: aida role adopt-key [OPTIONS] <ID>
+
+Arguments:
+  <ID>
+          The grant id
+
+Options:
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -12623,9 +12792,9 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 ===== aida pr
-Pull-request side-effects intended to fire from the /aida-pr skill. Today: `auto-queue-review` files
-the reviewer story right after `gh pr create` so the trigger lives where context is freshest. `aida
-session end` keeps the same logic as an idempotent backup for PRs opened outside the skill
+Pull-request side-effects. Today: `auto-queue-review` files the reviewer story right after a change
+opens, so the trigger lives where context is freshest. `aida session end` keeps the same logic as an
+idempotent backup for changes opened without it
 
 Usage: aida pr [OPTIONS] <COMMAND>
 
@@ -12646,6 +12815,9 @@ Commands:
                      --auto-complete` (which drives the full reviewer pipeline) — use this for
                      human-pre-approved work where no orchestrator review phase is needed (docs PRs,
                      master-signed architecture work, recovery merges)
+  train              Land a batch of approved PRs together through a merge train, so two PRs that
+                     are each green cannot break main together
+  ship-batch         Ship several PRs that need a human merge, one at a time, in order
   hold               Deliberately HOLD the PR on the current session — push the branch but
                      intentionally do not open the PR yet, pending a manual gate (a smoke test, an
                      out-of-band review, an operator decision)
@@ -12676,13 +12848,12 @@ for it. Detects the change through the configured Forge — GitHub via `gh` (loo
 open PR), GitLab via `glab` (looks up the branch's open MR) — so that provider's CLI must be on PATH
 and authenticated.
 
-Intended trigger: `/aida-pr` runs this right after the change opens (`gh pr create` / `glab mr
-create`) — the agent already has it open, the commit range, and the spec list cached, but the
-auto-queue logic does its own forge detection so the call is self-contained.
+Intended trigger: right after the change opens, while the agent has the branch, commit range and
+spec list at hand. The auto-queue logic does its own forge detection, so the call is self-contained.
 
-`aida session end` also fires this as a backup, so a forgotten /aida-pr (or a raw `gh pr create` /
-`glab mr create`) still ends up routed to the reviewer. The idempotency guard means both firing is
-fine.
+`aida session end` also fires this as a backup, so a change opened without it (a raw `gh pr create`
+/ `glab mr create`, or `aida ship --no-merge`) still ends up routed to the reviewer. The idempotency
+guard means both firing is fine.
 
 Usage: aida pr auto-queue-review [OPTIONS]
 
@@ -12858,10 +13029,9 @@ Options:
           intentional (e.g. a cross-repo id the local store can't see)
 
       --override-stale-check
-          Ship even when the PR's green check completed before a CI-definition file (a workflow, or
-          a script it invokes directly) changed on the base branch. Without this, ship refuses so a
-          green that no longer means what it looks like doesn't merge unnoticed. A plain test-file
-          change on the base branch only warns and never needs this flag
+          Retired: ship now refuses any PR whose head is behind its base branch, CI-definition
+          change or not, and this flag does not override that. Land a behind PR with `aida pr train
+          N`, or merge the base into the branch and wait for green
 
       --override-stale-approval
           Ship even when the PR's newest recorded approval does not cover its current head — the
@@ -12900,6 +13070,106 @@ Options:
 Exit codes: 0 merged (or already merged; dry-run previews); 1 other error; 20 CI red; 21
 ownership/CI wait timed out; 22 needs rebase/not mergeable; 23 needs review/approval at head; 24
 stale CI definition; 25 merge-hold present.
+===== aida pr train
+Land a batch of approved PRs together through a merge train, so two PRs that are each green cannot
+break main together.
+
+Each PR must pass the same gates `aida pr ship` applies before a merge: open, not a draft, on the
+default branch, no merge hold, an approval recorded at its head (or carried over a clean merge from
+main), a clear verdict corpus, no live drive owning it, and no spec tagged `review:draft-only`. A
+spec whose execution mode needs supervision merges only for a human at a terminal who named that PR,
+or under an active mandate (always for one found by --all-ready). Drafts are refused with a reason,
+since CI does not run Build on them. GitHub only for now.
+
+The train is main plus one squash commit per PR, each written with the subject `aida pr ship` would
+use and checked to carry exactly the PR's approved diff (by patch-id). A PR that conflicts, or whose
+diff changes once stacked, is left out with its reason. The train is opened as a `train/*` PR so the
+normal CI runs on exactly what main will receive. When it is green and main has not moved, it is
+rebase-merged pinned to its head, and each member PR is closed with a pointer to its commit on main.
+When it is red, it is rerun once, then split in halves (two at a time) until each bad PR is isolated
+and left out with a comment.
+
+`--dry-run` gates and builds the train and prints the plan without pushing anything; add `--local-ci
+<CMD>` to simulate the whole run with a local command as CI, against a checkout of each train tip.
+
+Usage: aida pr train [OPTIONS] <N|--all-ready>
+
+Arguments:
+  [N]...
+          PR numbers to train, in landing order
+
+Options:
+      --all-ready
+          Train every open PR on the default branch that passes the gates, oldest first
+
+      --dry-run
+          Gate and build the train and print the plan; push nothing
+
+      --local-ci <CMD>
+          With --dry-run: run CMD in a checkout of each train tip as the CI, and simulate the full
+          land / rerun / bisect run locally
+
+      --max <N>
+          At most this many PRs per train. With --all-ready the rest wait for the next train; naming
+          more PRs than this is refused
+          
+          [default: 10]
+
+      --no-pull
+          Skip the `aida pull` after a train lands
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida pr ship-batch
+Ship several PRs that need a human merge, one at a time, in order.
+
+For each PR, in the order given, it refreshes the branch from main only when the PR is behind or its
+green predates a CI-definition change, waits for CI on that exact head, waits for an independent
+approval recorded at that head (it queues the PR for review but never records a verdict), then asks
+you to type the PR number before shipping it with every `aida pr ship` gate in force. A merge-hold
+on a confirmed PR is cleared only when you also type `clear`.
+
+Any failure stops the batch without shipping: red or missing CI, a conflict, no approval in time, a
+refused gate, or an unconfirmed prompt. Re-run the same command to continue; merged PRs are skipped.
+Runs only for a human at an interactive terminal, on GitHub.
+
+Usage: aida pr ship-batch [OPTIONS] <PR>...
+
+Arguments:
+  <PR>...
+          PR numbers, shipped in exactly this order (at most 20, no repeats)
+
+Options:
+      --review-timeout <DURATION>
+          How long to wait for an approval at each PR's head, e.g. `45m`, `2h` (a bare number is
+          minutes; default 60m)
+
+      --dry-run
+          Show each PR's state and what the batch would do; change nothing. It does not fetch:
+          staleness is judged against your local `origin/*` refs as they are
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+  -h, --help
+          Print help (see a summary with '-h')
 ===== aida pr hold
 Deliberately HOLD the PR on the current session — push the branch but intentionally do not open the
 PR yet, pending a manual gate (a smoke test, an out-of-band review, an operator decision).
@@ -21115,11 +21385,15 @@ Options:
       --json
           Emit results as a JSON array. Mutually exclusive with --short. Mirrors `aida list --json`
 
-      --fields <CSV>
-          Select AND order the displayed columns, e.g. `--fields id,title,status,priority,tags`.
-          Valid fields: id, title, status, type, priority, feature, owner, assignee, tags. Renders
-          exactly those columns in that order; default keeps the standard layout. Mirrors `aida list
-          --fields`
+      --fields <FIELDS>
+          Select AND order the displayed columns, e.g. `--fields id,title,status,priority,tags` or
+          `--fields 'id title opened'`; entries are separated by commas and/or whitespace. Renders
+          exactly those columns in that order. Valid fields: id, title, status, type, priority,
+          feature, owner, assignee, tags, heft, modified_at, opened, weight, queued, in_flight,
+          blocked, mode, origin, deferred_reason, driver, driver_kind, review_lens. `opened` is the
+          creation time. Aliases: req_type = type, created_at = opened, created = opened. Search
+          rows carry no work-routing state, so queued, in_flight and blocked render false. Default
+          keeps the standard layout. Mirrors `aida list --fields`
 
   -h, --help
           Print help (see a summary with '-h')
@@ -24124,7 +24398,7 @@ Options:
           Run one tick: route stalled lanes and ledger every action
 
       --json
-          Print the tick report as JSON
+          Print the preview as JSON, or with `--tick` the tick report
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -24527,7 +24801,7 @@ Working on aida itself
       {
         "name": "fields",
         "takes_value": true,
-        "help": "Select AND order the displayed columns, e.g. `--fields id,title,status,priority,tags`. Renders exactly those columns in that order — on the human table AND the token-efficient agent output (a real token win for agents). Valid fields: id, title, status, type, priority, feature, owner, assignee, tags, heft, weight, queued, in_flight, blocked. Default (no `--fields`) keeps the standard columns; agent mode defaults to the minimal id,title,status,type set"
+        "help": "Select AND order the displayed columns, e.g. `--fields id,title,status,priority,tags` or `--fields 'id title opened'`; entries are separated by commas and/or whitespace. Renders exactly those columns in that order — on the human table AND the token-efficient agent output (a real token win for agents). Valid fields: id, title, status, type, priority, feature, owner, assignee, tags, heft, modified_at, opened, weight, queued, in_flight, blocked, mode, origin, deferred_reason, driver, driver_kind, review_lens. `opened` is the creation time. Aliases: req_type = type, created_at = opened, created = opened. Default (no `--fields`) keeps the standard columns; agent mode defaults to the minimal id,title,status,type,modified_at set"
       },
       {
         "name": "format",
@@ -28170,6 +28444,37 @@ Working on aida itself
     "path": [
       "aida",
       "mailbox",
+      "migrate"
+    ],
+    "about": "Preview legacy mailbox reconciliation before recipient migration",
+    "flags": [
+      {
+        "name": "dry-run",
+        "takes_value": false,
+        "help": "Produce a read-only report. Write-mode migration is not available"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Print the reconciliation report as JSON"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "mailbox",
       "latency"
     ],
     "about": "Show mailbox read latency for the active identity (or an explicit recipient)",
@@ -29342,7 +29647,7 @@ Working on aida itself
       {
         "name": "drive",
         "takes_value": false,
-        "help": "A DRIVE mandate: also covers advisor signoff of sketches and dispatching fixers, and turns on the 15-minute drive tick that routes every stalled lane. Implies --ship-held and covers sensitive specs unless --exclude-supervised"
+        "help": "A DRIVE mandate: also covers advisor signoff of sketches and dispatching fixers, and turns on the 15-minute drive tick that routes every stalled lane. Implies --ship-held and covers sensitive specs unless --exclude-supervised. It also covers relay-restart: the tick may restart a crashed relay a human started at a terminal (a drive mandate started before this scope existed does not; start a new one)"
       },
       {
         "name": "exclude-supervised",
@@ -30832,6 +31137,37 @@ Working on aida itself
     "path": [
       "aida",
       "remote",
+      "mirror-guard-check"
+    ],
+    "about": "(plumbing) Ask whether a push to the default branch is an attested `aida remote mirror-sync` of origin's reviewed tip. A project's pre-push main guard pipes its stdin ref lines here before refusing; exit 0 allows the push only when the remote is a registered mirror (never origin), every default-branch sha equals origin's tip, and mirror-sync attested exactly that push. Anything else exits non-zero with the reason, so the guard keeps refusing. Guard snippet: `printf '%s\\n' \"$refs\" | aida remote mirror-guard-check \"$1\" && exit 0` `--install-guard` installs AIDA's opt-in main guard, which already consults this check, chained in front of the existing pre-push hook",
+    "flags": [
+      {
+        "name": "force",
+        "takes_value": false,
+        "help": "With --install-guard: chain in front of a custom pre-push hook too (shell hooks only; a Python or Node hook is refused)"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "install-guard",
+        "takes_value": false,
+        "help": "Install the main guard and chain it in front of the pre-push hook"
+      }
+    ],
+    "hidden": true
+  },
+  {
+    "path": [
+      "aida",
+      "remote",
       "mirror-sync"
     ],
     "about": "Push origin's tips of the default branch and the spec store to every mirror hub, by sha. The pre-push hook only mirrors what this machine pushes; a merge performed on the forge and a store push from another clone never fire it, so mirrors drift. `aida pull` runs this after a successful pull; run it by hand when `aida remote status` shows a hub behind. Never force-pushes: a diverged hub is reported and exits non-zero",
@@ -31092,6 +31428,32 @@ Working on aida itself
     ],
     "about": "Query effective solo mode for the Claude advisor-code-guard PreToolUse hook. Exits 0 when solo mode is active and 1 when it is off; prints nothing",
     "flags": [
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": true
+  },
+  {
+    "path": [
+      "aida",
+      "internal",
+      "lane-env"
+    ],
+    "about": "Print the environment correction for a session inside a lane worktree: shell lines setting AIDA_SESSION_ROLE to the role its lease records, and exporting the lease's child grant or unsetting an inherited grant for another seat (and the inherited purpose). Prints nothing outside a lane or when the environment already matches. Read-only. Called by the SessionStart hook, which appends the lines to $CLAUDE_ENV_FILE. Exits non-zero, printing nothing, when the lease cannot be turned into safe lines",
+    "flags": [
+      {
+        "name": "cwd",
+        "takes_value": true,
+        "help": "The session directory to resolve the lane for (default: cwd)"
+      },
       {
         "name": "format",
         "takes_value": true,
@@ -32446,6 +32808,11 @@ Working on aida itself
         "name": "path",
         "takes_value": true,
         "help": "Override the worktree path (default `~/ai/aida-<slug>`)"
+      },
+      {
+        "name": "role",
+        "takes_value": true,
+        "help": "The role recorded on the worktree's lease (default `implementer`). A session started inside the worktree takes its identity from the lease, not from an inherited environment"
       }
     ],
     "hidden": false
@@ -32933,7 +33300,7 @@ Working on aida itself
       {
         "name": "repo",
         "takes_value": true,
-        "help": "Override the AIDA repo path (defaults to current directory if it looks like the aida repo, or $AIDA_DEV_REPO if set)"
+        "help": "Override the AIDA repo path (defaults to current directory if it looks like the aida repo, or $AIDA_DEV_REPO if set; when that names a removed worktree, $AIDA_DEV_HOME_REPO)"
       }
     ],
     "hidden": true
@@ -32957,6 +33324,11 @@ Working on aida itself
         "help": "Promote even when the checkout is dirty, off `main`, or not at `origin/main` (`aida dev status` then shows the dirty SHA)"
       },
       {
+        "name": "autopromote-child",
+        "takes_value": true,
+        "help": "Internal: the background build an `--if-main-green` run launched"
+      },
+      {
         "name": "clean",
         "takes_value": true,
         "help": "Clear the incremental cache first. Bare `--clean` deletes only `target/agent/incremental` (keeps compiled dependencies); `--clean=full` runs `cargo clean --profile agent`"
@@ -32970,6 +33342,11 @@ Working on aida itself
         "name": "help",
         "takes_value": false,
         "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "if-main-green",
+        "takes_value": false,
+        "help": "For a schedule: promote only when origin/main has moved past the live binary and every CI check on that commit passed. Fetches, fast-forwards a clean primary `main`, and launches the build in the background; skips quietly otherwise. Acts only from the checkout the live binary was built from"
       },
       {
         "name": "install-links",
@@ -34172,8 +34549,13 @@ Working on aida itself
       "role",
       "enter"
     ],
-    "about": "Enter (resume) an existing role. With no name on an interactive terminal, shows a picker of the project's roles; non-interactively it errors. Outputs shell code that must run in the calling shell: raw binary: `eval \"$(aida role enter advisor)\"` via the shell helper (`aida dev shell-init`): just `aida role enter advisor` The helper auto-evals it, so the bare form is correct there",
+    "about": "Enter (resume) an existing role. With no name on an interactive terminal, shows a picker of the project's roles; non-interactively it errors. Outputs shell code that must run in the calling shell: raw binary: `eval \"$(aida role enter advisor)\"` via the shell helper (`aida dev shell-init`): just `aida role enter advisor` The helper auto-evals it, so the bare form is correct there. The seat grant is bound to this terminal session: any process in this terminal session can use this grant, and no process outside it can",
     "flags": [
+      {
+        "name": "bind-pid",
+        "takes_value": true,
+        "help": "Bind the grant to another running session instead of this terminal: the pid of that session's agent harness (claude, codex, agy) or shell, owned by you (`aida role status` shows a session's harness pid). Prints the grant id for that session to export and leaves this shell's role unchanged. Binds the process only: that session's hooks and MCP server can present the grant, but not its sandboxed tool calls, which need a session started from a role shell"
+      },
       {
         "name": "cd",
         "takes_value": false,
@@ -34383,6 +34765,53 @@ Working on aida itself
       }
     ],
     "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "role",
+      "status"
+    ],
+    "about": "Show this session's seat grant (seat, expiry, the processes it is bound to, and whether and how this process may present it: by its session key or by process) and this session's agent harness pid for `aida role enter <seat> --bind-pid`. Read-only; always exits 0",
+    "flags": [
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Emit JSON instead of text"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "role",
+      "adopt-key"
+    ],
+    "about": "Install a seat grant's session key into the calling shell's session keyring. Run by the `aida role enter` eval text with the secret on stdin; not for direct use",
+    "flags": [
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": true
   },
   {
     "path": [
@@ -36105,7 +36534,7 @@ Working on aida itself
       "aida",
       "pr"
     ],
-    "about": "Pull-request side-effects intended to fire from the /aida-pr skill. Today: `auto-queue-review` files the reviewer story right after `gh pr create` so the trigger lives where context is freshest. `aida session end` keeps the same logic as an idempotent backup for PRs opened outside the skill",
+    "about": "Pull-request side-effects. Today: `auto-queue-review` files the reviewer story right after a change opens, so the trigger lives where context is freshest. `aida session end` keeps the same logic as an idempotent backup for changes opened without it",
     "flags": [
       {
         "name": "format",
@@ -36299,7 +36728,7 @@ Working on aida itself
       {
         "name": "override-stale-check",
         "takes_value": false,
-        "help": "Ship even when the PR's green check completed before a CI-definition file (a workflow, or a script it invokes directly) changed on the base branch. Without this, ship refuses so a green that no longer means what it looks like doesn't merge unnoticed. A plain test-file change on the base branch only warns and never needs this flag"
+        "help": "Retired: ship now refuses any PR whose head is behind its base branch, CI-definition change or not, and this flag does not override that. Land a behind PR with `aida pr train N`, or merge the base into the branch and wait for green"
       },
       {
         "name": "rebase",
@@ -36310,6 +36739,83 @@ Working on aida itself
         "name": "wait",
         "takes_value": true,
         "help": "Bound drive ownership plus CI registration/settlement wait in seconds. Bare --wait uses 300 seconds; omitted leaves CI unbounded and refuses drive-owned PRs immediately. Drive seats always refuse immediately. Exit codes: 20 CI red, 21 CI timeout, 22 not mergeable, 23 review, 24 stale CI definition, 25 merge hold (0 merged/already merged)"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "pr",
+      "train"
+    ],
+    "about": "Land a batch of approved PRs together through a merge train, so two PRs that are each green cannot break main together",
+    "flags": [
+      {
+        "name": "all-ready",
+        "takes_value": false,
+        "help": "Train every open PR on the default branch that passes the gates, oldest first"
+      },
+      {
+        "name": "dry-run",
+        "takes_value": false,
+        "help": "Gate and build the train and print the plan; push nothing"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "local-ci",
+        "takes_value": true,
+        "help": "With --dry-run: run CMD in a checkout of each train tip as the CI, and simulate the full land / rerun / bisect run locally"
+      },
+      {
+        "name": "max",
+        "takes_value": true,
+        "help": "At most this many PRs per train. With --all-ready the rest wait for the next train; naming more PRs than this is refused"
+      },
+      {
+        "name": "no-pull",
+        "takes_value": false,
+        "help": "Skip the `aida pull` after a train lands"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "pr",
+      "ship-batch"
+    ],
+    "about": "Ship several PRs that need a human merge, one at a time, in order",
+    "flags": [
+      {
+        "name": "dry-run",
+        "takes_value": false,
+        "help": "Show each PR's state and what the batch would do; change nothing. It does not fetch: staleness is judged against your local `origin/*` refs as they are"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "review-timeout",
+        "takes_value": true,
+        "help": "How long to wait for an approval at each PR's head, e.g. `45m`, `2h` (a bare number is minutes; default 60m)"
       }
     ],
     "hidden": false
@@ -38077,6 +38583,11 @@ Working on aida itself
         "name": "title",
         "takes_value": false,
         "help": "Emit the one-liner wrapped in an OSC terminal-title escape sequence (`ESC ] 2 ; <line> BEL`) instead of printing it to the body, so the AIDA role/queue/inbox segment rides the terminal title bar / tmux window name. This is the in-agent parity surface for clients (e.g. Codex CLI) whose built-in footer is a fixed field set and cannot run `aida statusline` as a command: wire `aida statusline title` into the shell prompt (`PROMPT_COMMAND` / `precmd`) and the AIDA segment shows in the terminal title during the agent session. Forces color off (an OSC title string carries no ANSI). Mutually exclusive with the `setup` subcommand"
+      },
+      {
+        "name": "tmux-pane-pid",
+        "takes_value": true,
+        "help": "The tmux pane's shell pid (`#{pane_pid}`). A tmux `#(...)` render runs in tmux's own environment, so this is how it finds the agent session running in that pane and shows its handle"
       }
     ],
     "hidden": false
@@ -44528,7 +45039,7 @@ Working on aida itself
       {
         "name": "fields",
         "takes_value": true,
-        "help": "Select AND order the displayed columns, e.g. `--fields id,title,status,priority,tags`. Valid fields: id, title, status, type, priority, feature, owner, assignee, tags. Renders exactly those columns in that order; default keeps the standard layout. Mirrors `aida list --fields`"
+        "help": "Select AND order the displayed columns, e.g. `--fields id,title,status,priority,tags` or `--fields 'id title opened'`; entries are separated by commas and/or whitespace. Renders exactly those columns in that order. Valid fields: id, title, status, type, priority, feature, owner, assignee, tags, heft, modified_at, opened, weight, queued, in_flight, blocked, mode, origin, deferred_reason, driver, driver_kind, review_lens. `opened` is the creation time. Aliases: req_type = type, created_at = opened, created = opened. Search rows carry no work-routing state, so queued, in_flight and blocked render false. Default keeps the standard layout. Mirrors `aida list --fields`"
       },
       {
         "name": "format",
@@ -47402,7 +47913,7 @@ Working on aida itself
       {
         "name": "json",
         "takes_value": false,
-        "help": "Print the tick report as JSON"
+        "help": "Print the preview as JSON, or with `--tick` the tick report"
       },
       {
         "name": "tick",

@@ -164,7 +164,7 @@ expect_warn "include after a safe target fails closed" 'timeout 1h make hello' '
 # TASK-2076: a pattern or suffix rule may build an unknown prerequisite.
 mk_case pattern 'hello: page.html' $'\t@echo hi' '%.html: %.md' $'\tcargo run --bin render $<'
 expect_warn "pattern rule may build a prerequisite" 'timeout 1h make hello' 'AIDA_CARGO_TIMEOUT=1h make'
-mk_case suffix 'hello: page.html' $'\t@echo hi' '.md.html:' $'\tcargo run --bin render $<'
+mk_case suffix 'hello: page.o' $'\t@echo hi' '.c.o:' $'\tcargo run --bin cc $<'
 expect_warn "suffix rule may build a prerequisite" 'timeout 1h make hello' 'AIDA_CARGO_TIMEOUT=1h make'
 mk_case phony '.PHONY: hello' 'hello: a.txt' $'\t@echo hi'
 expect_silent "special target is no suffix rule" 'timeout 1h make hello'
@@ -182,6 +182,69 @@ for directive in 'override' 'export' 'private' 'override export'; do
 done
 mk_case evalrule '$(eval hello: ; cargo test)' 'other:' $'\t@echo hi'
 expect_warn "\$(eval) rule generation fails closed" 'timeout 1h make hello' 'AIDA_CARGO_TIMEOUT=1h make'
+# TASK-2128: the remaining fail-opens of the PR-2817 round-2 review.
+# trace:TASK-1955 | ai:claude (TASK-2128, TASK-2129)
+mk_case ifneq 'hello:' $'\t@echo hi' 'ifneq ($(CI),)' $'\tcargo test' 'endif'
+expect_warn "ifneq fails closed" 'timeout 1h make hello' 'AIDA_CARGO_TIMEOUT=1h make'
+mk_case ifndef 'ifndef FAST' 'hello:' $'\tcargo test' 'endif'
+expect_warn "ifndef fails closed" 'timeout 1h make hello' 'AIDA_CARGO_TIMEOUT=1h make'
+for directive in '' 'override ' 'export '; do
+    mk_case defprefix "${directive}define .RECIPEPREFIX" '>' 'endef' 'hello:' '>cargo test'
+    expect_warn "${directive}define .RECIPEPREFIX fails closed" 'timeout 1h make hello' 'AIDA_CARGO_TIMEOUT=1h make'
+done
+mk_case varrule 'X := hello: ; cargo test' 'hello:' $'\t@echo hi' '$(X)'
+expect_warn "a bare \$(X) line that expands to a rule fails closed" 'timeout 1h make hello' 'AIDA_CARGO_TIMEOUT=1h make'
+mk_case vartarget 'T := hello' '$(T): build' $'\t@echo hi' 'hello:' $'\t@echo hi'
+expect_warn "a computed target name fails closed" 'timeout 1h make hello' 'AIDA_CARGO_TIMEOUT=1h make'
+for sfx in .C .S .F; do
+    mk_case upsuffix "hello: page$sfx.o" $'\t@echo hi' "$sfx.o:" $'\tcargo run --bin cc $<'
+    expect_warn "upper-case suffix rule $sfx.o may build a prerequisite" 'timeout 1h make hello' 'AIDA_CARGO_TIMEOUT=1h make'
+    mk_case upsingle "hello: page" $'\t@echo hi' "$sfx:" $'\tcargo run --bin cc $<'
+    expect_warn "upper-case single-suffix rule $sfx may build a prerequisite" 'timeout 1h make hello' 'AIDA_CARGO_TIMEOUT=1h make'
+done
+mk_case declared '.SUFFIXES: .md .html' 'hello: page.html' $'\t@echo hi' '.md.html:' $'\tcargo run --bin render $<'
+expect_warn "a .SUFFIXES-declared suffix rule may build a prerequisite" 'timeout 1h make hello' 'AIDA_CARGO_TIMEOUT=1h make'
+# PR-2826 round 1: a variable .SUFFIXES list, an expansion in front of a
+# blank-containing name (no assignment to make) and .DEFAULT all fail closed.
+# trace:TASK-1955 | ai:claude (TASK-2128)
+mk_case varsuffixes 'S := .md .html' '.SUFFIXES: $(S)' 'hello: page.html' $'\t@echo hi' '.md.html:' $'\tcargo run --bin render $<'
+touch "$MK/varsuffixes/page.md"
+expect_warn "a variable .SUFFIXES list fails closed" 'timeout 1h make hello' 'AIDA_CARGO_TIMEOUT=1h make'
+mk_case varassign 'X := hello: ; cargo test' '$(X) Y=1'
+expect_warn "a \$(X) Y=1 line that expands to a rule fails closed" 'timeout 1h make hello' 'AIDA_CARGO_TIMEOUT=1h make'
+mk_case computedname 'N := A' '$(N)_FLAGS = -O2' 'override CFLAGS += -g' 'hello: notes.txt' $'\t@echo hi'
+expect_silent "a computed variable name is still an assignment" 'timeout 1h make hello'
+mk_case default 'hello: page.txt' $'\t@echo hi' '.DEFAULT:' $'\tcargo run --bin gen $@'
+expect_warn ".DEFAULT may build a prerequisite" 'timeout 1h make hello' 'AIDA_CARGO_TIMEOUT=1h make'
+# TASK-2129: a dot target with an unknown suffix is a plain target.
+mk_case venv '.venv: requirements.txt' $'\tpython3 -m venv .venv' 'hello: notes.txt' $'\t@echo hi'
+expect_silent ".venv is no suffix rule" 'timeout 1h make hello'
+mk_case dotenv '.env:' $'\t@touch .env' 'hello: notes.txt' $'\t@echo hi'
+expect_silent ".env is no suffix rule" 'timeout 1h make hello'
+# TASK-2185: the colon of `:=` / `::=` is no rule colon.
+mk_case computedimm 'N := A' '$(N)_FLAGS := -O2' '$(N)_LIBS ::= -lm' 'hello: notes.txt' $'\t@echo hi'
+expect_silent "a computed name assigned with := or ::= is still an assignment" 'timeout 1h make hello'
+# TASK-2173: make runs $(shell ...) and != while it parses the Makefile.
+mk_case shellimm 'X := $(shell cargo build)' 'hello: notes.txt' $'\t@echo hi'
+expect_warn "an immediate \$(shell cargo) assignment fails closed" 'timeout 1h make hello' 'AIDA_CARGO_TIMEOUT=1h make'
+mk_case shellbang 'X != cargo build' 'hello: notes.txt' $'\t@echo hi'
+expect_warn "a != shell assignment fails closed" 'timeout 1h make hello' 'AIDA_CARGO_TIMEOUT=1h make'
+mk_case shellrec 'X = $(shell cargo build)' 'hello: $(X)' $'\t@echo hi'
+expect_warn "a recursive \$(shell cargo) expanded in a prerequisite fails closed" 'timeout 1h make hello' 'AIDA_CARGO_TIMEOUT=1h make'
+mk_case shelldef 'define X :=' '$(shell cargo build)' 'endef' 'hello: notes.txt' $'\t@echo hi'
+expect_warn "a \$(shell cargo) in a define body fails closed" 'timeout 1h make hello' 'AIDA_CARGO_TIMEOUT=1h make'
+# TASK-2272 (TASK-2294): a target-specific := assignment and another target's
+# prerequisite list also run $(shell ...) while make parses the Makefile.
+# trace:TASK-2272 | ai:claude
+mk_case shelltspec 'other: X := $(shell cargo build)' 'hello: notes.txt' $'\t@echo hi'
+expect_warn "a target-specific \$(shell cargo) := assignment fails closed" 'timeout 1h make hello' 'AIDA_CARGO_TIMEOUT=1h make'
+mk_case shellprereq 'other: $(shell cargo build)' $'\t@echo other' 'hello: notes.txt' $'\t@echo hi'
+expect_warn "a \$(shell cargo) prerequisite of another target fails closed" 'timeout 1h make hello' 'AIDA_CARGO_TIMEOUT=1h make'
+mk_case shellcurly 'other: X := ${shell cargo build}' 'hello: notes.txt' $'\t@echo hi'
+expect_warn "the \${shell ...} spelling fails closed" 'timeout 1h make hello' 'AIDA_CARGO_TIMEOUT=1h make'
+# TASK-2186: an empty .SUFFIXES still clears the suffix list.
+mk_case sfxclear '.SUFFIXES:' '.c.o:' $'\tcargo run' 'hello: page.c' $'\t@echo hi'
+expect_silent "an empty .SUFFIXES clears the default suffixes" 'timeout 1h make hello'
 RUN_DIR="$ROOT"
 
 # Malformed input never blocks.

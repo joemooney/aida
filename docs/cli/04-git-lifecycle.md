@@ -14,7 +14,7 @@ A spec's life after you start building it:
 
 | Event | Verb | State it lands in | Who triggers it |
 |---|---|---|---|
-| Work finished on a branch, PR open | `aida queue done` / `aida pr` | **Done** | the implementer |
+| Work finished on a branch, PR open | `aida queue done` after review handoff | **Done** | the implementer |
 | Reviewer read the diff, sent it back | `aida review` → request changes / `aida rework` | **Rework** (→ In Progress) | the reviewer |
 | Reviewer passed it; PR merged to main | the merge + `aida pull` | **Completed** | the merge (auto-bump) |
 | A version tag cut after merge | `aida release` | **Released** | the releaser |
@@ -68,6 +68,30 @@ or forced completion is needed for an ID remapping.
 
 ---
 
+### `aida ship`
+
+**One line** — finish implemented work through the CLI-owned commit, rebase,
+push, and PR ceremony; choose the stopping point deliberately.
+
+For an independent review handoff, `/aida-pr` is a compatibility redirect to
+`aida ship <SPEC> --no-merge`. Preview with the same command plus `--dry-run`.
+After successful PR creation or reuse, explicitly run
+`aida pr auto-queue-review`: the ship stop mode does not queue review itself.
+Read the outcome before reporting a handoff; policy skips can exit zero.
+Creation derives title/body from the latest commit, so inspect and enrich the
+PR with linked specs and actual validation evidence.
+
+Full `aida ship` continues into CI, merge, sync, and cleanup through the
+lower-level `aida pr ship` tail. It requires an authorized finish-and-merge
+path with independent review satisfied; neither command supplies a fresh
+reviewer. Managed/headless implementers follow their orchestrator's stop and
+handoff contract. Preserve supervised judgment and draft-only policy:
+`--no-merge` creates a non-draft PR, so actual drafts use the established
+draft creation path. Opening a PR never earns Completed before merge.
+<!-- trace:TASK-1613 | ai:codex -->
+
+---
+
 ### `aida pr`
 
 **One line** — the pull-request side-effects that fire around opening a PR.
@@ -99,6 +123,16 @@ prints the trailer it derived and its source — `from the PR title`, `from the
 branch name`, or `none` with the reason it was withheld — and names the ids
 the merge will complete; `--dry-run` prints the same line.
 <!-- trace:BUG-1919 | ai:claude -->
+
+A non-completing squash ship writes the `aida: no-complete` line into the
+squash commit's body, so the pull on every clone reads the declaration from
+main. This works on GitHub (`gh pr merge --body`), GitLab (inside the squash
+commit message, after the MR title) and pure-git (the squash commit's body).
+The cost is on GitHub: an explicit body replaces GitHub's default one, so
+GitHub does not add `Co-authored-by:` trailers for the other commit authors
+on that merge. Trailers already written in commit messages are kept. An
+ordinary squash ship leaves the body to the forge.
+<!-- trace:TASK-1951 trace:TASK-2115 trace:TASK-2116 | ai:claude -->
 
 A title ending in `(Refs SPEC-ID[, …])` is a reference, not a trailer: ship
 appends no completion trailer to it, not even from the branch name, and the
@@ -177,6 +211,29 @@ merges land slice stacks incrementally without a squash subject, `--rebase`
 leaves the owning spec's status unchanged by default unless `--final-slice`
 (`--complete-spec`) is passed to complete the spec on the final slice.
 <!-- trace:STORY-1663 | ai:antigravity -->
+
+**Merge train (`aida pr train <N...>` / `--all-ready`).** Lands several
+approved PRs together so that two PRs that are each green cannot break main
+together. Every member passes ship's gates (approval at head or carried over a
+clean merge from main, no merge hold, clear verdicts, open, on the default
+branch). Drafts are refused with a reason, since CI never runs Build on them.
+The train is main plus one squash commit per member, with the subject ship
+would write. Each commit's patch-id must equal the member's approved diff, and
+a member that conflicts or whose diff changes when stacked is dropped with its
+reason. The train opens as a `train/*` PR, and CI and merge-hold-gate (train
+mode: every listed member's labels) run on it. When it is green and main has
+not moved, it is rebase-merged with `--match-head-commit <tip>` under the
+merge lease. Each member PR is then closed with a pointer to its commit, and
+`aida pull` completes specs from the trailers. A red train is rerun once, then
+bisected in halves (two sub-trains at a time). A one-member red train leaves
+that PR open with a comment. `--dry-run` prints the gate verdicts and the
+plan; `--dry-run --local-ci <CMD>` simulates the whole run with a local CI
+command; `--max N` caps the batch (default 10), and naming more PRs than
+`--max` is refused. The command exits non-zero when a named PR was not
+landed. The train is GitHub-only for now: GitLab's merge-hold gate has no
+train mode, so `aida pr train` refuses a GitLab project; ship its merge
+requests one at a time with `aida pr ship N`.
+<!-- trace:STORY-1690 | ai:claude -->
 
 **Chains with** — `aida queue done` (finish on a branch) → `aida pr` (open/ship the PR) → `aida review` (if reviewed) → merge → `aida pull` (auto-bump to Completed).
 
@@ -371,10 +428,35 @@ current PR head. Omit the PR number to inspect every local hold, or use
 `aida merge-hold auto-release <pr>` for one. Any seat may retry this command;
 it has no override flag and never merges. Refused candidates remain held and
 produce a nonzero exit with a reason. The review-record handler runs the same
-release after a verified APPROVED write. Sensitive or composed holds retain
-the human clear. See [clearance policy](08-reporting.md#merge-hold-gate-and-clearance-limits)
+release after a verified APPROVED write. A hold composed with any non-Rework
+kind keeps the human clear, and so does a sensitive spec unless a mandate
+started with `aida mandate start --include-supervised` covers it (see
+[`aida mandate`](#aida-mandate)). See [clearance policy](08-reporting.md#merge-hold-gate-and-clearance-limits)
 for grant, arming-round, metadata and audit requirements.
+
+- **Composed Rework holds.** When refusals on several specs compose into one
+  hold, each refusal must be answered by its own fresh approval at the PR
+  head. One unanswered or unreadable refusal keeps the whole hold, and the
+  reason names it. The clearance records the primary approval and lists the
+  others under `also_released_by`.
+- **Busy lock.** The release's second check and the marker removal run under
+  a per-PR hold lock, which hold placements take too. If another placement or
+  release holds it for 10 seconds, the command refuses with
+  `merge-hold PR-N is busy` and changes nothing; re-run it.
+- **Withdrawn clearances.** If the second check refuses after the clearance
+  was written (for example, the head moved), the clearance is moved aside to
+  `.aida/merge-hold-clearances/PR-N.superseded-<timestamp>.json` for audit, an
+  "authorization withdrawn" comment is posted, and the hold stays armed. A
+  superseded file is never read as a clearance. When two releases of one PR
+  overlap, the one that finishes second leaves the first one's clearance in
+  place.
+- **Order.** Auto-release records the clearance, posts the audit comment,
+  drops the forge labels, and removes the marker last, so a forge failure
+  leaves the hold armed for the next retry. The human `aida merge-hold clear`
+  records the clearance, removes the marker, then drops the labels; the
+  operator sees any label failure and re-runs it.
 <!-- trace:STORY-1687 | ai:codex -->
+<!-- trace:TASK-1951 trace:TASK-2286 | ai:claude -->
 
 ### `aida mandate`
 
@@ -476,8 +558,31 @@ each held PR:
 - **What it sends to you:** an advisor-seat run, a run stopped on API credits,
   and anything behind a human gate.
 
-It never ships, restarts a relay or clears a hold itself. Before each action
-it re-reads the mandate, so a stop or an expiry takes effect mid-tick.
+It never ships or clears a hold itself. Before each action it re-reads the
+mandate, so a stop or an expiry takes effect mid-tick.
+
+**Crashed relays.** The tick restarts a relay itself only when the relay died
+without its exit handler running (killed or crashed, not stopped, capped,
+blocked or finished), and only when all of these hold:
+
+- the run's `relay.launch` record shows that you started it at a terminal,
+  that it belongs to the mandate's principal, and that its profile is unchanged;
+- it is not an advisor-seat or forced-seat run, and no `relay.norestart` marker
+  is present (the relay's no-restart option writes one);
+- the run's spec is known: from its status, or from the spec named at
+  launch (the relay's spec option or the profile's `spec` key), and not an operator-only spec;
+- no agent session of the run is still alive (a `kill -9` of the relay alone
+  leaves its session running; stop it first);
+- it has been restarted fewer than 3 times, after waiting 1, 2 and then 4 ticks;
+- sessions are left in its budget and the mandate has at least 30 minutes left;
+- the mandate was started with the `relay-restart` scope (`--drive` adds it;
+  a drive mandate started before it existed does not cover it).
+
+The restart runs the record's resume arguments (the same run, its existing
+handoff, no initial prompt), with its session limit set to the sessions
+left. It uses no grant and no session role. Any other crashed run
+goes to the advisor as before. After the third restart you get one
+crash-loop notice.
 
 **No advisor.** If no advisor seat has been active in the last 30 minutes, you
 get one notice per absence. Seat actions wait in `aida awaiting` for the next
@@ -487,7 +592,7 @@ advisor; the substrate actions continue.
 
 ```toml
 [mandate.human_gates]
-ops = ["ship"]   # any of: ship, sketch-signoff, dispatch, hold-clear
+ops = ["ship"]   # any of: ship, sketch-signoff, dispatch, hold-clear, relay-restart
 ```
 
 - The list is empty by default. An unknown op is a configuration error.
@@ -497,10 +602,10 @@ ops = ["ship"]   # any of: ship, sketch-signoff, dispatch, hold-clear
 - If the committed layer cannot be read, every action is gated.
 - A PR that changes `.aida/config.toml` or the mandate code
   (`mandate.rs`, `mandate_gates.rs`, `mandate_drive.rs`, `mandate_ship.rs`,
-  `mandate_traces.rs`, `rework_hold_release.rs`, `fleet_lanes.rs`,
-  `pr_ship.rs`, and everything under
-  `aida-cli-lib/src/gate/`) never ships under a mandate, and a mandate never
-  releases its rework hold either.
+  `mandate_traces.rs`, `relay_launch.rs`, `rework_hold_release.rs`,
+  `fleet_lanes.rs`, `pr_ship.rs`, `merge_hold.rs`, `pr_ship_batch.rs`, and
+  everything under `aida-cli-lib/src/gate/`) never ships under a mandate, and a
+  mandate never releases its rework hold either.
   Listing `ship` or `hold-clear` stops mandate rework releases too.
 - You can protect more paths. Entries are exact paths, or directory prefixes
   that end in `/` (`gate/` matches `gate/x.rs`, never `gateway/x.rs`):
@@ -540,6 +645,51 @@ ops = ["ship"]   # any of: ship, sketch-signoff, dispatch, hold-clear
   mandate. The fix is `AIDA_USER=<you>` in the driver's environment.
 
 `aida fleet drive` on its own previews what `aida fleet drive --tick` would
-route, and changes nothing. `aida fleet drive --json` prints that preview as
-JSON.
-<!-- trace:STORY-1700 | ai:claude -->
+route, and changes nothing. The preview applies the same holds as the tick: an
+unreadable store, `[mandate.human_gates]`, and the operator-only floor of every
+spec a lane touches. `aida fleet drive --json` prints that preview as JSON, and
+`aida fleet drive --tick --json` prints the tick report.
+<!-- trace:STORY-1700 | ai:claude --> <!-- trace:TASK-1955 | ai:claude -->
+
+### `aida pr ship-batch`
+
+**One line** — ship several PRs that need a human merge, one at a time, in your
+order, while you only confirm each ship.
+
+**Mental model.** A PR that changes the mandate or merge-gate code, or carries
+an operator-only spec, needs a human to ship it. Each such merge moves main,
+so the next one goes stale: it needs a refresh from main, a new CI run and a
+new independent review before `aida pr ship` accepts it. `aida pr ship-batch
+2792 2798` does that waiting for you. For each PR, in the order given:
+
+1. A merged PR is skipped. A closed, draft or conflicting PR stops the batch.
+2. The branch is refreshed from main (GitHub's update-branch, pinned to the
+   head it read) only when GitHub reports it behind, or when its green
+   predates a CI-definition change on main (the check `aida pr ship` refuses).
+3. It waits for CI on that exact head. Checks from an earlier head never count.
+4. It queues the PR for review and waits for an independent approval recorded
+   at that exact head, printing once a minute that a reviewer has to act. It
+   never records a verdict, and an approval from an earlier head does not count.
+5. It asks you to type the PR number. If the PR has a merge-hold, it then asks
+   you to type `clear`, and clears it with `aida merge-hold clear`.
+6. It ships with `aida pr ship`, every gate in force and no override.
+
+**Options.** `--review-timeout` sets how long to wait for each approval
+(default `60m`). `--dry-run` reads each PR and reports what the batch would
+do, changing nothing. It does not run `git fetch`, so the stale-definition
+check reads your local `origin/*` refs as they are; fetch first for a current
+answer.
+
+**Record.** The start, each PR's outcome and the stop are written to the
+events feed; `aida history events --kind ship-batch-step` shows the run.
+
+**Stopping.** Any failure stops the batch and ships nothing further: red CI,
+CI or review timeout, a negative verdict, a head that keeps moving, an
+unconfirmed prompt, end of input, or a refused ship gate. Run the same command
+again to continue; merged PRs are skipped. The command first prints the order
+and waits for `go`; it refuses duplicate PR numbers and more than 20 PRs.
+
+**Who can run it.** Only a human at an interactive terminal, on a GitHub
+project. Each batch, PR outcome and stop is logged to
+`.aida/advisor-activity.jsonl`.
+<!-- trace:STORY-1887 | ai:claude -->

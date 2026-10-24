@@ -273,8 +273,8 @@ On BUG-1745 (2026-09-30) a new test needed `target/<profile>/aida`. Three things
    `-p aida-cli-lib --lib` suite (7425 tests, ~9 min) failed. Same family as
    [[feedback_source_scanning_guards_need_the_full_suite]] — this is the second instance, so treat
    "my change adds a new source file" as a change only the full suite verifies. The full suite runs
-   only in CI (STANDARD tier: `make test-touched` + `make check-ci-compile` locally), and
-   `make test-touched` module filters never reach a whole-tree guard: wait for CI's run, or name
+   only in CI (LIGHT tier: one targeted `cargo test` + `make check-ci-fast` locally), and
+   module filters never reach a whole-tree guard: wait for CI's run, or name
    the guard with `make test-touched ARGS="--filter <guard>"`.
 2. **`== allowed`, not `<= allowed`, kills the obvious workaround.** The instinct is to put a helper
    in the already-allowlisted `lib.rs` and call it from the test. That makes `lib.rs` hold **2**
@@ -479,7 +479,7 @@ Related: [[feedback_prove_a_test_fails_without_the_fix]],
 
 Operator directive (2026-07-02): "you had codex and agy, do not let this failure to connect be a limiting factor, begin to build resilience."
 
-I ran **Claude-only** subagent fan-out for a whole multi-wave batch session while **Codex and AGY sat idle** — a lapse. Reactivates [[feedback_lead_churn_direct_agents]] + [[feedback_multi_agent_budget_dispatching]] with a resilience lens.
+I ran a **Claude-only** in-session fan-out for a whole multi-wave batch session while **Codex and AGY sat idle** — a lapse. Reactivates [[feedback_lead_churn_direct_agents]] + [[feedback_multi_agent_budget_dispatching]] with a resilience lens.
 
 **Why:** over the session, dispatch was repeatedly threatened by single points of failure — the aida MCP server disconnected/reconnected many times, two worktree-isolated agents died mid-flight *before committing* (salvageable only via leftover worktree diffs), one agent stalled waiting on a background-test notification that never came (reaped child), and `aida pull` stranded autostashes on index-lock contention. None should halt progress.
 

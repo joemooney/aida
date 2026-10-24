@@ -55,6 +55,17 @@ aida_seat_grant() {
     now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
     expires=$(python3 -c 'import datetime; print((datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=23)).strftime("%Y-%m-%dT%H:%M:%SZ"))')
 
+    # BUG-1934: bind the grant to the gate script's own process ($$ is the
+    # top-level shell even inside a command substitution), the ancestor of
+    # every command the gate invokes, as `proc:<pid>@linux-starttime:<field
+    # 22 of its stat file>`, the format process_start_identity reads.
+    # Refuse rather than mint an unbindable grant. trace:BUG-1934 | ai:claude
+    local stat ticks binding
+    stat=$(cat "/proc/$$/stat") || return 1
+    ticks=$(printf '%s\n' "${stat##*)}" | awk '{print $20}')
+    [ -n "$ticks" ] || return 1
+    binding="proc:$$@linux-starttime:$ticks"
+
     mkdir -p "$home/.aida/session-grants"
     cat >"$home/.aida/session-grants/$id.json" <<EOF
 {
@@ -68,7 +79,8 @@ aida_seat_grant() {
   "parent_grant_id": null,
   "issued_at": "$now",
   "expires_at": "$expires",
-  "revoked_at": null
+  "revoked_at": null,
+  "binding": ["$binding"]
 }
 EOF
     printf '%s\n' "$id"

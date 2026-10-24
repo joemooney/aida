@@ -71,8 +71,10 @@ This skill composes existing surfaces rather than restating them:
 ## Required capabilities
 
 This skill needs four harness capabilities:
-- a subagent launcher (Claude Code: `Agent`), used for implementers only;
-- a way to message a running subagent (`SendMessage`);
+- a subagent launcher (Claude Code: `Agent`), used for read-only research
+  only: implementers and reviewers run as separate processes you start from
+  Bash;
+- a way to message a running interactive lane (`aida mailbox send`);
 - Bash `run_in_background` jobs that notify when they exit;
 - a way to stop a stuck job (`TaskStop`).
 
@@ -88,11 +90,12 @@ Without `--delegate-seat reviewer` the first reviewer launch fails closed.
 Report that to the operator; don't work around it.
 <!-- trace:STORY-1654 | ai:claude -->
 
-**Implementation and review must always run in separate sessions.** Without
-subagents, launch them with `aida queue work <SPEC> --strict` (the spec must be
-queued; `--strict` refuses to auto-queue an unsigned-off spec),
-or with `aida agent new` told to push a branch and not open a PR. You can also
-route review to another seat. If no second session is available, stop at
+**Implementation and review must always run in separate sessions.** An
+implementer is only ever a separate process (step 4): a headless
+`aida queue work <SPEC> --role implementer --no-human`, or an interactive lane
+started inside `aida worktree add <SPEC> --role implementer`. Never an
+Agent-tool subagent. You can also route review to another seat.
+<!-- trace:STORY-1662 | ai:claude --> If no second session is available, stop at
 pushed branches and report. **Never review your own diff.**
 
 ## The loop
@@ -184,11 +187,33 @@ Advisors often find real bugs on main. File each one as its own spec, with
 
 ### 4. Dispatch implementers (bounded parallel)
 
-Use one session per spec, each in a worktree that takes the implementer lease:
+Launch each implementer as a separate process from Bash, as a
+`run_in_background` job:
 
 ```bash
-aida worktree add <SPEC> --path ../wt-<spec> --branch <agent>/<spec>
+aida queue work <SPEC> --role implementer --no-human --vendor claude
 ```
+
+It creates the worktree and implementer lease, runs a headless implementer
+with its own seat (a child grant if your grant delegates `implementer`,
+otherwise baseline; never your grant), waits, and prints one `implementer:`
+result line. Branch on the exit code: 0 PR opened (go to step 5), 31 no PR,
+32 punted, 33 held, 34 the concurrency cap refused the launch (nothing was
+set up). The implementer opens its own PR and stops; it cannot ship or record
+a review. Don't `aida claim` the spec first: the launch refuses a held spec.
+
+When you need an interactive lane you will steer, pre-create its worktree
+with the role on its lease, then start the session from inside it:
+
+```bash
+aida worktree add <SPEC> --role implementer --path ../wt-<spec> --branch <agent>/<spec>
+cd ../wt-<spec> && claude --bg ...
+```
+
+The lane takes its identity from the lease at session start (a `--bg`
+session inherits the claude daemon's environment, not yours), so don't
+juggle `AIDA_SESSION_*` variables on the launch line.
+<!-- trace:STORY-1662 | ai:claude -->
 
 **Concurrency cap.** Run **at most 3 live child sessions** at once, counting
 implementers and reviewers together, unless the operator's delegation names a
@@ -214,7 +239,12 @@ what was spent and why it stopped, and re-dispatch **once** with a narrower
 brief. If the second attempt also runs out, report the spec as blocked. Never
 retry silently, and never raise a budget just to keep going.
 
-The implementer brief must include:
+A headless `aida queue work <SPEC> --role implementer --no-human` launch
+takes no brief from you: AIDA writes its prompt from the spec, so record
+anything it must know on the spec (`aida comment add`) before launching. The
+brief below is for an interactive lane started inside
+`aida worktree add <SPEC> --role implementer`. It must include:
+<!-- trace:STORY-1662 | ai:claude -->
 - Read `aida show <SPEC> --full` and the repo's CLAUDE.md. Work only in the
   worktree.
 - Tests use fixtures only. Never touch the live store or real user files
@@ -233,8 +263,9 @@ The implementer brief must include:
   report when it runs out, not to retry.
 - Read handoffs, plans and docs over ~200 lines with targeted reads
   (`rg -n <term> <file>`, `sed -n '<a>,<b>p' <file>`), never whole-file reads.
-- Commit as `[AI:<tool>] type(scope): summary (<SPEC>)`, push the branch, and
-  set the spec to `done`. **Don't open a PR.**
+- Commit as `[AI:<tool>] type(scope): summary (<SPEC>)`, push the branch,
+  open its own PR and stop, as in step 4. It never ships, merges or records
+  a review.
 
 **Model.** Only the `Agent` tool inherits the orchestrator's model by default.
 For an AIDA-launched child, an unset model means the `[agents.<vendor>] model`
@@ -250,8 +281,7 @@ says why.
 Every branch gets a reviewer that did not write it, running as a **separate
 process with its own identity**. The approval that `aida pr ship` accepts is
 the one that reviewer records from its own reviewer seat. An Agent-tool
-subagent shares your session, and you are an author of everything your
-implementer subagents wrote, so its approval is refused at ship.
+subagent shares your session and seat, so its approval is refused at ship.
 
 1. Open the branch's PR if it has none
    (`gh pr create --draft --head <branch> ...`), and note its number `<n>`.
@@ -292,8 +322,10 @@ The reviewer applies the strict tier itself when the diff touches drain logic,
 merge gates, store and cache writes, locks, authority and identity, or
 anything that launches unattended work.
 
-On `RequestChanges`, send the findings from the verdict file back to the
-**same implementer** so it keeps its context. Include a PROXY DECISION on any
+On `RequestChanges`, route the findings from the verdict file back to the
+implementer: relaunch `aida queue work <SPEC> --role implementer --no-human`
+on the existing branch, or mail an interactive lane
+(`aida mailbox send --to <lane> ...`) so it keeps its context. Include a PROXY DECISION on any
 routine design question. Then launch a **new** reviewer process at the new
 head. A stale approval (the head moved after review) also means a new
 reviewer; never use `--override-stale-approval`.

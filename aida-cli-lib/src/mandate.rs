@@ -56,24 +56,34 @@ pub(crate) const KIND_DRIVE: &str = "drive";
 /// STORY-1700: what a mandate covers beyond its on-disk `scope`. A closed
 /// set with no catch-all arm, so an unknown scope string fails
 /// deserialization and [`load_valid`] ignores that record (fail closed).
-/// Relay restart is not a scope here (STORY-1706).
+/// STORY-1706: `relay-restart` lets the drive tick restart a crashed relay
+/// from its human launch record. A drive record minted before it does not
+/// cover it; the operator re-mints.
 // trace:STORY-1700 | ai:claude
+// trace:STORY-1706 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub(crate) enum Scope {
     ShipHeld,
     SketchSignoff,
     Dispatch,
+    RelayRestart,
 }
 
 impl Scope {
-    pub(crate) const ALL: [Scope; 3] = [Scope::ShipHeld, Scope::SketchSignoff, Scope::Dispatch];
+    pub(crate) const ALL: [Scope; 4] = [
+        Scope::ShipHeld,
+        Scope::SketchSignoff,
+        Scope::Dispatch,
+        Scope::RelayRestart,
+    ];
 
     pub(crate) fn as_str(self) -> &'static str {
         match self {
             Self::ShipHeld => SCOPE_SHIP_HELD,
             Self::SketchSignoff => "sketch-signoff",
             Self::Dispatch => "dispatch",
+            Self::RelayRestart => "relay-restart",
         }
     }
 }
@@ -715,6 +725,12 @@ pub(crate) struct ShipSpec {
     /// absent from the store). False when it was only discovered via a trace
     /// comment in a touched file.
     pub named: bool,
+    /// True when the spec's git linkage shows a merged commit on the default
+    /// branch (`main`). Used by [`trace_operator_only_expired`] so an agent
+    /// cannot expire a trace-derived `operator-only` exclusion merely by
+    /// editing the spec's status to `Completed` without a shipped commit.
+    // trace:TASK-2314 | ai:agy
+    pub shipped: bool,
     /// The spec as the store holds it now; `None` when the store has no such
     /// spec currently.
     pub current: Option<aida_core::Requirement>,
@@ -808,7 +824,14 @@ fn store_git(
 ) -> std::result::Result<Vec<u8>, String> {
     use std::io::Write;
     let mut cmd = aida_core::git_ops::host_git_command(store_root);
-    cmd.args(args)
+    // TASK-2067 (advisor C1): no system config, and no path quoting, decide
+    // what a history walk reports. trace:TASK-2067 | ai:claude
+    // TASK-2238: nor do refs/replace/* objects, as for the snapshot queries.
+    // trace:TASK-2238 | ai:claude
+    cmd.args(["-c", "core.quotePath=false"])
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .env("GIT_NO_REPLACE_OBJECTS", "1")
+        .args(args)
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .stdin(if stdin.is_some() {
@@ -825,8 +848,11 @@ fn store_git(
         return match crate::command_output_with_timeout_detail(cmd, budget) {
             crate::BoundedCommandOutput::Completed(out) => git_output(out),
             crate::BoundedCommandOutput::SpawnFailed => Err("git failed to run".to_string()),
+            // TASK-2141: name the knob, so a cold-cache walk on a large
+            // store has a way forward. trace:TASK-1951 trace:TASK-2141 | ai:claude
             crate::BoundedCommandOutput::TimedOut => Err(format!(
-                "store history read timed out after {}s",
+                "store history read timed out after {}s; raise {STORE_HISTORY_TIMEOUT_ENV} \
+                 (seconds) for a large or cold store",
                 budget.as_secs()
             )),
         };
@@ -846,15 +872,19 @@ fn store_git(
     git_output(out)
 }
 
+const STORE_HISTORY_TIMEOUT_ENV: &str = "AIDA_STORE_HISTORY_TIMEOUT_SECS";
+
 /// The deadline for one store-history git walk:
-/// `AIDA_STORE_HISTORY_TIMEOUT_SECS`, else 120 s.
-// trace:TASK-1951 trace:TASK-1662 | ai:claude
+/// `AIDA_STORE_HISTORY_TIMEOUT_SECS`, else 600 s. TASK-2141: the default sits
+/// above the measured cold walk of the live store (4m26s, TASK-1662), so a
+/// cold cache does not refuse a ship; the deadline still bounds a hung walk.
+// trace:TASK-1951 trace:TASK-1662 trace:TASK-2141 | ai:claude
 fn store_history_timeout() -> std::time::Duration {
-    let secs = std::env::var("AIDA_STORE_HISTORY_TIMEOUT_SECS")
+    let secs = std::env::var(STORE_HISTORY_TIMEOUT_ENV)
         .ok()
         .and_then(|v| v.trim().parse::<u64>().ok())
         .filter(|&n| n > 0)
-        .unwrap_or(120);
+        .unwrap_or(600);
     std::time::Duration::from_secs(secs)
 }
 
@@ -936,10 +966,14 @@ impl StoreHistoryBatch {
             .collect();
         tops.sort_unstable();
         tops.dedup();
+        // TASK-2067 (advisor C1): renames off explicitly, so the listed names
+        // never depend on diff.renames or diff.renameLimit; a renamed-to path
+        // is listed as an addition. trace:TASK-2067 | ai:claude
         let mut args: Vec<&str> = vec![
             "log",
             "--all",
             "--format=%x00%H",
+            "--no-renames",
             "--diff-filter=ACMRT",
             "--name-only",
             "--",
@@ -1078,6 +1112,12 @@ pub(crate) fn store_history_alias_map(
             "--unified=0",
             "--no-color",
             "--no-ext-diff",
+            "--no-textconv",
+            "--no-show-signature",
+            "--src-prefix=a/",
+            "--dst-prefix=b/",
+            "--find-renames",
+            "-l0",
             "--regexp-ignore-case",
             &format!("-G{pattern}"),
             "--",
@@ -1086,51 +1126,91 @@ pub(crate) fn store_history_alias_map(
         None,
     )
     .map_err(|e| format!("cannot search store history for {}: {e}", ids.join(", ")))?;
-    let mut file: Option<String> = None;
+    // TASK-2067: the (old, new) paths of the file pair being read. Renames
+    // are detected explicitly (`--find-renames -l0` above), whatever the
+    // user's diff.renames or diff.renameLimit, so a renumbered object is one
+    // pair: a removed line belongs to the old path, an added line to the new
+    // one, and both stems of a rename are the same spec.
+    // trace:TASK-2067 | ai:claude
+    let mut pair: Option<(String, String)> = None;
     for line in String::from_utf8_lossy(&out).lines() {
         if let Some(paths) = line.strip_prefix("diff --git ") {
-            file = paths.rsplit_once(" b/").map(|(_, b)| b.to_string());
+            pair = paths
+                .strip_prefix("a/")
+                .and_then(|paths| paths.rsplit_once(" b/"))
+                .map(|(a, b)| (a.to_string(), b.to_string()));
+            continue;
+        }
+        if let (Some(from), Some((old, _))) = (line.strip_prefix("rename from "), pair.as_mut()) {
+            *old = from.to_string();
+            continue;
+        }
+        if let (Some(to), Some((_, new))) = (line.strip_prefix("rename to "), pair.as_mut()) {
+            *new = to.to_string();
             continue;
         }
         if line.starts_with("+++ ") || line.starts_with("--- ") {
             continue;
         }
-        let Some(body) = line.strip_prefix('+').or_else(|| line.strip_prefix('-')) else {
-            continue;
+        let (body, removed) = match (line.strip_prefix('-'), line.strip_prefix('+')) {
+            (Some(body), _) => (body, true),
+            (None, Some(body)) => (body, false),
+            (None, None) => continue,
         };
         let Some(caps) = line_re.captures(body) else {
             continue;
+        };
+        let (hit, other) = match &pair {
+            Some((old, new)) if removed => (Some(old.as_str()), Some(new.as_str())),
+            Some((old, new)) => (Some(new.as_str()), Some(old.as_str())),
+            None => (None, None),
         };
         // TASK-1800 (comment 24): the history read below finds versions only
         // at an object's canonical path. A hit anywhere else would read as no
         // history and drop the ID as dangling, so it refuses instead.
         // trace:TASK-1800 | ai:claude
-        let stem = file
-            .as_deref()
-            .and_then(|path| {
-                let stem = Path::new(path)
-                    .file_name()?
-                    .to_str()?
-                    .strip_suffix(".yaml")?;
-                let canonical = aida_core::object_store::relative_object_path(stem).ok()?;
-                (canonical == path).then_some(stem)
-            })
-            .ok_or_else(|| {
-                format!(
-                    "store history carries {} outside a canonical object path ({})",
-                    &caps[2],
-                    file.as_deref().unwrap_or("no file")
-                )
-            })?;
+        let stem = hit.and_then(canonical_object_stem).ok_or_else(|| {
+            format!(
+                "store history carries {} outside a canonical object path ({})",
+                &caps[2],
+                hit.unwrap_or("no file")
+            )
+        })?;
         let id = caps[2].to_ascii_uppercase();
-        let stem = stem.to_ascii_uppercase();
+        // The other side of a rename only adds versions to judge. TASK-2238:
+        // a non-canonical other side would be versions never judged, so it
+        // refuses like a non-canonical hit rather than being dropped.
+        // trace:TASK-2238 | ai:claude
+        let renamed = match other.filter(|other| Some(*other) != hit) {
+            None => None,
+            Some(other) => Some(canonical_object_stem(other).ok_or_else(|| {
+                format!(
+                    "store history renames {} to or from a non-canonical object path ({other})",
+                    &caps[2]
+                )
+            })?),
+        };
         if let Some(aliases) = found.get_mut(&id) {
-            if stem != id && !aliases.contains(&stem) {
-                aliases.push(stem);
+            for stem in std::iter::once(stem).chain(renamed) {
+                let stem = stem.to_ascii_uppercase();
+                if stem != id && !aliases.contains(&stem) {
+                    aliases.push(stem);
+                }
             }
         }
     }
     Ok(found)
+}
+
+/// The object ID whose canonical object path is `path`, if it is one.
+// trace:TASK-1800 trace:TASK-2067 | ai:claude
+fn canonical_object_stem(path: &str) -> Option<&str> {
+    let stem = Path::new(path)
+        .file_name()?
+        .to_str()?
+        .strip_suffix(".yaml")?;
+    let canonical = aida_core::object_store::relative_object_path(stem).ok()?;
+    (canonical == path).then_some(stem)
 }
 
 /// TASK-1800: [`store_history_alias_map`] for one ID.
@@ -1231,6 +1311,13 @@ pub(crate) enum HoldFacts {
     None,
     /// AIDA recorded placing a hold whose marker vanished without a clearance.
     MarkerMissing,
+    /// BUG-2214: no marker because a human already cleared the hold, proven by
+    /// three independent corroborations (the local clearance record, a
+    /// TTY-attested human release event newer than the last placement, and the
+    /// forge's label state). The mandate has nothing left to release; the
+    /// cover treats the PR as held-and-released rather than never held.
+    // trace:BUG-2214 | ai:claude
+    ClearedByHuman,
     Marker {
         kind: crate::merge_hold::HoldReasonKind,
         legacy: bool,
@@ -1393,6 +1480,32 @@ pub(crate) fn always_human_class(req: &aida_core::Requirement) -> Option<String>
         .then(|| "operator-only".into())
 }
 
+/// TASK-2168 / TASK-2314: a trace-derived `operator-only` exclusion stops
+/// applying ONLY once the traced spec's current status is `Completed` AND its
+/// linkage shows a merged commit on the default branch (`shipped`). `Rejected`
+/// or `Superseded`, `Completed` with no shipped commit, exclusions named
+/// directly on the PR's specs, and unreadable current status (`current: None`)
+/// keep the exclusion (fail closed).
+// trace:TASK-2168 trace:TASK-2314 | ai:agy
+pub(crate) fn trace_operator_only_expired(spec: &ShipSpec) -> bool {
+    !spec.named
+        && spec.shipped
+        && spec
+            .current
+            .as_ref()
+            .is_some_and(|req| matches!(req.status, aida_core::RequirementStatus::Completed))
+}
+
+// trace:TASK-2168 | ai:agy
+fn excluded_class_for(req: &aida_core::Requirement, ignore_operator_mode: bool) -> Option<String> {
+    if ignore_operator_mode && req.execution_mode == Some(aida_core::ExecutionMode::Operator) {
+        let mut without_operator = req.clone();
+        without_operator.execution_mode = None;
+        return excluded_class(&without_operator);
+    }
+    excluded_class(req)
+}
+
 /// STORY-1698: does an active mandate cover this ship? `Ok(mandate id)` =
 /// the advisor may release the hold and merge; `Err` = it may not. Pure:
 /// every input is gathered by the caller, at the instant of the decision.
@@ -1510,6 +1623,10 @@ pub(crate) fn rework_release_decision(
         }
         HoldFacts::None => return Err(MandateRefusal::NoHoldMarker),
         HoldFacts::MarkerMissing => return Err(MandateRefusal::MarkerMissing),
+        // BUG-2214: an approval releases a live rework hold; a hold a human
+        // already cleared leaves nothing for this path to release.
+        // trace:BUG-2214 | ai:claude
+        HoldFacts::ClearedByHuman => return Err(MandateRefusal::NoHoldMarker),
     }
     // STORY-1700 (R1): a released rework hold lets the PR ship, so the
     // release takes the same gate checks as a mandate ship, plus hold-clear.
@@ -1577,6 +1694,12 @@ fn hold_cover<'a>(c: &ShipCheck<'a>) -> std::result::Result<&'a Mandate, Mandate
     match c.hold {
         HoldFacts::None => return Err(MandateRefusal::NoHoldMarker),
         HoldFacts::MarkerMissing => return Err(MandateRefusal::MarkerMissing),
+        // BUG-2214: a hold a human already cleared (triply corroborated by the
+        // caller) leaves nothing to release; every other check — sticky
+        // exclusions, always-human classes, approval at head, the two-person
+        // rules — still runs below and in `ship_decision`.
+        // trace:BUG-2214 | ai:claude
+        HoldFacts::ClearedByHuman => {}
         HoldFacts::Marker { legacy: true, .. } => {
             return Err(MandateRefusal::HoldNotReleasable {
                 kind: "untyped legacy".into(),
@@ -1608,85 +1731,109 @@ fn hold_cover<'a>(c: &ShipCheck<'a>) -> std::result::Result<&'a Mandate, Mandate
     // trace:STORY-1698 | ai:claude
     // trace:TASK-1800 | ai:antigravity
     for spec in c.specs {
-        let id = &spec.id;
-        if spec.named && spec.current.is_none() {
-            return Err(MandateRefusal::SpecsUnresolved);
-        }
-        let history = match &spec.history {
-            Ok(history) => history,
-            Err(why) => {
-                return Err(MandateRefusal::HistoryUnreadable {
-                    spec: id.clone(),
-                    why: why.clone(),
-                })
-            }
-        };
-        if spec.named && history.is_empty() {
+        judge_exclusion_spec(spec, ledger, mandate.include_supervised)?;
+    }
+    Ok(mandate)
+}
+
+/// One exclusion subject under the per-spec rules [`hold_cover`] applies to
+/// every spec: fail closed on a missing named spec or unreadable history, the
+/// ledger first, then every version; a dangling trace-derived ID passes.
+/// Shared with the TASK-1800 replay (TASK-2067).
+// trace:STORY-1698 | ai:claude
+// trace:TASK-1800 | ai:antigravity
+// trace:TASK-2067 | ai:claude
+pub(crate) fn judge_exclusion_spec(
+    spec: &ShipSpec,
+    ledger: &std::collections::BTreeMap<String, Exclusion>,
+    include_supervised: bool,
+) -> std::result::Result<(), MandateRefusal> {
+    let id = &spec.id;
+    if spec.named && spec.current.is_none() {
+        return Err(MandateRefusal::SpecsUnresolved);
+    }
+    let history = match &spec.history {
+        Ok(history) => history,
+        Err(why) => {
             return Err(MandateRefusal::HistoryUnreadable {
                 spec: id.clone(),
-                why: format!("no version of {id} in the store's history"),
-            });
+                why: why.clone(),
+            })
         }
-        // The ledger is the first source: once seen excluded, always excluded.
-        // Consult both the ID and any recorded aliases.
-        let mut excluded: Option<String> = None;
-        for key in std::iter::once(id).chain(spec.aliases.iter()) {
-            if let Some(entry) = ledger.get(&key.to_ascii_uppercase()) {
-                if entry.always_human {
+    };
+    if spec.named && history.is_empty() {
+        return Err(MandateRefusal::HistoryUnreadable {
+            spec: id.clone(),
+            why: format!("no version of {id} in the store's history"),
+        });
+    }
+    // The ledger is the first source: once seen excluded, always excluded.
+    // Consult both the ID and any recorded aliases.
+    // TASK-2168 / TASK-2314: a trace-derived operator-only exclusion expires
+    // only once the traced spec is Completed AND shipped on the default branch
+    // (fail closed when current status is unreadable or unshipped).
+    // trace:TASK-2168 trace:TASK-2314 | ai:agy
+    let operator_only_expired = trace_operator_only_expired(spec);
+    let mut excluded: Option<String> = None;
+    for key in std::iter::once(id).chain(spec.aliases.iter()) {
+        if let Some(entry) = ledger.get(&key.to_ascii_uppercase()) {
+            if entry.always_human {
+                if !(operator_only_expired && entry.class == "operator-only") {
                     return Err(MandateRefusal::AlwaysHuman {
                         spec: id.clone(),
                         class: entry.class.clone(),
                     });
                 }
-                if excluded.is_none() {
-                    excluded = Some(format!(
-                        "{}, recorded {}",
-                        entry.class,
-                        entry.first_seen.to_rfc3339()
-                    ));
-                }
+            } else if excluded.is_none() {
+                excluded = Some(format!(
+                    "{}, recorded {}",
+                    entry.class,
+                    entry.first_seen.to_rfc3339()
+                ));
             }
         }
-        if !spec.named && spec.current.is_none() && history.is_empty() && excluded.is_none() {
-            // Dangling trace-derived reference: no current version, no store
-            // history on any ref, and no exclusion ledger entry.
-            continue;
-        }
-        let current_changes = spec
-            .current
-            .as_ref()
-            .map(field_change_versions)
-            .unwrap_or_default();
-        let versions = spec
-            .current
-            .iter()
-            .chain(current_changes.iter())
-            .chain(history.iter());
-        for (i, version) in versions.enumerate() {
-            if let Some(class) = always_human_class(version) {
+    }
+    if !spec.named && spec.current.is_none() && history.is_empty() && excluded.is_none() {
+        // Dangling trace-derived reference: no current version, no store
+        // history on any ref, and no exclusion ledger entry.
+        return Ok(());
+    }
+    let current_changes = spec
+        .current
+        .as_ref()
+        .map(field_change_versions)
+        .unwrap_or_default();
+    let versions = spec
+        .current
+        .iter()
+        .chain(current_changes.iter())
+        .chain(history.iter());
+    for (i, version) in versions.enumerate() {
+        if let Some(class) = always_human_class(version) {
+            if !(operator_only_expired && class == "operator-only") {
                 return Err(MandateRefusal::AlwaysHuman {
                     spec: id.clone(),
                     class,
                 });
             }
-            if excluded.is_none() {
-                excluded = excluded_class(version).map(|why| {
-                    if i == 0 && spec.current.is_some() {
-                        why
-                    } else {
-                        format!("{why}, in an earlier version")
-                    }
-                });
-            }
         }
-        if let (Some(why), false) = (excluded, mandate.include_supervised) {
-            return Err(MandateRefusal::Excluded {
-                spec: id.clone(),
-                why,
+        if excluded.is_none() {
+            excluded = excluded_class_for(version, operator_only_expired).map(|why| {
+                if i == 0 && spec.current.is_some() {
+                    why
+                } else {
+                    format!("{why}, in an earlier version")
+                }
             });
         }
     }
-    Ok(mandate)
+    if let (Some(why), false) = (excluded, include_supervised) {
+        return Err(MandateRefusal::Excluded {
+            spec: id.clone(),
+            why,
+        });
+    }
+    Ok(())
 }
 
 // ── Ledger ──────────────────────────────────────────────────────────────────
@@ -2014,33 +2161,45 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
             for w in &warnings {
                 eprintln!("warning: {w}");
             }
-            if *json {
-                let mut out = status_json(&state, now);
-                if let (Some(root), Some(m)) = (&audit_root, state_mandate(&state)) {
-                    out["drive_actions"] = crate::mandate_drive::ledger_json(root, &m.id);
-                }
-                // trace:STORY-1888 | ai:claude
-                if let Some(root) = &audit_root {
-                    out["protected_paths"] = crate::mandate_gates::protected_paths_json(root);
-                }
-                println!("{out}");
-            } else {
-                println!("{}", status_text(&state, now));
-                if let (Some(root), Some(m)) = (&audit_root, state_mandate(&state)) {
-                    let gates = crate::mandate_gates::describe(Some(root));
-                    println!("  human gates: {gates}");
-                    if let Some(summary) = crate::mandate_drive::ledger_text(root, &m.id) {
-                        println!("{summary}");
-                    }
-                }
-                // trace:STORY-1888 | ai:claude
-                if let Some(root) = &audit_root {
-                    print!("{}", crate::mandate_gates::protected_paths_text(root));
-                }
-            }
+            print!(
+                "{}",
+                status_report(&state, now, audit_root.as_deref(), *json)
+            );
             Ok(())
         }
     }
+}
+
+/// The full `aida mandate status` output (text or JSON), newline-terminated.
+// trace:STORY-1888 | ai:claude
+pub(crate) fn status_report(
+    state: &MandateState,
+    now: DateTime<Utc>,
+    audit_root: Option<&Path>,
+    json: bool,
+) -> String {
+    if json {
+        let mut out = status_json(state, now);
+        if let (Some(root), Some(m)) = (audit_root, state_mandate(state)) {
+            out["drive_actions"] = crate::mandate_drive::ledger_json(root, &m.id);
+        }
+        if let Some(root) = audit_root {
+            out["protected_paths"] = crate::mandate_gates::protected_paths_json(root);
+        }
+        return format!("{out}\n");
+    }
+    let mut out = format!("{}\n", status_text(state, now));
+    if let (Some(root), Some(m)) = (audit_root, state_mandate(state)) {
+        let gates = crate::mandate_gates::describe(Some(root));
+        out.push_str(&format!("  human gates: {gates}\n"));
+        if let Some(summary) = crate::mandate_drive::ledger_text(root, &m.id) {
+            out.push_str(&format!("{summary}\n"));
+        }
+    }
+    if let Some(root) = audit_root {
+        out.push_str(&crate::mandate_gates::protected_paths_text(root));
+    }
+    out
 }
 
 #[cfg(test)]

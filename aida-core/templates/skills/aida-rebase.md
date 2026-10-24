@@ -126,5 +126,5 @@ aida rebase --branch <ref>       # rebase onto an explicit ref, not @{u}
 - `/aida-commit` — fire `/aida-rebase --dry-run` from its pre-commit
   check when the session is stale.
 - `/aida-pickup` — verify a fresh base when picking up a queued item.
-- `/aida-pr` — verify before `gh pr create` so review starts on a
-  current base.
+- `/aida-pr` / `aida ship <SPEC> --no-merge` — open the PR on a current
+  base so review starts there (`aida ship` rebases on its own).

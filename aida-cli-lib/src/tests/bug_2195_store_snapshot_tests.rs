@@ -185,3 +185,224 @@ fn a_dirty_store_is_a_typed_error_whatever_the_status_config() {
     assert!(err.is::<StoreDirty>(), "{err:#}");
     assert!(format!("{err:#}").contains("uncommitted evidence"));
 }
+
+/// TASK-2144: `git log --all` walks another worktree's detached HEAD, so an
+/// object version committed there during collection is a change.
+// trace:TASK-2067 | ai:claude
+#[test]
+fn an_object_version_on_another_worktrees_detached_head_is_unstable() {
+    let (s, base) = store();
+    let other = tempfile::tempdir().unwrap();
+    let wt = other.path().join("wt");
+    s.git(&[
+        "worktree",
+        "add",
+        "-q",
+        "--detach",
+        wt.to_str().unwrap(),
+        &base,
+    ]);
+    let before = s.snap();
+    assert!(
+        before
+            .refs
+            .keys()
+            .any(|k| k.starts_with("HEAD of worktree ")),
+        "{before:?}"
+    );
+    std::fs::write(wt.join("objects/TASK/000/TASK-1.yaml"), "title: two\n").unwrap();
+    for args in [&["add", "-A"][..], &["commit", "-qm", "detached"]] {
+        let out = crate::test_git::git_command()
+            .current_dir(&wt)
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "{out:?}");
+    }
+    assert!(
+        !s.stable(&before),
+        "the detached HEAD brought a new version"
+    );
+}
+
+/// TASK-2145: an excludes file (here repository-local; the global one is
+/// overridden the same way) never hides an untracked object from the dirty
+/// check.
+// trace:TASK-2067 | ai:claude
+#[test]
+fn an_excludes_file_does_not_hide_an_untracked_object() {
+    let (s, _) = store();
+    let dir = tempfile::tempdir().unwrap();
+    let excludes = dir.path().join("excludes");
+    std::fs::write(&excludes, "*.yaml\n").unwrap();
+    s.git(&["config", "core.excludesFile", excludes.to_str().unwrap()]);
+    std::fs::write(s.path().join("objects/TASK/000/TASK-9.yaml"), "x\n").unwrap();
+    assert_eq!(s.git(&["status", "--porcelain"]), "", "the file hides it");
+    let err = store_snapshot(s.path()).unwrap_err();
+    assert!(err.is::<StoreDirty>(), "{err:#}");
+}
+
+/// TASK-2230: neither `$GIT_DIR/info/exclude` nor a `.gitignore` hides an
+/// untracked object from the dirty check.
+// trace:TASK-2238 | ai:claude
+#[test]
+fn task_2238_info_exclude_and_gitignore_do_not_hide_an_untracked_object() {
+    for hide in ["info/exclude", ".gitignore"] {
+        let (s, _) = store();
+        if hide == ".gitignore" {
+            s.commit(".gitignore", "objects/TASK/000/TASK-9.yaml\n");
+        } else {
+            let common = s.path().join(s.git(&["rev-parse", "--git-common-dir"]));
+            std::fs::create_dir_all(common.join("info")).unwrap();
+            std::fs::write(common.join("info/exclude"), "*.yaml\n").unwrap();
+        }
+        std::fs::write(s.path().join("objects/TASK/000/TASK-9.yaml"), "x\n").unwrap();
+        assert_eq!(s.git(&["status", "--porcelain"]), "", "{hide} hides it");
+        let err = store_snapshot(s.path()).unwrap_err();
+        assert!(err.is::<StoreDirty>(), "{hide}: {err:#}");
+    }
+}
+
+/// A lease can be staged between a coordination writer's add and commit;
+/// mailbox/runtime dirt must not turn that window into a mandate refusal.
+// trace:BUG-2213 | ai:codex
+#[test]
+fn bug_2213_coordination_and_other_non_evidence_dirt_allow_a_snapshot() {
+    let (s, _) = store();
+    s.commit(
+        "coordination/leases/pr-17-reviewer.toml",
+        "lease = \"old\"\n",
+    );
+    s.commit("notes.txt", "old\n");
+    let before = s.snap();
+    std::fs::write(
+        s.path().join("coordination/leases/pr-17-reviewer.toml"),
+        "lease = \"renewed\"\n",
+    )
+    .unwrap();
+    s.git(&["add", "coordination/leases/pr-17-reviewer.toml"]);
+    std::fs::write(
+        s.path().join("coordination/leases/pr-18-new.toml"),
+        "lease = \"new\"\n",
+    )
+    .unwrap();
+    s.git(&["add", "coordination/leases/pr-18-new.toml"]);
+    std::fs::create_dir_all(s.path().join("coordination/mailbox")).unwrap();
+    std::fs::write(s.path().join("coordination/mailbox/message.toml"), "mail\n").unwrap();
+    std::fs::write(s.path().join("notes.txt"), "changed\n").unwrap();
+    std::fs::create_dir_all(s.path().join("objects-backup")).unwrap();
+    std::fs::write(
+        s.path().join("objects-backup/untracked.yaml"),
+        "not evidence\n",
+    )
+    .unwrap();
+    let status = s.git(&["status", "--porcelain"]);
+    assert!(
+        status.contains("M  coordination/leases/pr-17-reviewer.toml"),
+        "{status}"
+    );
+    assert!(
+        status.contains("A  coordination/leases/pr-18-new.toml"),
+        "{status}"
+    );
+    let after = store_snapshot(s.path()).expect("non-evidence dirt permits a snapshot");
+    assert!(store_snapshot_stable(s.path(), &before, &after));
+}
+
+/// Scoped status must still reject indexed and working-tree changes of any
+/// kind below objects/, not merely YAML modifications seen by porcelain.
+// trace:BUG-2213 | ai:codex
+#[test]
+fn bug_2213_dirty_objects_refuse_including_staged_deletions_and_renames() {
+    for change in [
+        "modified",
+        "staged",
+        "untracked",
+        "untracked-other",
+        "deleted",
+        "renamed-out",
+        "root-replaced",
+    ] {
+        let (s, _) = store();
+        let object = s.path().join("objects/TASK/000/TASK-1.yaml");
+        match change {
+            "modified" | "staged" => {
+                std::fs::write(&object, "tags: [security]\n").unwrap();
+                if change == "staged" {
+                    s.git(&["add", "objects/"]);
+                }
+            }
+            "untracked" => {
+                std::fs::write(
+                    s.path().join("objects/TASK/000/TASK-2.yaml"),
+                    "tags: [security]\n",
+                )
+                .unwrap();
+            }
+            "untracked-other" => {
+                std::fs::create_dir_all(s.path().join("objects/new-subdir")).unwrap();
+                std::fs::write(
+                    s.path().join("objects/new-subdir/not-yaml.txt"),
+                    "new evidence\n",
+                )
+                .unwrap();
+            }
+            "deleted" => {
+                s.git(&["rm", "objects/TASK/000/TASK-1.yaml"]);
+            }
+            "renamed-out" => {
+                s.git(&["mv", "objects/TASK/000/TASK-1.yaml", "removed-object.yaml"]);
+            }
+            "root-replaced" => {
+                std::fs::remove_dir_all(s.path().join("objects")).unwrap();
+                std::fs::write(s.path().join("objects"), "directory replaced\n").unwrap();
+            }
+            _ => unreachable!(),
+        }
+        let error = store_snapshot(s.path()).unwrap_err();
+        assert!(error.is::<StoreDirty>(), "{change}: {error:#}");
+    }
+}
+
+/// Git's literal mode disables :(...) magic. The production pathspec must
+/// keep both real dirt queries nonempty under every inherited pathspec mode,
+/// without mutating the process environment shared by concurrent tests.
+// trace:BUG-2213 | ai:codex
+#[test]
+fn bug_2213_inherited_pathspec_modes_cannot_hide_object_dirt() {
+    let (s, _) = store();
+    std::fs::write(
+        s.path().join("objects/TASK/000/TASK-1.yaml"),
+        "tags: [security]\n",
+    )
+    .unwrap();
+    std::fs::write(s.path().join("objects/untracked.yaml"), "security\n").unwrap();
+    let modes = [
+        "GIT_LITERAL_PATHSPECS",
+        "GIT_GLOB_PATHSPECS",
+        "GIT_NOGLOB_PATHSPECS",
+        "GIT_ICASE_PATHSPECS",
+    ];
+    for mode in std::iter::once(None).chain(modes.iter().copied().map(Some)) {
+        // The production arg vectors, not a paraphrase: the matrix must
+        // exercise --ignore-submodules=none too.
+        // trace:TASK-2272 | ai:claude (TASK-2320)
+        for args in [STORE_STATUS_ARGS.to_vec(), STORE_LS_FILES_ARGS.to_vec()] {
+            let mut cmd = snapshot_command(s.path());
+            for key in modes {
+                cmd.env_remove(key);
+            }
+            if let Some(key) = mode {
+                cmd.env(key, "1");
+            }
+            let out = cmd.args(&args).output().unwrap();
+            assert!(out.status.success(), "{mode:?} {args:?}: {out:?}");
+            assert!(
+                !out.stdout.is_empty(),
+                "{mode:?} {args:?} hid object evidence"
+            );
+        }
+    }
+}

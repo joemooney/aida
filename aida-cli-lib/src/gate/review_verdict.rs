@@ -236,6 +236,14 @@ pub struct RecorderAttestation {
     // trace:STORY-1655 | ai:claude
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub solo_human: bool,
+    /// BUG-1934: the recorder's process tokens that satisfied the seat
+    /// grant's binding when it recorded. The ship gate requires them to match
+    /// the grant's binding again; empty (an older verdict, or no grant) never
+    /// verifies a grant attestation. Kept apart from `identity` so the
+    /// author-overlap check is unchanged.
+    // trace:BUG-1934 | ai:claude
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub grant_binding: Vec<String>,
 }
 
 impl RecorderAttestation {
@@ -2293,7 +2301,23 @@ pub fn close_verdict_on_merge(
         .map(|s| !s.trim().is_empty())
         .unwrap_or(false);
     if already_closed {
-        return Ok(false);
+        // TASK-2135: an earlier close wrote the current file and then failed
+        // writing the archive entry at the same commit. The current file
+        // already says closed, so close the archive entry too if it is still
+        // open; otherwise `verdicts_for_sha` keeps reporting the refusal.
+        // trace:TASK-1951 trace:TASK-2135 | ai:claude
+        let Some((archive, body)) = prepare_archive_round(&path, &obj)? else {
+            return Ok(false);
+        };
+        let archive_open = read_existing_verdict_object(&archive)?
+            .get("closed_by_merge")
+            .and_then(|v| v.as_str())
+            .is_none_or(|s| s.trim().is_empty());
+        if !archive_open {
+            return Ok(false);
+        }
+        write_verdict_atomic(&archive, &body)?;
+        return Ok(true);
     }
     obj.insert(
         "closed_by_merge".to_string(),

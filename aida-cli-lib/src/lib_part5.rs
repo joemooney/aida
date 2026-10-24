@@ -3081,6 +3081,16 @@ pub(crate) fn handle_review_record_at(
         identity: recorder.tokens.clone(),
         receipt_id,
         solo_human,
+        // trace:BUG-1934 | ai:claude
+        grant_binding: recorder_grant
+            .as_ref()
+            .map(|g| {
+                crate::seat_authority::matched_binding(
+                    g,
+                    &crate::seat_authority::presenter_tokens_for(g),
+                )
+            })
+            .unwrap_or_default(),
     })
     .context("could not serialize the review recorder attestation")?;
 
@@ -3460,7 +3470,8 @@ pub(crate) const REVIEW_OPERATOR_RECORDED_BY: &str = "aida review record (operat
 /// BUG-1918 / BUG-1693: the human-at-TTY floor for operator attribution.
 /// Returns whether a human was proven present; refuses otherwise. Under
 /// `cfg(test)` no TTY exists, so it proves nothing (`false`) — a test-written
-/// operator approval is therefore never attested as human.
+/// operator approval is never attested as human unless the test seats one
+/// with `solo_review::with_test_human_terminal`.
 // trace:BUG-1918 | ai:claude
 fn review_operator_tty_floor(project_root: &std::path::Path) -> Result<bool> {
     #[cfg(not(test))]
@@ -3480,8 +3491,10 @@ fn review_operator_tty_floor(project_root: &std::path::Path) -> Result<bool> {
     }
     #[cfg(test)]
     {
+        // TASK-1808: a test can seat a human at the terminal.
+        // trace:TASK-1955 | ai:claude (TASK-1808)
         let _ = project_root;
-        Ok(false)
+        Ok(crate::solo_review::test_human_at_terminal())
     }
 }
 

@@ -850,6 +850,77 @@ pub(crate) fn classify_rebase_subprocess_exit(
     }
 }
 
+/// STORY-1662 (TASK-2154): every exit code an `aida` command assigns a
+/// meaning to, in ONE table. A caller that branches on a code needs it to be
+/// unambiguous, so the distinctness test reads this table rather than a
+/// hand-kept list; a new named code goes here, or the test cannot see it.
+/// A code with two meanings on different commands is one row naming both.
+/// Vendor exit codes that pass through (`queue work` reviewer and
+/// implementer launches) are not listed: they are the vendor's, not ours.
+// trace:STORY-1662 | ai:claude
+pub(crate) const EXIT_CODES: &[(i32, &str)] = &[
+    (auto_complete::DRIVE_EXIT_CLEAN, "success"),
+    (1, "error"),
+    (
+        auto_complete::DRIVE_EXIT_SHELVED,
+        "usage error (clap); `--auto-complete` drive shelved a spec",
+    ),
+    (
+        auto_complete::DRIVE_EXIT_HARD_FAIL,
+        "`--auto-complete` drive hard failure",
+    ),
+    (drain_next_n::DRAIN_CAP_EXIT_CODE, "drain cap reached"),
+    (pr_rebase::REBASE_EXIT_CODE_CONFLICT, "pr rebase conflict"),
+    (pr_rebase::REBASE_EXIT_CODE_REFUSED, "pr rebase refused"),
+    (pr_ship::ShipRefusal::CiRed as i32, "pr ship: CI red"),
+    (
+        pr_ship::ShipRefusal::CiTimeout as i32,
+        "pr ship: CI timeout",
+    ),
+    (
+        pr_ship::ShipRefusal::NotMergeable as i32,
+        "pr ship: not mergeable",
+    ),
+    (pr_ship::ShipRefusal::Review as i32, "pr ship: review"),
+    (
+        pr_ship::ShipRefusal::StaleDefinition as i32,
+        "pr ship: stale definition",
+    ),
+    (
+        pr_ship::ShipRefusal::MergeHold as i32,
+        "pr ship: merge hold",
+    ),
+    (
+        pr_ship::ShipRefusal::BehindBase as i32,
+        "pr ship: head behind its base",
+    ),
+    (
+        queue_cmd::NO_REVIEW_VERDICT_EXIT_CODE,
+        "standalone reviewer: no verdict",
+    ),
+    (
+        crate::standalone_implementer::NO_PR_EXIT_CODE,
+        "standalone implementer: no PR",
+    ),
+    (
+        crate::standalone_implementer::PUNTED_EXIT_CODE,
+        "standalone implementer: punted",
+    ),
+    (
+        crate::standalone_implementer::HELD_EXIT_CODE,
+        "standalone implementer: held",
+    ),
+    (
+        crate::standalone_implementer::CAP_EXIT_CODE,
+        "standalone implementer: concurrency cap",
+    ),
+    (
+        crate::maintenance_schedule::TIMEOUT_EXIT_STATUS,
+        "scheduled job timed out",
+    ),
+    (drain_signal::SIGTERM_EXIT_CODE, "terminated by SIGTERM"),
+];
+
 /// BUG-1295: the process exit code `main_entry` returns for a top-level
 /// error. Pulled out of `main_entry` so it's unit-testable: a
 /// `pr_rebase::RebaseFailureExit` (the sentinel a `pr rebase` conflict /
@@ -861,11 +932,11 @@ pub(crate) fn classify_rebase_subprocess_exit(
 pub(crate) fn exit_code_for_error(err: &anyhow::Error) -> i32 {
     // trace:TASK-1606 | ai:codex
     if let Some(failure) = err.downcast_ref::<pr_ship::ShipFailure>() {
-        return failure.reason as i32;
+        return named_exit_code(failure.reason as i32);
     }
     // trace:BUG-2149 | ai:claude
     if err.downcast_ref::<queue_cmd::NoReviewVerdict>().is_some() {
-        return queue_cmd::NO_REVIEW_VERDICT_EXIT_CODE;
+        return named_exit_code(queue_cmd::NO_REVIEW_VERDICT_EXIT_CODE);
     }
     // trace:BUG-2187 | ai:claude
     if let Some(exit) = err.downcast_ref::<queue_cmd::ReviewerVendorExit>() {
@@ -875,11 +946,27 @@ pub(crate) fn exit_code_for_error(err: &anyhow::Error) -> i32 {
     if let Some(exit) =
         err.downcast_ref::<crate::standalone_implementer::StandaloneImplementerExit>()
     {
-        return exit.code;
+        return if exit.vendor_exit {
+            exit.code
+        } else {
+            named_exit_code(exit.code)
+        };
     }
     err.downcast_ref::<pr_rebase::RebaseFailureExit>()
-        .map(|sig| sig.code)
+        .map(|sig| named_exit_code(sig.code))
         .unwrap_or(1)
+}
+
+/// TASK-2215: a named exit code, read from [`EXIT_CODES`]. A code with no row
+/// there exits 1, so a code nobody registered can never reach a caller that
+/// branches on it. Vendor pass-through codes do not come through here.
+// trace:STORY-1662 | ai:claude
+pub(crate) fn named_exit_code(code: i32) -> i32 {
+    if EXIT_CODES.iter().any(|(c, _)| *c == code) {
+        code
+    } else {
+        1
+    }
 }
 
 /// STORY-335: the argv `aida queue integrate --rebase` hands to the `aida`
@@ -988,12 +1075,14 @@ pub(crate) fn orchestrator_phase_child_env(
     env
 }
 
+/// Git in an implementer's tree, through the host git builder: a seat clone
+/// is refused rather than run (BUG-2169).
+// trace:TASK-2053 | ai:claude
 pub(crate) fn git_output_checked(
     worktree: &std::path::Path,
     args: &[&str],
 ) -> Result<String, String> {
-    let out = std::process::Command::new("git")
-        .current_dir(worktree)
+    let out = aida_core::git_ops::host_git_command(worktree)
         .args(args)
         .output()
         .map_err(|e| format!("could not invoke `git {}`: {e}", args.join(" ")))?;
@@ -1027,6 +1116,18 @@ pub(crate) fn push_branch_from_implementer_worktree(
 ) -> Result<(), auto_complete::PhaseFailure> {
     // trace:BUG-878 | ai:codex
     let refspec = format!("HEAD:refs/heads/{branch}");
+    // BUG-2169: a host push from a seat clone would run its seat-written
+    // pre-push hook and config; a clone seat pushes from its own sandbox.
+    // trace:TASK-2053 | ai:claude
+    if aida_core::seat_clone_detect::seat_clone_root(worktree).is_some() {
+        return Err(auto_complete::PhaseFailure::new(format!(
+            "`{}` is a contained seat's private clone; the host never pushes from it (the seat \
+             pushes `{branch}` itself)",
+            worktree.display()
+        )));
+    }
+    // trace:TASK-2270 | ai:claude
+    aida_core::git_ops::clear_sandbox_config_lock(worktree);
     let out = std::process::Command::new("git")
         .current_dir(worktree)
         .args(["push", "-u", "origin", &refspec])
@@ -1040,6 +1141,8 @@ pub(crate) fn push_branch_from_implementer_worktree(
             )
         })?;
     if out.status.success() {
+        // `HEAD:` refspec: the checked-out branch tracks origin/<branch>.
+        aida_core::git_ops::repair_push_upstream(worktree, "origin", None, branch);
         return Ok(());
     }
     let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
@@ -1054,11 +1157,108 @@ pub(crate) fn push_branch_from_implementer_worktree(
     )))
 }
 
+// trace:TASK-2191 | ai:codex
+fn clone_branch_origin_head(
+    main: &std::path::Path,
+    branch: &str,
+) -> Result<Option<String>, auto_complete::PhaseFailure> {
+    let reference = format!("refs/heads/{branch}");
+    let mut cmd = aida_core::git_ops::host_git_command(main);
+    cmd.args(["ls-remote", "--heads", "origin", &reference])
+        .remote_credentials(main, "origin");
+    let out = crate::command_output_with_timeout(cmd, std::time::Duration::from_secs(20))
+        .filter(|out| out.status.success())
+        .ok_or_else(|| {
+            auto_complete::PhaseFailure::new(
+                "could not verify implementer branch on origin before phase-2 CI/teardown",
+            )
+        })?;
+    let text = String::from_utf8_lossy(&out.stdout);
+    if text.trim().is_empty() {
+        return Ok(None);
+    }
+    let mut lines = text.lines();
+    let fields = lines
+        .next()
+        .unwrap_or_default()
+        .split_whitespace()
+        .collect::<Vec<_>>();
+    if fields.len() != 2
+        || fields[1] != reference
+        || lines.next().is_some()
+        || !matches!(fields[0].len(), 40 | 64)
+        || !fields[0].bytes().all(|b| b.is_ascii_hexdigit())
+    {
+        return Err(auto_complete::PhaseFailure::new(
+            "origin returned invalid implementer branch evidence",
+        ));
+    }
+    Ok(Some(fields[0].to_owned()))
+}
+
 pub(crate) fn ensure_implementer_branch_pushed(
     worktree: &std::path::Path,
     branch: &str,
     json: bool,
 ) -> Result<(), auto_complete::PhaseFailure> {
+    // Read private clone state only through the sandbox. Publication evidence
+    // comes from the real origin, never the seat-written tracking refs.
+    // trace:TASK-2191 | ai:codex
+    if aida_core::seat_clone_detect::seat_clone_root(worktree).is_some() {
+        let crate::seat_clone::MainFor::Verified(main) = crate::seat_clone::main_for(worktree)
+        else {
+            return Err(auto_complete::PhaseFailure::new(
+                "could not verify the implementer seat clone's main checkout before phase-2 CI/teardown",
+            ));
+        };
+        return match crate::seat_clone::probe(&main, worktree) {
+            crate::seat_clone::Probe::Known(facts) if facts.branch.as_deref() != Some(branch) => {
+                Err(auto_complete::PhaseFailure::new(format!(
+                    "implementer seat clone is on `{}` but phase 2 is driving `{branch}` — refusing to continue",
+                    facts.branch.as_deref().unwrap_or("DETACHED"),
+                )))
+            }
+            crate::seat_clone::Probe::Known(facts) if facts.unpushed > 0 => {
+                Err(auto_complete::PhaseFailure::new(format!(
+                    "implementer seat clone has {} unpushed commit(s); the seat must push `{branch}` before phase-2 CI/teardown (the host never pushes from a clone)",
+                    facts.unpushed,
+                )))
+            }
+            crate::seat_clone::Probe::Known(facts) => {
+                let Some(head) = facts.head else {
+                    return Err(auto_complete::PhaseFailure::new("implementer seat clone has no HEAD"));
+                };
+                let remote = clone_branch_origin_head(&main, branch)?;
+                if remote.as_deref() == Some(&head) {
+                    return Ok(());
+                }
+                // A zero-commit seat branch can be published from its host-owned
+                // base pin. Never read objects/config/hooks from the clone on the host.
+                // Existing remote branches are not overwritten on a mismatch.
+                if remote.is_none()
+                    && crate::seat_clone::pinned_base(&main, worktree).as_deref() == Some(&head)
+                {
+                    let mut cmd = aida_core::git_ops::host_git_command(&main);
+                    cmd.args(["push", "origin", &format!("{head}:refs/heads/{branch}")])
+                        .remote_credentials(&main, "origin");
+                    let out = crate::command_output_with_timeout(cmd, std::time::Duration::from_secs(30));
+                    if out.is_some_and(|out| out.status.success())
+                        && clone_branch_origin_head(&main, branch)?.as_deref() == Some(&head)
+                    {
+                        return Ok(());
+                    }
+                }
+                Err(auto_complete::PhaseFailure::new(format!(
+                    "implementer seat clone HEAD is not published at origin/{branch}; the seat must push `{branch}` before phase-2 CI/teardown",
+                )))
+            },
+            crate::seat_clone::Probe::Unknown(why) | crate::seat_clone::Probe::HasSubmodules(why) => {
+                Err(auto_complete::PhaseFailure::new(format!(
+                    "could not verify implementer seat clone before phase-2 CI/teardown: {why}",
+                )))
+            }
+        };
+    }
     // trace:BUG-878 | ai:codex
     let current = git_output_checked(worktree, &["branch", "--show-current"]).map_err(|e| {
         auto_complete::PhaseFailure::new(format!(
@@ -1181,8 +1381,8 @@ pub(crate) fn open_orchestrator_pr_for_implementer_worktree(
     if let Some(existing) = existing_open_pr_for_branch(project_root, branch, forge_kind) {
         return Ok(existing);
     }
-    let commit_msg_out = std::process::Command::new("git")
-        .current_dir(worktree)
+    // A seat clone is refused (BUG-2169). trace:TASK-2053 | ai:claude
+    let commit_msg_out = aida_core::git_ops::host_git_command(worktree)
         .args(["log", "-1", "--format=%B"])
         .output()
         .context("could not invoke `git log` to derive orchestrator PR title/body")?;
@@ -1698,18 +1898,27 @@ pub(crate) fn prepare_graded_review(
     }
     let checkout =
         std::env::temp_dir().join(format!("aida-graded-pr-{pr}-{}", uuid::Uuid::now_v7()));
-    let added = std::process::Command::new("git")
-        .current_dir(project_root)
+    // trace:BUG-2211 | ai:claude
+    let added = aida_core::git_ops::output_healing_config_lock(
+        project_root,
+        || {
+            let mut cmd = std::process::Command::new("git");
+            cmd.current_dir(project_root);
+            cmd
+        },
         // trace:BUG-1622 | ai:claude
-        .args(["worktree", "add", "--detach", "--"])
-        .arg(&checkout)
-        .arg(reviewed_sha.trim())
-        .output()
-        .map_err(|e| {
-            auto_complete::PhaseFailure::new(format!(
-                "could not create graded-review checkout: {e}"
-            ))
-        })?;
+        &[
+            std::ffi::OsStr::new("worktree"),
+            std::ffi::OsStr::new("add"),
+            std::ffi::OsStr::new("--detach"),
+            std::ffi::OsStr::new("--"),
+            checkout.as_os_str(),
+            std::ffi::OsStr::new(reviewed_sha.trim()),
+        ],
+    )
+    .map_err(|e| {
+        auto_complete::PhaseFailure::new(format!("could not create graded-review checkout: {e}"))
+    })?;
     if !added.status.success() {
         return Err(auto_complete::PhaseFailure::new(format!(
             "could not check out reviewed head {reviewed_sha}: {}",

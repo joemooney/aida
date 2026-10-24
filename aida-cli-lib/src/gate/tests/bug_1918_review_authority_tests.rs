@@ -398,6 +398,8 @@ fn seat_grant_is_revalidated_against_the_grant_store() {
                 seat: Some(seat.into()),
                 grant_id: Some(grant_id.into()),
                 identity: vec!["session:reviewer".into()],
+                // trace:BUG-1934 | ai:claude
+                grant_binding: grant.binding.clone(),
                 ..Default::default()
             }),
             recorded_at,
@@ -445,6 +447,65 @@ fn seat_grant_is_revalidated_against_the_grant_store() {
     let after_revoke = (chrono::Utc::now() + chrono::Duration::minutes(2)).to_rfc3339();
     let v = at("reviewer", &grant.id, &after_revoke);
     assert!(verified_authority_keys(root.path(), &[v]).is_empty());
+}
+
+/// BUG-1934: a live grant for the recorded seat still authorizes nothing at
+/// ship unless the attestation's `grant_binding` matches the grant's own
+/// binding: an empty one (an older verdict) or a foreign one is unattested.
+// trace:BUG-1934 | ai:claude
+#[test]
+fn ship_refuses_grant_attestation_whose_binding_does_not_overlap() {
+    let root = tempfile::tempdir().unwrap();
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(root.path(), "reviewer", &[]);
+    let grant = crate::seat_authority::current_grant(root.path()).expect("seated");
+    assert!(!grant.binding.is_empty(), "fixture grants are bound");
+    let in_window = (chrono::Utc::now() + chrono::Duration::minutes(1)).to_rfc3339();
+    let at = |grant_binding: Vec<String>| {
+        approval(
+            Some(RecorderAttestation {
+                sha: HEAD.into(),
+                seat: Some("reviewer".into()),
+                grant_id: Some(grant.id.clone()),
+                identity: vec!["session:reviewer".into()],
+                grant_binding,
+                ..Default::default()
+            }),
+            &in_window,
+        )
+    };
+    let head_at = Some(chrono::Utc::now() - chrono::Duration::days(1));
+    for (binding, ships) in [
+        (grant.binding.clone(), true),
+        (Vec::new(), false),
+        (vec!["proc:999999@linux-starttime:1".to_string()], false),
+        // A legacy (unprefixed) start identity for the same pid never matches.
+        (
+            grant
+                .binding
+                .iter()
+                .map(|b| format!("{}@2026-10-10T00:00:00Z", b.split('@').next().unwrap()))
+                .collect(),
+            false,
+        ),
+    ] {
+        let v = at(binding.clone());
+        let keys = verified_authority_keys(root.path(), std::slice::from_ref(&v));
+        assert_eq!(keys.len() == 1, ships, "{binding:?}");
+        let policy = ShipApprovalPolicy {
+            verified_authority: keys,
+            reviewed_committed_at: head_at,
+            ..Default::default()
+        };
+        let refusal = approval_authority_refusal(&[v], &policy);
+        if ships {
+            assert_eq!(refusal, None, "{binding:?}");
+        } else {
+            assert!(
+                matches!(refusal, Some(ApprovalAuthorityRefusal::Unattested { .. })),
+                "{binding:?}: {refusal:?}"
+            );
+        }
+    }
 }
 
 // ── No opt-out ──────────────────────────────────────────────────────────────
@@ -592,6 +653,10 @@ fn harness_agent_claim_in_one_shell_then_approve_in_another_is_refused() {
 /// leader, shared by all of its shell calls.
 #[test]
 fn unrecognised_agent_is_bound_by_its_session_leader() {
+    // Sibling tests export AIDA_SESSION_ID (under the env lock); hold the
+    // lock with it unset so it cannot join both identities.
+    // trace:BUG-1934 | ai:claude
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_SESSION_ID", None)]);
     let root = tempfile::tempdir().unwrap();
     let l = lease("aaaabbbb2222", SPEC, root.path().join("wt"));
     let tool = proc(60, "my-agent", &["/usr/bin/my-agent"], "t0");

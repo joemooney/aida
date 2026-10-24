@@ -34,7 +34,10 @@ fn bug_2130_worktree_gc_owner_is_caller_matches_legacy_lease_and_exact_caller() 
     let me = std::process::id();
     let legacy = aida_core::liveness::process_start_identity_legacy(me).expect("own legacy start");
     let exact = aida_core::liveness::process_start_identity(me).expect("own exact start");
-    assert!(exact.starts_with("linux-starttime:"), "{exact}");
+    assert!(
+        exact.starts_with(aida_core::liveness::NATIVE_EXACT_SCHEME),
+        "{exact}"
+    );
     assert_ne!(legacy, exact);
 
     let lease = sample_lease(Some(me), Some(&legacy));
@@ -125,7 +128,7 @@ fn bug_2130_adopt_spec_lease_for_subagent_reclaims_recycled_active_pid_and_prese
         .and_then(|v| v.as_str())
         .expect("updated active_pid_start_time");
     assert!(
-        new_start.starts_with("linux-starttime:"),
+        new_start.starts_with(aida_core::liveness::NATIVE_EXACT_SCHEME),
         "adopted lease must stamp exact start identity, got {new_start}"
     );
 
@@ -218,6 +221,19 @@ fn bug_2130_review_authority_tokens_match_across_legacy_and_exact() {
         exact_tok,
         |_, _| false,
     ));
+    // TASK-2136: the two exact schemes are distinct too, so a dead pid's
+    // linux-starttime / sysinfo-start pair also matches without a probe.
+    // trace:TASK-1951 trace:TASK-2136 | ai:claude
+    assert!(crate::review_authority::tokens_match_with(
+        "proc:42@linux-starttime:987654",
+        "shell:42@sysinfo-start:1760745600",
+        |_, _| false,
+    ));
+    assert!(!crate::review_authority::tokens_match_with(
+        "proc:42@sysinfo-start:1",
+        "shell:42@sysinfo-start:2",
+        |_, _| false,
+    ));
 
     // 3. Different pids -> false even if strict_match would return true.
     assert!(!crate::review_authority::tokens_match_with(
@@ -250,7 +266,7 @@ fn bug_2130_solo_and_drain_locks_write_exact_identity_and_read_back_live() {
             assert_eq!(lock.pid, std::process::id());
             let start = lock.pid_start_time.as_deref().expect("solo pid_start_time");
             assert!(
-                start.starts_with("linux-starttime:"),
+                start.starts_with(aida_core::liveness::NATIVE_EXACT_SCHEME),
                 "solo lock must record exact tick identity, got {start}"
             );
         }
@@ -267,7 +283,7 @@ fn bug_2130_solo_and_drain_locks_write_exact_identity_and_read_back_live() {
         .as_deref()
         .expect("drain pid_start_time");
     assert!(
-        drain_start.starts_with("linux-starttime:"),
+        drain_start.starts_with(aida_core::liveness::NATIVE_EXACT_SCHEME),
         "drain lock must record exact tick identity, got {drain_start}"
     );
     drop(drain_guard);
@@ -313,6 +329,7 @@ fn bug_2130_solo_and_drain_locks_write_exact_identity_and_read_back_live() {
         binary_path: String::new(),
         launched_stale: false,
         specs: Vec::new(),
+        child_grant_id: None,
     };
     std::fs::write(
         crate::drain_lock::drain_lock_path(root),

@@ -9107,13 +9107,12 @@ pub(crate) fn resolve_queue_work_plan(
         if let Some(req) = store.requirements.iter().find(|r| spec_matches(r, arg_str)) {
             // A deferred spec is an explicit operator hold. Refuse before
             // queue synthesis or other pickup side effects. trace:BUG-1793
-            if let Some(refusal) = crate::gate::operator_hold::operator_hold_refusal(
-                req.spec_id.as_deref().unwrap_or(arg_str),
-                req.deferred,
-                req.deferred_reason.as_deref(),
-                req.deferred_until.as_deref(),
-            ) {
-                return Err(refusal);
+            if req.deferred && req.deferred_reason.is_some() {
+                return Err(crate::defer_cmd::hold_refusal(
+                    req.spec_id.as_deref().unwrap_or(arg_str),
+                    req.deferred_reason.as_deref(),
+                    req.deferred_until.as_deref(),
+                ));
             }
             // trace:BUG-1106 | ai:codex
             // A phase child is assigned by the live orchestrator, not by its
@@ -9431,12 +9430,22 @@ pub(crate) fn resolve_queue_work_plan(
         // reviews the PR against its backing spec directly — the review
         // lease is PR-scoped, so it needs neither a queue entry nor the
         // implementer's spec lease released. trace:BUG-2150 | ai:claude
+        // BUG-2208: a fallback that cannot resolve the backing spec says why
+        // (ambiguous, none) instead of only "no queued review story".
+        // trace:TASK-1955 | ai:claude (BUG-2208)
+        let mut fallback_refusal: Option<String> = None;
         if matches.is_empty() && reviewer_pickup_keeps_pr_scope(role_hint) {
             if let Some(project_root) = storage.path().parent() {
-                if let Ok(spec) = resolve_pr_to_spec(project_root, n as u32, &store) {
-                    if let Some(req) = store.requirements.iter().find(|r| spec_matches(r, &spec)) {
-                        return Ok(standalone_review_plan(forge, n, req, user_id));
+                match resolve_pr_to_spec(project_root, n as u32, &store) {
+                    Ok(spec) => {
+                        if let Some(req) =
+                            store.requirements.iter().find(|r| spec_matches(r, &spec))
+                        {
+                            return Ok(standalone_review_plan(forge, n, req, user_id));
+                        }
+                        fallback_refusal = Some(format!("backing spec {spec} is not in the store"));
                     }
+                    Err(err) => fallback_refusal = Some(format!("{err:#}")),
                 }
             }
         }
@@ -9456,11 +9465,15 @@ pub(crate) fn resolve_queue_work_plan(
                         identities.join(", ")
                     )
                 };
+                let fallback = fallback_refusal
+                    .map(|why| format!("; reviewing without a story failed too: {why}"))
+                    .unwrap_or_default();
                 anyhow::bail!(
-                    "no queued review story for {} ({}) after searching {}; check `gh pr view {}` (or `glab mr view {}`) and run `aida pr auto-queue-review --branch <branch>` if needed",
+                    "no queued review story for {} ({}) after searching {}{}; check `gh pr view {}` (or `glab mr view {}`) and run `aida pr auto-queue-review --branch <branch>` if needed",
                     label,
                     why,
                     searched,
+                    fallback,
                     n,
                     n
                 );
@@ -10915,6 +10928,21 @@ pub(crate) fn preflight_queue_work_branch(
             String::from_utf8_lossy(&out.stderr).trim()
         );
     }
+    // BUG-2169 slice S4: a contained seat's private clone on the branch holds
+    // it too. It is never offered for `git worktree remove` (not a linked
+    // worktree); ending its session salvages and removes it.
+    // trace:TASK-2053 | ai:claude
+    if let Some(clone) = clone_seat_trees(root)
+        .into_iter()
+        .find(|wt| wt.branch.as_deref() == Some(branch))
+    {
+        anyhow::bail!(
+            "branch `{branch}` is held by a contained seat's private clone at {} before pickup \
+             setup. Continue it in that seat, end that seat's session first (`aida session end`), \
+             or choose another --branch.",
+            clone.path.display()
+        );
+    }
     let inventory = String::from_utf8_lossy(&out.stdout);
     for wt in crate::worktree_reclaim::parse_worktree_entries(&inventory) {
         if wt.branch.as_deref() != Some(branch) {
@@ -11231,14 +11259,13 @@ pub(crate) fn handle_queue_work(
         .into_iter()
         .find(|r| spec_matches(r, &plan.anchor_display))
     {
-        let display = req.spec_id.as_deref().unwrap_or(&plan.anchor_display);
-        if let Some(refusal) = crate::gate::operator_hold::operator_hold_refusal(
-            display,
-            req.deferred,
-            req.deferred_reason.as_deref(),
-            req.deferred_until.as_deref(),
-        ) {
-            return Err(refusal);
+        if req.deferred && req.deferred_reason.is_some() {
+            let display = req.spec_id.as_deref().unwrap_or(&plan.anchor_display);
+            return Err(crate::defer_cmd::hold_refusal(
+                display,
+                req.deferred_reason.as_deref(),
+                req.deferred_until.as_deref(),
+            ));
         }
     }
 
@@ -12595,6 +12622,8 @@ pub(crate) fn handle_queue_work(
         crate::review_authority::as_launcher(start)?;
     }
 
+    // The lease this pickup minted, for the refused-delegation release below.
+    let mut minted_lease_id: Option<String> = None;
     // trace:TASK-1337 | ai:codex
     let setup_result = (|| -> Result<()> {
         // Look up the lease we just minted: by scope, by owner=us, freshest.
@@ -12608,6 +12637,7 @@ pub(crate) fn handle_queue_work(
                 plan.scope
             )
         })?;
+        minted_lease_id = Some(lease.id.clone());
 
         // STORY-1386: opt-in pre-implementation red run, in this lane's own
         // freshly created worktree and BEFORE the implementer agent launches.
@@ -12961,6 +12991,7 @@ pub(crate) fn handle_queue_work(
                     &project_root,
                     &lease.id,
                     child_grant,
+                    crate::seat_authority::current_grant_id().as_deref(),
                 );
                 eprintln!();
                 return crate::standalone_implementer::run(crate::standalone_implementer::Launch {
@@ -13198,6 +13229,22 @@ pub(crate) fn handle_queue_work(
             }
         }
     })();
+    // Advisor comment 35: a reviewer launch refused at child-seat delegation
+    // launched nobody, so its PR-N lease would only block the next pickup
+    // until --force-claim. Release it (the worktree stays).
+    // trace:TASK-1955 | ai:claude (advisor comment 35)
+    if release_refused_review_lease(
+        &project_root,
+        plan.review_target.is_some(),
+        minted_lease_id.as_deref(),
+        &setup_result,
+    ) {
+        eprintln!(
+            "  released the {} review lease: no reviewer was launched",
+            plan.scope
+        );
+        return setup_result;
+    }
     // A standalone implementer's outcome (punted, held, no PR) is a result,
     // not a failed setup to continue by hand. trace:STORY-1662 | ai:claude
     if setup_result.as_ref().is_err_and(|e| {
@@ -13210,6 +13257,37 @@ pub(crate) fn handle_queue_work(
         );
     }
     setup_result
+}
+
+/// Advisor comment 35: release the lease `lease_id` a failed pickup minted
+/// when [`refused_review_launch_releases_lease`] says so. Returns whether it
+/// was released.
+// trace:TASK-1955 | ai:claude (TASK-2256)
+pub(crate) fn release_refused_review_lease(
+    project_root: &std::path::Path,
+    review_scoped: bool,
+    lease_id: Option<&str>,
+    setup_result: &Result<()>,
+) -> bool {
+    let (Err(err), Some(lease_id)) = (setup_result, lease_id) else {
+        return false;
+    };
+    if !refused_review_launch_releases_lease(review_scoped, err) {
+        return false;
+    }
+    crate::session_reap::release_lease_files(project_root, lease_id);
+    true
+}
+
+/// Advisor comment 35: whether a failed pickup's lease is released — only a
+/// PR-scoped review pickup whose child grant was refused. An implementer's
+/// lease stays for the manual continuation.
+// trace:TASK-1955 | ai:claude (advisor comment 35)
+pub(crate) fn refused_review_launch_releases_lease(
+    review_scoped: bool,
+    err: &anyhow::Error,
+) -> bool {
+    review_scoped && crate::seat_authority::ChildGrantRefused::is_in(err)
 }
 
 /// The specs a reviewed PR credits for calibration: the same title / branch
@@ -13993,15 +14071,14 @@ pub(crate) fn pick_auto_complete_head_for_role(
                 continue;
             }
         }
-        if let Some(refusal) = crate::gate::operator_hold::operator_hold_refusal(
-            &candidate.id,
-            candidate.deferred,
-            candidate.deferred_reason.as_deref(),
-            candidate.deferred_until.as_deref(),
-        ) {
-            return Err(refusal);
-        }
         if candidate.deferred {
+            if candidate.deferred_reason.is_some() {
+                return Err(crate::defer_cmd::hold_refusal(
+                    &candidate.id,
+                    candidate.deferred_reason.as_deref(),
+                    candidate.deferred_until.as_deref(),
+                ));
+            }
             deferred_skipped.push(candidate.id.clone());
             continue;
         }
@@ -14126,15 +14203,14 @@ pub(crate) fn auto_complete_head_candidates_with_blocked(
                 continue;
             }
         }
-        if let Some(refusal) = crate::gate::operator_hold::operator_hold_refusal(
-            &candidate.id,
-            candidate.deferred,
-            candidate.deferred_reason.as_deref(),
-            candidate.deferred_until.as_deref(),
-        ) {
-            return Err(refusal);
-        }
         if candidate.deferred {
+            if candidate.deferred_reason.is_some() {
+                return Err(crate::defer_cmd::hold_refusal(
+                    &candidate.id,
+                    candidate.deferred_reason.as_deref(),
+                    candidate.deferred_until.as_deref(),
+                ));
+            }
             continue;
         }
         out.push((candidate.id, candidate.status, candidate.blocked));
@@ -14634,6 +14710,10 @@ pub(crate) fn recover_push_branch(repo: &std::path::Path, branch: &str) -> Resul
         crate::glyph(crate::glyphs::Glyph::Arrow).cyan(),
         args.join(" ")
     );
+    // The `-u` writes the shared config: clear a sandbox placeholder first
+    // and repair the upstream if the write still failed.
+    // trace:TASK-2305 | ai:claude
+    aida_core::git_ops::clear_sandbox_config_lock(repo);
     let status = std::process::Command::new("git")
         .arg("-C")
         .arg(repo)
@@ -14641,6 +14721,9 @@ pub(crate) fn recover_push_branch(repo: &std::path::Path, branch: &str) -> Resul
         // trace:BUG-2181 | ai:claude
         .remote_credentials(repo, "origin")
         .status()?;
+    if status.success() {
+        aida_core::git_ops::repair_push_upstream(repo, "origin", Some(branch), branch);
+    }
     Ok(status.success())
 }
 

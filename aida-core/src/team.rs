@@ -208,6 +208,200 @@ pub fn core_role_names() -> [&'static str; 5] {
     ["advisor", "implementer", "human", "guest", "requester"]
 }
 
+/// The identity the test harnesses pin `AIDA_USER` to (BUG-1618), chosen to
+/// be absent from any real roster. A roster write made as this user is a test
+/// write, and must land in a scratch store.
+// trace:BUG-2209 | ai:claude
+pub const HERMETIC_TEST_USER: &str = "bug-1618-hermetic-test-user";
+
+/// Is `path` (or, when it does not exist yet, its nearest existing ancestor)
+/// under one of the system temp roots?
+// trace:BUG-2209 | ai:claude
+pub fn is_under_temp_root(path: &Path) -> bool {
+    let mut probe = path;
+    let canonical = loop {
+        if let Ok(c) = probe.canonicalize() {
+            break c;
+        }
+        match probe.parent() {
+            Some(parent) => probe = parent,
+            None => return false,
+        }
+    };
+    crate::store_locate::canonical_temp_roots()
+        .iter()
+        .any(|root| canonical.starts_with(root))
+}
+
+/// Is `path` under this workspace's `target/` directory? Test fixtures that
+/// must live outside `/tmp` build their stores there.
+// trace:TASK-2238 | ai:claude
+fn is_under_workspace_target(path: &Path) -> bool {
+    let Some(target) = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .map(|workspace| workspace.join("target"))
+        .and_then(|target| target.canonicalize().ok())
+    else {
+        return false;
+    };
+    let mut probe = path;
+    loop {
+        if let Ok(canonical) = probe.canonicalize() {
+            return canonical.starts_with(&target);
+        }
+        match probe.parent() {
+            Some(parent) => probe = parent,
+            None => return false,
+        }
+    }
+}
+
+/// Panic on a roster write a test must never make: from a process running as
+/// [`HERMETIC_TEST_USER`], or from this crate's own tests, into a store outside
+/// the system temp roots and the workspace `target/`. Such a write once reached
+/// the operator's real store through a fixture's store walk-up and replaced
+/// their roster (BUG-2209).
+// trace:BUG-2209 | ai:claude
+pub fn guard_roster_write(store_root: &Path) {
+    let hermetic = std::env::var("AIDA_USER").is_ok_and(|user| user == HERMETIC_TEST_USER);
+    if !(hermetic || cfg!(test))
+        || is_under_temp_root(store_root)
+        || is_under_workspace_target(store_root)
+    {
+        return;
+    }
+    panic!(
+        "refusing a test roster write to `{}`: the store is not under a temp directory \
+         (AIDA_USER hermetic: {hermetic}); a test resolved a real store",
+        store_root.display()
+    );
+}
+
+/// Read the roster for a writer. A missing file is an empty roster; an
+/// unreadable or malformed one is an error, never an empty roster for the
+/// write to replace every member with.
+// trace:BUG-2209 | ai:claude
+fn load_for_write(path: &Path) -> std::io::Result<(Option<Vec<u8>>, TeamRoster)> {
+    match std::fs::read(path) {
+        Ok(bytes) => {
+            let text = std::str::from_utf8(&bytes)
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+            let roster = toml::from_str(text).map_err(|e| {
+                std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    format!(
+                        "`{}` is not a readable roster ({e}); refusing to overwrite it",
+                        path.display()
+                    ),
+                )
+            })?;
+            Ok((Some(bytes), roster))
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok((None, TeamRoster::default())),
+        Err(e) => Err(e),
+    }
+}
+
+/// Change ONE member's seats in `registry/team.toml` and keep every other
+/// member as read: `edit` maps the member's current seats to the new ones
+/// (`None` removes the member). The write is compare-and-swap on the file
+/// content (a file changed since the read is re-read and the edit re-applied)
+/// and lands by atomic rename, so a concurrent reader never sees a truncated
+/// roster. `nodes`, when given, migrates stray integer keys first
+/// (STORY-653). Returns whether the file changed.
+///
+/// The write runs [`guard_roster_write`] in the primitive, so a new caller
+/// cannot bypass it, and holds the store write lock (re-entrant, so the CAS
+/// functions below, which already hold it around their stage and commit,
+/// nest). A caller without the lock therefore cannot lose a write that lands
+/// between the CAS re-read and the rename to another locked writer. Callers
+/// stage and commit the file.
+// trace:BUG-2209 | ai:claude
+// trace:TASK-2238 | ai:claude
+// trace:TASK-1955 | ai:claude (TASK-2223, TASK-2224, TASK-2292)
+pub fn write_member_seats(
+    store_root: &Path,
+    user_id: &str,
+    nodes: Option<&NodeRegistry>,
+    edit: impl Fn(Option<&[String]>) -> Option<Vec<String>>,
+) -> std::io::Result<bool> {
+    const MAX_ATTEMPTS: u32 = 20;
+    guard_roster_write(store_root);
+    let _lock = crate::db::acquire_store_write_lock(store_root).map_err(std::io::Error::other)?;
+    let path = TeamRoster::path(store_root);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    for _ in 0..MAX_ATTEMPTS {
+        let (before, mut roster) = load_for_write(&path)?;
+        let migrated = nodes.is_some_and(|nodes| roster.migrate_integer_keys(nodes));
+        let current = roster.seats_for(user_id);
+        let next = edit(current.as_deref());
+        if next == current && !migrated {
+            return Ok(false);
+        }
+        let others: Vec<(String, Vec<String>)> = roster
+            .entries()
+            .into_iter()
+            .filter(|(user, _)| user != user_id)
+            .collect();
+        match next {
+            Some(seats) => roster = roster.with_seats(user_id, seats),
+            None => {
+                roster.members.remove(user_id);
+            }
+        }
+        let content = toml::to_string_pretty(&roster)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+        // The member-merge invariant, checked on what is about to be written.
+        let written: TeamRoster = toml::from_str(&content)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+        for (user, seats) in &others {
+            if written.seats_for(user).as_ref() != Some(seats) {
+                return Err(std::io::Error::other(format!(
+                    "roster write for `{user_id}` would change member `{user}`; refused"
+                )));
+            }
+        }
+        // CAS: another writer changed the file since the read — redo the edit
+        // on its content instead of replacing it.
+        let now = match std::fs::read(&path) {
+            Ok(bytes) => Some(bytes),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+            Err(e) => return Err(e),
+        };
+        if now != before {
+            continue;
+        }
+        crate::fs_atomic::write_atomic(&path, content)?;
+        return Ok(true);
+    }
+    Err(std::io::Error::other(format!(
+        "`{}` kept changing under the write for `{user_id}`; retry",
+        path.display()
+    )))
+}
+
+/// The members holding `advisor` in `head` (a committed roster) that do not
+/// hold it in `worktree` (the pending one; `None` when the file is gone). A
+/// pending roster that does not parse loses every advisor.
+// trace:BUG-2209 | ai:claude
+pub fn advisors_lost(head: &str, worktree: Option<&str>) -> Vec<String> {
+    let Ok(head) = toml::from_str::<TeamRoster>(head) else {
+        return Vec::new();
+    };
+    let pending: TeamRoster = worktree
+        .and_then(|text| toml::from_str(text).ok())
+        .unwrap_or_default();
+    let is_advisor = |seats: &[String]| seats.iter().any(|s| canonical_role(s) == "advisor");
+    head.entries()
+        .into_iter()
+        .filter(|(_, seats)| is_advisor(seats))
+        .filter(|(user, _)| !pending.seats_for(user).is_some_and(|s| is_advisor(&s)))
+        .map(|(user, _)| user)
+        .collect()
+}
+
 /// Write `user_id = role` into `registry/team.toml` on the store with a
 /// CAS push-wins loop (mirrors `git_ops::register_node_full` and the aida-cli
 /// `set_role_cas`): pull → load → merge our edit → save → commit → push; on a
@@ -228,10 +422,7 @@ pub fn set_allowed_seats_cas(
     use crate::git_ops;
 
     const MAX_RETRIES: u32 = 10;
-    let registry_path = TeamRoster::path(store_root);
-    if let Some(parent) = registry_path.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
+    guard_roster_write(store_root); // trace:BUG-2209 | ai:claude
     let branch = git_ops::current_branch(store_root).unwrap_or_else(|_| "main".to_string());
     let local_only = !git_ops::has_remote(store_root, "origin");
 
@@ -250,13 +441,9 @@ pub fn set_allowed_seats_cas(
                 // merge our edit → save. The migration self-heals the STORY-653 bug
                 // (roles written under the cryptic integer user_id) opportunistically on
                 // the next role write. trace:STORY-653
-                let mut roster = TeamRoster::load(store_root);
+                // trace:BUG-2209 | ai:claude — merge this member only.
                 let nodes = load_node_roster(store_root);
-                roster.migrate_integer_keys(&nodes);
-                let roster = roster.with_seats(user_id, seats.to_vec());
-                let content = toml::to_string_pretty(&roster)
-                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-                std::fs::write(&registry_path, content)?;
+                write_member_seats(store_root, user_id, Some(&nodes), |_| Some(seats.to_vec()))?;
 
                 // Step 3: stage + commit. On a no-op commit (Ok(false)), return
                 // None without capturing head_sha so we never push or arm the
@@ -316,10 +503,7 @@ fn update_seats_cas(
     use crate::git_ops;
 
     const MAX_RETRIES: u32 = 10;
-    let registry_path = TeamRoster::path(store_root);
-    if let Some(parent) = registry_path.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
+    guard_roster_write(store_root); // trace:BUG-2209 | ai:claude
     let branch = git_ops::current_branch(store_root).unwrap_or_else(|_| "main".to_string());
     let local_only = !git_ops::has_remote(store_root, "origin");
     let io_err = |e: anyhow::Error| std::io::Error::other(e.to_string());
@@ -331,34 +515,23 @@ fn update_seats_cas(
                 if attempt > 0 && !local_only {
                     git_ops::pull_rebase(store_root, "origin", &branch)?;
                 }
-                let mut roster = TeamRoster::load(store_root);
+                // trace:BUG-2209 | ai:claude — merge this member only.
                 let nodes = load_node_roster(store_root);
-                roster.migrate_integer_keys(&nodes);
-                let mut seats = roster.seats_for(user_id).unwrap_or_default();
-                let changed = if allow {
-                    if seats.iter().any(|existing| existing == seat) {
-                        false
+                let changed = write_member_seats(store_root, user_id, Some(&nodes), |current| {
+                    let mut seats = current.map(<[String]>::to_vec).unwrap_or_default();
+                    if allow {
+                        if !seats.iter().any(|existing| existing == seat) {
+                            seats.push(seat.to_string());
+                            seats.sort();
+                        }
                     } else {
-                        seats.push(seat.to_string());
-                        seats.sort();
-                        true
+                        seats.retain(|existing| existing != seat);
                     }
-                } else {
-                    let before = seats.len();
-                    seats.retain(|existing| existing != seat);
-                    seats.len() != before
-                };
+                    (!seats.is_empty()).then_some(seats)
+                })?;
                 if !changed {
                     return Ok(None);
                 }
-                if seats.is_empty() {
-                    roster.members.remove(user_id);
-                } else {
-                    roster = roster.with_seats(user_id, seats);
-                }
-                let content = toml::to_string_pretty(&roster)
-                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-                std::fs::write(&registry_path, content)?;
                 git_ops::add(store_root, &["registry/team.toml"])?;
                 let verb = if allow { "allow" } else { "disallow" };
                 let msg = format!("chore(registry): {} {} for {}", verb, seat, user_id);
@@ -397,7 +570,7 @@ pub fn unset_role_cas(store_root: &Path, user_id: &str) -> std::io::Result<bool>
     use crate::git_ops;
 
     const MAX_RETRIES: u32 = 10;
-    let registry_path = TeamRoster::path(store_root);
+    guard_roster_write(store_root); // trace:BUG-2209 | ai:claude
     let branch = git_ops::current_branch(store_root).unwrap_or_else(|_| "main".to_string());
     let local_only = !git_ops::has_remote(store_root, "origin");
 
@@ -413,16 +586,10 @@ pub fn unset_role_cas(store_root: &Path, user_id: &str) -> std::io::Result<bool>
                 }
 
                 // Step 2: load → remove the key. No-op (and no commit) if absent.
-                let mut roster = TeamRoster::load(store_root);
-                if roster.members.remove(user_id).is_none() {
+                // trace:BUG-2209 | ai:claude — remove this member only.
+                if !write_member_seats(store_root, user_id, None, |_| None)? {
                     return Ok(None);
                 }
-                let content = toml::to_string_pretty(&roster)
-                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-                if let Some(parent) = registry_path.parent() {
-                    std::fs::create_dir_all(parent)?;
-                }
-                std::fs::write(&registry_path, content)?;
 
                 // Step 3: stage + commit.
                 git_ops::add(store_root, &["registry/team.toml"])?;
@@ -1372,5 +1539,171 @@ ttl_secs = 1800
             clone_a.join("unpushed_peer.txt").exists(),
             "unpushed peer file must survive a no-op set_allowed_seats_cas"
         );
+    }
+
+    // ── BUG-2209: roster writes merge one member, and never reach a real store ──
+
+    fn roster_file(store: &Path) -> PathBuf {
+        store.join("registry").join("team.toml")
+    }
+
+    /// One user's write keeps every other member exactly as read.
+    // trace:BUG-2209 | ai:claude
+    #[test]
+    fn bug_2209_member_write_keeps_every_other_member() {
+        let dir = tempfile::tempdir().unwrap();
+        write(
+            &roster_file(dir.path()),
+            "[members]\njoe = [\"advisor\", \"implementer\"]\n\"joe.mooney\" = \"advisor\"\n",
+        );
+        assert!(
+            write_member_seats(dir.path(), "tester", None, |_| Some(vec![
+                "implementer".to_string()
+            ]))
+            .unwrap()
+        );
+        let roster = TeamRoster::load(dir.path());
+        assert_eq!(
+            roster.seats_for("joe").unwrap(),
+            ["advisor", "implementer"].map(String::from)
+        );
+        assert_eq!(
+            roster.seats_for("joe.mooney").unwrap(),
+            ["advisor".to_string()]
+        );
+        assert_eq!(
+            roster.seats_for("tester").unwrap(),
+            ["implementer".to_string()]
+        );
+        // Removing the member touches nobody else either.
+        assert!(write_member_seats(dir.path(), "tester", None, |_| None).unwrap());
+        let roster = TeamRoster::load(dir.path());
+        assert_eq!(roster.entries().len(), 2);
+        assert!(roster.seats_for("tester").is_none());
+    }
+
+    /// An unreadable roster is refused, not read as empty and replaced.
+    // trace:BUG-2209 | ai:claude
+    #[test]
+    fn bug_2209_malformed_roster_is_never_overwritten() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = roster_file(dir.path());
+        write(&path, "[members]\njoe = [\"advisor\"\n");
+        let err =
+            write_member_seats(dir.path(), "tester", None, |_| Some(vec!["x".into()])).unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::InvalidData, "{err}");
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            "[members]\njoe = [\"advisor\"\n"
+        );
+    }
+
+    /// A file changed between the read and the write is re-read and the edit
+    /// re-applied on top of it (compare-and-swap), so a concurrent writer's
+    /// member survives.
+    // trace:BUG-2209 | ai:claude
+    #[test]
+    fn bug_2209_member_write_reapplies_over_a_concurrent_change() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = roster_file(dir.path());
+        write(&path, "[members]\njoe = [\"advisor\"]\n");
+        let calls = std::cell::Cell::new(0);
+        assert!(write_member_seats(dir.path(), "tester", None, |_| {
+            calls.set(calls.get() + 1);
+            if calls.get() == 1 {
+                // Another writer lands between this read and the write.
+                std::fs::write(
+                    &path,
+                    "[members]\njoe = [\"advisor\"]\nann = [\"reviewer\"]\n",
+                )
+                .unwrap();
+            }
+            Some(vec!["implementer".to_string()])
+        })
+        .unwrap());
+        assert_eq!(calls.get(), 2, "the edit is re-applied once");
+        let roster = TeamRoster::load(dir.path());
+        assert!(roster.seats_for("ann").is_some(), "concurrent member kept");
+        assert!(roster.seats_for("joe").is_some());
+        assert!(roster.seats_for("tester").is_some());
+    }
+
+    /// The roster-write guard panics for a store outside the temp roots in a
+    /// test build, before any git or file work.
+    // trace:BUG-2209 | ai:claude
+    #[test]
+    #[should_panic(expected = "refusing a test roster write")]
+    fn bug_2209_test_roster_write_outside_temp_panics() {
+        let _ = set_role_cas(
+            Path::new("/nonexistent-bug-2209/.aida-store"),
+            "x",
+            "advisor",
+        );
+    }
+
+    // trace:BUG-2209 | ai:claude
+    #[test]
+    fn bug_2209_temp_store_passes_the_guard() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(is_under_temp_root(&dir.path().join("not-yet/.aida-store")));
+        assert!(!is_under_temp_root(Path::new(
+            "/nonexistent-bug-2209/store"
+        )));
+        guard_roster_write(&dir.path().join(".aida-store"));
+    }
+
+    /// TASK-2223: the primitive guards its own write, so a caller that skips
+    /// the CAS functions still cannot reach a real store.
+    // trace:TASK-1955 | ai:claude
+    #[test]
+    #[should_panic(expected = "refusing a test roster write")]
+    fn task_2223_write_member_seats_guards_its_own_write() {
+        let _ = write_member_seats(
+            Path::new("/nonexistent-task-2223/.aida-store"),
+            "x",
+            None,
+            |_| Some(vec!["implementer".to_string()]),
+        );
+    }
+
+    /// TASK-2223: a store under the workspace `target/` (where a test crate's
+    /// fixtures may live) passes the guard outside the temp roots.
+    // trace:TASK-1955 | ai:claude (TASK-2292)
+    // trace:TASK-2272 | ai:claude (TASK-1848)
+    #[test]
+    fn task_2223_the_workspace_target_passes_the_guard() {
+        let target = Path::new(env!("CARGO_MANIFEST_DIR")).join("../target");
+        // With CARGO_TARGET_DIR pointing elsewhere, <workspace>/target may not
+        // exist, and is_under_workspace_target canonicalizes it (TASK-1848).
+        std::fs::create_dir_all(&target).unwrap();
+        let store = target.join("not-a-store-task-2223/.aida-store");
+        assert!(!is_under_temp_root(&store));
+        guard_roster_write(&store);
+    }
+
+    /// TASK-2224: the write holds the store write lock across the CAS re-read
+    /// and the rename, for a caller that does not hold it, and nests for one
+    /// that does.
+    // trace:TASK-1955 | ai:claude
+    #[test]
+    fn task_2224_write_member_seats_holds_the_store_write_lock() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(!crate::db::store_write_lock_held(dir.path()));
+        assert!(write_member_seats(dir.path(), "tester", None, |_| {
+            assert!(
+                crate::db::store_write_lock_held(dir.path()),
+                "the edit runs under the store write lock"
+            );
+            Some(vec!["implementer".to_string()])
+        })
+        .unwrap());
+        assert!(!crate::db::store_write_lock_held(dir.path()), "released");
+        // A caller already holding it re-enters instead of deadlocking.
+        crate::db::with_store_write_lock(dir.path(), || {
+            write_member_seats(dir.path(), "tester", None, |_| None)?;
+            Ok(())
+        })
+        .unwrap();
+        assert!(TeamRoster::load(dir.path()).seats_for("tester").is_none());
     }
 }

@@ -168,10 +168,16 @@ pub(crate) fn agent_output_mode_from(env: Option<&str>, stdout_is_tty: bool) -> 
 
 /// Resolve the requested `--fields` selection for agent-mode `aida list` into a
 /// validated, ordered field list. `None` (no `--fields`) yields the minimal
-/// default. A `csv` string is split on commas, trimmed, lowercased, and checked
-/// against [`TOON_LIST_KNOWN_FIELDS`]; an unknown name is an error naming the
-/// valid set. Empty selection falls back to the default.
+/// default. A `csv` string is split on commas and/or whitespace (so a copied
+/// TOON header's field list works; the human table's display headers, such as
+/// `Modified`, are labels rather than field names and are rejected),
+/// lowercased, alias-resolved via
+/// [`TOON_LIST_FIELD_ALIASES`], and checked against [`TOON_LIST_KNOWN_FIELDS`];
+/// an unknown name is an error naming the valid set. Empty segments are
+/// ignored; an empty selection falls back to the default.
 // trace:TASK-964
+// trace:TASK-2205 | ai:claude
+// trace:TASK-2238 | ai:claude
 pub(crate) fn toon_list_fields(csv: Option<&str>) -> Result<Vec<String>> {
     let Some(csv) = csv else {
         return Ok(TOON_LIST_DEFAULT_FIELDS
@@ -180,17 +186,15 @@ pub(crate) fn toon_list_fields(csv: Option<&str>) -> Result<Vec<String>> {
             .collect());
     };
     let mut out = Vec::new();
-    for raw in csv.split(',') {
-        let name = raw.trim().to_ascii_lowercase();
+    for raw in csv.split(|c: char| c == ',' || c.is_whitespace()) {
+        let name = raw.to_ascii_lowercase();
         if name.is_empty() {
             continue;
         }
-        // `req_type` is a friendly alias for `type`.
-        let name = if name == "req_type" {
-            "type".to_string()
-        } else {
-            name
-        };
+        let name = TOON_LIST_FIELD_ALIASES
+            .iter()
+            .find(|(alias, _)| *alias == name)
+            .map_or(name, |(_, field)| field.to_string());
         if !TOON_LIST_KNOWN_FIELDS.contains(&name.as_str()) {
             anyhow::bail!(
                 "unknown --fields entry `{name}`; valid fields: {}",
@@ -241,6 +245,8 @@ pub(crate) fn toon_list_cell(
         "heft" => r.heft.to_string(),
         // trace:TASK-1215 | ai:codex
         "modified_at" => r.modified_at.clone(),
+        // trace:TASK-2205 | ai:claude — rendered like modified_at.
+        "opened" => r.created_at.clone(),
         // trace:FR-283 | ai:claude — empty cell = no weight set.
         "weight" => r.weight.map(format_weight).unwrap_or_default(),
         "queued" => queued.to_string(),
@@ -258,14 +264,17 @@ pub(crate) fn toon_list_cell(
 /// Print the human `aida list --fields <csv>` table. Thin wrapper over
 /// [`build_list_fields_lines`].
 // trace:STORY-734 | ai:claude — plain `//` keeps the marker out of any doc/help.
-pub(crate) fn render_list_fields_table<F>(
+pub(crate) fn render_list_fields_table<F, C>(
     reqs: &[aida_core::RequirementSummary],
     fields: &[String],
     routing_of: F,
+    cell_of: C,
 ) where
     F: Fn(&aida_core::RequirementSummary) -> (bool, bool, bool),
+    C: Fn(&aida_core::RequirementSummary, &str) -> Option<String>,
 {
-    for line in build_list_fields_lines(reqs, fields, routing_of) {
+    // trace:TASK-1951 trace:TASK-2003 | ai:claude
+    for line in build_list_fields_lines_with(reqs, fields, routing_of, cell_of) {
         println!("{line}");
     }
 }
@@ -366,6 +375,11 @@ pub(crate) fn maybe_emit_toon_switch_hint() {
 #[cfg(test)]
 #[path = "tests/task970_agent_output_tests.rs"]
 mod task970_agent_output_tests;
+
+// trace:TASK-2205 | ai:claude
+#[cfg(test)]
+#[path = "tests/task_2205_list_fields_tests.rs"]
+mod task_2205_list_fields_tests;
 
 // trace:BUG-1813 | ai:claude
 #[cfg(test)]

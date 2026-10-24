@@ -85,6 +85,69 @@ mod linux {
             .unwrap()
     }
 
+    /// Give the fixture its own store and stop every store walk-up at the
+    /// fixture root. The fixture lives under the workspace's `target/`, so a
+    /// walk from a config naming no store (the seat configs below) used to
+    /// climb to this checkout's `.aida/config.toml` and resolve the
+    /// operator's real store, where the seat grants then wrote the hermetic
+    /// test user's roster (BUG-2209).
+    // trace:BUG-2209 | ai:claude
+    fn seal_store_walk(root: &Path, main: &Path) {
+        std::fs::create_dir_all(main.join(".aida-store/objects")).unwrap();
+        std::fs::create_dir_all(main.join(".aida-store/registry")).unwrap();
+        let store = main.join(".aida-store");
+        std::fs::write(store.join("objects/.keep"), "").unwrap();
+        git_ok(&store, &["init", "-q", "-b", "aida-store"]);
+        git_ok(&store, &["config", "user.email", "test@example.com"]);
+        git_ok(&store, &["config", "user.name", "AIDA Test"]);
+        git_ok(&store, &["add", "."]);
+        git_ok(&store, &["commit", "-qm", "store seed"]);
+        std::fs::create_dir_all(root.join(".aida")).unwrap();
+        let rel = main.strip_prefix(root).unwrap().join(".aida-store");
+        std::fs::write(
+            root.join(".aida/config.toml"),
+            format!(
+                "store_path = {}\n",
+                aida_core::toml_quote::toml_string(&rel.display().to_string())
+            ),
+        )
+        .unwrap();
+    }
+
+    /// BUG-2209: a store walk from anywhere in the fixture, under the seat
+    /// configs that name no store, resolves the fixture's own store, and the
+    /// seat grant writes its roster there.
+    // trace:BUG-2209 | ai:claude
+    #[test]
+    fn bug_2209_fixture_store_walk_stays_in_the_fixture() {
+        let fx = fixture();
+        std::fs::create_dir_all(fx.main.join(".aida")).unwrap();
+        std::fs::write(
+            fx.main.join(".aida/config.toml"),
+            "[contained]\nseat_tree = \"clone\"\n",
+        )
+        .unwrap();
+        let seats = fx.root.join("seats/clone");
+        std::fs::create_dir_all(&seats).unwrap();
+        let store = fx.main.join(".aida-store").canonicalize().unwrap();
+        for start in [&fx.main, &fx.other_wt, &seats] {
+            let found =
+                crate::detect_distributed_store_from(start).and_then(|s| s.canonicalize().ok());
+            assert_eq!(
+                found.as_ref(),
+                Some(&store),
+                "walk from {}",
+                start.display()
+            );
+        }
+        drop(ambient(&fx.main));
+        let roster = std::fs::read_to_string(store.join("registry/team.toml")).unwrap();
+        assert!(
+            roster.contains(crate::test_env::HERMETIC_TEST_USER),
+            "{roster}"
+        );
+    }
+
     /// A main checkout like the real one, plus the attacker's chosen commit.
     ///
     /// - `main` is packed, and `refs/remotes/origin/HEAD` points at `origin/main`
@@ -110,7 +173,7 @@ mod linux {
         git_ok(&main, &["config", "user.email", "test@example.com"]);
         git_ok(&main, &["config", "user.name", "AIDA Test"]);
         std::fs::write(main.join("README.md"), "seed\n").unwrap();
-        std::fs::write(main.join(".gitignore"), "/target\n/.aida/\n").unwrap();
+        std::fs::write(main.join(".gitignore"), "/target\n/.aida/\n/.aida-store/\n").unwrap();
         git_ok(&main, &["add", "README.md", ".gitignore"]);
         git_ok(&main, &["commit", "-qm", "seed"]);
         git_ok(&main, &["tag", "v0.0.1"]);
@@ -163,6 +226,7 @@ mod linux {
         git_ok(&main, &["repack", "-qad"]);
         git_ok(&main, &["pack-refs", "--all"]);
         std::fs::create_dir_all(main.join("target")).unwrap();
+        seal_store_walk(&root, &main);
         Fixture {
             _tmp: tmp,
             root,
@@ -579,10 +643,19 @@ mod linux {
             crate::seat_clone::host_recorded_clone(&clone).is_none(),
             "a forged main is never host-recorded"
         );
-        let settings = settings_for(&fx.main, &clone);
+        // TASK-2111: a tree whose `.git` directory resolves to a main other
+        // than itself, and is not a host-recorded clone, refuses the
+        // contained launch outright, so nothing is granted from the forgery.
+        // trace:TASK-1952 | trace:TASK-2111 | ai:claude
+        let refused = {
+            let _ambient = ambient(&fx.main);
+            let roots = crate::session::contained_session_write_roots_from(&clone);
+            crate::session::claude_contained_flags_for_roots(&roots)
+        }
+        .expect_err("a forged-main seat clone must refuse the contained launch");
         assert!(
-            !entries(&settings, "allowWrite").contains(&elsewhere),
-            "{settings}"
+            format!("{refused:#}").contains("not a seat clone the host recorded"),
+            "{refused:#}"
         );
         assert!(
             !crate::session::os_wrap_rw_paths(&clone).contains(&elsewhere),

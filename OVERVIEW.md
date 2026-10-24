@@ -1,3 +1,9 @@
+Mailbox delivery resolves named agents against current registry liveness,
+shares canonicalization across CLI/MCP/mentions, refuses unknown/dead agents
+and empty role/vendor audiences, and lists group readers. Known people retain
+offline inboxes; historical reads do not require a live recipient.
+<!-- trace:STORY-1843 | ai:codex -->
+
 Review watch discovers open non-draft GitHub/GitLab changes against pinned
 origin and each change's own base-branch evidence and dispatches ordinary attested reviewers before
 CI settles. Atomic version-1 state under the main worktree's `.aida/review-watch`
@@ -93,11 +99,15 @@ classifier. Verdict candidates, author identity and completion credit still use
 named specs. An empty named subject stays unresolved even when traces exist.
 The forge head must match the checked head; a missing local origin base, ambiguous
 merge base, unreadable diff/blob/store, changed symlink, invalid text or
-moving/dirty store refuses coverage. Retry after fetching missing evidence or
-finishing a store write. A stale local origin base can exclude more specs by
-including older changes. Store HEAD and ref tips are checked around collection;
+moving store or dirty canonical objects refuses coverage. Coordination leases,
+mail and other non-evidence dirt do not block the object snapshot; untracked
+objects remain evidence even when Git ignore rules hide them. The home exclusion
+ledger is read separately and retains its fail-closed trust checks. Retry after
+fetching missing evidence or finishing an object write. A stale local origin base
+can exclude more specs by including older changes. Store HEAD and ref tips are checked around collection;
 the existing history reader includes versions reachable through all store refs.
 <!-- trace:TASK-1790 | ai:codex -->
+<!-- trace:BUG-2213 | ai:codex -->
 
 C7 lifecycle commands resolve invoking caller authority after acquiring the
 seat lock; ack/release also revalidate persisted requester authority locally.

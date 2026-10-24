@@ -4794,6 +4794,236 @@ mod tests {
         }
     }
 
+    /// The marker that keeps a read-only research subagent line (Explore,
+    /// Plan) legal in a seat template, on that line or the line above it.
+    const SUBAGENT_RATCHET_ALLOW: &str = "aida:allow-research-subagent";
+
+    /// Phrasings that launch implementer, fixer, architect or advisor work
+    /// through the Agent tool. Matched case-insensitively, except the
+    /// literal `Agent(` call.
+    const AGENT_TOOL_LAUNCHES: &[&str] = &[
+        "subagent_type",
+        "isolation: \"worktree\"",
+        "isolation:\"worktree\"",
+        "implementer subagent",
+        "fixer subagent",
+        "architect subagent",
+        "advisor subagent",
+        "subagents implement",
+        "subagent fan-out",
+        "subagent fanout",
+    ];
+
+    /// Names of the in-session launcher that, on a line naming seat work
+    /// with no negation, mean "run that seat as a subagent".
+    // trace:TASK-2272 | ai:claude
+    const AGENT_TOOL_NAMES: &[&str] = &["agent tool", "task tool", "via task", "with task"];
+
+    /// Words that, BEFORE the tool name in its clause, turn the mention into
+    /// a prohibition. "instead"/"rather" are not negations: "with the Agent
+    /// tool instead of a process" is a launch.
+    const AGENT_TOOL_NEGATIONS: &[&str] = &["never", "not", "no", "don't", "without", "nor"];
+
+    /// `lower` names seat work, and a clause of it names the Agent/Task tool
+    /// (as a whole word) with no negation word before the tool name in that
+    /// clause: "launch the implementer with the Agent tool and no worktree"
+    /// is a launch (the negation trails the tool), "the implementer runs as
+    /// a process, not with the Agent tool" is not.
+    // trace:TASK-2272 | ai:claude
+    fn names_agent_tool_for_seat_work(lower: &str) -> bool {
+        let seat = ["implementer", "fixer", "architect", "advisor"]
+            .iter()
+            .any(|w| lower.contains(w));
+        let negated_before = |prefix: &str| {
+            prefix
+                .split(|c: char| !(c.is_alphanumeric() || c == '\''))
+                .any(|w| AGENT_TOOL_NEGATIONS.contains(&w))
+        };
+        let names_tool_unnegated = |clause: &str| {
+            AGENT_TOOL_NAMES.iter().any(|needle| {
+                clause.match_indices(needle).any(|(at, _)| {
+                    let before = clause[..at].chars().next_back();
+                    let after = clause[at + needle.len()..].chars().next();
+                    !before.is_some_and(|c| c.is_alphanumeric())
+                        && !after.is_some_and(|c| c.is_alphanumeric() || c == '-')
+                        && !negated_before(&clause[..at])
+                })
+            })
+        };
+        seat && lower
+            .split([';', ',', '.', ':', '(', ')', '—'])
+            .any(names_tool_unnegated)
+    }
+
+    /// Every `key:line: pattern` in `body` that launches seat work through
+    /// the Agent tool, skipping lines the research marker covers.
+    // trace:STORY-1662 | ai:claude
+    fn agent_tool_launches(key: &str, body: &str) -> Vec<String> {
+        let mut violations = Vec::new();
+        let mut previous = "";
+        for (idx, line) in body.lines().enumerate() {
+            let allowed =
+                line.contains(SUBAGENT_RATCHET_ALLOW) || previous.contains(SUBAGENT_RATCHET_ALLOW);
+            previous = line;
+            if allowed {
+                continue;
+            }
+            let lower = line.to_ascii_lowercase();
+            if line.contains("Agent(") {
+                violations.push(format!("{key}:{}: `Agent(`", idx + 1));
+            }
+            // Rework routed to an implementer or fixer through `SendMessage`
+            // assumes an in-session subagent.
+            if lower.contains("sendmessage")
+                && (lower.contains("implementer") || lower.contains("fixer"))
+            {
+                violations.push(format!(
+                    "{key}:{}: `SendMessage` to an implementer",
+                    idx + 1
+                ));
+            }
+            for pattern in AGENT_TOOL_LAUNCHES {
+                if lower.contains(pattern) {
+                    violations.push(format!("{key}:{}: `{pattern}`", idx + 1));
+                }
+            }
+            if names_agent_tool_for_seat_work(&lower) {
+                violations.push(format!(
+                    "{key}:{}: seat work through the Agent tool",
+                    idx + 1
+                ));
+            }
+        }
+        violations
+    }
+
+    /// The scan refuses each phrasing, ignoring case, and the research marker
+    /// on the line or the line above exempts exactly that line.
+    // trace:STORY-1662.AC4 | ai:claude
+    #[test]
+    fn agent_tool_launch_scan_refuses_each_phrasing_and_honours_the_marker() {
+        let refused = [
+            "> `Agent(subagent_type: \"general-purpose\", isolation: \"worktree\")`",
+            "You coordinate and subagents implement.",
+            "The Subagent fan-out is the harness primitive.",
+            "an architect subagent writes the sketch",
+            "a separate advisor subagent signs it off",
+            "fan ONE worktree-isolated implementer subagent per spec",
+            "every PR your fixer subagents wrote",
+            "- `RequestChanges` → resume the same implementer (`SendMessage`) with the",
+            "resume the same fixer (`SendMessage` to its agent id)",
+        ];
+        for line in refused {
+            assert!(
+                !agent_tool_launches("t.md", line).is_empty(),
+                "not refused: {line}"
+            );
+        }
+        let same_line =
+            format!("Agent(subagent_type: \"Explore\") <!-- {SUBAGENT_RATCHET_ALLOW} -->");
+        assert!(agent_tool_launches("t.md", &same_line).is_empty());
+        let line_above =
+            format!("<!-- {SUBAGENT_RATCHET_ALLOW} -->\nAgent(subagent_type: \"Plan\")\nAgent(x)");
+        assert_eq!(
+            agent_tool_launches("t.md", &line_above),
+            vec!["t.md:3: `Agent(`"]
+        );
+        assert!(agent_tool_launches("t.md", "launch a separate implementer process").is_empty());
+        // trace:TASK-2272 | ai:claude
+        for line in [
+            "launch the implementer with the Agent tool",
+            "spawn each fixer via Task",
+            "the advisor starts an architect with the Task tool",
+            "launch the implementer with the Agent tool; no worktree needed",
+            "launch the fixer with the Agent tool instead of a process",
+            "launch the implementer with the Agent tool and no worktree",
+        ] {
+            assert!(
+                !agent_tool_launches("t.md", line).is_empty(),
+                "not refused: {line}"
+            );
+        }
+        for line in [
+            "Never fan implementers out through the Agent tool.",
+            "launch the implementer as a process, not with the Agent tool",
+            "the implementer works with task-specific notes",
+            "use the Agent tool for read-only research",
+        ] {
+            assert!(agent_tool_launches("t.md", line).is_empty(), "{line}");
+        }
+        assert!(agent_tool_launches("t.md", "  - SendMessage").is_empty());
+    }
+
+    /// TASK-2272 (TASK-2297, TASK-2298): discipline prose describes the
+    /// standalone implementer launch, not the retired Agent-tool brief.
+    // trace:TASK-2272 | ai:claude
+    #[test]
+    fn discipline_prose_has_no_agent_tool_brief_residue() {
+        let doc = |key: &str| {
+            crate::templates::EMBEDDED_TEMPLATES
+                .get(key)
+                .unwrap_or_else(|| panic!("{key} embedded"))
+        };
+        let review = doc(".aida/discipline/git-sync-and-review.md");
+        assert!(!review.contains("return ONLY the PR URL"));
+        assert!(review.contains("takes no prompt from the caller"));
+        assert!(review.contains("`implementer:` line"));
+        let authoring = doc(".aida/discipline/spec-authoring.md");
+        assert!(!authoring.contains("subagent, brief, or queue-work"));
+    }
+
+    /// TASK-2272 (TASK-2287): the advisor pre-creates the fixer's worktree,
+    /// which creates its branch, so the fixer prompt must not STOP on it.
+    // trace:TASK-2272 | ai:claude
+    #[test]
+    fn fire_fixer_prompt_does_not_stop_on_its_own_worktree_branch() {
+        let body = crate::templates::EMBEDDED_TEMPLATES
+            .get("skills/aida-fire.md")
+            .expect("aida-fire skill embedded");
+        let prompt = body.split("#### Fixer prompt template").nth(1).unwrap();
+        let flat = prompt.split_whitespace().collect::<Vec<_>>().join(" ");
+        assert!(
+            flat.contains("an unmerged branch or open PR other than this worktree's branch, STOP"),
+            "{flat}"
+        );
+        assert!(!flat.contains("has a branch or PR, STOP"), "{flat}");
+    }
+
+    /// Seat skills, commands and discipline launch implementers and fixers as
+    /// separate processes, never through the Agent tool: an in-session
+    /// subagent inherits the launcher's seat and grant.
+    // trace:STORY-1662 | ai:claude
+    // trace:STORY-1662.AC4 | ai:claude
+    #[test]
+    fn seat_templates_never_launch_implementers_through_the_agent_tool() {
+        use crate::templates::EMBEDDED_TEMPLATES;
+        let mut violations = Vec::new();
+        let mut scanned = 0;
+        for (key, body) in EMBEDDED_TEMPLATES.iter() {
+            let seat_file = [
+                "skills/",
+                "skills-portable/",
+                "commands/",
+                ".aida/discipline/",
+            ]
+            .iter()
+            .any(|prefix| key.starts_with(prefix))
+                && key.ends_with(".md");
+            if seat_file {
+                scanned += 1;
+                violations.extend(agent_tool_launches(key, body));
+            }
+        }
+        assert!(scanned > 20, "the scan found only {scanned} seat templates");
+        assert!(
+            violations.is_empty(),
+            "seat templates launch work through the Agent tool; use \
+             `aida queue work <SPEC> --role implementer --no-human` (or mark a \
+             research-only line with `{SUBAGENT_RATCHET_ALLOW}`):\n{}",
+            violations.join("\n")
+        );
+    }
+
     // STORY-1129: default scaffolding keeps CLI-capable agents on the
     // token-efficient CLI/TOON lane and does not register MCP unless opted in.
     // trace:TASK-0424 STORY-1129 | ai:claude,codex

@@ -29,6 +29,7 @@ impl Fixture {
             issued_at: Utc::now(),
             expires_at: Utc::now() + chrono::Duration::hours(1),
             revoked_at: None,
+            binding: Vec::new(),
         };
         let mut hold = mh::typed_hold(37, HoldReasonKind::Rework, "rework", Some(HEAD.into()));
         hold.verdict_ref = Some(mh::VerdictRef::new(
@@ -61,6 +62,7 @@ impl Fixture {
             &[Some(&self.req)],
             &sa::GrantCheck::Valid(self.grant.clone()),
             &no_mandate,
+            &held_check(),
         )
     }
     fn refused(&self, why: &str) {
@@ -80,6 +82,7 @@ fn current_independent_newer_approval_releases_with_audit() {
         root.path(),
         &f.hold,
         &verdict,
+        &[],
         || Ok(HEAD.into()),
         |body| {
             assert!(
@@ -143,7 +146,8 @@ fn invalid_or_absent_reviewer_grant_cannot_release() {
             HEAD,
             &[Some(&f.req)],
             &authority,
-            &no_mandate
+            &no_mandate,
+            &held_check()
         )
         .unwrap_err()
         .to_string()
@@ -266,7 +270,8 @@ fn missing_covered_specs_and_one_sensitive_member_stay_held() {
         HEAD,
         &[],
         &grant,
-        &no_mandate
+        &no_mandate,
+        &held_check()
     )
     .is_err());
     assert!(eligible(
@@ -276,7 +281,8 @@ fn missing_covered_specs_and_one_sensitive_member_stay_held() {
         HEAD,
         &[None],
         &grant,
-        &no_mandate
+        &no_mandate,
+        &held_check()
     )
     .is_err());
     let mut other = f.req.clone();
@@ -288,7 +294,8 @@ fn missing_covered_specs_and_one_sensitive_member_stay_held() {
         HEAD,
         &[Some(&f.req), Some(&other)],
         &grant,
-        &no_mandate
+        &no_mandate,
+        &held_check()
     )
     .is_err());
 }
@@ -302,6 +309,7 @@ fn moved_head_before_release_preserves_marker_and_labels() {
         root.path(),
         &f.hold,
         &f.check().unwrap(),
+        &[],
         || {
             count.set(count.get() + 1);
             Ok(if count.get() == 1 {
@@ -327,6 +335,7 @@ fn failed_comment_or_label_keeps_hold_and_label_retry_does_not_repeat_comment() 
         root.path(),
         &f.hold,
         &verdict,
+        &[],
         || Ok(HEAD.into()),
         |_| bail!("comment failed"),
         || panic!()
@@ -337,6 +346,7 @@ fn failed_comment_or_label_keeps_hold_and_label_retry_does_not_repeat_comment() 
         root.path(),
         &f.hold,
         &verdict,
+        &[],
         || Ok(HEAD.into()),
         |_| Ok(()),
         || bail!("labels failed")
@@ -347,6 +357,7 @@ fn failed_comment_or_label_keeps_hold_and_label_retry_does_not_repeat_comment() 
         root.path(),
         &f.hold,
         &verdict,
+        &[],
         || Ok(HEAD.into()),
         |_| panic!("audit was already posted"),
         || Ok(()),
@@ -364,6 +375,7 @@ fn failed_clearance_write_keeps_hold() {
         root.path(),
         &f.hold,
         &f.check().unwrap(),
+        &[],
         || Ok(HEAD.into()),
         |_| panic!(),
         || panic!()
@@ -404,6 +416,7 @@ fn expired_revoked_subject_roster_and_parent_grants_stay_held() {
             &[Some(&f.req)],
             &authority,
             &no_mandate,
+            &held_check(),
         )
         .unwrap_err();
         assert!(error.to_string().starts_with("reviewer grant rejected:"));
@@ -867,6 +880,7 @@ fn auto_release_fixture(change: ReleaseChange) {
             },
             approval_authority: &|_| Ok(()),
             mandate: &no_mandate,
+            refusal_release: &|_, _| held_check(),
             comment: &|body| {
                 comments.borrow_mut().push(body.to_string());
                 Ok(())
@@ -914,8 +928,9 @@ fn auto_release_fixture(change: ReleaseChange) {
             "id" | "subject" | "session_id" | "recorded_by" => "identity",
             "recorded_at" | "rounds" => "strictly newer",
             "round_verdict" | "missing_round_verdict" => "ambiguous",
-            "unarmed" => "no earlier",
-            "missing_rounds" => "missing arming",
+            // BUG-2216: with no retained arming round, the hold-marker
+            // fallback is consulted; this fixture's check answers Held.
+            "unarmed" | "missing_rounds" => "no retained arming round",
             "missing_timestamp" => "missing approval timestamp",
             "invalid_timestamp" => "invalid approval timestamp",
             "invalid_round_timestamp" => "invalid arming refusal timestamp",
@@ -970,13 +985,20 @@ fn auto_release_fixture(change: ReleaseChange) {
             *expected_marker.borrow()
         );
         if change.after_audit {
-            // A real re-arm invalidates the prior clearance itself. Other races
-            // retain the already-written authorization; none mirror the release.
-            assert_eq!(
-                mh::clearance_path(root.path(), 37).is_file(),
-                !(change.stricter_hold || change.changed_rework)
-            );
-            assert_eq!(comments.borrow().len(), 1);
+            // A real re-arm invalidates the prior clearance itself. TASK-1757
+            // (3): any other refused second pass supersedes the clearance it
+            // wrote and says so on the PR; none mirror the release.
+            // trace:TASK-1951 trace:TASK-1757 | ai:claude
+            assert!(!mh::clearance_path(root.path(), 37).exists());
+            let rearmed = change.stricter_hold || change.changed_rework;
+            let comments = comments.borrow();
+            assert_eq!(comments.len(), if rearmed { 1 } else { 2 }, "{comments:?}");
+            if !rearmed {
+                assert!(
+                    comments[1].contains("authorization withdrawn"),
+                    "{comments:?}"
+                );
+            }
         } else {
             assert!(!mh::clearance_path(root.path(), 37).exists());
             assert!(comments.borrow().is_empty());
@@ -1454,6 +1476,7 @@ fn malformed_matching_heads_cannot_authorize_release() {
             &[Some(&f.req)],
             &sa::GrantCheck::Valid(f.grant.clone()),
             &no_mandate,
+            &held_check(),
         )
         .unwrap_err();
         assert!(error.to_string().contains("unverifiable head"));
@@ -1515,4 +1538,22 @@ fn auto_release_fresh_covered_id_corpus_refusal_at_each_release_phase() {
             ..Default::default()
         });
     }
+}
+
+/// An unreadable recorded-label probe reaches auto-release as a label
+/// failure. The marker is still armed, so the retry it names is the
+/// auto-release itself, not `aida merge-hold clear`.
+// trace:TASK-1951 | ai:claude
+#[test]
+fn label_failure_names_the_auto_release_retry() {
+    let err = auto_release_label_failure(
+        37,
+        &mh::LabelSyncError::Other(
+            "could not read PR #37's labels from the forge (HTTP 502); no label was changed".into(),
+        ),
+    )
+    .to_string();
+    assert!(err.contains("HTTP 502"), "{err}");
+    assert!(err.contains("aida merge-hold auto-release 37"), "{err}");
+    assert!(!err.contains("merge-hold clear"), "{err}");
 }

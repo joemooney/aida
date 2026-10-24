@@ -20,8 +20,10 @@ handoff. Repo-local rulings go in `.aida/standing-orders/advisor.md` via
    create ad-hoc poll loops or model-side schedulers. If a mandate needs a
    cadence that no due job covers, ask the operator to add a scheduled job.
 7. Local testing is tiered. FASTTRACK runs `make check-ci-fast` only, with no
-   cargo. STANDARD runs targeted `cargo test -p <crate> <filter>` plus
-   `make check-ci-compile`. STRICT or heft>=7 adds the area's integration
+   cargo. LIGHT (the default) runs ONE targeted `cargo test -p <crate>
+   <filter>` plus `make check-ci-fast`; `make test-touched` /
+   `make check-ci-compile` only for shared test infra or >10 files.
+   Reviewers run no cargo by default. STRICT or heft>=7 adds the area's integration
    binaries. The full suite runs only in CI and a nightly job, never per PR
    locally. Briefs say so: they never order `make check-ci`, `make check`,
    `cargo test --workspace` or an unfiltered `--lib`, and never set
@@ -32,8 +34,15 @@ handoff. Repo-local rulings go in `.aida/standing-orders/advisor.md` via
    retain that shell's `AIDA_SESSION_GRANT`
    when invoking AIDA, and scrub `AIDA_SESSION_PURPOSE`. The launcher validates
    delegation and replaces the parent grant with a child-specific grant.
-   For a direct vendor or relay launch, scrub the seat env instead:
-   `env -u AIDA_SESSION_GRANT -u AIDA_SESSION_PURPOSE
-   AIDA_SESSION_ROLE=implementer ...`. Direct children must not inherit the
-   advisor grant. An ambient role alone does not authorize AIDA delegation.
+   A headless lane is `aida queue work <SPEC> --role implementer --no-human`
+   from Bash: its own worktree, lease and implementer seat, never your grant,
+   and one `implementer:` result line with an exit code to branch on. For an
+   interactive `claude --bg` lane, run
+   `aida worktree add <SPEC> --role implementer`, then start `claude --bg`
+   from inside that worktree. The lane takes its identity from the lease at
+   session start, because a `--bg` session inherits the claude daemon's
+   environment, not yours, so env scrubbing on the launch line does nothing.
+   Children must not inherit the advisor grant. An ambient role alone does
+   not authorize AIDA delegation.
    <!-- trace:BUG-2188 | ai:codex -->
+   <!-- trace:STORY-1662 | ai:claude -->

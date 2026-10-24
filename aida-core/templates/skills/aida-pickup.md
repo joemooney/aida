@@ -478,9 +478,12 @@ Test locally by the spec's tier; the full workspace suite runs only in CI
 (never `cargo test --workspace` locally):
 
 - **FASTTRACK** (docs, one line; nothing compiled or embedded into a binary): `make check-ci-fast` only, no cargo.
-- **STANDARD**: `make test-touched` (targeted `cargo test --profile agent -p
-  <crate> <filter>` for the touched modules) plus `make check-ci-compile`.
-- **STRICT or heft >= 7**: STANDARD plus the area's integration test binaries
+- **LIGHT** (the default): ONE targeted `cargo test --profile agent -p
+  <crate> <module filter>` run plus `make check-ci-fast`, then push; CI's full
+  shards are the gate. `make test-touched` / `make check-ci-compile` only when
+  the change touches shared test infra (`test_env`, `test_git`, ratchet
+  baselines) or more than 10 files. trace:TASK-2209 | ai:claude
+- **STRICT or heft >= 7**: LIGHT plus the area's integration test binaries
   (`cargo test --profile agent -p <crate> --test <name>`).
 
 `make check-ci-fast` runs before every push. trace:TASK-1780 | ai:claude
@@ -931,14 +934,16 @@ trace:TASK-286 trace:TASK-359 trace:TASK-393
 
 **Graceful exit signal (TASK-329).** Under `$AIDA_ZEN`, `/aida-pickup`
 auto-takes the `⇒ Submit the PR` row — it hands off to `/aida-pr`, which
-drives the session to the open PR and *then* touches `$AIDA_EXIT_SENTINEL`
-as the session's absolute last action so the orchestrator reaps the
-otherwise-idle REPL. `/aida-pickup` itself must **not** touch the sentinel:
-the hand-off target owns the exit, and a premature touch here would let the
-orchestrator reap the session before `/aida-pr` opens the PR. The sentinel
+in corroborated `orchestrated` mode commits and pushes the branch (`aida ship
+<SPEC> --no-pr`, leaving preflight and PR creation to the parent per
+TASK-1289) and *then* touches `$AIDA_EXIT_SENTINEL` as the session's
+absolute last action so the orchestrator reaps the otherwise-idle REPL.
+`/aida-pickup` itself must **not** touch the sentinel: the hand-off target
+owns the exit, and a premature touch here would let the orchestrator reap
+the session before `/aida-pr` finishes committing and pushing. The sentinel
 is touched exactly once, by whichever skill performs the session's genuinely
 last action. Full protocol: `.aida/discipline/skill-prompt-kinds.md`.
-trace:TASK-329
+trace:TASK-329 trace:TASK-1613
 
 *Batch mode (`batch:<NAME>` still has queued members) — TASK-272:*
 

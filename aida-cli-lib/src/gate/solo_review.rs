@@ -183,9 +183,43 @@ fn open_controlling_tty() -> Option<ControllingTty> {
     None
 }
 
+#[cfg(test)]
+thread_local! {
+    static TEST_TERMINAL_ANSWER: std::cell::RefCell<Option<String>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// Run `f` as a human typing `answer` at a terminal: the record path's
+/// human-at-TTY floor passes and the challenge reads `answer` (tests only).
+// trace:TASK-1955 | ai:claude (TASK-1808)
+#[cfg(test)]
+pub(crate) fn with_test_human_terminal<R>(answer: &str, f: impl FnOnce() -> R) -> R {
+    struct Reset(Option<String>);
+    impl Drop for Reset {
+        fn drop(&mut self) {
+            let prev = self.0.take();
+            TEST_TERMINAL_ANSWER.with(|a| *a.borrow_mut() = prev);
+        }
+    }
+    let prev = TEST_TERMINAL_ANSWER.with(|a| a.borrow_mut().replace(answer.to_string()));
+    let _reset = Reset(prev);
+    f()
+}
+
+/// Is a [`with_test_human_terminal`] human at the terminal? (tests only)
+#[cfg(test)]
+pub(crate) fn test_human_at_terminal() -> bool {
+    TEST_TERMINAL_ANSWER.with(|a| a.borrow().is_some())
+}
+
 /// Run the typed challenge for a solo self-approval of `spec` at PR `pr`,
 /// reading the answer from the controlling terminal, never from stdin.
 pub(crate) fn run_challenge(spec: &str, pr: u64) -> anyhow::Result<()> {
+    #[cfg(test)]
+    if let Some(answer) = TEST_TERMINAL_ANSWER.with(|a| a.borrow().clone()) {
+        let tty = (std::io::Cursor::new(answer.into_bytes()), Vec::new());
+        return run_challenge_with(true, Some(tty), spec, pr);
+    }
     let stdin_is_terminal = crate::authority_stdin_is_terminal();
     let tty = if stdin_is_terminal {
         open_controlling_tty()

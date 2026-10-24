@@ -1,0 +1,478 @@
+//! Ship readiness: a report-only verdict per reviewed change and a once-only
+//! advisor wake. It reads the same evidence `aida pr ship` checks and never
+//! acts on it: no merge, push or branch update happens here.
+// trace:TASK-1945 | ai:claude
+use super::*;
+
+/// Wakes of one kind for a head reach the advisor once.
+pub(super) const WAKE_READY: &str = "ready";
+pub(super) const WAKE_AFTER_UPDATE: &str = "ready-after-update-branch";
+
+/// A change's readiness to ship. Recomputed on every evaluation from the
+/// forge, the verdicts and the holds; stored only for display.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum Readiness {
+    Ready,
+    /// Behind its base only on paths it does not touch: ready once the
+    /// branch is updated, which the watcher never does itself.
+    ReadyAfterUpdateBranch {
+        behind: u64,
+    },
+    NotReady(String),
+}
+
+impl Readiness {
+    pub(super) fn line(&self, change: &forge::Change) -> String {
+        match self {
+            Readiness::Ready => "ready".into(),
+            Readiness::ReadyAfterUpdateBranch { behind } => format!(
+                "ready after its branch is updated ({behind} commit(s) behind `{}`, no overlapping paths): {}",
+                change.base,
+                update_command(change)
+            ),
+            Readiness::NotReady(reason) => format!("not ready: {reason}"),
+        }
+    }
+    pub(super) fn wake(&self) -> Option<&'static str> {
+        match self {
+            Readiness::Ready => Some(WAKE_READY),
+            Readiness::ReadyAfterUpdateBranch { .. } => Some(WAKE_AFTER_UPDATE),
+            Readiness::NotReady(_) => None,
+        }
+    }
+}
+
+/// How to bring the branch up to date with a merge of its base: a rebase
+/// rewrites the change's own commits, and the TASK-1960 carry-over refuses
+/// that, so the advice never names one.
+// trace:TASK-1945 | ai:claude (TASK-2202)
+pub(super) fn update_command(change: &forge::Change) -> String {
+    if change.gitlab {
+        format!(
+            "a merge of `{base}` into the source branch (`git merge origin/{base}` there, then a push)",
+            base = change.base
+        )
+    } else {
+        format!("`gh pr update-branch {}`", change.id)
+    }
+}
+
+/// The approval a ready change ships on.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct Approval {
+    /// The commit the approval reviewed.
+    pub reviewed: String,
+    /// Who recorded it and when: with the head and CI commit, it keys the
+    /// wake, so a new approval of the same head is a new wake.
+    pub identity: String,
+    /// The TASK-1960 carry-over that extends it to the head, when it moved.
+    pub carried: Option<String>,
+}
+
+/// Every input readiness reads, behind one seam so tests inject snapshots.
+/// Each read fails closed: an error is reported as not ready, never clean.
+pub(super) trait Evidence {
+    /// An authorized, non-author approval covering the head (a clean base
+    /// merge may carry it over), and a verdict corpus that does not refuse
+    /// the head. `Err` names the refusal.
+    fn approval(&self, change: &forge::Change) -> std::result::Result<Approval, String>;
+    /// The approval gate alone, without the verdict-corpus gate: whether a
+    /// non-author approval covers the head (directly or carried over). The
+    /// round-cap wake asks this, since a capped change's earlier blocking
+    /// rounds can keep the corpus refusing a head that was reviewed.
+    // trace:TASK-2238 | ai:claude
+    fn approval_only(&self, change: &forge::Change) -> std::result::Result<Approval, String> {
+        self.approval(change)
+    }
+    /// A live review marker covering the head, described.
+    fn under_review(&self, change: &forge::Change) -> Option<String>;
+    /// Any merge hold (marker or label, of any kind), described. An
+    /// unreadable hold is `Err`.
+    fn hold(&self, change: &forge::Change) -> Result<Option<String>>;
+    /// Every CI check on `sha`.
+    fn ci(&self, sha: &str) -> Result<crate::forge::CommitChecks>;
+    /// The checks that must be present and green beyond "every check
+    /// passed": the project's configured ones. An unreadable setting is `Err`.
+    fn required_checks(&self) -> Result<Vec<String>>;
+    /// Commits behind the base, and whether the base's changes overlap the
+    /// change's paths.
+    fn base(&self, change: &forge::Change) -> Result<(u64, bool)>;
+    /// The change's head, re-read from the forge.
+    fn head(&self, change: &forge::Change) -> Result<String>;
+}
+
+/// The readiness verdict, and the approval it relies on when ready. The
+/// cheap local reads run first; the first refusal ends the evaluation.
+pub(super) fn evaluate(
+    change: &forge::Change,
+    evidence: &dyn Evidence,
+) -> (Readiness, Option<Approval>) {
+    let not = |reason: String| (Readiness::NotReady(reason), None);
+    if let Some(review) = evidence.under_review(change) {
+        return not(format!("under review ({review})"));
+    }
+    match evidence.hold(change) {
+        Ok(Some(hold)) => return not(format!("held: {hold}")),
+        Ok(None) => {}
+        Err(error) => return not(format!("merge-hold evidence unreadable: {error:#}")),
+    }
+    let (behind, overlap) = match evidence.base(change) {
+        Ok(base) => base,
+        Err(error) => return not(format!("base evidence unknown: {error:#}")),
+    };
+    if behind > 0 && overlap {
+        return not(format!(
+            "{behind} commit(s) behind `{}` with overlapping paths; merge `{}` into the branch",
+            change.base, change.base
+        ));
+    }
+    let approval = match evidence.approval(change) {
+        Ok(approval) => approval,
+        Err(refusal) => return not(bounded_diagnostic(&refusal)),
+    };
+    let checks = match evidence.ci(&change.head) {
+        Ok(checks) => checks,
+        Err(error) => return not(format!("CI evidence unknown: {error:#}")),
+    };
+    if !checks.sha.eq_ignore_ascii_case(&change.head) {
+        return not(format!(
+            "CI evidence is for {}, not the head",
+            short(&checks.sha)
+        ));
+    }
+    let required = match evidence.required_checks() {
+        Ok(required) => required,
+        Err(error) => return not(format!("required CI checks unknown: {error:#}")),
+    };
+    let required: Vec<&str> = required.iter().map(String::as_str).collect();
+    let names = |names: &[String]| bounded_diagnostic(&names.join(", "));
+    match crate::forge::judge_commit_checks(&checks, &required) {
+        crate::forge::CommitCi::Green => {}
+        crate::forge::CommitCi::NoChecks => return not("no CI checks on the head".into()),
+        crate::forge::CommitCi::MissingRequired(name) => {
+            return not(format!(
+                "CI check `{name}` has not reported success on the head"
+            ))
+        }
+        crate::forge::CommitCi::Pending(pending) => {
+            return not(format!("CI pending: {}", names(&pending)))
+        }
+        crate::forge::CommitCi::Failed(failed) => {
+            return not(format!("CI failed: {}", names(&failed)))
+        }
+    }
+    match evidence.head(change) {
+        Ok(head) if head == change.head => {}
+        Ok(head) => return not(format!("head moved to {} during evaluation", short(&head))),
+        Err(error) => return not(format!("head re-read refused: {error:#}")),
+    }
+    let readiness = if behind > 0 {
+        Readiness::ReadyAfterUpdateBranch { behind }
+    } else {
+        Readiness::Ready
+    };
+    (readiness, Some(approval))
+}
+
+fn short(sha: &str) -> &str {
+    sha.get(..12).unwrap_or(sha)
+}
+
+/// The advisor's ready wake. Its ID binds the change, head (the commit CI
+/// passed on), readiness and approval, so a retry re-delivers the same
+/// message and new evidence is a new wake. It names only ordinary commands.
+pub(super) fn wake_message(
+    repository: &str,
+    change: &forge::Change,
+    readiness: &Readiness,
+    approval: &Approval,
+) -> aida_core::mailbox::Message {
+    use aida_core::mailbox::{Intent, Message, Recipient, SenderSource};
+    let key = change.key();
+    let kind = readiness.wake().unwrap_or(WAKE_READY);
+    let id = format!(
+        "review-watch-{:x}",
+        Sha256::digest(format!(
+            "{repository}\0{key}\0{}\0{kind}\0{}",
+            change.head, approval.identity
+        ))
+    );
+    let carried = approval
+        .carried
+        .as_deref()
+        .map(|c| format!(" ({c})"))
+        .unwrap_or_default();
+    let ship = format!("`aida pr ship {}`", change.id);
+    let (state, next) = match readiness {
+        Readiness::ReadyAfterUpdateBranch { behind } => (
+            format!(
+                "{behind} commit(s) behind `{}` on paths it does not touch",
+                change.base
+            ),
+            format!(
+                "Update the branch with {}, then run {ship} once CI on the new head is green.",
+                update_command(change)
+            ),
+        ),
+        _ => (
+            format!("0 commits behind `{}`", change.base),
+            format!("Run {ship} to merge it."),
+        ),
+    };
+    let body = format!(
+        "{key} at {head} is ready to ship: an authorized approval of {reviewed}{carried} covers the head, \
+         every CI check on {head} passed, it is {state}, and no merge hold or review in progress is \
+         recorded. {next} The watcher only reports; it did not merge or update the branch.",
+        head = change.head,
+        reviewed = approval.reviewed,
+    );
+    Message {
+        id: id.clone(),
+        thread_id: id,
+        from: "review-watch".into(),
+        to: Recipient::Agent("advisor".into()),
+        timestamp: chrono::Utc::now().timestamp(),
+        in_reply_to: None,
+        body,
+        subject: Some(match readiness {
+            Readiness::ReadyAfterUpdateBranch { .. } => {
+                format!("{key}: ready to ship after its branch is updated")
+            }
+            _ => format!("{key}: ready to ship"),
+        }),
+        urgent: false,
+        intent: Intent::Request,
+        retracted: false,
+        deleted: false,
+        archived: false,
+        from_source: SenderSource::Explicit,
+        from_role: None,
+        relayed_from: None,
+    }
+}
+
+/// The production evidence: the readers `aida pr ship` uses, pinned to the
+/// watcher's repository, all read-only.
+pub(super) struct Live<'a> {
+    pub root: &'a Path,
+    pub repo: &'a forge::Repository,
+}
+
+impl Evidence for Live<'_> {
+    fn approval(&self, change: &forge::Change) -> std::result::Result<Approval, String> {
+        live_approval(self.root, change)
+    }
+    fn approval_only(&self, change: &forge::Change) -> std::result::Result<Approval, String> {
+        live_approval_only(self.root, change)
+    }
+    fn under_review(&self, change: &forge::Change) -> Option<String> {
+        live_under_review(self.root, change)
+    }
+    fn hold(&self, change: &forge::Change) -> Result<Option<String>> {
+        live_hold(self.root, change)
+    }
+    fn ci(&self, sha: &str) -> Result<crate::forge::CommitChecks> {
+        self.repo.commit_checks(self.root, sha)
+    }
+    fn required_checks(&self) -> Result<Vec<String>> {
+        required_checks(self.root)
+    }
+    fn base(&self, change: &forge::Change) -> Result<(u64, bool)> {
+        if let (Some(behind), Some(overlap)) = (change.behind, change.overlap) {
+            return Ok((behind, overlap));
+        }
+        let mut probed = change.clone();
+        self.repo.probe(self.root, &mut probed)?;
+        Ok((
+            probed.behind.context("behind count unknown")?,
+            probed.overlap.context("overlap unknown")?,
+        ))
+    }
+    fn head(&self, change: &forge::Change) -> Result<String> {
+        Ok(self.repo.change(self.root, change.id)?.head)
+    }
+}
+
+// The Live adapters' bodies, free of the forge repository so tests drive
+// them on real fixtures. trace:TASK-1945 | ai:claude (TASK-2203)
+pub(super) fn live_approval(
+    root: &Path,
+    change: &forge::Change,
+) -> std::result::Result<Approval, String> {
+    let head = change.head.as_str();
+    let (candidates, policy, ids) =
+        crate::pr_cmd::merge_approval_subject(&[root], root, change.id, &[], None, Some(head));
+    let site = crate::review_carryover::CarryOverSite::quiet(root, Some(&change.base));
+    approval_then_corpus(
+        || approval_at(change.id, &candidates, head, &policy, &site),
+        || corpus_at(root, change, &ids),
+    )
+}
+
+/// [`live_approval`] without the corpus gate.
+// trace:TASK-2238 | ai:claude
+pub(super) fn live_approval_only(
+    root: &Path,
+    change: &forge::Change,
+) -> std::result::Result<Approval, String> {
+    let head = change.head.as_str();
+    let (candidates, policy, _) =
+        crate::pr_cmd::merge_approval_subject(&[root], root, change.id, &[], None, Some(head));
+    let site = crate::review_carryover::CarryOverSite::quiet(root, Some(&change.base));
+    approval_at(change.id, &candidates, head, &policy, &site)
+}
+
+/// [`live_approval`]'s composition: the approval gate first, then the corpus
+/// gate, whose refusal wins over an approval. The corpus is not read when no
+/// approval covers the head.
+// trace:TASK-2238 | ai:claude
+pub(super) fn approval_then_corpus(
+    approval: impl FnOnce() -> std::result::Result<Approval, String>,
+    corpus: impl FnOnce() -> std::result::Result<(), String>,
+) -> std::result::Result<Approval, String> {
+    let approval = approval()?;
+    corpus()?;
+    Ok(approval)
+}
+
+/// The TASK-1968 verdict-corpus gate on the head, read-only. `Err` is its
+/// refusal, or the error that made the corpus unreadable.
+pub(super) fn corpus_at(
+    root: &Path,
+    change: &forge::Change,
+    ids: &[String],
+) -> std::result::Result<(), String> {
+    match crate::merge_hold::corpus_gate_decision(root, change.id, ids, Some(&change.base), || {
+        Some(change.head.clone())
+    }) {
+        Ok(crate::merge_hold::CorpusMergeGate::Clear) => Ok(()),
+        Ok(crate::merge_hold::CorpusMergeGate::Refuse { message, .. }) => Err(message),
+        Err(error) => Err(format!("{error:#}")),
+    }
+}
+
+pub(super) fn live_under_review(root: &Path, change: &forge::Change) -> Option<String> {
+    crate::review_marker::live_description(root, change.id, Some(&change.head))
+}
+
+pub(super) fn live_hold(root: &Path, change: &forge::Change) -> Result<Option<String>> {
+    hold_at(root, change.id, || {
+        crate::merge_hold::label_present(root, change.id)
+    })
+}
+
+/// The project's required CI checks, from `[review_watch] required_checks`
+/// in `.aida/config.toml`. A check's name is the forge's, so each project
+/// (and so its one forge repository) names its own; unset requires no named
+/// check beyond every check on the head passing. A config that cannot be
+/// read or parsed is `Err`, never "nothing required".
+// trace:TASK-1945 | ai:claude (TASK-2201)
+// Also the live-binary promote's required checks. trace:STORY-1689 | ai:claude
+pub(crate) fn required_checks(root: &Path) -> Result<Vec<String>> {
+    let path = root.join(".aida").join("config.toml");
+    let text = match std::fs::read_to_string(&path) {
+        Ok(text) => text,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(error) => return Err(error).with_context(|| format!("read {}", path.display())),
+    };
+    let config: toml::Value =
+        toml::from_str(&text).with_context(|| format!("parse {}", path.display()))?;
+    let Some(value) = config
+        .get("review_watch")
+        .and_then(|section| section.get("required_checks"))
+    else {
+        return Ok(Vec::new());
+    };
+    let names = value
+        .as_array()
+        .context("`[review_watch] required_checks` is not a list")?
+        .iter()
+        .map(|name| {
+            name.as_str()
+                .map(str::trim)
+                .filter(|name| !name.is_empty())
+                .map(str::to_string)
+                .context("`[review_watch] required_checks` holds a non-name")
+        })
+        .collect::<Result<Vec<_>>>()?;
+    anyhow::ensure!(
+        names.len() <= 32,
+        "`[review_watch] required_checks` names more than 32 checks"
+    );
+    Ok(names)
+}
+
+/// The approval gate `aida pr ship` applies, decided read-only: an
+/// authorized, non-author approval that covers `head` or carries over to it
+/// through `site` (which must be quiet). `Err` is the gate's refusal.
+pub(super) fn approval_at(
+    pr: u64,
+    candidates: &[crate::review_verdict::RecordedVerdict],
+    head: &str,
+    policy: &crate::pr_ship::ShipApprovalPolicy,
+    site: &crate::review_carryover::CarryOverSite<'_>,
+) -> std::result::Result<Approval, String> {
+    debug_assert!(site.quiet, "readiness never records a carry-over");
+    let carried =
+        match crate::pr_cmd::approval_decision(pr, candidates, Some(head), policy, Some(site))? {
+            crate::pr_cmd::HeadDecision::Covered(Some(_)) => None,
+            crate::pr_cmd::HeadDecision::Covered(None) => {
+                return Err("no approval covers the head".into())
+            }
+            crate::pr_cmd::HeadDecision::CarriedOver(proof, _) => Some(format!(
+                "carried over clean merges of `{}` to the head, the PR's own diff unchanged",
+                proof.base_branch()
+            )),
+            crate::pr_cmd::HeadDecision::Stale { message, .. } => return Err(message),
+        };
+    let mut approval = approval_of(candidates).ok_or("no approval covers the head")?;
+    approval.carried = carried;
+    Ok(approval)
+}
+
+/// Any merge hold on `pr`, described: a marker of any kind (an unreadable
+/// one reads as an unknown-kind hold), a marker removed without a record,
+/// or the forge label, read through `label`. An unreadable label is `Err`.
+pub(super) fn hold_at(
+    root: &Path,
+    pr: u64,
+    label: impl FnOnce() -> std::result::Result<bool, String>,
+) -> Result<Option<String>> {
+    if let Some(record) = crate::merge_hold::read_hold_record(root, pr) {
+        return Ok(Some(format!(
+            "{} hold: {}",
+            format!("{:?}", record.reason_kind).to_lowercase(),
+            record.detail
+        )));
+    }
+    if let Some(reason) = crate::merge_hold::read_hold(root, pr) {
+        return Ok(Some(reason));
+    }
+    match label() {
+        Ok(true) => Ok(Some("the merge-hold label is set on the forge".into())),
+        Ok(false) => Ok(None),
+        Err(error) => anyhow::bail!("merge-hold label unreadable: {error}"),
+    }
+}
+
+/// The newest open approval among `candidates`, as a wake identity.
+pub(super) fn approval_of(
+    candidates: &[crate::review_verdict::RecordedVerdict],
+) -> Option<Approval> {
+    let open: Vec<_> = candidates
+        .iter()
+        .filter(|v| v.kind.approves() && !v.is_closed())
+        .cloned()
+        .collect();
+    let newest = crate::pr_ship::newest_approval(&open)?;
+    let reviewed = newest.reviewed_sha.clone()?;
+    Some(Approval {
+        identity: format!(
+            "{reviewed}\0{}\0{}",
+            newest.recorded_by.as_deref().unwrap_or(""),
+            newest.recorded_at.as_deref().unwrap_or("")
+        ),
+        reviewed,
+        carried: None,
+    })
+}

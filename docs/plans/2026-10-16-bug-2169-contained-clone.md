@@ -583,3 +583,145 @@ Owning spec: TASK-2053 (the remaining BUG-2169 slices moved there unchanged).
   a worktree. S3 enforces the rule at runtime instead. `host_git_command` and `status_sections`
   refuse any cwd inside a seat clone, and T7 and the logging-shim test check session end and
   dismiss. S4 adds the ratchet when it moves the `git -C <worktree>` consumers onto `seat_trees`.
+
+## S4a as built (host git off seat clones)
+
+S4 ships in three PRs: S4a (this: no host git in a clone from routine paths), S4b (`seat_trees`
+visibility: status rows, unshipped detector, runaway sources, preflight, trace, gc/reclaim), and
+S4c (flip `seat_tree` to `clone`, retire `AIDA_DEV_SEAT_CLONE`, close PR #2694).
+
+- **Raw git routed through `host_git_command`**, which refuses a seat clone without spawning git:
+  `dispatch_health_ps::git_stdout` (the `aida status` / `aida ps` / statusbar running-work probe,
+  `current_branch_at`, the untracked-parent `ls-files`), `worktree_gc::{current_branch_at,
+  detect_default_branch_ref, git_output_lossy}`, `burndown_run::worktree_last_activity` (its mtime
+  leg still answers), `lane_liveness::branch_latest_commit_ts`, and
+  `orchestrator_leases::git_output_checked` plus the PR-title `git log`. A refused read is "no
+  answer", which each caller already handles.
+- **`git_ops::is_git_repo`** is false for a seat clone, and the TUI's main-root resolver reads a
+  clone as its own directory.
+- **Clone-aware cleanup.** `force_cleanup_lease` (doctor's lease heal, pickup and review
+  stale-lease release, drain-retry predecessor, escalated cleanup) calls
+  `seat_clone::destroy(SalvageUnshipped)` for a clone lease after its holder check and releases
+  the lease only once the clone is gone. `salvage_worktree_patch` probes a clone and salvages it
+  through the sandbox; an unreadable clone is an error, so nothing is torn down.
+- **Implementer push.** `push_branch_from_implementer_worktree` refuses a clone: a host push would
+  run its seat-written pre-push hook. A clone seat pushes from its own sandbox.
+- **`agent new` re-entry** checks a clone lease's branch through `seat_clone::probe`.
+- **Tests.** `tests/task_2053_s4_host_git_tests.rs` runs every path above against a clone with a
+  logging `git` first on PATH and requires that no untagged git ran in the clone (negative
+  control included); `task_2053_bwrap_bulk_lease_cleanup_destroys_a_seat_clone_salvage_first`
+  covers heal/cleanup.
+
+### S4a additions (advisor signoff of SKETCH S4 v1, 2026-10-22)
+
+- **TASK-2161.** `run_path_isolated_test_output` passes `AIDA_REQUIRE_BWRAP_LIVE` into the
+  isolated child and re-emits the child's SKIP lines. The live-bwrap CI step tees its log and
+  fails on any `SKIP (bwrap unavailable)`, or when fewer `... ok` lines appear than there are
+  `bug_2169_bwrap_` / `task_2053_bwrap_` test functions in the source. Other skips are only
+  listed (for example, git too old to migrate refs to reftable).
+  `task_2053_bwrap_isolated_child_inherits_the_live_gate` proves the forwarding under the gate.
+- **TASK-2143 ratchet** (`tests/task_2143_clone_git_ratchet_tests.rs`). The ratchet scans the
+  non-test source of every workspace crate. Any file that names the lease field `worktree_path`
+  gets its raw `<Type>::new("git")` builders counted against a per-file allowlist. A count above
+  its entry fails, and so does a count below it until the allowlist is lowered. A new file that
+  reads `worktree_path` fails as soon as it holds any raw git. The opt-out is
+  `// raw-git-ok(TASK-2053): <why>`. S4a's baseline was 157 builders across 22 files.
+  S4b removes `worktree_reclaim.rs` (one builder) and adds coverage for the existing main-only
+  builders in newly lease-reading `status_prs.rs` (12) and `trace.rs` (13), yielding
+  181 builders across 23 files. Counts for already covered files may only decrease.
+- **TASK-2162.** `task_2162_dismiss_releases_a_hand_removed_seat_clone`.
+- **TASK-2160.** `docs/cli/03-work-autonomy.md` documents the salvage bundle and patch, what is
+  kept, and how to recover a submodule clone.
+
+## S4b as built (seat clones visible to the host)
+
+- **`seat_trees` enumerator** (`status_prs.rs`): the linked worktrees from `git worktree list`
+  (now run through `host_git_command`), then one record per `clone` lease whose directory exists
+  (`clone_seat_trees`), carrying the lease branch and `clone: true`. Destructive sweeps (gc, doctor
+  orphan/merged heals, reclaim, dismiss, reap) keep enumerating linked worktrees only, so a clone
+  is never their candidate; its removal stays `seat_clone::destroy`.
+- **Visibility.** `aida status`'s worktree pane and `aida awaiting`'s uncommitted-WIP detector list
+  clones, with branch, dirty count and unpushed count from the sandboxed probe (an unreadable clone
+  reads dirty). The unshipped-work detector adds `clone_unshipped_work_items`: a clone with commits
+  on no `origin/*` ref, attributed to its lease's spec, or an unreadable clone with an unknown
+  count; never dropped. Pushed work flows through the existing `origin/` path.
+- **Branch ownership.** `aida brief` resolves a spec branch held by a clone to a new
+  `SeatClone` target ("continue it in that seat"), `aida show` linkage falls back to a clone lease
+  for the spec, and `aida queue work` preflight refuses a branch a clone holds without suggesting
+  `git worktree remove`.
+- **Other sources.** Runaway-seat transcripts, `aida merge-hold list`'s stray markers (only through
+  real directories, never a symlinked `.aida`) and `aida worktree list` (kind `clone`, its focus
+  marker unread) include clones; doctor's trust-breadth count skips `aida-seat-*`.
+- **Post-ship pull.** `aida pr ship` from a seat clone skips step 4 with a note: main is read-only
+  to the seat and is synced from outside it.
+- **Hardening.** `teardown_worktree_path` refuses a clone before any `pre_destroy` hook runs; the
+  phase driver's failed-attempt teardown keeps a clone (its session end or reap removes it);
+  `local_commits_not_on_branch`, `worktree_reclaim`'s git and review-watch's root probe no longer
+  run raw git in a clone.
+- **Squash-merged branches (TASK-2110).** After a squash merge and a pruned `origin/<branch>`,
+  every branch commit used to read as unpushed, so reap kept the clone and session end demanded
+  `--force`. `probe_with_shipped` / `destroy_with_shipped` take the heads of the branch's merged PRs
+  (`gh pr list --state merged --head`, full hex ids only) and count commits those reach as on
+  origin; an id the clone lacks is skipped inside the sandbox. Reap (scan and removal) and session
+  end use them; other views and salvage stay conservative. Another forge, or no gh, gives no heads.
+- **Not changed (by design §2d):** `branch_in_sibling_worktree`, `pr_gc_branch_checked_out` and
+  `session_reap`'s checked-out-elsewhere check key off main's or origin's refs.
+- **Tests.** `tests/task_2053_s4b_seat_trees_tests.rs`: enumerator, brief, show, pickup,
+  runaway, teardown refusal with no untagged git in the clone; stray markers with a symlinked
+  `.aida`; under live bwrap, a status row and an unshipped item for a clone with a commit and a
+  dirty file.
+
+## S4c as built (default flip)
+
+- `[contained] seat_tree` now defaults to `clone`. `AIDA_DEV_SEAT_CLONE` and `clone_seats_enabled`
+  are gone, and `seat_tree = "worktree"` opts out.
+- With no knob set, four contained launches that a clone cannot serve keep a linked worktree, and
+  each prints a one-line `note:` naming its reason (never silently):
+  - the checkout has no `origin` remote to clone from (S4c ruling 2)
+  - a review session
+  - re-entering an existing `--path`
+  - an explicit `--path` that is not an `aida-seat-*` directory directly in the worktree parent
+    (inside or outside that parent)
+  An explicit `seat_tree = "clone"` refuses each of them instead and names the reason; a missing
+  origin refuses with "add an origin remote or set seat_tree = \"worktree\"". These fallbacks
+  cover the listed launch shapes; other clone setup failures can still refuse a launch.
+  The launch facts are read only when the tree would be a clone.
+- Tests: `the_default_is_a_clone_and_an_explicit_path_keeps_a_worktree`,
+  `the_default_without_an_origin_keeps_a_worktree`,
+  `the_default_keeps_a_worktree_for_an_in_parent_path_that_is_not_a_seat_dir`,
+  `session_start_refuses_a_contained_seat_it_cannot_clone_for`,
+  `an_explicit_clone_refuses_review_reentry_and_a_non_seat_path` and
+  `default_clone_fallback_notes_each_reason_and_explicit_never_downgrades`.
+- **S5 outcome** (advisor rule: p95 at or under 20 s rejects the host clone pool). The first
+  measurement on this host (2026-10-22, five fresh lease clones per condition, replicating
+  `seat_clone::create`) gave cold p95 35.7 s (p50 34.8 s) and warm p95 2.6 s. Cold time was
+  reading main's object store: 128,766 loose objects next to 237 MiB of packs. Per the 14:16
+  ruling, main's loose objects were packed first (`git repack -d` under the merge lease), down to
+  7,170. The re-measure gave cold p50 3.2 s and p95 3.3 s, warm p50/p95 1.2 s. S5 is therefore
+  the packing step plus the loose-object doctor check (`aida doctor check loose-objects`, #2847);
+  no host clone pool is built.
+
+## TASK-2300: unreachable origin under the default
+
+<!-- trace:TASK-2300 | ai:codex -->
+With `seat_tree` unset, failure or a 30-second timeout of the actual origin
+clone command now falls back to the ordinary linked-worktree path, with a
+one-line note naming origin reachability and credentials. There is no separate
+reachability probe or host clone pool. The failed clone and its base pin must
+be removed successfully before fallback; the lease records `tree_kind = "worktree"`.
+An explicit `seat_tree = "clone"` still refuses. Local destination, base-ref,
+pinning, checkout and runtime setup errors also still refuse, as does failure
+to start git or excessive clone output. The fallback does not guarantee that
+every contained launch succeeds. It uses locally available refs, as the existing
+worktree path does; it cannot fetch unavailable work from an offline origin.
+
+The fallback classifies failure of the origin clone command, rather than parsing
+Git's localized stderr to infer a transport cause. That command can also fail
+while initializing or writing its local clone. Failures in the separate local
+preparation, base, pin, checkout and runtime stages remain refusals.
+
+<!-- trace:TASK-2300 | ai:codex -->
+An explicit `--path` using the reserved `aida-seat-*` clone location cannot
+host a linked worktree. If origin cloning fails there, the launch refuses
+before making a worktree and asks to drop `--path` for automatic placement
+or choose an ordinary worktree path. It does not silently change that request.

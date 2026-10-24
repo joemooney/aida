@@ -1,5 +1,5 @@
-//! Review discovery, dispatch and head-change supersede; readiness is a
-//! later slice.
+//! Review discovery, dispatch, head-change supersede, and the report-only
+//! ship-readiness verdict with its once-only advisor wake.
 // trace:TASK-1945 trace:TASK-1993 | ai:codex
 use anyhow::{Context, Result};
 use clap::Args;
@@ -19,6 +19,15 @@ mod forge;
 // trace:TASK-1945 | ai:claude
 #[path = "review_watch_signal.rs"]
 mod signal;
+// Ship readiness: report only. trace:TASK-1945 | ai:claude
+#[path = "review_watch_ready.rs"]
+mod ready;
+// The project's required checks also gate the live-binary promote.
+// trace:STORY-1689 | ai:claude
+pub(crate) use ready::required_checks;
+// The author's findings mail and the round-cap wake. trace:TASK-1945 | ai:claude
+#[path = "review_watch_notice.rs"]
+mod notice;
 
 #[derive(Args, Debug)]
 pub struct ReviewWatchArgs {
@@ -64,6 +73,15 @@ const SUPERSEDE_GRACE: std::time::Duration = if cfg!(test) {
 } else {
     std::time::Duration::from_secs(20)
 };
+// How often one head's readiness is re-evaluated: each evaluation costs
+// several forge reads. Tests evaluate every pass. trace:TASK-1945 | ai:claude
+const READY_INTERVAL: chrono::Duration = if cfg!(test) {
+    chrono::Duration::zero()
+} else {
+    chrono::Duration::seconds(120)
+};
+// Wakes kept per change: current-head ones only, so two at most.
+const MAX_WAKES: usize = 8;
 
 /// Marks a failure of the whole watcher state (missing, corrupt, unsafe), the
 /// only error that stops a continuous watcher; per-change errors are logged.
@@ -258,6 +276,39 @@ struct Entry {
     #[serde(default, skip_serializing)]
     historical_keys: BTreeSet<crate::review_verdict::RecordingKey>,
     notices: BTreeMap<String, Notice>,
+    // Advisor ready wakes for the current head, keyed `<head>:<kind>`.
+    // trace:TASK-1945 | ai:claude
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    wakes: BTreeMap<String, Notice>,
+    // Author findings mails for the current head, keyed
+    // `<head>:<verdict digest>`. trace:TASK-1945 | ai:claude
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    findings: BTreeMap<String, Notice>,
+    // The advisor's round-cap wake: once per change.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    cap: Option<Notice>,
+    // The last readiness report, for display only: never authority.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    readiness: Option<Reported>,
+}
+impl Entry {
+    fn is_empty(&self) -> bool {
+        self.attempts.is_empty()
+            && self.notices.is_empty()
+            && self.wakes.is_empty()
+            && self.findings.is_empty()
+            && self.cap.is_none()
+            && self.readiness.is_none()
+    }
+}
+/// One readiness report: the head it judged, the verdict line, and when.
+// trace:TASK-1945 | ai:claude
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+struct Reported {
+    head: String,
+    line: String,
+    checked_at: chrono::DateTime<chrono::Utc>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -463,9 +514,7 @@ impl Store {
         // A change seen only to be skipped leaves no durable entry, so state
         // tracks reviewed/notified changes rather than every PR ever polled.
         // trace:TASK-1993 | ai:claude
-        state
-            .entries
-            .retain(|_, e| !(e.attempts.is_empty() && e.notices.is_empty()));
+        state.entries.retain(|_, e| !e.is_empty());
         validate_state(&state, &self.repository)?;
         if before != serde_json::to_vec(&state)? || !initialized {
             self.dir.write(STATE, &serde_json::to_vec_pretty(&state)?)?;
@@ -630,6 +679,7 @@ impl Store {
     fn history(&self, key: &str) -> Result<History> {
         let mut history = History {
             keys: self.retained(key)?,
+            ..History::default()
         };
         let Some(dir) = Directory::existing(&self.runtime.path().join("review-verdicts"))? else {
             return Ok(history);
@@ -642,7 +692,7 @@ impl Store {
         };
         for alias in aliases {
             if let Some(bytes) = dir.read_file(&format!("{alias}.json"), true)? {
-                history.add(&bytes)?;
+                history.add(&bytes, &format!("{alias}.json"))?;
             }
             if history.blocking() >= 2 {
                 return Ok(history);
@@ -668,7 +718,7 @@ impl Store {
                     let bytes = archive
                         .read_file(&name, true)?
                         .context("review history disappeared during admission")?;
-                    history.add(&bytes)?;
+                    history.add(&bytes, &format!("{alias}/{name}"))?;
                     if history.blocking() >= 2 {
                         return Ok(history);
                     }
@@ -681,12 +731,15 @@ impl Store {
     /// forge login names (stored spelling), else the advisor. Mailbox
     /// delivery matches the AIDA identity exactly, so a bare forge login
     /// (`joemooney` vs `joe`) reached no inbox and the stale PR stalled.
-    // trace:TASK-1955 | ai:claude (TASK-1-410)
+    /// An aliased login resolves to its canonical identity first: delivery
+    /// does not resolve aliases, so mail to the alias spelling is a phantom.
+    // trace:TASK-1955 | ai:claude (TASK-1-410) (TASK-2118)
     fn notice_recipient(&self, author: &str) -> String {
         let store = crate::detect_distributed_store_from(&self.root)
             .unwrap_or_else(|| self.root.join(".aida-store"));
+        let canonical = aida_core::alias::AliasRegistry::load(&store).resolve(author);
         crate::known_mailbox_recipients(&store)
-            .get(&author.to_lowercase())
+            .get(&canonical.to_lowercase())
             .cloned()
             .unwrap_or_else(|| "advisor".to_string())
     }
@@ -821,9 +874,12 @@ impl Store {
 #[derive(Default)]
 struct History {
     keys: BTreeSet<crate::review_verdict::RecordingKey>,
+    // The verdict files each recording was read from, relative to
+    // `.aida/review-verdicts/`, for the findings mail. trace:TASK-1945 | ai:claude
+    files: BTreeMap<crate::review_verdict::RecordingKey, Vec<String>>,
 }
 impl History {
-    fn add(&mut self, bytes: &[u8]) -> Result<()> {
+    fn add(&mut self, bytes: &[u8], file: &str) -> Result<()> {
         let mut object = serde_json::from_slice::<serde_json::Value>(bytes)?
             .as_object()
             .cloned()
@@ -848,6 +904,10 @@ impl History {
                 valid_recording_key(&key),
                 "unidentifiable historical review requires advisor reconciliation"
             );
+            let files = self.files.entry(key.clone()).or_default();
+            if !files.iter().any(|f| f == file) {
+                files.push(file.to_string());
+            }
             self.keys.insert(key);
         }
         Ok(())
@@ -968,6 +1028,34 @@ fn validate_state(state: &State, repository: &str) -> Result<()> {
         anyhow::ensure!(
             entry.notices.keys().all(|h| valid_sha(h)),
             "invalid review-watch notice head"
+        );
+        // trace:TASK-1945 | ai:claude
+        anyhow::ensure!(
+            entry.wakes.len() <= MAX_WAKES
+                && entry
+                    .wakes
+                    .keys()
+                    .all(|k| k.split_once(':').is_some_and(|(head, rest)| {
+                        // `<kind>:<approval digest>`; a bare `<kind>` was
+                        // recorded before the key named the approval.
+                        let (kind, digest) = rest.split_once(':').unwrap_or((rest, ""));
+                        valid_sha(head)
+                            && matches!(kind, ready::WAKE_READY | ready::WAKE_AFTER_UPDATE)
+                            && (digest.is_empty() || notice::valid_digest(digest))
+                    }))
+                && entry
+                    .readiness
+                    .as_ref()
+                    .is_none_or(|r| { valid_sha(&r.head) && r.line.len() <= DIAGNOSTIC_LIMIT }),
+            "invalid review-watch readiness record"
+        );
+        // trace:TASK-1945 | ai:claude
+        anyhow::ensure!(
+            entry.findings.len() <= MAX_WAKES
+                && entry.findings.keys().all(|k| k.split_once(':').is_some_and(
+                    |(head, digest)| { valid_sha(head) && notice::valid_digest(digest) }
+                )),
+            "invalid review-watch findings receipt"
         );
     }
     Ok(())
@@ -1181,13 +1269,7 @@ fn hold_cause(key: &str, attempt: &Attempt) -> String {
 /// read without creating or changing any watcher state (`aida ps`).
 // trace:TASK-1945 | ai:claude
 pub(crate) fn held_slots(root: &Path) -> Vec<(String, String)> {
-    let root = forge::main_root(root).unwrap_or_else(|_| root.to_path_buf());
-    let state = (|| {
-        let runtime = Directory::existing(&root.join(".aida")).ok()??;
-        let dir = Directory::existing(&runtime.path().join("review-watch")).ok()??;
-        serde_json::from_slice::<State>(&dir.read(STATE).ok()??).ok()
-    })();
-    let Some(state) = state else {
+    let Some(state) = read_only_state(root) else {
         return Vec::new();
     };
     state
@@ -1201,6 +1283,16 @@ pub(crate) fn held_slots(root: &Path) -> Vec<(String, String)> {
                 .map(move |a| (key.clone(), hold_cause(key, a)))
         })
         .collect()
+}
+
+/// The watcher state of the project `root` belongs to, read without creating
+/// or changing anything; `None` when there is none or it is unreadable.
+// trace:TASK-1945 | ai:claude
+fn read_only_state(root: &Path) -> Option<State> {
+    let root = forge::main_root(root).unwrap_or_else(|_| root.to_path_buf());
+    let runtime = Directory::existing(&root.join(".aida")).ok()??;
+    let dir = Directory::existing(&runtime.path().join("review-watch")).ok()??;
+    serde_json::from_slice::<State>(&dir.read(STATE).ok()??).ok()
 }
 
 /// Supersede the change's active attempt at an obsolete head. `Some(cause)`
@@ -1826,14 +1918,45 @@ fn mark_unclaimed_exit(store: &Store, key: &str, token: &str, status: &str) -> R
             .entries
             .get_mut(key)
             .and_then(|e| e.attempts.iter_mut().find(|a| a.token == token))
-            .filter(|a| a.phase == Phase::Reserved && a.identity.is_none())
+            .filter(|a| a.identity.is_none())
         {
-            a.phase = Phase::Exited;
-            a.diagnostic = Some(bounded_diagnostic(&format!(
+            let diagnostic = bounded_diagnostic(&format!(
                 "dispatcher exited {status} before claiming its launch receipt: {}",
                 tail.as_deref().unwrap_or("no log output")
-            )));
+            ));
+            match a.phase {
+                Phase::Reserved => {
+                    a.phase = Phase::Exited;
+                    a.diagnostic = Some(diagnostic);
+                }
+                // Superseded before it claimed: an unclaimed dispatcher can
+                // start nothing, and this one is reaped, so nothing runs.
+                // trace:TASK-1945 | ai:claude (TASK-2150)
+                Phase::Superseding => {
+                    a.phase = Phase::Superseded;
+                    a.diagnostic = Some(diagnostic);
+                }
+                _ => {}
+            }
         }
+        Ok(())
+    })
+}
+
+/// The dispatcher for this reservation could not be spawned, so nothing of
+/// it runs.
+// trace:TASK-1993 | ai:claude
+fn mark_spawn_failed(store: &Store, key: &str, token: &str) -> Result<()> {
+    store.transaction(key, |state| {
+        let a = attempt_mut(state, key, token).context("launch reservation disappeared")?;
+        anyhow::ensure!(a.identity.is_none(), "launch reservation already claimed");
+        a.phase = match a.phase {
+            Phase::Reserved => Phase::Failed,
+            // Superseded before the spawn failed: nothing was started.
+            // trace:TASK-1945 | ai:claude (TASK-2150)
+            Phase::Superseding => Phase::Superseded,
+            _ => anyhow::bail!("launch reservation already claimed"),
+        };
         Ok(())
     })
 }
@@ -1861,15 +1984,21 @@ fn watch_change(
         eprintln!("{key}: {reason}");
         return Ok(());
     }
+    // A reviewed head is reported on, and needs no base probe to be skipped.
+    // trace:TASK-1945 | ai:claude
+    let live = ready::Live { root, repo };
     // trace:TASK-1955 | ai:claude (TASK-2064, TASK-1-411)
     if let Some(reason) = probe_unneeded(store, &change)? {
         eprintln!("{key}: {reason}");
-        return Ok(());
+        return report(root, store, &change, &live);
     }
     repo.probe(root, &mut change)
         .context("base evidence refused")?;
     match select(store, &change, args.vendor.clone(), args.max_concurrent)? {
-        Action::Skip(reason) => eprintln!("{key}: {reason}"),
+        Action::Skip(reason) => {
+            eprintln!("{key}: {reason}");
+            report(root, store, &change, &live)?;
+        }
         Action::Notify(notice) => {
             deliver(root, &notice)?;
             store.transaction(&key, |state| {
@@ -1892,6 +2021,7 @@ fn watch_change(
                     aida_core::mailbox::Recipient::Broadcast => "everyone",
                 }
             );
+            report(root, store, &change, &live)?;
         }
         Action::Dispatch(attempt) => {
             use std::os::unix::process::CommandExt;
@@ -1959,25 +2089,180 @@ fn watch_change(
                     eprintln!("{key}: review admitted for {}", change.head);
                 }
                 Err(error) => {
-                    store.transaction(&key, |state| {
-                        let a = state
-                            .entries
-                            .get_mut(&key)
-                            .and_then(|e| e.attempts.iter_mut().find(|a| a.token == attempt.token))
-                            .context("launch reservation disappeared")?;
-                        anyhow::ensure!(
-                            a.phase == Phase::Reserved && a.identity.is_none(),
-                            "launch reservation already claimed"
-                        );
-                        a.phase = Phase::Failed;
-                        Ok(())
-                    })?;
+                    mark_spawn_failed(store, &key, &attempt.token)?;
                     return Err(error).context("could not spawn review dispatcher");
                 }
             }
         }
     }
     Ok(())
+}
+
+/// Report a reviewed change's ship readiness, at most once per
+/// [`READY_INTERVAL`] per head, and wake the advisor once when it is ready.
+/// Report only: nothing here merges, pushes or updates a branch. A change
+/// with a review still active, or with no recorded verdict, is not judged.
+// trace:TASK-1945 | ai:claude
+fn report(
+    root: &Path,
+    store: &Store,
+    change: &forge::Change,
+    evidence: &dyn ready::Evidence,
+) -> Result<()> {
+    let key = change.key();
+    let state = store.load()?;
+    let entry = state.entries.get(&key);
+    if entry.is_some_and(|e| e.attempts.iter().any(active)) {
+        return Ok(());
+    }
+    let recent =
+        entry.is_some_and(|e| throttled(e, &change.head, chrono::Utc::now(), READY_INTERVAL));
+    let history = store.history(&key);
+    if let Ok(history) = &history {
+        if history.keys.is_empty() {
+            return Ok(());
+        }
+        // Not throttled: a failed delivery is retried on the next pass, and
+        // never stops the readiness report.
+        if let Err(error) = notice::send(root, store, change, history, evidence) {
+            eprintln!("{key}: review notice not delivered; retried next pass: {error:#}");
+        }
+    }
+    if recent {
+        return Ok(());
+    }
+    // An unreadable verdict history is reported, never read as clean.
+    let (readiness, approval) = match history {
+        Ok(_) => ready::evaluate(change, evidence),
+        Err(error) => (
+            ready::Readiness::NotReady(format!("verdict history unreadable: {error:#}")),
+            None,
+        ),
+    };
+    let line = bounded_diagnostic(&readiness.line(change));
+    eprintln!("{key} at {}: {line}", &change.head[..12]);
+    let wake = store.transaction(&key, |state| {
+        let repository = state.repository.clone();
+        let entry = state.entries.entry(key.clone()).or_default();
+        entry.readiness = Some(Reported {
+            head: change.head.clone(),
+            line: line.clone(),
+            checked_at: chrono::Utc::now(),
+        });
+        let prefix = format!("{}:", change.head);
+        let current = match (readiness.wake(), approval.as_ref()) {
+            (Some(kind), Some(approval)) => Some((
+                format!("{prefix}{kind}:{}", notice::digest(&approval.identity)),
+                approval,
+            )),
+            _ => None,
+        };
+        prune_wakes(
+            &mut entry.wakes,
+            &prefix,
+            current.as_ref().map(|(k, _)| k.as_str()),
+        );
+        let Some((wake_key, approval)) = current else {
+            return Ok(None);
+        };
+        // A pending wake keeps the message it was recorded with, so a retry
+        // re-delivers it under the same ID. The key names the approval, as
+        // the message ID does: a new approval of the head is a new wake.
+        // trace:TASK-1945 | ai:claude (TASK-2200)
+        let wake = entry.wakes.entry(wake_key).or_insert_with(|| Notice {
+            message: ready::wake_message(&repository, change, &readiness, approval),
+            sent: false,
+        });
+        Ok((!wake.sent).then(|| wake.clone()))
+    })?;
+    let Some(wake) = wake else {
+        return Ok(());
+    };
+    deliver(root, &wake)?;
+    let event = crate::events::Event::new(
+        None,
+        "",
+        crate::events::EventKind::ReviewWatchReady {
+            pr: change.id,
+            head: change.head.clone(),
+            after_update_branch: matches!(
+                readiness,
+                ready::Readiness::ReadyAfterUpdateBranch { .. }
+            ),
+        },
+    );
+    crate::events::emit_recorded(root, &event).map_err(|e| anyhow::anyhow!(e))?;
+    store.transaction(&key, |state| {
+        let pending = state
+            .entries
+            .get_mut(&key)
+            .and_then(|e| {
+                e.wakes
+                    .values_mut()
+                    .find(|w| w.message.id == wake.message.id)
+            })
+            .context("ready wake receipt disappeared")?;
+        pending.sent = true;
+        Ok(())
+    })?;
+    eprintln!("{key}: ready wake delivered to the advisor");
+    Ok(())
+}
+
+/// Keep only the wakes for the current head (`prefix` is `<head>:`), and of
+/// those drop every unsent one but `current`: a pending wake whose readiness
+/// kind or approval has since changed is never redelivered, and left in place
+/// it would disable [`throttled`] for the head on every pass.
+// trace:TASK-2238 | ai:claude
+fn prune_wakes(wakes: &mut BTreeMap<String, Notice>, prefix: &str, current: Option<&str>) {
+    wakes.retain(|k, w| k.starts_with(prefix) && (w.sent || Some(k.as_str()) == current));
+}
+
+/// Whether `head` was judged within `interval`, so this pass skips it. A
+/// wake for the head still pending delivery is never throttled: its retry
+/// runs on the next pass, not an interval later.
+// trace:TASK-1945 | ai:claude (TASK-2204)
+fn throttled(
+    entry: &Entry,
+    head: &str,
+    now: chrono::DateTime<chrono::Utc>,
+    interval: chrono::Duration,
+) -> bool {
+    let pending = entry
+        .wakes
+        .iter()
+        .any(|(k, w)| !w.sent && k.split_once(':').is_some_and(|(h, _)| h == head));
+    !pending
+        && entry
+            .readiness
+            .as_ref()
+            .is_some_and(|r| r.head == head && now - r.checked_at < interval)
+}
+
+/// Each change's last readiness report, `(change, "at <head>: <line>
+/// (checked <when>)")`, read without creating or changing any watcher state
+/// (`aida ps`).
+// trace:TASK-1945 | ai:claude
+pub(crate) fn readiness_reports(root: &Path) -> Vec<(String, String)> {
+    let Some(state) = read_only_state(root) else {
+        return Vec::new();
+    };
+    state
+        .entries
+        .iter()
+        .filter_map(|(key, entry)| {
+            let r = entry.readiness.as_ref()?;
+            Some((
+                key.clone(),
+                format!(
+                    "at {}: {} (checked {})",
+                    &r.head[..12],
+                    r.line,
+                    r.checked_at.format("%Y-%m-%d %H:%M UTC")
+                ),
+            ))
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -1988,3 +2273,11 @@ mod tests;
 #[cfg(all(test, target_os = "linux"))]
 #[path = "tests/task_1945_review_watch_supersede_tests.rs"]
 mod supersede_tests;
+
+#[cfg(test)]
+#[path = "tests/task_1945_review_watch_ready_tests.rs"]
+mod ready_tests;
+
+#[cfg(test)]
+#[path = "tests/task_1945_review_watch_notice_tests.rs"]
+mod notice_tests;

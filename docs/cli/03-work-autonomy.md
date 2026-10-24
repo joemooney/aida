@@ -104,7 +104,8 @@ branches on the exit code:
 The child runs in its own lease and worktree as `implementer`. If the
 launcher's grant delegates `implementer`, it gets a child grant. Otherwise
 (no grant, or a grant that does not delegate it) it runs at baseline
-authority, with a notice on stderr and a note in the authorship ledger. It
+authority, with a notice on stderr and a note in the authorship ledger whose
+reason says which (`launcher-has-no-grant` or `launcher-did-not-delegate`). It
 never inherits the launcher's grant, session purpose, or drain context. The
 lane shows in `aida ps` as a live implementer on its spec, and its pickup
 sets the spec's owner and moves it to In Progress.
@@ -114,8 +115,39 @@ The child must stop once its PR is open. Inside it, `aida pr ship` and
 `AIDA_STANDALONE_IMPLEMENTER`). At most three standalone implementers run at
 once per project; set `[queue] standalone_implementer_cap` in
 `.aida/config.toml` to change the cap. A launch past the cap exits 34
-without creating a lease, worktree or status change. Do not `aida claim` the
+without creating a lease, worktree, queue row or status change. Do not `aida claim` the
 spec yourself before launching: the pickup refuses a spec whose lease is held.
+<!-- trace:STORY-1662 | ai:claude -->
+
+**An interactive `claude --bg` lane takes its identity from its worktree
+lease.** A `claude --bg` session runs under the long-lived claude daemon, so
+its environment is the daemon's: often the role, grant and purpose of the
+shell that first started the daemon, whatever the launching command set. To
+start an interactive implementer lane, create its worktree with the role on
+its lease, then start the session from inside it:
+
+```bash
+aida worktree add <SPEC> --role implementer
+cd <worktree> && claude --bg ...
+```
+
+`--role` defaults to `implementer`. At session start the SessionStart hook
+runs `aida internal lane-env`, which reads the lease covering the session's
+directory and prints the correction: `AIDA_SESSION_ROLE` set to the lease's
+role, the lease's child grant exported or an inherited grant for another
+seat unset, and an inherited `AIDA_SESSION_PURPOSE` unset. The hook appends
+those lines to `$CLAUDE_ENV_FILE`, which Claude Code sources before every
+Bash command, so `aida claim`, `aida ps` and the cargo-slot WHO column all
+read the lane's role. The MCP server applies the same correction to itself
+when it starts. `aida claim` inside a lane records the lease's role in any
+case. If `lane-env` fails or times out inside a linked worktree, the hook
+drops the inherited grant and purpose and sets no role. Outside a lane
+nothing changes. This corrects the lane's commands; it is not an authority
+boundary, since grants are validated wherever they are used.
+
+The root fix is operator-side: start the claude daemon from a shell with no
+`AIDA_SESSION_*` variables. `aida doctor` (category `claude-daemon-grant`)
+warns when a running daemon's environment holds `AIDA_SESSION_GRANT`.
 <!-- trace:STORY-1662 | ai:claude -->
 
 **`aida worktree add <ID>` re-enters only a live linked worktree.** A session lease is re-entered only when its path is a linked git worktree that still exists; a lease recorded at the project root (or any other path that is not a linked worktree) is no longer re-entered — `worktree add` refuses, names that session, and tells you to end it with `aida session end <id>`. If you deleted the spec's worktree by hand (`rm -rf`), `worktree add` ends the dead session (its lease and stale git registration; the branch is kept) and mints a fresh worktree on the same branch. <!-- trace:TASK-1784 | ai:claude -->
@@ -426,7 +458,16 @@ It is **strictly opt-in (default OFF)** and **fail-closed**: if `bwrap` is not o
 
 > **Scope.** `os_wrap` wraps the headless drain paths (`aida queue work --auto-complete --no-human`, the `claude -p` launches), a foreground `aida agent new claude`, and a contained interactive `claude` launch or resume. A contained `aida agent new claude --bg` is **refused** under `os_wrap` before it claims, leases or creates anything: Claude Code's background supervisor starts that session itself, outside any sandbox around the launcher, so it cannot be confined. Run it in the foreground instead.
 
-> **Contained seats in a private clone** (`[contained] seat_tree = "clone"`, still a development switch). The seat's write boundary is its own clone (including its own `.git`), the main checkout's `.aida-store` and cache files, and its own cargo target directory under the main checkout's `target/worktrees/`. The main checkout's `.git` stays read-only, so the seat commits in its clone and pushes to origin. Cargo builds there run with `RUSTC_WRAPPER` empty, so a configured `sccache` is bypassed: a compile cache shared with the host and other seats is never writable from a contained seat. Ending, reaping or dismissing a clone seat never runs git in the clone on the host: its state is read by git inside a read-only, network-less sandbox, and a clone whose state cannot be read is kept. `aida session end` refuses a clone holding commits origin does not have or uncommitted files unless you pass `--force`, which saves that work as a patch under `.aida/salvage/<clone>/` before removing the clone, its cargo target directory and its base pin. `aida session reap` removes a clone only when nothing in it is missing from origin and its PR is merged, and releases base pins left behind by clones that no longer exist. `aida worktree dismiss <clone>` salvages and removes one clone and releases its lease.
+> **Contained seats in a private clone** (`[contained] seat_tree`, default `"clone"`; set `"worktree"` to opt out). A contained seat gets its own clone. Without the knob set, four launches that a clone cannot serve keep a linked worktree and print a one-line note saying why: a review session, re-entering an existing `--path`, an explicit `--path` that is not an `aida-seat-*` directory directly in the worktree parent, and a checkout with no `origin` remote to clone from. With `seat_tree = "clone"` set explicitly, those launches are refused; for a missing origin, add an origin remote or set `seat_tree = "worktree"`. The seat's write boundary is its own clone (including its own `.git`), the main checkout's `.aida-store` and cache files, and its own cargo target directory under the main checkout's `target/worktrees/`. The main checkout's `.git` stays read-only, so the seat commits in its clone and pushes to origin. Cargo builds there run with `RUSTC_WRAPPER` empty, so a configured `sccache` is bypassed: a compile cache shared with the host and other seats is never writable from a contained seat. Ending, reaping or dismissing a clone seat never runs git in the clone on the host: its state is read by git inside a read-only, network-less sandbox, and a clone whose state cannot be read is kept. `aida session end` refuses a clone holding commits origin does not have or uncommitted files unless you pass `--force`. With `--force`, it saves that work under `.aida/salvage/<clone>/` before removing the clone, its cargo target directory and its base pin. The salvage has up to two parts:
+>
+> - `<stamp>.bundle` holds every commit origin lacks, on any branch, tag or stash entry. It is written only when there are such commits. Restore it with `git fetch <stamp>.bundle 'refs/*:refs/salvaged/*'`.
+> - `<stamp>.patch` is the readable copy: the unpushed `HEAD` commits, the uncommitted changes, and each untracked file as a new-file diff.
+>
+> Some work the salvage cannot capture, so the clone is kept. That covers an untracked nested repository, an untracked symlink to a directory, a salvage over its size cap (the patch ends with a `# TRUNCATED` line) and a clone whose state cannot be read.
+>
+> **Submodules.** AIDA neither counts nor salvages work inside submodules. So a clone with any sign of them (a `.gitmodules` file, a submodule entry in the index or at `HEAD`, or anything under `.git/modules`) is never removed for you. `aida session end` refuses it even with `--force`, and reap and dismiss keep it. The message names the clone. Inspect it, save what you need, remove the directory by hand, then run `aida worktree dismiss <clone>`, which releases the leftover lease and base pin.
+>
+> `aida session reap` removes a clone only when nothing in it is missing from origin and its PR is merged, and releases base pins left behind by clones that no longer exist. `aida worktree dismiss <clone>` salvages and removes one clone and releases its lease. That includes a clone already removed by hand.
 
 > **Host requirement: unprivileged user namespaces.** `bwrap` needs the kernel to allow unprivileged user namespaces. On recent Ubuntu (23.10+/24.04) AppArmor blocks this by default, so even with `bwrap` installed the sandbox fails-closed until you run `sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0` (persist it under `/etc/sysctl.d/`). **Discovery path:** `aida doctor` reports whether `bwrap` is available and confinement-capable on this host, and `aida config show` renders the resolved `[contained]` posture (including `os_wrap`) — start there before enabling it.
 

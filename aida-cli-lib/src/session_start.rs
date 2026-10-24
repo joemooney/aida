@@ -1572,10 +1572,16 @@ fn transactional_worktree_add(
     rollback: &mut Option<SessionStartCleanup>,
 ) -> Result<std::process::Output> {
     let Some(cleanup) = rollback.as_mut() else {
-        return Ok(std::process::Command::new("git")
-            .current_dir(root)
-            .args(args)
-            .output()?);
+        // trace:BUG-2211 | ai:claude
+        return Ok(aida_core::git_ops::output_healing_config_lock(
+            root,
+            || {
+                let mut cmd = std::process::Command::new("git");
+                cmd.current_dir(root);
+                cmd
+            },
+            args,
+        )?);
     };
     if std::fs::symlink_metadata(requested).is_ok() {
         anyhow::bail!("worktree path {} already exists; kept it unchanged; inspect `git worktree list --porcelain`", requested.display());
@@ -1618,10 +1624,16 @@ fn transactional_worktree_add(
     cleanup.gitdir = Some(gitdir);
     let mut staged_args = args.iter().map(|s| s.to_string()).collect::<Vec<_>>();
     staged_args[path_index] = staging.to_string_lossy().into_owned();
-    let out = std::process::Command::new("git")
-        .current_dir(root)
-        .args(&staged_args)
-        .output()?;
+    // trace:BUG-2211 | ai:claude
+    let out = aida_core::git_ops::output_healing_config_lock(
+        root,
+        || {
+            let mut cmd = std::process::Command::new("git");
+            cmd.current_dir(root);
+            cmd
+        },
+        &staged_args,
+    )?;
     if !out.status.success() {
         return Ok(out);
     }
@@ -1835,6 +1847,36 @@ pub(crate) fn session_start_with_receipt(
                 crate::worktree::is_registered(&String::from_utf8_lossy(&o.stdout), &worktree_path)
             })
             .unwrap_or(false);
+    // TASK-2053 S4c: the default flipped to `clone`, but a clone cannot yet
+    // host a review session, re-enter an existing --path, live at an
+    // explicit --path that is not an `aida-seat-*` directory in the worktree
+    // parent, or be made without an `origin` remote to clone from. With no
+    // explicit knob those launches keep a worktree and say why; an explicit
+    // `seat_tree = "clone"` refuses them (below, or here for a missing origin).
+    // The launch facts (a git call, a config read, a canonicalize) are read
+    // only for a clone; a worktree launch has nothing to fall back from.
+    // trace:TASK-2053 | ai:claude
+    let mut tree_kind = if tree_kind != crate::seat_clone::TreeKind::Clone {
+        tree_kind
+    } else {
+        match crate::seat_clone::default_clone_fallback(
+            tree_kind,
+            crate::seat_clone::seat_tree_is_explicit(&project_root),
+            &crate::seat_clone::CloneLaunch {
+                review: review_target.is_some(),
+                reentry: reuse_existing_worktree_path,
+                path_not_seat_location: explicit_path.is_some()
+                    && !crate::seat_clone::is_seat_clone_location(&project_root, &worktree_path),
+                has_origin: aida_core::git_ops::has_remote(&project_root, "origin"),
+            },
+        )? {
+            (kind, Some(note)) => {
+                eprintln!("note: {note}");
+                kind
+            }
+            (kind, None) => kind,
+        }
+    };
     if worktree_path.exists() && !reuse_existing_worktree_path {
         anyhow::bail!(
             "{} already exists — pick a different --path or remove it first",
@@ -2098,10 +2140,11 @@ pub(crate) fn session_start_with_receipt(
     // error in between removes the clone and releases its pin.
     // trace:BUG-2169 | ai:claude
     let mut clone_cleanup: Option<crate::seat_clone::CloneCleanupGuard> = None;
-    if tree_kind == crate::seat_clone::TreeKind::Clone {
-        // BUG-2169: a contained seat gets a private clone. There is no
-        // worktree fallback: any failure refuses the launch.
-        // trace:BUG-2169 | ai:claude
+    // Keep the original worktree placement if the default clone cannot reach
+    // origin. No lease exists yet; create cleans its clone and pin first.
+    // trace:TASK-2300 | ai:codex
+    let fallback_worktree_path = worktree_path.clone();
+    let created_clone = if tree_kind == crate::seat_clone::TreeKind::Clone {
         if reuse_existing_worktree_path || review_target.is_some() {
             anyhow::bail!(
                 "a contained seat with `[contained] seat_tree = \"clone\"` cannot {} yet; \
@@ -2143,8 +2186,37 @@ pub(crate) fn session_start_with_receipt(
                 worktree_path.display()
             );
         }
-        let created =
-            crate::seat_clone::create(&project_root, &worktree_path, &branch_name, &base_ref)?;
+        match crate::seat_clone::create(&project_root, &worktree_path, &branch_name, &base_ref) {
+            Ok(created) => Some(created),
+            Err(error) => {
+                let Some(note) = crate::seat_clone::origin_failure_fallback(
+                    crate::seat_clone::seat_tree_is_explicit(&project_root),
+                    &error,
+                ) else {
+                    return Err(error);
+                };
+                // An explicit clone location has a reserved aida-seat-* name.
+                // Host git refuses even a linked worktree under that name, so
+                // do not create one or silently ignore the requested --path.
+                // trace:TASK-2300 | ai:codex
+                if explicit_path.is_some() {
+                    anyhow::bail!(
+                        "cloning from origin failed or timed out, but --path {} is reserved for \
+                         private seat clones and cannot host a worktree fallback; drop --path \
+                         to use an automatic worktree, or choose an ordinary worktree path",
+                        worktree_path.display()
+                    );
+                }
+                eprintln!("note: {note}");
+                tree_kind = crate::seat_clone::TreeKind::Worktree;
+                worktree_path = fallback_worktree_path;
+                None
+            }
+        }
+    } else {
+        None
+    };
+    if let Some(created) = created_clone {
         eprintln!(
             "{} private clone for this contained seat: {} [{}] at {}",
             crate::glyph(crate::glyphs::Glyph::Check).green(),

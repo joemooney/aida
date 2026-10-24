@@ -355,6 +355,7 @@ mod tests {
             binary_path: "/repo/target/release/aida".into(),
             launched_stale: false,
             specs: vec![],
+            child_grant_id: None,
         };
         let lock_path = crate::drain_lock::drain_lock_path(root);
         std::fs::write(&lock_path, serde_json::to_string(&lock).unwrap()).unwrap();

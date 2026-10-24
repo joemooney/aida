@@ -11,6 +11,7 @@ const LEASE: &str = "0123456789ab";
 
 // ── Selection ─────────────────────────────────────────────────────────────
 
+// trace:STORY-1662.AC11 | ai:claude
 #[test]
 fn is_standalone_implementer_truth_table() {
     let _env = crate::test_env::EnvVarsGuard::apply(&[
@@ -33,6 +34,7 @@ fn is_standalone_implementer_truth_table() {
     }
 }
 
+// trace:STORY-1662.AC11 | ai:claude
 #[test]
 fn a_drain_child_is_never_a_standalone_implementer() {
     for key in [
@@ -71,6 +73,8 @@ fn hold() -> HoldSignal {
     }
 }
 
+// trace:STORY-1662.AC8 | ai:claude
+// trace:STORY-1662.AC12 | ai:claude
 #[test]
 fn outcome_classifier_gives_one_line_and_exit_code_per_outcome() {
     let pr = || Some((42, Some("abc123".to_string())));
@@ -130,6 +134,7 @@ fn outcome_classifier_gives_one_line_and_exit_code_per_outcome() {
     }
 }
 
+// trace:STORY-1662.AC12 | ai:claude
 #[test]
 fn a_pure_git_change_zero_is_not_an_opened_pr() {
     let change = |number| crate::OpenPrInfo {
@@ -142,6 +147,7 @@ fn a_pure_git_change_zero_is_not_an_opened_pr() {
     assert!(is_real_pr(&change(42)));
 }
 
+// trace:STORY-1662.AC12 | ai:claude
 #[test]
 fn only_a_pr_on_the_lease_branch_is_this_runs_outcome() {
     let pr = |number, head: &str| crate::OpenPrInfo {
@@ -163,6 +169,7 @@ fn only_a_pr_on_the_lease_branch_is_this_runs_outcome() {
     assert!(!is_run_pr(&headless, "claude/story-9"));
 }
 
+// trace:STORY-1662.AC12 | ai:claude
 #[test]
 fn a_signal_wins_over_the_pr_lookup_which_is_then_skipped() {
     let called = std::cell::Cell::new(false);
@@ -180,51 +187,70 @@ fn a_signal_wins_over_the_pr_lookup_which_is_then_skipped() {
     assert!(!called.get());
 }
 
+// trace:STORY-1662.AC8 | ai:claude
 #[test]
 fn outcome_exit_codes_are_distinct_and_mapped_by_exit_code_for_error() {
-    let ours = [
+    // TASK-2154: distinctness comes from the ONE exit-code table, not a
+    // hand-kept list here.
+    let table = crate::orchestrator_leases::EXIT_CODES;
+    for (i, (code, meaning)) in table.iter().enumerate() {
+        assert!(
+            !table[..i].iter().any(|(c, _)| c == code),
+            "exit code {code} ({meaning}) has two rows; merge them into one"
+        );
+    }
+    for code in [3, 124] {
+        assert!(
+            table.iter().any(|(c, _)| *c == code),
+            "exit code {code} is missing from the table"
+        );
+    }
+    for code in [
         NO_PR_EXIT_CODE,
         PUNTED_EXIT_CODE,
         HELD_EXIT_CODE,
         CAP_EXIT_CODE,
-    ];
-    use crate::pr_ship::ShipRefusal::*;
-    let existing: Vec<i32> = [
-        0,
-        1,
-        2, // clap usage errors
-        crate::drain_next_n::DRAIN_CAP_EXIT_CODE,
-        crate::pr_rebase::REBASE_EXIT_CODE_CONFLICT,
-        crate::pr_rebase::REBASE_EXIT_CODE_REFUSED,
-        crate::queue_cmd::NO_REVIEW_VERDICT_EXIT_CODE,
-        crate::drain_signal::SIGTERM_EXIT_CODE,
-    ]
-    .into_iter()
-    .chain(
-        [
-            CiRed,
-            CiTimeout,
-            NotMergeable,
-            Review,
-            StaleDefinition,
-            MergeHold,
-        ]
-        .into_iter()
-        .map(|r| r as i32),
-    )
-    .collect();
-    for (i, code) in ours.iter().enumerate() {
-        assert!(
-            !existing.contains(code),
-            "exit code {code} is already in use"
+    ] {
+        assert_eq!(
+            table.iter().filter(|(c, _)| *c == code).count(),
+            1,
+            "exit code {code} must have exactly one row"
         );
-        assert!(!ours[..i].contains(code), "exit code {code} is used twice");
         let err = anyhow::Error::new(StandaloneImplementerExit {
-            code: *code,
+            code,
             message: "x".into(),
+            vendor_exit: false,
         })
         .context("queue work failed");
-        assert_eq!(crate::exit_code_for_error(&err), *code);
+        assert_eq!(crate::exit_code_for_error(&err), code);
+    }
+}
+
+/// TASK-2215: `exit_code_for_error` reads the table. A named code with no
+/// row exits 1; only a vendor pass-through skips the table.
+// trace:STORY-1662.AC8 | ai:claude
+#[test]
+fn exit_code_for_error_reads_the_exit_code_table() {
+    let unlisted = 77;
+    assert!(!crate::orchestrator_leases::EXIT_CODES
+        .iter()
+        .any(|(c, _)| *c == unlisted));
+    let exit = |vendor_exit| {
+        crate::exit_code_for_error(&anyhow::Error::new(StandaloneImplementerExit {
+            code: unlisted,
+            message: "x".into(),
+            vendor_exit,
+        }))
+    };
+    assert_eq!(exit(false), 1, "an unregistered named code must not escape");
+    assert_eq!(exit(true), unlisted, "the vendor's own code passes through");
+    let rebase = anyhow::Error::new(crate::pr_rebase::RebaseFailureExit {
+        code: unlisted,
+        message: "x".into(),
+    });
+    assert_eq!(crate::exit_code_for_error(&rebase), 1);
+    for (code, _) in crate::orchestrator_leases::EXIT_CODES {
+        assert_eq!(crate::orchestrator_leases::named_exit_code(*code), *code);
     }
 }
 
@@ -281,6 +307,7 @@ fn child_command(grant_env: &str) -> std::process::Command {
     cmd
 }
 
+// trace:STORY-1662.AC9 | ai:claude
 #[test]
 fn child_env_from_an_advisor_env_has_the_implementer_seat_and_no_launcher_variable() {
     for grant in ["child-grant-id", ""] {
@@ -317,6 +344,7 @@ fn child_env_from_an_advisor_env_has_the_implementer_seat_and_no_launcher_variab
     }
 }
 
+// trace:STORY-1662.AC9 | ai:claude
 #[test]
 fn launcher_only_list_names_the_drain_context_the_grant_file_and_the_marker() {
     for key in [
@@ -333,6 +361,7 @@ fn launcher_only_list_names_the_drain_context_the_grant_file_and_the_marker() {
     }
 }
 
+// trace:STORY-1662.AC9 | ai:claude
 #[test]
 fn every_headless_child_drops_the_marker_so_a_grandchild_is_unbound() {
     let mut cmd = std::process::Command::new("true");
@@ -388,6 +417,7 @@ fn guard_exit(env: &BTreeMap<String, String>) -> i32 {
     child.wait().unwrap().code().unwrap_or(-1)
 }
 
+// trace:STORY-1662.AC1 | ai:claude
 #[cfg(unix)]
 #[test]
 fn advisor_code_guard_passes_the_child_env_and_blocks_the_parent_env() {
@@ -399,6 +429,7 @@ fn advisor_code_guard_passes_the_child_env_and_blocks_the_parent_env() {
     assert_eq!(guard_exit(&child), 0, "the implementer child edits freely");
 }
 
+// trace:STORY-1662.AC1 | ai:claude
 #[test]
 fn commit_gate_passes_the_child_env_and_refuses_the_parent_env() {
     if crate::test_env::run_path_isolated_test() {
@@ -494,6 +525,7 @@ impl Drop for MarkerGuard {
     }
 }
 
+// trace:STORY-1662.AC6 | ai:claude
 #[test]
 fn pr_ship_refuses_under_the_marker() {
     let cli = crate::command_registry::try_parse_from(["aida", "pr", "ship", "42"]).unwrap();
@@ -507,6 +539,7 @@ fn pr_ship_refuses_under_the_marker() {
 
 /// The refusal sits in the shared merge path, so every caller of it (the
 /// `aida ship` finish tail included) is covered, not only the CLI arm.
+// trace:STORY-1662.AC6 | ai:claude
 #[test]
 fn the_shared_ship_path_refuses_under_the_marker() {
     let _marker = MarkerGuard::set();
@@ -530,6 +563,7 @@ fn the_shared_ship_path_refuses_under_the_marker() {
     assert!(format!("{err:#}").contains("is refused"), "{err:#}");
 }
 
+// trace:STORY-1662.AC6 | ai:claude
 #[test]
 fn top_level_ship_refuses_to_merge_under_the_marker() {
     let _marker = MarkerGuard::set();
@@ -549,6 +583,7 @@ fn top_level_ship_refuses_to_merge_under_the_marker() {
     );
 }
 
+// trace:STORY-1662.AC6 | ai:claude
 #[test]
 fn burndown_and_release_merges_refuse_under_the_marker() {
     let tmp = tempfile::tempdir().unwrap();
@@ -571,6 +606,7 @@ fn burndown_and_release_merges_refuse_under_the_marker() {
     );
 }
 
+// trace:STORY-1662.AC6 | ai:claude
 #[test]
 fn review_record_refuses_under_the_marker_before_writing() {
     let tmp = tempfile::tempdir().unwrap();
@@ -597,6 +633,7 @@ fn review_record_refuses_under_the_marker_before_writing() {
     );
 }
 
+// trace:STORY-1662.AC6 | ai:claude
 #[test]
 fn the_prompt_carries_the_stop_contract() {
     for phrase in [
@@ -621,6 +658,7 @@ fn write_slot(dir: &std::path::Path, pid: u32, spec: &str) {
     .unwrap();
 }
 
+// trace:STORY-1662.AC7 | ai:claude
 #[test]
 fn cap_refuses_past_the_live_count_with_its_own_exit_code() {
     let tmp = tempfile::tempdir().unwrap();
@@ -656,6 +694,7 @@ fn cap_refuses_past_the_live_count_with_its_own_exit_code() {
     );
 }
 
+// trace:STORY-1662.AC7 | ai:claude
 #[test]
 fn cap_comes_from_config_with_a_default_of_three() {
     let tmp = tempfile::tempdir().unwrap();
@@ -712,6 +751,7 @@ fn proc_entry(pid: u32, name: &str, start: &str) -> crate::review_authority::Pro
     }
 }
 
+// trace:STORY-1662.AC2 | ai:claude
 #[test]
 fn the_launch_record_never_names_the_orchestrator_that_ran_it() {
     let root = tempfile::tempdir().unwrap();
@@ -740,6 +780,7 @@ fn the_launch_record_never_names_the_orchestrator_that_ran_it() {
                 &crate::seat_authority::HeadlessChildGrant::Baseline {
                     cause: "the launcher's grant does not delegate `implementer`".into(),
                 },
+                Some("g-advisor"),
             );
         })
     });
@@ -771,6 +812,38 @@ fn the_launch_record_never_names_the_orchestrator_that_ran_it() {
     assert!(note.detail.unwrap().contains("does not delegate"));
 }
 
+/// TASK-2154: the audit note tells a launcher with no grant apart from a
+/// granted launcher that did not delegate `implementer`.
+// trace:STORY-1662.AC5 | ai:claude
+#[test]
+fn baseline_reason_distinguishes_no_grant_from_not_delegated() {
+    assert_eq!(baseline_reason(None), BASELINE_NO_GRANT);
+    assert_eq!(baseline_reason(Some("")), BASELINE_NO_GRANT);
+    assert_eq!(baseline_reason(Some("  ")), BASELINE_NO_GRANT);
+    assert_eq!(baseline_reason(Some("g-advisor")), BASELINE_NOT_DELEGATED);
+    assert_ne!(BASELINE_NO_GRANT, BASELINE_NOT_DELEGATED);
+
+    let root = tempfile::tempdir().unwrap();
+    let lease = implementer_lease(root.path().join("wt"));
+    let path = crate::lease_path(root.path(), &lease.id);
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(&path, toml::to_string_pretty(&lease).unwrap()).unwrap();
+    record_child_authority(
+        root.path(),
+        LEASE,
+        &crate::seat_authority::HeadlessChildGrant::Baseline {
+            cause: "no valid parent seat grant is active".into(),
+        },
+        None,
+    );
+    let note = crate::review_authority::load_ledger(root.path())
+        .into_iter()
+        .find_map(|r| r.launch)
+        .expect("a launch-authority record");
+    assert_eq!(note.grant, "baseline");
+    assert_eq!(note.reason, BASELINE_NO_GRANT);
+}
+
 // ── End to end, with a stub vendor ────────────────────────────────────────
 
 /// The real launch against a stub vendor that punts, from a granted advisor
@@ -780,6 +853,9 @@ fn the_launch_record_never_names_the_orchestrator_that_ran_it() {
 /// column (the child's `AIDA_SESSION_ROLE`) reads implementer, and no
 /// advisor-role lease exists. Afterwards: exit 32 and nothing of the
 /// launcher's reached the child.
+// trace:STORY-1662.AC5 | ai:claude
+// trace:STORY-1662.AC10 | ai:claude
+// trace:STORY-1662.AC11 | ai:claude
 #[cfg(unix)]
 #[test]
 fn stub_vendor_that_punts_exits_32_as_a_live_implementer_lane_with_no_grant_leaked() {

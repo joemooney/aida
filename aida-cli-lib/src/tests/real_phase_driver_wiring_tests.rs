@@ -162,6 +162,7 @@ fn mint_lease(root: &std::path::Path, lease_id: &str, branch: &str, claude_id: O
         plan_source: "queue work".to_string(),
         claude_session_id: claude_id.map(str::to_string),
         batch_name: None,
+        agent_name: None,
         plan: None,
         items: vec![],
     };
@@ -2795,6 +2796,9 @@ fn t1458_run_merge(
             seat: Some(grant.seat.clone()),
             grant_id: Some(grant.id.clone()),
             identity: vec!["session:independent-reviewer".into()],
+            // BUG-1934: the presenter tokens `review record` stamps; ship
+            // refuses an attestation without them. trace:BUG-1934 | ai:claude
+            grant_binding: grant.binding.clone(),
             ..Default::default()
         })
         .unwrap();
@@ -2839,6 +2843,58 @@ fn task_1458_drain_merge_with_a_stale_approval_never_calls_gh_merge() {
     let (_tmp, root, gh, calls, _, older) = t1458_fixture();
     let failure = t1458_run_merge(&root, &gh, &older).expect_err("a stale approval shelves");
     assert_eq!(failure.kind, FailureKind::StaleApproval);
+    assert_eq!(t1458_merge_argv(&calls), None, "no merge attempted");
+}
+
+/// STORY-1690: the drain's merge phase refuses a head behind its base, as
+/// `aida pr ship` does, and never reaches `gh pr merge`.
+// trace:STORY-1690 | ai:claude
+#[cfg(unix)]
+#[test]
+fn story_1690_drain_merge_refuses_a_head_behind_its_base() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let (tmp, root, gh, calls, head, _) = t1458_fixture();
+    // origin: a local bare repo where main has moved past the PR head.
+    git(&root, &["branch", "task-1458", &head]);
+    write_commit(&root, "guard.txt", "a whole-repo guard", "main moves on");
+    let origin = tmp.path().join("origin.git");
+    git(
+        &root,
+        &["clone", "--quiet", "--bare", ".", &origin.to_string_lossy()],
+    );
+    git(
+        &root,
+        &["remote", "set-url", "origin", &origin.to_string_lossy()],
+    );
+    let inherited = std::env::var_os("PATH").unwrap_or_default();
+    let path = std::env::join_paths(
+        std::iter::once(gh.parent().unwrap().to_path_buf())
+            .chain(std::env::split_paths(&inherited)),
+    )
+    .unwrap();
+    let path = path.to_string_lossy().into_owned();
+    let gh_bin = gh.to_string_lossy().into_owned();
+    let _env = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+        &root,
+        "reviewer",
+        &[],
+        &[
+            ("AIDA_TEST_GH_BINARY", Some(gh_bin.as_str())),
+            ("PATH", Some(path.as_str())),
+        ],
+    );
+    let mut d = driver(&root, "TASK-1458");
+    d.pr_number = Some(77);
+    d.branch = Some("task-1458".into());
+    let failure = d.merge().expect_err("a behind head must not merge");
+    assert_eq!(failure.kind, FailureKind::BehindBase);
+    assert!(
+        failure.reason.contains("behind main") && failure.reason.contains("aida pr train 77"),
+        "{}",
+        failure.reason
+    );
     assert_eq!(t1458_merge_argv(&calls), None, "no merge attempted");
 }
 
@@ -3157,6 +3213,12 @@ fn bug_2185_phase_driver_implementer_commits_child_store_writes() {
     d.drain_tuning.no_progress = std::time::Duration::ZERO;
     d.drain_tuning.ceiling = std::time::Duration::ZERO;
 
-    let _ = d.run_implementer();
+    // The fake child exits 1 without a lease: the launch-refused exit is the
+    // path that must still commit the child's store writes.
+    // trace:TASK-1955 | ai:claude (TASK-2074)
+    let failure = d
+        .run_implementer()
+        .expect_err("the fake implementer starts no session");
+    assert_eq!(failure.kind, FailureKind::LaunchRefused, "{failure:?}");
     bug_2185_assert_store_committed_by(&store_root, "implementer");
 }

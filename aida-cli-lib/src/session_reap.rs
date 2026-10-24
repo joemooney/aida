@@ -1008,11 +1008,12 @@ pub(crate) fn scan_reapable_with(
         // PR head the review recorded (an unpushed fix-forward would be lost
         // with the branch), so the skipped merge gate loses no commit.
         // trace:TASK-1955 | ai:claude (TASK-2095)
-        let review_pr_terminal = process_exited
-            && review_branch_within_pr_head(project_root, branch_tip.as_deref(), lease)
-            && review_lease_pr(lease)
-                .and_then(|pr| u32::try_from(pr).ok())
-                .is_some_and(|pr| pr_terminal(pr) == Some(true));
+        let review_pr_terminal = review_pr_terminal_gate(
+            process_exited,
+            lease,
+            || review_branch_within_pr_head(project_root, branch_tip.as_deref(), lease),
+            &pr_terminal,
+        );
         let facts = ReapFacts {
             spec_finished,
             review_pr_terminal,
@@ -1079,6 +1080,21 @@ fn review_lease_pr(lease: &SessionLease) -> Option<u64> {
     (lease.review_verb || lease.role.as_deref() == Some("reviewer"))
         .then(|| crate::status_prs::parse_pr_scope(&lease.scope))
         .flatten()
+}
+
+/// The dead-reviewer reap gate, cheapest check first: the lease's PR scope
+/// (no I/O), then the review branch's git checks, then the forge.
+// trace:TASK-1955 | ai:claude (TASK-2119)
+fn review_pr_terminal_gate(
+    process_exited: bool,
+    lease: &SessionLease,
+    branch_within_pr_head: impl FnOnce() -> bool,
+    pr_terminal: impl FnOnce(u32) -> Option<bool>,
+) -> bool {
+    let Some(pr) = review_lease_pr(lease).and_then(|pr| u32::try_from(pr).ok()) else {
+        return false;
+    };
+    process_exited && branch_within_pr_head() && pr_terminal(pr) == Some(true)
 }
 
 /// Does the review branch hold nothing the reap would lose? True when its
@@ -1327,7 +1343,11 @@ fn scan_clone_lease(
     let mut branch_tip = None;
     let verdict = classify_clone_reap(
         || {
-            let probe = crate::seat_clone::probe(project_root, &lease.worktree_path);
+            // TASK-2110: a squash-merged PR's head counts as shipped.
+            // trace:TASK-2110 | ai:claude
+            let shipped = crate::seat_clone::merged_pr_heads(project_root, &lease.branch);
+            let probe =
+                crate::seat_clone::probe_with_shipped(project_root, &lease.worktree_path, &shipped);
             if let crate::seat_clone::Probe::Known(facts) = &probe {
                 branch_tip = facts.head.clone();
             }
@@ -1372,11 +1392,14 @@ pub(crate) fn reap_one_clone(
     let Some(tip) = checked_tip else {
         return "skipped — the scan recorded no HEAD for the seat clone".to_string();
     };
-    match crate::seat_clone::destroy(
+    // trace:TASK-2110 | ai:claude
+    let shipped = crate::seat_clone::merged_pr_heads(project_root, &lease.branch);
+    match crate::seat_clone::destroy_with_shipped(
         project_root,
         &lease.worktree_path,
         crate::seat_clone::DestroyMode::KeepUnshipped,
         Some(tip),
+        &shipped,
     ) {
         Ok(crate::seat_clone::Destroyed::Removed { .. }) => {
             release_lease_files(project_root, &lease.id);

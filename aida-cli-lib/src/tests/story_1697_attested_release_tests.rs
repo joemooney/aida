@@ -91,6 +91,7 @@ impl Case {
             issued_at: Utc::now(),
             expires_at: Utc::now() + chrono::Duration::hours(1),
             revoked_at: None,
+            binding: Vec::new(),
         };
         let mut hold = mh::typed_hold(PR, HoldReasonKind::Rework, "rework", Some(OLD.into()));
         hold.verdict_ref = Some(mh::VerdictRef::new(
@@ -153,6 +154,7 @@ impl Case {
             id: "TASK-37".into(),
             aliases: Vec::new(),
             named: true,
+            shipped: false,
             current: Some(self.req.clone()),
             history: Ok(vec![self.req.clone()]),
         }];
@@ -221,6 +223,7 @@ impl Case {
                     })
                     .map_err(|refusal| anyhow::anyhow!("{}", refusal.message(PR)))
                 },
+                refusal_release: &|_, _| held_check(),
                 comment: &|body| {
                     comments.borrow_mut().push(body.to_string());
                     Ok(())
@@ -466,6 +469,7 @@ fn the_mandate_is_consulted_only_for_a_sensitive_spec() {
         &[Some(&case.req)],
         &sa::GrantCheck::Valid(case.grant.clone()),
         &|| panic!("an ordinary spec must not consult the mandate"),
+        &held_check(),
     )
     .unwrap();
     assert_eq!(release.mandate, None);

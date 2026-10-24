@@ -55,6 +55,11 @@ sites = 6
 channels = ["home"]
 sites = 1
 
+# review watch readiness: the project's required CI check names (TASK-1945).
+[readers."aida-cli-lib/src/review_watch_ready.rs"]
+channels = ["worktree"]
+sites = 1
+
 [readers."aida-cli-lib/src/ci_gate.rs"]
 channels = ["worktree"]
 sites = 1
@@ -261,11 +266,14 @@ sites = 1
 # STORY-1700: the drive mandate's human gates. The committed layer is the
 # origin/main blob (never the worktree copy) and the operator layer is
 # ~/.aida/config.toml; the third site is the protected-path list a PR is
-# compared against (no value read).
+# compared against (no value read). STORY-1888 adds two prose sites: the
+# PathSource labels naming those two layers (origin/main = trusted, ~/.aida =
+# home) in refusals and `aida mandate status`; nothing is read through them.
 # trace:STORY-1700 | ai:claude
+# trace:STORY-1888 | ai:claude
 [readers."aida-cli-lib/src/mandate_gates.rs"]
-channels = ["trusted", "home", "probe"]
-sites = 4
+channels = ["trusted", "home", "probe", "prose"]
+sites = 6
 
 [readers."aida-cli-lib/src/maintenance_schedule.rs"]
 channels = ["worktree", "prose"]
@@ -560,6 +568,11 @@ ctrl_d_palette = "policy"
 [keys.worktree."pipeline.gate"]
 "*" = "policy" # [pipeline.gate.<name>] kind / role / applies_to / on_fail
 
+# Names of CI checks readiness requires; it can only add requirements beyond
+# "every check on the head passed", and it launches nothing. TASK-1945.
+[keys.worktree.review_watch]
+required_checks = "policy"
+
 [keys.worktree.drain]
 gh_verify_retries = "policy"
 no_progress_minutes = "policy"
@@ -627,6 +640,10 @@ window_hours = "policy"
 
 [keys.worktree."doctor.disk_headroom"]
 min_free_gib = "policy"
+# STORY-1916: the emergency auto-reclaim tier.
+emergency_used_pct = "policy"
+emergency_margin_pct = "policy"
+emergency_idle_hours = "policy"
 
 [keys.worktree.watchdog]
 "*" = "policy"

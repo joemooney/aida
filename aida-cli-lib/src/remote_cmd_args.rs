@@ -90,6 +90,31 @@ pub enum RemoteCommand {
         dry_run: bool,
     },
 
+    /// (plumbing) Ask whether a push to the default branch is an attested
+    /// `aida remote mirror-sync` of origin's reviewed tip. A project's
+    /// pre-push main guard pipes its stdin ref lines here before refusing;
+    /// exit 0 allows the push only when the remote is a registered mirror
+    /// (never origin), every default-branch sha equals origin's tip, and
+    /// mirror-sync attested exactly that push. Anything else exits non-zero
+    /// with the reason, so the guard keeps refusing. Guard snippet:
+    /// `printf '%s\n' "$refs" | aida remote mirror-guard-check "$1" && exit 0`
+    /// `--install-guard` installs AIDA's opt-in main guard, which already
+    /// consults this check, chained in front of the existing pre-push hook.
+    // trace:BUG-2015 | ai:claude
+    #[clap(hide = true)]
+    MirrorGuardCheck {
+        /// The remote the push targets (pre-push hook argument $1).
+        #[clap(required_unless_present = "install_guard")]
+        remote: Option<String>,
+        /// Install the main guard and chain it in front of the pre-push hook.
+        #[clap(long, conflicts_with = "remote")]
+        install_guard: bool,
+        /// With --install-guard: chain in front of a custom pre-push hook too
+        /// (shell hooks only; a Python or Node hook is refused).
+        #[clap(long, requires = "install_guard")]
+        force: bool,
+    },
+
     /// Push origin's tips of the default branch and the spec store to every
     /// mirror hub, by sha. The pre-push hook only mirrors what this machine
     /// pushes; a merge performed on the forge and a store push from another

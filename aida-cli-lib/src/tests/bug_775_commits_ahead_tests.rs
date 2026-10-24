@@ -676,6 +676,46 @@ fn sibling_publication_preserves_and_reconciles_preexisting_canonical_evidence()
     );
 }
 
+// TASK-2137: since the mtime probe stopped reading the body (TASK-1814(3)),
+// a fresh verdict whose body is not UTF-8 is no longer skipped as absent: at
+// both phase-3 call sites it fails closed with a NoVerdict failure that
+// names the unreadable file.
+// trace:TASK-1951 trace:TASK-2137 | ai:claude
+#[test]
+fn a_fresh_unreadable_verdict_fails_phase_3_closed_at_both_call_sites() {
+    const HEAD: &str = "9f1c2b3a4d5e6f7089abcdef0123456789fedcba";
+    let started = std::time::SystemTime::now() - std::time::Duration::from_secs(60);
+
+    let parent = tempfile::tempdir().unwrap();
+    let root = parent.path().join("aida");
+    std::fs::create_dir_all(root.join(".aida/review-verdicts")).unwrap();
+    std::fs::write(
+        root.join(".aida/review-verdicts/BUG-88.json"),
+        [0xff_u8, 0xfe],
+    )
+    .unwrap();
+    let spec = crate::spec_verdict_fallback_for_phase3(&root, "BUG-88", started, Some(HEAD))
+        .expect_err("an unreadable fresh spec verdict must fail closed");
+    assert_eq!(spec.kind, crate::auto_complete::FailureKind::NoVerdict);
+
+    let sibling = parent
+        .path()
+        .join("reviewer-checkout/.aida/review-verdicts");
+    std::fs::create_dir_all(&sibling).unwrap();
+    std::fs::write(sibling.join("PR-88.json"), [0xff_u8, 0xfe]).unwrap();
+    let sweep = crate::sibling_verdict_sweep_for_phase3(&root, 88, "BUG-89", started, Some(HEAD))
+        .expect_err("an unreadable fresh sibling verdict must fail closed");
+    assert_eq!(sweep.kind, crate::auto_complete::FailureKind::NoVerdict);
+    assert!(
+        sweep
+            .reason
+            .contains("could not read sibling verdict evidence")
+            && sweep.reason.contains("PR-88.json"),
+        "{}",
+        sweep.reason
+    );
+}
+
 /// The freshness gate holds for the sweep too: a sibling verdict older than
 /// the reviewer session start must never advance a later diff.
 #[test]

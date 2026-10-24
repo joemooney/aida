@@ -4,11 +4,10 @@
 use clap::{ArgGroup, Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 
-/// Pull-request side-effects intended to fire from /aida-pr at PR-create
-/// time. Mirrors what `aida session end` would do as a backup, but moves
-/// the trigger to the moment context is freshest (right after `gh pr
-/// create` returns the URL).
-// trace:STORY-90 | ai:claude
+/// Pull-request side-effects for the moment a change opens. Mirrors what
+/// `aida session end` does as a backup, but fires while context is
+/// freshest (right after the PR or MR is created).
+// trace:STORY-90 trace:TASK-2251 | ai:claude
 #[derive(Subcommand, Debug)]
 pub enum PrCommand {
     /// File the reviewer story for the change (PR/MR) open on the current
@@ -19,16 +18,15 @@ pub enum PrCommand {
     /// branch's open MR) — so that provider's CLI must be on PATH and
     /// authenticated.
     ///
-    /// Intended trigger: `/aida-pr` runs this right after the change opens
-    /// (`gh pr create` / `glab mr create`) — the agent already has it open,
-    /// the commit range, and the spec list cached, but the auto-queue logic
-    /// does its own forge detection so the call is self-contained.
+    /// Intended trigger: right after the change opens, while the agent has
+    /// the branch, commit range and spec list at hand. The auto-queue logic
+    /// does its own forge detection, so the call is self-contained.
     ///
-    /// `aida session end` also fires this as a backup, so a forgotten
-    /// /aida-pr (or a raw `gh pr create` / `glab mr create`) still ends up
-    /// routed to the reviewer. The idempotency guard means both firing is
-    /// fine.
-    // trace:STORY-90 trace:BUG-1609 | ai:claude
+    /// `aida session end` also fires this as a backup, so a change opened
+    /// without it (a raw `gh pr create` / `glab mr create`, or
+    /// `aida ship --no-merge`) still ends up routed to the reviewer. The
+    /// idempotency guard means both firing is fine.
+    // trace:STORY-90 trace:BUG-1609 trace:TASK-2251 | ai:claude
     AutoQueueReview {
         /// Branch to look up the PR for. Defaults to the current
         /// branch via `git branch --show-current`.
@@ -191,13 +189,11 @@ pub enum PrCommand {
         #[clap(long)]
         no_trailer_check: bool,
 
-        /// Ship even when the PR's green check completed before a
-        /// CI-definition file (a workflow, or a script it invokes directly)
-        /// changed on the base branch. Without this, ship refuses so a
-        /// green that no longer means what it looks like doesn't merge
-        /// unnoticed. A plain test-file change on the base branch only
-        /// warns and never needs this flag.
-        // trace:BUG-1468 | ai:claude — plain `//` keeps the marker out of `--help`.
+        /// Retired: ship now refuses any PR whose head is behind its base
+        /// branch, CI-definition change or not, and this flag does not
+        /// override that. Land a behind PR with `aida pr train N`, or merge
+        /// the base into the branch and wait for green.
+        // trace:BUG-1468 trace:STORY-1690 | ai:claude — plain `//` keeps the marker out of `--help`.
         #[clap(long)]
         override_stale_check: bool,
 
@@ -243,6 +239,95 @@ pub enum PrCommand {
         final_slice: bool,
     },
 
+    /// Land a batch of approved PRs together through a merge train, so two
+    /// PRs that are each green cannot break main together.
+    ///
+    /// Each PR must pass the same gates `aida pr ship` applies before a
+    /// merge: open, not a draft, on the default branch, no merge hold, an
+    /// approval recorded at its head (or carried over a clean merge from
+    /// main), a clear verdict corpus, no live drive owning it, and no spec
+    /// tagged `review:draft-only`. A spec whose execution mode needs
+    /// supervision merges only for a human at a terminal who named that PR,
+    /// or under an active mandate (always for one found by --all-ready).
+    /// Drafts are refused with a reason, since CI does not run Build on
+    /// them. GitHub only for now.
+    ///
+    /// The train is main plus one squash commit per PR, each written with
+    /// the subject `aida pr ship` would use and checked to carry exactly the
+    /// PR's approved diff (by patch-id). A PR that conflicts, or whose diff
+    /// changes once stacked, is left out with its reason. The train is
+    /// opened as a `train/*` PR so the normal CI runs on exactly what main
+    /// will receive. When it is green and main has not moved, it is
+    /// rebase-merged pinned to its head, and each member PR is closed with a
+    /// pointer to its commit on main. When it is red, it is rerun once, then
+    /// split in halves (two at a time) until each bad PR is isolated and
+    /// left out with a comment.
+    ///
+    /// `--dry-run` gates and builds the train and prints the plan without
+    /// pushing anything; add `--local-ci <CMD>` to simulate the whole run
+    /// with a local command as CI, against a checkout of each train tip.
+    // trace:STORY-1690 | ai:claude
+    #[clap(group(ArgGroup::new("train_members").required(true).args(["prs", "all_ready"])))]
+    Train {
+        /// PR numbers to train, in landing order.
+        #[clap(value_name = "N")]
+        prs: Vec<u64>,
+
+        /// Train every open PR on the default branch that passes the gates,
+        /// oldest first.
+        #[clap(long, conflicts_with = "prs")]
+        all_ready: bool,
+
+        /// Gate and build the train and print the plan; push nothing.
+        #[clap(long)]
+        dry_run: bool,
+
+        /// With --dry-run: run CMD in a checkout of each train tip as the
+        /// CI, and simulate the full land / rerun / bisect run locally.
+        #[clap(long, value_name = "CMD", requires = "dry_run")]
+        local_ci: Option<String>,
+
+        /// At most this many PRs per train. With --all-ready the rest wait
+        /// for the next train; naming more PRs than this is refused.
+        #[clap(long, value_name = "N", default_value_t = 10)]
+        max: usize,
+
+        /// Skip the `aida pull` after a train lands.
+        #[clap(long)]
+        no_pull: bool,
+    },
+
+    /// Ship several PRs that need a human merge, one at a time, in order.
+    ///
+    /// For each PR, in the order given, it refreshes the branch from main only
+    /// when the PR is behind or its green predates a CI-definition change,
+    /// waits for CI on that exact head, waits for an independent approval
+    /// recorded at that head (it queues the PR for review but never records
+    /// a verdict), then
+    /// asks you to type the PR number before shipping it with every
+    /// `aida pr ship` gate in force. A merge-hold on a confirmed PR is
+    /// cleared only when you also type `clear`.
+    ///
+    /// Any failure stops the batch without shipping: red or missing CI, a
+    /// conflict, no approval in time, a refused gate, or an unconfirmed
+    /// prompt. Re-run the same command to continue; merged PRs are skipped.
+    /// Runs only for a human at an interactive terminal, on GitHub.
+    // trace:STORY-1887 | ai:claude
+    ShipBatch {
+        /// PR numbers, shipped in exactly this order (at most 20, no repeats).
+        #[clap(required = true, value_name = "PR")]
+        prs: Vec<u64>,
+        /// How long to wait for an approval at each PR's head, e.g. `45m`,
+        /// `2h` (a bare number is minutes; default 60m).
+        #[clap(long, value_name = "DURATION", value_parser = parse_review_timeout_secs)]
+        review_timeout: Option<u64>,
+        /// Show each PR's state and what the batch would do; change nothing.
+        /// It does not fetch: staleness is judged against your local
+        /// `origin/*` refs as they are.
+        #[clap(long)]
+        dry_run: bool,
+    },
+
     /// Deliberately HOLD the PR on the current session — push the branch but
     /// intentionally do not open the PR yet, pending a manual gate (a smoke
     /// test, an out-of-band review, an operator decision).
@@ -286,4 +371,13 @@ pub enum PrCommand {
         #[clap(long)]
         dry_run: bool,
     },
+}
+
+/// `--review-timeout` for `aida pr ship-batch`, in seconds.
+// trace:STORY-1887 | ai:claude
+fn parse_review_timeout_secs(raw: &str) -> Result<u64, String> {
+    crate::drain_caps::parse_duration(raw)
+        .map(|d| d.as_secs())
+        .filter(|secs| *secs > 0)
+        .ok_or_else(|| format!("`{raw}` is not a duration like `45m` or `2h`"))
 }

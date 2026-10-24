@@ -648,3 +648,298 @@ fn reexec_single_profile_builds_delegate_to_that_profile() {
         Some(std::path::Path::new("/repo/target/debug/aida"))
     );
 }
+
+// ---- BUG-2210: activate in a worktree uses the worktree's own build ----
+
+/// A fake aida checkout at `dir` with an agent build stamped `age_secs` old.
+fn fake_checkout_with_agent_build(dir: &std::path::Path, age_secs: u64) {
+    std::fs::create_dir_all(dir.join("target/agent")).unwrap();
+    std::fs::write(
+        dir.join("Cargo.toml"),
+        "[workspace]\n[workspace.package]\nrepository = \"https://github.com/joemooney/aida\"\n",
+    )
+    .unwrap();
+    let bin = dir.join("target/agent/aida");
+    std::fs::write(&bin, b"binary").unwrap();
+    let mtime = std::time::SystemTime::now() - std::time::Duration::from_secs(age_secs);
+    std::fs::File::options()
+        .write(true)
+        .open(&bin)
+        .unwrap()
+        .set_modified(mtime)
+        .unwrap();
+}
+
+#[test]
+fn activate_auto_in_a_worktree_prefers_its_own_older_build_over_mains_newer_one() {
+    use crate::dev_cmd::ActivateRepoSource;
+    use crate::dev_cmd::{activate_choice_note, choose_activate_repo, pick_dev_binary_dir};
+    let temp = tempfile::tempdir().unwrap();
+    let main = temp.path().join("aida");
+    let worktree = temp.path().join("aida-worktrees/take-2830");
+    fake_checkout_with_agent_build(&main, 10); // newer
+    fake_checkout_with_agent_build(&worktree, 3600); // older
+    let main = main.canonicalize().unwrap();
+    let worktree = worktree.canonicalize().unwrap();
+    std::fs::create_dir_all(worktree.join("aida-cli-lib/src")).unwrap();
+    let main_str = main.display().to_string();
+
+    // Run from inside the worktree while $AIDA_DEV_REPO names main.
+    let (repo, source) = choose_activate_repo(
+        None,
+        Some(&main_str),
+        None,
+        &worktree.join("aida-cli-lib/src"),
+    );
+    assert_eq!(repo, worktree);
+    assert_eq!(source, ActivateRepoSource::Enclosing);
+
+    // `auto` (request None) picks the worktree's agent build.
+    let (bin_dir, profile, reason) = pick_dev_binary_dir(&repo, None).unwrap();
+    assert_eq!(bin_dir, worktree.join("target/agent"));
+    assert_eq!(profile, "agent");
+
+    let note = activate_choice_note(
+        profile,
+        &bin_dir,
+        &reason,
+        false,
+        &repo,
+        source,
+        Some(&main_str),
+    );
+    assert!(
+        note.contains(&worktree.join("target/agent").display().to_string()),
+        "{note}"
+    );
+    assert!(
+        note.contains("the checkout you are in, not $AIDA_DEV_REPO"),
+        "{note}"
+    );
+    assert!(note.contains(&main_str), "{note}");
+
+    // Primary-checkout behaviour is unchanged: from main, main's build.
+    let (repo, source) = choose_activate_repo(None, Some(&main_str), None, &main);
+    assert_eq!(
+        (repo.as_path(), source),
+        (main.as_path(), ActivateRepoSource::Enclosing)
+    );
+    let note = activate_choice_note(
+        "agent",
+        &main.join("target/agent"),
+        &reason,
+        false,
+        &main,
+        source,
+        Some(&main_str),
+    );
+    assert!(note.ends_with("(the checkout you are in)"), "{note}");
+
+    // Outside any checkout, $AIDA_DEV_REPO still applies; --repo beats all.
+    let outside = temp.path().join("elsewhere");
+    std::fs::create_dir_all(&outside).unwrap();
+    assert_eq!(
+        choose_activate_repo(None, Some(&main_str), None, &outside),
+        (main.clone(), ActivateRepoSource::EnvRepo)
+    );
+    let wt_str = worktree.display().to_string();
+    assert_eq!(
+        choose_activate_repo(Some(&wt_str), Some(&main_str), None, &main),
+        (worktree.clone(), ActivateRepoSource::Flag)
+    );
+}
+
+// trace:TASK-2251 | ai:claude
+#[test]
+fn activate_falls_back_to_the_primary_checkout_once_the_worktree_in_aida_dev_repo_is_removed() {
+    use crate::dev_cmd::{activate_choice_note, choose_activate_repo, primary_checkout_of};
+    use crate::dev_cmd::{ActivateRepoSource, BinarySelectionReason};
+    let temp = tempfile::tempdir().unwrap();
+    let main = temp.path().join("aida");
+    std::fs::create_dir_all(&main).unwrap();
+    let main = main.canonicalize().unwrap();
+    let git = |dir: &std::path::Path, args: &[&str]| {
+        let out = crate::test_git::git_command()
+            .current_dir(dir)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "git {args:?}: {out:?}");
+    };
+    git(&main, &["init", "-q", "-b", "main"]);
+    git(
+        &main,
+        &[
+            "-c",
+            "user.name=t",
+            "-c",
+            "user.email=t@t",
+            "commit",
+            "-q",
+            "--allow-empty",
+            "-m",
+            "init",
+        ],
+    );
+    let worktree = temp.path().join("aida-worktrees/take-2250");
+    git(
+        &main,
+        &[
+            "worktree",
+            "add",
+            "-q",
+            "-b",
+            "take",
+            worktree.to_str().unwrap(),
+        ],
+    );
+
+    // Activation records the primary checkout from either side.
+    assert_eq!(primary_checkout_of(&worktree), main);
+    assert_eq!(primary_checkout_of(&main), main);
+
+    // The worktree is removed; $AIDA_DEV_REPO still names it.
+    let wt_str = worktree.display().to_string();
+    git(&main, &["worktree", "remove", "--force", &wt_str]);
+    assert!(!worktree.exists());
+    let main_str = main.display().to_string();
+    let outside = temp.path().join("elsewhere");
+    std::fs::create_dir_all(&outside).unwrap();
+
+    let (repo, source) = choose_activate_repo(None, Some(&wt_str), Some(&main_str), &outside);
+    assert_eq!(
+        (repo.as_path(), source),
+        (main.as_path(), ActivateRepoSource::HomeRepo)
+    );
+    let note = activate_choice_note(
+        "agent",
+        &main.join("target/agent"),
+        &BinarySelectionReason::OnlyOne,
+        false,
+        &repo,
+        source,
+        Some(&wt_str),
+    );
+    assert!(
+        note.contains(&format!("$AIDA_DEV_REPO ({wt_str}) no longer exists")),
+        "{note}"
+    );
+
+    // A live $AIDA_DEV_REPO still wins over the recorded primary.
+    assert_eq!(
+        choose_activate_repo(None, Some(&main_str), Some(&wt_str), &outside),
+        (main.clone(), ActivateRepoSource::EnvRepo)
+    );
+    // Nothing to fall back to: the stale path is kept so the error names it.
+    assert_eq!(
+        choose_activate_repo(None, Some(&wt_str), None, &outside),
+        (worktree.clone(), ActivateRepoSource::EnvRepo)
+    );
+}
+
+// trace:TASK-2251 | ai:claude
+#[test]
+fn home_repo_fallback_fires_only_for_a_set_but_missing_aida_dev_repo() {
+    use crate::dev_cmd::{choose_activate_repo, choose_env_dev_repo, ActivateRepoSource};
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path().join("aida");
+    std::fs::create_dir_all(&home).unwrap();
+    let home_str = home.display().to_string();
+    let gone = temp.path().join("aida-worktrees/removed");
+    let gone_str = gone.display().to_string();
+    let outside = temp.path().join("elsewhere");
+    std::fs::create_dir_all(&outside).unwrap();
+
+    // Unset (or empty) $AIDA_DEV_REPO: no dev checkout, so no fallback and
+    // no "(?) no longer exists" note.
+    fn os(s: &str) -> &std::ffi::OsStr {
+        std::ffi::OsStr::new(s)
+    }
+    assert_eq!(choose_env_dev_repo(None, Some(os(&home_str))), None);
+    assert_eq!(choose_env_dev_repo(Some(os("")), Some(os(&home_str))), None);
+    assert_eq!(
+        choose_activate_repo(None, None, Some(&home_str), &outside),
+        (outside.clone(), ActivateRepoSource::Cwd)
+    );
+    // Set but missing: the recorded primary checkout.
+    assert_eq!(
+        choose_env_dev_repo(Some(os(&gone_str)), Some(os(&home_str))),
+        Some((home.clone(), ActivateRepoSource::HomeRepo))
+    );
+    // Set and present: used as is, even with a home recorded.
+    assert_eq!(
+        choose_env_dev_repo(Some(os(&home_str)), Some(os(&gone_str))),
+        Some((home.clone(), ActivateRepoSource::EnvRepo))
+    );
+}
+
+// trace:TASK-2251 | ai:claude
+#[test]
+fn dev_build_and_release_fall_back_to_the_home_repo_for_a_removed_worktree() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path().join("aida");
+    std::fs::create_dir_all(&home).unwrap();
+    let home_str = home.display().to_string();
+    let gone_str = temp.path().join("removed").display().to_string();
+
+    // `aida dev build` / `aida dev release` read the env through this.
+    let env = crate::test_env::EnvVarsGuard::apply(&[
+        ("AIDA_DEV_REPO", Some(&gone_str)),
+        ("AIDA_DEV_HOME_REPO", Some(&home_str)),
+    ]);
+    assert_eq!(crate::dev_cmd::env_dev_repo(), Some(home.clone()));
+    drop(env);
+
+    // No fallback recorded: the stale path is dropped, not returned.
+    let env = crate::test_env::EnvVarsGuard::apply(&[
+        ("AIDA_DEV_REPO", Some(&gone_str)),
+        ("AIDA_DEV_HOME_REPO", None),
+    ]);
+    assert_eq!(crate::dev_cmd::env_dev_repo(), None);
+    drop(env);
+
+    // Unset $AIDA_DEV_REPO: nothing, even with a home recorded.
+    let _env = crate::test_env::EnvVarsGuard::apply(&[
+        ("AIDA_DEV_REPO", None),
+        ("AIDA_DEV_HOME_REPO", Some(&home_str)),
+    ]);
+    assert_eq!(crate::dev_cmd::env_dev_repo(), None);
+}
+
+// TASK-2272 (TASK-2278): the real `aida dev build` / `aida dev release`
+// resolvers, run from outside any checkout with `$AIDA_DEV_REPO` naming a
+// removed worktree, land on the recorded primary checkout.
+// trace:TASK-2272 | ai:claude
+#[test]
+fn build_and_release_resolvers_take_the_home_repo_for_a_removed_worktree() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path().join("aida");
+    std::fs::create_dir_all(&home).unwrap();
+    std::fs::write(
+        home.join("Cargo.toml"),
+        "[workspace]\n[workspace.package]\nrepository = \"https://github.com/joemooney/aida\"\n",
+    )
+    .unwrap();
+    let outside = temp.path().join("elsewhere");
+    std::fs::create_dir_all(&outside).unwrap();
+    let home_str = home.display().to_string();
+    let gone_str = temp
+        .path()
+        .join("aida-worktrees/removed")
+        .display()
+        .to_string();
+
+    let _env = crate::test_env::EnvVarsGuard::apply(&[
+        ("AIDA_DEV_REPO", Some(&gone_str)),
+        ("AIDA_DEV_HOME_REPO", Some(&home_str)),
+    ]);
+    let canonical = home.canonicalize().unwrap();
+    assert_eq!(
+        crate::dev_build::resolve_build_repo_from(&outside).unwrap(),
+        canonical
+    );
+    assert_eq!(
+        crate::upgrade_release::release_repo_from(&outside),
+        Some(home.clone())
+    );
+}

@@ -71,9 +71,129 @@ fn every_exit_between_the_mandate_release_and_the_merge_ledgers_a_refusal() {
         "exits after the release decision that write no MandateDriveAction row: {unledgered:#?}"
     );
     // The release floor, the refusal hold, the refusal pin, the rebase pin,
-    // both hold-gate timeouts, the mandate ending, the proven base, and the
-    // merge failure with and without a hold to re-arm.
-    assert_eq!(exits.len(), 10, "{exits:#?}");
+    // the hold-gate timeout (one exit for both arms since TASK-2086), the
+    // mandate ending, the proven base, and the merge failure with and without
+    // a hold to re-arm.
+    assert_eq!(exits.len(), 9, "{exits:#?}");
+}
+
+// TASK-2087: a `?` propagation in the same window would skip the ledger
+// without being a `return Err(` / `bail!(` exit, so the window holds none.
+// trace:TASK-1955 | ai:claude (TASK-2087)
+#[test]
+fn no_question_mark_exit_between_the_mandate_release_and_the_merge() {
+    let src = include_str!("../pr_cmd.rs");
+    let body = &src[src
+        .find(concat!("pub(crate) fn pr_ship_", "with_method("))
+        .expect("pr_ship_with_method exists")..];
+    let start = body
+        .find(concat!("let mandate_release = (!floor_", "authority)"))
+        .expect("the mandate release decision");
+    let end = body
+        .find(concat!(
+            "STORY-1700: a ship under a mandate is a ",
+            "mandate-driven action"
+        ))
+        .expect("the post-merge success ledger");
+    let window = &body[start..end];
+    let offenders: Vec<&str> = rust_code_only(window)
+        .lines()
+        .zip(window.lines())
+        .filter(|(code, _)| code.contains('?'))
+        .map(|(_, line)| line)
+        .collect();
+    assert!(
+        offenders.is_empty(),
+        "a `?` here skips the MandateDriveAction ledger: {offenders:#?}"
+    );
+}
+
+/// `text` with every string literal (raw and multi-line included), char
+/// literal and comment blanked out, newlines kept, so line `n` of the result
+/// is line `n` of `text`'s code.
+// trace:TASK-1955 | ai:claude (TASK-2087)
+fn rust_code_only(text: &str) -> String {
+    let c: Vec<char> = text.chars().collect();
+    let mut out = String::new();
+    // Skip from `i` to `end`, keeping only the newlines in between.
+    let skip = |out: &mut String, from: usize, end: usize| {
+        out.extend(c[from..end.min(c.len())].iter().filter(|&&ch| ch == '\n'));
+        end
+    };
+    let mut i = 0;
+    while i < c.len() {
+        let next = c.get(i + 1).copied();
+        let ident = |k: usize| c[k].is_alphanumeric() || c[k] == '_';
+        // `br"…"`: the `b` is the literal's prefix, not an identifier.
+        // trace:TASK-1955 | ai:claude (TASK-2176)
+        let byte_prefix = i > 0 && c[i - 1] == 'b' && (i < 2 || !ident(i - 2));
+        let ident_before = i > 0 && ident(i - 1) && !byte_prefix;
+        i = match c[i] {
+            '/' if next == Some('/') => {
+                let end = (i..c.len()).find(|&j| c[j] == '\n').unwrap_or(c.len());
+                skip(&mut out, i, end)
+            }
+            '/' if next == Some('*') => skip(&mut out, i, block_comment_end(&c, i)),
+            'r' if !ident_before && matches!(next, Some('"' | '#')) => {
+                let hashes = c[i + 1..].iter().take_while(|&&ch| ch == '#').count();
+                let open = i + 1 + hashes;
+                if c.get(open) != Some(&'"') {
+                    out.push('r');
+                    i + 1
+                } else {
+                    let end = (open + 1..c.len())
+                        .find(|&j| c[j] == '"' && (1..=hashes).all(|k| c.get(j + k) == Some(&'#')))
+                        .map_or(c.len(), |j| j + 1 + hashes);
+                    skip(&mut out, i, end)
+                }
+            }
+            '"' => {
+                let mut j = i + 1;
+                while j < c.len() && c[j] != '"' {
+                    j += if c[j] == '\\' { 2 } else { 1 };
+                }
+                skip(&mut out, i, j + 1)
+            }
+            // A char literal (`'x'`, `'\''`, `'\u{..}'`); otherwise a lifetime.
+            '\'' if next == Some('\\') => {
+                let end = (i + 3..c.len())
+                    .find(|&j| c[j] == '\'')
+                    .map_or(c.len(), |j| j + 1);
+                skip(&mut out, i, end)
+            }
+            '\'' if c.get(i + 2) == Some(&'\'') => i + 3,
+            ch => {
+                out.push(ch);
+                i + 1
+            }
+        };
+    }
+    out
+}
+
+/// The `?` pin's stripper hides only literals and comments: a `?` inside a
+/// multi-line or raw string, a char literal or a block comment is no exit,
+/// and one after a `'"'` char literal still is.
+// trace:TASK-1955 | ai:claude (TASK-2087)
+#[test]
+fn the_question_mark_stripper_hides_only_literals_and_comments() {
+    let text = concat!(
+        "let a = \"first\n",
+        "  still a string? yes\";\n",
+        "let b = r#\"raw \"?\" body\"#;\n",
+        "let q = '?'; let e = '\\''; /* a? */\n",
+        "let d = '\"'; let x = load()?;\n",
+        "fn f<'a>(s: &'a str) -> Option<&'a str> { s.get(0..)?; None }\n",
+    );
+    let code = rust_code_only(text);
+    let flagged: Vec<usize> = code
+        .lines()
+        .enumerate()
+        .filter(|(_, l)| l.contains('?'))
+        .map(|(n, _)| n)
+        .collect();
+    assert_eq!(code.lines().count(), text.lines().count(), "{code}");
+    assert_eq!(flagged, [4, 5], "{code}");
 }
 
 /// The pin's scanner catches every kind of early exit, and ignores a `?` or
@@ -134,6 +254,29 @@ fn early_exits(window: &str) -> (Vec<String>, Vec<String>) {
     (exits, unledgered)
 }
 
+/// The index just past the (possibly nested) block comment opening at `i`,
+/// or the end of `c` when it never closes.
+// trace:TASK-1955 | ai:claude (TASK-1695)
+fn block_comment_end(c: &[char], i: usize) -> usize {
+    let mut depth = 0usize;
+    let mut j = i;
+    while j < c.len() {
+        if c[j] == '/' && c.get(j + 1) == Some(&'*') {
+            depth += 1;
+            j += 2;
+        } else if c[j] == '*' && c.get(j + 1) == Some(&'/') {
+            depth -= 1;
+            j += 2;
+            if depth == 0 {
+                return j;
+            }
+        } else {
+            j += 1;
+        }
+    }
+    c.len()
+}
+
 /// Replaces the contents of string and char literals and comments with
 /// spaces, keeping line breaks so line numbers still match the source.
 fn blank_strings_and_comments(src: &str) -> String {
@@ -143,7 +286,12 @@ fn blank_strings_and_comments(src: &str) -> String {
     let mut i = 0;
     while i < chars.len() {
         let c = chars[i];
-        if c == '/' && chars.get(i + 1) == Some(&'/') {
+        if c == '/' && chars.get(i + 1) == Some(&'*') {
+            // trace:TASK-1955 | ai:claude (TASK-1695)
+            let end = block_comment_end(&chars, i);
+            out.extend(chars[i..end].iter().map(|&c| blank(c)));
+            i = end;
+        } else if c == '/' && chars.get(i + 1) == Some(&'/') {
             while i < chars.len() && chars[i] != '\n' {
                 out.push(' ');
                 i += 1;
@@ -190,4 +338,51 @@ fn blank_strings_and_comments(src: &str) -> String {
         }
     }
     out
+}
+
+/// The ship-window scanner's blanker hides block comments, nested ones
+/// included, keeping their line breaks: a `?` or `return` inside one is no
+/// exit, one after it still is.
+// trace:TASK-1955 | ai:claude (TASK-1695)
+#[test]
+fn blank_strings_and_comments_hides_nested_block_comments() {
+    let src = "a /* x? /* return */ y? */ b?\n/* multi\nline return */ c?;\n";
+    let out = blank_strings_and_comments(src);
+    assert_eq!(out.lines().count(), src.lines().count(), "{out}");
+    assert_eq!(out.chars().count(), src.chars().count());
+    let lines: Vec<&str> = out.lines().collect();
+    assert!(
+        lines[0].starts_with("a ") && lines[0].ends_with(" b?"),
+        "{out}"
+    );
+    assert_eq!(lines[0].matches('?').count(), 1, "{out}");
+    assert!(!lines[0].contains("return"), "{out}");
+    assert!(!lines[1].contains("return") && !lines[1].contains('?'));
+    assert_eq!(lines[2].trim(), "c?;");
+}
+
+/// The `?` pin's stripper reads `br"…"` / `br#"…"#` as raw byte strings and
+/// nested block comments as one comment; an identifier ending in `br` is
+/// still an identifier.
+// trace:TASK-1955 | ai:claude (TASK-2176)
+#[test]
+fn the_question_mark_stripper_reads_raw_byte_strings_and_nested_comments() {
+    let text = concat!(
+        "let a = br\"raw?\";\n",
+        "let b = br#\"raw \"?\" body\"#;\n",
+        "/* outer /* inner? */ still comment? */ let c = x?;\n",
+        "let abr = 1; let d = y?;\n",
+    );
+    let code = rust_code_only(text);
+    let flagged: Vec<usize> = code
+        .lines()
+        .enumerate()
+        .filter(|(_, l)| l.contains('?'))
+        .map(|(n, _)| n)
+        .collect();
+    assert_eq!(flagged, [2, 3], "{code}");
+    assert!(
+        code.lines().nth(2).unwrap().contains("let c = x?"),
+        "{code}"
+    );
 }

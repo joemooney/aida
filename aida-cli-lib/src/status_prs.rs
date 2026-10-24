@@ -685,14 +685,18 @@ pub(crate) fn render_in_flight_grouped(
 pub(crate) struct WorktreeRecord {
     pub(crate) path: std::path::PathBuf,
     pub(crate) branch: Option<String>,
+    /// BUG-2169: a contained seat's private clone from [`seat_trees`], not a
+    /// linked worktree. Host git never runs in it, and only
+    /// `seat_clone::destroy` removes it.
+    // trace:TASK-2053 | ai:claude
+    pub(crate) clone: bool,
 }
 
 /// Parse `git worktree list --porcelain` output. One record per worktree,
 /// separated by blank lines.
 pub(crate) fn list_worktrees(project_root: &std::path::Path) -> Vec<WorktreeRecord> {
-    let out = std::process::Command::new("git")
-        .arg("-C")
-        .arg(project_root)
+    // trace:TASK-2053 | ai:claude
+    let out = aida_core::git_ops::host_git_command(project_root)
         .args(["worktree", "list", "--porcelain"])
         .output();
     let Ok(out) = out else { return Vec::new() };
@@ -709,6 +713,7 @@ pub(crate) fn list_worktrees(project_root: &std::path::Path) -> Vec<WorktreeReco
                 records.push(WorktreeRecord {
                     path,
                     branch: cur_branch.take(),
+                    clone: false,
                 });
             }
             cur_path = Some(std::path::PathBuf::from(p));
@@ -720,9 +725,73 @@ pub(crate) fn list_worktrees(project_root: &std::path::Path) -> Vec<WorktreeReco
         records.push(WorktreeRecord {
             path,
             branch: cur_branch,
+            clone: false,
         });
     }
     records
+}
+
+/// BUG-2169 slice S4: every tree a session works in. The linked worktrees
+/// from [`list_worktrees`], then the private clone of each `clone` session
+/// lease in `project_root`, whose branch is the lease's (a clone is not in
+/// `git worktree list`, and its own refs are never read with host git). A
+/// clone whose directory is gone is left out.
+// trace:TASK-2053 | ai:claude
+pub(crate) fn seat_trees(project_root: &std::path::Path) -> Vec<WorktreeRecord> {
+    let mut records = list_worktrees(project_root);
+    records.extend(clone_seat_trees(project_root));
+    records
+}
+
+/// The clone half of [`seat_trees`]: one record per `clone` lease whose
+/// directory exists, deduplicated by path.
+// trace:TASK-2053 | ai:claude
+pub(crate) fn clone_seat_trees(project_root: &std::path::Path) -> Vec<WorktreeRecord> {
+    let mut records: Vec<WorktreeRecord> = Vec::new();
+    for lease in crate::list_leases(project_root) {
+        if lease.tree_kind != crate::seat_clone::TreeKind::Clone
+            || !std::fs::symlink_metadata(&lease.worktree_path).is_ok_and(|m| m.is_dir())
+            || records.iter().any(|r| r.path == lease.worktree_path)
+        {
+            continue;
+        }
+        records.push(WorktreeRecord {
+            branch: (!lease.branch.is_empty()).then(|| lease.branch.clone()),
+            path: lease.worktree_path,
+            clone: true,
+        });
+    }
+    records
+}
+
+/// One status or awaiting pass gives all its seat-clone probes this much time
+/// together, never [`crate::seat_clone::probe`]'s per-call budget per clone.
+// trace:TASK-2053 | ai:claude
+pub(crate) const CLONE_PROBE_BUDGET: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// [`clone_seat_trees`], each read through the sandboxed probe under one
+/// shared `deadline`. A clone the deadline leaves unread is still returned,
+/// as [`crate::seat_clone::Probe::Unknown`] naming the skip, so callers show
+/// it like an unreadable clone and never drop or count it as clean.
+// trace:TASK-2053 | ai:claude
+pub(crate) fn probe_clone_seat_trees(
+    project_root: &std::path::Path,
+    deadline: Option<std::time::Instant>,
+) -> Vec<(WorktreeRecord, crate::seat_clone::Probe)> {
+    clone_seat_trees(project_root)
+        .into_iter()
+        .map(|wt| {
+            let probe = if deadline.is_some_and(|end| std::time::Instant::now() >= end) {
+                crate::seat_clone::Probe::Unknown(format!(
+                    "not read: the clone scan deadline elapsed before {}",
+                    wt.path.display()
+                ))
+            } else {
+                crate::seat_clone::probe_until(project_root, &wt.path, &[], deadline)
+            };
+            (wt, probe)
+        })
+        .collect()
 }
 
 /// Open-PR snapshot keyed by head branch — one `gh` invocation feeds the
@@ -2836,14 +2905,109 @@ pub(crate) fn collect_unshipped_work_items_bounded(
             }
         })
         .collect();
+    let mut items = items;
+    let (clones, clone_scan) = clone_unshipped_work_items_bounded(project_root, deadline);
+    items.extend(clones);
     (
         items,
         awaiting_you::UnshippedScanStatus {
-            complete: !truncated,
-            scanned,
-            candidates: total_candidates,
+            complete: !truncated && clone_scan.complete,
+            scanned: scanned + clone_scan.scanned,
+            candidates: total_candidates + clone_scan.candidates,
         },
     )
+}
+
+/// BUG-2169 slice S4: unshipped work in contained seats' private clones. A
+/// clone's branch and commits are not in main's refs, so the branch scan
+/// above never sees them; each `clone` lease's tree is read through the
+/// sandboxed probe instead. A clone with commits on no `origin/*` ref is
+/// reported, unpushed; one the probe cannot read is reported with an unknown
+/// count, never dropped. Pushed work already reaches the scan above through
+/// its `origin/` ref.
+// trace:TASK-2053 | ai:claude
+pub(crate) fn clone_unshipped_work_items(
+    project_root: &std::path::Path,
+) -> Vec<awaiting_you::UnshippedWorkItem> {
+    clone_unshipped_work_items_bounded(project_root, None).0
+}
+
+// trace:TASK-2053 | ai:codex
+pub(crate) fn clone_unshipped_work_items_bounded(
+    project_root: &std::path::Path,
+    deadline: Option<std::time::Instant>,
+) -> (
+    Vec<awaiting_you::UnshippedWorkItem>,
+    awaiting_you::UnshippedScanStatus,
+) {
+    let now = chrono::Utc::now();
+    let mut items = Vec::new();
+    let mut scan = awaiting_you::UnshippedScanStatus {
+        complete: true,
+        scanned: 0,
+        candidates: 0,
+    };
+    for lease in crate::list_leases(project_root) {
+        if lease.tree_kind != crate::seat_clone::TreeKind::Clone
+            || !std::fs::symlink_metadata(&lease.worktree_path).is_ok_and(|m| m.is_dir())
+        {
+            continue;
+        }
+        scan.candidates += 1;
+        if deadline.is_some_and(|end| std::time::Instant::now() >= end) {
+            scan.complete = false;
+            continue;
+        }
+        let probe =
+            crate::seat_clone::probe_until(project_root, &lease.worktree_path, &[], deadline);
+        if deadline.is_some_and(|end| std::time::Instant::now() >= end) {
+            scan.complete = false;
+            continue;
+        }
+        scan.scanned += 1;
+        let (branch, commits_ahead, recovery) = match probe {
+            crate::seat_clone::Probe::Known(facts) if facts.unpushed == 0 => continue,
+            crate::seat_clone::Probe::Known(facts) => (
+                facts.branch.unwrap_or_else(|| lease.branch.clone()),
+                u32::try_from(facts.unpushed).unwrap_or(u32::MAX),
+                format!(
+                    "commits exist only in the seat clone {}: the seat pushes them from its \
+                         session; ending the session saves them under .aida/salvage first",
+                    lease.worktree_path.display()
+                ),
+            ),
+            crate::seat_clone::Probe::Unknown(why) => (
+                lease.branch.clone(),
+                0,
+                format!(
+                    "seat clone {} could not be read ({why}); it is kept",
+                    lease.worktree_path.display()
+                ),
+            ),
+            crate::seat_clone::Probe::HasSubmodules(reason) => (lease.branch.clone(), 0, reason),
+        };
+        // The clone's commit times are not read on the host; the session's
+        // age stands in.
+        let secs = now
+            .signed_duration_since(lease.started_at)
+            .num_seconds()
+            .max(0);
+        let age = match secs {
+            s if s < 3600 => format!("{}m", (s / 60).max(1)),
+            s if s < 86400 => format!("{}h", s / 3600),
+            s => format!("{}d", s / 86400),
+        };
+        items.push(awaiting_you::UnshippedWorkItem {
+            spec_id: lease.scope.clone(),
+            branch,
+            commits_ahead,
+            age,
+            recovery,
+            pr_state: "unknown".to_string(),
+            pushed: false,
+        });
+    }
+    (items, scan)
 }
 
 // trace:STORY-1043 | ai:codex

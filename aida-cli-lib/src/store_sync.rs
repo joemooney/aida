@@ -325,13 +325,9 @@ pub(crate) fn attached_store_present(project_root: &std::path::Path) -> bool {
 /// intent (SPIKE-48) is preserved — we inform, we don't error.
 /// trace:SPIKE-48 trace:BUG-567 | ai:claude
 pub(crate) fn aida_store_override() -> Option<std::path::PathBuf> {
-    let raw = std::env::var("AIDA_STORE").ok()?;
-    let raw = raw.trim();
-    if raw.is_empty() {
-        return None;
-    }
+    let (raw, setting) = aida_store_setting()?;
     // trace:BUG-567 | ai:claude
-    match aida_store_override_from(std::path::Path::new(raw)) {
+    match setting {
         StoreOverride::Usable(p) => Some(p),
         StoreOverride::Unusable { reason } => {
             if !aida_quiet() {
@@ -348,6 +344,32 @@ pub(crate) fn aida_store_override() -> Option<std::path::PathBuf> {
         }
     }
 }
+
+/// The trimmed `AIDA_STORE` value and how it classifies, or `None` when
+/// unset or blank — what [`aida_store_override`] resolves, without its
+/// unusable notice, for a caller that names the setting itself.
+// trace:TASK-2170, TASK-2171 | ai:claude
+pub(crate) fn aida_store_setting() -> Option<(String, StoreOverride)> {
+    aida_store_setting_from(std::env::var("AIDA_STORE").ok().as_deref())
+}
+
+/// [`aida_store_setting`] over a given raw value: a blank or whitespace-only
+/// one is unset, so no seat-check note names it.
+// trace:TASK-1955 | ai:claude (TASK-2199)
+pub(crate) fn aida_store_setting_from(raw: Option<&str>) -> Option<(String, StoreOverride)> {
+    let raw = raw?.trim();
+    if raw.is_empty() {
+        return None;
+    }
+    Some((
+        raw.to_string(),
+        aida_store_override_from(std::path::Path::new(raw)),
+    ))
+}
+
+#[cfg(test)]
+#[path = "tests/task_2199_aida_store_setting_tests.rs"]
+mod task_2199_aida_store_setting_tests;
 
 /// BUG-568: detect a "shared-store-but-multi-repo" context — a workspace where
 /// a single `.aida-store` is shared by two or more code repos (via a
@@ -1108,6 +1130,7 @@ pub(crate) fn pull_store_before_id_allocation(
     // A failed stage/commit (a refusing hook) stops the allocation with the
     // original error; the pending changes stay as they were.
     aida_core::db::with_store_write_lock(store_path, || {
+        git_ops::protect_roster_advisors(store_path)?; // trace:BUG-2209 | ai:claude
         if git_ops::has_changes_checked(store_path)
             .context("cannot read the store status before id allocation")?
         {

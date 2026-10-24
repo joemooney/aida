@@ -48,4 +48,19 @@ pub enum InternalCommand {
     /// nothing.
     // trace:BUG-1748 | ai:codex
     SoloActive,
+
+    /// Print the environment correction for a session inside a lane
+    /// worktree: shell lines setting AIDA_SESSION_ROLE to the role its lease
+    /// records, and exporting the lease's child grant or unsetting an
+    /// inherited grant for another seat (and the inherited purpose). Prints
+    /// nothing outside a lane or when the environment already matches.
+    /// Read-only. Called by the SessionStart hook, which appends the lines to
+    /// $CLAUDE_ENV_FILE. Exits non-zero, printing nothing, when the lease
+    /// cannot be turned into safe lines.
+    // trace:STORY-1662 | ai:claude
+    LaneEnv {
+        /// The session directory to resolve the lane for (default: cwd).
+        #[clap(long, value_name = "PATH")]
+        cwd: Option<PathBuf>,
+    },
 }

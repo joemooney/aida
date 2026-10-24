@@ -30,6 +30,11 @@ use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+// The one commit-keyed CI reader. trace:TASK-1945 | ai:claude
+#[path = "forge_commit_ci.rs"]
+mod commit_ci;
+pub(crate) use commit_ci::*;
+
 /// A supervised merge-hold deliberately refused a merge.
 ///
 /// Keep this as a typed error so orchestrator callers can distinguish a human
@@ -709,6 +714,21 @@ pub(crate) fn head_matches_pin(pin: &str, actual: &str) -> bool {
         == crate::awaiting_you::ReviewRelation::Same
 }
 
+/// The `gh api` argv for GitHub's update-branch endpoint, pinned to
+/// `expected_head` so a head that moved since it was read is refused (422)
+/// instead of updated.
+// trace:STORY-1887 | ai:claude
+pub(crate) fn github_update_branch_argv(id: u64, expected_head: &str) -> Vec<String> {
+    vec![
+        "api".to_string(),
+        "--method".to_string(),
+        "PUT".to_string(),
+        format!("repos/{{owner}}/{{repo}}/pulls/{id}/update-branch"),
+        "-f".to_string(),
+        format!("expected_head_sha={expected_head}"),
+    ]
+}
+
 /// TASK-1458: the `gh pr merge` argv for `opts`. Squash reuses the
 /// SPEC-410-pinned `pr_ship::merge_args`; a `match_head` pin appends
 /// `--match-head-commit <sha>` so GitHub itself refuses a head that moved
@@ -858,6 +878,15 @@ pub trait Forge {
     /// `gh run` / `glab ci` / pure-git `CiState::None`.
     fn ci_status(&self, target: CiTarget) -> Result<CiStatus>;
 
+    /// Every CI check on one commit SHA, through the shared commit-keyed
+    /// reader. Any CLI, API or parse failure is an `Err`; a forge with no
+    /// commit-keyed CI (pure git) always errs, so a caller never reads it as
+    /// clean.
+    // trace:STORY-1689 | ai:claude
+    fn commit_checks(&self, sha: &str) -> Result<CommitChecks> {
+        anyhow::bail!("this forge has no commit-keyed CI to read for {sha}")
+    }
+
     /// STORY-516: branch-keyed CI probe (PR number + check rollup in one call)
     /// — the forge-neutral form of `probe_ci_state_for_branch`. Returns a
     /// [`CiProbeResult`] preserving the `NoSignal(reason)` "couldn't probe"
@@ -944,6 +973,19 @@ pub trait Forge {
     /// so the closure is self-explaining to whoever finds it.
     // trace:TASK-1289 | ai:claude
     fn close_change(&self, c: &ChangeRef, reason: &str) -> Result<()>;
+
+    /// Merge the base branch into change `id`'s head on the forge (GitHub's
+    /// "Update branch"), refused by the forge when the head is no longer
+    /// `expected_head`. Only GitHub implements it; every other forge refuses,
+    /// so `aida pr ship-batch` stops instead of guessing.
+    // trace:STORY-1887 | ai:claude
+    fn update_change_branch(&self, id: u64, expected_head: &str) -> Result<()> {
+        let _ = (id, expected_head);
+        anyhow::bail!(
+            "updating a change's branch from its base is not supported on {}",
+            self.kind().cli_name()
+        )
+    }
 
     /// `gh pr ready` / `glab mr update --ready` / pure-git no-op.
     ///
@@ -1624,6 +1666,19 @@ impl Forge for GitHubForge {
         ))
     }
 
+    // trace:STORY-1887 | ai:claude
+    fn update_change_branch(&self, id: u64, expected_head: &str) -> Result<()> {
+        let argv = github_update_branch_argv(id, expected_head);
+        let argv: Vec<&str> = argv.iter().map(String::as_str).collect();
+        let out = self.gh(&argv)?;
+        anyhow::ensure!(
+            out.status.success(),
+            "gh could not update PR #{id}'s branch: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+        Ok(())
+    }
+
     fn change_status(&self, c: &ChangeRef) -> Result<ChangeStatus> {
         let out = self.gh(&[
             "pr",
@@ -1784,9 +1839,12 @@ impl Forge for GitHubForge {
     }
 
     fn ci_status(&self, target: CiTarget) -> Result<CiStatus> {
+        // STORY-1689: a commit's CI is read by its SHA. `gh pr checks <sha>`
+        // finds no PR for a squash-merged main commit and so never answered.
+        // trace:STORY-1689 | ai:claude
         let r#ref = match target {
             CiTarget::Branch(b) => b,
-            CiTarget::Commit(c) => c,
+            CiTarget::Commit(c) => return Ok(ci_status_from_commit_checks(self.commit_checks(&c))),
             CiTarget::Change(c) => c.branch,
         };
         let out = self.gh(&[
@@ -1836,6 +1894,20 @@ impl Forge for GitHubForge {
             url: None,
             failing_checks: failing,
         })
+    }
+
+    fn commit_checks(&self, sha: &str) -> Result<CommitChecks> {
+        // trace:STORY-1689 | ai:claude
+        anyhow::ensure!(
+            is_full_commit_sha(sha),
+            "invalid commit `{sha}` for a CI read: a full 40- or 64-character SHA is required"
+        );
+        let gh = crate::resolve_forge_cli(ForgeKind::GitHub).ok_or_else(|| {
+            anyhow::anyhow!("could not invoke `gh` — is the GitHub CLI installed?")
+        })?;
+        let mut api = |endpoint: &str| commit_ci_api(&gh, &self.project_root, endpoint);
+        // `gh api` fills `{owner}/{repo}` from this checkout's repository.
+        github_commit_checks("{owner}/{repo}", sha, &mut api)
     }
 
     fn ci_probe_for_branch(&self, branch: &str) -> Result<CiProbeResult> {
@@ -2417,13 +2489,30 @@ impl Forge for GitLabForge {
         // its source branch (the orchestrator merges branches, not commits). The
         // pure mapper degrades a missing CLI / no pipelines to CiState::None,
         // mirroring GitHubForge::ci_status. trace:STORY-510 | ai:claude
+        // STORY-1689: a commit target reads the job statuses on that SHA;
+        // `pipelines?ref=` takes only a branch or tag name.
+        // trace:STORY-1689 | ai:claude
         let r#ref = match target {
             CiTarget::Branch(b) => b,
-            CiTarget::Commit(c) => c,
+            CiTarget::Commit(c) => return Ok(ci_status_from_commit_checks(self.commit_checks(&c))),
             CiTarget::Change(c) => c.branch,
         };
         let out = self.glab_api_get("projects/:id/pipelines", &[("ref", &r#ref)]);
         Ok(ci_status_from_glab_pipelines(out))
+    }
+
+    fn commit_checks(&self, sha: &str) -> Result<CommitChecks> {
+        // trace:STORY-1689 | ai:claude
+        anyhow::ensure!(
+            is_full_commit_sha(sha),
+            "invalid commit `{sha}` for a CI read: a full 40- or 64-character SHA is required"
+        );
+        let glab = crate::resolve_forge_cli(ForgeKind::GitLab).ok_or_else(|| {
+            anyhow::anyhow!("could not invoke `glab` — is the GitLab CLI installed?")
+        })?;
+        let mut api = |endpoint: &str| commit_ci_api(&glab, &self.project_root, endpoint);
+        // `glab api` resolves `:id` to this checkout's project.
+        gitlab_commit_checks(":id", sha, &mut api)
     }
 
     fn ci_probe_for_branch(&self, branch: &str) -> Result<CiProbeResult> {
@@ -2569,7 +2658,13 @@ impl Forge for GitLabForge {
                     // Complete it before the ordinary merge request rather
                     // than degrading Rebase into Merge. trace:BUG-1232 | ai:codex
                     if matches!(opts.method, MergeMethod::Rebase) && !rebase_requested {
-                        let request = gitlab_merge_api_shape(&path, opts, true, &snapshot.head_sha);
+                        let request = gitlab_merge_api_shape(
+                            &path,
+                            opts,
+                            true,
+                            &snapshot.head_sha,
+                            &snapshot.title,
+                        );
                         let rebased = self.glab_api_put(&request.path, &[])?;
                         anyhow::ensure!(
                             rebased.status.success(),
@@ -2580,7 +2675,13 @@ impl Forge for GitLabForge {
                         rebase_requested = true;
                         continue;
                     }
-                    let request = gitlab_merge_api_shape(&path, opts, false, &snapshot.head_sha);
+                    let request = gitlab_merge_api_shape(
+                        &path,
+                        opts,
+                        false,
+                        &snapshot.head_sha,
+                        &snapshot.title,
+                    );
                     let fields: Vec<(&str, &str)> = request
                         .fields
                         .iter()
@@ -2936,8 +3037,15 @@ impl Forge for PureGitForge {
                     branch_head_subject(&self.project_root, &c.branch)
                         .unwrap_or_else(|| format!("Merge {} into {}", c.branch, base))
                 });
+                // TASK-2115: the squash body (the `aida: no-complete`
+                // declaration) is part of the commit on main here too.
+                // trace:TASK-1951 trace:TASK-2115 | ai:claude
+                let mut commit = vec!["commit", "-m", subject.as_str()];
+                if let Some(body) = opts.squash_body.as_deref().filter(|b| !b.trim().is_empty()) {
+                    commit.extend(["-m", body]);
+                }
                 anyhow::ensure!(
-                    git(&["commit", "-m", &subject])?.status.success(),
+                    git(&commit)?.status.success(),
                     "pure-git merge: commit after squash failed"
                 );
             }
@@ -3138,6 +3246,9 @@ struct GitLabMergeSnapshot {
     detailed_merge_status: String,
     rebase_in_progress: bool,
     head_sha: String,
+    /// The MR title: GitLab's own squash subject, kept when AIDA supplies
+    /// only a squash body (TASK-2115).
+    title: String,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -3155,6 +3266,7 @@ fn gitlab_merge_api_shape(
     opts: &MergeOptions,
     request_rebase: bool,
     reviewed_head_sha: &str,
+    mr_title: &str,
 ) -> GitLabMergeApiRequest {
     if matches!(opts.method, MergeMethod::Rebase) && request_rebase {
         return GitLabMergeApiRequest {
@@ -3173,8 +3285,22 @@ fn gitlab_merge_api_shape(
             opts.delete_branch.to_string(),
         ),
     ];
-    if let Some(message) = opts.squash_subject.as_deref() {
-        fields.push(("squash_commit_message".into(), message.into()));
+    // TASK-2115: GitLab's squash message is subject and body in one field,
+    // so a squash body (the `aida: no-complete` declaration) rides along
+    // with the subject, which falls back to the MR title.
+    // trace:TASK-1951 trace:TASK-2115 | ai:claude
+    let subject = opts
+        .squash_subject
+        .as_deref()
+        .or_else(|| (!mr_title.trim().is_empty()).then_some(mr_title));
+    let message = match (subject, opts.squash_body.as_deref()) {
+        (Some(subject), Some(body)) if matches!(opts.method, MergeMethod::Squash) => {
+            Some(format!("{subject}\n\n{body}"))
+        }
+        _ => opts.squash_subject.clone(),
+    };
+    if let Some(message) = message {
+        fields.push(("squash_commit_message".into(), message));
     }
     GitLabMergeApiRequest {
         path: format!("{mr_path}/merge"),
@@ -3201,6 +3327,11 @@ fn classify_gitlab_merge_status(status: &str) -> GitLabMergeGate {
 fn parse_gitlab_merge_snapshot(body: &str) -> Result<GitLabMergeSnapshot> {
     let value: serde_json::Value = serde_json::from_str(body.trim())?;
     Ok(GitLabMergeSnapshot {
+        title: value
+            .get("title")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string(),
         state: value
             .get("state")
             .and_then(|v| v.as_str())
@@ -3690,6 +3821,64 @@ pub(crate) fn stream_probe_needs_wait(probe: &CiProbeResult) -> bool {
     matches!(probe, CiProbeResult::InProgress { .. })
 }
 
+/// A full SHA-1 or SHA-256 commit ID. The forge reports every check with
+/// the full SHA, so an abbreviated one could never match and would read as
+/// "no CI" instead of an error.
+// trace:STORY-1689 | ai:claude
+pub(crate) fn is_full_commit_sha(sha: &str) -> bool {
+    matches!(sha.len(), 40 | 64) && sha.bytes().all(|b| b.is_ascii_hexdigit())
+}
+
+/// Bound on one commit-keyed CI API call.
+// trace:STORY-1689 | ai:claude
+const COMMIT_CI_API_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// Run `<cli> api -X GET <endpoint>` in `root` for the commit-keyed reader;
+/// a spawn failure, timeout or non-zero exit is an `Err`.
+// trace:STORY-1689 | ai:claude
+fn commit_ci_api(cli: &Path, root: &Path, endpoint: &str) -> Result<Vec<u8>> {
+    let mut command = Command::new(cli);
+    command
+        .args(["api", "-X", "GET", endpoint])
+        .current_dir(root)
+        .stdin(std::process::Stdio::null());
+    let out =
+        crate::command_output_with_timeout(command, COMMIT_CI_API_TIMEOUT).with_context(|| {
+            format!(
+                "`{} api {endpoint}` timed out or failed to spawn",
+                cli.display()
+            )
+        })?;
+    anyhow::ensure!(
+        out.status.success(),
+        "`{} api {endpoint}` failed ({}): {}",
+        cli.display(),
+        out.status,
+        String::from_utf8_lossy(&out.stderr).trim()
+    );
+    Ok(out.stdout)
+}
+
+/// `ci_status(CiTarget::Commit)`: the commit's checks judged with no
+/// required check. A failed read, or a commit with no checks, is
+/// `CiState::None` (no signal), never success.
+// trace:STORY-1689 | ai:claude
+pub(crate) fn ci_status_from_commit_checks(checks: Result<CommitChecks>) -> CiStatus {
+    let (state, failing_checks) = match checks.map(|c| judge_commit_checks(&c, &[])) {
+        Ok(CommitCi::Green) => (CiState::Success, Vec::new()),
+        Ok(CommitCi::Pending(_)) => (CiState::Pending, Vec::new()),
+        Ok(CommitCi::Failed(names)) => (CiState::Failed, names),
+        Ok(CommitCi::NoChecks | CommitCi::MissingRequired(_)) | Err(_) => {
+            (CiState::None, Vec::new())
+        }
+    };
+    CiStatus {
+        state,
+        url: None,
+        failing_checks,
+    }
+}
+
 // trace:TASK-1424 | ai:claude — pub(crate) so gitlab_mirror_link can reuse this
 // mapper for a sha-filtered pipeline query instead of a second implementation.
 pub(crate) fn ci_status_from_glab_pipelines(out: Result<std::process::Output>) -> CiStatus {
@@ -4020,7 +4209,90 @@ fn configured_ssh_command(project_root: &Path) -> Option<String> {
 /// replacing it, so a custom key or wrapper keeps working for the probe.
 // trace:TASK-1951 trace:TASK-1663 | ai:claude
 pub(crate) fn ssh_command_with_batch_mode(configured: Option<&str>) -> String {
-    format!("{} -o BatchMode=yes", configured.unwrap_or("ssh"))
+    ssh_command_with_batch_mode_for(configured, None)
+}
+
+/// [`ssh_command_with_batch_mode`] for the ssh variant git will pick. PuTTY's
+/// plink rejects OpenSSH's `-o`; its batch flag is `-batch`. The `simple`
+/// variant takes no options, so nothing is appended. `variant` is an explicit
+/// `GIT_SSH_VARIANT` / `ssh.variant`; without one the variant comes from the
+/// command's program name, as git decides it.
+// trace:TASK-1951 trace:TASK-2100 | ai:claude
+pub(crate) fn ssh_command_with_batch_mode_for(
+    configured: Option<&str>,
+    variant: Option<&str>,
+) -> String {
+    let command = configured.unwrap_or("ssh");
+    let variant = variant
+        .map(|v| v.trim().to_ascii_lowercase())
+        .filter(|v| !v.is_empty() && v != "auto")
+        .unwrap_or_else(|| ssh_variant_of(command));
+    match variant.as_str() {
+        "plink" | "putty" | "tortoiseplink" => format!("{command} -batch"),
+        "simple" => command.to_string(),
+        _ => format!("{command} -o BatchMode=yes"),
+    }
+}
+
+/// The batch-mode ssh command for `project_root`'s configuration: what a
+/// bounded network git call sets as `GIT_SSH_COMMAND` so an ssh origin that
+/// needs a passphrase or host-key answer fails at once instead of stalling on
+/// a prompt, while any configured ssh command keeps working.
+// trace:TASK-2272 | ai:claude (TASK-2318)
+pub(crate) fn batch_mode_ssh_command(project_root: &Path) -> String {
+    ssh_command_with_batch_mode_for(
+        configured_ssh_command(project_root).as_deref(),
+        configured_ssh_variant(project_root).as_deref(),
+    )
+}
+
+/// The ssh variant git infers from a command's program name.
+// trace:TASK-1951 trace:TASK-2100 | ai:claude
+fn ssh_variant_of(command: &str) -> String {
+    // The first shell word, with POSIX quoting undone (`'op'\''s/plink'`).
+    let mut program = String::new();
+    let mut quote: Option<char> = None;
+    let mut chars = command.trim_start().chars();
+    while let Some(c) = chars.next() {
+        match (quote, c) {
+            (None, c) if c.is_whitespace() => break,
+            (None, '\'' | '"') => quote = Some(c),
+            (None, '\\') => program.extend(chars.next()),
+            (Some(q), c) if c == q => quote = None,
+            (Some('"'), '\\') => program.extend(chars.next()),
+            (_, c) => program.push(c),
+        }
+    }
+    let name = program
+        .rsplit(['/', '\\'])
+        .next()
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    match name.strip_suffix(".exe").unwrap_or(&name) {
+        "plink" => "plink".to_string(),
+        "tortoiseplink" => "tortoiseplink".to_string(),
+        _ => "ssh".to_string(),
+    }
+}
+
+/// An explicit ssh variant: `GIT_SSH_VARIANT`, else `ssh.variant`.
+// trace:TASK-1951 trace:TASK-2100 | ai:claude
+fn configured_ssh_variant(project_root: &Path) -> Option<String> {
+    std::env::var("GIT_SSH_VARIANT")
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+        .or_else(|| {
+            Command::new("git")
+                .arg("-C")
+                .arg(project_root)
+                .args(["config", "--get", "ssh.variant"])
+                .output()
+                .ok()
+                .filter(|out| out.status.success())
+                .and_then(|out| String::from_utf8(out.stdout).ok())
+                .map(|v| v.trim().to_owned())
+                .filter(|v| !v.is_empty())
+        })
 }
 
 /// Local `refs/remotes/origin/HEAD`, the only local default-branch evidence;
@@ -4067,10 +4339,7 @@ fn probe_origin_head_symref(project_root: &Path) -> Option<String> {
         .env("GIT_TERMINAL_PROMPT", "0")
         // An ssh origin must never prompt for a passphrase or host key.
         // trace:TASK-1803 | ai:claude
-        .env(
-            "GIT_SSH_COMMAND",
-            ssh_command_with_batch_mode(configured_ssh_command(project_root).as_deref()),
-        )
+        .env("GIT_SSH_COMMAND", batch_mode_ssh_command(project_root))
         .args(["ls-remote", "--symref", "origin", "HEAD"]);
     aida_core::git_ops::configure_remote_credentials(&mut cmd, project_root, "origin"); // trace:BUG-2181 | ai:claude
     let out = crate::command_output_with_timeout(cmd, crate::FORGE_CLI_CALL_TIMEOUT)?;
@@ -4288,6 +4557,10 @@ pub(crate) mod fake {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "tests/story_1689_commit_ci_status_tests.rs"]
+mod story_1689_commit_ci_status_tests;
 
 #[cfg(test)]
 mod tests {
@@ -5275,6 +5548,70 @@ mod tests {
         // trace:STORY-516 | ai:claude
     }
 
+    /// TASK-2115: the non-completing declaration rides in the squash body.
+    /// GitLab sends it inside `squash_commit_message` (subject falling back
+    /// to the MR title); pure-git commits it as the squash commit's body.
+    // trace:TASK-1951 trace:TASK-2115 | ai:claude
+    #[test]
+    fn squash_body_reaches_main_on_gitlab_and_pure_git() {
+        let mut opts = MergeOptions::squash();
+        opts.squash_body = Some("* fix: one\n\naida: no-complete".into());
+        let path = "projects/:id/merge_requests/7";
+        let titled = gitlab_merge_api_shape(path, &opts, false, "abc123", "fix: slice one");
+        assert!(titled.fields.contains(&(
+            "squash_commit_message".into(),
+            "fix: slice one\n\n* fix: one\n\naida: no-complete".into()
+        )));
+        opts.squash_subject = Some("fix: explicit (Refs TASK-9)".into());
+        let explicit = gitlab_merge_api_shape(path, &opts, false, "abc123", "fix: slice one");
+        assert!(explicit
+            .fields
+            .iter()
+            .any(|(k, v)| k == "squash_commit_message"
+                && v.starts_with("fix: explicit (Refs TASK-9)\n\n")
+                && v.ends_with("aida: no-complete")));
+
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let g = |args: &[&str]| {
+            let out = crate::test_git::git_command()
+                .current_dir(root)
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(out.status.success(), "git {args:?}");
+            String::from_utf8_lossy(&out.stdout).to_string()
+        };
+        g(&["init", "-q", "-b", "main"]);
+        g(&["config", "user.email", "t@t.t"]);
+        g(&["config", "user.name", "t"]);
+        std::fs::write(root.join("a"), "1").unwrap();
+        g(&["add", "."]);
+        g(&["commit", "-q", "-m", "base"]);
+        g(&["checkout", "-q", "-b", "feature"]);
+        std::fs::write(root.join("b"), "2").unwrap();
+        g(&["add", "."]);
+        g(&["commit", "-q", "-m", "feat: slice one"]);
+        g(&["checkout", "-q", "main"]);
+        let cref = ChangeRef {
+            id: 0,
+            url: String::new(),
+            branch: "feature".into(),
+            base: "main".into(),
+            title: None,
+        };
+        opts.squash_subject = None;
+        PureGitForge::new(root)
+            .merge_change(&cref, &opts, &mut crate::network_retry::NoopSink)
+            .unwrap();
+        let message = g(&["log", "-1", "--format=%B", "main"]);
+        assert!(message.starts_with("feat: slice one"), "{message}");
+        assert!(
+            crate::db_reconcile::commit_declares_non_completing(&message),
+            "{message}"
+        );
+    }
+
     // ── TASK-1458: match_head pin on every forge ────────────────────────────
     // trace:TASK-1458 | ai:claude
 
@@ -5485,20 +5822,20 @@ mod tests {
         };
         let path = "projects/:id/merge_requests/7";
 
-        let merge = gitlab_merge_api_shape(path, &opts(MergeMethod::Merge), false, "abc123");
+        let merge = gitlab_merge_api_shape(path, &opts(MergeMethod::Merge), false, "abc123", "");
         assert_eq!(merge.path, format!("{path}/merge"));
         assert!(merge.fields.contains(&("squash".into(), "false".into())));
         assert!(merge.fields.contains(&("sha".into(), "abc123".into())));
 
-        let squash = gitlab_merge_api_shape(path, &opts(MergeMethod::Squash), false, "abc123");
+        let squash = gitlab_merge_api_shape(path, &opts(MergeMethod::Squash), false, "abc123", "");
         assert_eq!(squash.path, format!("{path}/merge"));
         assert!(squash.fields.contains(&("squash".into(), "true".into())));
 
-        let rebase = gitlab_merge_api_shape(path, &opts(MergeMethod::Rebase), true, "abc123");
+        let rebase = gitlab_merge_api_shape(path, &opts(MergeMethod::Rebase), true, "abc123", "");
         assert_eq!(rebase.path, format!("{path}/rebase"));
         assert!(rebase.fields.is_empty());
 
-        let after = gitlab_merge_api_shape(path, &opts(MergeMethod::Rebase), false, "def456");
+        let after = gitlab_merge_api_shape(path, &opts(MergeMethod::Rebase), false, "def456", "");
         assert_eq!(after.path, format!("{path}/merge"));
         assert!(after.fields.contains(&("squash".into(), "false".into())));
         assert!(after.fields.contains(&("sha".into(), "def456".into())));

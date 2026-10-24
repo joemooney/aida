@@ -530,6 +530,26 @@ pub(crate) fn salvage_worktree_patch(
     agent: Option<&str>,
     worktree: &std::path::Path,
 ) -> Result<Option<std::path::PathBuf>> {
+    // BUG-2169: a seat clone is salvaged by its sandboxed accessor; host git
+    // never runs in it. An unreadable clone is an error, so the caller keeps
+    // it rather than tear down work it could not capture.
+    // trace:TASK-2053 | ai:claude
+    if let Some(clone) = aida_core::seat_clone_detect::seat_clone_root(worktree) {
+        return match crate::seat_clone::probe(project_root, &clone) {
+            crate::seat_clone::Probe::Known(facts) if !facts.unshipped() => Ok(None),
+            crate::seat_clone::Probe::Known(_) => {
+                crate::seat_clone::salvage(project_root, &clone).map(Some)
+            }
+            crate::seat_clone::Probe::Unknown(why) => anyhow::bail!(
+                "could not read the seat clone {} ({why}); nothing was salvaged or removed",
+                clone.display()
+            ),
+            crate::seat_clone::Probe::HasSubmodules(why) => anyhow::bail!(
+                "the seat clone {} has submodules ({why}); nothing was salvaged or removed",
+                clone.display()
+            ),
+        };
+    }
     if !worktree.exists() || worktree_dirty_entries(worktree).is_empty() {
         return Ok(None);
     }
@@ -592,10 +612,10 @@ pub(crate) fn salvage_worktree_patch(
     Ok(Some(path))
 }
 
+/// Refuses a seat clone (empty output; BUG-2169).
+// trace:TASK-2053 | ai:claude
 pub(crate) fn git_output_lossy(worktree: &std::path::Path, args: &[&str]) -> String {
-    let out = std::process::Command::new("git")
-        .arg("-C")
-        .arg(worktree)
+    let out = aida_core::git_ops::host_git_command(worktree)
         .args(args)
         .output();
     match out {
@@ -798,10 +818,11 @@ pub(crate) fn find_main_worktree_root() -> Result<std::path::PathBuf> {
 ///    Returns None if no reasonable default is detectable (e.g. no remotes,
 ///    no main/master locally).
 pub(crate) fn detect_default_branch_ref(project_root: &std::path::Path) -> Option<String> {
+    // Through the host git builder: callers pass a session's tree too, and a
+    // contained seat's private clone is refused rather than run (BUG-2169).
+    // trace:TASK-2053 | ai:claude
     let try_cmd = |args: &[&str]| -> Option<String> {
-        let o = std::process::Command::new("git")
-            .arg("-C")
-            .arg(project_root)
+        let o = aida_core::git_ops::host_git_command(project_root)
             .args(args)
             .output()
             .ok()?;
@@ -863,10 +884,10 @@ pub(crate) fn forecast_rebase_onto(
 
 /// Return the branch name currently checked out at `path` (its HEAD).
 /// `None` if detached or git fails. trace:BUG-76 | ai:claude
+/// Refuses a seat clone (no git runs there; BUG-2169).
+// trace:TASK-2053 | ai:claude
 pub(crate) fn current_branch_at(path: &std::path::Path) -> Option<String> {
-    let o = std::process::Command::new("git")
-        .arg("-C")
-        .arg(path)
+    let o = aida_core::git_ops::host_git_command(path)
         .args(["symbolic-ref", "--short", "HEAD"])
         .output()
         .ok()?;
@@ -1423,12 +1444,17 @@ pub(crate) fn ensure_epic_worktree_core(
         args.push(base_ref.clone());
     }
 
-    let res = std::process::Command::new("git")
-        .arg("-C")
-        .arg(main_root)
-        .args(&args)
-        .output()
-        .context("failed to invoke `git worktree add`")?;
+    // trace:BUG-2211 | ai:claude
+    let res = aida_core::git_ops::output_healing_config_lock(
+        main_root,
+        || {
+            let mut cmd = std::process::Command::new("git");
+            cmd.arg("-C").arg(main_root);
+            cmd
+        },
+        &args,
+    )
+    .context("failed to invoke `git worktree add`")?;
     if !res.status.success() {
         anyhow::bail!(
             "`git worktree add` failed: {}",
@@ -1877,6 +1903,8 @@ pub(crate) fn ensure_spec_worktree(
     path_override: Option<&str>,
     branch_override: Option<&str>,
     worktree_context: &str,
+    // STORY-1662: the role recorded on a freshly minted lease.
+    role: &str,
 ) -> Result<WorktreeOutcome> {
     let main_root = find_main_worktree_root()?;
     let home =
@@ -2038,7 +2066,7 @@ pub(crate) fn ensure_spec_worktree(
                 /* launch_name */ None,
                 /* permission_mode */ None,
                 /* launch_contained */ false,
-                /* role */ Some("implementer".to_string()),
+                /* role (STORY-1662) */ Some(role.to_string()),
                 /* force_claim (TASK-1784: own dead lease) */ reclaimed_dead_lease,
                 /* use_pool */ Some(false),
                 /* self_claim: the caller works it (BUG-2010) */ true,
@@ -2135,7 +2163,8 @@ pub(crate) fn handle_worktree_command(cmd: &WorktreeCommand) -> Result<()> {
             target,
             path,
             branch,
-        } => handle_worktree_add(target, path.as_deref(), branch.as_deref()),
+            role,
+        } => handle_worktree_add(target, path.as_deref(), branch.as_deref(), role.as_deref()),
         WorktreeCommand::Enter {
             target,
             path,
@@ -2902,13 +2931,51 @@ pub(crate) fn handle_worktree_add(
     arg: &str,
     path_override: Option<&str>,
     branch_override: Option<&str>,
+    role: Option<&str>,
 ) -> Result<()> {
+    // STORY-1662: the role the lane's lease records. A `claude --bg` session
+    // started in this worktree takes its identity from it.
+    // trace:STORY-1662 | ai:claude
+    let lane_role = role
+        .map(|r| crate::lane_env::validate_value("role", r.trim()))
+        .transpose()?
+        .map(|r| crate::canonical_role_name(&r));
+    // A reviewer lease is a review lock, not a lane: `worktree add` could
+    // never find the lease it had just written.
+    if lane_role.as_deref() == Some("reviewer") {
+        anyhow::bail!(
+            "--role reviewer is not a lane role; a review worktree comes from \
+             `aida queue work PR-<N> --role reviewer`"
+        );
+    }
     let out = match classify_worktree_arg(arg) {
-        WorktreeTarget::Epic => ensure_epic_worktree(arg, path_override, branch_override)?,
-        WorktreeTarget::Spec { display, focus } => {
-            ensure_spec_worktree(&display, &focus, path_override, branch_override, "add")?
+        WorktreeTarget::Epic => {
+            if lane_role.is_some() {
+                anyhow::bail!(
+                    "--role applies to a spec worktree; `{arg}` is an epic, whose worktree holds no lease"
+                );
+            }
+            ensure_epic_worktree(arg, path_override, branch_override)?
         }
+        WorktreeTarget::Spec { display, focus } => ensure_spec_worktree(
+            &display,
+            &focus,
+            path_override,
+            branch_override,
+            "add",
+            lane_role.as_deref().unwrap_or("implementer"),
+        )?,
     };
+    if let (Some(role), Some(lease_id)) = (lane_role.as_deref(), out.lease_id.as_deref()) {
+        let main_root = find_main_worktree_root()?;
+        let current = list_leases(&main_root)
+            .into_iter()
+            .find(|l| l.id == lease_id)
+            .and_then(|l| l.role);
+        if current.as_deref() != Some(role) {
+            crate::lane_env::stamp_lease_role_at(&main_root, lease_id, role)?;
+        }
+    }
     // BUG-2143: print an absolute path, and never a blank one as success.
     ensure_worktree_on_disk(&out.path, &out.focus)?;
     let mut out = out;
@@ -2943,9 +3010,14 @@ pub(crate) fn handle_worktree_enter(
 ) -> Result<()> {
     let out = match classify_worktree_arg(arg) {
         WorktreeTarget::Epic => ensure_epic_worktree(arg, path_override, branch_override)?,
-        WorktreeTarget::Spec { display, focus } => {
-            ensure_spec_worktree(&display, &focus, path_override, branch_override, "enter")?
-        }
+        WorktreeTarget::Spec { display, focus } => ensure_spec_worktree(
+            &display,
+            &focus,
+            path_override,
+            branch_override,
+            "enter",
+            "implementer",
+        )?,
     };
     // BUG-2143: never `cd` into a path that is not a git worktree.
     ensure_worktree_on_disk(&out.path, &out.focus)?;
@@ -3482,9 +3554,45 @@ pub(crate) fn session_env_eval_lines(body: &str, running_exe: &std::path::Path) 
 // trace:STORY-716 | ai:claude
 pub(crate) fn handle_worktree_list(json: bool) -> Result<()> {
     let main_root = find_main_worktree_root()?;
+    let rows = worktree_list_rows(&main_root)?;
+
+    if json {
+        let arr = worktree_list_json(&rows);
+        println!("{}", serde_json::to_string_pretty(&serde_json::json!(arr))?);
+        return Ok(());
+    }
+
+    if rows.is_empty() {
+        println!("No git worktrees found.");
+        return Ok(());
+    }
+    println!("{}", "AIDA worktrees".bold());
+    for (p, b, f, clone) in &rows {
+        let focus = if *clone {
+            "seat clone".dimmed().to_string()
+        } else {
+            f.as_deref()
+                .map(|s| s.cyan().bold().to_string())
+                .unwrap_or_else(|| "\u{2014}".dimmed().to_string())
+        };
+        let branch = b.as_deref().unwrap_or("(detached)");
+        println!(
+            "  {}  [{}]  focus: {}",
+            p.display().to_string().cyan(),
+            branch,
+            focus,
+        );
+    }
+    Ok(())
+}
+
+// trace:TASK-2053 | ai:codex
+type WorktreeListRow = (std::path::PathBuf, Option<String>, Option<String>, bool);
+
+pub(crate) fn worktree_list_rows(main_root: &std::path::Path) -> Result<Vec<WorktreeListRow>> {
     let porcelain = std::process::Command::new("git")
         .arg("-C")
-        .arg(&main_root)
+        .arg(main_root)
         .args(["worktree", "list", "--porcelain"])
         .output()
         .context("failed to invoke `git worktree list`")?;
@@ -3500,49 +3608,37 @@ pub(crate) fn handle_worktree_list(json: bool) -> Result<()> {
     // Pair each worktree with its focus marker + current branch (re-parse the
     // porcelain for the branch line that follows each `worktree` record).
     let branches = parse_worktree_branches(&text);
-    let rows: Vec<(std::path::PathBuf, Option<String>, Option<String>)> = paths
+    let mut rows: Vec<(std::path::PathBuf, Option<String>, Option<String>, bool)> = paths
         .iter()
         .map(|p| {
             let focus = crate::focus::read_focus_marker(p);
             let branch = branches.get(p).cloned();
-            (p.clone(), branch, focus)
+            (p.clone(), branch, focus, false)
         })
         .collect();
+    // TASK-2053: contained seats' private clones, with their lease branch.
+    // Their seat-written focus marker is not read.
+    // trace:TASK-2053 | ai:claude
+    rows.extend(
+        crate::clone_seat_trees(main_root)
+            .into_iter()
+            .map(|wt| (wt.path, wt.branch, None, true)),
+    );
 
-    if json {
-        let arr: Vec<serde_json::Value> = rows
-            .iter()
-            .map(|(p, b, f)| {
-                serde_json::json!({
-                    "path": p.display().to_string(),
-                    "branch": b,
-                    "focus": f,
-                })
+    Ok(rows)
+}
+
+pub(crate) fn worktree_list_json(rows: &[WorktreeListRow]) -> Vec<serde_json::Value> {
+    rows.iter()
+        .map(|(p, b, f, clone)| {
+            serde_json::json!({
+                "path": p.display().to_string(),
+                "branch": b,
+                "focus": f,
+                "kind": if *clone { "clone" } else { "worktree" },
             })
-            .collect();
-        println!("{}", serde_json::to_string_pretty(&serde_json::json!(arr))?);
-        return Ok(());
-    }
-
-    if rows.is_empty() {
-        println!("No git worktrees found.");
-        return Ok(());
-    }
-    println!("{}", "AIDA worktrees".bold());
-    for (p, b, f) in &rows {
-        let focus = f
-            .as_deref()
-            .map(|s| s.cyan().bold().to_string())
-            .unwrap_or_else(|| "\u{2014}".dimmed().to_string());
-        let branch = b.as_deref().unwrap_or("(detached)");
-        println!(
-            "  {}  [{}]  focus: {}",
-            p.display().to_string().cyan(),
-            branch,
-            focus,
-        );
-    }
-    Ok(())
+        })
+        .collect()
 }
 
 /// Parse `git worktree list --porcelain` into a path -> branch-shortname map.

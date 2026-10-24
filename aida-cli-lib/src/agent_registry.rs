@@ -88,6 +88,11 @@ pub(crate) struct AgentRegistryEntry {
     // trace:TASK-1750 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) pid_start: Option<String>,
+    // Namespace in which the stored numeric PID was observed. Mail routing
+    // treats a different or unobservable namespace as unknown, never dead.
+    // trace:STORY-1843 | ai:codex
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) pid_namespace: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -186,6 +191,9 @@ pub(crate) struct AgentRegistryView {
     pub(crate) native_session_id: Option<String>,
     pub(crate) ended_at: Option<DateTime<Utc>>,
     pub(crate) resumed_from: Option<String>,
+    // trace:BUG-2212 | ai:claude
+    #[serde(default, skip_serializing_if = "LivenessBasis::is_process")]
+    pub(crate) liveness: LivenessBasis,
 }
 
 // trace:STORY-994 | ai:codex
@@ -248,6 +256,9 @@ pub(crate) struct AgentGcRow {
 pub(crate) struct AgentGcReport {
     pub(crate) removed: Vec<AgentGcRow>,
     pub(crate) retained: Vec<AgentGcRow>,
+    // Retained rows whose dead process gc newly stamped ended.
+    // trace:STORY-1843 | ai:claude
+    pub(crate) marked_ended: usize,
 }
 
 impl AgentGcReport {
@@ -279,6 +290,16 @@ pub(crate) struct AgentClassifyContext {
     pub(crate) live_lease_worktrees: Vec<PathBuf>,
     pub(crate) proc_tree: Option<ProcTree>,
     pub(crate) work_grace_secs: u64,
+    // trace:BUG-2212 | ai:claude
+    pub(crate) observer: PidObserver,
+    /// How long a heartbeat-only row (process unobservable) counts as live.
+    /// `None` — the guard default — means no bound: a row this observer
+    /// cannot verify stays live however old its heartbeat, so guards fail
+    /// CLOSED (session-start-hook rows heartbeat only once, at SessionStart).
+    /// Display surfaces opt into a finite listing window with
+    /// [`Self::for_display`].
+    // trace:TASK-2272 | ai:claude
+    pub(crate) heartbeat_ttl_secs: Option<i64>,
 }
 
 impl AgentClassifyContext {
@@ -293,7 +314,26 @@ impl AgentClassifyContext {
             live_lease_worktrees,
             proc_tree: None,
             work_grace_secs: 10,
+            observer: PidObserver::current(),
+            heartbeat_ttl_secs: None,
         }
+    }
+
+    /// A listing a human reads: a heartbeat-only row ages out of the listing
+    /// after `UNOBSERVED_HEARTBEAT_TTL_SECS`. Guards (launch dedupe, nudge
+    /// routing, reaping) keep the unbounded default: a row they cannot verify
+    /// counts as live, so a duplicate launch is refused rather than allowed
+    /// over a possibly-live host session.
+    // trace:TASK-2272 | ai:claude
+    pub(crate) fn for_display(mut self) -> Self {
+        self.heartbeat_ttl_secs = Some(UNOBSERVED_HEARTBEAT_TTL_SECS);
+        self
+    }
+
+    // trace:BUG-2212 | ai:claude
+    pub(crate) fn with_observer(mut self, observer: PidObserver) -> Self {
+        self.observer = observer;
+        self
     }
 
     // trace:BUG-1704 | ai:codex
@@ -520,6 +560,7 @@ pub(crate) fn touch_mcp_agent(
             agent_type: agent_type.clone(),
             pid,
             pid_start: crate::process_probe::process_start_identity(pid),
+            pid_namespace: current_pid_namespace(),
             name: None,
             description: None,
             tty: current_tty(),
@@ -548,6 +589,7 @@ pub(crate) fn touch_mcp_agent(
         entry.agent_type = agent_type;
         if entry.pid != pid || entry.pid_start.is_none() {
             entry.pid_start = crate::process_probe::process_start_identity(pid);
+            entry.pid_namespace = current_pid_namespace();
         }
         entry.pid = pid;
     }
@@ -574,25 +616,32 @@ pub(crate) fn touch_mcp_agent(
 }
 
 /// The lease an `aida agent new --bg` launch linked to this Claude session
-/// (its manifest records the session id, possibly as a short prefix).
-// trace:TASK-1955 | ai:claude (BUG-2167)
-fn lease_linked_to_session(project_root: &Path, session_id: &str) -> Option<SessionLease> {
+/// (its manifest records the session id, possibly as a short prefix), with
+/// the name the launch gave it (TASK-2102).
+// trace:TASK-1955 | ai:claude (BUG-2167, TASK-2102)
+fn lease_linked_to_session(
+    project_root: &Path,
+    session_id: &str,
+) -> Option<(SessionLease, Option<String>)> {
     let session_id = session_id.trim();
     if session_id.is_empty() {
         return None;
     }
-    let linked: Vec<String> = crate::session_manifest::list_all(project_root)
+    let linked: Vec<(String, Option<String>)> = crate::session_manifest::list_all(project_root)
         .into_iter()
         .filter(|m| {
             m.claude_session_id
                 .as_deref()
                 .is_some_and(|sid| !sid.is_empty() && session_id.starts_with(sid))
         })
-        .map(|m| m.session_id)
+        .map(|m| (m.session_id, m.agent_name))
         .collect();
     crate::leases::list_leases(project_root)
         .into_iter()
-        .find(|l| linked.contains(&l.id))
+        .find_map(|l| {
+            let name = linked.iter().find(|(id, _)| *id == l.id)?.1.clone();
+            Some((l, name))
+        })
 }
 
 /// Record the session a SessionStart hook fires in. `worktree_root` is the
@@ -622,10 +671,17 @@ pub(crate) fn touch_session_start_agent(
     let session_id = session_id.filter(|s| !s.trim().is_empty());
     let current_start = crate::process_probe::process_start_identity(pid);
     let linked = session_id.and_then(|sid| lease_linked_to_session(project_root, sid));
+    let (linked, launch_name) = match linked {
+        Some((lease, name)) => (Some(lease), name),
+        None => (None, None),
+    };
     let env_scope = env_nonempty("AIDA_SESSION_SCOPE").filter(|s| looks_like_spec_id(s));
     let env_name = match &linked {
         Some(lease) if env_scope.as_deref() != Some(lease.scope.as_str()) => None,
-        _ => env_nonempty("AIDA_AGENT_NAME"),
+        // A headless child's own handle, else its launch name.
+        // trace:STORY-1843 | ai:claude
+        _ => env_nonempty(crate::agent_handle::HANDLE_ENV)
+            .or_else(|| env_nonempty("AIDA_AGENT_NAME")),
     };
     let mut entry = std::fs::read_to_string(&path)
         .ok()
@@ -649,6 +705,7 @@ pub(crate) fn touch_session_start_agent(
             agent_type: agent_type.clone(),
             pid,
             pid_start: crate::process_probe::process_start_identity(pid),
+            pid_namespace: current_pid_namespace(),
             name: env_name.clone(),
             description: None,
             tty: process_tty(pid).or_else(current_tty),
@@ -676,10 +733,17 @@ pub(crate) fn touch_session_start_agent(
     entry.agent_type = agent_type;
     if entry.pid != pid || entry.pid_start.is_none() {
         entry.pid_start = crate::process_probe::process_start_identity(pid);
+        entry.pid_namespace = current_pid_namespace();
     }
     entry.pid = pid;
     entry.last_active_at = now;
     if let Some(lease) = &linked {
+        // The launch's own name wins over the spare's env and over a name a
+        // same-start entry already carried; a hook firing after the link has
+        // no later adopt step to correct it. trace:TASK-1955 | ai:claude (TASK-2102)
+        if let Some(name) = launch_name.clone().or_else(|| env_name.clone()) {
+            entry.name = Some(name);
+        }
         entry.role = lease.role.clone().or(entry.role);
         entry.current_spec = Some(lease.scope.clone());
         entry.worktree_path = lease.worktree_path.clone();
@@ -700,6 +764,9 @@ pub(crate) fn touch_session_start_agent(
     if let Some(session_id) = session_id.filter(|s| !s.trim().is_empty()) {
         entry.claude_session_id = Some(session_id.to_string());
     }
+    // Every session gets one stable handle at start; the launch's name when
+    // it gave one. trace:STORY-1843 | ai:claude
+    crate::agent_handle::assign_session_handle(project_root, &mut entry, session_id);
 
     write_entry(project_root, &entry)?;
     Ok(entry)
@@ -732,7 +799,32 @@ pub(crate) fn adopt_bg_session_identity(
         {
             continue;
         }
-        entry.name = Some(name.to_string());
+        // The launch reserved `name`; bind it to this session so the
+        // generated handle its SessionStart took is released. This runs in
+        // the launcher, which holds the reservation's token.
+        // trace:STORY-1843 | ai:claude
+        let token = crate::agent_handle::launch_token_for(project_root, name);
+        let reserved = crate::agent_handle::reserve_handle(
+            project_root,
+            &crate::agent_handle::HandleRequest {
+                agent_type: &entry.agent_type,
+                role,
+                explicit: Some(name),
+                native_session_id: entry.claude_session_id.as_deref(),
+                registry_id: Some(&entry.id),
+                launch_token: token.as_deref(),
+                launcher: false,
+            },
+        );
+        // Never write a name the namespace refused: the session keeps the
+        // handle its SessionStart took, so two sessions never share one.
+        match reserved {
+            Ok(_) => entry.name = Some(name.to_string()),
+            Err(err) => eprintln!(
+                "  warning: the launched session keeps its handle `{}`: {err:#}",
+                entry.name.as_deref().unwrap_or("-")
+            ),
+        }
         entry.current_spec = spec.map(str::to_string);
         entry.role = role.map(str::to_string).or(entry.role);
         entry.worktree_path = worktree.to_path_buf();
@@ -771,6 +863,7 @@ pub(crate) fn register_spawned_agent(
         agent_type,
         pid,
         pid_start: crate::process_probe::process_start_identity(pid),
+        pid_namespace: current_pid_namespace(),
         name,
         description,
         tty: current_tty(),
@@ -817,6 +910,7 @@ pub(crate) fn register_role_enter_agent(
         agent_type,
         pid,
         pid_start: crate::process_probe::process_start_identity(pid),
+        pid_namespace: current_pid_namespace(),
         name: Some(format!("role:{role}")),
         description: Some("aida role enter shell".to_string()),
         tty,
@@ -843,109 +937,44 @@ pub(crate) fn register_role_enter_agent(
     Ok(entry)
 }
 
-/// Validate a custom agent name or generate a default '<type>-<role>-<seq>' name.
-/// Validates uniqueness across all active (non-stale) agents.
+/// Validate a custom agent name or generate a default `<vendor>-<role>-NN`
+/// handle. Validates uniqueness across all active (non-stale) agents and
+/// launch reservations. With `reserve`, the name is reserved under the
+/// handle namespace lock so a concurrent launch cannot take it before the
+/// launched session binds it; a preview passes `false` and reserves nothing.
 // trace:TASK-542 | ai:antigravity
+// trace:STORY-1843 | ai:claude
 pub(crate) fn generate_or_validate_name(
     project_root: &Path,
     agent_type: &str,
     role: Option<&str>,
     custom_name: Option<&str>,
+    reserve: bool,
 ) -> Result<String> {
     let agent_type_clean = normalize_agent_type(agent_type.to_string());
-    let role_clean = role.unwrap_or("unknown").to_lowercase();
-
-    // Read all alive agents
-    let mut alive_agents = Vec::new();
-    if let Ok(entries) = std::fs::read_dir(agents_dir(project_root)) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.extension().and_then(|s| s.to_str()) != Some("toml") {
-                continue;
-            }
-            if let Ok(body) = std::fs::read_to_string(&path) {
-                if let Ok(record) = toml::from_str::<AgentRegistryEntry>(&body) {
-                    if registry_entry_is_live(project_root, &record) {
-                        alive_agents.push(record);
-                    }
-                }
-            }
-        }
-    }
 
     if let Some(name) = custom_name {
         let name_trimmed = name.trim();
         if name_trimmed.is_empty() {
             anyhow::bail!("--name cannot be empty");
         }
-
-        // 1. Uniqueness check across active agents
-        for agent in &alive_agents {
-            if let Some(ref active_name) = agent.name {
-                if active_name.eq_ignore_ascii_case(name_trimmed) {
-                    anyhow::bail!(
-                        "agent name `{}` is already in use by active agent process (PID {})",
-                        name_trimmed,
-                        agent.pid
-                    );
-                }
-            }
-        }
-
-        // 2. Prefix-hierarchy validation
-        let name_lower = name_trimmed.to_lowercase();
-        let is_type = name_lower == "claude"
-            || name_lower == "codex"
-            || name_lower == "antigravity"
-            || name_lower == "web";
-        if is_type {
-            anyhow::bail!(
-                "invalid agent name `{}`: conflicts with agent type prefix",
-                name_trimmed
-            );
-        }
-
-        let is_type_role_prefix =
-            ["claude-", "codex-", "antigravity-", "web-"]
-                .iter()
-                .any(|prefix| {
-                    if let Some(remainder) = name_lower.strip_prefix(prefix) {
-                        if let Some(dash_idx) = remainder.rfind('-') {
-                            let suffix = &remainder[dash_idx + 1..];
-                            !suffix.chars().all(|c| c.is_ascii_digit()) || suffix.is_empty()
-                        } else {
-                            true
-                        }
-                    } else {
-                        false
-                    }
-                });
-        if is_type_role_prefix {
-            anyhow::bail!(
-                "invalid agent name `{}`: conflicts with agent type+role prefix",
-                name_trimmed
-            );
-        }
-
-        return Ok(name_trimmed.to_string());
+        let reserved = crate::agent_handle::reserved_addresses(project_root);
+        crate::agent_handle::validate_explicit_handle(name_trimmed, &reserved)?;
     }
 
-    // Default name generation: '<type>-<role>-<seq>' using the lowest free integer starting from 1
-    let mut seq = 1;
-    loop {
-        let candidate_name = format!("{}-{}-{}", agent_type_clean, role_clean, seq);
-        let in_use = alive_agents.iter().any(|agent| {
-            if let Some(ref active_name) = agent.name {
-                active_name.eq_ignore_ascii_case(&candidate_name)
-            } else {
-                false
-            }
-        });
-        if !in_use {
-            return Ok(candidate_name);
-        }
-        seq += 1;
+    let request = crate::agent_handle::HandleRequest {
+        agent_type: &agent_type_clean,
+        role,
+        explicit: custom_name.map(str::trim),
+        native_session_id: None,
+        registry_id: None,
+        launch_token: None,
+        launcher: true,
+    };
+    if reserve {
+        return Ok(crate::agent_handle::reserve_handle(project_root, &request)?.handle);
     }
+    crate::agent_handle::preview_handle(project_root, &request)
 }
 
 /// Resolve an agent brief target to its allowed brief directories (exact name, type-role, and type)
@@ -1048,6 +1077,7 @@ pub(crate) fn register_existing_agent(
         agent_type,
         pid,
         pid_start: crate::process_probe::process_start_identity(pid),
+        pid_namespace: current_pid_namespace(),
         name,
         description,
         tty,
@@ -1185,8 +1215,13 @@ pub(crate) fn gc_dead_agents(
 ) -> Result<AgentGcReport> {
     let now = Utc::now();
     let mut report = AgentGcReport::default();
-    for (path, entry) in load_entries(project_root) {
-        if registry_entry_is_live(project_root, &entry) {
+    // trace:BUG-2212 | ai:claude
+    let observer = PidObserver::current();
+    for (path, mut entry) in load_entries(project_root) {
+        // A row this process cannot observe is neither live nor dead to it:
+        // a sandboxed gc must not prune or end a host session's row.
+        // trace:STORY-1843 | ai:claude
+        if observed_liveness_from(project_root, &entry, observer) != Some(false) {
             continue;
         }
         let resumable = resumable_session_id(&entry);
@@ -1199,6 +1234,17 @@ pub(crate) fn gc_dead_agents(
                 })
                 .unwrap_or(true);
         if protected_ended_or_resumable {
+            // Keep the resumable history but stop it counting as a mail
+            // reader: an observably dead process has ended. Its end is the
+            // last heartbeat, never now, so an old crash cannot outrank a
+            // recent end in resume ordering. trace:STORY-1843 | ai:claude
+            if entry.ended_at.is_none() {
+                if !dry_run {
+                    entry.ended_at = Some(entry.last_active_at);
+                    write_entry(project_root, &entry)?;
+                }
+                report.marked_ended += 1;
+            }
             report
                 .retained
                 .push(gc_row(path, &entry, resumable, "retained"));
@@ -1731,7 +1777,8 @@ pub(crate) fn mcp_authority_status_lines(agents: &[AgentRegistryView]) -> Vec<St
 
 pub(crate) fn mcp_authority_status_lines_for_project(project_root: &Path) -> Vec<String> {
     let cfg = Config::load(project_root);
-    let ctx = AgentClassifyContext::new(Utc::now(), cfg.busy_threshold_secs, Vec::new());
+    let ctx =
+        AgentClassifyContext::new(Utc::now(), cfg.busy_threshold_secs, Vec::new()).for_display();
     let agents = list_agent_views(project_root, &ctx);
     mcp_authority_status_lines(&agents)
 }
@@ -1752,7 +1799,14 @@ fn view_for(
     entry: AgentRegistryEntry,
     ctx: &AgentClassifyContext,
 ) -> AgentRegistryView {
-    let pid_alive = registry_entry_is_live(project_root, &entry);
+    // trace:BUG-2212 | ai:claude
+    let (pid_alive, liveness) = observer_liveness(
+        project_root,
+        &entry,
+        ctx.observer,
+        ctx.now,
+        ctx.heartbeat_ttl_secs,
+    );
     let status = classify_status(&entry, pid_alive, ctx);
     let native_session_id = resumable_session_id(&entry);
     AgentRegistryView {
@@ -1780,6 +1834,7 @@ fn view_for(
         native_session_id,
         ended_at: entry.ended_at,
         resumed_from: entry.resumed_from,
+        liveness,
     }
 }
 
@@ -1815,6 +1870,209 @@ pub(crate) fn named_agent_liveness(project_root: &Path, name: &str) -> Option<bo
         seen = true;
     }
     seen.then_some(false)
+}
+
+// Namespace of the observer, not /proc/<target>/ns/pid: a host observer
+// records the host-visible PID even when the target itself is namespaced.
+// trace:STORY-1843 | ai:codex
+pub(crate) fn current_pid_namespace() -> Option<u64> {
+    use std::os::unix::fs::MetadataExt;
+    std::fs::metadata("/proc/self/ns/pid").ok().map(|m| m.ino())
+}
+
+/// Liveness as this observer can actually see it. `None` when the row's PID
+/// lives in a namespace the observer cannot probe (a sandboxed command, or a
+/// legacy unstamped row seen from outside the initial namespace). Ended rows
+/// are dead to every observer.
+// trace:STORY-1843 | ai:claude
+pub(crate) fn observed_liveness(
+    project_root: &Path,
+    entry: &AgentRegistryEntry,
+    observer: Option<u64>,
+) -> Option<bool> {
+    let observer = PidObserver {
+        namespace: observer,
+        isolated: false,
+    };
+    observed_liveness_from(project_root, entry, observer)
+}
+
+/// [`observed_liveness`] from a full observer, so an isolated sandbox in the
+/// initial namespace's clothing still cannot vouch for unstamped rows.
+// trace:BUG-2212 | ai:claude
+pub(crate) fn observed_liveness_from(
+    project_root: &Path,
+    entry: &AgentRegistryEntry,
+    observer: PidObserver,
+) -> Option<bool> {
+    if entry.ended_at.is_some() {
+        return Some(false);
+    }
+    observer
+        .can_observe(entry.pid_namespace)
+        .then(|| registry_entry_is_live(project_root, entry))
+}
+
+/// Inode of Linux's initial PID namespace.
+// trace:STORY-1843 | ai:claude
+pub(crate) const INITIAL_PID_NAMESPACE: u64 = 0xEFFF_FFFC;
+
+/// How long a row whose process this observer cannot see stays in a human
+/// LISTING, from its last heartbeat. Display only: guards never apply a
+/// heartbeat bound, because session-start-hook rows heartbeat exactly once
+/// (at SessionStart), so any finite bound makes every live host session look
+/// stale from a sandbox eventually — the guard must fail closed instead.
+// trace:BUG-2212 | ai:claude
+// trace:TASK-2272 | ai:claude
+pub(crate) const UNOBSERVED_HEARTBEAT_TTL_SECS: i64 = 24 * 60 * 60;
+
+/// Raw `/proc` facts that say whether this process sits in a PID namespace
+/// of its own (a sandboxed shell sees only its own few pids).
+// trace:BUG-2212 | ai:claude
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct PidNamespaceProbe {
+    pub(crate) self_ns: Option<u64>,
+    /// `None` when `/proc/1/ns/pid` is unreadable (pid 1 owned by another user).
+    pub(crate) pid1_ns: Option<u64>,
+    /// Entries on the `NSpid:` line of `/proc/self/status`.
+    pub(crate) nspid_levels: usize,
+    pub(crate) pid1_comm: Option<String>,
+}
+
+impl PidNamespaceProbe {
+    pub(crate) fn read() -> Self {
+        use std::os::unix::fs::MetadataExt;
+        let ns = |path: &str| std::fs::metadata(path).ok().map(|m| m.ino());
+        let nspid_levels = std::fs::read_to_string("/proc/self/status")
+            .ok()
+            .and_then(|body| {
+                body.lines()
+                    .find_map(|l| l.strip_prefix("NSpid:"))
+                    .map(|rest| rest.split_whitespace().count())
+            })
+            .unwrap_or(0);
+        Self {
+            self_ns: ns("/proc/self/ns/pid"),
+            pid1_ns: ns("/proc/1/ns/pid"),
+            nspid_levels,
+            pid1_comm: std::fs::read_to_string("/proc/1/comm")
+                .ok()
+                .map(|c| c.trim().to_string()),
+        }
+    }
+
+    /// Isolated when pid 1 lives in another namespace or the kernel reports
+    /// more than one pid level. Only when `/proc/1/ns/pid` is unreadable does
+    /// pid 1's name decide: anything but a known init means a sandbox.
+    // trace:TASK-2272 | ai:claude
+    pub(crate) fn is_isolated(&self) -> bool {
+        const INITS: [&str; 10] = [
+            "systemd",
+            "init",
+            "tini",
+            "dumb-init",
+            "docker-init",
+            "catatonit",
+            "runit",
+            "openrc-init",
+            "s6-svscan",
+            "busybox",
+        ];
+        match (self.self_ns, self.pid1_ns) {
+            (Some(a), Some(b)) if a != b => return true,
+            _ => {}
+        }
+        if self.nspid_levels > 1 {
+            return true;
+        }
+        if self.pid1_ns.is_some() {
+            return false;
+        }
+        self.pid1_comm
+            .as_deref()
+            .is_some_and(|comm| !INITS.contains(&comm))
+    }
+}
+
+/// The PID view a liveness check runs from: which namespace this process is
+/// in, and whether that namespace is an isolated sandbox.
+// trace:BUG-2212 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct PidObserver {
+    pub(crate) namespace: Option<u64>,
+    pub(crate) isolated: bool,
+}
+
+impl PidObserver {
+    pub(crate) fn current() -> Self {
+        Self::from_probe(&PidNamespaceProbe::read())
+    }
+
+    pub(crate) fn from_probe(probe: &PidNamespaceProbe) -> Self {
+        Self {
+            namespace: probe.self_ns,
+            isolated: probe.is_isolated(),
+        }
+    }
+
+    /// A row's process is visible only from the namespace it was stamped in;
+    /// an unstamped legacy row only from a non-isolated initial namespace.
+    pub(crate) fn can_observe(&self, recorded: Option<u64>) -> bool {
+        match (recorded, self.namespace) {
+            (Some(recorded), Some(current)) => recorded == current,
+            (None, Some(INITIAL_PID_NAMESPACE)) => !self.isolated,
+            _ => false,
+        }
+    }
+}
+
+/// What a displayed row's liveness rests on.
+// trace:BUG-2212 | ai:claude
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum LivenessBasis {
+    #[default]
+    Process,
+    /// The process is invisible from this PID namespace; the row's recent
+    /// heartbeat stands in for it.
+    Heartbeat,
+}
+
+impl LivenessBasis {
+    pub(crate) fn is_process(&self) -> bool {
+        *self == Self::Process
+    }
+}
+
+/// Liveness as `observer` sees it. Process-observed when the observer can see
+/// the row's pid. Otherwise the row is only PROVABLY dead via `ended_at`, so
+/// it counts as live (unverified) — `heartbeat_ttl_secs: None`, the guard
+/// default — unless a display caller passes a finite listing window.
+// trace:BUG-2212 | ai:claude
+// trace:TASK-2272 | ai:claude
+pub(crate) fn observer_liveness(
+    project_root: &Path,
+    entry: &AgentRegistryEntry,
+    observer: PidObserver,
+    now: DateTime<Utc>,
+    heartbeat_ttl_secs: Option<i64>,
+) -> (bool, LivenessBasis) {
+    if entry.ended_at.is_some() {
+        return (false, LivenessBasis::Process);
+    }
+    if observer.can_observe(entry.pid_namespace) {
+        return (
+            registry_entry_is_live(project_root, entry),
+            LivenessBasis::Process,
+        );
+    }
+    let age = now
+        .signed_duration_since(entry.last_active_at)
+        .num_seconds();
+    (
+        heartbeat_ttl_secs.is_none_or(|ttl| age <= ttl),
+        LivenessBasis::Heartbeat,
+    )
 }
 
 /// The entry's process is still running: pid plus recorded start time, so a
@@ -2495,12 +2753,25 @@ fn process_cmdline(pid: u32) -> Option<String> {
 }
 
 #[cfg(unix)]
-fn session_start_agent_pid(mut child_pid: u32, agent_type: &str) -> Option<u32> {
-    while let Some(parent) = parent_pid(child_pid) {
+fn session_start_agent_pid(child_pid: u32, agent_type: &str) -> Option<u32> {
+    session_start_agent_pid_in(child_pid, agent_type, parent_pid, process_cmdline)
+}
+
+/// The nearest ancestor of `child_pid` whose cmdline is the agent's, over an
+/// injectable process tree so the walk is testable without `/proc`.
+// trace:TASK-2272 | ai:claude
+#[cfg(unix)]
+fn session_start_agent_pid_in(
+    mut child_pid: u32,
+    agent_type: &str,
+    parent_of: impl Fn(u32) -> Option<u32>,
+    cmdline_of: impl Fn(u32) -> Option<String>,
+) -> Option<u32> {
+    while let Some(parent) = parent_of(child_pid) {
         if parent == 0 || parent == child_pid {
             return None;
         }
-        if process_cmdline(parent).is_some_and(|cmd| cmdline_matches_agent(&cmd, agent_type)) {
+        if cmdline_of(parent).is_some_and(|cmd| cmdline_matches_agent(&cmd, agent_type)) {
             return Some(parent);
         }
         child_pid = parent;
@@ -2528,7 +2799,18 @@ fn cmdline_matches_agent(cmdline: &str, agent_type: &str) -> bool {
                 .and_then(|s| s.to_str())
                 .is_some_and(|name| name == "codex")
         }),
-        "antigravity" => lower.contains("antigravity") || lower.contains("gemini"),
+        // The installed Antigravity CLI binary is `agy`.
+        // trace:TASK-2272 | ai:claude
+        "antigravity" => {
+            lower.contains("antigravity")
+                || lower.contains("gemini")
+                || lower.split_whitespace().any(|arg| {
+                    std::path::Path::new(arg)
+                        .file_name()
+                        .and_then(|s| s.to_str())
+                        .is_some_and(|name| name == "agy")
+                })
+        }
         _ => false,
     }
 }
@@ -2541,6 +2823,37 @@ fn session_start_agent_pid(_child_pid: u32, _agent_type: &str) -> Option<u32> {
 #[cfg(not(unix))]
 fn pid_has_ancestor(_child_pid: u32, _ancestor_pid: u32) -> bool {
     false
+}
+
+/// The parent of `pid`, when this process can see it.
+// trace:STORY-1843 | ai:claude
+pub(crate) fn parent_pid_of(pid: u32) -> Option<u32> {
+    #[cfg(unix)]
+    {
+        parent_pid(pid)
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = pid;
+        None
+    }
+}
+
+/// How many generations `ancestor` sits above `pid` (0 when they are the
+/// same process), or `None` when it is not an ancestor.
+// trace:STORY-1843 | ai:claude
+pub(crate) fn ancestor_depth(pid: u32, ancestor: u32) -> Option<usize> {
+    let mut current = pid;
+    for depth in 0..64 {
+        if current == ancestor {
+            return Some(depth);
+        }
+        match parent_pid_of(current) {
+            Some(parent) if parent != current && parent > 0 => current = parent,
+            _ => return None,
+        }
+    }
+    None
 }
 
 #[cfg(not(unix))]
@@ -2565,6 +2878,7 @@ mod tests {
             agent_type: "codex".to_string(),
             pid,
             pid_start: None,
+            pid_namespace: current_pid_namespace(),
             name: None,
             description: None,
             tty: Some("/dev/pts/1".to_string()),
@@ -2762,10 +3076,47 @@ mod tests {
             "claude"
         ));
         assert!(cmdline_matches_agent("gemini --model pro", "antigravity"));
+        // trace:TASK-2272 | ai:claude
+        assert!(cmdline_matches_agent(
+            "/home/joe/.local/bin/agy --resume",
+            "antigravity"
+        ));
+        assert!(!cmdline_matches_agent(
+            "aida awaiting --notice",
+            "antigravity"
+        ));
         assert!(!cmdline_matches_agent(
             "bash .claude/hooks/aida-mail-notice.sh",
             "claude"
         ));
+    }
+
+    // TASK-2272 (TASK-2282, TASK-1-463): the Antigravity SessionStart hook
+    // runs as `aida awaiting --notice` under a hook shell under `agy`. The
+    // registry row must name the `agy` process, not the short-lived hook.
+    // trace:TASK-2272 | ai:claude
+    #[cfg(unix)]
+    #[test]
+    fn session_start_agent_pid_finds_the_agy_ancestor_of_the_hook() {
+        let tree: std::collections::HashMap<u32, (u32, &str)> = [
+            (300, (200, "aida awaiting --notice")),
+            (200, (100, "sh -c aida awaiting --notice")),
+            (100, (1, "/home/joe/.local/bin/agy")),
+            (1, (0, "/sbin/init")),
+        ]
+        .into_iter()
+        .collect();
+        let parent_of = |pid: u32| tree.get(&pid).map(|(p, _)| *p);
+        let cmdline_of = |pid: u32| tree.get(&pid).map(|(_, c)| c.to_string());
+        assert_eq!(
+            session_start_agent_pid_in(300, "antigravity", parent_of, cmdline_of),
+            Some(100)
+        );
+        // No agent ancestor: None, so the caller falls back to the hook pid.
+        assert_eq!(
+            session_start_agent_pid_in(300, "codex", parent_of, cmdline_of),
+            None
+        );
     }
 
     #[test]
@@ -2857,6 +3208,47 @@ mod tests {
             .collect();
         assert_eq!(views.len(), 1);
         assert_eq!(views[0].name.as_deref(), Some("rebase-2673"));
+    }
+
+    /// TASK-2102: a SessionStart hook that fires AFTER `link_bg_session`
+    /// saved the manifest names the row from the launch, even when the
+    /// spare's env contradicts the lease and its pid already had an entry
+    /// with this start identity carrying a stale name.
+    // trace:TASK-1955 | ai:claude (TASK-2102)
+    #[test]
+    fn bg_session_start_after_the_link_takes_the_launch_name() {
+        let tmp = TempDir::new().unwrap();
+        let pool = tmp.path().join("pool-8");
+        bug_2167_linked_lease(tmp.path(), "leaseb00000002", "TASK-2001", &pool, "feed5678");
+        let manifest = tmp
+            .path()
+            .join(".aida")
+            .join("sessions")
+            .join("leaseb00000002.manifest.toml");
+        let body = std::fs::read_to_string(&manifest).unwrap();
+        std::fs::write(
+            &manifest,
+            body.replace("items = []", "agent_name = \"rebase-2678\"\nitems = []"),
+        )
+        .unwrap();
+        let _env = crate::test_env::EnvVarsGuard::set(&[
+            ("AIDA_AGENT_TYPE", "claude"),
+            ("AIDA_AGENT_NAME", "fix-task-1784"),
+            ("AIDA_SESSION_SCOPE", "TASK-1784"),
+        ]);
+        let binary = AgentBinaryIdentity::new("0.16.0".into(), "abc".into());
+        let sid = "feed5678-0000-4000-8000-000000000000";
+        // The spare's first session already left a same-start entry named
+        // from its stale env.
+        let first = touch_session_start_agent(tmp.path(), tmp.path(), Some(sid), &binary).unwrap();
+        let mut stale = first.clone();
+        stale.name = Some("fix-task-1784".into());
+        write_entry(tmp.path(), &stale).unwrap();
+
+        let entry = touch_session_start_agent(tmp.path(), tmp.path(), Some(sid), &binary).unwrap();
+        assert_eq!(entry.name.as_deref(), Some("rebase-2678"));
+        assert_eq!(entry.current_spec.as_deref(), Some("TASK-2001"));
+        assert_eq!(first.name.as_deref(), Some("rebase-2678"));
     }
 
     /// BUG-2167: a pid's entry left by an earlier session never lends its
@@ -3508,6 +3900,271 @@ mod tests {
         assert!(!path.exists());
     }
 
+    // STORY-1843 (TASK-2177): a dead resumable row stays for resume but is
+    // stamped ended, so a sandboxed mail sender stops counting it as a reader.
+    // trace:STORY-1843 | ai:claude
+    // trace:STORY-1843.ac97b025 | ai:claude
+    #[test]
+    fn gc_dead_agents_marks_dead_resumable_rows_ended_and_keeps_them() {
+        let tmp = TempDir::new().unwrap();
+        let now = Utc::now();
+        let mut record = entry_with(u32::MAX - 1, now - Duration::minutes(5));
+        record.native_session_id = Some("native-session-1".to_string());
+        let path = registry_path(tmp.path(), &record.id);
+        write_entry(tmp.path(), &record).unwrap();
+
+        let preview = gc_dead_agents(tmp.path(), true, None).unwrap();
+        assert_eq!(preview.marked_ended, 1);
+        assert!(load_entries(tmp.path())[0].1.ended_at.is_none());
+
+        let report = gc_dead_agents(tmp.path(), false, None).unwrap();
+        assert_eq!(report.marked_ended, 1);
+        assert_eq!(report.retained.len(), 1);
+        assert!(path.exists());
+        let ended = load_entries(tmp.path()).remove(0).1;
+        assert!(ended.ended_at.is_some());
+        assert_eq!(ended.native_session_id.as_deref(), Some("native-session-1"));
+        assert_eq!(ended.last_active_at, record.last_active_at);
+
+        assert_eq!(ended.ended_at, Some(record.last_active_at));
+
+        let again = gc_dead_agents(tmp.path(), false, None).unwrap();
+        assert_eq!(again.marked_ended, 0, "ending is idempotent");
+    }
+
+    // STORY-1843: a crash gc discovers late keeps its last-heartbeat end, so a
+    // session that ended recently stays first for resume-latest and the picker.
+    // trace:STORY-1843 | ai:claude
+    #[test]
+    fn gc_ended_old_crash_does_not_outrank_a_recent_end_for_resume() {
+        let tmp = TempDir::new().unwrap();
+        let now = Utc::now();
+        let mut crashed = entry_with(u32::MAX - 1, now - Duration::days(3));
+        crashed.native_session_id = Some("old-crash".to_string());
+        write_entry(tmp.path(), &crashed).unwrap();
+        let mut recent = entry_with(u32::MAX - 2, now - Duration::minutes(10));
+        recent.native_session_id = Some("recent-end".to_string());
+        recent.ended_at = Some(now - Duration::minutes(10));
+        write_entry(tmp.path(), &recent).unwrap();
+
+        let report = gc_dead_agents(tmp.path(), false, None).unwrap();
+        assert_eq!(report.marked_ended, 1);
+
+        let views =
+            ended_resumable_agent_views(tmp.path(), &ctx(Utc::now(), 30, vec![tmp.path().into()]));
+        let order: Vec<_> = views
+            .iter()
+            .map(|v| v.native_session_id.as_deref().unwrap_or(""))
+            .collect();
+        assert_eq!(order, vec!["recent-end", "old-crash"]);
+        assert_eq!(views[1].ended_at, Some(crashed.last_active_at));
+    }
+
+    // STORY-1843: gc in another PID namespace cannot see the row's process, so
+    // it must neither prune nor end it.
+    // trace:STORY-1843 | ai:claude
+    #[test]
+    fn gc_dead_agents_leaves_rows_from_unobservable_namespaces_untouched() {
+        let Some(observer) = current_pid_namespace() else {
+            return;
+        };
+        let tmp = TempDir::new().unwrap();
+        let now = Utc::now();
+        let mut resumable = entry_with(u32::MAX - 1, now);
+        resumable.pid_namespace = Some(observer ^ 1);
+        resumable.native_session_id = Some("native-session-1".to_string());
+        write_entry(tmp.path(), &resumable).unwrap();
+        let mut plain = entry_with(u32::MAX - 2, now);
+        plain.pid_namespace = Some(observer ^ 1);
+        write_entry(tmp.path(), &plain).unwrap();
+        let before: Vec<_> = load_entries(tmp.path())
+            .into_iter()
+            .map(|(p, _)| std::fs::read(p).unwrap())
+            .collect();
+
+        let report = gc_dead_agents(tmp.path(), false, None).unwrap();
+
+        assert_eq!(report, AgentGcReport::default());
+        let after: Vec<_> = load_entries(tmp.path())
+            .into_iter()
+            .map(|(p, _)| std::fs::read(p).unwrap())
+            .collect();
+        assert_eq!(before, after);
+    }
+
+    fn probe(self_ns: u64, pid1_ns: Option<u64>, nspid: usize, comm: &str) -> PidNamespaceProbe {
+        PidNamespaceProbe {
+            self_ns: Some(self_ns),
+            pid1_ns,
+            nspid_levels: nspid,
+            pid1_comm: Some(comm.to_string()),
+        }
+    }
+
+    // BUG-2212: each signal alone marks the caller isolated; a host shell
+    // with systemd as pid 1 in its own namespace is not.
+    // trace:BUG-2212 | ai:claude
+    #[test]
+    fn pid_namespace_probe_detects_isolated_callers() {
+        let host = INITIAL_PID_NAMESPACE;
+        assert!(!probe(host, Some(host), 1, "systemd").is_isolated());
+        assert!(!probe(host, None, 1, "init").is_isolated());
+        assert!(probe(7, Some(host), 1, "systemd").is_isolated());
+        assert!(probe(7, None, 2, "systemd").is_isolated());
+        // bubblewrap: pid 1 unreadable from the sandbox user, comm is not init.
+        assert!(probe(7, None, 1, "3").is_isolated());
+        assert!(!PidNamespaceProbe::default().is_isolated());
+    }
+
+    // TASK-2272 (TASK-2281): a host whose pid 1 is runit/openrc/s6 shares its
+    // namespace with pid 1, so the inode comparison settles it and the name is
+    // never consulted. The name decides only when /proc/1/ns/pid is unreadable.
+    // trace:TASK-2272 | ai:claude
+    #[test]
+    fn pid_namespace_probe_prefers_the_namespace_inode_over_pid1_comm() {
+        let host = INITIAL_PID_NAMESPACE;
+        for comm in ["runit", "openrc-init", "s6-svscan", "my-custom-init"] {
+            assert!(!probe(host, Some(host), 1, comm).is_isolated(), "{comm}");
+        }
+        for comm in ["runit", "openrc-init", "s6-svscan", "dumb-init", "tini"] {
+            assert!(!probe(host, None, 1, comm).is_isolated(), "{comm}");
+        }
+        assert!(probe(host, None, 1, "bwrap").is_isolated());
+        assert!(probe(7, Some(host), 1, "runit").is_isolated());
+    }
+
+    // trace:BUG-2212 | ai:claude
+    #[test]
+    fn pid_observer_sees_only_its_own_namespace_and_unstamped_rows_from_the_host() {
+        let host = PidObserver::from_probe(&probe(INITIAL_PID_NAMESPACE, None, 1, "systemd"));
+        let sandbox = PidObserver::from_probe(&probe(7, None, 1, "bwrap"));
+        assert!(host.can_observe(Some(INITIAL_PID_NAMESPACE)));
+        assert!(host.can_observe(None));
+        assert!(!host.can_observe(Some(7)));
+        assert!(sandbox.can_observe(Some(7)));
+        assert!(!sandbox.can_observe(Some(INITIAL_PID_NAMESPACE)));
+        assert!(!sandbox.can_observe(None));
+        // An isolated caller cannot vouch for unstamped rows even when its
+        // namespace inode reads as the initial one.
+        let masked = PidObserver {
+            namespace: Some(INITIAL_PID_NAMESPACE),
+            isolated: true,
+        };
+        assert!(!masked.can_observe(None));
+    }
+
+    // BUG-2212: from a sandboxed shell a live host session's pid is invisible.
+    // agent ls must list it on its fresh heartbeat, labelled as such, and only
+    // age it out of the DISPLAY listing once the heartbeat is past the window.
+    // trace:BUG-2212 | ai:claude
+    #[test]
+    fn list_agent_views_falls_back_to_heartbeat_for_unobservable_rows() {
+        let tmp = TempDir::new().unwrap();
+        let now = Utc::now();
+        let mut fresh = entry_with(u32::MAX - 1, now - chrono::Duration::minutes(5));
+        fresh.pid_namespace = Some(INITIAL_PID_NAMESPACE);
+        write_entry(tmp.path(), &fresh).unwrap();
+        let mut old = entry_with(u32::MAX - 2, now - chrono::Duration::hours(25));
+        old.pid_namespace = Some(INITIAL_PID_NAMESPACE);
+        write_entry(tmp.path(), &old).unwrap();
+        let sandbox = PidObserver::from_probe(&probe(7, None, 1, "bwrap"));
+
+        let views = list_agent_views(
+            tmp.path(),
+            &ctx(now, 30, vec![]).with_observer(sandbox).for_display(),
+        );
+        let by_pid: std::collections::HashMap<u32, &AgentRegistryView> =
+            views.iter().map(|v| (v.pid, v)).collect();
+        assert_eq!(by_pid[&(u32::MAX - 1)].status, AgentStatus::Idle);
+        assert_eq!(by_pid[&(u32::MAX - 1)].liveness, LivenessBasis::Heartbeat);
+        assert_eq!(by_pid[&(u32::MAX - 2)].status, AgentStatus::Stale);
+        assert_eq!(by_pid[&(u32::MAX - 2)].liveness, LivenessBasis::Heartbeat);
+
+        // From the host the same dead pids read Stale on process evidence.
+        let host = PidObserver {
+            namespace: Some(INITIAL_PID_NAMESPACE),
+            isolated: false,
+        };
+        let views = list_agent_views(tmp.path(), &ctx(now, 30, vec![]).with_observer(host));
+        assert!(views
+            .iter()
+            .all(|v| v.status == AgentStatus::Stale && v.liveness == LivenessBasis::Process));
+    }
+
+    // TASK-2272 (TASK-2280): guards FAIL CLOSED. A session-start-hook row
+    // heartbeats exactly once, so from a sandboxed launcher every live host
+    // session's heartbeat goes arbitrarily old. A row whose pid this observer
+    // cannot check and that has no `ended_at` therefore counts as live
+    // (unverified) however old its heartbeat — the duplicate launch is
+    // refused. Only a PROVABLY dead row (ended_at, or a checkable dead pid)
+    // frees the seat.
+    // trace:TASK-2272 | ai:claude
+    #[test]
+    fn guards_fail_closed_on_unverifiable_rows_and_open_only_on_provable_death() {
+        let tmp = TempDir::new().unwrap();
+        let now = Utc::now();
+        // A host row whose only heartbeat is its session start, 17h ago.
+        let mut unverifiable = entry_with(u32::MAX - 1, now - chrono::Duration::hours(17));
+        unverifiable.pid_namespace = Some(INITIAL_PID_NAMESPACE);
+        unverifiable.role = Some("advisor".to_string());
+        write_entry(tmp.path(), &unverifiable).unwrap();
+        let sandbox = PidObserver::from_probe(&probe(7, None, 1, "bwrap"));
+
+        let guard = list_agent_views(tmp.path(), &ctx(now, 30, vec![]).with_observer(sandbox));
+        let row = guard.iter().find(|v| v.pid == u32::MAX - 1).unwrap();
+        assert_ne!(row.status, AgentStatus::Stale);
+        assert_eq!(row.liveness, LivenessBasis::Heartbeat);
+        let dup = crate::agent_launch::matching_live_duplicate(
+            &guard,
+            &unverifiable.agent_type,
+            Some("advisor"),
+            None,
+        )
+        .expect("an unverifiable host row refuses the duplicate launch");
+        assert_eq!(dup.pid, u32::MAX - 1);
+
+        // An ended row is provably dead from any namespace: launch allowed.
+        let mut ended = entry_with(u32::MAX - 2, now - chrono::Duration::minutes(1));
+        ended.pid_namespace = Some(INITIAL_PID_NAMESPACE);
+        ended.role = Some("advisor".to_string());
+        ended.ended_at = Some(now);
+        write_entry(tmp.path(), &ended).unwrap();
+        // A checkable dead pid (our own namespace) is provably dead too.
+        let mut dead = entry_with(u32::MAX - 3, now - chrono::Duration::minutes(1));
+        dead.pid_namespace = Some(7);
+        dead.role = Some("advisor".to_string());
+        write_entry(tmp.path(), &dead).unwrap();
+
+        let sandbox_ctx = ctx(now, 30, vec![]).with_observer(sandbox);
+        let provably_dead: Vec<_> = list_agent_views(tmp.path(), &sandbox_ctx)
+            .into_iter()
+            .filter(|v| v.pid != u32::MAX - 1)
+            .collect();
+        assert!(provably_dead.iter().all(|v| v.status == AgentStatus::Stale));
+        assert!(crate::agent_launch::matching_live_duplicate(
+            &provably_dead,
+            &unverifiable.agent_type,
+            Some("advisor"),
+            None,
+        )
+        .is_none());
+    }
+
+    // trace:BUG-2212 | ai:claude
+    #[test]
+    fn observer_liveness_treats_ended_rows_as_dead_from_any_namespace() {
+        let tmp = TempDir::new().unwrap();
+        let now = Utc::now();
+        let mut ended = entry_with(u32::MAX - 1, now);
+        ended.pid_namespace = Some(INITIAL_PID_NAMESPACE);
+        ended.ended_at = Some(now);
+        let sandbox = PidObserver::from_probe(&probe(7, None, 1, "bwrap"));
+        assert_eq!(
+            observer_liveness(tmp.path(), &ended, sandbox, now, None),
+            (false, LivenessBasis::Process)
+        );
+    }
+
     // TASK-543: raw-registered agents use the same stale-PID transition as
     // launcher/MCP entries.
     #[test]
@@ -3598,6 +4255,7 @@ mod tests {
             native_session_id: None,
             ended_at: None,
             resumed_from: None,
+            liveness: LivenessBasis::Process,
         };
 
         let lines = format_agent_status_lines(&[view]);
@@ -3647,6 +4305,7 @@ mod tests {
             native_session_id: None,
             ended_at: None,
             resumed_from: None,
+            liveness: LivenessBasis::Process,
         };
 
         let lines = mcp_authority_status_lines(&[view]);
@@ -3865,6 +4524,7 @@ source = "mcp"
             native_session_id: None,
             ended_at: None,
             resumed_from: None,
+            liveness: LivenessBasis::Process,
         };
 
         let avail_line = &format_agent_status_lines(&[mk(Availability::Available, None)])[0];

@@ -480,6 +480,16 @@ pub(crate) fn handle_burndown_run(
     // so lock lifetime == `claude -p` child lifetime. trace:BUG-759 | ai:claude
     let _drain_guard =
         drain_lock::acquire_drain_lock_with_specs(&project_root, &drain_lock_command, &ready)?;
+    // TASK-1798: `aida drain stop --now` SIGTERMs this launcher; revoke the
+    // running child's grant in-process before exiting. Advisory: without the
+    // handler the lock removal by `stop --now` still revokes it.
+    // trace:TASK-1952 | trace:TASK-1798 | ai:claude
+    if let Err(e) = install_burndown_sigterm_revoke(&project_root) {
+        eprintln!(
+            "  {} {e:#}",
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+        );
+    }
 
     // BUG-660: keep the host awake for the unattended headless drain. Best-effort
     // + pid-scoped (auto-releases when this process exits). trace:BUG-660
@@ -586,6 +596,10 @@ pub(crate) fn handle_burndown_run(
                     queue_cmd::headless_baseline_notice("implementer", cause)
                 );
             }
+            // TASK-1798: stamp the grant on the drain lock before launching,
+            // so a takeover of a dead launcher's lock revokes it.
+            // trace:TASK-1952 | trace:TASK-1798 | ai:claude
+            stamp_burndown_child_grant(&project_root, &child_grant)?;
             let res = build_burndown_quiet_command(
                 &current_prompt,
                 mode,
@@ -604,6 +618,7 @@ pub(crate) fn handle_burndown_run(
             });
             if let Some(id) = child_grant.id() {
                 session::revoke_headless_child_grant(id);
+                let _ = crate::drain_lock::stamp_drain_lock_child_grant(&project_root, None);
             }
             res?
         };
@@ -1728,9 +1743,9 @@ pub(crate) fn worktree_last_activity(
     };
 
     // Leg 1: last commit time (epoch seconds) via `git log -1 --format=%ct`.
-    if let Ok(output) = std::process::Command::new("git")
-        .arg("-C")
-        .arg(worktree)
+    // Through the host git builder: a seat clone is refused, and only the
+    // mtime leg below answers for it (BUG-2169). trace:TASK-2053 | ai:claude
+    if let Ok(output) = aida_core::git_ops::host_git_command(worktree)
         .args(["log", "-1", "--format=%ct"])
         .output()
     {
@@ -2064,6 +2079,13 @@ pub(crate) fn run_burndown_verbose(
             queue_cmd::headless_baseline_notice("implementer", cause)
         );
     }
+    // The drain lock lives in the main checkout (`handle_burndown_run`).
+    // trace:TASK-1952 | trace:TASK-1798 | ai:claude
+    let lock_root = find_main_worktree_root().unwrap_or_else(|_| project_root.clone());
+    if let Err(e) = stamp_burndown_child_grant(&lock_root, &child_grant) {
+        tee_handle.stop();
+        return Err(e);
+    }
     let status_code = build_burndown_verbose_command(
         prompt,
         mode,
@@ -2085,8 +2107,64 @@ pub(crate) fn run_burndown_verbose(
     tee_handle.stop();
     if let Some(id) = child_grant.id() {
         session::revoke_headless_child_grant(id);
+        let _ = crate::drain_lock::stamp_drain_lock_child_grant(&lock_root, None);
     }
     status_code
+}
+
+/// TASK-1798: the burndown launcher's SIGTERM path. Without it the default
+/// action killed the launcher before the in-process revoke after the child
+/// ran, leaving the orphaned `claude -p` child its live implementer grant.
+/// On SIGTERM: [`burndown_sigterm_cleanup`], then exit
+/// [`crate::drain_signal::SIGTERM_EXIT_CODE`].
+// trace:TASK-1952 | trace:TASK-1798 | ai:claude
+#[cfg(unix)]
+fn install_burndown_sigterm_revoke(project_root: &std::path::Path) -> Result<()> {
+    let mut signals = signal_hook::iterator::Signals::new([signal_hook::consts::SIGTERM])
+        .context("installing the burndown SIGTERM handler")?;
+    let root = project_root.to_path_buf();
+    std::thread::Builder::new()
+        .name("aida-burndown-sigterm".into())
+        .spawn(move || {
+            if signals.forever().next().is_some() {
+                burndown_sigterm_cleanup(&root);
+                std::process::exit(crate::drain_signal::SIGTERM_EXIT_CODE);
+            }
+        })
+        .context("spawning the burndown SIGTERM handler thread")?;
+    Ok(())
+}
+
+/// Windows has no SIGTERM; lock reclaim and `stop --now` still revoke.
+#[cfg(not(unix))]
+fn install_burndown_sigterm_revoke(_project_root: &std::path::Path) -> Result<()> {
+    Ok(())
+}
+
+/// TASK-1798: revoke the child grant recorded on this launcher's own drain
+/// lock and release the lock. True when a lock of ours was released.
+// trace:TASK-1952 | trace:TASK-1798 | ai:claude
+pub(crate) fn burndown_sigterm_cleanup(project_root: &std::path::Path) -> bool {
+    crate::drain_lock::release_lock_if_ours(project_root)
+}
+
+/// TASK-1798: record an issued burndown child grant on this launcher's drain
+/// lock. A grant that cannot be recorded is revoked and the launch refused,
+/// so no child runs with a grant only this process could revoke. A baseline
+/// (ungranted) child has nothing to record.
+// trace:TASK-1952 | trace:TASK-1798 | ai:claude
+pub(crate) fn stamp_burndown_child_grant(
+    project_root: &std::path::Path,
+    child_grant: &seat_authority::HeadlessChildGrant,
+) -> Result<()> {
+    let Some(id) = child_grant.id() else {
+        return Ok(());
+    };
+    if let Err(e) = crate::drain_lock::stamp_drain_lock_child_grant(project_root, Some(id)) {
+        session::revoke_headless_child_grant(id);
+        return Err(e.context("could not record the burndown child grant on the drain lock"));
+    }
+    Ok(())
 }
 
 // trace:BUG-2124 | ai:antigravity

@@ -28,10 +28,14 @@ use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, MutexGuard};
 
+/// Set by the live-bwrap CI gate: a test that cannot get bwrap fails rather
+/// than skipping.
+pub(crate) const REQUIRE_BWRAP_LIVE_ENV: &str = "AIDA_REQUIRE_BWRAP_LIVE";
+
 /// PATH readers in production code do not take ENV_LOCK. Run a PATH-changing
 /// test as one exact test in its own process, before constructing any fixture.
 /// Returns true in the parent after the child passed, so the caller returns.
-// trace:BUG-1994 | ai:codex
+// trace:BUG-1994 trace:TASK-2189 | ai:codex
 pub(crate) fn run_path_isolated_test() -> bool {
     run_path_isolated_test_output().is_some()
 }
@@ -71,8 +75,21 @@ pub(crate) fn run_path_isolated_test_output() -> Option<std::process::Output> {
     if let Some(path) = std::env::var_os("LD_LIBRARY_PATH") {
         command.env("LD_LIBRARY_PATH", path);
     }
+    // The live-bwrap CI gate turns a bwrap skip into a failure; the child must
+    // see it too, or an isolated live test skips silently under the gate.
+    // trace:TASK-2161 | ai:claude
+    if let Some(live) = std::env::var_os(REQUIRE_BWRAP_LIVE_ENV) {
+        command.env(REQUIRE_BWRAP_LIVE_ENV, live);
+    }
     let output = command.output().expect("spawn isolated test");
     let stdout = String::from_utf8_lossy(&output.stdout);
+    // The child's output is captured, so re-emit its skip notices.
+    for line in String::from_utf8_lossy(&output.stderr)
+        .lines()
+        .filter(|line| line.starts_with("SKIP"))
+    {
+        eprintln!("{line}");
+    }
     assert!(
         output.status.success(),
         "isolated test {name} failed:\n{stdout}\n{}",
@@ -447,7 +464,8 @@ pub(crate) fn pin_queue_user() -> EnvVarGuard {
 /// BUG-1618: the fixed identity `AmbientGuard::hermetic` pins `AIDA_USER` to,
 /// chosen to be absent from any real roster.
 // trace:BUG-1618 | ai:claude
-pub(crate) const HERMETIC_TEST_USER: &str = "bug-1618-hermetic-test-user";
+// trace:BUG-2209 | ai:claude — one constant, shared with aida-core's roster-write guard.
+pub(crate) const HERMETIC_TEST_USER: &str = aida_core::team::HERMETIC_TEST_USER;
 
 /// BUG-1618: a hermetic ambient context for tests that exercise the
 /// advisor-authority checks (`has_advisor_authority` and friends). Those checks
@@ -533,6 +551,7 @@ impl AmbientGuard {
     /// [`Self::hermetic`] plus extra env pins applied under the SAME guard
     /// (the env lock is not reentrant).
     // trace:TASK-2053 | ai:claude
+    // trace:TASK-1955 | ai:claude (TASK-1808)
     pub(crate) fn hermetic_and(
         root: &std::path::Path,
         role: Option<&str>,
@@ -934,6 +953,14 @@ pub(crate) fn pub_crate_helper_without_guard() {
 pub(super) async fn async_helper_without_guard() {
     std::env::set_current_dir("fixture-async").unwrap();
 }
+
+#[test]
+fn guarded_by_output_variant() {
+    if let Some(out) = crate::test_env::run_path_isolated_test_output() {
+        return;
+    }
+    std::env::set_current_dir("fixture-output").unwrap();
+}
 "#;
         let mut offenders = Vec::new();
         scan_block_for_unisolated_cwd(Path::new("seeded.rs"), sample, 1, &mut offenders);
@@ -1086,7 +1113,10 @@ fn scan_block_for_unisolated_cwd(
         if trimmed.starts_with("#[test]") || is_fn_item_start(trimmed) {
             current_fn_has_isolated_guard = false;
         }
-        if line.contains("run_path_isolated_test()") {
+        // trace:TASK-2270 | ai:claude
+        if line.contains("run_path_isolated_test()")
+            || line.contains("run_path_isolated_test_output()")
+        {
             current_fn_has_isolated_guard = true;
         }
         if line.contains("set_current_dir(") && !current_fn_has_isolated_guard {
@@ -1315,3 +1345,64 @@ fn find_matching_brace(source: &str, open_brace: usize) -> Option<usize> {
 #[cfg(test)]
 #[path = "tests/bug_1994_path_isolation_tests.rs"]
 mod bug_1994_path_isolation_tests;
+
+#[cfg(test)]
+mod documentation_tests {
+    // Check the attributes Rust actually attaches to each item, so the const
+    // cannot silently take the isolation helper's rustdoc again.
+    // trace:TASK-2189 | ai:codex
+    #[test]
+    fn path_isolation_rustdoc_belongs_to_the_function() {
+        let source = syn::parse_file(include_str!("test_env.rs")).unwrap();
+        let docs = |attrs: &[syn::Attribute]| {
+            attrs
+                .iter()
+                .filter_map(|attr| {
+                    if !attr.path().is_ident("doc") {
+                        return None;
+                    }
+                    let syn::Meta::NameValue(meta) = &attr.meta else {
+                        return None;
+                    };
+                    let syn::Expr::Lit(expr) = &meta.value else {
+                        return None;
+                    };
+                    let syn::Lit::Str(value) = &expr.lit else {
+                        return None;
+                    };
+                    Some(value.value())
+                })
+                .collect::<Vec<_>>()
+                .join("\n")
+        };
+        let function = source
+            .items
+            .iter()
+            .find_map(|item| match item {
+                syn::Item::Fn(item) if item.sig.ident == "run_path_isolated_test" => {
+                    Some(docs(&item.attrs))
+                }
+                _ => None,
+            })
+            .unwrap();
+        let constant = source
+            .items
+            .iter()
+            .find_map(|item| match item {
+                syn::Item::Const(item) if item.ident == "REQUIRE_BWRAP_LIVE_ENV" => {
+                    Some(docs(&item.attrs))
+                }
+                _ => None,
+            })
+            .unwrap();
+        assert!(
+            function.contains("Returns true in the parent"),
+            "{function}"
+        );
+        assert!(
+            !constant.contains("Returns true in the parent"),
+            "{constant}"
+        );
+        assert!(constant.contains("live-bwrap CI gate"), "{constant}");
+    }
+}

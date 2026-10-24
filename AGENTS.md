@@ -1,3 +1,9 @@
+Mailbox explicit sends and mentions share live-recipient resolution. Unknown or
+dead agent recipients and role/vendor addresses with zero live readers refuse
+before writing; group sends list current readers. Known human inboxes and
+historical inspection remain available. See docs/cli/06-roles-sessions.md.
+<!-- trace:STORY-1843 | ai:codex -->
+
 `aida review watch` dispatches attested reviews without waiting for CI. Shared
 versioned runtime state reserves at most two reviews before spawning; ambiguous
 receipts retain capacity. Stale overlapping heads notify the forge author once;
@@ -91,8 +97,9 @@ mandate ships restore holds with explicit re-arm context in the placement event.
 Mandate exclusions also include committed base/head traces in changed source
 hunks and enclosing Rust fn/impl items, plus each Rust file’s header traces,
 with full-file fallback when attribution fails. Trace IDs grant no completion or
-author/reviewer authority; unreadable evidence or a moving/dirty store refuses
-mandate coverage. See OVERVIEW.md.
+author/reviewer authority; unreadable evidence, a moving store or dirty canonical
+objects refuses mandate coverage. Coordination/mail dirt does not block the
+object snapshot; the home exclusion ledger retains its separate trust checks. See OVERVIEW.md.
 <!-- trace:TASK-1790 | ai:codex -->
 
 Explicit `aida verify constraints` reads data-only version-1 blocks using six

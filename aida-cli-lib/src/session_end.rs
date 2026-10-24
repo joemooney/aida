@@ -236,6 +236,44 @@ pub(crate) fn resolve_session_to_end(
     anyhow::bail!(msg)
 }
 
+/// BUG-2205: are `entries` (porcelain status lines) only staged changes, with
+/// no unstaged edit and no untracked file, whose index tree is the tree of a
+/// commit reachable from `origin/<branch>`? Then every change is already
+/// pushed. Any git failure answers `false`, keeping the tree dirty.
+// trace:TASK-1955 | ai:claude (BUG-2205)
+pub(crate) fn staged_tree_is_pushed(
+    worktree: &std::path::Path,
+    branch: &str,
+    entries: &[String],
+) -> bool {
+    let staged_only = |e: &String| {
+        let b = e.as_bytes();
+        b.len() > 3 && b[0] != b' ' && b[0] != b'?' && b[0] != b'!' && b[1] == b' '
+    };
+    if entries.is_empty() || branch.is_empty() || !entries.iter().all(staged_only) {
+        return false;
+    }
+    let git = |args: &[&str]| -> Option<String> {
+        let out = aida_core::git_ops::host_git_command(worktree)
+            .args(args)
+            .output()
+            .ok()?;
+        out.status
+            .success()
+            .then(|| String::from_utf8_lossy(&out.stdout).into_owned())
+    };
+    let Some(tree) = git(&["write-tree"]).map(|t| t.trim().to_string()) else {
+        return false;
+    };
+    let remote = format!("refs/remotes/origin/{branch}");
+    git(&["log", "--format=%T", "-n", "1000", &remote, "--"])
+        .is_some_and(|trees| trees.lines().any(|t| t.trim() == tree))
+}
+
+#[cfg(test)]
+#[path = "tests/bug_2205_pushed_index_tests.rs"]
+mod bug_2205_pushed_index_tests;
+
 #[cfg(test)]
 #[path = "tests/session_end_summary_tests.rs"]
 mod session_end_summary_tests;
@@ -1049,7 +1087,11 @@ pub(crate) fn session_end(
     // trace:TASK-2053 | ai:claude
     let is_clone = target.tree_kind == crate::seat_clone::TreeKind::Clone;
     let clone_facts = if is_clone {
-        match crate::seat_clone::probe(&project_root, &target.worktree_path) {
+        // TASK-2110: a squash-merged PR's head counts as shipped.
+        // trace:TASK-2110 | ai:claude
+        let shipped = crate::seat_clone::merged_pr_heads(&project_root, &target.branch);
+        match crate::seat_clone::probe_with_shipped(&project_root, &target.worktree_path, &shipped)
+        {
             crate::seat_clone::Probe::Known(facts) => Some(facts),
             crate::seat_clone::Probe::Unknown(why) => anyhow::bail!(
                 "session {} works in the seat clone {}, whose state could not be read ({why}). \
@@ -1428,6 +1470,25 @@ pub(crate) fn session_end(
         )
     } else {
         Vec::new()
+    };
+    // BUG-2205: a tree whose only change is a staged index reproducing a
+    // commit already on `origin/<branch>` (the branch moved on under it from
+    // another worktree) loses nothing; it is not dirty for this gate.
+    // trace:TASK-1955 | ai:claude (BUG-2205)
+    let dirty_entries = if staged_tree_is_pushed(
+        &target.worktree_path,
+        &target.branch,
+        &dirty_entries,
+    ) {
+        eprintln!(
+            "{} worktree {} has only staged changes, and they match a commit already pushed to origin/{}; nothing is lost by ending it",
+            crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+            target.worktree_path.display(),
+            target.branch
+        );
+        Vec::new()
+    } else {
+        dirty_entries
     };
     // BUG-652: `--return` resets the worktree (reset --hard + clean -fd), so a
     // dirty pooled tree must NOT be refused here — refusing leaves the tree

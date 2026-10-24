@@ -651,12 +651,16 @@ pub fn resume(id: Option<String>, limit: usize) -> Result<()> {
 /// `aida session resume` command for a contained parent: only a claude
 /// session can resume contained — codex/agy are refused, never resumed
 /// uncontained — and it resumes with the contained flags and `AIDA_CONTAINED=1`
-/// kept on the child. It runs in the session's own checkout — the directory
-/// whose Claude project store holds the transcript, so `--resume` finds it —
-/// and that checkout's git root is the write boundary. `launcher_cwd` is the
-/// fallback only when the target has no checkout recorded or it is gone. No
-/// git root means no write roots (fail closed).
+/// kept on the child. It runs in the session's lease tree when a host lease
+/// minted it (TASK-2031), else in the checkout whose Claude project store
+/// listed it, and that tree's git root is the write boundary. Claude keys
+/// transcripts by cwd, so a lease-tree resume first copies the one transcript
+/// into the lease tree's project store ([`stage_resume_transcript`],
+/// TASK-2112). `launcher_cwd` is the fallback only when the target has no
+/// checkout recorded or it is gone. No git root means no write roots (fail
+/// closed).
 // trace:BUG-2157 | ai:claude
+// trace:TASK-1952 | trace:TASK-2112 | ai:claude
 pub(crate) fn build_contained_resume_command(
     target: &ResumeTarget,
     launcher_cwd: &Path,
@@ -677,7 +681,11 @@ pub(crate) fn build_contained_resume_command(
     // listed it: a cwd of main would leave main inside Claude Code's own
     // working-directory permissions.
     // trace:TASK-1952 | trace:TASK-2031 | ai:claude
-    let worktree = resume_lease_tree(target)
+    let lease_tree = resume_lease_tree(target);
+    if let (Some(tree), Some(listed_in)) = (&lease_tree, &target.worktree) {
+        stage_resume_transcript(&target.id, listed_in, tree)?;
+    }
+    let worktree = lease_tree
         .or_else(|| target.worktree.clone().filter(|p| p.is_dir()))
         .unwrap_or_else(|| launcher_cwd.to_path_buf());
     let mut cmd = std::process::Command::new("claude");
@@ -688,6 +696,138 @@ pub(crate) fn build_contained_resume_command(
     cmd.env("AIDA_CONTAINED", "1");
     cmd.current_dir(&worktree);
     Ok(cmd)
+}
+
+/// TASK-2112: make the transcript of Claude session `id`, listed from the
+/// project store of `listed_in`, visible to `claude --resume` run from
+/// `cwd`. Claude keys transcripts by cwd, so a resume from the lease tree
+/// would not find a transcript stored under the main checkout.
+///
+/// Copies only `<id>.jsonl`, as a regular file owned by this user, never
+/// following or writing through a symlink, created mode 0600. An existing
+/// destination with the same bytes is reused; one with different bytes
+/// refuses the resume rather than being overwritten. Nothing to copy (no
+/// source, or both directories are one store) is not an error: `--resume`
+/// then reports a missing session itself.
+// trace:TASK-1952 | trace:TASK-2112 | ai:claude
+pub(crate) fn stage_resume_transcript(id: &str, listed_in: &Path, cwd: &Path) -> Result<()> {
+    let valid_id = !id.is_empty()
+        && id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
+    anyhow::ensure!(valid_id, "refusing to resume `{id}`: not a session id");
+    let from_dir = claude_project_dir(listed_in)?;
+    let to_dir = claude_project_dir(cwd)?;
+    if from_dir == to_dir {
+        return Ok(());
+    }
+    let name = format!("{id}.jsonl");
+    let source = from_dir.join(&name);
+    let refuse = |why: &str| {
+        anyhow::anyhow!(
+            "[contained] refusing to resume `{id}` in {}: {why}",
+            cwd.display()
+        )
+    };
+    // TASK-2315: open the source O_NOFOLLOW and fstat the HANDLE, so the
+    // checks and the read share one file description and a symlink swapped
+    // in between them is never followed. O_NONBLOCK so a planted FIFO cannot
+    // park the open until a writer appears (TASK-2321): harmless for a
+    // regular file, and the fstat below refuses anything that is not one.
+    // trace:TASK-2272 | ai:claude (TASK-2315)
+    // trace:TASK-2321 | ai:claude
+    let mut source_options = std::fs::OpenOptions::new();
+    source_options.read(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        source_options.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
+    }
+    let mut source_file = match source_options.open(&source) {
+        Ok(f) => f,
+        // No source to copy is not an error: `--resume` reports it itself.
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        // O_NOFOLLOW refuses a symlink with ELOOP.
+        #[cfg(unix)]
+        Err(e) if e.raw_os_error() == Some(libc::ELOOP) => {
+            return Err(refuse("its transcript is not a regular file"));
+        }
+        Err(e) => {
+            return Err(e).with_context(|| format!("reading transcript {}", source.display()));
+        }
+    };
+    let meta = source_file
+        .metadata()
+        .with_context(|| format!("reading transcript {}", source.display()))?;
+    if !meta.file_type().is_file() {
+        return Err(refuse("its transcript is not a regular file"));
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        // SAFETY: geteuid has no preconditions and cannot fail.
+        if meta.uid() != unsafe { libc::geteuid() } {
+            return Err(refuse("its transcript belongs to another user"));
+        }
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::io::AsRawFd;
+        // The file is a confirmed regular file; drop O_NONBLOCK before the
+        // read so the handle carries no surprising mode. trace:TASK-2321 | ai:claude
+        // SAFETY: fcntl F_GETFL/F_SETFL on an fd this function owns and keeps open.
+        unsafe {
+            let flags = libc::fcntl(source_file.as_raw_fd(), libc::F_GETFL);
+            if flags >= 0 {
+                libc::fcntl(
+                    source_file.as_raw_fd(),
+                    libc::F_SETFL,
+                    flags & !libc::O_NONBLOCK,
+                );
+            }
+        }
+    }
+    let mut bytes = Vec::new();
+    {
+        use std::io::Read;
+        source_file
+            .read_to_end(&mut bytes)
+            .with_context(|| format!("reading transcript {}", source.display()))?;
+    }
+    if std::fs::symlink_metadata(&to_dir).is_ok_and(|m| !m.file_type().is_dir()) {
+        return Err(refuse(
+            "the lease tree's Claude project directory is not a directory",
+        ));
+    }
+    std::fs::create_dir_all(&to_dir).with_context(|| format!("creating {}", to_dir.display()))?;
+    let dest = to_dir.join(&name);
+    if let Ok(existing) = std::fs::symlink_metadata(&dest) {
+        if !existing.file_type().is_file() {
+            return Err(refuse(
+                "a transcript in the lease tree's store is not a regular file",
+            ));
+        }
+        if std::fs::read(&dest).ok().as_deref() == Some(bytes.as_slice()) {
+            return Ok(());
+        }
+        return Err(refuse(
+            "the lease tree's store already holds a different transcript for it",
+        ));
+    }
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600).custom_flags(libc::O_NOFOLLOW);
+    }
+    use std::io::Write;
+    let mut file = options
+        .open(&dest)
+        .with_context(|| format!("creating {}", dest.display()))?;
+    file.write_all(&bytes)
+        .with_context(|| format!("writing {}", dest.display()))?;
+    Ok(())
 }
 
 /// Replace this process with `cmd` (spawn + wait where exec is unavailable).
@@ -1652,8 +1792,8 @@ pub(crate) fn spawn_claude_resume_with_grant(
     if let Some(grant) = grant_id {
         cmd.env(crate::seat_authority::GRANT_ENV, grant)
             .env("AIDA_SESSION_ROLE", "reviewer");
-        // trace:BUG-2187 | ai:claude
-        apply_child_agent_identity(&mut cmd, HeadlessVendor::Claude, "reviewer");
+        // A resume keeps the session's handle. trace:BUG-2187 | ai:claude
+        apply_resumed_child_agent_identity(&mut cmd, HeadlessVendor::Claude, "reviewer", id);
     }
     // trace:BUG-2139 | ai:claude
     scrub_launcher_session_env(&mut cmd);
@@ -2965,14 +3105,37 @@ pub(crate) fn contained_store_grant(
 /// and that gitdir's own `gitdir` file names this worktree's `.git`. Both live
 /// in `main`'s git directory, which the sandbox cannot write. A rewritten
 /// pointer therefore refuses the launch instead of granting another
-/// repository's store and cache. A tree whose `.git` is not a file (a main
-/// checkout, a seat clone) resolved its main without a pointer.
+/// repository's store and cache. A tree that is its own main (a main
+/// checkout, a seat clone) resolved its main without a pointer, and a tree
+/// with no `.git` (a subdirectory) resolves through its parents.
+///
+/// TASK-2111: a `.git` directory (holding a `commondir` that names another
+/// repository) or a `.git` symlink also redirects the resolved main, with no
+/// pointer file to check. When such a tree resolves to a main other than
+/// itself, it is accepted only as a host-recorded seat clone of that main.
 // trace:TASK-1952 | trace:BUG-2016 | ai:claude
+// trace:TASK-1952 | trace:TASK-2111 | ai:claude
 pub(crate) fn verify_linked_worktree_main(worktree: &Path, main: &Path) -> Result<()> {
     let git_entry = worktree.join(".git");
     let canon = |p: &Path| std::fs::canonicalize(p).ok();
-    if !git_entry.is_file() || canon(worktree) == canon(main) {
+    if canon(worktree) == canon(main) {
         return Ok(());
+    }
+    let Ok(meta) = std::fs::symlink_metadata(&git_entry) else {
+        return Ok(());
+    };
+    if !meta.file_type().is_file() {
+        let recorded = crate::seat_clone::host_recorded_clone(worktree)
+            .is_some_and(|clone| canon(&clone.main).is_some() && canon(&clone.main) == canon(main));
+        if recorded {
+            return Ok(());
+        }
+        anyhow::bail!(
+            "contained launch refused: {} has a .git directory or symlink that resolves to \
+             {}, and it is not a seat clone the host recorded for that checkout",
+            worktree.display(),
+            main.display()
+        );
     }
     let refuse = || {
         anyhow::anyhow!(
@@ -4037,21 +4200,104 @@ pub(crate) fn apply_headless_child_seat_env(
 ///
 /// Every seat gets it, not only the reviewer, deliberately: an implementer
 /// child launched from an `aida agent new` lane is labelled
-/// `<vendor>-implementer` rather than inheriting the lane's name. Inheriting
-/// would attribute the child's writes to whatever seat launched it (an
+/// `<vendor>-implementer` (its own handle rides in `AIDA_HANDLE`) rather
+/// than inheriting the lane's name. Inheriting would attribute the child's writes to whatever seat launched it (an
 /// advisor's `queue work`, say). Lane attribution in `aida ps` does not
 /// depend on this label: BUG-2010 binds a lane by the lease the child
 /// claims itself, and skips children that claim none.
 // trace:BUG-2187 | ai:codex
 // trace:TASK-1955 | ai:claude (TASK-2066, TASK-1672)
-fn apply_child_agent_identity(cmd: &mut std::process::Command, vendor: HeadlessVendor, seat: &str) {
+pub(crate) fn apply_child_agent_identity(
+    cmd: &mut std::process::Command,
+    vendor: HeadlessVendor,
+    seat: &str,
+) {
+    apply_child_identity(cmd, vendor, seat, None);
+}
+
+/// [`apply_child_agent_identity`] for a resume of native session
+/// `session_id`: the session keeps the handle it already holds, and no new
+/// one is reserved.
+// trace:STORY-1843 | ai:claude
+pub(crate) fn apply_resumed_child_agent_identity(
+    cmd: &mut std::process::Command,
+    vendor: HeadlessVendor,
+    seat: &str,
+    session_id: &str,
+) {
+    apply_child_identity(cmd, vendor, seat, Some(session_id));
+}
+
+fn apply_child_identity(
+    cmd: &mut std::process::Command,
+    vendor: HeadlessVendor,
+    seat: &str,
+    resumed_session: Option<&str>,
+) {
     let agent_type = match vendor {
         HeadlessVendor::Claude => "claude",
         HeadlessVendor::Codex => "codex",
         HeadlessVendor::Agy => "antigravity",
     };
+    // `AIDA_AGENT_NAME` is the seat identity review attestation records.
+    // The child's own address is a separate handle in `AIDA_HANDLE`:
+    // reserved here and bound by the child with the launch token, so
+    // concurrent children of one seat never share a From address; a resume
+    // keeps the handle its session holds. Without a project to reserve in,
+    // no handle is exported and session start allocates one.
+    // trace:STORY-1843 | ai:claude
+    cmd.env_remove(crate::agent_handle::LAUNCH_TOKEN_ENV)
+        .env_remove(crate::agent_handle::HANDLE_ENV);
+    let handle = match resumed_session {
+        Some(sid) => {
+            child_handle_root().and_then(|root| crate::agent_handle::handle_of_session(&root, sid))
+        }
+        None => reserve_child_handle(cmd, agent_type, seat),
+    };
+    if let Some(handle) = handle {
+        cmd.env(crate::agent_handle::HANDLE_ENV, handle);
+    }
     cmd.env("AIDA_AGENT_TYPE", agent_type)
         .env("AIDA_AGENT_NAME", format!("{agent_type}-{seat}"));
+}
+
+/// Reserve a generated `<vendor>-<seat>-NN` handle for a child about to be
+/// launched and hand it the launch token. Fail-open: `None` when no project
+/// namespace is reachable.
+// trace:STORY-1843 | ai:claude
+fn reserve_child_handle(
+    cmd: &mut std::process::Command,
+    agent_type: &str,
+    seat: &str,
+) -> Option<String> {
+    let root = child_handle_root()?;
+    let reservation = crate::agent_handle::reserve_handle(
+        &root,
+        &crate::agent_handle::HandleRequest {
+            agent_type,
+            role: Some(seat),
+            launcher: true,
+            ..Default::default()
+        },
+    )
+    .ok()?;
+    let token = crate::agent_handle::launch_token_for(&root, &reservation.handle)?;
+    cmd.env(crate::agent_handle::LAUNCH_TOKEN_ENV, token);
+    Some(reservation.handle)
+}
+
+/// The handle namespace a headless child is reserved in: the main checkout
+/// of the launch's project. Tests reserve only in a pinned project.
+fn child_handle_root() -> Option<PathBuf> {
+    #[cfg(test)]
+    {
+        contained_cwd_seam::cwd()
+    }
+    #[cfg(not(test))]
+    {
+        let root = crate::find_aida_project_root_from(&headless_worktree_root()).ok()?;
+        Some(crate::main_worktree_root_from(&root))
+    }
 }
 
 /// Stamp `AIDA_HARNESS_VERSION` on a headless child from its own vendor
@@ -4254,26 +4500,86 @@ fn stamp_lease_active_pid(lease_id: &str, pid: u32) -> Result<()> {
 // trace:BUG-2165 | ai:antigravity
 pub(crate) const LEASE_CHILD_GRANT_KEY: &str = "child_grant_id";
 
+/// TASK-1798: the orchestrator's CI-fix child grant, stamped beside the
+/// implementer's own [`LEASE_CHILD_GRANT_KEY`] (never over it), so a launcher
+/// killed mid CI-fix still has that grant revoked by the lease end or reap.
+// trace:TASK-1952 | trace:TASK-1798 | ai:claude
+pub(crate) const LEASE_CI_FIX_CHILD_GRANT_KEY: &str = "ci_fix_child_grant_id";
+
+/// TASK-2217: serialize the read-modify-write lease stampers (role, child
+/// grant, active pid) under one lock file in the sessions directory, so two
+/// stamps on one lease never lose each other's field. `write_atomic` replaces
+/// the lease file, so the lock cannot be the lease file itself.
+// trace:STORY-1662 | ai:claude
+pub(crate) fn with_lease_write_lock<T>(
+    project_root: &Path,
+    write: impl FnOnce() -> Result<T>,
+) -> Result<T> {
+    use fs2::FileExt;
+    let dir = project_root.join(".aida").join("sessions");
+    std::fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
+    let lock_path = dir.join(LEASE_WRITE_LOCK);
+    let lock = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(&lock_path)
+        .with_context(|| format!("opening {}", lock_path.display()))?;
+    lock.lock_exclusive()
+        .with_context(|| format!("locking {}", lock_path.display()))?;
+    let out = write();
+    let _ = FileExt::unlock(&lock);
+    out
+}
+
+/// The lease-write lock file's name under `.aida/sessions/`.
+pub(crate) const LEASE_WRITE_LOCK: &str = ".lease-write.lock";
+
 // trace:BUG-2139 | ai:claude
 pub(crate) fn stamp_lease_child_grant_at(
     project_root: &Path,
     lease_id: &str,
     grant_id: &str,
 ) -> Result<()> {
+    set_lease_grant_key_at(
+        project_root,
+        lease_id,
+        LEASE_CHILD_GRANT_KEY,
+        Some(grant_id),
+    )
+}
+
+/// Set (`Some`) or remove (`None`) the grant-id `key` on lease `lease_id`.
+/// A missing or unparseable lease is an error, so a caller that must stamp
+/// before launching refuses instead of running unstamped.
+// trace:BUG-2139 | ai:claude
+// trace:TASK-1952 | trace:TASK-1798 | ai:claude
+pub(crate) fn set_lease_grant_key_at(
+    project_root: &Path,
+    lease_id: &str,
+    key: &str,
+    grant_id: Option<&str>,
+) -> Result<()> {
     use toml_edit::{value, DocumentMut};
     let path = project_root
         .join(".aida")
         .join("sessions")
         .join(format!("{lease_id}.toml"));
-    let body = std::fs::read_to_string(&path)
-        .with_context(|| format!("reading lease {}", path.display()))?;
-    let mut doc = body
-        .parse::<DocumentMut>()
-        .with_context(|| format!("parsing lease {}", path.display()))?;
-    doc[LEASE_CHILD_GRANT_KEY] = value(grant_id);
-    aida_core::write_atomic(&path, doc.to_string())
-        .with_context(|| format!("writing lease {}", path.display()))?;
-    Ok(())
+    with_lease_write_lock(project_root, || {
+        let body = std::fs::read_to_string(&path)
+            .with_context(|| format!("reading lease {}", path.display()))?;
+        let mut doc = body
+            .parse::<DocumentMut>()
+            .with_context(|| format!("parsing lease {}", path.display()))?;
+        match grant_id {
+            Some(id) => doc[key] = value(id),
+            None => {
+                doc.remove(key);
+            }
+        }
+        aida_core::write_atomic(&path, doc.to_string())
+            .with_context(|| format!("writing lease {}", path.display()))
+    })
 }
 
 /// BUG-2139: revoke the child grant stamped on lease file `lease_file`, if
@@ -4288,12 +4594,17 @@ pub(crate) fn revoke_lease_child_grant(lease_file: &Path) {
     let Ok(table) = body.parse::<toml::Table>() else {
         return;
     };
-    if let Some(id) = table
-        .get(LEASE_CHILD_GRANT_KEY)
-        .and_then(|v| v.as_str())
-        .filter(|id| !id.is_empty())
-    {
-        revoke_headless_child_grant(id);
+    // TASK-1798: the CI-fix child's grant too; a lease written before that
+    // key existed carries only the implementer's.
+    // trace:TASK-1952 | trace:TASK-1798 | ai:claude
+    for key in [LEASE_CHILD_GRANT_KEY, LEASE_CI_FIX_CHILD_GRANT_KEY] {
+        if let Some(id) = table
+            .get(key)
+            .and_then(|v| v.as_str())
+            .filter(|id| !id.is_empty())
+        {
+            revoke_headless_child_grant(id);
+        }
     }
 }
 
@@ -4309,20 +4620,23 @@ pub(crate) fn stamp_lease_active_pid_at(
         .join(".aida")
         .join("sessions")
         .join(format!("{lease_id}.toml"));
-    let body = std::fs::read_to_string(&path)
-        .with_context(|| format!("reading lease {}", path.display()))?;
-    let mut doc = body
-        .parse::<DocumentMut>()
-        .with_context(|| format!("parsing lease {}", path.display()))?;
-    doc["active_pid"] = value(i64::from(pid));
     let start_time = crate::process_probe::process_start_identity(pid);
-    if let Some(start_time) = &start_time {
-        doc["active_pid_start_time"] = value(start_time.clone());
-    }
-    // STORY-1429: atomic, so a reader never sees a half-rewritten lease.
-    // trace:STORY-1429 | ai:claude
-    aida_core::write_atomic(&path, doc.to_string())
-        .with_context(|| format!("writing lease {}", path.display()))?;
+    // trace:STORY-1662 | ai:claude
+    with_lease_write_lock(project_root, || {
+        let body = std::fs::read_to_string(&path)
+            .with_context(|| format!("reading lease {}", path.display()))?;
+        let mut doc = body
+            .parse::<DocumentMut>()
+            .with_context(|| format!("parsing lease {}", path.display()))?;
+        doc["active_pid"] = value(i64::from(pid));
+        if let Some(start_time) = &start_time {
+            doc["active_pid_start_time"] = value(start_time.clone());
+        }
+        // STORY-1429: atomic, so a reader never sees a half-rewritten lease.
+        // trace:STORY-1429 | ai:claude
+        aida_core::write_atomic(&path, doc.to_string())
+            .with_context(|| format!("writing lease {}", path.display()))
+    })?;
     // BUG-1918: the spawned worker — not the launcher that claimed — works
     // this lease; record its process as one of the lease's authors so the
     // ledger outlives the lease.
@@ -5112,7 +5426,9 @@ fn load_agent_views_for_enrich() -> Vec<crate::agent_registry::AgentRegistryView
     let Ok(project_root) = crate::find_main_worktree_root() else {
         return Vec::new();
     };
-    let ctx = crate::agent_registry::AgentClassifyContext::new(chrono::Utc::now(), 30, vec![]);
+    // trace:TASK-2272 | ai:claude
+    let ctx = crate::agent_registry::AgentClassifyContext::new(chrono::Utc::now(), 30, vec![])
+        .for_display();
     crate::agent_registry::list_agent_views(&project_root, &ctx)
 }
 
@@ -7021,6 +7337,7 @@ mod tests {
             plan_source: "test".to_string(),
             claude_session_id: None,
             batch_name: None,
+            agent_name: None,
             plan: None,
             items: items
                 .iter()
@@ -9618,6 +9935,54 @@ mod tests {
         assert!(valid(&other), "only the stamped grant is touched");
     }
 
+    /// TASK-1798: the CI-fix child's grant is stamped under its own key, so it
+    /// never overwrites the implementer's, and a lease end or reap revokes
+    /// both. Clearing the key leaves the lease intact; a missing lease is an
+    /// error, so the CI-fix launch refuses instead of running unstamped.
+    // trace:TASK-1952 | trace:TASK-1798 | ai:claude
+    #[test]
+    fn task_1798_ci_fix_grant_is_stamped_beside_the_implementer_grant() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let _lock = crate::test_env::env_lock();
+        let subject = "task-1798-lease-user";
+        let implementer =
+            crate::seat_authority::test_support::mint_grant_for(root, subject, "implementer", &[]);
+        let ci_fix =
+            crate::seat_authority::test_support::mint_grant_for(root, subject, "implementer", &[]);
+        let sessions = root.join(".aida").join("sessions");
+        std::fs::create_dir_all(&sessions).unwrap();
+        std::fs::write(sessions.join("l.toml"), "id = \"l\"\nactive_pid = 1\n").unwrap();
+        stamp_lease_child_grant_at(root, "l", &implementer).unwrap();
+        set_lease_grant_key_at(root, "l", LEASE_CI_FIX_CHILD_GRANT_KEY, Some(&ci_fix)).unwrap();
+        let body = std::fs::read_to_string(sessions.join("l.toml")).unwrap();
+        assert!(
+            body.contains(&implementer) && body.contains(&ci_fix),
+            "{body}"
+        );
+        set_lease_grant_key_at(root, "l", LEASE_CI_FIX_CHILD_GRANT_KEY, None).unwrap();
+        let body = std::fs::read_to_string(sessions.join("l.toml")).unwrap();
+        assert!(!body.contains(LEASE_CI_FIX_CHILD_GRANT_KEY), "{body}");
+        assert!(body.contains(&implementer) && body.contains("active_pid = 1"));
+        assert!(
+            set_lease_grant_key_at(root, "gone", LEASE_CI_FIX_CHILD_GRANT_KEY, Some(&ci_fix))
+                .is_err(),
+            "a missing lease cannot be stamped"
+        );
+
+        set_lease_grant_key_at(root, "l", LEASE_CI_FIX_CHILD_GRANT_KEY, Some(&ci_fix)).unwrap();
+        let valid = |g: &str| {
+            matches!(
+                crate::seat_authority::grant_check_for(root, g, subject),
+                crate::seat_authority::GrantCheck::Valid(_)
+            )
+        };
+        assert!(valid(&implementer) && valid(&ci_fix));
+        revoke_lease_child_grant(&sessions.join("l.toml"));
+        assert!(!valid(&implementer), "the implementer grant is revoked");
+        assert!(!valid(&ci_fix), "the CI-fix grant is revoked");
+    }
+
     /// BUG-2139: the fresh headless child's seat env is ALWAYS explicit — the
     /// grant minted for it (or `""` for a baseline child) and the routed seat
     /// — never the launcher's, even when the launcher exports a grant, a
@@ -9733,6 +10098,83 @@ mod tests {
             env_of(&build()),
             Some(None),
             "a mocked vendor is not probed"
+        );
+    }
+
+    /// TASK-2103: the two spawn paths that do not go through
+    /// `build_exec_vendor_headless_command` stamp the child's own vendor
+    /// version too. A fake vendor prints the `AIDA_HARNESS_VERSION` it was
+    /// launched with into the session log; deleting either call leaves the
+    /// launcher's value there.
+    // trace:TASK-1955 | ai:claude (TASK-2103)
+    #[cfg(unix)]
+    #[test]
+    fn spawn_and_resume_children_carry_their_own_vendor_harness_version() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        let root = tempfile::tempdir().unwrap();
+        let bin = tempfile::tempdir().unwrap();
+        for vendor in ["claude", "codex"] {
+            crate::test_exec::write_executable(
+                &bin.path().join(vendor),
+                format!(
+                    "#!/bin/sh\n[ \"$1\" = --version ] && {{ echo '{vendor} 9.9.9'; exit 0; }}\nprintf 'HV=%s\\n' \"${{AIDA_HARNESS_VERSION-unset}}\"\n"
+                ),
+            );
+        }
+        let path = format!(
+            "{}:{}",
+            bin.path().display(),
+            std::env::var("PATH").unwrap_or_default()
+        );
+        let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+            root.path(),
+            "advisor",
+            &["implementer"],
+            &[
+                ("PATH", Some(path.as_str())),
+                ("AIDA_CONTAINED", None),
+                ("AIDA_OS_WRAP", None),
+                ("AIDA_AGENT_CMD", None),
+                ("AIDA_HARNESS_VERSION", Some("launcher-version")),
+            ],
+        );
+        let tee = crate::headless_tee::TeeOptions {
+            enabled: false,
+            label: None,
+        };
+        let spawn_log = root.path().join("spawn.log");
+        let (status, _) = spawn_vendor_headless_with_seat_granted(
+            HeadlessVendor::Codex,
+            aida_core::agents_config::AgentSeat::Implementer,
+            "prompt",
+            "sid",
+            &spawn_log,
+            &tee,
+            false,
+        )
+        .unwrap();
+        assert!(status.success());
+        assert_eq!(
+            std::fs::read_to_string(&spawn_log).unwrap().trim(),
+            "HV=codex 9.9.9"
+        );
+        let resume_log = root.path().join("resume.log");
+        let (status, _) = spawn_claude_headless_resume_granted(
+            "prompt",
+            "sid",
+            &resume_log,
+            root.path(),
+            &tee,
+            false,
+            "implementer",
+        )
+        .unwrap();
+        assert!(status.success());
+        assert_eq!(
+            std::fs::read_to_string(&resume_log).unwrap().trim(),
+            "HV=claude 9.9.9"
         );
     }
 

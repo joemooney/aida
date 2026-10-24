@@ -109,6 +109,8 @@ mod driver_view;
 mod idle_in_progress;
 // trace:STORY-1646 | ai:claude
 mod dev_build;
+// trace:STORY-1689 | ai:claude
+mod dev_autopromote;
 mod dev_cmd;
 mod digest;
 mod digest_cmd;
@@ -130,14 +132,20 @@ mod faq_topics;
 // trace:STORY-1642 | ai:claude
 mod knowledge_list;
 // trace:BUG-1944 | ai:claude — live-work evidence + start-of-work status bump.
+// trace:STORY-1662 | ai:claude
+mod lane_env;
 mod leases;
 mod live_work;
 pub(crate) use live_work::try_auto_queue_pr_review;
+mod agent_handle;
+mod mailbox_resolver;
 mod mailbox_root;
 // trace:STORY-1652 | ai:claude — terminal markdown rendering for human output.
 mod markdown_render;
 mod memory_doc;
 mod merge_hold_cmd;
+// trace:BUG-2015 | ai:claude — attested mirror-sync allowance for a project's pre-push main guard.
+mod mirror_guard;
 mod orchestrator_leases;
 mod output_format;
 mod phase_driver;
@@ -154,6 +162,8 @@ mod protocol_gate;
 mod dispatch_health_ps;
 // trace:TASK-1092 | ai:claude — [dispatch.routing] config loader (additive, not yet wired in).
 mod dispatch_routing_config;
+// trace:STORY-1916 | ai:claude — disk guard emergency tier, stuck escalation, status.
+mod disk_emergency;
 // trace:STORY-776 | ai:claude — pure decision logic for `aida do` mode dispatch.
 mod autoprogress;
 mod do_dispatch;
@@ -186,7 +196,10 @@ mod queue_cmd;
 mod queue_misc;
 // trace:STORY-1688 | ai:antigravity
 mod lane_liveness;
+// trace:TASK-2053 | ai:claude
+mod loose_objects;
 mod rel_cards;
+mod relay_launch; // trace:STORY-1706 | ai:claude
 mod relay_stall;
 mod remote_cmd;
 mod requirements_cli;
@@ -202,8 +215,8 @@ mod session_misc;
 mod session_start;
 mod skill_cmd;
 mod solo_cmd;
-// trace:STORY-1662 | ai:claude
 mod stakeholder_role;
+// trace:STORY-1662 | ai:claude
 mod standalone_implementer;
 mod status_awaiting;
 mod status_cmd;
@@ -438,6 +451,8 @@ mod mandate_traces;
 mod merge_lock;
 mod metrics;
 mod metrics_cmd;
+// trace:TASK-1951 trace:TASK-2003 | ai:claude
+mod needs_attention_lens;
 mod network_retry;
 mod node_cmd;
 mod not_found;
@@ -465,6 +480,8 @@ mod pending_approval;
 mod plan_cmd;
 mod pr_rebase;
 mod pr_ship;
+mod pr_ship_batch;
+mod pr_train;
 mod presence;
 mod presence_cmd;
 mod process_probe;
@@ -519,15 +536,14 @@ mod review_verdict_display;
 // trace:TASK-1960 | ai:claude — attested-approval carry-over across clean base merges.
 mod review_carryover;
 mod role_cmd;
-// trace:STORY-1655 | ai:claude — audited solo-human self-approval mode (global key only).
 mod rules_cmd;
 mod rules_sync;
-// trace:STORY-1889 | ai:claude — transitional re-export; the module lives in gate/.
-pub(crate) use gate::solo_review;
-// trace:TASK-1307 | ai:claude — the pre-BUG-1452 stranded-refusal sweep.
 mod sandbox_cmd;
+// trace:BUG-2211 trace:TASK-2270 | ai:claude — sandbox-left config.lock doctor check.
+mod sandbox_config_lock;
 mod scaffold_cmd;
 mod scaffold_refresh;
+// trace:TASK-1307 | ai:claude — the pre-BUG-1452 stranded-refusal sweep.
 mod stranded_sweep;
 mod sweep_test_hook;
 // trace:STORY-262 | ai:claude
@@ -536,6 +552,8 @@ mod schedule_cmd;
 mod schedule_ledger;
 mod schedule_predicate;
 mod schema;
+// trace:BUG-1934 | ai:claude
+mod grant_keyring;
 // trace:STORY-1473 | ai:codex
 // STORY-1889: transitional re-export of the moved module; the final
 // STORY-1889 PR repoints callers to `crate::gate::seat_authority`.
@@ -567,6 +585,9 @@ mod session_reap;
 mod shell_eval;
 // trace:STORY-627 | ai:claude — per-repo solo-loop lock + liveness sentinel.
 mod solo_lock;
+// trace:STORY-1655 | ai:claude — audited solo-human self-approval mode (global key only).
+// trace:STORY-1889 | ai:claude — transitional re-export; the module lives in gate/.
+pub(crate) use gate::solo_review;
 mod stacks;
 mod state_snapshot;
 mod status_cleanup;

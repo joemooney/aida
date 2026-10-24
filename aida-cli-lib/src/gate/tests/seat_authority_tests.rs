@@ -73,6 +73,7 @@ fn expired_notice_rejects_changed_timestamp_or_seat() {
         issued_at: at,
         expires_at: at,
         revoked_at: None,
+        binding: Vec::new(),
     };
     for (expires_at, seat, emits) in [
         (at, "advisor", true),
@@ -97,6 +98,65 @@ fn expired_notice_rejects_changed_timestamp_or_seat() {
             "timestamp={expires_at}, seat={seat}"
         );
     }
+}
+
+/// TASK-2256 (advisor comment 35): the release `handle_queue_work` runs
+/// after a refused reviewer child grant deletes the minted PR-N lease and
+/// its companions, and keeps an implementer's lease, or one whose launch
+/// failed for any other reason.
+// trace:TASK-1955 | ai:claude (TASK-2256)
+#[test]
+fn a_refused_reviewer_child_grant_releases_only_the_review_lease() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let sessions = crate::leases::leases_dir(root);
+    std::fs::create_dir_all(&sessions).unwrap();
+    let mint = |id: &str| {
+        let lease = crate::leases::lease_path(root, id);
+        std::fs::write(&lease, format!("id = \"{id}\"\nscope = \"PR-42\"\n")).unwrap();
+        std::fs::write(crate::leases::session_activity_path(root, id), "").unwrap();
+        lease
+    };
+    let refused: anyhow::Result<()> = Err(anyhow::Error::new(ChildGrantRefused(anyhow::anyhow!(
+        "seat `reviewer` is not delegable"
+    )))
+    .context("launching the reviewer"));
+
+    let review = mint("leasereview01");
+    assert!(crate::queue_cmd::release_refused_review_lease(
+        root,
+        true,
+        Some("leasereview01"),
+        &refused
+    ));
+    assert!(!review.exists(), "the PR-N lease is released");
+    assert!(!crate::leases::session_activity_path(root, "leasereview01").exists());
+
+    let implementer = mint("leaseimpl0001");
+    assert!(!crate::queue_cmd::release_refused_review_lease(
+        root,
+        false,
+        Some("leaseimpl0001"),
+        &refused
+    ));
+    assert!(implementer.exists(), "an implementer lease stays");
+
+    let other = mint("leaseother001");
+    let failed: anyhow::Result<()> = Err(anyhow::anyhow!("reviewer exited 1"));
+    assert!(!crate::queue_cmd::release_refused_review_lease(
+        root,
+        true,
+        Some("leaseother001"),
+        &failed
+    ));
+    assert!(other.exists(), "any other failure keeps the lease");
+    assert!(!crate::queue_cmd::release_refused_review_lease(
+        root,
+        true,
+        Some("leaseother001"),
+        &Ok(())
+    ));
+    assert!(other.exists());
 }
 
 /// ADR-66 acceptance: an env-only `AIDA_SESSION_ROLE=advisor` confers no
@@ -144,8 +204,33 @@ fn env_role_alone_confers_no_seat_and_grants_fail_closed() {
             child.delegable_seats.is_empty(),
             "children default to an empty delegation set"
         );
-        issue_child(root, "reviewer", "child-subject")
+        let refused = issue_child(root, "reviewer", "child-subject")
             .expect_err("a seat outside the delegation set must refuse");
+        // Advisor comment 35 (TASK-1955): the refusal is typed, so a
+        // launcher can release the lease it took, and reads unchanged.
+        assert!(ChildGrantRefused::is_in(&refused), "{refused:?}");
+        assert!(
+            crate::queue_cmd::refused_review_launch_releases_lease(true, &refused),
+            "a refused reviewer child releases its PR-N lease"
+        );
+        assert!(
+            !crate::queue_cmd::refused_review_launch_releases_lease(false, &refused),
+            "an implementer lease stays for the manual continuation"
+        );
+        assert!(
+            !crate::queue_cmd::refused_review_launch_releases_lease(
+                true,
+                &anyhow::anyhow!("reviewer exited 1")
+            ),
+            "any other failure keeps the lease"
+        );
+        assert_eq!(
+            format!("{refused:#}"),
+            format!(
+                "{:#}",
+                validate_child_delegation(root, "reviewer").unwrap_err()
+            )
+        );
 
         // Revocation fails closed.
         assert!(revoke_current().unwrap());

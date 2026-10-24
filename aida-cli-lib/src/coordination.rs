@@ -906,7 +906,20 @@ fn drop_unpushed_claim_commit(store_root: &Path, claim_sha: &str, expected: &Cla
         if aida_core::git_ops::head_sha(store_root)? == claim_sha {
             return rollback_claim_commit(store_root, claim_sha, expected);
         }
-        aida_core::git_ops::rollback_commit_if_head_matches(store_root, claim_sha).map(|_| ())
+        aida_core::git_ops::rollback_commit_if_head_matches(store_root, claim_sha)?;
+        // `Ok(false)` also covers "nothing removed": the claim commit was
+        // rewritten by a peer's rebase (no longer an ancestor), or the replay
+        // conflicted and was aborted. Verify the claim really left the store.
+        // trace:TASK-1955 | ai:claude (TASK-2101)
+        anyhow::ensure!(
+            read_claim(&claim_path(store_root, &expected.scope)).as_ref() != Some(expected),
+            "the unpushed claim commit {} for {} was not dropped (a rebase rewrote it, or \
+             removing it conflicted with a later commit); the claim is still in the local \
+             store. Inspect `aida session leases --all` and the store history",
+            &claim_sha[..claim_sha.len().min(10)],
+            expected.scope
+        );
+        Ok(())
     })
 }
 
@@ -3112,6 +3125,52 @@ mod bug2188_claim_rollback_tests {
             .output()
             .unwrap();
         assert_eq!(String::from_utf8_lossy(&log.stdout), "peer\nseed\n");
+    }
+
+    /// TASK-2101: when the rollback removed nothing (the claim commit was
+    /// rewritten, so it is no longer an ancestor of HEAD), the drop reports
+    /// failure instead of success, and the claim is left in place.
+    // trace:TASK-1955 | ai:claude (TASK-2101)
+    #[test]
+    fn unpushed_claim_commit_drop_fails_when_nothing_was_removed() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = dir.path();
+        let run = |args: &[&str]| {
+            let out = crate::test_git::git_command()
+                .current_dir(store)
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(
+                out.status.success(),
+                "git {args:?}: {}",
+                String::from_utf8_lossy(&out.stderr)
+            );
+        };
+        run(&["init", "-q", "-b", "aida-store"]);
+        run(&["config", "user.name", "fixture"]);
+        run(&["config", "user.email", "fixture@test"]);
+        run(&["commit", "-q", "--allow-empty", "-m", "seed"]);
+        std::fs::create_dir_all(leases_dir(store)).unwrap();
+        let claim = build_claim(store, "TASK-1", store, "implementer", false);
+        std::fs::write(
+            claim_path(store, "TASK-1"),
+            toml::to_string(&claim).unwrap(),
+        )
+        .unwrap();
+        run(&["add", "-A"]);
+        run(&["commit", "-q", "-m", "claim"]);
+        let claim_sha = aida_core::git_ops::head_sha(store).unwrap();
+        // A peer's pull --rebase rewrote the claim commit under a new sha.
+        run(&["commit", "-q", "--amend", "-m", "claim (rebased)"]);
+        std::fs::write(store.join("peer.txt"), "peer\n").unwrap();
+        run(&["add", "peer.txt"]);
+        run(&["commit", "-q", "-m", "peer"]);
+
+        let err =
+            drop_unpushed_claim_commit(store, &claim_sha, &claim).expect_err("nothing was dropped");
+        assert!(err.to_string().contains("was not dropped"), "{err}");
+        assert!(claim_path(store, "TASK-1").exists(), "the claim stays");
     }
 
     #[test]

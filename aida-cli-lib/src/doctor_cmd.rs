@@ -130,9 +130,30 @@ pub(crate) fn handle_doctor_command(
                     *fail_on_findings,
                 );
             }
+            // BUG-1934: the seat-grant check reads the grant store and this
+            // process's ancestry only. trace:BUG-1934 | ai:claude
+            if !all
+                && !*sub_all
+                && normalize_doctor_category(category).ok().as_deref()
+                    == Some(crate::seat_authority::DOCTOR_CATEGORY)
+            {
+                return doctor_check_store_free_light(
+                    crate::seat_authority::DOCTOR_CATEGORY,
+                    *json,
+                    *fail_on_findings,
+                );
+            }
             // trace:TASK-1544 | ai:codex
             if !all && !*sub_all {
                 match normalize_doctor_category(category).ok().as_deref() {
+                    // trace:TASK-2197 | ai:codex
+                    Some(crate::loose_objects::CATEGORY) => {
+                        return doctor_check_store_free_light(
+                            crate::loose_objects::CATEGORY,
+                            *json,
+                            *fail_on_findings,
+                        );
+                    }
                     Some("performance") => {
                         return doctor_check_store_free_light(
                             "performance",
@@ -441,6 +462,11 @@ pub(crate) struct DoctorReport {
     // trace:STORY-1462 | ai:claude
     #[serde(skip_serializing_if = "Option::is_none")]
     runaway_seats: Option<crate::runaway_seats::Coverage>,
+    /// STORY-1916: the disk guard at a glance (free space, floor, ceiling,
+    /// last run, last automatic reclaim). Set by the disk-headroom light path.
+    // trace:STORY-1916 | ai:claude
+    #[serde(skip_serializing_if = "Option::is_none")]
+    disk_status: Option<crate::disk_emergency::DiskStatus>,
 }
 
 impl DoctorReport {
@@ -454,6 +480,7 @@ impl DoctorReport {
             performance_audits: Vec::new(),
             error: None,
             runaway_seats: None,
+            disk_status: None,
         }
     }
 }
@@ -615,6 +642,17 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     }
 
+    // BUG-2211: the empty read-only config.lock a sandboxed shell leaves in
+    // the shared git dir. One `git rev-parse` + one stat.
+    // trace:BUG-2211 | ai:claude
+    if doctor_category_selected(
+        opts.category.as_deref(),
+        crate::sandbox_config_lock::CATEGORY,
+    )? {
+        findings.extend(crate::sandbox_config_lock::scan(&project_root));
+        findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
+    }
+
     // TASK-1095: remote-drift scan — do the shared branches (trunk + store) hold
     // the same tip on every configured remote? Uses cheap `ls-remote` (refs
     // only, no object transfer), so it is kept OUT of the hot
@@ -741,12 +779,13 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     }
 
-    // BUG-1700: the folder-trust gate that silently strands an interactive
-    // `aida agent new claude --spec` launch. Read-only (it never writes the
-    // operator's ~/.claude.json) and silent unless the worktree parent really
-    // lacks a covering trust record. Opt-in path for the same reason as
-    // disk-headroom: it reads a file outside the project.
-    // trace:BUG-1700 | ai:claude
+    // TASK-2053 S5: loose objects that slow seat-clone creation (opt-in
+    // append path, like disk-headroom: it runs git).
+    // trace:TASK-2053 | ai:claude
+    if doctor_category_selected(opts.category.as_deref(), crate::loose_objects::CATEGORY)? {
+        findings.extend(crate::loose_objects::scan(&project_root));
+        findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
+    }
     // STORY-1699: stalled relay runs (opt-in append path, like disk-headroom).
     // trace:STORY-1699 | ai:claude
     if doctor_category_selected(opts.category.as_deref(), crate::relay_stall::CATEGORY)? {
@@ -761,6 +800,14 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         findings.extend(crate::mandate_drive::doctor_scan(&project_root));
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     }
+    // trace:BUG-1934 | ai:claude
+    if doctor_category_selected(
+        opts.category.as_deref(),
+        crate::seat_authority::DOCTOR_CATEGORY,
+    )? {
+        findings.extend(crate::seat_authority::doctor_scan(&project_root));
+        findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
+    }
 
     // STORY-1688: lane liveness (opt-in append path: only when --category is explicitly passed,
     // since it inspects open PRs via gh and session leases via git).
@@ -772,6 +819,12 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     }
 
+    // BUG-1700: the folder-trust gate that silently strands an interactive
+    // `aida agent new claude --spec` launch. Read-only (it never writes the
+    // operator's ~/.claude.json) and silent unless the worktree parent really
+    // lacks a covering trust record. Opt-in path for the same reason as
+    // disk-headroom: it reads a file outside the project.
+    // trace:BUG-1700 | ai:claude
     if doctor_category_selected(opts.category.as_deref(), "agent-launch")? {
         findings.extend(scan_agent_worktree_trust(&project_root));
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
@@ -1128,17 +1181,33 @@ fn doctor_check_disk_headroom_light(json: bool, fail_on_findings: bool) -> Resul
     let project_root = main_worktree_root_from(&find_project_root()?);
     let report = disk_headroom_light_report(&project_root);
 
-    let reason = (fail_on_findings && !report.findings.is_empty()).then(|| format!(
-        "{} finding(s) in {DISK_HEADROOM_CATEGORY} — failing because --fail-on-findings was requested",
-        report.findings.len()
-    ));
-    emit_doctor_report(report, reason, doctor_render_mode(json), false, |_| {})
+    let reason = fail_on_findings
+        .then(|| disk_headroom_fail_reason(&report.findings))
+        .flatten();
+    let mode = doctor_render_mode(json);
+    // STORY-1916 AC3: the routed CronJobFailed item carries only the child's
+    // last stderr line, and a typed (JSON/TOON) failure prints nothing to
+    // stderr. Put the reason there explicitly so the route says why.
+    // trace:STORY-1916.ac641c6e | ai:claude
+    if let (Some(reason), true) = (&reason, mode != DoctorRenderMode::Human) {
+        eprintln!("{reason}");
+    }
+    emit_doctor_report(report, reason, mode, false, |report| {
+        // trace:STORY-1916 | ai:claude
+        if let Some(status) = &report.disk_status {
+            print!("{}", crate::disk_emergency::render_status(status));
+        }
+    })
 }
 
 // trace:TASK-1544 | ai:codex
 fn doctor_check_store_free_light(category: &str, json: bool, fail_on_findings: bool) -> Result<()> {
     let project_root = main_worktree_root_from(&find_project_root()?);
     let report = match category {
+        // trace:TASK-2197 | ai:codex
+        crate::loose_objects::CATEGORY => {
+            DoctorReport::from_findings(crate::loose_objects::scan(&project_root))
+        }
         "performance" => performance_light_report(&project_root),
         "remote-drift" => remote_drift_light_report(&project_root),
         // trace:STORY-1699 | ai:claude
@@ -1155,6 +1224,10 @@ fn doctor_check_store_free_light(category: &str, json: bool, fail_on_findings: b
         // trace:STORY-1700 | ai:claude
         crate::mandate_drive::DOCTOR_CATEGORY => {
             DoctorReport::from_findings(crate::mandate_drive::doctor_scan(&project_root))
+        }
+        // trace:BUG-1934 | ai:claude
+        crate::seat_authority::DOCTOR_CATEGORY => {
+            DoctorReport::from_findings(crate::seat_authority::doctor_scan(&project_root))
         }
         _ => unreachable!("only store-free categories dispatch here"),
     };
@@ -1227,8 +1300,147 @@ mod task_1544_light_doctor_tests;
 /// + disk probe → report. Split out so a fixture can pin that it never needs
 /// a loadable store.
 // trace:BUG-1675 | ai:claude
+// trace:STORY-1916 | ai:claude
 pub(crate) fn disk_headroom_light_report(project_root: &std::path::Path) -> DoctorReport {
-    disk_headroom_light_report_with(project_root, disk_free_bytes, cargo_slot_dir())
+    let cfg = crate::read_project_config_value(project_root);
+    let emergency = crate::disk_emergency::emergency_config(cfg.as_ref());
+    let scheduled = std::env::var_os("AIDA_SCHEDULE_CHILD").is_some_and(|v| v == "1");
+    // statvfs first: it resolves a bind-mounted `<main>/target` to its own
+    // filesystem, which the mount-table lookup by path prefix may not.
+    let free = |p: &std::path::Path| {
+        crate::disk_emergency::fs_stats(p)
+            .map(|s| s.avail)
+            .or_else(|| disk_free_bytes(p))
+    };
+    disk_headroom_light_report_finish(
+        project_root,
+        cfg.as_ref(),
+        scheduled,
+        || {
+            crate::disk_emergency::run_emergency(project_root, &emergency);
+        },
+        || disk_headroom_light_report_with(project_root, free, cargo_slot_dir()),
+        |dev, _role| {
+            let reclaimable = crate::disk_emergency::reclaimable_on(project_root, dev);
+            // trace:STORY-1916.ac641c6e | ai:claude
+            let top = if crate::disk_emergency::target_on_device(project_root, dev) {
+                crate::disk_emergency::top_consumers(project_root, 5)
+            } else {
+                Vec::new()
+            };
+            (reclaimable, top)
+        },
+    )
+}
+
+/// The light report around its two expensive, injected halves: the
+/// emergency run and the stuck scan (a reclaim dry run: `gh`, the offline
+/// merge scan, a walk of every cache). Both run only in the substrate run
+/// (TASK-2264): a manual light check reports free space, the floor breach
+/// and the status block, and stays cheap.
+// trace:STORY-1916 | ai:claude
+fn disk_headroom_light_report_finish(
+    project_root: &std::path::Path,
+    cfg: Option<&toml::Value>,
+    scheduled: bool,
+    emergency_run: impl FnOnce(),
+    report: impl FnOnce() -> DoctorReport,
+    stuck_scan: impl FnMut(u64, &str) -> (u64, Vec<(std::path::PathBuf, u64)>),
+) -> DoctorReport {
+    if scheduled {
+        emergency_run();
+    }
+    let mut report = report();
+    let min_free_gib = disk_headroom_min_free_gib(cfg);
+    if scheduled {
+        escalate_stuck_floor(project_root, &mut report.findings, min_free_gib, stuck_scan);
+    }
+    report.disk_status = Some(crate::disk_emergency::status(
+        project_root,
+        min_free_gib,
+        crate::disk_emergency::emergency_config(cfg),
+    ));
+    report
+}
+
+/// STORY-1916 AC3: for each filesystem below the floor, compare what a
+/// reclaim dry run could free there (`stuck_scan`, keyed by device and
+/// role) with the deficit. When it cannot restore the floor, say so in the
+/// finding (the routed item carries it), with the top cache consumers, and
+/// notify the operator, deduped. Substrate run only.
+// trace:STORY-1916 | ai:claude
+fn escalate_stuck_floor(
+    project_root: &std::path::Path,
+    findings: &mut [DoctorFinding],
+    min_free_gib: u64,
+    mut stuck_scan: impl FnMut(u64, &str) -> (u64, Vec<(std::path::PathBuf, u64)>),
+) {
+    use crate::disk_emergency as de;
+    let floor = min_free_gib.saturating_mul(1024 * 1024 * 1024);
+    for (role, path, stats) in de::probe_paths(project_root, de::fs_stats) {
+        if stats.avail >= floor {
+            continue;
+        }
+        let id = disk_headroom_finding_id(role);
+        let Some(finding) = findings.iter_mut().find(|f| f.id == id) else {
+            continue;
+        };
+        let deficit = floor - stats.avail;
+        let (reclaimable, top) = stuck_scan(stats.dev, role);
+        if reclaimable >= deficit {
+            continue;
+        }
+        let text = de::stuck_summary(reclaimable, deficit, &top);
+        finding.summary = format!("{}. {text}", finding.summary);
+        let mut state = de::load_guard_state(project_root);
+        let now = chrono::Utc::now();
+        if !de::should_escalate(&state, now, deficit) {
+            continue;
+        }
+        let title = format!(
+            "Disk floor cannot be restored automatically ({})",
+            path.display()
+        );
+        if crate::notify::send_direct(project_root, "disk-stuck", &title, &finding.summary).is_ok()
+        {
+            state.last_stuck_at = Some(now);
+            state.last_stuck_deficit = Some(deficit);
+            let _ = de::save_guard_state(project_root, &state);
+        }
+    }
+}
+
+/// The disk-headroom `--fail-on-findings` reason: one line, and it leads
+/// with the STUCK sentence (reclaim cannot restore the floor, plus the top
+/// consumers) when there is one, so the routed item carries it. `None` when
+/// there are no findings.
+// trace:STORY-1916.ac641c6e | ai:claude
+pub(crate) fn disk_headroom_fail_reason(findings: &[DoctorFinding]) -> Option<String> {
+    if findings.is_empty() {
+        return None;
+    }
+    let tail = format!(
+        "{} finding(s) in {DISK_HEADROOM_CATEGORY} — failing because --fail-on-findings was requested",
+        findings.len()
+    );
+    let stuck = findings
+        .iter()
+        .find_map(|f| f.summary.find("STUCK:").map(|i| &f.summary[i..]));
+    let reason = match stuck {
+        Some(stuck) => format!("{stuck} — {tail}"),
+        None => tail,
+    };
+    Some(reason.replace(['\n', '\r'], " "))
+}
+
+/// The finding id for a probed filesystem's floor breach.
+// trace:STORY-1916 | ai:claude
+fn disk_headroom_finding_id(role: &str) -> &'static str {
+    if role == "build-cache" {
+        "disk-headroom-cache"
+    } else {
+        "disk-headroom"
+    }
 }
 
 /// [`disk_headroom_light_report`] with the free-space probe injected, so a
@@ -1242,9 +1454,44 @@ fn disk_headroom_light_report_with(
     // trace:BUG-1702 | ai:claude
     cargo_slot_dir: Option<std::path::PathBuf>,
 ) -> DoctorReport {
+    // STORY-1916: the build cache may be its own filesystem (a bind mount of
+    // `/mnt/build` on the dev host); the project-root probe never saw it.
+    let cache_fs =
+        crate::disk_emergency::probe_paths(project_root, crate::disk_emergency::fs_stats)
+            .into_iter()
+            .find(|(role, _, _)| *role == "build-cache")
+            .map(|(_, path, _)| path);
+    disk_headroom_light_report_probing(project_root, free_bytes, cargo_slot_dir, cache_fs)
+}
+
+/// [`disk_headroom_light_report_with`] with the separate build-cache
+/// filesystem injected too.
+// trace:STORY-1916 | ai:claude
+fn disk_headroom_light_report_probing(
+    project_root: &std::path::Path,
+    free_bytes: impl Fn(&std::path::Path) -> Option<u64>,
+    cargo_slot_dir: Option<std::path::PathBuf>,
+    cache_fs: Option<std::path::PathBuf>,
+) -> DoctorReport {
     let cfg = crate::read_project_config_value(project_root);
     let min_free_gib = disk_headroom_min_free_gib(cfg.as_ref());
     let mut findings = disk_headroom_findings(free_bytes(project_root), min_free_gib);
+    // trace:STORY-1916 | ai:claude
+    if let Some(cache_fs) = cache_fs {
+        findings.extend(
+            disk_headroom_findings(free_bytes(&cache_fs), min_free_gib)
+                .into_iter()
+                .map(|mut f| {
+                    f.id = disk_headroom_finding_id("build-cache").to_string();
+                    f.summary = format!(
+                        "build-cache filesystem ({}): {}",
+                        cache_fs.display(),
+                        f.summary
+                    );
+                    f
+                }),
+        );
+    }
     // BUG-1702: the runtime tmpfs holding the Cargo slot locks is a separate, much smaller
     // filesystem than the project's, so the project-root floor above never sees it fill.
     // trace:BUG-1702 | ai:claude
@@ -2435,7 +2682,12 @@ fn count_unrelated_child_dirs(
         .filter_map(Result::ok)
         .filter(|entry| {
             let entry_path = normalize_path_lexically(&entry.path());
-            !entry.file_name().to_string_lossy().starts_with('.')
+            let name = entry.file_name();
+            let name = name.to_string_lossy();
+            // TASK-2053: seat clones are this project's own trees.
+            // trace:TASK-2053 | ai:claude
+            !name.starts_with('.')
+                && !name.starts_with(aida_core::seat_clone_detect::CLONE_DIR_PREFIX)
                 && entry.file_type().is_ok_and(|kind| kind.is_dir())
                 && entry_path != project_root
                 && entry_path != worktree_parent
@@ -6528,13 +6780,18 @@ fn heal_doctor_merged_agent_worktree(
     // recognized as merged by `-d`, and the scan already verified it shipped.
     let mut detail = None;
     if let Some(branch) = branch {
-        let deleted = std::process::Command::new("git")
-            .arg("-C")
-            .arg(project_root)
-            .args(["branch", "-D", &branch])
-            .status()
-            .map(|s| s.success())
-            .unwrap_or(false);
+        // trace:BUG-2211 | ai:claude
+        let deleted = aida_core::git_ops::output_healing_config_lock(
+            project_root,
+            || {
+                let mut cmd = std::process::Command::new("git");
+                cmd.arg("-C").arg(project_root);
+                cmd
+            },
+            &["branch", "-D", &branch],
+        )
+        .map(|o| o.status.success())
+        .unwrap_or(false);
         detail = Some(if deleted {
             format!("removed worktree + deleted branch `{branch}`")
         } else {
@@ -6775,6 +7032,61 @@ pub(crate) fn render_doctor_report_toon(report: &DoctorReport) -> String {
                 &rows,
             ));
         }
+    }
+    // trace:STORY-1916.Visibility | ai:claude
+    if let Some(d) = &report.disk_status {
+        let rows = d
+            .filesystems
+            .iter()
+            .map(|f| {
+                vec![
+                    f.role.to_string(),
+                    f.path.clone(),
+                    f.free_bytes.to_string(),
+                    f.total_bytes.to_string(),
+                    f.used_pct.to_string(),
+                ]
+            })
+            .collect::<Vec<_>>();
+        blocks.push(table_raw(
+            "disk_filesystems",
+            &["role", "path", "free_bytes", "total_bytes", "used_pct"],
+            &rows,
+        ));
+        blocks.push(scalar("disk_floor_gib", &d.floor_gib.to_string()));
+        blocks.push(scalar(
+            "disk_ceiling_pct",
+            &d.emergency.used_pct.to_string(),
+        ));
+        blocks.push(scalar(
+            "disk_stop_below_pct",
+            &d.emergency.stop_below().to_string(),
+        ));
+        blocks.push(scalar(
+            "disk_idle_hours",
+            &d.emergency.idle_hours.to_string(),
+        ));
+        blocks.push(scalar(
+            "disk_last_guard_run",
+            &d.last_guard_run.map_or("never".into(), |t| t.to_rfc3339()),
+        ));
+        blocks.push(scalar(
+            "disk_last_guard_result",
+            d.last_guard_result.as_deref().unwrap_or("-"),
+        ));
+        blocks.push(scalar(
+            "disk_last_reclaim",
+            &d.last_reclaim.as_ref().map_or("none".into(), |r| {
+                format!(
+                    "{} freed={} deleted={} after={} stopped={}",
+                    r.at.to_rfc3339(),
+                    r.freed_bytes,
+                    r.deleted,
+                    r.used_pct_after.map_or("?".into(), |p| p.to_string()),
+                    r.stopped
+                )
+            }),
+        ));
     }
     if let Some(v) = &report.error {
         blocks.push(error_block(v, None));
@@ -7362,6 +7674,8 @@ fn heal_doctor_finding(
         "store-staging-ignore" => heal_doctor_store_staging_ignore(project_root, finding),
         "orphan-queue-entries" => heal_doctor_orphan_queue_entry(project_root, finding),
         "stale-locks" => heal_doctor_stale_lock(finding),
+        // trace:BUG-2211 | ai:claude
+        "sandbox-config-lock" => heal_doctor_sandbox_config_lock(project_root, finding),
         "dead-agents" => heal_doctor_dead_agent(project_root, finding),
         // STORY-1128: permission-posture heal applies the contained profile
         // through the same merge-preserving writer as `config permissions set`.
@@ -7839,7 +8153,7 @@ fn heal_doctor_completed_without_commit(
     })
 }
 
-fn heal_doctor_orphan_worktree(
+pub(crate) fn heal_doctor_orphan_worktree(
     project_root: &std::path::Path,
     finding: &DoctorFinding,
 ) -> Result<DoctorHealResult> {
@@ -8360,16 +8674,47 @@ fn heal_doctor_stale_lock(finding: &DoctorFinding) -> Result<DoctorHealResult> {
     })
 }
 
+/// Remove the sandbox-left `config.lock`. Re-resolves and re-checks the
+/// lock from `project_root` rather than trusting the finding's path, so a
+/// lock that became a real git lock since the scan is kept.
+// trace:BUG-2211 | ai:claude
+pub(crate) fn heal_doctor_sandbox_config_lock(
+    project_root: &std::path::Path,
+    finding: &DoctorFinding,
+) -> Result<DoctorHealResult> {
+    let removed = aida_core::git_ops::clear_sandbox_config_lock(project_root);
+    Ok(DoctorHealResult {
+        category: finding.category.clone(),
+        id: finding.id.clone(),
+        action: "removed empty read-only git config lock".to_string(),
+        status: if removed.is_some() {
+            "healed"
+        } else {
+            "skipped"
+        }
+        .to_string(),
+        detail: removed
+            .is_none()
+            .then(|| "lock is gone or no longer empty and read-only; left in place".to_string()),
+    })
+}
+
 fn heal_doctor_orphan_branch(
     project_root: &std::path::Path,
     finding: &DoctorFinding,
 ) -> Result<DoctorHealResult> {
-    let status = std::process::Command::new("git")
-        .arg("-C")
-        .arg(project_root)
-        .args(["branch", "-D", &finding.id])
-        .status()
-        .with_context(|| format!("deleting branch {}", finding.id))?;
+    // trace:BUG-2211 | ai:claude
+    let status = aida_core::git_ops::output_healing_config_lock(
+        project_root,
+        || {
+            let mut cmd = std::process::Command::new("git");
+            cmd.arg("-C").arg(project_root);
+            cmd
+        },
+        &["branch", "-D", &finding.id],
+    )
+    .with_context(|| format!("deleting branch {}", finding.id))?
+    .status;
     Ok(DoctorHealResult {
         category: finding.category.clone(),
         id: finding.id.clone(),
@@ -9090,6 +9435,93 @@ mod story_462_doctor_tests {
         for alias in ["dead-agents", "dead-agent", "stale-agents", "agents"] {
             assert_eq!(normalize_doctor_category(alias).unwrap(), "dead-agents");
         }
+    }
+
+    /// The sandbox config.lock category is reachable by every alias, selected
+    /// by `--category`, and its findings route to the heal that removes the
+    /// placeholder.
+    // trace:TASK-2270 | ai:claude
+    #[cfg(unix)]
+    #[test]
+    fn sandbox_config_lock_category_routes_from_alias_to_heal() {
+        use std::os::unix::fs::PermissionsExt;
+        for alias in ["sandbox-config-lock", "config-lock", "git-config-lock"] {
+            assert_eq!(
+                normalize_doctor_category(alias).unwrap(),
+                crate::sandbox_config_lock::CATEGORY
+            );
+            assert!(
+                doctor_category_selected(Some(alias), crate::sandbox_config_lock::CATEGORY)
+                    .unwrap()
+            );
+        }
+        assert!(!doctor_category_selected(
+            Some("stale-locks"),
+            crate::sandbox_config_lock::CATEGORY
+        )
+        .unwrap());
+
+        let dir = tempfile::tempdir().unwrap();
+        let init = crate::test_git::git_command()
+            .current_dir(dir.path())
+            .args(["init", "-q", "-b", "main"])
+            .output()
+            .unwrap();
+        assert!(init.status.success(), "{init:?}");
+        let lock = dir.path().join(".git/config.lock");
+        std::fs::write(&lock, b"").unwrap();
+        std::fs::set_permissions(&lock, std::fs::Permissions::from_mode(0o444)).unwrap();
+
+        let finding = crate::sandbox_config_lock::scan(dir.path()).remove(0);
+        let healed =
+            heal_doctor_finding(dir.path(), &finding, &DoctorRunOptions::default()).unwrap();
+        assert_eq!(healed.status, "healed");
+        assert!(!lock.exists());
+    }
+
+    /// A full `aida doctor --category config-lock` run reports the planted
+    /// placeholder, so the scan stays wired into `doctor_multi_agent`. Runs in
+    /// its own process because it changes the working directory.
+    // trace:TASK-2270 | ai:claude
+    #[cfg(unix)]
+    #[test]
+    fn doctor_run_with_config_lock_category_reports_the_placeholder() {
+        use std::os::unix::fs::PermissionsExt;
+        if let Some(out) = crate::test_env::run_path_isolated_test_output() {
+            let stdout = String::from_utf8_lossy(&out.stdout);
+            assert!(
+                stdout.contains(&format!(
+                    "\"category\": \"{}\"",
+                    crate::sandbox_config_lock::CATEGORY
+                )) && stdout.contains("config.lock"),
+                "{stdout}"
+            );
+            return;
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let init = crate::test_git::git_command()
+            .current_dir(dir.path())
+            .args(["init", "-q", "-b", "main"])
+            .output()
+            .unwrap();
+        assert!(init.status.success(), "{init:?}");
+        std::fs::create_dir(dir.path().join(".aida")).unwrap();
+        std::fs::create_dir(dir.path().join(".aida-store")).unwrap();
+        let lock = dir.path().join(".git/config.lock");
+        std::fs::write(&lock, b"").unwrap();
+        std::fs::set_permissions(&lock, std::fs::Permissions::from_mode(0o444)).unwrap();
+        std::env::set_current_dir(dir.path()).unwrap();
+        handle_doctor_command(
+            false,
+            false,
+            Some("config-lock"),
+            true,
+            false,
+            false,
+            None,
+            None,
+        )
+        .unwrap();
     }
 
     // ── TASK-717: stale-remote-branch classification ──
@@ -14629,3 +15061,90 @@ mod bug_1985_destructive_gate_tests;
 #[cfg(test)]
 #[path = "tests/task_1981_writer_tests.rs"]
 mod task_1981_writer_tests;
+
+#[cfg(test)]
+mod loose_objects_followup_tests {
+    use super::*;
+
+    // trace:TASK-2197 | ai:codex
+    #[test]
+    fn loose_object_check_aliases_run_without_a_loadable_store() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        let tmp = tempfile::tempdir().unwrap();
+        assert!(std::process::Command::new("git")
+            .args(["init", "-q"])
+            .arg(tmp.path())
+            .status()
+            .unwrap()
+            .success());
+        std::fs::create_dir(tmp.path().join(".aida")).unwrap();
+        std::fs::write(
+            tmp.path().join(".aida/config.toml"),
+            "[doctor.loose_objects]\nmax = \"bad\"\n",
+        )
+        .unwrap();
+        std::fs::write(tmp.path().join(".aida-store"), "unloadable store").unwrap();
+        assert!(Storage::new(&tmp.path().join(".aida-store"))
+            .load()
+            .is_err());
+        std::env::set_current_dir(tmp.path()).unwrap();
+        for alias in ["loose-objects", "loose-object", "git-objects", "repack"] {
+            assert_eq!(
+                normalize_doctor_category(alias).unwrap(),
+                crate::loose_objects::CATEGORY
+            );
+            let check = cli::DoctorCommand::Check {
+                category: alias.into(),
+                all: false,
+                json: true,
+                fail_on_findings: false,
+            };
+            handle_doctor_command(false, false, None, true, false, false, None, Some(&check))
+                .unwrap();
+            let check = cli::DoctorCommand::Check {
+                category: alias.into(),
+                all: false,
+                json: true,
+                fail_on_findings: true,
+            };
+            let error =
+                handle_doctor_command(false, false, None, true, false, false, None, Some(&check))
+                    .unwrap_err();
+            // JSON output owns the diagnostic; the dispatcher receives its
+            // typed nonzero-exit marker. trace:TASK-2197 | ai:codex
+            assert!(error.downcast_ref::<crate::TypedPayloadEmitted>().is_some());
+        }
+    }
+
+    // Pin the opt-in append call separately from the light dispatch. The
+    // scan's actual config/count behavior is covered by loose_objects tests.
+    // trace:TASK-2053 trace:TASK-2198 | ai:codex
+    #[test]
+    fn full_doctor_keeps_the_loose_object_scan_and_trust_comment_together() {
+        let source = include_str!("doctor_cmd.rs");
+        let full = source
+            .split_once("fn doctor_multi_agent(opts:")
+            .unwrap()
+            .1
+            .split_once("fn doctor_check_store_free_light(")
+            .unwrap()
+            .0;
+        assert!(full.contains("if doctor_category_selected(opts.category.as_deref(), crate::loose_objects::CATEGORY)? {\n        findings.extend(crate::loose_objects::scan(&project_root));"));
+        let trust = full
+            .split_once("// BUG-1700: the folder-trust gate")
+            .unwrap()
+            .1;
+        assert!(trust
+            .split_once("scan_agent_worktree_trust")
+            .unwrap()
+            .0
+            .contains("\"agent-launch\""));
+        assert!(!trust
+            .split_once("scan_agent_worktree_trust")
+            .unwrap()
+            .0
+            .contains("loose_objects"));
+    }
+}

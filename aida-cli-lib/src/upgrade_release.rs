@@ -308,7 +308,7 @@ pub(crate) fn classify_drain_merge_failure(
     // `MergeHoldRefusal`, so promote its distinctive policy detail to the same
     // non-transient kind before generic tool-exit handling.
     if forge == crate::forge::ForgeKind::GitHub
-        && crate::gate::branch_policy::is_branch_policy_merge_refusal(&detail)
+        && auto_complete::is_branch_policy_merge_refusal(&detail)
     {
         return auto_complete::PhaseFailure::of(
             auto_complete::FailureKind::MergeHold,
@@ -1418,6 +1418,11 @@ pub(crate) fn warn_if_pulled_binary_stale(project_root: &std::path::Path) {
     if !dev_activated {
         return;
     }
+    // No `$AIDA_DEV_HOME_REPO` fallback here: `$AIDA_DEV_REPO` names the
+    // checkout the active binary was built from, and a removed worktree's
+    // build is not comparable with the primary checkout's HEAD. A missing
+    // path fails the canonicalize below and stays silent.
+    // trace:TASK-2251 | ai:claude
     let (Ok(bin_dir), Ok(repo)) = (
         std::env::var("AIDA_DEV_BIN"),
         std::env::var("AIDA_DEV_REPO"),
@@ -1529,14 +1534,9 @@ pub(crate) fn handle_release(
     if check {
         let cur = current_version();
         let target = preview_next_version(cur, bump).unwrap_or_else(|| "?".to_string());
-        let repo = std::env::current_dir().ok().and_then(|cwd| {
-            find_aida_repo_above(&cwd).or_else(|| {
-                std::env::var("AIDA_DEV_REPO")
-                    .ok()
-                    .map(std::path::PathBuf::from)
-                    .filter(|p| is_aida_repo(p))
-            })
-        });
+        let repo = std::env::current_dir()
+            .ok()
+            .and_then(|cwd| release_repo_from(&cwd));
         println!(
             "{} would run a {} release: {} → {}",
             crate::glyph(crate::glyphs::Glyph::Arrow).cyan().bold(),
@@ -1591,14 +1591,9 @@ pub(crate) fn handle_release(
     // actually includes the merged work. Refuse if the checks don't pass.
     // trace:STORY-472 | ai:claude
     if let Some(n) = after_pr {
-        let repo = std::env::current_dir().ok().and_then(|cwd| {
-            find_aida_repo_above(&cwd).or_else(|| {
-                std::env::var("AIDA_DEV_REPO")
-                    .ok()
-                    .map(std::path::PathBuf::from)
-                    .filter(|p| is_aida_repo(p))
-            })
-        });
+        let repo = std::env::current_dir()
+            .ok()
+            .and_then(|cwd| release_repo_from(&cwd));
         let merge_root = repo
             .clone()
             .or_else(|| std::env::current_dir().ok())
@@ -1764,21 +1759,14 @@ pub(crate) fn released_tag(tag_file: &std::path::Path, repo: &std::path::Path) -
 pub(crate) fn handle_dev_release(bump: &str) -> Result<()> {
     // Locate the aida repo. Prefer PWD walk, then $AIDA_DEV_REPO.
     let cwd = std::env::current_dir()?;
-    let repo = find_aida_repo_above(&cwd)
-        .or_else(|| {
-            std::env::var("AIDA_DEV_REPO")
-                .ok()
-                .map(std::path::PathBuf::from)
-                .filter(|p| is_aida_repo(p))
-        })
-        .ok_or_else(|| {
-            // trace:TASK-667 — wrapper-correct activate form.
-            anyhow::anyhow!(
-                "Not in an aida repo. cd into the aida checkout, set AIDA_DEV_REPO, \
+    let repo = release_repo_from(&cwd).ok_or_else(|| {
+        // trace:TASK-667 — wrapper-correct activate form.
+        anyhow::anyhow!(
+            "Not in an aida repo. cd into the aida checkout, set AIDA_DEV_REPO, \
                  or run `{}` first.",
-                eval_subcommand_hint("dev activate")
-            )
-        })?;
+            eval_subcommand_hint("dev activate")
+        )
+    })?;
 
     let script = repo.join("scripts/release.sh");
     if !script.is_file() {
@@ -2209,6 +2197,14 @@ pub(crate) fn confirm(prompt: &str) -> bool {
         return false;
     }
     matches!(answer.trim().to_lowercase().as_str(), "y" | "yes")
+}
+
+/// The checkout `aida dev release` acts on: the aida repo enclosing `cwd`,
+/// else `$AIDA_DEV_REPO` (or, for a removed worktree, `$AIDA_DEV_HOME_REPO`).
+// trace:TASK-2251 | ai:claude
+// trace:TASK-2272 | ai:claude
+pub(crate) fn release_repo_from(cwd: &std::path::Path) -> Option<std::path::PathBuf> {
+    find_aida_repo_above(cwd).or_else(|| crate::dev_cmd::env_dev_repo().filter(|p| is_aida_repo(p)))
 }
 
 /// Common locations where users typically have aida installed. Order matters

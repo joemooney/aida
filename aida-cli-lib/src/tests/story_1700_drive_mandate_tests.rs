@@ -72,12 +72,27 @@ struct Fake {
     fail_due_for: Option<String>,
     /// Fail this many operator notices before delivering.
     fail_notices: usize,
+    /// For this lane, write the due event then fail the mail.
+    // trace:TASK-1955 | ai:claude (TASK-2084)
+    fail_mail_for: Option<String>,
+    /// `event_recorded` as each `emit_due` call received it.
+    recorded_on_entry: Vec<bool>,
 }
 
 impl DriveEffects for Fake {
-    fn emit_due(&mut self, mandate_id: &str, item: &Planned) -> Result<()> {
+    fn emit_due(
+        &mut self,
+        mandate_id: &str,
+        item: &Planned,
+        event_recorded: &mut bool,
+    ) -> Result<()> {
+        self.recorded_on_entry.push(*event_recorded);
         if self.fail_due_for.as_deref() == Some(item.lane.as_str()) {
             anyhow::bail!("events.jsonl is read-only");
+        }
+        *event_recorded = true;
+        if self.fail_mail_for.as_deref() == Some(item.lane.as_str()) {
+            anyhow::bail!("mailbox is read-only");
         }
         self.due.push((mandate_id.into(), item.clone()));
         Ok(())
@@ -834,6 +849,95 @@ fn an_approved_held_pr_routes_a_ship_to_the_advisor() {
         .contains("TASK-1 is operator-only"));
 }
 
+/// The floor plus an operator-layer `x/` prefix (STORY-1888).
+fn operator_protected() -> crate::mandate_gates::ProtectedPaths {
+    crate::mandate_gates::union(
+        Default::default(),
+        crate::mandate_gates::parse_layer(
+            "[mandate.human_gates]\nprotected_paths = [\"x/\"]\n",
+            "~/.aida/config.toml",
+        )
+        .unwrap(),
+    )
+    .protected
+}
+
+// trace:STORY-1888.acd4bc79 | ai:claude
+#[test]
+fn operator_layer_path_refuses_mandate_ship() {
+    let tmp = tempfile::tempdir().unwrap();
+    let state = MandateState::Active(drive_mandate(tmp.path(), "joe"));
+    let policy = Default::default();
+    let ledger = Ok(Default::default());
+    let hold = crate::mandate::HoldFacts::None;
+    let protected = operator_protected();
+    let paths = vec!["README.md".to_string(), "x/y.rs".to_string()];
+    let mut c = ship_check(&state, &policy, &ledger, &hold, Some(&paths));
+    c.protected = &protected;
+    let hit = crate::mandate_gates::GateMatch {
+        path: "x/y.rs".into(),
+        entry: "x/".into(),
+        source: crate::mandate_gates::PathSource::Operator,
+    };
+    assert_eq!(
+        crate::mandate::ship_decision(&c),
+        Err(MandateRefusal::TouchesGates(hit.clone()))
+    );
+    let msg = MandateRefusal::TouchesGates(hit).message(7);
+    assert!(
+        msg.contains("`x/`") && msg.contains("~/.aida/config.toml"),
+        "{msg}"
+    );
+    // The floor alone lets the same PR through to hold cover.
+    c.protected = crate::mandate_gates::ProtectedPaths::floor_ref();
+    assert!(!matches!(
+        crate::mandate::ship_decision(&c),
+        Err(MandateRefusal::TouchesGates(_))
+    ));
+}
+
+// trace:STORY-1888.acd4bc79 | ai:claude
+#[test]
+fn plan_held_pr_uses_effective_set() {
+    let held = || {
+        vec![HeldPr {
+            pr: 11,
+            releasable: true,
+            head: Some("d".repeat(40)),
+            spec: None,
+            approved_at_head: true,
+            changed_paths: Some(vec!["x/y.rs".into()]),
+        }]
+    };
+    // The tick reads the protected set from its gate load ...
+    let fx = Fixture::new();
+    drive_mandate(fx.mandates.path(), "joe");
+    let mut inputs = fx.inputs(&now_clock, Vec::new(), "joe");
+    inputs.held_prs = held();
+    inputs.gates = Ok(HumanGates {
+        protected: operator_protected(),
+        ..Default::default()
+    });
+    let mut fake = Fake::default();
+    let report = run_tick(&inputs, &TickHooks::default(), &mut fake);
+    assert!(fake.due.is_empty());
+    assert_eq!(report.rows[0].outcome, Outcome::Gated);
+    let why = report.rows[0].why.as_deref().unwrap();
+    assert!(
+        why.contains("`x/`") && why.contains("~/.aida/config.toml"),
+        "{why}"
+    );
+    // ... so without the operator entry the same PR is a ship.
+    let fx = Fixture::new();
+    drive_mandate(fx.mandates.path(), "joe");
+    let mut inputs = fx.inputs(&now_clock, Vec::new(), "joe");
+    inputs.held_prs = held();
+    let mut fake = Fake::default();
+    run_tick(&inputs, &TickHooks::default(), &mut fake);
+    assert_eq!(fake.due.len(), 1);
+    assert_eq!(fake.due[0].1.command, "aida pr ship 11");
+}
+
 // ── T7.12: principal under the scheduler ────────────────────────────────────
 
 // trace:STORY-1700.ac8eabb8 | ai:claude
@@ -909,7 +1013,8 @@ fn write_record(dir: &Path, body: &serde_json::Value) {
 // trace:STORY-1700.ace038d6 | ai:claude
 #[test]
 fn unknown_scope_string_fails_closed() {
-    for bogus in ["relay-restart", "bogus"] {
+    // relay-restart became a real scope in STORY-1706. trace:STORY-1706 | ai:claude
+    for bogus in ["relay-kill", "bogus"] {
         let dir = tempfile::tempdir().unwrap();
         let mut body = serde_json::to_value(drive_mandate(dir.path(), "joe")).unwrap();
         let id = uuid::Uuid::new_v4().to_string();
@@ -2118,12 +2223,59 @@ fn a_redispatch_or_setup_lane_carries_the_runs_spec_and_fails_closed_without_one
     }
 }
 
+/// Preview gate inputs with no human gate and no always-human spec.
+fn ungated(store_readable: bool) -> PreviewGates<'static> {
+    PreviewGates {
+        store_readable,
+        gates: Ok(HumanGates::default()),
+        spec_always_human: &|_| None,
+    }
+}
+
+/// TASK-1933: the preview applies the tick's `[mandate.human_gates]` op gate
+/// and the operator-only/sticky floor, in the human and the `--json` form, so
+/// it never shows routed (`held: null`) a lane the tick would gate.
+// trace:TASK-1955 | ai:claude (TASK-1933)
+#[test]
+fn the_preview_shows_human_gates_and_the_operator_only_floor_as_the_tick_does() {
+    let decisions = vec![plan_unowned_spec(&unowned("STORY-9"))];
+    assert_eq!(
+        preview_json(&decisions, &ungated(true))["lanes"][0]["held"],
+        serde_json::Value::Null
+    );
+
+    let op_gated = PreviewGates {
+        store_readable: true,
+        gates: Ok(HumanGates {
+            ops: [GateOp::Dispatch].into_iter().collect(),
+            ..Default::default()
+        }),
+        spec_always_human: &|_| None,
+    };
+    let held = preview_json(&decisions, &op_gated)["lanes"][0]["held"].clone();
+    assert!(
+        held.as_str().is_some_and(|h| h.starts_with("gated: ")),
+        "{held}"
+    );
+    assert!(preview_lines(&decisions, &op_gated)[0].contains("(gated: "));
+
+    let operator_only = PreviewGates {
+        store_readable: true,
+        gates: Ok(HumanGates::default()),
+        spec_always_human: &|s| (s == "STORY-9").then(|| "operator-only".to_string()),
+    };
+    assert_eq!(
+        preview_json(&decisions, &operator_only)["lanes"][0]["held"],
+        "gated: STORY-9 is operator-only"
+    );
+}
+
 // `aida fleet drive --json` (preview) emits JSON even with no lane to drive,
 // and carries the same withheld status the human preview shows.
 // trace:STORY-1700 | ai:claude
 #[test]
 fn the_json_preview_is_json_with_no_lanes_and_mirrors_withheld_routes() {
-    let empty = preview_json(&[], true);
+    let empty = preview_json(&[], &ungated(true));
     assert_eq!(empty["store_readable"], true);
     assert_eq!(empty["lanes"], serde_json::json!([]));
 
@@ -2132,9 +2284,9 @@ fn the_json_preview_is_json_with_no_lanes_and_mirrors_withheld_routes() {
         &lane("c", LaneClass::Crashed, &fx.run_dir("c"), &[]),
         &fixture_signoff,
     )];
-    let readable = preview_json(&decisions, true);
+    let readable = preview_json(&decisions, &ungated(true));
     assert_eq!(readable["lanes"][0]["held"], serde_json::Value::Null);
-    let blind = preview_json(&decisions, false);
+    let blind = preview_json(&decisions, &ungated(false));
     assert_eq!(blind["store_readable"], false);
     let lane = &blind["lanes"][0];
     assert!(lane["subject"].as_str().unwrap().contains("relay run c"));
@@ -2159,11 +2311,11 @@ fn the_preview_warns_and_shows_routes_withheld_when_the_store_is_unreadable() {
             &fixture_signoff,
         ),
     ];
-    let readable = preview_lines(&decisions, true);
+    let readable = preview_lines(&decisions, &ungated(true));
     assert!(readable
         .iter()
         .all(|l| !l.contains("withheld") && !l.starts_with("warning")));
-    let blind = preview_lines(&decisions, false);
+    let blind = preview_lines(&decisions, &ungated(false));
     assert!(blind[0].starts_with("warning: the requirement store is unreadable"));
     let crash = blind.iter().find(|l| l.contains("relay run c")).unwrap();
     assert!(
@@ -2176,7 +2328,7 @@ fn the_preview_warns_and_shows_routes_withheld_when_the_store_is_unreadable() {
         "an ungated operator notice is not withheld: {api}"
     );
     assert_eq!(
-        preview_lines(&[], false).len(),
+        preview_lines(&[], &ungated(false)).len(),
         1,
         "the warning shows even with no lanes"
     );
@@ -2308,13 +2460,15 @@ fn a_mail_failure_retry_does_not_duplicate_the_due_event() {
     let fail = |_: &Path, _: &aida_core::mailbox::Message| -> Result<()> {
         anyhow::bail!("mailbox is read-only")
     };
-    assert!(emit_due_with(root.path(), "m-1", &item, &fail).is_err());
+    let mut recorded = false;
+    assert!(emit_due_with(root.path(), "m-1", &item, &mut recorded, &fail).is_err());
+    assert!(recorded, "the event was written before the mail failed");
     let sent = Cell::new(0usize);
     let ok = |_: &Path, _: &aida_core::mailbox::Message| -> Result<()> {
         sent.set(sent.get() + 1);
         Ok(())
     };
-    emit_due_with(root.path(), "m-1", &item, &ok).unwrap();
+    emit_due_with(root.path(), "m-1", &item, &mut recorded, &ok).unwrap();
     let due = crate::events::read_all(root.path())
         .into_iter()
         .filter(|ev| {
@@ -2370,7 +2524,9 @@ fn a_corrupt_drive_state_fails_closed() {
     assert_eq!(changed.rows.len(), 1);
     assert!(fake.due.is_empty());
 
-    // With no own active mandate, nothing is ledgered under an empty id.
+    // With no own active mandate, nothing is ledgered under an empty id;
+    // the R4 mismatch (another principal's record) is still told, once.
+    // trace:TASK-1955 | ai:claude
     let other = Fixture::new();
     drive_mandate(other.mandates.path(), "a");
     let path = state_path(other.root.path());
@@ -2382,8 +2538,21 @@ fn a_corrupt_drive_state_fails_closed() {
         &TickHooks::default(),
         &mut fake,
     );
-    assert!(fake.rows.is_empty(), "{:?}", fake.rows);
     assert!(report.idle.is_some());
+    assert_eq!(fake.rows.len(), 1, "{:?}", fake.rows);
+    assert!(!fake.rows[0].0.is_empty());
+    assert_eq!(
+        fake.rows[0].1.why.as_deref(),
+        Some("principal mismatch: record=a tick=b")
+    );
+    assert_eq!(fake.notices.len(), 1);
+    let again = run_tick(
+        &other.inputs(&now_clock, Vec::new(), "b"),
+        &TickHooks::default(),
+        &mut fake,
+    );
+    assert!(again.rows.is_empty(), "{again:?}");
+    assert_eq!((fake.rows.len(), fake.notices.len()), (1, 1));
 }
 
 // F6: the mismatch notice is marked sent only once it is sent.
@@ -2626,4 +2795,247 @@ fn run_spec_keeps_only_store_known_ids() {
     };
     assert_eq!(p.spec, None);
     assert_eq!(p.forced_gate.as_deref(), Some(RUN_SPEC_UNKNOWN));
+}
+
+// ── TASK-1955 slice 8: drive follow-ups from the PR-2804 review ────────────
+
+fn tick_specs(
+    fx: &Fixture,
+    specs: Vec<UnownedSpec>,
+    clock: &dyn Fn() -> DateTime<Utc>,
+    fake: &mut Fake,
+) -> TickReport {
+    let mut inputs = fx.inputs(clock, Vec::new(), "joe");
+    inputs.unowned_specs = specs;
+    run_tick(&inputs, &TickHooks::default(), fake)
+}
+
+// A dispatch nobody takes up is re-routed after 2h, 4h and 8h, then no
+// more until an owner shows up; an owner that comes and goes resets that.
+// trace:TASK-1955 | ai:claude (TASK-2078) (TASK-1696)
+#[test]
+fn an_untaken_dispatch_backs_off_and_stops_rerouting() {
+    let fx = Fixture::new();
+    // The longest mandate (24h): the backoff spans most of it.
+    let m = crate::mandate::start_with(
+        fx.mandates.path(),
+        &ok_human,
+        "joe",
+        Duration::hours(24),
+        Some("fire".into()),
+        true,
+        true,
+        t0(),
+    )
+    .unwrap();
+    let mut fake = Fake::default();
+    let at = |h: i64, m: i64| move || now_clock() + Duration::hours(h) + Duration::minutes(m);
+    tick_specs(&fx, vec![unowned("TASK-1")], &at(0, 0), &mut fake);
+    assert_eq!(fake.due.len(), 1);
+    // 2h after the route: re-routed (epoch 1).
+    tick_specs(&fx, vec![unowned("TASK-1")], &at(2, 1), &mut fake);
+    assert_eq!(fake.due.len(), 2);
+    // The next window is 4h, not 2h.
+    tick_specs(&fx, vec![unowned("TASK-1")], &at(4, 2), &mut fake);
+    assert_eq!(fake.due.len(), 2, "the window doubled");
+    tick_specs(&fx, vec![unowned("TASK-1")], &at(6, 2), &mut fake);
+    assert_eq!(fake.due.len(), 3);
+    tick_specs(&fx, vec![unowned("TASK-1")], &at(14, 3), &mut fake);
+    assert_eq!(fake.due.len(), 4);
+    // Three stale re-routes spent: nothing new for the rest of the mandate.
+    for h in [17, 20, 22] {
+        tick_specs(&fx, vec![unowned("TASK-1")], &at(h, 30), &mut fake);
+    }
+    assert_eq!(fake.due.len(), 4, "{:?}", fake.due);
+    assert_eq!(fake.due[3].1.head, "approved#3");
+    // An owner takes it and goes away: a new epoch at once, budget reset.
+    let mut claimed = unowned("TASK-1");
+    claimed.live_claim = true;
+    tick_specs(&fx, vec![claimed], &at(22, 40), &mut fake);
+    tick_specs(&fx, vec![unowned("TASK-1")], &at(22, 50), &mut fake);
+    assert_eq!(fake.due.len(), 5);
+    let d = load_state(fx.root.path()).unwrap().mandates[&m.id].dispatch["TASK-1"].clone();
+    assert_eq!((d.epoch, d.stale_reroutes), (4, 0), "{d:?}");
+}
+
+// A dispatch routed before epochs existed (only its emitted key, no
+// routed_at) is dated from first sight, so its epoch can close.
+// trace:TASK-1955 | ai:claude (TASK-2080) (TASK-1694)
+#[test]
+fn a_pre_epoch_dispatch_is_dated_and_rerouted() {
+    let fx = Fixture::new();
+    let m = drive_mandate(fx.mandates.path(), "joe");
+    let mut state = DriveState::default();
+    let per = state.mandates.entry(m.id.clone()).or_default();
+    per.emitted.insert("spec:TASK-1|dispatch|approved".into());
+    std::fs::create_dir_all(fx.root.path().join(".aida")).unwrap();
+    std::fs::write(
+        state_path(fx.root.path()),
+        serde_json::to_vec(&state).unwrap(),
+    )
+    .unwrap();
+    let mut fake = Fake::default();
+    tick_specs(&fx, vec![unowned("TASK-1")], &now_clock, &mut fake);
+    assert!(fake.due.is_empty(), "already routed before the upgrade");
+    let dated = load_state(fx.root.path()).unwrap().mandates[&m.id].dispatch["TASK-1"].clone();
+    assert_eq!(dated.routed_at, Some(now_clock()));
+    let late = || now_clock() + Duration::hours(2) + Duration::minutes(1);
+    tick_specs(&fx, vec![unowned("TASK-1")], &late, &mut fake);
+    assert_eq!(fake.due.len(), 1);
+    assert_eq!(fake.due[0].1.head, "approved#1");
+}
+
+// The state stays bounded: specs no longer approved lose their epoch and
+// keys, an old epoch's keys go, and so do skip/refusal keys of sessions the
+// reap no longer reports. An unreadable store prunes no spec state.
+// trace:TASK-1955 | ai:claude (TASK-2080) (TASK-1694)
+#[test]
+fn drive_state_prunes_what_no_longer_names_a_live_item() {
+    let fx = Fixture::new();
+    let m = drive_mandate(fx.mandates.path(), "joe");
+    let mut fake = Fake {
+        reap: vec![ReapRow {
+            subject: "session s9".into(),
+            outcome: Outcome::Skipped,
+            why: "skipped — worktree dirty".into(),
+        }],
+        ..Default::default()
+    };
+    let mut claimed = unowned("TASK-2");
+    claimed.live_claim = true;
+    tick_specs(
+        &fx,
+        vec![unowned("TASK-1"), claimed.clone()],
+        &now_clock,
+        &mut fake,
+    );
+    let per = |fx: &Fixture| load_state(fx.root.path()).unwrap().mandates[&m.id].clone();
+    let first = per(&fx);
+    assert!(first.emitted.contains("spec:TASK-1|dispatch|approved"));
+    assert!(first
+        .emitted
+        .iter()
+        .any(|k| k.starts_with("leases|session s9|")));
+    assert_eq!(first.dispatch.len(), 2);
+    // TASK-1 leaves Approved; s9 is gone: an unreadable store keeps the
+    // spec state, the reap's view drops the session key.
+    let mut inputs = fx.inputs(&now_clock, Vec::new(), "joe");
+    inputs.store_readable = false;
+    run_tick(&inputs, &TickHooks::default(), &mut fake);
+    let blind = per(&fx);
+    assert!(blind.emitted.contains("spec:TASK-1|dispatch|approved"));
+    assert!(!blind.emitted.iter().any(|k| k.starts_with("leases|")));
+    assert_eq!(blind.dispatch.len(), 2);
+    // A readable store without TASK-1 drops it; TASK-2 stays.
+    tick_specs(&fx, vec![claimed], &now_clock, &mut fake);
+    let pruned = per(&fx);
+    assert!(!pruned.emitted.iter().any(|k| k.starts_with("spec:TASK-1|")));
+    assert_eq!(pruned.dispatch.keys().collect::<Vec<_>>(), ["TASK-2"]);
+    // An old epoch's key goes once the spec moves to a new one.
+    let late = || now_clock() + Duration::hours(3);
+    tick_specs(&fx, vec![unowned("TASK-2")], &now_clock, &mut fake);
+    tick_specs(&fx, vec![unowned("TASK-2")], &late, &mut fake);
+    let moved = per(&fx);
+    assert!(moved.emitted.contains("spec:TASK-2|dispatch|approved#1"));
+    assert!(!moved.emitted.contains("spec:TASK-2|dispatch|approved"));
+}
+
+// A failed mail after a written due event: the retry is told the event is
+// recorded (from the drive state, no event-log scan), and success clears it.
+// trace:TASK-1955 | ai:claude (TASK-2084) (TASK-1693)
+#[test]
+fn a_mail_retry_reads_the_recorded_event_from_the_state() {
+    let fx = Fixture::new();
+    let m = drive_mandate(fx.mandates.path(), "joe");
+    let mut fake = Fake {
+        fail_mail_for: Some("spec:TASK-1".into()),
+        ..Default::default()
+    };
+    tick_specs(&fx, vec![unowned("TASK-1")], &now_clock, &mut fake);
+    let key = "spec:TASK-1|dispatch|approved";
+    let state = load_state(fx.root.path()).unwrap();
+    assert!(state.mandates[&m.id].due_recorded.contains(key));
+    fake.fail_mail_for = None;
+    let later = || now_clock() + Duration::hours(1);
+    tick_specs(&fx, vec![unowned("TASK-1")], &later, &mut fake);
+    assert_eq!(fake.recorded_on_entry, [false, true]);
+    assert_eq!(fake.due.len(), 1);
+    let state = load_state(fx.root.path()).unwrap();
+    assert!(state.mandates[&m.id].due_recorded.is_empty());
+    assert!(state.mandates[&m.id].emitted.contains(key));
+}
+
+// A reap that fails the same way every tick is one ledgered row; a new
+// reason is a new row.
+// trace:TASK-1955 | ai:claude (TASK-1697)
+#[test]
+fn a_persistent_reap_failure_is_ledgered_once_per_reason() {
+    let fx = Fixture::new();
+    drive_mandate(fx.mandates.path(), "joe");
+    let failing = |why: &str| {
+        vec![
+            ReapRow {
+                subject: "session s3".into(),
+                outcome: Outcome::Refused,
+                why: why.into(),
+            },
+            ReapRow {
+                subject: "agent registry".into(),
+                outcome: Outcome::Refused,
+                why: "agent registry GC failed: EACCES".into(),
+            },
+        ]
+    };
+    let mut fake = Fake::default();
+    let mut tick = |reap| {
+        fake.reap = reap;
+        run_tick(
+            &fx.inputs(&now_clock, Vec::new(), "joe"),
+            &TickHooks::default(),
+            &mut fake,
+        )
+    };
+    assert_eq!(
+        tick(failing("failed — could not remove worktree /w"))
+            .rows
+            .len(),
+        2
+    );
+    assert!(tick(failing("failed — could not remove worktree /w"))
+        .rows
+        .is_empty());
+    let changed = tick(failing("failed — could not delete branch x"));
+    assert_eq!(changed.rows.len(), 1);
+    assert_eq!(changed.rows[0].subject, "session s3");
+}
+
+// An unwritable refusal sidecar: the tick reports why and does not ledger
+// or notify the same refusal every tick.
+// trace:TASK-1955 | ai:claude
+#[test]
+fn an_unwritable_refusal_sidecar_is_reported_not_repeated() {
+    let fx = Fixture::new();
+    drive_mandate(fx.mandates.path(), "joe");
+    let path = state_path(fx.root.path());
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(&path, "{not json").unwrap();
+    let sidecar = fx
+        .root
+        .path()
+        .join(".aida/mandate-drive-state.refused.json");
+    std::fs::create_dir_all(sidecar.join("blocker")).unwrap();
+    let mut fake = Fake::default();
+    for _ in 0..3 {
+        let report = run_tick(
+            &fx.inputs(&now_clock, three_lanes(&fx), "joe"),
+            &TickHooks::default(),
+            &mut fake,
+        );
+        let idle = report.idle.unwrap();
+        assert!(idle.contains("not ledgered or notified"), "{idle}");
+        assert!(idle.contains("refused.json"), "{idle}");
+    }
+    assert!(fake.rows.is_empty(), "{:?}", fake.rows);
+    assert!(fake.notices.is_empty());
+    assert!(fake.due.is_empty());
 }

@@ -1,5 +1,43 @@
 use super::*;
 
+/// The workspace `target/`, the one non-temp place a fixture store may
+/// live.
+// trace:TASK-1955 | ai:claude (TASK-2223)
+fn workspace_target() -> Option<std::path::PathBuf> {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .map(|workspace| workspace.join("target"))
+}
+
+thread_local! {
+    /// BUG-1934: force [`in_foreign_pid_namespace`] for this test thread
+    /// (`None` = probe for real). Unit tests default to "not foreign" so
+    /// a test suite run inside a sandbox keeps its expected sentences.
+    pub(crate) static FOREIGN_NAMESPACE: std::cell::Cell<Option<bool>> =
+        const { std::cell::Cell::new(Some(false)) };
+}
+
+/// Panic unless `store` is a scratch store a test may write: under a
+/// system temp root, or under this workspace's `target/` (fixtures that
+/// must live outside `/tmp`). A test that resolves a real checkout's store
+/// fails here instead of rewriting it (BUG-2209).
+// trace:BUG-2209 | ai:claude
+pub(crate) fn assert_scratch_store(store: &Path) {
+    if aida_core::team::is_under_temp_root(store) {
+        return;
+    }
+    let canonical = store.canonicalize().unwrap_or_else(|_| store.to_path_buf());
+    let in_target = workspace_target()
+        .and_then(|t| t.canonicalize().ok())
+        .is_some_and(|t| canonical.starts_with(t));
+    assert!(
+        in_target,
+        "test wrote a roster to `{}`, which is neither under a temp directory nor under \
+         the workspace target/: the fixture resolved a real store",
+        store.display()
+    );
+}
+
 /// Write the store plumbing (`.aida/config.toml`, `objects/`) plus a
 /// roster ceiling allowing `seat` ∪ `delegable` for `subject`, then mint
 /// a direct grant bound to `subject` and return its handle. The caller
@@ -52,28 +90,25 @@ pub(crate) fn mint_grant_for_with_ttl(
     let registry = store.join("registry");
     std::fs::create_dir_all(&registry).unwrap();
 
-    // Merge (never clobber) the roster ceiling for `subject`.
+    // Merge (never clobber) the roster ceiling for `subject`, and only
+    // into a scratch store: a fixture whose walk-up escaped to a real
+    // checkout once wrote this roster over the operator's (BUG-2209).
+    // trace:BUG-2209 | ai:claude
+    assert_scratch_store(&store);
     let seat = aida_core::team::canonical_role(seat);
-    let mut members: std::collections::BTreeMap<String, Vec<String>> =
-        aida_core::team::TeamRoster::load(&store)
-            .entries()
-            .into_iter()
-            .collect();
-    let seats = members.entry(subject.to_string()).or_default();
-    for requested in std::iter::once(seat.as_str()).chain(delegable.iter().copied()) {
-        let canonical = aida_core::team::canonical_role(requested);
-        if !seats.iter().any(|have| *have == canonical) {
-            seats.push(canonical);
+    // The primitive guards the write itself, accepting the workspace
+    // `target/`, and takes the store write lock (TASK-2223, TASK-2224).
+    // trace:TASK-1955 | ai:claude (TASK-2292)
+    aida_core::team::write_member_seats(&store, subject, None, |current| {
+        let mut seats = current.map(<[String]>::to_vec).unwrap_or_default();
+        for requested in std::iter::once(seat.as_str()).chain(delegable.iter().copied()) {
+            let canonical = aida_core::team::canonical_role(requested);
+            if !seats.iter().any(|have| *have == canonical) {
+                seats.push(canonical);
+            }
         }
-    }
-    #[derive(serde::Serialize)]
-    struct RosterFile {
-        members: std::collections::BTreeMap<String, Vec<String>>,
-    }
-    std::fs::write(
-        registry.join("team.toml"),
-        toml::to_string(&RosterFile { members }).unwrap(),
-    )
+        Some(seats)
+    })
     .unwrap();
 
     let lifetime = ttl.unwrap_or(MAX_GRANT_AGE);
@@ -93,6 +128,10 @@ pub(crate) fn mint_grant_for_with_ttl(
         issued_at: now,
         expires_at: now + lifetime,
         revoked_at: None,
+        // BUG-1934: bound to the test process, the presenter of every
+        // in-process check and an ancestor of every binary a test spawns.
+        // trace:BUG-1934 | ai:claude
+        binding: own_process_token().into_iter().collect(),
     };
     write_grant(&grant).unwrap();
     grant.id

@@ -3,7 +3,7 @@ description: Run /aida-burndown.
 ---
 # Autonomously Burn Down the Backlog
 
-Fan out worktree-isolated implementer subagents over the ready set, integrate
+Launch one standalone implementer process per ready spec, integrate
 their PRs, and loop until drained — the empirically-working autonomous drain,
 encoded so the "never stop to ask" rules are structural.
 
@@ -15,7 +15,9 @@ Follow the workflow in `.claude/skills/aida-burndown/SKILL.md`:
    `--tag <T>` / `--batch <B>` / `--max <N>`).
 2. Get the ready set: `aida burndown plan <selector> --json` → `{ready, parked}`.
    Report the parked count + reasons once; act on `ready` only. Empty → stop.
-3. Fan out one worktree-isolated implementer subagent per ready spec (bounded
+3. Launch one standalone implementer per ready spec from Bash,
+   `aida queue work <SPEC> --role implementer --no-human --vendor claude`,
+   and branch on its exit code (bounded
    wave); each takes ONE spec end-to-end to a PR.
 4. Integrate (you do NOT implement): review each PR in a separate reviewer
    process launched from Bash

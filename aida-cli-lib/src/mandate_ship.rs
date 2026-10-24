@@ -41,6 +41,175 @@ pub(crate) fn mandate_exclusion_specs(
         .collect()
 }
 
+/// TASK-2067: resolve every exclusion subject — the named IDs and the
+/// trace-derived ones — to its current record, its recorded aliases and every
+/// stored version, exactly as the mandate cover judges them. Shared by the
+/// cover and the TASK-1800 replay so the replay measures production
+/// resolution.
+// trace:TASK-2067 | ai:claude
+pub(crate) fn resolve_exclusion_specs(
+    store: Option<&aida_core::RequirementsStore>,
+    store_root: &std::path::Path,
+    named: &[String],
+    traced: std::collections::BTreeSet<String>,
+) -> Vec<crate::mandate::ShipSpec> {
+    let mut history_keys_of: Vec<Vec<String>> = Vec::new();
+    let mut specs = mandate_exclusion_specs(named, traced, |id, is_named| {
+        let req = store.and_then(|store| {
+            store
+                .requirements
+                .iter()
+                .find(|r| {
+                    r.spec_id
+                        .as_deref()
+                        .is_some_and(|s| s.eq_ignore_ascii_case(id))
+                        || r.agreed_id
+                            .as_deref()
+                            .is_some_and(|s| s.eq_ignore_ascii_case(id))
+                })
+                .cloned()
+        });
+        // TASK-1800: collect any recorded aliases (both spec_id and agreed_id)
+        // so that an agreed_id resolves to its stored spec_id object path for
+        // history, and the ledger check / note_exclusions cover both keys.
+        let mut aliases = Vec::new();
+        let mut history_keys = vec![id.to_owned()];
+        if let Some(ref r) = req {
+            for candidate in [r.spec_id.as_deref(), r.agreed_id.as_deref()]
+                .into_iter()
+                .flatten()
+            {
+                let upper = candidate.trim().to_ascii_uppercase();
+                if !upper.is_empty() && !upper.eq_ignore_ascii_case(id) {
+                    if !aliases
+                        .iter()
+                        .any(|a: &String| a.eq_ignore_ascii_case(&upper))
+                    {
+                        aliases.push(upper.clone());
+                    }
+                    if !history_keys
+                        .iter()
+                        .any(|k: &String| k.eq_ignore_ascii_case(&upper))
+                    {
+                        history_keys.push(upper);
+                    }
+                }
+            }
+        }
+        // History is read in one batch below, once every spec is resolved.
+        // trace:BUG-2179 | ai:claude
+        history_keys_of.push(history_keys);
+        crate::mandate::ShipSpec {
+            id: id.to_owned(),
+            aliases,
+            named: is_named,
+            shipped: false,
+            current: req,
+            history: Ok(Vec::new()),
+        }
+    });
+    // trace:TASK-1800 | ai:claude
+    // A deleted spec has no current record to name its aliases, so find every
+    // object that ever carried its ID in store history. A history that cannot
+    // be searched refuses below; it never makes the ID dangling.
+    // BUG-2179: one search serves every deleted spec, and one walk plus one
+    // object read serves every spec's history, instead of a full-history
+    // `git log --all` per spec.
+    let deleted: Vec<String> = specs
+        .iter()
+        .filter(|spec| spec.current.is_none())
+        .map(|spec| spec.id.clone())
+        .collect();
+    let alias_search = crate::mandate::store_history_alias_map(store_root, &deleted);
+    for (spec, keys) in specs.iter_mut().zip(history_keys_of.iter_mut()) {
+        if spec.current.is_some() {
+            continue;
+        }
+        let found = match &alias_search {
+            Ok(map) => map
+                .get(&spec.id.to_ascii_uppercase())
+                .cloned()
+                .unwrap_or_default(),
+            Err(_) => Vec::new(),
+        };
+        for alias in found {
+            if !spec.aliases.iter().any(|a| a.eq_ignore_ascii_case(&alias)) {
+                spec.aliases.push(alias.clone());
+            }
+            if !keys.iter().any(|k| k.eq_ignore_ascii_case(&alias)) {
+                keys.push(alias);
+            }
+        }
+    }
+    let all_keys: Vec<String> = history_keys_of.iter().flatten().cloned().collect();
+    let batch = crate::mandate::StoreHistoryBatch::read(store_root, &all_keys);
+    let code_root = store_root
+        .file_name()
+        .filter(|name| *name == ".aida-store")
+        .and_then(|_| store_root.parent())
+        .unwrap_or(store_root);
+    for (spec, keys) in specs.iter_mut().zip(&history_keys_of) {
+        // STORY-1698 / TASK-1800: sticky exclusion reads every stored version
+        // across the ID and any resolved alias object path.
+        spec.history = (|| -> std::result::Result<Vec<aida_core::Requirement>, String> {
+            if spec.current.is_none() {
+                alias_search.as_ref().map_err(String::clone)?;
+            }
+            let batch = batch.as_ref().map_err(String::clone)?;
+            let mut all_versions = Vec::new();
+            for key in keys {
+                all_versions.extend(batch.versions(key)?);
+            }
+            if spec.named && all_versions.is_empty() {
+                return Err(format!("no version of {} in the store's history", spec.id));
+            }
+            Ok(all_versions)
+        })();
+        // TASK-2314: a trace-derived operator-only exclusion expires only when
+        // the traced spec is Completed AND its git linkage shows a merged
+        // commit on the default branch. Check default-branch commit linkage
+        // only for non-named Completed specs.
+        // trace:TASK-2314 | ai:agy
+        spec.shipped = !spec.named
+            && spec
+                .current
+                .as_ref()
+                .is_some_and(|req| matches!(req.status, aida_core::RequirementStatus::Completed))
+            && crate::shipped_linkage::has_shipped_commit_on_default_branch(code_root, keys);
+    }
+    specs
+}
+
+/// BUG-2214: with no marker on disk, "a human already cleared the hold" is
+/// accepted only when three independently writable sources all agree: the
+/// local clearance record (a human/operator principal, no mandate), a
+/// TTY-attested human release event that is the PR's newest hold change, and
+/// the forge's label state (`aida:merge-hold` absent, the BUG-1693
+/// recorded/cleared pair consistent). `labels` is read last, so the forge
+/// round-trip is spent only when both local halves qualify. Anything less —
+/// a forged clearance file, a stripped label, an unattested or re-placed
+/// event, an unreadable forge — stays [`HoldFacts::None`], which the cover
+/// refuses as `NoHoldMarker` (fail closed).
+// trace:BUG-2214 | ai:claude
+pub(crate) fn cleared_by_human_facts(
+    hold_root: &std::path::Path,
+    pr: u64,
+    labels: impl FnOnce() -> std::result::Result<Option<crate::merge_hold::PinnedChange>, String>,
+) -> crate::mandate::HoldFacts {
+    use crate::mandate::HoldFacts;
+    if crate::merge_hold::human_recorded_clearance(hold_root, pr).is_none()
+        || !crate::merge_hold::human_attested_release(hold_root, pr)
+    {
+        return HoldFacts::None;
+    }
+    match labels() {
+        Ok(Some(c)) if !c.hold_label && c.recorded_label == c.cleared_label => {
+            HoldFacts::ClearedByHuman
+        }
+        _ => HoldFacts::None,
+    }
+}
+
 /// BUG-2179: how many times the mandate cover rebuilds its store evidence when
 /// a concurrent writer changes the store mid-collection, before refusing.
 const MANDATE_COLLECT_ATTEMPTS: u32 = 3;
@@ -161,6 +330,35 @@ pub(crate) fn mandate_ship_cover(
         crate::forge::resolve_open_change_forge_kind(main_worktree),
     )
     .map_err(&unreadable)?;
+    // BUG-2214: a forge-side head move (`gh pr update-branch`) leaves the new
+    // head unfetched locally, and the evidence diff below fails on the missing
+    // commit. Fetch the base and head first; a fetch that still fails falls
+    // through to `collect_pr`, which fails closed. trace:BUG-2214 | ai:claude
+    if let Some(branch) = head_branch {
+        let have_head = !info.head_oid.is_empty()
+            && std::process::Command::new("git")
+                .arg("-C")
+                .arg(main_worktree)
+                .args(["cat-file", "-e", &format!("{}^{{commit}}", info.head_oid)])
+                .status()
+                .map(|s| s.success())
+                .unwrap_or(false);
+        let have_base = std::process::Command::new("git")
+            .arg("-C")
+            .arg(main_worktree)
+            .args([
+                "rev-parse",
+                "--verify",
+                "--quiet",
+                &format!("refs/remotes/origin/{}^{{commit}}", info.base_ref),
+            ])
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+        if !(have_head && have_base) {
+            let _ = crate::pr_cmd::fetch_ship_refs(main_worktree, &info.base_ref, branch);
+        }
+    }
     let trace_evidence = crate::mandate_traces::collect_pr(
         main_worktree,
         &info.base_ref,
@@ -195,114 +393,12 @@ pub(crate) fn mandate_ship_cover(
         stable,
         || {
             let store = load_store_for_lookup(project_root);
-            let mut history_keys_of: Vec<Vec<String>> = Vec::new();
-            let mut specs =
-                mandate_exclusion_specs(&ids, trace_evidence.ids.clone(), |id, is_named| {
-                    let req = store.as_ref().and_then(|store| {
-                        store
-                            .requirements
-                            .iter()
-                            .find(|r| {
-                                r.spec_id
-                                    .as_deref()
-                                    .is_some_and(|s| s.eq_ignore_ascii_case(id))
-                                    || r.agreed_id
-                                        .as_deref()
-                                        .is_some_and(|s| s.eq_ignore_ascii_case(id))
-                            })
-                            .cloned()
-                    });
-                    // TASK-1800: collect any recorded aliases (both spec_id and agreed_id)
-                    // so that an agreed_id resolves to its stored spec_id object path for
-                    // history, and the ledger check / note_exclusions cover both keys.
-                    let mut aliases = Vec::new();
-                    let mut history_keys = vec![id.to_owned()];
-                    if let Some(ref r) = req {
-                        for candidate in [r.spec_id.as_deref(), r.agreed_id.as_deref()]
-                            .into_iter()
-                            .flatten()
-                        {
-                            let upper = candidate.trim().to_ascii_uppercase();
-                            if !upper.is_empty() && !upper.eq_ignore_ascii_case(id) {
-                                if !aliases
-                                    .iter()
-                                    .any(|a: &String| a.eq_ignore_ascii_case(&upper))
-                                {
-                                    aliases.push(upper.clone());
-                                }
-                                if !history_keys
-                                    .iter()
-                                    .any(|k: &String| k.eq_ignore_ascii_case(&upper))
-                                {
-                                    history_keys.push(upper);
-                                }
-                            }
-                        }
-                    }
-                    // History is read in one batch below, once every spec is resolved.
-                    // trace:BUG-2179 | ai:claude
-                    history_keys_of.push(history_keys);
-                    crate::mandate::ShipSpec {
-                        id: id.to_owned(),
-                        aliases,
-                        named: is_named,
-                        current: req,
-                        history: Ok(Vec::new()),
-                    }
-                });
-            // trace:TASK-1800 | ai:claude
-            // A deleted spec has no current record to name its aliases, so find every
-            // object that ever carried its ID in store history. A history that cannot
-            // be searched refuses below; it never makes the ID dangling.
-            // BUG-2179: one search serves every deleted spec, and one walk plus one
-            // object read serves every spec's history, instead of a full-history
-            // `git log --all` per spec.
-            let deleted: Vec<String> = specs
-                .iter()
-                .filter(|spec| spec.current.is_none())
-                .map(|spec| spec.id.clone())
-                .collect();
-            let alias_search = crate::mandate::store_history_alias_map(&store_root, &deleted);
-            for (spec, keys) in specs.iter_mut().zip(history_keys_of.iter_mut()) {
-                if spec.current.is_some() {
-                    continue;
-                }
-                let found = match &alias_search {
-                    Ok(map) => map
-                        .get(&spec.id.to_ascii_uppercase())
-                        .cloned()
-                        .unwrap_or_default(),
-                    Err(_) => Vec::new(),
-                };
-                for alias in found {
-                    if !spec.aliases.iter().any(|a| a.eq_ignore_ascii_case(&alias)) {
-                        spec.aliases.push(alias.clone());
-                    }
-                    if !keys.iter().any(|k| k.eq_ignore_ascii_case(&alias)) {
-                        keys.push(alias);
-                    }
-                }
-            }
-            let all_keys: Vec<String> = history_keys_of.iter().flatten().cloned().collect();
-            let batch = crate::mandate::StoreHistoryBatch::read(&store_root, &all_keys);
-            for (spec, keys) in specs.iter_mut().zip(&history_keys_of) {
-                // STORY-1698 / TASK-1800: sticky exclusion reads every stored version
-                // across the ID and any resolved alias object path.
-                spec.history = (|| -> std::result::Result<Vec<aida_core::Requirement>, String> {
-                    if spec.current.is_none() {
-                        alias_search.as_ref().map_err(String::clone)?;
-                    }
-                    let batch = batch.as_ref().map_err(String::clone)?;
-                    let mut all_versions = Vec::new();
-                    for key in keys {
-                        all_versions.extend(batch.versions(key)?);
-                    }
-                    if spec.named && all_versions.is_empty() {
-                        return Err(format!("no version of {} in the store's history", spec.id));
-                    }
-                    Ok(all_versions)
-                })();
-            }
+            let specs = resolve_exclusion_specs(
+                store.as_ref(),
+                &store_root,
+                &ids,
+                trace_evidence.ids.clone(),
+            );
             // STORY-1698: every excluded class seen in any version goes into the
             // append-only ledger first, then the ledger is read back as the first
             // source of exclusion. trace:STORY-1698 | ai:claude
@@ -337,7 +433,20 @@ pub(crate) fn mandate_ship_cover(
     )?;
     let hold_record = crate::merge_hold::read_hold_record(hold_root, pr);
     let hold_reason = crate::merge_hold::read_hold(hold_root, pr);
-    let hold = HoldFacts::of(hold_record.as_ref(), hold_reason.as_deref());
+    // BUG-2214: "no marker" may be a hold a human already cleared — accepted
+    // only when the clearance record, the attested release event and the forge
+    // labels all agree (see [`cleared_by_human_facts`]). trace:BUG-2214 | ai:claude
+    let hold = match HoldFacts::of(hold_record.as_ref(), hold_reason.as_deref()) {
+        HoldFacts::None => cleared_by_human_facts(hold_root, pr, || {
+            crate::merge_hold::fetch_pinned_change(
+                project_root,
+                crate::forge::resolve_forge_kind(project_root),
+                pr,
+            )
+            .map_err(|e| e.to_string())
+        }),
+        hold => hold,
+    };
     let id = decide(&ShipCheck {
         state: &state,
         now: chrono::Utc::now(),
@@ -375,6 +484,83 @@ pub(crate) fn mandate_ship_cover(
         id,
         principal: grant.map(|(_, p)| p).unwrap_or_default(),
     })
+}
+
+/// BUG-2214: the one mandate hold release — ship's exact sequence, shared by
+/// `aida pr ship` and the train's land step so the train never re-implements
+/// it: the release note, the marker clear, the ledger clearance
+/// (`advisor:<principal>` under the mandate id), the PR comment, the
+/// `MergeHoldChanged` event and the label removal. Each half is best-effort
+/// exactly as ship's was; the caller owns the post-release hold-gate wait and
+/// the re-arm on any later failure ([`rearm_after_mandate_failure`]).
+// trace:BUG-2214 | ai:claude
+// trace:STORY-1698 | ai:claude
+pub(crate) fn release_hold_under_mandate(
+    hold_root: &std::path::Path,
+    change: &crate::forge::ChangeRef,
+    cover: &MandateCover,
+    hold_record: &crate::merge_hold::MergeHoldRecord,
+    released_by_verdict: Option<crate::merge_hold::VerdictRef>,
+    head_sha: Option<&str>,
+    reason: &str,
+) {
+    use colored::Colorize;
+    let pr = hold_record.pr;
+    eprintln!(
+        "  {} PR-{pr}: merge-hold {}",
+        crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+        crate::mandate::release_note(&cover.id)
+    );
+    let _ = crate::merge_hold::clear_hold(hold_root, pr);
+    if let Err(err) = crate::merge_hold::record_mandate_clearance(
+        hold_root,
+        hold_record,
+        &cover.principal,
+        &cover.id,
+        released_by_verdict,
+    ) {
+        eprintln!(
+            "  {} could not record the mandate release on PR-{pr}: {err}",
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+        );
+    }
+    let _ = crate::forge::forge_for(hold_root).comment(
+        change,
+        &format!(
+            "Merge-hold {} (`{}`). Approval at `{}`; CI green.",
+            crate::mandate::release_note(&cover.id),
+            cover.principal,
+            head_sha.unwrap_or("?"),
+        ),
+    );
+    // BUG-1423: the coordination-seat release, in the event taxonomy.
+    // trace:BUG-1423 | ai:claude
+    let mut hold_event = crate::events::Event::new(
+        None,
+        "",
+        crate::events::EventKind::MergeHoldChanged {
+            pr: pr as u32,
+            placed: false,
+            // STORY-1698: a mandate release names the mandate.
+            reason: Some(format!(
+                "{} — {reason}",
+                crate::mandate::release_note(&cover.id)
+            )),
+            // BUG-2214: a mandate release is an advisor action and never
+            // attests as human.
+            principal: Some(format!("advisor:{}", cover.principal)),
+            human_attested: false,
+        },
+    );
+    hold_event.seat = crate::events::active_seat();
+    crate::events::emit(hold_root, &hold_event);
+    if let Err(err) = crate::merge_hold::sync_label(hold_root, pr, false) {
+        eprintln!(
+            "  {} {}",
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+            crate::pr_cmd::ship_unlabel_failure(pr, &err),
+        );
+    }
 }
 
 /// TASK-1960: the carry-over a mandate ship may rely on — `None` when the
@@ -449,3 +635,11 @@ pub(crate) fn mandate_still_active(id: &str) -> bool {
 #[cfg(test)]
 #[path = "tests/bug_2179_mandate_recollect_tests.rs"]
 mod bug_2179_mandate_recollect_tests;
+
+#[cfg(test)]
+#[path = "tests/bug_2214_cleared_hold_tests.rs"]
+mod bug_2214_cleared_hold_tests;
+
+#[cfg(test)]
+#[path = "tests/task_2067_trace_resolution_tests.rs"]
+mod task_2067_trace_resolution_tests;

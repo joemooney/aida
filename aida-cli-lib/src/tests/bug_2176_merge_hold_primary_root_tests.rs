@@ -190,9 +190,9 @@ fn many_hold_path_calls_resolve_the_primary_checkout_at_most_once() {
 
 #[test]
 fn the_store_resolver_never_spawns_git() {
-    let src = include_str!("../merge_hold_core.rs");
+    let src = include_str!("../merge_hold.rs");
     let start = src.find("pub(crate) fn hold_store_root(").unwrap();
-    let end = start + src[start..].find("\npub(crate) fn holds_dir(").unwrap();
+    let end = start + src[start..].find("\nfn holds_dir(").unwrap();
     let body = &src[start..end];
     assert!(
         !body.contains("Command::new"),
@@ -225,7 +225,7 @@ fn list_json_reports_stray_markers_with_their_label_only_state() {
         ])
     );
     // The list command emits exactly these rows, in text and JSON alike.
-    let cmd = include_str!("../../merge_hold_cmd.rs");
+    let cmd = include_str!("../merge_hold_cmd.rs");
     assert!(cmd.contains("let strays = merge_hold::stray_worktree_markers(&root);"));
     assert!(cmd.contains(
         "\"stray_worktree_markers\": merge_hold::stray_markers_json(&strays, &label_only)"
@@ -237,7 +237,7 @@ fn list_json_reports_stray_markers_with_their_label_only_state() {
 
 #[test]
 fn the_standalone_reviewer_adopts_its_marker_after_collecting_the_verdict() {
-    let src = include_str!("../../queue_cmd.rs");
+    let src = include_str!("../queue_cmd.rs");
     let collect = src
         .find("crate::review_verdict::collect_standalone_verdict(")
         .expect("verdict collection");
@@ -265,4 +265,51 @@ fn a_linked_worktree_placement_is_audited_from_the_primary_checkout() {
     std::fs::remove_file(local_hold_path(&primary, 2727)).unwrap();
     assert_eq!(unrecorded_marker_removals(&primary), vec![2727]);
     assert_eq!(unrecorded_marker_removals(&linked), vec![2727]);
+}
+
+/// TASK-2153: a contained reviewer's fallback marker is placed in its own
+/// worktree with its placement event. Adoption moves the marker AND carries
+/// that placement into the primary's log at its original time, so the hold's
+/// waiting age is the real one and a hand-deleted adopted marker is detected
+/// from the primary.
+// trace:TASK-1951 trace:TASK-2153 | ai:claude
+#[test]
+fn adoption_carries_the_original_placement_event_to_the_primary() {
+    use crate::events::EventKind;
+    let (_tmp, primary, linked) = primary_with_linked();
+    std::fs::create_dir_all(primary.join(".aida")).unwrap();
+    std::fs::write(primary.join(".aida/merge-holds"), "occupied").unwrap();
+    let since = std::time::SystemTime::now() - std::time::Duration::from_secs(5);
+    write_typed_hold(&linked, &rework(2728)).unwrap();
+    let placements = |root: &Path| -> Vec<chrono::DateTime<chrono::Utc>> {
+        crate::events::read_all(root)
+            .into_iter()
+            .filter_map(|e| match e.kind {
+                EventKind::MergeHoldChanged {
+                    pr: 2728,
+                    placed: true,
+                    ..
+                } => Some(e.ts),
+                _ => None,
+            })
+            .collect()
+    };
+    let original = placements(&linked);
+    assert_eq!(
+        original.len(),
+        1,
+        "the fallback placement is in the worktree log"
+    );
+
+    std::fs::remove_file(primary.join(".aida/merge-holds")).unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(20));
+    assert!(adopt_worktree_hold(&primary, &linked, 2728, since).unwrap());
+    assert_eq!(
+        placements(&primary),
+        original,
+        "the primary log carries the original placement, at its original time"
+    );
+
+    std::fs::remove_file(local_hold_path(&primary, 2728)).unwrap();
+    assert_eq!(unrecorded_marker_removals(&primary), vec![2728]);
 }

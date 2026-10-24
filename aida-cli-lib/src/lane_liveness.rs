@@ -520,6 +520,20 @@ fn load_routed(project_root: &Path) -> BTreeMap<String, DateTime<Utc>> {
         .unwrap_or_default()
 }
 
+/// TASK-2003: the PR heads lane-liveness last saw pushed past a Rework hold
+/// with green CI and no review yet (its routed `unpicked-ready-pr` findings),
+/// as PR number -> short head sha. Read-only; `aida list` uses it to show a
+/// held spec whose rework is awaiting review.
+// trace:TASK-1951 trace:TASK-2003 | ai:claude
+pub(crate) fn unpicked_ready_heads(project_root: &Path) -> BTreeMap<u64, String> {
+    load_routed(project_root)
+        .keys()
+        .filter_map(|id| id.strip_prefix(UNPICKED_READY_PR_PREFIX))
+        .filter_map(|rest| rest.strip_prefix("PR-")?.split_once('@'))
+        .filter_map(|(pr, sha)| Some((pr.parse().ok()?, sha.to_string())))
+        .collect()
+}
+
 /// Route new findings: one `lane-liveness-<seat>` due job per seat with a new
 /// finding, and one operator notification for new human-only gate waits.
 /// Also deletes headless lane records whose work has closed.
@@ -1553,10 +1567,10 @@ fn pushed_branch_progress_ts(repo: &Path, branch: &str) -> Option<DateTime<Utc>>
     branch_latest_commit_ts(repo, branch)
 }
 
-fn branch_latest_commit_ts(repo: &Path, branch: &str) -> Option<DateTime<Utc>> {
-    let out = std::process::Command::new("git")
-        .arg("-C")
-        .arg(repo)
+/// `repo` may be a lease's tree; a seat clone is refused (BUG-2169).
+// trace:TASK-2053 | ai:claude
+pub(crate) fn branch_latest_commit_ts(repo: &Path, branch: &str) -> Option<DateTime<Utc>> {
+    let out = aida_core::git_ops::host_git_command(repo)
         .args(["log", "-1", "--format=%cI", branch])
         .output()
         .ok()?;

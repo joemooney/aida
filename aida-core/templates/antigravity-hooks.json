@@ -7,5 +7,14 @@
         "timeout": 2
       }
     ]
+  },
+  "aida-mail-notice": {
+    "SessionStart": [
+      {
+        "type": "command",
+        "command": "top=$(git rev-parse --show-toplevel 2>/dev/null) || { printf '{}\\n'; exit 0; }; h=\"$top/.agents/hooks/aida-mail-notice.sh\"; [ -x \"$h\" ] || { printf '{}\\n'; exit 0; }; \"$h\" --client agy --event SessionStart",
+        "timeout": 10
+      }
+    ]
   }
 }

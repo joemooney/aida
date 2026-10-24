@@ -35,6 +35,8 @@ Around that core sit the **launchers** and the **comms**. `aida agent new` and `
 **Key options (rationale only).**
 - `enter` / `end` — the env-mutating pair; both *output shell code* and must be `eval`'d (or run bare under the shell helper). This is why they feel different from every other subcommand — they can't change your shell from a child process, so they hand you the code to do it. `enter` mints a direct grant (interactive TTY, seat in your roster), and so does `add` when it can; [the launcher table](#how-each-launcher-sets-the-agents-grant) lists both. `end` revokes the grant.
 - `enter --delegate-seat <seat>` (repeatable) — declare which child seats *this* session may hand to agents it launches. Omitted means **none**: a session cannot delegate by default, so before a launcher can issue an agent a `reviewer` child grant, your session must have been entered with `--delegate-seat reviewer`. Entering `advisor` at a TTY with no `--delegate-seat` asks once whether to include `advisor` in the delegation set (the advisor's own headless sub-launches need it; the default answer is no).
+- `enter --bind-pid <pid>` — mint the grant for *another* running session instead of this terminal: name that session's agent harness (claude, codex, agy) or shell by pid. It must be a live process of yours, and not pid 1 or anything above your own terminal session (a session manager, terminal emulator or multiplexer would bind far too much). Your shell's role is left unchanged; the output names the grant id that session exports as `AIDA_SESSION_GRANT`. A grant id copied into a session from `~/.aida/session-grants/` or a log is refused, so hand-carrying a grant id into a background session no longer works. `--bind-pid` binds the process only: that session's hooks and MCP server can present the grant, but its sandboxed tool calls cannot (they run in their own process namespace). A background or relay session that needs its seat in tool calls must be started from the role shell. <!-- trace:BUG-1934 | ai:claude -->
+- `status` (`--json`) — this session's grant: seat, expiry, the processes it is bound to, whether and how this process may present it (`via`: `key`, `proc` or `none`, plus the refusal reason when not), and this session's agent harness pid for `--bind-pid`. A command run from an agent's tool shell never offers that transient shell's pid; when no stable harness pid can be seen (a sandboxed tool call), it says so. Read-only. <!-- trace:BUG-1934 | ai:claude --> <!-- trace:TASK-2159 | ai:claude -->
 - `add` (with `--global`) — define a new role; `--global` stores it under `~/.aida/roles/` for personas you carry across projects (triage, code-review) rather than per-project.
 - `scope` (`set` / `show` / `clear`) — attach a standing filter to a role so `aida list` and `aida queue list/next` auto-narrow while you wear that hat (the canonical example: a `triage` role scoped to `--tags inbox --status draft`). Override per-command with explicit `--tags`/`--status` or `--no-scope`. This is *why* a role is more than a label — it reshapes what you see.
 - `prompt` (`set` / `show` / `clear`) — the per-role system-prompt addendum injected into Claude at session start via the role-context hook. The seam where a role carries *instructions*, not just identity.
@@ -55,6 +57,10 @@ Around that core sit the **launchers** and the **comms**. `aida agent new` and `
 
 **Mental model.** Use `eval "$(aida role enter <seat> [--delegate-seat <child-seat> ...] [--ttl <dur>])"` at an interactive human TTY to establish a session seat. The requested seat must be in your **team roster**; add or remove roster seats with `aida team allow-seat <user> <seat>` and `aida team disallow-seat <user> <seat>`, which themselves require an interactive TTY (a terminal check, not proof that a human is typing). The roster is a *ceiling* (which seats you may ever take), the grant is the *active seat* (which one this session holds). Child delegation is **empty by default**: list each child seat this session may hand out with a repeated `--delegate-seat`. A **child grant** is a distinct grant for one seat: one per launched session, bound to the parent and limited to the parent's delegation set. Children cannot delegate onward. Which launchers issue one, and when, is in the table below. `AIDA_SESSION_ROLE` is only a display/routing hint and cannot grant authority. An **MCP server captures the grant it starts with** and re-validates it on every gated call (so revoking the grant takes effect immediately), but it cannot acquire a *different* one while running: to change a server's authority, enter the seat at a TTY and restart/reconnect the server. Grant lifetime defaults to 24 hours. The operator can pass `--ttl <dur>` (e.g. `72h` or `90m`) to set a custom duration, capped by `[seat] max_grant_hours` (default 24h, hard ceiling 168h; bare numbers without a unit are refused). Effective cap is `min(global, project)` when both are configured; project configuration alone can only lower the default 24h ceiling. All grants are subject to an unconfigurable hard ceiling of 168 hours. A cap below 24 does not shorten the default 24h grant when `--ttl` is omitted. Managed agent sessions cannot mint direct grants. <!-- trace:TASK-1787 | ai:antigravity -->
 
+**Grants are bound to a process tree.** A grant id is not a bearer token. `aida role enter` binds the grant to the shell that ran it and that shell's terminal session: any process in this terminal session can use this grant (an agent you start there, its tool calls and hooks), and no process outside it can, even with the id exported. A child grant is bound to the launcher that minted it, so a worker it execs or spawns holds it. `aida role enter <seat> --bind-pid <pid>` binds a grant to a named running session's process, which serves only that session's unsandboxed hooks and MCP server. Matching uses each process's kernel start identity, so a recycled pid never matches. Every refusal (`aida doctor --category seat-grant`, `aida role status`) names the fix. A grant minted before binding existed is refused outright: after upgrading, re-enter each seat with `eval "$(aida role enter <seat>)"`, and start background and relay seats from that role shell or an aida launcher (not with `--bind-pid`, whose grant their sandboxed tool calls cannot present). A review approval records which bound process presented its grant, and `aida pr ship` re-checks that against the grant. <!-- trace:BUG-1934 | ai:claude -->
+
+**Sandboxed tool calls hold the grant's session key.** An agent harness's sandbox (Claude Code's bubblewrap sandbox, for one) runs each tool call in its own process namespace, where the bound shell is invisible. So `aida role enter` also puts a one-time secret into the entering shell's Linux session keyring, as a key only that shell and its descendants can read. The grant record holds only the secret's digest. Session keyrings are inherited into sandboxes, so a tool call of an agent started from that shell (foreground, or a background/relay agent launched there with `aida agent new` without `--bg` or `nohup`) presents the grant by holding the key. A session the agent daemon (`--bg`) or a tmux server starts does not descend from the role shell. It holds no key and is refused with a sentence naming the fix. A launcher puts each child grant's key into its own keyring before starting the worker. `aida role end`, re-entering, or revoking a grant invalidates its key, and the key also expires with the grant. Where the kernel refuses keyrings (some containers), a grant falls back to its process binding only, and a sandboxed caller is refused with that reason, never allowed. The secret never appears in argv, the environment, a file or shell history: the eval text turns xtrace off and passes it to `aida role adopt-key` in a quoted heredoc. <!-- trace:BUG-1934 | ai:claude -->
+
 #### How each launcher sets the agent's grant
 
 `aida role enter` and `aida role add` set the grant of the shell you run them in. The other rows set the grant of the agent they launch.
@@ -65,7 +71,7 @@ Around that core sit the **launchers** and the **comms**. `aida agent new` and `
 | `aida role add` | Mints a direct grant for the new role (interactive TTY, seat in your roster) with no delegation set, and revokes the previous grant. If it cannot mint one, it creates the role as a label only and unsets the shell's grant variable. | Not applicable: the role name is required. |
 | `aida session new` | Issues no grant: `--role` only labels the session. The agent inherits the parent's grant from the environment. | Issues no grant. The agent inherits the parent's grant from the environment. |
 | `aida session resume` | Not applicable: there is no seat option. | Issues no grant. The resumed agent inherits the parent's grant from the environment. |
-| `aida agent new` | Removes the parent's grant from the agent's environment and issues a child grant for the `--role` seat. | No grant: the parent's grant is removed from the environment. With `--spec`, the session records a default seat (implementer, or reviewer for a PR) and the agent gets a child grant for it. |
+| `aida agent new` | Removes the parent's grant from the agent's environment and issues a child grant for the `--role` seat. With `--bg`, the session runs under the agent's background daemon, outside the launcher's process tree, so no grant can be bound to it: an implementer seat runs ungranted (it needs none) and any other seat is refused before launch. | No grant: the parent's grant is removed from the environment. With `--spec`, the session records a default seat (implementer, or reviewer for a PR) and the agent gets a child grant for it. |
 | `aida queue work` (drain phases also launch through it) | Issues a child grant for the seat. Two paths issue none and leave the parent's grant in the environment: a fresh `--no-human` launch that is not a PR review, and a resumed interactive PR review. | There is no seatless launch: it picks a seat from the queued items' routing, else implementer (reviewer for a PR), then behaves as in the previous column. |
 
 **Reach for it when**
@@ -245,6 +251,11 @@ So registration is what turns "a stranger handles the punt" into "your advisor, 
 
 **Reach for it when** — agents coordinating directly: `aida mailbox send "..." --to codex` (or `--broadcast`), `aida mailbox inbox` to read (which marks it seen), `aida mailbox thread` to see a full conversation. The operator's `aida mailbox list` for "who has mail waiting, who has unread/urgent."
 
+Explicit sends and comment mentions resolve against live named agents, role/vendor readers, and known people. Unknown or dead agent recipients refuse before creating mail. Role/vendor sends report the current live readers and warn when several can read the shared inbox; confirmed zero-reader sends refuse. If PID namespaces differ or liveness cannot be observed, an entry counts as an unverified reader only while its `last_active_at` is within the past 24 hours. Stale entries and entries without that heartbeat do not count. Delivery to fresh unverified readers continues to the durable inbox with a notice separating live and unverified readers. Notices list at most five names, live readers first, then report how many more remain. Sending never deletes or rewrites registry records. Instead, `aida agent gc`, `aida agent ls` and each session's start hook mark a retained resumable record ended once its process is observably gone, so a finished session stops counting as an unverified reader. Only the start hook always runs outside the command sandbox. `gc` and `ls` run wherever they are invoked, and from a sandboxed shell they skip rows whose processes they cannot observe, so ending host rows needs a host-side `aida agent gc`. <!-- trace:TASK-2238 | ai:claude --> Garbage collection never prunes or ends a record whose PID namespace it cannot observe. Human inboxes remain addressable without a running agent. A role wins over a same-named person; use `person:<name>` to address that person explicitly. Refused sends can instead reach a known person with `--to person:<name>` or leave a spec comment with `aida comment add <SPEC>`. The hint names the operator only when `AIDA_USER` resolves to a known person, or exactly one person holds an explicit `operator` seat in the team roster (`registry/team.toml`). Otherwise it names no recipient. It never falls back to an arbitrary catalog person. Mention-drop warnings suggest contacting the operator, without suggesting another comment command. Historical inbox inspection remains available after an agent ends.
+
+An invalid or unreadable individual agent record produces a warning while other inboxes remain available. Role, vendor, and person catalog names retain their meaning when an older agent uses the same name; addressing that agent by ID does not grant it the reserved inbox.
+<!-- trace:STORY-1843 | ai:codex -->
+
 **Don't reach for it when** — you're *assigning* work rather than discussing it — that's `aida brief` (one-directional, with `aida brief --notify` for urgency). And don't expect a message to survive a fresh clone until you `aida mailbox sync` — the local layer is per-clone until digested into the store.
 
 **Key options (rationale only).**
@@ -259,6 +270,25 @@ So registration is what turns "a stranger handles the punt" into "your advisor, 
 - `retract` vs `delete` — `retract` leaves a withdrawn *tombstone* visible in views (you take back what you said, transparently); `delete` removes it with a marker so sync won't resurrect it. Different intents: walk-it-back vs erase.
 
 **Gotchas.** Reading an `inbox` *marks it seen* — that's a side effect, so use `inbox --all` (read-only, operator view) when you want to peek without clearing unread state. And the local-vs-synced split surprises people: a message is durable and cross-clone only *after* `aida mailbox sync`.
+
+`aida mailbox migrate --dry-run` previews legacy mailbox reconciliation. Add `--json` for the versioned report. It inventories local and canonical messages, original read-state filenames and timestamps, unresolved recipients, divergent copies of message IDs, and read-state filename collisions. Message bodies are omitted. Malformed or unsupported inputs and observed mailbox changes refuse the preview rather than silently skipping evidence.
+
+The report's fingerprint covers mailbox and read-state content; recipient liveness is sampled advisory information. Historical shared group watermarks cannot reconstruct private acknowledgements. The command does not assign recipient UUIDs, acknowledge mail, rewrite messages or enable a new layout. Write-mode migration is unavailable pending advisor review of the real-store report and compatibility policy.
+<!-- trace:STORY-1843 | ai:codex -->
+
+#### Mailbox layout upgrade order
+
+The recipient-UUID mailbox layout replaces each legacy mailbox directory (`.aida/mailbox/` and the store's `mailbox/`) with a small manifest file. The file starts with `# aida-mailbox-layout-manifest` and names the new layout. The legacy directory is archived beside it, and the original paths of its unresolved addresses stay readable. A binary older than the manifest fails at that path: creating or listing a directory there is an error, so it exits nonzero without writing. A binary that knows the marker refuses with "migrated to layout N … Upgrade aida on this clone first". Neither can silently write mail that the new layout would never read.
+
+Upgrade in this order:
+
+1. Upgrade `aida`, `aida-server` and the MCP and hook binaries on every clone and machine that sends or reads this project's mail, to a release whose supported layout includes the new one.
+2. The operator runs `aida mailbox migrate --dry-run --json` and approves that exact report (its SHA). Group cohorts and divergent message IDs are decided in an explicit input file. The tool never picks them.
+3. The operator, never an agent, runs write mode. It reruns the dry run and refuses unless the report is byte-identical to the approved one. It takes a backup ref first, archives the legacy directories, installs the manifests, and is idempotent on rerun. *(Write mode has not shipped yet.)*
+4. Each clone passes its own admission check before UUID delivery starts there. A clone that has not been upgraded meets the manifest and refuses, rather than writing to the old layout.
+
+A manifest that claims the layout this build already uses is reported as damaged. Restore the directory from the backup ref instead of editing the manifest.
+<!-- trace:STORY-1843 | ai:claude -->
 
 **Chains with** — agents launched via `aida agent new` coordinate over the mailbox; the advisor's `watch` loop runs a mailbox-triage pass; briefs route *assignments*, the mailbox carries the *conversation* around them.
 
@@ -305,7 +335,10 @@ Antigravity (`antigravity-hooks.json`) template installs a `PreInvocation` hook
 once when a seat grant crosses 2h, 30m and expiry, including the terminal
 renewal command. It never prompts or decides tool permissions. New grants or
 renewal timestamps reset the notice epoch. Child expiry uses the earlier of
-child and parent expiry. Baseline seats stay silent.
+child and parent expiry. Baseline seats stay silent. The Antigravity template
+also installs a `SessionStart` hook running `aida-mail-notice.sh --client agy
+--event SessionStart`, the same mail notice and host-side dead-registry-row gc
+the Claude Code and Codex `SessionStart` hooks run.
 
 Without `AIDA_SESSION_GRANT`, the shell exits without launching the CLI
 (printing `{}` for Antigravity). With a grant it caps the notice command below
@@ -318,6 +351,7 @@ SessionStart and statusline warnings remain available. See
 [verified hook delivery](../testing/bug-2014-grant-expiry-notices.md).
 <!-- trace:BUG-2014 | ai:codex -->
 <!-- trace:TASK-1744 | ai:antigravity -->
+<!-- trace:TASK-2253 | ai:claude -->
 
 ## Watching for new review heads
 
@@ -397,7 +431,8 @@ rechecked before queue work and at the final vendor boundary; unreadable or
 unidentifiable history refuses dispatch. The round prompt comes from that
 combined count. Ordinary queue-work risk and review authority checks still apply. Review instructions forbid local
 Cargo, tests/builds, merge, and branch updates. The watcher adds no verdict
-authority, ship-ready report, or merge action.
+authority and takes no merge action; its ship-readiness report (below) only
+reports.
 
 ### Superseding a review when the head changes
 <!-- trace:TASK-1945 | ai:claude -->
@@ -443,6 +478,81 @@ remaining processes yourself, `aida review watch --release PR-N` clears the
 attempt. It stays refused while any recorded process is still running. An
 attempt recorded before process groups were kept gets per-process signals
 only, with no group sweep.
+
+### Ship-readiness report
+<!-- trace:TASK-1945 | ai:claude -->
+
+Once a change has a recorded verdict and no review of it is reserved, running
+or being superseded, the watcher judges whether it is ready to ship, at most
+once every two minutes per head. It reads the evidence `aida pr ship` checks,
+read-only, and stops at the first refusal:
+
+- no live review marker covers the head;
+- no merge hold of any kind is set (a marker, an unreadable marker, or the
+  forge label). The report names the hold; the watcher never releases one;
+- the head is 0 commits behind its base. A head behind only on paths it does
+  not touch is "ready after its branch is updated" (`gh pr update-branch N`,
+  or on GitLab a merge of the target branch into the source branch); one
+  behind with overlapping paths is not ready. The advice is always a merge:
+  a rebase rewrites the change's own commits, so its approval no longer
+  carries over;
+- an authorized, non-author approval covers the head, through the same
+  decision `aida pr ship` makes, including the carry-over of an approval over
+  clean merges of the base branch. The verdict corpus must not refuse the
+  head;
+- every CI check on the head commit has finished and passed (success,
+  neutral or skipped), and every check the project requires is among them.
+  A project names its required checks in `.aida/config.toml`; unset
+  requires none beyond every check passing. AIDA requires its
+  `Build (ubuntu-latest)` check, which requires every CI lane:
+
+  ```toml
+  [review_watch]
+  required_checks = ["Build (ubuntu-latest)"]
+  ```
+
+  CI is read by commit SHA: GitHub check runs and commit statuses, or GitLab
+  job statuses. No checks, a pending or failed check, a missing required
+  check, an unreadable config, or a failed read is not ready;
+- a final forge read finds the head unchanged.
+
+Each judgement prints `PR-N at <head>: ready | ready after its branch is
+updated | not ready: <reason>` on stderr. The last one per change is shown
+by `aida ps` (a "Review-watch readiness" section; `review_watch_ready` in
+`--json`). It is display only: `aida pr ship` checks everything again. A
+head with a wake still waiting for delivery is judged again on the next
+pass; otherwise it waits out the two minutes.
+
+When a change becomes ready, the watcher mails the advisor once per head,
+readiness and approval. The mail names the command to run (`aida pr ship N`,
+or the branch update first) and an actionable `ReviewWatchReady` event lets
+`aida watch --emit-wakes` wake a supervisor. The mail has a deterministic ID
+and is recorded as sent only after both the mail and the event succeed, so a
+failure is retried without a duplicate mail. The watcher never merges, pushes
+or updates a branch; an active fire-mode mandate consumer acts through the
+ordinary `aida pr ship`.
+
+### Review notices
+<!-- trace:TASK-1945 | ai:claude -->
+
+The same pass sends two more notices, each once:
+
+- **Findings.** When a review of the current head requested changes (or
+  rejected it), and no approval of that head followed, the change author gets
+  one mail per verdict. It goes to the AIDA identity the forge login maps to
+  (the advisor when none does), the same mapping the merge-base notice uses.
+  The mail names the findings file (`.aida/review-verdicts/PR-N.json`, plus
+  the archived round file when the verdict was also archived), the round
+  number, and whether this was the last round under the two-round cap. A new
+  blocking verdict, on a new head or the same one, is a new mail.
+- **Round cap.** When a change has used both review rounds and its head has
+  no review, the watcher starts none, and mails the advisor once for the
+  change. The mail names the reviewed heads, the unreviewed head, and the
+  findings file.
+
+Like the ready wake, each notice has a deterministic ID and is recorded as
+sent only after delivery. A failed delivery is retried on a later pass and
+does not stop the readiness report.
 <!-- trace:TASK-1993 | ai:codex -->
 
 Launch setup keeps invocation receipts before Git allocation. Fresh worktrees

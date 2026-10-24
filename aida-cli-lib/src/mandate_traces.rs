@@ -7,6 +7,27 @@ use anyhow::{ensure, Context, Result};
 use std::{collections::BTreeSet, path::Path};
 use syn::{spanned::Spanned, visit::Visit};
 
+// Commands run at the store root. A plain path also works when the caller
+// exports GIT_LITERAL_PATHSPECS=1, which disables Git's :(...) path magic.
+// trace:BUG-2213 | ai:codex
+const STORE_OBJECTS_PATH: &str = "objects";
+
+/// The exact argument vectors of the snapshot's two object-dirt queries,
+/// shared with the pathspec-mode test so its matrix exercises the production
+/// args (--ignore-submodules=none included), not a paraphrase.
+// trace:TASK-2272 | ai:claude (TASK-2320)
+const STORE_STATUS_ARGS: [&str; 7] = [
+    "status",
+    "--porcelain=v1",
+    "--untracked-files=all",
+    "--ignore-submodules=none",
+    "--no-renames",
+    "--",
+    STORE_OBJECTS_PATH,
+];
+// trace:TASK-2272 | ai:claude (TASK-2320)
+const STORE_LS_FILES_ARGS: [&str; 5] = ["ls-files", "--others", "-z", "--", STORE_OBJECTS_PATH];
+
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum Scope {
     // The full-file baseline is retained for the required historical benchmark.
@@ -78,31 +99,35 @@ pub(crate) fn collect_pr(
     collect(repo, bases[0], expected_head, Scope::ChangedItems)
 }
 
-/// Refuse a moving or dirty store rather than mixing uncommitted working objects
-/// with a historical exclusion read. Ref tips bind the existing --all history
-/// reader, including sticky versions not reachable from the store's HEAD.
+/// Refuse moving or dirty exclusion evidence rather than mixing uncommitted
+/// working objects with a historical exclusion read. Ref tips bind the existing
+/// --all history reader, including sticky versions not reachable from store HEAD.
 ///
-/// BUG-2195: the snapshot is the store HEAD plus every ref's tip, compared by
+/// BUG-2195: the snapshot is the store HEAD plus every ref's tip (and, for
+/// TASK-2144, every worktree's HEAD, which `--all` also walks), compared by
 /// [`store_snapshot_stable`] rather than byte for byte, so an unrelated ref move
 /// in the shared code repository no longer discards a collection attempt. A
-/// dirty store is a [`StoreDirty`] error, which the caller may retry
+/// dirty evidence tree is a [`StoreDirty`] error, which the caller may retry
 /// (TASK-2019). Every snapshot git call is config-independent: no system
 /// config, no replace objects, no path quoting, explicit status options.
 // trace:TASK-2067 | ai:antigravity
 pub(crate) fn store_snapshot(store: &Path) -> Result<StoreSnapshot> {
+    // Only canonical object dirt can change this store's exclusion evidence.
+    // Coordination leases/mail and other non-evidence files may be mid-write.
+    // The home exclusion ledger is read separately by mandate_ship; its trust
+    // checks do not depend on Git status here. Both queries run at the store
+    // root and include replacement of the objects directory itself.
+    // trace:BUG-2213 | ai:codex
     ensure!(
-        snapshot_git(
-            store,
-            &[
-                "status",
-                "--porcelain=v1",
-                "--untracked-files=all",
-                "--ignore-submodules=none",
-                "--no-renames",
-            ],
-            None,
-        )?
-        .is_empty(),
+        snapshot_git(store, &STORE_STATUS_ARGS, None)?.is_empty(),
+        StoreDirty
+    );
+    // TASK-2238: status still honours $GIT_DIR/info/exclude and any
+    // .gitignore, which could hide an untracked object. `ls-files --others`
+    // with no exclude option applies none of them.
+    // trace:TASK-2238 | ai:claude
+    ensure!(
+        snapshot_git(store, &STORE_LS_FILES_ARGS, None)?.is_empty(),
         StoreDirty
     );
     let head = snapshot_git(store, &["rev-parse", "--verify", "HEAD^{commit}"], None)?;
@@ -122,6 +147,26 @@ pub(crate) fn store_snapshot(store: &Path) -> Result<StoreSnapshot> {
         let (tip, name) = line.split_once(' ').context("invalid store ref listing")?;
         ensure!(oid(tip), "invalid store ref tip for {name}");
         refs.insert(name.to_owned(), tip.to_owned());
+    }
+    // TASK-2144: `git log --all` also walks every worktree's HEAD, including a
+    // detached one no ref names, so each is part of the snapshot. An unborn
+    // HEAD (all zeros) holds no history.
+    // trace:TASK-2067 | ai:claude
+    let worktrees = snapshot_git(store, &["worktree", "list", "--porcelain", "-z"], None)?;
+    let mut path = None;
+    for field in String::from_utf8(worktrees)
+        .context("non-text store worktree listing")?
+        .split('\0')
+    {
+        if let Some(p) = field.strip_prefix("worktree ") {
+            path = Some(p.to_owned());
+        } else if let Some(tip) = field.strip_prefix("HEAD ") {
+            let path = path.as_deref().context("invalid store worktree listing")?;
+            ensure!(oid(tip), "invalid HEAD for store worktree {path}");
+            if !tip.bytes().all(|b| b == b'0') {
+                refs.insert(format!("HEAD of worktree {path}"), tip.to_owned());
+            }
+        }
     }
     Ok(StoreSnapshot { head, refs })
 }
@@ -253,12 +298,19 @@ fn snapshot_status(store: &Path, args: &[&str]) -> Option<bool> {
 // trace:TASK-2067 | ai:antigravity
 fn snapshot_command(store: &Path) -> std::process::Command {
     let mut cmd = aida_core::git_ops::host_git_command(store);
-    cmd.args(["-c", "core.quotePath=false"])
-        .env("GIT_NO_REPLACE_OBJECTS", "1")
-        .env("GIT_CONFIG_NOSYSTEM", "1")
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped());
+    // TASK-2145: the user's global excludes must not hide an untracked object
+    // from the dirty check. trace:TASK-2067 | ai:claude
+    cmd.args([
+        "-c",
+        "core.quotePath=false",
+        "-c",
+        "core.excludesFile=/dev/null",
+    ])
+    .env("GIT_NO_REPLACE_OBJECTS", "1")
+    .env("GIT_CONFIG_NOSYSTEM", "1")
+    .stdin(std::process::Stdio::null())
+    .stdout(std::process::Stdio::piped())
+    .stderr(std::process::Stdio::piped());
     cmd
 }
 
@@ -311,23 +363,7 @@ pub(crate) fn collect(repo: &Path, base: &str, head: &str, scope: Scope) -> Resu
         let ty = git(repo, &["cat-file", "-t", commit])?;
         ensure!(ty == b"commit\n", "mandate trace endpoint is not a commit");
     }
-    let raw = git(
-        repo,
-        &[
-            "diff-tree",
-            "--raw",
-            "-z",
-            "-r",
-            "--no-abbrev",
-            "--no-renames",
-            "--no-ext-diff",
-            "--no-textconv",
-            "--ignore-submodules=none",
-            base,
-            head,
-            "--",
-        ],
-    )?;
+    let raw = git(repo, &diff_tree_args(base, head))?;
     let mut fields = raw.split(|b| *b == 0);
     let mut out = Evidence::default();
     while let Some(header) = fields.next() {
@@ -399,6 +435,27 @@ pub(crate) fn collect(repo: &Path, base: &str, head: &str, scope: Scope) -> Resu
         }
     }
     Ok(out)
+}
+
+/// The one `diff-tree` call [`collect`] reads its changed paths and blobs
+/// from. Renames are off explicitly, so no rename config changes it.
+// trace:TASK-1790 | ai:codex
+// trace:TASK-2067 | ai:claude
+fn diff_tree_args<'a>(base: &'a str, head: &'a str) -> [&'a str; 12] {
+    [
+        "diff-tree",
+        "--raw",
+        "-z",
+        "-r",
+        "--no-abbrev",
+        "--no-renames",
+        "--no-ext-diff",
+        "--no-textconv",
+        "--ignore-submodules=none",
+        base,
+        head,
+        "--",
+    ]
 }
 
 fn trace_ids(text: &str) -> BTreeSet<String> {

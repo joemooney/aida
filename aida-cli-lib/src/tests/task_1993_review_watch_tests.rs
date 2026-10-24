@@ -17,6 +17,7 @@ fn change(id: u64, head: u64, overlap: bool) -> forge::Change {
         author: "writer".into(),
         gitlab: false,
         overlap: Some(overlap),
+        behind: Some(u64::from(overlap)),
     }
 }
 fn dispatch(action: Action) -> Attempt {
@@ -1331,7 +1332,15 @@ fn task1993_capacity_refusal_names_holders_and_recovery() {
 #[test]
 fn task1993_watcher_never_signals_merges_or_runs_cargo() {
     let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
-    for file in ["review_watch.rs", "review_watch_forge.rs"] {
+    // Readiness and the commit CI reader too: the report names update and
+    // ship commands for the advisor but never runs one. trace:TASK-1945 | ai:claude
+    for file in [
+        "review_watch.rs",
+        "review_watch_forge.rs",
+        "review_watch_ready.rs",
+        "review_watch_notice.rs",
+        "forge_commit_ci.rs",
+    ] {
         let text = std::fs::read_to_string(src.join(file)).unwrap();
         for forbidden in [
             "libc::kill",
@@ -1339,7 +1348,11 @@ fn task1993_watcher_never_signals_merges_or_runs_cargo() {
             "killpg",
             "nix::sys::signal",
             "\"merge\"",
-            "update-branch",
+            "\"update-branch\"",
+            "\"push\"",
+            "\"rebase\"",
+            "--override",
+            "merge_change",
             "\"cargo\"",
             "\"ship\"",
             // trace:TASK-1993 | ai:claude
@@ -1967,22 +1980,120 @@ fn leaked_probe_refs_are_swept_and_live_ones_kept() {
     ]);
     let head = git(&["rev-parse", "HEAD"]);
     let me = std::process::id();
-    for name in [
-        format!("refs/aida/review-watch/{me}-live/base"),
-        "refs/aida/review-watch/4000000001-dead/base".to_string(),
-        "refs/aida/review-watch/legacy-uuid/head".to_string(),
-    ] {
-        git(&["update-ref", &name, &head]);
-    }
-    assert_eq!(forge::sweep_probe_refs(root), 2);
+    let uuid = "0b7c6a52-1f3e-4c1d-9a7e-5d2f8c3b4a10";
+    // A legacy pid-less UUID whose first group is all digits, equal to a
+    // live pid: it must not read as that pid's probe (TASK-2121).
+    let legacy_digits = format!("{me:08}-1f3e-4c1d-9a7e-5d2f8c3b4a10");
+    let now = chrono::Utc::now().timestamp();
+    let old = |name: &str| {
+        git(&["update-ref", name, &head]);
+        let path = root.join(git(&["rev-parse", "--git-path", name]));
+        std::fs::File::options()
+            .write(true)
+            .open(path)
+            .unwrap()
+            .set_modified(std::time::SystemTime::now() - std::time::Duration::from_secs(3600))
+            .unwrap();
+    };
+    let live_old = format!("refs/aida/review-watch/{me}-{uuid}/base");
+    old(&live_old);
+    old(&format!("refs/aida/review-watch/4000000001-{uuid}/base"));
+    old("refs/aida/review-watch/0b7c6a52-1f3e-4c1d-9a7e-5d2f8c3b4a10/head");
+    old(&format!("refs/aida/review-watch/{legacy_digits}/head"));
+    old(&format!(
+        "refs/aida/review-watch/4000000001-t{}-{uuid}/base",
+        now - 3600
+    ));
+    // Fresh refs are kept whatever their pid says: a legacy one by its loose
+    // ref mtime, a timestamped one from another pid namespace by its name.
+    let fresh_legacy = "refs/aida/review-watch/1c2d3e4f-1f3e-4c1d-9a7e-5d2f8c3b4a10/head";
+    let fresh_foreign = format!("refs/aida/review-watch/4000000001-t{now}-{uuid}/base");
+    git(&["update-ref", fresh_legacy, &head]);
+    git(&["update-ref", &fresh_foreign, &head]);
+
+    assert_eq!(forge::sweep_probe_refs(root), 4);
+    let mut left: Vec<String> = git(&[
+        "for-each-ref",
+        "--format=%(refname)",
+        "refs/aida/review-watch/",
+    ])
+    .lines()
+    .map(String::from)
+    .collect();
+    left.sort();
+    let mut want = vec![live_old, fresh_legacy.to_string(), fresh_foreign];
+    want.sort();
+    assert_eq!(left, want);
+}
+
+/// TASK-2121: probe-name parsing never reads a legacy UUID's digit group as
+/// a pid, and the current name carries its creation time.
+// trace:TASK-1955 | ai:claude (TASK-2121)
+#[test]
+fn probe_ref_names_parse_pid_and_creation_time_only_from_their_own_shapes() {
+    use forge::{parse_probe_name, ProbeName};
+    let uuid = "0b7c6a52-1f3e-4c1d-9a7e-5d2f8c3b4a10";
     assert_eq!(
-        git(&[
-            "for-each-ref",
-            "--format=%(refname)",
-            "refs/aida/review-watch/"
-        ]),
-        format!("refs/aida/review-watch/{me}-live/base")
+        parse_probe_name(&format!("42-t1700000000-{uuid}")),
+        ProbeName {
+            pid: Some(42),
+            created: Some(1_700_000_000)
+        }
     );
+    assert_eq!(
+        parse_probe_name(&format!("42-{uuid}")),
+        ProbeName {
+            pid: Some(42),
+            created: None
+        }
+    );
+    for legacy in [uuid, "12345678-1f3e-4c1d-9a7e-5d2f8c3b4a10", "42-live", "x"] {
+        assert_eq!(
+            parse_probe_name(legacy),
+            ProbeName {
+                pid: None,
+                created: None
+            },
+            "{legacy}"
+        );
+    }
+}
+
+/// TASK-2176 (2): a probe ref dated in the future is not "young" forever; past
+/// the pid check it is swept like any old timestamped ref.
+// trace:TASK-1955 | ai:claude (TASK-2176)
+#[test]
+fn a_future_dated_probe_ref_is_not_kept_forever() {
+    use forge::{probe_ref_in_use, ProbeName};
+    let now = 1_800_000_000;
+    let named = |created| ProbeName {
+        pid: Some(1),
+        created: Some(created),
+    };
+    let alive = |_| true;
+    assert!(
+        probe_ref_in_use(&named(now - 5), now, None, alive),
+        "young ref kept"
+    );
+    assert!(
+        probe_ref_in_use(&named(now), now, None, alive),
+        "a ref made now is kept"
+    );
+    assert!(
+        !probe_ref_in_use(&named(now - 3_600), now, None, alive),
+        "old ref swept"
+    );
+    assert!(
+        !probe_ref_in_use(&named(now + 86_400), now, None, alive),
+        "a future-dated ref is swept"
+    );
+    // A future loose-ref mtime on a pid-less legacy ref is swept too.
+    let legacy = ProbeName {
+        pid: None,
+        created: None,
+    };
+    assert!(!probe_ref_in_use(&legacy, now, Some(now + 86_400), alive));
+    assert!(probe_ref_in_use(&legacy, now, Some(now - 1), alive));
 }
 
 /// TASK-1-410 / TASK-2109: a stale-head notice goes to the AIDA identity the
@@ -2027,5 +2138,34 @@ fn stale_notice_maps_the_forge_login_and_survives_a_roster_change() {
     assert_eq!(
         n.message.to,
         aida_core::mailbox::Recipient::Agent("advisor".into())
+    );
+}
+
+/// TASK-2118: a forge login registered only as an alias of an identity is
+/// mailed at that identity's stored spelling, not at the alias.
+// trace:TASK-1955 | ai:claude (TASK-2118)
+#[test]
+fn stale_notice_resolves_an_aliased_forge_login_to_its_canonical_identity() {
+    let (temp, store) = fixture();
+    let registry = temp.path().join(".aida-store").join("registry");
+    std::fs::create_dir_all(&registry).unwrap();
+    std::fs::write(
+        registry.join("team.toml"),
+        "[members]\nJoe = [\"advisor\"]\n",
+    )
+    .unwrap();
+    std::fs::write(
+        registry.join("aliases.toml"),
+        "[aliases]\njoemooney = \"joe\"\n",
+    )
+    .unwrap();
+    let mut c = change(1, 1, true);
+    c.author = "joemooney".into();
+    let Action::Notify(notice) = select(&store, &c, None, 2).unwrap() else {
+        panic!("missing notice")
+    };
+    assert_eq!(
+        notice.message.to,
+        aida_core::mailbox::Recipient::Agent("Joe".into())
     );
 }

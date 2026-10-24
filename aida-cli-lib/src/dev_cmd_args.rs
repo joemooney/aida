@@ -28,7 +28,8 @@ pub enum DevCommand {
     // trace:TASK-1158 | ai:claude
     Activate {
         /// Override the AIDA repo path (defaults to current directory if it
-        /// looks like the aida repo, or $AIDA_DEV_REPO if set).
+        /// looks like the aida repo, or $AIDA_DEV_REPO if set; when that
+        /// names a removed worktree, $AIDA_DEV_HOME_REPO).
         #[clap(long)]
         repo: Option<String>,
 
@@ -104,6 +105,28 @@ pub enum DevCommand {
         /// instead of refusing.
         #[clap(long)]
         after_wave: bool,
+
+        /// For a schedule: promote only when origin/main has moved past the
+        /// live binary and every CI check on that commit passed. Fetches,
+        /// fast-forwards a clean primary `main`, and launches the build in
+        /// the background; skips quietly otherwise. Acts only from the
+        /// checkout the live binary was built from.
+        // trace:STORY-1689 | ai:claude
+        #[clap(
+            long,
+            conflicts_with_all = ["clean", "no_promote", "allow_dirty", "install_links", "after_wave"]
+        )]
+        if_main_green: bool,
+
+        /// Internal: the background build an `--if-main-green` run launched.
+        // trace:STORY-1689 | ai:claude
+        #[clap(
+            long,
+            hide = true,
+            value_name = "SHA",
+            conflicts_with_all = ["clean", "no_promote", "allow_dirty", "install_links", "after_wave", "if_main_green"]
+        )]
+        autopromote_child: Option<String>,
     },
 
     /// Swap the previous live binaries (`live/prev/`) back in, in one step.

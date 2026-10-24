@@ -144,6 +144,7 @@ lease_file="$main_root/.aida/merge-locks/${release_base//\//_}"
 lease_host=${AIDA_HOST_OVERRIDE:-$(uname -n)}
 lease_ttl=${AIDA_RELEASE_LEASE_TTL_SECS:-3600}
 lease_held=0
+lease_tmp=
 
 # Field 22 (starttime) of /proc/<pid>/stat as `linux-starttime:<ticks>`, the
 # identity merge_lock.rs records; empty when unreadable.
@@ -165,7 +166,18 @@ lease_field() {
 # is stale, and so is any holder aged past its TTL.
 lease_is_live() {
     [ -f "$lease_file" ] || return 1
-    local host pid start ttl acquired age live_start state
+    local host pid start ttl acquired age live_start state mtime
+    # An empty or cut-short record is a writer mid-publish (merge_lock.rs
+    # before TASK-1-421 created the file, then wrote it): live for a 30s grace
+    # after its mtime, not acquired_at=0 and TTL-stale.
+    # trace:TASK-1955 | ai:claude (TASK-1-421)
+    if ! grep -q '^ttl_secs=' "$lease_file" 2>/dev/null; then
+        mtime=$(stat -c %Y "$lease_file" 2>/dev/null || stat -f %m "$lease_file" 2>/dev/null) || return 1  # portable-fallback: BSD stat reads the mtime with -f %m
+        # A future mtime is as far off as a past one, so it cannot read live forever.
+        age=$(( $(date +%s) - mtime ))
+        [ "${age#-}" -gt 30 ] && return 1
+        return 0
+    fi
     host=$(lease_field host)
     pid=$(lease_field pid)
     start=$(lease_field pid_start)
@@ -205,17 +217,22 @@ lease_acquire() {
         # Write the full record to a temp file in the same directory, then
         # hard-link it into place: link(2) fails if the lease exists, so the
         # claim is atomic and a reader never sees a partial or empty lease.
-        local tmp
-        tmp=$(mktemp "$lease_file.XXXXXX")
+        # The temp name is dot-prefixed, so merge_lock::status skips it, and
+        # the EXIT trap removes it if the script dies before the link.
+        # trace:TASK-1955 | ai:claude (TASK-1-422)
+        lease_tmp=$(mktemp "$(dirname "$lease_file")/.$(basename "$lease_file").XXXXXX")
+        local tmp=$lease_tmp
         printf 'host=%s\npid=%s\npid_start=%s\npr=%s\nnote=%s\nacquired_at=%s\nttl_secs=%s\n' \
             "$lease_host" "$$" "$(lease_pid_start "$$")" "${2:-}" \
             "scripts/release.sh v$new" "$(date +%s)" "$lease_ttl" > "$tmp"
         if ln "$tmp" "$lease_file" 2>/dev/null; then
             rm -f "$tmp"
+            lease_tmp=
             lease_held=1
             return 0
         fi
         rm -f "$tmp"
+        lease_tmp=
         if ! lease_is_live; then
             rm -f "$lease_file"
             continue
@@ -226,6 +243,8 @@ lease_acquire() {
 }
 
 lease_release() {
+    [ -n "$lease_tmp" ] && rm -f "$lease_tmp"
+    lease_tmp=
     if [ "$lease_held" = "1" ] && [ "$(lease_field pid)" = "$$" ]; then
         rm -f "$lease_file"
     fi
@@ -424,6 +443,9 @@ if ! lease_acquire 0; then
     echo "error: the '$release_base' merge-lease was taken by $(lease_describe); re-run once it finishes" >&2
     exit 1
 fi
+# The commit the bump, cargo check, CHANGELOG and tag notes are computed on.
+# trace:TASK-1951 trace:TASK-1688 | ai:claude
+bump_base=$(git rev-parse HEAD)
 
 echo "bumping workspace from v$current -> v$new"
 
@@ -644,6 +666,29 @@ if ! lease_acquire "${AIDA_RELEASE_LEASE_WAIT_SECS:-180}"; then
 error: the '$release_base' merge-lease is held by $(lease_describe).
 The version bump is still in your working tree; re-run the publish steps once it
 finishes, or discard with: git restore ${manifest_paths[*]}
+Tag notes saved at: $notes_file
+EOM
+    exit 1
+fi
+# A ship that fast-forwarded this checkout (or the base on the remote) while
+# the confirmation prompt waited would cut release/vX from a different base
+# than the CHANGELOG and tag notes describe. Abort before committing.
+# trace:TASK-1951 trace:TASK-1688 | ai:claude
+moved=""
+if [ "$(git rev-parse HEAD)" != "$bump_base" ]; then
+    moved="local $release_base moved from $bump_base to $(git rev-parse HEAD)"
+elif ! git fetch -q "$release_remote" "$release_base"; then
+    moved="could not fetch $release_remote/$release_base to confirm it is still $bump_base"
+elif [ "$(git rev-parse FETCH_HEAD)" != "$bump_base" ]; then
+    moved="$release_remote/$release_base moved from $bump_base to $(git rev-parse FETCH_HEAD)"
+fi
+if [ -n "$moved" ]; then
+    lease_release
+    cat <<EOM >&2
+error: $moved while the release waited for confirmation.
+The version bump, CHANGELOG and tag notes were computed on $bump_base, so nothing
+was committed, pushed, or tagged. Discard the bump and re-run on the new base:
+  git restore ${manifest_paths[*]}
 Tag notes saved at: $notes_file
 EOM
     exit 1

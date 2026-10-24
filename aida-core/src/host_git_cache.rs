@@ -41,9 +41,6 @@ const GIT_DISCOVERY_ENV: &[&str] = &[
 /// One file's identity as `symlink_metadata` reports it; `None` when absent.
 pub(crate) type Stamp = Option<[i64; 9]>;
 
-// Test seam: treat every file as settled, so a test can see a memo hit on a
-// fixture it just made.
-
 /// The submodule names `lookup` reads from the regular file `file` (a
 /// repository's `.gitmodules`), memoised while the file is unchanged.
 /// TASK-1942: every host git call over a linked worktree with a `.gitmodules`
@@ -67,6 +64,9 @@ fn gitmodules_file_key(file: &Path) -> Option<Vec<Stamp>> {
     Some(vec![stamp(file)?])
 }
 
+// Test seam: treat every file as settled, so a test can see a memo hit on a
+// fixture it just made.
+// trace:TASK-1952 | trace:TASK-2149 | ai:claude
 #[cfg(test)]
 thread_local! { pub(crate) static ALWAYS_SETTLED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) }; }
 

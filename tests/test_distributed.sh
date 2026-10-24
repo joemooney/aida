@@ -2,6 +2,10 @@
 # Integration test for AIDA distributed mode
 # Tests the full flow: init, add requirements, verify sharded YAML files
 set -euo pipefail
+# Fixture git runs with automatic maintenance off: a detached repack can
+# race the next object write (BUG-2191). `env -i` sites pass the -c pair.
+# trace:TASK-1955 | ai:claude (TASK-2010)
+export GIT_CONFIG_COUNT=2 GIT_CONFIG_KEY_0=maintenance.auto GIT_CONFIG_VALUE_0=false GIT_CONFIG_KEY_1=gc.auto GIT_CONFIG_VALUE_1=0
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -141,15 +145,13 @@ fi
 # ============================================================================
 info "Test 5: Edit requirement status"
 
-$AIDA --file "$STORE" edit "$SPEC_ID" --status completed 2>/dev/null || true
+# Exercise a transition available to this unprivileged scratch fixture.
+# Draft -> Completed needs advisor authority; never swallow a refused edit.
+# trace:STORY-1706 | ai:codex
+$AIDA --file "$STORE" edit "$SPEC_ID" --status rejected || fail "Edit command refused"
 
-# Verify the YAML was updated
-if grep -q "Completed\|completed" "$FIRST_YAML"; then
-    pass "Requirement status updated in YAML file"
-else
-    info "Status update may use different format - checking via list"
-    pass "Edit command executed"
-fi
+grep -Eq '^status: [Rr]ejected$' "$FIRST_YAML" || fail "Edited status was not persisted in YAML"
+pass "Requirement status updated in YAML file"
 
 # ============================================================================
 # Test 6: Database info shows Git backend

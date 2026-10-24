@@ -3221,6 +3221,19 @@ fn command_table() -> &'static [(&'static [&'static str], ScheduledCommand)] {
                 hook_allowed: false,
             },
         ),
+        // STORY-1689: promote the live dev binary when main is green. The
+        // tick only decides and launches; the build runs detached, outside
+        // this child's timeout. It fetches and reads the forge, so never on
+        // the per-turn hook path.
+        // trace:STORY-1689 | ai:claude
+        (
+            &["dev build --if-main-green"],
+            ScheduledCommand {
+                display: "dev build --if-main-green",
+                args: &["dev", "build", "--if-main-green"],
+                hook_allowed: false,
+            },
+        ),
     ]
 }
 
@@ -3271,10 +3284,11 @@ fn valid_commands() -> Vec<&'static str> {
 /// indefinitely. Generous rather than tight: these are periodic maintenance
 /// checks, not a latency-sensitive per-turn hook path (that path already
 /// skips network-touching jobs — see `tick`'s `hook` flag).
-const SCHEDULED_COMMAND_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(120);
+pub(crate) const SCHEDULED_COMMAND_TIMEOUT: std::time::Duration =
+    std::time::Duration::from_secs(120);
 
 /// Exit status a killed-at-timeout (or unspawnable) scheduled child reports.
-const TIMEOUT_EXIT_STATUS: i32 = 124;
+pub(crate) const TIMEOUT_EXIT_STATUS: i32 = 124;
 /// How a timed-out run's `CronJobFailed.error` starts, so a routed failure
 /// can say "did not finish" instead of presenting it as a finding.
 // trace:BUG-1655 | ai:claude
@@ -3372,13 +3386,7 @@ fn record_outcome_local(
                     job: task.name.clone(),
                     seat: task.seats.join(","),
                     error: trip.and_then(|t| t.audit_error.as_deref()).map_or_else(
-                        || {
-                            format!(
-                                "exit {}: {}",
-                                outcome.status,
-                                outcome.stderr.trim().lines().last().unwrap_or("")
-                            )
-                        },
+                        || routed_failure_error(outcome.status, &outcome.stderr),
                         |error| {
                             format!(
                                 "exit {}: performance audit unavailable: {error}",
@@ -3392,6 +3400,16 @@ fn record_outcome_local(
             ),
         );
     }
+}
+
+/// The error a failed job's `CronJobFailed` carries: its exit status and
+/// its last stderr line.
+// trace:STORY-1689 | ai:claude
+pub(crate) fn routed_failure_error(status: i32, stderr: &str) -> String {
+    format!(
+        "exit {status}: {}",
+        stderr.trim().lines().last().unwrap_or("")
+    )
 }
 
 // trace:TASK-1280 | ai:codex
@@ -4244,6 +4262,53 @@ mod tests {
         assert!(
             !commands.iter().any(|c| c.contains("allow-listed")),
             "extraction picked up the documentation placeholder, not a real job: {commands:?}"
+        );
+    }
+
+    /// STORY-1689: this repository's own config registers the live-binary
+    /// promote job and binds its failure route to the advisor; the route's
+    /// `CronJobFailed:<job>` binding names a real job, so it loads enabled.
+    // trace:STORY-1689.ac481f1d | ai:claude
+    #[test]
+    fn repo_config_registers_dev_autopromote_and_its_advisor_route() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo_config = Path::new(env!("CARGO_MANIFEST_DIR")).join("../.aida/config.toml");
+        std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
+        std::fs::copy(&repo_config, tmp.path().join(".aida/config.toml")).unwrap();
+        let mut config = load_config(tmp.path()).unwrap().expect("a [schedule]");
+        disable_unknown_bindings(&mut config);
+        let job = config
+            .tasks
+            .iter()
+            .find(|t| t.name == "dev-autopromote")
+            .expect("dev-autopromote job");
+        assert!(job.enabled && job.problem.is_none());
+        let command = job.command.as_ref().expect("a substrate command");
+        assert_eq!(command.args, ["dev", "build", "--if-main-green"]);
+        assert!(!command.hook_allowed, "it fetches; never on the hook path");
+        let route = config
+            .tasks
+            .iter()
+            .find(|t| t.name == "dev-autopromote-route")
+            .expect("dev-autopromote-route");
+        assert!(
+            route.enabled && route.problem.is_none(),
+            "{:?}",
+            route.problem
+        );
+        assert_eq!(route.seats, vec!["advisor".to_string()]);
+        assert_eq!(
+            route.on.iter().map(ToString::to_string).collect::<Vec<_>>(),
+            vec!["CronJobFailed:dev-autopromote".to_string()]
+        );
+        // TASK-2272 (TASK-2291): the route also fires for a tick that errored
+        // or was killed on the scheduler's timeout, not only a failed build.
+        // trace:TASK-2272 | ai:claude
+        let prompt = route.prompt.as_deref().unwrap_or_default();
+        assert!(prompt.contains("errored or timed out"), "{prompt}");
+        assert!(
+            !prompt.starts_with("The scheduled live-binary build failed"),
+            "{prompt}"
         );
     }
 
@@ -5887,6 +5952,56 @@ enabled = true
             events,
         )
         .unwrap();
+    }
+
+    /// STORY-1916 AC3: when reclaim cannot restore the floor, the routed
+    /// item's evidence says so, with the top consumers. The guard's
+    /// `--fail-on-findings` reason is its last stderr line, and the route
+    /// carries exactly that line.
+    // trace:STORY-1916.ac641c6e | ai:claude
+    #[test]
+    fn story_1916_routed_disk_item_carries_the_stuck_sentence() {
+        let tmp = tempfile::tempdir().unwrap();
+        let finding = crate::doctor_root::DoctorFinding {
+            category: "disk-headroom".into(),
+            id: "disk-headroom-cache".into(),
+            summary: format!(
+                "free disk space is 12.0 GiB, below the 60 GiB floor. {}",
+                crate::disk_emergency::stuck_summary(
+                    3 << 30,
+                    48 << 30,
+                    &[("/t/worktrees/take-2845".into(), 39 << 30)]
+                )
+            ),
+            action: String::new(),
+            safe_heal: false,
+        };
+        let reason = crate::doctor_cmd::disk_headroom_fail_reason(&[finding]).unwrap();
+        let events =
+            bug_1655_trip_disk_guard(tmp.path(), 1, &format!("warning: noise\n{reason}\n"));
+        bug_1655_route(
+            tmp.path(),
+            vec![seat_task(
+                "disk-headroom-guard-route",
+                &["advisor"],
+                None,
+                &["CronJobFailed:disk-headroom-guard"],
+            )],
+            &events,
+        );
+        let routed = schedule_ledger::load(&store_root(tmp.path()), "disk-headroom-guard-route")
+            .and_then(|l| l.due_failure)
+            .and_then(|f| f.error)
+            .expect("routed evidence");
+        assert!(routed.starts_with("exit 1: STUCK:"), "{routed}");
+        assert!(
+            routed.contains("can free only 3.0 GiB of the 48.0 GiB"),
+            "{routed}"
+        );
+        assert!(
+            routed.contains("39.0 GiB /t/worktrees/take-2845"),
+            "{routed}"
+        );
     }
 
     #[test]

@@ -32,6 +32,9 @@ pub(crate) enum GateOp {
     Dispatch,
     /// Listed so an operator can state it; drive never clears holds.
     HoldClear,
+    /// The drive tick's restart of a crashed relay.
+    // trace:STORY-1706 | ai:claude
+    RelayRestart,
 }
 
 impl GateOp {
@@ -41,6 +44,7 @@ impl GateOp {
             Self::SketchSignoff => "sketch-signoff",
             Self::Dispatch => "dispatch",
             Self::HoldClear => "hold-clear",
+            Self::RelayRestart => "relay-restart",
         }
     }
 
@@ -50,6 +54,7 @@ impl GateOp {
             Self::SketchSignoff,
             Self::Dispatch,
             Self::HoldClear,
+            Self::RelayRestart,
         ]
         .into_iter()
         .find(|op| op.as_str() == raw.trim())
@@ -130,7 +135,7 @@ pub(crate) fn parse_layer(text: &str, source: &str) -> Result<GateLayer> {
                                 })?;
                                 let Some(op) = GateOp::parse(raw) else {
                                     bail!(
-                                        "{source}: [mandate.human_gates] unknown op `{raw}` (known: ship, sketch-signoff, dispatch, hold-clear)"
+                                        "{source}: [mandate.human_gates] unknown op `{raw}` (known: ship, sketch-signoff, dispatch, hold-clear, relay-restart)"
                                     );
                                 };
                                 layer.ops.insert(op);
@@ -381,9 +386,13 @@ pub(crate) const GATE_PROTECTED_PATHS: &[&str] = &[
     "aida-cli-lib/src/mandate_drive.rs",
     "aida-cli-lib/src/mandate_ship.rs",
     "aida-cli-lib/src/mandate_traces.rs",
+    "aida-cli-lib/src/relay_launch.rs",
     "aida-cli-lib/src/rework_hold_release.rs",
     "aida-cli-lib/src/fleet_lanes.rs",
     "aida-cli-lib/src/pr_ship.rs",
+    "aida-cli-lib/src/merge_hold.rs",
+    // STORY-1887: the batch that drives human-gated merges. trace:STORY-1887 | ai:claude
+    "aida-cli-lib/src/pr_ship_batch.rs",
     // Gate authority, code and its tests together (STORY-1889).
     "aida-cli-lib/src/gate/",
     // The drift ratchet that keeps this list complete (STORY-1888 C1).
@@ -397,8 +406,13 @@ pub(crate) const GATE_PROTECTED_PATHS: &[&str] = &[
 // trace:STORY-1888 | ai:claude
 pub(crate) const KNOWN_UNPROTECTED: &[&str] = &[
     // Gate authority today (approval, merge and hold refusals).
+    "aida-cli-lib/src/auto_complete.rs",
+    "aida-cli-lib/src/defer_cmd.rs",
     "aida-cli-lib/src/pr_cmd.rs",
     "aida-cli-lib/src/pr_merge_gate.rs",
+    // A name match that reads lease state rather than decides; STORY-1889
+    // confirms it before it moves or is exempted.
+    "aida-cli-lib/src/session_reap.rs",
 ];
 
 /// STORY-1889: functions whose NAME reads as gate authority but which decide
@@ -446,12 +460,8 @@ pub(crate) const NOT_GATE_AUTHORITY: &[(&str, &str, &str)] = &[
 /// repointed at a non-gate function, so the ratchet refuses any other, and
 /// this list only shrinks; the final STORY-1889 PR empties it.
 // trace:STORY-1889 | ai:claude
-pub(crate) const TRANSITIONAL_GATE_REEXPORTS: &[&str] = &[
-    "aida-cli-lib/src/defer_cmd.rs",
-    "aida-cli-lib/src/lib.rs",
-    "aida-cli-lib/src/merge_hold.rs",
-    "aida-cli-lib/src/role.rs",
-];
+pub(crate) const TRANSITIONAL_GATE_REEXPORTS: &[&str] =
+    &["aida-cli-lib/src/lib.rs", "aida-cli-lib/src/role.rs"];
 
 /// Where a protected path comes from, strongest first.
 // trace:STORY-1888 | ai:claude
@@ -481,13 +491,19 @@ pub(crate) struct ProtectedEntry {
 }
 
 impl ProtectedEntry {
-    /// A prefix entry matches on a path-component boundary only: it ends in
-    /// `/`, so `foo/` matches `foo/x.rs` and never `foobar/x.rs`.
+    /// Match on a path-component boundary: `foo/` matches `foo/x.rs` and
+    /// never `foobar/x.rs` or `foo`; an entry without a trailing `/` matches
+    /// the exact path and any file under that directory (`foo/x.rs`), never
+    /// `foobar/x.rs` or `bar.rs.bak` (TASK-2299).
+    // trace:TASK-2168 trace:TASK-2299 | ai:agy
     fn matches(&self, path: &str) -> bool {
         if self.pattern.ends_with('/') {
             path.starts_with(&self.pattern)
         } else {
             path == self.pattern
+                || path
+                    .strip_prefix(&self.pattern)
+                    .is_some_and(|rest| rest.starts_with('/'))
         }
     }
 }
@@ -577,8 +593,11 @@ pub(crate) fn parse_protected_entry(raw: &str) -> Result<String> {
     if entry.contains(['*', '?', '[', ']']) {
         bail!("globs are not supported; use an exact path or a `dir/` prefix");
     }
+    // At most one trailing `/` marks a prefix; `foo//` keeps an empty
+    // segment and is refused (it could never match a normalised path).
     if entry
-        .trim_end_matches('/')
+        .strip_suffix('/')
+        .unwrap_or(entry)
         .split('/')
         .any(|seg| seg.is_empty() || seg == "." || seg == "..")
     {

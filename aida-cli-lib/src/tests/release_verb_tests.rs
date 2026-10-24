@@ -49,7 +49,7 @@ fn preview_next_version_tolerates_prerelease_suffix_and_rejects_garbage() {
 
 // The artifact wait follows the merged release PR, so it must outlast the
 // release workflow plus runner queueing, not the old 10-minute cap.
-// trace:TASK-1721 | ai:claude
+// trace:TASK-1721 trace:TASK-1721.ace581bd trace:TASK-1951 | ai:claude
 #[test]
 fn release_artifact_timeout_covers_ci_and_honours_override() {
     let default = release_artifact_timeout(None);
@@ -67,7 +67,7 @@ fn release_artifact_timeout_covers_ci_and_honours_override() {
 
 // release.sh tags the squash-merged commit, which may not be HEAD of the
 // checkout, so the wrapper reads the tag release.sh reports.
-// trace:TASK-1721 | ai:claude
+// trace:TASK-1721 trace:TASK-1721.ace581bd trace:TASK-1951 | ai:claude
 #[test]
 fn released_tag_prefers_the_tag_release_sh_reports() {
     let dir = tempfile::tempdir().unwrap();
@@ -80,4 +80,48 @@ fn released_tag_prefers_the_tag_release_sh_reports() {
     );
     std::fs::write(&tag_file, "  \n").unwrap();
     assert_eq!(released_tag(&tag_file, dir.path()), None);
+}
+
+// TASK-1692: the TASK-1721 release criteria are exercised end to end by
+// tests/test_release_pr_flow.sh (a bare remote whose pre-receive hook refuses
+// pushes to main, a fake gh, a fake cargo). Running it here anchors each
+// criterion on a test `aida criteria` can see. Tests 1/1b cover the dry run
+// and fallback text, 2/2b the end-to-end release and tag, 2c AIDA_RELEASE=1.
+// trace:TASK-1721.aced1599 trace:TASK-1721.acd8fb85 trace:TASK-1721.acfe2a84 trace:TASK-1721.ac8f0bcb trace:TASK-1951 | ai:claude
+#[cfg(unix)]
+#[test]
+fn release_pr_flow_fixture_passes() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+    let out = std::process::Command::new("bash")
+        .arg(root.join("tests/test_release_pr_flow.sh"))
+        .current_dir(&root)
+        .output()
+        .expect("bash runs");
+    assert!(
+        out.status.success(),
+        "release PR-flow fixture failed:\n{}\n{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+// The operator runbook step: turn on "Require a pull request before merging"
+// (0 approvals, enforce_admins on), then verify a direct push is rejected.
+// trace:TASK-1721.ac0d9d77 trace:TASK-1951 | ai:claude
+#[test]
+fn release_runbook_names_the_branch_rule_and_the_direct_push_probe() {
+    let guide = include_str!("../../../docs/agents/aida-repository-guide.md");
+    let start = guide
+        .find("**Release runbook: operator, once")
+        .expect("the release runbook is in the repository guide");
+    let runbook = &guide[start..start + 1200];
+    for want in [
+        "Require a pull request before merging",
+        "Required approvals = 0",
+        "enforce_admins",
+        "git push origin HEAD:main",
+        "GH006",
+    ] {
+        assert!(runbook.contains(want), "runbook lacks {want:?}");
+    }
 }

@@ -40,6 +40,29 @@ Trade-off: silent auto-rebase for fewer manual decisions. `autoStash` preserves
 uncommitted changes across the rebase. If you'd rather see the prompt each time,
 leave these unset and the recipe above is your fallback.
 
+## Landing approved PRs: one at a time, or as a train
+
+Each PR's CI ran against the main that existed then, so two PRs that are each
+green can break main together (#2599/#2597: one added a whole-repo guard, the
+other added code the guard rejects). `aida pr ship` therefore refuses a PR
+whose head is behind main and names `aida pr train N`; no flag overrides it.
+It fetches main and the PR head first, and refuses when it cannot tell. The
+drain's merge phase applies the same refusal. Do not re-record approvals after `gh pr update-branch`. Land approved PRs
+with the merge train:
+
+```bash
+aida pr train 2597 2599 --dry-run   # gate verdict per PR + the planned train
+aida pr train 2597 2599             # build, CI, land or bisect
+```
+
+The train stacks one squash commit per PR on current main, proves by patch-id
+that each commit is exactly that PR's approved diff, runs CI on the stack as a
+`train/*` PR, and rebase-merges it pinned to its head only if main has not
+moved. On red it reruns once, then bisects; the PR that breaks the
+combination stays open with a comment. Drafts and held PRs are refused with
+a reason. Details: `two-seat-protocol.md` § Merge train.
+<!-- trace:STORY-1690 | ai:claude -->
+
 ## Review workflow
 
 `aida review prompt --pr N` (or `--specs FR-1,STORY-2,…`) generates a markdown
@@ -778,13 +801,13 @@ mirror to gitlab automatically, which is why only the *store* branch drifts.
 
 ### feedback_fan_committing_agents_with_worktree_isolation
 
-When using the Agent tool to fan out work that **commits, branches, or opens a PR**, pass `isolation: "worktree"` so the agent operates in its own git worktree. A **bare** agent (no isolation) runs in the **main repo's working tree** — it does `git checkout -b <branch>`, commits, pushes, and **leaves the main repo checked out on that feature branch**.
+Work that **commits, branches, or opens a PR** is never fanned out through the Agent tool: launch a standalone implementer (`aida queue work <SPEC> --role implementer --no-human`), which runs as its own process in its own worktree and implementer seat (STORY-1662). An in-session agent without its own worktree runs in the **main repo's working tree** — it does `git checkout -b <branch>`, commits, pushes, and **leaves the main repo checked out on that feature branch**.
 
-**Why:** (incident 2026-06-19) two research agents (cross-vendor portability TASK-870, RYO benchmark TASK-871) were fanned **without** `isolation: worktree` (the implementers in the same session WERE isolated; the research agents weren't). Each `git checkout -b`'d in the main repo. After their squash-merges landed on origin, local `main` was actually still on `task-871-...` with the **un-squashed** commit → `git merge --ff-only origin/main` aborted with *"Not possible to fast-forward"* (the squash created a different commit than the branch's). Looked like a scary divergence; was just the wrong branch left checked out. Also leaves stale local branches that the git-guardrail blocks `git branch -D` from cleaning.
+**Why:** (incident 2026-06-19) two research agents (cross-vendor portability TASK-870, RYO benchmark TASK-871) were fanned **without** worktree isolation (the implementers in the same session WERE isolated; the research agents weren't). Each `git checkout -b`'d in the main repo. After their squash-merges landed on origin, local `main` was actually still on `task-871-...` with the **un-squashed** commit → `git merge --ff-only origin/main` aborted with *"Not possible to fast-forward"* (the squash created a different commit than the branch's). Looked like a scary divergence; was just the wrong branch left checked out. Also leaves stale local branches that the git-guardrail blocks `git branch -D` from cleaning.
 
 **Recovery** (if it happens): `git checkout main` → `git merge --ff-only origin/main` (main IS an ancestor of origin once you're back on it) → the stale feature branch is harmless (guardrail blocks deleting it; ignore or let the worktree-GC handle it). Pairs with [[feedback_shared_tree_tracking_ref_hazard]] (committing/pushing from a shared tree is the deeper hazard) and [[feedback_clean_worktree_is_not_no_work]].
 
-**Rule:** any fanned agent that will `git commit`/`push`/PR → `isolation: "worktree"`. Read-only research (no commits) can be bare. When in doubt, isolate — the cost is ~200-500ms of worktree setup; the cost of NOT isolating is a polluted main checkout + a false-alarm divergence.
+**Rule:** anything that will `git commit`/`push`/PR → a standalone implementer process in its own worktree. Read-only research (no commits) can stay an in-session agent. When in doubt, isolate — the cost is a few seconds of worktree setup; the cost of NOT isolating is a polluted main checkout + a false-alarm divergence.
 
 ### feedback_fetch_before_commit
 
@@ -899,7 +922,7 @@ When a debugging investigation hits a point where the available artifacts (git r
 
 When integrating many PRs from a parallel fan-out (each agent branched off `origin/main` at a different time), two integrator failure modes recur:
 
-**1. Stale-base CI failure looks like a code bug but isn't.** A PR fails CI on an *existing* test unrelated to its diff (e.g. TASK-330 "session-id on comments" failed `bug670_agent_status_tests::actionable_matches_queue_list` — a queue/status test it never touches). Diagnosis: run the failing test on **current main** (it passes) + check `git rev-list --count <branch>..origin/main` (branch was N behind). The fix is a **REBASE onto current main, not a code change**. **How:** bounce it back to its implementer agent via SendMessage ("rebase onto origin/main, re-verify gates, `--force-with-lease`") — the agent has context and rebases *in its own worktree*; do NOT `git checkout`+rebase+force-push someone else's branch from your integrator (main) checkout (that's the [[feedback_never_force_push_main_and_chain_cd]] / shared-tree hazard).
+**1. Stale-base CI failure looks like a code bug but isn't.** A PR fails CI on an *existing* test unrelated to its diff (e.g. TASK-330 "session-id on comments" failed `bug670_agent_status_tests::actionable_matches_queue_list` — a queue/status test it never touches). Diagnosis: run the failing test on **current main** (it passes) + check `git rev-list --count <branch>..origin/main` (branch was N behind). The fix is a **REBASE onto current main, not a code change**. **How:** bounce it back to its implementer (mail its lane, or relaunch `aida queue work <SPEC> --role implementer --no-human` on the branch: "rebase onto origin/main, re-verify gates, `--force-with-lease`") — the agent has context and rebases *in its own worktree*; do NOT `git checkout`+rebase+force-push someone else's branch from your integrator (main) checkout (that's the [[feedback_never_force_push_main_and_chain_cd]] / shared-tree hazard).
 
 **2. CI-gate must check the conclusion, not just run the check.** A merge script that prints `gh pr checks` output but then runs `gh pr merge` *unconditionally* will merge a PR whose CI is still `pending` — I did this once (combined build happened to be green, but it violated the gate). Gate structurally: `ci=$(gh pr checks <n> | grep 'Build (ubuntu' | awk '{print $2}'); [ "$ci" = "pass" ] && gh pr merge ...`. NEVER merge on `pending`/`fail`. Pairs with [[feedback_verify_ci_green_before_merge]] and [[feedback_build_combined_main_after_concurrent_merges]] (build the combined main between merges — several fan-out PRs each green can still break the union, esp. multi-crate changes → `cargo build` the touched crates or the workspace).
 
@@ -1139,7 +1162,7 @@ e2e test actually execute it. Related: [[feedback_source_scanning_guards_need_th
 **The pattern that worked (12 specs merged to main in one push, zero questions):**
 
 1. **Front-load decisions once** (the 62-question disposition sweep) so the ready set is decision-free. Tag decided-and-buildable specs `ready-to-implement`.
-2. **Fan out implementer subagents in parallel** — `Agent(subagent_type:"general-purpose", isolation:"worktree")`, ~4 per wave. Each agent gets ONE bounded ready spec + a self-contained prompt: read it via `/home/joe/ai/aida/target/release/aida show <SPEC>`, implement per acceptance, add `// trace:<SPEC>`, build + `cargo test` + `cargo fmt --all --check`, commit `[AI:claude] type(scope): desc (SPEC-ID)` + co-author trailer, push, `gh pr create`, return ONLY the PR URL. Worktree isolation = no file-conflict between parallel agents.
+2. **Fan out implementers in parallel** — originally in-session subagents with worktree isolation; since STORY-1662, one standalone implementer process per spec (`aida queue work <SPEC> --role implementer --no-human`), ~3 per wave. Each launch gets ONE bounded ready spec and takes no prompt from the caller: the seat's own brief tells it to read the spec, implement per acceptance, add `// trace:<SPEC>`, run its gates, commit `[AI:claude] type(scope): desc (SPEC-ID)` + co-author trailer, push and open the PR. A headless launch ends with one `implementer:` line (its outcome and PR) plus an exit code; read those, not a returned URL. Worktree isolation = no file-conflict between parallel agents.
 3. **Main session = INTEGRATOR** (this is STORY-520's producer/consumer model, done by hand): poll the PRs, merge the green+clean ones (squash, delete-branch), `aida db reconcile-status --spec <S>` to bump Completed, pull main, then launch the next wave. Merge sequentially; rebase on conflict.
 4. **Loop it** via ScheduleWakeup so waves keep launching for hours.
 
@@ -1199,7 +1222,7 @@ Dialog role often used "ship" loosely to mean any of: committed, pushed, PR open
 |---|---|---|
 | **Committed** | Work exists in local git history | Still In Progress |
 | **Pushed** | Branch reflects on `origin` | Still In Progress |
-| **PR opened** | GitHub PR exists, awaiting CI/review | Done (if `/aida-pr` flipped it) |
+| **PR opened** | GitHub PR exists, awaiting CI/review | Done (at the `aida queue done` checkpoint) |
 | **Reviewed** | Reviewer rendered a verdict (approved/rejected) | Still Done (waiting for merge) |
 | **Merged** | PR squashed/merged to `main` | Should be Completed via auto-bump |
 | **Completed** | Spec status = Completed in AIDA | Final state |

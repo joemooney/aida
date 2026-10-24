@@ -2105,6 +2105,12 @@ impl<'a> McpServer<'a> {
 
         if let Some(status) = args.get("status").and_then(|v| v.as_str()) {
             if let Some(new_status) = parse_status(status) {
+                // A deferred spec reads `deferred`; refuse a status write
+                // nobody would see, as `aida edit` does.
+                // trace:TASK-1955 | ai:claude (slice 7 round-1 finding 5)
+                if let Some(msg) = crate::requirements_cli::deferred_status_edit_refusal(req) {
+                    return Err(msg);
+                }
                 // BUG-449 (TASK-647/ADR-3 caller parity): MCP is not advisor
                 // authority (the launching shell isn't the advisor seat), so it
                 // must not self-advance a spec into a status that is the
@@ -2741,28 +2747,34 @@ impl<'a> McpServer<'a> {
             .get("broadcast")
             .and_then(|v| v.as_bool())
             .unwrap_or(false);
-        let recipient = if broadcast {
-            Recipient::Broadcast
-        } else if let Some(a) = args.get("to").and_then(|v| v.as_str()) {
-            let a = a.trim();
-            // BUG-2132: same recipient-shape refusal as the CLI.
-            // trace:BUG-2132 trace:TASK-1766 | ai:claude
-            if let Some(why) = aida_core::mailbox::recipient_id_rejection(a) {
-                return Err(format!("send refused: `to` {why}"));
-            }
-            // Same stored-spelling rule as the CLI `--to` (a known identity
-            // is delivered under its stored spelling; `addressed_to` is
-            // case-sensitive). trace:TASK-1955 | ai:claude (TASK-1928)
-            let known = crate::known_mailbox_recipients(&self.mailbox_store_root());
-            Recipient::Agent(
-                known
-                    .get(&a.to_lowercase())
-                    .cloned()
-                    .unwrap_or_else(|| a.to_string()),
-            )
+        // Same canonical address and liveness refusal as the CLI.
+        // trace:STORY-1843 | ai:codex
+        let mut routing_warnings = Vec::new();
+        let resolution = if broadcast {
+            None
         } else {
-            return Err("specify `to` (an agent) or `broadcast: true`".to_string());
+            let target = args
+                .get("to")
+                .and_then(|v| v.as_str())
+                .ok_or("specify `to` (an agent) or `broadcast: true`")?;
+            let directory = crate::mailbox_resolver::RecipientDirectory::load(
+                &self.project_root,
+                &self.mailbox_store_root(),
+            )
+            .map_err(|e| e.to_string())?;
+            routing_warnings = directory.warnings().to_vec();
+            Some(directory.resolve(target).map_err(|error| {
+                if routing_warnings.is_empty() {
+                    error.to_string()
+                } else {
+                    format!("{error}\n{}", routing_warnings.join("\n"))
+                }
+            })?)
         };
+        let recipient = resolution
+            .as_ref()
+            .map(|r| Recipient::Agent(r.address.clone()))
+            .unwrap_or(Recipient::Broadcast);
         // trace:BUG-1533 | ai:claude — mirror the CLI's `--from` resolution:
         // an explicit `from` argument wins, else the same session-identity
         // precedence (agent name / AIDA_USER / role) as the CLI, never the
@@ -2859,7 +2871,15 @@ impl<'a> McpServer<'a> {
             relayed_from,
         };
         crate::mailbox_store::write_message(&self.project_root, &msg).map_err(|e| e.to_string())?;
-        Ok(format!("Message sent: {id} (thread {thread_id})"))
+        if let Some(note) = resolution.and_then(|r| r.reader_notice) {
+            routing_warnings.push(note);
+        }
+        let notice = if routing_warnings.is_empty() {
+            String::new()
+        } else {
+            format!("\n{}", routing_warnings.join("\n"))
+        };
+        Ok(format!("Message sent: {id} (thread {thread_id}){notice}"))
     }
 
     /// MCP parity for `aida mailbox inbox` (STORY-493): an agent's inbox —
@@ -8626,6 +8646,12 @@ fn workflow_tool_descriptors() -> Value {
 /// `project_root` is the AIDA project root (parent of `.aida/`). The
 /// coordination tools (STORY-361) resolve their file paths under this root.
 pub fn run_mcp_server(storage: &Storage, project_root: PathBuf) -> Result<()> {
+    // STORY-1662 (signoff C2): a `claude --bg` lane spawns this server with
+    // the daemon's environment; take the lane's identity from its lease
+    // before any grant-gated tool reads the env. trace:STORY-1662 | ai:claude
+    if let Ok(cwd) = std::env::current_dir() {
+        crate::lane_env::apply_in_process(&project_root, &cwd);
+    }
     let server = McpServer::new(storage, project_root);
     let respawn = McpRespawnState::new();
     let stdin = io::stdin();
@@ -10673,6 +10699,68 @@ mod tests {
         }
     }
 
+    // trace:STORY-1843 | ai:codex
+    #[test]
+    fn mcp_mailbox_live_resolution_refuses_without_writes_and_canonicalizes() {
+        let dir = tempdir().unwrap();
+        let server = mk_server(dir.path());
+        for target in ["absent-worker", "implementer", "claude"] {
+            let error = server
+                .tool_send_message(&json!({"to":target,"body":"routing probe"}))
+                .unwrap_err();
+            assert!(!error.contains("aida agent ls"), "{error}");
+        }
+        assert!(crate::mailbox_store::read_local_messages(dir.path())
+            .unwrap()
+            .is_empty());
+        let mut entry = crate::agent_registry::register_existing_agent(
+            dir.path(),
+            "claude",
+            std::process::id(),
+            "implementer".into(),
+            None,
+            dir.path().to_path_buf(),
+            Some("Case-Worker".into()),
+            None,
+        )
+        .unwrap();
+        // One damaged record must be reported without preventing valid delivery.
+        // trace:STORY-1843 | ai:codex
+        std::fs::write(
+            crate::agent_registry::agents_dir(dir.path()).join("broken.toml"),
+            "invalid toml [",
+        )
+        .unwrap();
+        let sent = server
+            .tool_send_message(&json!({"to":" case-worker ","body":"routing probe"}))
+            .unwrap();
+        assert!(
+            sent.contains("skipping invalid agent registry record"),
+            "{sent}"
+        );
+        assert!(sent.contains("broken.toml"), "{sent}");
+        let messages = crate::mailbox_store::read_local_messages(dir.path()).unwrap();
+        assert_eq!(messages.len(), 1);
+        assert_eq!(
+            messages[0].to,
+            aida_core::mailbox::Recipient::Agent("Case-Worker".into())
+        );
+        entry.ended_at = Some(chrono::Utc::now());
+        crate::agent_registry::write_entry(dir.path(), &entry).unwrap();
+        let error = server
+            .tool_send_message(&json!({"to":"Case-Worker","body":"late probe"}))
+            .unwrap_err();
+        assert!(error.contains("no live agent"), "{error}");
+        assert!(error.contains("broken.toml"), "{error}");
+        assert!(!error.contains("aida agent ls"), "{error}");
+        assert_eq!(
+            crate::mailbox_store::read_local_messages(dir.path())
+                .unwrap()
+                .len(),
+            1
+        );
+    }
+
     /// send_message → read_inbox round-trip: a direct message and a broadcast
     /// both land in the recipient's inbox; the sender's own message does not.
     // trace:STORY-493 | ai:claude
@@ -10680,6 +10768,19 @@ mod tests {
     fn mcp_mailbox_send_then_read_inbox_roundtrip() {
         let dir = tempdir().unwrap();
         let server = mk_server(dir.path());
+        // Direct vendor mail now requires a real live registry reader.
+        // trace:STORY-1843 | ai:codex
+        crate::agent_registry::register_existing_agent(
+            dir.path(),
+            "claude",
+            std::process::id(),
+            "implementer".into(),
+            None,
+            dir.path().to_path_buf(),
+            Some("mail-reader".into()),
+            None,
+        )
+        .unwrap();
 
         server
             .tool_send_message(&json!({ "to": "claude", "body": "direct hi", "from": "codex" }))
@@ -10717,6 +10818,19 @@ mod tests {
     fn mcp_send_message_trims_and_canonicalizes_a_known_recipient() {
         let dir = tempdir().unwrap();
         let server = mk_server(dir.path());
+        // The role and private name need a real live reader under the shared resolver.
+        // trace:STORY-1843 | ai:codex
+        crate::agent_registry::register_existing_agent(
+            dir.path(),
+            "claude",
+            std::process::id(),
+            "advisor".into(),
+            None,
+            dir.path().to_path_buf(),
+            Some("newagent".into()),
+            None,
+        )
+        .unwrap();
         server
             .tool_send_message(&json!({ "to": "ADVISOR", "body": "upper", "from": "codex" }))
             .unwrap();
@@ -10749,6 +10863,19 @@ mod tests {
     fn mcp_mailbox_send_with_subject_then_read_inbox_roundtrip() {
         let dir = tempdir().unwrap();
         let server = mk_server(dir.path());
+        // Direct vendor mail now requires a real live registry reader.
+        // trace:STORY-1843 | ai:codex
+        crate::agent_registry::register_existing_agent(
+            dir.path(),
+            "claude",
+            std::process::id(),
+            "implementer".into(),
+            None,
+            dir.path().to_path_buf(),
+            Some("mail-reader".into()),
+            None,
+        )
+        .unwrap();
 
         server
             .tool_send_message(&json!({
@@ -10778,6 +10905,19 @@ mod tests {
     fn mcp_read_inbox_peek_unread_and_mark_seen() {
         let dir = tempdir().unwrap();
         let server = mk_server(dir.path());
+        // Direct vendor mail now requires a real live registry reader.
+        // trace:STORY-1843 | ai:codex
+        crate::agent_registry::register_existing_agent(
+            dir.path(),
+            "claude",
+            std::process::id(),
+            "implementer".into(),
+            None,
+            dir.path().to_path_buf(),
+            Some("mail-reader".into()),
+            None,
+        )
+        .unwrap();
         server
             .tool_send_message(&json!({ "to": "claude", "body": "one", "from": "codex" }))
             .unwrap();
@@ -10833,6 +10973,19 @@ mod tests {
     fn mcp_mark_seen_does_not_backfill_receipts_at_or_below_existing_watermark() {
         let dir = tempdir().unwrap();
         let server = mk_server(dir.path());
+        // Direct vendor mail now requires a real live registry reader.
+        // trace:STORY-1843 | ai:codex
+        crate::agent_registry::register_existing_agent(
+            dir.path(),
+            "claude",
+            std::process::id(),
+            "implementer".into(),
+            None,
+            dir.path().to_path_buf(),
+            Some("mail-reader".into()),
+            None,
+        )
+        .unwrap();
         server
             .tool_send_message(&json!({ "to": "claude", "body": "already read", "from": "codex" }))
             .unwrap();
@@ -11096,6 +11249,54 @@ mod tests {
         let store = server.storage.load().unwrap();
         let req = store.get_requirement_by_spec_id(&id).unwrap();
         assert_eq!(req.status, RequirementStatus::Done);
+    }
+
+    /// TASK-1955 (slice 7 round-1 finding 5): MCP refuses a status write on a
+    /// deferred spec (flag or legacy `deferred:*` tag) as `aida edit` does —
+    /// it reads `deferred`, so the write would report success and show
+    /// nothing. Other fields still update.
+    // trace:TASK-1955 | ai:claude
+    #[test]
+    fn mcp_update_requirement_refuses_a_status_write_on_a_deferred_spec() {
+        let dir = tempdir().unwrap();
+        let _ambient = crate::test_env::AmbientGuard::hermetic(dir.path(), None);
+        let server = mk_server(dir.path());
+        let added = server
+            .tool_add_requirement(&json!({
+                "title": "Deferred target",
+                "description": "deferred status gate",
+                "type": "task",
+            }))
+            .unwrap();
+        let id = added_spec_id(&added).to_string();
+        force_status(&server, &id, RequirementStatus::Approved);
+        let set = |f: &dyn Fn(&mut Requirement)| {
+            let mut store = server.storage.load().unwrap();
+            f(store.get_requirement_by_spec_id_mut(&id).unwrap());
+            server.storage.save(&store).unwrap();
+        };
+        set(&|r| r.deferred = true);
+        let err = server
+            .tool_update_requirement(&json!({ "id": id, "status": "in-progress" }))
+            .expect_err("a status write on a deferred spec must be refused");
+        assert!(err.contains("aida undefer"), "{err}");
+        server
+            .tool_update_requirement(&json!({ "id": id, "title": "still editable" }))
+            .expect("non-status fields stay editable");
+
+        set(&|r| {
+            r.deferred = false;
+            r.tags.insert("deferred:later".to_string());
+        });
+        let err = server
+            .tool_update_requirement(&json!({ "id": id, "status": "in-progress" }))
+            .expect_err("a legacy deferred:* tag defers too");
+        assert!(err.contains("--remove-tag deferred:later"), "{err}");
+
+        let store = server.storage.load().unwrap();
+        let req = store.get_requirement_by_spec_id(&id).unwrap();
+        assert_eq!(req.status, RequirementStatus::Approved);
+        assert_eq!(req.title, "still editable");
     }
 
     /// BUG-481: the update_requirement status gate keyed only on the TARGET
@@ -13747,6 +13948,7 @@ mod tests {
             plan_source: "test".to_string(),
             claude_session_id: None,
             batch_name: None,
+            agent_name: None,
             plan: None,
             items: vec![
                 crate::session_manifest::ManifestItem {
