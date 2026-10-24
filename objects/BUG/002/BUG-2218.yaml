@@ -8,7 +8,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-24T12:27:08.977771549Z
-modified_at: 2026-10-24T15:04:08.078816482Z
+modified_at: 2026-10-24T17:15:28.013007917Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -34,6 +34,11 @@ comments:
   content: 'Implemented in PR-2898 at eb9846b8f4: contained Claude and OS-wrapper launches create and grant only the shared .aida/mailbox directory, refusing symlinked mailbox or state directories without granting surrounding sensitive coordination state. Send errors name the target path and filesystem reason. Three new mailbox regressions and all 17 store-boundary tests passed; make check-ci-fast passed all 34 gates. Existing contained sessions need restart for the new binding. PR remains unmerged for independent review.'
   created_at: 2026-10-24T13:44:17.510269596Z
   modified_at: 2026-10-24T13:44:17.510269596Z
+- id: 01a16ee9-078d-71c1-a000-e0b670d17daf
+  author: ai:codex:joe
+  content: 'PR-2898 round-1 rework pushed normally at 9d6d7141ebf88a2bf047a9a058342cf2747bdf45, folding superseded TASK-2326/2327/2328. Mailbox path/settings previews no longer create the mailbox; explicit runtime preparation creates it before sandbox startup. Contained Claude and OS-wrapper paths both refuse symlinked state/mailbox paths. Direct clarify, intake, burndown and headless launch seams prepare before issuing child grants. The Git-denial CI assertion had mistaken the mailbox grant for a store grant; it now distinguishes them and verifies effective Git metadata refusal across Git versions. Final checks passed: 41 bug_221 tests, 20 store-boundary tests, exact Git-denial/help/audit regressions, all 34 fast gates. No merge or self-verdict.'
+  created_at: 2026-10-24T17:15:28.013007917Z
+  modified_at: 2026-10-24T17:15:28.013007917Z
 history:
 - id: 01a16de2-65a2-7851-ac33-7b68ed2e6b49
   author: joe
