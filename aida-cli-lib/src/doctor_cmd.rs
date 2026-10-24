@@ -9232,6 +9232,51 @@ mod story_462_doctor_tests {
         assert!(!lock.exists());
     }
 
+    /// A full `aida doctor --category config-lock` run reports the planted
+    /// placeholder, so the scan stays wired into `doctor_multi_agent`. Runs in
+    /// its own process because it changes the working directory.
+    // trace:TASK-2270 | ai:claude
+    #[cfg(unix)]
+    #[test]
+    fn doctor_run_with_config_lock_category_reports_the_placeholder() {
+        use std::os::unix::fs::PermissionsExt;
+        if let Some(out) = crate::test_env::run_path_isolated_test_output() {
+            let stdout = String::from_utf8_lossy(&out.stdout);
+            assert!(
+                stdout.contains(&format!(
+                    "\"category\": \"{}\"",
+                    crate::sandbox_config_lock::CATEGORY
+                )) && stdout.contains("config.lock"),
+                "{stdout}"
+            );
+            return;
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let init = crate::test_git::git_command()
+            .current_dir(dir.path())
+            .args(["init", "-q", "-b", "main"])
+            .output()
+            .unwrap();
+        assert!(init.status.success(), "{init:?}");
+        std::fs::create_dir(dir.path().join(".aida")).unwrap();
+        std::fs::create_dir(dir.path().join(".aida-store")).unwrap();
+        let lock = dir.path().join(".git/config.lock");
+        std::fs::write(&lock, b"").unwrap();
+        std::fs::set_permissions(&lock, std::fs::Permissions::from_mode(0o444)).unwrap();
+        std::env::set_current_dir(dir.path()).unwrap();
+        handle_doctor_command(
+            false,
+            false,
+            Some("config-lock"),
+            true,
+            false,
+            false,
+            None,
+            None,
+        )
+        .unwrap();
+    }
+
     // ── TASK-717: stale-remote-branch classification ──
 
     #[test]

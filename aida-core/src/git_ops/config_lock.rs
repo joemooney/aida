@@ -164,8 +164,11 @@ pub(crate) fn deleted_branches(args: &[OsString]) -> Option<Vec<OsString>> {
 /// sandbox placeholder held the config lock: git pushes, warns "unable to
 /// write upstream branch configuration", and exits 0. `local` is the branch
 /// that should track, or `None` for the checked-out branch (a `HEAD:` push).
-/// Does nothing when an upstream is already set or the remote-tracking ref
-/// is missing. Returns whether it set the upstream.
+/// Repairs whenever the upstream is not `<remote>/<remote_branch>`, including
+/// a branch that already tracked `origin/main` from `worktree add -b` (the
+/// failed write leaves that stale upstream in place). Does nothing when the
+/// upstream already matches or the remote-tracking ref is missing. Returns
+/// whether it set the upstream.
 // trace:TASK-2270 | ai:claude
 pub fn repair_push_upstream(
     repo: &Path,
@@ -179,19 +182,26 @@ pub fn repair_push_upstream(
         cmd
     };
     let upstream_of = format!("{}@{{upstream}}", local.unwrap_or(""));
-    let has_upstream = git()
-        .args(["rev-parse", "--verify", "--quiet", &upstream_of])
+    let wanted = format!("{remote}/{remote_branch}");
+    // trace:TASK-2270 | ai:claude
+    let upstream_matches = git()
+        .args([
+            "rev-parse",
+            "--abbrev-ref",
+            "--symbolic-full-name",
+            &upstream_of,
+        ])
         .output()
-        .is_ok_and(|o| o.status.success());
-    let tracking = format!("refs/remotes/{remote}/{remote_branch}");
+        .is_ok_and(|o| o.status.success() && String::from_utf8_lossy(&o.stdout).trim() == wanted);
+    let tracking = format!("refs/remotes/{wanted}");
     let has_tracking = git()
         .args(["rev-parse", "--verify", "--quiet", &tracking])
         .output()
         .is_ok_and(|o| o.status.success());
-    if has_upstream || !has_tracking {
+    if upstream_matches || !has_tracking {
         return false;
     }
-    let mut args = vec![format!("--set-upstream-to={remote}/{remote_branch}")];
+    let mut args = vec![format!("--set-upstream-to={wanted}")];
     args.extend(local.map(str::to_string));
     args.insert(0, "branch".to_string());
     output_healing_config_lock(repo, git, &args).is_ok_and(|o| o.status.success())
@@ -442,6 +452,17 @@ mod tests {
     /// A clone of a bare remote, on branch `feat`, with the placeholder
     /// planted: `push -u` pushes and exits 0 but records no upstream.
     fn pushed_without_upstream(refspec: &str) -> (tempfile::TempDir, PathBuf) {
+        pushed_with_failed_upstream_write(refspec, false)
+    }
+
+    /// As [`pushed_without_upstream`], but with `tracks_main` the branch is
+    /// forked from `origin/main` with tracking first, the way AIDA's
+    /// `worktree add -b <branch> -- <path> origin/main` creates it, so the
+    /// failed write leaves `origin/main` as the upstream.
+    fn pushed_with_failed_upstream_write(
+        refspec: &str,
+        tracks_main: bool,
+    ) -> (tempfile::TempDir, PathBuf) {
         let root = tempfile::tempdir().unwrap();
         git_ok(root.path(), &["init", "-q", "--bare", "remote.git"]);
         let work = root.path().join("work");
@@ -451,7 +472,19 @@ mod tests {
         git_ok(&work, &["config", "user.name", "t"]);
         git_ok(&work, &["commit", "-q", "--allow-empty", "-m", "init"]);
         git_ok(&work, &["remote", "add", "origin", "../remote.git"]);
-        git_ok(&work, &["checkout", "-q", "-b", "feat"]);
+        if tracks_main {
+            git_ok(&work, &["push", "-q", "origin", "main"]);
+            git_ok(
+                &work,
+                &["checkout", "-q", "--track", "-b", "feat", "origin/main"],
+            );
+            assert_eq!(
+                git_ok(&work, &["rev-parse", "--abbrev-ref", "feat@{upstream}"]),
+                "origin/main"
+            );
+        } else {
+            git_ok(&work, &["checkout", "-q", "-b", "feat"]);
+        }
         plant_lock(&work, b"", 0o444);
         let push = crate::test_git::git_command()
             .current_dir(&work)
@@ -472,13 +505,39 @@ mod tests {
             "origin/feat"
         );
         assert!(!work.join(".git/config.lock").exists());
-        // Idempotent: an upstream is already set.
+        // Idempotent: the upstream already matches.
         assert!(!repair_push_upstream(&work, "origin", Some("feat"), "feat"));
     }
 
     #[test]
     fn push_upstream_is_repaired_for_a_head_refspec() {
         let (_root, work) = pushed_without_upstream("HEAD:refs/heads/remote-name");
+        assert!(repair_push_upstream(&work, "origin", None, "remote-name"));
+        assert_eq!(
+            git_ok(&work, &["rev-parse", "--abbrev-ref", "@{upstream}"]),
+            "origin/remote-name"
+        );
+    }
+
+    #[test]
+    fn push_upstream_replaces_a_stale_origin_main_upstream() {
+        let (_root, work) = pushed_with_failed_upstream_write("feat", true);
+        // The failed write left the creation-time upstream in place.
+        assert_eq!(
+            git_ok(&work, &["rev-parse", "--abbrev-ref", "feat@{upstream}"]),
+            "origin/main"
+        );
+        assert!(repair_push_upstream(&work, "origin", Some("feat"), "feat"));
+        assert_eq!(
+            git_ok(&work, &["rev-parse", "--abbrev-ref", "feat@{upstream}"]),
+            "origin/feat"
+        );
+        assert!(!repair_push_upstream(&work, "origin", Some("feat"), "feat"));
+    }
+
+    #[test]
+    fn head_push_upstream_replaces_a_stale_origin_main_upstream() {
+        let (_root, work) = pushed_with_failed_upstream_write("HEAD:refs/heads/remote-name", true);
         assert!(repair_push_upstream(&work, "origin", None, "remote-name"));
         assert_eq!(
             git_ok(&work, &["rev-parse", "--abbrev-ref", "@{upstream}"]),
