@@ -1,5 +1,6 @@
 id: 01a16ca7-8c7e-7671-9e69-9811a72ebe72
 spec_id: TASK-1-481
+agreed_id: TASK-1850
 title: 'minor: disk_emergency::run_emergency appends the ledger once, after apply() fin…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on STORY-1916, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -38,6 +39,10 @@ history:
   author: joe
   timestamp: 2026-10-24T06:53:30.974848062Z
   session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+  changes: []
+- id: 01a16cb7-902e-72f2-b2e1-563a6b1f1469
+  author: joe
+  timestamp: 2026-10-24T07:02:11.758866579Z
   changes: []
 filed_at:
   code_sha: 4d3777338645602470178f0ab2e63309f71520e2

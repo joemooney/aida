@@ -1,5 +1,6 @@
 id: 01a16ca7-9baf-75c2-9e92-e26129a98306
 spec_id: TASK-1-482
+agreed_id: TASK-1854
 title: 'minor: run_emergency (the production glue: lock, gh / offline fallback, ledger …'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on STORY-1916, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -38,6 +39,10 @@ history:
   author: joe
   timestamp: 2026-10-24T06:53:42.816893329Z
   session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+  changes: []
+- id: 01a16cb7-90d6-77b3-b83f-d5d35635fc3d
+  author: joe
+  timestamp: 2026-10-24T07:02:11.926421896Z
   changes: []
 filed_at:
   code_sha: 4d3777338645602470178f0ab2e63309f71520e2
