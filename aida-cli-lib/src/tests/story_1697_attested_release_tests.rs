@@ -154,6 +154,7 @@ impl Case {
             id: "TASK-37".into(),
             aliases: Vec::new(),
             named: true,
+            shipped: false,
             current: Some(self.req.clone()),
             history: Ok(vec![self.req.clone()]),
         }];

@@ -80,7 +80,7 @@ fn a_directory_prefix_matches_nested_files_on_a_component_boundary() {
     assert_eq!(touches_gates(&paths(&["bar.rs.bak"]), &set), None);
 }
 
-// trace:TASK-2168 | ai:agy
+// trace:TASK-2299 | ai:agy
 #[test]
 fn a_directory_entry_without_a_trailing_slash_matches_files_under_it() {
     let mut set = ProtectedPaths::floor();

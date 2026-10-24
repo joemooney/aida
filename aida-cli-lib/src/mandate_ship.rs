@@ -103,6 +103,7 @@ pub(crate) fn resolve_exclusion_specs(
             id: id.to_owned(),
             aliases,
             named: is_named,
+            shipped: false,
             current: req,
             history: Ok(Vec::new()),
         }
@@ -142,6 +143,11 @@ pub(crate) fn resolve_exclusion_specs(
     }
     let all_keys: Vec<String> = history_keys_of.iter().flatten().cloned().collect();
     let batch = crate::mandate::StoreHistoryBatch::read(store_root, &all_keys);
+    let code_root = store_root
+        .file_name()
+        .filter(|name| *name == ".aida-store")
+        .and_then(|_| store_root.parent())
+        .unwrap_or(store_root);
     for (spec, keys) in specs.iter_mut().zip(&history_keys_of) {
         // STORY-1698 / TASK-1800: sticky exclusion reads every stored version
         // across the ID and any resolved alias object path.
@@ -159,6 +165,17 @@ pub(crate) fn resolve_exclusion_specs(
             }
             Ok(all_versions)
         })();
+        // TASK-2314: a trace-derived operator-only exclusion expires only when
+        // the traced spec is Completed AND its git linkage shows a merged
+        // commit on the default branch. Check default-branch commit linkage
+        // only for non-named Completed specs.
+        // trace:TASK-2314 | ai:agy
+        spec.shipped = !spec.named
+            && spec
+                .current
+                .as_ref()
+                .is_some_and(|req| matches!(req.status, aida_core::RequirementStatus::Completed))
+            && crate::shipped_linkage::has_shipped_commit_on_default_branch(code_root, keys);
     }
     specs
 }

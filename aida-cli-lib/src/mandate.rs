@@ -725,6 +725,12 @@ pub(crate) struct ShipSpec {
     /// absent from the store). False when it was only discovered via a trace
     /// comment in a touched file.
     pub named: bool,
+    /// True when the spec's git linkage shows a merged commit on the default
+    /// branch (`main`). Used by [`trace_operator_only_expired`] so an agent
+    /// cannot expire a trace-derived `operator-only` exclusion merely by
+    /// editing the spec's status to `Completed` without a shipped commit.
+    // trace:TASK-2314 | ai:agy
+    pub shipped: bool,
     /// The spec as the store holds it now; `None` when the store has no such
     /// spec currently.
     pub current: Option<aida_core::Requirement>,
@@ -1467,21 +1473,20 @@ pub(crate) fn always_human_class(req: &aida_core::Requirement) -> Option<String>
         .then(|| "operator-only".into())
 }
 
-/// TASK-2168: a trace-derived `operator-only` exclusion stops applying once
-/// the traced spec's current status is Completed, Rejected or Superseded.
-/// Exclusions named directly on the PR's specs and unreadable current status
-/// (`current: None`) keep the exclusion (fail closed).
-// trace:TASK-2168 | ai:agy
+/// TASK-2168 / TASK-2314: a trace-derived `operator-only` exclusion stops
+/// applying ONLY once the traced spec's current status is `Completed` AND its
+/// linkage shows a merged commit on the default branch (`shipped`). `Rejected`
+/// or `Superseded`, `Completed` with no shipped commit, exclusions named
+/// directly on the PR's specs, and unreadable current status (`current: None`)
+/// keep the exclusion (fail closed).
+// trace:TASK-2168 trace:TASK-2314 | ai:agy
 pub(crate) fn trace_operator_only_expired(spec: &ShipSpec) -> bool {
     !spec.named
-        && spec.current.as_ref().is_some_and(|req| {
-            matches!(
-                req.status,
-                aida_core::RequirementStatus::Completed
-                    | aida_core::RequirementStatus::Rejected
-                    | aida_core::RequirementStatus::Superseded
-            )
-        })
+        && spec.shipped
+        && spec
+            .current
+            .as_ref()
+            .is_some_and(|req| matches!(req.status, aida_core::RequirementStatus::Completed))
 }
 
 // trace:TASK-2168 | ai:agy
@@ -1747,10 +1752,10 @@ pub(crate) fn judge_exclusion_spec(
     }
     // The ledger is the first source: once seen excluded, always excluded.
     // Consult both the ID and any recorded aliases.
-    // TASK-2168: a trace-derived operator-only exclusion expires once the
-    // traced spec is Completed, Rejected or Superseded (fail closed when
-    // current status is unreadable).
-    // trace:TASK-2168 | ai:agy
+    // TASK-2168 / TASK-2314: a trace-derived operator-only exclusion expires
+    // only once the traced spec is Completed AND shipped on the default branch
+    // (fail closed when current status is unreadable or unshipped).
+    // trace:TASK-2168 trace:TASK-2314 | ai:agy
     let operator_only_expired = trace_operator_only_expired(spec);
     let mut excluded: Option<String> = None;
     for key in std::iter::once(id).chain(spec.aliases.iter()) {
