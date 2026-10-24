@@ -1,0 +1,27 @@
+id: 01a16eed-0452-7780-a8f7-35b515e8c85a
+spec_id: TASK-2332
+agreed_id: TASK-2332
+title: Train rider gate is read-once; concurrent train starts can double-carry
+description: |
+  The BUG-2220 rider gate reads live_trains once at the start of pr_train_handler. Two `aida pr train` runs starting concurrently both read before either opens its train PR or takes the lease, so neither refuses the shared riders. Acceptance as written ("a PR in a LIVE train") is met and the merge lease still serializes landings — the cost is wasted CI, the thing BUG-2220 aimed to stop. Consider re-checking under the lease or a short build-phase claim.
+
+  Raised in review of PR-2900: https://github.com/joemooney/aida/pull/2900#issuecomment-6387215630
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-24T17:19:49.330081546Z
+modified_at: 2026-10-24T17:19:49.330081546Z
+req_type: Task
+tags:
+- from-review:PR-2900
+- severity:minor
+filed_at:
+  code_sha: 2d15e9be4fd5db000fdff8b062f655527d9a2878
+  branch: pr-2900
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 194492a69f
+  vendor: claude
+  session: 01a16ee59b04
+  harness_version: 2.1.310 (Claude Code)

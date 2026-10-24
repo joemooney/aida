@@ -1,0 +1,27 @@
+id: 01a16eec-ed74-74b2-9424-5726a22f797b
+spec_id: TASK-2331
+agreed_id: TASK-2331
+title: live_trains gh pr list --limit 100 can miss an open train PR
+description: |
+  live_trains (pr_train.rs:1233) lists open PRs with `gh pr list --state open --limit 100` and filters train/* heads client-side. With more than 100 open PRs, an open train PR past the limit is silently missed and its riders can board a second train (the exact BUG-2220 failure). Raise the limit or filter server-side (e.g. a head:train/ search) so the gate sees every open train.
+
+  Raised in review of PR-2900: https://github.com/joemooney/aida/pull/2900#issuecomment-6387215630
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-24T17:19:43.476996262Z
+modified_at: 2026-10-24T17:19:43.476996262Z
+req_type: Task
+tags:
+- from-review:PR-2900
+- severity:minor
+filed_at:
+  code_sha: 2d15e9be4fd5db000fdff8b062f655527d9a2878
+  branch: pr-2900
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 194492a69f
+  vendor: claude
+  session: 01a16ee59b04
+  harness_version: 2.1.310 (Claude Code)
