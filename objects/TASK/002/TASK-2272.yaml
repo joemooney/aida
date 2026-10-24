@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T21:38:06.702176218Z
-modified_at: 2026-10-24T01:57:09.467635239Z
+modified_at: 2026-10-24T01:57:23.712746836Z
 req_type: Task
 relationships:
 - rel_type: Supersedes
@@ -151,6 +151,12 @@ comments:
   content: 'ADVISOR 18:14: Folded TASK-2296 (the aida-fire fixer ''has a branch -> STOP'' conflict; same root as TASK-2287), TASK-2297 and TASK-2298 (stale skill prose; cosmetic), all from the #2865 PASS, and TASK-2294 (the Cargo-timeout hook''s parse-time $(shell) blind spot; minor) from the #2855 PASS. Take them in #2868.'
   created_at: 2026-10-24T01:15:23.274297126Z
   modified_at: 2026-10-24T01:15:23.274297126Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+- id: 01a16ba0-8280-72a2-8693-bc9c0cf622d7
+  author: joe
+  content: 'ADVISOR 18:57: Folded TASK-2301 from the #2850 PASS (a scheduled dev-autopromote re-promotes a commit the operator just rolled back; minor). Take it after #2850 merges: rollback should pin the rolled-back SHA so the tick skips it until main moves past it, with a test.'
+  created_at: 2026-10-24T01:57:23.712746836Z
+  modified_at: 2026-10-24T01:57:23.712746836Z
   session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
 history:
 - id: 01a16ab3-42ef-7420-86da-7b4600ae0438
