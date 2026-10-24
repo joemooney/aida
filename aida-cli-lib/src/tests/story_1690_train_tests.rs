@@ -1539,8 +1539,9 @@ fn ship_meta(title: &str) -> crate::pr_cmd::PrShipMetadata {
 }
 
 /// TASK-2272 (TASK-2271): the merge seat's checkout holds a stale local
-/// branch of the same name. The car subject comes from the gated head sha,
-/// so it carries that commit's `(STORY-1)`, never the stale `(STORY-2)`.
+/// branch of the same name. With no usable title (the GitLab metadata path)
+/// the subject comes from the commit, and that commit is the gated head sha,
+/// so the car carries its `(STORY-1)`, never the stale `(STORY-2)`.
 // trace:TASK-2272 | ai:claude
 #[test]
 fn a_car_reads_its_subject_at_the_approved_head_not_a_stale_local_branch() {
@@ -1554,9 +1555,19 @@ fn a_car_reads_its_subject_at_the_approved_head_not_a_stale_local_branch() {
     git(r, &["checkout", "--quiet", "main"]);
     git(r, &["branch", "--quiet", "-f", "feature-x", &stale]);
 
-    let subject = member_subject_at_head(r, r, &ship_meta("feat: X"), "feature-x", &head).unwrap();
+    let subject = member_subject_at_head(r, r, &ship_meta(""), "feature-x", &head).unwrap();
     assert!(subject.contains("(STORY-1)"), "{subject}");
     assert!(!subject.contains("STORY-2"), "{subject}");
+    // The branch-based read this replaces lands on the stale commit.
+    let (derived, _) =
+        crate::pr_cmd::derive_pr_ship_squash_subject_from(r, &ship_meta(""), "feature-x", false)
+            .unwrap();
+    let branch_msg = crate::pr_cmd::branch_head_commit_message(r, "feature-x").unwrap();
+    let old = member_squash_subject(derived, &branch_msg, "");
+    assert!(
+        old.contains("STORY-2"),
+        "the fixture must reproduce the bug: {old}"
+    );
 
     // An unreadable head fails closed instead of falling back to the branch.
     let err = member_subject_at_head(r, r, &ship_meta("feat: X"), "feature-x", &"0".repeat(40))
