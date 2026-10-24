@@ -37,7 +37,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T22:12:54.027870933Z
-modified_at: 2026-10-24T17:45:24.504287450Z
+modified_at: 2026-10-24T17:48:46.427689195Z
 req_type: Bug
 tags:
 - id-allocation
@@ -132,6 +132,22 @@ comments:
     The current Draft description still requires signed grants and offline grant import. Advisor sign-off on v2 should replace those acceptance clauses with this single-home/node-local contract before implementation; this comment does not silently claim they are satisfied. Confirm the operator's home clone for explicit local enrollment and the existing node/alias schema representation to preserve. No further authority/key infrastructure is proposed. BUG-2017 remains Draft, unclaimed, and unimplemented.
   created_at: 2026-10-24T17:45:24.504287450Z
   modified_at: 2026-10-24T17:45:24.504287450Z
+- id: 01a16f07-85db-7751-ab37-4ec1f2f20746
+  author: joe
+  content: |-
+    ADVISOR SIGNOFF 10:50 on SKETCH v2: SIGNED. This replaces the signed-grant contract.
+    Acceptance contract for v1 (supersedes the description's signed-grant/offline-grant-import clauses):
+    1. Allocation authority is a local, versioned setting in the clone's common git dir. Missing means non-authoritative; malformed refuses. It is never read from the store, a forge URL, user prefs or env.
+    2. A non-authoritative clone allocates only node-local <TYPE>-<node>-<n> IDs through every writer (CLI, MCP, backend, bulk, import, repair). Global-ID or block requests refuse before any counter, object or ref changes; there is no fallback to global counters.
+    3. Node binding is a pseudonymous UUID with no host/user/email/path fields; STORY-1742's scanner covers node and registry serialization with no exemption.
+    4. Only the authoritative clone claims or dispenses global blocks and runs canonical promotion. UUIDs and old-ID aliases survive renumbering, and repeat sync is idempotent.
+    5. Reconciliation preflight reports the full conflict set (global ranges, node bindings, display-ID to UUID) with opaque IDs, and refuses before union or ref advancement.
+    Rulings: the home clone is the operator's primary checkout /home/joe/ai/aida (the operator enrolls it explicitly in slice 2). Preserve the existing node/alias schema; add fields, never repurpose them. The writer inventory is a slice-1 deliverable, as a checklist in the PR body.
+    Sequencing: start after STORY-1742 slice 3 (the scanner) is in review; slice 1 may proceed earlier only if it doesn't touch STORY-1742's files. Slicing (1)-(3) as proposed; the final slice carries (BUG-2017).
+    Operator action: approve the spec, and either edit the description to this contract or let the implementer's first PR update it.
+  created_at: 2026-10-24T17:48:46.427689195Z
+  modified_at: 2026-10-24T17:48:46.427689195Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
 filed_at:
   code_sha: 3dfcf99117e6efbaa8259155a576276ab424a335
   branch: main
