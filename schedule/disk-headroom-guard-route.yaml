@@ -5,3 +5,9 @@ last_by:
   session: 2260a307-a73f-4f18-b7da-137e3109fd2e
   vendor: claude
 result: done
+due_since: 2026-10-24T07:45:03.562837725Z
+due_reason: on CronJobFailed:disk-headroom-guard
+due_failure:
+  trip_id: disk-headroom-guard@2026-10-24T07:40:44.765107825Z
+  job: disk-headroom-guard
+  error: 'exit 1: 1 finding(s) in disk-headroom — failing because --fail-on-findings was requested'
