@@ -290,6 +290,10 @@ pub(crate) fn mailbox_line_body(m: &aida_core::mailbox::Message) -> String {
 // trace:TASK-818 | ai:claude
 // trace:BUG-1592 | ai:claude
 pub(crate) fn inbox_identities() -> Vec<String> {
+    // A raw child can inherit a parent's launch aliases. Its persisted
+    // process/session binding wins for private mail, as on the sender side.
+    // trace:STORY-1843 | ai:codex
+    let own_handle = crate::agent_handle::current_session_handle_for_cwd();
     let mut ids = vec![current_user_id(None)];
     // BUG-1592: `resolve_mail_sender_identity` puts `AIDA_AGENT_NAME` FIRST in
     // the send-side precedence (ahead of `AIDA_USER`), but this read-side set
@@ -303,6 +307,9 @@ pub(crate) fn inbox_identities() -> Vec<String> {
     // trace:STORY-1843 | ai:claude
     for key in [crate::agent_handle::HANDLE_ENV, "AIDA_AGENT_NAME"] {
         if let Some(agent_name) = std::env::var(key).ok().filter(|s| !s.trim().is_empty()) {
+            if own_handle.as_deref().is_some_and(|own| own != agent_name) {
+                continue;
+            }
             if !ids.iter().any(|i| i == &agent_name) {
                 ids.push(agent_name);
             }
@@ -343,7 +350,7 @@ pub(crate) fn inbox_identities() -> Vec<String> {
     // registry binding (hook payload or the client's per-session env), so
     // mail sent to the handle reaches a session no launcher named.
     // trace:STORY-1843 | ai:claude
-    if let Some(handle) = crate::agent_handle::current_session_handle_for_cwd() {
+    if let Some(handle) = own_handle {
         if !ids.iter().any(|i| i.eq_ignore_ascii_case(&handle)) {
             ids.push(handle);
         }

@@ -1792,14 +1792,25 @@ thread_local! {
 /// this is the ordinary blocking run.
 // trace:TASK-1993 | ai:claude
 pub(crate) fn reviewer_status(cmd: &mut Command) -> std::io::Result<std::process::ExitStatus> {
+    reviewer_status_on_spawn(cmd, || {})
+}
+
+// trace:STORY-1843 | ai:codex
+pub(crate) fn reviewer_status_on_spawn(
+    cmd: &mut Command,
+    on_spawn: impl FnOnce(),
+) -> std::io::Result<std::process::ExitStatus> {
     use crate::process_retry::RetryEtxtbsy;
     let launch = LAUNCH.with(|launch| launch.borrow().clone());
     let Some((root, identity, key, head)) = launch else {
-        return cmd.status_retrying_etxtbsy();
+        let mut child = cmd.spawn_retrying_etxtbsy()?;
+        on_spawn();
+        return child.wait();
     };
     let store = Store::open(&root, &identity).map_err(std::io::Error::other)?;
     retry_busy(|| store.record_reviewer(&key, &head, None)).map_err(std::io::Error::other)?;
     let mut child = cmd.spawn_retrying_etxtbsy()?;
+    on_spawn();
     match Identity::of(child.id()) {
         Ok(reviewer) => {
             if let Err(error) =

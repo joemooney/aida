@@ -33,6 +33,7 @@ use anyhow::{bail, Context, Result};
 use chrono::{DateTime, Utc};
 use fs2::FileExt;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
@@ -232,7 +233,7 @@ fn reservation_path(project_root: &Path, handle: &str) -> PathBuf {
     handles_dir(project_root).join(format!("{handle}.toml"))
 }
 
-struct NamespaceLock {
+pub(crate) struct NamespaceLock {
     file: std::fs::File,
 }
 
@@ -244,32 +245,112 @@ impl Drop for NamespaceLock {
 
 /// The common-root allocation lock. Held across read-decide-write so a
 /// reservation is atomic with respect to every other allocator.
-fn lock_namespace(project_root: &Path) -> Result<NamespaceLock> {
+pub(crate) fn lock_namespace(project_root: &Path) -> Result<NamespaceLock> {
     let dir = handles_dir(project_root);
     std::fs::create_dir_all(&dir)
         .with_context(|| format!("creating handle directory {}", dir.display()))?;
     let path = dir.join(".lock");
-    let file = std::fs::OpenOptions::new()
-        .create(true)
-        .truncate(false)
-        .write(true)
+    let mut options = std::fs::OpenOptions::new();
+    options.create(true).truncate(false).write(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
+    }
+    let file = options
         .open(&path)
         .with_context(|| format!("opening handle lock {}", path.display()))?;
-    file.lock_exclusive()
-        .with_context(|| format!("locking {}", path.display()))?;
+    if !file.metadata()?.is_file() {
+        bail!("invalid handle allocation lock");
+    }
+    // SessionStart is advisory: never wait behind a wedged allocator.
+    // trace:STORY-1843 | ai:codex
+    let deadline = std::time::Instant::now() + std::time::Duration::from_millis(250);
+    loop {
+        match file.try_lock_exclusive() {
+            Ok(()) => break,
+            Err(e)
+                if e.kind() == std::io::ErrorKind::WouldBlock
+                    && std::time::Instant::now() < deadline =>
+            {
+                std::thread::sleep(std::time::Duration::from_millis(5));
+            }
+            Err(e) => return Err(e).context("handle allocation lock busy; retry after agent gc"),
+        }
+    }
     Ok(NamespaceLock { file })
 }
 
+// Every allocation input is a bounded regular file. In particular, FIFO
+// counters/session indexes must not defeat the SessionStart time budget.
+// trace:STORY-1843 | ai:codex
+fn read_allocation_text(path: &Path, limit: u64) -> Result<Option<String>> {
+    use std::io::Read;
+    let mut options = std::fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
+    }
+    let file = match options.open(path) {
+        Ok(file) => file,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(e).with_context(|| format!("opening {}", path.display())),
+    };
+    let meta = file.metadata()?;
+    if !meta.is_file() || meta.len() > limit {
+        bail!(
+            "invalid or oversized handle allocation record {}",
+            path.display()
+        );
+    }
+    let mut body = String::new();
+    file.take(limit + 1).read_to_string(&mut body)?;
+    if body.len() as u64 > limit {
+        bail!("oversized handle allocation record {}", path.display());
+    }
+    Ok(Some(body))
+}
+
+fn checked_reservation(root: &Path, handle: &str) -> Result<Option<HandleReservation>> {
+    if handle_spelling_rejection(handle).is_some() {
+        bail!("invalid reservation handle");
+    }
+    let body = match read_allocation_text(&reservation_path(root, handle), 65536)? {
+        Some(body) => Some(body),
+        None => read_allocation_text(
+            &handles_dir(root)
+                .join("retired")
+                .join(format!("{handle}.toml")),
+            65536,
+        )?,
+    };
+    body.map(|body| {
+        let r: HandleReservation = toml::from_str(&body).context("invalid handle reservation")?;
+        if r.handle != handle {
+            bail!("handle reservation filename mismatch");
+        }
+        Ok(r)
+    })
+    .transpose()
+}
+
 pub(crate) fn load_reservation(project_root: &Path, handle: &str) -> Option<HandleReservation> {
-    let body = std::fs::read_to_string(reservation_path(project_root, handle)).ok()?;
-    toml::from_str(&body).ok()
+    checked_reservation(project_root, handle).ok().flatten()
 }
 
 fn write_reservation(project_root: &Path, r: &HandleReservation) -> Result<()> {
     let body = toml::to_string_pretty(r).context("serialising handle reservation")?;
     let path = reservation_path(project_root, &r.handle);
     aida_core::write_atomic(&path, body.as_bytes())
-        .with_context(|| format!("writing handle reservation {}", path.display()))
+        .with_context(|| format!("writing handle reservation {}", path.display()))?;
+    if let Some(sid) = &r.native_session_id {
+        let index = session_index_path(project_root, sid);
+        std::fs::create_dir_all(index.parent().unwrap())?;
+        aida_core::write_atomic(&index, r.handle.as_bytes())?;
+    }
+    Ok(())
 }
 
 /// Whether a registry entry may still be a live holder: observably alive,
@@ -484,6 +565,26 @@ pub(crate) fn reserve_handle(
     let _lock = lock_namespace(project_root)?;
     let now = Utc::now();
     let (handle, existing) = decide(project_root, req, &reserved, now)?;
+    if req.explicit.is_none() {
+        if let Some((stem, seq)) = handle.rsplit_once('-') {
+            let prefix = generated_handle(req.agent_type, req.role, 0);
+            if seq.chars().all(|c| c.is_ascii_digit())
+                && prefix.rsplit_once('-').is_some_and(|(p, _)| p == stem)
+            {
+                let path = handles_dir(project_root).join("counters").join(&prefix);
+                let previous = read_allocation_text(&path, 64)?
+                    .map(|s| s.trim().parse::<u32>())
+                    .transpose()
+                    .context("invalid handle allocation counter")?
+                    .unwrap_or(0);
+                let seq = seq
+                    .parse::<u32>()
+                    .context("invalid generated handle sequence")?;
+                std::fs::create_dir_all(path.parent().unwrap())?;
+                aida_core::write_atomic(&path, previous.max(seq).to_string().as_bytes())?;
+            }
+        }
+    }
     let taken = take(project_root, &handle, existing, req, now)?;
     release_other_bindings(project_root, &taken)?;
     Ok(taken)
@@ -505,12 +606,17 @@ fn decide(
     reserved: &BTreeSet<String>,
     now: DateTime<Utc>,
 ) -> Result<(String, Option<HandleReservation>)> {
-    let entries: Vec<AgentRegistryEntry> = agent_registry::load_entries(project_root)
-        .into_iter()
-        .map(|(_, e)| e)
-        .collect();
+    if req.explicit.is_none() {
+        if let Some(sid) = req.native_session_id.filter(|s| !s.is_empty()) {
+            if let Some(r) = reservation_of_session(project_root, sid)? {
+                return Ok((r.handle.clone(), Some(r)));
+            }
+        }
+    }
+    let entries: Vec<AgentRegistryEntry> =
+        bounded_records(&agent_registry::agents_dir(project_root))?;
     if let Some(name) = req.explicit {
-        let existing = load_reservation(project_root, name);
+        let existing = checked_reservation(project_root, name)?;
         if let Some(holder) =
             other_live_holder(project_root, &entries, existing.as_ref(), name, req, now)
         {
@@ -519,19 +625,45 @@ fn decide(
         return Ok((name.to_string(), existing));
     }
     if let Some(sid) = req.native_session_id.filter(|s| !s.is_empty()) {
-        if let Some(r) = list_reservations(project_root)
-            .into_iter()
-            .find(|r| session_matches(r, Some(sid)))
-        {
+        if let Some(r) = reservation_of_session(project_root, sid)? {
             return Ok((r.handle.clone(), Some(r)));
         }
     }
-    for seq in 1.. {
+    let prefix = generated_handle(req.agent_type, req.role, 0);
+    let counter = handles_dir(project_root).join("counters").join(&prefix);
+    let start = match read_allocation_text(&counter, 64)? {
+        Some(raw) => raw
+            .trim()
+            .parse::<u32>()
+            .context("invalid handle allocation counter")?,
+        None => {
+            // One bounded bootstrap for pre-counter installations. GC seeds
+            // each stem's counter before archiving, so unrelated archived
+            // history never participates in a new stem's startup.
+            let mut last = 0;
+            for dir in [handles_dir(project_root)] {
+                for r in bounded_records::<HandleReservation>(&dir)? {
+                    if let Some((stem, seq)) = r.handle.rsplit_once('-') {
+                        if prefix.rsplit_once('-').is_some_and(|(p, _)| p == stem) {
+                            last = last.max(seq.parse::<u32>().unwrap_or(0));
+                        }
+                    }
+                }
+            }
+            last
+        }
+    };
+    // At most 64 path/liveness probes, regardless of historical numbering.
+    // trace:STORY-1843 | ai:codex
+    for offset in 1..=64 {
+        let seq = start
+            .checked_add(offset)
+            .context("handle sequence exhausted")?;
         let candidate = generated_handle(req.agent_type, req.role, seq);
         if handle_spelling_rejection(&candidate).is_some() || reserved.contains(&candidate) {
             bail!("cannot generate a valid handle for `{}`", req.agent_type);
         }
-        let existing = load_reservation(project_root, &candidate);
+        let existing = checked_reservation(project_root, &candidate)?;
         // Mail is keyed by the spelling, so a generated spelling another
         // recipient held is never handed out again: the next session would
         // read that holder's unread mail. Numbers grow instead.
@@ -552,18 +684,20 @@ fn decide(
         )
         .is_none()
         {
+            // Previews remain read-only; the real allocator persists this
+            // under the namespace lock before writing the reservation.
             return Ok((candidate, existing));
         }
     }
-    unreachable!("the handle sequence is unbounded")
+    bail!("handle allocation probe budget exhausted; run aida agent gc and retry")
 }
 
 /// The handle a native session already holds, so a resume of it keeps it.
 // trace:STORY-1843 | ai:claude
 pub(crate) fn handle_of_session(project_root: &Path, native_session_id: &str) -> Option<String> {
-    list_reservations(project_root)
-        .into_iter()
-        .find(|r| session_matches(r, Some(native_session_id)))
+    reservation_of_session(project_root, native_session_id)
+        .ok()
+        .flatten()
         .map(|r| r.handle)
 }
 
@@ -583,7 +717,7 @@ fn release_other_bindings(project_root: &Path, taken: &HandleReservation) -> Res
     let Some(sid) = taken.native_session_id.as_deref() else {
         return Ok(());
     };
-    for mut r in list_reservations(project_root) {
+    for mut r in bounded_records::<HandleReservation>(&handles_dir(project_root))? {
         if r.handle != taken.handle && session_matches(&r, Some(sid)) {
             r.native_session_id = None;
             // Not a fresh launch promise: an unbound reservation older than
@@ -766,6 +900,121 @@ pub(crate) fn assign_session_handle(
     }
 }
 
+// SessionStart work is bounded even on an old, uncollected namespace.
+// Refuse allocation instead of silently ignoring a possible live owner.
+// trace:STORY-1843 | ai:codex
+const MAX_ALLOCATION_RECORDS: usize = 4096;
+fn bounded_records<T: serde::de::DeserializeOwned>(dir: &Path) -> Result<Vec<T>> {
+    let entries = match std::fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(e) => return Err(e.into()),
+    };
+    let mut records = Vec::new();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_millis(250);
+    for (n, entry) in entries.enumerate() {
+        if n >= MAX_ALLOCATION_RECORDS || std::time::Instant::now() >= deadline {
+            bail!("handle allocation record budget exceeded; run aida agent gc");
+        }
+        let path = entry?.path();
+        if path.extension().and_then(|s| s.to_str()) != Some("toml") {
+            continue;
+        }
+        let Some(body) = read_allocation_text(&path, 65536)? else {
+            continue;
+        };
+        // Other agent metadata lives in the registry directory too.
+        if let Ok(record) = toml::from_str(&body) {
+            records.push(record);
+        }
+    }
+    Ok(records)
+}
+
+// Retired records retain exact-session resume and recipient history without
+// participating in every new session's allocation scan.
+// trace:STORY-1843 | ai:codex
+fn session_index_path(root: &Path, sid: &str) -> PathBuf {
+    handles_dir(root)
+        .join("sessions")
+        .join(format!("{:x}", Sha256::digest(sid.as_bytes())))
+}
+fn reservation_of_session(root: &Path, sid: &str) -> Result<Option<HandleReservation>> {
+    if let Some(handle) =
+        read_allocation_text(&session_index_path(root, sid), HANDLE_MAX_LEN as u64)?
+    {
+        if let Some(r) =
+            checked_reservation(root, handle.trim())?.filter(|r| session_matches(r, Some(sid)))
+        {
+            return Ok(Some(r));
+        }
+    }
+    Ok(bounded_records::<HandleReservation>(&handles_dir(root))?
+        .into_iter()
+        .find(|r| session_matches(r, Some(sid))))
+}
+
+/// Agent GC archives reservations after their launch grace has expired and
+/// no live/unverified recent registry row holds the spelling. Keep mail and
+/// history untouched; generated counters never issue an archived spelling.
+// trace:STORY-1843 | ai:codex
+pub(crate) fn collect_retired_reservations(root: &Path, dry_run: bool) -> Result<usize> {
+    if !handles_dir(root).is_dir() {
+        return Ok(0);
+    }
+    let _lock = lock_namespace(root)?;
+    let entries = agent_registry::load_entries(root)
+        .into_iter()
+        .map(|(_, e)| e)
+        .collect::<Vec<_>>();
+    let now = Utc::now();
+    let mut count = 0;
+    for mut r in list_reservations(root) {
+        if now.signed_duration_since(r.reserved_at)
+            <= chrono::Duration::seconds(UNBOUND_RESERVATION_TTL_SECS)
+            || entries
+                .iter()
+                .any(|e| e.name.as_deref() == Some(&r.handle) && entry_may_hold(root, e, now))
+        {
+            continue;
+        }
+        count += 1;
+        if dry_run {
+            continue;
+        }
+        if let Some((stem, seq)) = r.handle.rsplit_once('-') {
+            if let Ok(seq) = seq.parse::<u32>() {
+                let path = handles_dir(root)
+                    .join("counters")
+                    .join(format!("{stem}-00"));
+                let previous = read_allocation_text(&path, 64)?
+                    .map(|s| s.trim().parse::<u32>())
+                    .transpose()
+                    .context("invalid handle allocation counter")?
+                    .unwrap_or(0);
+                std::fs::create_dir_all(path.parent().unwrap())?;
+                aida_core::write_atomic(&path, previous.max(seq).to_string().as_bytes())?;
+            }
+        }
+        if let Some(sid) = &r.native_session_id {
+            let index = session_index_path(root, sid);
+            std::fs::create_dir_all(index.parent().unwrap())?;
+            aida_core::write_atomic(&index, r.handle.as_bytes())?;
+        }
+        // Expired launch tokens grant no future binding, even from archive.
+        r.launch_token = None;
+        r.launcher_pid = None;
+        write_reservation(root, &r)?;
+        let retired = handles_dir(root).join("retired");
+        std::fs::create_dir_all(&retired)?;
+        std::fs::rename(
+            reservation_path(root, &r.handle),
+            retired.join(format!("{}.toml", r.handle)),
+        )?;
+    }
+    Ok(count)
+}
+
 pub(crate) fn list_reservations(project_root: &Path) -> Vec<HandleReservation> {
     let mut out = Vec::new();
     if let Ok(dir) = std::fs::read_dir(handles_dir(project_root)) {
@@ -774,8 +1023,9 @@ pub(crate) fn list_reservations(project_root: &Path) -> Vec<HandleReservation> {
             if path.extension().and_then(|s| s.to_str()) != Some("toml") {
                 continue;
             }
-            if let Some(r) = std::fs::read_to_string(&path)
+            if let Some(r) = read_allocation_text(&path, 65536)
                 .ok()
+                .flatten()
                 .and_then(|body| toml::from_str::<HandleReservation>(&body).ok())
             {
                 out.push(r);
@@ -844,7 +1094,7 @@ fn live_session_entries(
 ) -> Vec<AgentRegistryEntry> {
     let now = Utc::now();
     let observer = agent_registry::PidObserver::current();
-    agent_registry::load_entries(project_root)
+    agent_registry::load_active_entries(project_root)
         .into_iter()
         .map(|(_, e)| e)
         .filter(|e| e.ended_at.is_none() && valid_handle(e).is_some() && candidate(e))
@@ -945,6 +1195,28 @@ pub(crate) fn session_handle_by_ancestry(project_root: &Path, pid: u32) -> Optio
 pub(crate) fn current_session_handle_for_cwd() -> Option<String> {
     let cwd = std::env::current_dir().ok()?;
     let root = crate::main_worktree_root_from(&crate::find_aida_project_root_from(&cwd).ok()?);
+    // A raw client may inherit its parent's vendor/session environment.
+    // Prefer the nearest actual vendor process (even an unregistered one)
+    // before considering those variables. A new child cannot borrow a more
+    // distant registered parent's inbox while its own hook is still starting.
+    // trace:STORY-1843 | ai:codex
+    let me = std::process::id();
+    let nearest = ["claude", "codex", "antigravity"]
+        .into_iter()
+        .filter_map(|vendor| {
+            let pid = agent_registry::session_start_agent_pid(me, vendor)?;
+            let depth = agent_registry::ancestor_depth(me, pid)?;
+            Some((depth, pid, vendor))
+        })
+        .min_by_key(|(depth, _, _)| *depth);
+    if let Some((_, pid, vendor)) = nearest {
+        return live_session_entries(&root, |e| e.pid == pid && e.agent_type == vendor)
+            .into_iter()
+            .max_by_key(|e| e.last_active_at)
+            .and_then(|e| valid_handle(&e));
+    }
+    // Inside a PID namespace the host client may be invisible; its native
+    // session evidence remains the supported lookup in that case.
     current_session_handle(&root, current_native_session_id().as_deref())
 }
 
@@ -2059,5 +2331,202 @@ mod tests {
             current_session_handle_for(project, Some("sess-abcdef12"), "claude").as_deref(),
             Some(long.handle.as_str())
         );
+    }
+    // trace:STORY-1843 | ai:codex
+    #[test]
+    fn story_1843_pr3_gc_archives_retired_preserving_resume_and_mail() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let mut retired = reserve_handle(root, &req(None, Some("old-session"))).unwrap();
+        retired.reserved_at = Utc::now() - chrono::Duration::days(2);
+        write_reservation(root, &retired).unwrap();
+        let mail = root.join(".aida/mailbox/inboxes").join(&retired.handle);
+        std::fs::create_dir_all(&mail).unwrap();
+        std::fs::write(mail.join("unread"), "private old mail").unwrap();
+        let live = reserve_handle(root, &launcher_req(None)).unwrap();
+        assert_eq!(collect_retired_reservations(root, true).unwrap(), 1);
+        assert!(reservation_path(root, &retired.handle).exists());
+        assert_eq!(collect_retired_reservations(root, false).unwrap(), 1);
+        assert!(!reservation_path(root, &retired.handle).exists());
+        assert!(reservation_path(root, &live.handle).exists());
+        assert_eq!(
+            handle_of_session(root, "old-session"),
+            Some(retired.handle.clone())
+        );
+        let resumed = reserve_handle(root, &req(None, Some("old-session"))).unwrap();
+        assert_eq!(resumed.recipient_id, retired.recipient_id);
+        let next = reserve_handle(root, &req(None, Some("new-session"))).unwrap();
+        assert_ne!(next.handle, retired.handle);
+        assert_eq!(
+            std::fs::read_to_string(mail.join("unread")).unwrap(),
+            "private old mail"
+        );
+    }
+
+    // trace:STORY-1843 | ai:codex
+    #[test]
+    fn story_1843_pr3_allocation_uses_counter_and_bounds_probes() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        reserve_handle(root, &req(None, Some("first"))).unwrap();
+        let counter = handles_dir(root).join("counters/claude-implementer-00");
+        std::fs::write(&counter, "1000000").unwrap();
+        // A corrupt historical candidate must not be probed from 1 again.
+        std::fs::write(reservation_path(root, "claude-implementer-02"), "invalid").unwrap();
+        let next = reserve_handle(root, &req(None, Some("second"))).unwrap();
+        assert_eq!(next.handle, "claude-implementer-1000001");
+        for seq in 1000002..=1000065 {
+            let mut r = next.clone();
+            r.handle = format!("claude-implementer-{seq}");
+            r.native_session_id = Some(format!("other-{seq}"));
+            write_reservation(root, &r).unwrap();
+        }
+        let err = reserve_handle(root, &req(None, Some("third"))).unwrap_err();
+        assert!(err.to_string().contains("probe budget"), "{err:#}");
+    }
+
+    // trace:STORY-1843 | ai:codex
+    #[test]
+    fn story_1843_pr3_session_start_binds_child_handle_env() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let r = reserve_handle(root, &launcher_req(Some("child-start"))).unwrap();
+        let _env = crate::test_env::EnvVarsGuard::apply(&[
+            ("AIDA_AGENT_TYPE", Some("claude")),
+            ("AIDA_HANDLE", Some("child-start")),
+            (LAUNCH_TOKEN_ENV, r.launch_token.as_deref()),
+            ("AIDA_AGENT_NAME", Some("claude-reviewer")),
+            ("AIDA_SESSION_SCOPE", None),
+        ]);
+        let binary = agent_registry::AgentBinaryIdentity::new("test".into(), "test".into());
+        let e =
+            agent_registry::touch_session_start_agent(root, root, Some("child-native"), &binary)
+                .unwrap();
+        assert_eq!(e.name.as_deref(), Some("child-start"));
+        assert_eq!(
+            load_reservation(root, "child-start").unwrap().recipient_id,
+            r.recipient_id
+        );
+        assert_eq!(
+            handle_of_session(root, "child-native").as_deref(),
+            Some("child-start")
+        );
+    }
+    // trace:STORY-1843 | ai:codex
+    #[test]
+    fn story_1843_pr3_new_stem_ignores_large_retired_history() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let retired = handles_dir(root).join("retired");
+        std::fs::create_dir_all(&retired).unwrap();
+        for n in 0..=MAX_ALLOCATION_RECORDS {
+            std::fs::write(retired.join(format!("old-{n}.toml")), "old history").unwrap();
+        }
+        let reservation = reserve_handle(
+            root,
+            &HandleRequest {
+                agent_type: "antigravity",
+                role: Some("reviewer"),
+                native_session_id: Some("new-stem"),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(reservation.handle, "agy-reviewer-01");
+    }
+
+    // A named resume must retain its UUID without interpreting a custom
+    // spelling as a generated numeric counter.
+    // trace:STORY-1843 | ai:codex
+    #[test]
+    fn story_1843_pr3_named_resume_keeps_recipient() {
+        let tmp = tempfile::tempdir().unwrap();
+        let original =
+            reserve_handle(tmp.path(), &req(Some("named-child"), Some("named-session"))).unwrap();
+        let resumed = reserve_handle(tmp.path(), &req(None, Some("named-session"))).unwrap();
+        assert_eq!(original, resumed);
+    }
+
+    // FIFO regression has a process watchdog, so removing O_NONBLOCK cannot
+    // hang a test shard or the SessionStart path unnoticed.
+    // trace:STORY-1843 | ai:codex
+    #[test]
+    #[cfg(unix)]
+    fn story_1843_pr3_allocation_refuses_fifo_without_blocking() {
+        use std::os::unix::ffi::OsStrExt;
+        if std::env::var_os("AIDA_TEST_HANDLE_FIFO_CHILD").is_some() {
+            let tmp = tempfile::tempdir().unwrap();
+            let path = tmp.path().join("record.toml");
+            let cpath = std::ffi::CString::new(path.as_os_str().as_bytes()).unwrap();
+            assert_eq!(unsafe { libc::mkfifo(cpath.as_ptr(), 0o600) }, 0);
+            assert!(bounded_records::<HandleReservation>(tmp.path()).is_err());
+            for name in ["counter", "session-index"] {
+                let path = tmp.path().join(name);
+                let cpath = std::ffi::CString::new(path.as_os_str().as_bytes()).unwrap();
+                assert_eq!(unsafe { libc::mkfifo(cpath.as_ptr(), 0o600) }, 0);
+                assert!(read_allocation_text(&path, 64).is_err());
+            }
+            let lock = lock_namespace(tmp.path()).unwrap();
+            let started = std::time::Instant::now();
+            assert!(reserve_handle(tmp.path(), &req(None, Some("blocked"))).is_err());
+            assert!(started.elapsed() < std::time::Duration::from_secs(2));
+            drop(lock);
+            return;
+        }
+        let name = "agent_handle::tests::story_1843_pr3_allocation_refuses_fifo_without_blocking";
+        let mut child = std::process::Command::new(
+            crate::aida_bin::current_executable_path().expect("resolve current test executable"),
+        )
+        .args(["--exact", name])
+        .env("AIDA_TEST_HANDLE_FIFO_CHILD", "1")
+        .spawn()
+        .unwrap();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        loop {
+            if let Some(status) = child.try_wait().unwrap() {
+                assert!(status.success());
+                break;
+            }
+            if std::time::Instant::now() >= deadline {
+                child.kill().unwrap();
+                child.wait().unwrap();
+                panic!("allocation blocked on a FIFO or busy namespace lock");
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+    }
+    // trace:STORY-1843 | ai:codex
+    #[test]
+    fn story_1843_pr3_ended_registry_history_is_collectable_without_losing_resume() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let original = reserve_handle(root, &req(None, Some("kept-session"))).unwrap();
+        for n in 0..=MAX_ALLOCATION_RECORDS {
+            let mut row = entry(
+                root,
+                &format!("claude-old-{n}"),
+                Some("old-handle"),
+                Some(&format!("old-session-{n}")),
+            );
+            row.ended_at = Some(Utc::now());
+            agent_registry::write_entry(root, &row).unwrap();
+        }
+        assert_eq!(
+            handle_of_session(root, "kept-session"),
+            Some(original.handle.clone())
+        );
+        assert!(reserve_handle(root, &req(None, Some("fresh"))).is_err());
+        assert_eq!(
+            agent_registry::archive_ended_entries(root, false).unwrap(),
+            MAX_ALLOCATION_RECORDS + 1
+        );
+        assert_eq!(
+            agent_registry::load_entries(root).len(),
+            MAX_ALLOCATION_RECORDS + 1
+        );
+        assert!(agent_registry::load_active_entries(root).is_empty());
+        let resumed = reserve_handle(root, &req(None, Some("kept-session"))).unwrap();
+        assert_eq!(resumed.recipient_id, original.recipient_id);
+        assert!(reserve_handle(root, &req(None, Some("fresh"))).is_ok());
     }
 }

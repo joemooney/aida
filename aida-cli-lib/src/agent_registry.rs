@@ -1217,7 +1217,12 @@ pub(crate) fn gc_dead_agents(
     let mut report = AgentGcReport::default();
     // trace:BUG-2212 | ai:claude
     let observer = PidObserver::current();
-    for (path, mut entry) in load_entries(project_root) {
+    let entries = if older_than_days.is_some() {
+        load_entries(project_root)
+    } else {
+        load_active_entries(project_root)
+    };
+    for (path, mut entry) in entries {
         // A row this process cannot observe is neither live nor dead to it:
         // a sandboxed gc must not prune or end a host session's row.
         // trace:STORY-1843 | ai:claude
@@ -1311,8 +1316,25 @@ pub(crate) fn mark_agent_ended(
 /// Unlike `list_agent_views` this hands back the raw record so callers can
 /// mutate + rewrite it (pause/resume). trace:STORY-528 | ai:claude
 pub(crate) fn load_entries(project_root: &Path) -> Vec<(PathBuf, AgentRegistryEntry)> {
+    let mut out = load_active_entries(project_root);
+    let mut ids: std::collections::HashSet<_> = out.iter().map(|(_, e)| e.id.clone()).collect();
+    out.extend(
+        load_entries_in(&agents_dir(project_root).join("retired"))
+            .into_iter()
+            .filter(|(_, e)| ids.insert(e.id.clone())),
+    );
+    out
+}
+
+// Archived rows are provably ended and need no live-reader/allocation probe.
+// trace:STORY-1843 | ai:codex
+pub(crate) fn load_active_entries(project_root: &Path) -> Vec<(PathBuf, AgentRegistryEntry)> {
+    load_entries_in(&agents_dir(project_root))
+}
+
+fn load_entries_in(dir: &Path) -> Vec<(PathBuf, AgentRegistryEntry)> {
     let mut out = Vec::new();
-    if let Ok(entries) = std::fs::read_dir(agents_dir(project_root)) {
+    if let Ok(entries) = std::fs::read_dir(dir) {
         for entry in entries.flatten() {
             let path = entry.path();
             if path.extension().and_then(|s| s.to_str()) != Some("toml") {
@@ -1330,10 +1352,38 @@ pub(crate) fn load_entries(project_root: &Path) -> Vec<(PathBuf, AgentRegistryEn
     out
 }
 
+/// Explicit maintenance retains ended history outside the allocation scan.
+/// The original rows remain readable for native-session resume and --ended.
+// trace:STORY-1843 | ai:codex
+pub(crate) fn archive_ended_entries(root: &Path, dry_run: bool) -> Result<usize> {
+    if !agents_dir(root).is_dir() {
+        return Ok(0);
+    }
+    let _lock = crate::agent_handle::lock_namespace(root)?;
+    let mut count = 0;
+    for (path, entry) in load_active_entries(root) {
+        if entry.ended_at.is_none() {
+            continue;
+        }
+        count += 1;
+        if dry_run {
+            continue;
+        }
+        let archived = agents_dir(root).join("retired");
+        std::fs::create_dir_all(&archived)?;
+        // Registry writers share the namespace lock, so no heartbeat or
+        // revived row can replace this ended entry between copy and removal.
+        let body = std::fs::read(&path)?;
+        aida_core::write_atomic(&archived.join(path.file_name().unwrap()), &body)?;
+        std::fs::remove_file(&path)?;
+    }
+    Ok(count)
+}
+
 /// Load all currently live agent registry entries for the project.
 // trace:BUG-2010 | ai:antigravity
 pub(crate) fn load_live_entries(project_root: &Path) -> Vec<AgentRegistryEntry> {
-    load_entries(project_root)
+    load_active_entries(project_root)
         .into_iter()
         .map(|(_, e)| e)
         .filter(|e| registry_entry_is_live(project_root, e))
@@ -1674,23 +1724,10 @@ pub(crate) fn list_agent_views(
     project_root: &Path,
     ctx: &AgentClassifyContext,
 ) -> Vec<AgentRegistryView> {
-    let Ok(entries) = std::fs::read_dir(agents_dir(project_root)) else {
-        return Vec::new();
-    };
-    let mut out = Vec::new();
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if path.extension().and_then(|s| s.to_str()) != Some("toml") {
-            continue;
-        }
-        let Ok(body) = std::fs::read_to_string(&path) else {
-            continue;
-        };
-        let Ok(record) = toml::from_str::<AgentRegistryEntry>(&body) else {
-            continue;
-        };
-        out.push(view_for(project_root, record, ctx));
-    }
+    let mut out: Vec<_> = load_entries(project_root)
+        .into_iter()
+        .map(|(_, record)| view_for(project_root, record, ctx))
+        .collect();
     out.sort_by(|a, b| {
         a.agent_type
             .cmp(&b.agent_type)
@@ -1784,6 +1821,10 @@ pub(crate) fn mcp_authority_status_lines_for_project(project_root: &Path) -> Vec
 }
 
 pub(crate) fn write_entry(project_root: &Path, entry: &AgentRegistryEntry) -> Result<()> {
+    // Serialize with ended-row archival and handle allocation, using their
+    // bounded common-root lock. Readers still see atomic record replacement.
+    // trace:STORY-1843 | ai:codex
+    let _lock = crate::agent_handle::lock_namespace(project_root)?;
     let path = registry_path(project_root, &entry.id);
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)
@@ -2753,7 +2794,7 @@ fn process_cmdline(pid: u32) -> Option<String> {
 }
 
 #[cfg(unix)]
-fn session_start_agent_pid(child_pid: u32, agent_type: &str) -> Option<u32> {
+pub(crate) fn session_start_agent_pid(child_pid: u32, agent_type: &str) -> Option<u32> {
     session_start_agent_pid_in(child_pid, agent_type, parent_pid, process_cmdline)
 }
 
@@ -2781,42 +2822,64 @@ fn session_start_agent_pid_in(
 
 #[cfg(unix)]
 fn cmdline_matches_agent(cmdline: &str, agent_type: &str) -> bool {
-    let lower = cmdline.to_ascii_lowercase();
+    // Only the executable or an interpreter's script identifies a client.
+    // Hook arguments (`--client agy`) and prompt text are not processes.
+    // trace:STORY-1843.ac0eef56 | ai:codex
+    let mut args = cmdline.split_whitespace();
+    let Some(program) = args.next() else {
+        return false;
+    };
+    let basename = |path: &str| {
+        std::path::Path::new(path)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("")
+            .to_ascii_lowercase()
+    };
+    let program_name = basename(program);
+    let interpreted = matches!(
+        program_name.as_str(),
+        "node" | "nodejs" | "bun" | "deno" | "sh" | "bash" | "dash" | "zsh" | "ksh"
+    ) || program_name.starts_with("python");
+    let candidate = if interpreted {
+        let mut script = None;
+        for arg in args {
+            if matches!(arg, "-c" | "-lc" | "-e" | "--eval" | "--command") {
+                return false;
+            }
+            if !arg.starts_with('-') {
+                script = Some(arg);
+                break;
+            }
+        }
+        let Some(script) = script else {
+            return false;
+        };
+        script
+    } else {
+        program
+    };
+    let lower = candidate.to_ascii_lowercase();
+    let name = basename(candidate);
     match agent_type {
         "claude" => {
-            lower.contains("claude-code")
+            name == "claude"
+                || lower.contains("claude-code")
                 || lower.contains("@anthropic-ai/claude")
-                || lower.split_whitespace().any(|arg| {
-                    std::path::Path::new(arg)
-                        .file_name()
-                        .and_then(|s| s.to_str())
-                        .is_some_and(|name| name == "claude")
-                })
         }
-        "codex" => lower.split_whitespace().any(|arg| {
-            std::path::Path::new(arg)
-                .file_name()
-                .and_then(|s| s.to_str())
-                .is_some_and(|name| name == "codex")
-        }),
-        // The installed Antigravity CLI binary is `agy`.
-        // trace:TASK-2272 | ai:claude
+        "codex" => name == "codex",
         "antigravity" => {
-            lower.contains("antigravity")
-                || lower.contains("gemini")
-                || lower.split_whitespace().any(|arg| {
-                    std::path::Path::new(arg)
-                        .file_name()
-                        .and_then(|s| s.to_str())
-                        .is_some_and(|name| name == "agy")
-                })
+            name == "agy"
+                || name == "gemini"
+                || lower.contains("antigravity")
+                || lower.contains("gemini-cli")
         }
         _ => false,
     }
 }
 
 #[cfg(not(unix))]
-fn session_start_agent_pid(_child_pid: u32, _agent_type: &str) -> Option<u32> {
+pub(crate) fn session_start_agent_pid(_child_pid: u32, _agent_type: &str) -> Option<u32> {
     None
 }
 
@@ -3089,6 +3152,34 @@ mod tests {
             "bash .claude/hooks/aida-mail-notice.sh",
             "claude"
         ));
+    }
+
+    // trace:STORY-1843.ac0eef56 | ai:codex
+    #[cfg(unix)]
+    #[test]
+    fn story_1843_pr3_hook_arguments_do_not_identify_a_client() {
+        let tree: std::collections::HashMap<u32, (u32, &str)> = [
+            (400, (300, "aida awaiting --notice")),
+            (300, (200, "sh /repo/.agents/hooks/aida-mail-notice.sh --client agy --event SessionStart")),
+            (200, (100, "sh -c h=/repo/.agents/hooks/aida-mail-notice.sh; $h --client agy --event SessionStart")),
+            (100, (1, "/home/joe/.local/bin/agy --prompt claude")),
+            (1, (0, "/sbin/init")),
+        ].into_iter().collect();
+        assert_eq!(
+            session_start_agent_pid_in(
+                400,
+                "antigravity",
+                |pid| tree.get(&pid).map(|(p, _)| *p),
+                |pid| tree.get(&pid).map(|(_, command)| command.to_string())
+            ),
+            Some(100)
+        );
+        assert!(!cmdline_matches_agent("agy --prompt claude", "claude"));
+        assert!(!cmdline_matches_agent(
+            "python3 /fixture/claude agy",
+            "antigravity"
+        ));
+        assert!(cmdline_matches_agent("python3 /fixture/agy", "antigravity"));
     }
 
     // TASK-2272 (TASK-2282, TASK-1-463): the Antigravity SessionStart hook

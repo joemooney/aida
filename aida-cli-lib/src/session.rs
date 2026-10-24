@@ -1625,6 +1625,8 @@ pub(crate) fn spawn_vendor_headless_with_seat_granted(
         .env("PATH", drive_path_env().unwrap_or_default())
         .env(ceiling_key, ceiling_value);
     // trace:BUG-2187 | ai:codex
+    // trace:STORY-1843 | ai:codex
+    let mut handle_guard = child_reservation_guard();
     apply_child_agent_identity(&mut cmd, vendor, seat.as_str());
     // trace:TASK-1955 | ai:claude (TASK-1804)
     apply_headless_harness_version(&mut cmd, vendor, &headless_worktree_root());
@@ -1638,7 +1640,7 @@ pub(crate) fn spawn_vendor_headless_with_seat_granted(
         cmd.env_remove("AIDA_CONTAINED");
     }
     // A watch-launched reviewer is recorded before the wait. trace:TASK-1993 | ai:claude
-    let status = crate::review_watch::reviewer_status(cmd.stdout(Stdio::from(log)))
+    let status = reviewer_status_with_handle_guard(cmd.stdout(Stdio::from(log)), &mut handle_guard)
         .with_context(|| format!("failed to spawn {}", vendor.program()))?;
     tee.stop();
     Ok((status, child_grant.id))
@@ -1802,6 +1804,9 @@ pub(crate) fn spawn_claude_resume_with_grant(
     refuse_contained_permission_override(permission_mode, parent_contained)?;
     let prog = resolve_agent_program("claude");
     let mut cmd = std::process::Command::new(prog);
+    for key in crate::agent_handle::INHERITED_SESSION_ENV {
+        cmd.env_remove(key);
+    }
     if let Some(grant) = grant_id {
         cmd.env(crate::seat_authority::GRANT_ENV, grant)
             .env("AIDA_SESSION_ROLE", "reviewer");
@@ -2014,6 +2019,8 @@ pub(crate) fn spawn_reviewer_launch_plan_granted(
         .env(crate::seat_authority::GRANT_ENV, &grant.id)
         .env("AIDA_SESSION_ROLE", "reviewer");
     // trace:BUG-2187 | ai:claude
+    // trace:STORY-1843 | ai:codex
+    let mut handle_guard = child_reservation_guard();
     apply_child_agent_identity(&mut cmd, plan.vendor, "reviewer");
     // trace:BUG-2139 | ai:claude
     scrub_launcher_session_env(&mut cmd);
@@ -2024,7 +2031,7 @@ pub(crate) fn spawn_reviewer_launch_plan_granted(
         cmd.env_remove("AIDA_CONTAINED");
     }
     // A watch-launched reviewer is recorded before the wait. trace:TASK-1993 | ai:claude
-    let status = crate::review_watch::reviewer_status(&mut cmd)
+    let status = reviewer_status_with_handle_guard(&mut cmd, &mut handle_guard)
         .with_context(|| format!("failed to spawn {}", plan.program))?;
     Ok((status, grant.id))
 }
@@ -4294,8 +4301,10 @@ fn apply_child_identity(
     // keeps the handle its session holds. Without a project to reserve in,
     // no handle is exported and session start allocates one.
     // trace:STORY-1843 | ai:claude
-    cmd.env_remove(crate::agent_handle::LAUNCH_TOKEN_ENV)
-        .env_remove(crate::agent_handle::HANDLE_ENV);
+    // trace:STORY-1843 | ai:codex — a child never borrows its parent session.
+    for key in crate::agent_handle::INHERITED_SESSION_ENV {
+        cmd.env_remove(key);
+    }
     let handle = match resumed_session {
         Some(sid) => {
             child_handle_root().and_then(|root| crate::agent_handle::handle_of_session(&root, sid))
@@ -4332,6 +4341,25 @@ fn reserve_child_handle(
     let token = crate::agent_handle::launch_token_for(&root, &reservation.handle)?;
     cmd.env(crate::agent_handle::LAUNCH_TOKEN_ENV, token);
     Some(reservation.handle)
+}
+
+// trace:STORY-1843 | ai:codex
+fn child_reservation_guard() -> Option<crate::agent_handle::LaunchReservationGuard> {
+    child_handle_root().map(|root| crate::agent_handle::LaunchReservationGuard::new(&root))
+}
+
+// Disarm at spawn, not at wait completion: a wait/receipt error must not
+// release a reservation already handed to a running child.
+// trace:STORY-1843 | ai:codex
+fn reviewer_status_with_handle_guard(
+    cmd: &mut std::process::Command,
+    guard: &mut Option<crate::agent_handle::LaunchReservationGuard>,
+) -> std::io::Result<std::process::ExitStatus> {
+    crate::review_watch::reviewer_status_on_spawn(cmd, || {
+        if let Some(guard) = guard {
+            guard.disarm();
+        }
+    })
 }
 
 /// The handle namespace a headless child is reserved in: the main checkout
@@ -4478,6 +4506,9 @@ fn run_vendor_headless_child(
         vendor,
         aida_core::agents_config::AgentSeat::Implementer,
     );
+    // Own reservations from command construction through the actual spawn.
+    // trace:STORY-1843 | ai:codex
+    let mut handle_guard = child_reservation_guard();
     let mut child_cmd = build_exec_vendor_headless_command(
         vendor,
         prompt,
@@ -4496,6 +4527,9 @@ fn run_vendor_headless_child(
         .stdout(Stdio::from(log))
         .spawn_retrying_etxtbsy()
         .with_context(|| format!("failed to spawn {}", vendor.program()))?;
+    if let Some(guard) = &mut handle_guard {
+        guard.disarm();
+    }
     if let Some(on_spawn) = hooks.on_spawn {
         on_spawn(child.id());
     }
@@ -4968,7 +5002,9 @@ pub(crate) fn spawn_claude_headless_resume_granted(
         .env(ceiling_key, ceiling_value);
     // A resume launches Claude even when the launcher is another harness.
     // trace:BUG-2187 | ai:codex
-    apply_child_agent_identity(&mut cmd, HeadlessVendor::Claude, seat);
+    // trace:STORY-1843 | ai:codex
+    let mut handle_guard = child_reservation_guard();
+    apply_resumed_child_agent_identity(&mut cmd, HeadlessVendor::Claude, seat, session_id);
     // trace:TASK-1955 | ai:claude (TASK-1804)
     apply_headless_harness_version(&mut cmd, HeadlessVendor::Claude, cwd);
     // trace:BUG-2139 | ai:claude
@@ -4980,7 +5016,7 @@ pub(crate) fn spawn_claude_headless_resume_granted(
         cmd.env_remove("AIDA_CONTAINED");
     }
     // A watch-launched reviewer is recorded before the wait. trace:TASK-1993 | ai:claude
-    let status = crate::review_watch::reviewer_status(cmd.stdout(Stdio::from(log)))
+    let status = reviewer_status_with_handle_guard(cmd.stdout(Stdio::from(log)), &mut handle_guard)
         .context("failed to spawn claude")?;
     tee.stop();
     Ok((status, child_grant.id))
@@ -10384,5 +10420,105 @@ mod tests {
                 .any(|(k, v)| *k == "AIDA_CONTAINED" && *v == None),
             "uncontained Agy exec headless must strip AIDA_CONTAINED: {envs:?}"
         );
+    }
+    // trace:STORY-1843 | ai:codex
+    #[test]
+    fn story_1843_pr3_headless_failure_releases_and_spawn_keeps_reservation() {
+        let root = tempfile::tempdir().unwrap();
+        let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+            root.path(),
+            "advisor",
+            &["implementer"],
+            &[
+                ("AIDA_AGENT_CMD", Some("/missing/story-1843-vendor")),
+                ("AIDA_OS_WRAP", Some("0")),
+                ("AIDA_CONTAINED", None),
+            ],
+        );
+        let _cwd = contained_cwd_seam::pin(root.path());
+        let log = root.path().join("failed.log");
+        let result = run_vendor_headless_child(
+            HeadlessVendor::Claude,
+            "prompt",
+            "sid",
+            &log,
+            &crate::headless_tee::TeeOptions::default(),
+            false,
+            None,
+            "implementer",
+            "",
+            &HeadlessChildHooks::default(),
+        );
+        assert!(result.is_err());
+        assert!(crate::agent_handle::list_reservations(root.path()).is_empty());
+        // The review-watch wrapper also releases on a failed spawn and
+        // disarms immediately after a successful (even nonzero) child.
+        for program in ["/missing/story-1843-vendor", "/bin/false"] {
+            let mut guard = child_reservation_guard();
+            let mut cmd = std::process::Command::new(program);
+            apply_child_agent_identity(&mut cmd, HeadlessVendor::Claude, "reviewer");
+            let handle = cmd
+                .get_envs()
+                .find(|(k, _)| *k == "AIDA_HANDLE")
+                .and_then(|(_, v)| v)
+                .unwrap()
+                .to_string_lossy()
+                .into_owned();
+            let result = reviewer_status_with_handle_guard(&mut cmd, &mut guard);
+            drop(guard);
+            assert_eq!(
+                crate::agent_handle::load_reservation(root.path(), &handle).is_some(),
+                result.is_ok()
+            );
+        }
+    }
+
+    // trace:STORY-1843 | ai:codex
+    #[test]
+    fn story_1843_pr3_headless_children_scrub_every_parent_session_key() {
+        let root = tempfile::tempdir().unwrap();
+        let _cwd = contained_cwd_seam::pin(root.path());
+        let pairs: Vec<_> = crate::agent_handle::INHERITED_SESSION_ENV
+            .iter()
+            .map(|key| (*key, Some("parent-session")))
+            .collect();
+        let _env = crate::test_env::EnvVarsGuard::apply(&pairs);
+        for vendor in [
+            HeadlessVendor::Claude,
+            HeadlessVendor::Codex,
+            HeadlessVendor::Agy,
+        ] {
+            for resume in [false, true] {
+                let mut guard = child_reservation_guard();
+                let mut cmd = std::process::Command::new("unused");
+                if resume {
+                    apply_resumed_child_agent_identity(&mut cmd, vendor, "reviewer", "own-session");
+                } else {
+                    apply_child_agent_identity(&mut cmd, vendor, "implementer");
+                }
+                let envs: std::collections::HashMap<_, _> = cmd.get_envs().collect();
+                for key in crate::agent_handle::INHERITED_SESSION_ENV {
+                    let value = envs
+                        .get(std::ffi::OsStr::new(key))
+                        .expect("explicit scrub or child value");
+                    assert_ne!(
+                        *value,
+                        Some(std::ffi::OsStr::new("parent-session")),
+                        "{vendor:?} {key}"
+                    );
+                    if ![
+                        crate::agent_handle::HANDLE_ENV,
+                        crate::agent_handle::LAUNCH_TOKEN_ENV,
+                    ]
+                    .contains(key)
+                    {
+                        assert_eq!(*value, None, "{vendor:?} {key}");
+                    }
+                }
+                // Retain the guard to cover the command's entire lifetime.
+                drop(cmd);
+                drop(guard.take());
+            }
+        }
     }
 }
