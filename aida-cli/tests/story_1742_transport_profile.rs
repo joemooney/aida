@@ -2,6 +2,9 @@
 //! projection. No network is available in these fixtures.
 // trace:STORY-1742 | ai:codex
 
+#[path = "support/test_git.rs"]
+mod test_git;
+
 use serde_json::Value;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -59,7 +62,11 @@ impl Fixture {
     }
 
     fn command(&self, executable: &str, root: &Path, args: &[&str]) -> Command {
-        let mut command = Command::new(executable);
+        let mut command = if executable == "git" {
+            test_git::git_command()
+        } else {
+            Command::new(executable)
+        };
         for (name, _) in std::env::vars_os() {
             let key = name.to_string_lossy();
             if key.starts_with("AIDA_") || key.starts_with("GIT_") {
