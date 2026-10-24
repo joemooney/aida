@@ -3,12 +3,12 @@ spec_id: TASK-2251
 agreed_id: TASK-2251
 title: 'Sweep: post-merge review notes batch 2 (2026-10-23: #2845 #2857)'
 description: 'Advisor 11:19, operator goal no deferrals. Members (superseded into this sweep): TASK-2248 (a pure-git already-merged re-run refuses a fast-forwarded slice), TASK-2249 (pure-git already-merged refs read a possibly stale origin/<base> without fetching), TASK-2250 (dev activate in a worktree exports AIDA_DEV_REPO=<worktree>, which goes stale when the worktree is removed). Each gets a fix plus a test, or evidence it no longer reproduces. Start after #2845 and #2857 have merged.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T18:16:23.129102755Z
-modified_at: 2026-10-24T06:54:44.878614636Z
+modified_at: 2026-10-24T12:32:21.604930453Z
 req_type: Task
 relationships:
 - rel_type: Supersedes
@@ -116,6 +116,20 @@ history:
   timestamp: 2026-10-24T06:54:46.768895855Z
   session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
   changes: []
+- id: 01a16de5-d661-7420-8f20-ccb958d798b1
+  author: aida-auto-bump
+  timestamp: 2026-10-24T12:32:21.601464902Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a16de5-d664-7b71-9480-b7e97bbd49d0
+  timestamp: 2026-10-24T12:32:21.604923561Z
+  agent: aida
+  commit_sha: a1fdbc36612d2abf54be67615402915879861beb
+  summary: 'Round 2: all three round-1 findings fixed (authored_slice_start fails closed on non-authoring reflog entries; refusal + rebased-before-merge tests added; fetch/warning skipped without origin). All 10 sweep member criteria verified or N/A with evidence; CI green at head (merge-hold-gate red is the round-1 hold itself).'
+  review_verdict: approved
 filed_at:
   code_sha: c51da8659361da4ae9a01c41f86ea6d28d00e948
   branch: main
@@ -124,11 +138,7 @@ filed_at:
   aida_build_sha: a9e78d3491
   vendor: claude
   session: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: TASK-2248 fast-forward fallback confirms a no-commit branch that was synced onto the base (merge --ff-only / pull / rebase / reset), attributing base commits to the slice; other members pass, CI green
-  recovery_hint: address the review findings, move TASK-2251 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-24T06:36:23.870565748Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-24T12:32:21.601460516Z
+  completion_sha: a1fdbc36612d2abf54be67615402915879861beb
