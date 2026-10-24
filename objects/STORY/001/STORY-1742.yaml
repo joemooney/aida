@@ -38,7 +38,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T22:02:03.191649035Z
-modified_at: 2026-10-24T17:36:50.452862557Z
+modified_at: 2026-10-24T17:46:52.419609184Z
 req_type: Story
 tags:
 - docs:impacted
@@ -95,6 +95,22 @@ comments:
   created_at: 2026-10-24T17:06:03.653702335Z
   modified_at: 2026-10-24T17:06:03.653702335Z
   session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+- id: 01a16f05-c883-7470-b2da-f8c5ef4a722b
+  author: codex
+  content: |
+    Slice 1 implemented: profile + read-only plans (non-completing).
+
+    Commit: 58d84bb3e5. Draft PR: https://github.com/joemooney/aida/pull/2904 . The title uses (Refs STORY-1742) and the body declares aida: no-complete; parent stays In Progress.
+
+    Added aida config transport enable work [--baseline <full-sha>], show and disable, with JSON output and common-Git-directory local settings shared by linked worktrees. The profile pins an origin endpoint fingerprint and refuses changed/ambiguous endpoints. Enabled push/pull dry-run/JSON planning happens before store initialization, without fetching, cache/projection creation, hook installation, or lifecycle actions. Plans name store refs, known source SHA, forbidden code legs, redundant/forbidden flags and pending prerequisites. Actual push/pull refuses in this slice; no unsafe fallback to ordinary sync. Show documents the raw-Git/client-only boundary. Ordinary clones retain existing behavior.
+
+    Validation: 9 isolated CLI integration tests passed with no default features; 18 default-feature command-registry tests passed; regenerated and independently checked the help snapshot; 20 existing scope/configuration-trust/store-Git guard tests passed. Formatting, whitespace, portability-growth, root-hygiene and doc-intent checks passed. GitHub CI is running. Tagged docs:impacted and updated setup/lifecycle/architecture documentation.
+
+    Remaining signed slices: ref-only executor plus hook compatibility; then refusal scanner, local deny list, sanitized intake/template and end-to-end export tests. No server enforcement or history rewrite tooling in v1. The profile is not yet a usable export path.
+
+    At the operator's requested stopping point, posted BUG-2017 SKETCH v2 without claiming/implementing that bug, notified the advisor, and returned to this slice's push/PR work.
+  created_at: 2026-10-24T17:46:52.419609184Z
+  modified_at: 2026-10-24T17:46:52.419609184Z
 history:
 - id: 01a16ee2-ad7a-7b30-aaeb-ec8f892fbe76
   author: joe
