@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T15:33:51.496539087Z
-modified_at: 2026-10-24T19:44:11.114707318Z
+modified_at: 2026-10-24T19:44:16.894242721Z
 req_type: Story
 tags:
 - architecture
@@ -41,6 +41,10 @@ relationships:
 - rel_type: Supersedes
   target_id: 01a16f52-4187-7370-8a92-f2bb3e039bf1
   created_at: 2026-10-24T19:44:11.114703207Z
+  created_by: joe
+- rel_type: Supersedes
+  target_id: 01a16ee5-ab03-73e0-9b00-b36a64f3d530
+  created_at: 2026-10-24T19:44:16.894236150Z
   created_by: joe
 comments:
 - id: 01a1614a-6fcf-7d03-bea6-19631c180579
@@ -226,6 +230,11 @@ history:
 - id: 01a16f71-32ec-7e92-8a5f-c8b79ced1e26
   author: joe
   timestamp: 2026-10-24T19:44:12.012600121Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+  changes: []
+- id: 01a16f71-4984-7f10-bf22-54ce605b63f5
+  author: joe
+  timestamp: 2026-10-24T19:44:17.796919138Z
   session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
   changes: []
 filed_at:
