@@ -934,14 +934,16 @@ trace:TASK-286 trace:TASK-359 trace:TASK-393
 
 **Graceful exit signal (TASK-329).** Under `$AIDA_ZEN`, `/aida-pickup`
 auto-takes the `⇒ Submit the PR` row — it hands off to `/aida-pr`, which
-drives the session to the open PR and *then* touches `$AIDA_EXIT_SENTINEL`
-as the session's absolute last action so the orchestrator reaps the
-otherwise-idle REPL. `/aida-pickup` itself must **not** touch the sentinel:
-the hand-off target owns the exit, and a premature touch here would let the
-orchestrator reap the session before `/aida-pr` opens the PR. The sentinel
+in corroborated `orchestrated` mode commits and pushes the branch (`aida ship
+<SPEC> --no-pr`, leaving preflight and PR creation to the parent per
+TASK-1289) and *then* touches `$AIDA_EXIT_SENTINEL` as the session's
+absolute last action so the orchestrator reaps the otherwise-idle REPL.
+`/aida-pickup` itself must **not** touch the sentinel: the hand-off target
+owns the exit, and a premature touch here would let the orchestrator reap
+the session before `/aida-pr` finishes committing and pushing. The sentinel
 is touched exactly once, by whichever skill performs the session's genuinely
 last action. Full protocol: `.aida/discipline/skill-prompt-kinds.md`.
-trace:TASK-329
+trace:TASK-329 trace:TASK-1613
 
 *Batch mode (`batch:<NAME>` still has queued members) — TASK-272:*
 

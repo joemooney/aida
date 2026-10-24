@@ -1222,7 +1222,7 @@ Dialog role often used "ship" loosely to mean any of: committed, pushed, PR open
 |---|---|---|
 | **Committed** | Work exists in local git history | Still In Progress |
 | **Pushed** | Branch reflects on `origin` | Still In Progress |
-| **PR opened** | GitHub PR exists, awaiting CI/review | Done (if `/aida-pr` flipped it) |
+| **PR opened** | GitHub PR exists, awaiting CI/review | Done (at the `aida queue done` checkpoint) |
 | **Reviewed** | Reviewer rendered a verdict (approved/rejected) | Still Done (waiting for merge) |
 | **Merged** | PR squashed/merged to `main` | Should be Completed via auto-bump |
 | **Completed** | Spec status = Completed in AIDA | Final state |

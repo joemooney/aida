@@ -221,6 +221,19 @@ fn bug_2130_review_authority_tokens_match_across_legacy_and_exact() {
         exact_tok,
         |_, _| false,
     ));
+    // TASK-2136: the two exact schemes are distinct too, so a dead pid's
+    // linux-starttime / sysinfo-start pair also matches without a probe.
+    // trace:TASK-1951 trace:TASK-2136 | ai:claude
+    assert!(crate::review_authority::tokens_match_with(
+        "proc:42@linux-starttime:987654",
+        "shell:42@sysinfo-start:1760745600",
+        |_, _| false,
+    ));
+    assert!(!crate::review_authority::tokens_match_with(
+        "proc:42@sysinfo-start:1",
+        "shell:42@sysinfo-start:2",
+        |_, _| false,
+    ));
 
     // 3. Different pids -> false even if strict_match would return true.
     assert!(!crate::review_authority::tokens_match_with(
@@ -316,6 +329,7 @@ fn bug_2130_solo_and_drain_locks_write_exact_identity_and_read_back_live() {
         binary_path: String::new(),
         launched_stale: false,
         specs: Vec::new(),
+        child_grant_id: None,
     };
     std::fs::write(
         crate::drain_lock::drain_lock_path(root),

@@ -182,7 +182,7 @@ fn search_fields_agent_emits_toon_human_emits_table() {
 
     // AGENT mode: the lean TOON projection — a `specs[N]{id,status}:` header
     // (NOT the human box-table) with the chosen columns only.
-    let agent = render_search_fields(&results, &selected, true);
+    let agent = render_search_fields(&results, &selected, true, &Default::default());
     assert!(
         agent.contains("specs[1]{id,status}:"),
         "agent mode emits the TOON specs table: {agent}"
@@ -197,7 +197,7 @@ fn search_fields_agent_emits_toon_human_emits_table() {
 
     // HUMAN mode: the aligned box-table — capitalized `ID`/`Status` headers,
     // a divider rule, and the row; NOT the TOON `specs[...]` shape.
-    let human = render_search_fields(&results, &selected, false);
+    let human = render_search_fields(&results, &selected, false, &Default::default());
     assert!(
         !human.contains("specs["),
         "human mode emits the box-table, not TOON: {human}"
@@ -229,7 +229,7 @@ fn search_default_agent_emits_toon_not_boxtable() {
 
     // AGENT mode (what the default path passes): TOON `specs[...]` shape, the
     // full default schema, and crucially NO box-table divider rule.
-    let agent = render_search_fields(&results, &selected, true);
+    let agent = render_search_fields(&results, &selected, true, &Default::default());
     assert!(
         agent.contains("specs[1]{id,title,status,type,modified_at}:"),
         "default agent search emits the TOON specs table: {agent}"
@@ -242,7 +242,7 @@ fn search_default_agent_emits_toon_not_boxtable() {
     assert!(agent.contains("2026-09-12T21:12:00Z"));
 
     // HUMAN mode keeps the aligned box-table with its divider rule.
-    let human = render_search_fields(&results, &selected, false);
+    let human = render_search_fields(&results, &selected, false, &Default::default());
     assert!(
         !human.contains("specs["),
         "human default search keeps the box-table, not TOON: {human}"
@@ -627,5 +627,34 @@ fn list_default_cap_skips_machine_and_tree_shapes() {
             AGENT_LIST_DEFAULT_LIMIT
         ),
         None
+    );
+}
+
+// TASK-2003: `aida search --fields review_lens` renders the NeedsAttention
+// lens it is handed on both surfaces, instead of an always-empty column.
+// trace:TASK-1951 trace:TASK-2003 | ai:claude
+#[test]
+fn search_fields_render_the_review_lens() {
+    colored::control::set_override(false);
+    let selected = toon_list_fields(Some("id,review_lens")).unwrap();
+    let results = vec![fields_summary(
+        "STORY-1",
+        "first thing",
+        "needs-attention",
+        "high",
+    )];
+    let lens = std::collections::HashMap::from([(
+        results[0].id,
+        "in review: PR-7 @c0bad0b0, round 2".to_string(),
+    )]);
+    let agent = render_search_fields(&results, &selected, true, &lens);
+    assert!(
+        agent.contains("in review: PR-7 @c0bad0b0, round 2"),
+        "{agent}"
+    );
+    let human = render_search_fields(&results, &selected, false, &lens);
+    assert!(
+        human.contains("in review: PR-7 @c0bad0b0, round 2"),
+        "{human}"
     );
 }

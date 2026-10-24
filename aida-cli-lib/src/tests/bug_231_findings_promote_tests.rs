@@ -283,6 +283,12 @@ fn inbox_identities_stable_name_only_when_no_agent_type() {
         ("AIDA_USER", "solo-user"),
         ("AIDA_AGENT_TYPE", ""),
         ("AIDA_SESSION_ROLE", ""),
+        // No session evidence, so no session handle joins the set.
+        ("AIDA_HOOK_PAYLOAD", ""),
+        ("CLAUDE_CODE_SESSION_ID", ""),
+        ("CLAUDE_PID", ""),
+        ("CODEX_THREAD_ID", ""),
+        ("CODEX_SESSION_ID", ""),
     ]);
     let ids = inbox_identities();
     assert_eq!(

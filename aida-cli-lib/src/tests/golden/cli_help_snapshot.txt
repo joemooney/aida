@@ -960,9 +960,9 @@ Options:
           exactly those columns in that order — on the human table AND the token-efficient agent
           output (a real token win for agents). Valid fields: id, title, status, type, priority,
           feature, owner, assignee, tags, heft, modified_at, opened, weight, queued, in_flight,
-          blocked, mode, origin, deferred_reason, driver, driver_kind. `opened` is the creation
-          time. Aliases: req_type = type, created_at = opened, created = opened. Default (no
-          `--fields`) keeps the standard columns; agent mode defaults to the minimal
+          blocked, mode, origin, deferred_reason, driver, driver_kind, review_lens. `opened` is the
+          creation time. Aliases: req_type = type, created_at = opened, created = opened. Default
+          (no `--fields`) keeps the standard columns; agent mode defaults to the minimal
           id,title,status,type,modified_at set
 
       --topics
@@ -21392,10 +21392,10 @@ Options:
           `--fields 'id title opened'`; entries are separated by commas and/or whitespace. Renders
           exactly those columns in that order. Valid fields: id, title, status, type, priority,
           feature, owner, assignee, tags, heft, modified_at, opened, weight, queued, in_flight,
-          blocked, mode, origin, deferred_reason, driver, driver_kind. `opened` is the creation
-          time. Aliases: req_type = type, created_at = opened, created = opened. Search rows carry
-          no work-routing state, so queued, in_flight and blocked render false. Default keeps the
-          standard layout. Mirrors `aida list --fields`
+          blocked, mode, origin, deferred_reason, driver, driver_kind, review_lens. `opened` is the
+          creation time. Aliases: req_type = type, created_at = opened, created = opened. Search
+          rows carry no work-routing state, so queued, in_flight and blocked render false. Default
+          keeps the standard layout. Mirrors `aida list --fields`
 
   -h, --help
           Print help (see a summary with '-h')
@@ -24803,7 +24803,7 @@ Working on aida itself
       {
         "name": "fields",
         "takes_value": true,
-        "help": "Select AND order the displayed columns, e.g. `--fields id,title,status,priority,tags` or `--fields 'id title opened'`; entries are separated by commas and/or whitespace. Renders exactly those columns in that order — on the human table AND the token-efficient agent output (a real token win for agents). Valid fields: id, title, status, type, priority, feature, owner, assignee, tags, heft, modified_at, opened, weight, queued, in_flight, blocked, mode, origin, deferred_reason, driver, driver_kind. `opened` is the creation time. Aliases: req_type = type, created_at = opened, created = opened. Default (no `--fields`) keeps the standard columns; agent mode defaults to the minimal id,title,status,type,modified_at set"
+        "help": "Select AND order the displayed columns, e.g. `--fields id,title,status,priority,tags` or `--fields 'id title opened'`; entries are separated by commas and/or whitespace. Renders exactly those columns in that order — on the human table AND the token-efficient agent output (a real token win for agents). Valid fields: id, title, status, type, priority, feature, owner, assignee, tags, heft, modified_at, opened, weight, queued, in_flight, blocked, mode, origin, deferred_reason, driver, driver_kind, review_lens. `opened` is the creation time. Aliases: req_type = type, created_at = opened, created = opened. Default (no `--fields`) keeps the standard columns; agent mode defaults to the minimal id,title,status,type,modified_at set"
       },
       {
         "name": "format",
@@ -38585,6 +38585,11 @@ Working on aida itself
         "name": "title",
         "takes_value": false,
         "help": "Emit the one-liner wrapped in an OSC terminal-title escape sequence (`ESC ] 2 ; <line> BEL`) instead of printing it to the body, so the AIDA role/queue/inbox segment rides the terminal title bar / tmux window name. This is the in-agent parity surface for clients (e.g. Codex CLI) whose built-in footer is a fixed field set and cannot run `aida statusline` as a command: wire `aida statusline title` into the shell prompt (`PROMPT_COMMAND` / `precmd`) and the AIDA segment shows in the terminal title during the agent session. Forces color off (an OSC title string carries no ANSI). Mutually exclusive with the `setup` subcommand"
+      },
+      {
+        "name": "tmux-pane-pid",
+        "takes_value": true,
+        "help": "The tmux pane's shell pid (`#{pane_pid}`). A tmux `#(...)` render runs in tmux's own environment, so this is how it finds the agent session running in that pane and shows its handle"
       }
     ],
     "hidden": false
@@ -45036,7 +45041,7 @@ Working on aida itself
       {
         "name": "fields",
         "takes_value": true,
-        "help": "Select AND order the displayed columns, e.g. `--fields id,title,status,priority,tags` or `--fields 'id title opened'`; entries are separated by commas and/or whitespace. Renders exactly those columns in that order. Valid fields: id, title, status, type, priority, feature, owner, assignee, tags, heft, modified_at, opened, weight, queued, in_flight, blocked, mode, origin, deferred_reason, driver, driver_kind. `opened` is the creation time. Aliases: req_type = type, created_at = opened, created = opened. Search rows carry no work-routing state, so queued, in_flight and blocked render false. Default keeps the standard layout. Mirrors `aida list --fields`"
+        "help": "Select AND order the displayed columns, e.g. `--fields id,title,status,priority,tags` or `--fields 'id title opened'`; entries are separated by commas and/or whitespace. Renders exactly those columns in that order. Valid fields: id, title, status, type, priority, feature, owner, assignee, tags, heft, modified_at, opened, weight, queued, in_flight, blocked, mode, origin, deferred_reason, driver, driver_kind, review_lens. `opened` is the creation time. Aliases: req_type = type, created_at = opened, created = opened. Search rows carry no work-routing state, so queued, in_flight and blocked render false. Default keeps the standard layout. Mirrors `aida list --fields`"
       },
       {
         "name": "format",

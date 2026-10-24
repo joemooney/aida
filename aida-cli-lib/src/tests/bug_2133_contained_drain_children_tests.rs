@@ -106,23 +106,29 @@ fn contained_child_without_bwrap_is_refused() {
 #[test]
 fn contained_child_wrapper_refuses_codex_and_passes_uncontained_through() {
     let tmp = tempfile::tempdir().unwrap();
+    let _os_wrap = EnvVarsGuard::apply(&[("AIDA_OS_WRAP", Some("0"))]);
     let args = vec!["exec".to_string(), "prompt".to_string()];
     let (prog, out) = contained_child_program_and_args(
         HeadlessVendor::Codex,
         false,
         None,
+        tmp.path(),
         "CI-fix session",
         "codex",
         args.clone(),
     )
     .unwrap();
     assert_eq!(prog, "codex");
-    assert_eq!(out, args, "uncontained: argv unchanged, no wrapper");
+    assert_eq!(
+        out, args,
+        "uncontained, os_wrap off: argv unchanged, no wrapper"
+    );
 
     let err = contained_child_program_and_args(
         HeadlessVendor::Codex,
         true,
         Some(tmp.path()),
+        tmp.path(),
         "CI-fix session",
         "codex",
         args,
@@ -387,17 +393,33 @@ fn ci_fix_driver(fx: &CiFixFixture, contained: bool) -> RealPhaseDriver {
 }
 
 fn run_ci_fix(fx: &CiFixFixture, vendor: &str, os_wrap: &str, contained: bool) {
+    run_ci_fix_with_path(fx, vendor, os_wrap, contained, None);
+}
+
+/// [`run_ci_fix`] with `PATH` replaced (one env guard, never nested).
+// trace:TASK-1952 | trace:TASK-1770 | ai:claude
+fn run_ci_fix_with_path(
+    fx: &CiFixFixture,
+    vendor: &str,
+    os_wrap: &str,
+    contained: bool,
+    path: Option<&str>,
+) {
     use crate::auto_complete::PhaseDriver;
     let agent = fx.agent.to_string_lossy().into_owned();
     let gh = fx.gh.to_string_lossy().into_owned();
-    let _env = EnvVarsGuard::apply(&[
+    let mut pairs: Vec<(&'static str, Option<&str>)> = vec![
         ("AIDA_HEADLESS_VENDOR", Some(vendor)),
         ("AIDA_AGENT_CMD", Some(&agent)),
         ("AIDA_TEST_GH_BINARY", Some(&gh)),
         ("AIDA_OS_WRAP", Some(os_wrap)),
         ("AIDA_TEE_HEADLESS", Some("0")),
         ("AIDA_CONTAINED", None),
-    ]);
+    ];
+    if let Some(path) = path {
+        pairs.push(("PATH", Some(path)));
+    }
+    let _env = EnvVarsGuard::apply(&pairs);
     let mut driver = ci_fix_driver(fx, contained);
     let failure = crate::auto_complete::PhaseFailure::new("CI red".to_string());
     // No origin, so no push is ever observed: the return is always false.
@@ -463,4 +485,113 @@ fn contained_ci_fix_child_writes_in_worktree_and_is_refused_outside() {
     let result = std::fs::read_to_string(fx.worktree.join("result.txt")).unwrap();
     assert_eq!(result.trim(), "inside_rc=0 outside_rc=0", "{result}");
     assert!(fx.outside.join("outside.txt").exists());
+}
+
+// ── TASK-1770: os_wrap applies to uncontained children; argv-level guard ────
+
+/// A fake `bwrap` first on PATH that records its argv (one per line) to
+/// `log` and runs nothing, so the os_wrap argv is checked on hosts (CI
+/// runners) where a real bwrap cannot create a user namespace.
+fn fake_bwrap(dir: &std::path::Path, log: &std::path::Path) -> String {
+    let bin = dir.join("fake-bwrap-bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    crate::test_exec::write_executable(
+        &bin.join("bwrap"),
+        format!(
+            "#!/bin/sh\nfor a in \"$@\"; do printf '%s\\n' \"$a\"; done >> '{}'\nexit 0\n",
+            log.display()
+        ),
+    );
+    format!(
+        "{}:{}",
+        bin.display(),
+        std::env::var("PATH").unwrap_or_default()
+    )
+}
+
+// TASK-1770 (1): with os_wrap on, an UNcontained drain's CI-fix and advisor
+// children are bwrap-wrapped at their own cwd, like its implementer.
+// trace:TASK-1952 | trace:TASK-1770 | ai:claude
+#[test]
+fn task_1770_uncontained_children_honour_os_wrap() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let wt = std::fs::canonicalize(tmp.path()).unwrap().join("wt");
+    git_init(&wt);
+    let log = tmp.path().join("bwrap-argv.txt");
+    let path = fake_bwrap(tmp.path(), &log);
+    let _env = EnvVarsGuard::apply(&[("PATH", Some(&path)), ("AIDA_OS_WRAP", Some("1"))]);
+    for child in ["CI-fix session", "advisor session"] {
+        let (prog, args) = contained_child_program_and_args(
+            HeadlessVendor::Claude,
+            false,
+            None,
+            &wt,
+            child,
+            "claude",
+            vec!["-p".to_string(), "x".to_string()],
+        )
+        .unwrap();
+        assert_eq!(prog, "bwrap", "{child}: {args:?}");
+        let wt_s = wt.to_string_lossy().into_owned();
+        assert!(
+            args.windows(3)
+                .any(|w| w[0] == "--bind" && w[1] == wt_s && w[2] == wt_s),
+            "{child}: the child's cwd is the rw root: {args:?}"
+        );
+        assert_eq!(&args[args.len() - 3..], ["claude", "-p", "x"], "{child}");
+    }
+}
+
+// TASK-1770 (2): the argv-level stand-in for the self-skipping real-bwrap
+// test. Through the real `attempt_ci_fix` arm, a contained CI-fix child with
+// os_wrap on runs under bwrap rooted at its worktree, read-only elsewhere,
+// carrying the contained settings; an uncontained one is wrapped too.
+// trace:TASK-1952 | trace:TASK-1770 | ai:claude
+#[test]
+fn task_1770_ci_fix_child_argv_is_bwrap_wrapped_without_userns() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let fx = ci_fix_fixture();
+    let log = fx.worktree.parent().unwrap().join("bwrap-argv.txt");
+    let path = fake_bwrap(fx.worktree.parent().unwrap(), &log);
+    for contained in [true, false] {
+        let _ = std::fs::remove_file(&log);
+        run_ci_fix_with_path(&fx, "claude", "1", contained, Some(&path));
+        let argv = std::fs::read_to_string(&log).unwrap_or_else(|_| {
+            panic!("contained={contained}: the CI-fix child went through bwrap")
+        });
+        let lines: Vec<&str> = argv.lines().collect();
+        let wt = fx.worktree.to_string_lossy().into_owned();
+        assert!(
+            lines.windows(3).any(|w| w == ["--ro-bind", "/", "/"]),
+            "contained={contained}: read-only root: {argv}"
+        );
+        assert!(
+            lines
+                .windows(3)
+                .any(|w| w[0] == "--bind" && w[1] == wt && w[2] == wt),
+            "contained={contained}: rw worktree: {argv}"
+        );
+        assert!(
+            lines.contains(&fx.agent.to_string_lossy().as_ref())
+                || lines.iter().any(|l| l.ends_with("claude")),
+            "contained={contained}: the agent runs inside bwrap: {argv}"
+        );
+        if contained {
+            let at = lines
+                .iter()
+                .position(|l| *l == "--settings")
+                .unwrap_or_else(|| panic!("contained argv carries --settings: {argv}"));
+            let settings: serde_json::Value = serde_json::from_str(lines[at + 1]).unwrap();
+            assert_eq!(settings["sandbox"]["enabled"], true, "{settings}");
+        }
+    }
+    assert!(
+        !fx.worktree.join("result.txt").exists(),
+        "the fake bwrap runs nothing"
+    );
 }

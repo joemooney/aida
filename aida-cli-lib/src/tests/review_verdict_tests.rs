@@ -2695,6 +2695,46 @@ fn task_1951_merge_close_writes_nothing_when_the_archive_entry_is_refused() {
     assert!(closed(&archive), "the re-run closes the archive too");
 }
 
+// TASK-2135: the archive write failed after the current file was closed.
+// A re-run sees the current file closed and closes the still-open archive
+// entry at that commit instead of returning `already closed`.
+// trace:TASK-1951 trace:TASK-2135 | ai:claude
+#[test]
+fn task_1951_merge_close_rerun_closes_an_archive_left_open() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+    let sha = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+    let file = record_verdict(
+        root,
+        "STORY-10",
+        Some("request-changes"),
+        Some(sha),
+        None,
+        Some("blocking"),
+        &[],
+        "reviewer-a",
+    )
+    .unwrap();
+    let archive = archived_verdict_file_for_sha(&file, sha).unwrap();
+    let open_archive = std::fs::read(&archive).unwrap();
+    assert!(close_verdict_on_merge(root, "STORY-10", "dddddddddddd").unwrap());
+    // Model the I/O failure: the current file closed, the archive did not.
+    std::fs::write(&archive, &open_archive).unwrap();
+    let closed = |path: &std::path::Path| {
+        let v: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+        v["closed_by_merge"] == "dddddddddddd"
+    };
+    assert!(closed(&file) && !closed(&archive));
+
+    assert!(close_verdict_on_merge(root, "STORY-10", "eeeeeeeeeeee").unwrap());
+    assert!(
+        closed(&archive),
+        "the re-run closes the archive with the recorded merge"
+    );
+    assert!(!close_verdict_on_merge(root, "STORY-10", "eeeeeeeeeeee").unwrap());
+}
+
 // TASK-1814(3): the mtime probe validates the handle without reading the
 // body, so a body that is not UTF-8 still has an mtime, while a linked file
 // still has none.

@@ -163,12 +163,15 @@ mod tests {
     fn baseline_tag_git_calls_use_host_git_command() {
         let src = include_str!("yaml_backend.rs");
         let production = &src[..src.find("#[cfg(test)]").unwrap()];
-        let raw = ["Command::", "new(\"git\")"].concat();
+        // TASK-2113: no raw builder of any spelling (`Command::new`, an
+        // alias); the number of hardened calls is free to change.
+        // trace:TASK-1952 | trace:TASK-2113 | ai:claude
+        let raw = ["::new(", "\"git\")"].concat();
         assert!(
             !production.contains(&raw),
             "raw git builder in yaml_backend.rs"
         );
-        assert_eq!(production.matches("host_git_command(dir)").count(), 3);
+        assert!(production.contains("host_git_command("));
     }
 
     #[test]

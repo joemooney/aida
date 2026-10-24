@@ -39,8 +39,31 @@ case "$PROJECT_ROOT" in
         STORE_SHA=$(git rev-parse -q --verify HEAD 2>/dev/null) || exit 0
         ;;
     *)
+        # TASK-2127: with --separate-git-dir or a submodule, the common
+        # directory's parent is not the checkout. Fall back to what git itself
+        # records, never to a path under a linked worktree's tree: a commit in
+        # the main worktree (git dir == common dir) runs in the checkout, so
+        # its toplevel is the main root; a linked worktree reads core.worktree
+        # from the common directory's config (set for submodules). A linked
+        # worktree of a --separate-git-dir or bare repository records no main
+        # checkout, so its commits carry no trailer.
+        # trace:TASK-1952 | trace:TASK-2127 | ai:claude
+        LISTED_MAIN=""
+        GIT_DIR_ABS=$(git rev-parse --path-format=absolute --git-dir 2>/dev/null)
+        if [ "$GIT_DIR_ABS" = "$COMMON_DIR" ]; then
+            LISTED_MAIN="$PROJECT_ROOT"
+        else
+            CORE_WORKTREE=$(git config --file "$COMMON_DIR/config" --get core.worktree 2>/dev/null)
+            if [ -n "$CORE_WORKTREE" ]; then
+                LISTED_MAIN=$(cd "$COMMON_DIR" 2>/dev/null && cd "$CORE_WORKTREE" 2>/dev/null && pwd -P)
+            fi
+            case "$LISTED_MAIN" in
+                "$PROJECT_ROOT"|"$PROJECT_ROOT"/*) LISTED_MAIN="" ;;
+            esac
+        fi
         STORE_PATH=""
-        for candidate in "$MAIN_ROOT/.aida-store" "$MAIN_ROOT/aida-store"; do
+        for candidate in "$MAIN_ROOT/.aida-store" "$MAIN_ROOT/aida-store" \
+            ${LISTED_MAIN:+"$LISTED_MAIN/.aida-store" "$LISTED_MAIN/aida-store"}; do
             if [ -d "$candidate/.git" ] || [ -f "$candidate/.git" ]; then
                 STORE_PATH="$candidate"
                 break

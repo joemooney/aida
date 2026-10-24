@@ -14,7 +14,7 @@ A spec's life after you start building it:
 
 | Event | Verb | State it lands in | Who triggers it |
 |---|---|---|---|
-| Work finished on a branch, PR open | `aida queue done` / `aida pr` | **Done** | the implementer |
+| Work finished on a branch, PR open | `aida queue done` after review handoff | **Done** | the implementer |
 | Reviewer read the diff, sent it back | `aida review` → request changes / `aida rework` | **Rework** (→ In Progress) | the reviewer |
 | Reviewer passed it; PR merged to main | the merge + `aida pull` | **Completed** | the merge (auto-bump) |
 | A version tag cut after merge | `aida release` | **Released** | the releaser |
@@ -68,6 +68,30 @@ or forced completion is needed for an ID remapping.
 
 ---
 
+### `aida ship`
+
+**One line** — finish implemented work through the CLI-owned commit, rebase,
+push, and PR ceremony; choose the stopping point deliberately.
+
+For an independent review handoff, `/aida-pr` is a compatibility redirect to
+`aida ship <SPEC> --no-merge`. Preview with the same command plus `--dry-run`.
+After successful PR creation or reuse, explicitly run
+`aida pr auto-queue-review`: the ship stop mode does not queue review itself.
+Read the outcome before reporting a handoff; policy skips can exit zero.
+Creation derives title/body from the latest commit, so inspect and enrich the
+PR with linked specs and actual validation evidence.
+
+Full `aida ship` continues into CI, merge, sync, and cleanup through the
+lower-level `aida pr ship` tail. It requires an authorized finish-and-merge
+path with independent review satisfied; neither command supplies a fresh
+reviewer. Managed/headless implementers follow their orchestrator's stop and
+handoff contract. Preserve supervised judgment and draft-only policy:
+`--no-merge` creates a non-draft PR, so actual drafts use the established
+draft creation path. Opening a PR never earns Completed before merge.
+<!-- trace:TASK-1613 | ai:codex -->
+
+---
+
 ### `aida pr`
 
 **One line** — the pull-request side-effects that fire around opening a PR.
@@ -99,6 +123,16 @@ prints the trailer it derived and its source — `from the PR title`, `from the
 branch name`, or `none` with the reason it was withheld — and names the ids
 the merge will complete; `--dry-run` prints the same line.
 <!-- trace:BUG-1919 | ai:claude -->
+
+A non-completing squash ship writes the `aida: no-complete` line into the
+squash commit's body, so the pull on every clone reads the declaration from
+main. This works on GitHub (`gh pr merge --body`), GitLab (inside the squash
+commit message, after the MR title) and pure-git (the squash commit's body).
+The cost is on GitHub: an explicit body replaces GitHub's default one, so
+GitHub does not add `Co-authored-by:` trailers for the other commit authors
+on that merge. Trailers already written in commit messages are kept. An
+ordinary squash ship leaves the body to the forge.
+<!-- trace:TASK-1951 trace:TASK-2115 trace:TASK-2116 | ai:claude -->
 
 A title ending in `(Refs SPEC-ID[, …])` is a reference, not a trailer: ship
 appends no completion trailer to it, not even from the branch name, and the
@@ -394,10 +428,35 @@ current PR head. Omit the PR number to inspect every local hold, or use
 `aida merge-hold auto-release <pr>` for one. Any seat may retry this command;
 it has no override flag and never merges. Refused candidates remain held and
 produce a nonzero exit with a reason. The review-record handler runs the same
-release after a verified APPROVED write. Sensitive or composed holds retain
-the human clear. See [clearance policy](08-reporting.md#merge-hold-gate-and-clearance-limits)
+release after a verified APPROVED write. A hold composed with any non-Rework
+kind keeps the human clear, and so does a sensitive spec unless a mandate
+started with `aida mandate start --include-supervised` covers it (see
+[`aida mandate`](#aida-mandate)). See [clearance policy](08-reporting.md#merge-hold-gate-and-clearance-limits)
 for grant, arming-round, metadata and audit requirements.
+
+- **Composed Rework holds.** When refusals on several specs compose into one
+  hold, each refusal must be answered by its own fresh approval at the PR
+  head. One unanswered or unreadable refusal keeps the whole hold, and the
+  reason names it. The clearance records the primary approval and lists the
+  others under `also_released_by`.
+- **Busy lock.** The release's second check and the marker removal run under
+  a per-PR hold lock, which hold placements take too. If another placement or
+  release holds it for 10 seconds, the command refuses with
+  `merge-hold PR-N is busy` and changes nothing; re-run it.
+- **Withdrawn clearances.** If the second check refuses after the clearance
+  was written (for example, the head moved), the clearance is moved aside to
+  `.aida/merge-hold-clearances/PR-N.superseded-<timestamp>.json` for audit, an
+  "authorization withdrawn" comment is posted, and the hold stays armed. A
+  superseded file is never read as a clearance. When two releases of one PR
+  overlap, the one that finishes second leaves the first one's clearance in
+  place.
+- **Order.** Auto-release records the clearance, posts the audit comment,
+  drops the forge labels, and removes the marker last, so a forge failure
+  leaves the hold armed for the next retry. The human `aida merge-hold clear`
+  records the clearance, removes the marker, then drops the labels; the
+  operator sees any label failure and re-runs it.
 <!-- trace:STORY-1687 | ai:codex -->
+<!-- trace:TASK-1951 trace:TASK-2286 | ai:claude -->
 
 ### `aida mandate`
 

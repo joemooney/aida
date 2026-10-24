@@ -2172,6 +2172,7 @@ impl RealPhaseDriver {
             vendor,
             self.contained,
             contained_in,
+            &self.project_root,
             "advisor session",
             &program,
             advisor_args,
@@ -2306,23 +2307,28 @@ pub(crate) fn missing_implementer_worktree_push_gate(
 }
 
 /// BUG-2133: the fail-closed gate + OS wrapper every agent child a drain
-/// spawns directly goes through. Uncontained: `(program, args)` unchanged.
-/// Contained: refuse a child that cannot be contained
-/// ([`session::require_child_containment`]), then apply the same opt-in
-/// `bwrap` OS boundary (`[contained] os_wrap` / `AIDA_OS_WRAP`) the contained
-/// implementer gets, rooted at the child's cwd `contained_in` — which itself
-/// refuses when os_wrap is requested but bwrap cannot run.
+/// spawns directly goes through. Contained: refuse a child that cannot be
+/// contained ([`session::require_child_containment`]), then apply the same
+/// opt-in `bwrap` OS boundary (`[contained] os_wrap` / `AIDA_OS_WRAP`) the
+/// contained implementer gets, rooted at the child's cwd `contained_in` —
+/// which itself refuses when os_wrap is requested but bwrap cannot run.
+///
+/// TASK-1770: uncontained, the child still gets the os_wrap boundary rooted
+/// at its cwd `child_cwd`, exactly like an uncontained drain's implementer:
+/// a no-op with os_wrap off, fail-closed when it is on but bwrap cannot run.
 // trace:BUG-2133 | ai:claude
+// trace:TASK-1952 | trace:TASK-1770 | ai:claude
 pub(crate) fn contained_child_program_and_args(
     vendor: session::HeadlessVendor,
     contained: bool,
     contained_in: Option<&std::path::Path>,
+    child_cwd: &std::path::Path,
     child: &str,
     program: &str,
     args: Vec<String>,
 ) -> anyhow::Result<(String, Vec<String>)> {
     if !contained {
-        return Ok((program.to_string(), args));
+        return session::os_wrapped_program_and_args(child_cwd, program, args);
     }
     session::require_child_containment(vendor, contained, child)?;
     let root = contained_in.ok_or_else(|| {
