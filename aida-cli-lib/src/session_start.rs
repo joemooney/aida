@@ -2996,21 +2996,11 @@ pub(crate) fn session_start_with_receipt(
         &lease_file,
     );
     let bumped_to_in_progress = if can_bump_status {
-        let storage = Storage::new(project_root.join(".aida-store"));
-        match storage.load().and_then(|mut store| {
-            let mut bumped = false;
-            // trace:TASK-1468 | ai:claude
-            if let Some(req) = store.get_requirement_unambiguous_mut(owns)? {
-                // BUG-1637: automated, recorded under its own author.
-                // trace:BUG-1637 | ai:claude
-                bumped =
-                    approved_to_in_progress_bump(req, aida_core::conflict::SESSION_START_AUTHOR);
-            }
-            if bumped {
-                storage.save(&store)?;
-            }
-            Ok::<bool, anyhow::Error>(bumped)
-        }) {
+        // trace:BUG-2215 | ai:codex
+        let claimed = crate::claim::resolve_spec_for_claim(owns).and_then(|(_, req)| {
+            crate::claim::persist_claim_status(&project_root, &req, &lease.owner)
+        });
+        match claimed {
             Ok(b) => {
                 if let Some(cleanup) = rollback.as_mut().filter(|_| b) {
                     cleanup.status_bump = Some(owns.to_string());

@@ -344,6 +344,8 @@ fn bug_1929_linked_worktree_grants_its_own_main_only() {
     for name in CACHE_FILES {
         expected.push(format!("/{}", main.join(".aida").join(name).display()));
     }
+    // trace:BUG-2218 | ai:codex
+    expected.push(format!("/{}", main.join(".aida/mailbox").display()));
     assert_eq!(allow_write(&settings), expected, "{json}");
     assert_eq!(
         deny_write(&settings),
@@ -1831,4 +1833,75 @@ fn bug_2140_id_allocation_deferral_and_doctor_check_and_host_commit() {
             .any(|l| l == "registry/blocks.yaml"),
         "host sweep commit must include registry/blocks.yaml: {block_commit_files}"
     );
+}
+
+// trace:BUG-2218 | ai:codex
+#[test]
+fn bug_2218_sandbox_mailbox_is_writable_but_sensitive_state_is_not() {
+    let (_tmp, main) = main_fixture();
+    let worktree = main.parent().unwrap().join("worker");
+    std::fs::create_dir_all(&worktree).unwrap();
+    let mut paths = contained_store_write_paths(&main);
+    paths.extend(contained_mailbox_write_paths(&main).unwrap());
+    assert!(
+        main.join(".aida/mailbox").is_dir(),
+        "created before sandbox binding"
+    );
+    let settings: serde_json::Value =
+        serde_json::from_str(&crate::session::contained_settings_json_with_store(
+            &[],
+            false,
+            &contained_write_roots(&worktree),
+            &paths,
+        ))
+        .unwrap();
+    assert!(sandbox_may_write(
+        &settings,
+        &main.join(".aida/mailbox/new.json")
+    ));
+    for path in [
+        ".aida/sessions/lease.toml",
+        ".aida/config.toml",
+        ".aida/grants/grant.json",
+        ".git/config",
+        "src/main.rs",
+    ] {
+        assert!(!sandbox_may_write(&settings, &main.join(path)), "{path}");
+    }
+    let message = aida_core::mailbox::Message {
+        subject: None,
+        id: "mail-probe".into(),
+        thread_id: "probe".into(),
+        from: "sender".into(),
+        to: aida_core::mailbox::Recipient::Broadcast,
+        timestamp: 1,
+        in_reply_to: None,
+        body: "body".into(),
+        urgent: false,
+        intent: aida_core::mailbox::Intent::Fyi,
+        retracted: false,
+        deleted: false,
+        archived: false,
+        from_source: aida_core::mailbox::SenderSource::Explicit,
+        from_role: None,
+        relayed_from: None,
+    };
+    // Actual filesystem delivery uses the same main-root mailbox the binding covers.
+    crate::mailbox_store::write_message(&main, &message).unwrap();
+    assert_eq!(
+        crate::mailbox_store::read_local_messages(&main)
+            .unwrap()
+            .len(),
+        1
+    );
+}
+
+// trace:BUG-2218 | ai:codex
+#[cfg(unix)]
+#[test]
+fn bug_2218_never_grants_a_symlink_target() {
+    let (_tmp, main) = main_fixture();
+    let sensitive = tempfile::tempdir().unwrap();
+    std::os::unix::fs::symlink(sensitive.path(), main.join(".aida/mailbox")).unwrap();
+    assert!(contained_mailbox_write_paths(&main).is_err());
 }

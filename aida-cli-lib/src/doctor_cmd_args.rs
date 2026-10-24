@@ -8,6 +8,14 @@ use std::path::PathBuf;
 // trace:EPIC-19 | ai:claude
 #[derive(Subcommand, Debug)]
 pub enum DoctorCommand {
+    /// Diagnose cached compiler-wrapper failures; remove only with --fix.
+    // trace:TASK-2324 | ai:codex
+    RustcCache {
+        /// Remove a cache that still contains a failed wrapper probe.
+        #[clap(long)]
+        fix: bool,
+    },
+
     /// Find prose that may have lost backticked text to shell command
     /// substitution. Reports only; candidates require human inspection.
     // trace:TASK-190 | ai:codex

@@ -135,6 +135,33 @@ pub(crate) fn contained_store_write_paths(main: &Path) -> Vec<PathBuf> {
     paths
 }
 
+/// The shared runtime mailbox alone; never grant the enclosing `.aida`
+/// directory (which contains grants, leases and other coordination authority).
+/// Refuse symlinked mailbox/state directories rather than binding their target.
+// trace:BUG-2218 | ai:codex
+pub(crate) fn contained_mailbox_write_paths(main: &Path) -> anyhow::Result<Vec<PathBuf>> {
+    let main = std::fs::canonicalize(main)?;
+    let state = main.join(".aida");
+    let mailbox = state.join("mailbox");
+    for path in [&state, &mailbox] {
+        if let Ok(meta) = std::fs::symlink_metadata(path) {
+            anyhow::ensure!(
+                !meta.file_type().is_symlink(),
+                "refusing sandbox mailbox path {}: symbolic link",
+                path.display()
+            );
+        }
+    }
+    anyhow::ensure!(
+        root_rule_path(&mailbox).is_some(),
+        "cannot express sandbox mailbox path {}",
+        mailbox.display()
+    );
+    std::fs::create_dir_all(&mailbox)
+        .map_err(|e| anyhow::anyhow!("creating sandbox mailbox {}: {e}", mailbox.display()))?;
+    Ok(vec![mailbox])
+}
+
 /// The `sandbox.filesystem` path entries (`allowWrite` or `denyWrite`) for
 /// `paths`: `//<abs>` (Claude
 /// Code's absolute-path anchor) per path. A path [`root_rule_path`] cannot

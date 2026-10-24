@@ -168,17 +168,6 @@ pub(crate) fn handle_claim(spec: &str, worktree: Option<&str>) -> Result<()> {
 
     let cwd = std::env::current_dir().ok();
     let role = claim_role(&project_root, cwd.as_deref());
-    // BUG-2207 (2): a claim inside an implementer lane (a `claude --bg` lane
-    // the advisor pre-created with `aida worktree add --role implementer`) is
-    // the lane taking its spec: set the owner and move it to In Progress, as
-    // the standalone-implementer launch does.
-    // trace:STORY-1662 | ai:claude
-    let in_implementer_lane = role.as_deref() == Some("implementer")
-        && cwd
-            .as_deref()
-            .and_then(|cwd| crate::lane_env::lane_lease_for_cwd(&project_root, cwd))
-            .is_some();
-
     let id = match existing {
         Some(l) => l.id.clone(),
         None => uuid::Uuid::now_v7().to_string().replace('-', "")[..12].to_string(),
@@ -226,16 +215,19 @@ pub(crate) fn handle_claim(spec: &str, worktree: Option<&str>) -> Result<()> {
     std::fs::create_dir_all(leases_dir(&project_root))?;
     // STORY-1429: atomic, so a reader never sees a half-written lease.
     // trace:STORY-1429 | ai:claude
-    aida_core::write_atomic(
-        &lease_path(&project_root, &id),
-        toml::to_string_pretty(&lease)?,
+    let path = lease_path(&project_root, &id);
+    let bytes = toml::to_string_pretty(&lease)?;
+    aida_core::write_atomic(&path, &bytes)?;
+    // trace:BUG-2215 | ai:codex
+    finish_claim_write(
+        &path,
+        bytes.as_bytes(),
+        refreshed,
+        persist_claim_status(&project_root, &req, &lease.owner),
     )?;
     // BUG-1918: durable record of who claimed this spec, surviving release.
     // trace:BUG-1918 | ai:claude
     crate::review_authority::record_authoring_lease(&project_root, &lease);
-    if in_implementer_lane {
-        crate::standalone_implementer::claim_spec(&project_root, &scope);
-    }
 
     let id_short: String = id.chars().take(8).collect();
     if refreshed {
@@ -297,6 +289,22 @@ pub(crate) fn handle_unclaim(spec: &str) -> Result<()> {
             Err(e) => return Err(e).with_context(|| format!("removing {}", path.display())),
         }
     }
+    // Only a confirmed absence of a PR permits returning work to Approved.
+    // A failed forge lookup retains In Progress, as does another live lease.
+    // trace:BUG-2215 | ai:codex
+    let others = list_leases(&project_root);
+    let live_sessions = process_probe::probe_live_claude_sessions();
+    let held = others.iter().any(|l| {
+        l.scope.eq_ignore_ascii_case(&scope)
+            && matches!(
+                lease_state_for(l, &live_sessions, chrono::Utc::now()),
+                LeaseState::Live
+            )
+    });
+    if !held && req.status == RequirementStatus::InProgress {
+        let lookup = detect_open_pr_for_spec(&project_root, &scope);
+        persist_unclaim_status(&project_root, &req, &lookup)?;
+    }
     println!(
         "{} released claim on {} ({} lease{} removed)",
         crate::glyph(crate::glyphs::Glyph::Check).green().bold(),
@@ -305,6 +313,91 @@ pub(crate) fn handle_unclaim(spec: &str) -> Result<()> {
         if removed == 1 { "" } else { "s" },
     );
     Ok(())
+}
+
+// A failed invocation must not leave a newly acquired claim behind. Never
+// delete a preexisting refresh or a lease changed since our write.
+// trace:BUG-2215 | ai:codex
+fn finish_claim_write(
+    path: &std::path::Path,
+    bytes: &[u8],
+    refreshed: bool,
+    result: Result<bool>,
+) -> Result<()> {
+    if let Err(error) = result {
+        if !refreshed && std::fs::read(path).ok().as_deref() == Some(bytes) {
+            std::fs::remove_file(path).with_context(|| {
+                format!(
+                    "claim status failed ({error:#}); removing new claim {}",
+                    path.display()
+                )
+            })?;
+        }
+        return Err(error);
+    }
+    Ok(())
+}
+
+// trace:BUG-2215 | ai:codex
+fn claim_status(req: &mut Requirement, claimant: &str) -> bool {
+    let bumped = approved_to_in_progress_bump(req, aida_core::conflict::SESSION_START_AUTHOR);
+    if matches!(req.status, RequirementStatus::InProgress) && req.owner != claimant {
+        req.owner = claimant.to_string();
+        req.modified_at = chrono::Utc::now();
+    }
+    bumped
+}
+
+// Re-read the target under the store writer lock; a concurrent completion or
+// deliberate status edit must not be overwritten by the earlier lookup.
+// trace:BUG-2215 | ai:codex
+pub(crate) fn persist_claim_status(
+    project_root: &std::path::Path,
+    target: &Requirement,
+    claimant: &str,
+) -> Result<bool> {
+    let storage = claim_storage(project_root)?;
+    let mut bumped = false;
+    storage.update_spec_atomically(target, |req| bumped = claim_status(req, claimant))?;
+    Ok(bumped)
+}
+
+// trace:BUG-2215 | ai:codex
+fn claim_storage(project_root: &std::path::Path) -> Result<Storage> {
+    let path = match detect_distributed_store_from(project_root) {
+        Some(path) => path,
+        None => aida_core::resolve_requirements_path_in(
+            project_root,
+            None,
+            None,
+            std::path::Path::new(""),
+        )?,
+    };
+    Ok(Storage::new(path))
+}
+
+// trace:BUG-2215 | ai:codex
+fn persist_unclaim_status(
+    project_root: &std::path::Path,
+    target: &Requirement,
+    pr: &PrLookup,
+) -> Result<()> {
+    claim_storage(project_root)?.update_spec_atomically(target, |req| {
+        unclaim_status(req, pr);
+    })?;
+    Ok(())
+}
+
+// trace:BUG-2215 | ai:codex
+fn unclaim_status(req: &mut Requirement, pr: &PrLookup) {
+    if req.status == RequirementStatus::InProgress && matches!(pr, PrLookup::NoOpenPr) {
+        aida_core::conflict::set_status_recorded(
+            req,
+            RequirementStatus::Approved,
+            aida_core::conflict::SESSION_START_AUTHOR,
+        );
+        req.modified_at = chrono::Utc::now();
+    }
 }
 
 /// Record a spec-scoped CLAIM so advisor-fanned work is visible to the
@@ -400,3 +493,7 @@ pub(crate) static UNCLAIM: crate::command_registry::CommandReg =
         },
         run: crate::command_registry::Handler::Early(run_unclaim),
     };
+
+#[cfg(test)]
+#[path = "tests/bug_2215_claim_status_tests.rs"]
+mod status_tests;

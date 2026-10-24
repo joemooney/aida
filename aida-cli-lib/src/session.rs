@@ -3013,7 +3013,13 @@ pub(crate) fn claude_contained_settings_json(write_roots: &[PathBuf]) -> Result<
             // the marker (not the empty grant) is what keeps host git off it.
             // trace:BUG-2131 | ai:claude
             // trace:TASK-1775 | ai:claude
-            contained_store_grant(&main, &store, aida_core::git_ops::mark_store_contained)
+            let mut paths =
+                contained_store_grant(&main, &store, aida_core::git_ops::mark_store_contained);
+            // trace:BUG-2218 | ai:codex
+            paths.extend(crate::contained_boundary::contained_mailbox_write_paths(
+                &main,
+            )?);
+            paths
         }
         None => Vec::new(),
     };
@@ -3775,6 +3781,12 @@ pub(crate) fn os_wrap_rw_paths(worktree_root: &Path) -> Vec<PathBuf> {
         }
         None => vec![worktree_root.join(".aida-store")],
     };
+    // trace:BUG-2218 | ai:codex
+    let main = crate::main_worktree_root_from(worktree_root);
+    match crate::contained_boundary::contained_mailbox_write_paths(&main) {
+        Ok(paths) => rw_paths.extend(paths),
+        Err(e) => eprintln!("{e:#}"),
+    }
     if let Some(home) = crate::home_dir() {
         let cargo_home = std::env::var_os("CARGO_HOME")
             .map(PathBuf::from)
