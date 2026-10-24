@@ -264,3 +264,152 @@ fn task_2238_info_exclude_and_gitignore_do_not_hide_an_untracked_object() {
         assert!(err.is::<StoreDirty>(), "{hide}: {err:#}");
     }
 }
+
+/// A lease can be staged between a coordination writer's add and commit;
+/// mailbox/runtime dirt must not turn that window into a mandate refusal.
+// trace:BUG-2213 | ai:codex
+#[test]
+fn bug_2213_coordination_and_other_non_evidence_dirt_allow_a_snapshot() {
+    let (s, _) = store();
+    s.commit(
+        "coordination/leases/pr-17-reviewer.toml",
+        "lease = \"old\"\n",
+    );
+    s.commit("notes.txt", "old\n");
+    let before = s.snap();
+    std::fs::write(
+        s.path().join("coordination/leases/pr-17-reviewer.toml"),
+        "lease = \"renewed\"\n",
+    )
+    .unwrap();
+    s.git(&["add", "coordination/leases/pr-17-reviewer.toml"]);
+    std::fs::write(
+        s.path().join("coordination/leases/pr-18-new.toml"),
+        "lease = \"new\"\n",
+    )
+    .unwrap();
+    s.git(&["add", "coordination/leases/pr-18-new.toml"]);
+    std::fs::create_dir_all(s.path().join("coordination/mailbox")).unwrap();
+    std::fs::write(s.path().join("coordination/mailbox/message.toml"), "mail\n").unwrap();
+    std::fs::write(s.path().join("notes.txt"), "changed\n").unwrap();
+    std::fs::create_dir_all(s.path().join("objects-backup")).unwrap();
+    std::fs::write(
+        s.path().join("objects-backup/untracked.yaml"),
+        "not evidence\n",
+    )
+    .unwrap();
+    let status = s.git(&["status", "--porcelain"]);
+    assert!(
+        status.contains("M  coordination/leases/pr-17-reviewer.toml"),
+        "{status}"
+    );
+    assert!(
+        status.contains("A  coordination/leases/pr-18-new.toml"),
+        "{status}"
+    );
+    let after = store_snapshot(s.path()).expect("non-evidence dirt permits a snapshot");
+    assert!(store_snapshot_stable(s.path(), &before, &after));
+}
+
+/// Scoped status must still reject indexed and working-tree changes of any
+/// kind below objects/, not merely YAML modifications seen by porcelain.
+// trace:BUG-2213 | ai:codex
+#[test]
+fn bug_2213_dirty_objects_refuse_including_staged_deletions_and_renames() {
+    for change in [
+        "modified",
+        "staged",
+        "untracked",
+        "untracked-other",
+        "deleted",
+        "renamed-out",
+        "root-replaced",
+    ] {
+        let (s, _) = store();
+        let object = s.path().join("objects/TASK/000/TASK-1.yaml");
+        match change {
+            "modified" | "staged" => {
+                std::fs::write(&object, "tags: [security]\n").unwrap();
+                if change == "staged" {
+                    s.git(&["add", "objects/"]);
+                }
+            }
+            "untracked" => {
+                std::fs::write(
+                    s.path().join("objects/TASK/000/TASK-2.yaml"),
+                    "tags: [security]\n",
+                )
+                .unwrap();
+            }
+            "untracked-other" => {
+                std::fs::create_dir_all(s.path().join("objects/new-subdir")).unwrap();
+                std::fs::write(
+                    s.path().join("objects/new-subdir/not-yaml.txt"),
+                    "new evidence\n",
+                )
+                .unwrap();
+            }
+            "deleted" => {
+                s.git(&["rm", "objects/TASK/000/TASK-1.yaml"]);
+            }
+            "renamed-out" => {
+                s.git(&["mv", "objects/TASK/000/TASK-1.yaml", "removed-object.yaml"]);
+            }
+            "root-replaced" => {
+                std::fs::remove_dir_all(s.path().join("objects")).unwrap();
+                std::fs::write(s.path().join("objects"), "directory replaced\n").unwrap();
+            }
+            _ => unreachable!(),
+        }
+        let error = store_snapshot(s.path()).unwrap_err();
+        assert!(error.is::<StoreDirty>(), "{change}: {error:#}");
+    }
+}
+
+/// Git's literal mode disables :(...) magic. The production pathspec must
+/// keep both real dirt queries nonempty under every inherited pathspec mode,
+/// without mutating the process environment shared by concurrent tests.
+// trace:BUG-2213 | ai:codex
+#[test]
+fn bug_2213_inherited_pathspec_modes_cannot_hide_object_dirt() {
+    let (s, _) = store();
+    std::fs::write(
+        s.path().join("objects/TASK/000/TASK-1.yaml"),
+        "tags: [security]\n",
+    )
+    .unwrap();
+    std::fs::write(s.path().join("objects/untracked.yaml"), "security\n").unwrap();
+    let modes = [
+        "GIT_LITERAL_PATHSPECS",
+        "GIT_GLOB_PATHSPECS",
+        "GIT_NOGLOB_PATHSPECS",
+        "GIT_ICASE_PATHSPECS",
+    ];
+    for mode in std::iter::once(None).chain(modes.iter().copied().map(Some)) {
+        for args in [
+            vec![
+                "status",
+                "--porcelain=v1",
+                "--untracked-files=all",
+                "--no-renames",
+                "--",
+                STORE_OBJECTS_PATH,
+            ],
+            vec!["ls-files", "--others", "-z", "--", STORE_OBJECTS_PATH],
+        ] {
+            let mut cmd = snapshot_command(s.path());
+            for key in modes {
+                cmd.env_remove(key);
+            }
+            if let Some(key) = mode {
+                cmd.env(key, "1");
+            }
+            let out = cmd.args(&args).output().unwrap();
+            assert!(out.status.success(), "{mode:?} {args:?}: {out:?}");
+            assert!(
+                !out.stdout.is_empty(),
+                "{mode:?} {args:?} hid object evidence"
+            );
+        }
+    }
+}
