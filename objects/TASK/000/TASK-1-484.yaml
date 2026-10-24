@@ -1,0 +1,29 @@
+id: 01a16ca7-b9aa-7741-a011-cd9adeb0befd
+spec_id: TASK-1-484
+title: 'cosmetic: should_notify_emergency always notifies on a refusal, so a persistent…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on STORY-1916, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  cosmetic: should_notify_emergency always notifies on a refusal, so a persistent plan bug re-notifies every 30 m with no dedupe (disk_emergency.rs:870).
+
+  PR: #2859
+  Reviewed sha: d00e3bc02715fe44ef1e5cb9db2ec6ee8342cc80
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-24T06:44:53.802909080Z
+modified_at: 2026-10-24T06:44:53.802909080Z
+req_type: Task
+tags:
+- carried-from:STORY-1916
+- finding-hash:083a671c
+- from-review:PR-2859
+- kind:carried-forward
+filed_at:
+  code_sha: 4d3777338645602470178f0ab2e63309f71520e2
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 43a38f38d2
+  vendor: claude
