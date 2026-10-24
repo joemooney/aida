@@ -305,3 +305,24 @@ fn the_evidence_fetch_brings_a_forge_moved_head() {
     crate::pr_cmd::fetch_ship_refs(&clone, "main", "pr").expect("fetch");
     assert!(have(&moved), "the fetch must bring the moved head");
 }
+
+/// TASK-2323: every `mandate_ship_cover` call site passes the PR's head
+/// branch, so the evidence fetch runs on the rework-release path too — not
+/// only on ship's and the train's.
+// trace:BUG-2214 | ai:claude
+#[test]
+fn every_mandate_cover_call_site_passes_the_head_branch() {
+    let rework = include_str!("../rework_hold_release.rs")
+        .split("mandate: &||")
+        .nth(1)
+        .and_then(|s| s.split("comment:").next())
+        .expect("the rework-release mandate closure");
+    assert!(
+        rework.contains("head_branch.as_deref()"),
+        "the rework-release cover must pass the PR's head branch"
+    );
+    assert!(
+        rework.contains("change_metadata"),
+        "the head branch comes from the forge's change metadata"
+    );
+}

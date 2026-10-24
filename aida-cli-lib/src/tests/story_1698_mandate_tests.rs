@@ -565,7 +565,19 @@ fn pr_ship_consults_the_mandate_at_every_hold_gate_and_before_the_merge() {
     assert!(handler.contains("interactive_tty || mandate_cover.is_ok()"));
     assert!(handler.contains("mandate_cover = mandate_cover_now();"));
     assert!(handler.contains("floor_authority || mandate_release.is_some()"));
-    assert!(handler.contains("record_mandate_clearance("));
+    // BUG-2214: the ledger clearance moved into the one shared release
+    // sequence, which ship and the train both call. trace:BUG-2214 | ai:claude
+    assert!(handler.contains("release_hold_under_mandate("));
+    let shared = include_str!("../mandate_ship.rs")
+        .split("pub(crate) fn release_hold_under_mandate(")
+        .nth(1)
+        .expect("release_hold_under_mandate");
+    assert!(shared.contains("record_mandate_clearance("));
+    let train = include_str!("../pr_train.rs");
+    assert!(
+        train.contains("release_hold_under_mandate("),
+        "the train releases through the shared sequence, not a copy"
+    );
     let before_merge = handler.split(".merge_change(").next().expect("merge call");
     assert!(
         before_merge.contains("mandate_still_active(&cover.id)"),

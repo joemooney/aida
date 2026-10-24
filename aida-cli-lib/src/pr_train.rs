@@ -36,12 +36,18 @@ const PARALLEL_SUB_TRAINS: usize = 2;
 
 /// One PR the train may land: its number, the head its approval covers, and
 /// the commit message `aida pr ship` would have given its squash merge.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub(crate) struct Member {
     pub pr: u64,
     pub head: String,
     pub subject: String,
     pub body: String,
+    /// BUG-2214: the mandate cover under which the land step releases this
+    /// member's merge-hold, from the gate's most recent cover check (the
+    /// pre-land re-gate refreshes it under the merge lease). `None` = no hold
+    /// to release.
+    // trace:BUG-2214 | ai:claude
+    pub release: Option<crate::pr_cmd::MandateCover>,
 }
 
 /// A member left off main, and why.
@@ -443,14 +449,33 @@ pub(crate) fn member_metadata_refusal(
 }
 
 /// The forge-label half of the member gate, the same three rules
-/// merge-hold-gate applies. The train never releases a hold.
+/// merge-hold-gate applies. BUG-2214: a hold label is deferred to the mandate
+/// cover when a typed marker exists under an active mandate
+/// (`marker_under_mandate`); a label-only hold (no marker) stays refused —
+/// label-only holds are human-only.
+// trace:BUG-2214 | ai:claude
 // trace:STORY-1690 | ai:claude
-pub(crate) fn member_label_refusal(c: &crate::merge_hold::PinnedChange) -> Option<String> {
+pub(crate) fn member_label_refusal(
+    c: &crate::merge_hold::PinnedChange,
+    marker_under_mandate: bool,
+) -> Option<String> {
     if c.hold_label {
-        return Some(
-            "it carries an active aida:merge-hold label; the train never releases a hold"
-                .to_string(),
-        );
+        if !marker_under_mandate {
+            return Some(
+                "it carries an active aida:merge-hold label; the train never releases a hold"
+                    .to_string(),
+            );
+        }
+        // A live deferred hold: `recorded` without `cleared` is its normal
+        // state; a clearance label beside a live hold is inconsistent.
+        if c.cleared_label {
+            return Some(
+                "it carries aida:merge-hold and aida:merge-hold-cleared together; the label \
+                 state is inconsistent"
+                    .to_string(),
+            );
+        }
+        return None;
     }
     if c.recorded_label && !c.cleared_label {
         return Some("it was held before and has no recorded clearance".to_string());
@@ -459,6 +484,40 @@ pub(crate) fn member_label_refusal(c: &crate::merge_hold::PinnedChange) -> Optio
         return Some("its clearance label has no matching recorded hold".to_string());
     }
     None
+}
+
+/// BUG-2214 (advisor's wait-ci condition): may the train treat this red CI as
+/// green-pending-release? Only when every non-green check is
+/// `merge-hold-gate`, at least one member is admitted for a mandate release,
+/// and every member's live forge labels agree with the member gate's rules:
+/// the BUG-1693 pair rule holds for all, and a hold label appears only on a
+/// member the mandate covers. Unreadable rows or labels fail closed.
+// trace:BUG-2214 | ai:claude
+pub(crate) fn hold_gate_tolerance(
+    rows: &[crate::ci_gate::CheckRow],
+    cars: &[Car],
+    mut labels: impl FnMut(u64) -> std::result::Result<Option<crate::merge_hold::PinnedChange>, String>,
+) -> bool {
+    let hold_gate = |name: &str| name.eq_ignore_ascii_case(crate::ci_gate::HOLD_GATE_CHECK);
+    if !rows
+        .iter()
+        .any(|r| hold_gate(&r.name) && r.bucket != "pass")
+    {
+        return false;
+    }
+    if rows
+        .iter()
+        .any(|r| !hold_gate(&r.name) && !matches!(r.bucket.as_str(), "pass" | "skipping"))
+    {
+        return false;
+    }
+    if !cars.iter().any(|c| c.member.release.is_some()) {
+        return false;
+    }
+    cars.iter().all(|car| match labels(car.member.pr) {
+        Ok(Some(c)) => member_label_refusal(&c, car.member.release.is_some()).is_none(),
+        _ => false,
+    })
 }
 
 pub(crate) fn short(sha: &str) -> &str {
@@ -579,6 +638,24 @@ impl Rails for LocalRails<'_> {
 
 // ─────────────────────────── the live train ────────────────────────────
 
+/// `gh` in the project root, returning its stdout.
+// trace:BUG-2214 | ai:claude
+fn gh_stdout(repo: &Path, args: &[&str]) -> Result<String> {
+    let out = std::process::Command::new("gh")
+        .current_dir(repo)
+        .args(args)
+        .stdin(std::process::Stdio::null())
+        .output()
+        .with_context(|| format!("could not run `gh {}`", args.join(" ")))?;
+    anyhow::ensure!(
+        out.status.success(),
+        "`gh {}` failed: {}",
+        args.join(" "),
+        String::from_utf8_lossy(&out.stderr).trim()
+    );
+    Ok(String::from_utf8_lossy(&out.stdout).trim_end().to_string())
+}
+
 /// `git` in the main clone with origin's stored credentials kept out of argv
 /// (BUG-2181), for the calls that contact origin.
 fn origin_git(repo: &Path, args: &[&str]) -> Result<String> {
@@ -652,14 +729,21 @@ pub(crate) trait MemberChecks {
     fn interactive_tty(&self) -> bool;
     /// STORY-1698: whether an active mandate covers merging this member;
     /// `Err(None)` when there is no mandate, `Err(Some(why))` when one
-    /// refuses.
+    /// refuses. BUG-2214: `Ok` carries the cover so the land step can
+    /// release a hold under it.
+    // trace:BUG-2214 | ai:claude
     fn mandate_cover(
         &mut self,
         pr: u64,
         ids: &[String],
         head_ref: &str,
         head: &str,
-    ) -> std::result::Result<(), Option<String>>;
+    ) -> std::result::Result<crate::pr_cmd::MandateCover, Option<String>>;
+    /// BUG-2214: is a fire-fighting mandate active at this instant? Gates
+    /// only whether a held member's judgment defers to the cover; the cover
+    /// itself re-reads the mandate.
+    // trace:BUG-2214 | ai:claude
+    fn mandate_active(&self) -> bool;
 }
 
 /// The spec IDs a member ships, read the way ship reads them: its branch and
@@ -749,15 +833,22 @@ pub(crate) fn gate_member_with(
             "a live drive owns it ({detail}); its independent reviewer gates the merge"
         ));
     }
-    if let Some(reason) = checks.hold_marker(pr) {
-        return Err(format!(
-            "it is under a merge hold ({}); the train never releases a hold",
-            reason.trim()
-        ));
+    // BUG-2214 (Q2 ruling): with no active mandate a held member refuses
+    // byte-identically to before; under one, the judgment defers to the
+    // mandate cover below, where the ids and the head exist.
+    // trace:BUG-2214 | ai:claude
+    let held = checks.hold_marker(pr);
+    if let Some(reason) = &held {
+        if !checks.mandate_active() {
+            return Err(format!(
+                "it is under a merge hold ({}); the train never releases a hold",
+                reason.trim()
+            ));
+        }
     }
     match checks.labels(pr) {
         Ok(Some(c)) => {
-            if let Some(why) = member_label_refusal(&c) {
+            if let Some(why) = member_label_refusal(&c, held.is_some()) {
                 return Err(why);
             }
         }
@@ -798,16 +889,47 @@ pub(crate) fn gate_member_with(
     let ids = member_spec_ids(&head_ref, &meta.title, &subject, &body);
     let records = checks.spec_records(&ids);
     let tty = checks.interactive_tty();
+    // BUG-2214: the cover is read at most once per gate run — the supervised
+    // gate and the hold release share it. trace:BUG-2214 | ai:claude
+    let mut cover_slot: Option<std::result::Result<crate::pr_cmd::MandateCover, Option<String>>> =
+        None;
     if let Some(why) = member_spec_policy_refusal(records, tty, || {
-        checks.mandate_cover(pr, &ids, &head_ref, &head)
+        let cover = checks.mandate_cover(pr, &ids, &head_ref, &head);
+        let outcome = cover.as_ref().map(|_| ()).map_err(Clone::clone);
+        cover_slot = Some(cover);
+        outcome
     }) {
         return Err(why);
     }
+    // BUG-2214: a held member is admitted exactly when ship's mandate cover
+    // would release its hold; the release itself happens at land time, under
+    // the merge lease, through ship's own release sequence.
+    // trace:BUG-2214 | ai:claude
+    let release = match &held {
+        None => None,
+        Some(reason) => {
+            let cover = match cover_slot {
+                Some(cover) => cover,
+                None => checks.mandate_cover(pr, &ids, &head_ref, &head),
+            };
+            match cover {
+                Ok(cover) => Some(cover),
+                Err(why) => {
+                    return Err(format!(
+                        "it is under a merge hold ({}); the mandate does not release it{}",
+                        reason.trim(),
+                        why.map(|w| format!(" — {w}")).unwrap_or_default(),
+                    ))
+                }
+            }
+        }
+    };
     Ok(Member {
         pr,
         head,
         subject,
         body,
+        release,
     })
 }
 
@@ -919,11 +1041,12 @@ impl MemberChecks for LiveChecks<'_> {
         ids: &[String],
         head_ref: &str,
         head: &str,
-    ) -> std::result::Result<(), Option<String>> {
+    ) -> std::result::Result<crate::pr_cmd::MandateCover, Option<String>> {
+        let hold_root = crate::pr_cmd::pr_ship_hold_root(self.project_root);
         crate::pr_cmd::mandate_ship_cover(
             self.project_root,
             self.main_worktree,
-            &crate::pr_cmd::pr_ship_hold_root(self.project_root),
+            &hold_root,
             pr,
             ids,
             Some(head_ref),
@@ -932,11 +1055,30 @@ impl MemberChecks for LiveChecks<'_> {
             crate::mandate::ship_decision,
             true,
         )
-        .map(|_| ())
         .map_err(|r| match r {
             crate::mandate::MandateRefusal::NoMandate => None,
-            r => Some(r.message(pr)),
+            r => {
+                // BUG-2214: parity with ship's mandate_refusal_note — a
+                // refusing cover is recorded, whichever surface asked.
+                // trace:BUG-2214 | ai:claude
+                let message = r.message(pr);
+                crate::events::record_gate_held(
+                    &hold_root,
+                    crate::events::GATE_MANDATE_SHIP,
+                    None,
+                    Some(pr),
+                    &message,
+                );
+                crate::mandate_drive::ship_refused(self.main_worktree, pr, &message);
+                Some(message)
+            }
         })
+    }
+    fn mandate_active(&self) -> bool {
+        matches!(
+            crate::mandate::current_state(),
+            crate::mandate::MandateState::Active(_)
+        )
     }
 }
 
@@ -1103,7 +1245,44 @@ pub(crate) trait TrainForge {
     fn gate(&mut self, pr: u64) -> std::result::Result<Member, String>;
     /// Push `train`'s tip to `branch` and open its train PR.
     fn open(&mut self, train: &Built, branch: &str) -> Result<crate::forge::ChangeRef>;
-    fn wait_ci(&mut self, change: &crate::forge::ChangeRef) -> Result<CiVerdict>;
+    /// BUG-2214: `train` lets the live wait tolerate a merge-hold-gate red
+    /// that is fully explained by admitted held members the mandate covers.
+    fn wait_ci(&mut self, change: &crate::forge::ChangeRef, train: &Built) -> Result<CiVerdict>;
+    /// BUG-2214: release `member`'s merge-hold under its mandate cover,
+    /// through ship's own release sequence, returning the cleared record for
+    /// a re-arm. The default fails closed: a runner that cannot release
+    /// ejects the member.
+    // trace:BUG-2214 | ai:claude
+    fn release_hold(
+        &mut self,
+        member: &Member,
+    ) -> std::result::Result<crate::merge_hold::MergeHoldRecord, String> {
+        Err(format!(
+            "PR-{}: this train runner cannot release a merge-hold",
+            member.pr
+        ))
+    }
+    /// BUG-2214: put `record`'s hold back after a failure between its release
+    /// and the merge; the returned text describes the outcome for the
+    /// ejection reason.
+    // trace:BUG-2214 | ai:claude
+    fn rearm_hold(&mut self, record: &crate::merge_hold::MergeHoldRecord) -> String {
+        format!(
+            " PR-{}'s released hold was NOT re-armed (this runner cannot); a human must re-place it.",
+            record.pr
+        )
+    }
+    /// BUG-2214: after member releases, re-run the train PR's merge-hold-gate
+    /// (a body edit re-runs it) and wait for green, re-checking that every
+    /// mandate in `covers` is still active. The default fails closed.
+    // trace:BUG-2214 | ai:claude
+    fn hold_gate_green_after_release(
+        &mut self,
+        _change: &crate::forge::ChangeRef,
+        _covers: &[String],
+    ) -> Result<bool> {
+        Ok(false)
+    }
     /// Close a train PR that will not merge, and delete its branch.
     fn retire(&mut self, change: &crate::forge::ChangeRef, why: &str);
     /// Rebase-merge the train PR, pinned to `tip`.
@@ -1202,7 +1381,7 @@ impl TrainForge for LiveTrainForge<'_> {
         })
     }
 
-    fn wait_ci(&mut self, change: &crate::forge::ChangeRef) -> Result<CiVerdict> {
+    fn wait_ci(&mut self, change: &crate::forge::ChangeRef, train: &Built) -> Result<CiVerdict> {
         use crate::forge::{CheckRegistration, CiState};
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(600);
         loop {
@@ -1220,10 +1399,36 @@ impl TrainForge for LiveTrainForge<'_> {
         }
         Ok(match self.forge.watch_ci(change)? {
             CiState::Success => CiVerdict::Green,
-            other => CiVerdict::Red(format!(
-                "train PR #{} CI {other:?}: {}",
-                change.id, change.url
-            )),
+            other => {
+                // BUG-2214: ship tolerates a merge-hold-gate red while the
+                // hold it will release is still armed (BUG-1180); the train
+                // does the same for admitted held members, re-verifying every
+                // member's live labels. trace:BUG-2214 | ai:claude
+                let tolerated = self.forge.check_rows(change).is_ok_and(|rows| {
+                    hold_gate_tolerance(&rows, &train.cars, |pr| {
+                        crate::merge_hold::fetch_pinned_change(
+                            &self.project_root,
+                            self.forge.kind(),
+                            pr,
+                        )
+                        .map_err(|e| e.to_string())
+                    })
+                });
+                if tolerated {
+                    println!(
+                        "  train PR #{} is green except `{}` — explained by mandate-covered \
+                         member holds; the land step releases them",
+                        change.id,
+                        crate::ci_gate::HOLD_GATE_CHECK
+                    );
+                    CiVerdict::Green
+                } else {
+                    CiVerdict::Red(format!(
+                        "train PR #{} CI {other:?}: {}",
+                        change.id, change.url
+                    ))
+                }
+            }
         })
     }
 
@@ -1256,6 +1461,99 @@ impl TrainForge for LiveTrainForge<'_> {
 
     fn parent(&mut self, commit: &str) -> Option<String> {
         rev_parse(&self.main_worktree, &format!("{commit}^1")).ok()
+    }
+
+    // trace:BUG-2214 | ai:claude
+    fn release_hold(
+        &mut self,
+        member: &Member,
+    ) -> std::result::Result<crate::merge_hold::MergeHoldRecord, String> {
+        let Some(cover) = member.release.as_ref() else {
+            return Err("no mandate cover was recorded for its hold".into());
+        };
+        let hold_root = crate::pr_cmd::pr_ship_hold_root(&self.project_root);
+        let record =
+            crate::merge_hold::read_hold_record(&hold_root, member.pr).ok_or_else(|| {
+                "its merge-hold marker vanished between the gate and the release; failing closed"
+                    .to_string()
+            })?;
+        // STORY-1698 parity: the mandate is re-read from disk immediately
+        // before the release that precedes the merge.
+        if !crate::pr_cmd::mandate_still_active(&cover.id) {
+            return Err(format!("mandate {} is no longer active", cover.id));
+        }
+        let change = crate::forge::ChangeRef {
+            id: member.pr,
+            url: String::new(),
+            branch: String::new(),
+            base: self.base.clone(),
+            title: None,
+        };
+        crate::pr_cmd::release_hold_under_mandate(
+            &hold_root,
+            &change,
+            cover,
+            &record,
+            None,
+            Some(&member.head),
+            "released by `aida pr train` under the mandate",
+        );
+        Ok(record)
+    }
+
+    // trace:BUG-2214 | ai:claude
+    fn rearm_hold(&mut self, record: &crate::merge_hold::MergeHoldRecord) -> String {
+        crate::pr_cmd::rearm_after_mandate_failure(
+            &crate::pr_cmd::pr_ship_hold_root(&self.project_root),
+            Some(record),
+            record.pr,
+        )
+    }
+
+    // trace:BUG-2214 | ai:claude
+    fn hold_gate_green_after_release(
+        &mut self,
+        change: &crate::forge::ChangeRef,
+        covers: &[String],
+    ) -> Result<bool> {
+        // Q3 ruling: a member's label change does not re-run the TRAIN PR's
+        // merge-hold-gate; a body edit does. One idempotent marker line,
+        // replaced rather than stacked, keeps the members line intact.
+        const MARKER: &str = "aida-train-gate-refresh:";
+        let body = gh_stdout(
+            &self.project_root,
+            &[
+                "pr",
+                "view",
+                &change.id.to_string(),
+                "--json",
+                "body",
+                "-q",
+                ".body",
+            ],
+        )?;
+        let mut kept: Vec<&str> = body
+            .lines()
+            .filter(|l| !l.trim_start().starts_with(MARKER))
+            .collect();
+        let refresh = format!("{MARKER} {}", chrono::Utc::now().to_rfc3339());
+        kept.push(&refresh);
+        let new_body = kept.join("\n");
+        gh_stdout(
+            &self.project_root,
+            &["pr", "edit", &change.id.to_string(), "--body", &new_body],
+        )?;
+        // Ship's BUG-1180 bounded wait, applied to the train PR.
+        let green = crate::ci_gate::wait_hold_gate_green(
+            self.forge,
+            change,
+            std::time::Duration::from_secs(180),
+            std::time::Duration::from_secs(10),
+        )?;
+        Ok(green
+            && covers
+                .iter()
+                .all(|id| crate::pr_cmd::mandate_still_active(id)))
     }
 
     fn member_landed(
@@ -1350,6 +1648,17 @@ impl<'a> ForgeRails<'a> {
         eprintln!("  warning: {line}");
         self.warnings.push(line);
     }
+
+    /// BUG-2214: re-arm every hold released during a landing that then
+    /// failed; the returned text (empty when nothing was released) appends to
+    /// the ejection reason or warning that caused it.
+    // trace:BUG-2214 | ai:claude
+    fn rearm_released(&mut self, released: &[crate::merge_hold::MergeHoldRecord]) -> String {
+        released
+            .iter()
+            .map(|record| self.ports.rearm_hold(record))
+            .collect()
+    }
 }
 
 impl Rails for ForgeRails<'_> {
@@ -1380,13 +1689,13 @@ impl Rails for ForgeRails<'_> {
         }
         // Every train's CI runs at once; wait for each in turn.
         let mut verdicts = Vec::new();
-        for change in &changes {
+        for (change, train) in changes.iter().zip(trains) {
             // A CI that cannot be read (none registered, an API error) is not
             // a red verdict: bisecting it would spend CI runs and eject every
             // member as "red alone". It stops the run with the real reason.
             let v = self
                 .ports
-                .wait_ci(change)
+                .wait_ci(change, train)
                 .with_context(|| format!("train PR #{}'s CI could not be read", change.id))?;
             if let CiVerdict::Red(why) = &v {
                 println!("  train PR #{} is red: {why}", change.id);
@@ -1425,12 +1734,16 @@ impl Rails for ForgeRails<'_> {
             return Ok(Landing::Stale);
         }
         // Re-gate every member right before the merge: a hold, a new push or
-        // a withdrawn approval since the build ejects that member.
+        // a withdrawn approval since the build ejects that member. BUG-2214:
+        // the fresh gate re-runs the mandate cover under the lease, so a
+        // lapsed mandate ejects a held member here with its hold intact.
+        // trace:BUG-2214 | ai:claude
         let mut refused = Vec::new();
+        let mut fresh: Vec<Member> = Vec::new();
         for car in &train.cars {
             let pr = car.member.pr;
             match self.ports.gate(pr) {
-                Ok(m) if m.head == car.member.head => {}
+                Ok(m) if m.head == car.member.head => fresh.push(m),
                 Ok(m) => refused.push(Ejected {
                     pr,
                     reason: format!(
@@ -1449,20 +1762,82 @@ impl Rails for ForgeRails<'_> {
             );
             return Ok(Landing::Refused(refused));
         }
+        // BUG-2214: release each admitted held member exactly as ship would —
+        // under the lease, after the fresh cover — then the train PR's
+        // merge-hold-gate must re-run green before the merge. Any failure
+        // after a release re-arms every released hold. trace:BUG-2214 | ai:claude
+        let mut released: Vec<crate::merge_hold::MergeHoldRecord> = Vec::new();
+        for member in fresh.iter().filter(|m| m.release.is_some()) {
+            match self.ports.release_hold(member) {
+                Ok(record) => released.push(record),
+                Err(why) => {
+                    let rearm = self.rearm_released(&released);
+                    self.retire(
+                        &change,
+                        "A member's merge-hold was not released; the train rebuilds.",
+                    );
+                    return Ok(Landing::Refused(vec![Ejected {
+                        pr: member.pr,
+                        reason: format!("its merge-hold was not released ({why}); re-train{rearm}"),
+                    }]));
+                }
+            }
+        }
+        if !released.is_empty() {
+            let covers: Vec<String> = fresh
+                .iter()
+                .filter_map(|m| m.release.as_ref().map(|c| c.id.clone()))
+                .collect();
+            match self.ports.hold_gate_green_after_release(&change, &covers) {
+                Ok(true) => {}
+                outcome => {
+                    let why = match outcome {
+                        Ok(_) => "the train PR's merge-hold-gate did not re-run green in time, \
+                                  or the mandate lapsed"
+                            .to_string(),
+                        Err(e) => {
+                            format!("the train PR's merge-hold-gate could not be read ({e:#})")
+                        }
+                    };
+                    let rearm = self.rearm_released(&released);
+                    self.retire(
+                        &change,
+                        &format!(
+                            "{why}; the released member holds are re-armed; the train rebuilds."
+                        ),
+                    );
+                    self.warn(format!("{why}.{rearm}"));
+                    return Ok(Landing::Stale);
+                }
+            }
+        }
         // The re-gate took several forge round trips, and a merge that does
         // not take the lease (the web UI, a raw `gh pr merge`) could have
         // moved main meanwhile; strict is off, so the forge would rebase the
         // train onto an untested main. Look again right before merging.
         if self.ports.fetch_main()? != train.base {
+            let rearm = self.rearm_released(&released);
+            if !rearm.is_empty() {
+                self.warn(format!("main moved after the hold release.{rearm}"));
+            }
             self.retire(
                 &change,
                 "Main moved while the train was re-checked; the train rebuilds.",
             );
             return Ok(Landing::Stale);
         }
-        self.ports
+        if let Err(e) = self
+            .ports
             .merge(&change, &train.tip)
-            .with_context(|| format!("train PR #{} was not merged", change.id))?;
+            .with_context(|| format!("train PR #{} was not merged", change.id))
+        {
+            // trace:BUG-2214 | ai:claude
+            let rearm = self.rearm_released(&released);
+            if !rearm.is_empty() {
+                self.warn(format!("the merge failed after the hold release.{rearm}"));
+            }
+            return Err(e);
+        }
         self.live.retain(|c| c.id != change.id);
         let main = match self.ports.fetch_main() {
             Ok(main) => main,

@@ -486,6 +486,83 @@ pub(crate) fn mandate_ship_cover(
     })
 }
 
+/// BUG-2214: the one mandate hold release — ship's exact sequence, shared by
+/// `aida pr ship` and the train's land step so the train never re-implements
+/// it: the release note, the marker clear, the ledger clearance
+/// (`advisor:<principal>` under the mandate id), the PR comment, the
+/// `MergeHoldChanged` event and the label removal. Each half is best-effort
+/// exactly as ship's was; the caller owns the post-release hold-gate wait and
+/// the re-arm on any later failure ([`rearm_after_mandate_failure`]).
+// trace:BUG-2214 | ai:claude
+// trace:STORY-1698 | ai:claude
+pub(crate) fn release_hold_under_mandate(
+    hold_root: &std::path::Path,
+    change: &crate::forge::ChangeRef,
+    cover: &MandateCover,
+    hold_record: &crate::merge_hold::MergeHoldRecord,
+    released_by_verdict: Option<crate::merge_hold::VerdictRef>,
+    head_sha: Option<&str>,
+    reason: &str,
+) {
+    use colored::Colorize;
+    let pr = hold_record.pr;
+    eprintln!(
+        "  {} PR-{pr}: merge-hold {}",
+        crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+        crate::mandate::release_note(&cover.id)
+    );
+    let _ = crate::merge_hold::clear_hold(hold_root, pr);
+    if let Err(err) = crate::merge_hold::record_mandate_clearance(
+        hold_root,
+        hold_record,
+        &cover.principal,
+        &cover.id,
+        released_by_verdict,
+    ) {
+        eprintln!(
+            "  {} could not record the mandate release on PR-{pr}: {err}",
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+        );
+    }
+    let _ = crate::forge::forge_for(hold_root).comment(
+        change,
+        &format!(
+            "Merge-hold {} (`{}`). Approval at `{}`; CI green.",
+            crate::mandate::release_note(&cover.id),
+            cover.principal,
+            head_sha.unwrap_or("?"),
+        ),
+    );
+    // BUG-1423: the coordination-seat release, in the event taxonomy.
+    // trace:BUG-1423 | ai:claude
+    let mut hold_event = crate::events::Event::new(
+        None,
+        "",
+        crate::events::EventKind::MergeHoldChanged {
+            pr: pr as u32,
+            placed: false,
+            // STORY-1698: a mandate release names the mandate.
+            reason: Some(format!(
+                "{} — {reason}",
+                crate::mandate::release_note(&cover.id)
+            )),
+            // BUG-2214: a mandate release is an advisor action and never
+            // attests as human.
+            principal: Some(format!("advisor:{}", cover.principal)),
+            human_attested: false,
+        },
+    );
+    hold_event.seat = crate::events::active_seat();
+    crate::events::emit(hold_root, &hold_event);
+    if let Err(err) = crate::merge_hold::sync_label(hold_root, pr, false) {
+        eprintln!(
+            "  {} {}",
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+            crate::pr_cmd::ship_unlabel_failure(pr, &err),
+        );
+    }
+}
+
 /// TASK-1960: the carry-over a mandate ship may rely on — `None` when the
 /// approval does not need one (or cannot get one: no moved head), else the
 /// proven head or the reason it failed. Proof only: the gate that pins the
