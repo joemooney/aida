@@ -6,17 +6,26 @@ description: |
   The scheduled-promote paragraph in docs/cli/11-dev.md does not say that a build whose checkout moved under it is recorded as refused, never routed, and retried on the next tick. The repository guide says so. Add one sentence so the CLI reference matches.
 
   Raised in review of PR-2850: https://github.com/joemooney/aida/pull/2850#issuecomment-6377435068
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-24T00:20:43.830534384Z
-modified_at: 2026-10-24T00:20:43.830534384Z
+modified_at: 2026-10-24T00:22:25.883803565Z
 req_type: Task
 tags:
 - docs
 - from-review:PR-2850
 - severity:cosmetic
+history:
+- id: 01a16b49-915b-7c11-807b-4a12dc579172
+  author: joe
+  timestamp: 2026-10-24T00:22:25.883794035Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: ca8515c11c9a5d520ee5c89e5c8861e267167476
   branch: pr-2850
