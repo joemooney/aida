@@ -25,7 +25,7 @@ off-mainline pause state and two terminal off-ramps (**Rejected** and
 | **Approved** | Agreed and well-formed — ready to be scheduled. | `aida edit SPEC --status approved` |
 | **Planned** | Scheduled into a sprint or work cycle. *Optional* — many specs go straight from Approved to In Progress. | `aida edit SPEC --status planned`, or `/aida-plan` decomposition |
 | **In Progress** | Someone (usually a Claude session) is actively writing the code. | `aida queue work SPEC` spawns the session and flips the status |
-| **Done** | The work is finished **on a branch** — a PR is open, but it has not landed on `main` yet. | `aida queue done SPEC`, or `/aida-pr` |
+| **Done** | The work is finished **on a branch** — a PR is open, but it has not landed on `main` yet. | `aida queue done SPEC` at the gated handoff |
 | **Completed** | The work is **merged to `main`**. This is the terminal status for a spec. | auto-bumped by `aida pull` when a commit referencing the spec lands on the default branch |
 | **Released** | Not a spec status — a *cross-spec* milestone. Many Completed specs aggregate into one tagged, published version. | `make release-minor` (or `scripts/release.sh`) |
 
@@ -312,7 +312,7 @@ stateDiagram-v2
     Approved --> Planned: aida edit --status planned
     Approved --> InProgress: aida queue work
     Planned --> InProgress: aida queue work
-    InProgress --> Done: aida queue done / aida-pr
+    InProgress --> Done: aida queue done after review handoff
     Done --> Completed: merge auto-bump (aida pull)
     Completed --> Released: release tag (scripts/release.sh)
 
@@ -353,7 +353,7 @@ verdict; an "approve" merges, a "request changes" sends it back to `InProgress`.
 ```mermaid
 stateDiagram-v2
     direction LR
-    InProgress --> Done: /aida-pr (push + open PR + queue reviewer)
+    InProgress --> Done: queue done after PR + review handoff
     Done --> UnderReview: aida queue work PR-N (reviewer picks it up)
     UnderReview --> NeedsAttention: RequestChanges verdict
     UnderReview --> Merged: Approve verdict + gh pr merge --squash
@@ -654,15 +654,20 @@ The branch is now reflected on `origin`. Still **In Progress** — a pushed
 branch with no PR is invisible to reviewers and to CI gating.
 
 - Command: `git push`. In the normal AIDA flow you never push by hand —
-  `/aida-pr` pushes the branch as its first step.
+  `/aida-pr` delegates commit, rebase, push, and PR opening to
+  `aida ship <SPEC> --no-merge`.
 
 ### PR opened
 
-A pull request exists on GitHub, awaiting CI and review. The spec flips to
-**Done**: the work is finished on a branch, but not on `main`.
+A pull request exists on GitHub, awaiting CI and review. The existing
+**Done** checkpoint records finished work on a branch, but not on `main`;
+opening the PR alone is not a status transition.
 
-- Command: `/aida-pr` — pushes the branch, opens the PR, and queues a
-  reviewer story so the work routes to the `reviewer` role automatically.
+- Command: `/aida-pr` — calls `aida ship <SPEC> --no-merge`, then explicitly
+  calls `aida pr auto-queue-review`. The ship command alone does not queue
+  review. Check the autoqueue outcome before claiming a reviewer handoff;
+  policy skips and failures require the reported follow-up. Completed still
+  requires merge; use the existing Done checkpoint only when its gates permit.
 
 ### Reviewed
 
