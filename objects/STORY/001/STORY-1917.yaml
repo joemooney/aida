@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T17:15:51.947160848Z
-modified_at: 2026-10-24T06:28:23.288758003Z
+modified_at: 2026-10-24T06:35:28.284886395Z
 req_type: Story
 comments:
 - id: 01a16c5c-c849-7771-b14f-e58f209acc0a
@@ -286,6 +286,28 @@ comments:
        Should the standard instructions wrapped around `--brief <file>` for `take` and `impl` (git merge origin/main, no force-push, `test_git::git_command()`, light gate rules, PR/mailbox reporting) live as a versioned template under `aida-core/templates/dispatch/` (synced via `make sync-templates`) or as a compiled constant in `dispatch.rs`?
   created_at: 2026-10-24T06:28:23.288758003Z
   modified_at: 2026-10-24T06:28:23.288758003Z
+- id: 01a16c9f-189c-7631-8469-9360c411224a
+  author: joe
+  content: |-
+    ADVISOR SIGNOFF 23:45 on SKETCH v1: SIGNED, with one change to (3) and these rulings.
+
+    CHANGE (3) Boundary B, a hard condition: no DispatchGrantBindGuard. The executor must never call bind_grant_to_pid to append its own proc: token to the advisor grant. A cron or systemd process that extends an advisor grant to itself is a non-human process minting advisor authority, which is exactly what BUG-1934 closed. Instead:
+    - Grant-requiring verbs (review, flow, train) run only in `aida dispatch serve`, a long-running executor the human starts from the advisor terminal after `eval "$(aida role enter advisor ...)"`. It inherits the grant's proc/sid/key binding the ordinary way, like today's dispatcher. If the grant is invalid or expired, serve refuses to start, and when it expires mid-run serve stops and leaves the requests Pending.
+    - The cron/schedule `dispatch tick` may execute ONLY take and impl. These are implementer lanes and need no grant. It leaves review, flow and train Pending, and `aida dispatch list` shows them as "waiting for serve".
+    - Tests: tick refuses a review/flow/train request; serve refuses to start without a bound grant; no code path writes to grant.binding outside role enter / bind-pid.
+
+    Q1: require `eval "$(aida role enter advisor ...)"` before the advisor session starts, so the key is inherited into bwrap. No MCP request tool and no turn-clock stamp in v1. A --bind-pid advisor that can't present gets a clear refusal naming the fix.
+    Q2: yes. Hold tick.lock / serve's claim lock only to move Pending to Running, and detach the per-request workers. Caps: 2 reviews, 4 flows, 1 train.
+    Q3: keep Scope::Dispatch explicit: add `aida mandate start --scope dispatch`, not on by default.
+    Q4: a versioned template under aida-core/templates/dispatch/, synced by make sync-templates.
+
+    Further conditions:
+    - .aida/dispatch/ must be gitignored, with a test that `git status` stays clean after a request.
+    - The train verb: ship first, then `gh pr update-branch` + fetch + ship when held and behind, then fall back to train. That matches the current ship-queue.sh. Hold-release behaviour follows BUG-2214 once it lands; don't duplicate BUG-2214 logic here.
+    - Slicing (3 PRs) as proposed, with serve added in Slice 2. Each PR carries (Refs STORY-1917); the last one carries (STORY-1917).
+  created_at: 2026-10-24T06:35:28.284886395Z
+  modified_at: 2026-10-24T06:35:28.284886395Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
 history:
 - id: 01a16c5e-51c4-73b2-b8a3-3b764dc7e5cd
   author: joe
