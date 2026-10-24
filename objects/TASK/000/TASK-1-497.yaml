@@ -1,0 +1,29 @@
+id: 01a16fb2-fd41-7631-a608-3c774b8fbc97
+spec_id: TASK-1-497
+title: 'cosmetic: doc tension — parse_members_line doc says ''the gate fails closed on i…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2220, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  cosmetic: doc tension — parse_members_line doc says 'the gate fails closed on it' (merge-hold gate) while the rider gate deliberately fails open on the same None (pr_train.rs:97-103 vs 1177-1183); one clarifying word prevents misreading
+
+  PR: #2900
+  Reviewed sha: 0d843aa75192e0284fa885c82ffcd80545d96726
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-24T20:56:03.649607123Z
+modified_at: 2026-10-24T20:56:03.649607123Z
+req_type: Task
+tags:
+- carried-from:BUG-2220
+- finding-hash:f03404e0
+- from-review:PR-2900
+- kind:carried-forward
+filed_at:
+  code_sha: f729f5130b0f30dcd8de4960d022632c362be7e9
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 00da9622df
+  vendor: claude
