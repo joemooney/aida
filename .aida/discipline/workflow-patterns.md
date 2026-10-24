@@ -479,7 +479,7 @@ Related: [[feedback_prove_a_test_fails_without_the_fix]],
 
 Operator directive (2026-07-02): "you had codex and agy, do not let this failure to connect be a limiting factor, begin to build resilience."
 
-I ran **Claude-only** subagent fan-out for a whole multi-wave batch session while **Codex and AGY sat idle** — a lapse. Reactivates [[feedback_lead_churn_direct_agents]] + [[feedback_multi_agent_budget_dispatching]] with a resilience lens.
+I ran a **Claude-only** in-session fan-out for a whole multi-wave batch session while **Codex and AGY sat idle** — a lapse. Reactivates [[feedback_lead_churn_direct_agents]] + [[feedback_multi_agent_budget_dispatching]] with a resilience lens.
 
 **Why:** over the session, dispatch was repeatedly threatened by single points of failure — the aida MCP server disconnected/reconnected many times, two worktree-isolated agents died mid-flight *before committing* (salvageable only via leftover worktree diffs), one agent stalled waiting on a background-test notification that never came (reaped child), and `aida pull` stranded autostashes on index-lock contention. None should halt progress.
 

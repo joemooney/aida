@@ -245,6 +245,9 @@ const LANE_LINES: &str = "export AIDA_SESSION_ROLE='implementer'\n\
                           unset AIDA_SESSION_GRANT\n\
                           unset AIDA_SESSION_PURPOSE\n";
 
+// trace:STORY-1662.AC1 | ai:claude
+// trace:STORY-1662.AC10 | ai:claude
+// trace:STORY-1662.AC14 | ai:claude
 #[test]
 fn a_bg_lane_takes_its_identity_from_the_worktree_lease() {
     let fx = fixture();
@@ -395,6 +398,7 @@ fn a_bg_lane_takes_its_identity_from_the_worktree_lease() {
 /// C1 and C3 at the hook: a lane-env that fails, or prints anything but the
 /// accepted lines, leaves no grant or purpose inside a linked worktree and
 /// sets no role; in the primary checkout it changes nothing.
+// trace:STORY-1662.AC20 | ai:claude
 #[test]
 fn the_hook_fails_closed_when_lane_env_cannot_answer() {
     use std::os::unix::fs::PermissionsExt;
@@ -451,6 +455,7 @@ fn the_hook_fails_closed_when_lane_env_cannot_answer() {
 /// reviewer worktree keeps its grant, both with an `aida` that reads the
 /// lane and with one that predates `internal lane-env` (clap refuses the
 /// subcommand; the hook must not read that as a lane-env failure).
+// trace:STORY-1662.AC16 | ai:claude
 #[test]
 fn a_reviewer_lane_keeps_the_reviewer_grant() {
     use std::os::unix::fs::PermissionsExt;
