@@ -3,13 +3,21 @@ spec_id: BUG-2219
 agreed_id: BUG-2219
 title: A merge train dies on a transient network failure (DNS) with no retry
 description: 'Observed 2026-10-23: train #2884 (2864+2869) failed on ''Could not resolve host: github.com'' and stopped, needing a manual re-run. ACCEPTANCE: train network steps (fetch, push, gh API) retry a transient failure (DNS, connection reset, 5xx) with bounded backoff, at most about 3 attempts. A non-transient failure (auth, 4xx, conflict) does not retry. When retries run out, the train reports which step failed and leaves a resumable state. Tests with an injected transient failure.'
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-24T12:27:12.571568239Z
-modified_at: 2026-10-24T12:27:12.571568239Z
+modified_at: 2026-10-24T12:28:37.756779206Z
 req_type: Bug
+history:
+- id: 01a16de2-6bfc-7ff0-af11-cb56c5989c13
+  author: joe
+  timestamp: 2026-10-24T12:28:37.756771470Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 6980be3ace8b7b9ae795e4347b8a9d4be01a287e
   branch: main
