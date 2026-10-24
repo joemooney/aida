@@ -3,12 +3,12 @@ spec_id: TASK-2270
 agreed_id: TASK-2270
 title: 'Sweep: config.lock self-heal follow-ups (post #2863)'
 description: 'Advisor 14:27. Members superseded into this sweep: TASK-2267 (route the git push -u call sites through the config.lock self-heal), TASK-2268 (move the misplaced BUG-2211 trace comment on mod sandbox_config_lock in lib.rs), TASK-2269 (branch -D under a re-created config.lock placeholder leaves a stale branch config section). Each needs a fix and a test. Start after #2863 merges.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T21:24:29.804361936Z
-modified_at: 2026-10-24T05:03:01.993552878Z
+modified_at: 2026-10-24T06:44:28.565255076Z
 req_type: Task
 relationships:
 - rel_type: Supersedes
@@ -141,6 +141,20 @@ history:
   session_id: 01a16c461cb7
   harness_version: 2.1.310 (Claude Code)
   changes: []
+- id: 01a16ca7-5710-71e1-8f63-f59e7e1344c8
+  author: aida-auto-bump
+  timestamp: 2026-10-24T06:44:28.560153154Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a16ca7-5715-7f71-a613-9a7ba6ac1382
+  timestamp: 2026-10-24T06:44:28.565250366Z
+  agent: aida
+  commit_sha: 4f811f287733604c76e19884b3c173875801bfe5
+  summary: 'Round 5: all TASK-2270 members met (push -u sites incl. queue recover/init/gitlab pre-clear + repair_push_upstream; lib.rs trace; branch -D section follow-up incl. combined short flags; doctor routing + scan wiring; site tests). CI green at de30ce4 (run 40065618211), 0 behind main; merge-hold-gate red only from the rework hold.'
+  review_verdict: approved
 filed_at:
   code_sha: 3dfcf99117e6efbaa8259155a576276ab424a335
   branch: main
@@ -149,11 +163,7 @@ filed_at:
   aida_build_sha: c51da86593
   vendor: claude
   session: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Code meets every TASK-2270 member criterion as approved in round 3, but PR CI is red at 02337fb: CI (lib-0) fails its ''Test time budget'' gate (tests pass) at both 07942e8 and 02337fb while main (7f5e7d9) is green.'
-  recovery_hint: address the review findings, move TASK-2270 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-24T05:02:42.025008549Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-24T06:44:28.560147134Z
+  completion_sha: 4f811f287733604c76e19884b3c173875801bfe5
