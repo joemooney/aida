@@ -5,16 +5,25 @@ title: dev rollback pin overwrites an unreported autopromote failure without the
 description: |
   aida-cli-lib/src/dev_build.rs:1254 and dev_autopromote.rs pin_rolled_back write autopromote.json unconditionally and without try_lock(live). A Failed record for another SHA with reported=false is replaced, so that failure is never routed; the next tick rebuilds it instead. Keep the pending report or skip the pin in that case, and take the lock.
   Raised in review of PR-2868: https://github.com/joemooney/aida/pull/2868#issuecomment-6379539506
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-24T03:54:16.455337480Z
-modified_at: 2026-10-24T03:54:16.455337480Z
+modified_at: 2026-10-24T03:59:16.193802985Z
 req_type: Task
 tags:
 - from-review:PR-2868
 - severity:minor
+history:
+- id: 01a16c10-16e1-7041-ba66-805a96521a1f
+  author: joe
+  timestamp: 2026-10-24T03:59:16.193800656Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: a9d3b605f17f4ca868fbbfb1e16c6f8e4da94976
   branch: pr-2868
