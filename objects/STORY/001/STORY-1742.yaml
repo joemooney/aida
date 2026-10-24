@@ -38,7 +38,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T22:02:03.191649035Z
-modified_at: 2026-10-24T17:46:52.419609184Z
+modified_at: 2026-10-24T18:07:32.479243020Z
 req_type: Story
 tags:
 - docs:impacted
@@ -111,6 +111,11 @@ comments:
     At the operator's requested stopping point, posted BUG-2017 SKETCH v2 without claiming/implementing that bug, notified the advisor, and returned to this slice's push/PR work.
   created_at: 2026-10-24T17:46:52.419609184Z
   modified_at: 2026-10-24T17:46:52.419609184Z
+- id: 01a16f18-b47f-7722-9395-bb01f1c53f44
+  author: codex
+  content: 'CI follow-up: pushed 4d6baae238 to PR #2904, correcting the JSON command inventory and qualifying push/pull flag examples in the setup manual. The exhaustive JSON audit/probe test and manual command/flag verifier pass locally; the generated audit also matches the live default-feature catalog byte-for-byte. Both previously failing CI lanes now pass, as do all other test lanes. The gates lane is still running. Per operator instruction, the PR will be marked ready once the full current-head CI run is green. Push execution remains disabled and this remains a non-completing slice.'
+  created_at: 2026-10-24T18:07:32.479243020Z
+  modified_at: 2026-10-24T18:07:32.479243020Z
 history:
 - id: 01a16ee2-ad7a-7b30-aaeb-ec8f892fbe76
   author: joe
