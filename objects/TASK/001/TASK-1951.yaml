@@ -59,12 +59,12 @@ description: |-
 
   ### TASK-1814: TASK-1801 follow-ups: nlink race on sibling evidence publish, residual path read in stamp_pr_review_verdict, metadata-only mtime read
   Non-blocking findings from PR #2712 round-2 review (PASS). (1) phase_gates.rs:508-509 publishes sibling evidence via hard_link(temp,dest) then remove_file(temp), so dest briefly has st_nlink=2, which the new nlink!=1 rule refuses, and a concurrent collision read (:513) or phase-4/ship read can fail spuriously. Publish with rename (or linkat then unlink before exposing), with a concurrency test. (2) pr_merge_gate.rs:248 stamp_pr_review_verdict re-reads and rewrites the just-recorded verdict by path; route it through the anchored handle reader, or narrow the AGENTS.md/OVERVIEW.md 'every production verdict reader' claim. (3) review_verdict.rs verdict_file_modified reads the full body (up to 1 MiB) just to get mtime; use a metadata-only handle open.
-status: NeedsAttention
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T15:55:48.750553278Z
-modified_at: 2026-10-24T02:47:08.585428126Z
+modified_at: 2026-10-24T05:03:44.522772033Z
 req_type: Task
 tags:
 - reconcile
@@ -893,6 +893,20 @@ history:
   session_id: 01a16bbc5093
   harness_version: 2.1.310 (Claude Code)
   changes: []
+- id: 01a16c4b-1d84-79f1-ac2f-9124b96e5bfe
+  author: aida-auto-bump
+  timestamp: 2026-10-24T05:03:44.516560029Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a16c4b-1d8a-7690-8563-c7f256852322
+  timestamp: 2026-10-24T05:03:44.522765415Z
+  agent: aida
+  commit_sha: 43a38f38d2ba2b6794ea3c74d8bb69f15a54f040
+  summary: 'Round fix verified: the TASK-2285 busy-lock test now hooks the first-pass hold re-read (after the head check), so the loser reaches with_hold_lock and refuses busy having written nothing; it discriminates against the pre-fix outside-lock path. Only that test changed since ad7f4260d8 (plus a main merge). CI green at 32aac566c2 (run 40057691767). Every TASK-1951 item verified by a test, a merged slice, or an evidenced no-change. Gate code: the operator merges.'
+  review_verdict: approved
 filed_at:
   code_sha: 6d590ed914dea5135a126f7dae6abb403adec66d
   branch: main
@@ -901,11 +915,7 @@ filed_at:
   aida_build_sha: 6d590ed914
   vendor: claude
   session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'CI lib-0 red at ad7f4260d8: the new TASK-2285 busy-lock test fails every run (its hook fires before the loser''s first head check), so the busy branch of release_with is still untested; every other TASK-1951 item is verified'
-  recovery_hint: address the review findings, move TASK-1951 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-24T02:47:08.585428126Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-24T05:03:44.516554232Z
+  completion_sha: 43a38f38d2ba2b6794ea3c74d8bb69f15a54f040
