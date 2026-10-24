@@ -1,0 +1,27 @@
+id: 01a16c35-9347-7be2-a8b3-c3ba5fa933ce
+spec_id: TASK-2311
+agreed_id: TASK-2311
+title: agent dispatch-health uses the 10-min guard heartbeat bound and tells sandboxed callers to salvage live host implementers
+description: |
+  aida-cli-lib/src/agent_launch.rs:639 agent_dispatch_health builds its context with build_agent_classify_context, which after PR-2868 (TASK-2280) carries the 10-minute GUARD_HEARTBEAT_TTL_SECS. A host implementer row that is heartbeat-only from a sandbox (session-start rows never re-heartbeat) becomes Stale after 10 minutes. With a dirty worktree, dispatch_report_row then advises "dead agent with dirty worktree; salvage ... before rebriefing" for a live agent. Use for_display(), or report heartbeat-only rows as unverified.
+
+  Raised in review of PR-2868: https://github.com/joemooney/aida/pull/2868#issuecomment-6379961377
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-24T04:40:12.871372397Z
+modified_at: 2026-10-24T04:40:12.871372397Z
+req_type: Task
+tags:
+- from-review:PR-2868
+- severity:minor
+filed_at:
+  code_sha: 377bb03376f846288b872a5f9938d5a250b33ecf
+  branch: pr-2868
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: d14a20aaae
+  vendor: claude
+  session: 01a16c31a1ea
+  harness_version: 2.1.310 (Claude Code)

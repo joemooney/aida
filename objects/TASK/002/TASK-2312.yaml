@@ -1,0 +1,27 @@
+id: 01a16c35-a6c9-7940-bfcc-24ce6dc8378a
+spec_id: TASK-2312
+agreed_id: TASK-2312
+title: 'Agent-tool ratchet: ''instead''/''rather'' negations and ''and'' clauses let launch prose through'
+description: |
+  aida-core/src/scaffolding/mod.rs AGENT_TOOL_NEGATIONS includes instead/rather, so "launch the fixer with the Agent tool instead of a process" passes names_agent_tool_for_seat_work. "launch the implementer with the Agent tool and no worktree" also passes, because 'and' does not split the clause. Drop instead/rather, or require the negation to precede the tool name. Add both phrasings to the self-test.
+
+  Raised in review of PR-2868: https://github.com/joemooney/aida/pull/2868#issuecomment-6379961377
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-24T04:40:17.865683749Z
+modified_at: 2026-10-24T04:40:17.865683749Z
+req_type: Task
+tags:
+- from-review:PR-2868
+- severity:cosmetic
+filed_at:
+  code_sha: 377bb03376f846288b872a5f9938d5a250b33ecf
+  branch: pr-2868
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: d14a20aaae
+  vendor: claude
+  session: 01a16c31a1ea
+  harness_version: 2.1.310 (Claude Code)
