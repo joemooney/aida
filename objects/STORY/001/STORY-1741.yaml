@@ -35,7 +35,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T21:07:20.910348370Z
-modified_at: 2026-10-24T16:53:50.365893969Z
+modified_at: 2026-10-24T17:04:21.120616775Z
 req_type: Story
 tags:
 - portable-intake
@@ -46,6 +46,37 @@ comments:
   created_at: 2026-10-24T16:53:50.365893969Z
   modified_at: 2026-10-24T16:53:50.365893969Z
   session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+- id: 01a16ede-da80-7f41-a867-0b2967892450
+  author: codex
+  content: |
+    SKETCH v1 (STORY-1741)
+
+    Problem
+    Adoption currently writes configuration and agent scaffolding into product history. The operator needs disposable AIDA adoption in a WORK clone, with only sanitized generic AIDA defect/store changes flowing outward through the GitLab hub to the PUBLIC GitHub store. This sketch incorporates the 2026-10-24 09:53 OPERATOR DECISION: no work email addresses, IPs, hostnames, or other work-identifying data may enter that public path.
+
+    Design
+    1. Use the conventional orphan aida-store plane for versioned shared configuration and guidance source, in a versioned adoption/ namespace separate from requirement objects. Do not introduce a product-branch marker or connect orphan ancestry to code. Bootstrap resolves repository/common Git directory first, discovers the conventional local/remote store ref, then reads configuration. A nonstandard/sibling plane is selected through a clone-local untracked locator, never a shared absolute path. Ambiguous locators or conflicting discoveries refuse.
+    2. Separate reviewed shared policy/source from credentials, machine paths, node bindings, preferences, and the STORY-1742 transport profile, which remain local. Work-specific policy must remain local or on a separate non-exported plane; the shared public-bound plane contains generic AIDA material only. STORY-1742 owns the outbound sanitization gate; this story must not auto-publish adoption material around it.
+    3. Materialize a deterministic, revision-stamped projection beneath ignored local .aida state, using local Git excludes rather than editing tracked .gitignore. Pin source revision plus schema/generator version; stage and atomically replace only AIDA-owned outputs. Cache identity and ownership manifests are local. Worktree-specific outputs remain separate where needed, while clone metadata follows the common Git directory.
+    4. Route config readers, hook setup, and agent launch guidance through that projection. Preserve the existing code-execution trust distinction: moving a command into a store object does not make it trusted. Executable configuration requires an explicitly trusted reviewed plane revision; untrusted/missing evidence fails closed. CI bootstrap explicitly selects/verifies its revision before use. External harnesses must receive guidance through supported launch/config adapters; do not overwrite tracked AGENTS.md, CLAUDE.md, or existing hook configuration to simulate support. Unsupported adapters report the limitation.
+    5. Migration is dry-run first: inventory tracked generated versus authored/mixed policy, show preservation destinations and removable files, and refuse ambiguous loss. Actual tracked-file removal is a separate reviewed product change, never implicit adoption. Uninstall uses an ownership manifest and identity/content checks to remove only local generated state and AIDA hook bindings; preserve user files/hooks and restore prior bindings only when still owned. Product worktree/index/history/branches/remotes stay unchanged.
+
+    Files touched (proposed only; none changed)
+    aida-core/src/store_locate.rs; aida-cli-lib/src/init_cmd.rs, config_init.rs, scaffold_init.rs, config_cmd.rs, trusted_config.rs; aida-core/src/scaffolding/ and store_hooks.rs; affected config readers/agent-launch adapters; new adoption projection/manifest module; scripts/config-trust.toml; focused init/store-location/config-trust fixtures; docs/cli/07-project-setup.md and 10-storage.md. AGENTS.md/OVERVIEW.md only for the resulting architecture, not a session log.
+
+    Failure modes
+    Config-before-discovery bootstrap loops; unrelated ancestor-store adoption; dirty or moving source revisions; concurrent refreshes; projection symlinks/path escape; mixed authored/generated files; stale executable-config trust; unsupported harness discovery; uninstall erasing user hooks; work-only policy accidentally committed to the shared plane. Resolve against pinned identities, serialize store writes using existing locks, and refuse uncertainty rather than fall back to product-file mutation. Preserve node UUID/clone identity and existing writer-lock ordering.
+
+    Test plan
+    Snapshot tracked file bytes, index, code refs, and remotes across adopt/refresh/uninstall on clean and pre-dirty fixtures. Exercise conventional discovery without markers, explicit sibling locators, worktrees, fresh CI bootstrap with revision mismatch, deterministic regeneration, concurrent refresh, interrupted replacement, hostile paths, custom hooks, and edited owned outputs. Migration fixtures include authored policy and ambiguous mixed blocks; prove dry-run writes nothing. Verify untrusted executable config cannot execute. Integration verifies work-specific projection material never enters exported store content and uses STORY-1742's guard.
+
+    PR slicing
+    (1) Discovery/schema/local locator and trusted-version contract with fixtures. (2) Deterministic projection plus reader/harness/hook integration. (3) Migration/uninstall, CI bootstrap, and architecture/docs. Each slice has bounded acceptance; no slice may silently modify product tracked files.
+
+    Open questions
+    Confirm adoption/ inside aida-store versus a separate orphan ref (proposal favors one plane to retain store-only transport). Define the review/trust anchor for executable plane policy and supported harness adapters before implementation. Agree how existing mixed authored scaffolding is represented without losing policy. All are design review questions, not authorization to implement. Spec stays Draft; no claim, branch, or implementation performed.
+  created_at: 2026-10-24T17:04:21.120616775Z
+  modified_at: 2026-10-24T17:04:21.120616775Z
 history:
 - id: 01a16a97-f720-7ad0-b09e-3e490758eade
   author: joe.mooney
