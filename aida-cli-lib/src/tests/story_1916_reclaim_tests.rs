@@ -415,6 +415,36 @@ fn story_1916_offline_merge_proof_ancestor_squash_and_unmerged() {
     assert_eq!(branch_merged_offline(r, "no-such-branch", "main", d), None);
 }
 
+/// TASK-1-481: inside a scheduled child, one offline merge scan serves both
+/// halves of the disk-guard tick (the emergency run and the stuck scan);
+/// outside one, every call scans fresh.
+// trace:TASK-2272 | ai:claude (TASK-1-481)
+#[test]
+fn task_1_481_scheduled_child_memoizes_the_offline_scan() {
+    let tmp = repo();
+    let r = tmp.path().canonicalize().unwrap();
+    let wts = vec![WorktreeEntry {
+        path: r.join("wt-ff"),
+        branch: Some("ff".into()),
+    }];
+    let env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_SCHEDULE_CHILD", Some("1"))]);
+    let first = merged_offline(&r, &wts);
+    assert!(first.contains("ff"), "{first:?}");
+    // Delete the branch: a fresh scan would now prove nothing, so a repeat
+    // result can only come from the memo.
+    git(&r, &["branch", "-qD", "ff"]);
+    assert_eq!(
+        merged_offline(&r, &wts),
+        first,
+        "the scheduled child reuses the one scan"
+    );
+    drop(env);
+    assert!(
+        merged_offline(&r, &wts).is_empty(),
+        "outside a scheduled child the scan is fresh"
+    );
+}
+
 // trace:STORY-1916.ac149566 | ai:claude
 #[test]
 fn story_1916_squash_scan_past_its_deadline_is_unknown_never_merged() {

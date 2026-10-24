@@ -12,6 +12,22 @@ use syn::{spanned::Spanned, visit::Visit};
 // trace:BUG-2213 | ai:codex
 const STORE_OBJECTS_PATH: &str = "objects";
 
+/// The exact argument vectors of the snapshot's two object-dirt queries,
+/// shared with the pathspec-mode test so its matrix exercises the production
+/// args (--ignore-submodules=none included), not a paraphrase.
+// trace:TASK-2272 | ai:claude (TASK-2320)
+const STORE_STATUS_ARGS: [&str; 7] = [
+    "status",
+    "--porcelain=v1",
+    "--untracked-files=all",
+    "--ignore-submodules=none",
+    "--no-renames",
+    "--",
+    STORE_OBJECTS_PATH,
+];
+// trace:TASK-2272 | ai:claude (TASK-2320)
+const STORE_LS_FILES_ARGS: [&str; 5] = ["ls-files", "--others", "-z", "--", STORE_OBJECTS_PATH];
+
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum Scope {
     // The full-file baseline is retained for the required historical benchmark.
@@ -103,20 +119,7 @@ pub(crate) fn store_snapshot(store: &Path) -> Result<StoreSnapshot> {
     // root and include replacement of the objects directory itself.
     // trace:BUG-2213 | ai:codex
     ensure!(
-        snapshot_git(
-            store,
-            &[
-                "status",
-                "--porcelain=v1",
-                "--untracked-files=all",
-                "--ignore-submodules=none",
-                "--no-renames",
-                "--",
-                STORE_OBJECTS_PATH,
-            ],
-            None,
-        )?
-        .is_empty(),
+        snapshot_git(store, &STORE_STATUS_ARGS, None)?.is_empty(),
         StoreDirty
     );
     // TASK-2238: status still honours $GIT_DIR/info/exclude and any
@@ -124,12 +127,7 @@ pub(crate) fn store_snapshot(store: &Path) -> Result<StoreSnapshot> {
     // with no exclude option applies none of them.
     // trace:TASK-2238 | ai:claude
     ensure!(
-        snapshot_git(
-            store,
-            &["ls-files", "--others", "-z", "--", STORE_OBJECTS_PATH],
-            None
-        )?
-        .is_empty(),
+        snapshot_git(store, &STORE_LS_FILES_ARGS, None)?.is_empty(),
         StoreDirty
     );
     let head = snapshot_git(store, &["rev-parse", "--verify", "HEAD^{commit}"], None)?;

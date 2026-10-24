@@ -1669,9 +1669,13 @@ ttl_secs = 1800
     /// TASK-2223: a store under the workspace `target/` (where a test crate's
     /// fixtures may live) passes the guard outside the temp roots.
     // trace:TASK-1955 | ai:claude (TASK-2292)
+    // trace:TASK-2272 | ai:claude (TASK-1848)
     #[test]
     fn task_2223_the_workspace_target_passes_the_guard() {
         let target = Path::new(env!("CARGO_MANIFEST_DIR")).join("../target");
+        // With CARGO_TARGET_DIR pointing elsewhere, <workspace>/target may not
+        // exist, and is_under_workspace_target canonicalizes it (TASK-1848).
+        std::fs::create_dir_all(&target).unwrap();
         let store = target.join("not-a-store-task-2223/.aida-store");
         assert!(!is_under_temp_root(&store));
         guard_roster_write(&store);

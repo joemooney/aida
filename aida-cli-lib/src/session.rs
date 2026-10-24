@@ -723,15 +723,39 @@ pub(crate) fn stage_resume_transcript(id: &str, listed_in: &Path, cwd: &Path) ->
     }
     let name = format!("{id}.jsonl");
     let source = from_dir.join(&name);
-    let Ok(meta) = std::fs::symlink_metadata(&source) else {
-        return Ok(());
-    };
     let refuse = |why: &str| {
         anyhow::anyhow!(
             "[contained] refusing to resume `{id}` in {}: {why}",
             cwd.display()
         )
     };
+    // TASK-2315: open the source O_NOFOLLOW and fstat the HANDLE, so the
+    // checks and the read share one file description and a symlink swapped
+    // in between them is never followed.
+    // trace:TASK-2272 | ai:claude (TASK-2315)
+    let mut source_options = std::fs::OpenOptions::new();
+    source_options.read(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        source_options.custom_flags(libc::O_NOFOLLOW);
+    }
+    let mut source_file = match source_options.open(&source) {
+        Ok(f) => f,
+        // No source to copy is not an error: `--resume` reports it itself.
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        // O_NOFOLLOW refuses a symlink with ELOOP.
+        #[cfg(unix)]
+        Err(e) if e.raw_os_error() == Some(libc::ELOOP) => {
+            return Err(refuse("its transcript is not a regular file"));
+        }
+        Err(e) => {
+            return Err(e).with_context(|| format!("reading transcript {}", source.display()));
+        }
+    };
+    let meta = source_file
+        .metadata()
+        .with_context(|| format!("reading transcript {}", source.display()))?;
     if !meta.file_type().is_file() {
         return Err(refuse("its transcript is not a regular file"));
     }
@@ -743,8 +767,13 @@ pub(crate) fn stage_resume_transcript(id: &str, listed_in: &Path, cwd: &Path) ->
             return Err(refuse("its transcript belongs to another user"));
         }
     }
-    let bytes = std::fs::read(&source)
-        .with_context(|| format!("reading transcript {}", source.display()))?;
+    let mut bytes = Vec::new();
+    {
+        use std::io::Read;
+        source_file
+            .read_to_end(&mut bytes)
+            .with_context(|| format!("reading transcript {}", source.display()))?;
+    }
     if std::fs::symlink_metadata(&to_dir).is_ok_and(|m| !m.file_type().is_dir()) {
         return Err(refuse(
             "the lease tree's Claude project directory is not a directory",

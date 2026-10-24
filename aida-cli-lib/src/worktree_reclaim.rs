@@ -949,8 +949,30 @@ fn patch_ids(repo: &Path, producer: &[&str], stop: std::time::Instant) -> Option
 const OFFLINE_SCAN_BUDGET: Duration = Duration::from_secs(60);
 
 /// Branches git alone proves merged, for every worktree branch.
+///
+/// Inside a scheduled child (one short-lived tick process) the result is
+/// memoized per (main root, branch set): the disk guard's emergency run and
+/// its stuck scan both need it, and one scan on the tick's 120 s kill budget
+/// must serve both halves.
 // trace:STORY-1916 | ai:claude
+// trace:TASK-2272 | ai:claude (TASK-1-481)
 pub(crate) fn merged_offline(main_root: &Path, worktrees: &[WorktreeEntry]) -> BTreeSet<String> {
+    static MEMO: std::sync::Mutex<
+        std::collections::BTreeMap<(PathBuf, Vec<String>), BTreeSet<String>>,
+    > = std::sync::Mutex::new(std::collections::BTreeMap::new());
+    let scheduled = std::env::var_os("AIDA_SCHEDULE_CHILD").is_some_and(|v| v == "1");
+    let key = (
+        main_root.to_path_buf(),
+        worktrees
+            .iter()
+            .filter_map(|w| w.branch.clone())
+            .collect::<Vec<_>>(),
+    );
+    if scheduled {
+        if let Some(hit) = MEMO.lock().ok().and_then(|m| m.get(&key).cloned()) {
+            return hit;
+        }
+    }
     let Some(default_ref) = crate::resolve_default_branch_ref(main_root) else {
         return BTreeSet::new();
     };
@@ -970,6 +992,11 @@ pub(crate) fn merged_offline(main_root: &Path, worktrees: &[WorktreeEntry]) -> B
         .is_some()
         {
             merged.insert(branch.to_string());
+        }
+    }
+    if scheduled {
+        if let Ok(mut memo) = MEMO.lock() {
+            memo.insert(key, merged.clone());
         }
     }
     merged

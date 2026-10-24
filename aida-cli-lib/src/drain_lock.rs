@@ -220,28 +220,61 @@ pub(crate) struct DrainLock {
     pub(crate) child_grant_id: Option<String>,
 }
 
+/// Advisory mutex serialising every local drain-lock write: the grant stamp's
+/// read-modify-write and a (possibly forced) acquisition's lock write both run
+/// under it, so a takeover landing between the stamp's read and its write is
+/// seen (and refused) instead of silently overwritten with our stale record.
+/// `flock(2)`-style via fs2, like the session lease-write lock.
+// trace:TASK-2272 | ai:claude (TASK-2316)
+fn with_drain_lock_write_lock<T>(project_root: &Path, f: impl FnOnce() -> T) -> Result<T> {
+    use fs2::FileExt;
+    let lock_path = project_root.join(".aida").join(DRAIN_LOCK_WRITE_LOCK);
+    if let Some(parent) = lock_path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let lock = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(&lock_path)
+        .map_err(|e| anyhow::anyhow!("opening {}: {e}", lock_path.display()))?;
+    lock.lock_exclusive()
+        .map_err(|e| anyhow::anyhow!("locking {}: {e}", lock_path.display()))?;
+    let out = f();
+    let _ = FileExt::unlock(&lock);
+    Ok(out)
+}
+
+/// The drain-lock write mutex's file name under `.aida/`.
+// trace:TASK-2272 | ai:claude (TASK-2316)
+const DRAIN_LOCK_WRITE_LOCK: &str = ".drain-lock.write.lock";
+
 /// TASK-1798: record (`Some`) or clear (`None`) the running burndown child's
 /// grant on this process's own drain lock. Errors when the lock is missing,
 /// unreadable or held by another process, so the caller refuses to launch an
-/// unstamped child.
+/// unstamped child. The read-modify-write holds the drain-lock write mutex so
+/// a concurrent takeover's write serialises with it (TASK-2316).
 // trace:TASK-1952 | trace:TASK-1798 | ai:claude
 pub(crate) fn stamp_drain_lock_child_grant(
     project_root: &Path,
     grant_id: Option<&str>,
 ) -> Result<()> {
     let path = drain_lock_path(project_root);
-    let mut lock = read_lock(&path)
-        .ok_or_else(|| anyhow::anyhow!("no readable drain lock at {}", path.display()))?;
-    anyhow::ensure!(
-        lock.pid == std::process::id(),
-        "the drain lock at {} is held by pid {}, not this launcher",
-        path.display(),
-        lock.pid
-    );
-    lock.child_grant_id = grant_id.map(str::to_string);
-    let json = serde_json::to_string_pretty(&lock)?;
-    aida_core::write_atomic(&path, json)
-        .map_err(|e| anyhow::anyhow!("could not write drain lock {}: {e}", path.display()))
+    // trace:TASK-2272 | ai:claude (TASK-2316)
+    with_drain_lock_write_lock(project_root, || {
+        let mut lock = read_lock(&path)
+            .ok_or_else(|| anyhow::anyhow!("no readable drain lock at {}", path.display()))?;
+        anyhow::ensure!(
+            lock.pid == std::process::id(),
+            "the drain lock at {} is held by pid {}, not this launcher",
+            path.display(),
+            lock.pid
+        );
+        lock.child_grant_id = grant_id.map(str::to_string);
+        let json = serde_json::to_string_pretty(&lock)?;
+        aida_core::write_atomic(&path, json)
+            .map_err(|e| anyhow::anyhow!("could not write drain lock {}: {e}", path.display()))
+    })?
 }
 
 /// TASK-1798: revoke the child grant a reclaimed (dead-holder) or removed
@@ -543,9 +576,14 @@ pub(crate) fn acquire_drain_lock_with_specs(
                 child_grant_id: None,
             };
             let json = serde_json::to_string_pretty(&record).unwrap_or_else(|_| "{}".to_string());
-            aida_core::write_atomic(&path, json).map_err(|e| {
-                anyhow::anyhow!("could not write drain lock {}: {e}", path.display())
-            })?;
+            // A takeover's write shares the write mutex with the grant
+            // stamp's read-modify-write, so neither overwrites the other
+            // unseen. trace:TASK-2272 | ai:claude (TASK-2316)
+            with_drain_lock_write_lock(project_root, || {
+                aida_core::write_atomic(&path, json).map_err(|e| {
+                    anyhow::anyhow!("could not write drain lock {}: {e}", path.display())
+                })
+            })??;
             // STORY-638: when we hold the shared claim, spawn a background
             // heartbeat thread that refreshes `heartbeat_at` periodically so a
             // long drain (a single phase can outlast the TTL) never looks stale
@@ -1100,6 +1138,52 @@ mod tests {
         assert!(!release_lock_if_ours(root));
         assert!(path.exists());
         assert!(valid(&grant), "another holder's grant is never revoked");
+    }
+
+    /// TASK-2316: the grant stamp's read-modify-write holds the drain-lock
+    /// write mutex (shared with acquisition's lock write), so a concurrent
+    /// takeover mid-write and the stamp serialise instead of interleaving.
+    // trace:TASK-2272 | ai:claude (TASK-2316)
+    #[test]
+    fn task_2316_stamp_blocks_on_the_drain_lock_write_mutex() {
+        let _env = test_env_isolation();
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let _guard = acquire_drain_lock(root, "ours").unwrap();
+
+        // Hold the write mutex, standing in for a takeover between the
+        // stamp's read and its write.
+        let (release_tx, release_rx) = std::sync::mpsc::channel::<()>();
+        let (held_tx, held_rx) = std::sync::mpsc::channel::<()>();
+        let holder_root = root.to_path_buf();
+        let holder = std::thread::spawn(move || {
+            with_drain_lock_write_lock(&holder_root, || {
+                held_tx.send(()).unwrap();
+                release_rx.recv().unwrap();
+            })
+            .unwrap();
+        });
+        held_rx.recv().unwrap();
+
+        let stamp_root = root.to_path_buf();
+        let stamper = std::thread::spawn(move || {
+            stamp_drain_lock_child_grant(&stamp_root, Some("task-2316-grant")).unwrap();
+        });
+        std::thread::sleep(std::time::Duration::from_millis(200));
+        assert!(
+            !stamper.is_finished(),
+            "the stamp must wait for the write mutex, not interleave"
+        );
+        release_tx.send(()).unwrap();
+        holder.join().unwrap();
+        stamper.join().unwrap();
+        assert_eq!(
+            read_lock(&drain_lock_path(root))
+                .unwrap()
+                .child_grant_id
+                .as_deref(),
+            Some("task-2316-grant")
+        );
     }
 
     #[test]
