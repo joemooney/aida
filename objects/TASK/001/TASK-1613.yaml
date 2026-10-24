@@ -24,7 +24,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-08T04:15:57.651449326Z
-modified_at: 2026-10-24T00:50:54.631186498Z
+modified_at: 2026-10-24T01:14:00.324465481Z
 req_type: Task
 tags:
 - docs:impacted
@@ -33,6 +33,10 @@ relationships:
     custom: implemented-by
   target_id: 01a16b60-0eb7-7192-9c14-23d414eab0f2
   created_at: 2026-10-24T00:47:31.149286045Z
+  created_by: joe
+- rel_type: Supersedes
+  target_id: 01a16b64-1a77-7e60-8bb1-172b63aa7972
+  created_at: 2026-10-24T01:14:00.324453037Z
   created_by: joe
 comments:
 - id: 01a11c4c-ea34-7831-8a39-b2b252255ef8
@@ -518,6 +522,11 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a16b78-d0c6-7493-85cd-e160084a05ea
+  author: joe
+  timestamp: 2026-10-24T01:14:02.310848833Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+  changes: []
 filed_at:
   code_sha: 5d4180e5ded8a55ad1b02beac5571c190d3da0ac
   branch: main
