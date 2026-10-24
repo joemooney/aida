@@ -31,6 +31,10 @@ use std::path::{Path, PathBuf};
 pub(crate) const MEMBERS_LINE: &str = "aida-train-members:";
 /// Branch prefix of a train PR; merge-hold-gate keys its train mode on it.
 pub(crate) const BRANCH_PREFIX: &str = "train/";
+/// The note a train writes into the base's merge-lease; the BUG-2220 rider
+/// gate keys live-lease train detection on it.
+// trace:BUG-2220 | ai:claude
+pub(crate) const TRAIN_LEASE_NOTE: &str = "aida pr train";
 /// Two sub-trains test at once while bisecting.
 const PARALLEL_SUB_TRAINS: usize = 2;
 
@@ -638,15 +642,38 @@ impl Rails for LocalRails<'_> {
 
 // ─────────────────────────── the live train ────────────────────────────
 
+/// One train network step (origin fetch/push, a `gh` call): run with the
+/// shared transient-retry policy — bounded backoff from `RetryConfig::load`
+/// (about 3 attempts by default), retry notices on stderr, a non-transient
+/// failure (auth, 4xx, conflict) returned at once, and the exhausted or
+/// final error naming the step through the caller's `ensure!`.
+// trace:BUG-2219 | ai:claude
+fn net_output(
+    repo: &Path,
+    label: &str,
+    build: impl FnMut() -> std::process::Command,
+) -> Result<std::process::Output> {
+    let config = crate::network_retry::RetryConfig::load(repo);
+    crate::network_retry::run_with_retry(
+        label,
+        &config,
+        &mut crate::network_retry::StderrSink,
+        build,
+    )
+    .with_context(|| format!("could not run `{label}`"))
+}
+
 /// `gh` in the project root, returning its stdout.
 // trace:BUG-2214 | ai:claude
 fn gh_stdout(repo: &Path, args: &[&str]) -> Result<String> {
-    let out = std::process::Command::new("gh")
-        .current_dir(repo)
-        .args(args)
-        .stdin(std::process::Stdio::null())
-        .output()
-        .with_context(|| format!("could not run `gh {}`", args.join(" ")))?;
+    // trace:BUG-2219 | ai:claude
+    let out = net_output(repo, &format!("gh {}", args.join(" ")), || {
+        let mut cmd = std::process::Command::new("gh");
+        cmd.current_dir(repo)
+            .args(args)
+            .stdin(std::process::Stdio::null());
+        cmd
+    })?;
     anyhow::ensure!(
         out.status.success(),
         "`gh {}` failed: {}",
@@ -659,13 +686,14 @@ fn gh_stdout(repo: &Path, args: &[&str]) -> Result<String> {
 /// `git` in the main clone with origin's stored credentials kept out of argv
 /// (BUG-2181), for the calls that contact origin.
 fn origin_git(repo: &Path, args: &[&str]) -> Result<String> {
-    let mut cmd = std::process::Command::new("git");
-    cmd.arg("-C").arg(repo).args(args);
-    aida_core::git_ops::configure_remote_credentials(&mut cmd, repo, "origin");
-    let out = cmd
-        .stdin(std::process::Stdio::null())
-        .output()
-        .with_context(|| format!("could not run `git {}`", args.join(" ")))?;
+    // trace:BUG-2219 | ai:claude
+    let out = net_output(repo, &format!("git {}", args.join(" ")), || {
+        let mut cmd = std::process::Command::new("git");
+        cmd.arg("-C").arg(repo).args(args);
+        aida_core::git_ops::configure_remote_credentials(&mut cmd, repo, "origin");
+        cmd.stdin(std::process::Stdio::null());
+        cmd
+    })?;
     anyhow::ensure!(
         out.status.success(),
         "`git {}` failed: {}",
@@ -1149,6 +1177,104 @@ pub(crate) fn tty_consents(interactive_tty: bool, named: bool) -> bool {
     interactive_tty && named
 }
 
+/// BUG-2220: why `pr` already rides a live train, or `None`. `open_trains`
+/// are the open `train/*` PRs as `(number, parsed members line)`;
+/// `leased_trains` are the train PRs named by live train merge-leases that
+/// are not already in the open list, with their members. A members line that
+/// does not parse names nobody: the gate cannot tell who rides that train,
+/// and blocking every candidate on one malformed body would stop all trains.
+// trace:BUG-2220 | ai:claude
+pub(crate) fn train_rider_refusal(
+    pr: u64,
+    open_trains: &[(u64, Option<Vec<(u64, String)>>)],
+    leased_trains: &[(u64, Option<Vec<(u64, String)>>)],
+) -> Option<String> {
+    let rides = |members: &Option<Vec<(u64, String)>>| {
+        members
+            .as_ref()
+            .is_some_and(|m| m.iter().any(|(n, _)| *n == pr))
+    };
+    if let Some((train, _)) = open_trains.iter().find(|(_, m)| rides(m)) {
+        return Some(format!(
+            "it is already riding live train PR #{train}; a PR rides one train at a time"
+        ));
+    }
+    if let Some((train, _)) = leased_trains.iter().find(|(_, m)| rides(m)) {
+        return Some(format!(
+            "it is already riding train PR #{train}, whose merge lease is still held; \
+             a PR rides one train at a time"
+        ));
+    }
+    None
+}
+
+/// The live trains a second train must not double-carry: every open
+/// `train/*` PR with its parsed members line, and every train PR named by a
+/// live train merge-lease and not already open (its PR can close mid-land
+/// while the lease is still held, so its members are read by number). A
+/// closed train PR with no live lease, or a lease whose holder is dead or
+/// TTL-expired, is stale and appears in neither list.
+// trace:BUG-2220 | ai:claude
+#[allow(clippy::type_complexity)]
+fn live_trains(
+    main_worktree: &Path,
+) -> Result<(
+    Vec<(u64, Option<Vec<(u64, String)>>)>,
+    Vec<(u64, Option<Vec<(u64, String)>>)>,
+)> {
+    #[derive(serde::Deserialize)]
+    struct Row {
+        number: u64,
+        #[serde(rename = "headRefName")]
+        head_ref: String,
+        body: String,
+    }
+    let raw = gh_stdout(
+        main_worktree,
+        &[
+            "pr",
+            "list",
+            "--state",
+            "open",
+            "--limit",
+            "100",
+            "--json",
+            "number,headRefName,body",
+        ],
+    )?;
+    let rows: Vec<Row> = serde_json::from_str(&raw).context("could not parse `gh pr list` JSON")?;
+    let open: Vec<(u64, Option<Vec<(u64, String)>>)> = rows
+        .into_iter()
+        .filter(|r| r.head_ref.starts_with(BRANCH_PREFIX))
+        .map(|r| (r.number, parse_members_line(&r.body)))
+        .collect();
+    let mut leased: Vec<(u64, Option<Vec<(u64, String)>>)> = Vec::new();
+    for (_, holder) in crate::merge_lock::live_status(main_worktree) {
+        let Some(train) = holder.pr else { continue };
+        if holder.note != TRAIN_LEASE_NOTE
+            || open.iter().any(|(n, _)| *n == train)
+            || leased.iter().any(|(n, _)| *n == train)
+        {
+            continue;
+        }
+        let body = gh_stdout(
+            main_worktree,
+            &[
+                "pr",
+                "view",
+                &train.to_string(),
+                "--json",
+                "body",
+                "--jq",
+                ".body",
+            ],
+        )
+        .unwrap_or_default();
+        leased.push((train, parse_members_line(&body)));
+    }
+    Ok((open, leased))
+}
+
 /// The member gate, live.
 // trace:STORY-1690 | ai:claude
 pub(crate) fn gate_member(
@@ -1335,7 +1461,7 @@ impl TrainForge for LiveTrainForge<'_> {
             &self.main_worktree,
             &self.base,
             Some(train_pr),
-            "aida pr train",
+            TRAIN_LEASE_NOTE,
             crate::merge_lock::DEFAULT_WAIT,
         )
         .map(|lease| Box::new(lease) as Box<dyn std::any::Any>)
@@ -2031,12 +2157,22 @@ pub(crate) fn pr_train_handler(opts: &TrainOptions<'_>) -> Result<()> {
         candidates.len(),
         if opts.dry_run { " (dry run)" } else { "" }
     );
+    // BUG-2220: the merge lease serializes landings but never stopped a
+    // second train from carrying a PR already riding a live one — wasted CI
+    // and a confused "who landed it". Read the live trains once and refuse
+    // such candidates, naming the other train. trace:BUG-2220 | ai:claude
+    let (open_trains, leased_trains) = live_trains(&main_worktree)?;
     let mut members = Vec::new();
     let mut refused = Vec::new();
     let mut waiting = Vec::new();
     for pr in candidates {
         if members.len() >= opts.max.max(1) {
             waiting.push(pr);
+            continue;
+        }
+        if let Some(reason) = train_rider_refusal(pr, &open_trains, &leased_trains) {
+            println!("  ✗ #{pr} not eligible: {reason}");
+            refused.push(Ejected { pr, reason });
             continue;
         }
         match gate_member(

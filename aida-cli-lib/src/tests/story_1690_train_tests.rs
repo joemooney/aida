@@ -1932,3 +1932,143 @@ fn bug_2214_a_merge_failure_after_the_release_rearms() {
     assert!(out.landed.is_empty());
     assert_eq!(f.rearmed, f.released, "every release was re-armed");
 }
+
+// ── BUG-2220: a PR rides one train at a time ───────────────────────────────
+
+// trace:BUG-2220 | ai:claude
+#[test]
+fn bug_2220_a_pr_riding_an_open_train_is_refused_naming_it() {
+    let open = vec![(
+        2890,
+        Some(vec![(2864, "aaaa".to_string()), (2869, "bbbb".to_string())]),
+    )];
+    let why = train_rider_refusal(2869, &open, &[]).unwrap();
+    assert!(why.contains("#2890"), "{why}");
+    assert!(
+        train_rider_refusal(2899, &open, &[]).is_none(),
+        "a PR on no train is free to board"
+    );
+}
+
+// trace:BUG-2220 | ai:claude
+#[test]
+fn bug_2220_a_pr_on_a_leased_train_is_refused_naming_the_lease() {
+    let leased = vec![(2891, Some(vec![(2864, "aaaa".to_string())]))];
+    let why = train_rider_refusal(2864, &[], &leased).unwrap();
+    assert!(why.contains("#2891") && why.contains("lease"), "{why}");
+}
+
+/// A real members line round-trips into the refusal; a malformed line names
+/// nobody (blocking every candidate on one bad body would stop all trains).
+// trace:BUG-2220 | ai:claude
+#[test]
+fn bug_2220_members_lines_parse_into_the_gate_and_malformed_names_nobody() {
+    let body = format!("CI body\n{MEMBERS_LINE} #12@abc1234, #13@def5678\n");
+    let open = vec![(77, parse_members_line(&body))];
+    assert!(train_rider_refusal(12, &open, &[]).is_some());
+    assert!(train_rider_refusal(13, &open, &[]).is_some());
+    assert!(train_rider_refusal(14, &open, &[]).is_none());
+    let malformed = vec![(78, parse_members_line("aida-train-members: nonsense"))];
+    assert!(train_rider_refusal(12, &malformed, &[]).is_none());
+}
+
+// ── BUG-2219: train network steps retry transient failures ────────────────
+
+/// Fast retry config for the temp repo: 3 attempts, ~1ms backoff.
+// trace:BUG-2219 | ai:claude
+#[cfg(unix)]
+fn write_retry_config(root: &Path) {
+    std::fs::create_dir_all(root.join(".aida")).unwrap();
+    std::fs::write(
+        root.join(".aida/config.toml"),
+        "[orchestrator]\nretry_max_attempts = 3\nretry_base_delay_ms = 1\n",
+    )
+    .unwrap();
+}
+
+/// A command that fails `fail_n` times with `msg` on stderr, then succeeds,
+/// counting attempts in `counter`.
+// trace:BUG-2219 | ai:claude
+#[cfg(unix)]
+fn flaky_cmd(counter: &Path, fail_n: u32, msg: &str) -> std::process::Command {
+    let mut cmd = std::process::Command::new("sh");
+    cmd.arg("-c").arg(format!(
+        "n=$(cat {c} 2>/dev/null || echo 0); n=$((n+1)); printf %s $n > {c}; \
+         if [ $n -le {fail_n} ]; then echo '{msg}' >&2; exit 1; fi; echo ok",
+        c = counter.display()
+    ));
+    cmd
+}
+
+#[cfg(unix)]
+fn attempts(counter: &Path) -> String {
+    std::fs::read_to_string(counter).unwrap_or_default()
+}
+
+/// An injected transient failure (the BUG-2219 symptom text) retries and the
+/// step then succeeds.
+// trace:BUG-2219 | ai:claude
+#[cfg(unix)]
+#[test]
+fn bug_2219_a_transient_network_failure_retries_then_succeeds() {
+    let dir = tempfile::tempdir().unwrap();
+    write_retry_config(dir.path());
+    let counter = dir.path().join("count");
+    let out = net_output(dir.path(), "git fetch origin", || {
+        flaky_cmd(&counter, 2, "Could not resolve host: github.com")
+    })
+    .unwrap();
+    assert!(out.status.success(), "the retried step must succeed");
+    assert_eq!(attempts(&counter), "3", "two failures, then the success");
+}
+
+/// A non-transient failure (auth) is returned at once — exactly one attempt.
+// trace:BUG-2219 | ai:claude
+#[cfg(unix)]
+#[test]
+fn bug_2219_a_non_transient_failure_never_retries() {
+    let dir = tempfile::tempdir().unwrap();
+    write_retry_config(dir.path());
+    let counter = dir.path().join("count");
+    let out = net_output(dir.path(), "gh pr view 1", || {
+        flaky_cmd(&counter, 99, "authentication failed")
+    })
+    .unwrap();
+    assert!(!out.status.success());
+    assert_eq!(attempts(&counter), "1", "no retry on a permanent failure");
+}
+
+/// Retries are bounded; when they run out the failing output comes back so
+/// the caller's `ensure!` names the step that failed.
+// trace:BUG-2219 | ai:claude
+#[cfg(unix)]
+#[test]
+fn bug_2219_exhausted_retries_return_the_final_failure() {
+    let dir = tempfile::tempdir().unwrap();
+    write_retry_config(dir.path());
+    let counter = dir.path().join("count");
+    let out = net_output(dir.path(), "git push origin", || {
+        flaky_cmd(&counter, 99, "Connection reset by peer")
+    })
+    .unwrap();
+    assert!(!out.status.success());
+    assert_eq!(
+        attempts(&counter),
+        "3",
+        "bounded at the configured attempts"
+    );
+    assert!(String::from_utf8_lossy(&out.stderr).contains("Connection reset by peer"));
+}
+
+/// The train's two network helpers route every fetch/push/gh call through
+/// the retry runner.
+// trace:BUG-2219 | ai:claude
+#[test]
+fn bug_2219_train_network_helpers_route_through_the_retry_runner() {
+    let src = include_str!("../pr_train.rs");
+    for name in ["fn gh_stdout(", "fn origin_git("] {
+        let start = src.find(name).expect(name);
+        let body = &src[start..start + 700];
+        assert!(body.contains("net_output("), "{name} must retry transients");
+    }
+}
