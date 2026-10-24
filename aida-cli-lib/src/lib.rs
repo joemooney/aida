@@ -475,6 +475,7 @@ mod plan_cmd;
 mod pr_rebase;
 mod pr_ship;
 mod pr_ship_batch;
+mod pr_train;
 mod presence;
 mod presence_cmd;
 mod process_probe;

@@ -1183,6 +1183,22 @@ fn collect_git_linkage_inner(
             }
         }
     }
+    // BUG-2169 slice S4: a contained seat working the spec in a private
+    // clone. Its commits are not in main's refs, so the scan above cannot
+    // find them; its lease names the spec, the branch and the clone.
+    // trace:TASK-2053 | ai:claude
+    if worktree.is_none() {
+        if let Some(lease) = crate::list_leases(project_root).into_iter().find(|lease| {
+            lease.tree_kind == crate::seat_clone::TreeKind::Clone
+                && ids.iter().any(|id| id.eq_ignore_ascii_case(&lease.scope))
+                && branch.as_deref().is_none_or(|b| b == lease.branch)
+        }) {
+            if branch.is_none() && !lease.branch.is_empty() {
+                branch = Some(lease.branch.clone());
+            }
+            worktree = Some(lease.worktree_path.display().to_string());
+        }
+    }
 
     GitLinkage {
         commits,
