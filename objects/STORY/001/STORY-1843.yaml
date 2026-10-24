@@ -23,7 +23,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-24T22:03:24.299862345Z
+modified_at: 2026-10-24T23:00:58.082818377Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -407,6 +407,11 @@ comments:
     aida ship STORY-1843 --no-merge exited 0, rebased cleanly and opened PR-2909; it filed STORY-1927 to reviewer. Title ends (STORY-1843). No merge, verdict or hold clearance. PR4 relay work and operator-run C3 migration remain outside this slice.
   created_at: 2026-10-24T22:03:24.299862345Z
   modified_at: 2026-10-24T22:03:24.299862345Z
+- id: 01a17025-5862-7b41-88ca-808d33857046
+  author: ai:codex:joe
+  content: 'PR #2909 CI repair assigned to codex1 and resumed in existing story-1843-pr3 worktree/lease 01a16fa985ac. FIFO watchdog now calls the existing aida_bin::current_executable_path helper; exact-test filter, child environment, deadline and kill/wait cleanup are unchanged, as is the resolver ratchet. Local validation is running. Completion-attribution mismatch: PR #2909 currently ends with (STORY-1843), while the signed advisor ruling requires Refs STORY-1843 for PR3 and completion only in relay PR4. This repair will use Refs STORY-1843; parent completion is not claimed. PR #2906 remains assigned to agy1; live mailbox migration remains operator-run.'
+  created_at: 2026-10-24T23:00:58.082818377Z
+  modified_at: 2026-10-24T23:00:58.082818377Z
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
   author: joe
