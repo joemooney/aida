@@ -3221,6 +3221,19 @@ fn command_table() -> &'static [(&'static [&'static str], ScheduledCommand)] {
                 hook_allowed: false,
             },
         ),
+        // STORY-1689: promote the live dev binary when main is green. The
+        // tick only decides and launches; the build runs detached, outside
+        // this child's timeout. It fetches and reads the forge, so never on
+        // the per-turn hook path.
+        // trace:STORY-1689 | ai:claude
+        (
+            &["dev build --if-main-green"],
+            ScheduledCommand {
+                display: "dev build --if-main-green",
+                args: &["dev", "build", "--if-main-green"],
+                hook_allowed: false,
+            },
+        ),
     ]
 }
 
@@ -3271,7 +3284,8 @@ fn valid_commands() -> Vec<&'static str> {
 /// indefinitely. Generous rather than tight: these are periodic maintenance
 /// checks, not a latency-sensitive per-turn hook path (that path already
 /// skips network-touching jobs — see `tick`'s `hook` flag).
-const SCHEDULED_COMMAND_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(120);
+pub(crate) const SCHEDULED_COMMAND_TIMEOUT: std::time::Duration =
+    std::time::Duration::from_secs(120);
 
 /// Exit status a killed-at-timeout (or unspawnable) scheduled child reports.
 pub(crate) const TIMEOUT_EXIT_STATUS: i32 = 124;
@@ -3372,13 +3386,7 @@ fn record_outcome_local(
                     job: task.name.clone(),
                     seat: task.seats.join(","),
                     error: trip.and_then(|t| t.audit_error.as_deref()).map_or_else(
-                        || {
-                            format!(
-                                "exit {}: {}",
-                                outcome.status,
-                                outcome.stderr.trim().lines().last().unwrap_or("")
-                            )
-                        },
+                        || routed_failure_error(outcome.status, &outcome.stderr),
                         |error| {
                             format!(
                                 "exit {}: performance audit unavailable: {error}",
@@ -3392,6 +3400,16 @@ fn record_outcome_local(
             ),
         );
     }
+}
+
+/// The error a failed job's `CronJobFailed` carries: its exit status and
+/// its last stderr line.
+// trace:STORY-1689 | ai:claude
+pub(crate) fn routed_failure_error(status: i32, stderr: &str) -> String {
+    format!(
+        "exit {status}: {}",
+        stderr.trim().lines().last().unwrap_or("")
+    )
 }
 
 // trace:TASK-1280 | ai:codex
@@ -4244,6 +4262,44 @@ mod tests {
         assert!(
             !commands.iter().any(|c| c.contains("allow-listed")),
             "extraction picked up the documentation placeholder, not a real job: {commands:?}"
+        );
+    }
+
+    /// STORY-1689: this repository's own config registers the live-binary
+    /// promote job and binds its failure route to the advisor; the route's
+    /// `CronJobFailed:<job>` binding names a real job, so it loads enabled.
+    // trace:STORY-1689.ac481f1d | ai:claude
+    #[test]
+    fn repo_config_registers_dev_autopromote_and_its_advisor_route() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo_config = Path::new(env!("CARGO_MANIFEST_DIR")).join("../.aida/config.toml");
+        std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
+        std::fs::copy(&repo_config, tmp.path().join(".aida/config.toml")).unwrap();
+        let mut config = load_config(tmp.path()).unwrap().expect("a [schedule]");
+        disable_unknown_bindings(&mut config);
+        let job = config
+            .tasks
+            .iter()
+            .find(|t| t.name == "dev-autopromote")
+            .expect("dev-autopromote job");
+        assert!(job.enabled && job.problem.is_none());
+        let command = job.command.as_ref().expect("a substrate command");
+        assert_eq!(command.args, ["dev", "build", "--if-main-green"]);
+        assert!(!command.hook_allowed, "it fetches; never on the hook path");
+        let route = config
+            .tasks
+            .iter()
+            .find(|t| t.name == "dev-autopromote-route")
+            .expect("dev-autopromote-route");
+        assert!(
+            route.enabled && route.problem.is_none(),
+            "{:?}",
+            route.problem
+        );
+        assert_eq!(route.seats, vec!["advisor".to_string()]);
+        assert_eq!(
+            route.on.iter().map(ToString::to_string).collect::<Vec<_>>(),
+            vec!["CronJobFailed:dev-autopromote".to_string()]
         );
     }
 

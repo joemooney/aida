@@ -163,6 +163,79 @@ fn no_hold_orphan_cleanup(
     }
 }
 
+/// What `aida merge-hold clear N` found before it removed the marker; the
+/// input to [`finish_clear`]. Records are reduced to `(detail, actor key)`.
+// trace:TASK-1951 trace:TASK-2152 | ai:claude
+struct ClearTail<'a> {
+    pr: u64,
+    existed: bool,
+    cleared_detail: Option<&'a str>,
+    label_only_forge: Option<&'a merge_hold::ForgeLabel>,
+    tampering: Option<(&'a str, String)>,
+    label_only_actor: Option<(&'a str, String)>,
+}
+
+/// The forge half of `aida merge-hold clear N`, after the clearance is
+/// recorded and the marker removed. Returns the lines to print. A label that
+/// could not be dropped is never reported as dropped: the hold label keeps
+/// merge-hold-gate failing, so that is an error (non-zero exit) naming the
+/// retry. The forge calls and the release event are injected so each branch
+/// is testable.
+// trace:TASK-1951 trace:TASK-2152 | ai:claude
+fn finish_clear(
+    tail: &ClearTail<'_>,
+    unlabel: impl FnOnce() -> Result<(), merge_hold::LabelSyncError>,
+    drop_orphan: impl FnOnce() -> Result<bool, String>,
+    emit_release: impl Fn(&str),
+) -> anyhow::Result<Vec<String>> {
+    let pr = tail.pr;
+    let mut lines = Vec::new();
+    if matches!(
+        tail.label_only_forge,
+        Some(merge_hold::ForgeLabel::Absent | merge_hold::ForgeLabel::NoForge)
+    ) {
+        if let Some((detail, actor)) = &tail.tampering {
+            emit_release(merge_hold::MARKER_MISSING_REASON);
+            lines.push(format!(
+                "PR #{pr} had a recorded hold placement whose marker went missing with no clearance. Recorded the release as {actor} ({detail}); `aida merge-hold list` and `aida doctor` stop reporting it, and the clearance record keeps the evidence."
+            ));
+        } else {
+            lines.push(format!(
+                "No merge-hold on PR #{pr}: no marker, and the forge carries no `aida:merge-hold` label."
+            ));
+            lines.extend(no_hold_orphan_cleanup(pr, drop_orphan));
+        }
+        return Ok(lines);
+    }
+    let unlabel = unlabel();
+    if tail.existed {
+        if let Some(detail) = tail.cleared_detail {
+            emit_release(detail);
+        }
+        if let Err(err) = &unlabel {
+            anyhow::bail!(
+                "Removed the merge-hold marker on PR #{pr} and recorded the clearance, but the `aida:merge-hold` label could not be dropped ({err}); merge-hold-gate keeps failing until it is. Re-run `aida merge-hold clear {pr}` when the forge is reachable, or drop the label by hand."
+            );
+        }
+        lines.push(format!(
+            "Cleared merge-hold on PR #{pr} (marker removed, `aida:merge-hold` label dropped)."
+        ));
+    } else if let Some((detail, actor)) = &tail.label_only_actor {
+        if let Err(err) = &unlabel {
+            anyhow::bail!(
+                "label-only merge-hold on PR #{pr} is still in place: the label could not be removed ({err})"
+            );
+        }
+        emit_release(detail);
+        lines.push(format!(
+            "Cleared label-only merge-hold on PR #{pr} (no marker; `aida:merge-hold` label dropped, clearance recorded as {actor})."
+        ));
+    } else {
+        lines.push(unread_label_clear_outcome(pr, &unlabel)?);
+    }
+    Ok(lines)
+}
+
 #[cfg(test)]
 mod merge_hold_cli_tests {
     use super::partition_stale_holds;
@@ -1044,21 +1117,26 @@ pub(crate) fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<
                     // BUG-1693: persist the local clearance before removing
                     // the marker or changing forge labels. A failed audit
                     // write must leave the hold in place.
-                    if let Some((record, actor)) = &cleared {
-                        merge_hold::record_clearance_with_verdict(
-                            &root,
-                            record,
-                            actor,
-                            released_by_verdict.clone(),
-                        )?;
-                    }
-                    if let Some((record, actor)) = &tampering_record {
-                        merge_hold::record_clearance(&root, record, actor)?;
-                    }
-                    if let Some((record, actor)) = &label_only_record {
-                        merge_hold::record_clearance(&root, record, actor)?;
-                    }
-                    merge_hold::clear_hold(&root, *pr)?;
+                    // TASK-1757: the same per-PR hold lock auto-release and
+                    // every placement take. trace:TASK-1951 trace:TASK-1757 | ai:claude
+                    merge_hold::with_hold_lock(&root, *pr, || -> anyhow::Result<()> {
+                        if let Some((record, actor)) = &cleared {
+                            merge_hold::record_clearance_with_verdict(
+                                &root,
+                                record,
+                                actor,
+                                released_by_verdict.clone(),
+                            )?;
+                        }
+                        if let Some((record, actor)) = &tampering_record {
+                            merge_hold::record_clearance(&root, record, actor)?;
+                        }
+                        if let Some((record, actor)) = &label_only_record {
+                            merge_hold::record_clearance(&root, record, actor)?;
+                        }
+                        merge_hold::clear_hold(&root, *pr)?;
+                        Ok(())
+                    })??;
                     if let Some((record, actor)) = &cleared {
                         if record.reason_kind == merge_hold::HoldReasonKind::Recusal {
                             println!(
@@ -1085,58 +1163,25 @@ pub(crate) fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<
                         // trace:TASK-1951 trace:TASK-1406 | ai:claude
                         events::emit(&merge_hold::hold_store_root(&root), &ev);
                     };
-                    if matches!(
-                        label_only_forge,
-                        Some(merge_hold::ForgeLabel::Absent | merge_hold::ForgeLabel::NoForge)
-                    ) {
-                        if let Some((record, actor)) = &tampering_record {
-                            emit_release(merge_hold::MARKER_MISSING_REASON);
-                            println!(
-                                "PR #{pr} had a recorded hold placement whose marker went missing with no clearance. Recorded the release as {} ({}); `aida merge-hold list` and `aida doctor` stop reporting it, and the clearance record keeps the evidence.",
-                                actor.key(),
-                                record.detail
-                            );
-                        } else {
-                            println!(
-                                "No merge-hold on PR #{pr}: no marker, and the forge carries no `aida:merge-hold` label."
-                            );
-                            // trace:TASK-1951 | ai:claude
-                            if let Some(line) = no_hold_orphan_cleanup(*pr, || {
-                                merge_hold::drop_orphaned_cleared_label(&root, *pr)
-                            }) {
-                                println!("{line}");
-                            }
-                        }
-                        return Ok(());
-                    }
-                    let unlabel = merge_hold::sync_label(&root, *pr, false);
-                    if let Err(err) = &unlabel {
-                        eprintln!(
-                        "  {} label not dropped on PR #{pr}: {err} — drop it by hand or re-run `aida merge-hold clear {pr}`",
-                        crate::glyph(crate::glyphs::Glyph::Warning).yellow()
-                    );
-                    }
-                    if existed {
-                        if let Some((record, _)) = &cleared {
-                            emit_release(&record.detail);
-                        }
-                        println!(
-                            "Cleared merge-hold on PR #{pr} (marker removed, `aida:merge-hold` label dropped)."
-                        );
-                    } else if let Some((record, actor)) = &label_only_record {
-                        if unlabel.is_ok() {
-                            emit_release(&record.detail);
-                            println!(
-                                "Cleared label-only merge-hold on PR #{pr} (no marker; `aida:merge-hold` label dropped, clearance recorded as {}).",
-                                actor.key()
-                            );
-                        } else {
-                            anyhow::bail!(
-                                "label-only merge-hold on PR #{pr} is still in place: the label could not be removed"
-                            );
-                        }
-                    } else {
-                        println!("{}", unread_label_clear_outcome(*pr, &unlabel)?);
+                    let tail = ClearTail {
+                        pr: *pr,
+                        existed,
+                        cleared_detail: cleared.as_ref().map(|(record, _)| record.detail.as_str()),
+                        label_only_forge: label_only_forge.as_ref(),
+                        tampering: tampering_record
+                            .as_ref()
+                            .map(|(record, actor)| (record.detail.as_str(), actor.key())),
+                        label_only_actor: label_only_record
+                            .as_ref()
+                            .map(|(record, actor)| (record.detail.as_str(), actor.key())),
+                    };
+                    for line in finish_clear(
+                        &tail,
+                        || merge_hold::sync_label(&root, *pr, false),
+                        || merge_hold::drop_orphaned_cleared_label(&root, *pr),
+                        emit_release,
+                    )? {
+                        println!("{line}");
                     }
                     Ok(())
                 }
@@ -1307,11 +1352,72 @@ mod task_1951_orphan_cleared_label_tests {
         assert!(line.unwrap().contains("orphaned `aida:merge-hold-cleared`"));
         assert_eq!(no_hold_orphan_cleanup(9, || Ok(false)), None);
         assert_eq!(no_hold_orphan_cleanup(9, || Err("HTTP 502".into())), None);
-        // The "No merge-hold" branch of `merge-hold clear` calls it.
-        let src = include_str!("merge_hold_cmd.rs");
-        let no_hold = src
-            .find("\"No merge-hold on PR #{pr}: no marker, and the forge carries no")
-            .unwrap();
-        assert!(src[no_hold..no_hold + 1200].contains("no_hold_orphan_cleanup("));
+    }
+
+    fn tail(existed: bool, forge: Option<&merge_hold::ForgeLabel>) -> ClearTail<'_> {
+        ClearTail {
+            pr: 9,
+            existed,
+            cleared_detail: existed.then_some("refused at abc"),
+            label_only_forge: forge,
+            tampering: None,
+            label_only_actor: None,
+        }
+    }
+
+    /// The "No merge-hold" branch of `merge-hold clear` runs the orphaned
+    /// cleared-label cleanup and prints what it removed (replaces the
+    /// source-grep wiring test).
+    // trace:TASK-1951 | ai:claude
+    #[test]
+    fn no_hold_branch_runs_the_orphan_cleanup() {
+        let absent = merge_hold::ForgeLabel::Absent;
+        let called = std::cell::Cell::new(false);
+        let lines = finish_clear(
+            &tail(false, Some(&absent)),
+            || panic!("no label to drop on a PR with no hold"),
+            || {
+                called.set(true);
+                Ok(true)
+            },
+            |_| panic!("no hold, no release event"),
+        )
+        .unwrap();
+        assert!(called.get());
+        assert!(lines[0].starts_with("No merge-hold on PR #9"), "{lines:?}");
+        assert!(
+            lines[1].contains("orphaned `aida:merge-hold-cleared`"),
+            "{lines:?}"
+        );
+    }
+
+    /// TASK-2152: the marker existed and the label drop failed. The clear
+    /// must not claim the label was dropped, and it exits non-zero; the
+    /// release is still recorded because the marker is gone.
+    // trace:TASK-1951 trace:TASK-2152 | ai:claude
+    #[test]
+    fn marker_clear_with_failed_unhold_does_not_claim_the_label_dropped() {
+        let released = std::cell::RefCell::new(Vec::new());
+        let err = finish_clear(
+            &tail(true, None),
+            || Err(merge_hold::LabelSyncError::Other("HTTP 502".into())),
+            || panic!("orphan cleanup is only for the no-hold branch"),
+            |detail| released.borrow_mut().push(detail.to_string()),
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(!err.contains("label dropped"), "{err}");
+        assert!(err.contains("could not be dropped (HTTP 502)"), "{err}");
+        assert!(err.contains("aida merge-hold clear 9"), "{err}");
+        assert_eq!(*released.borrow(), vec!["refused at abc".to_string()]);
+
+        let ok = finish_clear(&tail(true, None), || Ok(()), || Ok(false), |_| {}).unwrap();
+        assert_eq!(
+            ok,
+            vec![
+                "Cleared merge-hold on PR #9 (marker removed, `aida:merge-hold` label dropped)."
+                    .to_string()
+            ]
+        );
     }
 }

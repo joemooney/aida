@@ -15,6 +15,7 @@
 //! `punt.rs` / `pr_rebase.rs`).
 //!
 //! trace:TASK-458 | ai:claude
+// mandate-gate
 
 // trace:TASK-1602 | ai:codex
 #[derive(Debug, Clone)]
@@ -161,6 +162,10 @@ pub(crate) enum ShipRefusal {
     Review = 23,
     StaleDefinition = 24,
     MergeHold = 25,
+    /// STORY-1690: the head is behind its base (or that could not be
+    /// computed) and no CI definition changed.
+    // trace:STORY-1690 | ai:claude
+    BehindBase = 26,
 }
 
 #[derive(Debug)]
@@ -2645,6 +2650,7 @@ mod tests {
             (Review, 23),
             (StaleDefinition, 24),
             (MergeHold, 25),
+            (BehindBase, 26),
         ] {
             let error = reason.error("refused").context("ship failed");
             assert_eq!(crate::exit_code_for_error(&error), code);

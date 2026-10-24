@@ -1572,10 +1572,16 @@ fn transactional_worktree_add(
     rollback: &mut Option<SessionStartCleanup>,
 ) -> Result<std::process::Output> {
     let Some(cleanup) = rollback.as_mut() else {
-        return Ok(std::process::Command::new("git")
-            .current_dir(root)
-            .args(args)
-            .output()?);
+        // trace:BUG-2211 | ai:claude
+        return Ok(aida_core::git_ops::output_healing_config_lock(
+            root,
+            || {
+                let mut cmd = std::process::Command::new("git");
+                cmd.current_dir(root);
+                cmd
+            },
+            args,
+        )?);
     };
     if std::fs::symlink_metadata(requested).is_ok() {
         anyhow::bail!("worktree path {} already exists; kept it unchanged; inspect `git worktree list --porcelain`", requested.display());
@@ -1618,10 +1624,16 @@ fn transactional_worktree_add(
     cleanup.gitdir = Some(gitdir);
     let mut staged_args = args.iter().map(|s| s.to_string()).collect::<Vec<_>>();
     staged_args[path_index] = staging.to_string_lossy().into_owned();
-    let out = std::process::Command::new("git")
-        .current_dir(root)
-        .args(&staged_args)
-        .output()?;
+    // trace:BUG-2211 | ai:claude
+    let out = aida_core::git_ops::output_healing_config_lock(
+        root,
+        || {
+            let mut cmd = std::process::Command::new("git");
+            cmd.current_dir(root);
+            cmd
+        },
+        &staged_args,
+    )?;
     if !out.status.success() {
         return Ok(out);
     }
@@ -1835,6 +1847,36 @@ pub(crate) fn session_start_with_receipt(
                 crate::worktree::is_registered(&String::from_utf8_lossy(&o.stdout), &worktree_path)
             })
             .unwrap_or(false);
+    // TASK-2053 S4c: the default flipped to `clone`, but a clone cannot yet
+    // host a review session, re-enter an existing --path, live at an
+    // explicit --path that is not an `aida-seat-*` directory in the worktree
+    // parent, or be made without an `origin` remote to clone from. With no
+    // explicit knob those launches keep a worktree and say why; an explicit
+    // `seat_tree = "clone"` refuses them (below, or here for a missing origin).
+    // The launch facts (a git call, a config read, a canonicalize) are read
+    // only for a clone; a worktree launch has nothing to fall back from.
+    // trace:TASK-2053 | ai:claude
+    let tree_kind = if tree_kind != crate::seat_clone::TreeKind::Clone {
+        tree_kind
+    } else {
+        match crate::seat_clone::default_clone_fallback(
+            tree_kind,
+            crate::seat_clone::seat_tree_is_explicit(&project_root),
+            &crate::seat_clone::CloneLaunch {
+                review: review_target.is_some(),
+                reentry: reuse_existing_worktree_path,
+                path_not_seat_location: explicit_path.is_some()
+                    && !crate::seat_clone::is_seat_clone_location(&project_root, &worktree_path),
+                has_origin: aida_core::git_ops::has_remote(&project_root, "origin"),
+            },
+        )? {
+            (kind, Some(note)) => {
+                eprintln!("note: {note}");
+                kind
+            }
+            (kind, None) => kind,
+        }
+    };
     if worktree_path.exists() && !reuse_existing_worktree_path {
         anyhow::bail!(
             "{} already exists — pick a different --path or remove it first",

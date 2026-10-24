@@ -597,6 +597,13 @@ pub(crate) enum FailureKind {
     /// `recover_phase1_failure_with_open_pr`.
     // trace:BUG-1524 | ai:claude
     LaunchRefused,
+    /// STORY-1690: the merge phase refused because the PR's head is behind
+    /// its base (or that could not be computed), so its green was never
+    /// tested with main's newer commits. Not a broken PR: it lands through
+    /// `aida pr train`, which tests it on the current main. Shelved, never
+    /// retried (a retry meets the same moved main).
+    // trace:STORY-1690 | ai:claude
+    BehindBase,
     /// The spawned work ran and reported failure — the phase-specific default.
     /// The hint points at the phase's normal "address it and retry" path.
     Failed,
@@ -655,6 +662,8 @@ impl FailureKind {
                 | Self::ShippedMismatch
                 // trace:TASK-1459 | ai:claude
                 | Self::ReviewInProgress
+                // trace:STORY-1690 | ai:claude
+                | Self::BehindBase
         )
     }
 
@@ -693,6 +702,8 @@ impl FailureKind {
             Self::ShippedMismatch => "shipped-mismatch",
             // trace:TASK-1459 | ai:claude
             Self::ReviewInProgress => "review-in-progress",
+            // trace:STORY-1690 | ai:claude
+            Self::BehindBase => "behind-base",
         }
     }
 
@@ -727,6 +738,7 @@ impl FailureKind {
             "tool-exit" => Self::Failed,
             "shipped-mismatch" => Self::ShippedMismatch,
             "review-in-progress" => Self::ReviewInProgress,
+            "behind-base" => Self::BehindBase,
             _ => return None,
         })
     }
@@ -2275,6 +2287,12 @@ pub(crate) fn recovery_hint(phase: Phase, kind: FailureKind, ctx: &HintContext) 
              or `aida awaiting`. Wait for the verdict (`aida review record … --pr {pr}` clears \
              this marker), or, if that review was abandoned, release it with \
              `aida review claim --pr {pr} --release` and retry."
+        ),
+        // STORY-1690: the drain-to-train handoff. trace:STORY-1690 | ai:claude
+        (Phase::Merge, FailureKind::BehindBase) => format!(
+            "PR-{pr} is approved and green, but its head is behind main, so the drain will \
+             not merge it. Land it through the merge train, which tests it on the current \
+             main first: `aida pr train {pr}`."
         ),
         (Phase::Merge, FailureKind::MissingTool) => {
             forge_cli_missing_hint(ctx.forge, "merge the PR", "merge the PR manually")
@@ -4848,14 +4866,18 @@ pub(crate) struct BatchDrainResult {
     /// / `escalated` so the summary points the operator at the right
     /// triage path. trace:EPIC-28 | ai:claude
     pub(crate) shelved: Vec<String>,
-    /// EPIC-28: members the drain skipped because they were blocked by a
-    /// just-shelved (or already-`NeedsAttention`) spec. Each entry is
-    /// `(display_id, reason_label)` where `reason_label` is the same
-    /// `pickability_reason_label` the queue UI uses. The pure
-    /// [`drain_batch`] cannot fill this — the mock has no relationship
-    /// graph — so it stays empty here; the real CLI surface
-    /// (`resolve_batch_members`) records skips and populates this field
-    /// after the fact. trace:EPIC-28 | ai:claude
+    /// EPIC-28: members the drain skipped, as `(display_id, reason_label)`.
+    /// Three sources fill it:
+    /// - members blocked by a just-shelved (or already-`NeedsAttention`)
+    ///   spec, labelled with the `pickability_reason_label` the queue UI
+    ///   uses. The pure [`drain_batch`] cannot fill these (the mock has no
+    ///   relationship graph); the real CLI surface (`resolve_batch_members`)
+    ///   records them after the fact. trace:EPIC-28 | ai:claude
+    /// - in-flight pipelined members whose serial finish was skipped because
+    ///   the parent's serial leg broke or the queue stalled (TASK-1615);
+    /// - in-flight members whose held, inconclusive, failed or
+    ///   environment-blocked result arrived after another member's halt had
+    ///   latched (TASK-1617). trace:TASK-1951 trace:TASK-2106 | ai:claude
     pub(crate) skipped: Vec<(String, String)>,
     /// The spec the drain stopped on — set for `Failed` / `Stalled`, `None`
     /// for a clean `Drained` / `MaxReached`.
@@ -5215,13 +5237,24 @@ fn apply_batch_result(
 /// A member whose terminal result arrives after another member's halt has
 /// latched: the first halt keeps `stopped_at`, so a held, inconclusive or
 /// un-shelvable result would otherwise appear in no summary list. Mismatched
-/// and shelved results already recorded their member.
-// trace:TASK-1951 trace:TASK-1617 | ai:claude
+/// and just-shelved results already recorded their member; `just_shelved`
+/// says whether this result itself shelved it (not whether an earlier run of
+/// the same spec did). Any earlier disposition of a requeued spec is
+/// forgotten first, as every other recorder does (BUG-852).
+// trace:TASK-1951 trace:TASK-1617 trace:TASK-2105 | ai:claude
+#[allow(clippy::too_many_arguments)]
 fn record_result_after_latched_halt(
     done: &BatchDrainResult,
-    shelved: &[String],
+    just_shelved: bool,
+    shipped: &mut Vec<String>,
+    punted: &mut Vec<String>,
+    escalated: &mut Vec<String>,
+    shelved: &mut Vec<String>,
     skipped: &mut Vec<(String, String)>,
 ) {
+    if just_shelved {
+        return;
+    }
     let Some(head) = done.stopped_at.as_ref() else {
         return;
     };
@@ -5238,9 +5271,7 @@ fn record_result_after_latched_halt(
         }
         _ => return,
     };
-    if shelved.contains(head) || skipped.iter().any(|(spec, _)| spec == head) {
-        return;
-    }
+    forget_batch_disposition(head, shipped, punted, escalated, shelved, skipped);
     skipped.push((head.clone(), reason));
 }
 
@@ -5419,6 +5450,7 @@ pub(crate) fn drain_batch_pipelined_with_caps(
         let effective_max_failures = if halted.is_some() { None } else { max_failures };
         if !should_finish_serial {
             let env_halt = env_streak.observe(&through_ci, env_halt_after);
+            let shelves_before = shelve_events;
             if let Some(done) = apply_batch_result(
                 member.spec,
                 through_ci,
@@ -5432,7 +5464,15 @@ pub(crate) fn drain_batch_pipelined_with_caps(
                 env_halt,
             ) {
                 if halted.is_some() {
-                    record_result_after_latched_halt(&done, &shelved, &mut skipped);
+                    record_result_after_latched_halt(
+                        &done,
+                        shelve_events > shelves_before,
+                        &mut shipped,
+                        &mut punted,
+                        &mut escalated,
+                        &mut shelved,
+                        &mut skipped,
+                    );
                 } else {
                     halted = Some(LatchedHalt {
                         stopped_at: done.stopped_at,
@@ -5460,6 +5500,7 @@ pub(crate) fn drain_batch_pipelined_with_caps(
         let serial_unshelved_fail =
             final_result.exit_code != 0 && final_result.shelved_reason.is_none();
         let env_halt = env_streak.observe(&final_result, env_halt_after);
+        let shelves_before = shelve_events;
         if let Some(done) = apply_batch_result(
             member.spec,
             final_result,
@@ -5473,7 +5514,15 @@ pub(crate) fn drain_batch_pipelined_with_caps(
             env_halt,
         ) {
             if let Some(existing) = halted.as_mut() {
-                record_result_after_latched_halt(&done, &shelved, &mut skipped);
+                record_result_after_latched_halt(
+                    &done,
+                    shelve_events > shelves_before,
+                    &mut shipped,
+                    &mut punted,
+                    &mut escalated,
+                    &mut shelved,
+                    &mut skipped,
+                );
                 if serial_unshelved_fail {
                     existing.skip_in_flight = Some(SERIAL_LEG_BROKEN);
                 }
@@ -10752,6 +10801,20 @@ mod tests {
     /// conflict — the drain merge refusal must carry its own kind with an
     /// accurate hint, not point the user at `aida merge-lock` (which names a
     /// different seat entirely: another MERGER, not a review still running).
+    /// STORY-1690: a behind head shelves with its own kind and a hint that
+    /// hands the PR to the merge train.
+    #[test]
+    fn behind_base_is_distinct_and_hands_off_to_the_train() {
+        assert!(FailureKind::BehindBase.is_shelvable());
+        assert_eq!(FailureKind::BehindBase.cause_slug(), "behind-base");
+        assert_eq!(
+            FailureKind::from_cause_slug("behind-base"),
+            Some(FailureKind::BehindBase)
+        );
+        let hint = recovery_hint(Phase::Merge, FailureKind::BehindBase, &ctx());
+        assert!(hint.contains("aida pr train 46"), "hint: {hint}");
+    }
+
     #[test]
     fn review_in_progress_is_distinct_from_lease_conflict() {
         assert!(FailureKind::ReviewInProgress.is_shelvable());
@@ -13120,6 +13183,115 @@ mod tests {
             ]
         );
         assert_eq!(driver.heads, vec!["D"]);
+    }
+
+    /// TASK-2104: at the serial-finish call site, an in-flight member whose
+    /// finish fails un-shelvably after another member's halt latched is
+    /// recorded in `skipped` with its failed phase, and the broken serial
+    /// leg then skips the next in-flight member.
+    // trace:TASK-1951 trace:TASK-2104 | ai:claude
+    #[test]
+    fn drain_batch_pipelined_records_an_unshelvable_finish_after_a_latched_halt() {
+        let mut driver = MockPipelinedBatchDriver::new(&["A", "B", "C", "D"], 3)
+            .failing_finish("B", Phase::Merge);
+        let mut held = ok_result();
+        held.held_reason = Some("held for smoke".to_string());
+        driver.through_ci_by_spec.insert("A".to_string(), held);
+        let result = drain_batch_pipelined_with_caps(
+            &mut driver,
+            None,
+            None,
+            &crate::drain_caps::DrainCaps::default(),
+            std::time::Instant::now(),
+            &mut None,
+        );
+        assert_eq!(result.outcome, BatchDrainOutcome::Held);
+        assert_eq!(result.stopped_at, Some("A".to_string()));
+        assert_eq!(
+            result.skipped,
+            vec![
+                (
+                    "B".to_string(),
+                    "Merge failed after the drain halted — not shelved".to_string()
+                ),
+                (
+                    "C".to_string(),
+                    "serial leg broken — PR left open".to_string()
+                ),
+            ]
+        );
+        assert_eq!(driver.heads, vec!["D"]);
+    }
+
+    /// TASK-2104 + TASK-2105: every arm of the post-halt recorder, and a
+    /// requeued spec's earlier disposition is forgotten rather than kept
+    /// beside the new one. A result that shelved its member this time is
+    /// already recorded.
+    // trace:TASK-1951 trace:TASK-2104 trace:TASK-2105 | ai:claude
+    #[test]
+    fn post_halt_recorder_covers_every_arm_and_forgets_requeued_dispositions() {
+        let done = |outcome: BatchDrainOutcome| BatchDrainResult {
+            shipped: Vec::new(),
+            punted: Vec::new(),
+            escalated: Vec::new(),
+            shelved: Vec::new(),
+            skipped: Vec::new(),
+            stopped_at: Some("B".to_string()),
+            outcome,
+            exit_code: 0,
+        };
+        let cases = [
+            (
+                BatchDrainOutcome::Held,
+                "held after the drain halted — PR left open",
+            ),
+            (
+                BatchDrainOutcome::Inconclusive,
+                "inconclusive after the drain halted — left for retry",
+            ),
+            (
+                BatchDrainOutcome::Failed(Phase::Merge),
+                "Merge failed after the drain halted — not shelved",
+            ),
+            (
+                BatchDrainOutcome::EnvironmentBlocked {
+                    cause: "resource-exhaustion",
+                },
+                "environment blocked (resource-exhaustion) after the drain halted",
+            ),
+        ];
+        for (outcome, reason) in cases {
+            // B was shelved earlier in the drain and punted before that
+            // (requeued twice), then came back after the halt.
+            let (mut shipped, mut escalated) = (Vec::new(), Vec::new());
+            let mut punted = vec!["B".to_string()];
+            let mut shelved = vec!["B".to_string()];
+            let mut skipped = Vec::new();
+            record_result_after_latched_halt(
+                &done(outcome),
+                false,
+                &mut shipped,
+                &mut punted,
+                &mut escalated,
+                &mut shelved,
+                &mut skipped,
+            );
+            assert!(punted.is_empty() && shelved.is_empty(), "{reason}");
+            assert_eq!(skipped, vec![("B".to_string(), reason.to_string())]);
+        }
+        let mut shelved = vec!["B".to_string()];
+        let mut skipped = Vec::new();
+        record_result_after_latched_halt(
+            &done(BatchDrainOutcome::Failed(Phase::Ci)),
+            true,
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut shelved,
+            &mut skipped,
+        );
+        assert_eq!(shelved, vec!["B"]);
+        assert!(skipped.is_empty());
     }
 
     /// BUG-1930: resource exhaustion travels the same pipelined path (its

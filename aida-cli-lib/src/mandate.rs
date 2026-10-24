@@ -24,6 +24,7 @@
 //! Expiry is never cached: every ship decision re-reads the records and
 //! compares them against the clock at that instant.
 // trace:STORY-1698 | ai:claude
+// mandate-gate
 
 use anyhow::{bail, Context, Result};
 use chrono::{DateTime, Duration, Utc};
@@ -819,8 +820,11 @@ fn store_git(
     let mut cmd = aida_core::git_ops::host_git_command(store_root);
     // TASK-2067 (advisor C1): no system config, and no path quoting, decide
     // what a history walk reports. trace:TASK-2067 | ai:claude
+    // TASK-2238: nor do refs/replace/* objects, as for the snapshot queries.
+    // trace:TASK-2238 | ai:claude
     cmd.args(["-c", "core.quotePath=false"])
         .env("GIT_CONFIG_NOSYSTEM", "1")
+        .env("GIT_NO_REPLACE_OBJECTS", "1")
         .args(args)
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
@@ -838,8 +842,11 @@ fn store_git(
         return match crate::command_output_with_timeout_detail(cmd, budget) {
             crate::BoundedCommandOutput::Completed(out) => git_output(out),
             crate::BoundedCommandOutput::SpawnFailed => Err("git failed to run".to_string()),
+            // TASK-2141: name the knob, so a cold-cache walk on a large
+            // store has a way forward. trace:TASK-1951 trace:TASK-2141 | ai:claude
             crate::BoundedCommandOutput::TimedOut => Err(format!(
-                "store history read timed out after {}s",
+                "store history read timed out after {}s; raise {STORE_HISTORY_TIMEOUT_ENV} \
+                 (seconds) for a large or cold store",
                 budget.as_secs()
             )),
         };
@@ -859,15 +866,19 @@ fn store_git(
     git_output(out)
 }
 
+const STORE_HISTORY_TIMEOUT_ENV: &str = "AIDA_STORE_HISTORY_TIMEOUT_SECS";
+
 /// The deadline for one store-history git walk:
-/// `AIDA_STORE_HISTORY_TIMEOUT_SECS`, else 120 s.
-// trace:TASK-1951 trace:TASK-1662 | ai:claude
+/// `AIDA_STORE_HISTORY_TIMEOUT_SECS`, else 600 s. TASK-2141: the default sits
+/// above the measured cold walk of the live store (4m26s, TASK-1662), so a
+/// cold cache does not refuse a ship; the deadline still bounds a hung walk.
+// trace:TASK-1951 trace:TASK-1662 trace:TASK-2141 | ai:claude
 fn store_history_timeout() -> std::time::Duration {
-    let secs = std::env::var("AIDA_STORE_HISTORY_TIMEOUT_SECS")
+    let secs = std::env::var(STORE_HISTORY_TIMEOUT_ENV)
         .ok()
         .and_then(|v| v.trim().parse::<u64>().ok())
         .filter(|&n| n > 0)
-        .unwrap_or(120);
+        .unwrap_or(600);
     std::time::Duration::from_secs(secs)
 }
 
@@ -1160,10 +1171,19 @@ pub(crate) fn store_history_alias_map(
             )
         })?;
         let id = caps[2].to_ascii_uppercase();
-        // The other side of a rename only adds versions to judge.
-        let renamed = other
-            .filter(|other| Some(*other) != hit)
-            .and_then(canonical_object_stem);
+        // The other side of a rename only adds versions to judge. TASK-2238:
+        // a non-canonical other side would be versions never judged, so it
+        // refuses like a non-canonical hit rather than being dropped.
+        // trace:TASK-2238 | ai:claude
+        let renamed = match other.filter(|other| Some(*other) != hit) {
+            None => None,
+            Some(other) => Some(canonical_object_stem(other).ok_or_else(|| {
+                format!(
+                    "store history renames {} to or from a non-canonical object path ({other})",
+                    &caps[2]
+                )
+            })?),
+        };
         if let Some(aliases) = found.get_mut(&id) {
             for stem in std::iter::once(stem).chain(renamed) {
                 let stem = stem.to_ascii_uppercase();
@@ -1238,6 +1258,9 @@ pub(crate) struct ShipCheck<'a> {
     /// [`ship_decision`].
     // trace:STORY-1700 | ai:claude
     pub changed_paths: Option<&'a [String]>,
+    /// STORY-1888: the effective protected set (floor plus both config
+    /// layers; the floor alone when the layers are unreadable).
+    pub protected: &'a crate::mandate_gates::ProtectedPaths,
     /// STORY-1700: why `ship` is a human gate right now (listed in
     /// `[mandate.human_gates]`, or the gate config is unreadable); `None` =
     /// not gated. Read by [`ship_decision`] and [`rework_release_decision`].
@@ -1263,8 +1286,9 @@ fn gate_checks(
     let paths = c
         .changed_paths
         .ok_or(MandateRefusal::ChangedPathsUnresolved)?;
-    if let Some(path) = crate::mandate_gates::touches_gates(paths) {
-        return Err(MandateRefusal::TouchesGates { path });
+    // trace:STORY-1888 | ai:claude
+    if let Some(hit) = crate::mandate_gates::touches_gates(paths, c.protected) {
+        return Err(MandateRefusal::TouchesGates(hit));
     }
     if let Some(why) = gates.iter().find_map(|g| g.as_ref()) {
         return Err(MandateRefusal::HumanGated { why: why.clone() });
@@ -1331,7 +1355,7 @@ pub(crate) enum MandateRefusal {
     SupervisedNotIncluded { id: String }, // trace:STORY-1697 | ai:claude
     // trace:STORY-1700 | ai:claude
     ChangedPathsUnresolved,
-    TouchesGates { path: String },
+    TouchesGates(crate::mandate_gates::GateMatch), // trace:STORY-1888 | ai:claude
     HumanGated { why: String },
     SoloSelfApproval,
 }
@@ -1396,8 +1420,9 @@ impl MandateRefusal {
             Self::ChangedPathsUnresolved => {
                 "the files the PR changes could not be resolved, so it may touch the mandate's own gates".to_string()
             }
-            Self::TouchesGates { path } => format!(
-                "it changes `{path}`, part of the mandate and its human gates; a human must merge it"
+            Self::TouchesGates(hit) => format!(
+                "it changes {}, part of the mandate and its human gates; a human must merge it",
+                hit.describe()
             ),
             Self::HumanGated { why } => format!("shipping is a human gate ({why})"),
             Self::SoloSelfApproval => "the approval is a solo-human self-approval, not an independent review; a human must ship it".to_string(),
@@ -2079,25 +2104,45 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
             for w in &warnings {
                 eprintln!("warning: {w}");
             }
-            if *json {
-                let mut out = status_json(&state, now);
-                if let (Some(root), Some(m)) = (&audit_root, state_mandate(&state)) {
-                    out["drive_actions"] = crate::mandate_drive::ledger_json(root, &m.id);
-                }
-                println!("{out}");
-            } else {
-                println!("{}", status_text(&state, now));
-                if let (Some(root), Some(m)) = (&audit_root, state_mandate(&state)) {
-                    let gates = crate::mandate_gates::describe(Some(root));
-                    println!("  human gates: {gates}");
-                    if let Some(summary) = crate::mandate_drive::ledger_text(root, &m.id) {
-                        println!("{summary}");
-                    }
-                }
-            }
+            print!(
+                "{}",
+                status_report(&state, now, audit_root.as_deref(), *json)
+            );
             Ok(())
         }
     }
+}
+
+/// The full `aida mandate status` output (text or JSON), newline-terminated.
+// trace:STORY-1888 | ai:claude
+pub(crate) fn status_report(
+    state: &MandateState,
+    now: DateTime<Utc>,
+    audit_root: Option<&Path>,
+    json: bool,
+) -> String {
+    if json {
+        let mut out = status_json(state, now);
+        if let (Some(root), Some(m)) = (audit_root, state_mandate(state)) {
+            out["drive_actions"] = crate::mandate_drive::ledger_json(root, &m.id);
+        }
+        if let Some(root) = audit_root {
+            out["protected_paths"] = crate::mandate_gates::protected_paths_json(root);
+        }
+        return format!("{out}\n");
+    }
+    let mut out = format!("{}\n", status_text(state, now));
+    if let (Some(root), Some(m)) = (audit_root, state_mandate(state)) {
+        let gates = crate::mandate_gates::describe(Some(root));
+        out.push_str(&format!("  human gates: {gates}\n"));
+        if let Some(summary) = crate::mandate_drive::ledger_text(root, &m.id) {
+            out.push_str(&format!("{summary}\n"));
+        }
+    }
+    if let Some(root) = audit_root {
+        out.push_str(&crate::mandate_gates::protected_paths_text(root));
+    }
+    out
 }
 
 #[cfg(test)]

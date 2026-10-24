@@ -718,8 +718,9 @@ pub fn human_bytes(bytes: u64) -> String {
 /// `git` in `dir`, captured, `None` on any failure.
 // trace:TASK-1562 | ai:claude
 fn git_capture(dir: &Path, args: &[&str]) -> Option<String> {
-    let out = std::process::Command::new("git")
-        .current_dir(dir)
+    // TASK-2053: refuses a seat clone (run from inside one: no survey).
+    // trace:TASK-2053 | ai:claude
+    let out = aida_core::git_ops::host_git_command(dir)
         .args(args)
         .output()
         .ok()?;

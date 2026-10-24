@@ -1,6 +1,7 @@
 //! Committed trace evidence for mandate EXCLUSIONS only. No completion or
 //! author/reviewer authority may be derived from this module.
 // trace:TASK-1790 | ai:codex
+// mandate-gate
 
 use anyhow::{ensure, Context, Result};
 use std::{collections::BTreeSet, path::Path};
@@ -101,6 +102,19 @@ pub(crate) fn store_snapshot(store: &Path) -> Result<StoreSnapshot> {
                 "--no-renames",
             ],
             None,
+        )?
+        .is_empty(),
+        StoreDirty
+    );
+    // TASK-2238: status still honours $GIT_DIR/info/exclude and any
+    // .gitignore, which could hide an untracked object. `ls-files --others`
+    // with no exclude option applies none of them.
+    // trace:TASK-2238 | ai:claude
+    ensure!(
+        snapshot_git(
+            store,
+            &["ls-files", "--others", "-z", "--", "objects/"],
+            None
         )?
         .is_empty(),
         StoreDirty

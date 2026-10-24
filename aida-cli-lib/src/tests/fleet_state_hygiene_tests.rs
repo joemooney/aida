@@ -27,6 +27,7 @@ fn agent_view(id: &str, status: agent_registry::AgentStatus) -> agent_registry::
         native_session_id: None,
         ended_at: None,
         resumed_from: None,
+        liveness: agent_registry::LivenessBasis::Process,
     }
 }
 

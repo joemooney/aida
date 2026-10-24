@@ -233,14 +233,41 @@ pub fn is_under_temp_root(path: &Path) -> bool {
         .any(|root| canonical.starts_with(root))
 }
 
+/// Is `path` under this workspace's `target/` directory? Test fixtures that
+/// must live outside `/tmp` build their stores there.
+// trace:TASK-2238 | ai:claude
+fn is_under_workspace_target(path: &Path) -> bool {
+    let Some(target) = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .map(|workspace| workspace.join("target"))
+        .and_then(|target| target.canonicalize().ok())
+    else {
+        return false;
+    };
+    let mut probe = path;
+    loop {
+        if let Ok(canonical) = probe.canonicalize() {
+            return canonical.starts_with(&target);
+        }
+        match probe.parent() {
+            Some(parent) => probe = parent,
+            None => return false,
+        }
+    }
+}
+
 /// Panic on a roster write a test must never make: from a process running as
 /// [`HERMETIC_TEST_USER`], or from this crate's own tests, into a store outside
-/// the system temp roots. Such a write once reached the operator's real store
-/// through a fixture's store walk-up and replaced their roster (BUG-2209).
+/// the system temp roots and the workspace `target/`. Such a write once reached
+/// the operator's real store through a fixture's store walk-up and replaced
+/// their roster (BUG-2209).
 // trace:BUG-2209 | ai:claude
 pub fn guard_roster_write(store_root: &Path) {
     let hermetic = std::env::var("AIDA_USER").is_ok_and(|user| user == HERMETIC_TEST_USER);
-    if (hermetic || cfg!(test)) && !is_under_temp_root(store_root) {
+    if (hermetic || cfg!(test))
+        && !is_under_temp_root(store_root)
+        && !is_under_workspace_target(store_root)
+    {
         panic!(
             "refusing a test roster write to `{}`: the store is not under a temp directory \
              (AIDA_USER hermetic: {hermetic}); a test resolved a real store",
@@ -283,8 +310,15 @@ fn load_for_write(path: &Path) -> std::io::Result<(Option<Vec<u8>>, TeamRoster)>
 /// (STORY-653). Returns whether the file changed.
 ///
 /// Callers stage and commit the file; the CAS functions below hold the store
-/// write lock around it.
+/// write lock around it. The content CAS narrows, but does not close, the
+/// window between its re-read and the rename: a caller that does not hold the
+/// store write lock (the seat-grant test fixture) can still lose a writer that
+/// lands inside it, so every production caller must take the lock.
+///
+/// The test-write guard ([`guard_roster_write`]) runs here, in the primitive,
+/// so a new caller cannot bypass it.
 // trace:BUG-2209 | ai:claude
+// trace:TASK-2238 | ai:claude
 pub fn write_member_seats(
     store_root: &Path,
     user_id: &str,
@@ -292,6 +326,7 @@ pub fn write_member_seats(
     edit: impl Fn(Option<&[String]>) -> Option<Vec<String>>,
 ) -> std::io::Result<bool> {
     const MAX_ATTEMPTS: u32 = 20;
+    guard_roster_write(store_root);
     let path = TeamRoster::path(store_root);
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
