@@ -1,0 +1,35 @@
+id: 01a16b63-96f7-7dd1-ae54-ff0567fed65d
+spec_id: TASK-2294
+agreed_id: TASK-2294
+title: 'Cargo-timeout hook: $(shell ...) in a target-specific := assignment or a rule prerequisite runs cargo at parse time but reads as safe'
+description: |
+  TASK-2173 (folded into TASK-1955 slice 8) made `X := $(shell ...)`, `X != ...`, a recursive `X = $(shell ...)` and a `$(shell ...)` in a define body fail closed in aida-core/templates/hooks/aida-cargo-timeout-guard.sh (make_targets_skip_cargo). Two other places where make runs `$(shell ...)` while it parses the Makefile still fail open:
+
+  1. A target-specific immediate assignment: `other: X := $(shell cargo build)`. The line is a rule line (`c < eq`, and `body ~ /=/`), so it hits `owner = ""; next` and the shell check never runs.
+  2. A prerequisite list of ANOTHER target: `other: $(shell cargo build)`. make expands prerequisites immediately, but the `$` only marks `bad[other]`, which matters only when `other` is reached.
+
+  Reproduced against PR-2855 head 05e2bcd8e7: with a Makefile `other: X := $(shell cargo build)` / `hello: notes.txt` / `\t@echo hi`, `timeout 1h make hello` gets no hint. The same is true for `other2: $(shell cargo build)`. `make -s hello` on that Makefile with `touch` in place of cargo creates both marker files, which confirms that make runs both at parse time.
+
+  Fix: treat any `$(shell` / `${shell` anywhere outside a recipe line as unresolvable (`!=` is already covered). Add both cases to tests/test_cargo_timeout_guard.sh. Impact is minor because the hook only warns.
+
+  Raised in review of PR-2855: https://github.com/joemooney/aida/pull/2855
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-24T00:50:51.255404187Z
+modified_at: 2026-10-24T00:50:51.255404187Z
+req_type: Task
+tags:
+- from-review:PR-2855
+- hook
+- severity:minor
+filed_at:
+  code_sha: 05e2bcd8e78d554b62bddfea65bd071714137cc0
+  branch: pr-2855
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c38043228d
+  vendor: claude
+  session: 01a16b60b6bb
+  harness_version: 2.1.310 (Claude Code)
