@@ -235,6 +235,19 @@ pub enum EventKind {
         /// Human-readable reason, when known.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         reason: Option<String>,
+        /// The acting principal's key (`human:<user>`, `operator:<id>`,
+        /// `advisor:<principal>`), when the emitting command resolved one.
+        /// Events written before this field existed carry none.
+        // trace:BUG-2214 | ai:claude
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        principal: Option<String>,
+        /// `true` only when the emitting command held the human integrity
+        /// floor (an interactive terminal) at the moment of the change — the
+        /// same attestation `aida merge-hold clear` enforces before it clears.
+        /// The BUG-2214 cleared-by-human mandate cover requires it.
+        // trace:BUG-2214 | ai:claude
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        human_attested: bool,
     },
     /// A fire-fighting mandate was started (`active: true`) or stopped
     /// (`active: false`) by a human at a terminal — the audit copy of the
@@ -1643,6 +1656,8 @@ mod tests {
                     pr: 4,
                     placed: false,
                     reason: None,
+                    principal: None,
+                    human_attested: false,
                 },
             ),
             Event::new(
@@ -1652,6 +1667,8 @@ mod tests {
                     pr: 5,
                     placed: true,
                     reason: None,
+                    principal: None,
+                    human_attested: false,
                 },
             ),
         ];
@@ -1747,6 +1764,8 @@ mod tests {
                     pr: 1978,
                     placed: false,
                     reason: None,
+                    principal: None,
+                    human_attested: false,
                 },
             ),
         ];

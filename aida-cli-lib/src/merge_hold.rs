@@ -657,6 +657,9 @@ fn write_marker(
             } else {
                 record.detail.clone()
             }),
+            // trace:BUG-2214 | ai:claude
+            principal: None,
+            human_attested: false,
         },
     );
     event.seat = crate::events::active_seat();
@@ -1453,6 +1456,59 @@ fn record_clearance_full(
     let body = serde_json::to_vec_pretty(&clearance)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
     aida_core::fs_atomic::write_atomic(&path, &body)
+}
+
+/// BUG-2214 corroboration 1 of 3: `pr`'s recorded clearance, only when it
+/// names a human or operator principal and no mandate — a release a human
+/// decided, not one an advisor's mandate performed. Unreadable or unqualified
+/// records answer `None` (fail closed).
+// trace:BUG-2214 | ai:claude
+pub(crate) fn human_recorded_clearance(project_root: &Path, pr: u64) -> Option<HoldClearance> {
+    let body = std::fs::read(clearance_path(project_root, pr)).ok()?;
+    let clearance: HoldClearance = serde_json::from_slice(&body).ok()?;
+    // A clearance copied from another PR's file does not qualify.
+    if clearance.pr != pr || clearance.released_under_mandate.is_some() {
+        return None;
+    }
+    matches!(
+        PrincipalIdentity::parse(&clearance.cleared_by).principal_kind,
+        PrincipalKind::Human | PrincipalKind::Operator
+    )
+    .then_some(clearance)
+}
+
+/// BUG-2214 corroboration 2 of 3: does the events ledger say PR `pr`'s most
+/// recent hold change is a release by a Human/Operator principal that carried
+/// the human integrity-floor attestation? Any later placement (including a
+/// mandate-failure re-arm), an unattested release, or an agent/advisor release
+/// answers `false`, as does a ledger with no hold events for the PR.
+// trace:BUG-2214 | ai:claude
+pub(crate) fn human_attested_release(project_root: &Path, pr: u64) -> bool {
+    use crate::events::EventKind;
+    let mut released = false;
+    for event in crate::events::read_all_with_archive(&hold_store_root(project_root)) {
+        if let EventKind::MergeHoldChanged {
+            pr: event_pr,
+            placed,
+            principal,
+            human_attested,
+            ..
+        } = event.kind
+        {
+            if u64::from(event_pr) != pr {
+                continue;
+            }
+            released = !placed
+                && human_attested
+                && principal.as_deref().is_some_and(|p| {
+                    matches!(
+                        PrincipalIdentity::parse(p).principal_kind,
+                        PrincipalKind::Human | PrincipalKind::Operator
+                    )
+                });
+        }
+    }
+    released
 }
 
 /// The hold reason if `pr` is under a supervised merge-hold, else `None`.
@@ -3691,6 +3747,8 @@ mod tests {
                 pr: 4321,
                 placed: true,
                 reason: Some("fixture".into()),
+                principal: None,
+                human_attested: false,
             },
         );
         std::fs::remove_file(hold_path(root, 4321)).unwrap();
@@ -3702,6 +3760,8 @@ mod tests {
             pr: 4321,
             placed: false,
             reason: Some("fixture cleared".into()),
+            principal: None,
+            human_attested: false,
         };
         crate::events::emit(root, &placed);
         assert!(unrecorded_marker_removals(root).is_empty());

@@ -3846,6 +3846,18 @@ pub(crate) fn pr_ship_with_method(
                         }
                         None => reason.to_string(),
                     }),
+                    // BUG-2214: who released, and whether the human integrity
+                    // floor held — a mandate release is an advisor action and
+                    // never attests as human. trace:BUG-2214 | ai:claude
+                    principal: Some(match &mandate_release {
+                        Some(cover) => format!("advisor:{}", cover.principal),
+                        None => crate::merge_hold::PrincipalIdentity::human(
+                            crate::current_user_id(None),
+                        )
+                        .key(),
+                    }),
+                    human_attested: mandate_release.is_none()
+                        && crate::has_integrity_floor_authority(),
                 },
             );
             hold_event.seat = crate::events::active_seat();

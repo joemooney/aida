@@ -1305,6 +1305,13 @@ pub(crate) enum HoldFacts {
     None,
     /// AIDA recorded placing a hold whose marker vanished without a clearance.
     MarkerMissing,
+    /// BUG-2214: no marker because a human already cleared the hold, proven by
+    /// three independent corroborations (the local clearance record, a
+    /// TTY-attested human release event newer than the last placement, and the
+    /// forge's label state). The mandate has nothing left to release; the
+    /// cover treats the PR as held-and-released rather than never held.
+    // trace:BUG-2214 | ai:claude
+    ClearedByHuman,
     Marker {
         kind: crate::merge_hold::HoldReasonKind,
         legacy: bool,
@@ -1584,6 +1591,10 @@ pub(crate) fn rework_release_decision(
         }
         HoldFacts::None => return Err(MandateRefusal::NoHoldMarker),
         HoldFacts::MarkerMissing => return Err(MandateRefusal::MarkerMissing),
+        // BUG-2214: an approval releases a live rework hold; a hold a human
+        // already cleared leaves nothing for this path to release.
+        // trace:BUG-2214 | ai:claude
+        HoldFacts::ClearedByHuman => return Err(MandateRefusal::NoHoldMarker),
     }
     // STORY-1700 (R1): a released rework hold lets the PR ship, so the
     // release takes the same gate checks as a mandate ship, plus hold-clear.
@@ -1651,6 +1662,12 @@ fn hold_cover<'a>(c: &ShipCheck<'a>) -> std::result::Result<&'a Mandate, Mandate
     match c.hold {
         HoldFacts::None => return Err(MandateRefusal::NoHoldMarker),
         HoldFacts::MarkerMissing => return Err(MandateRefusal::MarkerMissing),
+        // BUG-2214: a hold a human already cleared (triply corroborated by the
+        // caller) leaves nothing to release; every other check — sticky
+        // exclusions, always-human classes, approval at head, the two-person
+        // rules — still runs below and in `ship_decision`.
+        // trace:BUG-2214 | ai:claude
+        HoldFacts::ClearedByHuman => {}
         HoldFacts::Marker { legacy: true, .. } => {
             return Err(MandateRefusal::HoldNotReleasable {
                 kind: "untyped legacy".into(),

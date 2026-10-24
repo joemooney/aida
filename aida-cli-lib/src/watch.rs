@@ -390,7 +390,9 @@ fn describe(ek: &EventKind) -> (&'static str, String) {
         ),
         EventKind::PrMerged { pr } => ("pr-merged", format!("PR #{} merged", pr)),
         // trace:BUG-1423 | ai:claude
-        EventKind::MergeHoldChanged { pr, placed, reason } => (
+        EventKind::MergeHoldChanged {
+            pr, placed, reason, ..
+        } => (
             "merge-hold-changed",
             format!(
                 "merge hold {} on PR #{pr}{}",
