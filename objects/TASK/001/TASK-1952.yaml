@@ -42,12 +42,12 @@ description: |-
   3) A checked-out submodule whose `.git` was removed is skipped (the documented TOCTOU choice), and the toplevel status never lists files inside a gitlink path. Edits left inside such a directory are therefore invisible to the destructive gates. This is only reachable by a session tampering with its own submodule, but it is worth a line in OVERVIEW.
 
   Raised in review of PR-2753: https://github.com/joemooney/aida/pull/2753
-status: NeedsAttention
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T15:57:44.849505155Z
-modified_at: 2026-10-24T01:22:49.749256121Z
+modified_at: 2026-10-24T07:02:17.067930749Z
 req_type: Task
 tags:
 - contained
@@ -754,12 +754,25 @@ history:
   session_id: 01a16b675249
   harness_version: 2.1.310 (Claude Code)
   changes: []
+- id: 01a16cb7-a4e7-7b93-8399-4fb5d43911f1
+  author: aida-auto-bump
+  timestamp: 2026-10-24T07:02:17.063775116Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
 processing_record:
 - id: 01a15cd6-7d71-7962-8b84-e2ae16b3e1d0
   timestamp: 2026-10-21T05:02:03.121912504Z
   agent: aida
   commit_sha: 88430e08c60c19d441eda3086e43479a15a57436
   summary: Completed via merge 88430e08
+- id: 01a16cb7-a4eb-7842-b9e1-dd822fd5f763
+  timestamp: 2026-10-24T07:02:17.067925679Z
+  agent: aida
+  commit_sha: 14065b6254e5edc2d364a3d8281a5a0cc2d08fc3
+  summary: 'S6-only diff (17 files): TASK-2111/2112/1781/1761/1770/1798 implemented to the signed sketch with tests; all 4 round-1 findings fixed (drain-lock removal revokes child_grant_id on stop --now/atexit/SIGTERM/drop, criterion anchors, strict forged-main assert, S5 merged first); both TASK-1952 criteria verified by bug_1985_host_status_guard; CI green at head (merge-hold-gate is the operator hold).'
+  review_verdict: approved
 filed_at:
   code_sha: 6d590ed914dea5135a126f7dae6abb403adec66d
   branch: main
@@ -770,13 +783,6 @@ filed_at:
   session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 implementation_info:
   implemented: false
+  completed_at: 2026-10-24T07:02:17.063767795Z
   completion_sha: 88430e08c60c19d441eda3086e43479a15a57436
   reopened_at_sha: b66e4d93b8fefe25b2af3139fe725fa1801e1981
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Round 7 (head 769a24fc23 = round-6-approved e500886da9 + clean merge of main): PR CI is red. CI (lib-1) failed on attempt 1 and on a reviewer re-run (attempt 2), so Build''s ''Require every CI lane'' fails too. Likely cause: main''s new fetch_ship_refs is an unrouted origin fetch, which this PR''s TASK-2001 ratchet flags.'
-  recovery_hint: address the review findings, move TASK-1952 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-24T01:22:49.749256121Z
