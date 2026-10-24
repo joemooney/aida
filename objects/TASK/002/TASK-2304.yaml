@@ -1,0 +1,27 @@
+id: 01a16bb6-adf2-7433-b235-f0aab4096925
+spec_id: TASK-2304
+agreed_id: TASK-2304
+title: Session-id matching prefix-matches both ways with no minimum length
+description: |
+  agent_handle.rs:368-385 same_session/session_matches accept own.starts_with(sid)||sid.starts_with(own) for any length; a short id matches unrelated sessions. Require equality or a minimum prefix length.
+
+  Raised in review of PR-2864: https://github.com/joemooney/aida/pull/2864#issuecomment-6378690421
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-24T02:21:36.626585364Z
+modified_at: 2026-10-24T02:21:36.626585364Z
+req_type: Task
+tags:
+- from-review:PR-2864
+- severity:minor
+filed_at:
+  code_sha: f200587eab7f73713608a243770c92cb1a510732
+  branch: pr-2864
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c016980d03
+  vendor: claude
+  session: 01a16bae1102
+  harness_version: 2.1.310 (Claude Code)

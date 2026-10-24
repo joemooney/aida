@@ -1,0 +1,27 @@
+id: 01a16bb6-9ee3-7402-b448-b7d1c2a821d3
+spec_id: TASK-2303
+agreed_id: TASK-2303
+title: Handle lookup by CLAUDE_PID/ancestry ignores process liveness
+description: |
+  agent_handle.rs:775-781 live_session_entries filters only ended_at/role-enter, so current_session_handle_for (CLAUDE_PID fallback), session_handle_by_ancestry and session_handle_in_pane can match a stale unended row whose pid was reused, rendering or reading the wrong handle. Use entry_may_hold.
+
+  Raised in review of PR-2864: https://github.com/joemooney/aida/pull/2864#issuecomment-6378690421
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-24T02:21:32.771012424Z
+modified_at: 2026-10-24T02:21:32.771012424Z
+req_type: Task
+tags:
+- from-review:PR-2864
+- severity:minor
+filed_at:
+  code_sha: f200587eab7f73713608a243770c92cb1a510732
+  branch: pr-2864
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c016980d03
+  vendor: claude
+  session: 01a16bae1102
+  harness_version: 2.1.310 (Claude Code)

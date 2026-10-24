@@ -1,0 +1,27 @@
+id: 01a16bb6-8ebc-7a60-ab22-9ae588a8626b
+spec_id: TASK-2302
+agreed_id: TASK-2302
+title: LaunchReservationGuard releases every unbound reservation of its pid, not only its own
+description: |
+  agent_handle.rs:637-653 LaunchReservationGuard::drop releases all reservations with launcher_pid == this pid. A process doing more than one launch would release an earlier launch's not-yet-bound reservation; that child falls back to a generated handle and mail to its launch name is refused. Scope it to the guard's own handle+recipient_id.
+
+  Raised in review of PR-2864: https://github.com/joemooney/aida/pull/2864#issuecomment-6378690421
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-24T02:21:28.636828576Z
+modified_at: 2026-10-24T02:21:28.636828576Z
+req_type: Task
+tags:
+- from-review:PR-2864
+- severity:minor
+filed_at:
+  code_sha: f200587eab7f73713608a243770c92cb1a510732
+  branch: pr-2864
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c016980d03
+  vendor: claude
+  session: 01a16bae1102
+  harness_version: 2.1.310 (Claude Code)
