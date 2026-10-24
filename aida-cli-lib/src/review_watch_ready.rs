@@ -367,7 +367,8 @@ pub(super) fn live_hold(root: &Path, change: &forge::Change) -> Result<Option<St
 /// check beyond every check on the head passing. A config that cannot be
 /// read or parsed is `Err`, never "nothing required".
 // trace:TASK-1945 | ai:claude (TASK-2201)
-pub(super) fn required_checks(root: &Path) -> Result<Vec<String>> {
+// Also the live-binary promote's required checks. trace:STORY-1689 | ai:claude
+pub(crate) fn required_checks(root: &Path) -> Result<Vec<String>> {
     let path = root.join(".aida").join("config.toml");
     let text = match std::fs::read_to_string(&path) {
         Ok(text) => text,
