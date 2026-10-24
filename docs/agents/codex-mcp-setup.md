@@ -137,7 +137,7 @@ trusted AIDA project, the same snippet can live in `.codex/config.toml`.
 For the AIDA-specific role, queue, cache, and session summary, prefer tmux:
 
 ```tmux
-set -g status-right '#(aida statusline --color=never)'
+set -g status-right '#(cd #{q:pane_current_path} && aida statusline --color=never --tmux-pane-pid #{pane_pid})'
 set -g status-interval 15
 ```
 
