@@ -3,12 +3,12 @@ spec_id: BUG-2215
 agreed_id: BUG-2215
 title: aida claim takes a lease but never moves an Approved spec to In Progress
 description: 'Observed 2026-10-24: zero specs project-wide show in-progress while ~7 have live lanes or open PRs (BUG-2214 shows Approved with two open PRs). BUG-754 fixed only the burndown path. ACCEPTANCE: a successful aida claim (and aida queue work) moves Approved -> In Progress and records the claimant; aida unclaim with no open PR returns it to Approved; with an open PR it stays In Progress; merge-time completion is unchanged; a claim on a Draft spec never promotes it. Tests for each transition.'
-status: InProgress
+status: Done
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-24T12:26:56.191718979Z
-modified_at: 2026-10-24T13:44:07.460308986Z
+modified_at: 2026-10-24T13:44:35.066039984Z
 req_type: Bug
 comments:
 - id: 01a16e27-8a24-75c1-bf16-b00df69c9790
@@ -40,6 +40,13 @@ history:
   author: joe
   timestamp: 2026-10-24T12:41:54.443733055Z
   changes: []
+- id: 01a16e27-f5fa-7e70-a896-01570ab7cb50
+  author: ai:codex:joe
+  timestamp: 2026-10-24T13:44:35.066024494Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 6980be3ace8b7b9ae795e4347b8a9d4be01a287e
   branch: main
