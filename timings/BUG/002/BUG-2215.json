@@ -1,0 +1,96 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2215",
+  "publishes": [
+    {
+      "at": "2026-10-24T18:50:09.483679183Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-24T12:28:32.136152106Z",
+      "spec": "BUG-2215",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-24T12:29:31.492349944Z",
+      "spec": "BUG-2215",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-24T12:41:48.790026749Z",
+      "spec": "BUG-2215",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-24T13:43:35.396793028Z",
+      "spec": "BUG-2215",
+      "kind": {
+        "event": "PhaseDonePr",
+        "pr": 2898
+      }
+    },
+    {
+      "ts": "2026-10-24T16:44:29.666959238Z",
+      "spec": "BUG-2215",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-2215",
+        "branch": "pr-2898",
+        "first_seen": "2026-10-24T16:44:29.666929621+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-24T16:44:29.667050581Z",
+      "spec": "BUG-2215",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-2215",
+        "branch": "codex/bug-2215",
+        "first_seen": "2026-10-24T16:44:29.667024207+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-24T18:48:08.863594851Z",
+      "spec": "BUG-2215",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-24T18:49:51.151190098Z",
+      "spec": "BUG-2215",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2898
+      }
+    },
+    {
+      "ts": "2026-10-24T18:50:08.224409548Z",
+      "spec": "BUG-2215",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "00da9622dfb5f7b721b164e2516a102cf22b9824",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
