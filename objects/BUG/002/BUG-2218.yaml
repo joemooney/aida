@@ -3,12 +3,12 @@ spec_id: BUG-2218
 agreed_id: BUG-2218
 title: 'aida mailbox send fails from a sandboxed agent session: mailbox store not writable'
 description: 'Observed 2026-10-24: an implementer in the Claude Code sandbox got ''error: writing message <id>'' from aida mailbox send, so lanes report to the advisor by other routes. ACCEPTANCE: a sandboxed agent can send mail. Either the mailbox write target is inside the sandbox-writable area or the send goes through a path the sandbox allows, without widening the sandbox to sensitive paths. When the send really cannot be written, the error names the path and the reason. Test with a read-only mailbox root.'
-status: Done
+status: NeedsAttention
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-24T12:27:08.977771549Z
-modified_at: 2026-10-24T13:46:52.478771941Z
+modified_at: 2026-10-24T15:00:47.686719736Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -53,6 +53,15 @@ history:
   author: joe
   timestamp: 2026-10-24T13:46:53.450414917Z
   changes: []
+- id: 01a16e6d-bbc6-74b0-a00c-168137256f3f
+  author: aida-orchestrator
+  timestamp: 2026-10-24T15:00:47.686738437Z
+  session_id: 01a16e498aba
+  harness_version: 2.1.310 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 filed_at:
   code_sha: 6980be3ace8b7b9ae795e4347b8a9d4be01a287e
   branch: main
@@ -61,3 +70,11 @@ filed_at:
   aida_build_sha: 6980be3ace
   vendor: claude
   session: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: BUG-2218 implementation passes acceptance on inspection (mailbox-only sandbox grant, symlink refusal, error names path+reason; local tests green), but PR CI is red in lanes cli-0/lib-1 — blocked with the PR
+  recovery_hint: address the review findings, move BUG-2218 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-10-24T15:00:47.686719736Z

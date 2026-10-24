@@ -3,12 +3,12 @@ spec_id: BUG-2215
 agreed_id: BUG-2215
 title: aida claim takes a lease but never moves an Approved spec to In Progress
 description: 'Observed 2026-10-24: zero specs project-wide show in-progress while ~7 have live lanes or open PRs (BUG-2214 shows Approved with two open PRs). BUG-754 fixed only the burndown path. ACCEPTANCE: a successful aida claim (and aida queue work) moves Approved -> In Progress and records the claimant; aida unclaim with no open PR returns it to Approved; with an open PR it stays In Progress; merge-time completion is unchanged; a claim on a Draft spec never promotes it. Tests for each transition.'
-status: Done
+status: NeedsAttention
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-24T12:26:56.191718979Z
-modified_at: 2026-10-24T13:46:46.187617313Z
+modified_at: 2026-10-24T15:00:32.312881225Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -57,6 +57,15 @@ history:
   author: joe
   timestamp: 2026-10-24T13:46:47.221684936Z
   changes: []
+- id: 01a16e6d-7fb8-7131-b235-e0cf444d3d94
+  author: aida-orchestrator
+  timestamp: 2026-10-24T15:00:32.312899298Z
+  session_id: 01a16e498aba
+  harness_version: 2.1.310 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 filed_at:
   code_sha: 6980be3ace8b7b9ae795e4347b8a9d4be01a287e
   branch: main
@@ -65,3 +74,11 @@ filed_at:
   aida_build_sha: 6980be3ace
   vendor: claude
   session: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: CI lanes cli-0 and lib-1 fail deterministically at head (rerun-confirmed); code meets BUG-2215/BUG-2218/TASK-2324 acceptance on inspection and 13/15 new tests pass locally, but the PR cannot merge on red CI
+  recovery_hint: address the review findings, move BUG-2215 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-10-24T15:00:32.312881225Z

@@ -1,0 +1,27 @@
+id: 01a16e6e-e4f9-7863-b1ac-35d99c944313
+spec_id: TASK-2328
+agreed_id: TASK-2328
+title: contained_mailbox_write_paths mutates the filesystem from path-computation helpers
+description: |
+  contained_mailbox_write_paths runs create_dir_all(.aida/mailbox), so callers that merely compute grant lists (os_wrap_rw_paths, settings builders) now create directories in the main checkout as a side effect. Pre-sandbox creation is required for the binding, but it belongs at the launch site, not inside a path-listing helper.
+
+  Raised in review of PR-2898: https://github.com/joemooney/aida/pull/2898#issuecomment-6385738243
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-24T15:02:03.769130144Z
+modified_at: 2026-10-24T15:02:03.769130144Z
+req_type: Task
+tags:
+- from-review:PR-2898
+- severity:cosmetic
+filed_at:
+  code_sha: eb9846b8f4b039b5c99419889114271e4dc9af17
+  branch: pr-2898
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 194492a69f
+  vendor: claude
+  session: 01a16e498aba
+  harness_version: 2.1.310 (Claude Code)
