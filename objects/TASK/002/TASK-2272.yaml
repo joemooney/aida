@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T21:38:06.702176218Z
-modified_at: 2026-10-24T00:13:26.692821966Z
+modified_at: 2026-10-24T00:13:32.725648691Z
 req_type: Task
 relationships:
 - rel_type: Supersedes
@@ -97,6 +97,12 @@ comments:
   content: 'ADVISOR 16:38: Folded the post-merge carry-overs: from #2843 (STORY-1690), TASK-1-467 (pr_train.rs:905 car-subject fallback, which goes with TASK-2271) and TASK-1-468/469/470 (cosmetic); from #2858 (TASK-2238), TASK-1833/1834/1835 (TASK-1835: the TASK-2252 approval_only fix, minor). Take them in #2868.'
   created_at: 2026-10-23T23:38:32.205732565Z
   modified_at: 2026-10-23T23:38:32.205732565Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+- id: 01a16b41-6eb5-7a62-826d-6a0573663b63
+  author: joe
+  content: 'ADVISOR 17:13: Folded TASK-2287 (the aida-fire fixer prompt STOPs on the branch the advisor''s worktree add created; minor) and TASK-2288 (the Agent-tool ratchet misses prose; cosmetic), both from the PR-2865 PASS review. Take them in #2868.'
+  created_at: 2026-10-24T00:13:32.725648691Z
+  modified_at: 2026-10-24T00:13:32.725648691Z
   session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
 history:
 - id: 01a16ab3-42ef-7420-86da-7b4600ae0438
