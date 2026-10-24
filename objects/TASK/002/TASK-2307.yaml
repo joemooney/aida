@@ -1,0 +1,27 @@
+id: 01a16bee-4ea8-7ff0-8123-e03dc359bc1c
+spec_id: TASK-2307
+agreed_id: TASK-2307
+title: config_lock::deleted_branches should parse combined short flags (-qD, -df)
+description: |
+  aida-core/src/git_ops/config_lock.rs deleted_branches matches only the exact flags -d, -D and --delete, so 'branch -qD x' or '-df' skips the --remove-section follow-up. No production caller passes combined flags today.
+
+  Raised in review of PR-2867: https://github.com/joemooney/aida/pull/2867
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-24T03:22:22.248243735Z
+modified_at: 2026-10-24T03:22:22.248243735Z
+req_type: Task
+tags:
+- from-review:PR-2867
+- severity:cosmetic
+filed_at:
+  code_sha: 42e75c3e32e596eb9d808686bed54cb79aa1dd51
+  branch: pr-2867
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c016980d03
+  vendor: claude
+  session: 01a16bec3d84
+  harness_version: 2.1.310 (Claude Code)
