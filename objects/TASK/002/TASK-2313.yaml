@@ -1,0 +1,29 @@
+id: 01a16c46-8b3f-7dd3-a6de-c65ce0d1832d
+spec_id: TASK-2313
+agreed_id: TASK-2313
+title: 'aida-pr redirect: stale gh pr create references in aida-rebase skill and auto-queue-review help'
+description: |
+  aida-core/templates/skills/aida-rebase.md:129 still says "/aida-pr — verify before gh pr create so review starts on a current base". After TASK-1613, /aida-pr redirects to `aida ship <SPEC> --no-merge`, which rebases on its own and never runs gh pr create. Reword it.
+  Related: the `aida pr auto-queue-review` help text (aida-cli-lib/src/pr_cmd_args.rs:28, golden help snapshot) still describes /aida-pr running `gh pr create`. Fixing it is a code change plus a snapshot update.
+
+  Raised in review of PR-2869: https://github.com/joemooney/aida/pull/2869#issuecomment-6380116860
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-24T04:58:44.927914803Z
+modified_at: 2026-10-24T04:58:44.927914803Z
+req_type: Task
+tags:
+- docs
+- from-review:PR-2869
+- severity:cosmetic
+filed_at:
+  code_sha: d14a20aaaea1d58be05fdacf97e1ef60c46d02fb
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: d14a20aaae
+  vendor: claude
+  session: 01a16c4427ee
+  harness_version: 2.1.310 (Claude Code)

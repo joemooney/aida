@@ -925,7 +925,7 @@ blocks:
   type_prefix: TASK
   range_start: 2215
   range_end: 2314
-  next: 2313
+  next: 2314
   allocated_at: 2026-10-23T07:44:07.121691028Z
 - node_id: '1'
   owner: redacted@node.invalid
