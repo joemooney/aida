@@ -1711,6 +1711,25 @@ pub(crate) fn reduce_to_most_specific_specs(
             }
         }
     }
+    // BUG-2208: a spec superseded into another candidate is that candidate's
+    // work now (a sweep that folded it), so the candidate is the answer.
+    // (superseded uuid, superseding uuid) pairs, from either direction.
+    // trace:TASK-1955 | ai:claude (BUG-2208)
+    let mut superseded_by: std::collections::HashSet<(uuid::Uuid, uuid::Uuid)> =
+        std::collections::HashSet::new();
+    for req in &store.requirements {
+        for rel in &req.relationships {
+            match rel.rel_type {
+                aida_core::RelationshipType::Supersedes => {
+                    superseded_by.insert((rel.target_id, req.id));
+                }
+                aida_core::RelationshipType::SupersededBy => {
+                    superseded_by.insert((req.id, rel.target_id));
+                }
+                _ => {}
+            }
+        }
+    }
     let resolved: Vec<(String, Option<uuid::Uuid>)> =
         specs.iter().map(|s| (s.clone(), uuid_of(s))).collect();
     let mut out = Vec::new();
@@ -1718,7 +1737,10 @@ pub(crate) fn reduce_to_most_specific_specs(
         let keep = match uuid_of(s) {
             None => true, // unresolved → can't prove ancestry → keep
             Some(a) => !resolved.iter().any(|(other, ou)| {
-                other != s && ou.is_some_and(|ou| is_transitive_ancestor(&parents, a, ou))
+                other != s
+                    && ou.is_some_and(|ou| {
+                        is_transitive_ancestor(&parents, a, ou) || superseded_by.contains(&(a, ou))
+                    })
             }),
         };
         if keep {
@@ -1890,6 +1912,7 @@ pub fn resolve_pr_to_spec(
     // "multiple backing specs" bail. trace:BUG-440 | ai:claude
     let mut delivered: Vec<String> = Vec::new();
     let mut referenced: Vec<String> = Vec::new();
+    let mut slice_refs: Vec<String> = Vec::new();
     let push_unique = |v: &mut Vec<String>, id: String| {
         if !v.contains(&id) {
             v.push(id);
@@ -1948,6 +1971,12 @@ pub fn resolve_pr_to_spec(
                     for id in extract_spec_ids_from_commit(field) {
                         push_unique(&mut delivered, id);
                     }
+                    // BUG-2208: a `(Refs SPEC-ID)` trailer names the spec a
+                    // slice PR works toward; it outranks a stray mention.
+                    // trace:TASK-1955 | ai:claude (BUG-2208)
+                    for id in crate::pr_ship::extract_trailing_refs_spec_ids_from_subject(field) {
+                        push_unique(&mut slice_refs, id);
+                    }
                     for id in extract_all_spec_ids(field) {
                         push_unique(&mut referenced, id);
                     }
@@ -1958,6 +1987,8 @@ pub fn resolve_pr_to_spec(
 
     // Referenced is the fallback pool only — drop anything already delivered.
     referenced.retain(|r| !delivered.contains(r));
+    slice_refs.retain(|r| !delivered.contains(r));
+    referenced.retain(|r| !slice_refs.contains(r));
 
     // BUG-431 #2: a PR can legitimately back an epic + its child story (the
     // session was epic-scoped). Reduce each pool to the most-specific before
@@ -1965,7 +1996,15 @@ pub fn resolve_pr_to_spec(
     // Genuinely unrelated specs survive and still bail below.
     // trace:BUG-431 | ai:claude
     let delivered = reduce_to_most_specific_specs(store, &delivered);
+    let slice_refs = reduce_to_most_specific_specs(store, &slice_refs);
     let referenced = reduce_to_most_specific_specs(store, &referenced);
+    // BUG-2208: with no delivery trailer, the slice's `Refs` spec is the
+    // backing spec before any stray headline mention.
+    let delivered = if delivered.is_empty() {
+        slice_refs
+    } else {
+        delivered
+    };
 
     match pick_pr_spec(&delivered, &referenced) {
         PrSpecChoice::One(s) => Ok(s),

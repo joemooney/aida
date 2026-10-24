@@ -685,6 +685,10 @@ pub(crate) fn current_user_id(user_override: Option<&str>) -> String {
 ///
 /// trace:BUG-217 | ai:claude
 pub(crate) fn aida_exe_path() -> std::path::PathBuf {
+    #[cfg(test)]
+    if let Some(fake) = test_aida_exe::current() {
+        return fake;
+    }
     static AIDA_EXE: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
     AIDA_EXE
         .get_or_init(|| {
@@ -693,6 +697,39 @@ pub(crate) fn aida_exe_path() -> std::path::PathBuf {
                 .unwrap_or_else(|_| resolve_aida_exe_from(std::env::current_exe().ok()))
         })
         .clone()
+}
+
+/// Test-only, per-thread `aida` binary for the subcommands this process
+/// spawns (`aida add`, `aida rel add`, `aida queue add`), so a test can drive
+/// a whole path that shells out to `aida` against a recording fake. The
+/// process-wide path is cached once, which a test cannot swap.
+// trace:TASK-1955 | ai:claude (TASK-2255)
+#[cfg(test)]
+pub(crate) mod test_aida_exe {
+    use std::cell::RefCell;
+    use std::path::PathBuf;
+
+    thread_local! {
+        static FAKE: RefCell<Option<PathBuf>> = const { RefCell::new(None) };
+    }
+
+    pub(crate) fn current() -> Option<PathBuf> {
+        FAKE.with(|f| f.borrow().clone())
+    }
+
+    /// Use `path` as `aida` on this thread until the guard drops.
+    pub(crate) struct Guard(Option<PathBuf>);
+
+    pub(crate) fn set(path: PathBuf) -> Guard {
+        Guard(FAKE.with(|f| f.replace(Some(path))))
+    }
+
+    impl Drop for Guard {
+        fn drop(&mut self) {
+            let prev = self.0.take();
+            FAKE.with(|f| *f.borrow_mut() = prev);
+        }
+    }
 }
 
 pub(crate) fn resolve_aida_exe() -> std::path::PathBuf {

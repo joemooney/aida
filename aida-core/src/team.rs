@@ -264,16 +264,17 @@ fn is_under_workspace_target(path: &Path) -> bool {
 // trace:BUG-2209 | ai:claude
 pub fn guard_roster_write(store_root: &Path) {
     let hermetic = std::env::var("AIDA_USER").is_ok_and(|user| user == HERMETIC_TEST_USER);
-    if (hermetic || cfg!(test))
-        && !is_under_temp_root(store_root)
-        && !is_under_workspace_target(store_root)
+    if !(hermetic || cfg!(test))
+        || is_under_temp_root(store_root)
+        || is_under_workspace_target(store_root)
     {
-        panic!(
-            "refusing a test roster write to `{}`: the store is not under a temp directory \
-             (AIDA_USER hermetic: {hermetic}); a test resolved a real store",
-            store_root.display()
-        );
+        return;
     }
+    panic!(
+        "refusing a test roster write to `{}`: the store is not under a temp directory \
+         (AIDA_USER hermetic: {hermetic}); a test resolved a real store",
+        store_root.display()
+    );
 }
 
 /// Read the roster for a writer. A missing file is an empty roster; an
@@ -309,16 +310,15 @@ fn load_for_write(path: &Path) -> std::io::Result<(Option<Vec<u8>>, TeamRoster)>
 /// roster. `nodes`, when given, migrates stray integer keys first
 /// (STORY-653). Returns whether the file changed.
 ///
-/// Callers stage and commit the file; the CAS functions below hold the store
-/// write lock around it. The content CAS narrows, but does not close, the
-/// window between its re-read and the rename: a caller that does not hold the
-/// store write lock (the seat-grant test fixture) can still lose a writer that
-/// lands inside it, so every production caller must take the lock.
-///
-/// The test-write guard ([`guard_roster_write`]) runs here, in the primitive,
-/// so a new caller cannot bypass it.
+/// The write runs [`guard_roster_write`] in the primitive, so a new caller
+/// cannot bypass it, and holds the store write lock (re-entrant, so the CAS
+/// functions below, which already hold it around their stage and commit,
+/// nest). A caller without the lock therefore cannot lose a write that lands
+/// between the CAS re-read and the rename to another locked writer. Callers
+/// stage and commit the file.
 // trace:BUG-2209 | ai:claude
 // trace:TASK-2238 | ai:claude
+// trace:TASK-1955 | ai:claude (TASK-2223, TASK-2224, TASK-2292)
 pub fn write_member_seats(
     store_root: &Path,
     user_id: &str,
@@ -327,6 +327,7 @@ pub fn write_member_seats(
 ) -> std::io::Result<bool> {
     const MAX_ATTEMPTS: u32 = 20;
     guard_roster_write(store_root);
+    let _lock = crate::db::acquire_store_write_lock(store_root).map_err(std::io::Error::other)?;
     let path = TeamRoster::path(store_root);
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
@@ -1649,5 +1650,56 @@ ttl_secs = 1800
             "/nonexistent-bug-2209/store"
         )));
         guard_roster_write(&dir.path().join(".aida-store"));
+    }
+
+    /// TASK-2223: the primitive guards its own write, so a caller that skips
+    /// the CAS functions still cannot reach a real store.
+    // trace:TASK-1955 | ai:claude
+    #[test]
+    #[should_panic(expected = "refusing a test roster write")]
+    fn task_2223_write_member_seats_guards_its_own_write() {
+        let _ = write_member_seats(
+            Path::new("/nonexistent-task-2223/.aida-store"),
+            "x",
+            None,
+            |_| Some(vec!["implementer".to_string()]),
+        );
+    }
+
+    /// TASK-2223: a store under the workspace `target/` (where a test crate's
+    /// fixtures may live) passes the guard outside the temp roots.
+    // trace:TASK-1955 | ai:claude (TASK-2292)
+    #[test]
+    fn task_2223_the_workspace_target_passes_the_guard() {
+        let target = Path::new(env!("CARGO_MANIFEST_DIR")).join("../target");
+        let store = target.join("not-a-store-task-2223/.aida-store");
+        assert!(!is_under_temp_root(&store));
+        guard_roster_write(&store);
+    }
+
+    /// TASK-2224: the write holds the store write lock across the CAS re-read
+    /// and the rename, for a caller that does not hold it, and nests for one
+    /// that does.
+    // trace:TASK-1955 | ai:claude
+    #[test]
+    fn task_2224_write_member_seats_holds_the_store_write_lock() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(!crate::db::store_write_lock_held(dir.path()));
+        assert!(write_member_seats(dir.path(), "tester", None, |_| {
+            assert!(
+                crate::db::store_write_lock_held(dir.path()),
+                "the edit runs under the store write lock"
+            );
+            Some(vec!["implementer".to_string()])
+        })
+        .unwrap());
+        assert!(!crate::db::store_write_lock_held(dir.path()), "released");
+        // A caller already holding it re-enters instead of deadlocking.
+        crate::db::with_store_write_lock(dir.path(), || {
+            write_member_seats(dir.path(), "tester", None, |_| None)?;
+            Ok(())
+        })
+        .unwrap();
+        assert!(TeamRoster::load(dir.path()).seats_for("tester").is_none());
     }
 }

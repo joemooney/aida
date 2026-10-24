@@ -481,10 +481,13 @@ pub(super) fn probe_ref_in_use(
     loose_mtime: Option<i64>,
     pid_alive: impl Fn(u32) -> bool,
 ) -> bool {
+    // A time in the future (a skewed clock, a hand-made ref) is not young:
+    // `now - t` is negative forever, so it would never be swept.
+    // trace:TASK-1955 | ai:claude (TASK-2176)
     if name
         .created
         .or(loose_mtime)
-        .is_some_and(|t| now - t < PROBE_REF_AGE_FLOOR_SECS)
+        .is_some_and(|t| (0..PROBE_REF_AGE_FLOOR_SECS).contains(&(now - t)))
     {
         return true;
     }

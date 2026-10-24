@@ -51,10 +51,10 @@ fn template_dir() -> &'static std::path::Path {
 /// The name carries the owner's uid, and an existing directory is used only
 /// when it is a real directory owned by this user with mode 0700: a shared
 /// temp dir lets another user pre-create it with a planted hook, so anything
-/// else is refused. A partial directory is repaired atomically: it is renamed
-/// aside into a fresh `mkdtemp` dir, never removed in place while another
-/// process may be installing over it.
-// trace:TASK-1955 | ai:claude (TASK-2017)
+/// else is refused. A partial directory is repaired in place, one atomic
+/// rename per missing or wrong file, so a concurrent reader never finds the
+/// directory itself missing (renaming it aside did; TASK-2175).
+// trace:TASK-1955 | ai:claude (TASK-2017) (TASK-2175)
 #[allow(dead_code)]
 fn ensure_template_dir(parent: &std::path::Path) -> std::path::PathBuf {
     // FNV-1a: stable across Rust releases and processes, unlike DefaultHasher.
@@ -78,24 +78,35 @@ fn ensure_template_dir(parent: &std::path::Path) -> std::path::PathBuf {
             && dir.join("info/exclude").is_file()
             && dir.join("hooks").is_dir()
     };
-    let existed = template_dir_trusted(&dir, owner);
-    if existed && complete(&dir) {
+    if template_dir_trusted(&dir, owner) {
+        if !complete(&dir) {
+            // A partial dir (say, half-cleaned by a temp cleaner): rewrite
+            // what is missing or wrong through the staging dir. Concurrent
+            // repairers write the same bytes, so the last rename wins harmlessly.
+            // trace:TASK-1955 | ai:claude (TASK-2175)
+            std::fs::create_dir_all(dir.join("hooks")).expect("repair git template hooks");
+            std::fs::create_dir_all(dir.join("info")).expect("repair git template info");
+            for (rel, content) in TEMPLATE_FILES {
+                if std::fs::read_to_string(dir.join(rel)).is_ok_and(|c| c == content) {
+                    continue;
+                }
+                let tmp = staging.path().join(rel.replace('/', "-"));
+                std::fs::write(&tmp, content).expect("stage git template file");
+                std::fs::rename(&tmp, dir.join(rel)).expect("repair git template file");
+            }
+            assert!(
+                complete(&dir),
+                "git template dir {} is incomplete after repair",
+                dir.display()
+            );
+        }
         return dir;
     }
     let root = staging.path();
     std::fs::create_dir_all(root.join("hooks")).unwrap();
     std::fs::create_dir_all(root.join("info")).unwrap();
-    std::fs::write(root.join("info/exclude"), "").unwrap();
-    std::fs::write(root.join("description"), TEMPLATE_DESCRIPTION).unwrap();
-    std::fs::write(root.join("config"), TEMPLATE_CONFIG).unwrap();
-    // Move a partial dir (say, half-removed by a temp cleaner) aside; another
-    // process may already have moved it, which is fine.
-    let aside = tempfile::Builder::new()
-        .prefix(".aida-test-git-template-stale-")
-        .tempdir_in(parent)
-        .expect("create git template stale dir");
-    if existed {
-        let _ = std::fs::rename(&dir, aside.path().join("old"));
+    for (rel, content) in TEMPLATE_FILES {
+        std::fs::write(root.join(rel), content).unwrap();
     }
     if std::fs::rename(root, &dir).is_err() {
         // Lost the race: whoever won must have installed a complete, private copy.
@@ -105,12 +116,19 @@ fn ensure_template_dir(parent: &std::path::Path) -> std::path::PathBuf {
             dir.display()
         );
     }
-    // The staging TempDir is now gone (renamed) or a loser's copy, and the
-    // stale one holds the moved-aside dir; dropping them removes what is left.
+    // The staging TempDir is now gone (renamed) or a loser's copy; dropping
+    // it removes what is left.
     drop(staging);
-    drop(aside);
     dir
 }
+
+/// Every file the template holds, relative to it, with its content.
+#[allow(dead_code)]
+const TEMPLATE_FILES: [(&str, &str); 3] = [
+    ("info/exclude", ""),
+    ("description", TEMPLATE_DESCRIPTION),
+    ("config", TEMPLATE_CONFIG),
+];
 
 /// Set `dir`'s mode to 0700 (no-op where there are no modes).
 #[allow(dead_code)]
@@ -276,6 +294,68 @@ fn template_dir_refuses_a_dir_that_is_not_private_to_this_user() {
     std::os::unix::fs::symlink(elsewhere.path(), &dir).unwrap();
     let refused = std::panic::catch_unwind(|| ensure_template_dir(parent.path()));
     assert!(refused.is_err(), "a symlinked template dir must be refused");
+}
+
+// TASK-2175: a partial dir is repaired in place, so a reader racing the
+// repair never finds the dir missing (it keeps its inode), and racing
+// repairers neither panic nor leave staging copies.
+// trace:TASK-1955 | ai:claude (TASK-2175)
+#[cfg(unix)]
+#[test]
+fn template_dir_repair_keeps_the_dir_in_place_under_racing_repairers() {
+    use std::os::unix::fs::MetadataExt as _;
+    let parent = tempfile::tempdir().unwrap();
+    let dir = ensure_template_dir(parent.path());
+    let inode = std::fs::metadata(&dir).unwrap().ino();
+    std::fs::remove_file(dir.join("config")).unwrap();
+    std::fs::write(dir.join("description"), "tampered\n").unwrap();
+    std::fs::remove_dir_all(dir.join("info")).unwrap();
+    let stop = std::sync::atomic::AtomicBool::new(false);
+    let barrier = std::sync::Barrier::new(9);
+    std::thread::scope(|s| {
+        let reader = s.spawn(|| {
+            barrier.wait();
+            let mut seen = 0u64;
+            // Checks at least once, even if scheduled only after the repair.
+            loop {
+                assert!(dir.is_dir(), "the template dir went missing mid-repair");
+                seen += 1;
+                if stop.load(std::sync::atomic::Ordering::Relaxed) {
+                    break seen;
+                }
+            }
+        });
+        let repairers: Vec<_> = (0..8)
+            .map(|_| {
+                s.spawn(|| {
+                    barrier.wait();
+                    ensure_template_dir(parent.path())
+                })
+            })
+            .collect();
+        for h in repairers {
+            assert_eq!(h.join().unwrap(), dir);
+        }
+        stop.store(true, std::sync::atomic::Ordering::Relaxed);
+        assert!(reader.join().unwrap() > 0);
+    });
+    assert_eq!(
+        std::fs::metadata(&dir).unwrap().ino(),
+        inode,
+        "repaired in place"
+    );
+    for (rel, content) in TEMPLATE_FILES {
+        assert_eq!(
+            std::fs::read_to_string(dir.join(rel)).unwrap(),
+            content,
+            "{rel}"
+        );
+    }
+    let entries: Vec<_> = std::fs::read_dir(parent.path())
+        .unwrap()
+        .map(|e| e.unwrap().file_name())
+        .collect();
+    assert_eq!(entries, [dir.file_name().unwrap()], "{entries:?}");
 }
 
 // The first creation on an empty temp dir, raced by many threads: none

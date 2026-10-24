@@ -51,6 +51,12 @@ const ADVISOR_LIVE_WITHIN: Duration = Duration::minutes(30);
 /// A routed dispatch that no owner has taken up within this window is
 /// re-routed: the fixer died before it claimed (TASK-1915 F8).
 const DISPATCH_STALE: Duration = Duration::hours(2);
+/// How many times a dispatch nobody took up is re-routed before the drive
+/// stops re-routing it (until an owner shows up): the window doubles each
+/// time (2h, 4h, 8h), so an approved spec the advisor leaves unqueued on
+/// purpose costs three re-routes, not one every 2h for the mandate's life.
+// trace:TASK-1955 | ai:claude (TASK-2078) (TASK-1696)
+const MAX_STALE_REROUTES: u32 = 3;
 /// A work-queue entry older than this is abandoned, not an owner: a spec
 /// left in a stale queue is dispatched again (TASK-1915 F8).
 const QUEUE_ENTRY_FRESH: Duration = Duration::days(7);
@@ -863,8 +869,16 @@ pub(crate) trait DriveEffects {
     fn restart_relay(&mut self, plan: &RestartPlan) -> Result<u32> {
         anyhow::bail!("this backend cannot restart {}", plan.run_id)
     }
-    /// Emit the advisor due item (event + mail nudge).
-    fn emit_due(&mut self, mandate_id: &str, item: &Planned) -> Result<()>;
+    /// Emit the advisor due item (event + mail nudge). `event_recorded`
+    /// says the event is already written (send only the mail); the effect
+    /// sets it once the event is written, whatever the mail does.
+    // trace:TASK-1955 | ai:claude (TASK-2084) (TASK-1693)
+    fn emit_due(
+        &mut self,
+        mandate_id: &str,
+        item: &Planned,
+        event_recorded: &mut bool,
+    ) -> Result<()>;
     /// Tell the operator; `Ok` names the delivery.
     fn notify_operator(&mut self, title: &str, body: &str) -> Result<String>;
     /// Reap sessions whose owner process is dead: one row per thing the reap
@@ -947,6 +961,12 @@ pub(crate) struct PerMandate {
     /// Per approved spec, its dispatch epoch (TASK-1915 F8).
     #[serde(default)]
     pub dispatch: BTreeMap<String, DispatchEpoch>,
+    /// Due keys whose `MandateDriveDue` event is written but whose mail
+    /// failed: the retry sends only the mail, without scanning the event
+    /// log for the event (TASK-1915 F5).
+    // trace:TASK-1955 | ai:claude (TASK-2084) (TASK-1693)
+    #[serde(default)]
+    pub due_recorded: BTreeSet<String>,
 }
 
 /// Where a spec's unowned-dispatch lane stands. A routed dispatch opens an
@@ -962,6 +982,11 @@ pub(crate) struct DispatchEpoch {
     pub routed_at: Option<DateTime<Utc>>,
     #[serde(default)]
     pub owned_since_route: bool,
+    /// Re-routes since an owner last took the spec up, each closed by
+    /// [`DISPATCH_STALE`] doubling, at most [`MAX_STALE_REROUTES`].
+    // trace:TASK-1955 | ai:claude (TASK-2078) (TASK-1696)
+    #[serde(default)]
+    pub stale_reroutes: u32,
 }
 
 impl PerMandate {
@@ -970,13 +995,33 @@ impl PerMandate {
     // trace:TASK-1915 | ai:claude
     fn dispatch_epoch(&mut self, s: &UnownedSpec, now: DateTime<Utc>) -> u32 {
         let d = self.dispatch.entry(s.id.to_ascii_uppercase()).or_default();
+        // A dispatch routed before epochs existed left only its emitted key:
+        // date it from now, so its epoch can still close.
+        // trace:TASK-1955 | ai:claude (TASK-2080) (TASK-1694)
+        if d.routed_at.is_none()
+            && self
+                .emitted
+                .contains(&dispatch_key(&s.id, &dispatch_head(d.epoch)))
+        {
+            d.routed_at = Some(now);
+        }
         if s.owned() {
             if d.routed_at.is_some() {
                 d.owned_since_route = true;
             }
         } else if s.open_pr.is_some() {
             if let Some(at) = d.routed_at {
-                if d.owned_since_route || now - at >= DISPATCH_STALE {
+                // An owner that came and went closes the epoch at once; a
+                // dispatch nobody took up closes after a doubling window, a
+                // bounded number of times. trace:TASK-1955 | ai:claude (TASK-2078) (TASK-1696)
+                let stale = d.stale_reroutes < MAX_STALE_REROUTES
+                    && now - at >= DISPATCH_STALE * (1i32 << d.stale_reroutes);
+                if d.owned_since_route || stale {
+                    d.stale_reroutes = if d.owned_since_route {
+                        0
+                    } else {
+                        d.stale_reroutes + 1
+                    };
                     d.epoch += 1;
                     d.routed_at = None;
                     d.owned_since_route = false;
@@ -985,6 +1030,56 @@ impl PerMandate {
         }
         d.epoch
     }
+
+    /// Drop what no longer names a live item, so the state stays bounded:
+    /// dispatch epochs and spec keys of specs no longer approved (or of an
+    /// epoch the spec has left), and lease keys of sessions this tick's reap
+    /// no longer reported. `approved` is `None` when the store could not be
+    /// read, `reaped` when the reap did not run; either then prunes nothing
+    /// of its kind. Relay and PR keys stay: a lane the forge or the relay
+    /// dir transiently fails to list would otherwise be routed again.
+    // trace:TASK-1955 | ai:claude (TASK-2080) (TASK-1694)
+    fn prune(
+        &mut self,
+        approved: Option<&BTreeMap<String, u32>>,
+        reaped: Option<&BTreeSet<String>>,
+    ) {
+        let keep = |key: &str| -> bool {
+            let mut parts = key.split('|');
+            let lane = parts.next().unwrap_or_default();
+            if let (Some(spec), Some(approved)) = (lane.strip_prefix("spec:"), approved) {
+                let _action = parts.next();
+                let head = parts.next().unwrap_or_default();
+                return approved
+                    .get(&spec.to_ascii_uppercase())
+                    .is_some_and(|&epoch| head == dispatch_head(epoch));
+            }
+            if let (Some(reaped), "leases") = (reaped, lane) {
+                return parts.next().is_some_and(|subject| reaped.contains(subject));
+            }
+            true
+        };
+        self.emitted.retain(|k| keep(k));
+        self.due_recorded.retain(|k| keep(k));
+        if let Some(approved) = approved {
+            self.dispatch.retain(|id, _| approved.contains_key(id));
+        }
+    }
+}
+
+/// The dispatch lane's head for `epoch`: a re-route is a new item.
+// trace:TASK-1955 | ai:claude (TASK-2080)
+fn dispatch_head(epoch: u32) -> String {
+    match epoch {
+        0 => "approved".to_string(),
+        n => format!("approved#{n}"),
+    }
+}
+
+/// The [`Planned::key`] of `spec`'s dispatch under `head`.
+// trace:TASK-1955 | ai:claude (TASK-2080)
+fn dispatch_key(spec: &str, head: &str) -> String {
+    format!("spec:{spec}|{}|{head}", DriveAction::Redispatch.as_str())
 }
 
 /// `.aida/mandate-drive-state.json`, keyed by mandate id.
@@ -1028,6 +1123,11 @@ fn save_state(project_root: &Path, state: &DriveState) -> Result<()> {
 struct StateRefusal {
     fingerprint: String,
     notified: bool,
+    /// Foreign-principal drive mandates already told about (R4) while the
+    /// state could not record it.
+    // trace:TASK-1955 | ai:claude
+    #[serde(default)]
+    mismatch_notified: BTreeSet<String>,
 }
 
 fn state_refusal_path(project_root: &Path) -> PathBuf {
@@ -1040,10 +1140,12 @@ fn read_state_refusal(project_root: &Path) -> Option<StateRefusal> {
     serde_json::from_slice(&std::fs::read(state_refusal_path(project_root)).ok()?).ok()
 }
 
-fn write_state_refusal(project_root: &Path, refusal: &StateRefusal) {
-    if let Ok(bytes) = serde_json::to_vec(refusal) {
-        let _ = aida_core::fs_atomic::write_atomic(&state_refusal_path(project_root), &bytes);
-    }
+/// Record `refusal`; an error names the sidecar (TASK-1955, PR-2804 r2).
+// trace:TASK-1955 | ai:claude
+fn write_state_refusal(project_root: &Path, refusal: &StateRefusal) -> Result<()> {
+    let path = state_refusal_path(project_root);
+    aida_core::fs_atomic::write_atomic(&path, &serde_json::to_vec(refusal)?)
+        .with_context(|| format!("cannot write {}", path.display()))
 }
 
 fn clear_state_refusal(project_root: &Path) {
@@ -1211,7 +1313,15 @@ impl Tick<'_, '_> {
     /// same reason every tick is one row, not one per tick (TASK-1915 F7).
     // trace:TASK-1915 | ai:claude
     fn skip_once(&mut self, per: &mut PerMandate, key: &str, row: ActionRow) {
-        let seen = format!("{key}|skip|{}", row.why.as_deref().unwrap_or_default());
+        self.once(per, key, "skip", row);
+    }
+
+    /// Ledger `row` once per `(key, kind, reason)`: a persistent refusal
+    /// (a reap that cannot remove a worktree, a failing registry GC) is one
+    /// row until its reason changes, not one per 15m tick.
+    // trace:TASK-1955 | ai:claude (TASK-1697)
+    fn once(&mut self, per: &mut PerMandate, key: &str, kind: &str, row: ActionRow) {
+        let seen = format!("{key}|{kind}|{}", row.why.as_deref().unwrap_or_default());
         if per.emitted.insert(seen) {
             self.row(row);
         }
@@ -1240,6 +1350,43 @@ impl Tick<'_, '_> {
             Err(_) => Err("mandate stopped mid-tick".into()),
         }
     }
+}
+
+/// R4: a drive record for ANOTHER principal means the driver resolves the
+/// wrong user. Notify (and ledger under that mandate) each one `told` does
+/// not already cover; returns `(mandate id, notice delivered, row)`. Only a
+/// delivered notice marks the mismatch told: a failed one retries next tick.
+// trace:TASK-1915 | ai:claude
+fn principal_mismatches(
+    inp: &TickInputs<'_>,
+    now: DateTime<Utc>,
+    fx: &mut dyn DriveEffects,
+    told: &dyn Fn(&str) -> bool,
+) -> Vec<(String, bool, ActionRow)> {
+    let mut out = Vec::new();
+    for m in active_drive_records(inp.mandate_dir, now) {
+        if m.principal.trim() == inp.principal.trim() || told(&m.id) {
+            continue;
+        }
+        let sent = fx.notify_operator(
+            "AIDA drive mandate is not acting",
+            &format!(
+                "Drive mandate {} belongs to `{}`, but the drive tick resolves `{}`. Set AIDA_USER={} in the schedule driver's environment.",
+                m.id, m.principal, inp.principal, m.principal
+            ),
+        );
+        let mut why = format!(
+            "principal mismatch: record={} tick={}",
+            m.principal, inp.principal
+        );
+        if let Err(e) = &sent {
+            why.push_str(&format!("; notify failed: {e:#}"));
+        }
+        let row = ActionRow::new("tick", "drive tick", "tick", Outcome::Refused, Some(why));
+        fx.ledger(&m.id, &row);
+        out.push((m.id.clone(), sent.is_ok(), row));
+    }
+    out
 }
 
 /// STORY-1706 (R4/R5): restart every crashed lane [`restart_verdict`]
@@ -1285,9 +1432,27 @@ fn restart_crashed(
                 notes.insert(key.clone(), None);
                 continue;
             }
-            // No row of its own: the reason rides on the lane's advisor
-            // item, which is routed as before.
+            // The lane's advisor item carries the reason, but it is routed
+            // once; a restart candidate (it has a launch record) also gets
+            // its own row per (lane, crashed head, reason). A relay launched
+            // without a record was never restartable, so it adds no row.
+            // trace:TASK-1955 | ai:claude (TASK-2207)
             RestartVerdict::No(why) => {
+                let record = lane.run_dir.join(crate::relay_launch::RECORD_FILE);
+                if record.symlink_metadata().is_ok() {
+                    let row = ActionRow::new(
+                        &key,
+                        &subject,
+                        ACTION,
+                        Outcome::Skipped,
+                        Some(format!("not auto-restarted: {why}")),
+                    );
+                    tick.skip_once(
+                        per,
+                        &format!("{key}|{ACTION}|{}|no", crashed_head(lane)),
+                        row,
+                    );
+                }
                 notes.insert(key.clone(), Some(why));
                 continue;
             }
@@ -1479,25 +1644,40 @@ pub(crate) fn run_tick(
             // One ledgered refusal per state fingerprint and one operator
             // notice, never every tick; and no row without an own active
             // mandate to ledger it under. trace:TASK-1915 | ai:claude
+            let fingerprint = state_fingerprint(inp.project_root, &e);
+            let known =
+                read_state_refusal(inp.project_root).filter(|r| r.fingerprint == fingerprint);
+            let fresh = known.is_none();
+            let mut seen = known.unwrap_or(StateRefusal {
+                fingerprint,
+                notified: false,
+                mismatch_notified: BTreeSet::new(),
+            });
+            // The sidecar is the only dedup while the state is unreadable:
+            // when it cannot be written, every tick would ledger and notify
+            // again, so the tick says why on its report and stays quiet.
+            // trace:TASK-1955 | ai:claude
+            if fresh {
+                if let Err(werr) = write_state_refusal(inp.project_root, &seen) {
+                    report.idle = Some(format!(
+                        "{why}; the refusal is not ledgered or notified, because {werr:#}"
+                    ));
+                    drop(lock);
+                    return report;
+                }
+            }
             if let Some(m) = &mandate {
-                let fingerprint = state_fingerprint(inp.project_root, &e);
-                let mut seen = read_state_refusal(inp.project_root)
-                    .filter(|r| r.fingerprint == fingerprint)
-                    .unwrap_or_else(|| {
-                        let row = ActionRow::new(
-                            "tick",
-                            "drive tick",
-                            "state-check",
-                            Outcome::Refused,
-                            Some(why.clone()),
-                        );
-                        fx.ledger(&m.id, &row);
-                        report.rows.push(row);
-                        StateRefusal {
-                            fingerprint,
-                            notified: false,
-                        }
-                    });
+                if fresh {
+                    let row = ActionRow::new(
+                        "tick",
+                        "drive tick",
+                        "state-check",
+                        Outcome::Refused,
+                        Some(why.clone()),
+                    );
+                    fx.ledger(&m.id, &row);
+                    report.rows.push(row);
+                }
                 if !seen.notified {
                     seen.notified = fx
                         .notify_operator(
@@ -1509,7 +1689,22 @@ pub(crate) fn run_tick(
                         )
                         .is_ok();
                 }
-                write_state_refusal(inp.project_root, &seen);
+            } else {
+                // R4 still runs: the mismatch is why nothing acts, and the
+                // sidecar records who was told. trace:TASK-1955 | ai:claude
+                let told = seen.mismatch_notified.clone();
+                for (id, delivered, row) in
+                    principal_mismatches(inp, now, fx, &|id| told.contains(id))
+                {
+                    if delivered {
+                        seen.mismatch_notified.insert(id.clone());
+                    }
+                    report.mandate_id = Some(id);
+                    report.rows.push(row);
+                }
+            }
+            if let Err(werr) = write_state_refusal(inp.project_root, &seen) {
+                report.idle = Some(format!("{why}; {werr:#}"));
             }
             drop(lock);
             return report;
@@ -1517,41 +1712,25 @@ pub(crate) fn run_tick(
     };
 
     let Some(mandate) = mandate else {
-        // R4: a drive record for ANOTHER principal means the driver resolves
-        // the wrong user; say so once per mandate and do nothing.
-        let foreign: Vec<Mandate> = active_drive_records(inp.mandate_dir, now)
-            .into_iter()
-            .filter(|m| m.principal.trim() != inp.principal.trim())
-            .collect();
         let mut report = TickReport {
             idle: Some("no active drive mandate".into()),
             ..Default::default()
         };
-        for m in foreign {
-            let per = state.mandates.entry(m.id.clone()).or_default();
-            if per.mismatch_notified {
-                continue;
+        let told: BTreeSet<String> = state
+            .mandates
+            .iter()
+            .filter(|(_, per)| per.mismatch_notified)
+            .map(|(id, _)| id.clone())
+            .collect();
+        for (id, delivered, row) in principal_mismatches(inp, now, fx, &|id| told.contains(id)) {
+            if delivered {
+                state
+                    .mandates
+                    .entry(id.clone())
+                    .or_default()
+                    .mismatch_notified = true;
             }
-            let sent = fx.notify_operator(
-                "AIDA drive mandate is not acting",
-                &format!(
-                    "Drive mandate {} belongs to `{}`, but the drive tick resolves `{}`. Set AIDA_USER={} in the schedule driver's environment.",
-                    m.id, m.principal, inp.principal, m.principal
-                ),
-            );
-            // Only a delivered notice marks the mismatch told: a failed one
-            // retries next tick. trace:TASK-1915 | ai:claude
-            let mut why = format!(
-                "principal mismatch: record={} tick={}",
-                m.principal, inp.principal
-            );
-            match &sent {
-                Ok(_) => per.mismatch_notified = true,
-                Err(e) => why.push_str(&format!("; notify failed: {e:#}")),
-            }
-            let row = ActionRow::new("tick", "drive tick", "tick", Outcome::Refused, Some(why));
-            fx.ledger(&m.id, &row);
-            report.mandate_id = Some(m.id.clone());
+            report.mandate_id = Some(id);
             report.rows.push(row);
         }
         // trace:TASK-1915 | ai:claude
@@ -1597,20 +1776,23 @@ pub(crate) fn run_tick(
 
     // Substrate: the dead-session reap, every outcome ledgered.
     // trace:TASK-1915 | ai:claude
+    let mut reaped: Option<BTreeSet<String>> = None;
     match tick.recheck() {
         Err(why) => tick.end("leases", "session leases", "reap", why),
         Ok(()) => {
+            let seen = reaped.insert(BTreeSet::new());
             for r in tick.fx.reap_dead_leases() {
+                seen.insert(r.subject.clone());
+                let key = format!("leases|{}", r.subject);
                 let row = ActionRow::new("leases", &r.subject, "reap", r.outcome, Some(r.why));
                 match r.outcome {
-                    Outcome::Skipped => {
-                        tick.skip_once(per, &format!("leases|{}", r.subject), row);
-                    }
+                    Outcome::Skipped => tick.skip_once(per, &key, row),
                     Outcome::Done => {
                         per.actions += 1;
                         tick.row(row);
                     }
-                    _ => tick.row(row),
+                    // trace:TASK-1955 | ai:claude (TASK-1697)
+                    _ => tick.once(per, &key, "refused", row),
                 }
             }
         }
@@ -1678,11 +1860,15 @@ pub(crate) fn run_tick(
     decisions.extend(inp.held_prs.iter().map(|pr| plan_held_pr(pr, &protected)));
     // Each unowned spec carries its dispatch epoch, so a dead fixer's spec
     // is routed again. trace:TASK-1915 | ai:claude
+    let mut epochs: BTreeMap<String, u32> = BTreeMap::new();
     decisions.extend(inp.unowned_specs.iter().map(|s| {
         let mut s = s.clone();
         s.epoch = per.dispatch_epoch(&s, now);
+        epochs.insert(s.id.to_ascii_uppercase(), s.epoch);
         plan_unowned_spec(&s)
     }));
+    // trace:TASK-1955 | ai:claude (TASK-2080) (TASK-1694)
+    per.prune(inp.store_readable.then_some(&epochs), reaped.as_ref());
     // An unreadable store: no operator-only or signoff check can be made,
     // so every gated seat action is withheld, with one ledgered refusal and
     // one operator notice per episode. trace:STORY-1700 | ai:claude
@@ -1815,12 +2001,20 @@ pub(crate) fn run_tick(
                     .map(|d| format!("routed to the operator ({d})")),
                 Outcome::Routed,
             ),
-            (None, Route::Advisor) => (
-                tick.fx
-                    .emit_due(&tick.mandate_id, &planned)
-                    .map(|()| "routed to the advisor seat".to_string()),
-                Outcome::Routed,
-            ),
+            (None, Route::Advisor) => {
+                // trace:TASK-1955 | ai:claude (TASK-2084) (TASK-1693)
+                let mut recorded = per.due_recorded.contains(&key);
+                let sent = tick.fx.emit_due(&tick.mandate_id, &planned, &mut recorded);
+                if recorded && sent.is_err() {
+                    per.due_recorded.insert(key.clone());
+                } else {
+                    per.due_recorded.remove(&key);
+                }
+                (
+                    sent.map(|()| "routed to the advisor seat".to_string()),
+                    Outcome::Routed,
+                )
+            }
         };
         match result {
             Ok(why) => {
@@ -1971,9 +2165,13 @@ pub(crate) fn spawn_restart(plan: &RestartPlan) -> Result<u32> {
 
 /// Beyond [`SESSION_ENV`]: an agent identity would make the restarted relay
 /// look like an agent's launch, and a stale restart token is never passed on.
-const RESTART_ENV_SCRUB: [&str; 3] = [
+/// A restarted relay is a long-lived worker, not a schedule child, so the
+/// marker `scrubbed_command` sets is removed again (TASK-2206).
+// trace:TASK-1955 | ai:claude (TASK-2206)
+const RESTART_ENV_SCRUB: [&str; 4] = [
     "AIDA_AGENT_NAME",
     "AIDA_AGENT_TYPE",
+    "AIDA_SCHEDULE_CHILD",
     crate::relay_launch::RESTART_ENV,
 ];
 
@@ -1982,11 +2180,17 @@ struct LiveEffects<'a> {
 }
 
 impl DriveEffects for LiveEffects<'_> {
-    fn emit_due(&mut self, mandate_id: &str, item: &Planned) -> Result<()> {
+    fn emit_due(
+        &mut self,
+        mandate_id: &str,
+        item: &Planned,
+        event_recorded: &mut bool,
+    ) -> Result<()> {
         emit_due_with(
             self.root,
             mandate_id,
             item,
+            event_recorded,
             &crate::mailbox_store::write_message,
         )
     }
@@ -2018,22 +2222,21 @@ impl DriveEffects for LiveEffects<'_> {
 }
 
 /// Emit the advisor due item: the `MandateDriveDue` event, then the mail
-/// nudge. Idempotent per key: a retry after a failed mail finds the event
-/// already written and sends only the mail, so a mail failure never
-/// duplicates the due item (TASK-1915 F5).
+/// nudge. Idempotent per key: a retry after a failed mail passes
+/// `event_recorded` (the tick keeps it in its state) and sends only the
+/// mail, so a mail failure never duplicates the due item (TASK-1915 F5).
+/// Nothing scans the event log to find out (TASK-2084).
 // trace:TASK-1915 | ai:claude
+// trace:TASK-1955 | ai:claude (TASK-2084) (TASK-1693)
 pub(crate) fn emit_due_with(
     root: &Path,
     mandate_id: &str,
     item: &Planned,
+    event_recorded: &mut bool,
     write_mail: &dyn Fn(&Path, &aida_core::mailbox::Message) -> Result<()>,
 ) -> Result<()> {
     let key = item.key();
-    let recorded = crate::events::read_all(root).iter().any(|ev| {
-        matches!(&ev.kind, crate::events::EventKind::MandateDriveDue { mandate_id: m, key: k, .. }
-        if m == mandate_id && *k == key)
-    });
-    if !recorded {
+    if !*event_recorded {
         let event = crate::events::Event::new(
             item.spec.clone(),
             "",
@@ -2048,6 +2251,7 @@ pub(crate) fn emit_due_with(
             },
         );
         crate::events::emit_recorded(root, &event).map_err(anyhow::Error::msg)?;
+        *event_recorded = true;
     }
     // The mail nudge: the advisor inbox carries the exact command.
     use aida_core::mailbox::{Intent, Message, Recipient};
@@ -2229,8 +2433,8 @@ pub(crate) fn advisor_live(project_root: &Path, now: DateTime<Utc>) -> bool {
 /// STORY-1700: the per-turn notice's stamp for the session's seat grant
 /// ([`crate::seat_authority::GRANT_ENV`]), read back by [`advisor_live`].
 /// BUG-1934: the stamp carries this process's tokens that satisfy the
-/// grant's binding; none (an unbound grant, a foreign presenter) leaves a
-/// stamp that never makes the seat live.
+/// grant's binding; none (an unbound grant, a foreign presenter) stamps
+/// nothing, so it can neither make the seat live nor end a live one.
 // trace:STORY-1700 | ai:claude
 // trace:BUG-1934 | ai:claude
 pub(crate) fn stamp_grant_turn(grant: Option<&str>, now: DateTime<Utc>) {
@@ -2246,6 +2450,14 @@ pub(crate) fn stamp_grant_turn(grant: Option<&str>, now: DateTime<Utc>) {
                 )
             })
             .unwrap_or_default();
+        // TASK-2210: a presenter the grant is not bound to (a daemon lane
+        // that inherited a leaked grant id) matches nothing. Its stamp would
+        // overwrite the bound session's with an empty binding and flap
+        // advisor liveness, so it stamps nothing.
+        // trace:TASK-1955 | ai:claude (TASK-2210)
+        if binding.is_empty() {
+            return;
+        }
         crate::presence::stamp_bound_turn_clock(&grant_turn_key(g), binding, now);
     }
 }
@@ -2335,10 +2547,7 @@ pub(crate) fn plan_unowned_spec(s: &UnownedSpec) -> LaneDecision {
     }
     // The head carries the dispatch epoch, so a re-route is a new item.
     // trace:TASK-1915 | ai:claude
-    let head = match s.epoch {
-        0 => "approved".to_string(),
-        n => format!("approved#{n}"),
-    };
+    let head = dispatch_head(s.epoch);
     if s.open_pr.is_none() {
         return LaneDecision::Skip {
             lane,
