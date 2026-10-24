@@ -3,12 +3,12 @@ spec_id: BUG-2216
 agreed_id: BUG-2216
 title: A passing re-review does not release the earlier CHANGES REQUESTED merge-hold
 description: 'Observed 2026-10-24: #2885, #2886 and #2868 passed round-2 review at new heads, yet still carried the round-1 reviewer-refusal hold. The train refused them and the operator had to clear each by hand. ACCEPTANCE: when the reviewer records APPROVED at the current head for every spec the hold names, the reviewer-refusal hold is released through the existing release path (marker, label, ledger clearance and event), exactly once. A hold of any other kind (recusal, operator, legacy, label-only) is never released this way. An approval at a non-current head releases nothing. Tests for each case.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-24T12:27:00.643498059Z
-modified_at: 2026-10-24T12:29:32.655313171Z
+modified_at: 2026-10-24T13:16:32.023038055Z
 req_type: Bug
 history:
 - id: 01a16de2-58d0-71d0-b275-57234d5f5eea
@@ -23,6 +23,14 @@ history:
   timestamp: 2026-10-24T12:29:32.766791430Z
   session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
   changes: []
+- id: 01a16e0e-4797-7952-bf93-99357b9448f8
+  author: joe
+  timestamp: 2026-10-24T13:16:32.023032461Z
+  session_id: 16800bb8-6bb5-4aad-a6bd-ab9e4ef96b8b
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 6980be3ace8b7b9ae795e4347b8a9d4be01a287e
   branch: main
