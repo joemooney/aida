@@ -23,7 +23,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-24T22:02:10.639446320Z
+modified_at: 2026-10-24T22:03:24.299862345Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -393,6 +393,20 @@ comments:
   created_at: 2026-10-24T03:58:02.919211839Z
   modified_at: 2026-10-24T03:58:02.919211839Z
   session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+- id: 01a16ff0-a50b-76f1-8d13-cc1af1cbe9ee
+  author: ai:codex:joe
+  content: |-
+    STORY-1843 PR3 opened: https://github.com/joemooney/aida/pull/2909 at de9c0ffb7f27102fbf477a2c7aa5155724fe20bc (branch codex/story-1843-pr3).
+
+    F3: headless launch reservations are guarded through actual spawn and released on failure. F4: children scrub INHERITED_SESSION_ENV; raw sender/inbox lookup prefers the nearest registered client over inherited parent identity and aliases. F5: monotonic counters, bounded allocation reads/probes/lock waits, and explicit GC archival retain native-session resume/history/mail while collecting active reservation and ended-registry files.
+
+    Agy PreInvocation reuses the existing JSON relay with non-marking mailbox notice; SessionStart keeps registration via awaiting. The black-box test exposed and fixed short-lived hook shells being mistaken for Agy and unified awaiting omitting handle mail. It now proves Claude-to-Agy next-turn delivery, stale-parent isolation, repeated non-marking notices and explicit private inbox acknowledgement.
+
+    Local validation completed: 10 focused CLI unit tests; 3 Antigravity scaffold tests; real-CLI/source-hook black-box test; all 34 make check-ci-fast gates. Three author checker rounds found issues that were corrected; they confer no approval. Full CI/independent review remain pending.
+
+    aida ship STORY-1843 --no-merge exited 0, rebased cleanly and opened PR-2909; it filed STORY-1927 to reviewer. Title ends (STORY-1843). No merge, verdict or hold clearance. PR4 relay work and operator-run C3 migration remain outside this slice.
+  created_at: 2026-10-24T22:03:24.299862345Z
+  modified_at: 2026-10-24T22:03:24.299862345Z
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
   author: joe
