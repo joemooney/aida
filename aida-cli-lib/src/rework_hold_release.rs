@@ -150,6 +150,9 @@ fn timestamp(value: Option<&Value>, context: &str) -> Result<DateTime<FixedOffse
 /// and the mandate lookup. `mandate` is consulted only after every other
 /// check passed and only when a covered spec is sensitive; `Ok(id)` lets an
 /// active `--include-supervised` mandate cover that spec (STORY-1697).
+/// `release_check` is merge-hold clear's release condition for this hold at
+/// `head` ([`crate::pr_cmd::ship_refusal_release`]) — the arming evidence
+/// when no round history survives (BUG-2216).
 fn eligible(
     hold: &mh::MergeHoldRecord,
     body: &Value,
@@ -158,6 +161,7 @@ fn eligible(
     specs: &[Option<&aida_core::Requirement>],
     authority: &sa::GrantCheck,
     mandate: &dyn Fn() -> Result<String>,
+    release_check: &mh::RefusalRelease,
 ) -> Result<Release> {
     ensure!(
         !hold.legacy
@@ -250,11 +254,6 @@ fn eligible(
             .as_slice(),
     };
     let rounds: Vec<&Value> = inline.iter().chain(&history.archived).collect();
-    ensure!(
-        !rounds.is_empty(),
-        "missing arming refusal rounds: {}",
-        history_note(history)
-    );
     let mut armed = false;
     for round in rounds {
         let kind = round
@@ -275,11 +274,21 @@ fn eligible(
             armed = true;
         }
     }
-    ensure!(
-        armed,
-        "no earlier request-changes/rejected arming round is recorded: {}",
-        history_note(history)
-    );
+    // BUG-2216: a fresh reviewer worktree keeps no round history, which left
+    // answered refusal holds armed until a human cleared them (#2885, #2886,
+    // #2868). The hold marker itself is the arming evidence; whether this
+    // approval answers it is merge-hold clear's own release-condition check,
+    // which fails closed (approval at the live head under the hold's key,
+    // not outranked by a newer refusal). trace:BUG-2216 | ai:claude
+    if !armed {
+        match release_check {
+            mh::RefusalRelease::Released(_) => {}
+            mh::RefusalRelease::Held(why) => bail!(
+                "no retained arming round ({}) and the hold's release condition is not met: {why}",
+                history_note(history)
+            ),
+        }
+    }
     let key = hold
         .verdict_ref
         .as_ref()
@@ -454,6 +463,30 @@ fn release_with(
         );
         labels()?;
         mh::clear_hold(root, hold.pr)?;
+        // BUG-2216: the release path's event, as ship's release emits it —
+        // who released, and that no human attested. Inside the lock, on the
+        // one successful clear, so it is emitted exactly once.
+        // trace:BUG-2216 | ai:claude
+        let mut hold_event = crate::events::Event::new(
+            None,
+            "",
+            crate::events::EventKind::MergeHoldChanged {
+                pr: hold.pr as u32,
+                placed: false,
+                reason: Some(match &release.mandate {
+                    Some(id) => format!(
+                        "{} — auto-released by recorded verdict {}",
+                        crate::mandate::release_note(id),
+                        verdict.path()
+                    ),
+                    None => format!("auto-released by recorded verdict {}", verdict.path()),
+                }),
+                principal: Some(PRINCIPAL.to_string()),
+                human_attested: false,
+            },
+        );
+        hold_event.seat = crate::events::active_seat();
+        crate::events::emit(root, &hold_event);
         Ok(())
     });
     match locked {
@@ -510,6 +543,11 @@ struct AutoReleaseIo<'a> {
     approval_authority: &'a dyn Fn(&str) -> Result<()>,
     /// The mandate covering a sensitive release, re-read on every call.
     mandate: &'a dyn Fn() -> Result<String>,
+    /// BUG-2216: merge-hold clear's release condition for a hold at a head
+    /// ([`crate::pr_cmd::ship_refusal_release`]) — the arming evidence when
+    /// no round history survives.
+    // trace:BUG-2216 | ai:claude
+    refusal_release: &'a dyn Fn(&mh::MergeHoldRecord, &str) -> mh::RefusalRelease,
     comment: &'a dyn Fn(&str) -> Result<()>,
     labels: &'a dyn Fn() -> Result<()>,
 }
@@ -613,6 +651,12 @@ pub(crate) fn auto_release(project: &Path, pr: u64) -> Result<Outcome> {
                 )
                 .map(|cover| cover.id)
                 .map_err(|refusal| anyhow::anyhow!("{}", refusal.message(pr)))
+            },
+            // Verdicts are read under the calling worktree first, then the
+            // main root — the same roots the verdict file lookup uses.
+            // trace:BUG-2216 | ai:claude
+            refusal_release: &|record, head| {
+                crate::pr_cmd::ship_refusal_release(&[project, root.as_path()], record, Some(head))
             },
             comment: &|body| {
                 let (cli, args) = match kind {
@@ -776,6 +820,8 @@ fn auto_release_with(
             &specs,
             &(io.grant_check)(id, subject),
             io.mandate,
+            // trace:BUG-2216 | ai:claude
+            &(io.refusal_release)(hold, &head),
         )
     };
     // BUG-2123: every arming refusal must be answered at this head. Each is
@@ -873,6 +919,14 @@ fn auto_release_with(
     Ok(Outcome::Released {
         mandate: release.mandate,
     })
+}
+
+/// A release-condition check that never answers, for fixtures whose arming
+/// evidence is retained rounds — the fallback must stay unconsulted there.
+// trace:BUG-2216 | ai:claude
+#[cfg(test)]
+pub(crate) fn held_check() -> mh::RefusalRelease {
+    mh::RefusalRelease::Held("no release-condition check in this fixture".into())
 }
 
 #[cfg(test)]
