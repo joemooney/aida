@@ -75,6 +75,15 @@ fn member(pr: u64, head: &str, subject: &str) -> Member {
         head: head.to_string(),
         subject: subject.to_string(),
         body: format!("* {subject}"),
+        release: None,
+    }
+}
+
+/// BUG-2214: the cover a fake gate hands a held member.
+fn fake_cover() -> crate::pr_cmd::MandateCover {
+    crate::pr_cmd::MandateCover {
+        id: "6f1c1d6e-0000-4000-8000-00000000fake".into(),
+        principal: "joe".into(),
     }
 }
 
@@ -536,12 +545,21 @@ fn member_gate_applies_the_merge_hold_gate_label_rules() {
         recorded_label: recorded,
         cleared_label: cleared,
     };
-    assert_eq!(member_label_refusal(&c(false, false, false)), None);
-    assert_eq!(member_label_refusal(&c(false, true, true)), None);
-    assert!(member_label_refusal(&c(true, true, false)).is_some());
-    assert!(member_label_refusal(&c(true, true, true)).is_some());
-    assert!(member_label_refusal(&c(false, true, false)).is_some());
-    assert!(member_label_refusal(&c(false, false, true)).is_some());
+    assert_eq!(member_label_refusal(&c(false, false, false), false), None);
+    assert_eq!(member_label_refusal(&c(false, true, true), false), None);
+    assert!(member_label_refusal(&c(true, true, false), false).is_some());
+    assert!(member_label_refusal(&c(true, true, true), false).is_some());
+    assert!(member_label_refusal(&c(false, true, false), false).is_some());
+    assert!(member_label_refusal(&c(false, false, true), false).is_some());
+    // BUG-2214: with a typed marker under an active mandate the hold label
+    // defers to the cover; `recorded` without `cleared` is a live hold's
+    // normal state, while `cleared` beside a live hold is inconsistent, and
+    // the pair rules still bind once the hold label is gone.
+    assert_eq!(member_label_refusal(&c(true, true, false), true), None);
+    assert_eq!(member_label_refusal(&c(true, false, false), true), None);
+    assert!(member_label_refusal(&c(true, true, true), true).is_some());
+    assert!(member_label_refusal(&c(false, true, false), true).is_some());
+    assert!(member_label_refusal(&c(false, false, true), true).is_some());
 }
 
 // ─────────────────────────── regression demo ────────────────────────────
@@ -852,7 +870,9 @@ struct FakeChecks {
     drive: Option<String>,
     records: Vec<crate::pr_cmd::ShipGateSpecRecord>,
     tty: bool,
-    mandate: std::result::Result<(), Option<String>>,
+    mandate: std::result::Result<crate::pr_cmd::MandateCover, Option<String>>,
+    /// BUG-2214: whether the gate defers a held member to the mandate cover.
+    mandate_active: bool,
     /// The IDs the spec-policy gates were asked about.
     asked: Vec<String>,
 }
@@ -870,6 +890,7 @@ impl FakeChecks {
             records: Vec::new(),
             tty: false,
             mandate: Err(None),
+            mandate_active: false,
             asked: Vec::new(),
         }
     }
@@ -957,9 +978,12 @@ impl MemberChecks for FakeChecks {
         _ids: &[String],
         _head_ref: &str,
         _head: &str,
-    ) -> std::result::Result<(), Option<String>> {
+    ) -> std::result::Result<crate::pr_cmd::MandateCover, Option<String>> {
         self.calls.push("mandate");
         self.mandate.clone()
+    }
+    fn mandate_active(&self) -> bool {
+        self.mandate_active
     }
 }
 
@@ -1018,7 +1042,7 @@ fn live_gate_refuses_a_review_draft_only_spec_even_for_a_human() {
         Some(aida_core::ExecutionMode::Drain),
     );
     c.tty = true;
-    c.mandate = Ok(());
+    c.mandate = Ok(fake_cover());
     let why = gate_member_with(&mut c, "main", 41).unwrap_err();
     assert!(why.contains("TASK-9"), "{why}");
     assert!(why.contains(crate::pr_ship::DRAFT_ONLY_TAG), "{why}");
@@ -1060,7 +1084,7 @@ fn live_gate_lets_a_human_at_a_terminal_land_a_supervised_spec() {
 #[test]
 fn live_gate_honours_the_mandate_cover_for_a_supervised_spec() {
     let mut c = FakeChecks::shipping("TASK-9", &[], Some(aida_core::ExecutionMode::Guided));
-    c.mandate = Ok(());
+    c.mandate = Ok(fake_cover());
     assert!(gate_member_with(&mut c, "main", 41).is_ok());
 
     let mut c = FakeChecks::shipping("TASK-9", &[], Some(aida_core::ExecutionMode::Guided));
@@ -1142,6 +1166,13 @@ struct FakeForge {
     open_fails_at: Option<u64>,
     merge_fails: bool,
     ci_unreadable: bool,
+    // BUG-2214: the land step's hold releases.
+    released: Vec<u64>,
+    rearmed: Vec<u64>,
+    release_fails_for: Option<u64>,
+    /// What `hold_gate_green_after_release` answers (fail closed by default).
+    gate_green: bool,
+    gate_checked_covers: Vec<String>,
 }
 
 impl FakeForge {
@@ -1190,11 +1221,39 @@ impl TrainForge for FakeForge {
             title: None,
         })
     }
-    fn wait_ci(&mut self, _change: &crate::forge::ChangeRef) -> Result<CiVerdict> {
+    fn wait_ci(&mut self, _change: &crate::forge::ChangeRef, _train: &Built) -> Result<CiVerdict> {
         if self.ci_unreadable {
             anyhow::bail!("no CI registered within 600s");
         }
         Ok(CiVerdict::Green)
+    }
+    // trace:BUG-2214 | ai:claude
+    fn release_hold(
+        &mut self,
+        member: &Member,
+    ) -> std::result::Result<crate::merge_hold::MergeHoldRecord, String> {
+        if self.release_fails_for == Some(member.pr) {
+            return Err("the mandate is no longer active".into());
+        }
+        self.released.push(member.pr);
+        Ok(crate::merge_hold::typed_hold(
+            member.pr,
+            crate::merge_hold::HoldReasonKind::Supervision,
+            "supervised spec",
+            None,
+        ))
+    }
+    fn rearm_hold(&mut self, record: &crate::merge_hold::MergeHoldRecord) -> String {
+        self.rearmed.push(record.pr);
+        format!(" PR-{}'s merge-hold is re-armed.", record.pr)
+    }
+    fn hold_gate_green_after_release(
+        &mut self,
+        _change: &crate::forge::ChangeRef,
+        covers: &[String],
+    ) -> Result<bool> {
+        self.gate_checked_covers = covers.to_vec();
+        Ok(self.gate_green)
     }
     fn retire(&mut self, change: &crate::forge::ChangeRef, why: &str) {
         self.retired.push((change.id, why.to_string()));
@@ -1494,6 +1553,7 @@ fn a_car_keeps_the_head_commits_spec_id_when_ship_derives_no_subject() {
         head: "a".repeat(40),
         subject,
         body: String::new(),
+        release: None,
     });
     let first = car.lines().next().unwrap();
     assert!(
@@ -1549,6 +1609,240 @@ fn the_terminal_bypass_covers_named_prs_only() {
     // The same member, swept in under a covering mandate, lands.
     let mut c = FakeChecks::shipping("TASK-9", &[], Some(aida_core::ExecutionMode::Guided));
     c.tty = tty_consents(true, false);
-    c.mandate = Ok(());
+    c.mandate = Ok(fake_cover());
     assert!(gate_member_with(&mut c, "main", 41).is_ok());
+}
+
+// ── BUG-2214: the train releases a member's hold under the mandate ──────────
+
+/// A member admitted with a hold to release at land time.
+fn covered_member(pr: u64) -> Member {
+    let mut m = member(pr, &format!("head{pr}"), "s");
+    m.release = Some(fake_cover());
+    m
+}
+
+// trace:BUG-2214 | ai:claude
+#[test]
+fn bug_2214_gate_defers_a_held_member_to_the_mandate_cover() {
+    // No active mandate: the refusal is byte-identical to before.
+    let mut c = FakeChecks::new();
+    c.hold = Some("supervised spec needs a human".into());
+    let why = gate_member_with(&mut c, "main", 41).unwrap_err();
+    assert_eq!(
+        why,
+        "it is under a merge hold (supervised spec needs a human); the train never releases a hold"
+    );
+    assert!(
+        !c.calls.contains(&"mandate"),
+        "no cover read without a mandate"
+    );
+
+    // Active covering mandate: admitted, carrying the cover for the land step.
+    let mut c = FakeChecks::new();
+    c.hold = Some("supervised spec needs a human".into());
+    c.mandate_active = true;
+    c.mandate = Ok(fake_cover());
+    let m = gate_member_with(&mut c, "main", 41).unwrap();
+    assert_eq!(m.release, Some(fake_cover()));
+
+    // Active mandate whose cover refuses: the hold stays, the reason names both.
+    let mut c = FakeChecks::new();
+    c.hold = Some("supervised spec needs a human".into());
+    c.mandate_active = true;
+    c.mandate = Err(Some("TASK-9 is in an excluded class".into()));
+    let why = gate_member_with(&mut c, "main", 41).unwrap_err();
+    assert!(why.contains("it is under a merge hold"), "{why}");
+    assert!(why.contains("TASK-9 is in an excluded class"), "{why}");
+}
+
+// trace:BUG-2214 | ai:claude
+#[test]
+fn bug_2214_one_cover_read_serves_the_supervised_gate_and_the_hold() {
+    let mut c = FakeChecks::shipping("TASK-9", &[], Some(aida_core::ExecutionMode::Guided));
+    c.hold = Some("supervised spec".into());
+    c.mandate_active = true;
+    c.mandate = Ok(fake_cover());
+    let m = gate_member_with(&mut c, "main", 41).unwrap();
+    assert_eq!(m.release, Some(fake_cover()));
+    assert_eq!(c.calls.iter().filter(|s| **s == "mandate").count(), 1);
+}
+
+// trace:BUG-2214 | ai:claude
+#[test]
+fn bug_2214_a_label_only_hold_stays_human_even_under_a_mandate() {
+    let mut c = FakeChecks::new();
+    c.mandate_active = true;
+    c.mandate = Ok(fake_cover());
+    c.labels = Ok(Some(crate::merge_hold::PinnedChange {
+        merged: false,
+        state: crate::merge_hold::ChangeState::Open,
+        head_sha: None,
+        hold_label: true,
+        recorded_label: false,
+        cleared_label: false,
+    }));
+    let why = gate_member_with(&mut c, "main", 41).unwrap_err();
+    assert!(why.contains("the train never releases a hold"), "{why}");
+}
+
+// trace:BUG-2214 | ai:claude
+#[test]
+fn bug_2214_train_ci_tolerates_only_a_covered_hold_gate_red() {
+    use crate::ci_gate::CheckRow;
+    let row = |name: &str, bucket: &str| CheckRow {
+        name: name.into(),
+        workflow: "w".into(),
+        bucket: bucket.into(),
+        run_id: None,
+    };
+    let pinned = |hold: bool, recorded: bool, cleared: bool| crate::merge_hold::PinnedChange {
+        merged: false,
+        state: crate::merge_hold::ChangeState::Open,
+        head_sha: None,
+        hold_label: hold,
+        recorded_label: recorded,
+        cleared_label: cleared,
+    };
+    let car = |m: &Member| Car {
+        member: m.clone(),
+        commit: "c".into(),
+        patch_id: "p".into(),
+    };
+    let covered = vec![car(&covered_member(7))];
+    let plain = vec![car(&member(7, "head7", "s"))];
+    let red = vec![
+        row("build", "pass"),
+        row(crate::ci_gate::HOLD_GATE_CHECK, "fail"),
+    ];
+    // The one tolerated shape: only the hold gate is red, the member is
+    // admitted for release, and its live labels show exactly a live hold.
+    assert!(hold_gate_tolerance(&red, &covered, |_| Ok(Some(pinned(
+        true, true, false
+    )))));
+    // A held member the mandate does not cover stays red.
+    assert!(!hold_gate_tolerance(&red, &plain, |_| Ok(Some(pinned(
+        true, true, false
+    )))));
+    // Any other red check stays red.
+    let two_red = vec![
+        row("build", "fail"),
+        row(crate::ci_gate::HOLD_GATE_CHECK, "fail"),
+    ];
+    assert!(!hold_gate_tolerance(&two_red, &covered, |_| Ok(Some(
+        pinned(true, true, false)
+    ))));
+    // A BUG-1693 pair-rule failure stays red.
+    assert!(!hold_gate_tolerance(&red, &covered, |_| Ok(Some(pinned(
+        false, true, false
+    )))));
+    // Unreadable or missing labels fail closed.
+    assert!(!hold_gate_tolerance(&red, &covered, |_| Err(
+        "api down".into()
+    )));
+    assert!(!hold_gate_tolerance(&red, &covered, |_| Ok(None)));
+    // A green hold gate is not this tolerance's business.
+    let green = vec![row(crate::ci_gate::HOLD_GATE_CHECK, "pass")];
+    assert!(!hold_gate_tolerance(&green, &covered, |_| Ok(Some(
+        pinned(false, false, false)
+    ))));
+}
+
+// trace:BUG-2214 | ai:claude
+#[test]
+fn bug_2214_land_releases_covered_holds_then_merges() {
+    let covered = covered_member(7);
+    let mut f = FakeForge::mains(&["base"]);
+    f.gates.insert(7, Ok(covered.clone()));
+    f.gate_green = true;
+    let mut rails = ForgeRails::new(&mut f, "s".into());
+    let out = drive(&mut rails, vec![covered]).unwrap();
+    assert_eq!(
+        out.landed.iter().map(|(pr, _)| *pr).collect::<Vec<_>>(),
+        [7]
+    );
+    assert_eq!(f.released, [7]);
+    assert_eq!(f.gate_checked_covers, [fake_cover().id]);
+    assert!(f.rearmed.is_empty(), "{:?}", f.rearmed);
+}
+
+// trace:BUG-2214 | ai:claude
+#[test]
+fn bug_2214_a_failed_release_rearms_the_already_released_and_ejects() {
+    let (seven, eight) = (covered_member(7), covered_member(8));
+    let mut f = FakeForge::mains(&["base"]);
+    f.gates.insert(7, Ok(seven.clone()));
+    f.gates.insert(8, Ok(eight.clone()));
+    f.release_fails_for = Some(8);
+    f.gate_green = true;
+    let mut rails = ForgeRails::new(&mut f, "s".into());
+    let out = drive(&mut rails, vec![seven, eight]).unwrap();
+    let ejected: Vec<_> = out.ejected.iter().filter(|e| e.pr == 8).collect();
+    assert_eq!(ejected.len(), 1, "{:?}", out.ejected);
+    assert!(
+        ejected[0]
+            .reason
+            .contains("its merge-hold was not released"),
+        "{}",
+        ejected[0].reason
+    );
+    assert!(
+        ejected[0].reason.contains("re-armed"),
+        "{}",
+        ejected[0].reason
+    );
+    // PR-7's hold was released before PR-8 failed, re-armed, then released
+    // again when PR-7 landed alone.
+    assert_eq!(
+        out.landed.iter().map(|(pr, _)| *pr).collect::<Vec<_>>(),
+        [7]
+    );
+    assert!(f.rearmed.contains(&7), "{:?}", f.rearmed);
+}
+
+// trace:BUG-2214 | ai:claude
+#[test]
+fn bug_2214_a_red_hold_gate_after_release_rearms_and_rebuilds() {
+    let covered = covered_member(7);
+    let mut f = FakeForge::mains(&["base"]);
+    f.gates.insert(7, Ok(covered.clone()));
+    // gate_green stays false: the gate never re-runs green after the release.
+    let mut rails = ForgeRails::new(&mut f, "s".into());
+    let out = drive(&mut rails, vec![covered]).unwrap();
+    assert!(out.landed.is_empty(), "{:?}", out.landed);
+    assert!(!f.released.is_empty());
+    assert_eq!(f.rearmed, f.released, "every release was re-armed");
+    assert!(f.merged.is_empty(), "{:?}", f.merged);
+}
+
+// trace:BUG-2214 | ai:claude
+#[test]
+fn bug_2214_main_moving_after_the_release_rearms_then_lands_on_rebuild() {
+    let covered = covered_member(7);
+    let mut f = FakeForge::mains(&["base", "base", "moved"]);
+    f.gates.insert(7, Ok(covered.clone()));
+    f.gate_green = true;
+    let mut rails = ForgeRails::new(&mut f, "s".into());
+    let out = drive(&mut rails, vec![covered]).unwrap();
+    assert_eq!(
+        out.landed.iter().map(|(pr, _)| *pr).collect::<Vec<_>>(),
+        [7]
+    );
+    assert_eq!(f.released, [7, 7], "released, re-armed, released again");
+    assert_eq!(f.rearmed, [7]);
+}
+
+// trace:BUG-2214 | ai:claude
+#[test]
+fn bug_2214_a_merge_failure_after_the_release_rearms() {
+    let covered = covered_member(7);
+    let mut f = FakeForge::mains(&["base"]);
+    f.gates.insert(7, Ok(covered.clone()));
+    f.gate_green = true;
+    f.merge_fails = true;
+    let mut rails = ForgeRails::new(&mut f, "s".into());
+    let out = drive(&mut rails, vec![covered]).unwrap();
+    assert!(out.error.is_some(), "the merge failure stops the run");
+    assert!(out.landed.is_empty());
+    assert_eq!(f.rearmed, f.released, "every release was re-armed");
 }

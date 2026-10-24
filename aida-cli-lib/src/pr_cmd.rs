@@ -2006,7 +2006,7 @@ pub(crate) fn ship_ci_budget(
 // trace:STORY-1700 | ai:claude
 pub(crate) use crate::mandate_ship::{
     mandate_carry_over, mandate_exclusion_specs, mandate_ship_cover, mandate_still_active,
-    rearm_after_mandate_failure, rearm_mandate_hold_with, MandateCover,
+    rearm_after_mandate_failure, rearm_mandate_hold_with, release_hold_under_mandate, MandateCover,
 };
 
 /// BUG-1918: the approval gate for merge paths other than `aida pr ship`
@@ -3783,91 +3783,68 @@ pub(crate) fn pr_ship_with_method(
                     reason,
                 ),
             }
-            let _ = crate::merge_hold::clear_hold(&hold_root, pr_number);
             // STORY-1698: a mandate-authorized release is recorded in the
             // hold ledger and on the PR as "released under mandate <id> by
-            // advisor". trace:STORY-1698 | ai:claude
+            // advisor". BUG-2214: through the one shared release sequence the
+            // train also uses. trace:STORY-1698 trace:BUG-2214 | ai:claude
             if let (Some(cover), Some(record)) = (&mandate_release, &hold_record) {
-                eprintln!(
-                    "  {} PR-{pr_number}: merge-hold {}",
-                    crate::glyph(crate::glyphs::Glyph::Info).cyan(),
-                    crate::mandate::release_note(&cover.id)
-                );
-                if let Err(err) = crate::merge_hold::record_mandate_clearance(
+                release_hold_under_mandate(
                     &hold_root,
-                    record,
-                    &cover.principal,
-                    &cover.id,
-                    released_by_verdict.clone(),
-                ) {
-                    eprintln!(
-                        "  {} could not record the mandate release on PR-{pr_number}: {err}",
-                        crate::glyph(crate::glyphs::Glyph::Warning).yellow()
-                    );
-                }
-                let _ = crate::forge::forge_for(&hold_root).comment(
                     &change_ref,
-                    &format!(
-                        "Merge-hold {} (`{}`). Approval at `{}`; CI green.",
-                        crate::mandate::release_note(&cover.id),
-                        cover.principal,
-                        head_sha.as_deref().unwrap_or("?"),
-                    ),
-                );
-            } else if let (Some(record), Some(verdict)) = (&hold_record, &released_by_verdict) {
-                let actor =
-                    crate::merge_hold::PrincipalIdentity::human(crate::current_user_id(None));
-                if let Err(err) = crate::merge_hold::record_clearance_with_verdict(
-                    &hold_root,
+                    cover,
                     record,
-                    &actor,
-                    Some(verdict.clone()),
-                ) {
+                    released_by_verdict.clone(),
+                    head_sha.as_deref(),
+                    reason,
+                );
+            } else {
+                let _ = crate::merge_hold::clear_hold(&hold_root, pr_number);
+                if let (Some(record), Some(verdict)) = (&hold_record, &released_by_verdict) {
+                    let actor =
+                        crate::merge_hold::PrincipalIdentity::human(crate::current_user_id(None));
+                    if let Err(err) = crate::merge_hold::record_clearance_with_verdict(
+                        &hold_root,
+                        record,
+                        &actor,
+                        Some(verdict.clone()),
+                    ) {
+                        eprintln!(
+                            "  {} could not record the hold release on PR-{pr_number}: {err}",
+                            crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+                        );
+                    }
+                }
+                // BUG-1423: this IS the coordination-seat action the missing
+                // event taxonomy could not record — an explicit advisor/human
+                // `aida pr ship` releasing a supervised merge-hold. Best-effort,
+                // never affects the ship outcome. trace:BUG-1423 | ai:claude
+                let mut hold_event = crate::events::Event::new(
+                    None,
+                    "",
+                    crate::events::EventKind::MergeHoldChanged {
+                        pr: pr_number as u32,
+                        placed: false,
+                        reason: Some(reason.to_string()),
+                        // BUG-2214: who released, and whether the human
+                        // integrity floor held. trace:BUG-2214 | ai:claude
+                        principal: Some(
+                            crate::merge_hold::PrincipalIdentity::human(crate::current_user_id(
+                                None,
+                            ))
+                            .key(),
+                        ),
+                        human_attested: crate::has_integrity_floor_authority(),
+                    },
+                );
+                hold_event.seat = crate::events::active_seat();
+                crate::events::emit(&hold_root, &hold_event);
+                if let Err(err) = crate::merge_hold::sync_label(&hold_root, pr_number, false) {
                     eprintln!(
-                        "  {} could not record the hold release on PR-{pr_number}: {err}",
-                        crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+                        "  {} {}",
+                        crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                        ship_unlabel_failure(pr_number, &err),
                     );
                 }
-            }
-            // BUG-1423: this IS the coordination-seat action the missing
-            // event taxonomy could not record — an explicit advisor/human
-            // `aida pr ship` releasing a supervised merge-hold. Best-effort,
-            // never affects the ship outcome. trace:BUG-1423 | ai:claude
-            let mut hold_event = crate::events::Event::new(
-                None,
-                "",
-                crate::events::EventKind::MergeHoldChanged {
-                    pr: pr_number as u32,
-                    placed: false,
-                    // STORY-1698: a mandate release names the mandate.
-                    reason: Some(match &mandate_release {
-                        Some(cover) => {
-                            format!("{} — {reason}", crate::mandate::release_note(&cover.id))
-                        }
-                        None => reason.to_string(),
-                    }),
-                    // BUG-2214: who released, and whether the human integrity
-                    // floor held — a mandate release is an advisor action and
-                    // never attests as human. trace:BUG-2214 | ai:claude
-                    principal: Some(match &mandate_release {
-                        Some(cover) => format!("advisor:{}", cover.principal),
-                        None => crate::merge_hold::PrincipalIdentity::human(
-                            crate::current_user_id(None),
-                        )
-                        .key(),
-                    }),
-                    human_attested: mandate_release.is_none()
-                        && crate::has_integrity_floor_authority(),
-                },
-            );
-            hold_event.seat = crate::events::active_seat();
-            crate::events::emit(&hold_root, &hold_event);
-            if let Err(err) = crate::merge_hold::sync_label(&hold_root, pr_number, false) {
-                eprintln!(
-                    "  {} {}",
-                    crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
-                    ship_unlabel_failure(pr_number, &err),
-                );
             }
             // BUG-1180: removing the label re-runs `merge-hold-gate`; the
             // squash-merge below would be refused by branch protection until it
