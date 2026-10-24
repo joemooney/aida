@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-24T21:05:34.975743848Z
-modified_at: 2026-10-24T22:29:24.483681105Z
+modified_at: 2026-10-24T22:29:28.091999604Z
 req_type: Task
 tags:
 - from-review:PR-2904
@@ -29,6 +29,13 @@ relationships:
   target_id: 01a16ac9-0c37-7d72-a140-fa29d8b4b141
   created_at: 2026-10-24T22:29:24.483678097Z
   created_by: joe
+comments:
+- id: 01a17008-819c-7782-ae0c-f103eba656a1
+  author: joe
+  content: 'ADVISOR 15:30: fold into the next STORY-1742 slice: show must degrade (report origin lookup error) rather than fail entirely.'
+  created_at: 2026-10-24T22:29:28.091999604Z
+  modified_at: 2026-10-24T22:29:28.091999604Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
 history:
 - id: 01a17008-6fab-7bc0-9933-9323c89ce473
   author: joe
