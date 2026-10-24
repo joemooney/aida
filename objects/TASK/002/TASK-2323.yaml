@@ -1,0 +1,27 @@
+id: 01a16d24-aa64-7532-97e3-5ef3b473aa1a
+spec_id: TASK-2323
+agreed_id: TASK-2323
+title: Rework-release path skips the BUG-2214 evidence-read head fetch (head_branch=None)
+description: |
+  The BUG-2214 PR-1 fix fetches the PR head in mandate_ship_cover before collect_pr, but the rework-release call site (rework_hold_release.rs:584) passes head_branch: None, so the fetch never runs on that path. SKETCH v1 (c) claimed "one place covers ship's early gate, the under-lease re-read, the train's cover, and the rework release path" — the last is not covered. A rework-hold release after `gh pr update-branch` can still refuse TraceEvidenceUnreadable ("git merge-base: Not a valid commit name <new head>"). Fails closed — an availability gap, not a safety gap; the spec acceptance names ship/train only, so this did not block PR-2894. Fix: thread the head branch (available via live_head / fetch_pinned_change) into the mandate_ship_cover call, in PR-2 of the slice or a follow-up.
+
+  Raised in review of PR-2894: https://github.com/joemooney/aida/pull/2894#issuecomment-6382289721
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-24T09:01:21.892271028Z
+modified_at: 2026-10-24T09:01:21.892271028Z
+req_type: Task
+tags:
+- from-review:PR-2894
+- severity:minor
+filed_at:
+  code_sha: 99b1d7cf9ecefa3cd7dca481593e4da791d9a02b
+  branch: pr-2894
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 2d8eebbebc
+  vendor: claude
+  session: 01a16d1e1c48
+  harness_version: 2.1.310 (Claude Code)
