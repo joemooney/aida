@@ -23,7 +23,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-24T02:30:30.085169631Z
+modified_at: 2026-10-24T03:16:16.193338828Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -560,6 +560,12 @@ history:
   timestamp: 2026-10-24T02:30:31.423009091Z
   session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
   changes: []
+- id: 01a16be8-b918-7230-9588-7a33bc6c4b31
+  author: joe
+  timestamp: 2026-10-24T03:16:16.280031177Z
+  session_id: 01a16be5072e
+  harness_version: 2.1.310 (Claude Code)
+  changes: []
 filed_at:
   code_sha: ba665aaf98777ed00ac96a782a6d6f51dfd528bd
   branch: main
@@ -572,7 +578,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: PR2b handle allocation/binding/statusline/agent-ls is well-structured and well-tested, but PR CI is red at the head (CI (lib-0) Run tests failed; Build aggregate failed) and headless child seats' mail From address no longer resolves to their registry handle.
+  detail: 'STRICT round 4 at f34c0de4: CI green (merge-hold-gate red only under the retained hold); round-3 fixes for lib-0, TASK-2302/2303/2304 are correct and tested, but the child-seat fix only works for one child: concurrent same-seat headless children share the <vendor>-<seat> address, and reused generated spellings still hand a dead holder''s unread mail to the new holder. AC aca8ca0d PARTIAL (finding 1); aceb5213 verified by statusline_session_evidence_covers_all_three_clients + statusline_handle_resolves_from_a_tmux_pane_and_from_the_spawning_client (minor gap finding 3); ac97b025 verified by agent_ls_views_list_every_vendor_with_handle_role_spec_and_liveness + gc_dead_agents_marks_dead_resumable_rows_ended_and_keeps_them; acfeb946 PARTIAL (findings 1,2) - single-session path verified by mail_to_a_handle_reaches_the_session_holding_it_and_nothing_else + a_headless_child_seat_keeps_its_sender_name_so_replies_resolve; ac0eef56 not-applicable (PR3 per 2026-10-23 ruling); C3 write mode not-applicable (operator-run post-deploy); signoff ''no authority escalation'' black-box case unverified (finding 4).'
   recovery_hint: address the review findings, move STORY-1843 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-10-24T02:20:58.242530589Z
+  shelved_at: 2026-10-24T03:16:16.193338828Z
