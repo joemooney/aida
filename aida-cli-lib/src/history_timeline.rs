@@ -2483,6 +2483,8 @@ mod tests {
                     pr: 42,
                     placed: true,
                     reason: Some("advisor review".into()),
+                    principal: None,
+                    human_attested: false,
                 },
             ),
             // A different PR's release must not clear PR-42's hold.
@@ -2494,6 +2496,8 @@ mod tests {
                     pr: 99,
                     placed: false,
                     reason: None,
+                    principal: None,
+                    human_attested: false,
                 },
             ),
             rec(
@@ -2511,6 +2515,8 @@ mod tests {
                     pr: 77,
                     placed: true,
                     reason: None,
+                    principal: None,
+                    human_attested: false,
                 },
             ),
         ];

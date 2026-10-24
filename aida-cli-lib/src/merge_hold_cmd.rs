@@ -1156,6 +1156,15 @@ pub(crate) fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<
                                 pr: *pr as u32,
                                 placed: false,
                                 reason: Some(format!("merge-hold clear: {detail}")),
+                                // BUG-2214: the cleared-by-human mandate cover
+                                // needs the event to name a human principal and
+                                // carry the integrity-floor attestation this
+                                // command verified above. trace:BUG-2214 | ai:claude
+                                principal: Some(
+                                    merge_hold::PrincipalIdentity::human(current_user_id(None))
+                                        .key(),
+                                ),
+                                human_attested: has_integrity_floor_authority(),
                             },
                         );
                         ev.seat = events::active_seat();
