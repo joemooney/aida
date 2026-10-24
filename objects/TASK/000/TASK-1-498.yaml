@@ -14,7 +14,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-24T20:56:07.401469562Z
-modified_at: 2026-10-24T22:29:09.646598787Z
+modified_at: 2026-10-24T22:29:14.646694384Z
 req_type: Task
 tags:
 - carried-from:BUG-2220
@@ -26,6 +26,13 @@ relationships:
   target_id: 01a16de1-2db8-75e3-b99d-afa3c62c66f4
   created_at: 2026-10-24T22:29:09.646594262Z
   created_by: joe
+comments:
+- id: 01a17008-4d16-77d1-bcbe-7bd97f09cc34
+  author: joe
+  content: 'ADVISOR 15:30: duplicate of TASK-2332 (read-once rider gate; lease serializes landings) — recorded limitation.'
+  created_at: 2026-10-24T22:29:14.646694384Z
+  modified_at: 2026-10-24T22:29:14.646694384Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
 history:
 - id: 01a16fcb-a8bd-7461-a585-896b3885f014
   author: joe
