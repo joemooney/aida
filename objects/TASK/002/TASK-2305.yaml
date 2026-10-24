@@ -6,16 +6,25 @@ description: |
   queue_cmd.rs recover_push_branch runs 'git push -u -- origin <branch>' directly, with no clear_sandbox_config_lock beforehand and no repair_push_upstream afterwards. Under the sandbox config.lock placeholder the push exits 0 but records no upstream, or leaves a stale origin/main one. None of the TASK-2270 member specs named this site.
 
   Raised in review of PR-2867: https://github.com/joemooney/aida/pull/2867
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-24T03:22:13.023500981Z
-modified_at: 2026-10-24T03:22:13.023500981Z
+modified_at: 2026-10-24T03:23:53.866857889Z
 req_type: Task
 tags:
 - from-review:PR-2867
 - severity:minor
+history:
+- id: 01a16bef-b48a-7210-856f-38bffc470cab
+  author: joe
+  timestamp: 2026-10-24T03:23:53.866855960Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 42e75c3e32e596eb9d808686bed54cb79aa1dd51
   branch: pr-2867
