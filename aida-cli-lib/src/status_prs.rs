@@ -764,6 +764,36 @@ pub(crate) fn clone_seat_trees(project_root: &std::path::Path) -> Vec<WorktreeRe
     records
 }
 
+/// One status or awaiting pass gives all its seat-clone probes this much time
+/// together, never [`crate::seat_clone::probe`]'s per-call budget per clone.
+// trace:TASK-2053 | ai:claude
+pub(crate) const CLONE_PROBE_BUDGET: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// [`clone_seat_trees`], each read through the sandboxed probe under one
+/// shared `deadline`. A clone the deadline leaves unread is still returned,
+/// as [`crate::seat_clone::Probe::Unknown`] naming the skip, so callers show
+/// it like an unreadable clone and never drop or count it as clean.
+// trace:TASK-2053 | ai:claude
+pub(crate) fn probe_clone_seat_trees(
+    project_root: &std::path::Path,
+    deadline: Option<std::time::Instant>,
+) -> Vec<(WorktreeRecord, crate::seat_clone::Probe)> {
+    clone_seat_trees(project_root)
+        .into_iter()
+        .map(|wt| {
+            let probe = if deadline.is_some_and(|end| std::time::Instant::now() >= end) {
+                crate::seat_clone::Probe::Unknown(format!(
+                    "not read: the clone scan deadline elapsed before {}",
+                    wt.path.display()
+                ))
+            } else {
+                crate::seat_clone::probe_until(project_root, &wt.path, &[], deadline)
+            };
+            (wt, probe)
+        })
+        .collect()
+}
+
 /// Open-PR snapshot keyed by head branch — one `gh` invocation feeds the
 /// "open PRs" and "branches ahead with no PR" detectors. Empty when gh is
 /// missing or the call fails (every dependent detector silently

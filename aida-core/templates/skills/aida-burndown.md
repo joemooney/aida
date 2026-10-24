@@ -1,6 +1,6 @@
 ---
 name: aida-burndown
-description: Autonomously burn down a backlog — fan out worktree-isolated implementer subagents over the ready set, integrate their PRs, and loop until drained.
+description: Autonomously burn down a backlog — launch one standalone implementer process per ready spec, integrate their PRs, and loop until drained.
 disable-model-invocation: true
 allowed-tools:
   - Bash
@@ -16,13 +16,13 @@ Run the autonomous backlog burn-down that empirically works (memory
 `feedback_parallel_implementer_fanout_burndown`; discipline
 `.aida/discipline/autonomous-burndown.md`) as one command, so the rules
 that keep it from stalling are **structural**, not something the driving agent
-must remember. The engine is Claude-Code-native and only the harness can run it:
-fan out implementer subagents in isolated worktrees, integrate their PRs, loop.
-The subagent fan-out is the harness's native `Agent(isolation: "worktree")`
-primitive, so this is **Claude-harness-only** — a non-Claude vendor (Codex,
-Cursor, Amp) has no equivalent and drains the same ready set the serial way
+must remember. The engine launches one standalone implementer process per
+spec (`aida queue work <SPEC> --role implementer --no-human`), each in its own
+worktree and implementer seat, integrates their PRs, and loops. A harness that
+cannot run background shell jobs drains the same ready set the serial way
 instead: `aida queue work --auto-complete` per spec (the vendor-agnostic
-orchestrator engine). SPIKE-74 tracks closing that gap.
+orchestrator engine).
+<!-- trace:STORY-1662 | ai:claude -->
 
 The safety property is delegated to `aida burndown plan` (STORY-527 slice 1):
 **only bounded + unblocked + decision-free specs are ever fanned out.** That is
@@ -117,29 +117,19 @@ concurrency cap refused it (nothing set up; launch it in a later wave).
 than `[queue] standalone_implementer_cap`.
 <!-- trace:STORY-1662 | ai:claude -->
 
-An Agent-tool implementer subagent is the fallback only where the launch
-above is unavailable. It shares your session, so it inherits your seat, and
-you are an author of what it writes:
-
-> `Agent(subagent_type: "general-purpose", isolation: "worktree")` — each gets
-> ONE ready spec and a self-contained prompt: read it (`aida show <SPEC> -c`),
-> **flip it in flight at pickup** (`aida edit <SPEC> --status in-progress`) so
-> queue/status views agree the spec is being worked — the fanout lease alone
-> doesn't flip it (BUG-754: `queue list` showed the same spec as both a
-> pickable Approved row and in-flight/leased) — then
-> implement to acceptance, add `// trace:<SPEC>` (plain `//`, never `///`),
-> `cargo build` + `cargo test` + `cargo fmt --all -- --check` (check the exit
-> code), commit `[AI:claude] type(scope): … (<SPEC>)` + the co-author trailer,
-> push, open a PR, then mark the spec done (`aida queue done <SPEC>`) so it
-> reaches **Done** and the normal merge-driven Done→Completed auto-bump fires on
-> integration, and reply ONLY the PR URL or `BLOCKED: <reason>`.
+Never fan implementers out through the Agent tool. An in-session subagent
+shares your session and seat: it trips the advisor code guard, and you become
+an author of the PR it opens. The pickup moves each spec to In Progress and
+sets its owner, so queue and status views agree it is being worked (BUG-754).
+If the standalone launch is unavailable (an older `aida`), drain the set
+serially with `aida queue work <SPEC> --auto-complete` instead.
 
 Worktree isolation means parallel agents never collide on files *mid-flight* —
 but two specs that touch the SAME files still **conflict at MERGE time** (the
 stacked / duplicate-edit hazard).
 
 **Sequential work in one worktree stacks branches (BUG-554).** The fan-out above
-is safe because each subagent gets a FRESH worktree off `origin/main`. The hazard
+is safe because each implementer gets a FRESH worktree off `origin/main`. The hazard
 is *reuse*: if a single agent (or you) works MORE THAN ONE spec in the SAME
 worktree, branch each spec off `origin/main`, **never** off the current HEAD —
 otherwise spec B's branch stacks on spec A's unmerged commit, which (1) pollutes
@@ -228,9 +218,8 @@ strands — give it the same wait every other PR got.
 
 **Review every PR in a separate reviewer process before merging it.** The
 merge gate accepts only an approval recorded at the PR's head by a reviewer
-process with its own identity. Your implementer subagents run inside your
-session, so you are an author of every wave PR: an approval you record, or
-one recorded by an Agent-tool reviewer, is refused at merge. Launch
+process with its own identity: an approval you record, or one recorded by an
+Agent-tool reviewer inside your session, is refused at merge. Launch
 each reviewer from Bash as its own `run_in_background` job, one job per PR,
 and wait for the job to exit. The job's exit status is the signal, not the
 verdict file:
@@ -270,8 +259,11 @@ from the previous round is there until the new launcher replaces it.
 - The burndown seat must have been entered with
   `aida role enter <seat> --delegate-seat reviewer`; without it the launch
   fails closed. Report that as a blocker; don't work around it.
-- `RequestChanges` → resume the same implementer (`SendMessage`) with the
-  findings, then launch a **new** reviewer at the new head. A stale approval
+- `RequestChanges` → route the findings back to the implementer: relaunch
+  `aida queue work <SPEC> --role implementer --no-human` on the existing
+  branch, or mail an interactive lane (`aida mailbox send --to <lane> ...`).
+  Then launch a **new** reviewer at the new head.
+  <!-- trace:STORY-1662 | ai:claude --> A stale approval
   also means a new reviewer; never use `--override-stale-approval`.
 <!-- trace:STORY-1654 | ai:claude -->
 
@@ -292,17 +284,16 @@ have the agent rebase (`git merge origin/main`, resolve, push).
 **Prune the merged implementer worktree + branch (per merged spec).** After a
 PR's merge succeeds **and** its spec auto-bumped to **Completed** (confirm with
 `aida show <SPEC>` — status `Completed`), reclaim that implementer's
-worktree-isolated branch and worktree. They are NOT cleaned up automatically:
-`Agent(isolation: "worktree")` auto-cleans only **unchanged** worktrees, and a
-committed + merged implementer worktree HAS changes, so it persists by design —
-the integrator must prune it explicitly, or a long unattended drain accumulates
-stale `.claude/worktrees/agent-*` worktrees that also block `git branch -d`.
+branch and worktree. They are NOT cleaned up automatically: a committed and
+merged implementer worktree persists by design, so the integrator must prune
+it explicitly, or a long unattended drain accumulates stale worktrees that
+also block `git branch -d`.
 
 For each just-merged Completed spec:
 
 1. Identify the implementer's branch (the spec's own branch, e.g.
    `task-NNN-…` — the `headRefName` from the `gh pr list` entry) and its
-   worktree path (the `.claude/worktrees/agent-*` or `~/ai/aida-<spec>` dir).
+   worktree path.
    `git worktree list --porcelain` maps branches → worktree paths.
 2. Remove the worktree, then delete the local branch:
 
@@ -435,10 +426,9 @@ channels** — they reach different audiences and neither replaces the other:
 
 ## Relationship to the orchestrator drain
 
-This is the **recommended** hands-off backlog-drain path. It deliberately uses
-the harness's native subagent fan-out rather than `aida queue work
---auto-complete` (the orchestrator-spawns-agent path), which is hardened in
-parallel. They are **not** competitors: reach for `/aida-burndown` to drain a
+This is the **recommended** hands-off backlog-drain path. It deliberately
+launches standalone implementers in parallel rather than `aida queue work
+--auto-complete` (the orchestrator drain, one per repository at a time). They are **not** competitors: reach for `/aida-burndown` to drain a
 *ready set*; reach for the orchestrator drain when its single-spec lifecycle is
 what you want. Don't run both against the same set.
 

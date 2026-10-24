@@ -9,6 +9,7 @@
 //! and every stop are unit-tested without a forge. Every failure stops the
 //! batch without shipping; a re-run skips PRs that already merged.
 // trace:STORY-1887 | ai:claude
+// mandate-gate
 
 use anyhow::Result;
 
@@ -794,9 +795,9 @@ impl BatchPorts for GitHubPorts {
 
     fn staleness(&mut self, pr: u64, view: &PrView, fetch: bool) -> Result<Staleness> {
         if fetch {
-            let out = std::process::Command::new("git")
-                .arg("-C")
-                .arg(&self.project_root)
+            // TASK-2001: a host fetch keeps origin's stored token out of argv.
+            // trace:TASK-1952 | trace:TASK-2001 | ai:claude
+            let out = aida_core::git_ops::host_remote_git_command(&self.project_root, "origin")
                 .args(["fetch", "--quiet", "origin"])
                 .output()?;
             anyhow::ensure!(
@@ -1528,10 +1529,13 @@ mod tests {
     // trace:STORY-1887 | ai:claude
     #[test]
     fn t8_ship_batch_is_gate_protected() {
-        assert_eq!(
-            crate::mandate_gates::touches_gates(&["aida-cli-lib/src/pr_ship_batch.rs".to_string()]),
-            Some("aida-cli-lib/src/pr_ship_batch.rs".to_string())
-        );
+        // trace:STORY-1888 | ai:claude
+        let hit = crate::mandate_gates::touches_gates(
+            &["aida-cli-lib/src/pr_ship_batch.rs".to_string()],
+            crate::mandate_gates::ProtectedPaths::floor_ref(),
+        )
+        .map(|m| m.path);
+        assert_eq!(hit, Some("aida-cli-lib/src/pr_ship_batch.rs".to_string()));
     }
 
     // TASK-2155: the start, each PR's outcome and the stop are recorded, and

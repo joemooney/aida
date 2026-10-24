@@ -573,6 +573,19 @@ ops = ["ship"]   # any of: ship, sketch-signoff, dispatch, hold-clear, relay-res
   `pr_ship_batch.rs`) never
   ships under a mandate, and a mandate never releases its rework hold either.
   Listing `ship` or `hold-clear` stops mandate rework releases too.
+- You can protect more paths. Entries are exact paths, or directory prefixes
+  that end in `/` (`gate/` matches `gate/x.rs`, never `gateway/x.rs`):
+
+  ```toml
+  [mandate.human_gates]
+  protected_paths = ["aida-cli-lib/src/role.rs", "aida-cli-lib/src/gate/"]
+  ```
+
+  The same two layers apply. Each layer can only add paths: neither can remove
+  a built-in one. A malformed entry (absolute, `..`, a glob) is a
+  configuration error, so every action is gated. `aida mandate status` lists
+  every protected path and where it came from (`--json`: `protected_paths`).
+  A refusal names the matching entry and its source.
 - `[mandate.drive] max_actions_per_tick` (default 10) is honoured from
   `~/.aida/config.toml` only.
 - Drive never clears holds; `hold-clear` exists so you can state that

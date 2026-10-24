@@ -191,6 +191,20 @@ Draft-only intake. A persona is discoverable in `aida role list` but has no
 seat, history, or lease. See
 `docs/architecture/roles-seats-and-personas.md` in the AIDA repository.
 
+### standalone implementer
+
+An implementer launched by an orchestrator, relay or advisor session as a
+separate process, never an in-session subagent:
+`aida queue work <SPEC> --role implementer --no-human`, run from a shell
+outside any [`--auto-complete`](#--auto-complete) drain. The child gets its
+own [lease](#lease), [worktree](#worktree) and implementer [seat](#seat) (a
+delegated child grant, or baseline authority; never the launcher's grant). It
+opens its PR and stops: `aida pr ship` and `aida review record` refuse inside
+it. The launcher waits and ends with one `implementer:` result line and an
+exit code the caller branches on: 0 PR opened, 31 no PR, 32 punted, 33 held,
+34 refused at the concurrency cap (`[queue] standalone_implementer_cap`,
+default 3). See `docs/cli/03-work-autonomy.md`.
+
 ### worktree
 
 The per-session git worktree a session works in — typically

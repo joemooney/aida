@@ -14,6 +14,7 @@ fn advisor_grant() -> InheritedGrant {
     }
 }
 
+// trace:STORY-1662.AC16 | ai:claude
 #[test]
 fn an_advisor_env_in_an_implementer_lane_becomes_implementer_without_the_grant() {
     let fix = fix_for("implementer", None, Some("advisor"), &advisor_grant())
@@ -35,6 +36,7 @@ fn an_advisor_env_in_an_implementer_lane_becomes_implementer_without_the_grant()
     );
 }
 
+// trace:STORY-1662.AC16 | ai:claude
 #[test]
 fn the_lease_child_grant_is_exported_in_place_of_the_inherited_one() {
     let fix = fix_for(
@@ -51,6 +53,7 @@ fn the_lease_child_grant_is_exported_in_place_of_the_inherited_one() {
 
 /// Q-b: with no child grant, an inherited grant is kept only when its seat
 /// is the lease's; an invalid one is always dropped.
+// trace:STORY-1662.AC16 | ai:claude
 #[test]
 fn an_inherited_grant_is_kept_only_for_the_lease_seat() {
     let own = InheritedGrant::Valid {
@@ -98,6 +101,7 @@ fn an_inherited_grant_is_kept_only_for_the_lease_seat() {
 
 /// C3: a role or grant carrying shell metacharacters is refused, never
 /// quoted into a line.
+// trace:STORY-1662.AC14 | ai:claude
 #[test]
 fn values_with_shell_metacharacters_are_refused() {
     for bad in [
@@ -166,6 +170,7 @@ fn lane_fixture() -> (tempfile::TempDir, std::path::PathBuf, std::path::PathBuf)
     (tmp, root, lane)
 }
 
+// trace:STORY-1662.AC16 | ai:claude
 #[test]
 fn the_lane_lease_is_the_worktree_lease_covering_cwd_never_a_claim() {
     let (_tmp, root, lane) = lane_fixture();
@@ -185,6 +190,7 @@ fn the_lane_lease_is_the_worktree_lease_covering_cwd_never_a_claim() {
 }
 
 /// The lease role is validated before it can reach a shell line.
+// trace:STORY-1662.AC14 | ai:claude
 #[test]
 fn a_lease_role_with_metacharacters_is_an_error() {
     let (_tmp, root, lane) = lane_fixture();
@@ -200,6 +206,7 @@ fn a_lease_role_with_metacharacters_is_an_error() {
 
 /// BUG-2207: `aida claim` inside a lane records the lease's role, not the
 /// advisor seat the daemon env carries.
+// trace:STORY-1662.AC10 | ai:claude
 #[test]
 fn claim_in_a_lane_keeps_the_lease_role() {
     let (_tmp, root, lane) = lane_fixture();
@@ -218,6 +225,7 @@ fn claim_in_a_lane_keeps_the_lease_role() {
 
 /// `aida internal lane-env`'s lines for an advisor env in a lane, and none
 /// outside it.
+// trace:STORY-1662.AC16 | ai:claude
 #[test]
 fn fix_at_reads_the_lane_and_the_inherited_env() {
     let (_tmp, root, lane) = lane_fixture();
@@ -238,6 +246,7 @@ fn fix_at_reads_the_lane_and_the_inherited_env() {
 }
 
 /// C2: the MCP server applies the same correction to its own env at start.
+// trace:STORY-1662.AC13 | ai:claude
 #[test]
 fn the_mcp_server_takes_the_lane_identity_at_start() {
     let (_tmp, root, lane) = lane_fixture();
@@ -254,6 +263,7 @@ fn the_mcp_server_takes_the_lane_identity_at_start() {
 }
 
 /// C2 outside a lane: the MCP server's env is left alone.
+// trace:STORY-1662.AC13 | ai:claude
 #[test]
 fn the_mcp_server_outside_a_lane_keeps_its_env() {
     let (_tmp, root, _lane) = lane_fixture();
@@ -271,6 +281,7 @@ fn the_mcp_server_outside_a_lane_keeps_its_env() {
 
 /// C4: `aida doctor` names a claude daemon whose environment holds a grant,
 /// and only the daemon (not its hosted sessions, nor a clean daemon).
+// trace:STORY-1662.AC15 | ai:claude
 #[test]
 fn doctor_finds_a_claude_daemon_holding_a_grant() {
     let proc_root = tempfile::tempdir().unwrap();
@@ -311,6 +322,7 @@ fn doctor_finds_a_claude_daemon_holding_a_grant() {
 
 /// TASK-2213: a least-privilege stakeholder role is never widened to the
 /// lane's seat, in the hook lines or in the MCP server's own env.
+// trace:STORY-1662.AC17 | ai:claude
 #[test]
 fn a_guest_or_requester_in_a_lane_keeps_its_role() {
     for role in ["guest", "requester", "Requester"] {
@@ -340,6 +352,7 @@ fn a_guest_or_requester_in_a_lane_keeps_its_role() {
 /// A reviewer seat in a reviewer worktree keeps its grant: the lane is
 /// already its own, so nothing is corrected (the PR-2844 reviewer that lost
 /// its recording grant).
+// trace:STORY-1662.AC16 | ai:claude
 #[test]
 fn a_reviewer_in_a_reviewer_lane_keeps_its_grant() {
     let reviewer = InheritedGrant::Valid {
@@ -354,6 +367,7 @@ fn a_reviewer_in_a_reviewer_lane_keeps_its_grant() {
 
 /// TASK-2214: a lane lease whose role does not validate fails closed. The
 /// claim records no role, never the inherited (valid) advisor seat.
+// trace:STORY-1662.AC18 | ai:claude
 #[test]
 fn claim_in_a_lane_with_a_malformed_role_records_no_role() {
     let (_tmp, root, lane) = lane_fixture();
@@ -383,6 +397,7 @@ fn claim_in_a_lane_with_a_malformed_role_records_no_role() {
 
 /// TASK-2217: the restamp refuses a lease a live session holds, and leaves
 /// every other field of an idle lease intact.
+// trace:STORY-1662.AC19 | ai:claude
 #[test]
 fn stamping_a_lane_role_refuses_a_live_lease_and_keeps_other_fields() {
     let (_tmp, root, lane) = lane_fixture();
@@ -406,6 +421,7 @@ fn stamping_a_lane_role_refuses_a_live_lease_and_keeps_other_fields() {
 
 /// TASK-2217: the restamp waits for the lease-write lock, so it can never
 /// interleave with another stamp's read-modify-write on the same lease.
+// trace:STORY-1662.AC19 | ai:claude
 #[test]
 fn stamping_a_lane_role_takes_the_lease_write_lock() {
     let (_tmp, root, lane) = lane_fixture();
@@ -443,6 +459,7 @@ fn stamping_a_lane_role_takes_the_lease_write_lock() {
 
 /// TASK-2216: the doctor scans an injected process table; under `cfg(test)`
 /// the default never reads the real `/proc`.
+// trace:STORY-1662.AC15 | ai:claude
 #[test]
 fn the_doctor_daemon_scan_reads_an_injected_proc_root() {
     let (_tmp, root, _lane) = lane_fixture();
