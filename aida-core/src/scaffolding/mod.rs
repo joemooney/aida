@@ -4814,6 +4814,47 @@ mod tests {
         "subagent fanout",
     ];
 
+    /// Names of the in-session launcher that, on a line naming seat work
+    /// with no negation, mean "run that seat as a subagent".
+    // trace:TASK-2272 | ai:claude
+    const AGENT_TOOL_NAMES: &[&str] = &["agent tool", "task tool", "via task", "with task"];
+
+    /// Words that, BEFORE the tool name in its clause, turn the mention into
+    /// a prohibition. "instead"/"rather" are not negations: "with the Agent
+    /// tool instead of a process" is a launch.
+    const AGENT_TOOL_NEGATIONS: &[&str] = &["never", "not", "no", "don't", "without", "nor"];
+
+    /// `lower` names seat work, and a clause of it names the Agent/Task tool
+    /// (as a whole word) with no negation word before the tool name in that
+    /// clause: "launch the implementer with the Agent tool and no worktree"
+    /// is a launch (the negation trails the tool), "the implementer runs as
+    /// a process, not with the Agent tool" is not.
+    // trace:TASK-2272 | ai:claude
+    fn names_agent_tool_for_seat_work(lower: &str) -> bool {
+        let seat = ["implementer", "fixer", "architect", "advisor"]
+            .iter()
+            .any(|w| lower.contains(w));
+        let negated_before = |prefix: &str| {
+            prefix
+                .split(|c: char| !(c.is_alphanumeric() || c == '\''))
+                .any(|w| AGENT_TOOL_NEGATIONS.contains(&w))
+        };
+        let names_tool_unnegated = |clause: &str| {
+            AGENT_TOOL_NAMES.iter().any(|needle| {
+                clause.match_indices(needle).any(|(at, _)| {
+                    let before = clause[..at].chars().next_back();
+                    let after = clause[at + needle.len()..].chars().next();
+                    !before.is_some_and(|c| c.is_alphanumeric())
+                        && !after.is_some_and(|c| c.is_alphanumeric() || c == '-')
+                        && !negated_before(&clause[..at])
+                })
+            })
+        };
+        seat && lower
+            .split([';', ',', '.', ':', '(', ')', '—'])
+            .any(names_tool_unnegated)
+    }
+
     /// Every `key:line: pattern` in `body` that launches seat work through
     /// the Agent tool, skipping lines the research marker covers.
     // trace:STORY-1662 | ai:claude
@@ -4845,6 +4886,12 @@ mod tests {
                 if lower.contains(pattern) {
                     violations.push(format!("{key}:{}: `{pattern}`", idx + 1));
                 }
+            }
+            if names_agent_tool_for_seat_work(&lower) {
+                violations.push(format!(
+                    "{key}:{}: seat work through the Agent tool",
+                    idx + 1
+                ));
             }
         }
         violations
@@ -4882,7 +4929,64 @@ mod tests {
             vec!["t.md:3: `Agent(`"]
         );
         assert!(agent_tool_launches("t.md", "launch a separate implementer process").is_empty());
+        // trace:TASK-2272 | ai:claude
+        for line in [
+            "launch the implementer with the Agent tool",
+            "spawn each fixer via Task",
+            "the advisor starts an architect with the Task tool",
+            "launch the implementer with the Agent tool; no worktree needed",
+            "launch the fixer with the Agent tool instead of a process",
+            "launch the implementer with the Agent tool and no worktree",
+        ] {
+            assert!(
+                !agent_tool_launches("t.md", line).is_empty(),
+                "not refused: {line}"
+            );
+        }
+        for line in [
+            "Never fan implementers out through the Agent tool.",
+            "launch the implementer as a process, not with the Agent tool",
+            "the implementer works with task-specific notes",
+            "use the Agent tool for read-only research",
+        ] {
+            assert!(agent_tool_launches("t.md", line).is_empty(), "{line}");
+        }
         assert!(agent_tool_launches("t.md", "  - SendMessage").is_empty());
+    }
+
+    /// TASK-2272 (TASK-2297, TASK-2298): discipline prose describes the
+    /// standalone implementer launch, not the retired Agent-tool brief.
+    // trace:TASK-2272 | ai:claude
+    #[test]
+    fn discipline_prose_has_no_agent_tool_brief_residue() {
+        let doc = |key: &str| {
+            crate::templates::EMBEDDED_TEMPLATES
+                .get(key)
+                .unwrap_or_else(|| panic!("{key} embedded"))
+        };
+        let review = doc(".aida/discipline/git-sync-and-review.md");
+        assert!(!review.contains("return ONLY the PR URL"));
+        assert!(review.contains("takes no prompt from the caller"));
+        assert!(review.contains("`implementer:` line"));
+        let authoring = doc(".aida/discipline/spec-authoring.md");
+        assert!(!authoring.contains("subagent, brief, or queue-work"));
+    }
+
+    /// TASK-2272 (TASK-2287): the advisor pre-creates the fixer's worktree,
+    /// which creates its branch, so the fixer prompt must not STOP on it.
+    // trace:TASK-2272 | ai:claude
+    #[test]
+    fn fire_fixer_prompt_does_not_stop_on_its_own_worktree_branch() {
+        let body = crate::templates::EMBEDDED_TEMPLATES
+            .get("skills/aida-fire.md")
+            .expect("aida-fire skill embedded");
+        let prompt = body.split("#### Fixer prompt template").nth(1).unwrap();
+        let flat = prompt.split_whitespace().collect::<Vec<_>>().join(" ");
+        assert!(
+            flat.contains("an unmerged branch or open PR other than this worktree's branch, STOP"),
+            "{flat}"
+        );
+        assert!(!flat.contains("has a branch or PR, STOP"), "{flat}");
     }
 
     /// Seat skills, commands and discipline launch implementers and fixers as

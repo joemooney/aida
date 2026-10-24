@@ -1209,6 +1209,8 @@ pub(crate) fn rollback_with_steps(
             );
         }
     }
+    // trace:TASK-2272 | ai:claude
+    let rolled_away = read_promotion_meta(&layout.live_dir).map(|m| m.sha);
     // Park the live pair and both records, mark parking done, then per
     // binary prev -> live and the parked copy -> prev, then settle the
     // records. [`recover_live_dir`] finishes or undoes a crash at any step.
@@ -1246,6 +1248,22 @@ pub(crate) fn rollback_with_steps(
     std::fs::remove_file(swap.join(ROLLBACK_MARKER))?;
     step("unmarked")?;
     let _ = std::fs::remove_dir(&swap);
+    let mut notes = notes;
+    // The scheduled autopromote must not rebuild what was just rolled away.
+    // trace:TASK-2272 | ai:claude
+    if let Some(sha) = rolled_away.filter(|s| !s.is_empty()) {
+        let why = match crate::dev_autopromote::pin_rolled_back(&layout.live_dir, &sha) {
+            Ok(None) => None,
+            Ok(Some(why)) => Some(why),
+            Err(e) => Some(format!("{e:#}")),
+        };
+        if let Some(why) = why {
+            notes.push(format!(
+                "could not pin {sha} against the scheduled autopromote ({why}); \
+                 disable the dev-autopromote job until main moves"
+            ));
+        }
+    }
     Ok(notes)
 }
 
@@ -1598,7 +1616,12 @@ impl BuildSteps for RealSteps {
 /// when that names a removed worktree, `$AIDA_DEV_HOME_REPO`.
 // trace:TASK-2251 | ai:claude
 pub(crate) fn resolve_build_repo() -> Result<PathBuf> {
-    let cwd = std::env::current_dir()?;
+    resolve_build_repo_from(&std::env::current_dir()?)
+}
+
+/// [`resolve_build_repo`] from an explicit cwd.
+// trace:TASK-2272 | ai:claude
+pub(crate) fn resolve_build_repo_from(cwd: &Path) -> Result<PathBuf> {
     if let Some(found) = cwd.ancestors().find(|p| crate::is_aida_repo(p)) {
         return Ok(found.canonicalize()?);
     }

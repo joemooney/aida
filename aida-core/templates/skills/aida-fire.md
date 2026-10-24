@@ -139,8 +139,9 @@ Rules:
 - Work in the sibling worktree you were started in (the advisor created it
   with `aida worktree add <SPEC-ID> --role implementer`), never the main
   checkout.
-- Claim the spec first (`aida claim <SPEC-ID>`). If it is already claimed or
-  has a branch or PR, STOP and report.
+- Claim the spec first (`aida claim <SPEC-ID>`). If another session already
+  claimed it, or it has an unmerged branch or open PR other than this
+  worktree's branch, STOP and report.
 - Commit format: `[AI:<tool>] type(scope): summary (<SPEC-ID>)` + co-author
   trailer. Never use --no-verify.
 - Template masters only; never edit generated mirrors.
