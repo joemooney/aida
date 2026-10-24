@@ -38,7 +38,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T22:02:03.191649035Z
-modified_at: 2026-10-24T23:29:47.678090970Z
+modified_at: 2026-10-24T23:45:57.585189326Z
 req_type: Story
 tags:
 - docs:impacted
@@ -150,6 +150,20 @@ comments:
   content: 'PR-2910 reviewer finding 6 reconciliation: clarified the hook constraint and non-goal to name the existing mandatory verified host-owned store Git hook profile (identity gate included). Project code/mirror hooks stay excluded, consistent with existing store hardening and the documented slice-2 behavior; no hook bypass or new executable policy was introduced. Other review findings are being corrected with the credential-routing CI fix; the next head remains non-completing and requires re-review before Slice 3.'
   created_at: 2026-10-24T23:29:47.678090970Z
   modified_at: 2026-10-24T23:29:47.678090970Z
+- id: 01a1704e-8951-76b1-9326-c14a7ab26548
+  author: joe
+  content: |-
+    PR-2910 rework pushed WITHOUT FORCE: 74512a53ef717bafeb68393c2e115a10420e3719 (descends from reviewed 62d1e6b70c34f6a0eda86b9a8223129f5abca44b). https://github.com/joemooney/aida/pull/2910
+
+    Read CI run 40138790524: the actual failure was task_2001_every_host_remote_call_routes_its_credentials in transport_executor.rs, not the review's unconfirmed golden-help suspicion. Fixed the real routing call with the shared configure_git_remote_credentials helper and frozen endpoint URL hint, preserving pinned destination/refspec and the single attempt. HTTP secrets are removed from push argv, and clean-URL rewrites refuse; no credential-routing exemption was added.
+
+    Addressed the posted review findings: safe preflight reasons remain distinct from lock/hook setup errors; executing pushes report redundant flags; JSON plans state executed=false; relative origin paths resolve once from the invoking checkout. Hook constraint/non-goal wording was reconciled to the mandatory verified host-owned store-hook profile (identity gate preserved; project code/mirror hooks excluded). No security-hook bypass or lifecycle behavior was added.
+
+    Final validation: exact CI credential-routing regression passed; 19 transport integration tests passed; make check-ci-fast passed all 34 gates. New fixtures prove credentialed authentication, clean helper argv, one store-ref receive, clean-URL rewrite refusal, relative-origin success, JSON no mutation and distinct busy/dirty/active-store refusals.
+
+    PR description updated. Title still ends (Refs STORY-1742); aida: no-complete retained. No merge or review-hold clearance. Ready for independent re-review at the new full head; Slice 3 has not started and will wait for review findings to be resolved.
+  created_at: 2026-10-24T23:45:57.585189326Z
+  modified_at: 2026-10-24T23:45:57.585189326Z
 history:
 - id: 01a16ee2-ad7a-7b30-aaeb-ec8f892fbe76
   author: joe
