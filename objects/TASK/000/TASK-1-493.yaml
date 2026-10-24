@@ -14,7 +14,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-24T17:11:41.993830986Z
-modified_at: 2026-10-24T19:44:21.011848634Z
+modified_at: 2026-10-24T19:44:24.860270885Z
 req_type: Task
 tags:
 - carried-from:TASK-2168
@@ -26,6 +26,13 @@ relationships:
   target_id: 01a15f18-ed08-7922-ac1d-114f0fa53917
   created_at: 2026-10-24T19:44:21.011845578Z
   created_by: joe
+comments:
+- id: 01a16f71-651c-79d0-9e40-47547e91f9de
+  author: joe
+  content: 'ADVISOR 12:50: fold into STORY-1889''s remaining slice: test the mandate_ship.rs:338-351 fetch-skip (have_head/have_base).'
+  created_at: 2026-10-24T19:44:24.860270885Z
+  modified_at: 2026-10-24T19:44:24.860270885Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
 history:
 - id: 01a16ef7-6612-7d73-9d02-d5024f6b784f
   author: joe
