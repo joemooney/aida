@@ -17,12 +17,12 @@ description: |
   - Generate a structured review prompt with `aida review prompt --pr 2905` and verify each spec's acceptance criteria.
   - Approve and merge, or request changes by spec id.
   - Mark this story `completed` once the PR is merged.
-status: Draft
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-24T17:49:58.078676714Z
-modified_at: 2026-10-24T17:50:09.946566021Z
+modified_at: 2026-10-24T22:50:32.833494326Z
 req_type: Story
 relationships:
 - rel_type:
@@ -30,11 +30,24 @@ relationships:
   target_id: 01a169c3-090b-7350-9b07-de2fa0c4ad61
   created_at: 2026-10-24T17:50:09.946561763Z
   created_by: joe
+comments:
+- id: 01a1701b-ce01-7cb3-99f6-8ec713684d63
+  author: aida-auto-bump
+  content: 'Auto-completed: PR #2905 merged without a reviewer session (the review story was never queued past Draft).'
+  created_at: 2026-10-24T22:50:32.833492805Z
+  modified_at: 2026-10-24T22:50:32.833492805Z
 history:
 - id: 01a16f08-cfde-7f51-aa1e-0e79ed3c94d0
   author: joe
   timestamp: 2026-10-24T17:50:10.910415905Z
   changes: []
+- id: 01a1701b-ce01-7cb3-99f6-8eb3cc41dd1c
+  author: aida-auto-bump
+  timestamp: 2026-10-24T22:50:32.833482226Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Completed
 filed_at:
   code_sha: d103d49208c460fdb1dbb9fc12785d82d541c237
   branch: claude/story-1917-slice1
@@ -42,3 +55,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: c7e5160ce3
   vendor: antigravity
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-24T22:50:32.833477642Z
+  completion_sha: 2db1d977b0615f01ae82216f3b9c8ce2d009550f
