@@ -14644,6 +14644,10 @@ pub(crate) fn recover_push_branch(repo: &std::path::Path, branch: &str) -> Resul
         crate::glyph(crate::glyphs::Glyph::Arrow).cyan(),
         args.join(" ")
     );
+    // The `-u` writes the shared config: clear a sandbox placeholder first
+    // and repair the upstream if the write still failed.
+    // trace:TASK-2305 | ai:claude
+    aida_core::git_ops::clear_sandbox_config_lock(repo);
     let status = std::process::Command::new("git")
         .arg("-C")
         .arg(repo)
@@ -14651,6 +14655,9 @@ pub(crate) fn recover_push_branch(repo: &std::path::Path, branch: &str) -> Resul
         // trace:BUG-2181 | ai:claude
         .remote_credentials(repo, "origin")
         .status()?;
+    if status.success() {
+        aida_core::git_ops::repair_push_upstream(repo, "origin", Some(branch), branch);
+    }
     Ok(status.success())
 }
 
