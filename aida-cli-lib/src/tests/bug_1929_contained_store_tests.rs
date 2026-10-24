@@ -1243,6 +1243,8 @@ fn bug_1985_status_wrapper_offenders(sources: &[(PathBuf, String)]) -> Vec<(Path
 // trace:BUG-1985.acb27baf | ai:claude
 // trace:BUG-1985 | ai:claude
 // trace:TASK-1952 | trace:TASK-1926 | ai:claude
+// trace:TASK-1952.ac49e4ec | ai:claude
+// trace:TASK-1952.ac778555 | ai:claude
 #[test]
 fn bug_1985_host_status_guard() {
     let sample = "fn a(wt: &Path) {\n    let _ = std::process::Command::new(\"git\")\n        \

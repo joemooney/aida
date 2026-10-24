@@ -112,8 +112,21 @@ extern "C" fn drain_lock_atexit() {
 // tests still exercise it on every platform. trace:BUG-688 | ai:claude
 #[cfg_attr(not(unix), allow(dead_code))]
 fn remove_lock_if_ours(path: &Path) {
-    if read_lock(path).map(|l| l.pid) == Some(std::process::id()) {
-        let _ = std::fs::remove_file(path);
+    remove_lock_if_pid(path, std::process::id());
+}
+
+/// Remove the lock at `path` ONLY if it records `pid`, revoking the child
+/// grant it recorded first (TASK-1798): the lock is the grant's only record,
+/// so removing it unrevoked would leave an orphaned child's grant live until
+/// its parent expires. Every lock-removal path goes through here.
+// trace:TASK-1952 | trace:TASK-1798 | ai:claude
+fn remove_lock_if_pid(path: &Path, pid: u32) -> bool {
+    match read_lock(path) {
+        Some(lock) if lock.pid == pid => {
+            revoke_reclaimed_child_grant(&lock);
+            std::fs::remove_file(path).is_ok()
+        }
+        _ => false,
     }
 }
 
@@ -130,12 +143,9 @@ pub(crate) fn release_lock_if_ours(project_root: &Path) -> bool {
 /// whether it did. `aida drain stop --now` uses it once the signalled drain
 /// has exited, so a lock a successor drain has since taken is never removed.
 // trace:TASK-1518 | ai:claude
+// trace:TASK-1952 | trace:TASK-1798 | ai:claude
 pub(crate) fn release_lock_if_pid(project_root: &Path, pid: u32) -> bool {
-    let path = drain_lock_path(project_root);
-    if read_lock(&path).map(|l| l.pid) == Some(pid) {
-        return std::fs::remove_file(&path).is_ok();
-    }
-    false
+    remove_lock_if_pid(&drain_lock_path(project_root), pid)
 }
 
 /// Arm the process-exit cleanup for the just-acquired drain lock (BUG-712).
@@ -201,6 +211,46 @@ pub(crate) struct DrainLock {
     // trace:BUG-759 | ai:claude
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub(crate) specs: Vec<String>,
+    /// TASK-1798: the grant of the headless `claude -p` child this burndown
+    /// launcher is running, if any. The drain holds no session lease, so the
+    /// grant lives on the lock: whoever reclaims the lock from a dead holder
+    /// revokes it.
+    // trace:TASK-1952 | trace:TASK-1798 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) child_grant_id: Option<String>,
+}
+
+/// TASK-1798: record (`Some`) or clear (`None`) the running burndown child's
+/// grant on this process's own drain lock. Errors when the lock is missing,
+/// unreadable or held by another process, so the caller refuses to launch an
+/// unstamped child.
+// trace:TASK-1952 | trace:TASK-1798 | ai:claude
+pub(crate) fn stamp_drain_lock_child_grant(
+    project_root: &Path,
+    grant_id: Option<&str>,
+) -> Result<()> {
+    let path = drain_lock_path(project_root);
+    let mut lock = read_lock(&path)
+        .ok_or_else(|| anyhow::anyhow!("no readable drain lock at {}", path.display()))?;
+    anyhow::ensure!(
+        lock.pid == std::process::id(),
+        "the drain lock at {} is held by pid {}, not this launcher",
+        path.display(),
+        lock.pid
+    );
+    lock.child_grant_id = grant_id.map(str::to_string);
+    let json = serde_json::to_string_pretty(&lock)?;
+    aida_core::write_atomic(&path, json)
+        .map_err(|e| anyhow::anyhow!("could not write drain lock {}: {e}", path.display()))
+}
+
+/// TASK-1798: revoke the child grant a reclaimed (dead-holder) or removed
+/// lock recorded.
+// trace:TASK-1952 | trace:TASK-1798 | ai:claude
+fn revoke_reclaimed_child_grant(stale: &DrainLock) {
+    if let Some(id) = stale.child_grant_id.as_deref().filter(|id| !id.is_empty()) {
+        crate::session::revoke_headless_child_grant(id);
+    }
 }
 
 /// The pure decision: given the lock currently on disk (if any), should a new
@@ -449,6 +499,17 @@ pub(crate) fn acquire_drain_lock_with_specs(
                     stale.started_at_utc
                 );
             }
+            // TASK-1798: a dead holder's child grant dies with its lock. A
+            // forced takeover of a LIVE holder leaves its grant alone.
+            // trace:TASK-1952 | trace:TASK-1798 | ai:claude
+            if let Some(stale) = &existing {
+                if !process_probe::process_identity_is_alive(
+                    stale.pid,
+                    stale.pid_start_time.as_deref(),
+                ) {
+                    revoke_reclaimed_child_grant(stale);
+                }
+            }
 
             // Best-effort parent-dir create — the `.aida/` dir normally already
             // exists, but a freshly-attached clone might be racing it.
@@ -479,6 +540,7 @@ pub(crate) fn acquire_drain_lock_with_specs(
                 launched_stale: crate::freshness_gate::launched_stale(),
                 // trace:BUG-759 | ai:claude
                 specs: specs.to_vec(),
+                child_grant_id: None,
             };
             let json = serde_json::to_string_pretty(&record).unwrap_or_else(|_| "{}".to_string());
             aida_core::write_atomic(&path, json).map_err(|e| {
@@ -649,9 +711,8 @@ impl Drop for DrainGuard {
         // Only remove the local file if it's still ours. A different drain may
         // have reclaimed it (e.g. our pid was wrongly judged stale); deleting its
         // lock would reopen the double-drive hole.
-        if read_lock(&self.path).map(|l| l.pid) == Some(self.pid) {
-            let _ = std::fs::remove_file(&self.path);
-        }
+        // trace:TASK-1952 | trace:TASK-1798 | ai:claude
+        remove_lock_if_pid(&self.path, self.pid);
     }
 }
 
@@ -672,6 +733,7 @@ mod tests {
             binary_path: String::new(),
             launched_stale: false,
             specs: Vec::new(),
+            child_grant_id: None,
         }
     }
 
@@ -893,6 +955,7 @@ mod tests {
             binary_path: String::new(),
             launched_stale: false,
             specs: Vec::new(),
+            child_grant_id: None,
         };
         std::fs::write(&path, serde_json::to_string(&dead).unwrap()).unwrap();
         // Reclaim succeeds and rewrites the file with OUR pid.
@@ -920,6 +983,125 @@ mod tests {
         assert_eq!(replacement.pid_start_time, Some(actual));
     }
 
+    /// TASK-1798: the burndown child grant is recorded on this launcher's own
+    /// lock (never on another holder's), and reclaiming a dead holder's lock
+    /// revokes the grant it recorded.
+    // trace:TASK-1952 | trace:TASK-1798 | ai:claude
+    #[test]
+    fn task_1798_reclaiming_a_dead_lock_revokes_its_child_grant() {
+        let _env = test_env_isolation();
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let path = drain_lock_path(root);
+        let subject = "task-1798-drain-user";
+        let grant =
+            crate::seat_authority::test_support::mint_grant_for(root, subject, "implementer", &[]);
+        let valid = |g: &str| {
+            matches!(
+                crate::seat_authority::grant_check_for(root, g, subject),
+                crate::seat_authority::GrantCheck::Valid(_)
+            )
+        };
+
+        let guard = acquire_drain_lock(root, "ours").unwrap();
+        stamp_drain_lock_child_grant(root, Some(&grant)).unwrap();
+        assert_eq!(
+            read_lock(&path).unwrap().child_grant_id.as_deref(),
+            Some(grant.as_str())
+        );
+        stamp_drain_lock_child_grant(root, None).unwrap();
+        assert_eq!(read_lock(&path).unwrap().child_grant_id, None);
+        drop(guard);
+        assert!(
+            stamp_drain_lock_child_grant(root, Some(&grant)).is_err(),
+            "no lock: nothing to stamp, so the launch refuses"
+        );
+
+        // A dead holder that recorded a live child grant.
+        let mut dead = lock(u32::MAX - 7, &Utc::now().to_rfc3339());
+        dead.pid_start_time = Some("1970-01-01T00:00:01+00:00".to_string());
+        dead.child_grant_id = Some(grant.clone());
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, serde_json::to_string(&dead).unwrap()).unwrap();
+        assert!(
+            stamp_drain_lock_child_grant(root, Some(&grant)).is_err(),
+            "another holder's lock is never stamped"
+        );
+        assert!(valid(&grant));
+        let _reclaimed = acquire_drain_lock(root, "successor").unwrap();
+        assert!(
+            !valid(&grant),
+            "the reclaim revoked the dead holder's child grant"
+        );
+        assert_eq!(read_lock(&path).unwrap().child_grant_id, None);
+    }
+
+    /// TASK-1798: every path that removes our own lock (guard drop, the
+    /// atexit hook, the SIGTERM fallback) revokes the child grant it recorded
+    /// first, so removal never erases the grant's only record unrevoked.
+    // trace:TASK-1952 | trace:TASK-1798 | ai:claude
+    #[test]
+    fn task_1798_removing_our_lock_revokes_its_child_grant() {
+        let _env = test_env_isolation();
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let path = drain_lock_path(root);
+        let subject = "task-1798-drain-remove";
+        let valid = |g: &str| {
+            matches!(
+                crate::seat_authority::grant_check_for(root, g, subject),
+                crate::seat_authority::GrantCheck::Valid(_)
+            )
+        };
+        let mint = || {
+            crate::seat_authority::test_support::mint_grant_for(root, subject, "implementer", &[])
+        };
+
+        // DrainGuard::drop.
+        let grant = mint();
+        let guard = acquire_drain_lock(root, "ours").unwrap();
+        stamp_drain_lock_child_grant(root, Some(&grant)).unwrap();
+        drop(guard);
+        assert!(!path.exists());
+        assert!(!valid(&grant), "the guard drop revoked the recorded grant");
+
+        // The atexit hook's removal.
+        let grant = mint();
+        let guard = acquire_drain_lock(root, "ours").unwrap();
+        stamp_drain_lock_child_grant(root, Some(&grant)).unwrap();
+        remove_lock_if_ours(&path);
+        assert!(!path.exists());
+        assert!(
+            !valid(&grant),
+            "the atexit removal revoked the recorded grant"
+        );
+        drop(guard);
+
+        // The SIGTERM fallback (`release_lock_if_ours`).
+        let grant = mint();
+        let guard = acquire_drain_lock(root, "ours").unwrap();
+        stamp_drain_lock_child_grant(root, Some(&grant)).unwrap();
+        assert!(release_lock_if_ours(root));
+        assert!(
+            !valid(&grant),
+            "the SIGTERM release revoked the recorded grant"
+        );
+        drop(guard);
+
+        // Another holder's lock: neither removed nor revoked.
+        let grant = mint();
+        let mut other = lock(
+            std::process::id().wrapping_add(4242),
+            &Utc::now().to_rfc3339(),
+        );
+        other.child_grant_id = Some(grant.clone());
+        std::fs::write(&path, serde_json::to_string(&other).unwrap()).unwrap();
+        remove_lock_if_ours(&path);
+        assert!(!release_lock_if_ours(root));
+        assert!(path.exists());
+        assert!(valid(&grant), "another holder's grant is never revoked");
+    }
+
     #[test]
     fn guard_drop_leaves_a_successor_lock_intact() {
         // If our guard's file was reclaimed by another drain (different pid),
@@ -942,6 +1124,7 @@ mod tests {
             binary_path: String::new(),
             launched_stale: false,
             specs: Vec::new(),
+            child_grant_id: None,
         };
         std::fs::write(&path, serde_json::to_string(&successor).unwrap()).unwrap();
         drop(guard);
