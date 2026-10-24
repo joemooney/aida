@@ -1,5 +1,6 @@
 id: 01a16bd4-8f74-73a1-aa79-c2d6326c5c25
 spec_id: TASK-1-475
+agreed_id: TASK-1843
 title: 'non-blocking (minor): aida dev rollback (dev_build.rs:1192) swaps .promoted but…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on STORY-1689, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -38,6 +39,10 @@ history:
   author: joe
   timestamp: 2026-10-24T02:57:00.449035460Z
   session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+  changes: []
+- id: 01a16c4b-0a67-7751-93d1-607bc922db73
+  author: joe
+  timestamp: 2026-10-24T05:03:39.623742337Z
   changes: []
 filed_at:
   code_sha: d14a20aaaea1d58be05fdacf97e1ef60c46d02fb

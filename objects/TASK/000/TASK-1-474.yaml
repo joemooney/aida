@@ -1,5 +1,6 @@
 id: 01a16bd4-8509-7c01-a1bb-098fca20b809
 spec_id: TASK-1-474
+agreed_id: TASK-1844
 title: 'cosmetic (non-blocking): .aida/discipline/spec-authoring.md:158 still lists ''su…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on STORY-1662, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -38,6 +39,10 @@ history:
   author: joe
   timestamp: 2026-10-24T02:56:53.108567221Z
   session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+  changes: []
+- id: 01a16c4b-0a76-70b2-ad56-d7478ab06bc2
+  author: joe
+  timestamp: 2026-10-24T05:03:39.638266538Z
   changes: []
 filed_at:
   code_sha: d14a20aaaea1d58be05fdacf97e1ef60c46d02fb
