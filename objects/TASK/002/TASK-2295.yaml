@@ -8,17 +8,26 @@ description: |
   - aida-core/templates/skills/aida-pr/SKILL.md:20-23: the next-steps table has no ▶ primary row, which breaks the glyph convention in docs/skills-convention.md.
 
   Raised in review of PR-2869: https://github.com/joemooney/aida/pull/2869#issuecomment-6377769186
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-24T00:51:24.919978142Z
-modified_at: 2026-10-24T00:51:24.919978142Z
+modified_at: 2026-10-24T01:13:55.327492725Z
 req_type: Task
 tags:
 - docs
 - from-review:PR-2869
 - severity:cosmetic
+history:
+- id: 01a16b78-b57f-7e40-8759-dea65c56374c
+  author: joe
+  timestamp: 2026-10-24T01:13:55.327489944Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 74baefe6ea7d006f45d6f883d935f73511c74148
   branch: pr-2869
