@@ -1,5 +1,6 @@
 id: 01a16ee5-c8b7-7851-ab6e-1df62aa749d0
 spec_id: TASK-1-495
+agreed_id: TASK-1862
 title: 'cosmetic: story_1698_mandate_tests.rs lines 336/345/353/418 gained unexplained …'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-2168, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -20,6 +21,11 @@ tags:
 - finding-hash:9e2d9c17
 - from-review:PR-2886
 - kind:carried-forward
+history:
+- id: 01a16ef7-658e-7651-9abf-d3daf45d8b35
+  author: joe
+  timestamp: 2026-10-24T17:31:09.582726076Z
+  changes: []
 filed_at:
   code_sha: 62287fd361ad2ac2096236d2e222d037c0f60fbd
   branch: main
