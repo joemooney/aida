@@ -38,7 +38,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T22:02:03.191649035Z
-modified_at: 2026-10-24T22:29:19.811852134Z
+modified_at: 2026-10-24T22:29:26.180069384Z
 req_type: Story
 tags:
 - docs:impacted
@@ -47,6 +47,10 @@ relationships:
 - rel_type: Supersedes
   target_id: 01a16fbb-9e8f-73d3-8a79-7831bf13a568
   created_at: 2026-10-24T22:29:19.811847306Z
+  created_by: joe
+- rel_type: Supersedes
+  target_id: 01a16fbb-b4ff-73c1-9411-2a709a9f1ef0
+  created_at: 2026-10-24T22:29:26.180059941Z
   created_by: joe
 comments:
 - id: 01a16ed5-427a-7913-ae77-3665518083eb
@@ -163,6 +167,11 @@ history:
 - id: 01a17008-64e8-7351-9bc7-35abf4b544fd
   author: joe
   timestamp: 2026-10-24T22:29:20.744702211Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+  changes: []
+- id: 01a17008-7dab-7001-8696-02997ddcdd6f
+  author: joe
+  timestamp: 2026-10-24T22:29:27.083571439Z
   session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
   changes: []
 filed_at:
