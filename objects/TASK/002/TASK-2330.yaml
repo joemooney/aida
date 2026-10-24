@@ -11,12 +11,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-24T17:12:07.475652758Z
-modified_at: 2026-10-24T17:12:07.475652758Z
+modified_at: 2026-10-24T19:43:45.382520627Z
 req_type: Task
 tags:
 - from-review:PR-2899
 - severity:cosmetic
 - test-coverage
+comments:
+- id: 01a16f70-cae6-72e1-be20-e75e5cb1b553
+  author: joe
+  content: 'ADVISOR 12:50 REJECTED: label-only holds never reach eligible() by construction, and train-side bug_2214_a_label_only_hold_stays_human_even_under_a_mandate already covers the stance.'
+  created_at: 2026-10-24T19:43:45.382520627Z
+  modified_at: 2026-10-24T19:43:45.382520627Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
 filed_at:
   code_sha: 5ce2286bd04173a6a1712dd6f5b697d322f16283
   branch: pr-2899
