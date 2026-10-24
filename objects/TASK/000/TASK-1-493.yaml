@@ -1,0 +1,29 @@
+id: 01a16ee5-94a9-71d1-acd0-6a24d47092a3
+spec_id: TASK-1-493
+title: 'minor: mandate_ship.rs:338-351 fetch-skip (have_head/have_base) is untested and…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-2168, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  minor: mandate_ship.rs:338-351 fetch-skip (have_head/have_base) is untested and has no trace comment; behavior is fail-closed (stale base only enlarges evidence / under-reports shipped)
+
+  PR: #2886
+  Reviewed sha: 1293093350cd6ec107445dfbd3bb09e83a54e20a
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-24T17:11:41.993830986Z
+modified_at: 2026-10-24T17:11:41.993830986Z
+req_type: Task
+tags:
+- carried-from:TASK-2168
+- finding-hash:374a5384
+- from-review:PR-2886
+- kind:carried-forward
+filed_at:
+  code_sha: 62287fd361ad2ac2096236d2e222d037c0f60fbd
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: eb9846b8f4
+  vendor: claude
