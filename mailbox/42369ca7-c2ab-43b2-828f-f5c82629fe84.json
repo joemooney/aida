@@ -1,0 +1,19 @@
+{
+  "id": "42369ca7-c2ab-43b2-828f-f5c82629fe84",
+  "thread_id": "42369ca7-c2ab-43b2-828f-f5c82629fe84",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792821215681,
+  "body": "f944dd8ce6: merged origin/main (S5-only conflicts resolved to main; diff now S6-only); round-1 fixes already at e3caa54d09: TASK-1798 lock-removal grant revoke + burndown SIGTERM revoke, TASK-2111 strict expect_err, ac49e4ec/ac778555 anchors. Targeted cargo 28/28, check-ci-fast 34/34. Ready for round-2 review.",
+  "subject": "PR-2838 pushed (TASK-1952)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

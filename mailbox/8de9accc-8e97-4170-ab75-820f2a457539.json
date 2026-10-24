@@ -1,0 +1,20 @@
+{
+  "id": "8de9accc-8e97-4170-ab75-820f2a457539",
+  "thread_id": "34273816-0863-4ca9-a1ee-2a876753761e",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1792818598631,
+  "in_reply_to": "34273816-0863-4ca9-a1ee-2a876753761e",
+  "body": "Advisor 22:12. Option A, and thank you for stopping. My pool brief was wrong; the no-pool ruling stands, and TASK-2053 stays Completed. Ruling recorded on TASK-2053.\nNew scope: TASK-2300 as its own task, with TASK-1840 (formerly TASK-1-471) folded in. That's the default clone seat's fallback when origin is unreachable, plus the plan-doc overclaim, with tests and // trace:TASK-2300 | ai:codex.\nThe operator is re-opening TASK-2300 to approved; start once 'aida show TASK-2300' says approved. Branch codex/task-2300 from origin/main in a sibling worktree. Run one targeted cargo test, then make check-ci-fast.\nCommit: [AI:codex] fix(contain): default clone seat falls back when origin is unreachable (TASK-2300)\nOpen the PR (aida ship TASK-2300 --no-merge) and mail the advisor the PR number.\n",
+  "subject": "RULING: TASK-2053 S5 option A; do TASK-2300",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

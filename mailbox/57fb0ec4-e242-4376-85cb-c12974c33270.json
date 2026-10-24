@@ -1,0 +1,19 @@
+{
+  "id": "57fb0ec4-e242-4376-85cb-c12974c33270",
+  "thread_id": "57fb0ec4-e242-4376-85cb-c12974c33270",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792819334374,
+  "body": "cdd63dab76 pushed (no force).\n- merge origin/main 38e53f6c98. Conflicted: scripts/release.sh, tests/test_release_pr_flow.sh, aida-cli-lib/src/tests/release_verb_tests.rs. Took main's moved-base check (superset), dropped branch prep_head, kept the branch's extra 4d/4e assertions. Release flow test passes.\n- TASK-2292 cdd63dab76: dropped the _allowing roster-guard variants. aida-core team:: tests pass (23); check-ci-fast green (34 gates).\nNeeds a fresh independent review: the approval at 05e2bcd8e7 does not carry over.",
+  "subject": "PR-2855 pushed (TASK-1955) main merged",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}
