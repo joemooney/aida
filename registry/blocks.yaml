@@ -935,3 +935,11 @@ blocks:
   range_end: 2414
   next: 2326
   allocated_at: 2026-10-24T00:51:33.119932095Z
+- node_id: '1'
+  owner: redacted@node.invalid
+  hostname: imac
+  type_prefix: STORY
+  range_start: 1941
+  range_end: 2040
+  next: 1941
+  allocated_at: 2026-10-24T14:59:47.197917254Z
