@@ -1,0 +1,28 @@
+id: 01a16b64-5d59-7311-a222-2e9acf940fa3
+spec_id: TASK-2298
+agreed_id: TASK-2298
+title: 'spec-authoring: set-in-progress-at-dispatch still lists ''subagent'' as a way to dispatch an implementer'
+description: |
+  aida-core/templates/.aida/discipline/spec-authoring.md:158: "When you dispatch an agent (subagent, brief, or queue-work) to implement a spec". This is left over from STORY-1662 AC4, which says no discipline doc launches implementers through the Agent tool. The ratchet's phrase list does not catch it. Replace "subagent" with the standalone implementer launch or an interactive lane.
+
+  Raised in review of PR-2865: https://github.com/joemooney/aida/pull/2865#issuecomment-6377769794
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-24T00:51:42.041502511Z
+modified_at: 2026-10-24T00:51:42.041502511Z
+req_type: Task
+tags:
+- docs
+- from-review:PR-2865
+- severity:cosmetic
+filed_at:
+  code_sha: c38043228df6044c6c523a3c6a16805f359d3083
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c38043228d
+  vendor: claude
+  session: 01a16b5f9ebe
+  harness_version: 2.1.310 (Claude Code)
