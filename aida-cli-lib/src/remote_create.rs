@@ -321,15 +321,24 @@ pub fn remember_host(new: KnownHost) -> Result<PathBuf> {
 /// origin <branch>`. Returns Ok(()) only when both succeed.
 /// trace:STORY-537 | ai:claude
 fn add_origin_and_push(project_root: &Path, url: &str, branch: &str) -> Result<()> {
-    let add = Command::new("git")
-        .arg("-C")
-        .arg(project_root)
-        .args(["remote", "add", "origin", url])
-        .status()
-        .context("invoking git remote add origin")?;
-    if !add.success() {
-        anyhow::bail!("`git remote add origin {url}` failed");
+    // trace:TASK-2270 | ai:claude
+    let add = aida_core::git_ops::output_healing_config_lock(
+        project_root,
+        || {
+            let mut cmd = Command::new("git");
+            cmd.arg("-C").arg(project_root);
+            cmd
+        },
+        &["remote", "add", "origin", url],
+    )
+    .context("invoking git remote add origin")?;
+    if !add.status.success() {
+        anyhow::bail!(
+            "`git remote add origin {url}` failed: {}",
+            String::from_utf8_lossy(&add.stderr).trim()
+        );
     }
+    aida_core::git_ops::clear_sandbox_config_lock(project_root);
     let mut push = Command::new("git");
     push.arg("-C").arg(project_root);
     // trace:BUG-2119 | ai:claude
@@ -346,6 +355,7 @@ fn add_origin_and_push(project_root: &Path, url: &str, branch: &str) -> Result<(
     if !push.success() {
         anyhow::bail!("`git push -u origin {branch}` failed");
     }
+    aida_core::git_ops::repair_push_upstream(project_root, "origin", Some(branch), branch);
     Ok(())
 }
 
