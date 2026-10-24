@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T21:24:29.804361936Z
-modified_at: 2026-10-24T00:27:44.502883681Z
+modified_at: 2026-10-24T01:14:20.370685447Z
 req_type: Task
 relationships:
 - rel_type: Supersedes
@@ -116,6 +116,12 @@ history:
   timestamp: 2026-10-24T00:27:45.401962674Z
   session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
   changes: []
+- id: 01a16b79-1853-7fc0-9272-be1252a69a9d
+  author: joe
+  timestamp: 2026-10-24T01:14:20.627557437Z
+  session_id: 01a16b75c7a5
+  harness_version: 2.1.310 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 3dfcf99117e6efbaa8259155a576276ab424a335
   branch: main
@@ -128,7 +134,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'Pre-clear before every named push -u, the lib.rs trace move, the branch -D follow-up and the doctor alias-to-heal test are correct and CI is green. Blocking: repair_push_upstream skips any branch that already has an upstream, and AIDA''s worktree branches track origin/main from creation, so the push -u repair never runs for AIDA''s own branches.'
+  detail: 'CI green at 96c0224; the branch -D follow-up, the lib.rs trace move and doctor alias/heal routing are correct and tested. Blocking: repair_push_upstream skips any branch that already has an upstream, so the common branch tracking origin/main keeps tracking main after a placeholder-blocked push -u. TASK-2293 sites, superseded into this sweep, are untouched.'
   recovery_hint: address the review findings, move TASK-2270 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-10-24T00:22:02.978179736Z
+  shelved_at: 2026-10-24T01:14:20.370685447Z
