@@ -2609,6 +2609,9 @@ pub(crate) fn agent_new_with_config(
             cwd.unwrap_or(&project_root),
         )?;
     }
+    // A launch that fails before its child spawns releases its handle.
+    // trace:STORY-1843 | ai:claude
+    let mut handle_guard = crate::agent_handle::LaunchReservationGuard::new(&project_root);
     let (plan, mut setup_receipt) = prepare_agent_launch_attempt(
         &project_root,
         role,
@@ -2706,6 +2709,7 @@ pub(crate) fn agent_new_with_config(
         title,
         verbose,
         || {
+            handle_guard.disarm();
             if let Some(receipt) = setup_receipt.as_mut() {
                 receipt.disarm();
             }
@@ -2883,6 +2887,9 @@ pub(crate) fn agent_new_bg_dispatch(
             cwd.unwrap_or(&project_root),
         )?;
     }
+    // A launch that fails before its child spawns releases its handle.
+    // trace:STORY-1843 | ai:claude
+    let mut handle_guard = crate::agent_handle::LaunchReservationGuard::new(&project_root);
     let (plan, mut setup_receipt) = prepare_agent_launch_attempt(
         &project_root,
         role,
@@ -2988,6 +2995,7 @@ pub(crate) fn agent_new_bg_dispatch(
     }
     // trace:BUG-2188 | ai:codex
     grant_rollback.disarm();
+    handle_guard.disarm();
     if let Some(receipt) = setup_receipt.as_mut() {
         receipt.disarm();
     }
@@ -3616,8 +3624,40 @@ fn prepare_agent_launch_with_cwd(
     })
 }
 
-// trace:BUG-2188 BUG-2168 | ai:codex
+/// [`prepare_agent_launch_attempt_inner`], releasing the handle it reserved
+/// when preparation fails after the reservation (cwd checks, worktree or
+/// lease setup).
+// trace:STORY-1843 | ai:claude
 fn prepare_agent_launch_attempt(
+    project_root: &std::path::Path,
+    role: Option<String>,
+    spec: Option<String>,
+    agent_type: &str,
+    custom_name: Option<String>,
+    explicit_cwd: Option<&std::path::Path>,
+    contained_seat: bool,
+) -> Result<(
+    AgentLaunchPlan,
+    Option<crate::session_start::SessionStartReceipt>,
+)> {
+    let mut guard = crate::agent_handle::LaunchReservationGuard::new(project_root);
+    let prepared = prepare_agent_launch_attempt_inner(
+        project_root,
+        role,
+        spec,
+        agent_type,
+        custom_name,
+        explicit_cwd,
+        contained_seat,
+    );
+    if prepared.is_ok() {
+        guard.disarm();
+    }
+    prepared
+}
+
+// trace:BUG-2188 BUG-2168 | ai:codex
+fn prepare_agent_launch_attempt_inner(
     project_root: &std::path::Path,
     role: Option<String>,
     spec: Option<String>,
@@ -3667,6 +3707,7 @@ fn prepare_agent_launch_attempt(
             agent_type,
             role.as_deref(),
             custom_name.as_deref(),
+            /* reserve */ true,
         )?;
         ensure_agent_launch_cwd_not_git_metadata(project_root)?;
         return Ok((
@@ -3725,6 +3766,7 @@ fn prepare_agent_launch_attempt(
                     agent_type,
                     plan_role.as_deref(),
                     custom_name.as_deref(),
+                    /* reserve */ true,
                 )?;
                 ensure_agent_launch_cwd_not_git_metadata(&lease.worktree_path)?;
                 return Ok((
@@ -3750,6 +3792,7 @@ fn prepare_agent_launch_attempt(
                 agent_type,
                 role.as_deref().or(Some(agent_new_scope_role(&spec))),
                 custom_name.as_deref(),
+                /* reserve */ true,
             )?;
             let requested_path = requested_cwd
                 .as_ref()
@@ -3853,6 +3896,7 @@ fn prepare_agent_launch_attempt(
                 agent_type,
                 plan_role.as_deref(),
                 custom_name.as_deref(),
+                /* reserve */ true,
             )?;
             ensure_agent_launch_cwd_not_git_metadata(project_root)?;
             Ok((
@@ -4185,8 +4229,8 @@ pub(crate) fn pr_state_for_spec(project_root: &std::path::Path, spec: &str) -> O
 /// by `--show-context`, which is a pure preview. The working directory is
 /// reported as the project root (the dedicated worktree only exists after a
 /// real launch); the preview banner makes that explicit. `generate_or_validate_name`
-/// is read-only (it inspects the registry to pick a unique name but reserves
-/// nothing until the agent record is written at launch), so it is safe here.
+/// runs with `reserve: false` here, so it inspects the registry and handle
+/// reservations to pick a unique name but reserves nothing.
 /// trace:BUG-408 | ai:claude
 pub(crate) fn prepare_agent_launch_dry(
     project_root: &std::path::Path,
@@ -4210,6 +4254,7 @@ pub(crate) fn prepare_agent_launch_dry(
         agent_type,
         plan_role.as_deref(),
         custom_name.as_deref(),
+        /* reserve */ false,
     )?;
     ensure_agent_launch_cwd_not_git_metadata(project_root)?;
     Ok(AgentLaunchPlan {
@@ -5117,6 +5162,10 @@ fn reported_harness_version(
         .env_remove(seat_authority::GRANT_ENV)
         .env_remove("AIDA_SESSION_ROLE")
         .env_remove("AIDA_SESSION_PURPOSE");
+    // Nor the launching session's identity. trace:STORY-1843 | ai:claude
+    for key in crate::agent_handle::INHERITED_SESSION_ENV {
+        probe.env_remove(key);
+    }
     let mut child = probe
         .args(args)
         .stdin(Stdio::null())
@@ -5230,6 +5279,9 @@ pub(crate) fn build_agent_new_bg_command(
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped());
+    // The child is its own session: never the launcher's session identity,
+    // and only this launch's handle token. trace:STORY-1843 | ai:claude
+    crate::agent_handle::apply_launch_env(&mut command, &plan.project_root, &plan.name);
     // The `--bg` child is the bare binary (never os-wrapped), so is its probe.
     apply_harness_version(
         &mut command,
@@ -5482,6 +5534,8 @@ fn run_tracked_agent_after_spawn(
         .stdin(std::process::Stdio::inherit())
         .stdout(std::process::Stdio::inherit())
         .stderr(std::process::Stdio::inherit());
+    // trace:STORY-1843 | ai:claude
+    crate::agent_handle::apply_launch_env(&mut command, &plan.project_root, &plan.name);
     apply_harness_version(
         &mut command,
         harness_version_probe_program_and_args(binary, config, plan, true)?,
@@ -5804,7 +5858,7 @@ mod task_1806_launch_mandate_tests {
             role: Some("implementer".into()),
             role_instance: RoleInstanceKind::Driver,
             current_spec: Some("TASK-2000".into()),
-            name: "agy-lane".to_string(),
+            name: "lane-2000".to_string(),
             lease_id: None,
             native_session_id: None,
             resumed_from: None,
@@ -5901,7 +5955,7 @@ mod task_1806_launch_mandate_tests {
         assert_eq!(manifest.claude_session_id.as_deref(), Some("abcd1234"));
         let entries = agent_registry::load_entries(&project);
         assert_eq!(entries.len(), 1);
-        assert_eq!(entries[0].1.name.as_deref(), Some("agy-lane"));
+        assert_eq!(entries[0].1.name.as_deref(), Some("lane-2000"));
         assert_eq!(entries[0].1.current_spec.as_deref(), Some("TASK-2000"));
     }
 
@@ -5920,7 +5974,7 @@ mod task_1806_launch_mandate_tests {
 
         link_bg_session(&plan_at(&project), "leaseb00000003", "feed5678").unwrap();
         let manifest = load("leaseb00000003");
-        assert_eq!(manifest.agent_name.as_deref(), Some("agy-lane"));
+        assert_eq!(manifest.agent_name.as_deref(), Some("lane-2000"));
         assert_eq!(manifest.claude_session_id.as_deref(), Some("feed5678"));
 
         let mut blank = plan_at(&project);
