@@ -233,6 +233,15 @@ mk_case shellrec 'X = $(shell cargo build)' 'hello: $(X)' $'\t@echo hi'
 expect_warn "a recursive \$(shell cargo) expanded in a prerequisite fails closed" 'timeout 1h make hello' 'AIDA_CARGO_TIMEOUT=1h make'
 mk_case shelldef 'define X :=' '$(shell cargo build)' 'endef' 'hello: notes.txt' $'\t@echo hi'
 expect_warn "a \$(shell cargo) in a define body fails closed" 'timeout 1h make hello' 'AIDA_CARGO_TIMEOUT=1h make'
+# TASK-2272 (TASK-2294): a target-specific := assignment and another target's
+# prerequisite list also run $(shell ...) while make parses the Makefile.
+# trace:TASK-2272 | ai:claude
+mk_case shelltspec 'other: X := $(shell cargo build)' 'hello: notes.txt' $'\t@echo hi'
+expect_warn "a target-specific \$(shell cargo) := assignment fails closed" 'timeout 1h make hello' 'AIDA_CARGO_TIMEOUT=1h make'
+mk_case shellprereq 'other: $(shell cargo build)' $'\t@echo other' 'hello: notes.txt' $'\t@echo hi'
+expect_warn "a \$(shell cargo) prerequisite of another target fails closed" 'timeout 1h make hello' 'AIDA_CARGO_TIMEOUT=1h make'
+mk_case shellcurly 'other: X := ${shell cargo build}' 'hello: notes.txt' $'\t@echo hi'
+expect_warn "the \${shell ...} spelling fails closed" 'timeout 1h make hello' 'AIDA_CARGO_TIMEOUT=1h make'
 # TASK-2186: an empty .SUFFIXES still clears the suffix list.
 mk_case sfxclear '.SUFFIXES:' '.c.o:' $'\tcargo run' 'hello: page.c' $'\t@echo hi'
 expect_silent "an empty .SUFFIXES clears the default suffixes" 'timeout 1h make hello'

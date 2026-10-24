@@ -241,6 +241,56 @@ fn a_failed_clone_refuses_loudly_and_leaves_no_directory_and_no_pin() {
     assert!(!git_ok(&fx.main, &["worktree", "list", "--porcelain"]).contains("aida-seat"));
 }
 
+// TASK-2318: an ssh origin must never prompt — the clone sets GIT_SSH_COMMAND
+// to the operator's configured ssh command (env or core.sshCommand) with batch
+// mode appended, so a passphrase or host-key prompt fails at once instead of
+// stopping the launch for the whole 30s timeout on SIGTTIN.
+// trace:TASK-2272 | ai:claude (TASK-2318)
+#[cfg(unix)]
+#[test]
+fn task_2318_ssh_origin_clone_keeps_operator_ssh_command_and_adds_batch_mode() {
+    for via_config in [false, true] {
+        let fx = fixture();
+        let log = fx.root.join("ssh-calls");
+        let ssh = fx.root.join("fake-ssh");
+        crate::test_exec::write_executable(
+            &ssh,
+            format!("#!/bin/sh\necho \"$*\" >> '{}'\nexit 1\n", log.display()),
+        );
+        let user_command = format!("'{}' --operator-wrapper", ssh.display());
+        git_ok(
+            &fx.main,
+            &[
+                "remote",
+                "set-url",
+                "origin",
+                "ssh://forge.invalid/repo.git",
+            ],
+        );
+        if via_config {
+            git_ok(&fx.main, &["config", "core.sshCommand", &user_command]);
+        }
+        let _env = crate::test_env::EnvVarsGuard::apply(&[
+            (
+                "GIT_SSH_COMMAND",
+                (!via_config).then_some(user_command.as_str()),
+            ),
+            ("GIT_SSH", None),
+            ("GIT_SSH_VARIANT", None),
+        ]);
+        let dest = fx.root.join("seats").join("aida-seat-aida-ssh");
+        create(&fx.main, &dest, "feat", "origin/main").unwrap_err();
+        let calls = std::fs::read_to_string(&log).unwrap_or_default();
+        assert!(
+            calls
+                .lines()
+                .any(|l| l.contains("--operator-wrapper") && l.contains("BatchMode=yes")),
+            "via_config={via_config}: {calls:?}"
+        );
+        assert!(!dest.exists(), "nothing half-made is left behind");
+    }
+}
+
 #[cfg(unix)]
 #[test]
 fn an_unwritable_parent_refuses_before_pinning() {

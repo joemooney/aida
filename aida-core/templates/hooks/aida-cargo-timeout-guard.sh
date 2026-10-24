@@ -23,9 +23,10 @@
 # Make conditionals, `.RECIPEPREFIX` (assigned or `define`d), `$(eval ...)`,
 # a top-level line that expands a variable outside an assignment, pattern or
 # suffix rules (over GNU make's default suffixes plus `.SUFFIXES:`) that could
-# build an unknown prerequisite, `<(...)` process substitution, and a
-# `$(shell ...)` or `!=` assignment (make runs it while parsing) are all
-# treated as unresolvable, so they get the hint.
+# build an unknown prerequisite, `<(...)` process substitution, a `!=`
+# assignment, and any `$(shell ...)` outside a recipe line (make can run it
+# while parsing: an assignment RHS, a prerequisite list, a define body) are
+# all treated as unresolvable, so they get the hint.
 #
 # trace:STORY-1854 | ai:claude
 # trace:TASK-1967 | ai:claude
@@ -264,6 +265,12 @@ make_targets_skip_cargo() {
         line = $0
         while (line ~ /\\$/ && (getline nxt) > 0) line = substr(line, 1, length(line) - 1) " " nxt
         sub(/[ \t]#.*$/, "", line)
+        # make runs $(shell ...) wherever it expands one while parsing: a
+        # plain or target-specific immediate assignment RHS, and a
+        # prerequisite list (even another target'"'"'s). Any $(shell outside a
+        # recipe or define body is unresolvable here.
+        # trace:TASK-2272 | ai:claude (TASK-2294)
+        if (line ~ /\$[({]shell[ \t]/) { unresolvable = 1; exit }
         c = index(line, ":")
         head = substr(line, 1, c - 1)
         # Outside an assignment, an expansion before the rule colon (or a
@@ -281,10 +288,10 @@ make_targets_skip_cargo() {
             if (nm ~ /[ \t]/) eq = 0
         }
         if (eq > 0) {
-            # `X != cmd` and `X := $(shell cmd)` run cmd while make parses
-            # the Makefile, before any target; a recursive `=` runs it
-            # wherever it expands. trace:TASK-1955 | ai:claude (TASK-2173)
-            if (substr(line, eq - 1, 1) == "!" || substr(line, eq + 1) ~ /\$[({]shell[ \t]/) { unresolvable = 1; exit }
+            # `X != cmd` runs cmd while make parses the Makefile, before any
+            # target ($(shell ...) is caught above).
+            # trace:TASK-1955 | ai:claude (TASK-2173)
+            if (substr(line, eq - 1, 1) == "!") { unresolvable = 1; exit }
             # The colon of `:=` / `::=` is the assignment operator, not a
             # rule colon. trace:TASK-1955 | ai:claude (TASK-2185)
             if (c > 0 && c < eq && substr(line, c, eq - c) ~ /^:+$/) c = 0

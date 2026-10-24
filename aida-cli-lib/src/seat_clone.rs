@@ -507,6 +507,16 @@ fn clone_and_checkout(
     // trace:TASK-2300 | ai:codex
     clone
         .env("GIT_TERMINAL_PROMPT", "0")
+        // ssh ignores GIT_TERMINAL_PROMPT and the null stdin: it opens
+        // /dev/tty for passphrase and host-key prompts, and in the timeout
+        // runner's own process group it stops on SIGTTIN until the full 30s
+        // timeout. Batch mode makes an ssh origin that needs interaction fail
+        // at once, keeping any configured ssh command.
+        // trace:TASK-2272 | ai:claude (TASK-2318)
+        .env(
+            "GIT_SSH_COMMAND",
+            crate::forge::batch_mode_ssh_command(main),
+        )
         .stdin(std::process::Stdio::null());
     run_origin_clone(clone, std::time::Duration::from_secs(30))?;
 

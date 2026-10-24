@@ -25,7 +25,8 @@
 //! binary under `~/.local/share/aida/live`.
 //!
 //! Immediately before each delete, [`busy_reason`] tries a non-blocking flock
-//! on every `<cache>/<profile>/.cargo-lock` and re-walks the cache. A held
+//! on every `<cache>/<profile>/.cargo-lock` (and a cross-target build's
+//! `<cache>/<triple>/<profile>/.cargo-lock`) and re-walks the cache. A held
 //! lock, or any write in the idle window, skips the cache as busy (advisor
 //! condition C1).
 //!
@@ -301,16 +302,36 @@ impl Allowlist {
 }
 
 /// Advisor condition C1: is a build about to use this cache? Tries a
-/// non-blocking flock on every `<cache>/<profile>/.cargo-lock` (cargo holds
-/// it for the whole build) and re-walks the tree. Any held lock, write in the
+/// non-blocking flock on every `<cache>/<profile>/.cargo-lock` — and one
+/// level deeper, a cross-target build's `<cache>/<triple>/<profile>/
+/// .cargo-lock` (cargo holds it for the whole build) — and re-walks the
+/// tree. Any held lock, write in the
 /// last 60 s, write inside the idle window, or unreadable tree is a reason
 /// to skip.
 // trace:STORY-1916 | ai:claude
 pub(crate) fn busy_reason(cache: &Path, now: SystemTime, idle: Duration) -> Option<String> {
     use fs2::FileExt;
-    let profiles = std::fs::read_dir(cache).into_iter().flatten().flatten();
+    // `<cache>/<profile>/.cargo-lock`, plus a cross-target build's
+    // `<cache>/<triple>/<profile>/.cargo-lock` one level deeper.
+    // trace:TASK-2272 | ai:claude (TASK-1-483)
+    let level1: Vec<PathBuf> = std::fs::read_dir(cache)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|e| e.path())
+        .collect();
+    let mut profiles = level1.clone();
+    for dir in &level1 {
+        profiles.extend(
+            std::fs::read_dir(dir)
+                .into_iter()
+                .flatten()
+                .flatten()
+                .map(|e| e.path()),
+        );
+    }
     for profile in profiles {
-        let lock = profile.path().join(".cargo-lock");
+        let lock = profile.join(".cargo-lock");
         if !lock.is_file() {
             continue;
         }
@@ -586,7 +607,10 @@ pub(crate) struct RunOutcome {
 /// is re-probed before each delete, `remove` is the delete, and
 /// `on_tier2` is told about each tier-2 delete (for the holder's mail).
 /// Every path passes [`Allowlist::check`] and [`busy_reason`] first.
+/// `on_row` sees each ledger row as it is made, so a caller on a kill
+/// budget can persist them incrementally (TASK-1-481).
 // trace:STORY-1916 | ai:claude
+// trace:TASK-2272 | ai:claude (TASK-1-481)
 pub(crate) fn apply(
     allow: &Allowlist,
     candidates: &[Candidate],
@@ -595,10 +619,15 @@ pub(crate) fn apply(
     used_pct: impl Fn() -> Option<u8>,
     remove: impl Fn(&Path) -> std::io::Result<()>,
     mut on_tier2: impl FnMut(&Candidate),
+    mut on_row: impl FnMut(&LedgerRow),
 ) -> RunOutcome {
     let ts = DateTime::<Utc>::from(now);
     let before = used_pct();
     let mut rows = Vec::new();
+    let mut push_row = |rows: &mut Vec<LedgerRow>, row: LedgerRow| {
+        on_row(&row);
+        rows.push(row);
+    };
     let mut deleted = Vec::new();
     let mut freed = 0u64;
     let mut stopped = Stop::Exhausted;
@@ -621,56 +650,71 @@ pub(crate) fn apply(
         // ledger rows: they are returned with it, not dropped.
         // trace:STORY-1916.ac40b516 | ai:claude
         if let Err(e) = allow.check(&c.path) {
-            rows.push(LedgerRow::Fail {
-                ts,
-                path,
-                error: e.to_string(),
-            });
+            push_row(
+                &mut rows,
+                LedgerRow::Fail {
+                    ts,
+                    path,
+                    error: e.to_string(),
+                },
+            );
             refusal = Some(e.to_string());
             stopped = Stop::Refused;
             break;
         }
         if let Some(why) = busy_reason(&c.path, now, cfg.idle()) {
-            rows.push(LedgerRow::Skip {
-                ts,
-                path,
-                reason: c.reason,
-                why,
-            });
+            push_row(
+                &mut rows,
+                LedgerRow::Skip {
+                    ts,
+                    path,
+                    reason: c.reason,
+                    why,
+                },
+            );
             continue;
         }
         match remove(&c.path) {
             Ok(()) => {
                 freed = freed.saturating_add(c.bytes);
-                rows.push(LedgerRow::Delete {
-                    ts,
-                    path,
-                    bytes: c.bytes,
-                    reason: c.reason,
-                    idle_secs: c.idle.as_secs(),
-                    used_pct_before: Some(pct),
-                });
+                push_row(
+                    &mut rows,
+                    LedgerRow::Delete {
+                        ts,
+                        path,
+                        bytes: c.bytes,
+                        reason: c.reason,
+                        idle_secs: c.idle.as_secs(),
+                        used_pct_before: Some(pct),
+                    },
+                );
                 if c.reason.tier() == 2 {
                     on_tier2(c);
                 }
                 deleted.push(c.clone());
             }
-            Err(e) => rows.push(LedgerRow::Fail {
-                ts,
-                path,
-                error: e.to_string(),
-            }),
+            Err(e) => push_row(
+                &mut rows,
+                LedgerRow::Fail {
+                    ts,
+                    path,
+                    error: e.to_string(),
+                },
+            ),
         }
     }
     let after = used_pct();
-    rows.push(LedgerRow::Run {
-        ts,
-        freed_bytes: freed,
-        deleted: deleted.len(),
-        used_pct_before: before,
-        used_pct_after: after,
-        stopped: stopped.code().to_string(),
-    });
+    push_row(
+        &mut rows,
+        LedgerRow::Run {
+            ts,
+            freed_bytes: freed,
+            deleted: deleted.len(),
+            used_pct_before: before,
+            used_pct_after: after,
+            stopped: stopped.code().to_string(),
+        },
+    );
     RunOutcome {
         rows,
         deleted,
@@ -815,6 +859,11 @@ pub(crate) struct GuardState {
     /// notice went out.
     #[serde(default)]
     pub last_emergency_stuck_at: Option<DateTime<Utc>>,
+    /// The refusal the last emergency notice carried, so a persistent plan
+    /// bug re-notifies on the stuck cadence instead of every 30 m.
+    // trace:TASK-2272 | ai:claude (TASK-1-484)
+    #[serde(default)]
+    pub last_emergency_refusal: Option<String>,
 }
 
 fn guard_state_path(main_root: &Path) -> PathBuf {
@@ -857,17 +906,22 @@ pub(crate) fn should_escalate(state: &GuardState, now: DateTime<Utc>, deficit: u
     stale || grew
 }
 
-/// Should this emergency run notify? A run that deleted something, or was
-/// refused, always does: each is news. A run that deleted nothing and is
-/// still over the margin repeats every tick, so it is deduped like the
-/// stuck escalation: at most every 6h. Pure.
+/// Should this emergency run notify? A run that deleted something always
+/// does, and so does a NEW refusal: each is news. A run that deleted nothing
+/// and is still over the margin repeats every tick, and so does a refusal
+/// from a persistent plan bug, so both are deduped like the stuck
+/// escalation: at most every 6h. Pure.
 // trace:STORY-1916.ac40b516 | ai:claude
+// trace:TASK-2272 | ai:claude (TASK-1-484)
 pub(crate) fn should_notify_emergency(
     state: &GuardState,
     now: DateTime<Utc>,
     outcome: &RunOutcome,
 ) -> bool {
-    if !outcome.deleted.is_empty() || outcome.refusal.is_some() {
+    if !outcome.deleted.is_empty() {
+        return true;
+    }
+    if outcome.refusal.is_some() && outcome.refusal != state.last_emergency_refusal {
         return true;
     }
     state
@@ -1215,12 +1269,29 @@ fn mail_holder(main_root: &Path, c: &Candidate) {
 /// filesystem is under the ceiling, or another run holds the lock.
 // trace:STORY-1916 | ai:claude
 pub(crate) fn run_emergency(main_root: &Path, cfg: &EmergencyConfig) -> Option<RunOutcome> {
+    let cache_root = crate::worktree_reclaim::cache_root_of(main_root)?;
+    let probe_root = cache_root.clone();
+    run_emergency_probed(main_root, &cache_root, cfg, move || {
+        fs_stats(&probe_root).map(|s| s.used_pct())
+    })
+}
+
+/// [`run_emergency`] with the cache root and usage probe injected, so the
+/// production glue (lock, gh / offline fallback, incremental ledger appends,
+/// notice dedupe state) is testable on a real tempdir whatever its
+/// filesystem's actual usage.
+// trace:TASK-2272 | ai:claude (TASK-1-482)
+pub(crate) fn run_emergency_probed(
+    main_root: &Path,
+    cache_root: &Path,
+    cfg: &EmergencyConfig,
+    used_pct: impl Fn() -> Option<u8>,
+) -> Option<RunOutcome> {
     use fs2::FileExt;
     if !cfg.enabled() {
         return None;
     }
-    let cache_root = crate::worktree_reclaim::cache_root_of(main_root)?;
-    if fs_stats(&cache_root)?.used_pct() < cfg.used_pct {
+    if used_pct()? < cfg.used_pct {
         return None;
     }
     let lock_path = main_root.join(".aida").join("disk-emergency.lock");
@@ -1230,7 +1301,12 @@ pub(crate) fn run_emergency(main_root: &Path, cfg: &EmergencyConfig) -> Option<R
 
     let worktrees = worktree_entries(main_root);
     let home = crate::home_dir();
-    let allow = Allowlist::for_main(main_root, cache_root.clone(), home.as_deref(), &worktrees);
+    let allow = Allowlist::for_main(
+        main_root,
+        cache_root.to_path_buf(),
+        home.as_deref(),
+        &worktrees,
+    );
     let (finished_branches, finished_prs) = finished_from_gh(main_root).unwrap_or_else(|| {
         // gh unreachable: git can still prove merges (STORY-1916 AC2), under
         // reclaim's overall scan budget.
@@ -1251,23 +1327,30 @@ pub(crate) fn run_emergency(main_root: &Path, cfg: &EmergencyConfig) -> Option<R
         idle: cfg.idle(),
     };
     let (candidates, _held) = plan(&survey);
+    // The scheduled child is killed at its 120 s budget: each ledger row is
+    // appended as it happens, so a kill mid-apply loses no Delete row.
+    // trace:TASK-2272 | ai:claude (TASK-1-481)
     let outcome = apply(
         &allow,
         &candidates,
         cfg,
         now,
-        || fs_stats(&cache_root).map(|s| s.used_pct()),
+        used_pct,
         |p| std::fs::remove_dir_all(p),
         |c| mail_holder(main_root, c),
+        |row| {
+            let _ = append_ledger(main_root, std::slice::from_ref(row));
+        },
     );
-    let _ = append_ledger(main_root, &outcome.rows);
     let mut state = load_guard_state(main_root);
     let now_utc = Utc::now();
     if let Some((title, body)) = emergency_notice(&outcome, cfg) {
         if should_notify_emergency(&state, now_utc, &outcome) {
             let _ = crate::notify::send_direct(main_root, "disk-emergency", &title, &body);
-            if outcome.deleted.is_empty() && outcome.refusal.is_none() {
+            if outcome.deleted.is_empty() {
                 state.last_emergency_stuck_at = Some(now_utc);
+                // trace:TASK-2272 | ai:claude (TASK-1-484)
+                state.last_emergency_refusal = outcome.refusal.clone();
                 let _ = save_guard_state(main_root, &state);
             }
         }

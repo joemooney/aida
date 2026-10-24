@@ -410,6 +410,77 @@ fn task_1781_contained_parent_refuses_no_default_flags() {
         .expect("defaults applied");
 }
 
+// TASK-2317: the refusal holds at the agent_new_claude call site, not only in
+// the helper — a contained parent passing --no-default-flags refuses before
+// the role picker or any project lookup (`cwd` is not an AIDA project, so
+// reaching either would fail with a different error).
+// trace:TASK-2272 | ai:claude (TASK-2317)
+#[test]
+fn task_2317_agent_new_claude_refuses_no_default_flags_under_contained_parent() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (_root, home) = project(tmp.path(), false);
+    let nowhere = tmp.path().join("not-a-project");
+    std::fs::create_dir_all(&nowhere).unwrap();
+    let _env = EnvVarsGuard::apply(&[("AIDA_HOME", Some(&home)), ("AIDA_CONTAINED", Some("1"))]);
+    let err = crate::agent_launch::agent_new_claude(
+        None,
+        None,
+        false,
+        Some(&nowhere),
+        None,
+        false,
+        crate::agent_launch::AgentContextOptions::new(false, false),
+        false,
+        true,
+        false,
+        false,
+        crate::agent_launch::AgentPromptOptions::new(None, true),
+        crate::agent_launch::AgentResumeOptions::new(false, None, false, false),
+        AgentDefaultFlagOptions::new(false, Vec::new(), None),
+        None,
+        None,
+        false,
+    )
+    .expect_err("a contained parent may not pass --no-default-flags");
+    assert!(format!("{err:#}").contains("--no-default-flags"), "{err:#}");
+}
+
+// TASK-2315: the staged resume transcript's source is opened O_NOFOLLOW and
+// fstat'ed on the handle, so a symlinked source — whenever it was swapped in —
+// is refused, while a regular source still stages from that same handle.
+// trace:TASK-2272 | ai:claude (TASK-2315)
+#[cfg(unix)]
+#[test]
+fn task_2315_symlinked_source_transcript_is_refused_via_o_nofollow() {
+    let tmp = tempfile::tempdir().unwrap();
+    let home = tmp.path().join("home");
+    std::fs::create_dir_all(&home).unwrap();
+    let _env = EnvVarsGuard::apply(&[("AIDA_TEST_HOME", Some(home.to_str().unwrap()))]);
+    let listed_in = tmp.path().join("main");
+    let cwd = tmp.path().join("tree");
+    let from_dir = crate::session::claude_project_dir(&listed_in).unwrap();
+    std::fs::create_dir_all(&from_dir).unwrap();
+    let secret = tmp.path().join("secret.jsonl");
+    std::fs::write(&secret, b"{\"secret\":1}").unwrap();
+    std::os::unix::fs::symlink(&secret, from_dir.join("sess-2315.jsonl")).unwrap();
+
+    let err = crate::session::stage_resume_transcript("sess-2315", &listed_in, &cwd).unwrap_err();
+    assert!(format!("{err:#}").contains("not a regular file"), "{err:#}");
+    let dest = crate::session::claude_project_dir(&cwd)
+        .unwrap()
+        .join("sess-2315.jsonl");
+    assert!(!dest.exists(), "nothing staged from a symlinked source");
+
+    // A regular source still stages, read from the O_NOFOLLOW handle.
+    std::fs::remove_file(from_dir.join("sess-2315.jsonl")).unwrap();
+    std::fs::write(from_dir.join("sess-2315.jsonl"), b"{\"ok\":1}").unwrap();
+    crate::session::stage_resume_transcript("sess-2315", &listed_in, &cwd).unwrap();
+    assert_eq!(std::fs::read(&dest).unwrap(), b"{\"ok\":1}");
+
+    // And a missing source stays a quiet no-op.
+    crate::session::stage_resume_transcript("sess-absent", &listed_in, &cwd).unwrap();
+}
+
 // TASK-1781 (d): codex and agy refuse under a contained parent before the
 // role picker or any project lookup runs. `cwd` is not an AIDA project, so
 // reaching the picker would fail with a different error.

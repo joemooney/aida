@@ -351,6 +351,7 @@ fn story_1916_apply_stops_once_below_ceiling_minus_margin() {
             Ok(())
         },
         |_| {},
+        |_| {},
     );
     assert!(!a.exists() && !b.exists(), "deleted until below 90%");
     assert!(c.exists(), "left warm once usage fell below the margin");
@@ -394,6 +395,7 @@ fn story_1916_tier2_runs_only_while_still_at_or_above_the_ceiling() {
         || Some(93),
         |p| std::fs::remove_dir_all(p),
         |c| mailed.borrow_mut().push(c.path.clone()),
+        |_| {},
     );
     assert!(held.exists());
     assert_eq!(outcome.stopped, Stop::Tier2BelowCeiling);
@@ -408,6 +410,7 @@ fn story_1916_tier2_runs_only_while_still_at_or_above_the_ceiling() {
         || Some(96),
         |p| std::fs::remove_dir_all(p),
         |c| mailed.borrow_mut().push(c.path.clone()),
+        |_| {},
     );
     assert!(!held.exists());
     assert_eq!(outcome.deleted.len(), 1);
@@ -431,6 +434,7 @@ fn story_1916_held_cargo_lock_skips_the_cache_as_busy() {
         SystemTime::now(),
         || Some(99),
         |p| std::fs::remove_dir_all(p),
+        |_| {},
         |_| {},
     );
     assert!(
@@ -468,6 +472,7 @@ fn story_1916_a_write_since_planning_skips_the_cache_as_busy() {
         || Some(99),
         |p| std::fs::remove_dir_all(p),
         |_| {},
+        |_| {},
     );
     assert!(c.exists());
     assert!(outcome.deleted.is_empty());
@@ -497,6 +502,7 @@ fn story_1916_a_refusal_stops_the_run_and_keeps_earlier_ledger_rows() {
             removed.borrow_mut().push(p.to_path_buf());
             std::fs::remove_dir_all(p)
         },
+        |_| {},
         |_| {},
     );
     assert_eq!(
@@ -541,6 +547,7 @@ fn story_1916_apply_stops_when_the_probe_is_lost() {
         SystemTime::now(),
         || None,
         |p| std::fs::remove_dir_all(p),
+        |_| {},
         |_| {},
     );
     assert!(c.exists());
@@ -816,6 +823,112 @@ fn story_1916_emergency_notice_dedupes_a_repeating_nothing_deleted_run() {
         should_notify_emergency(&recent, now, &deleted),
         "a delete is always news"
     );
+}
+
+/// TASK-1-483: a cross-target build holds `<cache>/<triple>/<profile>/
+/// .cargo-lock`; the busy probe must find it one level deeper, not only the
+/// mtime re-walk.
+// trace:TASK-2272 | ai:claude (TASK-1-483)
+#[test]
+fn task_1_483_cross_target_cargo_lock_is_probed_too() {
+    use fs2::FileExt;
+    let tmp = tempfile::tempdir().unwrap();
+    let (_main, root) = layout(tmp.path());
+    let c = cache(&root, "cross", 10, 9 * HOUR);
+    let triple = c.join("x86_64-unknown-linux-musl/release");
+    std::fs::create_dir_all(&triple).unwrap();
+    std::fs::write(triple.join(".cargo-lock"), b"").unwrap();
+    age_tree(&c, SystemTime::now() - 9 * HOUR);
+    let lock = std::fs::File::open(triple.join(".cargo-lock")).unwrap();
+    lock.lock_exclusive().unwrap();
+    let why = busy_reason(&c, SystemTime::now(), 2 * HOUR).expect("busy");
+    assert!(why.contains(".cargo-lock"), "{why}");
+    FileExt::unlock(&lock).unwrap();
+    assert_eq!(
+        busy_reason(&c, SystemTime::now(), 2 * HOUR),
+        None,
+        "released cross-target lock, idle tree"
+    );
+}
+
+/// TASK-1-484: a refusal from a persistent plan bug re-notifies on the stuck
+/// cadence, not every 30 m tick; a NEW refusal is news at once.
+// trace:TASK-2272 | ai:claude (TASK-1-484)
+#[test]
+fn task_1_484_a_repeating_refusal_is_deduped_a_new_one_notifies() {
+    let now = Utc::now();
+    let mut refused = outcome_with(Vec::new(), Some(97));
+    refused.refusal = Some("refusing to delete x".into());
+    assert!(
+        should_notify_emergency(&GuardState::default(), now, &refused),
+        "a first refusal is news"
+    );
+    let recent = GuardState {
+        last_emergency_stuck_at: Some(now - chrono::Duration::minutes(30)),
+        last_emergency_refusal: Some("refusing to delete x".into()),
+        ..GuardState::default()
+    };
+    assert!(
+        !should_notify_emergency(&recent, now, &refused),
+        "the same refusal 30 m later stays quiet"
+    );
+    assert!(
+        should_notify_emergency(&recent, now + chrono::Duration::hours(6), &refused),
+        "and re-notifies on the stuck cadence"
+    );
+    let mut other = outcome_with(Vec::new(), Some(97));
+    other.refusal = Some("refusing to delete y".into());
+    assert!(
+        should_notify_emergency(&recent, now, &other),
+        "a different refusal is news at once"
+    );
+}
+
+/// TASK-1-482: the production glue — the lock, the gh / offline fallback,
+/// the incremental ledger append (TASK-1-481) and the notice dedupe state
+/// write — driven end to end with only the usage probe injected.
+// trace:TASK-2272 | ai:claude (TASK-1-481, TASK-1-482)
+#[test]
+fn task_1_482_run_emergency_glue_locks_ledgers_and_dedupes() {
+    use fs2::FileExt;
+    let tmp = tempfile::tempdir().unwrap();
+    let (main, root) = layout(tmp.path());
+    let idle = cache(&root, "idle-a", 10, 9 * HOUR);
+    let cfg = cfg();
+
+    // Under the ceiling: no run, no lock taken, no ledger.
+    assert!(run_emergency_probed(&main, &root, &cfg, || Some(50)).is_none());
+    assert!(!ledger_path(&main).exists());
+
+    // Over the ceiling: the idle cache goes, and every row was appended to
+    // the ledger as it happened (the file matches the outcome row for row).
+    let outcome = run_emergency_probed(&main, &root, &cfg, || Some(97)).expect("ran");
+    assert_eq!(outcome.deleted.len(), 1);
+    assert!(!idle.exists());
+    let ledger = std::fs::read_to_string(ledger_path(&main)).unwrap();
+    assert_eq!(ledger.lines().count(), outcome.rows.len());
+    assert!(
+        load_guard_state(&main).last_emergency_stuck_at.is_none(),
+        "a run that deleted something sets no dedupe state"
+    );
+
+    // Nothing left to delete and still over the margin: the notice dedupe
+    // state is written, and a tick 30 m later stays quiet (state unchanged).
+    run_emergency_probed(&main, &root, &cfg, || Some(97)).expect("ran");
+    let stuck_at = load_guard_state(&main)
+        .last_emergency_stuck_at
+        .expect("stuck state written");
+    run_emergency_probed(&main, &root, &cfg, || Some(97)).expect("ran");
+    assert_eq!(
+        load_guard_state(&main).last_emergency_stuck_at,
+        Some(stuck_at),
+        "the repeat tick did not re-notify"
+    );
+
+    // Another holder of the emergency lock: the run steps aside.
+    let lock = std::fs::File::create(main.join(".aida/disk-emergency.lock")).unwrap();
+    lock.lock_exclusive().unwrap();
+    assert!(run_emergency_probed(&main, &root, &cfg, || Some(97)).is_none());
 }
 
 // trace:STORY-1916.ac641c6e | ai:claude

@@ -386,17 +386,10 @@ fn bug_2213_inherited_pathspec_modes_cannot_hide_object_dirt() {
         "GIT_ICASE_PATHSPECS",
     ];
     for mode in std::iter::once(None).chain(modes.iter().copied().map(Some)) {
-        for args in [
-            vec![
-                "status",
-                "--porcelain=v1",
-                "--untracked-files=all",
-                "--no-renames",
-                "--",
-                STORE_OBJECTS_PATH,
-            ],
-            vec!["ls-files", "--others", "-z", "--", STORE_OBJECTS_PATH],
-        ] {
+        // The production arg vectors, not a paraphrase: the matrix must
+        // exercise --ignore-submodules=none too.
+        // trace:TASK-2272 | ai:claude (TASK-2320)
+        for args in [STORE_STATUS_ARGS.to_vec(), STORE_LS_FILES_ARGS.to_vec()] {
             let mut cmd = snapshot_command(s.path());
             for key in modes {
                 cmd.env_remove(key);
