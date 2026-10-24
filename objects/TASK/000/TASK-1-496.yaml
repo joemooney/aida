@@ -1,0 +1,29 @@
+id: 01a16fb2-eea1-7e10-9bba-14aab90a2b71
+spec_id: TASK-1-496
+title: 'minor: rider gate fails open when a leased train''s body cannot be read — live_t…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2220, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  minor: rider gate fails open when a leased train's body cannot be read — live_trains' gh pr view .unwrap_or_default() (pr_train.rs ~1262) silently names nobody on a gh error; add a one-line stderr warning naming the unreadable train
+
+  PR: #2900
+  Reviewed sha: 0d843aa75192e0284fa885c82ffcd80545d96726
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-24T20:55:59.905618324Z
+modified_at: 2026-10-24T20:55:59.905618324Z
+req_type: Task
+tags:
+- carried-from:BUG-2220
+- finding-hash:b2ed880c
+- from-review:PR-2900
+- kind:carried-forward
+filed_at:
+  code_sha: f729f5130b0f30dcd8de4960d022632c362be7e9
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 00da9622df
+  vendor: claude
