@@ -8,12 +8,12 @@ description: |
   Ruling 2 handles only a MISSING origin, by falling back with a note. Either extend that to an unreachable origin under the default knob (with a note), or document it: the plan doc's "The flip never turns a working contained launch into a refusal" (docs/plans/2026-10-16-bug-2169-contained-clone.md, S4c as built) overclaims, and docs/release-notes/2026-10-contained-seat-clone-default.md should say that origin must be reachable at launch.
 
   Raised in review of PR-2839: https://github.com/joemooney/aida/pull/2839#issuecomment-6378149711
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-24T01:26:39.516291752Z
-modified_at: 2026-10-24T06:12:07.266989593Z
+modified_at: 2026-10-24T06:26:07.393367353Z
 req_type: Task
 tags:
 - docs
@@ -82,6 +82,20 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a16c96-899d-7430-b37b-ea7e8041182b
+  author: aida-auto-bump
+  timestamp: 2026-10-24T06:26:07.389844841Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a16c96-89a1-73d2-b5a3-7c140a2dff91
+  timestamp: 2026-10-24T06:26:07.393363962Z
+  agent: aida
+  commit_sha: 98f7705e063dd5b8ac190e89a7a023463df4d9a5
+  summary: Default (unset seat_tree) contained launch now falls back to a linked worktree with a note when the origin clone command fails or times out (30s, prompts disabled, output capped), only after clone dir + base pin cleanup succeeds; explicit seat_tree=clone, local setup, spawn and cleanup failures still refuse; reserved explicit aida-seat-* --path refuses before any worktree; plan doc overclaim and release note corrected. Covered by 5 task_2300_* tests; PR CI green at head.
+  review_verdict: approved
 filed_at:
   code_sha: 42cef5f69f1795e85e1dbe91fcd8c83ba0239b72
   branch: pr-2839
@@ -91,3 +105,7 @@ filed_at:
   vendor: claude
   session: 01a16b81ae59
   harness_version: 2.1.310 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-24T06:26:07.389840423Z
+  completion_sha: 98f7705e063dd5b8ac190e89a7a023463df4d9a5
