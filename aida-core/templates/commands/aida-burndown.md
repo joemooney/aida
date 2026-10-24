@@ -3,7 +3,7 @@ description: Run /aida-burndown.
 ---
 # Autonomously Burn Down the Backlog
 
-Fan out worktree-isolated implementer subagents over the ready set, integrate
+Launch one standalone implementer process per ready spec, integrate
 their PRs, and loop until drained — the empirically-working autonomous drain,
 encoded so the "never stop to ask" rules are structural.
 

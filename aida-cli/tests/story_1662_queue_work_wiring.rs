@@ -221,6 +221,8 @@ fn launch(fx: &Fixture, grant: &str) -> (Option<i32>, String, String) {
 
 /// A launch past the concurrency cap exits 34 before any setup: no lease,
 /// worktree, queue row, status change or manifest.
+// trace:STORY-1662.AC7 | ai:claude
+// trace:STORY-1662.AC11 | ai:claude
 #[test]
 fn cap_refusal_exits_34_and_leaves_no_lease_worktree_or_queue_row() {
     let fx = fixture("exit 97", "[queue]\nstandalone_implementer_cap = 1\n");
@@ -253,6 +255,8 @@ fn cap_refusal_exits_34_and_leaves_no_lease_worktree_or_queue_row() {
 /// The full wiring: dispatch to the standalone launcher, the outcome line
 /// and its exit code, the launch-authority record naming why a granted
 /// advisor's child runs at baseline, and no manual-continuation hint.
+// trace:STORY-1662.AC5 | ai:claude
+// trace:STORY-1662.AC11 | ai:claude
 #[test]
 fn punting_child_exits_32_through_queue_work_with_authority_recorded() {
     let fx = fixture(
