@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T21:38:06.702176218Z
-modified_at: 2026-10-24T04:23:58.175551392Z
+modified_at: 2026-10-24T04:27:20.813726752Z
 req_type: Task
 relationships:
 - rel_type: Supersedes
@@ -197,6 +197,12 @@ comments:
   content: 'ADVISOR 18:57: Folded TASK-2301 from the #2850 PASS (a scheduled dev-autopromote re-promotes a commit the operator just rolled back; minor). Take it after #2850 merges: rollback should pin the rolled-back SHA so the tick skips it until main moves past it, with a test.'
   created_at: 2026-10-24T01:57:23.712746836Z
   modified_at: 2026-10-24T01:57:23.712746836Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+- id: 01a16c29-cb6d-7180-b129-1798afad4645
+  author: joe
+  content: 'ADVISOR 21:30 RULING: TASK-2305/2306/2307 depend on code that exists only in #2867 (repair_push_upstream, deleted_branches), so they move to #2867 (TASK-2270), whose lane is taking them. TASK-2294 and TASK-2292 depend on #2855 code; they land in a TASK-2272 completing follow-up after #2855 merges. #2868 therefore lands its 22 fixed members as a NON-completing slice: retitle its squash subject to ''(Refs TASK-2272)'' and mark the five in the PR body as ''-> #2867'' or ''-> follow-up after #2855''. The reviewer should judge #2868 on those 22 members.'
+  created_at: 2026-10-24T04:27:20.813726752Z
+  modified_at: 2026-10-24T04:27:20.813726752Z
   session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
 history:
 - id: 01a16ab3-42ef-7420-86da-7b4600ae0438
