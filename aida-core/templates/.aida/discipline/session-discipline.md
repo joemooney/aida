@@ -579,7 +579,8 @@ re-doing the work from scratch.
 ## Finish-state communication rubric
 
 Any time a skill *ends a phase* — the implementer wrapping up phase 1, the
-reviewer writing the verdict, `/aida-pr` after opening the PR — the closing
+reviewer writing the verdict, `/aida-pr` reporting its review-handoff or
+orchestrated commit/push outcome — the closing
 output is finish-state communication, and it must be self-contained. The
 reader (a human at the keyboard, the next session's headless advisor, or a
 log-trawler tomorrow) should not have to infer current state or guess what
@@ -627,9 +628,9 @@ Worked examples that follow this rubric:
   BUG-226) — written *before* this rubric was named, but already embodies
   it: labelled verdict line, explicit drain phases that follow, named key
   to press, sentinel touch under zen.
-- The implementer's orchestrator-mode templates in `aida-pickup.md` step 6
-  and `aida-pr.md` (TASK-359) — the rubric's first deliberate application
-  to the implementer + PR surfaces.
+- The implementer's orchestrator-mode template in `aida-pickup.md` step 6
+  (TASK-359; `aida-pr` is now a thin `aida ship` redirect per TASK-1613) —
+  the rubric's first deliberate application to the implementer surface.
 
 Origin: 2026-05-19, captured as TASK-359 and the discipline memory
 `feedback_finish_checkpoint_clarity.md`. The user saw the same gap on two
