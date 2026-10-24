@@ -589,13 +589,22 @@ pub(crate) fn auto_release(project: &Path, pr: u64) -> Result<Outcome> {
                 approval_attested(&candidates, &policy, head, pr)
             },
             mandate: &|| {
+                // TASK-2323: the BUG-2214 evidence fetch needs the head
+                // BRANCH; with `None` here the rework-release path never
+                // fetched, and a forge-moved head failed the exclusion diff.
+                // trace:BUG-2214 | ai:claude
+                let head_branch = crate::forge::forge_for_kind(&root, kind)
+                    .change_metadata(pr, &mut crate::network_retry::NoopSink)
+                    .ok()
+                    .map(|m| m.head_ref.trim().to_string())
+                    .filter(|r: &String| !r.is_empty());
                 crate::pr_cmd::mandate_ship_cover(
                     project,
                     &root,
                     &root,
                     pr,
                     &known_ids,
-                    None,
+                    head_branch.as_deref(),
                     || open_change_head(live_head().ok().flatten()).ok(),
                     false,
                     crate::mandate::rework_release_decision,
