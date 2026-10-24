@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-24T00:35:24.407537052Z
-modified_at: 2026-10-24T06:27:42.862396946Z
+modified_at: 2026-10-24T07:33:33.331948216Z
 req_type: Bug
 tags:
 - coordination
@@ -23,6 +23,11 @@ comments:
     Implementation on codex/bug-2213 uses the same root-literal objects pathspec for status and the ignore-independent ls-files --others check. Coordination/mail and other non-evidence dirt are ignored. HEAD/ref/worktree stability logic is unchanged. Regression tests cover staged new/renewed leases; modified/staged/untracked/deleted/renamed-out/replaced objects; and newly excluding or malformed home-ledger updates. One fresh-context author checker found no confirmed findings; targeted mandate_ run is currently building, so no test/fast-gate PASS or review approval claimed yet.
   created_at: 2026-10-24T06:27:42.862396946Z
   modified_at: 2026-10-24T06:27:42.862396946Z
+- id: 01a16cd4-4613-7f11-bad0-05b8fe88dfdd
+  author: joe
+  content: Commit 14065b6254 references this requirement
+  created_at: 2026-10-24T07:33:33.331948216Z
+  modified_at: 2026-10-24T07:33:33.331948216Z
 history:
 - id: 01a16c91-e717-7102-8c61-c1ca6d83fb24
   author: joe
