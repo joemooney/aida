@@ -1,5 +1,6 @@
 id: 01a16fb2-fd41-7631-a608-3c774b8fbc97
 spec_id: TASK-1-497
+agreed_id: TASK-1867
 title: 'cosmetic: doc tension — parse_members_line doc says ''the gate fails closed on i…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on BUG-2220, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -20,6 +21,11 @@ tags:
 - finding-hash:f03404e0
 - from-review:PR-2900
 - kind:carried-forward
+history:
+- id: 01a16fcb-a948-7c73-8b54-378fe9a90d8a
+  author: joe
+  timestamp: 2026-10-24T21:23:00.552806017Z
+  changes: []
 filed_at:
   code_sha: f729f5130b0f30dcd8de4960d022632c362be7e9
   branch: main
