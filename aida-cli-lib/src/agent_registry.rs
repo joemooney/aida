@@ -658,7 +658,10 @@ pub(crate) fn touch_session_start_agent(
     let env_scope = env_nonempty("AIDA_SESSION_SCOPE").filter(|s| looks_like_spec_id(s));
     let env_name = match &linked {
         Some(lease) if env_scope.as_deref() != Some(lease.scope.as_str()) => None,
-        _ => env_nonempty("AIDA_AGENT_NAME"),
+        // A headless child's own handle, else its launch name.
+        // trace:STORY-1843 | ai:claude
+        _ => env_nonempty(crate::agent_handle::HANDLE_ENV)
+            .or_else(|| env_nonempty("AIDA_AGENT_NAME")),
     };
     let mut entry = std::fs::read_to_string(&path)
         .ok()
@@ -741,6 +744,9 @@ pub(crate) fn touch_session_start_agent(
     if let Some(session_id) = session_id.filter(|s| !s.trim().is_empty()) {
         entry.claude_session_id = Some(session_id.to_string());
     }
+    // Every session gets one stable handle at start; the launch's name when
+    // it gave one. trace:STORY-1843 | ai:claude
+    crate::agent_handle::assign_session_handle(project_root, &mut entry, session_id);
 
     write_entry(project_root, &entry)?;
     Ok(entry)
@@ -773,7 +779,32 @@ pub(crate) fn adopt_bg_session_identity(
         {
             continue;
         }
-        entry.name = Some(name.to_string());
+        // The launch reserved `name`; bind it to this session so the
+        // generated handle its SessionStart took is released. This runs in
+        // the launcher, which holds the reservation's token.
+        // trace:STORY-1843 | ai:claude
+        let token = crate::agent_handle::launch_token_for(project_root, name);
+        let reserved = crate::agent_handle::reserve_handle(
+            project_root,
+            &crate::agent_handle::HandleRequest {
+                agent_type: &entry.agent_type,
+                role,
+                explicit: Some(name),
+                native_session_id: entry.claude_session_id.as_deref(),
+                registry_id: Some(&entry.id),
+                launch_token: token.as_deref(),
+                launcher: false,
+            },
+        );
+        // Never write a name the namespace refused: the session keeps the
+        // handle its SessionStart took, so two sessions never share one.
+        match reserved {
+            Ok(_) => entry.name = Some(name.to_string()),
+            Err(err) => eprintln!(
+                "  warning: the launched session keeps its handle `{}`: {err:#}",
+                entry.name.as_deref().unwrap_or("-")
+            ),
+        }
         entry.current_spec = spec.map(str::to_string);
         entry.role = role.map(str::to_string).or(entry.role);
         entry.worktree_path = worktree.to_path_buf();
@@ -886,109 +917,44 @@ pub(crate) fn register_role_enter_agent(
     Ok(entry)
 }
 
-/// Validate a custom agent name or generate a default '<type>-<role>-<seq>' name.
-/// Validates uniqueness across all active (non-stale) agents.
+/// Validate a custom agent name or generate a default `<vendor>-<role>-NN`
+/// handle. Validates uniqueness across all active (non-stale) agents and
+/// launch reservations. With `reserve`, the name is reserved under the
+/// handle namespace lock so a concurrent launch cannot take it before the
+/// launched session binds it; a preview passes `false` and reserves nothing.
 // trace:TASK-542 | ai:antigravity
+// trace:STORY-1843 | ai:claude
 pub(crate) fn generate_or_validate_name(
     project_root: &Path,
     agent_type: &str,
     role: Option<&str>,
     custom_name: Option<&str>,
+    reserve: bool,
 ) -> Result<String> {
     let agent_type_clean = normalize_agent_type(agent_type.to_string());
-    let role_clean = role.unwrap_or("unknown").to_lowercase();
-
-    // Read all alive agents
-    let mut alive_agents = Vec::new();
-    if let Ok(entries) = std::fs::read_dir(agents_dir(project_root)) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.extension().and_then(|s| s.to_str()) != Some("toml") {
-                continue;
-            }
-            if let Ok(body) = std::fs::read_to_string(&path) {
-                if let Ok(record) = toml::from_str::<AgentRegistryEntry>(&body) {
-                    if registry_entry_is_live(project_root, &record) {
-                        alive_agents.push(record);
-                    }
-                }
-            }
-        }
-    }
 
     if let Some(name) = custom_name {
         let name_trimmed = name.trim();
         if name_trimmed.is_empty() {
             anyhow::bail!("--name cannot be empty");
         }
-
-        // 1. Uniqueness check across active agents
-        for agent in &alive_agents {
-            if let Some(ref active_name) = agent.name {
-                if active_name.eq_ignore_ascii_case(name_trimmed) {
-                    anyhow::bail!(
-                        "agent name `{}` is already in use by active agent process (PID {})",
-                        name_trimmed,
-                        agent.pid
-                    );
-                }
-            }
-        }
-
-        // 2. Prefix-hierarchy validation
-        let name_lower = name_trimmed.to_lowercase();
-        let is_type = name_lower == "claude"
-            || name_lower == "codex"
-            || name_lower == "antigravity"
-            || name_lower == "web";
-        if is_type {
-            anyhow::bail!(
-                "invalid agent name `{}`: conflicts with agent type prefix",
-                name_trimmed
-            );
-        }
-
-        let is_type_role_prefix =
-            ["claude-", "codex-", "antigravity-", "web-"]
-                .iter()
-                .any(|prefix| {
-                    if let Some(remainder) = name_lower.strip_prefix(prefix) {
-                        if let Some(dash_idx) = remainder.rfind('-') {
-                            let suffix = &remainder[dash_idx + 1..];
-                            !suffix.chars().all(|c| c.is_ascii_digit()) || suffix.is_empty()
-                        } else {
-                            true
-                        }
-                    } else {
-                        false
-                    }
-                });
-        if is_type_role_prefix {
-            anyhow::bail!(
-                "invalid agent name `{}`: conflicts with agent type+role prefix",
-                name_trimmed
-            );
-        }
-
-        return Ok(name_trimmed.to_string());
+        let reserved = crate::agent_handle::reserved_addresses(project_root);
+        crate::agent_handle::validate_explicit_handle(name_trimmed, &reserved)?;
     }
 
-    // Default name generation: '<type>-<role>-<seq>' using the lowest free integer starting from 1
-    let mut seq = 1;
-    loop {
-        let candidate_name = format!("{}-{}-{}", agent_type_clean, role_clean, seq);
-        let in_use = alive_agents.iter().any(|agent| {
-            if let Some(ref active_name) = agent.name {
-                active_name.eq_ignore_ascii_case(&candidate_name)
-            } else {
-                false
-            }
-        });
-        if !in_use {
-            return Ok(candidate_name);
-        }
-        seq += 1;
+    let request = crate::agent_handle::HandleRequest {
+        agent_type: &agent_type_clean,
+        role,
+        explicit: custom_name.map(str::trim),
+        native_session_id: None,
+        registry_id: None,
+        launch_token: None,
+        launcher: true,
+    };
+    if reserve {
+        return Ok(crate::agent_handle::reserve_handle(project_root, &request)?.handle);
     }
+    crate::agent_handle::preview_handle(project_root, &request)
 }
 
 /// Resolve an agent brief target to its allowed brief directories (exact name, type-role, and type)
@@ -2792,6 +2758,37 @@ fn pid_has_ancestor(_child_pid: u32, _ancestor_pid: u32) -> bool {
     false
 }
 
+/// The parent of `pid`, when this process can see it.
+// trace:STORY-1843 | ai:claude
+pub(crate) fn parent_pid_of(pid: u32) -> Option<u32> {
+    #[cfg(unix)]
+    {
+        parent_pid(pid)
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = pid;
+        None
+    }
+}
+
+/// How many generations `ancestor` sits above `pid` (0 when they are the
+/// same process), or `None` when it is not an ancestor.
+// trace:STORY-1843 | ai:claude
+pub(crate) fn ancestor_depth(pid: u32, ancestor: u32) -> Option<usize> {
+    let mut current = pid;
+    for depth in 0..64 {
+        if current == ancestor {
+            return Some(depth);
+        }
+        match parent_pid_of(current) {
+            Some(parent) if parent != current && parent > 0 => current = parent,
+            _ => return None,
+        }
+    }
+    None
+}
+
 #[cfg(not(unix))]
 fn current_tty() -> Option<String> {
     None
@@ -3802,6 +3799,7 @@ mod tests {
     // STORY-1843 (TASK-2177): a dead resumable row stays for resume but is
     // stamped ended, so a sandboxed mail sender stops counting it as a reader.
     // trace:STORY-1843 | ai:claude
+    // trace:STORY-1843.ac97b025 | ai:claude
     #[test]
     fn gc_dead_agents_marks_dead_resumable_rows_ended_and_keeps_them() {
         let tmp = TempDir::new().unwrap();

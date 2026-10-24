@@ -640,6 +640,10 @@ window_hours = "policy"
 
 [keys.worktree."doctor.disk_headroom"]
 min_free_gib = "policy"
+# STORY-1916: the emergency auto-reclaim tier.
+emergency_used_pct = "policy"
+emergency_margin_pct = "policy"
+emergency_idle_hours = "policy"
 
 [keys.worktree.watchdog]
 "*" = "policy"

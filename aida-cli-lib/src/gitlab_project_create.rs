@@ -249,6 +249,11 @@ fn git_push(
     url: &str,
     args: &[&str],
 ) -> Result<std::result::Result<(), String>> {
+    // trace:TASK-2270 | ai:claude
+    let upstream_branch = args.contains(&"-u").then(|| args.last().copied()).flatten();
+    if upstream_branch.is_some() {
+        aida_core::git_ops::clear_sandbox_config_lock(dir);
+    }
     let mut cmd = Command::new("git");
     cmd.arg("-C")
         .arg(dir)
@@ -258,6 +263,9 @@ fn git_push(
     configure_git_remote_credentials(&mut cmd, dir, remote, Some(url));
     let out = cmd.output().context("could not launch `git push`")?;
     if out.status.success() {
+        if let Some(branch) = upstream_branch {
+            aida_core::git_ops::repair_push_upstream(dir, remote, Some(branch), branch);
+        }
         Ok(Ok(()))
     } else {
         Ok(Err(String::from_utf8_lossy(&out.stderr).to_string()))
@@ -513,3 +521,8 @@ mod bug_2004_token_leak_argv_tests;
 #[cfg(test)]
 #[path = "tests/bug_2181_host_remote_credentials_tests.rs"]
 mod bug_2181_host_remote_credentials_tests;
+
+// trace:TASK-2306 | ai:claude
+#[cfg(all(test, unix))]
+#[path = "tests/task_2270_push_upstream_site_tests.rs"]
+mod task_2270_push_upstream_site_tests;

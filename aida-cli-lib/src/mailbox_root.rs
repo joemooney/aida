@@ -299,12 +299,13 @@ pub(crate) fn inbox_identities() -> Vec<String> {
     // `AIDA_USER = AIDA_AGENT_NAME`, which is why this was latent; any future
     // override inside a launched agent splits send-identity from
     // read-identity without this union.
-    if let Some(agent_name) = std::env::var("AIDA_AGENT_NAME")
-        .ok()
-        .filter(|s| !s.trim().is_empty())
-    {
-        if !ids.iter().any(|i| i == &agent_name) {
-            ids.push(agent_name);
+    // A headless child also reads its own handle's inbox (STORY-1843).
+    // trace:STORY-1843 | ai:claude
+    for key in [crate::agent_handle::HANDLE_ENV, "AIDA_AGENT_NAME"] {
+        if let Some(agent_name) = std::env::var(key).ok().filter(|s| !s.trim().is_empty()) {
+            if !ids.iter().any(|i| i == &agent_name) {
+                ids.push(agent_name);
+            }
         }
     }
     if let Some(raw) = std::env::var("AIDA_SESSION_ROLE")
@@ -336,6 +337,15 @@ pub(crate) fn inbox_identities() -> Vec<String> {
         let type_name = agent_registry::normalize_agent_type(raw);
         if !ids.iter().any(|i| i == &type_name) {
             ids.push(type_name);
+        }
+    }
+    // STORY-1843: the handle this session holds, resolved from its persisted
+    // registry binding (hook payload or the client's per-session env), so
+    // mail sent to the handle reaches a session no launcher named.
+    // trace:STORY-1843 | ai:claude
+    if let Some(handle) = crate::agent_handle::current_session_handle_for_cwd() {
+        if !ids.iter().any(|i| i.eq_ignore_ascii_case(&handle)) {
+            ids.push(handle);
         }
     }
     ids
