@@ -14,6 +14,7 @@
 //! `gh pr merge` that never touches AIDA. A drain-mode PR is never marked, so its
 //! auto-merge is unaffected (the granularity the branch-protection concern needs).
 // trace:BUG-1167 | ai:claude
+// mandate-gate
 
 use crate::process_retry::RetryEtxtbsy;
 use std::path::{Path, PathBuf};

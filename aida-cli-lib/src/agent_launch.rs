@@ -5316,30 +5316,14 @@ pub(crate) fn build_agent_new_bg_command(
         review_authority::bind_worker_env(&mut command, lease_id);
     }
     if let Some(role) = &plan.role {
-        bg_seat_refusal(role)?;
+        seat_authority::bg_seat_refusal(role)?;
         // BUG-1934: a baseline seat needs no grant, and a child grant here
-        // could never be presented (see `bg_seat_refusal`).
+        // could never be presented (see `seat_authority::bg_seat_refusal`).
         command.env("AIDA_SESSION_ROLE", role);
     } else {
         command.env_remove("AIDA_SESSION_ROLE");
     }
     Ok(command)
-}
-
-/// BUG-1934: `--bg` hands the session to the agent's own background daemon,
-/// which this launcher never parents and whose pid it never learns, so a seat
-/// grant cannot be bound to the session. A baseline seat (implementer, ...)
-/// runs ungranted; any other seat is refused before launch rather than
-/// started with a grant every gated command would reject.
-// trace:BUG-1934 | ai:claude
-pub(crate) fn bg_seat_refusal(role: &str) -> Result<()> {
-    let seat = canonical_role_name(role);
-    if seat_authority::is_baseline_seat(&seat) {
-        return Ok(());
-    }
-    anyhow::bail!(
-        "`--bg` cannot launch a `{seat}` session: it runs under the agent's background daemon, outside this launcher's process tree, so its seat grant cannot be bound to it. Launch it without `--bg` from a terminal that entered the role (`eval \"$(aida role enter {seat})\"`); `--bind-pid` would serve only its unsandboxed hooks and MCP server, not its tool calls"
-    )
 }
 
 /// BUG-2169 S2: `claude --bg` hands the session to Claude Code's background
