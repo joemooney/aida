@@ -1849,27 +1849,33 @@ pub(crate) fn session_start_with_receipt(
             .unwrap_or(false);
     // TASK-2053 S4c: the default flipped to `clone`, but a clone cannot yet
     // host a review session, re-enter an existing --path, live at an
-    // explicit --path outside the worktree parent, or be made without an
-    // `origin` remote to clone from. With no explicit knob those launches
-    // keep a worktree and say why; an explicit `seat_tree = "clone"` refuses
-    // them (below, or here for a missing origin).
+    // explicit --path that is not an `aida-seat-*` directory in the worktree
+    // parent, or be made without an `origin` remote to clone from. With no
+    // explicit knob those launches keep a worktree and say why; an explicit
+    // `seat_tree = "clone"` refuses them (below, or here for a missing origin).
+    // The launch facts (a git call, a config read, a canonicalize) are read
+    // only for a clone; a worktree launch has nothing to fall back from.
     // trace:TASK-2053 | ai:claude
-    let tree_kind = match crate::seat_clone::default_clone_fallback(
-        tree_kind,
-        crate::seat_clone::seat_tree_is_explicit(&project_root),
-        &crate::seat_clone::CloneLaunch {
-            review: review_target.is_some(),
-            reentry: reuse_existing_worktree_path,
-            path_outside_parent: explicit_path.is_some()
-                && !crate::seat_clone::is_seat_clone_location(&project_root, &worktree_path),
-            has_origin: aida_core::git_ops::has_remote(&project_root, "origin"),
-        },
-    )? {
-        (kind, Some(note)) => {
-            eprintln!("note: {note}");
-            kind
+    let tree_kind = if tree_kind != crate::seat_clone::TreeKind::Clone {
+        tree_kind
+    } else {
+        match crate::seat_clone::default_clone_fallback(
+            tree_kind,
+            crate::seat_clone::seat_tree_is_explicit(&project_root),
+            &crate::seat_clone::CloneLaunch {
+                review: review_target.is_some(),
+                reentry: reuse_existing_worktree_path,
+                path_not_seat_location: explicit_path.is_some()
+                    && !crate::seat_clone::is_seat_clone_location(&project_root, &worktree_path),
+                has_origin: aida_core::git_ops::has_remote(&project_root, "origin"),
+            },
+        )? {
+            (kind, Some(note)) => {
+                eprintln!("note: {note}");
+                kind
+            }
+            (kind, None) => kind,
         }
-        (kind, None) => kind,
     };
     if worktree_path.exists() && !reuse_existing_worktree_path {
         anyhow::bail!(

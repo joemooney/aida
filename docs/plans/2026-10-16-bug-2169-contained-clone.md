@@ -675,22 +675,28 @@ S4c (flip `seat_tree` to `clone`, retire `AIDA_DEV_SEAT_CLONE`, close PR #2694).
 
 - `[contained] seat_tree` now defaults to `clone`. `AIDA_DEV_SEAT_CLONE` and `clone_seats_enabled`
   are gone, and `seat_tree = "worktree"` opts out.
-- With no knob set, three contained launches that a clone cannot serve yet keep a linked
-  worktree, as they had before the flip:
+- With no knob set, four contained launches that a clone cannot serve keep a linked worktree, and
+  each prints a one-line `note:` naming its reason (never silently):
+  - the checkout has no `origin` remote to clone from (S4c ruling 2)
   - a review session
   - re-entering an existing `--path`
-  - an explicit `--path` outside the worktree parent
-  An explicit `seat_tree = "clone"` still refuses them. The point is that the flip never turns a
-  working contained review into a refusal. Test:
-  `the_default_is_a_clone_and_an_explicit_path_keeps_a_worktree`.
-- **S5 decision data** (advisor rule: p95 at or under 20 s rejects S5; over 20 s files it). The
-  measurement is on this host (2026-10-22, load average 14) and replicates `seat_clone::create`:
-  `git clone --no-checkout --no-hardlinks --reference <main> <origin>` plus the checkout, five
-  runs each.
-  - Cold (main's objects evicted from the page cache with `posix_fadvise(DONTNEED)`):
-    34.5–35.7 s, p50 34.8 s, p95 35.7 s.
-  - Warm: 1.5–2.6 s, p50 1.7 s, p95 2.6 s.
-  - Cold time is reading main's object store: 2.0 GiB, of which 128k loose objects; the packs are
-    237 MiB. The clone itself borrows through alternates and copies almost nothing.
-  - By the rule, S5 is filed. Packing main's loose objects (`git gc` / maintenance) is probably
-    the cheaper fix for the cold case, and S5 should be ruled against it.
+  - an explicit `--path` that is not an `aida-seat-*` directory directly in the worktree parent
+    (inside or outside that parent)
+  An explicit `seat_tree = "clone"` refuses each of them instead and names the reason; a missing
+  origin refuses with "add an origin remote or set seat_tree = \"worktree\"". The flip never turns
+  a working contained launch into a refusal. The launch facts are read only when the tree would
+  be a clone.
+- Tests: `the_default_is_a_clone_and_an_explicit_path_keeps_a_worktree`,
+  `the_default_without_an_origin_keeps_a_worktree`,
+  `the_default_keeps_a_worktree_for_an_in_parent_path_that_is_not_a_seat_dir`,
+  `session_start_refuses_a_contained_seat_it_cannot_clone_for`,
+  `an_explicit_clone_refuses_review_reentry_and_a_non_seat_path` and
+  `default_clone_fallback_notes_each_reason_and_explicit_never_downgrades`.
+- **S5 outcome** (advisor rule: p95 at or under 20 s rejects the host clone pool). The first
+  measurement on this host (2026-10-22, five fresh lease clones per condition, replicating
+  `seat_clone::create`) gave cold p95 35.7 s (p50 34.8 s) and warm p95 2.6 s. Cold time was
+  reading main's object store: 128,766 loose objects next to 237 MiB of packs. Per the 14:16
+  ruling, main's loose objects were packed first (`git repack -d` under the merge lease), down to
+  7,170. The re-measure gave cold p50 3.2 s and p95 3.3 s, warm p50/p95 1.2 s. S5 is therefore
+  the packing step plus the loose-object doctor check (`aida doctor check loose-objects`, #2847);
+  no host clone pool is built.

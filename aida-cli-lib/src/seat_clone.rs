@@ -126,7 +126,9 @@ pub(crate) fn tree_kind_for_launch(project_root: &Path, contained_seat: bool) ->
 pub(crate) struct CloneLaunch {
     pub(crate) review: bool,
     pub(crate) reentry: bool,
-    pub(crate) path_outside_parent: bool,
+    /// An explicit --path that is not an `aida-seat-*` directory directly in
+    /// the worktree parent ([`is_seat_clone_location`]).
+    pub(crate) path_not_seat_location: bool,
     pub(crate) has_origin: bool,
 }
 
@@ -159,8 +161,8 @@ pub(crate) fn default_clone_fallback(
         "a review session runs in a worktree"
     } else if launch.reentry {
         "it re-enters an existing worktree"
-    } else if launch.path_outside_parent {
-        "its --path is outside the worktree parent"
+    } else if launch.path_not_seat_location {
+        "its --path is not an `aida-seat-*` directory directly in the worktree parent"
     } else {
         return Ok((kind, None));
     };
