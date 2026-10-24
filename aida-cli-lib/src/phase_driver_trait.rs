@@ -3751,6 +3751,14 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         };
         // trace:TASK-1169 | ai:claude
         let (ceiling_key, ceiling_value) = crate::bg_wait_ceiling_env(Some(&self.project_root));
+        // trace:BUG-2218 TASK-2328 | ai:codex
+        if self.contained {
+            if let Err(error) = session::prepare_contained_mailbox_for_launch(&worktree) {
+                tee.stop();
+                eprintln!("CI-fix mailbox: {error:#}; leaving the CI failure standing");
+                return false;
+            }
+        }
         // trace:BUG-2165 | ai:antigravity
         let child_grant = match crate::seat_authority::issue_headless_child(
             &self.project_root,

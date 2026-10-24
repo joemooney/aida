@@ -145,6 +145,8 @@ drops the inherited grant and purpose and sets no role. Outside a lane
 nothing changes. This corrects the lane's commands; it is not an authority
 boundary, since grants are validated wherever they are used.
 
+`aida claim <SPEC>` and successful `aida queue work <SPEC>` move Approved work to In Progress and record its claimant. Claiming Draft work never approves it. `aida unclaim <SPEC>` returns In Progress work to Approved only after confirming that no open PR and no other live lease retain it; an unavailable forge lookup keeps it In Progress. Done and Completed states retain their merge lifecycle. <!-- trace:BUG-2215 | ai:codex -->
+
 The root fix is operator-side: start the claude daemon from a shell with no
 `AIDA_SESSION_*` variables. `aida doctor` (category `claude-daemon-grant`)
 warns when a running daemon's environment holds `AIDA_SESSION_GRANT`.

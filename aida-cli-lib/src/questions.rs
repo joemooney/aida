@@ -1646,6 +1646,11 @@ pub(crate) fn questions_clarify(
     // drives a Claude Code skill, so Codex parity arrives with the
     // skills-parity work, not by swapping the binary here.
     let project_root = find_project_root()?;
+    // Prepare before issuing authority: a filesystem refusal leaves no grant.
+    // trace:BUG-2218 TASK-2328 | ai:codex
+    if contained {
+        crate::session::prepare_contained_mailbox_for_launch(&project_root)?;
+    }
     let child_grant =
         seat_authority::issue_child(&project_root, "advisor", &current_user_id(None))?;
     let status_code = build_questions_clarify_command(&prompt, &child_grant.id, contained)?
