@@ -26,13 +26,6 @@ use anyhow::{Context, Result};
 // trace:BUG-2169 | ai:claude
 pub(crate) use aida_core::seat_clone_detect::{CLONE_DIR_PREFIX, MARKER_RELATIVE};
 
-/// Until slice S4 moves the host's status and listing paths off plain git
-/// (S3 moved session end, reap and dismiss), `seat_tree = "clone"` is a
-/// development switch: it works under test or with
-/// this variable set to `1`, and refuses otherwise (advisor ruling on #2699).
-// trace:BUG-2169 | ai:claude
-pub(crate) const DEV_ENABLE_ENV: &str = "AIDA_DEV_SEAT_CLONE";
-
 /// Where [`crate::worktree_gc::main_worktree_root_from`] points a seat clone
 /// that does not verify: a path under `/dev/null`, so every read, write or
 /// `git -C` aimed at it fails instead of treating the clone as main.
@@ -82,19 +75,26 @@ impl TreeKind {
 }
 
 /// The `[contained] seat_tree` knob: which tree a CONTAINED seat gets. The
-/// default stays `worktree` until slice S4 is approved (condition 5).
-// trace:BUG-2169 | ai:claude
+/// default is `clone` since slice S4c (TASK-2053); `worktree` opts out.
+// trace:BUG-2169 | trace:TASK-2053 | ai:claude
 pub(crate) fn seat_tree_knob(project_root: &Path) -> Result<TreeKind> {
     let cfg = crate::read_project_config_value(project_root);
     parse_seat_tree_knob(crate::config_lookup(cfg.as_ref(), "contained", "seat_tree"))
 }
 
-/// Parse a raw `[contained] seat_tree` value. Absent means `worktree`; an
+/// Whether `[contained] seat_tree` is set at all, rather than defaulted.
+// trace:TASK-2053 | ai:claude
+pub(crate) fn seat_tree_is_explicit(project_root: &Path) -> bool {
+    let cfg = crate::read_project_config_value(project_root);
+    crate::config_lookup(cfg.as_ref(), "contained", "seat_tree").is_some()
+}
+
+/// Parse a raw `[contained] seat_tree` value. Absent means `clone`; an
 /// unknown value is an error, so a typo never silently picks a posture.
-// trace:BUG-2169 | ai:claude
+// trace:BUG-2169 | trace:TASK-2053 | ai:claude
 pub(crate) fn parse_seat_tree_knob(raw: Option<&toml::Value>) -> Result<TreeKind> {
     let Some(raw) = raw else {
-        return Ok(TreeKind::Worktree);
+        return Ok(TreeKind::Clone);
     };
     match raw
         .as_str()
@@ -118,22 +118,60 @@ pub(crate) fn tree_kind_for_launch(project_root: &Path, contained_seat: bool) ->
     if !contained_seat {
         return Ok(TreeKind::Worktree);
     }
-    let kind = seat_tree_knob(project_root)?;
-    let dev_switch = std::env::var(DEV_ENABLE_ENV).ok();
-    if kind == TreeKind::Clone && !clone_seats_enabled(cfg!(test), dev_switch.as_deref()) {
-        anyhow::bail!(
-            "[contained] seat_tree = \"clone\" is not available yet: host status and listing \
-             paths still run git in a seat's tree, which is unsafe for a private clone. Set seat_tree = \"worktree\", or {DEV_ENABLE_ENV}=1 for development only."
-        );
-    }
-    Ok(kind)
+    seat_tree_knob(project_root)
 }
 
-/// Whether clone seats may be created: under test, or with the development
-/// switch set to exactly `1`.
-// trace:BUG-2169 | ai:claude
-pub(crate) fn clone_seats_enabled(under_test: bool, dev_switch: Option<&str>) -> bool {
-    under_test || dev_switch.map(str::trim) == Some("1")
+/// What a contained launch asks of its tree, for [`default_clone_fallback`].
+// trace:TASK-2053 | ai:claude
+pub(crate) struct CloneLaunch {
+    pub(crate) review: bool,
+    pub(crate) reentry: bool,
+    /// An explicit --path that is not an `aida-seat-*` directory directly in
+    /// the worktree parent ([`is_seat_clone_location`]).
+    pub(crate) path_not_seat_location: bool,
+    pub(crate) has_origin: bool,
+}
+
+/// The tree a contained launch gets once the default is `clone`, plus a
+/// one-line note when it falls back. With the knob unset, a launch a clone
+/// cannot serve keeps a worktree and says why; never silently. With an
+/// explicit `seat_tree = "clone"` a missing origin refuses here, and the
+/// other cases refuse later in session start with their own reasons.
+// trace:TASK-2053 | ai:claude
+pub(crate) fn default_clone_fallback(
+    kind: TreeKind,
+    explicit: bool,
+    launch: &CloneLaunch,
+) -> Result<(TreeKind, Option<String>)> {
+    if kind != TreeKind::Clone {
+        return Ok((kind, None));
+    }
+    if explicit {
+        if !launch.has_origin {
+            anyhow::bail!(
+                "[contained] seat_tree = \"clone\" needs an `origin` remote to clone from, and \
+                 this checkout has none: add an origin remote or set seat_tree = \"worktree\""
+            );
+        }
+        return Ok((kind, None));
+    }
+    let why = if !launch.has_origin {
+        "this checkout has no `origin` remote to clone from"
+    } else if launch.review {
+        "a review session runs in a worktree"
+    } else if launch.reentry {
+        "it re-enters an existing worktree"
+    } else if launch.path_not_seat_location {
+        "its --path is not an `aida-seat-*` directory directly in the worktree parent"
+    } else {
+        return Ok((kind, None));
+    };
+    Ok((
+        TreeKind::Worktree,
+        Some(format!(
+            "this contained seat gets a linked worktree, not a private clone: {why}"
+        )),
+    ))
 }
 
 /// A fresh directory for a seat clone of `project_root` working `slug`:
@@ -891,6 +929,18 @@ fn run_sandboxed(
     args: &[&std::ffi::OsStr],
     cap: u64,
 ) -> std::result::Result<Vec<u8>, SandboxFailure> {
+    run_sandboxed_until(clone, main, program, args, cap, None)
+}
+
+// trace:TASK-2053 | ai:codex
+fn run_sandboxed_until(
+    clone: &Path,
+    main: &Path,
+    program: &str,
+    args: &[&std::ffi::OsStr],
+    cap: u64,
+    deadline: Option<std::time::Instant>,
+) -> std::result::Result<Vec<u8>, SandboxFailure> {
     let failed = |why: String| SandboxFailure::Failed(why);
     let repo_config = tempfile::NamedTempFile::new()
         .and_then(|mut file| {
@@ -910,7 +960,16 @@ fn run_sandboxed(
     .arg(program)
     .args(args)
     .stdin(std::process::Stdio::null());
-    match crate::command_output_with_timeout_capped(cmd, PROBE_TIMEOUT, cap) {
+    let timeout = deadline
+        .map(|end| {
+            end.saturating_duration_since(std::time::Instant::now())
+                .min(PROBE_TIMEOUT)
+        })
+        .unwrap_or(PROBE_TIMEOUT);
+    if timeout.is_zero() {
+        return Err(failed("the clone scan deadline elapsed".into()));
+    }
+    match crate::command_output_with_timeout_capped(cmd, timeout, cap) {
         crate::BoundedCommandOutput::Completed(mut out) if out.stdout.len() as u64 > cap => {
             out.stdout.truncate(cap as usize);
             Err(SandboxFailure::Truncated(out.stdout))
@@ -926,7 +985,7 @@ fn run_sandboxed(
         )),
         crate::BoundedCommandOutput::TimedOut => Err(failed(format!(
             "the sandboxed {program} did not finish within {}s",
-            PROBE_TIMEOUT.as_secs()
+            timeout.as_secs()
         ))),
     }
 }
@@ -947,7 +1006,7 @@ fn probe_run(
 /// The commit `refs/aida/seats/<dir>` pins in `main`: the clone's base, read
 /// from main (host-owned), never from the clone.
 // trace:TASK-2053 | ai:claude
-fn pinned_base(main: &Path, clone: &Path) -> Option<String> {
+pub(crate) fn pinned_base(main: &Path, clone: &Path) -> Option<String> {
     let pin = pin_ref(clone)?;
     let mut cmd = git(main);
     cmd.args([
@@ -970,6 +1029,33 @@ fn pinned_base(main: &Path, clone: &Path) -> Option<String> {
 /// `main` is the main checkout from the LEASE, never from the clone's marker.
 // trace:TASK-2053 | ai:claude
 pub(crate) fn probe(main: &Path, clone: &Path) -> Probe {
+    probe_with_shipped(main, clone, &[])
+}
+
+/// [`probe`], with `shipped` commits (the heads of the clone branch's merged
+/// PRs, from the forge) counted as on origin. A squash merge puts none of the
+/// branch's commits on origin, and once the seat prunes `origin/<branch>`
+/// every one of them would otherwise read as unpushed. Only full hex ids the
+/// clone has as commits are used; work on other refs, or past a merged head,
+/// still counts.
+// trace:TASK-2053 trace:TASK-2110 | ai:claude
+pub(crate) fn probe_with_shipped(main: &Path, clone: &Path, shipped: &[String]) -> Probe {
+    probe_until(main, clone, shipped, None)
+}
+
+// One deadline covers all three sandbox calls, rather than a fresh budget per call.
+// trace:TASK-2053 | ai:codex
+pub(crate) fn probe_until(
+    main: &Path,
+    clone: &Path,
+    shipped: &[String],
+    deadline: Option<std::time::Instant>,
+) -> Probe {
+    let probe_run = |clone: &Path, main: &Path, args: &[&std::ffi::OsStr], program: &str| {
+        run_sandboxed_until(clone, main, program, args, PROBE_OUTPUT_CAP, deadline)
+            .map(|out| String::from_utf8_lossy(&out).into_owned())
+            .map_err(|failure| failure.to_string())
+    };
     if !aida_core::seat_clone_detect::has_real_git_dir(clone) {
         return Probe::Unknown(format!(
             "{} has no .git directory of its own",
@@ -1021,7 +1107,15 @@ pub(crate) fn probe(main: &Path, clone: &Path) -> Probe {
             UNPUSHED_COUNT_SCRIPT.as_ref(),
             "aida-seat-unpushed".as_ref(),
             base.as_ref(),
-        ],
+        ]
+        .into_iter()
+        .chain(
+            shipped
+                .iter()
+                .filter(|oid| is_full_oid(oid))
+                .map(|oid| oid.as_ref()),
+        )
+        .collect::<Vec<&std::ffi::OsStr>>(),
         "sh",
     );
     match count {
@@ -1092,15 +1186,59 @@ exit 0
 
 /// Inside the probe sandbox: how many commits the clone holds that origin
 /// does not: reachable from ANY ref (every branch, tag, HEAD) or stash entry,
-/// and not from `origin/*` or the pinned base (`$1`, or empty). Submodules
+/// and not from `origin/*`, the pinned base (`$1`, or empty) or a shipped
+/// head (`$2...`, full hex ids; one the clone lacks is skipped). Submodules
 /// are not counted: [`probe`] keeps any clone that has one.
 // trace:TASK-2053 | ai:claude
 const UNPUSHED_COUNT_SCRIPT: &str = concat!(
     "set -u\n",
     stash_entries_sh!(),
-    r##"git rev-list --count --all $s --not --remotes=origin ${1:+"$1"}
-"##
+    "base=$1\nshift\nshipped=''\n",
+    "for t in \"$@\"; do\n  if git cat-file -e \"$t^{commit}\" 2>/dev/null; then shipped=\"$shipped $t\"; fi\ndone\n",
+    "git rev-list --count --all $s --not --remotes=origin ${base:+\"$base\"} $shipped\n"
 );
+
+/// A full 40- or 64-hex object id.
+fn is_full_oid(oid: &str) -> bool {
+    (oid.len() == 40 || oid.len() == 64) && oid.chars().all(|c| c.is_ascii_hexdigit())
+}
+
+/// The head commits of `branch`'s merged PRs on GitHub (`gh pr list --head
+/// <branch> --state merged`), for [`probe_with_shipped`]. Empty when gh is
+/// missing, fails, or the forge is not GitHub: the count then stays
+/// conservative.
+// trace:TASK-2110 | ai:claude
+pub(crate) fn merged_pr_heads(main: &Path, branch: &str) -> Vec<String> {
+    merged_pr_heads_with_timeout(main, branch, std::time::Duration::from_secs(20))
+}
+
+// trace:TASK-2053 | ai:codex
+pub(crate) fn merged_pr_heads_with_timeout(
+    main: &Path,
+    branch: &str,
+    timeout: std::time::Duration,
+) -> Vec<String> {
+    if branch.is_empty() {
+        return Vec::new();
+    }
+    let mut cmd = std::process::Command::new("gh");
+    cmd.current_dir(main)
+        .args(["pr", "list", "--state", "merged", "--head", branch])
+        .args(["--json", "headRefOid", "--jq", ".[].headRefOid"])
+        .stdin(std::process::Stdio::null());
+    let Some(out) = crate::command_output_with_timeout(cmd, timeout) else {
+        return Vec::new();
+    };
+    if !out.status.success() {
+        return Vec::new();
+    }
+    String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .map(str::trim)
+        .filter(|oid| is_full_oid(oid))
+        .map(str::to_string)
+        .collect()
+}
 
 /// Inside the probe sandbox: a git bundle of every commit
 /// [`UNPUSHED_COUNT_SCRIPT`] counts, with all of the clone's refs, on stdout.
@@ -1338,6 +1476,19 @@ pub(crate) fn destroy(
     mode: DestroyMode,
     expect_head: Option<&str>,
 ) -> Result<Destroyed> {
+    destroy_with_shipped(main, clone, mode, expect_head, &[])
+}
+
+/// [`destroy`], reading the clone with [`probe_with_shipped`]: commits that
+/// only a merged PR's head reaches count as on origin.
+// trace:TASK-2110 | ai:claude
+pub(crate) fn destroy_with_shipped(
+    main: &Path,
+    clone: &Path,
+    mode: DestroyMode,
+    expect_head: Option<&str>,
+    shipped: &[String],
+) -> Result<Destroyed> {
     if !is_seat_clone_location(main, clone) {
         anyhow::bail!(
             "{} is not a seat clone of {} (it must be an `{CLONE_DIR_PREFIX}*` directory in the \
@@ -1348,7 +1499,7 @@ pub(crate) fn destroy(
     }
     let mut salvaged = None;
     if std::fs::symlink_metadata(clone).is_ok() {
-        let facts = match probe(main, clone) {
+        let facts = match probe_with_shipped(main, clone, shipped) {
             Probe::Known(facts) => facts,
             Probe::Unknown(why) => {
                 return Ok(Destroyed::Kept {
@@ -1534,3 +1685,7 @@ mod s4_host_git_tests;
 #[cfg(test)]
 #[path = "tests/task_2143_clone_git_ratchet_tests.rs"]
 mod clone_git_ratchet_tests;
+
+#[cfg(test)]
+#[path = "tests/task_2053_s4b_seat_trees_tests.rs"]
+mod s4b_seat_trees_tests;

@@ -373,6 +373,21 @@ pub(crate) fn probe_checkout(repo: &Path) -> Result<CheckoutState> {
 // Pipeline
 // ---------------------------------------------------------------------------
 
+/// The checkout does not qualify (or stopped qualifying during the build),
+/// so nothing was promoted. Typed so the scheduled promote can report it as
+/// a refusal, not a failed build.
+// trace:STORY-1689 | ai:claude
+#[derive(Debug)]
+pub(crate) struct PromotionRefused(pub String);
+
+impl std::fmt::Display for PromotionRefused {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl std::error::Error for PromotionRefused {}
+
 /// The side-effecting steps of the pipeline. [`RealSteps`] runs the real
 /// toolchain; tests substitute fakes so no unit test runs a cargo build or
 /// touches the host's live binaries or MCP servers.
@@ -427,7 +442,10 @@ pub(crate) fn run_dev_build(
     let state = steps.probe(&layout.repo)?;
     let plan = plan_promotion(&state, opts.no_promote, opts.allow_dirty);
     match &plan {
-        PromotionPlan::Refuse { reasons } => bail!("{}", refusal_message(reasons)),
+        // trace:STORY-1689 | ai:claude
+        PromotionPlan::Refuse { reasons } => {
+            return Err(PromotionRefused(refusal_message(reasons)).into())
+        }
         PromotionPlan::Promote { warnings } => {
             for w in warnings {
                 writeln!(out, "warning: {w}")?;
@@ -569,10 +587,12 @@ pub(crate) fn run_dev_build(
                 plan_promotion(&state, false, opts.allow_dirty)
             {
                 let _ = std::fs::remove_dir_all(&incoming);
-                bail!(
+                // trace:STORY-1689 | ai:claude
+                return Err(PromotionRefused(format!(
                     "the checkout changed during the build, so the new build was not promoted.\n{}",
                     refusal_message(&reasons)
-                );
+                ))
+                .into());
             }
             // trace:STORY-1646 | ai:claude
             let head = state.head.clone().unwrap_or_default();
@@ -595,6 +615,8 @@ pub(crate) fn run_dev_build(
                         PromotionPlan::Refuse { .. }
                     ),
                 promoted_at: chrono::Utc::now().to_rfc3339(),
+                // trace:STORY-1689 | ai:claude
+                repo: Some(canonical_or_self(&layout.repo).display().to_string()),
             };
             commit_staged(layout, &meta)?;
             drop(lock);
@@ -1040,6 +1062,12 @@ pub(crate) struct PromotionMeta {
     pub allow_dirty: bool,
     /// RFC 3339 promotion time.
     pub promoted_at: String,
+    /// The canonical checkout this pair was built from. A scheduled
+    /// `--if-main-green` run acts only from this checkout. Absent in a
+    /// record written before STORY-1689.
+    // trace:STORY-1689 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub repo: Option<String>,
 }
 
 /// Read a `.promoted` record from `dir` (the live dir or `prev/`).
@@ -1566,13 +1594,15 @@ impl BuildSteps for RealSteps {
 
 /// Locate the checkout `aida dev build` should build: the enclosing AIDA
 /// checkout of the cwd first (so a worktree builds itself even when
-/// `$AIDA_DEV_REPO` names the main checkout), then `$AIDA_DEV_REPO`.
+/// `$AIDA_DEV_REPO` names the main checkout), then `$AIDA_DEV_REPO` — or,
+/// when that names a removed worktree, `$AIDA_DEV_HOME_REPO`.
+// trace:TASK-2251 | ai:claude
 pub(crate) fn resolve_build_repo() -> Result<PathBuf> {
     let cwd = std::env::current_dir()?;
     if let Some(found) = cwd.ancestors().find(|p| crate::is_aida_repo(p)) {
         return Ok(found.canonicalize()?);
     }
-    if let Some(repo) = env_path("AIDA_DEV_REPO") {
+    if let Some(repo) = crate::dev_cmd::env_dev_repo() {
         if crate::is_aida_repo(&repo) {
             return Ok(repo.canonicalize()?);
         }

@@ -625,8 +625,78 @@ S4c (flip `seat_tree` to `clone`, retire `AIDA_DEV_SEAT_CLONE`, close PR #2694).
   gets its raw `<Type>::new("git")` builders counted against a per-file allowlist. A count above
   its entry fails, and so does a count below it until the allowlist is lowered. A new file that
   reads `worktree_path` fails as soon as it holds any raw git. The opt-out is
-  `// raw-git-ok(TASK-2053): <why>`. The baseline is 157 builders across 22 files. S4b lowers
-  that baseline as it moves consumers onto `seat_trees`.
+  `// raw-git-ok(TASK-2053): <why>`. S4a's baseline was 157 builders across 22 files.
+  S4b removes `worktree_reclaim.rs` (one builder) and adds coverage for the existing main-only
+  builders in newly lease-reading `status_prs.rs` (12) and `trace.rs` (13), yielding
+  181 builders across 23 files. Counts for already covered files may only decrease.
 - **TASK-2162.** `task_2162_dismiss_releases_a_hand_removed_seat_clone`.
 - **TASK-2160.** `docs/cli/03-work-autonomy.md` documents the salvage bundle and patch, what is
   kept, and how to recover a submodule clone.
+
+## S4b as built (seat clones visible to the host)
+
+- **`seat_trees` enumerator** (`status_prs.rs`): the linked worktrees from `git worktree list`
+  (now run through `host_git_command`), then one record per `clone` lease whose directory exists
+  (`clone_seat_trees`), carrying the lease branch and `clone: true`. Destructive sweeps (gc, doctor
+  orphan/merged heals, reclaim, dismiss, reap) keep enumerating linked worktrees only, so a clone
+  is never their candidate; its removal stays `seat_clone::destroy`.
+- **Visibility.** `aida status`'s worktree pane and `aida awaiting`'s uncommitted-WIP detector list
+  clones, with branch, dirty count and unpushed count from the sandboxed probe (an unreadable clone
+  reads dirty). The unshipped-work detector adds `clone_unshipped_work_items`: a clone with commits
+  on no `origin/*` ref, attributed to its lease's spec, or an unreadable clone with an unknown
+  count; never dropped. Pushed work flows through the existing `origin/` path.
+- **Branch ownership.** `aida brief` resolves a spec branch held by a clone to a new
+  `SeatClone` target ("continue it in that seat"), `aida show` linkage falls back to a clone lease
+  for the spec, and `aida queue work` preflight refuses a branch a clone holds without suggesting
+  `git worktree remove`.
+- **Other sources.** Runaway-seat transcripts, `aida merge-hold list`'s stray markers (only through
+  real directories, never a symlinked `.aida`) and `aida worktree list` (kind `clone`, its focus
+  marker unread) include clones; doctor's trust-breadth count skips `aida-seat-*`.
+- **Post-ship pull.** `aida pr ship` from a seat clone skips step 4 with a note: main is read-only
+  to the seat and is synced from outside it.
+- **Hardening.** `teardown_worktree_path` refuses a clone before any `pre_destroy` hook runs; the
+  phase driver's failed-attempt teardown keeps a clone (its session end or reap removes it);
+  `local_commits_not_on_branch`, `worktree_reclaim`'s git and review-watch's root probe no longer
+  run raw git in a clone.
+- **Squash-merged branches (TASK-2110).** After a squash merge and a pruned `origin/<branch>`,
+  every branch commit used to read as unpushed, so reap kept the clone and session end demanded
+  `--force`. `probe_with_shipped` / `destroy_with_shipped` take the heads of the branch's merged PRs
+  (`gh pr list --state merged --head`, full hex ids only) and count commits those reach as on
+  origin; an id the clone lacks is skipped inside the sandbox. Reap (scan and removal) and session
+  end use them; other views and salvage stay conservative. Another forge, or no gh, gives no heads.
+- **Not changed (by design §2d):** `branch_in_sibling_worktree`, `pr_gc_branch_checked_out` and
+  `session_reap`'s checked-out-elsewhere check key off main's or origin's refs.
+- **Tests.** `tests/task_2053_s4b_seat_trees_tests.rs`: enumerator, brief, show, pickup,
+  runaway, teardown refusal with no untagged git in the clone; stray markers with a symlinked
+  `.aida`; under live bwrap, a status row and an unshipped item for a clone with a commit and a
+  dirty file.
+
+## S4c as built (default flip)
+
+- `[contained] seat_tree` now defaults to `clone`. `AIDA_DEV_SEAT_CLONE` and `clone_seats_enabled`
+  are gone, and `seat_tree = "worktree"` opts out.
+- With no knob set, four contained launches that a clone cannot serve keep a linked worktree, and
+  each prints a one-line `note:` naming its reason (never silently):
+  - the checkout has no `origin` remote to clone from (S4c ruling 2)
+  - a review session
+  - re-entering an existing `--path`
+  - an explicit `--path` that is not an `aida-seat-*` directory directly in the worktree parent
+    (inside or outside that parent)
+  An explicit `seat_tree = "clone"` refuses each of them instead and names the reason; a missing
+  origin refuses with "add an origin remote or set seat_tree = \"worktree\"". The flip never turns
+  a working contained launch into a refusal. The launch facts are read only when the tree would
+  be a clone.
+- Tests: `the_default_is_a_clone_and_an_explicit_path_keeps_a_worktree`,
+  `the_default_without_an_origin_keeps_a_worktree`,
+  `the_default_keeps_a_worktree_for_an_in_parent_path_that_is_not_a_seat_dir`,
+  `session_start_refuses_a_contained_seat_it_cannot_clone_for`,
+  `an_explicit_clone_refuses_review_reentry_and_a_non_seat_path` and
+  `default_clone_fallback_notes_each_reason_and_explicit_never_downgrades`.
+- **S5 outcome** (advisor rule: p95 at or under 20 s rejects the host clone pool). The first
+  measurement on this host (2026-10-22, five fresh lease clones per condition, replicating
+  `seat_clone::create`) gave cold p95 35.7 s (p50 34.8 s) and warm p95 2.6 s. Cold time was
+  reading main's object store: 128,766 loose objects next to 237 MiB of packs. Per the 14:16
+  ruling, main's loose objects were packed first (`git repack -d` under the merge lease), down to
+  7,170. The re-measure gave cold p50 3.2 s and p95 3.3 s, warm p50/p95 1.2 s. S5 is therefore
+  the packing step plus the loose-object doctor check (`aida doctor check loose-objects`, #2847);
+  no host clone pool is built.

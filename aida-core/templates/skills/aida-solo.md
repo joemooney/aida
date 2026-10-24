@@ -90,18 +90,10 @@ For each bounded ready spec, launch **one standalone implementer** from Bash
 opens its PR, stops, and ends with one `implementer:` line and an exit code
 (0 PR opened, 31 no PR, 32 punted, 33 held, 34 cap reached).
 <!-- trace:STORY-1662 | ai:claude -->
-Only where that launch is unavailable, fall back to one worktree-isolated
-implementer subagent per spec, each taking ONE spec end-to-end to a PR:
-
-> `Agent(subagent_type: "general-purpose", isolation: "worktree")` — read it
-> (`aida show <SPEC> -c`), implement to acceptance, add `// trace:<SPEC>` (plain
-> `//`, never `///`), `cargo build` + `cargo test` + `cargo fmt --all -- --check`
-> (check the exit code), then the project's CI-gate target if it has one
-> (`make -n check-ci-fast >/dev/null 2>&1 && make check-ci-fast` — the gates a
-> documented check set omits, trace:TASK-1555), commit
-> `[AI:claude] type(scope): … (<SPEC>)` + the
-> co-author trailer, push, open a PR, `aida queue done <SPEC>`, then reply ONLY
-> the PR URL or `BLOCKED: <reason>`.
+Never implement through the Agent tool: an in-session subagent shares your
+seat, trips the advisor code guard, and makes you an author of its PR. Where
+the standalone launch is unavailable (an older `aida`), work the spec
+serially with `aida queue work <SPEC> --auto-complete`.
 
 **PARK keystone / `supervised` specs — never ship them unattended.** Anything
 security-, architecture-, or autonomy-machinery-related — `supervised`,

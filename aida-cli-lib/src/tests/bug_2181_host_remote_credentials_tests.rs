@@ -207,12 +207,20 @@ fn an_unrouted_remote_call_leaks_the_token_into_transport_argv() {
 
 /// TASK-2001: the host git builders in `src` (1-based lines) that contact a
 /// remote (`fetch`, `pull`, `push` or `ls-remote` as the subcommand, after any
-/// `-c k=v` options; a `let mut` builder in any statement up to its scope end)
+/// `-c k=v` options, or held in a local array passed as `.args(name)`; a
+/// `let mut` builder in any statement up to its scope end)
 /// with no credential routing (`remote_credentials`, `host_remote_git_command`)
-/// later in the same function (at most 25 lines), and no
+/// in the builder's own chain, and no
 /// `remote-creds-ok(TASK-2001): <why>` comment in the three lines above. A builder is `host_git_command(`, any
 /// `<Type>::new("git")`, or a `git(dir, &["fetch", ...])` style helper call.
 /// Inline `#[cfg(test)] mod name { ... }` blocks are skipped.
+///
+/// Heuristic limits (a line scanner, not a parser): only the first
+/// `.args(name)` with a local array binding is resolved, and the nearest
+/// earlier `let name = [..]` in the fn wins; a bracket or `;` inside a string
+/// literal can end a statement early; a `let` that shadows the builder with
+/// itself (`let push = push.args(..)`) continues it, any other re-binding of
+/// the name ends it.
 // trace:TASK-1952 | trace:TASK-2001 | ai:claude
 fn task_2001_unrouted_remote_calls(src: &str) -> Vec<usize> {
     use std::sync::LazyLock;
@@ -237,6 +245,8 @@ fn task_2001_unrouted_remote_calls(src: &str) -> Vec<usize> {
         LazyLock::new(|| regex::Regex::new(r"^\s*(pub(\(crate\))? )?mod \w+\s*\{").unwrap());
     static NEXT_FN: LazyLock<regex::Regex> =
         LazyLock::new(|| regex::Regex::new(r"^\s*(pub(\([^)]*\))? )?(async )?fn \w+").unwrap());
+    static ARGS_IDENT: LazyLock<regex::Regex> =
+        LazyLock::new(|| regex::Regex::new(r"\.args\(\s*&?(\w+)\s*\)").unwrap());
     static REMOTE_PARAM: LazyLock<regex::Regex> =
         LazyLock::new(|| regex::Regex::new(r"\bremote\s*:").unwrap());
     static TRAILING_COMMENT: LazyLock<regex::Regex> =
@@ -295,11 +305,17 @@ fn task_2001_unrouted_remote_calls(src: &str) -> Vec<usize> {
             // variable up to the end of its block or its next re-binding.
             let mention = regex::Regex::new(&format!(r"\b{var}\b")).unwrap();
             let rebind = regex::Regex::new(&format!(r"\blet (mut )?{var}\b")).unwrap();
+            // PR-2837 review round 4: a shadow that continues the same builder
+            // (`let push = push.args(["push", ..])`) is not a re-binding.
+            let shadow = regex::Regex::new(&format!(
+                r"\blet (mut )?{var}\s*(:[^=]*)?=\s*(&mut\s+|&)?{var}\b"
+            ))
+            .unwrap();
             let mut depth = 0i64;
             let mut end = lines.len();
             for (j, l) in lines.iter().enumerate().skip(i) {
                 let code = TRAILING_COMMENT.replace(l, "");
-                if j > i && rebind.is_match(&code) {
+                if j > i && rebind.is_match(&code) && !shadow.is_match(&code) {
                     end = j;
                     break;
                 }
@@ -315,21 +331,64 @@ fn task_2001_unrouted_remote_calls(src: &str) -> Vec<usize> {
                 .collect::<Vec<_>>()
                 .join(";")
         } else {
-            let window = strip(&lines[i..lines.len().min(i + 14)]);
-            window.split(';').next().unwrap_or_default().to_string()
+            // PR-2837 review round 3: the statement runs to its `;` at
+            // bracket depth 0 (or the close of the enclosing block, for a
+            // tail expression), however many lines the chain spans. The
+            // scan starts at the builder, so a one-line `fn f() { .. }`
+            // around it does not extend the statement into the next fn.
+            let text = strip(&lines[i..]);
+            let first = TRAILING_COMMENT.replace(line, "");
+            let from = builder
+                .find(&first)
+                .or_else(|| verb.find(&first))
+                .map_or(0, |m| m.start());
+            let text = &text[from..];
+            let mut depth = 0i64;
+            let end = text
+                .char_indices()
+                .find(|&(_, c)| {
+                    match c {
+                        '(' | '[' | '{' => depth += 1,
+                        ')' | ']' | '}' => depth -= 1,
+                        _ => {}
+                    }
+                    depth < 0 || (c == ';' && depth == 0)
+                })
+                .map_or(text.len(), |(at, _)| at);
+            text[..end].to_string()
+        };
+        // TASK-2245: a verb held in a local array (`let args = ["push", ..];
+        // .args(args)`) is resolved from its binding earlier in the same fn.
+        let resolved = ARGS_IDENT.captures_iter(&chain).find_map(|c| {
+            let name = &c[1];
+            let fn_start = (0..=i)
+                .rev()
+                .find(|&j| next_fn.is_match(lines[j]))
+                .unwrap_or(0);
+            let binding =
+                regex::Regex::new(&format!(r"\blet (mut )?{name}\s*(:[^=]*)?=\s*&?(vec!)?\["))
+                    .unwrap();
+            let at = (fn_start..i).rev().find(|&j| binding.is_match(lines[j]))?;
+            let body = strip(&lines[at..i]);
+            let open = binding.find(&body)?.end();
+            let close = body[open..].find(']')?;
+            Some(format!(".args([{}])", &body[open..open + close]))
+        });
+        let chain = match resolved {
+            Some(args) => format!("{chain}\n{args}"),
+            None => chain,
         };
         if !verb.is_match(&chain) {
             continue;
         }
-        // The routing must sit in the same function, before the next `fn`.
-        let end = (i + 1..lines.len().min(i + 25))
-            .find(|&j| next_fn.is_match(lines[j]))
-            .unwrap_or(lines.len().min(i + 25));
-        let after = lines[i..end].join("\n");
+        // PR-2837 review round 3: the routing must sit in the builder's OWN
+        // chain (up to its statement's `;`, or for a `let mut` builder, the
+        // statements naming it), so a neighbouring call's routing cannot mask
+        // a dropped one.
         let justified = lines[i.saturating_sub(3)..i]
             .iter()
             .any(|l| l.contains("remote-creds-ok(TASK-2001):"));
-        if !routed.is_match(&after) && !justified {
+        if !routed.is_match(&chain) && !justified {
             found.push(i + 1);
         }
     }
@@ -432,6 +491,46 @@ fn task_2001_every_host_remote_call_routes_its_credentials() {
                       let _ = cmd.output();\n    let mut cmd = host_git_command(d);\n    \
                       cmd.args([\"fetch\"]).remote_credentials(d, \"origin\");\n}\n";
     assert_eq!(task_2001_unrouted_remote_calls(long_chain), vec![2]);
+    // PR-2837 review round 3: two adjacent builders (pr_cmd's preflight
+    // `fetch --prune` then the PR-head fetch) where only the second routes;
+    // its routing must not mask the first, in either builder shape.
+    let adjacent = "fn preflight(d: &Path, n: u32) {\n    let _ = host_git_command(d)\n        \
+                    .args([\"fetch\", \"origin\", \"--prune\"])\n        .output();\n    \
+                    let _ = host_git_command(d)\n        .args([\"fetch\", \"origin\", &n.to_string()])\n        \
+                    .remote_credentials(d, \"origin\")\n        .output();\n}\n\
+                    fn heads(d: &Path) {\n    let mut a = Command::new(\"git\");\n    a.args([\"fetch\", \"origin\"]);\n    \
+                    let mut b = Command::new(\"git\");\n    b.args([\"fetch\", \"upstream\"]);\n    \
+                    configure_remote_credentials(&mut b, d, \"upstream\");\n}\n";
+    assert_eq!(task_2001_unrouted_remote_calls(adjacent), vec![2, 11]);
+    // TASK-2245: the verb held in a local array (queue recover's push),
+    // routing removed; the routed twin and a non-remote array pass.
+    let local_array = "fn recover(repo: &Path, b: &str) {\n    let args = [\n        \"push\",\n        \
+                       \"-u\",\n        \"origin\",\n        b,\n    ];\n    \
+                       let _ = std::process::Command::new(\"git\")\n        .arg(\"-C\")\n        .arg(repo)\n        \
+                       .args(args)\n        .status();\n}\n\
+                       fn routed(repo: &Path) {\n    let args = [\"fetch\", \"origin\"];\n    \
+                       let _ = Command::new(\"git\").args(args).remote_credentials(repo, \"origin\").status();\n}\n\
+                       fn local(repo: &Path) {\n    let args = [\"status\", \"--short\"];\n    \
+                       let _ = Command::new(\"git\").args(args).status();\n}\n";
+    assert_eq!(task_2001_unrouted_remote_calls(local_array), vec![8]);
+    // The own chain runs to the statement's `;` however long it is
+    // (preflight_mr_base's 17-line ls-remote), and stops there.
+    let tall = format!(
+        "fn tall(d: &Path) {{\n    let _ = Command::new(\"git\")\n        .args([\"ls-remote\",\n{}        ])\n        \
+         .remote_credentials(d, \"origin\")\n        .output();\n    let _ = Command::new(\"git\").args([\"push\"]).status();\n}}\n",
+        "            \"x\",\n".repeat(16)
+    );
+    assert_eq!(task_2001_unrouted_remote_calls(&tall), vec![23]);
+    // PR-2837 review round 4: a shadow re-binding that continues the builder
+    // (remote_create's add_origin_and_push) with its routing dropped, and
+    // the routed original.
+    let shadow = "fn push_it(d: &Path, b: &str) {\n    let mut push = Command::new(\"git\");\n    \
+                  push.arg(\"-C\").arg(d);\n    let push = push\n        .args([\"push\", \"-u\", \"origin\", b])\n        \
+                  .status();\n}\n\
+                  fn routed(d: &Path, b: &str) {\n    let mut push = Command::new(\"git\");\n    \
+                  configure_git_remote_credentials(&mut push, d, \"origin\", None);\n    \
+                  let push = push.args([\"push\", b]).status();\n}\n";
+    assert_eq!(task_2001_unrouted_remote_calls(shadow), vec![2]);
 
     let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     let mut offenders = Vec::new();

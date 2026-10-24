@@ -109,6 +109,8 @@ mod driver_view;
 mod idle_in_progress;
 // trace:STORY-1646 | ai:claude
 mod dev_build;
+// trace:STORY-1689 | ai:claude
+mod dev_autopromote;
 mod dev_cmd;
 mod digest;
 mod digest_cmd;
@@ -429,12 +431,14 @@ mod mailbox_cmd;
 mod mailbox_store;
 // trace:STORY-1648 | ai:claude — read-only primary-checkout drift probe.
 mod main_checkout_drift;
+// trace:BUG-2211 | ai:claude — sandbox-left config.lock doctor check.
 mod maintenance_schedule;
 mod manual;
 mod mcp;
 mod mcp_translate;
 mod memories_cmd;
 mod merge_hold;
+mod sandbox_config_lock;
 // trace:STORY-1698 | ai:claude — the fire-fighting mandate.
 mod mandate;
 mod mandate_drive;
@@ -444,6 +448,8 @@ mod mandate_traces;
 mod merge_lock;
 mod metrics;
 mod metrics_cmd;
+// trace:TASK-1951 trace:TASK-2003 | ai:claude
+mod needs_attention_lens;
 mod network_retry;
 mod node_cmd;
 mod not_found;
@@ -472,6 +478,7 @@ mod plan_cmd;
 mod pr_rebase;
 mod pr_ship;
 mod pr_ship_batch;
+mod pr_train;
 mod presence;
 mod presence_cmd;
 mod process_probe;
@@ -535,6 +542,8 @@ mod schedule_cmd;
 mod schedule_ledger;
 mod schedule_predicate;
 mod schema;
+// trace:BUG-1934 | ai:claude
+mod grant_keyring;
 // trace:STORY-1473 | ai:codex
 mod seat_authority;
 // trace:BUG-2169 | ai:claude — a contained seat's private clone (the only host accessor).

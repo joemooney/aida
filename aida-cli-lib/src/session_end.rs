@@ -1087,7 +1087,11 @@ pub(crate) fn session_end(
     // trace:TASK-2053 | ai:claude
     let is_clone = target.tree_kind == crate::seat_clone::TreeKind::Clone;
     let clone_facts = if is_clone {
-        match crate::seat_clone::probe(&project_root, &target.worktree_path) {
+        // TASK-2110: a squash-merged PR's head counts as shipped.
+        // trace:TASK-2110 | ai:claude
+        let shipped = crate::seat_clone::merged_pr_heads(&project_root, &target.branch);
+        match crate::seat_clone::probe_with_shipped(&project_root, &target.worktree_path, &shipped)
+        {
             crate::seat_clone::Probe::Known(facts) => Some(facts),
             crate::seat_clone::Probe::Unknown(why) => anyhow::bail!(
                 "session {} works in the seat clone {}, whose state could not be read ({why}). \

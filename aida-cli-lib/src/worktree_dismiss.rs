@@ -118,12 +118,17 @@ pub fn handle_dismiss(path: Option<&str>, category: Option<&str>) -> Result<()> 
             .output()
             .context("Failed to remove worktree")?;
 
-        Command::new("git")
-            .arg("-C")
-            .arg(&project_root)
-            .args(["branch", "-D", &branch_name])
-            .output()
-            .context("Failed to delete branch")?;
+        // trace:BUG-2211 | ai:claude
+        aida_core::git_ops::output_healing_config_lock(
+            &project_root,
+            || {
+                let mut cmd = Command::new("git");
+                cmd.arg("-C").arg(&project_root);
+                cmd
+            },
+            &["branch", "-D", &branch_name],
+        )
+        .context("Failed to delete branch")?;
 
         // Ledger who decided
         let ledger_line = format!(

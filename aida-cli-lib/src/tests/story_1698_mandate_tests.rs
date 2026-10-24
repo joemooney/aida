@@ -156,6 +156,7 @@ impl Case {
             hold: &self.hold,
             carry_over: self.carry_over.clone(),
             changed_paths: Some(&[]),
+            protected: crate::mandate_gates::ProtectedPaths::floor_ref(),
             ship_gate: None,
             hold_clear_gate: None,
         })
@@ -1559,6 +1560,7 @@ fn a_solo_self_approval_never_covers_a_mandate_ship_or_release() {
         hold: &c.hold,
         carry_over: None,
         changed_paths: Some(&[]),
+        protected: crate::mandate_gates::ProtectedPaths::floor_ref(),
         ship_gate: None,
         hold_clear_gate: None,
     });
@@ -2331,5 +2333,119 @@ fn task_1951_store_history_walk_times_out_as_unreadable() {
     let started = std::time::Instant::now();
     let err = store_history_alias_map(store.path(), &["TASK-1".to_string()]).unwrap_err();
     assert!(err.to_string().contains("timed out"), "{err}");
+    // TASK-2141: the refusal names the override. trace:TASK-1951 trace:TASK-2141 | ai:claude
+    assert!(
+        err.to_string().contains("AIDA_STORE_HISTORY_TIMEOUT_SECS"),
+        "{err}"
+    );
     assert!(started.elapsed() < std::time::Duration::from_secs(20));
+}
+
+// ── TASK-2238: post-merge review notes on the store-history walks ──────────
+
+/// `git` in `root`, returning trimmed stdout.
+// trace:TASK-2238 | ai:claude
+fn git_stdout(root: &Path, args: &[&str]) -> String {
+    let out = crate::test_git::git_command()
+        .arg("-C")
+        .arg(root)
+        .args(args)
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    String::from_utf8(out.stdout).unwrap().trim().to_owned()
+}
+
+/// TASK-2229: the other side of a rename at a non-canonical object path
+/// would hold versions never judged, so the alias walk refuses instead of
+/// silently dropping it.
+// trace:TASK-2238 | ai:claude
+#[test]
+fn task_2238_a_rename_to_a_non_canonical_path_is_refused() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    git(root, &["init", "-q", "-b", "main"]);
+    let canonical = aida_core::object_store::relative_object_path("TASK-1-152").unwrap();
+    let path = root.join(&canonical);
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let mut req = plain();
+    req.spec_id = Some("TASK-1-152".into());
+    req.agreed_id = Some("TASK-176".into());
+    std::fs::write(&path, serde_yaml::to_string(&req).unwrap()).unwrap();
+    git(root, &["add", "-A"]);
+    git(root, &["commit", "-qm", "v1"]);
+    assert_eq!(
+        store_history_alias_ids(root, "TASK-176").unwrap(),
+        vec!["TASK-1-152".to_string()]
+    );
+
+    // Renamed into the wrong shard while its agreed_id line changes.
+    let stray = root.join("objects/TASK/009/TASK-1-152.yaml");
+    std::fs::create_dir_all(stray.parent().unwrap()).unwrap();
+    std::fs::remove_file(&path).unwrap();
+    req.agreed_id = Some("TASK-177".into());
+    std::fs::write(&stray, serde_yaml::to_string(&req).unwrap()).unwrap();
+    git(root, &["add", "-A"]);
+    git(root, &["commit", "-qm", "renamed out of place"]);
+    let walk = git_stdout(
+        root,
+        &[
+            "log",
+            "-1",
+            "--format=",
+            "--name-status",
+            "-M",
+            "--",
+            "objects/",
+        ],
+    );
+    assert!(
+        walk.starts_with('R'),
+        "the fixture must be a rename: {walk}"
+    );
+
+    let err = store_history_alias_ids(root, "TASK-176").unwrap_err();
+    assert!(err.contains("non-canonical object path"), "{err}");
+    assert!(err.contains("objects/TASK/009/TASK-1-152.yaml"), "{err}");
+}
+
+/// TASK-2231: a refs/replace/* object never changes what the store history
+/// walks read.
+// trace:TASK-2238 | ai:claude
+#[test]
+fn task_2238_store_history_ignores_replace_objects() {
+    let store = bug_2179_store();
+    let root = store.path();
+    let rel = aida_core::object_store::relative_object_path("TASK-2").unwrap();
+    let real = git_stdout(root, &["rev-parse", &format!("HEAD:{rel}")]);
+    let mut forged = plain();
+    forged.spec_id = Some("TASK-2".into());
+    forged.title = "forged".into();
+    forged.tags.insert("security".into());
+    let file = root.join("forged.yaml");
+    std::fs::write(&file, serde_yaml::to_string(&forged).unwrap()).unwrap();
+    let fake = git_stdout(root, &["hash-object", "-w", "forged.yaml"]);
+    std::fs::remove_file(&file).unwrap();
+    git(root, &["replace", &real, &fake]);
+    assert!(
+        git_stdout(root, &["cat-file", "-p", &real]).contains("forged"),
+        "the replacement is live for an ordinary git read"
+    );
+
+    let versions = StoreHistoryBatch::read(root, &["TASK-2".to_string()])
+        .unwrap()
+        .versions("TASK-2")
+        .unwrap();
+    assert!(!versions.is_empty());
+    assert!(
+        versions
+            .iter()
+            .all(|v| v.title == "only" && v.tags.is_empty()),
+        "{:?}",
+        versions.iter().map(|v| &v.title).collect::<Vec<_>>()
+    );
 }

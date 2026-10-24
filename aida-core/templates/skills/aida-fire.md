@@ -111,7 +111,17 @@ the wave to **about 10 agents in total** (fixers plus reviewers). More than
 that costs more coordination than it saves.
 
 - **Fixers:** one per spec, or a tight pair that shares files. Never two
-  fixers on files that overlap. Serialize those.
+  fixers on files that overlap. Serialize those. Each fixer is a separate
+  **process** in its own implementer seat, never an Agent-tool subagent (an
+  in-session subagent inherits your advisor seat and the advisor code guard
+  blocks its edits). Pre-create its worktree with the role on the lease,
+  `aida worktree add <SPEC-ID> --role implementer`, then start
+  `claude --bg` from inside that worktree with the fixer prompt below; the
+  lane takes its identity from the lease. For a spec whose comments already
+  say everything, a headless
+  `aida queue work <SPEC-ID> --role implementer --no-human --vendor claude`
+  needs no prompt and ends with one `implementer:` line and an exit code.
+  <!-- trace:STORY-1662 | ai:claude -->
 - **Reviewers:** a separate reviewer **process** per PR, never the fixer and
   never an Agent-tool subagent. Launch each from Bash as a
   `run_in_background` job (see "Reviewer launch" below). The reviewer picks
@@ -126,8 +136,9 @@ Each fixer claims its spec (`aida claim <SPEC-ID>`) so a later survey sees it.
 You are a fixer in <repo path>. First read CLAUDE.md and
 .aida/discipline/README.md. Export AIDA_AGENT_TYPE=<tool> AIDA_AGENT_NAME=fixer-<id>.
 Rules:
-- Work in an isolated sibling worktree, never the main checkout: create it
-  with `aida worktree add <SPEC-ID>` (off origin/main; prints the path).
+- Work in the sibling worktree you were started in (the advisor created it
+  with `aida worktree add <SPEC-ID> --role implementer`), never the main
+  checkout.
 - Claim the spec first (`aida claim <SPEC-ID>`). If it is already claimed or
   has a branch or PR, STOP and report.
 - Commit format: `[AI:<tool>] type(scope): summary (<SPEC-ID>)` + co-author
@@ -157,9 +168,8 @@ Report the PR number, head SHA, files changed and check results in under 150 wor
 #### Reviewer launch
 
 The approval `aida pr ship` accepts is the one a reviewer process records from
-its own reviewer seat. You are an author of every PR your fixer subagents
-wrote, so a verdict you record, or one an Agent-tool reviewer records inside
-your session, is refused at ship. Launch each reviewer from Bash:
+its own reviewer seat. A verdict you record, or one an Agent-tool reviewer
+records inside your session, is refused at ship. Launch each reviewer from Bash:
 
 ```bash
 aida queue work PR-<N> --role reviewer --no-human --vendor claude
@@ -211,7 +221,7 @@ it saw. Ship it:
 
 ```bash
 gh pr ready N
-aida pr ship N    # --override-stale-check ONLY when the ci.yml delta on main is unrelated
+aida pr ship N    # refuses a head behind main: land it with `aida pr train N`
 ```
 
 Never run `aida review record` yourself. If the head moved after review
@@ -219,8 +229,8 @@ Never run `aida review record` yourself. If the head moved after review
 approval binds to a SHA, and `--override-stale-approval` stays an operator
 tool.
 
-**RequestChanges:** resume the **same** fixer (`SendMessage` to its agent id) with
-a rework brief per `.aida/discipline/rework-brief-craft.md`: each blocking
+**RequestChanges:** resume the **same** fixer lane
+(`aida mailbox send --to <lane> ...`) with a rework brief per `.aida/discipline/rework-brief-craft.md`: each blocking
 finding, its file:line, the failure scenario, and what "fixed" looks like. If
 the PR belongs to another seat, mail the owning seat instead.
 
@@ -241,17 +251,33 @@ PR #N's hold is ready to release: approved at <SHA>, Build green, up to date.
 Please run: ! aida merge-hold clear N
 ```
 
-### 5. Ship serially after any merge wave
+### 5. Land approved PRs through the merge train
 
 Two PRs that are each green can still break main together: one adds a required
 field, the other adds a literal without it. Neither run saw the other.
-`--override-stale-check` does not protect against this. Therefore:
+`aida pr ship` refuses a head behind main for this reason, and no flag
+overrides it. Once two or more PRs
+are approved, land them as one train instead of shipping them one by one:
 
-1. Ship **one** PR.
-2. For the next PR: update it from main (`gh pr update-branch N` or a merge
-   from main), let a **fresh** Build run on the new head, re-record the
-   approval at that head, then ship.
-3. Repeat. Never ship back to back on greens computed against an older main.
+```bash
+aida pr train --all-ready --dry-run   # the gate verdict per PR, and the plan
+aida pr train --all-ready             # or name them: aida pr train 12 13 14
+```
+
+The train applies ship's gates to every PR (approval at head or carried over a
+clean merge from main, no merge hold, clear verdicts), refuses drafts with a
+reason, and stacks one squash commit per PR on main. Each commit must carry
+exactly its PR's approved diff (patch-id), so no re-approval is needed. The
+stack is opened as a `train/*` PR and CI runs on exactly what main will
+receive. Green: it is rebase-merged pinned to its head and each member PR is
+closed with a pointer to its commit. Red: it is rerun once, then bisected in
+halves, and each PR that breaks it is left open with a comment saying why.
+The train never releases a merge hold. A held PR waits for the operator's
+`aida merge-hold clear N`, then rides the next train.
+
+A single approved PR still ships with `aida pr ship N`. Never ship two PRs back
+to back on greens computed against an older main; train them.
+<!-- trace:STORY-1690 | ai:claude -->
 
 ### 6. Wait without polling
 
@@ -278,7 +304,7 @@ Update the branch, or resume the fixer.
 PR's green is now meaningless. Diagnose the break (usually the fixer that hit
 it already knows), fix it forward with one small FASTTRACK PR through the
 normal gate (no `--no-verify`, even for one line), wait for main to go green,
-then resume serial shipping from step 5.
+then resume landing from step 5.
 
 ### 7. Respect spec-level gates
 

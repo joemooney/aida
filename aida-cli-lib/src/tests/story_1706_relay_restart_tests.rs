@@ -573,6 +573,7 @@ fn a_relay_restart_human_gate_or_unreadable_gates_refuse() {
     let gated = Ok(HumanGates {
         ops: BTreeSet::from([GateOp::RelayRestart]),
         max_actions_per_tick: None,
+        ..Default::default()
     });
     for gates in [gated, Err("origin/main unreadable".to_string())] {
         let v = restart_verdict(
@@ -640,6 +641,14 @@ fn a_live_session_of_the_run_refuses_the_restart() {
         .env("AIDA_RELAY_RUN", &fx.run)
         .spawn()
         .unwrap();
+    // spawn() returns while the child is still finishing exec, when its
+    // /proc environ can be briefly unreadable; wait until it is visible.
+    let seen = std::time::Instant::now();
+    while run_process_alive(&fx.run) != Some(true)
+        && seen.elapsed() < std::time::Duration::from_secs(5)
+    {
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
     let v = fx.verdict(&m, now());
     orphan.kill().unwrap();
     orphan.wait().unwrap();
@@ -846,6 +855,7 @@ fn the_restart_respects_the_per_tick_budget() {
     inputs.gates = Ok(HumanGates {
         ops: BTreeSet::new(),
         max_actions_per_tick: Some(0),
+        ..Default::default()
     });
     let mut fake = Fake::default();
     run_tick(&inputs, &TickHooks::default(), &mut fake);

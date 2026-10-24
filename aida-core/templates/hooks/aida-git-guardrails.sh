@@ -542,11 +542,14 @@ fi
 # An agent may not bypass the host cargo-slot limiter. Setting
 # AIDA_CARGO_NO_SLOT skips the slot queue, so one agent's full suite runs beside
 # two slotted builds on a 6-core host (fix-2725: `make check` took 1h20m).
-# Any assignment (`=`, `+=`, `export`, `env`) is blocked where it can run:
+# Any assignment (`=`, `+=`, `export`, `env`, and with no `=`: `printf -v`,
+# `read`, a bare `export`) is blocked where it can run (a bare setter's
+# name may be quoted):
 # - the command with quoted text and heredoc bodies removed (SCAN_COMMAND);
 # - anywhere, when the command runs an unquoted shell or eval (`bash -c
 #   "..."`, `sh -c '...'`, `eval "..."`, `bash <<EOF`, `| sh`, `fish -c`),
-#   runs `env -S` / `--split-string`, or sources a file (`source`, `.`);
+#   runs `env -S` / `--split-string` or `xargs`, or sources or runs a file
+#   (`source`, `.`, `./x`, also after `time` or an exec prefix like `nohup`);
 # - inside a command or process substitution (`$(...)`, backticks, `<(...)`);
 # - a quoted assignment word, or a quoted name before `=`, after
 #   env/export/declare/typeset/local/readonly/make/gmake.
@@ -555,6 +558,11 @@ fi
 # mailbox body. Unsetting it (`env -u`, `unset`) has no `=` and stays allowed.
 # An indirect name (`X=AIDA_CARGO_NO_SLOT; export "${X}=1"`) is out of scope:
 # that is deliberate evasion, not an accident.
+# This guard is defense-in-depth for an advisory hook, not a sandbox: a line
+# scanner cannot parse every shell form, and its exec-prefix and setter lists
+# are not exhaustive. Scope: a further bypass shape is tracked as a follow-up
+# spec rather than widened here.
+# trace:TASK-1952 | trace:TASK-2246 | ai:claude
 # trace:TASK-1948 | ai:claude
 # trace:TASK-1952 | trace:TASK-1643 | ai:claude
 NO_SLOT_SET='AIDA_CARGO_NO_SLOT\+?='
@@ -567,20 +575,46 @@ NO_SLOT_SHELL_END='([^A-Za-z0-9_.-]|$)'
 NO_SLOT_WORD_END='([^A-Za-z0-9_]|$)'
 # A command word at the start of a command: after a separator, the start, a
 # negation, or a keyword or builtin that runs the next word as a command
-# (`then . ./x`, `do source x`, `command . x`, `builtin source x`, `! . x`).
-# trace:TASK-1952 | trace:TASK-2139 | ai:claude
-NO_SLOT_CMD_START='(^|[;&|({!]|(^|[^A-Za-z0-9_])(then|do|else|command|builtin))[[:space:]]*'
+# (`then . ./x`, `do source x`, `command . x`, `builtin source x`, `! . x`,
+# TASK-2246: `time . x`, `time -p . x`, and the exec prefixes `exec`,
+# `nohup`, `setsid`, `nice -n 5`, `timeout -s KILL 10`, `stdbuf -oL`,
+# `ionice -c3`, `taskset -c 0`, `env -i -u FOO X=1`: each takes option words
+# (an option may take one argument), numbers, and `NAME=value` assignments).
+# The prefix list is not exhaustive (see the defense-in-depth note above).
+# trace:TASK-1952 | trace:TASK-2139 | trace:TASK-2246 | ai:claude
+NO_SLOT_PREFIX_WORD='(-[^[:space:];&|]*([[:space:]]+[A-Za-z0-9_][^[:space:];&|=]*)?|[0-9][^[:space:];&|]*|[A-Za-z_][A-Za-z0-9_]*=[^[:space:];&|]*)'
+NO_SLOT_EXEC_PREFIX="(exec|nohup|setsid|nice|timeout|stdbuf|ionice|taskset|env)([[:space:]]+$NO_SLOT_PREFIX_WORD)*"
+NO_SLOT_CMD_START="(^|[;&|({!]|(^|[^A-Za-z0-9_])(then|do|else|command|builtin|time([[:space:]]+-p)?|$NO_SLOT_EXEC_PREFIX))[[:space:]]*"
+# TASK-2246: a builtin that sets or exports the name with no `=` in the word
+# (`printf -v NAME 1`, `read NAME`, `mapfile NAME`, a bare `export NAME` of a
+# value set some other way, `export -- NAME`, `export -p NAME`, which exports
+# NAME too: `export -p` prints only when given no names). The only reads
+# passed are `declare -p NAME` / `typeset -p NAME` without `-x` or `-g`, and
+# `printf` without `-v`.
+# trace:TASK-1952 | trace:TASK-2246 | ai:claude
+NO_SLOT_ANY_WORD='[^[:space:];&|]+'
+NO_SLOT_DECLARE_WORD='(-[A-Za-oq-z]*|-[A-Za-z]*[xg][A-Za-z]*|--|[^-[:space:];&|][^[:space:];&|]*)'
+NO_SLOT_BARE_BODY="((export|readonly|local|read|readarray|mapfile)([[:space:]]+$NO_SLOT_ANY_WORD)*|(declare|typeset)([[:space:]]+$NO_SLOT_DECLARE_WORD)*|printf([[:space:]]+$NO_SLOT_ANY_WORD)*[[:space:]]+-v)[[:space:]]+AIDA_CARGO_NO_SLOT$NO_SLOT_WORD_END"
+NO_SLOT_BARE="${NO_SLOT_CMD_START}$NO_SLOT_BARE_BODY"
 no_slot_set() {
     printf '%s' "$SCAN_COMMAND" | grep -qE "(^|[^A-Za-z0-9_])$NO_SLOT_SET" && return 0
+    printf '%s' "$SCAN_COMMAND" | grep -qE "$NO_SLOT_BARE" && return 0
     # An unquoted shell or eval runs quoted text (`-c` payloads, `eval`
     # strings, heredocs or pipes fed to it), separators inside it included,
     # so the whole command is scanned. A shell named only inside quoted prose
     # runs nothing (TASK-2123). TASK-2139: so do `env -S` / `--split-string`
     # (env runs its string), `source` / `.` and a `./script` run (a file this
-    # command may just have written).
+    # command may just have written). TASK-2246: so does `xargs` (it feeds a
+    # file's words to a command, `xargs -a x.sh env`).
+    # trace:TASK-1952 | trace:TASK-2246 | ai:claude
     if printf '%s' "$SCAN_COMMAND" | grep -qE \
-        "$NO_SLOT_SHELL$NO_SLOT_SHELL_END|(^|[^A-Za-z0-9_])eval$NO_SLOT_WORD_END|(^|[^A-Za-z0-9_])env([[:space:]]+[^[:space:];&|]+)*[[:space:]]+(-[A-Za-z]*S|--split-string)|$NO_SLOT_CMD_START(source|\\.)[[:space:]]|$NO_SLOT_CMD_START\\./[^[:space:]]"; then
+        "$NO_SLOT_SHELL$NO_SLOT_SHELL_END|(^|[^A-Za-z0-9_])(eval|xargs)$NO_SLOT_WORD_END|(^|[^A-Za-z0-9_])env([[:space:]]+[^[:space:];&|]+)*[[:space:]]+(-[A-Za-z]*S|--split-string)|$NO_SLOT_CMD_START(source|\\.)[[:space:]]|$NO_SLOT_CMD_START\\./[^[:space:]]"; then
         printf '%s' "$COMMAND" | grep -qE "(^|[^A-Za-z0-9_])$NO_SLOT_SET" && return 0
+        # PR-2837 review round 5: a bare setter inside the payload too
+        # (`bash -c 'export NAME; make'`, `eval 'export NAME'`); a quote may
+        # open the payload's first command.
+        # trace:TASK-1952 | trace:TASK-2246 | ai:claude
+        printf '%s' "$COMMAND" | grep -qE "(^|[^A-Za-z0-9_./-])$NO_SLOT_BARE_BODY" && return 0
     fi
     # Command and process substitutions run even inside double quotes.
     printf '%s' "$COMMAND" | grep -qE "(\\\$\\(|<\\(|>\\(|\`)[^)\`]*$NO_SLOT_SET" && return 0
@@ -593,15 +627,29 @@ no_slot_set() {
     # first: a quote between two word characters, or opening a word, is
     # dropped (TASK-2140).
     # trace:TASK-1952 | trace:TASK-2140 | ai:claude
+    # PR-2837 review round 4: a bare setter's name is joined the same way
+    # (`export "NAME"`, `printf -v 'NAME'`), gated on an unquoted setter at a
+    # command start so quoted prose naming one (a commit message) passes. The
+    # unjoined SCAN_COMMAND match above still catches a setter whose earlier
+    # word quotes a `;` or `|` (`export FOO="x;y" NAME`).
+    # trace:TASK-1952 | trace:TASK-2246 | ai:claude
     NO_SLOT_ASSIGNER='(env|export|declare|typeset|local|readonly|make|gmake)'
-    if printf '%s' "$SCAN_COMMAND" | grep -qE "(^|[^A-Za-z0-9_])$NO_SLOT_ASSIGNER$NO_SLOT_WORD_END"; then
+    NO_SLOT_SETTER='(export|declare|typeset|local|readonly|read|readarray|mapfile|printf)'
+    NO_SLOT_HAS_ASSIGNER=0 NO_SLOT_HAS_SETTER=0
+    printf '%s' "$SCAN_COMMAND" | grep -qE "(^|[^A-Za-z0-9_])$NO_SLOT_ASSIGNER$NO_SLOT_WORD_END" \
+        && NO_SLOT_HAS_ASSIGNER=1
+    printf '%s' "$SCAN_COMMAND" | grep -qE "$NO_SLOT_CMD_START$NO_SLOT_SETTER$NO_SLOT_WORD_END" \
+        && NO_SLOT_HAS_SETTER=1
+    if [ "$NO_SLOT_HAS_ASSIGNER" = 1 ] || [ "$NO_SLOT_HAS_SETTER" = 1 ]; then
         NO_SLOT_JOINED=$(printf '%s' "$COMMAND" | sed -E \
             -e ':a' \
             -e 's/([A-Za-z0-9_+=])["'"'"']+([A-Za-z0-9_+=])/\1\2/' \
             -e 'ta' \
             -e 's/(^|[[:space:]])["'"'"']+([A-Za-z_])/\1\2/g')
-        printf '%s' "$NO_SLOT_JOINED" | grep -qE \
+        [ "$NO_SLOT_HAS_ASSIGNER" = 1 ] && printf '%s' "$NO_SLOT_JOINED" | grep -qE \
             "(^|[^A-Za-z0-9_])$NO_SLOT_ASSIGNER([[:space:]]+[^[:space:];&|]+)*[[:space:]]+$NO_SLOT_SET" \
+            && return 0
+        [ "$NO_SLOT_HAS_SETTER" = 1 ] && printf '%s' "$NO_SLOT_JOINED" | grep -qE "$NO_SLOT_BARE" \
             && return 0
     fi
     return 1
@@ -611,7 +659,9 @@ if no_slot_set; then
         echo "BLOCKED: AIDA_CARGO_NO_SLOT bypasses the cargo build-slot limiter."
         echo "Agents queue for a slot like everyone else: drop the variable and run long cargo"
         echo "commands in the background. A full suite is CI's job, not a pre-push step"
-        echo "(make check-ci-fast + make test-touched). Only the operator may bypass the queue."
+        # trace:TASK-2238 | ai:claude — the LIGHT gate (TASK-2209)
+        echo "(one targeted cargo test --profile agent run + make check-ci-fast)."
+        echo "Only the operator may bypass the queue."
     } >&2
     exit 2
 fi

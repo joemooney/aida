@@ -44,7 +44,7 @@ Those vendors drain the same ready set the **serial** way instead: `aida queue w
 
 ## Relationship to the orchestrator drain
 
-This is the **recommended** autonomous-drain path. It deliberately uses the harness's native subagent fan-out rather than `aida queue work --auto-complete` (the orchestrator-spawns-agent path). The two are **not** competitors: the orchestrator drain is hardened in parallel; `/aida-burndown` is the path to reach for now. Don't run both against the same set and wonder which to trust — pick `/aida-burndown` for hands-off backlog draining, and use the orchestrator drain where its single-spec lifecycle is what you want.
+This is the **recommended** autonomous-drain path. It deliberately launches one standalone implementer process per spec (`aida queue work <SPEC> --role implementer --no-human`, in parallel, each in its own worktree and implementer seat) rather than `aida queue work --auto-complete` (the orchestrator drain, one per repository at a time). <!-- trace:STORY-1662 | ai:claude --> The two are **not** competitors: the orchestrator drain is hardened in parallel; `/aida-burndown` is the path to reach for now. Don't run both against the same set and wonder which to trust — pick `/aida-burndown` for hands-off backlog draining, and use the orchestrator drain where its single-spec lifecycle is what you want.
 
 See also: [`workflow-patterns.md`](workflow-patterns.md) (when a fix must ship at the keyboard, not the drain), [`backlog-grooming.md`](backlog-grooming.md) (getting the ready set decision-free first), [`substrate-as-bouncer.md`](substrate-as-bouncer.md) (why the rules are encoded, not documented-and-hoped).
 

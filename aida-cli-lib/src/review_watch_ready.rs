@@ -76,6 +76,14 @@ pub(super) trait Evidence {
     /// merge may carry it over), and a verdict corpus that does not refuse
     /// the head. `Err` names the refusal.
     fn approval(&self, change: &forge::Change) -> std::result::Result<Approval, String>;
+    /// The approval gate alone, without the verdict-corpus gate: whether a
+    /// non-author approval covers the head (directly or carried over). The
+    /// round-cap wake asks this, since a capped change's earlier blocking
+    /// rounds can keep the corpus refusing a head that was reviewed.
+    // trace:TASK-2238 | ai:claude
+    fn approval_only(&self, change: &forge::Change) -> std::result::Result<Approval, String> {
+        self.approval(change)
+    }
     /// A live review marker covering the head, described.
     fn under_review(&self, change: &forge::Change) -> Option<String>;
     /// Any merge hold (marker or label, of any kind), described. An
@@ -254,6 +262,9 @@ impl Evidence for Live<'_> {
     fn approval(&self, change: &forge::Change) -> std::result::Result<Approval, String> {
         live_approval(self.root, change)
     }
+    fn approval_only(&self, change: &forge::Change) -> std::result::Result<Approval, String> {
+        live_approval_only(self.root, change)
+    }
     fn under_review(&self, change: &forge::Change) -> Option<String> {
         live_under_review(self.root, change)
     }
@@ -292,8 +303,35 @@ pub(super) fn live_approval(
     let (candidates, policy, ids) =
         crate::pr_cmd::merge_approval_subject(&[root], root, change.id, &[], None, Some(head));
     let site = crate::review_carryover::CarryOverSite::quiet(root, Some(&change.base));
-    let approval = approval_at(change.id, &candidates, head, &policy, &site)?;
-    corpus_at(root, change, &ids)?;
+    approval_then_corpus(
+        || approval_at(change.id, &candidates, head, &policy, &site),
+        || corpus_at(root, change, &ids),
+    )
+}
+
+/// [`live_approval`] without the corpus gate.
+// trace:TASK-2238 | ai:claude
+pub(super) fn live_approval_only(
+    root: &Path,
+    change: &forge::Change,
+) -> std::result::Result<Approval, String> {
+    let head = change.head.as_str();
+    let (candidates, policy, _) =
+        crate::pr_cmd::merge_approval_subject(&[root], root, change.id, &[], None, Some(head));
+    let site = crate::review_carryover::CarryOverSite::quiet(root, Some(&change.base));
+    approval_at(change.id, &candidates, head, &policy, &site)
+}
+
+/// [`live_approval`]'s composition: the approval gate first, then the corpus
+/// gate, whose refusal wins over an approval. The corpus is not read when no
+/// approval covers the head.
+// trace:TASK-2238 | ai:claude
+pub(super) fn approval_then_corpus(
+    approval: impl FnOnce() -> std::result::Result<Approval, String>,
+    corpus: impl FnOnce() -> std::result::Result<(), String>,
+) -> std::result::Result<Approval, String> {
+    let approval = approval()?;
+    corpus()?;
     Ok(approval)
 }
 
@@ -329,7 +367,8 @@ pub(super) fn live_hold(root: &Path, change: &forge::Change) -> Result<Option<St
 /// check beyond every check on the head passing. A config that cannot be
 /// read or parsed is `Err`, never "nothing required".
 // trace:TASK-1945 | ai:claude (TASK-2201)
-pub(super) fn required_checks(root: &Path) -> Result<Vec<String>> {
+// Also the live-binary promote's required checks. trace:STORY-1689 | ai:claude
+pub(crate) fn required_checks(root: &Path) -> Result<Vec<String>> {
     let path = root.join(".aida").join("config.toml");
     let text = match std::fs::read_to_string(&path) {
         Ok(text) => text,

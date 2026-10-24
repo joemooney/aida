@@ -5302,14 +5302,10 @@ pub(crate) fn build_agent_new_bg_command(
         review_authority::bind_worker_env(&mut command, lease_id);
     }
     if let Some(role) = &plan.role {
-        let grant = seat_authority::issue_child(
-            &plan.project_root,
-            &canonical_role_name(role),
-            &plan.name,
-        )?;
-        command
-            .env("AIDA_SESSION_ROLE", role)
-            .env(seat_authority::GRANT_ENV, grant.id);
+        seat_authority::bg_seat_refusal(role)?;
+        // BUG-1934: a baseline seat needs no grant, and a child grant here
+        // could never be presented (see `seat_authority::bg_seat_refusal`).
+        command.env("AIDA_SESSION_ROLE", role);
     } else {
         command.env_remove("AIDA_SESSION_ROLE");
     }

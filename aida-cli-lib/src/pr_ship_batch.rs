@@ -9,6 +9,7 @@
 //! and every stop are unit-tested without a forge. Every failure stops the
 //! batch without shipping; a re-run skips PRs that already merged.
 // trace:STORY-1887 | ai:claude
+// mandate-gate
 
 use anyhow::Result;
 
@@ -37,6 +38,16 @@ pub(crate) enum Mergeable {
     Clean,
     Conflicting,
     Unknown,
+}
+
+/// How stale a PR's green is, from the gate `aida pr ship` applies.
+// trace:STORY-1690 | ai:claude
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct Staleness {
+    /// The head is missing commits now on its base: ship refuses it.
+    pub behind: bool,
+    /// CI-definition files changed on the base since the head's green.
+    pub definition_files: Vec<String>,
 }
 
 /// What the batch needs to know about one PR, read in one forge call.
@@ -91,15 +102,11 @@ pub(crate) trait BatchPorts {
     /// The integrity floor: a human at an interactive terminal.
     fn human_at_terminal(&self) -> bool;
     fn view(&mut self, pr: u64) -> Result<PrView>;
-    /// C4: the CI-definition files that make `aida pr ship` refuse this PR's
-    /// green, from the stale-definition gate's own predicate. `fetch` false
-    /// (`--dry-run`) judges against the local tracking refs as they are.
-    fn stale_definition_files(
-        &mut self,
-        pr: u64,
-        view: &PrView,
-        fetch: bool,
-    ) -> Result<Vec<String>>;
+    /// C4: what makes `aida pr ship` refuse this PR's green, from the stale
+    /// gate's own predicate (STORY-1690: a head behind its base refuses even
+    /// when the forge does not report BEHIND). `fetch` false (`--dry-run`)
+    /// judges against the local tracking refs as they are.
+    fn staleness(&mut self, pr: u64, view: &PrView, fetch: bool) -> Result<Staleness>;
     fn update_branch(&mut self, pr: u64, expected_head: &str) -> Result<()>;
     /// CI at `head`; `held` is the PR's hold state, read by the caller
     /// (see [`read_ci`]) so a hold-label error is not reported as CI.
@@ -257,8 +264,8 @@ fn plan_pr(ports: &mut dyn BatchPorts, pr: u64) -> PrOutcome {
     // TASK-2157: a dry run changes nothing, so it does not fetch; the
     // stale-definition check reads the local `origin/*` refs as they are.
     // trace:STORY-1887 | ai:claude
-    match ports.stale_definition_files(pr, &view, false) {
-        Ok(files) if view.behind || !files.is_empty() => {
+    match ports.staleness(pr, &view, false) {
+        Ok(stale) if view.behind || stale.behind || !stale.definition_files.is_empty() => {
             steps.push("would refresh from main".to_string())
         }
         Ok(_) => {}
@@ -309,17 +316,21 @@ fn ship_one(ports: &mut dyn BatchPorts, pr: u64, opts: BatchOptions) -> PrOutcom
         return done;
     }
     ports.say(&format!("PR #{pr} {}", view.title));
-    let stale = match ports.stale_definition_files(pr, &view, true) {
-        Ok(files) => files,
+    let stale = match ports.staleness(pr, &view, true) {
+        Ok(stale) => stale,
         Err(e) => {
             return PrOutcome::Stopped(format!("could not check whether PR #{pr} is stale: {e:#}"))
         }
     };
-    if view.behind || !stale.is_empty() {
-        let why = if stale.is_empty() {
+    // trace:STORY-1690 | ai:claude
+    if view.behind || stale.behind || !stale.definition_files.is_empty() {
+        let why = if stale.definition_files.is_empty() {
             "it is behind main".to_string()
         } else {
-            format!("its green predates a change to {}", stale.join(", "))
+            format!(
+                "its green predates a change to {}",
+                stale.definition_files.join(", ")
+            )
         };
         ports.say(&format!("  refreshing from main: {why}"));
         let old_head = view.head_sha.clone();
@@ -483,6 +494,10 @@ fn wait_for_review(
     let started = ports.elapsed_secs();
     let mut last_line: Option<u64> = None;
     let mut enqueued = false;
+    // TASK-2194: a CI read error while waiting is said when it starts or
+    // changes, and the timeout names it, so a stalled wait says why.
+    // trace:TASK-1951 trace:TASK-2194 | ai:claude
+    let mut ci_error: Option<String> = None;
     loop {
         let note = match ports.review_at_head(pr, view) {
             ReviewAtHead::Approved(who) => return Ok(who),
@@ -498,10 +513,14 @@ fn wait_for_review(
         let now = ports.elapsed_secs();
         let waited = now.saturating_sub(started);
         if waited >= timeout_secs {
-            return Err(Wait::Stop(format!(
+            let mut why = format!(
                 "no independent approval of PR #{pr} at {head} within {}m; the batch stops here (re-run once it is reviewed)",
                 timeout_secs / 60
-            )));
+            );
+            if let Some(err) = &ci_error {
+                why.push_str(&format!("; the last CI read failed: {err}"));
+            }
+            return Err(Wait::Stop(why));
         }
         if last_line.is_none_or(|t| now.saturating_sub(t) >= AWAITING_LINE_SECS) {
             let mut line = format!(
@@ -521,7 +540,13 @@ fn wait_for_review(
                     "PR #{pr}'s CI went red at {head}: {why}"
                 )))
             }
-            _ => {}
+            Ok(_) => ci_error = None,
+            Err(why) => {
+                if ci_error.as_deref() != Some(why.as_str()) {
+                    ports.say(&format!("  {why}; retrying while the review is awaited"));
+                }
+                ci_error = Some(why);
+            }
         }
         ports.sleep(POLL_SECS);
     }
@@ -782,12 +807,7 @@ impl BatchPorts for GitHubPorts {
         Ok(parse_pr_view(&v))
     }
 
-    fn stale_definition_files(
-        &mut self,
-        pr: u64,
-        view: &PrView,
-        fetch: bool,
-    ) -> Result<Vec<String>> {
+    fn staleness(&mut self, pr: u64, view: &PrView, fetch: bool) -> Result<Staleness> {
         if fetch {
             // TASK-2001: a host fetch keeps origin's stored token out of argv.
             // trace:TASK-1952 | trace:TASK-2001 | ai:claude
@@ -802,7 +822,12 @@ impl BatchPorts for GitHubPorts {
         }
         let (_, warning) =
             crate::pr_cmd::ship_stale_definition_warning(&self.project_root, &view.head_ref, pr);
-        Ok(warning.map(|w| w.definition_files).unwrap_or_default())
+        Ok(warning
+            .map(|w| Staleness {
+                behind: true,
+                definition_files: w.definition_files,
+            })
+            .unwrap_or_default())
     }
 
     fn update_branch(&mut self, pr: u64, expected_head: &str) -> Result<()> {
@@ -987,6 +1012,7 @@ mod tests {
         human: bool,
         views: BTreeMap<u64, VecDeque<PrView>>,
         stale: BTreeMap<u64, Vec<String>>,
+        behind_base: Vec<u64>,
         ci: BTreeMap<String, VecDeque<CiAtHead>>,
         reviews: BTreeMap<String, VecDeque<ReviewAtHead>>,
         holds: BTreeMap<u64, String>,
@@ -998,6 +1024,8 @@ mod tests {
         forge_calls: u32,
         updates: Vec<(u64, String)>,
         ci_heads: Vec<(u64, String)>,
+        ci_held: Vec<(u64, bool)>,
+        ci_unreadable_after: Option<usize>,
         enqueued: Vec<(u64, String)>,
         cleared: Vec<u64>,
         shipped: Vec<(u64, ShipOverrides)>,
@@ -1054,24 +1082,29 @@ mod tests {
                 .and_then(next)
                 .ok_or_else(|| anyhow::anyhow!("no such PR"))
         }
-        fn stale_definition_files(
-            &mut self,
-            pr: u64,
-            _view: &PrView,
-            fetch: bool,
-        ) -> Result<Vec<String>> {
+        fn staleness(&mut self, pr: u64, _view: &PrView, fetch: bool) -> Result<Staleness> {
             self.forge_calls += 1;
             self.fetches += u32::from(fetch);
-            Ok(self.stale.get(&pr).cloned().unwrap_or_default())
+            Ok(Staleness {
+                behind: self.behind_base.contains(&pr),
+                definition_files: self.stale.get(&pr).cloned().unwrap_or_default(),
+            })
         }
         fn update_branch(&mut self, pr: u64, expected_head: &str) -> Result<()> {
             self.forge_calls += 1;
             self.updates.push((pr, expected_head.to_string()));
             Ok(())
         }
-        fn ci_at_head(&mut self, pr: u64, head: &str, _held: bool) -> Result<CiAtHead> {
+        fn ci_at_head(&mut self, pr: u64, head: &str, held: bool) -> Result<CiAtHead> {
             self.forge_calls += 1;
+            if self
+                .ci_unreadable_after
+                .is_some_and(|n| self.ci_heads.len() >= n)
+            {
+                anyhow::bail!("rollup unavailable");
+            }
             self.ci_heads.push((pr, head.to_string()));
+            self.ci_held.push((pr, held));
             Ok(self
                 .ci
                 .get_mut(head)
@@ -1459,6 +1492,22 @@ mod tests {
             .any(|l| l.contains(".github/workflows/ci.yml")));
     }
 
+    // STORY-1690: a head behind its base is refreshed before ship even when
+    // the forge does not report BEHIND (strict is off), because ship now
+    // refuses a behind head.
+    // trace:STORY-1690.acb4ffd6 | ai:claude
+    #[test]
+    fn behind_base_by_git_alone_triggers_refresh() {
+        let mut f = ready(Fake::human(), 5, "new_head_0005")
+            .views(5, vec![open("old_head_0005"), open("new_head_0005")])
+            .answers(&["go", "5"]);
+        f.behind_base.push(5);
+        let out = run_batch(&mut f, &[5], OPTS).unwrap();
+        assert_eq!(out[0].1, PrOutcome::Shipped);
+        assert_eq!(f.updates, vec![(5, "old_head_0005".to_string())]);
+        assert!(f.said.iter().any(|l| l.contains("behind main")));
+    }
+
     // C3 for the real port: a rollup from another head never counts, and no
     // checks yet is not green.
     // trace:STORY-1887 | ai:claude
@@ -1503,10 +1552,13 @@ mod tests {
     // trace:STORY-1887 | ai:claude
     #[test]
     fn t8_ship_batch_is_gate_protected() {
-        assert_eq!(
-            crate::mandate_gates::touches_gates(&["aida-cli-lib/src/pr_ship_batch.rs".to_string()]),
-            Some("aida-cli-lib/src/pr_ship_batch.rs".to_string())
-        );
+        // trace:STORY-1888 | ai:claude
+        let hit = crate::mandate_gates::touches_gates(
+            &["aida-cli-lib/src/pr_ship_batch.rs".to_string()],
+            crate::mandate_gates::ProtectedPaths::floor_ref(),
+        )
+        .map(|m| m.path);
+        assert_eq!(hit, Some("aida-cli-lib/src/pr_ship_batch.rs".to_string()));
     }
 
     // TASK-2155: the start, each PR's outcome and the stop are recorded, and
@@ -1709,6 +1761,9 @@ mod tests {
             "{out:?}"
         );
         assert_eq!(f.hold_reads, 1);
+        // TASK-2193: CI is judged with the hold state that was read.
+        // trace:TASK-1951 trace:TASK-2193 | ai:claude
+        assert_eq!(f.ci_held, vec![(9, true)]);
 
         let mut f = ready(Fake::human(), 9, "999999999999a");
         f.hold_unreadable.push(9);
@@ -1727,5 +1782,57 @@ mod tests {
             f.ci_heads.is_empty(),
             "CI is not judged without the hold state"
         );
+    }
+
+    // TASK-2193: the dry-run plan judges CI with the PR's hold state, so a
+    // held PR's red merge-hold-gate is not shown as red CI.
+    // trace:TASK-1951 trace:TASK-2193 | ai:claude
+    #[test]
+    fn task_2193_dry_run_passes_the_hold_state_to_ci() {
+        let dry = BatchOptions {
+            dry_run: true,
+            ..OPTS
+        };
+        let mut f = ready(Fake::human(), 9, "999999999999a");
+        f.holds.insert(9, "supervised".to_string());
+        let out = run_batch(&mut f, &[9], dry).unwrap();
+        assert!(
+            matches!(&out[0].1, PrOutcome::Planned(p) if p.contains("merge-hold: supervised")),
+            "{out:?}"
+        );
+        assert_eq!(f.ci_held, vec![(9, true)]);
+
+        let mut f = ready(Fake::human(), 9, "999999999999a");
+        run_batch(&mut f, &[9], dry).unwrap();
+        assert_eq!(f.ci_held, vec![(9, false)]);
+    }
+
+    // TASK-2194: a CI read error while the review is awaited is said once,
+    // not retried silently, and the timeout names it.
+    // trace:TASK-1951 trace:TASK-2194 | ai:claude
+    #[test]
+    fn task_2194_review_wait_surfaces_ci_read_errors() {
+        let head = "999999999999a";
+        let mut f = Fake::human()
+            .views(9, vec![open(head)])
+            .ci(head, vec![CiAtHead::Passing])
+            .answers(&["go", "9"]);
+        f.ci_unreadable_after = Some(1);
+        let out = run_batch(&mut f, &[9], OPTS).unwrap();
+        assert!(
+            matches!(&out[0].1, PrOutcome::Stopped(why)
+                if why.contains("no independent approval")
+                    && why.contains("the last CI read failed")
+                    && why.contains("rollup unavailable")),
+            "{out:?}"
+        );
+        let said: Vec<_> = f
+            .said
+            .iter()
+            .filter(|l| l.contains("rollup unavailable"))
+            .collect();
+        assert_eq!(said.len(), 1, "the same error is said once: {:?}", f.said);
+        assert!(said[0].contains("retrying"), "{said:?}");
+        assert!(f.shipped.is_empty());
     }
 }
