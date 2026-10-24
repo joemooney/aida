@@ -1,0 +1,34 @@
+id: 01a16f20-282b-7001-9779-06d487102ee6
+spec_id: STORY-1924
+agreed_id: STORY-1924
+title: 'Review PR-2906: [AI:claude] feat(disk): worktree reclaim scans agent scratch outside target/ (TASK-2325)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `claude/task-2325`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2906>
+  - Branch: `claude/task-2325` → `main`
+
+  ## Covers
+
+  - TASK-2325
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2906` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-24T18:15:40.843085957Z
+modified_at: 2026-10-24T18:15:40.843085957Z
+req_type: Story
+filed_at:
+  code_sha: 4bc5df90fc9b0b946005668bca436fd14da89d69
+  branch: claude/task-2325
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c7e5160ce3
+  vendor: claude
+  session: 16800bb8-6bb5-4aad-a6bd-ab9e4ef96b8b
