@@ -23,7 +23,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-23T23:35:51.776964602Z
+modified_at: 2026-10-24T01:54:40.743151364Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -521,6 +521,12 @@ history:
   session_id: 01a16b18969f
   harness_version: 2.1.309 (Claude Code)
   changes: []
+- id: 01a16b9e-063c-7131-9d86-e6eb17cc0477
+  author: joe
+  timestamp: 2026-10-24T01:54:40.828046545Z
+  session_id: 01a16b7ed44b
+  harness_version: 2.1.310 (Claude Code)
+  changes: []
 filed_at:
   code_sha: ba665aaf98777ed00ac96a782a6d6f51dfd528bd
   branch: main
@@ -533,7 +539,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'STRICT review: CI green; handle allocation can give one handle to two live sessions (a launcher''s reservation is free for the taking by any session-bearing request, and --bg adoption writes a name it failed to reserve). Codex statusline handle is unproven. AC status: aca8ca0d verified by session_start_registers_a_generated_handle_or_keeps_the_launch_name, but its uniqueness guarantee is broken (F1/F2); aceb5213 verified for Claude and Agy payload parsing only, Codex unverified (F3); ac97b025 verified by agent_ls_views_list_every_vendor_with_handle_role_spec_and_liveness plus PR-2860 (merged); acfeb946 verified by mail_to_a_handle_reaches_the_session_holding_it_and_nothing_else and the resolver refusal tests; ac0eef56 not applicable (PR3); C3 write mode not applicable (post-deploy, operator-run).'
+  detail: PR2b handle allocation/binding, statusline and agent ls are well built and tested, but CI lib-0 is red at the exact head (introduced by 5d18434387), and recycled generated handles hand a new session the previous holder's unread mail.
   recovery_hint: address the review findings, move STORY-1843 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-10-23T23:35:51.776964602Z
+  shelved_at: 2026-10-24T01:54:40.743151364Z
