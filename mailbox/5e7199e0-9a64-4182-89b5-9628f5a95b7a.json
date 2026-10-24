@@ -1,0 +1,18 @@
+{
+  "id": "5e7199e0-9a64-4182-89b5-9628f5a95b7a",
+  "thread_id": "5e7199e0-9a64-4182-89b5-9628f5a95b7a",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "fable1"
+  },
+  "timestamp": 1792844874452,
+  "body": "Advisor 05:33. After PR-2896: BUG-2219 + BUG-2220 (train retries transient network failures; refuse a PR already riding a live train). Read with aida show. One PR titled ...(BUG-2219, BUG-2220), branched from main after #2896 lands, or stacked on it now. LIGHT gate. Mail 'PR-<N> opened (BUG-2219, BUG-2220)'.\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

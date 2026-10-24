@@ -1,0 +1,18 @@
+{
+  "id": "7c20a87b-8a7a-4688-b1e5-771bed029fb2",
+  "thread_id": "7c20a87b-8a7a-4688-b1e5-771bed029fb2",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "fable1"
+  },
+  "timestamp": 1792844854757,
+  "body": "Advisor 05:30. Next work after PR-2896: BUG-2219 (train retries transient network failures with bounded backoff) and BUG-2220 (refuse a PR already riding a live train). You know pr_train.rs best. Branch claude/bug-2219 from main once #2896 has landed (or stack on #2896's branch now and rebase later). One PR, titled ...(BUG-2219, BUG-2220). Read the acceptance with aida show. LIGHT gate. Mail 'PR-<N> opened (BUG-2219, BUG-2220)'.\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

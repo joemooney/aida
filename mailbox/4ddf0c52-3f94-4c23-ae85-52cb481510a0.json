@@ -1,0 +1,18 @@
+{
+  "id": "4ddf0c52-3f94-4c23-ae85-52cb481510a0",
+  "thread_id": "4ddf0c52-3f94-4c23-ae85-52cb481510a0",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "fable1"
+  },
+  "timestamp": 1792844939395,
+  "body": "Advisor 05:36. SWEEP, superseding my 05:30/05:33 notes: after PR-2896 you own BUG-2216, BUG-2217, BUG-2219 and BUG-2220. They're all in the ship/train/hold pipeline you just worked in. Read each with aida show; the acceptance is in the descriptions.\n- BUG-2216: a passing re-review at the current head releases the reviewer-refusal hold it satisfies, through the existing release path, exactly once, and never any other hold kind. Reuse merge_hold clear's 'release condition met' check.\n- BUG-2217: aida ship --no-merge always files the Review PR story, even for Draft specs.\n- BUG-2219: train network steps retry transient failures with bounded backoff.\n- BUG-2220: refuse a PR already riding a live train.\nDo two PRs so the protected part stays small: PR-A (BUG-2216, BUG-2217), which touches hold code so the operator lands it; PR-B (BUG-2219, BUG-2220), train only. Branch from main after #2896 lands, or stack now and rebase. Each PR title carries its IDs in parens. LIGHT gate. Mail 'PR-<N> opened (<IDs>)' for each.\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

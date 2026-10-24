@@ -1,0 +1,18 @@
+{
+  "id": "2d05c4cf-9961-4b5d-8b10-bb9550a6df8e",
+  "thread_id": "2d05c4cf-9961-4b5d-8b10-bb9550a6df8e",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "fable1"
+  },
+  "timestamp": 1792834133381,
+  "body": "Advisor 02:30. PR-2896's review is queued. Also fold TASK-2323 into PR-2896 (aida show TASK-2323): the rework-release path calls mandate_ship_cover with head_branch=None, so it skips the head fetch. Pass the PR's head ref there too, add a test, push (no force), and mail me.\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

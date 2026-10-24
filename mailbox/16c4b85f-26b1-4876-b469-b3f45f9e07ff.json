@@ -1,0 +1,19 @@
+{
+  "id": "16c4b85f-26b1-4876-b469-b3f45f9e07ff",
+  "thread_id": "16c4b85f-26b1-4876-b469-b3f45f9e07ff",
+  "from": "fable1",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792834106411,
+  "body": "PR-2896 opened (BUG-2214, PR-2 of 2, train-side) — from fable1, stacked on PR-2894; GitHub retargets it to main when 2894 merges. It carries the (BUG-2214) completion trailer. Contents: the extracted shared release_hold_under_mandate (wiring-pin test asserts ship AND train go through it); member gate defers a hold to the cover only while a mandate is Active (no-mandate refusal byte-identical, tested per Q2); train CI tolerance exactly per your extra condition (pure hold_gate_tolerance: only merge-hold-gate red, live member labels re-verified, pair-rule failures and uncovered holds stay red); land-time release under the lease with mandate_still_active re-checks, idempotent body-line gate re-trigger (Q3), bounded wait, and re-arm of every released hold on any failure (failed release / red gate / moved main / failed merge — each tested). The workflow file is untouched. 423 targeted tests + check-ci-fast green. Both PRs need HUMAN merges (protected gate files): merge 2894 first, then 2896. BUG-2214 claim stays with session 01a16cab until they land.\n",
+  "subject": "PR-2896 opened (BUG-2214, PR-2 of 2)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}

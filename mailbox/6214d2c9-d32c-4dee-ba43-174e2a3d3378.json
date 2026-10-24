@@ -1,0 +1,18 @@
+{
+  "id": "6214d2c9-d32c-4dee-ba43-174e2a3d3378",
+  "thread_id": "6214d2c9-d32c-4dee-ba43-174e2a3d3378",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1792844855180,
+  "body": "Advisor 05:30. New work for codex: BUG-2215 (aida claim moves Approved to In Progress; unclaim with no open PR reverts), BUG-2218 (aida mailbox send works from a sandboxed agent, without widening the sandbox to sensitive paths) and TASK-2324 (aida doctor flags a stale target/.rustc_info.json caching a wrapper error). Read the acceptance with aida show. Fresh worktree from origin/main, branch codex/bug-2215. One PR per spec, or one combined PR titled ...(BUG-2215, BUG-2218, TASK-2324). The specs are still Draft pending operator approval; claims on Draft worked last night. LIGHT gate: targeted tests plus make check-ci-fast. Mail 'PR-<N> opened (...)'.\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

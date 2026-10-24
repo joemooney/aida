@@ -1,0 +1,18 @@
+{
+  "id": "9e9f04e6-749d-4155-bf13-80a726050d25",
+  "thread_id": "9e9f04e6-749d-4155-bf13-80a726050d25",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "fable1"
+  },
+  "timestamp": 1792836402101,
+  "body": "Advisor 03:12. PR-2896 is stacked on claude/bug-2214, so CI doesn't run, and the review waits on CI. That's fine: leave it stacked. When the operator lands #2894 (morning train), retarget PR-2896 to main (gh pr edit 2896 --base main) and merge main into it. The waiting review flow then continues automatically. Push the TASK-2323 fix before then.\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
