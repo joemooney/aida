@@ -1,0 +1,7 @@
+job: dev-autopromote-route
+due_since: 2026-10-24T03:12:15.920770102Z
+due_reason: on CronJobFailed:dev-autopromote
+due_failure:
+  trip_id: dev-autopromote@2026-10-24T03:05:06.760243893Z
+  job: dev-autopromote
+  error: 'exit 127: this aida binary does not support the command of scheduled job ''dev-autopromote'': unknown scheduled task command ''dev build --if-main-green''; valid commands: cache verify, cache refresh --history --if-behind, cache refresh --if-requested, session reap, queue gc, notify check, doctor, doctor check performance --fail-on-findings, fetch --code-only, store compact, store gc, doctor check remote-drift --fail-on-findings, doctor check stale-remote-branches --fail-on-findings, doctor check runaway-seats --fail-on-findings, doctor check disk-headroom --fail-on-findings, doctor check merged-agent-worktrees --fail-on-findings, fleet drive --tick, doctor check relay-stall --fail-on-findings, doctor check lane-liveness, lane-liveness, remote mirror-sync, shift tick'
