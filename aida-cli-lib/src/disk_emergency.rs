@@ -186,7 +186,16 @@ pub(crate) fn walk_cache(dir: &Path) -> CacheWalk {
             continue;
         };
         for entry in entries.flatten() {
-            let Ok(md) = entry.metadata() else { continue };
+            // Follow no symlinks (TASK-2325): over TMPDIR or ~/.claude/jobs a
+            // nested link to an external tree must neither traverse that tree,
+            // inflate bytes with target files, nor pin scratch age via the
+            // target's mtime.
+            let Ok(md) = std::fs::symlink_metadata(entry.path()) else {
+                continue;
+            };
+            if md.file_type().is_symlink() {
+                continue;
+            }
             if let Ok(m) = md.modified() {
                 walk.newest = Some(walk.newest.map_or(m, |n| n.max(m)));
             }
@@ -1384,7 +1393,12 @@ pub(crate) fn run_emergency_probed(
         |p| std::fs::remove_dir_all(p),
         |c| mail_holder(main_root, c),
         |row| {
-            let _ = append_ledger(main_root, std::slice::from_ref(row));
+            // The final `LedgerRow::Run` summary is emitted after the
+            // hard-ceiling scratch pass so it includes scratch deletions and
+            // post-scratch usage (TASK-2325).
+            if !matches!(row, LedgerRow::Run { .. }) {
+                let _ = append_ledger(main_root, std::slice::from_ref(row));
+            }
         },
     );
     // TASK-2325: at the hard ceiling the repo's caches alone may not be
@@ -1407,7 +1421,8 @@ pub(crate) fn run_emergency_probed(
 }
 
 /// TASK-2325: the emergency tier's last resort. Runs only while usage is
-/// still AT OR ABOVE the hard ceiling after the cache candidates: terminal
+/// still AT OR ABOVE the hard ceiling after the cache candidates (and only
+/// when the cache tier did not stop with an allowlist refusal): terminal
 /// jobs' tmp dirs and old session scratch — never build caches, never a live
 /// job or session — each re-checked at the delete site and ledgered like
 /// every other emergency delete. The age window is the emergency idle window
@@ -1422,11 +1437,25 @@ fn scratch_at_hard_ceiling(
     used_pct: &impl Fn() -> Option<u8>,
     mut outcome: RunOutcome,
 ) -> RunOutcome {
-    if !matches!(used_pct(), Some(pct) if pct >= cfg.used_pct) {
+    let ts = DateTime::<Utc>::from(now);
+    outcome.rows.retain(|r| !matches!(r, LedgerRow::Run { .. }));
+    let emit_run = |outcome: &mut RunOutcome| {
+        let run_row = LedgerRow::Run {
+            ts,
+            freed_bytes: outcome.freed_bytes,
+            deleted: outcome.deleted.len(),
+            used_pct_before: outcome.used_pct_before,
+            used_pct_after: outcome.used_pct_after,
+            stopped: outcome.stopped.code().to_string(),
+        };
+        let _ = append_ledger(main_root, std::slice::from_ref(&run_row));
+        outcome.rows.push(run_row);
+    };
+    if outcome.stopped == Stop::Refused || !matches!(used_pct(), Some(pct) if pct >= cfg.used_pct) {
+        emit_run(&mut outcome);
         return outcome;
     }
     let (rows, _held) = crate::scratch_reclaim::plan(survey);
-    let ts = DateTime::<Utc>::from(now);
     let mut push = |outcome: &mut RunOutcome, row: LedgerRow| {
         let _ = append_ledger(main_root, std::slice::from_ref(&row));
         outcome.rows.push(row);
@@ -1437,6 +1466,11 @@ fn scratch_at_hard_ceiling(
             break;
         };
         if pct < cfg.used_pct {
+            outcome.stopped = if pct < cfg.stop_below() {
+                Stop::BelowMargin
+            } else {
+                Stop::Tier2BelowCeiling
+            };
             break;
         }
         let path = row.path.display().to_string();
@@ -1461,6 +1495,13 @@ fn scratch_at_hard_ceiling(
         match removed {
             Ok(()) => {
                 outcome.freed_bytes = outcome.freed_bytes.saturating_add(row.bytes);
+                outcome.deleted.push(Candidate {
+                    path: row.path.clone(),
+                    bytes: row.bytes,
+                    idle: row.idle,
+                    reason: Reason::AgentScratch,
+                    holder: None,
+                });
                 push(
                     &mut outcome,
                     LedgerRow::Delete {
@@ -1483,7 +1524,18 @@ fn scratch_at_hard_ceiling(
             ),
         }
     }
-    outcome.used_pct_after = used_pct();
+    let after = used_pct();
+    outcome.used_pct_after = after;
+    if !matches!(outcome.stopped, Stop::Refused | Stop::ProbeLost) {
+        if let Some(pct) = after {
+            if pct < cfg.stop_below() {
+                outcome.stopped = Stop::BelowMargin;
+            } else if pct < cfg.used_pct {
+                outcome.stopped = Stop::Tier2BelowCeiling;
+            }
+        }
+    }
+    emit_run(&mut outcome);
     outcome
 }
 

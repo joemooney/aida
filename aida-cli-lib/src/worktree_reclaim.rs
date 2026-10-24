@@ -1215,34 +1215,41 @@ pub fn run(opts: &ReclaimOptions) -> Result<()> {
         std::fs::remove_dir_all(p)
     })?;
     // --apply deletes only the listed scratch rows, each re-checked against
-    // the survey's roots at the delete site. trace:TASK-2325 | ai:claude
-    let (scratch_deleted, scratch_failed) =
-        crate::scratch_reclaim::apply(&scratch_survey, &scratch_rows, |p| {
+    // the survey's roots at the delete site and gated by --target-pct.
+    // trace:TASK-2325 | ai:claude
+    let scratch_done = crate::scratch_reclaim::apply(
+        &scratch_survey,
+        &scratch_rows,
+        opts.target_pct,
+        disk_used_pct,
+        |p| {
             if p.is_dir() {
                 std::fs::remove_dir_all(p)
             } else {
                 std::fs::remove_file(p)
             }
-        })?;
+        },
+    )?;
     println!();
-    for (path, bytes) in done.deleted.iter().chain(&scratch_deleted) {
+    for (path, bytes) in done.deleted.iter().chain(&scratch_done.deleted) {
         println!("deleted {:>10}  {}", human_bytes(*bytes), path.display());
     }
-    for (path, err) in done.failed.iter().chain(&scratch_failed) {
+    for (path, err) in done.failed.iter().chain(&scratch_done.failed) {
         println!("FAILED  {}  — {err}", path.display());
     }
-    if !done.stopped_early.is_empty() {
+    let stopped_early_len = done.stopped_early.len() + scratch_done.stopped_early.len();
+    if stopped_early_len > 0 {
         println!(
             "stopped at --target-pct {}: {} cache(s) left warm",
             opts.target_pct.unwrap_or(0),
-            done.stopped_early.len()
+            stopped_early_len
         );
     }
-    let scratch_freed: u64 = scratch_deleted.iter().map(|(_, b)| b).sum();
+    let scratch_freed: u64 = scratch_done.deleted.iter().map(|(_, b)| b).sum();
     println!(
         "freed {} across {} dir(s)",
         human_bytes(done.freed_bytes + scratch_freed),
-        done.deleted.len() + scratch_deleted.len()
+        done.deleted.len() + scratch_done.deleted.len()
     );
     Ok(())
 }
@@ -1317,26 +1324,31 @@ fn render_json(
             std::fs::remove_dir_all(p)
         })?;
         // trace:TASK-2325 | ai:claude
-        let (scratch_deleted, scratch_failed) =
-            crate::scratch_reclaim::apply(scratch_survey, scratch_rows, |p| {
+        let scratch_done = crate::scratch_reclaim::apply(
+            scratch_survey,
+            scratch_rows,
+            opts.target_pct,
+            disk_used_pct,
+            |p| {
                 if p.is_dir() {
                     std::fs::remove_dir_all(p)
                 } else {
                     std::fs::remove_file(p)
                 }
-            })?;
-        let scratch_freed: u64 = scratch_deleted.iter().map(|(_, b)| b).sum();
+            },
+        )?;
+        let scratch_freed: u64 = scratch_done.deleted.iter().map(|(_, b)| b).sum();
         body["freed_bytes"] = serde_json::json!(done.freed_bytes + scratch_freed);
         body["deleted"] = serde_json::json!(done
             .deleted
             .iter()
-            .chain(&scratch_deleted)
+            .chain(&scratch_done.deleted)
             .map(|(p, _)| p.display().to_string())
             .collect::<Vec<_>>());
         body["failed"] = serde_json::json!(done
             .failed
             .iter()
-            .chain(&scratch_failed)
+            .chain(&scratch_done.failed)
             .map(|(p, e)| serde_json::json!({"path": p.display().to_string(), "error": e}))
             .collect::<Vec<_>>());
     }

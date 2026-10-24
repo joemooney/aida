@@ -8952,16 +8952,20 @@ Commands:
   dismiss  Disposition a worktree whose content is undecidable (e.g. batched integration). Archives
            the branch tip under refs/archive/, removes the worktree and branch, and ledgers the
            operator decision
-  reclaim  Reclaim disk by deleting stale `target/` build caches inside this repository's worktrees.
-           A `target/` is a cache, never a source of truth — nothing but rebuild time is lost. DRY
-           RUN BY DEFAULT: it reports reclaimable bytes and every worktree it held back, and deletes
-           only with `--apply`. Where `gc` removes worktrees that are FINISHED, `reclaim` removes
-           the regenerable cache inside worktrees that are KEPT, which is the space `aida session
-           reap` cannot reach and `cargo clean` targets wrongly (inside a worktree it clears the
-           SHARED CARGO_TARGET_DIR, i.e. the main checkout's live cache, not the stale one). The
-           main checkout's `target/` is never a candidate; nor is `.aida-store`, a worktree held by
-           a live session, a worktree whose branch has an open PR, or a cache touched in the last
-           `--min-age-mins` minutes
+  reclaim  Reclaim disk by deleting stale `target/` build caches inside this repository's worktrees,
+           plus aged agent scratch outside the repository (`~/.claude/jobs/<id>/tmp` of terminal
+           jobs, old entries under the agent `$TMPDIR` root, and idle `~/.cache/aida-impl-target`
+           build caches; pass `--no-scratch` to restrict to worktree `target/` caches). DRY RUN BY
+           DEFAULT: it reports reclaimable bytes and every worktree or scratch entry held back, and
+           deletes only with `--apply`. Where `gc` removes worktrees that are FINISHED, `reclaim`
+           removes stale worktree caches inside worktrees that are KEPT (which `aida session reap`
+           cannot reach and `cargo clean` targets wrongly by clearing the shared `CARGO_TARGET_DIR`)
+           alongside aged agent scratch older than `--scratch-age-days`. Note that while `target/`
+           and build caches are regenerable, deleted job `tmp/` and session scratch are not (job
+           `state.json`, `timeline.jsonl`, and `~/.claude/projects` transcripts are never touched).
+           The main checkout's `target/` is never a candidate; nor is `.aida-store`, a worktree or
+           scratch dir held by a live session or live job, a worktree whose branch has an open PR,
+           or a worktree cache touched in the last `--min-age-mins` minutes
   pool     Manage the warm-pool of recycled worktrees — kept warm (reset-not-delete on hand-back) so
            build caches survive across fan-outs. Dissolves the cargo-cache poison and
            branch-stacking hazards of destroy-and-recreate
@@ -9154,15 +9158,19 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 ===== aida worktree reclaim
-Reclaim disk by deleting stale `target/` build caches inside this repository's worktrees. A
-`target/` is a cache, never a source of truth — nothing but rebuild time is lost. DRY RUN BY
-DEFAULT: it reports reclaimable bytes and every worktree it held back, and deletes only with
-`--apply`. Where `gc` removes worktrees that are FINISHED, `reclaim` removes the regenerable cache
-inside worktrees that are KEPT, which is the space `aida session reap` cannot reach and `cargo
-clean` targets wrongly (inside a worktree it clears the SHARED CARGO_TARGET_DIR, i.e. the main
-checkout's live cache, not the stale one). The main checkout's `target/` is never a candidate; nor
-is `.aida-store`, a worktree held by a live session, a worktree whose branch has an open PR, or a
-cache touched in the last `--min-age-mins` minutes
+Reclaim disk by deleting stale `target/` build caches inside this repository's worktrees, plus aged
+agent scratch outside the repository (`~/.claude/jobs/<id>/tmp` of terminal jobs, old entries under
+the agent `$TMPDIR` root, and idle `~/.cache/aida-impl-target` build caches; pass `--no-scratch` to
+restrict to worktree `target/` caches). DRY RUN BY DEFAULT: it reports reclaimable bytes and every
+worktree or scratch entry held back, and deletes only with `--apply`. Where `gc` removes worktrees
+that are FINISHED, `reclaim` removes stale worktree caches inside worktrees that are KEPT (which
+`aida session reap` cannot reach and `cargo clean` targets wrongly by clearing the shared
+`CARGO_TARGET_DIR`) alongside aged agent scratch older than `--scratch-age-days`. Note that while
+`target/` and build caches are regenerable, deleted job `tmp/` and session scratch are not (job
+`state.json`, `timeline.jsonl`, and `~/.claude/projects` transcripts are never touched). The main
+checkout's `target/` is never a candidate; nor is `.aida-store`, a worktree or scratch dir held by a
+live session or live job, a worktree whose branch has an open PR, or a worktree cache touched in the
+last `--min-age-mins` minutes
 
 Usage: aida worktree reclaim [OPTIONS]
 
@@ -33399,7 +33407,7 @@ Working on aida itself
       "worktree",
       "reclaim"
     ],
-    "about": "Reclaim disk by deleting stale `target/` build caches inside this repository's worktrees. A `target/` is a cache, never a source of truth — nothing but rebuild time is lost. DRY RUN BY DEFAULT: it reports reclaimable bytes and every worktree it held back, and deletes only with `--apply`. Where `gc` removes worktrees that are FINISHED, `reclaim` removes the regenerable cache inside worktrees that are KEPT, which is the space `aida session reap` cannot reach and `cargo clean` targets wrongly (inside a worktree it clears the SHARED CARGO_TARGET_DIR, i.e. the main checkout's live cache, not the stale one). The main checkout's `target/` is never a candidate; nor is `.aida-store`, a worktree held by a live session, a worktree whose branch has an open PR, or a cache touched in the last `--min-age-mins` minutes",
+    "about": "Reclaim disk by deleting stale `target/` build caches inside this repository's worktrees, plus aged agent scratch outside the repository (`~/.claude/jobs/<id>/tmp` of terminal jobs, old entries under the agent `$TMPDIR` root, and idle `~/.cache/aida-impl-target` build caches; pass `--no-scratch` to restrict to worktree `target/` caches). DRY RUN BY DEFAULT: it reports reclaimable bytes and every worktree or scratch entry held back, and deletes only with `--apply`. Where `gc` removes worktrees that are FINISHED, `reclaim` removes stale worktree caches inside worktrees that are KEPT (which `aida session reap` cannot reach and `cargo clean` targets wrongly by clearing the shared `CARGO_TARGET_DIR`) alongside aged agent scratch older than `--scratch-age-days`. Note that while `target/` and build caches are regenerable, deleted job `tmp/` and session scratch are not (job `state.json`, `timeline.jsonl`, and `~/.claude/projects` transcripts are never touched). The main checkout's `target/` is never a candidate; nor is `.aida-store`, a worktree or scratch dir held by a live session or live job, a worktree whose branch has an open PR, or a worktree cache touched in the last `--min-age-mins` minutes",
     "flags": [
       {
         "name": "apply",

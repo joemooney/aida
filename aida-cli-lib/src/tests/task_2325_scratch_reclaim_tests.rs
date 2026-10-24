@@ -15,6 +15,9 @@ const DAY: Duration = Duration::from_secs(24 * 3600);
 fn age(path: &Path, now: SystemTime, age_days: u64) {
     let when = now - DAY * (age_days as u32);
     let md = std::fs::symlink_metadata(path).unwrap();
+    if md.file_type().is_symlink() {
+        return;
+    }
     if md.is_dir() {
         for entry in std::fs::read_dir(path).unwrap().flatten() {
             age(&entry.path(), now, age_days);
@@ -157,9 +160,9 @@ fn apply_deletes_only_listed_rows_and_never_job_records() {
     let sv = survey(fx.path(), now);
     let (rows, _) = plan(&sv);
     assert_eq!(rows.len(), 1);
-    let (deleted, failed) = apply(&sv, &rows, |p| std::fs::remove_dir_all(p)).unwrap();
-    assert_eq!(deleted.len(), 1);
-    assert!(failed.is_empty(), "{failed:?}");
+    let done_reclaim = apply(&sv, &rows, None, |_| None, |p| std::fs::remove_dir_all(p)).unwrap();
+    assert_eq!(done_reclaim.deleted.len(), 1);
+    assert!(done_reclaim.failed.is_empty(), "{:?}", done_reclaim.failed);
     assert!(!done.join("tmp").exists(), "the listed tmp dir is gone");
     assert!(done.join("state.json").exists(), "job records survive");
     assert!(done.join("timeline.jsonl").exists());
@@ -186,9 +189,13 @@ fn the_delete_site_recheck_refuses_a_foreign_path() {
             reason: "forged".into(),
             idle: Duration::ZERO,
         };
-        let err = apply(&sv, std::slice::from_ref(&row), |_| {
-            panic!("a refused row must never reach the delete")
-        })
+        let err = apply(
+            &sv,
+            std::slice::from_ref(&row),
+            None,
+            |_| None,
+            |_| panic!("a refused row must never reach the delete"),
+        )
         .unwrap_err();
         assert!(err.to_string().contains("refusing to delete"), "{err}");
     }
@@ -241,4 +248,151 @@ fn terminal_states_are_exactly_the_finished_ones() {
     for s in ["working", "blocked", "", "unknown", "Done"] {
         assert!(!job_state_terminal(s), "{s}");
     }
+}
+
+/// Requirement 2: `plan_tmp` and `plan_build_caches` filter symlinks before
+/// aging/pricing, including slug children and dangling links, so `apply`
+/// never aborts mid-run on a static link and external link targets are never
+/// priced or touched.
+// trace:TASK-2325 | ai:agy
+#[test]
+fn task_2325_symlinks_under_tmp_and_build_caches_are_filtered_at_plan_time() {
+    let fx = tempfile::tempdir().unwrap();
+    let now = SystemTime::now();
+    let tmp_root = fx.path().join("tmp-root");
+    let slug = tmp_root.join("-home-user-proj");
+    std::fs::create_dir_all(slug.join("real-session")).unwrap();
+    std::fs::write(slug.join("real-session/data.bin"), vec![0u8; 128]).unwrap();
+
+    // External target tree that must not be priced or deleted.
+    let ext = fx.path().join("external-target");
+    std::fs::create_dir_all(&ext).unwrap();
+    std::fs::write(ext.join("precious.bin"), vec![0u8; 8192]).unwrap();
+    age(&ext, now, 10);
+
+    // Symlinks: top-level pointing to ext, top-level dangling, slug-child
+    // pointing to ext, slug-child dangling, slug-named symlink, and build-cache
+    // symlink.
+    std::os::unix::fs::symlink(&ext, tmp_root.join("top-link")).unwrap();
+    std::os::unix::fs::symlink(fx.path().join("missing-1"), tmp_root.join("top-dangling")).unwrap();
+    std::os::unix::fs::symlink(&ext, slug.join("slug-link")).unwrap();
+    std::os::unix::fs::symlink(fx.path().join("missing-2"), slug.join("slug-dangling")).unwrap();
+    std::os::unix::fs::symlink(&ext, tmp_root.join("-slug-symlink")).unwrap();
+    let cache_link = fx.path().join("impl-target");
+    std::os::unix::fs::symlink(&ext, &cache_link).unwrap();
+
+    age(&tmp_root, now, 10);
+
+    let sv = survey(fx.path(), now);
+    let (rows, _) = plan(&sv);
+    assert_eq!(
+        rows.len(),
+        1,
+        "only real-session should be planned: {rows:?}"
+    );
+    assert_eq!(rows[0].path, slug.join("real-session"));
+    assert_eq!(rows[0].bytes, 128);
+
+    let res = apply(&sv, &rows, None, |_| None, |p| std::fs::remove_dir_all(p)).unwrap();
+    assert_eq!(res.deleted.len(), 1);
+    assert!(res.failed.is_empty());
+    assert!(!slug.join("real-session").exists());
+    assert!(
+        ext.join("precious.bin").exists(),
+        "external target untouched"
+    );
+}
+
+/// Requirement 3: `apply` honors `--target-pct` across scratch rows, probing
+/// before each deletion and stopping when the filesystem reaches or is
+/// already at the target percentage.
+// trace:TASK-2325 | ai:agy
+#[test]
+fn task_2325_apply_honors_target_pct_and_leaves_remaining_scratch_intact() {
+    use std::cell::Cell;
+    let fx = tempfile::tempdir().unwrap();
+    let now = SystemTime::now();
+    let tmp_root = fx.path().join("tmp-root");
+    let slug = tmp_root.join("-home-user-proj");
+    std::fs::create_dir_all(slug.join("sess-a")).unwrap();
+    std::fs::write(slug.join("sess-a/a.bin"), vec![0u8; 500]).unwrap();
+    std::fs::create_dir_all(slug.join("sess-b")).unwrap();
+    std::fs::write(slug.join("sess-b/b.bin"), vec![0u8; 300]).unwrap();
+    std::fs::create_dir_all(slug.join("sess-c")).unwrap();
+    std::fs::write(slug.join("sess-c/c.bin"), vec![0u8; 100]).unwrap();
+    age(&tmp_root, now, 10);
+
+    let sv = survey(fx.path(), now);
+    let (rows, _) = plan(&sv);
+    assert_eq!(rows.len(), 3);
+
+    // Case 1: already at target (80% <= 80%) -> deletes nothing, all 3 stopped_early.
+    let already = apply(
+        &sv,
+        &rows,
+        Some(80),
+        |_| Some(80),
+        |p| std::fs::remove_dir_all(p),
+    )
+    .unwrap();
+    assert!(already.deleted.is_empty());
+    assert_eq!(already.stopped_early.len(), 3);
+    assert!(slug.join("sess-a").exists());
+
+    // Case 2: reaches target after first deletion (85% -> 80% -> 80%) -> deletes
+    // largest row (sess-a) and leaves sess-b and sess-c intact.
+    let pct = Cell::new(85u8);
+    let partial = apply(
+        &sv,
+        &rows,
+        Some(80),
+        |_| Some(pct.get()),
+        |p| {
+            std::fs::remove_dir_all(p)?;
+            pct.set(pct.get() - 5);
+            Ok(())
+        },
+    )
+    .unwrap();
+    assert_eq!(partial.deleted.len(), 1);
+    assert_eq!(partial.deleted[0].0, slug.join("sess-a"));
+    assert_eq!(partial.stopped_early.len(), 2);
+    assert!(!slug.join("sess-a").exists());
+    assert!(slug.join("sess-b").exists(), "remaining scratch left warm");
+    assert!(slug.join("sess-c").exists(), "remaining scratch left warm");
+}
+
+/// Requirement 7: `aged` / `walk_cache` uses lstat semantics so a nested
+/// symlink inside a scratch directory to a large, recently modified external
+/// tree neither inflates reported bytes nor pins the scratch directory's age.
+// trace:TASK-2325 | ai:agy
+#[test]
+fn task_2325_nested_symlink_to_external_tree_does_not_inflate_bytes_or_pin_age() {
+    let fx = tempfile::tempdir().unwrap();
+    let now = SystemTime::now();
+    let jobs = fx.path().join("jobs");
+    let done = job(&jobs, "aaaa1111", Some("done"));
+
+    // External tree with a large, freshly written file.
+    let ext = fx.path().join("external-fresh");
+    std::fs::create_dir_all(&ext).unwrap();
+    std::fs::write(ext.join("huge.bin"), vec![0u8; 65536]).unwrap();
+
+    // Symlink inside the job's tmp/ pointing to the fresh external tree.
+    std::os::unix::fs::symlink(&ext, done.join("tmp/ext-link")).unwrap();
+    age(&done, now, 6);
+    // Keep external tree fresh (now).
+    std::fs::write(ext.join("huge.bin"), vec![0u8; 65536]).unwrap();
+
+    let sv = survey(fx.path(), now);
+    let (rows, held) = plan(&sv);
+    assert_eq!(
+        rows.len(),
+        1,
+        "fresh external symlink target must not pin job age: {rows:?} {held:?}"
+    );
+    assert_eq!(
+        rows[0].bytes, 64,
+        "external symlink target bytes must not be counted in tmp/ size"
+    );
 }

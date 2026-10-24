@@ -111,12 +111,13 @@ fn days(d: Duration) -> u64 {
 /// A plain file prices as its own length — the walk only sums directory
 /// entries (PR-2906 round 1).
 fn aged(survey: &ScratchSurvey, path: &Path) -> Option<(u64, Duration)> {
+    let md = std::fs::symlink_metadata(path).ok()?;
+    if md.file_type().is_symlink() {
+        return None;
+    }
     let walk = walk_cache(path);
     let idle = idle_for(&walk, survey.now)?;
-    let bytes = match std::fs::symlink_metadata(path) {
-        Ok(md) if md.is_file() => md.len(),
-        _ => walk.bytes,
-    };
+    let bytes = if md.is_file() { md.len() } else { walk.bytes };
     (idle >= survey.min_age).then_some((bytes, idle))
 }
 
@@ -188,19 +189,26 @@ fn plan_tmp(survey: &ScratchSurvey, rows: &mut Vec<ScratchRow>, held: &mut Vec<(
     let mut entries: Vec<PathBuf> = Vec::new();
     for entry in top.flatten() {
         let path = entry.path();
+        let Ok(ft) = entry.file_type() else {
+            continue;
+        };
+        if ft.is_symlink() {
+            continue;
+        }
         // A project-slug dir holds per-session scratch: its children are the
         // entries, so one old session never pins a whole project's scratch.
         let slug_dir = entry
             .file_name()
             .to_str()
             .is_some_and(|n| n.starts_with('-'))
-            && entry.file_type().is_ok_and(|t| t.is_dir());
+            && ft.is_dir();
         if slug_dir {
             entries.extend(
                 std::fs::read_dir(&path)
                     .into_iter()
                     .flatten()
                     .flatten()
+                    .filter(|e| e.file_type().is_ok_and(|t| !t.is_symlink()))
                     .map(|e| e.path()),
             );
         } else {
@@ -228,8 +236,9 @@ fn plan_tmp(survey: &ScratchSurvey, rows: &mut Vec<ScratchRow>, held: &mut Vec<(
 /// `(c)` — named build caches not written in the age window.
 fn plan_build_caches(survey: &ScratchSurvey, rows: &mut Vec<ScratchRow>) {
     for cache in &survey.build_caches {
-        if !cache.is_dir() {
-            continue;
+        match std::fs::symlink_metadata(cache) {
+            Ok(m) if m.is_dir() && !m.file_type().is_symlink() => {}
+            _ => continue,
         }
         let Some((bytes, idle)) = aged(survey, cache) else {
             continue;
@@ -305,24 +314,45 @@ pub(crate) fn check(survey: &ScratchSurvey, row: &ScratchRow) -> anyhow::Result<
     Ok(())
 }
 
-/// Delete `rows`, re-checking each against the survey first. Returns the
-/// deletions and failures; a check refusal fails the whole run, like
-/// worktree reclaim's rail-2 re-check.
+/// What `apply` did across the scratch rows.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct ScratchReclaimed {
+    pub deleted: Vec<(PathBuf, u64)>,
+    pub failed: Vec<(PathBuf, String)>,
+    /// Entries left alone because `--target-pct` was already satisfied.
+    pub stopped_early: Vec<PathBuf>,
+}
+
+/// Delete `rows`, re-checking each against the survey first. When
+/// `stop_at_pct` is set, `disk_pct` is probed on each row's parent directory
+/// before deleting and the row is skipped once its filesystem is at or below
+/// the target percentage, matching the worktree-cache tier. A check refusal
+/// fails the whole run, like worktree reclaim's rail-2 re-check.
 pub(crate) fn apply(
     survey: &ScratchSurvey,
     rows: &[ScratchRow],
+    stop_at_pct: Option<u8>,
+    disk_pct: impl Fn(&Path) -> Option<u8>,
     remove: impl Fn(&Path) -> std::io::Result<()>,
-) -> anyhow::Result<(Vec<(PathBuf, u64)>, Vec<(PathBuf, String)>)> {
-    let mut deleted = Vec::new();
-    let mut failed = Vec::new();
+) -> anyhow::Result<ScratchReclaimed> {
+    let mut out = ScratchReclaimed::default();
     for row in rows {
         check(survey, row)?;
+        if let Some(floor) = stop_at_pct {
+            let probe_path = row.path.parent().unwrap_or(&row.path);
+            if let Some(pct) = disk_pct(probe_path) {
+                if pct <= floor {
+                    out.stopped_early.push(row.path.clone());
+                    continue;
+                }
+            }
+        }
         match remove(&row.path) {
-            Ok(()) => deleted.push((row.path.clone(), row.bytes)),
-            Err(e) => failed.push((row.path.clone(), e.to_string())),
+            Ok(()) => out.deleted.push((row.path.clone(), row.bytes)),
+            Err(e) => out.failed.push((row.path.clone(), e.to_string())),
         }
     }
-    Ok((deleted, failed))
+    Ok(out)
 }
 
 /// The agent TMPDIR root for this process: the ancestor of `$TMPDIR` whose

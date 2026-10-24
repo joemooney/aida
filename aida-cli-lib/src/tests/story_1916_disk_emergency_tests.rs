@@ -1038,3 +1038,213 @@ fn task_2325_emergency_without_injected_roots_touches_no_scratch() {
         "no agent-scratch delete in the outcome"
     );
 }
+
+/// TASK-2325 (PR-2906 round 2): positive injected-survey coverage for the
+/// hard-ceiling scratch pass:
+/// - deletes terminal job `tmp/` and aged session scratch (while keeping
+///   scratch inside the `min_age` / `cfg.idle()` floor),
+/// - appends `LedgerRow::Delete { reason: AgentScratch }`,
+/// - updates `outcome.deleted`, `outcome.freed_bytes`, `outcome.used_pct_after`,
+///   and `outcome.stopped`,
+/// - stops once `used_pct()` drops below `cfg.used_pct`, leaving remaining
+///   scratch intact,
+/// - emits the single terminal `LedgerRow::Run` summary AFTER the scratch pass
+///   so `last_reclaim()` and `emergency_notice()` reflect the scratch recovery
+///   even when no worktree cache was deleted.
+// trace:TASK-2325 | ai:agy
+#[test]
+fn task_2325_emergency_hard_ceiling_scratch_deletes_ledgers_stops_and_notifies() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (main, root) = layout(tmp.path());
+    let now = SystemTime::now();
+    let day = 24 * HOUR;
+
+    // Two aged scratch items (5d old) and one younger than the 4d floor (3d old).
+    let jobs_root = tmp.path().join("jobs");
+    let job_big = jobs_root.join("aaaa1111");
+    std::fs::create_dir_all(job_big.join("tmp")).unwrap();
+    std::fs::write(job_big.join("tmp/big.o"), vec![0u8; 400]).unwrap();
+    std::fs::write(job_big.join("state.json"), r#"{"state":"done"}"#).unwrap();
+    age_tree(&job_big, now - 5 * day);
+
+    let tmp_root = tmp.path().join("claude-1000");
+    let sess_mid = tmp_root.join("-proj/sess-mid");
+    std::fs::create_dir_all(&sess_mid).unwrap();
+    std::fs::write(sess_mid.join("mid.txt"), vec![0u8; 200]).unwrap();
+    let sess_small = tmp_root.join("-proj/sess-small");
+    std::fs::create_dir_all(&sess_small).unwrap();
+    std::fs::write(sess_small.join("small.txt"), vec![0u8; 100]).unwrap();
+    let sess_young = tmp_root.join("-proj/sess-young");
+    std::fs::create_dir_all(&sess_young).unwrap();
+    std::fs::write(sess_young.join("young.txt"), vec![0u8; 900]).unwrap();
+    age_tree(&sess_mid, now - 5 * day);
+    age_tree(&sess_small, now - 5 * day);
+    age_tree(&sess_young, now - 3 * day);
+    std::fs::File::open(tmp_root.join("-proj"))
+        .unwrap()
+        .set_modified(now - 5 * day)
+        .unwrap();
+    std::fs::File::open(&tmp_root)
+        .unwrap()
+        .set_modified(now - 5 * day)
+        .unwrap();
+
+    // Emergency config with idle_hours = 96 (4 days), exceeding the 3-day default,
+    // so the scratch survey floor (min_age.max(cfg.idle())) holds back 3-day-old
+    // `sess_young`.
+    let custom_cfg = EmergencyConfig {
+        used_pct: 95,
+        margin_pct: 5,
+        idle_hours: 96,
+    };
+    let mut scratch = crate::scratch_reclaim::ScratchSurvey {
+        jobs_root: Some(jobs_root.clone()),
+        tmp_root: Some(tmp_root.clone()),
+        build_caches: Vec::new(),
+        live_session_dirs: BTreeSet::new(),
+        min_age: 3 * day,
+        now,
+    };
+    scratch.min_age = scratch.min_age.max(custom_cfg.idle());
+
+    // No worktree caches exist; usage starts at 97%. First delete drops 97 -> 95
+    // (still at ceiling), second delete drops 95 -> 88 (< 90 margin), so
+    // `sess_small` must be left untouched.
+    let probe = || {
+        let mut p = 97u8;
+        if !job_big.join("tmp").exists() {
+            p -= 2; // 95% -> still at ceiling, continues to second row
+        }
+        if !sess_mid.exists() {
+            p -= 7; // 88% -> below ceiling (and below 90% margin), stops before sess_small
+        }
+        Some(p)
+    };
+
+    let outcome =
+        run_emergency_probed(&main, &root, &custom_cfg, scratch, probe).expect("emergency ran");
+
+    assert!(
+        !job_big.join("tmp").exists(),
+        "largest aged job tmp deleted"
+    );
+    assert!(job_big.join("state.json").exists(), "job state preserved");
+    assert!(!sess_mid.exists(), "second aged scratch row deleted");
+    assert!(
+        sess_small.exists(),
+        "stopped once usage dropped below ceiling; remaining scratch kept"
+    );
+    assert!(
+        sess_young.exists(),
+        "3d scratch younger than 4d emergency idle floor kept"
+    );
+
+    assert_eq!(outcome.deleted.len(), 2);
+    assert_eq!(outcome.freed_bytes, 600);
+    assert_eq!(outcome.used_pct_before, Some(97));
+    assert_eq!(outcome.used_pct_after, Some(88));
+    assert_eq!(outcome.stopped, Stop::BelowMargin);
+    assert!(outcome
+        .deleted
+        .iter()
+        .all(|c| c.reason == Reason::AgentScratch));
+
+    // Exactly one Run row in outcome.rows and on disk, at the end, matching the
+    // post-scratch totals.
+    let run_rows: Vec<_> = outcome
+        .rows
+        .iter()
+        .filter(|r| matches!(r, LedgerRow::Run { .. }))
+        .collect();
+    assert_eq!(run_rows.len(), 1, "{:?}", outcome.rows);
+    assert!(matches!(
+        outcome.rows.last(),
+        Some(LedgerRow::Run {
+            freed_bytes: 600,
+            deleted: 2,
+            used_pct_before: Some(97),
+            used_pct_after: Some(88),
+            stopped,
+            ..
+        }) if stopped == "below-margin"
+    ));
+
+    let last = last_reclaim(&main).expect("last_reclaim reads Run row");
+    assert_eq!(last.freed_bytes, 600);
+    assert_eq!(last.deleted, 2);
+    assert_eq!(last.used_pct_after, Some(88));
+    assert_eq!(last.stopped, "below-margin");
+
+    // Scratch-only recovery produces an operator notice listing the deleted paths.
+    let (title, body) =
+        emergency_notice(&outcome, &custom_cfg).expect("scratch-only recovery notifies");
+    assert!(title.contains("auto-reclaimed 600 B"), "{title}");
+    assert!(
+        body.contains("deleted 2 idle cache(s), freeing 600 B")
+            && body.contains("(agent-scratch)")
+            && body.contains(&job_big.join("tmp").display().to_string()),
+        "{body}"
+    );
+}
+
+/// TASK-2325 (PR-2906 round 2): if the cache tier stops with `Stop::Refused`,
+/// `scratch_at_hard_ceiling` does not run, leaving scratch untouched and
+/// preserving the refusal outcome and summary.
+// trace:TASK-2325 | ai:agy
+#[test]
+fn task_2325_emergency_cache_refusal_skips_scratch_tier() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (main, root) = layout(tmp.path());
+    let now = SystemTime::now();
+    let day = 24 * HOUR;
+
+    let jobs_root = tmp.path().join("jobs");
+    let job_done = jobs_root.join("aaaa1111");
+    std::fs::create_dir_all(job_done.join("tmp")).unwrap();
+    std::fs::write(job_done.join("tmp/out.o"), vec![0u8; 256]).unwrap();
+    std::fs::write(job_done.join("state.json"), r#"{"state":"done"}"#).unwrap();
+    age_tree(&job_done, now - 5 * day);
+
+    let scratch = crate::scratch_reclaim::ScratchSurvey {
+        jobs_root: Some(jobs_root),
+        tmp_root: None,
+        build_caches: Vec::new(),
+        live_session_dirs: BTreeSet::new(),
+        min_age: 3 * day,
+        now,
+    };
+
+    let c = cfg();
+    let refused_outcome = apply(
+        &allow(&main, &root),
+        &[candidate(
+            &main.join("target/agent"),
+            Reason::WorktreeGone,
+            9 * HOUR,
+        )],
+        &c,
+        now,
+        || Some(97),
+        |p| std::fs::remove_dir_all(p),
+        |_| {},
+        |row| {
+            if !matches!(row, LedgerRow::Run { .. }) {
+                let _ = append_ledger(&main, std::slice::from_ref(row));
+            }
+        },
+    );
+    assert_eq!(refused_outcome.stopped, Stop::Refused);
+
+    let final_outcome =
+        scratch_at_hard_ceiling(&main, &c, now, &scratch, &|| Some(97), refused_outcome);
+    assert!(
+        job_done.join("tmp/out.o").exists(),
+        "scratch tier must not run after cache-tier Stop::Refused"
+    );
+    assert_eq!(final_outcome.stopped, Stop::Refused);
+    assert!(final_outcome.deleted.is_empty());
+    assert!(final_outcome.refusal.is_some());
+    let last = last_reclaim(&main).expect("Run row written");
+    assert_eq!(last.stopped, "refused");
+    assert_eq!(last.deleted, 0);
+}
