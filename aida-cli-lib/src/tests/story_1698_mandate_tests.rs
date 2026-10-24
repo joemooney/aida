@@ -2449,3 +2449,301 @@ fn task_2238_store_history_ignores_replace_objects() {
         versions.iter().map(|v| &v.title).collect::<Vec<_>>()
     );
 }
+
+// ── TASK-2168: trace-derived operator-only exclusions expire when terminal ─
+
+// trace:TASK-2168 | ai:agy
+#[test]
+fn task_2168_completed_operator_only_trace_no_longer_excludes() {
+    use aida_core::{ExecutionMode, RequirementStatus};
+    let tmp = tempfile::tempdir().unwrap();
+    let mut tagged_op = plain();
+    tagged_op.tags.insert(OPERATOR_ONLY_TAG.into());
+    note_exclusions(tmp.path(), "TASK-963", [&tagged_op]);
+    let ledger = read_exclusions(tmp.path());
+    assert_eq!(
+        ledger.as_ref().unwrap()["TASK-963"].class,
+        "operator-only",
+        "ledger records the operator-only exclusion"
+    );
+
+    for status in [
+        RequirementStatus::Completed,
+        RequirementStatus::Rejected,
+        RequirementStatus::Superseded,
+    ] {
+        // 1. Tag-based operator-only trace (current + history + sticky ledger).
+        let mut current = tagged_op.clone();
+        current.status = status.clone();
+        let mut c = Case::ok();
+        c.ledger = ledger.clone();
+        c.specs = vec![
+            spec("TASK-1"),
+            ShipSpec {
+                id: "TASK-963".into(),
+                aliases: Vec::new(),
+                named: false,
+                current: Some(current.clone()),
+                history: Ok(vec![tagged_op.clone(), current.clone()]),
+            },
+        ];
+        assert_eq!(
+            c.decide(),
+            Ok(active(false).id),
+            "trace-derived operator-only tag with status {status:?} must not exclude"
+        );
+
+        // 2. ExecutionMode::Operator trace (current + history).
+        let mut mode_op = plain();
+        mode_op.execution_mode = Some(ExecutionMode::Operator);
+        let mut mode_done = mode_op.clone();
+        mode_done.status = status.clone();
+        c.specs = vec![
+            spec("TASK-1"),
+            ShipSpec {
+                id: "TASK-964".into(),
+                aliases: Vec::new(),
+                named: false,
+                current: Some(mode_done.clone()),
+                history: Ok(vec![mode_op, mode_done]),
+            },
+        ];
+        assert_eq!(
+            c.decide(),
+            Ok(active(false).id),
+            "trace-derived ExecutionMode::Operator with status {status:?} must not exclude"
+        );
+
+        // 3. Named directly on the PR's own specs: still AlwaysHuman even when Completed.
+        c.state = MandateState::Active(active(true));
+        c.specs = vec![ShipSpec {
+            id: "TASK-963".into(),
+            aliases: Vec::new(),
+            named: true,
+            current: Some(current.clone()),
+            history: Ok(vec![current]),
+        }];
+        assert_eq!(
+            c.decide(),
+            Err(MandateRefusal::AlwaysHuman {
+                spec: "TASK-963".into(),
+                class: "operator-only".into(),
+            }),
+            "named operator-only spec with status {status:?} must still refuse"
+        );
+    }
+
+    // 4. Other exclusions (decide-mode, security, sticky ledger) still exclude when Completed.
+    let mut completed_decide = plain();
+    completed_decide.status = RequirementStatus::Completed;
+    completed_decide.execution_mode = Some(ExecutionMode::Decide);
+    let mut c = Case::ok();
+    c.state = MandateState::Active(active(true));
+    c.specs = vec![
+        spec("TASK-1"),
+        ShipSpec {
+            id: "TASK-965".into(),
+            aliases: Vec::new(),
+            named: false,
+            current: Some(completed_decide.clone()),
+            history: Ok(vec![completed_decide]),
+        },
+    ];
+    assert_eq!(
+        c.decide(),
+        Err(MandateRefusal::AlwaysHuman {
+            spec: "TASK-965".into(),
+            class: "decide-mode".into(),
+        })
+    );
+
+    let mut completed_sec = plain();
+    completed_sec.status = RequirementStatus::Completed;
+    completed_sec.execution_mode = Some(ExecutionMode::Operator);
+    completed_sec.tags.insert("security".into());
+    let mut c = Case::ok();
+    c.specs = vec![
+        spec("TASK-1"),
+        ShipSpec {
+            id: "TASK-966".into(),
+            aliases: Vec::new(),
+            named: false,
+            current: Some(completed_sec.clone()),
+            history: Ok(vec![completed_sec]),
+        },
+    ];
+    assert!(
+        matches!(c.decide(), Err(MandateRefusal::Excluded { ref spec, .. }) if spec == "TASK-966"),
+        "a completed operator-only trace that also carries security still excludes without --include-supervised"
+    );
+}
+
+// trace:TASK-2168 | ai:agy
+#[test]
+fn task_2168_approved_or_in_progress_operator_only_trace_still_excludes() {
+    use aida_core::{ExecutionMode, RequirementStatus};
+    let tmp = tempfile::tempdir().unwrap();
+    let mut tagged_op = plain();
+    tagged_op.tags.insert(OPERATOR_ONLY_TAG.into());
+    note_exclusions(tmp.path(), "TASK-963", [&tagged_op]);
+    let ledger = read_exclusions(tmp.path());
+
+    for status in [
+        RequirementStatus::Approved,
+        RequirementStatus::InProgress,
+        RequirementStatus::Draft,
+        RequirementStatus::Planned,
+        RequirementStatus::Done,
+        RequirementStatus::NeedsAttention,
+    ] {
+        let mut current = tagged_op.clone();
+        current.status = status.clone();
+        let mut c = Case::ok();
+        c.state = MandateState::Active(active(true));
+        c.specs = vec![
+            spec("TASK-1"),
+            ShipSpec {
+                id: "TASK-963".into(),
+                aliases: Vec::new(),
+                named: false,
+                current: Some(current.clone()),
+                history: Ok(vec![current]),
+            },
+        ];
+        assert_eq!(
+            c.decide(),
+            Err(MandateRefusal::AlwaysHuman {
+                spec: "TASK-963".into(),
+                class: "operator-only".into(),
+            }),
+            "trace-derived operator-only spec with status {status:?} must still exclude"
+        );
+
+        // Even if the tag was stripped on the current record, the sticky ledger still excludes.
+        let mut stripped = plain();
+        stripped.status = status.clone();
+        c.ledger = ledger.clone();
+        c.specs = vec![
+            spec("TASK-1"),
+            ShipSpec {
+                id: "TASK-963".into(),
+                aliases: Vec::new(),
+                named: false,
+                current: Some(stripped.clone()),
+                history: Ok(vec![stripped]),
+            },
+        ];
+        assert_eq!(
+            c.decide(),
+            Err(MandateRefusal::AlwaysHuman {
+                spec: "TASK-963".into(),
+                class: "operator-only".into(),
+            }),
+            "sticky ledger must still exclude non-terminal status {status:?}"
+        );
+
+        let mut mode_op = plain();
+        mode_op.status = status.clone();
+        mode_op.execution_mode = Some(ExecutionMode::Operator);
+        c.ledger = Ok(Default::default());
+        c.specs = vec![
+            spec("TASK-1"),
+            ShipSpec {
+                id: "TASK-964".into(),
+                aliases: Vec::new(),
+                named: false,
+                current: Some(mode_op.clone()),
+                history: Ok(vec![mode_op]),
+            },
+        ];
+        assert_eq!(
+            c.decide(),
+            Err(MandateRefusal::AlwaysHuman {
+                spec: "TASK-964".into(),
+                class: "operator-only".into(),
+            }),
+            "ExecutionMode::Operator trace with status {status:?} must still exclude"
+        );
+    }
+}
+
+// trace:TASK-2168 | ai:agy
+#[test]
+fn task_2168_unreadable_store_for_operator_only_trace_still_excludes() {
+    use aida_core::RequirementStatus;
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    git(root, &["init", "-q", "-b", "main"]);
+
+    let write_req = |id: &str, req: &aida_core::Requirement| {
+        let rel = aida_core::object_store::relative_object_path(id).unwrap();
+        let path = root.join(rel);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, serde_yaml::to_string(req).unwrap()).unwrap();
+    };
+    let mut r1 = plain();
+    r1.spec_id = Some("TASK-1".into());
+    write_req("TASK-1", &r1);
+
+    let mut r963 = plain();
+    r963.spec_id = Some("TASK-963".into());
+    r963.status = RequirementStatus::Completed;
+    r963.tags.insert(OPERATOR_ONLY_TAG.into());
+    write_req("TASK-963", &r963);
+    git(root, &["add", "-A"]);
+    git(
+        root,
+        &["commit", "-qm", "seed completed operator-only spec"],
+    );
+
+    // With a readable store, the completed operator-only trace no longer excludes.
+    let mut loaded = aida_core::RequirementsStore::new();
+    loaded.requirements = vec![r1.clone(), r963.clone()];
+    let mut c = Case::ok();
+    c.state = MandateState::Active(active(true));
+    c.specs = crate::mandate_ship::resolve_exclusion_specs(
+        Some(&loaded),
+        root,
+        &["TASK-1".into()],
+        ["TASK-963".into()].into_iter().collect(),
+    );
+    assert_eq!(c.decide(), Ok(active(true).id));
+
+    // Fail closed: when the live store cannot be read (`store: None`, so
+    // `current` is `None`), the exclusion from history/ledger still applies
+    // even though the committed object had `status: Completed`.
+    let unresolved_traced = crate::mandate_ship::resolve_exclusion_specs(
+        None,
+        root,
+        &[],
+        ["TASK-963".into()].into_iter().collect(),
+    );
+    assert_eq!(unresolved_traced.len(), 1);
+    assert!(unresolved_traced[0].current.is_none());
+    c.specs = vec![
+        spec("TASK-1"),
+        unresolved_traced.into_iter().next().unwrap(),
+    ];
+    assert_eq!(
+        c.decide(),
+        Err(MandateRefusal::AlwaysHuman {
+            spec: "TASK-963".into(),
+            class: "operator-only".into(),
+        })
+    );
+
+    // And an unreadable git store history also fails closed.
+    c.specs = vec![
+        spec("TASK-1"),
+        ShipSpec {
+            id: "TASK-963".into(),
+            aliases: Vec::new(),
+            named: false,
+            current: None,
+            history: Err("store unreadable".into()),
+        },
+    ];
+    assert!(
+        matches!(c.decide(), Err(MandateRefusal::HistoryUnreadable { ref spec, .. }) if spec == "TASK-963")
+    );
+}

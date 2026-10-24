@@ -454,13 +454,19 @@ pub(crate) struct ProtectedEntry {
 }
 
 impl ProtectedEntry {
-    /// A prefix entry matches on a path-component boundary only: it ends in
-    /// `/`, so `foo/` matches `foo/x.rs` and never `foobar/x.rs`.
+    /// Match on a path-component boundary: `foo/` matches `foo/x.rs` and
+    /// never `foobar/x.rs` or `foo`; an entry without a trailing `/` matches
+    /// the exact path and any file under that directory (`foo/x.rs`), never
+    /// `foobar/x.rs` or `bar.rs.bak` (TASK-2299).
+    // trace:TASK-2168 | ai:agy
     fn matches(&self, path: &str) -> bool {
         if self.pattern.ends_with('/') {
             path.starts_with(&self.pattern)
         } else {
             path == self.pattern
+                || path
+                    .strip_prefix(&self.pattern)
+                    .is_some_and(|rest| rest.starts_with('/'))
         }
     }
 }

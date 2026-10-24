@@ -1467,6 +1467,33 @@ pub(crate) fn always_human_class(req: &aida_core::Requirement) -> Option<String>
         .then(|| "operator-only".into())
 }
 
+/// TASK-2168: a trace-derived `operator-only` exclusion stops applying once
+/// the traced spec's current status is Completed, Rejected or Superseded.
+/// Exclusions named directly on the PR's specs and unreadable current status
+/// (`current: None`) keep the exclusion (fail closed).
+// trace:TASK-2168 | ai:agy
+pub(crate) fn trace_operator_only_expired(spec: &ShipSpec) -> bool {
+    !spec.named
+        && spec.current.as_ref().is_some_and(|req| {
+            matches!(
+                req.status,
+                aida_core::RequirementStatus::Completed
+                    | aida_core::RequirementStatus::Rejected
+                    | aida_core::RequirementStatus::Superseded
+            )
+        })
+}
+
+// trace:TASK-2168 | ai:agy
+fn excluded_class_for(req: &aida_core::Requirement, ignore_operator_mode: bool) -> Option<String> {
+    if ignore_operator_mode && req.execution_mode == Some(aida_core::ExecutionMode::Operator) {
+        let mut without_operator = req.clone();
+        without_operator.execution_mode = None;
+        return excluded_class(&without_operator);
+    }
+    excluded_class(req)
+}
+
 /// STORY-1698: does an active mandate cover this ship? `Ok(mandate id)` =
 /// the advisor may release the hold and merge; `Err` = it may not. Pure:
 /// every input is gathered by the caller, at the instant of the decision.
@@ -1720,16 +1747,22 @@ pub(crate) fn judge_exclusion_spec(
     }
     // The ledger is the first source: once seen excluded, always excluded.
     // Consult both the ID and any recorded aliases.
+    // TASK-2168: a trace-derived operator-only exclusion expires once the
+    // traced spec is Completed, Rejected or Superseded (fail closed when
+    // current status is unreadable).
+    // trace:TASK-2168 | ai:agy
+    let operator_only_expired = trace_operator_only_expired(spec);
     let mut excluded: Option<String> = None;
     for key in std::iter::once(id).chain(spec.aliases.iter()) {
         if let Some(entry) = ledger.get(&key.to_ascii_uppercase()) {
             if entry.always_human {
-                return Err(MandateRefusal::AlwaysHuman {
-                    spec: id.clone(),
-                    class: entry.class.clone(),
-                });
-            }
-            if excluded.is_none() {
+                if !(operator_only_expired && entry.class == "operator-only") {
+                    return Err(MandateRefusal::AlwaysHuman {
+                        spec: id.clone(),
+                        class: entry.class.clone(),
+                    });
+                }
+            } else if excluded.is_none() {
                 excluded = Some(format!(
                     "{}, recorded {}",
                     entry.class,
@@ -1755,13 +1788,15 @@ pub(crate) fn judge_exclusion_spec(
         .chain(history.iter());
     for (i, version) in versions.enumerate() {
         if let Some(class) = always_human_class(version) {
-            return Err(MandateRefusal::AlwaysHuman {
-                spec: id.clone(),
-                class,
-            });
+            if !(operator_only_expired && class == "operator-only") {
+                return Err(MandateRefusal::AlwaysHuman {
+                    spec: id.clone(),
+                    class,
+                });
+            }
         }
         if excluded.is_none() {
-            excluded = excluded_class(version).map(|why| {
+            excluded = excluded_class_for(version, operator_only_expired).map(|why| {
                 if i == 0 && spec.current.is_some() {
                     why
                 } else {

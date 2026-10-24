@@ -80,6 +80,40 @@ fn a_directory_prefix_matches_nested_files_on_a_component_boundary() {
     assert_eq!(touches_gates(&paths(&["bar.rs.bak"]), &set), None);
 }
 
+// trace:TASK-2168 | ai:agy
+#[test]
+fn a_directory_entry_without_a_trailing_slash_matches_files_under_it() {
+    let mut set = ProtectedPaths::floor();
+    let l = layer("[mandate.human_gates]\nprotected_paths = [\"./aida-cli-lib/src/gate\"]\n");
+    set.extend(PathSource::Operator, l.protected_paths);
+    for file in [
+        "aida-cli-lib/src/gate/mod.rs",
+        "./aida-cli-lib/src/gate/nested/check.rs",
+        "aida-cli-lib/src/gate",
+    ] {
+        let hit = touches_gates(&paths(&["README.md", file]), &set)
+            .unwrap_or_else(|| panic!("{file} must match directory entry without trailing '/'"));
+        assert_eq!(
+            hit,
+            GateMatch {
+                path: file.trim_start_matches("./").into(),
+                entry: "aida-cli-lib/src/gate".into(),
+                source: PathSource::Operator,
+            }
+        );
+    }
+    assert_eq!(
+        touches_gates(
+            &paths(&[
+                "aida-cli-lib/src/gates.rs",
+                "aida-cli-lib/src/gate_extra/x.rs"
+            ]),
+            &set
+        ),
+        None
+    );
+}
+
 // trace:STORY-1888.acd4bc79 | ai:claude
 #[test]
 fn no_layer_can_shrink_the_floor() {
