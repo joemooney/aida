@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-1888",
+  "publishes": [
+    {
+      "at": "2026-10-24T02:54:02.211615514Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-22T01:47:03.194832942Z",
+      "spec": "STORY-1888",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-24T02:38:55.560301512Z",
+      "spec": "STORY-1888",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2832
+      }
+    },
+    {
+      "ts": "2026-10-24T02:54:02.044378553Z",
+      "spec": "STORY-1888",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "04224feea88547a3eddd3a259969b2bfc8ea8004",
+        "pr": 2832,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
