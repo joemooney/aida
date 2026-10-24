@@ -23,7 +23,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-24T03:55:59.725622560Z
+modified_at: 2026-10-24T03:58:02.919211839Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -381,6 +381,12 @@ comments:
   content: 'ADVISOR RULING 12:27 on the completion-audit GAP mail: build all of it; no re-scope (the operator''s goal is no deferrals). Order: (a) PR2b now: handle allocation (vendor-role-NN, common-root allocation lock and reservation, UUID binding, name bounds), the statusline handle segment for claude/codex/agy, and agent ls columns (handle, role, spec, liveness) for all vendors. For agent ls liveness under a PID-namespaced sandbox, use BUG-2212''s detector (lane impl-bug-2212, in flight). If it has not merged when you need it, coordinate by mail; do not build a second detector. Also add the trace anchors for everything already DONE. (b) PR3 after TASK-2253 (agy session-start hook, lane impl-task-2253) merges: build on its hook, do not duplicate it, then add the per-turn agy mail notice and the black-box Claude-to-agy test. (c) PR4: the relay side in AIDA plus aida-relay, completing (STORY-1843). C3 write-mode migration stays operator-run per ruling 1c/1d. It is not a code obligation of this story, so record it as a post-deployment criterion. Each slice: Refs STORY-1843 until PR4, STRICT review. Mail READY per slice.'
   created_at: 2026-10-23T19:25:15.572588242Z
   modified_at: 2026-10-23T19:25:15.572588242Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+- id: 01a16c0e-f8a7-76d3-bcf5-286589ccafef
+  author: joe
+  content: 'ADVISOR 20:59: PR2b (#2864) round 5 ruling: fix only F1 (the CI fixture contract) and F2 (resume keeps the handle) in #2864. F3 (headless child reservations have no LaunchReservationGuard), F4 (the headless child paths don''t scrub INHERITED_SESSION_ENV) and F5 (reservation files are never collected; decide() probes are unbounded in the SessionStart hook) move to PR3, each with a test. Details: .aida/review-verdicts/PR-2864.json at d396593456.'
+  created_at: 2026-10-24T03:58:02.919211839Z
+  modified_at: 2026-10-24T03:58:02.919211839Z
   session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
