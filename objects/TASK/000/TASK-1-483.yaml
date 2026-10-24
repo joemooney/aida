@@ -1,0 +1,29 @@
+id: 01a16ca7-ab03-72b0-8493-fe8031ed403b
+spec_id: TASK-1-483
+title: 'cosmetic: busy_reason only probes <cache>/<profile>/.cargo-lock; a cross-target…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on STORY-1916, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  cosmetic: busy_reason only probes <cache>/<profile>/.cargo-lock; a cross-target build holds <cache>/<triple>/<profile>/.cargo-lock and is caught only by the mtime re-walk (disk_emergency.rs:311).
+
+  PR: #2859
+  Reviewed sha: d00e3bc02715fe44ef1e5cb9db2ec6ee8342cc80
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-24T06:44:50.051416451Z
+modified_at: 2026-10-24T06:44:50.051416451Z
+req_type: Task
+tags:
+- carried-from:STORY-1916
+- finding-hash:59fe6f78
+- from-review:PR-2859
+- kind:carried-forward
+filed_at:
+  code_sha: 4d3777338645602470178f0ab2e63309f71520e2
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 43a38f38d2
+  vendor: claude
