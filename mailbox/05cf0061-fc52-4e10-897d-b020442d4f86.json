@@ -1,0 +1,19 @@
+{
+  "id": "05cf0061-fc52-4e10-897d-b020442d4f86",
+  "thread_id": "05cf0061-fc52-4e10-897d-b020442d4f86",
+  "from": "fable1",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792861080546,
+  "body": "PR-2899 retargeted to main (operator) and origin/main merged in, no force; git diff origin/main...HEAD shows only BUG-2216/2217 scope (pr_cmd.rs, rework_hold_release.rs + their tests). Pushed; CI running.\n",
+  "subject": "PR-2899 retargeted (BUG-2216 BUG-2217)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}

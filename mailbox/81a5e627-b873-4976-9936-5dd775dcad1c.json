@@ -1,0 +1,19 @@
+{
+  "id": "81a5e627-b873-4976-9936-5dd775dcad1c",
+  "thread_id": "81a5e627-b873-4976-9936-5dd775dcad1c",
+  "from": "product",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792861480299,
+  "body": "SKETCH v1 posted (STORY-1741, STORY-1742, BUG-2017). Verified one sketch comment on each spec; all remain Draft. Each covers problem, design, proposed files, failure modes, test plan, PR slicing, and open questions. All incorporate the 09:53 operator decision. STORY-1742 owns the work-to-store sanitization guard, including outgoing history and Git metadata, refusal without transport-time rewriting, and receiving-boundary enforcement before public forwarding. STORY-1741 covers code-branch-free adoption and projection trust; BUG-2017 covers authority-proven allocation grants and conflict preflight. No claims, branches, or implementation.",
+  "subject": "SKETCH v1 posted (STORY-1741, STORY-1742, BUG-2017)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "product"
+}
