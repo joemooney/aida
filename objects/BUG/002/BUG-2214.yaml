@@ -18,12 +18,62 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-24T06:33:24.862508226Z
-modified_at: 2026-10-24T06:49:09.527485089Z
+modified_at: 2026-10-24T06:57:28.047440932Z
 req_type: Bug
 tags:
 - mandate
 - merge-hold
 - train
+comments:
+- id: 01a16cb3-3bef-77e2-a29a-9242fdb02865
+  author: joe
+  content: |-
+    SKETCH v1 (BUG-2214) — mandate lands a held behind-main PR via the train; human-cleared supervised holds are covered; evidence reads fetch the head first.
+
+    CONTEXT. Three overnight failures under ship-held --include-supervised: (1) a held PR behind main is unlandable (ship's STORY-1690 behind-base gate refuses before the release step and must stay un-overridable; the train, the designated landing path, refuses every hold); (2) a human-cleared supervised hold leaves no marker, so hold_cover refuses NoHoldMarker ("a human must ship it"); (3) after `gh pr update-branch`, mandate_ship_cover's collect_pr runs `git merge-base` against an unfetched head and refuses TraceEvidenceUnreadable.
+
+    (a) TRAIN RELEASES A MEMBER'S HOLD EXACTLY AS SHIP WOULD — one shared function, not a copy.
+    - The cover CHECK is already shared: MemberChecks::mandate_cover -> pr_cmd::mandate_ship_cover(..., mandate::ship_decision) — ship's exact decision fn (gate_checks on protected paths + human gates, hold-kind releasability, sticky exclusions via ledger+history, two-person rules, approval at head, carry-over). No new decision logic.
+    - Extract ship's release BLOCK (pr_cmd.rs ~3786–3858) into mandate_ship::release_hold_under_mandate(hold_root, forge, change_ref, pr, cover: &MandateCover, hold_record, released_by_verdict, head_sha) -> Result<(), String>: release note eprintln; merge_hold::clear_hold; merge_hold::record_mandate_clearance (ledger entry: cleared_by "advisor:<principal>", released_under_mandate=id); forge PR comment on the MEMBER PR ("Merge-hold released under mandate <id> ... Approval at <sha>; CI green"); MergeHoldChanged event (placed:false, mandate release_note, seat); sync_label(false). Ship's call site becomes a call to it (behavior unchanged); the train calls the same function. Re-arm on any later failure reuses rearm_after_mandate_failure unchanged.
+    - Member gate (gate_member_with): today a hold marker refuses at the top. New: when a marker exists AND a mandate is Active (mandate::current_state), defer the hold judgment to the spec-policy stage (after fetch_head / approval pin, where ids+head exist) and consult checks.mandate_cover. Ok -> admit, Member gains needs_release: bool; Err -> refuse with today's message plus the MandateRefusal note, and record GATE_MANDATE_SHIP gate-held + mandate_drive::ship_refused (parity with ship's mandate_refusal_note). No active mandate -> today's early refusal verbatim.
+    - Train CI with a held member: the merge-hold-gate WORKFLOW (server-side, stays untouched) fails the TRAIN PR while a member carries aida:merge-hold. Two ship-parity halves:
+      1. wait_ci tolerance: when the train PR's only failing check is merge-hold-gate and every admitted held member is mandate-covered (needs_release), treat as green-pending-release (reuse ci_gate::hold_gate_state / the wait_for_ship_ci hold_present pattern on the train change). Any other red stays red and bisects as today.
+      2. land(): under the merge lease, after the pre-land re-gate (ports.gate re-runs mandate_cover, re-reading the mandate from disk at that instant — a lapsed/stopped mandate ejects the member with the hold intact), release each held member via the shared function; then re-trigger the train PR's merge-hold-gate (append a release-note line to the train PR body — the workflow re-runs on `edited`; a member's label change does NOT re-run the train PR's workflow) and wait_hold_gate_green on the TRAIN PR (bounded, ship's BUG-1180 wait); then merge pinned to tip (match_head already set). ANY failure after release (gate not green in time, main moved, merge refused) -> rearm_after_mandate_failure per released member (marker + label restored), retire the train PR, Landing::Stale/Refused. The server-side layer is never weakened: releases are real marker+label+clearance releases, not body attestations.
+
+    (b) HUMAN-CLEARED SUPERVISED HOLD COVERED — without loosening anything else.
+    - New HoldFacts::ClearedByHuman, built in mandate_ship_cover when there is no marker and no MARKER_MISSING signal, requiring BOTH to agree:
+      (i) local clearance record at merge_hold::clearance_path(pr): parses as HoldClearance, released_under_mandate.is_none(), PrincipalIdentity::parse(cleared_by) is Human or Operator (an "advisor:*" mandate clearance is not a human decision and keeps today's refusal);
+      (ii) forge label state corroborates: aida:merge-hold absent, and the BUG-1693 pair rule holds (merge-hold-recorded -> merge-hold-cleared present) — the same three-rule check the merge-hold-gate workflow applies, read through the API. Labels unreadable -> fail closed (stay NoHoldMarker).
+    - hold_cover: ClearedByHuman passes the hold stage with nothing to release (ship's release step keys on marker_reason and naturally no-ops; the train admits with needs_release=false). EVERYTHING else still runs: sticky exclusions, AlwaysHuman (operator-only / decide-mode), include_supervised required for sensitive classes, gate_checks on protected paths and human gates, approval at head, two-person rules.
+    - HoldFacts::None (never held, no clearance) keeps refusing NoHoldMarker. MarkerMissing keeps refusing. Label-only holds stay human (ship_hold_release_refusal_for untouched).
+
+    (c) FETCH THE PR HEAD BEFORE EVIDENCE READS.
+    - In mandate_ship_cover, after fetch_change_info_via_resolved_forge yields base_ref and before mandate_traces::collect_pr, call pr_cmd::fetch_ship_refs(main_worktree, &info.base_ref, head_branch) when head_branch is Some (ship passes ship_branch; the train passes head_ref). Best-effort: a failed fetch falls through to collect_pr, which already fails closed (TraceEvidenceUnreadable). One place covers ship's early gate, the under-lease re-read, the train's cover, and the rework release path.
+
+    (d) EVERY REFUSAL THAT MUST STAY — a test each (targeted: pr_train, mandate_, merge_hold):
+    1. operator-only / decide-mode (AlwaysHuman): refused on the train-release path and on the cleared-hold path.
+    2. protected gate paths: a member whose diff touches mandate_ship.rs / mandate gates -> TouchesGates refusal through the train.
+    3. no approval at head: cleared-hold PR without approval at the live head -> refused; train member with approval pinned elsewhere -> ejected.
+    4. sticky exclusions: a tag stripped by a later edit still refuses via ledger+history on BOTH new paths.
+    5. hold kinds: recusal / legacy-untyped / MarkerMissing never released by the train; label-only stays human.
+    6. mandate without --include-supervised: sensitive spec refused on both new paths.
+    7. mandate lapses between train CI and land: pre-land re-gate ejects, hold intact; failure after release -> hold re-armed (marker + label).
+    8. two-person rules: advisor-authored member and approver==shipper refused through the train cover; solo self-approval refused.
+    9. ship's behind-main refusal UNCHANGED (no new ship bypass; a behind-main held PR lands only via the train) — plus the headline end-to-end: behind-main held member + covering mandate -> train releases (ledger record + PR comment identical to ship's) and lands on the tested train.
+    10. no mandate active: train hold refusal byte-identical to today.
+
+    (e) PR SLICING (both PRs touch mandate-gate protected files, so they are themselves mandate-uncoverable; a human merges each):
+    - PR-1 (small, ship-side): (c) fetch + (b) ClearedByHuman + their tests. Touches mandate_ship.rs, mandate.rs, merge_hold.rs (read helper).
+    - PR-2: shared-release extraction (pure move; ship behavior unchanged, existing STORY-1698 tests prove it) + train member gate under mandate + wait_ci tolerance + land-time release/re-arm/re-trigger + tests. Touches pr_train.rs, pr_cmd.rs, mandate_ship.rs, ci_gate.rs.
+
+    OPEN QUESTIONS (rulings requested):
+    Q1 (b): is local-clearance + forge-label agreement sufficient authority for ClearedByHuman, or do you want a third corroboration (events ledger)? Proposed: the two above; a forged local file alone cannot pass (labels disagree), and label tampering alone cannot pass (no local record).
+    Q2 (a): OK to defer the member-gate hold refusal to the spec-policy stage ONLY while a mandate is Active, keeping today's cheap early refusal otherwise?
+    Q3 (a): re-trigger the train PR's merge-hold-gate via a body-line append (workflow `edited` trigger). Acceptable, or prefer an actions re-run API call (needs actions:write the train tooling does not use today)?
+    Q4: gates for a train release = exact ship parity (ship_decision, ship_gate only), not rework_release_decision's extra hold_clear_gate. Parity argued: the train release IS ship's release, same function, no fork. Confirm?
+  created_at: 2026-10-24T06:57:28.047440932Z
+  modified_at: 2026-10-24T06:57:28.047440932Z
+  session_id: a2f39cdc-7bb2-4cbe-a53b-0b1168a2f89d
 history:
 - id: 01a16cab-a097-7c70-9384-7df089f14fe6
   author: joe
