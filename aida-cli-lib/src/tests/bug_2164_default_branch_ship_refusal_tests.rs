@@ -759,3 +759,77 @@ fn task_1951_ssh_command_with_batch_mode_appends_to_configured_command() {
         "ssh -i ~/.ssh/deploy -o BatchMode=yes"
     );
 }
+
+/// TASK-2099 + TASK-2100: with only GIT_SSH set (a bare program, here in a
+/// directory whose name has a space and a quote), the probe quotes it and
+/// adds the batch flag of the variant git will use: OpenSSH's
+/// `-o BatchMode=yes`, or `-batch` for a program named plink.
+// trace:TASK-1951 trace:TASK-2099 trace:TASK-2100 | ai:claude
+#[test]
+fn task_1951_origin_head_probe_quotes_git_ssh_and_uses_the_variant_batch_flag() {
+    for (program, want, refuse) in [
+        ("fake-ssh", "BatchMode=yes", "-batch"),
+        ("plink", "-batch", "BatchMode"),
+    ] {
+        let work = create_test_repo_on_branch("feature-work");
+        let log = work.path().join("ssh-calls");
+        let dir = work.path().join("op's tools");
+        std::fs::create_dir_all(&dir).unwrap();
+        let ssh = dir.join(program);
+        crate::test_exec::write_executable(
+            &ssh,
+            format!("#!/bin/sh\necho \"$*\" >> '{}'\nexit 1\n", log.display()),
+        );
+        assert!(crate::test_git::git_command()
+            .arg("-C")
+            .arg(work.path())
+            .args(["remote", "add", "origin", "ssh://forge.invalid/repo.git"])
+            .status()
+            .unwrap()
+            .success());
+        let gh = fake_default_branch_gh(work.path(), "pure-git", "echo unexpected");
+        let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+            work.path(),
+            "implementer",
+            &[],
+            &[
+                ("AIDA_TEST_GH_BINARY", Some(gh.to_str().unwrap())),
+                ("GIT_SSH_COMMAND", None),
+                ("GIT_SSH_VARIANT", None),
+                ("GIT_SSH", Some(ssh.to_str().unwrap())),
+            ],
+        );
+        assert_eq!(crate::forge::probe_default_branch(work.path()), None);
+        let calls = std::fs::read_to_string(&log).unwrap_or_default();
+        assert!(
+            calls
+                .lines()
+                .any(|l| l.contains(want) && !l.contains(refuse)),
+            "{program}: {calls:?}"
+        );
+    }
+}
+
+// trace:TASK-1951 trace:TASK-2100 | ai:claude
+#[test]
+fn task_1951_batch_flag_follows_the_ssh_variant() {
+    use crate::forge::ssh_command_with_batch_mode_for as batch;
+    assert_eq!(
+        batch(Some("'/opt/putty/plink.exe'"), None),
+        "'/opt/putty/plink.exe' -batch"
+    );
+    assert_eq!(
+        batch(Some("tortoiseplink -v"), None),
+        "tortoiseplink -v -batch"
+    );
+    assert_eq!(
+        batch(Some("my-wrapper"), Some("plink")),
+        "my-wrapper -batch"
+    );
+    assert_eq!(batch(Some("my-wrapper"), Some("simple")), "my-wrapper");
+    assert_eq!(
+        batch(Some("ssh -i k"), Some("auto")),
+        "ssh -i k -o BatchMode=yes"
+    );
+    assert_eq!(batch(None, None), "ssh -o BatchMode=yes");
+}

@@ -806,3 +806,103 @@ fn proven_base_refusals_have_no_whitespace_gap() {
         assert!(!text.contains("  "), "{text:?}");
     }
 }
+
+// TASK-1991: the advisor's ship-level sequence on one carried-over head:
+// approve at A, update the branch cleanly to B, then the approval-head gate
+// (the merge path's decision) pins B and the forge merge, whose chokepoint
+// runs the corpus gate, merges B. A pure-git forge over the bare origin.
+// trace:TASK-1951 trace:TASK-1991 | ai:claude
+#[test]
+fn approve_update_branch_then_both_ship_gates_clear_on_the_carried_head() {
+    use crate::forge::{ChangeRef, Forge, MergeOptions, PureGitForge};
+    use crate::review_verdict::{RecordedVerdict, RecorderAttestation, VerdictKind};
+    let (tmp, approved) = fixture();
+    let repo = tmp.path();
+    let carried = clean_merge(repo);
+    record_corpus_verdict(repo, "TASK-42", "approved", &approved);
+
+    let v = RecordedVerdict {
+        kind: VerdictKind::Approved,
+        raw: "approved".into(),
+        reviewed_sha: Some(approved.clone()),
+        recorded_at: Some("2026-09-23T00:00:00Z".into()),
+        attestation: Some(RecorderAttestation {
+            sha: approved.clone(),
+            human_at_tty: true,
+            receipt_id: Some("rcpt".into()),
+            identity: vec!["session:independent-reviewer".into()],
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let mut policy = crate::pr_ship::ShipApprovalPolicy {
+        reviewed_committed_at: Some("2026-09-22T00:00:00Z".parse().unwrap()),
+        shipper: vec!["session:independent-shipper".into()],
+        ..Default::default()
+    };
+    let a = v.attestation.as_ref().unwrap();
+    policy.verified_authority.insert(
+        a.authority_key(v.recorded_at.as_deref()).unwrap(),
+        a.identity.clone(),
+    );
+    let site = CarryOverSite::new(repo, Some("main"));
+    let pin = crate::pr_cmd::merge_path_approval_decision(
+        repo,
+        PR,
+        std::slice::from_ref(&v),
+        &policy,
+        Some(&carried),
+        &site,
+        &|| Some("main".to_string()),
+    )
+    .expect("the approval gate carries the approval over");
+    assert_eq!(pin.as_deref(), Some(carried.as_str()));
+
+    let mut opts = MergeOptions::squash();
+    opts.match_head = pin;
+    let change = ChangeRef {
+        id: 0,
+        url: String::new(),
+        branch: "pr".into(),
+        base: "main".into(),
+        title: Some("feat: reviewed change (TASK-42)".into()),
+    };
+    let merged = PureGitForge::new(repo)
+        .merge_change(&change, &opts, &mut crate::network_retry::NoopSink)
+        .expect("the corpus gate clears the carried head and the merge lands");
+    assert!(merged.merged);
+    let main_a = git(repo, &["show", "main:a.txt"]);
+    assert!(main_a.contains("a line 5 — reviewed change"), "{main_a}");
+}
+
+// TASK-1991: the corpus carry-over refuses an approval with no reviewed
+// sha, and an unparseable live verdict beside an approval.
+// trace:TASK-1951 trace:TASK-1991 | ai:claude
+#[test]
+fn corpus_carry_over_refuses_a_shaless_approval_or_an_unparseable_body() {
+    let (tmp, _approved) = fixture();
+    let repo = tmp.path();
+    let h = clean_merge(repo);
+    let path = crate::review_verdict::verdict_path(repo, &format!("PR-{PR}"));
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(
+        &path,
+        r#"{"verdict":"approved","recorded_by":"reviewer-a"}"#,
+    )
+    .unwrap();
+    assert!(
+        corpus_gate(repo, &[], "main", &h).is_err(),
+        "an approval that names no reviewed sha carries nothing over"
+    );
+
+    let (tmp, approved) = fixture();
+    let repo = tmp.path();
+    let h = clean_merge(repo);
+    record_corpus_verdict(repo, &format!("PR-{PR}"), "approved", &approved);
+    let other = crate::review_verdict::verdict_path(repo, "BUG-9");
+    std::fs::write(&other, "{ not json").unwrap();
+    assert!(
+        corpus_gate(repo, &["BUG-9".to_string()], "main", &h).is_err(),
+        "an unparseable live verdict beside the approval refuses"
+    );
+}
