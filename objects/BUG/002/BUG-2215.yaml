@@ -8,7 +8,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-24T12:26:56.191718979Z
-modified_at: 2026-10-24T15:00:32.312881225Z
+modified_at: 2026-10-24T17:15:25.408772677Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -22,6 +22,11 @@ comments:
   content: 'Implemented in PR-2898 at eb9846b8f4: claim and queue session setup record the claimant and move Approved to In Progress atomically. Unclaim returns to Approved only with confirmed no open PR and no other live lease; Draft and terminal states are retained. Failed new claims roll back their own unchanged lease; legacy resolution remains project scoped. All 8 new claim regressions passed within the 34-test targeted selection; 28 session preflight tests and all 34 fast gates passed. PR remains unmerged for independent review.'
   created_at: 2026-10-24T13:44:07.460308986Z
   modified_at: 2026-10-24T13:44:07.460308986Z
+- id: 01a16ee8-fd60-75f0-a078-286a29b1e7f6
+  author: ai:codex:joe
+  content: PR-2898 round-1 rework pushed normally at 9d6d7141ebf88a2bf047a9a058342cf2747bdf45. Startup now retains atomic before/after status and owner receipts, including owner-only changes; rollback preserves later edits. Unclaim rechecks current leases and ownership/timestamp so a new claim during forge lookup is retained. Final local targeted run passed 41 selected bug_221 tests, including all new rollback and stale-unclaim cases; exact failed CI regressions and all 34 fast gates passed. Fresh independent review is still required; no verdict or hold clearance was recorded.
+  created_at: 2026-10-24T17:15:25.408772677Z
+  modified_at: 2026-10-24T17:15:25.408772677Z
 history:
 - id: 01a16de2-5233-7500-aecc-5f6423061264
   author: joe
