@@ -148,6 +148,7 @@ fn release_hooks(
             grant_check: &|id, subject| sa::grant_check_for(root, id, subject),
             approval_authority: &|_| Ok(()),
             mandate: &|| bail!("no mandate is active"),
+            refusal_release: &|_, _| held_check(),
             comment: &|body| {
                 comments.borrow_mut().push(body.to_string());
                 on_comment(body);
