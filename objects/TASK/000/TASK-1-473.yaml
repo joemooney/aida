@@ -1,0 +1,29 @@
+id: 01a16bd4-72c1-7443-bdb0-f7e91493675d
+spec_id: TASK-1-473
+title: 'cosmetic (non-blocking): .aida/discipline/git-sync-and-review.md:1165 now names…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on STORY-1662, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  cosmetic (non-blocking): .aida/discipline/git-sync-and-review.md:1165 now names the standalone launch but keeps the old Agent-tool brief ('self-contained prompt ... return ONLY the PR URL'); a headless queue-work launch takes no caller prompt and ends with an 'implementer:' line.
+
+  PR: #2865
+  Reviewed sha: cb0a96cfe5cc4d4b53592feab097d355858d53c8
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-24T02:54:07.553433141Z
+modified_at: 2026-10-24T02:54:07.553433141Z
+req_type: Task
+tags:
+- carried-from:STORY-1662
+- finding-hash:7d4bba92
+- from-review:PR-2865
+- kind:carried-forward
+filed_at:
+  code_sha: d14a20aaaea1d58be05fdacf97e1ef60c46d02fb
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c016980d03
+  vendor: claude
