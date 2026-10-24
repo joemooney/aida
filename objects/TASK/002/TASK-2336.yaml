@@ -1,0 +1,34 @@
+id: 01a16fbb-9e8f-73d3-8a79-7831bf13a568
+spec_id: TASK-2336
+agreed_id: TASK-2336
+title: 'transport: disable cannot clear a corrupt clone-local profile'
+description: |
+  `aida config transport disable` runs `load(&common)?` before matching the
+  subcommand (aida-cli-lib/src/transport_profile.rs:352 area, `configure_in`), so a
+  corrupt / future-version / oversize `aida-transport.json` makes `disable` bail
+  with "Invalid clone-local transport profile" instead of removing it. The
+  operator's documented recovery verb cannot recover; they must hand-delete a
+  file the error message never names. Suggest: let Disable treat an unreadable
+  profile as removable (delete without validating), or at least name the file
+  path in the refusal.
+
+  Raised in review of PR-2904: https://github.com/joemooney/aida/pull/2904#issuecomment-6389521042
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-24T21:05:29.231815788Z
+modified_at: 2026-10-24T21:05:29.231815788Z
+req_type: Task
+tags:
+- from-review:PR-2904
+- severity:minor
+filed_at:
+  code_sha: 92a52d76462326489e97278dc7ebe1c5a9191972
+  branch: pr-2904
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 00da9622df
+  vendor: claude
+  session: 01a16fb42fea
+  harness_version: 2.1.310 (Claude Code)

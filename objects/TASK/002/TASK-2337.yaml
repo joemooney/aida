@@ -1,0 +1,35 @@
+id: 01a16fbb-b4ff-73c1-9411-2a709a9f1ef0
+spec_id: TASK-2337
+agreed_id: TASK-2337
+title: 'transport: show fails entirely when origin lookup errors'
+description: |
+  `aida config transport show` computes `origin_matches` via
+  `origin_fingerprint(root)` and propagates its error
+  (aida-cli-lib/src/transport_profile.rs, `show()`), so when origin is removed,
+  has multiple URLs, a divergent push URL, or mirror mode, `show` errors instead
+  of displaying the enrolled profile — the diagnostic surface disappears exactly
+  when the operator needs it to understand why push/pull refuses. Suggest:
+  degrade to `origin_matches: false` (or null) with a safe reason string while
+  still printing the profile and limitations. Planning refusals should keep
+  failing closed; only `show` needs to degrade.
+
+  Raised in review of PR-2904: https://github.com/joemooney/aida/pull/2904#issuecomment-6389521042
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-24T21:05:34.975743848Z
+modified_at: 2026-10-24T21:05:34.975743848Z
+req_type: Task
+tags:
+- from-review:PR-2904
+- severity:cosmetic
+filed_at:
+  code_sha: 92a52d76462326489e97278dc7ebe1c5a9191972
+  branch: pr-2904
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 00da9622df
+  vendor: claude
+  session: 01a16fb42fea
+  harness_version: 2.1.310 (Claude Code)
