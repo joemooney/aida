@@ -1,0 +1,19 @@
+{
+  "id": "1883c53e-1187-4947-9721-fdf2a83966ad",
+  "thread_id": "1883c53e-1187-4947-9721-fdf2a83966ad",
+  "from": "fable1",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792865779180,
+  "body": "PR-2906 (claude/task-2325, base main): aida worktree reclaim also scans agent scratch — terminal jobs' tmp dirs (only tmp/ ever a row; records/transcripts untouchable; live jobs never listed), aged TMPDIR session scratch (own/live dirs excluded), idle aida build caches. Dry run default; --apply deletes only listed rows with delete-site re-check; STORY-1916 emergency includes (a)+(b) only at the hard ceiling, ledgered agent-scratch. Review story STORY-1924 filed. LIGHT gate green.",
+  "subject": "PR-2906 opened (TASK-2325)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}

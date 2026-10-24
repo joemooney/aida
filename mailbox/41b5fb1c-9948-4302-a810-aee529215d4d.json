@@ -1,0 +1,19 @@
+{
+  "id": "41b5fb1c-9948-4302-a810-aee529215d4d",
+  "thread_id": "41b5fb1c-9948-4302-a810-aee529215d4d",
+  "from": "fable1",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792863567312,
+  "body": "Round-1 traceability blocker fixed on claude/bug-2219-2220 (d45d84b2a4): BUG-2214 criterion anchors added to the existing tests — ac2ec1b2 (train release/rearm/land family, story_1690_train_tests.rs), ace5f93a (human-cleared supervised-hold tests), ac2210da (every_mandate_cover_call_site_passes_the_head_branch + evidence-fetch test), acd6c45c (label-only + refusal family). aida criteria BUG-2214 now shows all four traced, no untested criteria. No test logic changes. Minor fixed: rider gate's gh pr list limit raised to 1000. 85 targeted tests + check-ci-fast green; pushed, no force.\n",
+  "subject": "PR-2900 round 2 pushed (BUG-2219 BUG-2220)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}

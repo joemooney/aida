@@ -1,0 +1,18 @@
+{
+  "id": "d51e1170-fa3f-458c-8076-1586a0ab5b67",
+  "thread_id": "d51e1170-fa3f-458c-8076-1586a0ab5b67",
+  "from": "agy2",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792864439202,
+  "body": "idle, slice 2 depends on PR-2905",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "integrator"
+}

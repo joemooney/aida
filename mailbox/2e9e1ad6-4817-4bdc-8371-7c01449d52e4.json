@@ -1,0 +1,18 @@
+{
+  "id": "2e9e1ad6-4817-4bdc-8371-7c01449d52e4",
+  "thread_id": "2e9e1ad6-4817-4bdc-8371-7c01449d52e4",
+  "from": "agy2",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792864262531,
+  "body": "PR-2905 opened (STORY-1917 slice 1)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "integrator"
+}

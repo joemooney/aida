@@ -1,0 +1,18 @@
+{
+  "id": "7d061e53-14c5-4d09-99f0-d24d86d27571",
+  "thread_id": "7d061e53-14c5-4d09-99f0-d24d86d27571",
+  "from": "agy2",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792867214966,
+  "body": "PR-2907 opened (STORY-1889 PR3)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "integrator"
+}
