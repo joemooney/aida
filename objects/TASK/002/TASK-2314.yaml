@@ -1,0 +1,29 @@
+id: 01a16c92-f3ae-7020-a1cd-4c89f40805d7
+spec_id: TASK-2314
+agreed_id: TASK-2314
+title: Mandate trace-exclusion expiry trusts an agent-mutable spec status (Rejected/Superseded)
+description: |
+  TASK-2168 (PR-2886, mandate.rs trace_operator_only_expired) lifts a trace-derived operator-only exclusion once the traced spec is Completed, Rejected or Superseded. I found no guard on `aida edit --status` for operator-only or ExecutionMode::Operator specs. So an agent seat can reject or supersede an operator-only spec and make the code traced to it mandate-shippable. During a "drive open list to zero" burndown, that can happen by accident. The sticky ledger exists so that loosening a tag can never loosen an exclusion; a status edit now does exactly that. Options: only count a terminal status recorded by a human or advisor (check the store history's author), only honour Completed-via-merge, or record a ledger "expired_at" stamp at the moment of a human-attested completion.
+
+  Raised in review of PR-2886: https://github.com/joemooney/aida/pull/2886#issuecomment-6380849436
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-24T06:22:12.398444667Z
+modified_at: 2026-10-24T06:22:12.398444667Z
+req_type: Task
+tags:
+- authority
+- from-review:PR-2886
+- mandate
+- severity:major
+filed_at:
+  code_sha: 6741b984355e7acad99651db4ddab54ba937f0da
+  branch: pr-2886
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 43a38f38d2
+  vendor: claude
+  session: 01a16c8fd7cd
+  harness_version: 2.1.310 (Claude Code)
