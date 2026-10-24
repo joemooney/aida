@@ -6,16 +6,25 @@ description: |
   claim_status (aida-cli-lib/src/claim.rs) reassigns req.owner when a spec is already InProgress and the claimant differs, and session_start_with_receipt (aida-cli-lib/src/session_start.rs:3000-3008) routes its Approved->InProgress bump through it. The rollback cleanup records only cleanup.status_bump when the bump happened; an owner overwrite on an already-InProgress spec is never rolled back if session start later fails, leaving the spec owned by a session that never materialized.
 
   Raised in review of PR-2898: https://github.com/joemooney/aida/pull/2898#issuecomment-6385738243
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-24T15:01:47.736218445Z
-modified_at: 2026-10-24T15:01:47.736218445Z
+modified_at: 2026-10-24T15:03:52.113640577Z
 req_type: Task
 tags:
 - from-review:PR-2898
 - severity:minor
+history:
+- id: 01a16e70-8c31-7ed2-ba7e-6a3674747f69
+  author: joe
+  timestamp: 2026-10-24T15:03:52.113635069Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: eb9846b8f4b039b5c99419889114271e4dc9af17
   branch: pr-2898
