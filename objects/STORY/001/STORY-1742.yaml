@@ -38,7 +38,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T22:02:03.191649035Z
-modified_at: 2026-10-24T18:07:32.479243020Z
+modified_at: 2026-10-24T18:18:42.166089917Z
 req_type: Story
 tags:
 - docs:impacted
@@ -116,6 +116,11 @@ comments:
   content: 'CI follow-up: pushed 4d6baae238 to PR #2904, correcting the JSON command inventory and qualifying push/pull flag examples in the setup manual. The exhaustive JSON audit/probe test and manual command/flag verifier pass locally; the generated audit also matches the live default-feature catalog byte-for-byte. Both previously failing CI lanes now pass, as do all other test lanes. The gates lane is still running. Per operator instruction, the PR will be marked ready once the full current-head CI run is green. Push execution remains disabled and this remains a non-completing slice.'
   created_at: 2026-10-24T18:07:32.479243020Z
   modified_at: 2026-10-24T18:07:32.479243020Z
+- id: 01a16f22-ec76-7ce3-98b6-6850d16d51b8
+  author: codex
+  content: 'CI follow-up: the preceding run later failed the Git auto-maintenance ratchet for the new fixture commit/commit-tree calls. Pushed 6ffc2d712c to route all fixture Git calls through support/test_git.rs; production transport code is unchanged. The maintenance ratchet (8 tests), executable-fixture ratchet (7 tests), split-stack fixtures (44 tests), and sccache fixtures (7 tests) pass locally. CI is now running on 6ffc2d712c; readiness will change only after that full current-head run is green.'
+  created_at: 2026-10-24T18:18:42.166089917Z
+  modified_at: 2026-10-24T18:18:42.166089917Z
 history:
 - id: 01a16ee2-ad7a-7b30-aaeb-ec8f892fbe76
   author: joe
