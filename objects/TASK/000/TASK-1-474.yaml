@@ -13,13 +13,18 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-24T02:54:12.233638800Z
-modified_at: 2026-10-24T02:56:51.188607840Z
+modified_at: 2026-10-24T02:56:52.206985874Z
 req_type: Task
 tags:
 - carried-from:STORY-1662
 - finding-hash:e831c99e
 - from-review:PR-2865
 - kind:carried-forward
+relationships:
+- rel_type: SupersededBy
+  target_id: 01a16ab3-20ee-7550-afba-013cc6054d9c
+  created_at: 2026-10-24T02:56:52.206982531Z
+  created_by: joe
 history:
 - id: 01a16bd6-f1f4-7bf0-829d-9416521a387f
   author: joe
@@ -29,6 +34,11 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Superseded
+- id: 01a16bd6-f974-7ab1-a748-053eb38ea3f2
+  author: joe
+  timestamp: 2026-10-24T02:56:53.108567221Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+  changes: []
 filed_at:
   code_sha: d14a20aaaea1d58be05fdacf97e1ef60c46d02fb
   branch: main
