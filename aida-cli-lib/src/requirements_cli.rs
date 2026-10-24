@@ -1614,6 +1614,68 @@ pub(crate) fn edit_requirement_cli(
     add_tag: &[String],
     remove_tag: &[String],
 ) -> Result<()> {
+    edit_requirement_cli_with(
+        storage,
+        id_str,
+        &EditFields {
+            title,
+            description,
+            status,
+            priority,
+            req_type,
+            owner,
+            feature,
+            tags,
+            add_tag,
+            remove_tag,
+        },
+        DeferredStatus::Refuse,
+    )
+}
+
+/// The flag-driven fields of one [`edit_requirement_cli`] call.
+pub(crate) struct EditFields<'a> {
+    pub(crate) title: &'a Option<String>,
+    pub(crate) description: &'a Option<String>,
+    pub(crate) status: &'a Option<String>,
+    pub(crate) priority: &'a Option<String>,
+    pub(crate) req_type: &'a Option<String>,
+    pub(crate) owner: &'a Option<String>,
+    pub(crate) feature: &'a Option<String>,
+    pub(crate) tags: &'a Option<String>,
+    pub(crate) add_tag: &'a [String],
+    pub(crate) remove_tag: &'a [String],
+}
+
+/// What a status edit does to a deferred spec.
+// trace:TASK-1955 | ai:claude (slice 7 round-1 finding 5)
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum DeferredStatus {
+    /// A caller's edit: refused (it would change nothing anyone sees).
+    Refuse,
+    /// An autopilot reversal restoring the stored status it overwrote: it
+    /// writes `stored_status`, which reads again once the spec is undeferred.
+    Restore,
+}
+
+pub(crate) fn edit_requirement_cli_with(
+    storage: &Storage,
+    id_str: &str,
+    fields: &EditFields<'_>,
+    deferred_status: DeferredStatus,
+) -> Result<()> {
+    let EditFields {
+        title,
+        description,
+        status,
+        priority,
+        req_type,
+        owner,
+        feature,
+        tags,
+        add_tag,
+        remove_tag,
+    } = *fields;
     // Load requirements
     let store_for_lookup = storage.load()?;
     let id = parse_requirement_id(id_str, &store_for_lookup)?;
@@ -1671,8 +1733,10 @@ pub(crate) fn edit_requirement_cli(
             _ => anyhow::bail!("Invalid status '{}'. Use: draft, approved, planned, in_progress, done, completed, rejected, needs-attention", status_str),
         };
         // trace:TASK-1955 | ai:claude
-        if let Some(msg) = deferred_status_edit_refusal(req) {
-            anyhow::bail!(msg);
+        if deferred_status == DeferredStatus::Refuse {
+            if let Some(msg) = deferred_status_edit_refusal(req) {
+                anyhow::bail!(msg);
+            }
         }
         // STORY-332: enforce the NeedsAttention transition rules here too.
         if let Some(msg) = forbidden_attention_transition(&req.status, &new_status) {
@@ -1955,6 +2019,10 @@ pub(crate) fn edit_requirement_interactive(storage: &Storage, id_str: &str) -> R
     ];
     if let Ok(new_status) = inquire::Select::new("Status:", status_options).prompt() {
         if new_status != req.status {
+            // trace:TASK-1955 | ai:claude (slice 7 round-1 finding 5)
+            if let Some(msg) = deferred_status_edit_refusal(req) {
+                anyhow::bail!(msg);
+            }
             // STORY-332: the picker does not offer NeedsAttention (it is
             // reached only via `aida punt`), but a NeedsAttention spec can
             // still be edited here — enforce the transition rules so it
@@ -7631,18 +7699,32 @@ pub(crate) struct EditArgs {
     pub no_human_only: bool,
 }
 
-/// The refusal for `aida edit --status` on a deferred spec, or `None`.
+/// The refusal for a status edit on a deferred spec, or `None`. Every status
+/// write path a caller drives (`aida edit` both paths, the interactive editor,
+/// MCP `update_requirement`) asks this. A legacy `deferred:*` tag defers too:
+/// the spec reads `deferred` either way ([`crate::status_display::is_deferred`]).
 // trace:TASK-1955 | ai:claude
 pub(crate) fn deferred_status_edit_refusal(req: &aida_core::Requirement) -> Option<String> {
-    req.deferred.then(|| {
-        let id = req.spec_id.clone().unwrap_or_else(|| req.id.to_string());
-        format!(
+    let id = req.spec_id.clone().unwrap_or_else(|| req.id.to_string());
+    if req.deferred {
+        return Some(format!(
             "{id} is deferred, and a deferred spec's status reads `deferred` until it is \
              undeferred, so this edit would change nothing anyone sees. Run `aida undefer {id}` \
              first, then set the status."
-        )
-    })
+        ));
+    }
+    // trace:TASK-1955 | ai:claude (slice 7 round-1 finding 5)
+    let tag = req.tags.iter().find(|t| t.starts_with("deferred:"))?;
+    Some(format!(
+        "{id} is deferred by its legacy `{tag}` tag, and a deferred spec's status reads \
+         `deferred`, so this edit would change nothing anyone sees. Remove the tag first \
+         (`aida edit {id} --remove-tag {tag}`), then set the status."
+    ))
 }
+
+#[cfg(test)]
+#[path = "tests/task_2174_deferred_status_edit_tests.rs"]
+mod task_2174_deferred_status_edit_tests;
 
 fn run_edit(
     matches: &clap::ArgMatches,

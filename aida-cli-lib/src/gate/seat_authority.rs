@@ -318,10 +318,12 @@ fn store_allows(store: &Path, principal: &str, seat: &str) -> bool {
         })
 }
 
-/// Why [`roster_check`] refused a seat. `note`, when set, names an
-/// `AIDA_STORE` that resolves to another store than the one checked: `aida
-/// team` reads that store's roster instead, so the two can disagree.
+/// Why [`roster_check`] refused a seat. `note`, when set, names the
+/// `AIDA_STORE` the check did not use: one that resolves to another store
+/// than the one checked (`aida team` reads that store's roster instead, so
+/// the two can disagree), or a set value that is unusable, with the reason.
 // trace:TASK-2072, TASK-1667, TASK-2054 | ai:claude
+// trace:TASK-1955 | ai:claude (TASK-2188)
 #[derive(Debug)]
 pub(crate) enum RosterRefusal {
     /// No roster could be read at all.
@@ -1895,12 +1897,37 @@ pub(crate) fn validate_child_delegation(
     Ok(parent)
 }
 
+/// A child grant could not be minted: the launcher's grant is missing,
+/// expired, or does not delegate the seat. No child was launched with it, so
+/// a launcher that already took a lease for that child can release it.
+/// Displays exactly as the refusal it wraps.
+// trace:TASK-1955 | ai:claude (advisor comment 35)
+#[derive(Debug)]
+pub(crate) struct ChildGrantRefused(pub(crate) anyhow::Error);
+
+impl std::fmt::Display for ChildGrantRefused {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:#}", self.0)
+    }
+}
+
+impl std::error::Error for ChildGrantRefused {}
+
+impl ChildGrantRefused {
+    /// Whether `err`'s chain carries a [`ChildGrantRefused`].
+    pub(crate) fn is_in(err: &anyhow::Error) -> bool {
+        err.chain().any(|cause| cause.is::<ChildGrantRefused>())
+    }
+}
+
 pub(crate) fn issue_child(
     project_root: &Path,
     requested_seat: &str,
     child_subject: &str,
 ) -> Result<SeatGrant> {
-    let parent = validate_child_delegation(project_root, requested_seat)?;
+    // trace:TASK-1955 | ai:claude (advisor comment 35)
+    let parent = validate_child_delegation(project_root, requested_seat)
+        .map_err(|refusal| anyhow::Error::new(ChildGrantRefused(refusal)))?;
     // BUG-1934: a child grant is bound to the launcher minting it. An exec'd
     // worker keeps this pid and start; a spawned worker descends from it; a
     // detached worker is stamped with [`bind_grant_to_pid`] after spawn.
@@ -1927,9 +1954,13 @@ pub(crate) fn issue_child(
         // presented by a sandboxed worker. Any other failure is named.
         // trace:BUG-1934 | ai:claude
         Err(e) if e.quota_exhausted() => bail!("{}", key_quota_refusal(requested_seat, &e)),
-        Err(e) => eprintln!(
-            "Warning: the child `{requested_seat}` grant is bound to this launcher's process only: {e}. A worker whose tool calls run in a sandbox cannot present it"
-        ),
+        Err(e) => {
+            if let Some(warning) =
+                proc_only_child_warning(requested_seat, &e, crate::grant_keyring::available())
+            {
+                eprintln!("{warning}");
+            }
+        }
     }
     let grant = SeatGrant {
         id,
@@ -1947,6 +1978,23 @@ pub(crate) fn issue_child(
     };
     write_grant(&grant)?;
     Ok(grant)
+}
+
+/// The warning for a child grant that keeps only its process binding. `None`
+/// where the keyring is structurally unavailable (off Linux, or refused by
+/// the kernel): every launch there is proc-only, so a per-launch warning is
+/// noise (TASK-2212).
+// trace:TASK-1955 | ai:claude (TASK-2212)
+pub(crate) fn proc_only_child_warning(
+    seat: &str,
+    err: &crate::grant_keyring::InstallError,
+    keyring_available: bool,
+) -> Option<String> {
+    keyring_available.then(|| {
+        format!(
+            "Warning: the child `{seat}` grant is bound to this launcher's process only: {err}. A worker whose tool calls run in a sandbox cannot present it"
+        )
+    })
 }
 
 /// TASK-2195: why a child launch is refused when the kernel key quota is
@@ -2065,7 +2113,10 @@ pub(crate) fn issue_headless_child(
     child_subject: &str,
 ) -> Result<HeadlessChildGrant> {
     let seat = aida_core::team::canonical_role(seat.trim());
-    match preflight_headless_child(project_root, &seat)? {
+    // trace:TASK-1955 | ai:claude (advisor comment 35)
+    let authority = preflight_headless_child(project_root, &seat)
+        .map_err(|refusal| anyhow::Error::new(ChildGrantRefused(refusal)))?;
+    match authority {
         HeadlessChildAuthority::Delegated => Ok(HeadlessChildGrant::Issued(issue_child(
             project_root,
             &seat,

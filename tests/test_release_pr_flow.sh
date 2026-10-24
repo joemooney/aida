@@ -190,6 +190,7 @@ echo ""
 
 # ─── 0. the fixture really refuses a direct push to main ──────────────────
 info "Test 0: the bare remote rejects a direct push to main"
+# trace:TASK-1721.acd8fb85 | ai:claude
 F0="$TEST_DIR/f0"; make_fixture "$F0"
 (
     cd "$F0/work"
@@ -200,6 +201,7 @@ pass "direct push to main is rejected by the fixture remote"
 
 # ─── 1. --dry-run prints the PR sequence and changes nothing ──────────────
 info "Test 1: --dry-run prints the planned PR sequence, pushes nothing"
+# trace:TASK-1721.aced1599 | ai:claude
 F1="$TEST_DIR/f1"; make_fixture "$F1"
 before=$(remote_refs "$F1")
 out=$(run_release "$F1" patch --dry-run 2>&1) || fail "dry run exited non-zero: $out"
@@ -218,6 +220,7 @@ fi
 pass "--dry-run prints the sequence and leaves remote, tree and branches unchanged"
 
 info "Test 1b: no direct push of main remains in release.sh, including fallback text"
+# trace:TASK-1721.aced1599 | ai:claude
 if grep -nE 'git push (origin|"\$release_remote"|\$release_remote) (HEAD|main)\b' "$RELEASE"; then
     fail "release.sh still pushes main directly"
 fi
@@ -225,6 +228,8 @@ pass "release.sh has no 'git push origin HEAD|main'"
 
 # ─── 2. end-to-end release against the PR-required remote ─────────────────
 info "Test 2: release completes end to end through the PR"
+# trace:TASK-1721.acd8fb85 | ai:claude
+# trace:TASK-1721.acfe2a84 | ai:claude
 F2="$TEST_DIR/f2"; make_fixture "$F2"
 out=$(run_release "$F2" patch --yes --skip-docs-check 2>&1) || fail "release failed: $out"
 merged=$(cat "$F2/state/merged")
@@ -250,6 +255,7 @@ info "Test 2b: local state after the release"
 pass "checkout back on fast-forwarded main, branches cleaned up, lease released"
 
 info "Test 2c: the bump commit keeps AIDA_RELEASE=1"
+# trace:TASK-1721.ac8f0bcb | ai:claude
 grep -qx "AIDA_RELEASE=1" "$F2/state/commit-env" || fail "bump commit ran without AIDA_RELEASE=1: $(cat "$F2/state/commit-env")"
 pass "AIDA_RELEASE=1 reached the commit-msg hook"
 
@@ -397,6 +403,11 @@ rc=$(pty_release "$F8" minor \
     || fail "a prompt waited on a human while the lease was held: $(cat "$F8/state/lease-at-prompt")"
 git --git-dir="$F8/remote.git" rev-parse -q --verify 'refs/tags/v0.16.0' >/dev/null \
     || fail "interactive release did not finish"
+# trace:TASK-1955 | ai:claude (TASK-2093)
+grep -q "note=scripts/release.sh v0.16.0" "$F8/state/lease-at-commit" 2>/dev/null \
+    || fail "the lease was not retaken after the confirmation prompt"
+[ "$(git --git-dir="$F8/remote.git" rev-parse 'refs/tags/v0.16.0^{commit}')" = "$(cat "$F8/state/merged")" ] \
+    || fail "the interactive release did not tag the merged commit"
 pass "neither the ecosystem prompt nor the confirmation prompt runs under the lease"
 
 info "Test 4e: the lease is claimed atomically, never visible empty"
@@ -405,7 +416,7 @@ mkdir -p "$F9/work/.aida/merge-locks"
 (
     lease="$F9/work/.aida/merge-locks/main"
     while [ ! -e "$F9/state/stop-watch" ]; do
-        if [ -e "$lease" ] && ! grep -q '^pid=' "$lease" 2>/dev/null; then
+        if [ -e "$lease" ] && ! { grep -q '^pid=' "$lease" && grep -q '^ttl_secs=' "$lease"; } 2>/dev/null; then
             [ -e "$lease" ] && echo "partial" >> "$F9/state/partial-lease"
         fi
         sleep 0.01
@@ -468,6 +479,7 @@ pass "gh pr create failure and the re-run both print the exact recovery"
 
 # ─── 5. --prepare-only fallback text routes through a PR ──────────────────
 info "Test 5: --prepare-only manual steps open a PR instead of pushing main"
+# trace:TASK-1721.aced1599 | ai:claude
 F6="$TEST_DIR/f6"; make_fixture "$F6"
 out=$(run_release "$F6" patch --prepare-only --skip-docs-check 2>&1) || fail "prepare-only failed: $out"
 grep -qF "gh pr create" <<<"$out" || fail "prepare-only steps lack gh pr create: $out"

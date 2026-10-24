@@ -1,5 +1,14 @@
 use super::*;
 
+/// The workspace `target/`, the one non-temp place a fixture store may
+/// live.
+// trace:TASK-1955 | ai:claude (TASK-2223)
+fn workspace_target() -> Option<std::path::PathBuf> {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .map(|workspace| workspace.join("target"))
+}
+
 thread_local! {
     /// BUG-1934: force [`in_foreign_pid_namespace`] for this test thread
     /// (`None` = probe for real). Unit tests default to "not foreign" so
@@ -17,11 +26,8 @@ pub(crate) fn assert_scratch_store(store: &Path) {
     if aida_core::team::is_under_temp_root(store) {
         return;
     }
-    let target = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .map(|workspace| workspace.join("target"));
     let canonical = store.canonicalize().unwrap_or_else(|_| store.to_path_buf());
-    let in_target = target
+    let in_target = workspace_target()
         .and_then(|t| t.canonicalize().ok())
         .is_some_and(|t| canonical.starts_with(t));
     assert!(
@@ -90,6 +96,9 @@ pub(crate) fn mint_grant_for_with_ttl(
     // trace:BUG-2209 | ai:claude
     assert_scratch_store(&store);
     let seat = aida_core::team::canonical_role(seat);
+    // The primitive guards the write itself, accepting the workspace
+    // `target/`, and takes the store write lock (TASK-2223, TASK-2224).
+    // trace:TASK-1955 | ai:claude (TASK-2292)
     aida_core::team::write_member_seats(&store, subject, None, |current| {
         let mut seats = current.map(<[String]>::to_vec).unwrap_or_default();
         for requested in std::iter::once(seat.as_str()).chain(delegable.iter().copied()) {

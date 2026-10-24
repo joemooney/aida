@@ -64,6 +64,10 @@ thread_local! {
     /// Test seam: make this thread's next [`install`] fail with this errno.
     pub(crate) static FORCE_INSTALL_ERRNO: std::cell::Cell<Option<i32>> =
         const { std::cell::Cell::new(None) };
+    /// Test seam: make this thread's next `add_key` (after any keyring join)
+    /// fail with this errno.
+    pub(crate) static FORCE_ADD_KEY_ERRNO: std::cell::Cell<Option<i32>> =
+        const { std::cell::Cell::new(None) };
 }
 
 /// What a possession probe found for one grant.
@@ -167,13 +171,16 @@ mod sys {
     /// Add `desc` to a session keyring and return that keyring's id. `reuse`
     /// names a keyring this thread joined earlier: while it is still the
     /// session keyring the key goes straight into it; otherwise a fresh
-    /// anonymous keyring is joined (the previous one linked in).
+    /// anonymous keyring is joined (the previous one linked in). `joined`
+    /// is set as soon as a join succeeds, even when a later step fails: the
+    /// thread's session keyring has changed either way (TASK-2211).
     pub(super) fn install(
         desc: &str,
         secret: &[u8],
         ttl_secs: u32,
         to_parent: bool,
         reuse: Option<libc::c_long>,
+        joined: &mut Option<libc::c_long>,
     ) -> Result<libc::c_long, InstallError> {
         let Some(old) = session_keyring() else {
             return Err(fail("the session keyring is unavailable"));
@@ -196,6 +203,8 @@ mod sys {
             if new < 0 {
                 return Err(InstallError::new("cannot create a session keyring", e));
             }
+            // trace:TASK-1955 | ai:claude (TASK-2211)
+            *joined = Some(new);
             if !linked {
                 return Err(InstallError::new(
                     "cannot link the previous session keyring",
@@ -210,6 +219,10 @@ mod sys {
         let invalid = || InstallError::new("the key description holds a NUL byte", libc::EINVAL);
         let ty = CString::new("user").map_err(|_| invalid())?;
         let d = CString::new(desc).map_err(|_| invalid())?;
+        #[cfg(test)]
+        if let Some(errno) = super::FORCE_ADD_KEY_ERRNO.with(std::cell::Cell::take) {
+            return Err(InstallError::new("cannot add the grant key", errno));
+        }
         // SAFETY: add_key reads `secret.len()` bytes from a live slice and two
         // NUL-terminated strings.
         let key = unsafe {
@@ -314,9 +327,23 @@ pub(crate) fn install(id: &str, secret: &[u8], ttl_secs: u32) -> Result<(), Inst
     #[cfg(target_os = "linux")]
     {
         let reuse = LAUNCHER_KEYRING.with(std::cell::Cell::get);
-        let ring = sys::install(&description(id), secret, ttl_secs, false, reuse)?;
-        LAUNCHER_KEYRING.with(|k| k.set(Some(ring)));
-        Ok(())
+        let mut joined = None;
+        let installed = sys::install(
+            &description(id),
+            secret,
+            ttl_secs,
+            false,
+            reuse,
+            &mut joined,
+        );
+        // TASK-2211: remember a joined keyring even when a later step failed
+        // (EDQUOT on add_key), so the next launch adds to it instead of
+        // joining and chaining yet another keyring against the quota.
+        // trace:TASK-1955 | ai:claude (TASK-2211)
+        if let Some(ring) = installed.as_ref().ok().copied().or(joined) {
+            LAUNCHER_KEYRING.with(|k| k.set(Some(ring)));
+        }
+        installed.map(|_| ())
     }
     #[cfg(not(target_os = "linux"))]
     {
@@ -335,7 +362,7 @@ pub(crate) fn install(id: &str, secret: &[u8], ttl_secs: u32) -> Result<(), Inst
 pub(crate) fn install_to_parent(id: &str, secret: &[u8], ttl_secs: u32) -> Result<()> {
     #[cfg(target_os = "linux")]
     {
-        sys::install(&description(id), secret, ttl_secs, true, None)?;
+        sys::install(&description(id), secret, ttl_secs, true, None, &mut None)?;
         Ok(())
     }
     #[cfg(not(target_os = "linux"))]
