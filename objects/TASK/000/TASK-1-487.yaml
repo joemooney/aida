@@ -1,0 +1,29 @@
+id: 01a16cb7-f822-72e3-b745-b4e268b662e3
+spec_id: TASK-1-487
+title: 'non-blocking (minor): drain_lock.rs stamp_drain_lock_child_grant read-modify-wr…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1952, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  non-blocking (minor): drain_lock.rs stamp_drain_lock_child_grant read-modify-writes the lock without serialising against a concurrent acquire_drain_lock takeover, so it could overwrite a successor's lock with ours. Re-check the pid after the write, or reuse the acquire lock.
+
+  PR: #2838
+  Reviewed sha: 1a6c419d58caf00e9a71b07d268518c32f057604
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-24T07:02:38.370301424Z
+modified_at: 2026-10-24T07:02:38.370301424Z
+req_type: Task
+tags:
+- carried-from:TASK-1952
+- finding-hash:51a67442
+- from-review:PR-2838
+- kind:carried-forward
+filed_at:
+  code_sha: 14065b6254e5edc2d364a3d8281a5a0cc2d08fc3
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 43a38f38d2
+  vendor: claude
