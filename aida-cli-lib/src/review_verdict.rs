@@ -26,6 +26,7 @@
 //! This is deliberately NOT a general review subsystem: no threads, no
 //! per-file comments, no history. One current verdict per spec, enough to
 //! answer "may this spec be marked done?".
+// mandate-gate
 //
 // trace:BUG-775 | ai:claude
 
@@ -2409,7 +2410,23 @@ pub fn close_verdict_on_merge(
         .map(|s| !s.trim().is_empty())
         .unwrap_or(false);
     if already_closed {
-        return Ok(false);
+        // TASK-2135: an earlier close wrote the current file and then failed
+        // writing the archive entry at the same commit. The current file
+        // already says closed, so close the archive entry too if it is still
+        // open; otherwise `verdicts_for_sha` keeps reporting the refusal.
+        // trace:TASK-1951 trace:TASK-2135 | ai:claude
+        let Some((archive, body)) = prepare_archive_round(&path, &obj)? else {
+            return Ok(false);
+        };
+        let archive_open = read_existing_verdict_object(&archive)?
+            .get("closed_by_merge")
+            .and_then(|v| v.as_str())
+            .is_none_or(|s| s.trim().is_empty());
+        if !archive_open {
+            return Ok(false);
+        }
+        write_verdict_atomic(&archive, &body)?;
+        return Ok(true);
     }
     obj.insert(
         "closed_by_merge".to_string(),

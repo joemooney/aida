@@ -507,7 +507,7 @@ fn an_unbound_presenter_does_not_overwrite_the_bound_turn_stamp() {
 
 #[test]
 fn bg_launch_refuses_a_seat_it_cannot_bind() {
-    let err = crate::agent_launch::bg_seat_refusal("reviewer")
+    let err = crate::seat_authority::bg_seat_refusal("reviewer")
         .unwrap_err()
         .to_string();
     assert!(
@@ -516,7 +516,7 @@ fn bg_launch_refuses_a_seat_it_cannot_bind() {
     );
     assert!(err.contains("aida role enter reviewer"), "{err}");
     assert!(err.contains("`--bind-pid` would serve only"), "{err}");
-    crate::agent_launch::bg_seat_refusal("implementer").unwrap();
+    crate::seat_authority::bg_seat_refusal("implementer").unwrap();
 }
 
 /// TASK-2158: `aida review record` driven end to end with an exported grant

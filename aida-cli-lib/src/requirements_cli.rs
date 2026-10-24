@@ -4953,6 +4953,12 @@ fn run_list(
                     if let Some(want) = driver.as_deref() {
                         crate::driver_view::retain_by_driver(&mut reqs, &list_drivers, want)?;
                     }
+                    // TASK-2003: a NeedsAttention row whose rework is awaiting
+                    // review reads `in review: PR-N @sha8, round k`, any other
+                    // NeedsAttention row its last activity. Display only.
+                    // trace:TASK-1951 trace:TASK-2003 | ai:claude
+                    let review_lens =
+                        crate::needs_attention_lens::lens_map(list_project_root.as_deref(), &reqs);
                     // Focus count follows every other filter and precedes the
                     // row limit, so it equals the view --no-focus would reveal.
                     // trace:BUG-2190 | ai:codex
@@ -5301,6 +5307,11 @@ fn run_list(
                             driver: Option<String>,
                             #[serde(skip_serializing_if = "Option::is_none")]
                             driver_kind: Option<&'static str>,
+                            // TASK-2003: the review lens of a NeedsAttention row and
+                            // every row's last change. trace:TASK-1951 trace:TASK-2003 | ai:claude
+                            #[serde(skip_serializing_if = "Option::is_none")]
+                            review_lens: Option<&'a str>,
+                            modified_at: &'a str,
                         }
                         let out: Vec<ListJsonRow> = reqs
                             .iter()
@@ -5342,6 +5353,8 @@ fn run_list(
                                     execution_mode: r.execution_mode.as_deref(),
                                     driver: list_drivers.get(&r.id).map(|d| d.label()),
                                     driver_kind: list_drivers.get(&r.id).map(|d| d.kind()),
+                                    review_lens: review_lens.get(&r.id).map(String::as_str),
+                                    modified_at: r.modified_at.as_str(),
                                 }
                             })
                             .collect();
@@ -5427,11 +5440,18 @@ fn run_list(
                             None => selected_fields.clone(),
                         };
                         // trace:STORY-1653 | ai:claude — `driver`, `driver_kind`
-                        let selected = crate::driver_view::with_driver_columns(
+                        let mut selected = crate::driver_view::with_driver_columns(
                             selected,
                             fields.is_some(),
                             &list_drivers,
                         );
+                        // trace:TASK-1951 trace:TASK-2003 | ai:claude
+                        if fields.is_none()
+                            && !review_lens.is_empty()
+                            && !selected.iter().any(|f| f == "review_lens")
+                        {
+                            selected.push("review_lens".to_string());
+                        }
                         let rows: Vec<Vec<String>> = reqs
                             .iter()
                             .map(|r| {
@@ -5439,6 +5459,12 @@ fn run_list(
                                 selected
                                     .iter()
                                     .map(|f| {
+                                        if f == "review_lens" {
+                                            return review_lens
+                                                .get(&r.id)
+                                                .cloned()
+                                                .unwrap_or_default();
+                                        }
                                         crate::driver_view::list_cell(&list_drivers, r, f)
                                             .unwrap_or_else(|| toon_list_cell(r, routing, f))
                                     })
@@ -5766,7 +5792,11 @@ fn run_list(
                             print_hidden_hints();
                             print_empty_list_hint();
                         } else {
-                            render_list_fields_table(&reqs, &selected, &row_routing);
+                            // trace:TASK-1951 trace:TASK-2003 | ai:claude
+                            render_list_fields_table(&reqs, &selected, &row_routing, |r, f| {
+                                (f == "review_lens")
+                                    .then(|| review_lens.get(&r.id).cloned().unwrap_or_default())
+                            });
                             println!(
                                 "\n{}",
                                 list_human_count_footer(
@@ -5829,7 +5859,11 @@ fn run_list(
                             flow_header: flow_header.to_string(),
                             terminal_width: terminal_list_width(),
                             // trace:STORY-1653 | ai:claude
-                            drivers: list_drivers.iter().map(|(k, d)| (*k, d.label())).collect(),
+                            drivers: list_drivers
+                                .iter()
+                                .map(|(k, d)| (*k, d.label()))
+                                .chain(review_lens.iter().map(|(k, l)| (*k, l.clone())))
+                                .collect(),
                         };
                         for line in render_list_table(&reqs, &options, row_routing) {
                             println!("{line}");
@@ -9545,9 +9579,25 @@ fn run_search(
                         if results.is_empty() {
                             println!("No results for: {}", query);
                         } else {
+                            // TASK-2003: the same NeedsAttention lens `aida list` shows,
+                            // computed only when the column is asked for.
+                            // trace:TASK-1951 trace:TASK-2003 | ai:claude
+                            let review_lens = if selected.iter().any(|f| f == "review_lens") {
+                                crate::needs_attention_lens::lens_map(
+                                    find_project_root().ok().as_deref(),
+                                    &results,
+                                )
+                            } else {
+                                Default::default()
+                            };
                             println!(
                                 "{}",
-                                render_search_fields(&results, &selected, agent_output_mode())
+                                render_search_fields(
+                                    &results,
+                                    &selected,
+                                    agent_output_mode(),
+                                    &review_lens
+                                )
                             );
                         }
                         return crate::command_registry::returned(Ok(()));
@@ -9564,7 +9614,10 @@ fn run_search(
                     // human TTY path keeps the box-table unchanged. trace:BUG-672
                     if agent_output_mode() {
                         let selected = toon_list_fields(None)?;
-                        println!("{}", render_search_fields(&results, &selected, true));
+                        println!(
+                            "{}",
+                            render_search_fields(&results, &selected, true, &Default::default())
+                        );
                         // BUG-672 (Finding #4): trailing drill-in next-step block —
                         // `aida show <id>` is the move an agent reaching for a search
                         // result is missing. Placeholder id (multi-row surface), same

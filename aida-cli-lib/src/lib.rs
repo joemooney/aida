@@ -109,6 +109,8 @@ mod driver_view;
 mod idle_in_progress;
 // trace:STORY-1646 | ai:claude
 mod dev_build;
+// trace:STORY-1689 | ai:claude
+mod dev_autopromote;
 mod dev_cmd;
 mod digest;
 mod digest_cmd;
@@ -446,6 +448,8 @@ mod mandate_traces;
 mod merge_lock;
 mod metrics;
 mod metrics_cmd;
+// trace:TASK-1951 trace:TASK-2003 | ai:claude
+mod needs_attention_lens;
 mod network_retry;
 mod node_cmd;
 mod not_found;

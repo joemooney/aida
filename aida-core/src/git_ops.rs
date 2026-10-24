@@ -3983,7 +3983,11 @@ const MAX_SUBMODULE_DEPTH: usize = 8;
 // trace:BUG-1985 | ai:claude
 fn contained_safety_scan(tree: &Path) -> Result<(String, Vec<String>)> {
     let (top, links) = contained_top_gitlinks(tree)?;
+    // TASK-2146: pin the quoting `porcelain_quote` assumes, so the added
+    // submodule line matches git's whatever the user's `core.quotePath`.
+    // trace:TASK-1952 | trace:TASK-2146 | ai:claude
     let out = host_git_command(&top)
+        .args(["-c", "core.quotePath=true"])
         .args(["status", "--porcelain", "--ignore-submodules=dirty"])
         .output()
         .context("run git status")?;
@@ -10346,6 +10350,71 @@ mod tests {
         assert!(
             body.contains(&format!("Aida-Store: {}", own_head.trim())),
             "a store commit pins the store's own head: {body}"
+        );
+    }
+
+    /// TASK-2127: with `--separate-git-dir` the common directory's parent is
+    /// not the checkout, so the store-pair hook falls back to git's own main
+    /// worktree and still pins the store HEAD.
+    // trace:TASK-1952 | trace:TASK-2127 | ai:claude
+    #[cfg(unix)]
+    #[test]
+    fn task_2127_store_pair_trailer_with_a_separate_git_dir() {
+        let dir = tempfile::tempdir().unwrap();
+        let main = dir.path().join("main");
+        let gitdir = dir.path().join("elsewhere.git");
+        std::fs::create_dir_all(&main).unwrap();
+        assert!(crate::test_git::git_command()
+            .current_dir(&main)
+            .args(["init", "-q", "--separate-git-dir"])
+            .arg(&gitdir)
+            .status()
+            .unwrap()
+            .success());
+        configure_user(&main, "Test", "test@example.com").unwrap();
+        std::fs::write(main.join("README.md"), "hi").unwrap();
+        add(&main, &["README.md"]).unwrap();
+        commit(&main, "chore: init").unwrap();
+        let store = create_store_worktree(&main, ".aida-store", "aida-store").unwrap();
+        // The store branch starts unborn: give it a head to pin.
+        assert!(crate::test_git::git_command()
+            .current_dir(&store)
+            .args(["-c", "user.name=t", "-c", "user.email=t@example.com"])
+            .args([
+                "commit",
+                "-q",
+                "--allow-empty",
+                "--no-verify",
+                "-m",
+                "store"
+            ])
+            .status()
+            .unwrap()
+            .success());
+        let store_head = git(&store, &["rev-parse", "HEAD"]).unwrap().stdout;
+        assert!(!store_head.trim().is_empty());
+        let hook = dir.path().join("prepare-commit-msg");
+        std::fs::write(
+            &hook,
+            crate::templates::EMBEDDED_TEMPLATES["hooks/aida-store-pair.sh"],
+        )
+        .unwrap();
+        let msg = dir.path().join("MSG");
+        std::fs::write(&msg, "feat: x\n").unwrap();
+        let out = std::process::Command::new("bash")
+            .arg(&hook)
+            .arg(&msg)
+            .arg("message")
+            .current_dir(&main)
+            .env_remove("GIT_DIR")
+            .env_remove("GIT_WORK_TREE")
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "{out:?}");
+        let body = std::fs::read_to_string(&msg).unwrap();
+        assert!(
+            body.contains(&format!("Aida-Store: {}", store_head.trim())),
+            "a separate git dir still pins the store head: {body}"
         );
     }
 

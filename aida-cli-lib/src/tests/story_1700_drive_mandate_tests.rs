@@ -695,6 +695,7 @@ fn ship_check<'a>(
         hold,
         carry_over: None,
         changed_paths,
+        protected: crate::mandate_gates::ProtectedPaths::floor_ref(),
         ship_gate: None,
         hold_clear_gate: None,
     }
@@ -722,12 +723,21 @@ fn pr_touching_gate_paths_is_gated() {
         let c = ship_check(&state, &policy, &ledger, &hold, Some(&paths));
         assert_eq!(
             crate::mandate::ship_decision(&c),
-            Err(MandateRefusal::TouchesGates { path: path.into() })
+            Err(MandateRefusal::TouchesGates(
+                crate::mandate_gates::GateMatch {
+                    path: path.into(),
+                    entry: path.into(),
+                    source: crate::mandate_gates::PathSource::BuiltIn,
+                }
+            ))
         );
     }
     // pr_cmd.rs is NOT protected as a whole (condition C1).
     assert_eq!(
-        crate::mandate_gates::touches_gates(&["aida-cli-lib/src/pr_cmd.rs".into()]),
+        crate::mandate_gates::touches_gates(
+            &["aida-cli-lib/src/pr_cmd.rs".into()],
+            crate::mandate_gates::ProtectedPaths::floor_ref()
+        ),
         None
     );
     // `ship` listed as a human gate refuses every mandate ship.
@@ -747,7 +757,8 @@ fn pr_touching_gate_paths_is_gated() {
         approved_at_head: true,
         changed_paths: Some(vec![".aida/config.toml".into()]),
     };
-    let LaneDecision::Act(p) = plan_held_pr(&pr) else {
+    let LaneDecision::Act(p) = plan_held_pr(&pr, crate::mandate_gates::ProtectedPaths::floor_ref())
+    else {
         panic!("an approved held PR is a lane")
     };
     assert!(p.forced_gate.unwrap().contains(".aida/config.toml"));
@@ -774,17 +785,24 @@ fn unresolved_changed_paths_refuses() {
         approved_at_head: true,
         changed_paths: None,
     };
-    let LaneDecision::Act(p) = plan_held_pr(&pr) else {
+    let LaneDecision::Act(p) = plan_held_pr(&pr, crate::mandate_gates::ProtectedPaths::floor_ref())
+    else {
         panic!("an approved held PR is a lane")
     };
     assert!(p.forced_gate.unwrap().contains("could not be resolved"));
     // An unapproved or non-releasable hold is not a drive lane at all.
     let mut quiet = pr.clone();
     quiet.approved_at_head = false;
-    assert_eq!(plan_held_pr(&quiet), LaneDecision::None);
+    assert_eq!(
+        plan_held_pr(&quiet, crate::mandate_gates::ProtectedPaths::floor_ref()),
+        LaneDecision::None
+    );
     quiet.approved_at_head = true;
     quiet.releasable = false;
-    assert_eq!(plan_held_pr(&quiet), LaneDecision::None);
+    assert_eq!(
+        plan_held_pr(&quiet, crate::mandate_gates::ProtectedPaths::floor_ref()),
+        LaneDecision::None
+    );
 }
 
 // trace:STORY-1700.ace038d6 | ai:claude
@@ -829,6 +847,95 @@ fn an_approved_held_pr_routes_a_ship_to_the_advisor() {
         .as_deref()
         .unwrap()
         .contains("TASK-1 is operator-only"));
+}
+
+/// The floor plus an operator-layer `x/` prefix (STORY-1888).
+fn operator_protected() -> crate::mandate_gates::ProtectedPaths {
+    crate::mandate_gates::union(
+        Default::default(),
+        crate::mandate_gates::parse_layer(
+            "[mandate.human_gates]\nprotected_paths = [\"x/\"]\n",
+            "~/.aida/config.toml",
+        )
+        .unwrap(),
+    )
+    .protected
+}
+
+// trace:STORY-1888.acd4bc79 | ai:claude
+#[test]
+fn operator_layer_path_refuses_mandate_ship() {
+    let tmp = tempfile::tempdir().unwrap();
+    let state = MandateState::Active(drive_mandate(tmp.path(), "joe"));
+    let policy = Default::default();
+    let ledger = Ok(Default::default());
+    let hold = crate::mandate::HoldFacts::None;
+    let protected = operator_protected();
+    let paths = vec!["README.md".to_string(), "x/y.rs".to_string()];
+    let mut c = ship_check(&state, &policy, &ledger, &hold, Some(&paths));
+    c.protected = &protected;
+    let hit = crate::mandate_gates::GateMatch {
+        path: "x/y.rs".into(),
+        entry: "x/".into(),
+        source: crate::mandate_gates::PathSource::Operator,
+    };
+    assert_eq!(
+        crate::mandate::ship_decision(&c),
+        Err(MandateRefusal::TouchesGates(hit.clone()))
+    );
+    let msg = MandateRefusal::TouchesGates(hit).message(7);
+    assert!(
+        msg.contains("`x/`") && msg.contains("~/.aida/config.toml"),
+        "{msg}"
+    );
+    // The floor alone lets the same PR through to hold cover.
+    c.protected = crate::mandate_gates::ProtectedPaths::floor_ref();
+    assert!(!matches!(
+        crate::mandate::ship_decision(&c),
+        Err(MandateRefusal::TouchesGates(_))
+    ));
+}
+
+// trace:STORY-1888.acd4bc79 | ai:claude
+#[test]
+fn plan_held_pr_uses_effective_set() {
+    let held = || {
+        vec![HeldPr {
+            pr: 11,
+            releasable: true,
+            head: Some("d".repeat(40)),
+            spec: None,
+            approved_at_head: true,
+            changed_paths: Some(vec!["x/y.rs".into()]),
+        }]
+    };
+    // The tick reads the protected set from its gate load ...
+    let fx = Fixture::new();
+    drive_mandate(fx.mandates.path(), "joe");
+    let mut inputs = fx.inputs(&now_clock, Vec::new(), "joe");
+    inputs.held_prs = held();
+    inputs.gates = Ok(HumanGates {
+        protected: operator_protected(),
+        ..Default::default()
+    });
+    let mut fake = Fake::default();
+    let report = run_tick(&inputs, &TickHooks::default(), &mut fake);
+    assert!(fake.due.is_empty());
+    assert_eq!(report.rows[0].outcome, Outcome::Gated);
+    let why = report.rows[0].why.as_deref().unwrap();
+    assert!(
+        why.contains("`x/`") && why.contains("~/.aida/config.toml"),
+        "{why}"
+    );
+    // ... so without the operator entry the same PR is a ship.
+    let fx = Fixture::new();
+    drive_mandate(fx.mandates.path(), "joe");
+    let mut inputs = fx.inputs(&now_clock, Vec::new(), "joe");
+    inputs.held_prs = held();
+    let mut fake = Fake::default();
+    run_tick(&inputs, &TickHooks::default(), &mut fake);
+    assert_eq!(fake.due.len(), 1);
+    assert_eq!(fake.due[0].1.command, "aida pr ship 11");
 }
 
 // ── T7.12: principal under the scheduler ────────────────────────────────────
@@ -1484,7 +1591,13 @@ fn a_mandate_cannot_release_a_rework_hold_on_a_pr_touching_the_gates() {
         let c = ship_check(&state, &policy, &ledger, &hold, Some(&paths));
         assert_eq!(
             crate::mandate::rework_release_decision(&c),
-            Err(MandateRefusal::TouchesGates { path: path.into() })
+            Err(MandateRefusal::TouchesGates(
+                crate::mandate_gates::GateMatch {
+                    path: path.into(),
+                    entry: path.into(),
+                    source: crate::mandate_gates::PathSource::BuiltIn,
+                }
+            ))
         );
     }
     let c = ship_check(&state, &policy, &ledger, &hold, None);

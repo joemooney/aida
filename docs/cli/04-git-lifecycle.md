@@ -100,6 +100,16 @@ branch name`, or `none` with the reason it was withheld — and names the ids
 the merge will complete; `--dry-run` prints the same line.
 <!-- trace:BUG-1919 | ai:claude -->
 
+A non-completing squash ship writes the `aida: no-complete` line into the
+squash commit's body, so the pull on every clone reads the declaration from
+main. This works on GitHub (`gh pr merge --body`), GitLab (inside the squash
+commit message, after the MR title) and pure-git (the squash commit's body).
+The cost is on GitHub: an explicit body replaces GitHub's default one, so
+GitHub does not add `Co-authored-by:` trailers for the other commit authors
+on that merge. Trailers already written in commit messages are kept. An
+ordinary squash ship leaves the body to the forge.
+<!-- trace:TASK-1951 trace:TASK-2115 trace:TASK-2116 | ai:claude -->
+
 A title ending in `(Refs SPEC-ID[, …])` is a reference, not a trailer: ship
 appends no completion trailer to it, not even from the branch name, and the
 merge completes nothing. Merge-time completion reads intent from the line
@@ -394,10 +404,35 @@ current PR head. Omit the PR number to inspect every local hold, or use
 `aida merge-hold auto-release <pr>` for one. Any seat may retry this command;
 it has no override flag and never merges. Refused candidates remain held and
 produce a nonzero exit with a reason. The review-record handler runs the same
-release after a verified APPROVED write. Sensitive or composed holds retain
-the human clear. See [clearance policy](08-reporting.md#merge-hold-gate-and-clearance-limits)
+release after a verified APPROVED write. A hold composed with any non-Rework
+kind keeps the human clear, and so does a sensitive spec unless a mandate
+started with `aida mandate start --include-supervised` covers it (see
+[`aida mandate`](#aida-mandate)). See [clearance policy](08-reporting.md#merge-hold-gate-and-clearance-limits)
 for grant, arming-round, metadata and audit requirements.
+
+- **Composed Rework holds.** When refusals on several specs compose into one
+  hold, each refusal must be answered by its own fresh approval at the PR
+  head. One unanswered or unreadable refusal keeps the whole hold, and the
+  reason names it. The clearance records the primary approval and lists the
+  others under `also_released_by`.
+- **Busy lock.** The release's second check and the marker removal run under
+  a per-PR hold lock, which hold placements take too. If another placement or
+  release holds it for 10 seconds, the command refuses with
+  `merge-hold PR-N is busy` and changes nothing; re-run it.
+- **Withdrawn clearances.** If the second check refuses after the clearance
+  was written (for example, the head moved), the clearance is moved aside to
+  `.aida/merge-hold-clearances/PR-N.superseded-<timestamp>.json` for audit, an
+  "authorization withdrawn" comment is posted, and the hold stays armed. A
+  superseded file is never read as a clearance. When two releases of one PR
+  overlap, the one that finishes second leaves the first one's clearance in
+  place.
+- **Order.** Auto-release records the clearance, posts the audit comment,
+  drops the forge labels, and removes the marker last, so a forge failure
+  leaves the hold armed for the next retry. The human `aida merge-hold clear`
+  records the clearance, removes the marker, then drops the labels; the
+  operator sees any label failure and re-runs it.
 <!-- trace:STORY-1687 | ai:codex -->
+<!-- trace:TASK-1951 trace:TASK-2286 | ai:claude -->
 
 ### `aida mandate`
 
@@ -549,6 +584,19 @@ ops = ["ship"]   # any of: ship, sketch-signoff, dispatch, hold-clear, relay-res
   `pr_ship_batch.rs`) never
   ships under a mandate, and a mandate never releases its rework hold either.
   Listing `ship` or `hold-clear` stops mandate rework releases too.
+- You can protect more paths. Entries are exact paths, or directory prefixes
+  that end in `/` (`gate/` matches `gate/x.rs`, never `gateway/x.rs`):
+
+  ```toml
+  [mandate.human_gates]
+  protected_paths = ["aida-cli-lib/src/role.rs", "aida-cli-lib/src/gate/"]
+  ```
+
+  The same two layers apply. Each layer can only add paths: neither can remove
+  a built-in one. A malformed entry (absolute, `..`, a glob) is a
+  configuration error, so every action is gated. `aida mandate status` lists
+  every protected path and where it came from (`--json`: `protected_paths`).
+  A refusal names the matching entry and its source.
 - `[mandate.drive] max_actions_per_tick` (default 10) is honoured from
   `~/.aida/config.toml` only.
 - Drive never clears holds; `hold-clear` exists so you can state that
