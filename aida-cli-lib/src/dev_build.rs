@@ -1252,9 +1252,14 @@ pub(crate) fn rollback_with_steps(
     // The scheduled autopromote must not rebuild what was just rolled away.
     // trace:TASK-2272 | ai:claude
     if let Some(sha) = rolled_away.filter(|s| !s.is_empty()) {
-        if let Err(e) = crate::dev_autopromote::pin_rolled_back(&layout.live_dir, &sha) {
+        let why = match crate::dev_autopromote::pin_rolled_back(&layout.live_dir, &sha) {
+            Ok(None) => None,
+            Ok(Some(why)) => Some(why),
+            Err(e) => Some(format!("{e:#}")),
+        };
+        if let Some(why) = why {
             notes.push(format!(
-                "could not pin {sha} against the scheduled autopromote ({e:#}); \
+                "could not pin {sha} against the scheduled autopromote ({why}); \
                  disable the dev-autopromote job until main moves"
             ));
         }

@@ -2199,11 +2199,6 @@ pub(crate) fn confirm(prompt: &str) -> bool {
     matches!(answer.trim().to_lowercase().as_str(), "y" | "yes")
 }
 
-/// Common locations where users typically have aida installed. Order matters
-/// for display; we use it as-is for the scan-and-report output.
-/// Walk up from `start` (a binary path or directory) looking for the aida
-/// repo root. Used to discover the dev binary's source repo so we can ask
-/// "is this build ahead of the latest release tag".
 /// The checkout `aida dev release` acts on: the aida repo enclosing `cwd`,
 /// else `$AIDA_DEV_REPO` (or, for a removed worktree, `$AIDA_DEV_HOME_REPO`).
 // trace:TASK-2251 | ai:claude
@@ -2212,6 +2207,11 @@ pub(crate) fn release_repo_from(cwd: &std::path::Path) -> Option<std::path::Path
     find_aida_repo_above(cwd).or_else(|| crate::dev_cmd::env_dev_repo().filter(|p| is_aida_repo(p)))
 }
 
+/// Common locations where users typically have aida installed. Order matters
+/// for display; we use it as-is for the scan-and-report output.
+/// Walk up from `start` (a binary path or directory) looking for the aida
+/// repo root. Used to discover the dev binary's source repo so we can ask
+/// "is this build ahead of the latest release tag".
 pub(crate) fn find_aida_repo_above(start: &std::path::Path) -> Option<std::path::PathBuf> {
     let mut probe = if start.is_file() {
         start.parent()?.to_path_buf()

@@ -4824,25 +4824,33 @@ mod tests {
         "never", "not", "no", "don't", "without", "instead", "rather", "nor",
     ];
 
-    /// `lower` names the Agent/Task tool (as a whole word) alongside seat work
-    /// and no negation, e.g. "launch the implementer with the Agent tool".
+    /// `lower` names seat work, and a clause of it names the Agent/Task tool
+    /// (as a whole word) with no negation in that clause: "launch the
+    /// implementer with the Agent tool; no worktree needed" is a launch, "the
+    /// implementer runs as a process, not with the Agent tool" is not.
     // trace:TASK-2272 | ai:claude
     fn names_agent_tool_for_seat_work(lower: &str) -> bool {
-        let whole = |needle: &str| {
-            lower.match_indices(needle).any(|(at, _)| {
-                let before = lower[..at].chars().next_back();
-                let after = lower[at + needle.len()..].chars().next();
-                !before.is_some_and(|c| c.is_alphanumeric())
-                    && !after.is_some_and(|c| c.is_alphanumeric() || c == '-')
-            })
-        };
         let seat = ["implementer", "fixer", "architect", "advisor"]
             .iter()
             .any(|w| lower.contains(w));
-        let negated = lower
-            .split(|c: char| !(c.is_alphanumeric() || c == '\''))
-            .any(|w| AGENT_TOOL_NEGATIONS.contains(&w));
-        seat && !negated && AGENT_TOOL_NAMES.iter().any(|n| whole(n))
+        let names_tool = |clause: &str| {
+            AGENT_TOOL_NAMES.iter().any(|needle| {
+                clause.match_indices(needle).any(|(at, _)| {
+                    let before = clause[..at].chars().next_back();
+                    let after = clause[at + needle.len()..].chars().next();
+                    !before.is_some_and(|c| c.is_alphanumeric())
+                        && !after.is_some_and(|c| c.is_alphanumeric() || c == '-')
+                })
+            })
+        };
+        let negated = |clause: &str| {
+            clause
+                .split(|c: char| !(c.is_alphanumeric() || c == '\''))
+                .any(|w| AGENT_TOOL_NEGATIONS.contains(&w))
+        };
+        seat && lower
+            .split([';', ',', '.', ':', '(', ')', '—'])
+            .any(|clause| names_tool(clause) && !negated(clause))
     }
 
     /// Every `key:line: pattern` in `body` that launches seat work through
@@ -4924,6 +4932,7 @@ mod tests {
             "launch the implementer with the Agent tool",
             "spawn each fixer via Task",
             "the advisor starts an architect with the Task tool",
+            "launch the implementer with the Agent tool; no worktree needed",
         ] {
             assert!(
                 !agent_tool_launches("t.md", line).is_empty(),

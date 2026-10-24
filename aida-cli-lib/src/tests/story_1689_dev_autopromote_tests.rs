@@ -1057,7 +1057,7 @@ fn a_refused_child_exits_zero_and_a_failed_one_does_not() {
 #[test]
 fn a_tick_skips_the_sha_the_operator_rolled_back_from() {
     let f = fixture();
-    pin_rolled_back(&f.layout.live_dir, TARGET).unwrap();
+    assert_eq!(pin_rolled_back(&f.layout.live_dir, TARGET).unwrap(), None);
     let mut fake = Fake::green();
     let outcome = tick(&f, &mut fake);
     assert_eq!(skip_reason(&outcome), "failed-sha");
@@ -1070,4 +1070,30 @@ fn a_tick_skips_the_sha_the_operator_rolled_back_from() {
         skip.detail()
     );
     assert_untouched(&fake);
+}
+
+// TASK-2272 (TASK-2308): the pin never replaces a failure of another SHA that
+// is not reported yet, and never writes while the autopromote lock is held.
+// trace:TASK-2272 | ai:claude
+#[test]
+fn the_rollback_pin_keeps_an_unreported_failure_and_respects_the_lock() {
+    let f = fixture();
+    put_state(&f, Phase::Failed, None, false, "2026-10-22T00:00:00Z");
+    let other = "3333333333333333333333333333333333333333";
+    let why = pin_rolled_back(&f.layout.live_dir, other)
+        .unwrap()
+        .expect("kept");
+    assert!(why.contains("not reported yet"), "{why}");
+    let kept = read_state(&f.layout.live_dir).unwrap();
+    assert_eq!((kept.sha.as_str(), kept.reported), (TARGET, false));
+
+    let f = fixture();
+    let _held = try_lock(&f.layout.live_dir, Duration::ZERO)
+        .unwrap()
+        .unwrap();
+    let why = pin_rolled_back(&f.layout.live_dir, other)
+        .unwrap()
+        .expect("busy");
+    assert!(why.contains("holds its lock"), "{why}");
+    assert!(read_state(&f.layout.live_dir).is_none());
 }

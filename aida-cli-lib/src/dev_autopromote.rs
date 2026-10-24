@@ -191,9 +191,24 @@ pub(crate) const ROLLED_BACK_ERROR: &str = "the operator rolled the live binary 
 
 /// `aida dev rollback` pins the SHA it rolled away from as an already
 /// reported failure, so the next tick skips it (`failed-sha`) until
-/// origin/main moves instead of rebuilding and re-promoting it.
+/// origin/main moves instead of rebuilding and re-promoting it. Under the
+/// autopromote lock, and never over a failure not yet reported: that report
+/// still has to reach the advisor. `Some(why)` when nothing was pinned.
 // trace:TASK-2272 | ai:claude
-pub(crate) fn pin_rolled_back(live: &Path, sha: &str) -> Result<()> {
+pub(crate) fn pin_rolled_back(live: &Path, sha: &str) -> Result<Option<String>> {
+    let Some(_lock) = try_lock(live, Duration::from_secs(2))? else {
+        return Ok(Some(
+            "a scheduled autopromote tick or build holds its lock".to_string(),
+        ));
+    };
+    if let Some(state) = read_state(live) {
+        if state.phase == Phase::Failed && !state.reported && state.sha != sha {
+            return Ok(Some(format!(
+                "the failed build of {} is not reported yet",
+                state.sha
+            )));
+        }
+    }
     write_state(
         live,
         &State {
@@ -205,7 +220,8 @@ pub(crate) fn pin_rolled_back(live: &Path, sha: &str) -> Result<()> {
             at: chrono::Utc::now().to_rfc3339(),
             error: Some(ROLLED_BACK_ERROR.to_string()),
         },
-    )
+    )?;
+    Ok(None)
 }
 
 /// Paths the tick and the child use besides the live dir.
