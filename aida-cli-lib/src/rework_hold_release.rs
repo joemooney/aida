@@ -1,8 +1,10 @@
 //! Narrow, recorded release of nonsensitive Rework-only holds.
 //! Shares today's record-time seat/grant check. It does not authenticate
 //! same-user JSON against forgery or provide the pending authorship ledger.
-//! Hold writes are atomic; there is no existing hold lock. Concurrent re-arm
-//! serialization is deferred by the signed slice; re-read before release.
+//! Hold writes are atomic. Hold placements and the release's second pass,
+//! label drop and marker removal serialize on the per-PR hold lock
+//! (TASK-1757); see [`release_with`] for the order and why it differs from
+//! the human clear.
 // trace:STORY-1687 | ai:codex
 // mandate-gate
 use crate::{merge_hold as mh, review_verdict as rv, seat_authority as sa};
@@ -186,13 +188,20 @@ fn eligible(
             sensitive_reason.get_or_insert(reason);
         }
     }
-    ensure!(
-        body.get("verdict")
-            .and_then(Value::as_str)
-            .map(rv::VerdictKind::parse)
-            == Some(rv::VerdictKind::Approved),
-        "verdict is not APPROVED"
-    );
+    // TASK-1757: an approval recorded under another key (the spec instead of
+    // the `PR-N` the refusal armed, or the reverse) leaves this one
+    // unanswered; say which key the release reads.
+    // trace:TASK-1951 trace:TASK-1757 | ai:claude
+    let raw = body.get("verdict").and_then(Value::as_str);
+    if raw.map(rv::VerdictKind::parse) != Some(rv::VerdictKind::Approved) {
+        let key = hold.verdict_ref.as_ref().map_or("?", |r| r.key.as_str());
+        bail!(
+            "verdict is not APPROVED: the latest verdict recorded under {key} is {}; \
+             auto-release reads the key the refusal was recorded under, so record the \
+             approval as `aida review record {key}`",
+            raw.unwrap_or("missing")
+        );
+    }
     let sha = body
         .get("reviewed_sha")
         .and_then(Value::as_str)
@@ -313,12 +322,34 @@ pub(crate) fn approval_attested(
 /// I/O seam shared by automatic recording and explicit retries. A failed audit
 /// or mirror write leaves the active marker in place; repeated successful calls
 /// are no-ops. The audit flag prevents duplicate comments on a mirror retry.
+///
+/// TASK-1757 order and locking. Auto-release records the clearance, posts the
+/// audit comment, drops the labels, and only then removes the marker: no
+/// human is present to retry, so the marker stays armed until the forge
+/// agrees. The human `aida merge-hold clear` records the clearance, removes
+/// the marker, then drops the labels, because the operator at the terminal
+/// sees a label failure and re-runs it. The clearance record, the second
+/// validation pass, the label drop and the marker removal run under the hold
+/// lock ([`mh::with_hold_lock`]), so a re-arm cannot land between the check and
+/// the removal. A second pass that refuses supersedes the clearance it
+/// recorded, so it is never read as a release.
+///
+/// TASK-2285: two auto-releases of one PR can overlap (the record-time
+/// release and an `aida merge-hold auto-release` sweep). The clearance is
+/// read, compared and written only under the lock, after re-checking that the
+/// marker is still armed, so the loser either finds the winner done and
+/// changes nothing or refuses busy having written nothing. The marker is
+/// removed only while the clearance it answers still exists. No interleaving
+/// leaves the marker gone without a clearance, which the tamper check would
+/// report as a hand-deletion.
+// trace:TASK-1951 trace:TASK-1757 trace:TASK-2285 | ai:claude
 fn release_with(
     root: &Path,
     hold: &mh::MergeHoldRecord,
     release: &Release,
+    also: &[mh::VerdictRef],
     mut validate: impl FnMut() -> Result<String>,
-    comment: impl FnOnce(&str) -> Result<()>,
+    comment: impl Fn(&str) -> Result<()>,
     labels: impl FnOnce() -> Result<()>,
 ) -> Result<()> {
     let verdict = &release.verdict;
@@ -326,50 +357,131 @@ fn release_with(
         Some(validate()?.as_str()) == verdict.reviewed_sha.as_deref(),
         "PR head moved before release"
     );
-    let path = mh::clearance_path(root, hold.pr);
-    let existing = std::fs::read(&path)
-        .ok()
-        .and_then(|b| serde_json::from_slice::<Value>(&b).ok());
-    let same = existing.as_ref().is_some_and(|v| {
-        v.get("cleared_by").and_then(Value::as_str) == Some(PRINCIPAL)
-            && v.get("released_by_verdict") == serde_json::to_value(verdict).ok().as_ref()
-    });
-    if !same {
-        let mut approved_hold = hold.clone();
-        approved_hold.target_head_sha = verdict.reviewed_sha.clone();
-        mh::record_clearance_by(root, &approved_hold, PRINCIPAL, Some(verdict.clone()))?;
-        // trace:STORY-1697 | ai:claude
-        if let Some(id) = &release.mandate {
+    // Every clearance read and write happens under the lock: an overlapping
+    // release either finished first (its clearance stands, the marker is
+    // gone) or waits, and a busy refusal has written nothing (TASK-2285).
+    // trace:TASK-1951 trace:TASK-2285 | ai:claude
+    let locked = mh::with_hold_lock(root, hold.pr, || -> Result<()> {
+        if !mh::hold_path(root, hold.pr).exists() {
+            bail!("a concurrent release already removed the hold; its clearance stands");
+        }
+        let path = mh::clearance_path(root, hold.pr);
+        let existing = std::fs::read(&path)
+            .ok()
+            .and_then(|b| serde_json::from_slice::<Value>(&b).ok());
+        let also_json = serde_json::to_value(also)?;
+        let same = existing.as_ref().is_some_and(|v| {
+            v.get("cleared_by").and_then(Value::as_str) == Some(PRINCIPAL)
+                && v.get("released_by_verdict") == serde_json::to_value(verdict).ok().as_ref()
+                && v.get("also_released_by")
+                    .unwrap_or(&Value::Array(Vec::new()))
+                    == &also_json
+        });
+        if !same {
+            let mut approved_hold = hold.clone();
+            approved_hold.target_head_sha = verdict.reviewed_sha.clone();
+            mh::record_clearance_by(root, &approved_hold, PRINCIPAL, Some(verdict.clone()))?;
+            // trace:STORY-1697 trace:BUG-2123 | ai:claude
+            if release.mandate.is_some() || !also.is_empty() {
+                let mut audit: Value = serde_json::from_slice(&std::fs::read(&path)?)?;
+                if let Some(id) = &release.mandate {
+                    audit["released_under_mandate"] = Value::String(id.clone());
+                }
+                if !also.is_empty() {
+                    audit["also_released_by"] = also_json.clone();
+                }
+                aida_core::fs_atomic::write_atomic(&path, &serde_json::to_vec_pretty(&audit)?)?;
+            }
+        }
+        if !same
+            || !existing
+                .as_ref()
+                .is_some_and(|v| v.get("audit_comment_posted") == Some(&Value::Bool(true)))
+        {
+            let specs = match &release.mandate {
+                None => "covered specs require no human signoff".to_string(),
+                Some(id) => format!(
+                    "a sensitive covered spec is {}",
+                    crate::mandate::release_note(id)
+                ),
+            };
+            let answered = if also.is_empty() {
+                String::new()
+            } else {
+                format!(
+                    " It also answers the absorbed refusals {}.",
+                    also.iter()
+                        .map(mh::VerdictRef::path)
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            };
+            comment(&format!("Recorded auto-release authorization: {} by {} at {}. Recorded clearance principal `{PRINCIPAL}`; all hold kinds are Rework and {specs}.{answered}",
+                verdict.path(), verdict.recorded_by.as_deref().unwrap_or_default(), verdict.reviewed_sha.as_deref().unwrap_or_default()))?;
             let mut audit: Value = serde_json::from_slice(&std::fs::read(&path)?)?;
-            audit["released_under_mandate"] = Value::String(id.clone());
+            audit["audit_comment_posted"] = Value::Bool(true);
             aida_core::fs_atomic::write_atomic(&path, &serde_json::to_vec_pretty(&audit)?)?;
         }
+        let second = validate().and_then(|head| {
+            ensure!(
+                Some(head.as_str()) == verdict.reviewed_sha.as_deref(),
+                "PR head moved before release"
+            );
+            Ok(())
+        });
+        if let Err(why) = second {
+            // trace:TASK-1951 trace:TASK-2285 | ai:claude
+            if !mh::hold_path(root, hold.pr).exists() {
+                return Err(why.context(
+                    "a concurrent release already removed the hold; its clearance stands",
+                ));
+            }
+            supersede_clearance(root, hold.pr, &why, &comment);
+            return Err(why);
+        }
+        ensure!(
+            path.exists(),
+            "the auto-release clearance was withdrawn by a concurrent release; the hold \
+             stays armed (re-run `aida merge-hold auto-release`)"
+        );
+        labels()?;
+        mh::clear_hold(root, hold.pr)?;
+        Ok(())
+    });
+    match locked {
+        Ok(released) => released,
+        // Busy: nothing was recorded, so there is nothing to withdraw.
+        Err(busy) => Err(anyhow::Error::new(busy)),
     }
-    if !same
-        || !existing
-            .as_ref()
-            .is_some_and(|v| v.get("audit_comment_posted") == Some(&Value::Bool(true)))
-    {
-        let specs = match &release.mandate {
-            None => "covered specs require no human signoff".to_string(),
-            Some(id) => format!(
-                "a sensitive covered spec is {}",
-                crate::mandate::release_note(id)
-            ),
-        };
-        comment(&format!("Recorded auto-release authorization: {} by {} at {}. Recorded clearance principal `{PRINCIPAL}`; all hold kinds are Rework and {specs}.",
-            verdict.path(), verdict.recorded_by.as_deref().unwrap_or_default(), verdict.reviewed_sha.as_deref().unwrap_or_default()))?;
-        let mut audit: Value = serde_json::from_slice(&std::fs::read(&path)?)?;
-        audit["audit_comment_posted"] = Value::Bool(true);
-        aida_core::fs_atomic::write_atomic(&path, &serde_json::to_vec_pretty(&audit)?)?;
+}
+
+/// TASK-1757: the second validation pass refused after the clearance was
+/// recorded. Move the clearance aside (kept for audit, never read as a
+/// clearance: a stale one beside a live marker would mask a later
+/// hand-deletion from the tamper check) and say so on the PR, best-effort.
+// trace:TASK-1951 trace:TASK-1757 | ai:claude
+fn supersede_clearance(
+    root: &Path,
+    pr: u64,
+    why: &anyhow::Error,
+    comment: &dyn Fn(&str) -> Result<()>,
+) {
+    let path = mh::clearance_path(root, pr);
+    if !path.exists() {
+        return;
     }
-    ensure!(
-        Some(validate()?.as_str()) == verdict.reviewed_sha.as_deref(),
-        "PR head moved before release"
-    );
-    labels()?;
-    mh::clear_hold(root, hold.pr)?;
-    Ok(())
+    let aside = mh::superseded_clearance_path(root, pr, chrono::Utc::now());
+    if let Err(e) = std::fs::rename(&path, &aside) {
+        eprintln!(
+            "  warning: could not supersede PR #{pr}'s auto-release clearance {} ({e}); remove it by hand",
+            path.display()
+        );
+        return;
+    }
+    let _ = comment(&format!(
+        "Auto-release authorization withdrawn: {why:#}. The hold stays armed; the withdrawn clearance is kept at {}.",
+        aside.display()
+    ));
 }
 
 // Reads and forge effects are injected; eligibility and both release-time rechecks
@@ -410,16 +522,19 @@ pub(crate) fn auto_release(project: &Path, pr: u64) -> Result<Outcome> {
         .filter(|spec| !spec.starts_with("PR-"))
         .cloned()
         .collect();
-    let verdict_root = std::cell::Cell::new(None::<&Path>);
+    // Each arming verdict is read from the root it was first found under, so
+    // both validation passes read the same file (BUG-2123: one per key).
+    let verdict_roots = std::cell::RefCell::new(std::collections::HashMap::<String, &Path>::new());
     let verdict_file = |key: &str| -> Result<std::path::PathBuf> {
-        let verdict_root = match verdict_root.get() {
+        let known = verdict_roots.borrow().get(key).copied();
+        let verdict_root = match known {
             Some(path) => path,
             None => {
                 let path = [project, root.as_path()]
                     .into_iter()
                     .find(|r| rv::verdict_path(r, key).is_file())
-                    .context("arming verdict is missing")?;
-                verdict_root.set(Some(path));
+                    .with_context(|| format!("arming verdict {key} is missing"))?;
+                verdict_roots.borrow_mut().insert(key.to_string(), path);
                 path
             }
         };
@@ -434,18 +549,9 @@ pub(crate) fn auto_release(project: &Path, pr: u64) -> Result<Outcome> {
             covered_specs: &|| {
                 let forge = crate::forge::forge_for_kind(&root, kind);
                 let mut sink = crate::network_retry::StderrSink;
-                let mut ids: Vec<String> = forge
-                    .change_commit_headlines(pr, &mut sink)?
-                    .iter()
-                    .flat_map(|s| crate::pr_ship::extract_trailing_spec_ids_from_subject(s))
-                    .collect();
-                if let Some(spec) = &hold.spec {
-                    if !spec.starts_with("PR-") {
-                        ids.push(spec.clone());
-                    }
-                }
-                ids.sort();
-                ids.dedup();
+                let headlines = forge.change_commit_headlines(pr, &mut sink)?;
+                let title = forge.change_metadata(pr, &mut sink)?.title;
+                let ids = covered_spec_ids(&headlines, &title, &hold);
                 let store = crate::pr_lookup::load_review_story_inventory(&root)
                     .context("covered spec store is unreadable; human clear required")?;
                 Ok((ids, store))
@@ -518,11 +624,72 @@ pub(crate) fn auto_release(project: &Path, pr: u64) -> Result<Outcome> {
                 Ok(())
             },
             labels: &|| {
-                mh::sync_label(&root, pr, false)
-                    .map_err(|e| anyhow::anyhow!("release labels failed: {e}"))
+                mh::sync_label(&root, pr, false).map_err(|e| auto_release_label_failure(pr, &e))
             },
         },
     )
+}
+
+/// The auto-release label step failed. The marker is still armed (labels run
+/// before the marker is removed), so the retry is the auto-release itself,
+/// not `aida merge-hold clear`.
+// trace:TASK-1951 | ai:claude
+fn auto_release_label_failure(pr: u64, err: &mh::LabelSyncError) -> anyhow::Error {
+    anyhow::anyhow!(
+        "release labels failed: {err}; the hold stays armed — re-run `aida merge-hold auto-release {pr}` when the forge is reachable"
+    )
+}
+
+/// BUG-2123: the specs an auto-release must resolve and judge: every commit
+/// headline's and the PR title's trailing ids, the hold's own spec, and the
+/// spec of every hold it absorbed. A spec named in only one of those places
+/// is still covered.
+// trace:TASK-1951 trace:BUG-2123 | ai:claude
+fn covered_spec_ids(headlines: &[String], title: &str, hold: &mh::MergeHoldRecord) -> Vec<String> {
+    let mut ids: Vec<String> = headlines
+        .iter()
+        .map(String::as_str)
+        .chain(std::iter::once(title))
+        .flat_map(crate::pr_ship::extract_trailing_spec_ids_from_subject)
+        .collect();
+    ids.extend(
+        hold.spec
+            .iter()
+            .chain(hold.absorbed.iter().filter_map(|a| a.spec.as_ref()))
+            .filter(|spec| !spec.starts_with("PR-"))
+            .cloned(),
+    );
+    ids.sort();
+    ids.dedup();
+    ids
+}
+
+/// BUG-2123: every refusal the hold stands on: its own verdict, then each
+/// absorbed Rework hold's. Auto-release must find each one answered. An
+/// absorbed Rework hold with no verdict reference cannot be answered, so it
+/// needs a human clear.
+// trace:TASK-1951 trace:BUG-2123 | ai:claude
+fn arming_refs(hold: &mh::MergeHoldRecord) -> Result<Vec<mh::VerdictRef>> {
+    let mut refs = vec![hold
+        .verdict_ref
+        .clone()
+        .context("hold has no arming verdict reference")?];
+    for absorbed in hold
+        .absorbed
+        .iter()
+        .filter(|a| a.reason_kind == mh::HoldReasonKind::Rework)
+    {
+        let r = absorbed.verdict_ref.clone().with_context(|| {
+            format!(
+                "an absorbed rework hold ({}) has no verdict reference; human clear required",
+                absorbed.detail
+            )
+        })?;
+        if !refs.iter().any(|known| known.key == r.key) {
+            refs.push(r);
+        }
+    }
+    Ok(refs)
 }
 
 // Keep forge-response validation inside the shared production/test path too.
@@ -539,12 +706,9 @@ fn auto_release_with(
     io: AutoReleaseIo<'_>,
 ) -> Result<Outcome> {
     let head = open_change_head((io.live_head)()?)?;
-    let key = &hold
-        .verdict_ref
-        .as_ref()
-        .context("hold has no arming verdict reference")?
-        .key;
-    let check = |body: &Value,
+    let refs = arming_refs(hold)?;
+    let check = |hold: &mh::MergeHoldRecord,
+                 body: &Value,
                  history: &RetainedHistory,
                  ids: &[String],
                  store: &aida_core::RequirementsStore|
@@ -597,17 +761,41 @@ fn auto_release_with(
             io.mandate,
         )
     };
+    // BUG-2123: every arming refusal must be answered at this head. Each is
+    // judged against the hold as if it alone armed it, so its Release names
+    // its own verdict. trace:TASK-1951 trace:BUG-2123 | ai:claude
+    let check_all = |ids: &[String],
+                     store: &aida_core::RequirementsStore|
+     -> Result<Vec<Release>> {
+        refs.iter()
+            .map(|r| {
+                let mut armed = hold.clone();
+                armed.verdict_ref = Some(r.clone());
+                let judged = (io.read_body)(&r.key)
+                    .and_then(|body| check(&armed, &body, &(io.read_history)(&r.key)?, ids, store));
+                match judged {
+                    Ok(release) => Ok(release),
+                    Err(e) if refs.len() > 1 => Err(anyhow::anyhow!(
+                        "the refusal on {} at {} is not answered: {e:#}",
+                        r.key,
+                        r.reviewed_sha
+                            .as_deref()
+                            .map_or("an unknown head", |s| &s[..s.len().min(8)])
+                    )),
+                    Err(e) => Err(e),
+                }
+            })
+            .collect()
+    };
     let (ids, store) = (io.covered_specs)()?;
-    let release = check(
-        &(io.read_body)(key)?,
-        &(io.read_history)(key)?,
-        &ids,
-        &store,
-    )?;
+    let releases = check_all(&ids, &store)?;
+    let release = releases[0].clone();
+    let also: Vec<mh::VerdictRef> = releases[1..].iter().map(|r| r.verdict.clone()).collect();
     let released = release_with(
         root,
         hold,
         &release,
+        &also,
         || {
             let current_head = open_change_head((io.live_head)()?)?;
             ensure!(
@@ -619,12 +807,7 @@ fn auto_release_with(
             // trace:STORY-1687 | ai:codex
             let (ids, store) = (io.covered_specs)()?;
             ensure!(
-                check(
-                    &(io.read_body)(key)?,
-                    &(io.read_history)(key)?,
-                    &ids,
-                    &store
-                )? == release,
+                check_all(&ids, &store)? == releases,
                 "approval changed before release (or its covering mandate did)"
             );
             let bodies = (io.read_corpus)(&ids)?;
@@ -686,3 +869,7 @@ mod story_1697_tests;
 #[cfg(test)]
 #[path = "tests/bug_2186_archived_history_release_tests.rs"]
 mod bug_2186_tests;
+
+#[cfg(test)]
+#[path = "tests/bug_2123_composed_rework_release_tests.rs"]
+mod bug_2123_tests;

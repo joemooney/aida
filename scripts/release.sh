@@ -443,6 +443,9 @@ if ! lease_acquire 0; then
     echo "error: the '$release_base' merge-lease was taken by $(lease_describe); re-run once it finishes" >&2
     exit 1
 fi
+# The commit the bump, cargo check, CHANGELOG and tag notes are computed on.
+# trace:TASK-1951 trace:TASK-1688 | ai:claude
+bump_base=$(git rev-parse HEAD)
 
 echo "bumping workspace from v$current -> v$new"
 
@@ -663,6 +666,29 @@ if ! lease_acquire "${AIDA_RELEASE_LEASE_WAIT_SECS:-180}"; then
 error: the '$release_base' merge-lease is held by $(lease_describe).
 The version bump is still in your working tree; re-run the publish steps once it
 finishes, or discard with: git restore ${manifest_paths[*]}
+Tag notes saved at: $notes_file
+EOM
+    exit 1
+fi
+# A ship that fast-forwarded this checkout (or the base on the remote) while
+# the confirmation prompt waited would cut release/vX from a different base
+# than the CHANGELOG and tag notes describe. Abort before committing.
+# trace:TASK-1951 trace:TASK-1688 | ai:claude
+moved=""
+if [ "$(git rev-parse HEAD)" != "$bump_base" ]; then
+    moved="local $release_base moved from $bump_base to $(git rev-parse HEAD)"
+elif ! git fetch -q "$release_remote" "$release_base"; then
+    moved="could not fetch $release_remote/$release_base to confirm it is still $bump_base"
+elif [ "$(git rev-parse FETCH_HEAD)" != "$bump_base" ]; then
+    moved="$release_remote/$release_base moved from $bump_base to $(git rev-parse FETCH_HEAD)"
+fi
+if [ -n "$moved" ]; then
+    lease_release
+    cat <<EOM >&2
+error: $moved while the release waited for confirmation.
+The version bump, CHANGELOG and tag notes were computed on $bump_base, so nothing
+was committed, pushed, or tagged. Discard the bump and re-run on the new base:
+  git restore ${manifest_paths[*]}
 Tag notes saved at: $notes_file
 EOM
     exit 1
