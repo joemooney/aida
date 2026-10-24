@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-24T21:05:29.231815788Z
-modified_at: 2026-10-24T22:29:18.014281798Z
+modified_at: 2026-10-24T22:29:21.722658801Z
 req_type: Task
 tags:
 - from-review:PR-2904
@@ -28,6 +28,13 @@ relationships:
   target_id: 01a16ac9-0c37-7d72-a140-fa29d8b4b141
   created_at: 2026-10-24T22:29:18.014278202Z
   created_by: joe
+comments:
+- id: 01a17008-68ba-79a1-963c-cbb9eae8ba1e
+  author: joe
+  content: 'ADVISOR 15:30: fold into the next STORY-1742 slice: disable must clear a corrupt clone-local profile.'
+  created_at: 2026-10-24T22:29:21.722658801Z
+  modified_at: 2026-10-24T22:29:21.722658801Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
 history:
 - id: 01a17008-517a-7c40-82eb-db1fc0c93241
   author: joe
