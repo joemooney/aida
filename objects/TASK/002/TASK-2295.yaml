@@ -1,0 +1,30 @@
+id: 01a16b64-1a77-7e60-8bb1-172b63aa7972
+spec_id: TASK-2295
+agreed_id: TASK-2295
+title: 'aida-pr redirect: extending-skills example wording + missing ▶ primary row'
+description: |
+  Two cosmetic nits from the review of PR-2869 (TASK-1613):
+  - docs/extending-skills.md:107-110: the example heredoc's "otherwise" now attaches to the trailing-group clause, not to the [SPEC-ID] title-prefix rule. Reword it.
+  - aida-core/templates/skills/aida-pr/SKILL.md:20-23: the next-steps table has no ▶ primary row, which breaks the glyph convention in docs/skills-convention.md.
+
+  Raised in review of PR-2869: https://github.com/joemooney/aida/pull/2869#issuecomment-6377769186
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-24T00:51:24.919978142Z
+modified_at: 2026-10-24T00:51:24.919978142Z
+req_type: Task
+tags:
+- docs
+- from-review:PR-2869
+- severity:cosmetic
+filed_at:
+  code_sha: 74baefe6ea7d006f45d6f883d935f73511c74148
+  branch: pr-2869
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c38043228d
+  vendor: claude
+  session: 01a16b61266a
+  harness_version: 2.1.310 (Claude Code)
