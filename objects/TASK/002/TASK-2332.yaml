@@ -11,7 +11,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-24T17:19:49.330081546Z
-modified_at: 2026-10-24T19:43:39.411080830Z
+modified_at: 2026-10-24T19:43:44.137350947Z
 req_type: Task
 tags:
 - from-review:PR-2900
@@ -21,6 +21,13 @@ relationships:
   target_id: 01a16de1-2db8-75e3-b99d-afa3c62c66f4
   created_at: 2026-10-24T19:43:39.411077415Z
   created_by: joe
+comments:
+- id: 01a16f70-c609-7193-8e5f-32da3d281f72
+  author: joe
+  content: 'ADVISOR 12:50: known limitation recorded on BUG-2220: rider gate is read-once; the merge lease still serializes landings, so a double-carry cannot double-land. No separate work.'
+  created_at: 2026-10-24T19:43:44.137350947Z
+  modified_at: 2026-10-24T19:43:44.137350947Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
 history:
 - id: 01a16f70-afa0-7ce1-8643-4a64dd5b6e94
   author: joe
