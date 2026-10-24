@@ -1,0 +1,29 @@
+id: 01a16d08-d046-7981-9f47-2de83d2937cb
+spec_id: TASK-2321
+agreed_id: TASK-2321
+title: 'stage_resume_transcript: O_NOFOLLOW open lacks O_NONBLOCK — a FIFO source blocks the resume indefinitely'
+description: |
+  aida-cli-lib/src/session.rs stage_resume_transcript (TASK-2315 fix, PR-2893): the source transcript is opened with O_NOFOLLOW and fstat'ed on the handle — correct for the symlink TOCTOU — but without O_NONBLOCK. A FIFO planted at <from_dir>/<id>.jsonl makes open(2) block indefinitely (a FIFO opened O_RDONLY blocks until a writer appears). The pre-fix code checked symlink_metadata().is_file() before any open, so a FIFO only hung in the swap race window; the new code opens first, making the hang deterministic in exactly the hostile-source scenario the fix hardens against. DoS only — no disclosure, the symlink goal is met.
+
+  Fix: add libc::O_NONBLOCK to the custom open flags (harmless for regular files; fstat then confirms is_file and refuses a FIFO), or pre-probe with symlink_metadata before the O_NOFOLLOW open.
+
+  Raised in review of PR-2893: https://github.com/joemooney/aida/pull/2893#issuecomment-6382019618
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-24T08:30:56.582861652Z
+modified_at: 2026-10-24T08:30:56.582861652Z
+req_type: Task
+tags:
+- from-review:PR-2893
+- severity:minor
+filed_at:
+  code_sha: 7551db72771f959b7365064c267d16e7657be1a3
+  branch: pr-2893
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 14065b6254
+  vendor: claude
+  session: 01a16d025b72
+  harness_version: 2.1.310 (Claude Code)

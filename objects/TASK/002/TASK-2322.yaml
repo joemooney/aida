@@ -1,0 +1,27 @@
+id: 01a16d08-e0bf-7fa3-b020-02681dba3b50
+spec_id: TASK-2322
+agreed_id: TASK-2322
+title: 'run_emergency_probed: partial run (deletes then refusal) never saves last_emergency_refusal, so the repeat refusal re-notifies as new'
+description: |
+  aida-cli-lib/src/disk_emergency.rs run_emergency_probed (TASK-1-484 fix, PR-2893): the dedupe state block is gated on outcome.deleted.is_empty(), so a run that deleted something AND ended Stop::Refused never records last_emergency_refusal. The next nothing-deleted tick carrying the same refusal compares against the stale/None value and notifies again as a "new" refusal. One extra notification; arguably still news. A one-line gate tweak (save last_emergency_refusal whenever outcome.refusal.is_some()) closes it if it ever annoys.
+
+  Raised in review of PR-2893: https://github.com/joemooney/aida/pull/2893#issuecomment-6382019618
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-24T08:31:00.799754234Z
+modified_at: 2026-10-24T08:31:00.799754234Z
+req_type: Task
+tags:
+- from-review:PR-2893
+- severity:cosmetic
+filed_at:
+  code_sha: 7551db72771f959b7365064c267d16e7657be1a3
+  branch: pr-2893
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 14065b6254
+  vendor: claude
+  session: 01a16d025b72
+  harness_version: 2.1.310 (Claude Code)
