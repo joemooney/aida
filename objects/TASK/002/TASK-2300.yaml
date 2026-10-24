@@ -8,12 +8,12 @@ description: |
   Ruling 2 handles only a MISSING origin, by falling back with a note. Either extend that to an unreachable origin under the default knob (with a note), or document it: the plan doc's "The flip never turns a working contained launch into a refusal" (docs/plans/2026-10-16-bug-2169-contained-clone.md, S4c as built) overclaims, and docs/release-notes/2026-10-contained-seat-clone-default.md should say that origin must be reachable at launch.
 
   Raised in review of PR-2839: https://github.com/joemooney/aida/pull/2839#issuecomment-6378149711
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-24T01:26:39.516291752Z
-modified_at: 2026-10-24T06:12:00.680119553Z
+modified_at: 2026-10-24T06:12:07.266989593Z
 req_type: Task
 tags:
 - docs
@@ -75,6 +75,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a16c89-b7e2-7333-9439-6a71e678975e
+  author: joe
+  timestamp: 2026-10-24T06:12:07.266987429Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 42cef5f69f1795e85e1dbe91fcd8c83ba0239b72
   branch: pr-2839
