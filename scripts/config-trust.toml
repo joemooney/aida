@@ -266,11 +266,14 @@ sites = 1
 # STORY-1700: the drive mandate's human gates. The committed layer is the
 # origin/main blob (never the worktree copy) and the operator layer is
 # ~/.aida/config.toml; the third site is the protected-path list a PR is
-# compared against (no value read).
+# compared against (no value read). STORY-1888 adds two prose sites: the
+# PathSource labels naming those two layers (origin/main = trusted, ~/.aida =
+# home) in refusals and `aida mandate status`; nothing is read through them.
 # trace:STORY-1700 | ai:claude
+# trace:STORY-1888 | ai:claude
 [readers."aida-cli-lib/src/mandate_gates.rs"]
-channels = ["trusted", "home", "probe"]
-sites = 4
+channels = ["trusted", "home", "probe", "prose"]
+sites = 6
 
 [readers."aida-cli-lib/src/maintenance_schedule.rs"]
 channels = ["worktree", "prose"]
