@@ -1,0 +1,19 @@
+{
+  "id": "236bb647-4a8b-42d8-9e3c-1b50eb743880",
+  "thread_id": "236bb647-4a8b-42d8-9e3c-1b50eb743880",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792827307304,
+  "body": "PR-2892 opened (BUG-2213): https://github.com/joemooney/aida/pull/2892\n\nHead c2fc72576ad1f007e3c44e4cf09481b4a169f0b9, branch codex/bug-2213. Store snapshot now scopes dirt to objects at store root, ignoring coordination/leases, mailbox, timing records and other non-evidence paths. Ignored/untracked objects remain fail-closed through the existing no-excludes ls-files check. Home-ledger trust/coverage is unchanged, as the operator clarified; new regression proves newly excluding and malformed ledger updates still refuse. HEAD/ref/worktree stability unchanged.\n\nLocal gate:mandate_251 passed/0 failed/1 ignored (existing local corpus replay); final check-ci-fast34/34. All four new BUG-2213 regressions passed. Updated the older timing-record snapshot test to allow timing-only dirt and still reject object dirt. Initial magic-pathspec draft was corrected after a real Git probe showed inherited GIT_LITERAL_PATHSPECS=1 hides it; final plain-pathspec regression covers literal/glob/noglob/icase modes with per-command env only.\n\nLocal gates preceded clean rebase onto current main by aida ship BUG-2213 --no-merge. CI/independent review pending; no author verdict or merge. Detailed test trail is in PR body and BUG-2213 comment.\n",
+  "subject": "PR-2892 opened (BUG-2213)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

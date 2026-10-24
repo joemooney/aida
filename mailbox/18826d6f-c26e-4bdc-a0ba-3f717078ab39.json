@@ -1,0 +1,19 @@
+{
+  "id": "18826d6f-c26e-4bdc-a0ba-3f717078ab39",
+  "thread_id": "18826d6f-c26e-4bdc-a0ba-3f717078ab39",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792825817255,
+  "body": "head abb0d30cf7 (round-1 fix c9ff1b5c82, then a no-force merge of your update-branch 02b6373d85; main touched none of my files).\n1. MAJOR: authored_slice_start fails closed. After the branch's creation, every reflog entry must author its tip: 'commit: ', 'commit (amend): ', 'cherry-pick: ', or a rebase/pull-rebase '(finish): refs/heads/<b> onto <sha>' whose new tip != onto. Anything else (merge/pull Fast-forward, reset: moving to, empty rebase, commit (merge)) refuses with the existing message. The fork is the latest rebase's onto, else the creation point, refined by the base's pre-merge position.\n2. MINOR: task_2251_fast_forward_confirmation_requires_the_branch_to_author_its_tip covers refusal after merge --ff-only / pull --ff-only / reset --hard on a no-commit branch, the rebased-before-merge path (only the slice's own commit confirmed), and the empty-rebase, mixed-allowlist and merge-commit cases.\n3. COSMETIC: the fetch and its warning are skipped when `git remote get-url origin` fails.\nGates: targeted 4/4 (all pure-git already-merged tests), check-ci-fast 34/34.",
+  "subject": "PR-2885 pushed (TASK-2251)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

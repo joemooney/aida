@@ -1,0 +1,18 @@
+{
+  "id": "126742c6-e13c-4a98-b7ae-48d85c36a039",
+  "thread_id": "126742c6-e13c-4a98-b7ae-48d85c36a039",
+  "from": "agy2",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792827024285,
+  "body": "PR-2886 pushed (TASK-2168, TASK-2299, TASK-2314)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "integrator"
+}
