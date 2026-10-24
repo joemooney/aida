@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-1916",
+  "publishes": [
+    {
+      "at": "2026-10-24T06:44:35.787249203Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-23T16:40:35.287640823Z",
+      "spec": "STORY-1916",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-23T21:41:50.705491440Z",
+      "spec": "STORY-1916",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "STORY-1916",
+        "branch": "pr-2859",
+        "first_seen": "2026-10-23T21:41:50.705466105+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-24T06:44:06.998175216Z",
+      "spec": "STORY-1916",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2859
+      }
+    },
+    {
+      "ts": "2026-10-24T06:44:35.590640663Z",
+      "spec": "STORY-1916",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "4d3777338645602470178f0ab2e63309f71520e2",
+        "pr": 2859,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
