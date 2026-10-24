@@ -1,0 +1,27 @@
+id: 01a16b49-66bb-7bb1-9571-8567e1567827
+spec_id: TASK-2293
+agreed_id: TASK-2293
+title: Route remaining push -u sites (init_bootstrap, init_cmd, gitlab_project_create) through the config.lock pre-clear and upstream repair
+description: |
+  These non-test git push -u sites still call git directly, with no clear_sandbox_config_lock pre-clear and no repair_push_upstream: aida-cli-lib/src/init_bootstrap.rs:412, 434 and 509, init_cmd.rs:4641 and 4665, and gitlab_project_create.rs:281. If the sandbox config.lock placeholder is present, the push exits 0 but no upstream is recorded. These sites were not named in TASK-2267 or TASK-2273, so this is a follow-up only.
+
+  Raised in review of PR-2867: https://github.com/joemooney/aida/pull/2867
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-24T00:22:14.971756903Z
+modified_at: 2026-10-24T00:22:14.971756903Z
+req_type: Task
+tags:
+- from-review:PR-2867
+- severity:cosmetic
+filed_at:
+  code_sha: 96c0224be1cdba64f7ec2b60da958beb9c03ac05
+  branch: pr-2867
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c51da86593
+  vendor: claude
+  session: 01a16b47955f
+  harness_version: 2.1.310 (Claude Code)
