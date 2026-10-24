@@ -377,6 +377,9 @@ pub(crate) enum Reason {
     Closed,
     Idle,
     IdleLiveLease,
+    /// TASK-2325: a terminal job's tmp dir or old session scratch, reclaimed
+    /// only at the hard ceiling after the cache tiers.
+    AgentScratch,
 }
 
 impl Reason {
@@ -385,6 +388,8 @@ impl Reason {
             Reason::WorktreeGone | Reason::Merged | Reason::Closed => 0,
             Reason::Idle => 1,
             Reason::IdleLiveLease => 2,
+            // trace:TASK-2325 | ai:claude
+            Reason::AgentScratch => 3,
         }
     }
 
@@ -395,6 +400,8 @@ impl Reason {
             Reason::Closed => "closed",
             Reason::Idle => "idle",
             Reason::IdleLiveLease => "idle-live-lease",
+            // trace:TASK-2325 | ai:claude
+            Reason::AgentScratch => "agent-scratch",
         }
     }
 }
@@ -1358,13 +1365,18 @@ pub(crate) fn run_emergency_probed(
         &candidates,
         cfg,
         now,
-        used_pct,
+        &used_pct,
         |p| std::fs::remove_dir_all(p),
         |c| mail_holder(main_root, c),
         |row| {
             let _ = append_ledger(main_root, std::slice::from_ref(row));
         },
     );
+    // TASK-2325: at the hard ceiling the repo's caches alone may not be
+    // enough — terminal jobs' tmp dirs and old session scratch (never build
+    // caches, never a live job or session) are then reclaimed too, until
+    // usage drops below the ceiling. trace:TASK-2325 | ai:claude
+    let outcome = scratch_at_hard_ceiling(main_root, cfg, now, &used_pct, outcome);
     let mut state = load_guard_state(main_root);
     let now_utc = Utc::now();
     if let Some((title, body)) = emergency_notice(&outcome, cfg) {
@@ -1379,6 +1391,90 @@ pub(crate) fn run_emergency_probed(
     Some(outcome)
 }
 
+/// TASK-2325: the emergency tier's last resort. Runs only while usage is
+/// still AT OR ABOVE the hard ceiling after the cache candidates: terminal
+/// jobs' tmp dirs and old session scratch — never build caches, never a live
+/// job or session — each re-checked at the delete site and ledgered like
+/// every other emergency delete. The age window is the emergency idle window
+/// or the scratch default, whichever is longer, so this never deletes
+/// younger scratch than the ordinary scan would list.
+// trace:TASK-2325 | ai:claude
+fn scratch_at_hard_ceiling(
+    main_root: &Path,
+    cfg: &EmergencyConfig,
+    now: SystemTime,
+    used_pct: &impl Fn() -> Option<u8>,
+    mut outcome: RunOutcome,
+) -> RunOutcome {
+    if !matches!(used_pct(), Some(pct) if pct >= cfg.used_pct) {
+        return outcome;
+    }
+    let mut survey =
+        crate::scratch_reclaim::survey_from_env(crate::scratch_reclaim::DEFAULT_MIN_AGE_DAYS, now);
+    survey.min_age = survey.min_age.max(cfg.idle());
+    survey.build_caches.clear();
+    let (rows, _held) = crate::scratch_reclaim::plan(&survey);
+    let ts = DateTime::<Utc>::from(now);
+    let mut push = |outcome: &mut RunOutcome, row: LedgerRow| {
+        let _ = append_ledger(main_root, std::slice::from_ref(&row));
+        outcome.rows.push(row);
+    };
+    for row in rows {
+        let Some(pct) = used_pct() else {
+            outcome.stopped = Stop::ProbeLost;
+            break;
+        };
+        if pct < cfg.used_pct {
+            break;
+        }
+        let path = row.path.display().to_string();
+        if let Err(e) = crate::scratch_reclaim::check(&survey, &row) {
+            push(
+                &mut outcome,
+                LedgerRow::Fail {
+                    ts,
+                    path,
+                    error: e.to_string(),
+                },
+            );
+            outcome.refusal = Some(e.to_string());
+            outcome.stopped = Stop::Refused;
+            break;
+        }
+        let removed = if row.path.is_dir() {
+            std::fs::remove_dir_all(&row.path)
+        } else {
+            std::fs::remove_file(&row.path)
+        };
+        match removed {
+            Ok(()) => {
+                outcome.freed_bytes = outcome.freed_bytes.saturating_add(row.bytes);
+                push(
+                    &mut outcome,
+                    LedgerRow::Delete {
+                        ts,
+                        path,
+                        bytes: row.bytes,
+                        reason: Reason::AgentScratch,
+                        idle_secs: row.idle.as_secs(),
+                        used_pct_before: Some(pct),
+                    },
+                );
+            }
+            Err(e) => push(
+                &mut outcome,
+                LedgerRow::Fail {
+                    ts,
+                    path,
+                    error: e.to_string(),
+                },
+            ),
+        }
+    }
+    outcome.used_pct_after = used_pct();
+    outcome
+}
+
 /// Bytes a `worktree reclaim` dry run could free on the filesystem `dev`.
 // trace:STORY-1916 | ai:claude
 pub(crate) fn reclaimable_on(main_root: &Path, dev: u64) -> u64 {
@@ -1390,6 +1486,10 @@ pub(crate) fn reclaimable_on(main_root: &Path, dev: u64) -> u64 {
         include_live: false,
         include_open_prs: false,
         json: false,
+        // This measure is per-device over the repo's caches; scratch has its
+        // own survey. trace:TASK-2325 | ai:claude
+        scratch_age_days: crate::scratch_reclaim::DEFAULT_MIN_AGE_DAYS,
+        no_scratch: true,
     };
     let Ok(survey) = crate::worktree_reclaim::survey_from_env(main_root, &opts) else {
         return 0;

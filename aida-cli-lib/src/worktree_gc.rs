@@ -2186,6 +2186,8 @@ pub(crate) fn handle_worktree_command(cmd: &WorktreeCommand) -> Result<()> {
             include_live,
             include_open_prs,
             json,
+            scratch_age_days,
+            no_scratch,
         } => worktree_reclaim::run(&worktree_reclaim::ReclaimOptions {
             apply: *apply,
             min_age_mins: *min_age_mins,
@@ -2193,6 +2195,9 @@ pub(crate) fn handle_worktree_command(cmd: &WorktreeCommand) -> Result<()> {
             include_live: *include_live,
             include_open_prs: *include_open_prs,
             json: *json,
+            // trace:TASK-2325 | ai:claude
+            scratch_age_days: *scratch_age_days,
+            no_scratch: *no_scratch,
         }),
         WorktreeCommand::Pool(pool) => handle_worktree_pool_command(pool),
     }
