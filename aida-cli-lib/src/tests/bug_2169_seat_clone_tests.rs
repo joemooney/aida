@@ -241,6 +241,56 @@ fn a_failed_clone_refuses_loudly_and_leaves_no_directory_and_no_pin() {
     assert!(!git_ok(&fx.main, &["worktree", "list", "--porcelain"]).contains("aida-seat"));
 }
 
+// TASK-2318: an ssh origin must never prompt — the clone sets GIT_SSH_COMMAND
+// to the operator's configured ssh command (env or core.sshCommand) with batch
+// mode appended, so a passphrase or host-key prompt fails at once instead of
+// stopping the launch for the whole 30s timeout on SIGTTIN.
+// trace:TASK-2272 | ai:claude (TASK-2318)
+#[cfg(unix)]
+#[test]
+fn task_2318_ssh_origin_clone_keeps_operator_ssh_command_and_adds_batch_mode() {
+    for via_config in [false, true] {
+        let fx = fixture();
+        let log = fx.root.join("ssh-calls");
+        let ssh = fx.root.join("fake-ssh");
+        crate::test_exec::write_executable(
+            &ssh,
+            format!("#!/bin/sh\necho \"$*\" >> '{}'\nexit 1\n", log.display()),
+        );
+        let user_command = format!("'{}' --operator-wrapper", ssh.display());
+        git_ok(
+            &fx.main,
+            &[
+                "remote",
+                "set-url",
+                "origin",
+                "ssh://forge.invalid/repo.git",
+            ],
+        );
+        if via_config {
+            git_ok(&fx.main, &["config", "core.sshCommand", &user_command]);
+        }
+        let _env = crate::test_env::EnvVarsGuard::apply(&[
+            (
+                "GIT_SSH_COMMAND",
+                (!via_config).then_some(user_command.as_str()),
+            ),
+            ("GIT_SSH", None),
+            ("GIT_SSH_VARIANT", None),
+        ]);
+        let dest = fx.root.join("seats").join("aida-seat-aida-ssh");
+        create(&fx.main, &dest, "feat", "origin/main").unwrap_err();
+        let calls = std::fs::read_to_string(&log).unwrap_or_default();
+        assert!(
+            calls
+                .lines()
+                .any(|l| l.contains("--operator-wrapper") && l.contains("BatchMode=yes")),
+            "via_config={via_config}: {calls:?}"
+        );
+        assert!(!dest.exists(), "nothing half-made is left behind");
+    }
+}
+
 #[cfg(unix)]
 #[test]
 fn an_unwritable_parent_refuses_before_pinning() {
@@ -1371,4 +1421,205 @@ fn a_renamed_root_without_a_marker_is_caught_by_the_host_lease() {
     );
     assert_host_git_refused(&renamed, &fsmonitor, &filter);
     control_filter_fires(&renamed, &filter);
+}
+
+/// The default launches offline from local refs, cleans the failed clone/pin,
+/// and records a worktree lease at the originally selected automatic path.
+/// An explicit reserved clone path refuses before creating a worktree.
+// trace:TASK-2300 | ai:codex
+#[test]
+fn task_2300_default_origin_failure_falls_back_and_cleans_clone_resources() {
+    for explicit_path in [false, true] {
+        let fx = fixture();
+        git_ok(
+            &fx.main,
+            &[
+                "remote",
+                "set-url",
+                "origin",
+                "/nonexistent/aida-offline-origin.git",
+            ],
+        );
+        let seats = fx.root.join("seats");
+        std::fs::create_dir_all(&seats).unwrap();
+        std::fs::create_dir_all(fx.main.join(".aida")).unwrap();
+        std::fs::write(
+            fx.main.join(".aida/config.toml"),
+            format!(
+                "[worktree_pool]\nworktree_parent = {}\n",
+                aida_core::toml_quote::toml_string(&seats.display().to_string())
+            ),
+        )
+        .unwrap();
+        let _ambient =
+            crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+        let requested = seats.join("aida-seat-offline-explicit");
+        assert!(is_seat_clone_location(&fx.main, &requested));
+        let started = contained_start(
+            "TASK-2300",
+            explicit_path.then(|| requested.to_str().unwrap()),
+        );
+        if explicit_path {
+            let error = started.unwrap_err().to_string();
+            assert!(
+                error.contains("reserved") && error.contains("drop --path"),
+                "{error}"
+            );
+            assert!(!requested.exists());
+            assert!(crate::list_leases(&fx.main).is_empty());
+            assert!(git_ok(
+                &fx.main,
+                &["for-each-ref", "--format=%(refname)", PIN_PREFIX]
+            )
+            .is_empty());
+            assert_eq!(std::fs::read_dir(&seats).unwrap().count(), 0);
+            assert_eq!(
+                git_ok(&fx.main, &["worktree", "list", "--porcelain"])
+                    .matches("worktree ")
+                    .count(),
+                1
+            );
+            continue;
+        }
+        started.unwrap();
+
+        let lease = crate::list_leases(&fx.main)
+            .into_iter()
+            .find(|lease| lease.scope == "TASK-2300")
+            .expect("fallback lease");
+        assert_eq!(lease.tree_kind, TreeKind::Worktree);
+        assert!(lease.worktree_path.join(".git").is_file());
+        assert!(!lease.worktree_path.join(MARKER_RELATIVE).exists());
+        let worktrees = git_ok(&fx.main, &["worktree", "list", "--porcelain"]);
+        assert_eq!(worktrees.matches("worktree ").count(), 2, "{worktrees}");
+        assert!(git_ok(
+            &fx.main,
+            &["for-each-ref", "--format=%(refname)", PIN_PREFIX]
+        )
+        .is_empty());
+        assert_eq!(std::fs::read_dir(&seats).unwrap().count(), 1);
+    }
+}
+
+/// Both folded findings are the same regression: failed origin cloning has
+/// a visible note only for the default; an explicit clone keeps its refusal.
+// trace:TASK-2300 | ai:codex
+#[test]
+fn task_2300_origin_failure_note_and_explicit_clone_policy() {
+    let fx = fixture();
+    git_ok(
+        &fx.main,
+        &[
+            "remote",
+            "set-url",
+            "origin",
+            "/nonexistent/aida-offline-origin.git",
+        ],
+    );
+    let dest = fx.root.join("aida-seat-offline");
+    let error = create(&fx.main, &dest, "offline", "main").unwrap_err();
+    let note = origin_failure_fallback(false, &error).expect("default fallback note");
+    assert!(
+        note.contains("linked worktree") && note.contains("`origin`"),
+        "{note}"
+    );
+    assert!(note.contains("credentials"), "{note}");
+    assert!(origin_failure_fallback(true, &error).is_none());
+    assert!(!dest.exists());
+    assert!(!ref_exists(&fx.main, &pin_ref(&dest).unwrap()));
+}
+
+/// A valid origin followed by a checkout error is not an origin outage;
+/// likewise, a bad local base or occupied destination must never downgrade.
+// trace:TASK-2300 | ai:codex
+#[test]
+fn task_2300_local_clone_setup_errors_do_not_fall_back() {
+    let fx = fixture();
+    for (branch, base) in [("bad..branch", "main"), ("valid", "missing-base")] {
+        let dest = fx.root.join("aida-seat-local-error");
+        let error = create(&fx.main, &dest, branch, base).unwrap_err();
+        assert!(
+            origin_failure_fallback(false, &error).is_none(),
+            "{error:#}"
+        );
+        assert!(!dest.exists());
+        assert!(!ref_exists(&fx.main, &pin_ref(&dest).unwrap()));
+    }
+    let dest = fx.root.join("aida-seat-occupied");
+    std::fs::create_dir(&dest).unwrap();
+    std::fs::write(dest.join("keep"), "operator data").unwrap();
+    let error = create(&fx.main, &dest, "valid", "main").unwrap_err();
+    assert!(origin_failure_fallback(false, &error).is_none());
+    assert_eq!(
+        std::fs::read_to_string(dest.join("keep")).unwrap(),
+        "operator data"
+    );
+}
+
+/// A stalled transport is bounded and selects the same default-only policy;
+/// inability to spawn the executable is a local error, not an outage.
+// trace:TASK-2300 | ai:codex
+#[cfg(unix)]
+#[test]
+fn task_2300_clone_timeout_falls_back_but_spawn_failure_refuses() {
+    let mut stall = Command::new("/bin/sh");
+    stall.args(["-c", "exec /bin/sleep 30"]);
+    let start = std::time::Instant::now();
+    let error = run_origin_clone(stall, std::time::Duration::from_millis(30)).unwrap_err();
+    assert!(start.elapsed() < std::time::Duration::from_secs(5));
+    assert!(origin_failure_fallback(false, &error).is_some());
+    assert!(origin_failure_fallback(true, &error).is_none());
+    let error = run_origin_clone(
+        Command::new("/nonexistent/aida-git"),
+        std::time::Duration::from_millis(30),
+    )
+    .unwrap_err();
+    assert!(origin_failure_fallback(false, &error).is_none());
+}
+
+/// Failed directory removal or pin deletion must erase fallback eligibility,
+/// preserving recovery evidence rather than proceeding with a worktree.
+// trace:TASK-2300 | ai:codex
+#[test]
+fn task_2300_failed_cleanup_refuses_fallback() {
+    let fx = fixture();
+    let dest = fx.root.join("aida-seat-cleanup-failed");
+    let pin = pin_ref(&dest).unwrap();
+    git_ok(&fx.main, &["update-ref", &pin, "HEAD"]);
+    // An unexpected file cannot be removed as a clone directory.
+    std::fs::write(&dest, "retain this unexpected allocation").unwrap();
+    let error = cleanup_failed_clone(
+        &fx.main,
+        &dest,
+        &pin,
+        anyhow::Error::new(OriginCloneFailure("origin unavailable".into())),
+    );
+    assert!(
+        error.to_string().contains("clone cleanup failed"),
+        "{error:#}"
+    );
+    assert!(origin_failure_fallback(false, &error).is_none());
+    assert!(dest.is_file());
+    assert!(ref_exists(&fx.main, &pin));
+    std::fs::remove_file(&dest).unwrap();
+
+    // Git's ref lock makes the second cleanup fail after directory removal.
+    std::fs::create_dir(&dest).unwrap();
+    let lock = fx.main.join(".git").join(format!("{pin}.lock"));
+    std::fs::write(&lock, "held by another writer").unwrap();
+    let error = cleanup_failed_clone(
+        &fx.main,
+        &dest,
+        &pin,
+        anyhow::Error::new(OriginCloneFailure("origin unavailable".into())),
+    );
+    assert!(
+        error.to_string().contains("base-pin cleanup failed"),
+        "{error:#}"
+    );
+    assert!(origin_failure_fallback(false, &error).is_none());
+    assert!(!dest.exists());
+    assert!(ref_exists(&fx.main, &pin));
+    std::fs::remove_file(lock).unwrap();
+    release_pin(&fx.main, &pin).unwrap();
 }

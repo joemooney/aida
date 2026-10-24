@@ -4234,6 +4234,18 @@ pub(crate) fn ssh_command_with_batch_mode_for(
     }
 }
 
+/// The batch-mode ssh command for `project_root`'s configuration: what a
+/// bounded network git call sets as `GIT_SSH_COMMAND` so an ssh origin that
+/// needs a passphrase or host-key answer fails at once instead of stalling on
+/// a prompt, while any configured ssh command keeps working.
+// trace:TASK-2272 | ai:claude (TASK-2318)
+pub(crate) fn batch_mode_ssh_command(project_root: &Path) -> String {
+    ssh_command_with_batch_mode_for(
+        configured_ssh_command(project_root).as_deref(),
+        configured_ssh_variant(project_root).as_deref(),
+    )
+}
+
 /// The ssh variant git infers from a command's program name.
 // trace:TASK-1951 trace:TASK-2100 | ai:claude
 fn ssh_variant_of(command: &str) -> String {
@@ -4327,13 +4339,7 @@ fn probe_origin_head_symref(project_root: &Path) -> Option<String> {
         .env("GIT_TERMINAL_PROMPT", "0")
         // An ssh origin must never prompt for a passphrase or host key.
         // trace:TASK-1803 | ai:claude
-        .env(
-            "GIT_SSH_COMMAND",
-            ssh_command_with_batch_mode_for(
-                configured_ssh_command(project_root).as_deref(),
-                configured_ssh_variant(project_root).as_deref(),
-            ),
-        )
+        .env("GIT_SSH_COMMAND", batch_mode_ssh_command(project_root))
         .args(["ls-remote", "--symref", "origin", "HEAD"]);
     aida_core::git_ops::configure_remote_credentials(&mut cmd, project_root, "origin"); // trace:BUG-2181 | ai:claude
     let out = crate::command_output_with_timeout(cmd, crate::FORGE_CLI_CALL_TIMEOUT)?;

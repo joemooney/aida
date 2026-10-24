@@ -146,7 +146,7 @@ which is agent-agnostic and survives inside any Codex or Claude session:
 
 ```bash
 # tmux
-set -g status-right '#(aida statusline --color=never)'
+set -g status-right '#(cd #{{q:pane_current_path}} && aida statusline --color=never --tmux-pane-pid #{{pane_pid}})'
 set -g status-interval 15
 ```
 
@@ -367,7 +367,7 @@ mod tests {
         // trace:TASK-1188 | ai:codex — current Codex owns the terminal title,
         // so the scaffold disables it and recommends tmux for full fidelity.
         assert!(md.contains("terminal_title = null"));
-        assert!(md.contains("status-right '#(aida statusline --color=never)'"));
+        assert!(md.contains("status-right '#(cd #{q:pane_current_path} && aida statusline --color=never --tmux-pane-pid #{pane_pid})'"));
         assert!(md.contains("aida statusbar --plain"));
         assert!(md.contains("command-backed `[tui] status_line` item"));
         assert!(md.contains("SPEC-410"));

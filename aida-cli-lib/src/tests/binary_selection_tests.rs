@@ -852,20 +852,23 @@ fn home_repo_fallback_fires_only_for_a_set_but_missing_aida_dev_repo() {
 
     // Unset (or empty) $AIDA_DEV_REPO: no dev checkout, so no fallback and
     // no "(?) no longer exists" note.
-    assert_eq!(choose_env_dev_repo(None, Some(&home_str)), None);
-    assert_eq!(choose_env_dev_repo(Some(""), Some(&home_str)), None);
+    fn os(s: &str) -> &std::ffi::OsStr {
+        std::ffi::OsStr::new(s)
+    }
+    assert_eq!(choose_env_dev_repo(None, Some(os(&home_str))), None);
+    assert_eq!(choose_env_dev_repo(Some(os("")), Some(os(&home_str))), None);
     assert_eq!(
         choose_activate_repo(None, None, Some(&home_str), &outside),
         (outside.clone(), ActivateRepoSource::Cwd)
     );
     // Set but missing: the recorded primary checkout.
     assert_eq!(
-        choose_env_dev_repo(Some(&gone_str), Some(&home_str)),
+        choose_env_dev_repo(Some(os(&gone_str)), Some(os(&home_str))),
         Some((home.clone(), ActivateRepoSource::HomeRepo))
     );
     // Set and present: used as is, even with a home recorded.
     assert_eq!(
-        choose_env_dev_repo(Some(&home_str), Some(&gone_str)),
+        choose_env_dev_repo(Some(os(&home_str)), Some(os(&gone_str))),
         Some((home.clone(), ActivateRepoSource::EnvRepo))
     );
 }
@@ -901,4 +904,42 @@ fn dev_build_and_release_fall_back_to_the_home_repo_for_a_removed_worktree() {
         ("AIDA_DEV_HOME_REPO", Some(&home_str)),
     ]);
     assert_eq!(crate::dev_cmd::env_dev_repo(), None);
+}
+
+// TASK-2272 (TASK-2278): the real `aida dev build` / `aida dev release`
+// resolvers, run from outside any checkout with `$AIDA_DEV_REPO` naming a
+// removed worktree, land on the recorded primary checkout.
+// trace:TASK-2272 | ai:claude
+#[test]
+fn build_and_release_resolvers_take_the_home_repo_for_a_removed_worktree() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path().join("aida");
+    std::fs::create_dir_all(&home).unwrap();
+    std::fs::write(
+        home.join("Cargo.toml"),
+        "[workspace]\n[workspace.package]\nrepository = \"https://github.com/joemooney/aida\"\n",
+    )
+    .unwrap();
+    let outside = temp.path().join("elsewhere");
+    std::fs::create_dir_all(&outside).unwrap();
+    let home_str = home.display().to_string();
+    let gone_str = temp
+        .path()
+        .join("aida-worktrees/removed")
+        .display()
+        .to_string();
+
+    let _env = crate::test_env::EnvVarsGuard::apply(&[
+        ("AIDA_DEV_REPO", Some(&gone_str)),
+        ("AIDA_DEV_HOME_REPO", Some(&home_str)),
+    ]);
+    let canonical = home.canonicalize().unwrap();
+    assert_eq!(
+        crate::dev_build::resolve_build_repo_from(&outside).unwrap(),
+        canonical
+    );
+    assert_eq!(
+        crate::upgrade_release::release_repo_from(&outside),
+        Some(home.clone())
+    );
 }

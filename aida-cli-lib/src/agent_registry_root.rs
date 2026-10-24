@@ -3,6 +3,16 @@
 
 use crate::*;
 
+/// The HANDLE column: the agent's address, or `-` when it has none, so a
+/// pid or lease id never reads as something mail can be sent to.
+// trace:STORY-1843 | ai:claude
+pub(crate) fn ls_handle_cell(name: Option<&str>) -> String {
+    name.map(str::trim)
+        .filter(|n| !n.is_empty())
+        .unwrap_or("-")
+        .to_string()
+}
+
 // trace:TASK-542 | ai:antigravity
 // trace:TASK-1184 | ai:codex
 pub(crate) fn agent_ls(show_all: bool, stale_only: bool, ended_only: bool) -> Result<()> {
@@ -12,7 +22,8 @@ pub(crate) fn agent_ls(show_all: bool, stale_only: bool, ended_only: bool) -> Re
         let _ = agent_registry::gc_dead_agents(&project_root, false, None);
     }
     let leases = list_leases(&project_root);
-    let agent_ctx = build_agent_classify_context(&project_root, &leases);
+    // trace:TASK-2272 | ai:claude
+    let agent_ctx = build_agent_classify_context(&project_root, &leases).for_display();
     let observer = agent_ctx.observer;
     let mut agents = if ended_only {
         agent_registry::ended_resumable_agent_views(&project_root, &agent_ctx)
@@ -54,7 +65,7 @@ pub(crate) fn agent_ls(show_all: bool, stale_only: bool, ended_only: bool) -> Re
 
     println!(
         "{:<30} {:<10} {:<20} {:<8} {:<11} {:<12} {:<18} {:<6} {:<8} {:<8} {:<24} WORKTREE",
-        "NAME/ID", "PID", "TTY", "KIND", "ROLE", "SPEC", "SCOPE", "STATUS", "AGE", "CPU", "DESC"
+        "HANDLE", "PID", "TTY", "KIND", "ROLE", "SPEC", "SCOPE", "STATUS", "AGE", "CPU", "DESC"
     );
     let now = chrono::Utc::now();
     let notes = unobserved_liveness_notes(&agents, observer);
@@ -63,15 +74,7 @@ pub(crate) fn agent_ls(show_all: bool, stale_only: bool, ended_only: bool) -> Re
             now,
             agent.last_active_at,
         ));
-        let identity = if let Some(ref name) = agent.name {
-            name.clone()
-        } else if agent.source == "lease" {
-            let short = agent.id.trim_start_matches("lease-");
-            let short = &short[..short.len().min(8)];
-            format!("{}#{}", agent.agent_type, short)
-        } else {
-            format!("{}#{}", agent.agent_type, agent.pid)
-        };
+        let identity = ls_handle_cell(agent.name.as_deref());
         let pid_str = if agent.source == "lease" {
             "-".to_string()
         } else {
@@ -463,8 +466,25 @@ pub(crate) fn agent_register(
         agent_registry::normalize_description(description.map(std::string::ToString::to_string));
 
     validate_register_pid(pid)?;
+    // A registered agent is addressable like a launched one: its handle is
+    // the given name, else a generated `<vendor>-<role>-NN`.
+    // trace:STORY-1843 | ai:claude
+    let registry_id = format!("{agent_type}-{pid}");
+    let reservation = crate::agent_handle::reserve_handle(
+        &project_root,
+        &crate::agent_handle::HandleRequest {
+            agent_type: &agent_type,
+            role: Some(role.as_str()),
+            explicit: name.as_deref(),
+            native_session_id: None,
+            registry_id: Some(&registry_id),
+            launch_token: None,
+            launcher: false,
+        },
+    )?;
+    let name = Some(reservation.handle.clone());
     let worktree_path = registered_process_cwd(pid).unwrap_or_else(|| project_root.clone());
-    let entry = agent_registry::register_existing_agent(
+    let registered = agent_registry::register_existing_agent(
         &project_root,
         &agent_type,
         pid,
@@ -473,10 +493,20 @@ pub(crate) fn agent_register(
         worktree_path,
         name,
         description,
-    )?;
+    );
+    // A failed register must not hold the name for the reservation TTL.
+    // trace:STORY-1843 | ai:claude
+    let entry = match registered {
+        Ok(entry) => entry,
+        Err(err) => {
+            let _ = crate::agent_handle::release_unbound(&project_root, &reservation);
+            return Err(err);
+        }
+    };
     println!(
-        "{} registered {}#{} ({}) at {}",
+        "{} registered {} as {}#{} ({}) at {}",
         crate::glyph(crate::glyphs::Glyph::Check).green(),
+        entry.name.as_deref().unwrap_or("(unnamed)"),
         entry.agent_type,
         entry.pid,
         entry.role.as_deref().unwrap_or("(none)"),

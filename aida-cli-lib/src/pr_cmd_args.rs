@@ -4,11 +4,10 @@
 use clap::{ArgGroup, Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 
-/// Pull-request side-effects intended to fire from /aida-pr at PR-create
-/// time. Mirrors what `aida session end` would do as a backup, but moves
-/// the trigger to the moment context is freshest (right after `gh pr
-/// create` returns the URL).
-// trace:STORY-90 | ai:claude
+/// Pull-request side-effects for the moment a change opens. Mirrors what
+/// `aida session end` does as a backup, but fires while context is
+/// freshest (right after the PR or MR is created).
+// trace:STORY-90 trace:TASK-2251 | ai:claude
 #[derive(Subcommand, Debug)]
 pub enum PrCommand {
     /// File the reviewer story for the change (PR/MR) open on the current
@@ -19,16 +18,15 @@ pub enum PrCommand {
     /// branch's open MR) — so that provider's CLI must be on PATH and
     /// authenticated.
     ///
-    /// Intended trigger: `/aida-pr` runs this right after the change opens
-    /// (`gh pr create` / `glab mr create`) — the agent already has it open,
-    /// the commit range, and the spec list cached, but the auto-queue logic
-    /// does its own forge detection so the call is self-contained.
+    /// Intended trigger: right after the change opens, while the agent has
+    /// the branch, commit range and spec list at hand. The auto-queue logic
+    /// does its own forge detection, so the call is self-contained.
     ///
-    /// `aida session end` also fires this as a backup, so a forgotten
-    /// /aida-pr (or a raw `gh pr create` / `glab mr create`) still ends up
-    /// routed to the reviewer. The idempotency guard means both firing is
-    /// fine.
-    // trace:STORY-90 trace:BUG-1609 | ai:claude
+    /// `aida session end` also fires this as a backup, so a change opened
+    /// without it (a raw `gh pr create` / `glab mr create`, or
+    /// `aida ship --no-merge`) still ends up routed to the reviewer. The
+    /// idempotency guard means both firing is fine.
+    // trace:STORY-90 trace:BUG-1609 trace:TASK-2251 | ai:claude
     AutoQueueReview {
         /// Branch to look up the PR for. Defaults to the current
         /// branch via `git branch --show-current`.
@@ -250,8 +248,9 @@ pub enum PrCommand {
     /// main), a clear verdict corpus, no live drive owning it, and no spec
     /// tagged `review:draft-only`. A spec whose execution mode needs
     /// supervision merges only for a human at a terminal who named that PR,
-    /// or under an active mandate (always for one found by --all-ready). Drafts are refused with a reason, since CI does not run Build
-    /// on them. GitHub only for now.
+    /// or under an active mandate (always for one found by --all-ready).
+    /// Drafts are refused with a reason, since CI does not run Build on
+    /// them. GitHub only for now.
     ///
     /// The train is main plus one squash commit per PR, each written with
     /// the subject `aida pr ship` would use and checked to carry exactly the

@@ -699,6 +699,7 @@ mod tests {
         assert_eq!(reader_liveness(tmp.path(), &entry, Some(43)), Some(false));
     }
 
+    // trace:STORY-1843.acfeb946 | ai:claude
     #[test]
     fn unknown_dead_and_zero_reader_recipients_refuse() {
         let tmp = tempfile::tempdir().unwrap();
@@ -774,6 +775,7 @@ mod tests {
             .contains("ambiguous"));
     }
 
+    // trace:STORY-1843.acfeb946 | ai:claude
     #[test]
     fn cli_send_refuses_without_write_then_delivers_to_canonical_name() {
         let tmp = tempfile::tempdir().unwrap();

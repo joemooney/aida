@@ -84,12 +84,12 @@ fn a_directory_prefix_matches_nested_files_on_a_component_boundary() {
 #[test]
 fn a_directory_entry_without_a_trailing_slash_matches_files_under_it() {
     let mut set = ProtectedPaths::floor();
-    let l = layer("[mandate.human_gates]\nprotected_paths = [\"./aida-cli-lib/src/gate\"]\n");
+    let l = layer("[mandate.human_gates]\nprotected_paths = [\"./aida-cli-lib/src/gate_dir\"]\n");
     set.extend(PathSource::Operator, l.protected_paths);
     for file in [
-        "aida-cli-lib/src/gate/mod.rs",
-        "./aida-cli-lib/src/gate/nested/check.rs",
-        "aida-cli-lib/src/gate",
+        "aida-cli-lib/src/gate_dir/mod.rs",
+        "./aida-cli-lib/src/gate_dir/nested/check.rs",
+        "aida-cli-lib/src/gate_dir",
     ] {
         let hit = touches_gates(&paths(&["README.md", file]), &set)
             .unwrap_or_else(|| panic!("{file} must match directory entry without trailing '/'"));
@@ -97,7 +97,7 @@ fn a_directory_entry_without_a_trailing_slash_matches_files_under_it() {
             hit,
             GateMatch {
                 path: file.trim_start_matches("./").into(),
-                entry: "aida-cli-lib/src/gate".into(),
+                entry: "aida-cli-lib/src/gate_dir".into(),
                 source: PathSource::Operator,
             }
         );
@@ -105,8 +105,8 @@ fn a_directory_entry_without_a_trailing_slash_matches_files_under_it() {
     assert_eq!(
         touches_gates(
             &paths(&[
-                "aida-cli-lib/src/gates.rs",
-                "aida-cli-lib/src/gate_extra/x.rs"
+                "aida-cli-lib/src/gate_dirs.rs",
+                "aida-cli-lib/src/gate_dir_extra/x.rs"
             ]),
             &set
         ),
@@ -417,28 +417,48 @@ fn non_test_lines(text: &str) -> Vec<&str> {
     out
 }
 
-/// Why a file is gate authority: its marker, or the first function whose
-/// name reads as a ship, merge, hold, review or seat authority decision.
-fn gate_authority(text: &str) -> Option<String> {
-    let name = regex::Regex::new(
+fn authority_name() -> regex::Regex {
+    regex::Regex::new(
         r"^(\w*_)?(approval|authority|hold|ship|merge|verdict|seat|mandate|signoff|review)\w*_(gate|gated|authority|authorized|decision|refusal)$|_authority_from$",
     )
-    .unwrap();
+    .unwrap()
+}
+
+/// The functions `text` defines outside test items.
+fn defined_fns(text: &str) -> Vec<String> {
     let fn_def = regex::Regex::new(
         r#"^\s*(pub(\([^)]*\))?\s+)?((const|async|unsafe)\s+)*(extern\s+("[^"]*"\s+)?)?fn\s+(?P<name>\w+)"#,
     )
     .unwrap();
-    let lines = non_test_lines(text);
-    if lines.iter().any(|l| l.trim() == MARKER) {
-        return Some(format!("carries `{MARKER}`"));
-    }
-    lines.iter().find_map(|l| {
-        let f = fn_def.captures(l)?.name("name")?.as_str();
-        name.is_match(f).then(|| format!("defines `fn {f}`"))
-    })
+    non_test_lines(text)
+        .iter()
+        .filter_map(|l| Some(fn_def.captures(l)?.name("name")?.as_str().to_string()))
+        .collect()
 }
 
-fn scan() -> std::collections::BTreeMap<String, String> {
+/// STORY-1889: is `(path, f)` a confirmed name-only match?
+fn exempt(path: &str, f: &str) -> bool {
+    NOT_GATE_AUTHORITY
+        .iter()
+        .any(|(p, name, _)| *p == path && *name == f)
+}
+
+/// Why a file is gate authority: its marker, or the first function whose
+/// name reads as a ship, merge, hold, review or seat authority decision and
+/// is not a confirmed name-only match in [`NOT_GATE_AUTHORITY`].
+fn gate_authority(path: &str, text: &str) -> Option<String> {
+    if non_test_lines(text).iter().any(|l| l.trim() == MARKER) {
+        return Some(format!("carries `{MARKER}`"));
+    }
+    let name = authority_name();
+    defined_fns(text)
+        .into_iter()
+        .find(|f| name.is_match(f) && !exempt(path, f))
+        .map(|f| format!("defines `fn {f}`"))
+}
+
+/// Every scanned non-test source file, workspace-relative, with its text.
+fn sources() -> Vec<(String, String)> {
     let root = workspace_root();
     let mut files = Vec::new();
     for r in SCANNED_ROOTS {
@@ -453,29 +473,62 @@ fn scan() -> std::collections::BTreeMap<String, String> {
                 .unwrap()
                 .to_string_lossy()
                 .replace('\\', "/");
-            gate_authority(&text).map(|why| (rel, why))
+            Some((rel, text))
         })
         .collect()
+}
+
+fn scan() -> std::collections::BTreeMap<String, String> {
+    sources()
+        .into_iter()
+        .filter_map(|(rel, text)| gate_authority(&rel, &text).map(|why| (rel, why)))
+        .collect()
+}
+
+/// STORY-1889: on the floor as an exact path or under a prefix entry.
+fn on_floor(path: &str) -> bool {
+    touches_gates(&[path.to_string()], ProtectedPaths::floor_ref()).is_some()
 }
 
 // trace:STORY-1888.aca70d99 | ai:claude
 #[test]
 fn ratchet_skips_test_items() {
     let text = "fn ok() {}\n#[cfg(test)]\nmod tests {\n    fn ship_gate() {}\n}\n    #[test]\n    fn merge_decision() {\n    }\n";
-    assert_eq!(gate_authority(text), None);
+    assert_eq!(gate_authority("x.rs", text), None);
     // A one-line test item ends on its own line ...
     let one_line = "#[cfg(test)]\nfn fixture() -> u8 { 1 }\npub(crate) fn ship_gate() {}\n";
-    assert!(gate_authority(one_line).is_some(), "{one_line}");
+    assert!(gate_authority("x.rs", one_line).is_some(), "{one_line}");
     // ... and so does one closed by `});`.
     let closure = "#[cfg(test)]\nstatic FIXTURE: Lazy<u8> = Lazy::new(|| {\n    1\n});\nfn merge_decision() {}\n";
-    assert!(gate_authority(closure).is_some(), "{closure}");
+    assert!(gate_authority("x.rs", closure).is_some(), "{closure}");
     let braces =
         "#[test]\nfn t() {\n    let _ = \"}\"; // }\n    let _ = '}';\n}\nfn ship_gate() {}\n";
-    assert!(gate_authority(braces).is_some(), "{braces}");
-    assert!(gate_authority("pub(crate) fn hold_authorized() {}\n").is_some());
-    assert!(gate_authority("fn advisor_authority_from() {}\n").is_some());
-    assert!(gate_authority("//! notes\n// mandate-gate\n").is_some());
-    assert_eq!(gate_authority("// see `// mandate-gate` markers\n"), None);
+    assert!(gate_authority("x.rs", braces).is_some(), "{braces}");
+    assert!(gate_authority("x.rs", "pub(crate) fn hold_authorized() {}\n").is_some());
+    assert!(gate_authority("x.rs", "fn advisor_authority_from() {}\n").is_some());
+    assert!(gate_authority("x.rs", "//! notes\n// mandate-gate\n").is_some());
+    assert_eq!(
+        gate_authority("x.rs", "// see `// mandate-gate` markers\n"),
+        None
+    );
+}
+
+#[test]
+fn an_exemption_covers_only_its_own_function() {
+    let (path, f, _) = NOT_GATE_AUTHORITY[0];
+    assert_eq!(gate_authority(path, &format!("pub fn {f}() {{}}\n")), None);
+    // The same name elsewhere, or a second match in the same file, is caught.
+    assert!(gate_authority("x.rs", &format!("pub fn {f}() {{}}\n")).is_some());
+    assert!(gate_authority(path, &format!("pub fn {f}() {{}}\nfn ship_gate() {{}}\n")).is_some());
+}
+
+#[test]
+fn a_prefix_floor_entry_covers_the_gate_module() {
+    assert!(on_floor("aida-cli-lib/src/gate/role_authority.rs"));
+    assert!(on_floor(
+        "aida-cli-lib/src/gate/tests/seat_authority_tests.rs"
+    ));
+    assert!(!on_floor("aida-cli-lib/src/gateway.rs"));
 }
 
 // trace:STORY-1888.aca70d99 | ai:claude
@@ -489,7 +542,10 @@ fn ratchet_sees_qualified_fns() {
         "extern fn seat_authority() {}",
         "async fn review_decision() {}",
     ] {
-        assert!(gate_authority(&format!("{def}\n")).is_some(), "{def}");
+        assert!(
+            gate_authority("x.rs", &format!("{def}\n")).is_some(),
+            "{def}"
+        );
     }
 }
 
@@ -498,19 +554,15 @@ fn ratchet_sees_qualified_fns() {
 fn gate_authority_code_is_on_the_floor() {
     let missing: Vec<String> = scan()
         .into_iter()
-        .filter(|(path, _)| {
-            !GATE_PROTECTED_PATHS.contains(&path.as_str())
-                && !KNOWN_UNPROTECTED.contains(&path.as_str())
-        })
+        .filter(|(path, _)| !on_floor(path) && !KNOWN_UNPROTECTED.contains(&path.as_str()))
         .map(|(path, why)| format!("  {path} ({why})"))
         .collect();
     assert!(
         missing.is_empty(),
         "gate-authority code outside the mandate's protected floor:\n{}\n\
-         Move the function into a file already on GATE_PROTECTED_PATHS in \
-         aida-cli-lib/src/mandate_gates.rs, or add its path there (either change \
-         then needs a human merge). Do not remove the marker, rename the function, \
-         or widen KNOWN_UNPROTECTED to get past this check.",
+         Move it into aida-cli-lib/src/gate/ (the change then needs a human merge). \
+         Do not remove the marker, rename the function, or widen \
+         KNOWN_UNPROTECTED to get past this check.",
         missing.join("\n")
     );
 }
@@ -519,10 +571,25 @@ fn gate_authority_code_is_on_the_floor() {
 #[test]
 fn every_floor_source_file_carries_the_marker() {
     let root = workspace_root();
-    let unmarked: Vec<&str> = GATE_PROTECTED_PATHS
-        .iter()
-        .copied()
-        .filter(|p| p.ends_with(".rs"))
+    let mut files: Vec<String> = Vec::new();
+    for entry in GATE_PROTECTED_PATHS {
+        if entry.ends_with('/') {
+            // STORY-1889: every non-test source file under a prefix entry.
+            let mut found = Vec::new();
+            rust_files(&root.join(entry), &mut found);
+            assert!(!found.is_empty(), "floor prefix {entry} holds no source");
+            files.extend(found.into_iter().map(|f| {
+                f.strip_prefix(&root)
+                    .unwrap()
+                    .to_string_lossy()
+                    .replace('\\', "/")
+            }));
+        } else if entry.ends_with(".rs") {
+            files.push((*entry).to_string());
+        }
+    }
+    let unmarked: Vec<String> = files
+        .into_iter()
         .filter(|p| {
             let text = std::fs::read_to_string(root.join(p))
                 .unwrap_or_else(|e| panic!("floor file {p} is unreadable: {e}"));
@@ -543,12 +610,96 @@ fn known_unprotected_only_shrinks() {
     let stale: Vec<&str> = KNOWN_UNPROTECTED
         .iter()
         .copied()
-        .filter(|p| !found.contains_key(*p) || GATE_PROTECTED_PATHS.contains(p))
+        .filter(|p| !found.contains_key(*p) || on_floor(p))
         .collect();
     assert!(
         stale.is_empty(),
         "KNOWN_UNPROTECTED entries that no longer hold gate authority outside the \
          floor: {stale:?}. Delete them from KNOWN_UNPROTECTED in mandate_gates.rs; \
          the list only shrinks."
+    );
+}
+
+#[test]
+fn not_gate_authority_only_shrinks() {
+    let root = workspace_root();
+    let name = authority_name();
+    let stale: Vec<String> = NOT_GATE_AUTHORITY
+        .iter()
+        .filter(|(path, f, reason)| {
+            let defined = std::fs::read_to_string(root.join(path))
+                .map(|text| defined_fns(&text).iter().any(|d| d == f))
+                .unwrap_or(false);
+            !defined || !name.is_match(f) || on_floor(path) || reason.trim().is_empty()
+        })
+        .map(|(path, f, _)| format!("{path}::{f}"))
+        .collect();
+    assert!(
+        stale.is_empty(),
+        "NOT_GATE_AUTHORITY entries that no longer name a matching function outside \
+         the floor (or carry no reason): {stale:?}. Delete them from \
+         NOT_GATE_AUTHORITY in mandate_gates.rs; the list only shrinks."
+    );
+}
+
+/// The non-test lines of `text` that re-export a `crate::gate` item.
+fn gate_reexports(text: &str) -> Vec<String> {
+    let reexport = regex::Regex::new(
+        r"^\s*pub(\([^)]*\))?\s+use\s+(crate::|self::|super::)*(\{[^}]*\b)?gate(::|\s*;|\s*\})",
+    )
+    .unwrap();
+    non_test_lines(text)
+        .into_iter()
+        .filter(|l| reexport.is_match(l))
+        .map(|l| l.trim().to_string())
+        .collect()
+}
+
+#[test]
+fn reexport_detection() {
+    assert_eq!(
+        gate_reexports("pub(crate) use gate::seat_authority;\n").len(),
+        1
+    );
+    assert_eq!(
+        gate_reexports("pub(crate) use crate::gate::role_authority::{\n    a,\n};\n").len(),
+        1
+    );
+    assert_eq!(gate_reexports("pub use crate::{gate::x, y};\n").len(), 1);
+    assert!(gate_reexports("use crate::gate::seat_authority::GrantCheck;\n").is_empty());
+    assert!(gate_reexports("pub(crate) use crate::gateway::x;\n").is_empty());
+}
+
+#[test]
+fn no_unprotected_file_reexports_gate_items() {
+    let found: std::collections::BTreeMap<String, Vec<String>> = sources()
+        .into_iter()
+        .filter(|(path, _)| !on_floor(path))
+        .filter_map(|(path, text)| {
+            let lines = gate_reexports(&text);
+            (!lines.is_empty()).then_some((path, lines))
+        })
+        .collect();
+    let unlisted: Vec<String> = found
+        .iter()
+        .filter(|(path, _)| !TRANSITIONAL_GATE_REEXPORTS.contains(&path.as_str()))
+        .map(|(path, lines)| format!("  {path}: {}", lines.join(" | ")))
+        .collect();
+    assert!(
+        unlisted.is_empty(),
+        "unprotected files re-export crate::gate items:\n{}\n\
+         A re-export outside the floor can be repointed at a non-gate function \
+         without a human merge. Call `crate::gate::...` directly instead.",
+        unlisted.join("\n")
+    );
+    let stale: Vec<&str> = TRANSITIONAL_GATE_REEXPORTS
+        .iter()
+        .copied()
+        .filter(|p| !found.contains_key(*p))
+        .collect();
+    assert!(
+        stale.is_empty(),
+        "TRANSITIONAL_GATE_REEXPORTS entries that no longer re-export: {stale:?}. \
+         Delete them from mandate_gates.rs; the list only shrinks."
     );
 }

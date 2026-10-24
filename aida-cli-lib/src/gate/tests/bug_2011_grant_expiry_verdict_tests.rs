@@ -6,7 +6,7 @@ use clap::Parser;
 
 const CHILD_ROOT: &str = "AIDA_TEST_ROLE_EXPIRY_ROOT";
 const CHILD_NAME: &str =
-    "seat_authority::bug_2011_grant_expiry_verdict_tests::role_expiry_cli_child";
+    "gate::seat_authority::bug_2011_grant_expiry_verdict_tests::role_expiry_cli_child";
 
 // This driver is confined to this CLI probe. Parent requires an entry artifact
 // and the actual handler's exit code; a missing filter cannot count as success.

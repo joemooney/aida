@@ -317,7 +317,7 @@ sites = 1
 
 # Resolves max_grant_hours cap from global (~/.aida) and worktree (.aida).
 # Worktree policy may only lower the cap. trace:TASK-1787 | ai:antigravity
-[readers."aida-cli-lib/src/seat_authority.rs"]
+[readers."aida-cli-lib/src/gate/seat_authority.rs"]
 channels = ["home", "worktree"]
 sites = 2
 
@@ -640,6 +640,10 @@ window_hours = "policy"
 
 [keys.worktree."doctor.disk_headroom"]
 min_free_gib = "policy"
+# STORY-1916: the emergency auto-reclaim tier.
+emergency_used_pct = "policy"
+emergency_margin_pct = "policy"
+emergency_idle_hours = "policy"
 
 [keys.worktree.watchdog]
 "*" = "policy"

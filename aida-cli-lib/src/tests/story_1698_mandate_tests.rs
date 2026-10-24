@@ -1243,6 +1243,8 @@ fn task_1790_rearm_audit_follows_release_before_label_and_keeps_reason() {
                 pr: 44,
                 placed: false,
                 reason: Some("released under mandate M-1".into()),
+                principal: None,
+                human_attested: false,
             },
         ),
     );
@@ -1251,7 +1253,7 @@ fn task_1790_rearm_audit_follows_release_before_label_and_keeps_reason() {
         let events = crate::events::read_all(tmp.path());
         assert_eq!(events.len(), before + 1, "one placement event, no duplicate audit");
         assert!(matches!(&events[before - 1].kind, crate::events::EventKind::MergeHoldChanged { placed: false, .. }));
-        assert!(matches!(&events[before].kind, crate::events::EventKind::MergeHoldChanged { pr: 44, placed: true, reason: Some(reason) } if reason == "Re-armed after mandate ship failure: operator review"));
+        assert!(matches!(&events[before].kind, crate::events::EventKind::MergeHoldChanged { pr: 44, placed: true, reason: Some(reason), .. } if reason == "Re-armed after mandate ship failure: operator review"));
         let restored = crate::merge_hold::read_hold_record(tmp.path(), 44).unwrap();
         assert_eq!(restored.detail, hold.detail);
         assert_eq!(restored.reason_kind, hold.reason_kind);
@@ -2463,6 +2465,106 @@ fn task_2238_store_history_ignores_replace_objects() {
         "{:?}",
         versions.iter().map(|v| &v.title).collect::<Vec<_>>()
     );
+}
+
+/// The Git snapshot's narrower dirt scope grants no ledger bypass: this
+/// separately read home ledger still refuses newly excluded or corrupt data.
+// trace:BUG-2213 | ai:codex
+#[test]
+fn bug_2213_mandate_ledger_updates_still_refuse() {
+    let ledger_dir = tempfile::tempdir().unwrap();
+    let mut c = Case::ok();
+    c.ledger = read_exclusions(ledger_dir.path());
+    assert!(c.decide().is_ok(), "clean home ledger");
+
+    let mut excluded = plain();
+    excluded.tags.insert("security".into());
+    note_exclusions(ledger_dir.path(), "TASK-1", [&excluded]);
+    c.ledger = read_exclusions(ledger_dir.path());
+    assert!(matches!(c.decide(), Err(MandateRefusal::Excluded { .. })));
+
+    let ledger = ledger_dir.path().join(EXCLUSION_LEDGER);
+    let mut text = std::fs::read_to_string(&ledger).unwrap();
+    text.push_str("{partial coordination-era append\n"); // }
+    std::fs::write(&ledger, text).unwrap();
+    c.ledger = read_exclusions(ledger_dir.path());
+    assert!(matches!(
+        c.decide(),
+        Err(MandateRefusal::LedgerUnreadable(_))
+    ));
+}
+
+// ── BUG-2214: a hold a human already cleared is covered — nothing looser ────
+
+// trace:BUG-2214 | ai:claude
+#[test]
+fn bug_2214_a_human_cleared_hold_lets_the_mandate_cover_the_ship() {
+    let mut c = Case::ok();
+    c.hold = HoldFacts::ClearedByHuman;
+    assert_eq!(c.decide(), Ok(active(false).id));
+}
+
+// trace:BUG-2214 | ai:claude
+#[test]
+fn bug_2214_a_cleared_hold_loosens_no_other_refusal() {
+    // Sticky exclusion: a sensitive spec still needs --include-supervised.
+    let mut c = Case::ok();
+    c.hold = HoldFacts::ClearedByHuman;
+    c.specs = vec![tagged("TASK-1", "security")];
+    assert!(matches!(c.decide(), Err(MandateRefusal::Excluded { .. })));
+
+    // Always-human: an operator-only spec refuses even with the flag.
+    let mut c = Case::ok();
+    c.state = MandateState::Active(active(true));
+    c.hold = HoldFacts::ClearedByHuman;
+    let mut operator_only = spec("TASK-1");
+    operator_only.current.as_mut().unwrap().execution_mode =
+        Some(aida_core::ExecutionMode::Operator);
+    operator_only.history = Ok(vec![operator_only.current.clone().unwrap()]);
+    c.specs = vec![operator_only];
+    assert!(matches!(
+        c.decide(),
+        Err(MandateRefusal::AlwaysHuman { .. })
+    ));
+
+    // The approval must still cover the live head.
+    let mut c = Case::ok();
+    c.hold = HoldFacts::ClearedByHuman;
+    c.candidates = vec![approval(OLD)];
+    c.policy = policy(&c.candidates);
+    assert!(matches!(c.decide(), Err(MandateRefusal::StaleApproval(_))));
+
+    // Never held at all (no corroborated clearance) still refuses.
+    let mut c = Case::ok();
+    c.hold = HoldFacts::None;
+    assert_eq!(c.decide(), Err(MandateRefusal::NoHoldMarker));
+}
+
+// trace:BUG-2214 | ai:claude
+#[test]
+fn bug_2214_the_rework_release_path_never_accepts_a_cleared_hold() {
+    let mut c = Case::ok();
+    c.state = MandateState::Active(active(true));
+    c.hold = HoldFacts::ClearedByHuman;
+    let release = rework_release_decision(&ShipCheck {
+        state: &c.state,
+        now: c.now,
+        grant: c.grant,
+        specs: &c.specs,
+        specs_resolved: c.specs_resolved,
+        candidates: &c.candidates,
+        policy: &c.policy,
+        head: c.head,
+        override_stale_approval: false,
+        ledger: &c.ledger,
+        hold: &c.hold,
+        carry_over: None,
+        changed_paths: Some(&[]),
+        protected: crate::mandate_gates::ProtectedPaths::floor_ref(),
+        ship_gate: None,
+        hold_clear_gate: None,
+    });
+    assert_eq!(release, Err(MandateRefusal::NoHoldMarker));
 }
 
 // ── TASK-2168 / TASK-2314: trace-derived operator-only exclusions ──────────

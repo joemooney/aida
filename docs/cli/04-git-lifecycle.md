@@ -14,7 +14,7 @@ A spec's life after you start building it:
 
 | Event | Verb | State it lands in | Who triggers it |
 |---|---|---|---|
-| Work finished on a branch, PR open | `aida queue done` / `aida pr` | **Done** | the implementer |
+| Work finished on a branch, PR open | `aida queue done` after review handoff | **Done** | the implementer |
 | Reviewer read the diff, sent it back | `aida review` → request changes / `aida rework` | **Rework** (→ In Progress) | the reviewer |
 | Reviewer passed it; PR merged to main | the merge + `aida pull` | **Completed** | the merge (auto-bump) |
 | A version tag cut after merge | `aida release` | **Released** | the releaser |
@@ -65,6 +65,30 @@ Every recognized requirement ID in a scoped branch must belong to that same
 requirement (including existing dashed child variants); an unrelated branch
 cannot gain ownership through an alias in a commit trailer. No branch rename
 or forced completion is needed for an ID remapping.
+
+---
+
+### `aida ship`
+
+**One line** — finish implemented work through the CLI-owned commit, rebase,
+push, and PR ceremony; choose the stopping point deliberately.
+
+For an independent review handoff, `/aida-pr` is a compatibility redirect to
+`aida ship <SPEC> --no-merge`. Preview with the same command plus `--dry-run`.
+After successful PR creation or reuse, explicitly run
+`aida pr auto-queue-review`: the ship stop mode does not queue review itself.
+Read the outcome before reporting a handoff; policy skips can exit zero.
+Creation derives title/body from the latest commit, so inspect and enrich the
+PR with linked specs and actual validation evidence.
+
+Full `aida ship` continues into CI, merge, sync, and cleanup through the
+lower-level `aida pr ship` tail. It requires an authorized finish-and-merge
+path with independent review satisfied; neither command supplies a fresh
+reviewer. Managed/headless implementers follow their orchestrator's stop and
+handoff contract. Preserve supervised judgment and draft-only policy:
+`--no-merge` creates a non-draft PR, so actual drafts use the established
+draft creation path. Opening a PR never earns Completed before merge.
+<!-- trace:TASK-1613 | ai:codex -->
 
 ---
 
@@ -580,16 +604,16 @@ ops = ["ship"]   # any of: ship, sketch-signoff, dispatch, hold-clear, relay-res
   (`mandate.rs`, `mandate_gates.rs`, `mandate_drive.rs`, `mandate_ship.rs`,
   `mandate_traces.rs`, `relay_launch.rs`, `rework_hold_release.rs`, `review_authority.rs`,
   `solo_review.rs`, `review_verdict.rs`,
-  `fleet_lanes.rs`, `seat_authority.rs`, `pr_ship.rs`, `merge_hold.rs`,
-  `pr_ship_batch.rs`) never
-  ships under a mandate, and a mandate never releases its rework hold either.
+  `fleet_lanes.rs`, `pr_ship.rs`, `merge_hold.rs`, `pr_ship_batch.rs`, and
+  everything under `aida-cli-lib/src/gate/`) never ships under a mandate, and a
+  mandate never releases its rework hold either.
   Listing `ship` or `hold-clear` stops mandate rework releases too.
 - You can protect more paths. Entries are exact paths, or directory prefixes
   that end in `/` (`gate/` matches `gate/x.rs`, never `gateway/x.rs`):
 
   ```toml
   [mandate.human_gates]
-  protected_paths = ["aida-cli-lib/src/role.rs", "aida-cli-lib/src/gate/"]
+  protected_paths = ["aida-cli-lib/src/pr_cmd.rs", "scripts/release/"]
   ```
 
   The same two layers apply. Each layer can only add paths: neither can remove

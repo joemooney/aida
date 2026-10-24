@@ -120,6 +120,8 @@ mod drain_batch;
 mod drain_failure_note;
 mod drain_gate;
 mod findings_gate;
+// trace:STORY-1889 | ai:claude — gate authority, all on the mandate floor.
+mod gate;
 mod gitlab_mirror_link;
 mod graph_cmd;
 mod help;
@@ -135,6 +137,7 @@ mod lane_env;
 mod leases;
 mod live_work;
 pub(crate) use live_work::try_auto_queue_pr_review;
+mod agent_handle;
 mod mailbox_resolver;
 mod mailbox_root;
 // trace:STORY-1652 | ai:claude — terminal markdown rendering for human output.
@@ -159,6 +162,8 @@ mod protocol_gate;
 mod dispatch_health_ps;
 // trace:TASK-1092 | ai:claude — [dispatch.routing] config loader (additive, not yet wired in).
 mod dispatch_routing_config;
+// trace:STORY-1916 | ai:claude — disk guard emergency tier, stuck escalation, status.
+mod disk_emergency;
 // trace:STORY-776 | ai:claude — pure decision logic for `aida do` mode dispatch.
 mod autoprogress;
 mod do_dispatch;
@@ -431,14 +436,12 @@ mod mailbox_cmd;
 mod mailbox_store;
 // trace:STORY-1648 | ai:claude — read-only primary-checkout drift probe.
 mod main_checkout_drift;
-// trace:BUG-2211 | ai:claude — sandbox-left config.lock doctor check.
 mod maintenance_schedule;
 mod manual;
 mod mcp;
 mod mcp_translate;
 mod memories_cmd;
 mod merge_hold;
-mod sandbox_config_lock;
 // trace:STORY-1698 | ai:claude — the fire-fighting mandate.
 mod mandate;
 mod mandate_drive;
@@ -531,6 +534,8 @@ mod role_cmd;
 mod rules_cmd;
 mod rules_sync;
 mod sandbox_cmd;
+// trace:BUG-2211 trace:TASK-2270 | ai:claude — sandbox-left config.lock doctor check.
+mod sandbox_config_lock;
 mod scaffold_cmd;
 mod scaffold_refresh;
 // trace:TASK-1307 | ai:claude — the pre-BUG-1452 stranded-refusal sweep.
@@ -545,7 +550,10 @@ mod schema;
 // trace:BUG-1934 | ai:claude
 mod grant_keyring;
 // trace:STORY-1473 | ai:codex
-mod seat_authority;
+// STORY-1889: transitional re-export of the moved module; the final
+// STORY-1889 PR repoints callers to `crate::gate::seat_authority`.
+// trace:STORY-1889 | ai:claude
+pub(crate) use gate::seat_authority;
 // trace:BUG-2169 | ai:claude — a contained seat's private clone (the only host accessor).
 mod seat_clone;
 mod seat_occupancy;

@@ -1162,7 +1162,7 @@ e2e test actually execute it. Related: [[feedback_source_scanning_guards_need_th
 **The pattern that worked (12 specs merged to main in one push, zero questions):**
 
 1. **Front-load decisions once** (the 62-question disposition sweep) so the ready set is decision-free. Tag decided-and-buildable specs `ready-to-implement`.
-2. **Fan out implementers in parallel** — originally in-session subagents with worktree isolation; since STORY-1662, one standalone implementer process per spec (`aida queue work <SPEC> --role implementer --no-human`), ~3 per wave. Each agent gets ONE bounded ready spec + a self-contained prompt: read it via `/home/joe/ai/aida/target/release/aida show <SPEC>`, implement per acceptance, add `// trace:<SPEC>`, build + `cargo test` + `cargo fmt --all --check`, commit `[AI:claude] type(scope): desc (SPEC-ID)` + co-author trailer, push, `gh pr create`, return ONLY the PR URL. Worktree isolation = no file-conflict between parallel agents.
+2. **Fan out implementers in parallel** — originally in-session subagents with worktree isolation; since STORY-1662, one standalone implementer process per spec (`aida queue work <SPEC> --role implementer --no-human`), ~3 per wave. Each launch gets ONE bounded ready spec and takes no prompt from the caller: the seat's own brief tells it to read the spec, implement per acceptance, add `// trace:<SPEC>`, run its gates, commit `[AI:claude] type(scope): desc (SPEC-ID)` + co-author trailer, push and open the PR. A headless launch ends with one `implementer:` line (its outcome and PR) plus an exit code; read those, not a returned URL. Worktree isolation = no file-conflict between parallel agents.
 3. **Main session = INTEGRATOR** (this is STORY-520's producer/consumer model, done by hand): poll the PRs, merge the green+clean ones (squash, delete-branch), `aida db reconcile-status --spec <S>` to bump Completed, pull main, then launch the next wave. Merge sequentially; rebase on conflict.
 4. **Loop it** via ScheduleWakeup so waves keep launching for hours.
 
@@ -1222,7 +1222,7 @@ Dialog role often used "ship" loosely to mean any of: committed, pushed, PR open
 |---|---|---|
 | **Committed** | Work exists in local git history | Still In Progress |
 | **Pushed** | Branch reflects on `origin` | Still In Progress |
-| **PR opened** | GitHub PR exists, awaiting CI/review | Done (if `/aida-pr` flipped it) |
+| **PR opened** | GitHub PR exists, awaiting CI/review | Done (at the `aida queue done` checkpoint) |
 | **Reviewed** | Reviewer rendered a verdict (approved/rejected) | Still Done (waiting for merge) |
 | **Merged** | PR squashed/merged to `main` | Should be Completed via auto-bump |
 | **Completed** | Spec status = Completed in AIDA | Final state |

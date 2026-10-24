@@ -155,7 +155,7 @@ honest-reporting behaviour you want. Related:
 
 ### feedback_set_spec_inprogress_at_dispatch
 
-When you dispatch an agent (subagent, brief, or queue-work) to implement a spec, move the spec's status to **In Progress at dispatch time** (approve it first if still Draft). Leaving it Draft/Approved while an agent is actively building it makes the substrate lie about what's happening — the exact opacity AIDA exists to prevent.
+When you dispatch an implementer (a standalone `aida queue work <SPEC> --role implementer` launch, a brief to an interactive lane, or a mailed brief) to implement a spec, move the spec's status to **In Progress at dispatch time** (approve it first if still Draft). Leaving it Draft/Approved while an agent is actively building it makes the substrate lie about what's happening — the exact opacity AIDA exists to prevent.
 
 **Why:** 2026-09-13 — I delegated a worktree-isolated implementer to fix BUG-1135 but never moved the spec; the operator saw `aida list` still showing it `Draft` and asked "if you're actively working it, why this status?" A fair hit.
 
