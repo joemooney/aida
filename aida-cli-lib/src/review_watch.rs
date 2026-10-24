@@ -22,6 +22,9 @@ mod signal;
 // Ship readiness: report only. trace:TASK-1945 | ai:claude
 #[path = "review_watch_ready.rs"]
 mod ready;
+// The project's required checks also gate the live-binary promote.
+// trace:STORY-1689 | ai:claude
+pub(crate) use ready::required_checks;
 // The author's findings mail and the round-cap wake. trace:TASK-1945 | ai:claude
 #[path = "review_watch_notice.rs"]
 mod notice;
