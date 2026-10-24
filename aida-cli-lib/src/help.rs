@@ -88,6 +88,10 @@ pub(crate) fn command_groups() -> &'static [(&'static str, &'static [(&'static s
                 ("questions", "The async decision inbox"),
                 ("brief", "Route work to an agent via a pickup brief"),
                 ("agent", "Supervised agent launcher"),
+                (
+                    "dispatch",
+                    "Typed dispatch queue for sandboxed advisor seats",
+                ),
                 ("triage", "Triage incoming work"),
             ],
         ),

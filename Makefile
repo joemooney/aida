@@ -470,6 +470,10 @@ sync-templates: ## Sync .claude/ templates as symlinks to aida-core/templates/
 	@for f in aida-core/templates/.aida/discipline/standing-orders/*.md; do \
 		[ -f "$$f" ] && cp "$$f" ".aida/discipline/standing-orders/$$(basename $$f)"; \
 	done; true
+	@# trace:STORY-1917 | ai:agy — dispatch prompt wrapper templates
+	@for f in aida-core/templates/dispatch/*.md; do \
+		[ -f "$$f" ] || { echo "MISSING: dispatch template master $$f"; exit 1; }; \
+	done
 	@$(MAKE) --no-print-directory sync-agent-skills
 	@# trace:BUG-2014 | ai:codex
 	@python3 scripts/check-template-hooks.py --sync
@@ -559,6 +563,8 @@ check-templates: ## Check if .claude/ templates are properly linked
 	@# trace:BUG-2014 | ai:codex
 	@python3 scripts/check-template-hooks.py
 	@test -f aida-core/templates/hooks/aida-sync-agent-skills.sh || { echo "MISSING: portable-pack hook master"; exit 1; }
+	@test -f aida-core/templates/dispatch/take-prompt.md || { echo "MISSING: dispatch/take-prompt.md master"; exit 1; }
+	@test -f aida-core/templates/dispatch/impl-prompt.md || { echo "MISSING: dispatch/impl-prompt.md master"; exit 1; }
 	@errors=0; \
 	for f in aida-core/templates/skills/*.md; do \
 		name=$$(basename "$$f"); \

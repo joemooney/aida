@@ -114,6 +114,7 @@ mod dev_autopromote;
 mod dev_cmd;
 mod digest;
 mod digest_cmd;
+mod dispatch;
 // trace:TASK-1564 | ai:claude — render/re-read a drain phase-failure note.
 mod doctor_root;
 mod drain_batch;

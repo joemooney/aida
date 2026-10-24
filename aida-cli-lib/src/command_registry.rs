@@ -50,6 +50,7 @@ pub(crate) static REGISTRY: &[&CommandReg] = &[
     &crate::derisk_cmd::DERISK,
     &crate::dev_cmd::DEV,
     &crate::digest_cmd::DIGEST,
+    &crate::dispatch::DISPATCH,
     &crate::do_dispatch::DO,
     &crate::doc_cmd::DOC,
     &crate::doc_cmd::DOCS,
