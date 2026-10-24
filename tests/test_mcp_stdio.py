@@ -212,7 +212,7 @@ def mint_seat_grant(root: Path, seat: str, delegable: tuple[str, ...] = ()) -> d
     must carry the records ``aida role enter`` would create at a human TTY: a
     roster ceiling in the project store plus a grant record under the
     (isolated) HOME. Mirrors
-    ``aida-cli-lib/src/seat_authority.rs::test_support::mint_grant_for``
+    ``aida-cli-lib/src/gate/seat_authority.rs::test_support::mint_grant_for``
     exactly; a drifting field fails these suites closed, never open. No
     production bypass is involved.
     trace:STORY-1473 | ai:claude
