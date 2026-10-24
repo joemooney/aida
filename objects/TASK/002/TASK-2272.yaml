@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T21:38:06.702176218Z
-modified_at: 2026-10-24T00:22:43.986547344Z
+modified_at: 2026-10-24T00:22:47.949839084Z
 req_type: Task
 relationships:
 - rel_type: Supersedes
@@ -119,6 +119,12 @@ comments:
   content: 'ADVISOR 17:13: Folded TASK-2287 (the aida-fire fixer prompt STOPs on the branch the advisor''s worktree add created; minor) and TASK-2288 (the Agent-tool ratchet misses prose; cosmetic), both from the PR-2865 PASS review. Take them in #2868.'
   created_at: 2026-10-24T00:13:32.725648691Z
   modified_at: 2026-10-24T00:13:32.725648691Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+- id: 01a16b49-e78d-7e70-8e80-2aedbba4a2dc
+  author: joe
+  content: 'ADVISOR 17:22: Folded the non-blocking notes from the PASS reviews of #2850 (STORY-1689): TASK-2289 (the autopromote child exits non-zero on a refusal), TASK-2290 (docs: the refused outcome) and TASK-2291 (bound the pre-ff steps of the tick). Also from #2855 (TASK-1955): TASK-2292 (drop the redundant scratch_root allowance). Take them after #2850 and #2855 merge.'
+  created_at: 2026-10-24T00:22:47.949839084Z
+  modified_at: 2026-10-24T00:22:47.949839084Z
   session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
 history:
 - id: 01a16ab3-42ef-7420-86da-7b4600ae0438
