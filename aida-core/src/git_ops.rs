@@ -39,6 +39,33 @@ fn git(cwd: &Path, args: &[&str]) -> Result<GitResult> {
     git_with_env(cwd, args, &[])
 }
 
+/// [`git`] for a call that takes the repository's config lock (`worktree
+/// add`, `branch -D`, `git config <key> <value>`): clears a sandbox-left
+/// placeholder `config.lock` first and retries once if git still reports it.
+// trace:BUG-2211 | ai:claude
+fn git_config_writer(cwd: &Path, args: &[&str]) -> Result<GitResult> {
+    clear_sandbox_config_lock(cwd);
+    let first = git(cwd, args)?;
+    if first.success
+        || !config_lock::is_config_lock_refusal(first.stderr.as_bytes())
+        || clear_sandbox_config_lock(cwd).is_none()
+    {
+        return Ok(first);
+    }
+    let retry = config_lock::retry_args(
+        &args
+            .iter()
+            .map(std::ffi::OsString::from)
+            .collect::<Vec<_>>(),
+    );
+    let retry: Vec<String> = retry
+        .iter()
+        .map(|a| a.to_string_lossy().into_owned())
+        .collect();
+    let retry: Vec<&str> = retry.iter().map(String::as_str).collect();
+    git(cwd, &retry)
+}
+
 /// [`git`] with extra environment for this one subprocess (e.g. a C locale
 /// where the caller classifies git's stderr).
 // trace:BUG-1969 | ai:claude
@@ -1547,10 +1574,16 @@ fn fetch_rebase_target(repo: &Path, remote: &str, branch: &str) -> Result<String
     Ok(sha)
 }
 
+// trace:BUG-2211 | ai:claude
+mod config_lock;
 mod evidence;
 // trace:BUG-2181 | ai:claude
 mod remote_credentials;
 pub use crate::hypothesis::{is_evidence_refusal, EvidenceRefusal};
+pub use config_lock::{
+    clear_sandbox_config_lock, config_lock_path, is_sandbox_placeholder,
+    output_healing_config_lock, sandbox_config_lock,
+};
 pub use remote_credentials::{
     configure_remote_credentials, configure_remote_credentials_with, host_remote_git_command,
     operator_credential_helper_configured, percent_decode, split_http_url_userinfo,
@@ -3182,7 +3215,7 @@ pub fn create_store_worktree(
 
     if branch_exists {
         // Branch exists (e.g., from a clone) — just add the worktree
-        let result = git(repo_root, &["worktree", "add", worktree_dir, branch_name])?;
+        let result = git_config_writer(repo_root, &["worktree", "add", worktree_dir, branch_name])?;
         if !result.success {
             anyhow::bail!("Failed to add worktree: {}", result.stderr);
         }
@@ -3190,7 +3223,7 @@ pub fn create_store_worktree(
         // Create orphan branch via worktree
         // git worktree add --orphan was added in git 2.42+
         // For compatibility, create it manually
-        let result = git(repo_root, &["worktree", "add", "--detach", worktree_dir])?;
+        let result = git_config_writer(repo_root, &["worktree", "add", "--detach", worktree_dir])?;
         if !result.success {
             anyhow::bail!("Failed to create worktree: {}", result.stderr);
         }
@@ -4561,10 +4594,11 @@ pub fn resolve_store_gc_auto(override_val: Option<&str>) -> Option<u32> {
 /// swallowed (returns `false`) — a maintenance knob must never break the store.
 // trace:TASK-1033 trace:BUG-663 | ai:claude
 pub fn configure_store_gc_auto(repo: &Path, threshold: u32) -> bool {
-    let auto_ok = git(repo, &["config", "gc.auto", &threshold.to_string()])
+    // trace:BUG-2211 | ai:claude
+    let auto_ok = git_config_writer(repo, &["config", "gc.auto", &threshold.to_string()])
         .map(|r| r.success)
         .unwrap_or(false);
-    let detach_ok = git(repo, &["config", "gc.autoDetach", "true"])
+    let detach_ok = git_config_writer(repo, &["config", "gc.autoDetach", "true"])
         .map(|r| r.success)
         .unwrap_or(false);
     auto_ok && detach_ok

@@ -62,6 +62,12 @@ assert_exit "AIDA_CARGO_NO_SLOT=1 prefix is blocked" 2 "$(run '{"tool_input":{"c
 assert_exit "exported AIDA_CARGO_NO_SLOT is blocked" 2 "$(run '{"tool_input":{"command":"export AIDA_CARGO_NO_SLOT=1 && make check"}}')"
 assert_exit "env AIDA_CARGO_NO_SLOT=\"1\" is blocked" 2 "$(run '{"tool_input":{"command":"cd x && env AIDA_CARGO_NO_SLOT=\"1\" cargo build"}}')"
 assert_stderr "the NO_SLOT block names the limiter" "cargo build-slot limiter" "$(run_stderr '{"tool_input":{"command":"AIDA_CARGO_NO_SLOT=1 cargo test"}}')"
+# trace:TASK-2238 | ai:claude — the block names the LIGHT gate, not make test-touched
+NO_SLOT_STDERR="$(run_stderr '{"tool_input":{"command":"AIDA_CARGO_NO_SLOT=1 cargo test"}}')"
+assert_stderr "the NO_SLOT block names the LIGHT pre-push gate" "one targeted cargo test --profile agent run + make check-ci-fast" "$NO_SLOT_STDERR"
+if printf '%s' "$NO_SLOT_STDERR" | grep -qF "make test-touched"; then
+    echo "FAIL - the NO_SLOT block still names make test-touched as the pre-push step"; fail=1
+else echo "ok   - the NO_SLOT block no longer names make test-touched"; fi
 assert_exit "unsetting AIDA_CARGO_NO_SLOT is allowed" 0 "$(run '{"tool_input":{"command":"env -u AIDA_CARGO_NO_SLOT cargo test -p aida-core x; unset AIDA_CARGO_NO_SLOT"}}')"
 assert_exit "bash -c wrapping AIDA_CARGO_NO_SLOT=1 is blocked" 2 "$(run '{"tool_input":{"command":"timeout 3000 bash -c \"AIDA_CARGO_NO_SLOT=1 make check\""}}')"
 assert_exit "sh -c wrapping AIDA_CARGO_NO_SLOT=1 is blocked" 2 "$(run '{"tool_input":{"command":"sh -c '"'"'AIDA_CARGO_NO_SLOT=1 cargo test'"'"'"}}')"

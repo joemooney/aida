@@ -39,6 +39,16 @@ pub(crate) enum Mergeable {
     Unknown,
 }
 
+/// How stale a PR's green is, from the gate `aida pr ship` applies.
+// trace:STORY-1690 | ai:claude
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct Staleness {
+    /// The head is missing commits now on its base: ship refuses it.
+    pub behind: bool,
+    /// CI-definition files changed on the base since the head's green.
+    pub definition_files: Vec<String>,
+}
+
 /// What the batch needs to know about one PR, read in one forge call.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct PrView {
@@ -91,15 +101,11 @@ pub(crate) trait BatchPorts {
     /// The integrity floor: a human at an interactive terminal.
     fn human_at_terminal(&self) -> bool;
     fn view(&mut self, pr: u64) -> Result<PrView>;
-    /// C4: the CI-definition files that make `aida pr ship` refuse this PR's
-    /// green, from the stale-definition gate's own predicate. `fetch` false
-    /// (`--dry-run`) judges against the local tracking refs as they are.
-    fn stale_definition_files(
-        &mut self,
-        pr: u64,
-        view: &PrView,
-        fetch: bool,
-    ) -> Result<Vec<String>>;
+    /// C4: what makes `aida pr ship` refuse this PR's green, from the stale
+    /// gate's own predicate (STORY-1690: a head behind its base refuses even
+    /// when the forge does not report BEHIND). `fetch` false (`--dry-run`)
+    /// judges against the local tracking refs as they are.
+    fn staleness(&mut self, pr: u64, view: &PrView, fetch: bool) -> Result<Staleness>;
     fn update_branch(&mut self, pr: u64, expected_head: &str) -> Result<()>;
     /// CI at `head`; `held` is the PR's hold state, read by the caller
     /// (see [`read_ci`]) so a hold-label error is not reported as CI.
@@ -257,8 +263,8 @@ fn plan_pr(ports: &mut dyn BatchPorts, pr: u64) -> PrOutcome {
     // TASK-2157: a dry run changes nothing, so it does not fetch; the
     // stale-definition check reads the local `origin/*` refs as they are.
     // trace:STORY-1887 | ai:claude
-    match ports.stale_definition_files(pr, &view, false) {
-        Ok(files) if view.behind || !files.is_empty() => {
+    match ports.staleness(pr, &view, false) {
+        Ok(stale) if view.behind || stale.behind || !stale.definition_files.is_empty() => {
             steps.push("would refresh from main".to_string())
         }
         Ok(_) => {}
@@ -309,17 +315,21 @@ fn ship_one(ports: &mut dyn BatchPorts, pr: u64, opts: BatchOptions) -> PrOutcom
         return done;
     }
     ports.say(&format!("PR #{pr} {}", view.title));
-    let stale = match ports.stale_definition_files(pr, &view, true) {
-        Ok(files) => files,
+    let stale = match ports.staleness(pr, &view, true) {
+        Ok(stale) => stale,
         Err(e) => {
             return PrOutcome::Stopped(format!("could not check whether PR #{pr} is stale: {e:#}"))
         }
     };
-    if view.behind || !stale.is_empty() {
-        let why = if stale.is_empty() {
+    // trace:STORY-1690 | ai:claude
+    if view.behind || stale.behind || !stale.definition_files.is_empty() {
+        let why = if stale.definition_files.is_empty() {
             "it is behind main".to_string()
         } else {
-            format!("its green predates a change to {}", stale.join(", "))
+            format!(
+                "its green predates a change to {}",
+                stale.definition_files.join(", ")
+            )
         };
         ports.say(&format!("  refreshing from main: {why}"));
         let old_head = view.head_sha.clone();
@@ -782,12 +792,7 @@ impl BatchPorts for GitHubPorts {
         Ok(parse_pr_view(&v))
     }
 
-    fn stale_definition_files(
-        &mut self,
-        pr: u64,
-        view: &PrView,
-        fetch: bool,
-    ) -> Result<Vec<String>> {
+    fn staleness(&mut self, pr: u64, view: &PrView, fetch: bool) -> Result<Staleness> {
         if fetch {
             // TASK-2001: a host fetch keeps origin's stored token out of argv.
             // trace:TASK-1952 | trace:TASK-2001 | ai:claude
@@ -802,7 +807,12 @@ impl BatchPorts for GitHubPorts {
         }
         let (_, warning) =
             crate::pr_cmd::ship_stale_definition_warning(&self.project_root, &view.head_ref, pr);
-        Ok(warning.map(|w| w.definition_files).unwrap_or_default())
+        Ok(warning
+            .map(|w| Staleness {
+                behind: true,
+                definition_files: w.definition_files,
+            })
+            .unwrap_or_default())
     }
 
     fn update_branch(&mut self, pr: u64, expected_head: &str) -> Result<()> {
@@ -987,6 +997,7 @@ mod tests {
         human: bool,
         views: BTreeMap<u64, VecDeque<PrView>>,
         stale: BTreeMap<u64, Vec<String>>,
+        behind_base: Vec<u64>,
         ci: BTreeMap<String, VecDeque<CiAtHead>>,
         reviews: BTreeMap<String, VecDeque<ReviewAtHead>>,
         holds: BTreeMap<u64, String>,
@@ -1054,15 +1065,13 @@ mod tests {
                 .and_then(next)
                 .ok_or_else(|| anyhow::anyhow!("no such PR"))
         }
-        fn stale_definition_files(
-            &mut self,
-            pr: u64,
-            _view: &PrView,
-            fetch: bool,
-        ) -> Result<Vec<String>> {
+        fn staleness(&mut self, pr: u64, _view: &PrView, fetch: bool) -> Result<Staleness> {
             self.forge_calls += 1;
             self.fetches += u32::from(fetch);
-            Ok(self.stale.get(&pr).cloned().unwrap_or_default())
+            Ok(Staleness {
+                behind: self.behind_base.contains(&pr),
+                definition_files: self.stale.get(&pr).cloned().unwrap_or_default(),
+            })
         }
         fn update_branch(&mut self, pr: u64, expected_head: &str) -> Result<()> {
             self.forge_calls += 1;
@@ -1457,6 +1466,22 @@ mod tests {
             .said
             .iter()
             .any(|l| l.contains(".github/workflows/ci.yml")));
+    }
+
+    // STORY-1690: a head behind its base is refreshed before ship even when
+    // the forge does not report BEHIND (strict is off), because ship now
+    // refuses a behind head.
+    // trace:STORY-1690.acb4ffd6 | ai:claude
+    #[test]
+    fn behind_base_by_git_alone_triggers_refresh() {
+        let mut f = ready(Fake::human(), 5, "new_head_0005")
+            .views(5, vec![open("old_head_0005"), open("new_head_0005")])
+            .answers(&["go", "5"]);
+        f.behind_base.push(5);
+        let out = run_batch(&mut f, &[5], OPTS).unwrap();
+        assert_eq!(out[0].1, PrOutcome::Shipped);
+        assert_eq!(f.updates, vec![(5, "old_head_0005".to_string())]);
+        assert!(f.said.iter().any(|l| l.contains("behind main")));
     }
 
     // C3 for the real port: a rollup from another head never counts, and no

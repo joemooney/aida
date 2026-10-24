@@ -696,10 +696,16 @@ pub(crate) fn handle_zen_compete(spec_arg: &str, dry_run: bool) -> Result<()> {
         } else {
             "-D"
         };
-        let _ = std::process::Command::new("git")
-            .args(["branch", flag, &r.branch])
-            .current_dir(&project_root)
-            .output();
+        // trace:BUG-2211 | ai:claude
+        let _ = aida_core::git_ops::output_healing_config_lock(
+            &project_root,
+            || {
+                let mut cmd = std::process::Command::new("git");
+                cmd.current_dir(&project_root);
+                cmd
+            },
+            &["branch", flag, &r.branch],
+        );
         if r.branch != winner_branch {
             println!("  loser branch `{}` deleted — work discarded.", r.branch);
         }
@@ -877,16 +883,24 @@ fn run_compete_arm(
         .args(["worktree", "prune"])
         .current_dir(project_root)
         .output();
-    let _ = std::process::Command::new("git")
-        .args(["branch", "-D", branch])
-        .current_dir(project_root)
-        .output();
+    // trace:BUG-2211 | ai:claude
+    let git_in_root = || {
+        let mut cmd = std::process::Command::new("git");
+        cmd.current_dir(project_root);
+        cmd
+    };
+    let _ = aida_core::git_ops::output_healing_config_lock(
+        project_root,
+        git_in_root,
+        &["branch", "-D", branch],
+    );
 
-    let add = std::process::Command::new("git")
-        .args(["worktree", "add", "-b", branch, &worktree_str, "HEAD"])
-        .current_dir(project_root)
-        .output()
-        .context("failed to run `git worktree add`")?;
+    let add = aida_core::git_ops::output_healing_config_lock(
+        project_root,
+        git_in_root,
+        &["worktree", "add", "-b", branch, &worktree_str, "HEAD"],
+    )
+    .context("failed to run `git worktree add`")?;
     if !add.status.success() {
         anyhow::bail!(
             "git worktree add failed: {}",
