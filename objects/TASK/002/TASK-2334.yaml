@@ -6,16 +6,25 @@ description: |
   scratch_at_hard_ceiling (TASK-2325, PR-2906) derives the session-scratch root from the guard process's OWN $TMPDIR via scratch_reclaim::tmp_root_from. A scheduled disk-guard tick typically runs without TMPDIR (or with a non-claude TMPDIR), so tmp_root is None and the (b) session-scratch arm never fires at the hard ceiling in production — the exact 74 GiB /tmp/claude-1000 case that motivated TASK-2325 would not be reclaimed by the emergency path. Consider discovering claude-<uid> roots under the system tmp dir (e.g. /tmp/claude-*) instead of relying on the caller's env, with the same age + own-session rails.
 
   Raised in review of PR-2906: https://github.com/joemooney/aida/pull/2906#issuecomment-6388225690
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-24T18:57:18.240821099Z
-modified_at: 2026-10-24T18:57:18.240821099Z
+modified_at: 2026-10-24T19:43:59.027216798Z
 req_type: Task
 tags:
 - from-review:PR-2906
 - severity:minor
+history:
+- id: 01a16f71-0033-75e0-a1c1-9ecd677ec82e
+  author: joe
+  timestamp: 2026-10-24T19:43:59.027212618Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: f6bb4a0e951511bd35774fb08343657b54be688b
   branch: pr-2906
