@@ -1,0 +1,29 @@
+id: 01a16c4b-3a7c-7993-9e23-0f335e2b54db
+spec_id: TASK-1-476
+title: '[minor, non-blocking, carried from ad7f4260d8] rework_hold_release.rs release_w…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1951, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  [minor, non-blocking, carried from ad7f4260d8] rework_hold_release.rs release_with (~:398-423): the forge audit comment (network call) is posted while holding the per-PR hold lock; a slow forge (>HOLD_LOCK_WAIT 10s) makes a concurrent placement, re-arm or human 'merge-hold clear' refuse busy. Fails closed; either post the comment after the locked record or note the trade-off in release_with's doc.
+
+  PR: #2845
+  Reviewed sha: 32aac566c22a161a2ab11f1c45bd18d6a7cbb386
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-24T05:03:51.932069338Z
+modified_at: 2026-10-24T05:03:51.932069338Z
+req_type: Task
+tags:
+- carried-from:TASK-1951
+- finding-hash:4af77735
+- from-review:PR-2845
+- kind:carried-forward
+filed_at:
+  code_sha: 43a38f38d2ba2b6794ea3c74d8bb69f15a54f040
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: d14a20aaae
+  vendor: claude
