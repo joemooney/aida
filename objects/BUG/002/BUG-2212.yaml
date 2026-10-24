@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T17:20:19.556174803Z
-modified_at: 2026-10-23T22:15:07.798770955Z
+modified_at: 2026-10-24T00:01:19.232063659Z
 req_type: Bug
 comments:
 - id: 01a16a9f-7934-7c70-979d-7acd07d760ca
@@ -17,6 +17,12 @@ comments:
   created_at: 2026-10-23T21:16:38.580266264Z
   modified_at: 2026-10-23T21:16:38.580266264Z
   session_id: e4aac5bc-c046-4268-8239-f233e1f17612
+- id: 01a16b36-3d80-7183-84b2-1407d08b390b
+  author: joe
+  content: Commit 5d18434387 references this requirement
+  created_at: 2026-10-24T00:01:19.232063659Z
+  modified_at: 2026-10-24T00:01:19.232063659Z
+  session_id: df79ef3b-c7cd-402b-9b5a-580f9deb793b
 history:
 - id: 01a16a2e-3928-7950-8571-236934ce2779
   author: joe
