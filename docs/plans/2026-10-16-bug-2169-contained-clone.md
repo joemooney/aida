@@ -683,9 +683,9 @@ S4c (flip `seat_tree` to `clone`, retire `AIDA_DEV_SEAT_CLONE`, close PR #2694).
   - an explicit `--path` that is not an `aida-seat-*` directory directly in the worktree parent
     (inside or outside that parent)
   An explicit `seat_tree = "clone"` refuses each of them instead and names the reason; a missing
-  origin refuses with "add an origin remote or set seat_tree = \"worktree\"". The flip never turns
-  a working contained launch into a refusal. The launch facts are read only when the tree would
-  be a clone.
+  origin refuses with "add an origin remote or set seat_tree = \"worktree\"". These fallbacks
+  cover the listed launch shapes; other clone setup failures can still refuse a launch.
+  The launch facts are read only when the tree would be a clone.
 - Tests: `the_default_is_a_clone_and_an_explicit_path_keeps_a_worktree`,
   `the_default_without_an_origin_keeps_a_worktree`,
   `the_default_keeps_a_worktree_for_an_in_parent_path_that_is_not_a_seat_dir`,
@@ -700,3 +700,28 @@ S4c (flip `seat_tree` to `clone`, retire `AIDA_DEV_SEAT_CLONE`, close PR #2694).
   7,170. The re-measure gave cold p50 3.2 s and p95 3.3 s, warm p50/p95 1.2 s. S5 is therefore
   the packing step plus the loose-object doctor check (`aida doctor check loose-objects`, #2847);
   no host clone pool is built.
+
+## TASK-2300: unreachable origin under the default
+
+<!-- trace:TASK-2300 | ai:codex -->
+With `seat_tree` unset, failure or a 30-second timeout of the actual origin
+clone command now falls back to the ordinary linked-worktree path, with a
+one-line note naming origin reachability and credentials. There is no separate
+reachability probe or host clone pool. The failed clone and its base pin must
+be removed successfully before fallback; the lease records `tree_kind = "worktree"`.
+An explicit `seat_tree = "clone"` still refuses. Local destination, base-ref,
+pinning, checkout and runtime setup errors also still refuse, as does failure
+to start git or excessive clone output. The fallback does not guarantee that
+every contained launch succeeds. It uses locally available refs, as the existing
+worktree path does; it cannot fetch unavailable work from an offline origin.
+
+The fallback classifies failure of the origin clone command, rather than parsing
+Git's localized stderr to infer a transport cause. That command can also fail
+while initializing or writing its local clone. Failures in the separate local
+preparation, base, pin, checkout and runtime stages remain refusals.
+
+<!-- trace:TASK-2300 | ai:codex -->
+An explicit `--path` using the reserved `aida-seat-*` clone location cannot
+host a linked worktree. If origin cloning fails there, the launch refuses
+before making a worktree and asks to drop `--path` for automatic placement
+or choose an ordinary worktree path. It does not silently change that request.

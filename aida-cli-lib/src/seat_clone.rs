@@ -275,13 +275,35 @@ fn run(mut cmd: std::process::Command, what: &str) -> Result<String> {
     Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
 }
 
-/// The loud refusal when a contained seat cannot get its clone. There is no
-/// worktree fallback: a silent fallback is how a seat ends up with a shared
-/// gitdir again (advisor ruling O1).
+/// Only failure of the origin-clone command permits the unset knob to
+/// fall back. Destination preparation, pinning and checkout failures still refuse.
+// trace:TASK-2300 | ai:codex
+#[derive(Debug)]
+struct OriginCloneFailure(String);
+
+impl std::fmt::Display for OriginCloneFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+impl std::error::Error for OriginCloneFailure {}
+
+/// An explicit clone never downgrades; the default names the origin failure.
+// trace:TASK-2300 | ai:codex
+pub(crate) fn origin_failure_fallback(explicit: bool, error: &anyhow::Error) -> Option<String> {
+    if explicit || error.downcast_ref::<OriginCloneFailure>().is_none() {
+        return None;
+    }
+    Some("this contained seat gets a linked worktree because cloning from `origin` failed or timed out; check origin reachability and credentials".into())
+}
+
+/// The loud refusal when a contained seat cannot get its clone. Callers may
+/// fall back only for a typed origin failure with the knob unset.
+// trace:TASK-2300 | ai:codex
 fn refusal(dest: &Path, error: anyhow::Error) -> anyhow::Error {
     anyhow::anyhow!(
         "cannot create the private clone this contained seat needs at {}: {error:#}\n\
-         A contained seat never falls back to a shared worktree. Fix the cause and retry, set \
+         This clone refusal never falls back to a shared worktree. Fix the cause and retry, set \
          `[contained] seat_tree = \"worktree\"`, or launch from an uncontained shell.",
         dest.display()
     )
@@ -297,8 +319,9 @@ fn refusal(dest: &Path, error: anyhow::Error) -> anyhow::Error {
 /// 4. check out `branch` at that commit (present through alternates);
 /// 5. exclude AIDA runtime files and write the marker.
 ///
-/// Every failure is a [`refusal`]; anything made before it (pin, directory)
-/// is removed, and `dest` is never a worktree afterwards.
+/// Every failure refuses clone creation and attempts to remove its directory
+/// and pin. Cleanup failure retains recovery evidence and prevents fallback.
+/// This function never creates a worktree.
 // trace:BUG-2169 | ai:claude
 pub(crate) fn create(
     main: &Path,
@@ -392,17 +415,69 @@ pub(crate) fn create(
 
     let made = clone_and_checkout(main, dest, branch, &base_sha, &origin_url, &pin);
     if let Err(error) = made {
-        if dest.exists() {
-            let _ = std::fs::remove_dir_all(dest);
-        }
-        let _ = release_pin(main, &pin);
-        return Err(refusal(dest, error));
+        return Err(cleanup_failed_clone(main, dest, &pin, error));
     }
     Ok(CreatedClone {
         path: dest.to_path_buf(),
         base_sha,
         pin,
     })
+}
+
+/// Preserve origin-failure eligibility only after removing both allocations.
+// trace:TASK-2300 | ai:codex
+fn cleanup_failed_clone(
+    main: &Path,
+    dest: &Path,
+    pin: &str,
+    error: anyhow::Error,
+) -> anyhow::Error {
+    if dest.exists() {
+        if let Err(cleanup) = std::fs::remove_dir_all(dest) {
+            return refusal(
+                dest,
+                anyhow::anyhow!("{error:#}; clone cleanup failed: {cleanup}"),
+            );
+        }
+    }
+    if let Err(cleanup) = release_pin(main, pin) {
+        return refusal(
+            dest,
+            anyhow::anyhow!("{error:#}; base-pin cleanup failed: {cleanup:#}"),
+        );
+    }
+    let origin_failed = error.downcast_ref::<OriginCloneFailure>().is_some();
+    let refused = refusal(dest, error);
+    if origin_failed {
+        anyhow::Error::new(OriginCloneFailure(refused.to_string()))
+    } else {
+        refused
+    }
+}
+
+// trace:TASK-2300 | ai:codex
+fn run_origin_clone(cmd: std::process::Command, timeout: std::time::Duration) -> Result<()> {
+    const CAP: u64 = 1024 * 1024;
+    match crate::command_output_with_timeout_capped(cmd, timeout, CAP) {
+        crate::BoundedCommandOutput::Completed(out)
+            if out.stdout.len() as u64 > CAP || out.stderr.len() as u64 > CAP =>
+        {
+            anyhow::bail!("origin clone output exceeded the capture limit")
+        }
+        crate::BoundedCommandOutput::Completed(out) if out.status.success() => Ok(()),
+        crate::BoundedCommandOutput::Completed(out) => {
+            Err(anyhow::Error::new(OriginCloneFailure(format!(
+                "git could not clone origin: {}",
+                String::from_utf8_lossy(&out.stderr).trim()
+            ))))
+        }
+        crate::BoundedCommandOutput::TimedOut => Err(anyhow::Error::new(OriginCloneFailure(
+            "git clone from origin timed out".into(),
+        ))),
+        crate::BoundedCommandOutput::SpawnFailed => {
+            anyhow::bail!("could not start git to clone origin")
+        }
+    }
 }
 
 fn clone_and_checkout(
@@ -426,7 +501,14 @@ fn clone_and_checkout(
             "--reference",
         ]);
     clone.arg(main).arg("--").arg(origin_url).arg(dest);
-    run(clone, &format!("clone {origin_url}"))?;
+    // Bound unreachable transports and disable terminal credential prompts.
+    // Clone stderr may contain credentials from the URL, so the fallback note
+    // is generic; explicit clone refusals retain the existing diagnostics.
+    // trace:TASK-2300 | ai:codex
+    clone
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .stdin(std::process::Stdio::null());
+    run_origin_clone(clone, std::time::Duration::from_secs(30))?;
 
     let mut checkout = git(dest);
     checkout.args(["checkout", "--quiet", "--no-track", "-b", branch, base_sha]);
