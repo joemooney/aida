@@ -874,7 +874,8 @@ fn approved_verdict_at_a_stale_sha_does_not_silently_proceed() {
         ],
     );
 
-    let (gate, verdict) = crate::queue_cmd::evaluate_review_verdict_gate(p, "TASK-9", "TASK-9");
+    let (gate, verdict) =
+        crate::gate::review_verdict::evaluate_review_verdict_gate(p, "TASK-9", "TASK-9");
     assert!(verdict.is_some(), "the recorded approval must be found");
     assert!(
         !matches!(gate, review_verdict::VerdictGate::Proceed),
@@ -904,7 +905,8 @@ fn approved_verdict_with_no_reviewed_sha_refuses_through_the_real_gate() {
     )
     .unwrap();
 
-    let (gate, verdict) = crate::queue_cmd::evaluate_review_verdict_gate(p, "TASK-10", "TASK-10");
+    let (gate, verdict) =
+        crate::gate::review_verdict::evaluate_review_verdict_gate(p, "TASK-10", "TASK-10");
     assert!(verdict.is_some());
     match gate {
         review_verdict::VerdictGate::Refuse(lines) => {
@@ -936,7 +938,8 @@ fn approved_verdict_still_at_the_reviewed_sha_proceeds() {
     )
     .unwrap();
 
-    let (gate, _) = crate::queue_cmd::evaluate_review_verdict_gate(p, "TASK-11", "TASK-11");
+    let (gate, _) =
+        crate::gate::review_verdict::evaluate_review_verdict_gate(p, "TASK-11", "TASK-11");
     assert_eq!(gate, review_verdict::VerdictGate::Proceed);
 }
 

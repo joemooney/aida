@@ -59,7 +59,7 @@ pub(crate) fn pr_has_approved_verdict(project_root: &std::path::Path, pr_number:
 /// Returns `None` for a comment that is not a review at all.
 // trace:BUG-1672 | ai:claude
 pub(crate) fn review_comment_verdict(content: &str) -> Option<review_verdict::VerdictKind> {
-    if review_verdict::is_findings_block(content) {
+    if crate::review_verdict_display::is_findings_block(content) {
         return None;
     }
     let first = content.lines().find(|l| !l.trim().is_empty())?.trim();

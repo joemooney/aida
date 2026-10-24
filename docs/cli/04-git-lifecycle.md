@@ -610,8 +610,7 @@ ops = ["ship"]   # any of: ship, sketch-signoff, dispatch, hold-clear, relay-res
 - If the committed layer cannot be read, every action is gated.
 - A PR that changes `.aida/config.toml` or the mandate code
   (`mandate.rs`, `mandate_gates.rs`, `mandate_drive.rs`, `mandate_ship.rs`,
-  `mandate_traces.rs`, `relay_launch.rs`, `rework_hold_release.rs`, `review_authority.rs`,
-  `solo_review.rs`, `review_verdict.rs`,
+  `mandate_traces.rs`, `relay_launch.rs`, `rework_hold_release.rs`,
   `fleet_lanes.rs`, `pr_ship.rs`, `merge_hold.rs`, `pr_ship_batch.rs`, and
   everything under `aida-cli-lib/src/gate/`) never ships under a mandate, and a
   mandate never releases its rework hold either.

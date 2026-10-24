@@ -388,9 +388,6 @@ pub(crate) const GATE_PROTECTED_PATHS: &[&str] = &[
     "aida-cli-lib/src/mandate_traces.rs",
     "aida-cli-lib/src/relay_launch.rs",
     "aida-cli-lib/src/rework_hold_release.rs",
-    "aida-cli-lib/src/review_authority.rs",
-    "aida-cli-lib/src/solo_review.rs",
-    "aida-cli-lib/src/review_verdict.rs",
     "aida-cli-lib/src/fleet_lanes.rs",
     "aida-cli-lib/src/pr_ship.rs",
     "aida-cli-lib/src/merge_hold.rs",
@@ -411,11 +408,8 @@ pub(crate) const KNOWN_UNPROTECTED: &[&str] = &[
     // Gate authority today (approval, merge and hold refusals).
     "aida-cli-lib/src/auto_complete.rs",
     "aida-cli-lib/src/defer_cmd.rs",
-    "aida-cli-lib/src/lib_part5.rs",
     "aida-cli-lib/src/pr_cmd.rs",
     "aida-cli-lib/src/pr_merge_gate.rs",
-    "aida-cli-lib/src/queue_cmd.rs",
-    "aida-cli-lib/src/review_marker.rs",
     // A name match that reads lease state rather than decides; STORY-1889
     // confirms it before it moves or is exempted.
     "aida-cli-lib/src/session_reap.rs",
