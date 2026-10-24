@@ -1,0 +1,19 @@
+{
+  "id": "159e2f59-02d2-4539-893c-e8121c6561e7",
+  "thread_id": "159e2f59-02d2-4539-893c-e8121c6561e7",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792806442766,
+  "body": "260a7655d7\n1. help snapshot regenerated (search --fields review_lens)\n2. manual: merge-hold cites 'aida mandate start --include-supervised'; verify-manual clean\n3. auto-release clearance read/compare/write moved under hold lock; busy refusal writes nothing; busy interleaving test added\n4. search --fields review_lens now computed for search rows; test added\ngates: targeted cargo test 52 ok, check-ci-fast 34 ok",
+  "subject": "PR-2845 pushed (TASK-1951)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

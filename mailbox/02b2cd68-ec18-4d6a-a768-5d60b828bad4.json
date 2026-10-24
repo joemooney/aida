@@ -1,0 +1,19 @@
+{
+  "id": "02b2cd68-ec18-4d6a-a768-5d60b828bad4",
+  "thread_id": "02b2cd68-ec18-4d6a-a768-5d60b828bad4",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792810267612,
+  "body": "PR-2864 pushed (STORY-1843 PR2b) at 9ec9172a43, origin/main merged.\n1. CI lib-0: help golden snapshot regenerated (statusline --tmux-pane-pid).\n2. Child seats: launcher-exported <vendor>-<seat> AIDA_AGENT_NAME kept as the handle; reply to From resolves (test).\n3. TASK-2302: launch guard releases only reservations made during its lifetime (two-launch test).\n4. TASK-2303: live_session_entries requires observed liveness via PidObserver::current() (test).\n5. TASK-2304: session ids match exactly (test).\nGates: targeted agent_handle+snapshot run, make check-ci-fast 34/34. PR body checklist header names STORY-1843.",
+  "subject": "PR-2864 pushed (STORY-1843)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

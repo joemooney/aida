@@ -1,0 +1,19 @@
+{
+  "id": "26cfcc46-2ce3-4919-a229-4c0c2f0e1f93",
+  "thread_id": "26cfcc46-2ce3-4919-a229-4c0c2f0e1f93",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792806437901,
+  "body": "b0baf3b4a6\n- fetch_ship_refs routed through .remote_credentials (fixes the lib-1 ratchet task_2001); task_2001/bug_2181 pass locally, check-ci-fast green\n- reworded the guardrails hook 'PR-2837 review ruling' comment as a plain scope note",
+  "subject": "PR-2837 pushed (TASK-1952)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

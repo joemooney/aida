@@ -1,0 +1,19 @@
+{
+  "id": "5ecc39f5-8d7d-415c-b6b1-f010768d723c",
+  "thread_id": "5ecc39f5-8d7d-415c-b6b1-f010768d723c",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792809040997,
+  "body": "cff2ad3bbd (main merged; #2865 is on main as 523740d360).\n- 2287: the fire fixer prompt STOPs only on another session's claim or an unmerged branch / open PR other than this worktree's branch; pinned by a test.\n- 2288: the Agent-tool ratchet also refuses an unnegated line naming the Agent/Task tool alongside seat work; self-test extended; current templates have no unnegated hit.\nGates: scaffolding:: 187 passed; check-ci-fast 34 passed. Earlier head 0f9eac1b85 was CI-green apart from the merge-hold-gate (the review hold).",
+  "subject": "PR-2868 pushed (TASK-2272)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}
