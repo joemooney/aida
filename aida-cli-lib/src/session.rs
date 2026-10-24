@@ -731,14 +731,17 @@ pub(crate) fn stage_resume_transcript(id: &str, listed_in: &Path, cwd: &Path) ->
     };
     // TASK-2315: open the source O_NOFOLLOW and fstat the HANDLE, so the
     // checks and the read share one file description and a symlink swapped
-    // in between them is never followed.
+    // in between them is never followed. O_NONBLOCK so a planted FIFO cannot
+    // park the open until a writer appears (TASK-2321): harmless for a
+    // regular file, and the fstat below refuses anything that is not one.
     // trace:TASK-2272 | ai:claude (TASK-2315)
+    // trace:TASK-2321 | ai:claude
     let mut source_options = std::fs::OpenOptions::new();
     source_options.read(true);
     #[cfg(unix)]
     {
         use std::os::unix::fs::OpenOptionsExt;
-        source_options.custom_flags(libc::O_NOFOLLOW);
+        source_options.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
     }
     let mut source_file = match source_options.open(&source) {
         Ok(f) => f,
@@ -765,6 +768,23 @@ pub(crate) fn stage_resume_transcript(id: &str, listed_in: &Path, cwd: &Path) ->
         // SAFETY: geteuid has no preconditions and cannot fail.
         if meta.uid() != unsafe { libc::geteuid() } {
             return Err(refuse("its transcript belongs to another user"));
+        }
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::io::AsRawFd;
+        // The file is a confirmed regular file; drop O_NONBLOCK before the
+        // read so the handle carries no surprising mode. trace:TASK-2321 | ai:claude
+        // SAFETY: fcntl F_GETFL/F_SETFL on an fd this function owns and keeps open.
+        unsafe {
+            let flags = libc::fcntl(source_file.as_raw_fd(), libc::F_GETFL);
+            if flags >= 0 {
+                libc::fcntl(
+                    source_file.as_raw_fd(),
+                    libc::F_SETFL,
+                    flags & !libc::O_NONBLOCK,
+                );
+            }
         }
     }
     let mut bytes = Vec::new();

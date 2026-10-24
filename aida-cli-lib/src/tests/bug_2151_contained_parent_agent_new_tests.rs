@@ -481,6 +481,38 @@ fn task_2315_symlinked_source_transcript_is_refused_via_o_nofollow() {
     crate::session::stage_resume_transcript("sess-absent", &listed_in, &cwd).unwrap();
 }
 
+// TASK-2321: a FIFO planted as the source must refuse at once — the open
+// carries O_NONBLOCK, so it cannot park the resume until a writer appears.
+// trace:TASK-2321 | ai:claude
+#[cfg(unix)]
+#[test]
+fn task_2321_fifo_source_transcript_refuses_without_hanging() {
+    let tmp = tempfile::tempdir().unwrap();
+    let home = tmp.path().join("home");
+    std::fs::create_dir_all(&home).unwrap();
+    let _env = EnvVarsGuard::apply(&[("AIDA_TEST_HOME", Some(home.to_str().unwrap()))]);
+    let listed_in = tmp.path().join("main");
+    let cwd = tmp.path().join("tree");
+    let from_dir = crate::session::claude_project_dir(&listed_in).unwrap();
+    std::fs::create_dir_all(&from_dir).unwrap();
+    let fifo = from_dir.join("sess-2321.jsonl");
+    let c_path = std::ffi::CString::new(fifo.to_str().unwrap()).unwrap();
+    // SAFETY: mkfifo on a fresh path inside a private tempdir.
+    assert_eq!(unsafe { libc::mkfifo(c_path.as_ptr(), 0o600) }, 0);
+
+    let start = std::time::Instant::now();
+    let err = crate::session::stage_resume_transcript("sess-2321", &listed_in, &cwd).unwrap_err();
+    assert!(format!("{err:#}").contains("not a regular file"), "{err:#}");
+    assert!(
+        start.elapsed() < std::time::Duration::from_secs(5),
+        "the open must not block on the FIFO"
+    );
+    let dest = crate::session::claude_project_dir(&cwd)
+        .unwrap()
+        .join("sess-2321.jsonl");
+    assert!(!dest.exists(), "nothing staged from a FIFO source");
+}
+
 // TASK-1781 (d): codex and agy refuse under a contained parent before the
 // role picker or any project lookup runs. `cwd` is not an AIDA project, so
 // reaching the picker would fail with a different error.
