@@ -97,8 +97,9 @@ mandate ships restore holds with explicit re-arm context in the placement event.
 Mandate exclusions also include committed base/head traces in changed source
 hunks and enclosing Rust fn/impl items, plus each Rust file’s header traces,
 with full-file fallback when attribution fails. Trace IDs grant no completion or
-author/reviewer authority; unreadable evidence or a moving/dirty store refuses
-mandate coverage. See OVERVIEW.md.
+author/reviewer authority; unreadable evidence, a moving store or dirty canonical
+objects refuses mandate coverage. Coordination/mail dirt does not block the
+object snapshot; the home exclusion ledger retains its separate trust checks. See OVERVIEW.md.
 <!-- trace:TASK-1790 | ai:codex -->
 
 Explicit `aida verify constraints` reads data-only version-1 blocks using six
