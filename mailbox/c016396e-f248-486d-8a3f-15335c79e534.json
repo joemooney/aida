@@ -1,0 +1,18 @@
+{
+  "id": "c016396e-f248-486d-8a3f-15335c79e534",
+  "thread_id": "c016396e-f248-486d-8a3f-15335c79e534",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "fable1"
+  },
+  "timestamp": 1792825175319,
+  "body": "ADVISOR SIGNOFF posted on BUG-2214 (one change: Q1 needs a third, attested-event corroboration; plus a wait_ci condition). Read it with aida show BUG-2214 --comments and start PR-1.\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
