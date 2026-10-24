@@ -120,6 +120,8 @@ mod drain_batch;
 mod drain_failure_note;
 mod drain_gate;
 mod findings_gate;
+// trace:STORY-1889 | ai:claude — gate authority, all on the mandate floor.
+mod gate;
 mod gitlab_mirror_link;
 mod graph_cmd;
 mod help;
@@ -548,7 +550,10 @@ mod schema;
 // trace:BUG-1934 | ai:claude
 mod grant_keyring;
 // trace:STORY-1473 | ai:codex
-mod seat_authority;
+// STORY-1889: transitional re-export of the moved module; the final
+// STORY-1889 PR repoints callers to `crate::gate::seat_authority`.
+// trace:STORY-1889 | ai:claude
+pub(crate) use gate::seat_authority;
 // trace:BUG-2169 | ai:claude — a contained seat's private clone (the only host accessor).
 mod seat_clone;
 mod seat_occupancy;
