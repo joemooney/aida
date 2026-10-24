@@ -38,7 +38,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T22:02:03.191649035Z
-modified_at: 2026-10-24T16:53:52.378484414Z
+modified_at: 2026-10-24T17:04:23.043395072Z
 req_type: Story
 tags:
 - portable-intake
@@ -49,6 +49,38 @@ comments:
   created_at: 2026-10-24T16:53:52.378484414Z
   modified_at: 2026-10-24T16:53:52.378484414Z
   session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+- id: 01a16ede-e203-7c42-8515-f04bc6f8e1c0
+  author: codex
+  content: |
+    SKETCH v1 (STORY-1742)
+
+    Problem
+    Ordinary push/pull can commit pending store changes, publish mail, allocate IDs, reconcile lifecycle state, and mirror refs. A WORK clone needs an explicit clone-local transport profile: only existing AIDA-store changes leave it through the GitLab hub, and those changes can subsequently reach PUBLIC GitHub. The 09:53 OPERATOR DECISION permits only sanitized generic AIDA defects, never work email addresses, IPs, hostnames, or other work-identifying data. This story owns the work-to-store sanitization guard.
+
+    Design
+    1. Store a versioned named profile in common-Git-directory local metadata, outside product files and shared store objects. Enable/show/disable are explicit. Pin the intended origin endpoint locally, permitted directions, exact refs, and guard policy identity; do not persist credentials or work endpoint details in shared objects. Reject unknown profile versions, changed endpoint resolution, extra push URLs, mirror configuration, URL rewrites that broaden destinations, or unsupported flag combinations. Ordinary clones retain existing behavior until explicitly enabled.
+    2. Resolve profile before default push scope and before any ordinary lifecycle handler. Bare push means all permitted legs: exactly one ref-only push of pinned local refs/heads/aida-store to origin refs/heads/aida-store. --store-only succeeds with a redundant flag annotation; --code-only refuses. Ignore neither profile restrictions nor Git hooks, and do not let environment defaults enable code. No auto-commit, mailbox publication, ID allocation, reconciliation, maintenance, or AIDA mirror fan-out. Existing hooks still run; validate that installed AIDA transport-mode hooks themselves do not fan out, and refuse incompatible hook/profile setups rather than disable hooks.
+    3. Build one human/JSON plan naming source SHA, destination/refspec, permitted/refused legs, and flag disposition. Refuse a dirty store or in-progress Git operation; pin and recheck source/config identity under existing locking discipline. Push the exact inspected SHA, without force, tags, implicit upstream refspecs, or extra remotes. Dirty product code need not be changed or exported. Non-fast-forward leaves history for explicit ordinary reconciliation outside transport mode.
+    4. For this WORK profile, pulls fetch only the explicitly configured store ref and may fast-forward the store when clean; code legs are disabled in both directions. Name remote-tracking and local refs that may move before execution. Dirty/divergent state refuses local advancement; no rebase, union, new commits, or post-pull lifecycle mutations. If an earlier fetch succeeds before later refusal, report exact partial ref movements; do not promise network-wide atomicity.
+    5. Sanitization guard: sanitize before canonical defect creation where possible, and always perform a read-only refusal gate before outbound transport. Offer a local generic-defect template/preview; require replacing work context with synthetic reproductions. The initial guard refuses rather than silently strips committed data, preserving the ref-only contract. Scan every newly public-reachable commit/tree/blob relative to an explicitly trusted public-safe baseline, not just the latest diff: titles, descriptions, comments, attachments, registry fields, provenance, filenames, commit messages, author/committer identities, and other reachable textual metadata. Reject email/IP/host/URL identifying patterns, local work identifiers from a local-only deny policy, unsupported/binary blobs, malformed/unreadable content, and uncertain baseline/policy. Never echo matched values or raw Git errors that contain them; report safe field/category references. Use public-safe pseudonymous metadata at creation; node grants follow BUG-2017. Scan-result caches bind exact object IDs and policy version; no fail-open on size/time limits. A deleted secret in an earlier commit still refuses. An unsafe committed history requires separately reviewed clean export/reconstruction; push never rewrites or launders history.
+    6. Generic prose cannot be proven safe by regex alone: require an operator-reviewed sanitized intake preview, then mechanically reject known identifiers and unsafe serialization. Local hooks are bypassable by raw Git; enforce the same validation at the receiving work-ingress boundary before accepted refs become eligible for public forwarding. If such enforcement is unavailable, surface that boundary limitation and do not describe the client profile as a universal data-loss-prevention guarantee. No automatic public fan-out from this clone.
+
+    Files touched (proposed only)
+    aida-cli-lib/src/store_push_pull.rs, store_sync.rs, config_cmd.rs/config_cmd_args.rs; a new local transport-profile planner and sanitization validator; aida-core/src/git_ops.rs and store_hooks.rs; hooks/aida-store-pre-push.sh; defect creation/serialization entry points and receiving-hook deployment adapter as identified during implementation inventory; tests extending push_pull_scope_tests.rs and isolated bare-remote fixtures; docs/cli/04-git-lifecycle.md and 07-project-setup.md. Exact intake adapter coverage needs inventory before coding.
+
+    Failure modes
+    Hidden pushurl/mirror/hook fan-out, profile drift, moving source tip, dirty store, remote race, unknown public baseline, identifying registry/Git metadata, historical leaks hidden by clean tip, encoded/unstructured work identifiers, and raw-Git bypass. Refuse before outbound publication when validation is incomplete; receiver quarantine must precede public forwarding. Never auto-fix these by creating a commit during push.
+
+    Test plan
+    Use isolated bare work/hub/public fixture remotes with synthetic identifiers only. Assert exact refs/SHAs and zero code pushes, lifecycle calls, store commits, mail publication, allocation, and fan-out. Cover every flag/env combination, profile enable/disable, sibling worktrees, dirty/in-progress stores, detached/moving tips, non-fast-forward, URL rewrites/multiple endpoints, hooks, partial pulls, and JSON diagnostics. Seed identifiers in each field plus commit identities/messages/old deleted blobs, unknown binary paths, parser/size errors, and baseline/policy changes: refusal must move no outbound ref and must not echo the identifier. A safe generic defect passes work-to-hub-to-public; receive enforcement rejects bypassed client checks.
+
+    PR slicing
+    (1) Local profile/schema/inspection and pure plan output. (2) Ref-only executor and hook compatibility with lifecycle isolation. (3) Intake sanitization plus history/metadata refusal and receiving-boundary enforcement. (4) End-to-end fixtures/docs. Do not declare the WORK export path usable until slice 3 lands; profile alone does not satisfy the operator decision.
+
+    Open questions
+    Approve initial refusal-only behavior and trusted public-safe baseline enrollment. Which receiving service owns mandatory ingress validation/quarantine? Confirm an operator-reviewed template plus conservative known-identifier scanning is the initial bounded policy; a comprehensive policy can follow. How should previously unsafe commits be cleanly re-exported without rewriting published history? Draft only: no claim, branch, or implementation performed.
+  created_at: 2026-10-24T17:04:23.043395072Z
+  modified_at: 2026-10-24T17:04:23.043395072Z
 filed_at:
   code_sha: 3dfcf99117e6efbaa8259155a576276ab424a335
   branch: main
