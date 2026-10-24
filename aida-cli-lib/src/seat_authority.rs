@@ -1973,6 +1973,24 @@ pub(crate) fn is_baseline_seat(seat: &str) -> bool {
     BASELINE_SEATS.contains(&seat.as_str())
 }
 
+/// BUG-1934: `--bg` hands the session to the agent's own background daemon,
+/// which this launcher never parents and whose pid it never learns, so a seat
+/// grant cannot be bound to the session. A baseline seat (implementer, ...)
+/// runs ungranted; any other seat is refused before launch rather than
+/// started with a grant every gated command would reject.
+// STORY-1888: seat-authority gate code, so it lives on the mandate floor.
+// trace:BUG-1934 | ai:claude
+// trace:STORY-1888 | ai:claude
+pub(crate) fn bg_seat_refusal(role: &str) -> Result<()> {
+    let seat = crate::canonical_role_name(role);
+    if is_baseline_seat(&seat) {
+        return Ok(());
+    }
+    anyhow::bail!(
+        "`--bg` cannot launch a `{seat}` session: it runs under the agent's background daemon, outside this launcher's process tree, so its seat grant cannot be bound to it. Launch it without `--bg` from a terminal that entered the role (`eval \"$(aida role enter {seat})\"`); `--bind-pid` would serve only its unsandboxed hooks and MCP server, not its tool calls"
+    )
+}
+
 /// BUG-2139: the authority a fresh headless queue-work child will run with.
 /// It never inherits the launcher's grant.
 // trace:BUG-2139 | ai:claude

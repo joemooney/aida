@@ -473,9 +473,10 @@ fn gate_authority_code_is_on_the_floor() {
     assert!(
         missing.is_empty(),
         "gate-authority code outside the mandate's protected floor:\n{}\n\
-         Add each path to GATE_PROTECTED_PATHS in aida-cli-lib/src/mandate_gates.rs \
-         (the change then needs a human merge). Do not remove the marker or rename \
-         the function to get past this check.",
+         Move the function into a file already on GATE_PROTECTED_PATHS in \
+         aida-cli-lib/src/mandate_gates.rs, or add its path there (either change \
+         then needs a human merge). Do not remove the marker, rename the function, \
+         or widen KNOWN_UNPROTECTED to get past this check.",
         missing.join("\n")
     );
 }
