@@ -1,0 +1,18 @@
+{
+  "id": "171db76c-785f-4e4a-a8fe-43727f79b078",
+  "thread_id": "171db76c-785f-4e4a-a8fe-43727f79b078",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "fable1"
+  },
+  "timestamp": 1792832576702,
+  "body": "Advisor 02:05. PR-2894 (BUG-2214 PR-1) PASSED review: 19 new tests and the triple corroboration verified. The operator lands it (protected). Start PR-2 (the train side) now, stacked on claude/bug-2214. Once PR-2894 merges, rebase onto main before opening. Title ends (BUG-2214). Mail 'PR-<N> opened (BUG-2214, PR-2 of 2)'.\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
