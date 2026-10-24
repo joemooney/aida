@@ -3,12 +3,12 @@ spec_id: TASK-2053
 agreed_id: TASK-2053
 title: 'BUG-2169 remaining slices: S3 probe/destroy lifecycle, S4 visibility + default flip, S5 host clone pool, plus folded hardening TASK-2046/2047/2048'
 description: 'BUG-2169 was auto-completed by the PR-2787 ship (b66e4d93b8) although the PR subject said ''(Refs BUG-2169)'': aida pr ship appended a bare (BUG-2169) trailer (see the bug filed alongside). Slices S1 and S2 are merged. The remaining scope moves here unchanged from BUG-2169''s signed design and comments: S3 probe/destroy lifecycle; S4 visibility and the default flip; S5 host clone pool (only if O1 says the launcher can be sandboxed). Also the hardening folded into BUG-2169 on 2026-10-21: TASK-2046 (anchor host_recorded_clone to the launcher''s main), TASK-2047 (scope session resume os_wrap/--settings to the lease tree), TASK-2048 (trust tests: main/.git deny under a forged main; mismatched cargo_target_dir lease). Read BUG-2169 comments for the signed sketch.'
-status: NeedsAttention
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T09:53:13.924066900Z
-modified_at: 2026-10-24T01:28:14.530001367Z
+modified_at: 2026-10-24T01:30:24.650600706Z
 req_type: Task
 relationships:
 - rel_type: References
@@ -477,6 +477,20 @@ history:
   timestamp: 2026-10-24T01:28:10.982531747Z
   session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
   changes: []
+- id: 01a16b87-cdfe-7a32-9486-0f9b40b6c6ea
+  author: aida-auto-bump
+  timestamp: 2026-10-24T01:30:24.638066646Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a16b87-ce0a-7fb0-b5a6-516eff366551
+  timestamp: 2026-10-24T01:30:24.650595304Z
+  agent: aida
+  commit_sha: c016980d0323594b27f6bce8a0019a172a3aa089
+  summary: 'Round 2: all five round-1 findings fixed with tests; S4c default flip, rulings 1-2, TASK-2247/2283/2284, docs and release note verified; CI green at head. The operator merges per C3.'
+  review_verdict: approved
 filed_at:
   code_sha: b66e4d93b8fefe25b2af3139fe725fa1801e1981
   branch: main
@@ -485,11 +499,7 @@ filed_at:
   aida_build_sha: 68d66b1e36
   vendor: claude
   session: 7d71bfbf-a609-42bd-a714-a7d52d81db81
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: S4c default flip, fallback notes, missing-origin ruling, TASK-2247/2283/2284 and CI (run 40043894997, green at head) are sound; round-1 sweep found an untested explicit-clone refusal path (strict tier), a misleading fallback reason, a missing release note and stale plan-doc text
-  recovery_hint: address the review findings, move TASK-2053 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-24T00:33:07.014799789Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-24T01:30:24.638060475Z
+  completion_sha: c016980d0323594b27f6bce8a0019a172a3aa089
