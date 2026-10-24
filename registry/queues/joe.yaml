@@ -6,14 +6,6 @@
   added_at: 2026-10-06T02:04:51.350629190Z
   for_role: advisor
 - user_id: joe
-  requirement_id: 01a16e52-86a7-7003-a6ea-b053357d2176
-  position: 6000
-  added_by: joe
-  note: auto-queued by `aida pr` ((no-sess); covers 0 specs
-  added_at: 2026-10-24T14:31:16.438078100Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
   requirement_id: 01a16e6c-c8fe-7761-8902-c093e81b2a0c
   position: 7000
   added_by: joe
