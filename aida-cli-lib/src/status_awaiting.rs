@@ -11,6 +11,21 @@ pub(crate) fn collect_cleanup_report(
     project_root: &std::path::Path,
     store: &aida_core::models::RequirementsStore,
 ) -> status_cleanup::CleanupReport {
+    collect_cleanup_report_until(
+        project_root,
+        store,
+        Some(std::time::Instant::now() + CLONE_PROBE_BUDGET),
+    )
+}
+
+/// [`collect_cleanup_report`] with the seat-clone probes bounded by one
+/// shared `deadline`.
+// trace:TASK-2053 | ai:claude
+pub(crate) fn collect_cleanup_report_until(
+    project_root: &std::path::Path,
+    store: &aida_core::models::RequirementsStore,
+    clone_deadline: Option<std::time::Instant>,
+) -> status_cleanup::CleanupReport {
     let leases = list_leases(project_root);
     let now = chrono::Utc::now();
     let live_sessions = process_probe::probe_live_claude_sessions();
@@ -40,13 +55,12 @@ pub(crate) fn collect_cleanup_report(
     // trace:STORY-385 | ai:claude
     // TASK-2053: seat clones too; a clone's dirty files and branch come from
     // its sandboxed probe (unreadable: one explanatory entry, so it shows).
+    // All clone probes share one deadline; a clone it skips shows the same way.
     // trace:TASK-2053 | ai:claude
     let mut worktrees = list_worktrees(project_root);
     let mut clone_facts = std::collections::HashMap::new();
-    for mut wt in clone_seat_trees(project_root) {
-        if let crate::seat_clone::Probe::Known(facts) =
-            crate::seat_clone::probe(project_root, &wt.path)
-        {
+    for (mut wt, probe) in probe_clone_seat_trees(project_root, clone_deadline) {
+        if let crate::seat_clone::Probe::Known(facts) = probe {
             wt.branch = facts.branch.clone().or(wt.branch);
             clone_facts.insert(wt.path.clone(), facts);
         }

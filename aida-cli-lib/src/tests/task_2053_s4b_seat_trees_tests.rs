@@ -378,25 +378,82 @@ fn worktree_list_json_lists_clone_without_reading_its_focus_marker() {
     assert!(untagged_in(&log, &clone).is_empty());
 }
 
-// trace:TASK-2053 | ai:codex
+/// TASK-2284: the seat-clone skip reason is pure (no note, no log); ship
+/// prints and logs whichever reason it gets, in one place.
+// trace:TASK-2053 | ai:claude
 #[test]
-fn ship_clone_skips_post_merge_pull_and_records_skipped_step() {
+fn ship_clone_skip_reason_names_the_clone_and_has_no_side_effects() {
     let fx = fixture();
     let clone = leased_clone(&fx, "ship", "c0ffee000062");
-    assert!(crate::pr_cmd::skip_seat_clone_post_merge_pull(
-        &clone, &fx.main, 42
-    ));
-    let log = fx.main.join(".aida/advisor-activity.jsonl");
-    let text = std::fs::read_to_string(&log).unwrap();
-    let event: serde_json::Value = serde_json::from_str(text.trim()).unwrap();
-    assert_eq!(event["step"], "pr-pull");
-    assert_eq!(event["status"], "skipped");
-    assert_eq!(event["pr"], 42);
-    assert!(event["detail"].as_str().unwrap().contains("seat clone"));
-    assert!(!crate::pr_cmd::skip_seat_clone_post_merge_pull(
-        &fx.main, &fx.main, 43
-    ));
-    assert_eq!(std::fs::read_to_string(log).unwrap(), text);
+    let reason = crate::pr_cmd::seat_clone_post_merge_pull_skip_reason(&clone)
+        .expect("a seat clone skips the post-merge pull");
+    assert!(reason.contains("seat clone"), "{reason}");
+    assert!(reason.contains(&clone.display().to_string()), "{reason}");
+    assert_eq!(
+        crate::pr_cmd::seat_clone_post_merge_pull_skip_reason(&fx.main),
+        None
+    );
+    assert!(!fx.main.join(".aida/advisor-activity.jsonl").exists());
+    assert!(!clone.join(".aida/advisor-activity.jsonl").exists());
+}
+
+/// TASK-2247 / TASK-2283: the cleanup report and the status rows read every
+/// seat clone under one shared deadline. A clone the deadline skips is not
+/// dropped or counted clean: it shows like an unreadable clone (a WIP entry,
+/// a dirty row with no ahead count), and no probe or host git runs in it.
+// trace:TASK-2053 | ai:claude
+#[cfg(unix)]
+#[test]
+fn an_elapsed_clone_deadline_skips_every_probe_but_still_reports_each_clone() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let fx = fixture();
+    let first = leased_clone(&fx, "deadline-a", "c0ffee000063");
+    let second = leased_clone(&fx, "deadline-b", "c0ffee000064");
+    let (shim_dir, log, _) = git_shim(&fx);
+    let _path = crate::test_env::EnvVarGuard::prepend_path(&shim_dir);
+    let elapsed = Some(std::time::Instant::now());
+
+    let probes = crate::probe_clone_seat_trees(&fx.main, elapsed);
+    assert_eq!(probes.len(), 2, "{probes:?}");
+    for (wt, probe) in &probes {
+        match probe {
+            crate::seat_clone::Probe::Unknown(why) => {
+                assert!(why.contains("deadline elapsed"), "{why}");
+                assert!(why.contains(&wt.path.display().to_string()), "{why}");
+            }
+            other => panic!("an elapsed deadline must not probe: {other:?}"),
+        }
+    }
+
+    let report = crate::status_awaiting::collect_cleanup_report_until(
+        &fx.main,
+        &aida_core::models::RequirementsStore::default(),
+        elapsed,
+    );
+    let rows = crate::status_sections::collect_worktree_status_rows_until(&fx.main, elapsed);
+    for clone in [&first, &second] {
+        let wip = report
+            .uncommitted_wip
+            .iter()
+            .find(|r| r.worktree_path == *clone)
+            .expect("a skipped clone keeps its WIP entry");
+        assert_eq!(wip.scope.as_deref(), Some("TASK-2053"));
+        assert_eq!(wip.modified_files, 1);
+        let row = rows
+            .iter()
+            .find(|r| r.path == *clone)
+            .expect("a skipped clone keeps its status row");
+        assert_eq!(row.dirty_count, 1);
+        assert_eq!(row.ahead, None);
+        assert!(!row.obsolete);
+        let violations = untagged_in(&log, clone);
+        assert!(
+            violations.is_empty(),
+            "host git ran in a seat clone: {violations:#?}"
+        );
+    }
 }
 
 // trace:TASK-2053 | ai:codex
