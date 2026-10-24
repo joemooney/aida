@@ -47,8 +47,12 @@ fn write_message_in(dir: &Path, msg: &Message) -> Result<()> {
 /// writer so the CLI and the REST server share one implementation.
 /// trace:STORY-650 | ai:claude
 pub(crate) fn write_message(project_root: &Path, msg: &Message) -> Result<()> {
+    // Include both the actual target and the OS reason even in the CLI's
+    // outermost error display, which does not always print anyhow's chain.
+    // trace:BUG-2218 | ai:codex
+    let path = mailbox_dir(project_root).join(format!("{}.json", sanitize_id(&msg.id)));
     aida_core::mailbox::write_local_message(project_root, msg)
-        .with_context(|| format!("writing message {}", msg.id))
+        .map_err(|e| anyhow::anyhow!("writing message {}: {e}", path.display()))
 }
 
 /// Read every message under `dir`. Files that fail to parse are skipped (a
@@ -409,6 +413,33 @@ mod tests {
             vec!["m1", "m2"],
             "direct + broadcast land in claude's inbox"
         );
+    }
+
+    // trace:BUG-2218 | ai:codex
+    #[cfg(unix)]
+    #[test]
+    fn bug_2218_read_only_mailbox_names_path_and_reason() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempdir().unwrap();
+        let mailbox = mailbox_dir(dir.path());
+        std::fs::create_dir_all(&mailbox).unwrap();
+        std::fs::set_permissions(&mailbox, std::fs::Permissions::from_mode(0o555)).unwrap();
+        let result = write_message(
+            dir.path(),
+            &msg("refused", "sender", Recipient::Broadcast, 1),
+        );
+        std::fs::set_permissions(&mailbox, std::fs::Permissions::from_mode(0o755)).unwrap();
+        // Root can write mode-0555 directories; exercise this under an ordinary uid.
+        if unsafe { libc::geteuid() } == 0 {
+            return;
+        }
+        let error = result.unwrap_err().to_string();
+        assert!(
+            error.contains(&mailbox.join("refused.json").display().to_string()),
+            "{error}"
+        );
+        assert!(error.contains("Permission denied"), "{error}");
+        assert!(read_local_messages(dir.path()).unwrap().is_empty());
     }
 
     #[test]
