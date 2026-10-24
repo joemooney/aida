@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-24T01:26:39.516291752Z
-modified_at: 2026-10-24T06:10:56.017923610Z
+modified_at: 2026-10-24T06:12:00.680119553Z
 req_type: Task
 tags:
 - docs
@@ -34,6 +34,14 @@ comments:
   content: Commit 71143a2a03 references this requirement
   created_at: 2026-10-24T06:10:56.017923610Z
   modified_at: 2026-10-24T06:10:56.017923610Z
+- id: 01a16c89-9e28-7cf0-8a41-4985bae3f23d
+  author: ai:codex:joe
+  content: |
+    PR-2887 opened for TASK-2300 (folded TASK-1840, formerly TASK-1-471): https://github.com/joemooney/aida/pull/2887 . Pushed head 167012ce0a0771cdf4c04ec654c3cede012ecff9 after a clean aida ship --no-merge rebase. Default origin clone command failure/30-second timeout falls back to the ordinary linked-worktree path with a note, only after clone and pin cleanup succeeds. Explicit clone, separate setup failures and failed cleanup still refuse. Reserved explicit aida-seat-* paths refuse before worktree creation with actionable placement guidance; no silent path change. Plan/release-note overclaim corrected; TASK-2053 remains Completed and no pool was built.
+
+    Local targeted seat_clone::tests module: 32 passed/0 failed, then shell-only timeout test received cfg(unix) (compiled Linux test body unchanged). make check-ci-fast final: 34/34. Initial targeted31/1 exposed the reserved-path conflict and was corrected; initial fast run required the Unix annotation, with no baseline change. Three spawned author-checker passes, final no further confirmed findings; no author review verdict. Local gates preceded clean main rebase; CI/independent review still pending. PR left unmerged. Logs: /tmp/task2300-targeted-final.log and /tmp/task2300-fast-final.log.
+  created_at: 2026-10-24T06:12:00.680119553Z
+  modified_at: 2026-10-24T06:12:00.680119553Z
 history:
 - id: 01a16b85-ad57-7b40-b50b-734c07f6e81a
   author: joe
