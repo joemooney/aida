@@ -329,6 +329,51 @@ fn child_launch_refuses_on_key_quota_exhaustion() {
     );
 }
 
+/// TASK-2211: a launch whose `add_key` fails after the keyring JOIN (EDQUOT)
+/// still records the joined keyring, so the next launch on the thread adds
+/// to it instead of joining and chaining another one against the quota.
+// trace:TASK-1955 | ai:claude (TASK-2211)
+#[test]
+fn a_failed_add_key_after_join_keeps_the_joined_keyring() {
+    // No `fresh_keyring()`: this thread must start without a launcher
+    // keyring so the first install joins one.
+    if !crate::grant_keyring::available() {
+        eprintln!("SKIP: the session keyring is unavailable here");
+        return;
+    }
+    let before = crate::grant_keyring::session_keyring_id();
+    crate::grant_keyring::FORCE_ADD_KEY_ERRNO.with(|e| e.set(Some(libc::EDQUOT)));
+    let err = crate::grant_keyring::install("00000000-0000-4000-8000-000000002211", b"-", 60)
+        .unwrap_err();
+    assert!(err.quota_exhausted(), "{err}");
+    let joined = crate::grant_keyring::session_keyring_id();
+    assert_ne!(joined, before, "the failing install joined a keyring");
+    crate::grant_keyring::install("00000000-0000-4000-8000-000000002212", b"-", 60).unwrap();
+    assert_eq!(
+        crate::grant_keyring::session_keyring_id(),
+        joined,
+        "the next install reuses the joined keyring instead of joining another"
+    );
+}
+
+/// TASK-2212: a structurally unavailable keyring (off Linux, or refused by
+/// the kernel) makes every child proc-only, so no per-launch warning prints;
+/// an available keyring that failed still warns.
+// trace:TASK-1955 | ai:claude (TASK-2212)
+#[test]
+fn proc_only_child_warning_is_silent_without_a_keyring() {
+    let err = crate::grant_keyring::InstallError::new(
+        "the session keyring is only available on Linux",
+        0,
+    );
+    assert_eq!(proc_only_child_warning("reviewer", &err, false), None);
+    let warning = proc_only_child_warning("reviewer", &err, true).expect("a warning");
+    assert!(
+        warning.contains("child `reviewer` grant is bound to this launcher's process only"),
+        "{warning}"
+    );
+}
+
 /// `aida role adopt-key` accepts only the secret whose digest the grant
 /// carries. (The success path installs into the PARENT process's keyring, so
 /// it is exercised by the binary-level bwrap test, never in-process.)

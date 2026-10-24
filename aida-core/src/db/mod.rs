@@ -68,6 +68,9 @@ pub use migration::{migrate_from_postgres, migrate_to_postgres};
 pub use postgres_backend::PostgresBackend;
 #[cfg(feature = "native")]
 pub use sqlite_backend::SqliteBackend;
+// trace:TASK-1955 | ai:claude (TASK-2224: the roster primitive takes the lock itself)
+#[cfg(feature = "native")]
+pub(crate) use store_lock::acquire as acquire_store_write_lock;
 // trace:TASK-1717 | ai:claude
 #[cfg(feature = "native")]
 pub use store_lock::{

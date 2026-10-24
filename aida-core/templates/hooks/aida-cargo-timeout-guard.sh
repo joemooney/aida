@@ -23,7 +23,8 @@
 # Make conditionals, `.RECIPEPREFIX` (assigned or `define`d), `$(eval ...)`,
 # a top-level line that expands a variable outside an assignment, pattern or
 # suffix rules (over GNU make's default suffixes plus `.SUFFIXES:`) that could
-# build an unknown prerequisite, and `<(...)` process substitution are all
+# build an unknown prerequisite, `<(...)` process substitution, and a
+# `$(shell ...)` or `!=` assignment (make runs it while parsing) are all
 # treated as unresolvable, so they get the hint.
 #
 # trace:STORY-1854 | ai:claude
@@ -228,7 +229,13 @@ make_targets_skip_cargo() {
         n = split(".out .a .ln .o .c .cc .C .cpp .p .f .F .m .r .y .l .ym .yl .s .S .mod .sym .def .h .info .dvi .tex .texinfo .texi .txinfo .w .ch .web .sh .elc .el", sfx, " ")
         for (k = 1; k <= n; k++) suffix[sfx[k]] = 1
     }
-    indef { if ($0 ~ /^[ \t]*endef/) indef = 0; next }
+    indef {
+        # A `$(shell ...)` in a define body runs when the variable expands,
+        # which can be at parse time. trace:TASK-1955 | ai:claude (TASK-2173)
+        if ($0 ~ /\$[({]shell[ \t]/) { unresolvable = 1; exit }
+        if ($0 ~ /^[ \t]*endef/) indef = 0
+        next
+    }
     /^\t/ || incont {
         # A recipe line, or the continuation of one, whatever its indent.
         incont = ($0 ~ /\\$/)
@@ -273,8 +280,17 @@ make_targets_skip_cargo() {
             sub(/[ \t]+$/, "", nm)
             if (nm ~ /[ \t]/) eq = 0
         }
+        if (eq > 0) {
+            # `X != cmd` and `X := $(shell cmd)` run cmd while make parses
+            # the Makefile, before any target; a recursive `=` runs it
+            # wherever it expands. trace:TASK-1955 | ai:claude (TASK-2173)
+            if (substr(line, eq - 1, 1) == "!" || substr(line, eq + 1) ~ /\$[({]shell[ \t]/) { unresolvable = 1; exit }
+            # The colon of `:=` / `::=` is the assignment operator, not a
+            # rule colon. trace:TASK-1955 | ai:claude (TASK-2185)
+            if (c > 0 && c < eq && substr(line, c, eq - c) ~ /^:+$/) c = 0
+        }
         if (eq == 0 || (c > 0 && c < eq)) {
-            lead = (c > 0) ? head : line
+            lead = (c > 0) ? substr(line, 1, c - 1) : line
             if (lead ~ /\$/) { unresolvable = 1; exit }
         }
         if (c == 0 || head ~ /[=$]/ || substr(line, c + 1, 1) == "=") { owner = ""; next }
@@ -305,7 +321,7 @@ make_targets_skip_cargo() {
                 # A variable suffix list cannot be read here.
                 # trace:TASK-1955 | ai:claude (TASK-2128)
                 if (body ~ /\$/) { unresolvable = 1; exit }
-                if (body ~ /^[ \t]*$/) { delete suffix; delete declared }
+                if (body ~ /^[ \t]*$/) delete suffix
                 m = split(body, sl, /[ \t]+/)
                 for (j = 1; j <= m; j++) if (sl[j] != "") suffix[sl[j]] = 1
             }
