@@ -14,7 +14,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-24T17:11:47.715785793Z
-modified_at: 2026-10-24T19:44:15.229094506Z
+modified_at: 2026-10-24T19:44:18.839435530Z
 req_type: Task
 tags:
 - carried-from:TASK-2168
@@ -26,6 +26,13 @@ relationships:
   target_id: 01a15f18-ed08-7922-ac1d-114f0fa53917
   created_at: 2026-10-24T19:44:15.229091015Z
   created_by: joe
+comments:
+- id: 01a16f71-4d97-7af2-b891-03598b0722e5
+  author: joe
+  content: 'ADVISOR 12:50: fold into STORY-1889''s remaining slice (mandate_ship gate code): has_shipped_commit_on_default_branch should consult origin/main only when local main diverges.'
+  created_at: 2026-10-24T19:44:18.839435530Z
+  modified_at: 2026-10-24T19:44:18.839435530Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
 history:
 - id: 01a16ef7-65a7-7003-908d-46fd6ea70a5f
   author: joe
