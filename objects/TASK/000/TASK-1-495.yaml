@@ -14,13 +14,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-24T17:11:55.319602518Z
-modified_at: 2026-10-24T17:11:55.319602518Z
+modified_at: 2026-10-24T19:43:48.075879892Z
 req_type: Task
 tags:
 - carried-from:TASK-2168
 - finding-hash:9e2d9c17
 - from-review:PR-2886
 - kind:carried-forward
+comments:
+- id: 01a16f70-d56b-7001-aca6-55b92817c063
+  author: joe
+  content: 'ADVISOR 12:50 REJECTED: cosmetic test-line churn; no behavior impact.'
+  created_at: 2026-10-24T19:43:48.075879892Z
+  modified_at: 2026-10-24T19:43:48.075879892Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
 history:
 - id: 01a16ef7-658e-7651-9abf-d3daf45d8b35
   author: joe
