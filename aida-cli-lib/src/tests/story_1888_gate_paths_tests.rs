@@ -611,7 +611,9 @@ fn not_gate_authority_only_shrinks() {
 /// The non-test lines of `text` that re-export a `crate::gate` item.
 fn gate_reexports(text: &str) -> Vec<String> {
     let reexport = regex::Regex::new(
-        r"^\s*pub(\([^)]*\))?\s+use\s+(crate::|self::|super::)*(\{[^}]*\b)?gate(::|\s*;|\s*\})",
+        // TASK-2319: `gate as g` and a non-final `{gate, ..}` re-export the
+        // module itself. trace:STORY-1889 | ai:claude
+        r"^\s*pub(\([^)]*\))?\s+use\s+(crate::|self::|super::)*(\{[^}]*\b)?gate(::|\s*;|\s*\}|\s*,|\s+as\b)",
     )
     .unwrap();
     non_test_lines(text)
@@ -634,6 +636,24 @@ fn reexport_detection() {
     assert_eq!(gate_reexports("pub use crate::{gate::x, y};\n").len(), 1);
     assert!(gate_reexports("use crate::gate::seat_authority::GrantCheck;\n").is_empty());
     assert!(gate_reexports("pub(crate) use crate::gateway::x;\n").is_empty());
+}
+
+// TASK-2319: an aliased re-export is still a re-export.
+// trace:STORY-1889 | ai:claude
+#[test]
+fn reexport_detection_sees_aliases() {
+    for line in [
+        "pub use crate::gate as g;",
+        "pub(crate) use gate as g;",
+        "pub(crate) use crate::gate::seat_authority as x;",
+        "pub use crate::{gate as g, y};",
+        "pub use crate::{gate, y};",
+        "pub use crate::{y, gate};",
+    ] {
+        assert_eq!(gate_reexports(&format!("{line}\n")).len(), 1, "{line}");
+    }
+    assert!(gate_reexports("pub use crate::gateway as g;\n").is_empty());
+    assert!(gate_reexports("pub use crate::{gate_x as g, y};\n").is_empty());
 }
 
 #[test]
