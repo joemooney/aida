@@ -521,3 +521,8 @@ mod bug_2004_token_leak_argv_tests;
 #[cfg(test)]
 #[path = "tests/bug_2181_host_remote_credentials_tests.rs"]
 mod bug_2181_host_remote_credentials_tests;
+
+// trace:TASK-2306 | ai:claude
+#[cfg(all(test, unix))]
+#[path = "tests/task_2270_push_upstream_site_tests.rs"]
+mod task_2270_push_upstream_site_tests;
