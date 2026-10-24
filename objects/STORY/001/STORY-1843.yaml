@@ -23,7 +23,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-24T23:00:58.082818377Z
+modified_at: 2026-10-24T23:23:09.131005796Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -412,6 +412,11 @@ comments:
   content: 'PR #2909 CI repair assigned to codex1 and resumed in existing story-1843-pr3 worktree/lease 01a16fa985ac. FIFO watchdog now calls the existing aida_bin::current_executable_path helper; exact-test filter, child environment, deadline and kill/wait cleanup are unchanged, as is the resolver ratchet. Local validation is running. Completion-attribution mismatch: PR #2909 currently ends with (STORY-1843), while the signed advisor ruling requires Refs STORY-1843 for PR3 and completion only in relay PR4. This repair will use Refs STORY-1843; parent completion is not claimed. PR #2906 remains assigned to agy1; live mailbox migration remains operator-run.'
   created_at: 2026-10-24T23:00:58.082818377Z
   modified_at: 2026-10-24T23:00:58.082818377Z
+- id: 01a17039-a7cb-7b32-a7e5-fa302aa60de9
+  author: ai:codex:joe
+  content: 'PR #2909 CI repair pushed without force to codex/story-1843-pr3 at dbb682f679b2d877b9dc30c765a3170b898bde64. FIFO regression passed in parent and exact-test child; raw-executable resolver ratchet passed; make check-ci-fast passed all 34 gates. Rustfmt and git diff --check passed. Two-round author self-check corrected formatting then found nothing; this confers no independent-review authority. Existing helper preserves same test runner, exact filter, child environment, five-second deadline, kill/wait cleanup and unchanged ratchet. PR body updated with evidence and completion mismatch; title now uses Refs STORY-1843 per signed PR4 scope. No parent completion, merge, verdict, hold clearance, #2906 changes or live mailbox migration. Independent review at this new head is required. Logs: /tmp/codex1-2909-fifo.log, /tmp/codex1-2909-ratchet.log, /tmp/codex1-2909-fast.log.'
+  created_at: 2026-10-24T23:23:09.131005796Z
+  modified_at: 2026-10-24T23:23:09.131005796Z
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
   author: joe
