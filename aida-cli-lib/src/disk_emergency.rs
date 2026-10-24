@@ -1301,20 +1301,35 @@ fn mail_holder(main_root: &Path, c: &Candidate) {
 pub(crate) fn run_emergency(main_root: &Path, cfg: &EmergencyConfig) -> Option<RunOutcome> {
     let cache_root = crate::worktree_reclaim::cache_root_of(main_root)?;
     let probe_root = cache_root.clone();
-    run_emergency_probed(main_root, &cache_root, cfg, move || {
+    // TASK-2325: the hard-ceiling scratch pass reads the REAL environment
+    // only here, in the production glue — never below the injection seam, so
+    // a test can never reach this host's jobs or session scratch. The age
+    // floor is the longer of the emergency idle window and the scratch
+    // default, and build caches are never part of the emergency tier.
+    // trace:TASK-2325 | ai:claude
+    let mut scratch = crate::scratch_reclaim::survey_from_env(
+        crate::scratch_reclaim::DEFAULT_MIN_AGE_DAYS,
+        SystemTime::now(),
+    );
+    scratch.min_age = scratch.min_age.max(cfg.idle());
+    scratch.build_caches.clear();
+    run_emergency_probed(main_root, &cache_root, cfg, scratch, move || {
         fs_stats(&probe_root).map(|s| s.used_pct())
     })
 }
 
-/// [`run_emergency`] with the cache root and usage probe injected, so the
-/// production glue (lock, gh / offline fallback, incremental ledger appends,
-/// notice dedupe state) is testable on a real tempdir whatever its
-/// filesystem's actual usage.
+/// [`run_emergency`] with the cache root, usage probe and hard-ceiling
+/// scratch survey injected, so the production glue (lock, gh / offline
+/// fallback, incremental ledger appends, notice dedupe state) is testable on
+/// a real tempdir whatever its filesystem's actual usage — and so no test
+/// can reach the real TMPDIR or HOME (TASK-2325).
 // trace:TASK-2272 | ai:claude (TASK-1-482)
+// trace:TASK-2325 | ai:claude
 pub(crate) fn run_emergency_probed(
     main_root: &Path,
     cache_root: &Path,
     cfg: &EmergencyConfig,
+    scratch: crate::scratch_reclaim::ScratchSurvey,
     used_pct: impl Fn() -> Option<u8>,
 ) -> Option<RunOutcome> {
     use fs2::FileExt;
@@ -1376,7 +1391,7 @@ pub(crate) fn run_emergency_probed(
     // enough — terminal jobs' tmp dirs and old session scratch (never build
     // caches, never a live job or session) are then reclaimed too, until
     // usage drops below the ceiling. trace:TASK-2325 | ai:claude
-    let outcome = scratch_at_hard_ceiling(main_root, cfg, now, &used_pct, outcome);
+    let outcome = scratch_at_hard_ceiling(main_root, cfg, now, &scratch, &used_pct, outcome);
     let mut state = load_guard_state(main_root);
     let now_utc = Utc::now();
     if let Some((title, body)) = emergency_notice(&outcome, cfg) {
@@ -1403,17 +1418,14 @@ fn scratch_at_hard_ceiling(
     main_root: &Path,
     cfg: &EmergencyConfig,
     now: SystemTime,
+    survey: &crate::scratch_reclaim::ScratchSurvey,
     used_pct: &impl Fn() -> Option<u8>,
     mut outcome: RunOutcome,
 ) -> RunOutcome {
     if !matches!(used_pct(), Some(pct) if pct >= cfg.used_pct) {
         return outcome;
     }
-    let mut survey =
-        crate::scratch_reclaim::survey_from_env(crate::scratch_reclaim::DEFAULT_MIN_AGE_DAYS, now);
-    survey.min_age = survey.min_age.max(cfg.idle());
-    survey.build_caches.clear();
-    let (rows, _held) = crate::scratch_reclaim::plan(&survey);
+    let (rows, _held) = crate::scratch_reclaim::plan(survey);
     let ts = DateTime::<Utc>::from(now);
     let mut push = |outcome: &mut RunOutcome, row: LedgerRow| {
         let _ = append_ledger(main_root, std::slice::from_ref(&row));
@@ -1428,7 +1440,7 @@ fn scratch_at_hard_ceiling(
             break;
         }
         let path = row.path.display().to_string();
-        if let Err(e) = crate::scratch_reclaim::check(&survey, &row) {
+        if let Err(e) = crate::scratch_reclaim::check(survey, &row) {
             push(
                 &mut outcome,
                 LedgerRow::Fail {

@@ -175,7 +175,7 @@ fn the_delete_site_recheck_refuses_a_foreign_path() {
     let sv = survey(fx.path(), now);
     for (kind, path) in [
         (ScratchKind::JobTmp, fx.path().join("jobs/aaaa1111")), // the job dir, not tmp/
-        (ScratchKind::JobTmp, fx.path().join("elsewhere/tmp")),
+        (ScratchKind::JobTmp, fx.path().join("elsewhere").join("tmp")),
         (ScratchKind::SessionScratch, fx.path().join("outside")),
         (ScratchKind::BuildCache, fx.path().join("not-a-cache")),
     ] {
@@ -194,22 +194,42 @@ fn the_delete_site_recheck_refuses_a_foreign_path() {
     }
 }
 
+/// A loose file under the TMPDIR root prices as its own length — the tree
+/// walk alone sums only directory entries (PR-2906 round 1).
+#[test]
+fn a_loose_file_row_reports_its_own_size() {
+    let fx = tempfile::tempdir().unwrap();
+    let now = SystemTime::now();
+    let tmp_root = fx.path().join("tmp-root");
+    std::fs::create_dir_all(&tmp_root).unwrap();
+    std::fs::write(tmp_root.join("loose.log"), vec![0u8; 4096]).unwrap();
+    age(&tmp_root, now, 10);
+    let (rows, _) = plan(&survey(fx.path(), now));
+    assert_eq!(rows.len(), 1, "{rows:?}");
+    assert_eq!(rows[0].path, tmp_root.join("loose.log"));
+    assert_eq!(rows[0].bytes, 4096, "a file prices as its own length");
+}
+
 #[test]
 fn tmp_root_and_own_session_dir_are_derived_from_tmpdir() {
-    let tmpdir = Path::new("/tmp/claude-1000/-home-user-proj/abcd-1234/scratchpad");
-    let root = tmp_root_from(Some(tmpdir)).unwrap();
-    assert_eq!(root, Path::new("/tmp/claude-1000"));
+    // Pure path derivation; every fixture path is built from a tempdir so
+    // nothing names a real system location (PR-2906 round 1).
+    let base = tempfile::tempdir().unwrap();
+    let claude_root = base.path().join("claude-1000");
+    let tmpdir = claude_root.join("-home-user-proj/abcd-1234/scratchpad");
+    let root = tmp_root_from(Some(&tmpdir)).unwrap();
+    assert_eq!(root, claude_root);
     assert_eq!(
-        own_session_dir(&root, Some(tmpdir)).unwrap(),
-        Path::new("/tmp/claude-1000/-home-user-proj/abcd-1234")
+        own_session_dir(&root, Some(&tmpdir)).unwrap(),
+        claude_root.join("-home-user-proj/abcd-1234")
     );
     // A non-slug child of the root is its own entry.
-    let loose = Path::new("/tmp/claude-1000/adhoc");
+    let loose = claude_root.join("adhoc");
     assert_eq!(
-        own_session_dir(Path::new("/tmp/claude-1000"), Some(loose)).unwrap(),
-        Path::new("/tmp/claude-1000/adhoc")
+        own_session_dir(&claude_root, Some(&loose)).unwrap(),
+        claude_root.join("adhoc")
     );
-    assert!(tmp_root_from(Some(Path::new("/var/tmp/other"))).is_none());
+    assert!(tmp_root_from(Some(&base.path().join("var-tmp/other"))).is_none());
     assert!(tmp_root_from(None).is_none());
 }
 
