@@ -1,0 +1,19 @@
+{
+  "id": "f836b052-6acd-427d-bb9d-f4664304bbff",
+  "thread_id": "f836b052-6acd-427d-bb9d-f4664304bbff",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792814879695,
+  "body": "PR-2864 pushed (STORY-1843 PR2b) at b99cb31acc (round 5).\nF1: AIDA_AGENT_NAME stays <vendor>-<seat> (attestation contract; bug_2187 fixture unchanged, test passes locally); unique handle in AIDA_HANDLE, read first by session start / mail sender / inbox identities.\nF2: resume reuses the session's handle, no new reservation; test a_resumed_child_keeps_its_sessions_handle.\nF3/F4/F5 listed as -> PR3 in the PR body.\nAlso pinned CLAUDE_PID in the mail_to_a_handle test (raced a parallel test).\nGates: targeted agent_handle run 33/33, bug_2187 passed, make check-ci-fast 34/34.",
+  "subject": "PR-2864 pushed (STORY-1843 PR2b)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

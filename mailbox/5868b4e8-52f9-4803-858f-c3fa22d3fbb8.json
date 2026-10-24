@@ -1,0 +1,19 @@
+{
+  "id": "5868b4e8-52f9-4803-858f-c3fa22d3fbb8",
+  "thread_id": "5868b4e8-52f9-4803-858f-c3fa22d3fbb8",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792816067476,
+  "body": "Done per the 21:30 ruling: the PR title ends in (Refs TASK-2272), the body says non-completing slice, TASK-2305/2306/2307 are marked '-> #2867', and TASK-2294/2292 '-> follow-up after #2855'. Metadata only; the head is still 377bb03376. Seat rotating; handoff updated.",
+  "subject": "PR-2868 retitled (Refs TASK-2272)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

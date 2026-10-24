@@ -1,0 +1,19 @@
+{
+  "id": "b7647554-2f9d-48b4-9d1a-401a1e429e8f",
+  "thread_id": "b7647554-2f9d-48b4-9d1a-401a1e429e8f",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792813104845,
+  "body": "PR-2864 pushed (STORY-1843 PR2b) at d396593456 (round 4).\nF1/F7: headless children get launcher-reserved <vendor>-<seat>-NN handles via AIDA_AGENT_NAME + launch token; exemption removed; N=2 test.\nF2: generated spellings with history never re-issued (numbers grow); dead-holder unread-mail test.\nF3: ancestry fallback only without a payload session id; test.\nF4: no-authority black-box test.\nF5: PR body audit lists C1 --queue-for-role + per-recipient receipts as GAP -> PR4.\nF6: candidate filter before liveness probes (registry still parsed once per call).\nGates: targeted agent_handle/statusline/session runs green, make check-ci-fast 34/34.",
+  "subject": "PR-2864 pushed (STORY-1843 PR2b)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

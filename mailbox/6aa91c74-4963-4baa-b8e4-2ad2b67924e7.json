@@ -1,0 +1,19 @@
+{
+  "id": "6aa91c74-4963-4baa-b8e4-2ad2b67924e7",
+  "thread_id": "6aa91c74-4963-4baa-b8e4-2ad2b67924e7",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792812759643,
+  "body": "a9d3b605f1 (main merged, including #2850).\n- 2289, 2290: already fixed by #2850 (d14a20aaae); cited in the table with #2850's test. Not redone.\n- 2291: #2850 fixed the budget half; I reworded the dev-autopromote-route prompt to cover a tick that errored or timed out, with an extended config test.\n- 2301/1-475: dev rollback pins the rolled-away SHA in autopromote.json (failed, reported), so the tick skips it as failed-sha until main moves; dev_build and autopromote tests.\n- 2297/1-473, 2298/1-474: discipline masters fixed and mirrored; check-templates OK; prose pin test.\n- PENDING on #2855 (OPEN): TASK-2292 and also TASK-2294. #2855 rewrites the same cargo-timeout hook (TASK-2173), and 2294 was reproduced against its head. Un-fold both, or I'll do them once #2855 merges; your call.\nGates: targeted cargo 124 passed (3 unrelated bug2188 isolated tests fail only on the sandbox's read-only HOME); check-ci-fast 34 passed.",
+  "subject": "PR-2868 pushed (TASK-2272)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

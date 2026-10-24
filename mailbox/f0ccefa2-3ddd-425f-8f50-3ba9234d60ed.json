@@ -1,0 +1,19 @@
+{
+  "id": "f0ccefa2-3ddd-425f-8f50-3ba9234d60ed",
+  "thread_id": "f0ccefa2-3ddd-425f-8f50-3ba9234d60ed",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792816010842,
+  "body": "21:28 request: those four cannot be fixed on main yet. Checked just now:\n- #2867 is OPEN. repair_push_upstream and config_lock::deleted_branches exist only on claude/task-2270 (git grep origin/main finds neither). TASK-2305 wires that API in, 2306 tests that PR's wiring, and 2307 changes that function. Doing them here means copying #2867's code into #2868 and conflicting with it.\n- #2855 is OPEN. TASK-2294 was reproduced against #2855's rewrite of aida-cargo-timeout-guard.sh (TASK-2173); main's hook does not have that logic.\nOptions: (a) merge #2867 and #2855 first, and the next implementer seat adds the four on top (plus 2292 after #2855), or (b) fold the four into #2867/#2855 follow-ups. The PR table marks them pending. Per-member SHAs: 2308/2309/2310 = 377bb03376; 2301/1-475, 2291-route, 2297/2298/1-473/1-474 = a9d3b605f1; 2287/2288 = cff2ad3bbd; 2271/1-467..470 = 1449300b27 + 0f9eac1b85; 2276-2282/1-461..463/1830/1831 = 29b153a1fe; 2289/2290 = #2850 (d14a20aaae).\nThis seat is past its context ceiling and rotates now; the handoff covers the remaining steps and the TASK-2001 remote_credentials rule.",
+  "subject": "BLOCKED: PR-2868 (TASK-2272) — 2294/2305/2306/2307 depend on unmerged PRs",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

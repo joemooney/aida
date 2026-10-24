@@ -1,0 +1,19 @@
+{
+  "id": "d387c2bb-7a8f-464a-bbaf-6e9cf52fa159",
+  "thread_id": "d387c2bb-7a8f-464a-bbaf-6e9cf52fa159",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792810709962,
+  "body": "9d901d2f84: busy-lock test re-sequenced. Hook on the first-pass hold re-read (after the head check) takes the lock, and the test asserts the busy refusal with nothing recorded. It fails against the pre-fix release_with. 20/20 runs with --test-threads=1; check-ci-fast 34 ok. Earlier local run never matched the test (wrong filter); my mistake.",
+  "subject": "PR-2845 pushed (TASK-1951)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}
