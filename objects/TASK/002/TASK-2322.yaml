@@ -6,12 +6,12 @@ description: |
   aida-cli-lib/src/disk_emergency.rs run_emergency_probed (TASK-1-484 fix, PR-2893): the dedupe state block is gated on outcome.deleted.is_empty(), so a run that deleted something AND ended Stop::Refused never records last_emergency_refusal. The next nothing-deleted tick carrying the same refusal compares against the stale/None value and notifies again as a "new" refusal. One extra notification; arguably still news. A one-line gate tweak (save last_emergency_refusal whenever outcome.refusal.is_some()) closes it if it ever annoys.
 
   Raised in review of PR-2893: https://github.com/joemooney/aida/pull/2893#issuecomment-6382019618
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-24T08:31:00.799754234Z
-modified_at: 2026-10-24T12:34:13.775658812Z
+modified_at: 2026-10-24T14:20:49.579138353Z
 req_type: Task
 tags:
 - from-review:PR-2893
@@ -50,6 +50,20 @@ history:
   timestamp: 2026-10-24T12:34:14.709807761Z
   session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
   changes: []
+- id: 01a16e49-2426-7721-99fc-fe9270a5ef55
+  author: aida-auto-bump
+  timestamp: 2026-10-24T14:20:49.574494601Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a16e49-242b-7c02-8b65-3eda0eaaaaef
+  timestamp: 2026-10-24T14:20:49.579133210Z
+  agent: aida
+  commit_sha: 6980be3ace8b7b9ae795e4347b8a9d4be01a287e
+  summary: note_emergency_notified records last_emergency_refusal whenever a refusal is present, including partial runs (disk_emergency.rs:938); same-refusal stuck tick deduped; verified by task_2322_partial_run_records_its_refusal_for_dedupe, CI green at head
+  review_verdict: approved
 filed_at:
   code_sha: 7551db72771f959b7365064c267d16e7657be1a3
   branch: pr-2893
@@ -59,3 +73,7 @@ filed_at:
   vendor: claude
   session: 01a16d025b72
   harness_version: 2.1.310 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-24T14:20:49.574489234Z
+  completion_sha: 6980be3ace8b7b9ae795e4347b8a9d4be01a287e
