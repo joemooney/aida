@@ -334,7 +334,13 @@ fn wave_argv_identical_on_unit_and_detached_paths() {
 
 #[test]
 fn wave_unit_helper_has_single_call_site() {
-    // B-c: one launch seam, reached from one place.
+    // B-c: one launch seam, reached from one place. Advisor ruling
+    // 2026-10-23 (STORY-1689, PR-2850, option A): every transient unit -- the
+    // night-shift wave and the scheduled live-binary build -- starts through
+    // `schedule_driver::launch_transient_unit`, the ONLY caller of
+    // `systemd_run_user`. No other file names `systemd_run_user` or
+    // `build_wave_unit_argv`, shift.rs included.
+    // trace:STORY-1689 | ai:claude
     let shift = include_str!("../shift.rs");
     assert_eq!(
         shift.matches("launch_wave_isolated(").count(),
@@ -342,7 +348,7 @@ fn wave_unit_helper_has_single_call_site() {
         "def + one call"
     );
     assert_eq!(shift.matches("exec.spawn_wave(").count(), 1);
-    assert_eq!(shift.matches(".systemd_run_user(").count(), 1);
+    assert_eq!(shift.matches("launch_transient_unit(").count(), 1);
     assert!(!shift.contains("pub(crate) fn launch_wave_isolated"));
     assert!(!shift.contains("pub fn launch_wave_isolated"));
     // The one call is in RealExec::spawn_wave, which only tick_core calls.
@@ -380,7 +386,7 @@ fn wave_unit_helper_has_single_call_site() {
         if name != "shift.rs" {
             assert!(!body.contains("launch_wave_isolated"), "{name}");
         }
-        if name != "shift.rs" && name != "schedule_driver.rs" {
+        if name != "schedule_driver.rs" {
             assert!(!body.contains("systemd_run_user"), "{name}");
             assert!(!body.contains("build_wave_unit_argv"), "{name}");
         }
@@ -388,9 +394,24 @@ fn wave_unit_helper_has_single_call_site() {
     let driver = include_str!("../schedule_driver.rs");
     assert_eq!(
         driver.matches("systemd_run_user(").count(),
-        2,
-        "the trait method and the real host only"
+        3,
+        "the trait method, the real host and launch_transient_unit only"
     );
+    let start = driver
+        .find("pub(crate) fn launch_transient_unit(")
+        .expect("launch_transient_unit");
+    let end = start + driver[start..].find("\n}\n").unwrap();
+    assert_eq!(
+        driver[start..end].matches("systemd_run_user(").count(),
+        1,
+        "the one call is inside launch_transient_unit"
+    );
+    assert_eq!(
+        driver.matches("build_wave_unit_argv(").count(),
+        2,
+        "def + the one call in launch_transient_unit"
+    );
+    assert!(driver[start..end].contains("build_wave_unit_argv("));
     assert_eq!(driver.matches("Command::new(\"systemd-run\")").count(), 1);
 }
 

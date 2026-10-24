@@ -1442,9 +1442,8 @@ fn launch_wave_isolated(
     identity: &dyn Fn(u32) -> Option<String>,
 ) -> Result<WaveSpawn> {
     use crate::schedule_driver::{
-        build_wave_unit_argv, cgroup_in_unit, classify_systemd_run, classify_unit_show,
-        expands_in_unit, unit_show_args, unit_stem, wave_unit_name, RunFailure, UnitProbe,
-        WaveUnitSpec, WAVE_UNIT_PROBE_TIMEOUT, WAVE_UNIT_RUN_TIMEOUT,
+        cgroup_in_unit, classify_unit_show, expands_in_unit, launch_transient_unit, unit_show_args,
+        unit_stem, wave_unit_name, RunFailure, UnitProbe, WaveUnitSpec, WAVE_UNIT_PROBE_TIMEOUT,
     };
     let mut go_detached = |reason: Option<String>| -> Result<WaveSpawn> {
         let (pid, pid_start) = detached()?;
@@ -1502,7 +1501,7 @@ fn launch_wave_isolated(
     let description = format!("AIDA drain wave batch:{batch} for {}", w.repo);
     let set_env = wave_unit_set_env(w.path_env);
     let unset_env = wave_unit_unset_env();
-    let args = build_wave_unit_argv(&WaveUnitSpec {
+    let spec = WaveUnitSpec {
         unit: &unit,
         repo: w.repo,
         exe: w.exe,
@@ -1514,9 +1513,8 @@ fn launch_wave_isolated(
         set_env: &set_env,
         unset_env: &unset_env,
         argv: w.argv,
-    });
-    let run = host.systemd_run_user(&args, WAVE_UNIT_RUN_TIMEOUT);
-    let failure = match classify_systemd_run(&run) {
+    };
+    let failure = match launch_transient_unit(host, &spec) {
         Ok(()) => None,
         Err(RunFailure::NotStarted(why)) => return go_detached(Some(why)),
         Err(other) => Some(other),
