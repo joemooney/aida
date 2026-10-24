@@ -7,12 +7,12 @@ description: |-
 
   minor: aida-core/src/team.rs task_2223_the_workspace_target_passes_the_guard relies on <workspace>/target existing, because is_under_workspace_target canonicalizes it and returns false otherwise; with CARGO_TARGET_DIR pointing elsewhere on a fresh checkout the guard panics and the test fails. The removed version used CARGO_MANIFEST_DIR, which always exists. Create the dir in the test or skip when it is absent.
   Reviewed sha: cdd63dab76396e2da81e6cb499d452cd38fad96d
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-24T05:55:57.177089929Z
-modified_at: 2026-10-24T05:55:57.177089929Z
+modified_at: 2026-10-24T06:52:00.097592585Z
 req_type: Task
 tags:
 - carried-from:TASK-1955
@@ -24,6 +24,14 @@ history:
   author: joe
   timestamp: 2026-10-24T06:26:03.930980513Z
   changes: []
+- id: 01a16cae-3ae1-7d71-8d04-c5a31101a59a
+  author: joe
+  timestamp: 2026-10-24T06:52:00.097588252Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 71143a2a03adef3676ff786c52912324b3813bdd
   branch: main
