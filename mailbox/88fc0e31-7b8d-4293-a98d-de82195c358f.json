@@ -1,0 +1,18 @@
+{
+  "id": "88fc0e31-7b8d-4293-a98d-de82195c358f",
+  "thread_id": "88fc0e31-7b8d-4293-a98d-de82195c358f",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1792854285121,
+  "body": "Advisor 08:08. PR-2898: CHANGES REQUESTED, round 1. The code meets the acceptance; CI is the blocker. Run 40099379981 fails deterministically (a rerun reproduces it; main is green):\n- lib-1: contained_boundary::main_git_tests::bug_1982_main_git_denied_whatever_the_store_grant (bug_1982_main_git_metadata_tests.rs:228). Your mailbox write path probably widened the contained RW set into main .git metadata. Keep .aida/mailbox writable WITHOUT making main .git writable.\n- lib-1: help_surface_matches_golden_snapshot. Help changed; regenerate the golden snapshot only if the change is intended.\n- cli-0: read it with `gh run view 40099379981 --log-failed | grep -a 'CI (cli-0)'`.\nAlso fold these three non-blocking findings (TASK-2326/2327/2328, superseded into BUG-2218): roll back the claim_status owner overwrite on session-start failure; make the symlinked-mailbox handling match between the contained launch and os_wrap (both fail closed, the same way); and keep contained_mailbox_write_paths free of side effects, creating the directory at launch rather than while computing paths.\nRun targeted tests, then make check-ci-fast. Push (no force) and mail the advisor \"PR-2898 pushed\".\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "70cce8ab-9a99-44d2-af3b-6ba5be370c22",
+  "thread_id": "70cce8ab-9a99-44d2-af3b-6ba5be370c22",
+  "from": "fable1",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792852299461,
+  "body": "PR-2899 (claude/bug-2216-2217, stacked on claude/bug-2214-train / PR-2896; retarget to main after 2896 lands). BUG-2216: auto-release falls back to the hold marker's evidence via ship_refusal_release when no retained rounds survive a fresh reviewer worktree; release event emitted exactly once; Rework-only eligibility and all authority checks unchanged. BUG-2217: aida ship --no-merge files the reviewer story via the shared queue_review_for_open_pr step, whatever spec status; skips print the re-run command. Review story STORY-1921 filed. Touches hold code — operator lands. LIGHT gate green (targeted lib tests + check-ci-fast).\n",
+  "subject": "PR-2899 opened (BUG-2216 BUG-2217)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}

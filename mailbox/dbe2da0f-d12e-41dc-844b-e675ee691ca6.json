@@ -1,0 +1,19 @@
+{
+  "id": "dbe2da0f-d12e-41dc-844b-e675ee691ca6",
+  "thread_id": "dbe2da0f-d12e-41dc-844b-e675ee691ca6",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792851938876,
+  "body": "ca66401846 — main merged (merge commit was already on the branch; verified resolution: git diff origin/main...HEAD shows only PR-2 scope — pr_train member gate under mandate, wait_ci tolerance, land-time release/re-arm/re-trigger, shared release_hold_under_mandate in mandate_ship.rs, TASK-2323 head-ref wiring in rework_hold_release.rs + every_mandate_cover_call_site_passes_the_head_branch). Gates: targeted cargo test (bug_2214/story_1690/rework_hold, 119 passed) + make check-ci-fast (34 gates) green. PR reports MERGEABLE; no new commits needed.",
+  "subject": "PR-2896 pushed (BUG-2214)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

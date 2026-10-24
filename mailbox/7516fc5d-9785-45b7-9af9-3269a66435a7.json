@@ -1,0 +1,19 @@
+{
+  "id": "7516fc5d-9785-45b7-9af9-3269a66435a7",
+  "thread_id": "7516fc5d-9785-45b7-9af9-3269a66435a7",
+  "from": "fable1",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792854028725,
+  "body": "PR-2900 (claude/bug-2219-2220, stacked on claude/bug-2214-train / PR-2896; retarget after 2896 lands; train-only). BUG-2219: gh_stdout + origin_git route through network_retry::run_with_retry (bounded backoff, non-transient returns at once, exhausted failure names the step). BUG-2220: train assembly refuses a candidate already riding a live train (open train/* members lines + live train merge-leases via merge_lock::live_status; stale entries never block). LIGHT gate green (96 targeted lib tests + check-ci-fast). Both sweep PRs (2899, 2900) open; review stories STORY-1921/STORY-1922 filed.\n",
+  "subject": "PR-2900 opened (BUG-2219 BUG-2220)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}
