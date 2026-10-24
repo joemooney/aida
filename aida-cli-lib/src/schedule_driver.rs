@@ -91,7 +91,7 @@ pub(crate) trait DriverHost {
     /// Whether systemd user timers exist on this platform at all.
     fn systemd_supported(&self) -> bool;
     /// `systemd-run <args>` (the args start with `--user`), killed after
-    /// `timeout`. Only the night-shift wave launch calls it. A host that
+    /// `timeout`. Only [`launch_transient_unit`] calls it. A host that
     /// does not implement it never runs anything: the wave falls back to
     /// the detached launch.
     // trace:TASK-1510 | ai:claude
@@ -1761,6 +1761,20 @@ pub(crate) fn classify_systemd_run(run: &BoundedRun) -> Result<(), RunFailure> {
             }
         }
     }
+}
+
+/// Start one transient unit described by `spec`, bounded by
+/// [`WAVE_UNIT_RUN_TIMEOUT`]: the ONLY caller of
+/// [`DriverHost::systemd_run_user`]. The night-shift wave and the scheduled
+/// live-binary build both launch through it; the unit name and description
+/// come from `spec`.
+// trace:TASK-1510 | ai:claude
+// trace:STORY-1689 | ai:claude
+pub(crate) fn launch_transient_unit(
+    host: &mut dyn DriverHost,
+    spec: &WaveUnitSpec<'_>,
+) -> Result<(), RunFailure> {
+    classify_systemd_run(&host.systemd_run_user(&build_wave_unit_argv(spec), WAVE_UNIT_RUN_TIMEOUT))
 }
 
 /// What `systemctl --user show -p LoadState -p ActiveState -p MainPID`
