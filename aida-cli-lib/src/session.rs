@@ -688,6 +688,7 @@ pub(crate) fn build_contained_resume_command(
     let worktree = lease_tree
         .or_else(|| target.worktree.clone().filter(|p| p.is_dir()))
         .unwrap_or_else(|| launcher_cwd.to_path_buf());
+    prepare_contained_mailbox_for_launch(&worktree)?;
     let mut cmd = std::process::Command::new("claude");
     cmd.args(["--resume", &target.id]);
     cmd.args(claude_contained_flags_for_roots(
@@ -1223,6 +1224,10 @@ pub(crate) fn build_claude_exec_command(
             model,
         )?,
     )?;
+    // trace:BUG-2218 TASK-2328 | ai:codex
+    if contained {
+        prepare_contained_mailbox_for_launch(&std::env::current_dir()?)?;
+    }
     let mut cmd = Command::new(program);
     if let Some(grant) = grant_id {
         cmd.env(crate::seat_authority::GRANT_ENV, grant);
@@ -1326,6 +1331,10 @@ pub(crate) fn build_run_claude_session_command(
             model,
         )?,
     )?;
+    // trace:BUG-2218 TASK-2328 | ai:codex
+    if contained {
+        prepare_contained_mailbox_for_launch(&std::env::current_dir()?)?;
+    }
     let mut cmd = std::process::Command::new(program);
     if contained {
         cmd.env("AIDA_CONTAINED", "1");
@@ -1580,6 +1589,10 @@ pub(crate) fn spawn_vendor_headless_with_seat_granted(
         );
     }
     let tuning = resolve_agent_tuning(&headless_worktree_root(), vendor, seat);
+    // trace:BUG-2218 TASK-2328 | ai:codex
+    if contained {
+        prepare_contained_mailbox_for_launch(&headless_worktree_root())?;
+    }
     let (program, args) = compose_headless_command(
         vendor,
         prompt,
@@ -1810,6 +1823,9 @@ pub(crate) fn spawn_claude_resume_with_grant(
     } else {
         cmd.env_remove("AIDA_CONTAINED");
     }
+    if contained {
+        prepare_contained_mailbox_for_launch(&std::env::current_dir()?)?;
+    }
     // A watch-launched reviewer is recorded before the wait. trace:TASK-1993 | ai:claude
     crate::review_watch::reviewer_status(&mut cmd).context("failed to spawn claude")
 }
@@ -1983,6 +1999,10 @@ pub(crate) fn spawn_reviewer_launch_plan_granted(
     )?;
     if parent_contained && !plan.contained {
         anyhow::bail!("[contained] reviewer launch plan is uncontained; rebuild it under the current parent before launching");
+    }
+    // trace:BUG-2218 TASK-2328 | ai:codex
+    if plan.contained {
+        prepare_contained_mailbox_for_launch(&std::env::current_dir()?)?;
     }
     let grant = crate::seat_authority::issue_child(
         project_root,
@@ -3013,7 +3033,13 @@ pub(crate) fn claude_contained_settings_json(write_roots: &[PathBuf]) -> Result<
             // the marker (not the empty grant) is what keeps host git off it.
             // trace:BUG-2131 | ai:claude
             // trace:TASK-1775 | ai:claude
-            contained_store_grant(&main, &store, aida_core::git_ops::mark_store_contained)
+            let mut paths =
+                contained_store_grant(&main, &store, aida_core::git_ops::mark_store_contained);
+            // trace:BUG-2218 | ai:codex
+            paths.extend(crate::contained_boundary::contained_mailbox_write_paths(
+                &main,
+            )?);
+            paths
         }
         None => Vec::new(),
     };
@@ -3766,7 +3792,7 @@ pub(crate) fn bwrap_confinement_args_inner(
 /// bound: the seat commits in its own clone and pushes to origin.
 // trace:STORY-612 | ai:claude
 // trace:BUG-2169 | ai:claude
-pub(crate) fn os_wrap_rw_paths(worktree_root: &Path) -> Vec<PathBuf> {
+pub(crate) fn os_wrap_rw_paths(worktree_root: &Path) -> Result<Vec<PathBuf>> {
     let mut rw_paths = match crate::seat_clone::host_recorded_clone(worktree_root) {
         Some(clone) => {
             let mut paths = crate::contained_boundary::contained_store_write_paths(&clone.main);
@@ -3775,6 +3801,13 @@ pub(crate) fn os_wrap_rw_paths(worktree_root: &Path) -> Vec<PathBuf> {
         }
         None => vec![worktree_root.join(".aida-store")],
     };
+    // trace:BUG-2218 | ai:codex
+    let main = crate::main_worktree_root_from(worktree_root);
+    // Match the contained settings path: refuse the launch on an unsafe path.
+    // trace:BUG-2218 TASK-2327 | ai:codex
+    rw_paths.extend(crate::contained_boundary::contained_mailbox_write_paths(
+        &main,
+    )?);
     if let Some(home) = crate::home_dir() {
         let cargo_home = std::env::var_os("CARGO_HOME")
             .map(PathBuf::from)
@@ -3784,7 +3817,18 @@ pub(crate) fn os_wrap_rw_paths(worktree_root: &Path) -> Vec<PathBuf> {
         rw_paths.push(home.join(".claude"));
         rw_paths.push(home.join(".claude.json"));
     }
-    rw_paths
+    Ok(rw_paths)
+}
+
+/// Explicit runtime preparation; never called by path/settings renderers.
+// trace:BUG-2218 TASK-2327 TASK-2328 | ai:codex
+pub(crate) fn prepare_contained_mailbox_for_launch(worktree: &Path) -> Result<()> {
+    if let Some(root) = contained_session_write_roots_from(worktree).first() {
+        let main = crate::main_worktree_root_from(root);
+        verify_linked_worktree_main(root, &main)?;
+        crate::contained_boundary::prepare_mailbox(&main)?;
+    }
+    Ok(())
 }
 
 /// `--setenv` pairs for a seat clone the host recorded: the same build
@@ -3893,7 +3937,7 @@ pub(crate) fn os_wrapped_program_and_args(
     // restriction — SPIKE-61 §7.7). Catch it here with an actionable message
     // instead of letting the drain die on a cryptic `uid map: Permission denied`.
     bwrap_preflight()?;
-    let rw_paths = os_wrap_rw_paths(worktree_root);
+    let rw_paths = os_wrap_rw_paths(worktree_root)?;
     // STORY-617: opt-in strict read-confinement. Default-ABSENT => empty =>
     // `bwrap_confinement_args_inner` falls back to the unchanged `--ro-bind / /`.
     let read_allowlist = contained_read_allowlist(worktree_root);
@@ -4104,6 +4148,10 @@ pub(crate) fn build_exec_vendor_headless_command(
     // path is the `--no-human` phase-1 implementer, which must not diverge.
     // trace:TASK-1169 | ai:claude
     let (ceiling_key, ceiling_value) = crate::bg_wait_ceiling_env(Some(&headless_worktree_root()));
+    // trace:BUG-2218 TASK-2328 | ai:codex
+    if contained {
+        prepare_contained_mailbox_for_launch(&headless_worktree_root())?;
+    }
     let mut child_cmd = Command::new(program);
     child_cmd
         .args(args)
@@ -4903,6 +4951,10 @@ pub(crate) fn spawn_claude_headless_resume_granted(
     // bounded ceiling, so a resumed drain can't diverge from a fresh one.
     // trace:TASK-1169 | ai:claude
     let (ceiling_key, ceiling_value) = crate::bg_wait_ceiling_env(Some(cwd));
+    // trace:BUG-2218 TASK-2328 | ai:codex
+    if contained {
+        prepare_contained_mailbox_for_launch(cwd)?;
+    }
     let child_grant = crate::seat_authority::issue_child(cwd, seat, &crate::current_user_id(None))?;
     let mut cmd = Command::new(program);
     cmd.current_dir(cwd)
@@ -6287,6 +6339,10 @@ pub(crate) fn build_claude_resume_exec_command(
     // BUG-2169 S2: a contained interactive resume runs inside os_wrap too.
     // trace:BUG-2169 | ai:claude
     let (program, args) = interactive_claude_program_and_args(contained, args)?;
+    // trace:BUG-2218 TASK-2328 | ai:codex
+    if contained {
+        prepare_contained_mailbox_for_launch(&std::env::current_dir()?)?;
+    }
     let mut cmd = Command::new(program);
     cmd.args(args);
     if let Some(grant) = grant_id {

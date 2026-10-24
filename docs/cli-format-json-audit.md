@@ -308,6 +308,7 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida driver deregister` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida driver list` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida doctor` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
+| `aida doctor rustc-cache` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida doctor shell-substitution-holes` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida doctor check` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida doctor heal` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
@@ -481,6 +482,10 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida comment edit` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida comment delete` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida config` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida config transport` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida config transport enable` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
+| `aida config transport show` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
+| `aida config transport disable` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida config show` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida config format` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida config numbering` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |

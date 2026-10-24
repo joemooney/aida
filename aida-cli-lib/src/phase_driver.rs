@@ -2188,6 +2188,16 @@ impl RealPhaseDriver {
         };
         // trace:TASK-1169 | ai:claude
         let (ceiling_key, ceiling_value) = crate::bg_wait_ceiling_env(Some(&self.project_root));
+        // trace:BUG-2218 TASK-2328 | ai:codex
+        if self.contained {
+            if let Err(error) = session::prepare_contained_mailbox_for_launch(&self.project_root) {
+                tee_handle.stop();
+                return Err(PhaseFailure::of(
+                    FailureKind::Spawn,
+                    format!("advisor mailbox: {error:#}"),
+                ));
+            }
+        }
         let mut child_cmd = build_phase_driver_advisor_command(
             &self.project_root,
             &program,

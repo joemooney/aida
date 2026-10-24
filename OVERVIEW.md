@@ -380,6 +380,18 @@ For contributors, reviewers of architecture sketches, and anyone choosing what A
 
 ### Storage (EPIC-1-001) — git-canonical by default
 
+Transport policy is separate from shared project policy. The optional `work`
+profile is versioned JSON in the common Git directory, shared by linked
+worktrees. Its endpoint fingerprint and optional explicitly enrolled public-safe
+baseline never enter the requirement store. Profile configuration and push/pull
+plans dispatch before store initialization; plans do not fetch or run lifecycle
+actions. Execution currently refuses pending the executor and sanitization
+slices. Fixed store refspecs cannot expand through environment defaults, and
+changed/ambiguous origin endpoints refuse. Raw Git and other sync commands are
+outside this client-only boundary; there is no receiving-side enforcement.
+See [transport configuration](docs/cli/07-project-setup.md#aida-config-transport).
+<!-- trace:STORY-1742 | ai:codex -->
+
 The orphan branch `aida-store` is the writer of record. Each requirement is one YAML file at `objects/<TYPE>/000/<SPEC-ID>.yaml`, committed to that branch. Writes go to git first, then to a local SQLite cache (`.aida/cache.db`, gitignored, rebuildable).
 
 - **Live worktree:** `.aida-store/` (gitignored on the main branch; populated by `aida init`)

@@ -69,6 +69,47 @@ The one-time and once-in-a-while plumbing: the commands that *establish* an AIDA
 
 ---
 
+### `aida config transport`
+
+Enable the clone-local `work` profile with `aida config transport enable work`,
+inspect it with `aida config transport show`, and restore ordinary push/pull
+behavior with `aida config transport disable`. Each supports `--json` and
+`--format json`. Settings live in `aida-transport.json` under the common Git
+directory, shared by linked worktrees; no tracked project file or store object
+is changed. Configuration works before AIDA store/projection initialization.
+
+The profile pins a fingerprint of origin's single resolved fetch/push endpoint.
+Multiple endpoints, a different push endpoint, mirror mode, or later endpoint
+changes refuse planning. To change the pin, inspect the Git configuration and
+explicitly disable/re-enable the profile. Output and persisted profile data
+contain the fingerprint rather than URLs or credentials. An optional
+`--baseline <full-sha>` explicitly enrolls a reviewed public-safe commit from
+the local store history for the later outbound scanner. Enrollment records the
+operator's decision; it does not scan or certify that history.
+
+**Current boundary: profile and plans only.** While enabled, `aida push --dry-run`
+and `aida pull --dry-run` inspect local metadata without fetching, opening a
+store cache, or running lifecycle actions. `--json` also selects planning.
+Plans name origin, exact store refspecs, locally known source SHA, refs that
+execution could move, flag dispositions, and missing prerequisites. Code legs
+are forbidden even when `AIDA_PUSH_DEFAULT=code`; `aida push --store-only` and
+`aida pull --store-only` are redundant. `aida push --message <text>` and
+`aida pull --auto` refuse. Actual push/pull refuses until
+the executor and sanitization slices are available. Ordinary clones with no
+profile retain their existing behavior, including pull dry-run fetching.
+Explicit store overrides such as `aida --file <path> push` refuse when either
+clone has an enabled profile; run from the intended clone without the override.
+
+The intended transport is a ref-only store push and a store-only fetch followed
+by fast-forward. These plans do not yet validate cleanliness, fast-forward
+eligibility, hook compatibility, or content safety. The profile governs only
+`aida push/pull`; raw Git and other sync entry points bypass it. There is no
+server-side enforcement. Keep work-filed defects generic and sanitized before
+they enter any store that may become public.
+<!-- trace:STORY-1742 | ai:codex -->
+
+---
+
 ### `aida type`
 
 **One line** — manage the set of requirement types (the 19 built-ins, plus any project-specific ones).
@@ -197,6 +238,8 @@ The one-time and once-in-a-while plumbing: the commands that *establish* an AIDA
 
 
 **Primary-checkout drift.** `aida doctor check main-checkout-drift` reports when the primary checkout (the main worktree that linked worktrees hang off) has uncommitted tracked edits, untracked files, a branch other than `main`, or commits ahead of or behind its upstream. It lists the drifting paths. Where an untracked file's modification time falls inside a live session's window, it names that session as the likely owner so you know whom to ask. It only reads: nothing is deleted or moved. The same condition adds one `main checkout: …` line to the session-start context (set `AIDA_MAIN_CHECKOUT_DRIFT=off` to silence it) and shows a `⌂!` marker in `aida statusline`. <!-- trace:STORY-1648 | ai:claude -->
+
+**Cached compiler-wrapper errors.** `aida doctor` reports a `rustc-cache` finding when Cargo's `target/.rustc_info.json` contains a failed wrapper probe (such as an sccache permission error). It also checks the target selected by `CARGO_TARGET_DIR`; relative values resolve from the invocation directory, as in Cargo. `aida doctor rustc-cache` diagnoses just that cache without running Cargo; `aida doctor rustc-cache --fix` rechecks and removes the failed cache so Cargo can regenerate it. Plain diagnosis and general `--heal` leave it in place. Healthy caches, malformed JSON, and failures unrelated to a compiler wrapper are retained. <!-- trace:TASK-2324 | ai:codex -->
 
 **Read-only git config lock.** A sandboxed shell (for example Claude Code's Bash sandbox) can leave an empty, read-only `config.lock` in the repository's shared git directory. While it is there, git refuses every config write, so new worktrees, branch deletion and `push -u` fail with `could not lock config file .git/config: File exists`. AIDA removes that file before its own worktree and branch commands, and retries once if it reappears. `aida doctor check sandbox-config-lock` reports it, and `aida doctor --heal --category sandbox-config-lock` removes it. Only an empty lock with mode `0444` is removed; a real git lock is never read-only, so any other lock is left in place and git's error is shown. <!-- trace:BUG-2211 | ai:claude -->
 

@@ -5319,6 +5319,10 @@ pub(crate) fn build_agent_new_bg_command(
     launch_context: Option<&AgentLaunchContext>,
 ) -> Result<std::process::Command> {
     refuse_bg_under_os_wrap(config, &plan.launch_cwd)?;
+    // trace:BUG-2218 TASK-2328 | ai:codex
+    if is_contained_launch(config) {
+        crate::session::prepare_contained_mailbox_for_launch(&plan.launch_cwd)?;
+    }
     let mut command = std::process::Command::new(binary);
     command
         .current_dir(&plan.launch_cwd)
@@ -5576,6 +5580,10 @@ fn run_tracked_agent_after_spawn(
     // returns the bare program + args, so a normal `aida agent new` is
     // byte-identical to today's behavior. Non-claude agents keep the bare path.
     // trace:TASK-864 | ai:claude
+    // trace:BUG-2218 TASK-2328 | ai:codex
+    if is_contained_launch(config) {
+        session::prepare_contained_mailbox_for_launch(&plan.launch_cwd)?;
+    }
     let (program, exec_args) =
         resolved_agent_program_and_args(binary, config, plan, prompt_args, true)?;
     let mut command = std::process::Command::new(&program);

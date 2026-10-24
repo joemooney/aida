@@ -1255,9 +1255,9 @@ pub(crate) struct SessionStartCleanup {
     clone: Option<crate::seat_clone::CreatedClone>,
     clone_git_identity: Option<(u64, u64)>,
     lease_id: Option<String>,
-    // The spec this invocation moved Approved → InProgress, if it did.
-    // trace:BUG-2188 | ai:claude
-    status_bump: Option<String>,
+    // The exact status/owner write this invocation owns, including owner-only changes.
+    // trace:BUG-2188 TASK-2326 | ai:codex
+    claim_write: Option<crate::claim::ClaimStatusChange>,
     armed: bool,
 }
 impl SessionStartCleanup {
@@ -1273,7 +1273,7 @@ impl SessionStartCleanup {
             clone: None,
             clone_git_identity: None,
             lease_id: None,
-            status_bump: None,
+            claim_write: None,
             armed: true,
         }
     }
@@ -1365,35 +1365,22 @@ impl SessionStartCleanup {
         }
         true
     }
-    /// Put back the Approved → InProgress bump this invocation made, so a
-    /// refused launch leaves the spec pickable. Only an InProgress status is
-    /// reverted: anything a later writer set is left alone.
-    // trace:BUG-2188 | ai:claude
-    fn revert_status_bump(&self) {
-        let Some(spec) = &self.status_bump else {
+    /// Undo the status AND owner write only while its exact values remain.
+    // trace:BUG-2215 TASK-2326 | ai:codex
+    fn revert_claim_write(&self) {
+        let Some(change) = &self.claim_write else {
             return;
         };
-        let storage = Storage::new(self.root.join(".aida-store"));
-        let reverted = storage.load().and_then(|mut store| {
-            let Some(req) = store.get_requirement_unambiguous_mut(spec)? else {
-                return Ok(false);
-            };
-            if !matches!(req.status, RequirementStatus::InProgress) {
-                return Ok(false);
-            }
-            aida_core::conflict::set_status_recorded(
-                req,
-                RequirementStatus::Approved,
-                aida_core::conflict::SESSION_START_AUTHOR,
-            );
-            req.modified_at = chrono::Utc::now();
-            storage.save(&store)?;
-            Ok::<bool, anyhow::Error>(true)
-        });
-        match reverted {
+        match crate::claim::rollback_claim_status(&self.root, change) {
             Ok(true) => {}
-            Ok(false) => eprintln!("launch cleanup kept {spec}'s status: it changed after this launch set InProgress"),
-            Err(error) => eprintln!("launch cleanup could not restore {spec} to Approved: {error:#}; run `aida edit {spec} --status approved`"),
+            Ok(false) => eprintln!(
+                "launch cleanup kept {}: claim state changed after this launch",
+                self.scope
+            ),
+            Err(error) => eprintln!(
+                "launch cleanup could not restore {} claim state: {error:#}",
+                self.scope
+            ),
         }
     }
     /// Compare-and-delete the branch this invocation created. True when the
@@ -1432,7 +1419,7 @@ impl Drop for SessionStartCleanup {
                 return;
             }
         }
-        self.revert_status_bump();
+        self.revert_claim_write();
         let _ = self.release_branch();
         if let Some(claim) = &self.claim {
             match coordination::release_claim_receipt(&self.root.join(".aida-store"), claim) {
@@ -2996,26 +2983,17 @@ pub(crate) fn session_start_with_receipt(
         &lease_file,
     );
     let bumped_to_in_progress = if can_bump_status {
-        let storage = Storage::new(project_root.join(".aida-store"));
-        match storage.load().and_then(|mut store| {
-            let mut bumped = false;
-            // trace:TASK-1468 | ai:claude
-            if let Some(req) = store.get_requirement_unambiguous_mut(owns)? {
-                // BUG-1637: automated, recorded under its own author.
-                // trace:BUG-1637 | ai:claude
-                bumped =
-                    approved_to_in_progress_bump(req, aida_core::conflict::SESSION_START_AUTHOR);
-            }
-            if bumped {
-                storage.save(&store)?;
-            }
-            Ok::<bool, anyhow::Error>(bumped)
-        }) {
-            Ok(b) => {
-                if let Some(cleanup) = rollback.as_mut().filter(|_| b) {
-                    cleanup.status_bump = Some(owns.to_string());
+        // trace:BUG-2215 | ai:codex
+        let claimed = crate::claim::resolve_spec_for_claim(owns).and_then(|(_, req)| {
+            crate::claim::persist_claim_status_with_receipt(&project_root, &req, &lease.owner)
+        });
+        match claimed {
+            Ok(change) => {
+                let bumped = change.bumped;
+                if let Some(cleanup) = rollback.as_mut().filter(|_| change.changed()) {
+                    cleanup.claim_write = Some(change);
                 }
-                b
+                bumped
             }
             Err(e) => {
                 eprintln!(
@@ -3337,3 +3315,7 @@ pub(crate) fn probe_dangling_claudes_at_path(
 #[cfg(test)]
 #[path = "tests/bug_734_empty_worktree_probe_tests.rs"]
 mod bug_734_empty_worktree_probe_tests;
+
+#[cfg(test)]
+#[path = "tests/bug_2215_session_claim_rollback_tests.rs"]
+mod claim_rollback_tests;
