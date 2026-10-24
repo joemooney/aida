@@ -4,6 +4,7 @@
 //! Hold writes are atomic; there is no existing hold lock. Concurrent re-arm
 //! serialization is deferred by the signed slice; re-read before release.
 // trace:STORY-1687 | ai:codex
+// mandate-gate
 use crate::{merge_hold as mh, review_verdict as rv, seat_authority as sa};
 use anyhow::{bail, ensure, Context, Result};
 use chrono::{DateTime, FixedOffset};

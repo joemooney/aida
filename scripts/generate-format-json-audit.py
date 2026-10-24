@@ -35,6 +35,12 @@ VERIFIED = {
     "aida fleet drive": "fleet drive (preview; changes nothing without --tick)",
 }
 
+# Documented top-level fields of JSON leaves the hermetic audit cannot run.
+# trace:STORY-1888 | ai:claude
+FIELDS = {
+    "aida mandate status": "`protected_paths`: the effective protected set, `[{path, source}]` (source `built-in`, `origin/main:.aida/config.toml` or `~/.aida/config.toml`), or `{error, floor}` when the gate config is unreadable",
+}
+
 
 def main() -> int:
     if len(sys.argv) != 3:
@@ -57,6 +63,8 @@ def main() -> int:
         elif has_json:
             outcome = "COULD NOT VERIFY"
             probe = "Dedicated --json exists; needs command-specific state or external service"
+            if path in FIELDS:
+                probe += f". Fields: {FIELDS[path]}"
         else:
             outcome = "JSON not honoured"
             probe = "Explicitly rejected before dispatch (no local --json contract)"
