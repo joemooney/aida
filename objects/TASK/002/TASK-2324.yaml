@@ -8,8 +8,14 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-24T12:27:19.917135686Z
-modified_at: 2026-10-24T13:45:15.817445290Z
+modified_at: 2026-10-24T13:46:57.117556242Z
 req_type: Task
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a16e29-bad5-71f3-8055-4ae2d89f69b0
+  created_at: 2026-10-24T13:46:57.117553105Z
+  created_by: joe
 comments:
 - id: 01a16e27-dffb-70e0-a911-77f21d9acdbc
   author: ai:codex:joe
@@ -43,6 +49,10 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a16e2a-2499-7273-9265-80b7aad57cc1
+  author: joe
+  timestamp: 2026-10-24T13:46:58.073661522Z
+  changes: []
 filed_at:
   code_sha: 6980be3ace8b7b9ae795e4347b8a9d4be01a287e
   branch: main
