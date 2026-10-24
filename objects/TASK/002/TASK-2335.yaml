@@ -20,7 +20,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-24T19:10:24.135843668Z
-modified_at: 2026-10-24T19:44:09.419434544Z
+modified_at: 2026-10-24T19:44:13.084767869Z
 req_type: Task
 tags:
 - authority
@@ -32,6 +32,13 @@ relationships:
   target_id: 01a15f18-ed08-7922-ac1d-114f0fa53917
   created_at: 2026-10-24T19:44:09.419430890Z
   created_by: joe
+comments:
+- id: 01a16f71-371c-7b00-91bc-907fb79d3786
+  author: joe
+  content: 'ADVISOR 12:50: fold into STORY-1889''s remaining slice: ratchet #[path] mounts of gate tests in unprotected files.'
+  created_at: 2026-10-24T19:44:13.084767869Z
+  modified_at: 2026-10-24T19:44:13.084767869Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
 history:
 - id: 01a16f71-254a-7e11-979a-6ec52e471b25
   author: joe
