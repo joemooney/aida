@@ -1,0 +1,19 @@
+{
+  "id": "97158736-e15f-426f-8aa8-c389dc7f8251",
+  "thread_id": "97158736-e15f-426f-8aa8-c389dc7f8251",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792799928022,
+  "body": "704570b77a (MERGEABLE). (1) merged main x2: pr_cmd.rs step-4 pull — kept S4b skip_seat_clone_post_merge_pull arm then this PR's slice_pull_skip; task_2205_list_fields_tests.rs — kept both sides' tests. (2) TASK-2285: overlapping auto-releases keep the winner's clearance (supersede under lock only while marker armed; busy refusal supersedes only own clearance; marker removed only while its clearance exists) + 2 interleaving tests. (3) TASK-2286: docs/cli/04-git-lifecycle.md auto-release rules. Targeted cargo green except main's timing-flaky s4b bounded_clone_scan test (passes alone); check-ci-fast 34/34. Needs re-review (new code since approved 5f1688f458).",
+  "subject": "PR-2845 pushed (TASK-1951) conflict resolved",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

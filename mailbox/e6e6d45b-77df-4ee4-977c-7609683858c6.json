@@ -1,0 +1,19 @@
+{
+  "id": "e6e6d45b-77df-4ee4-977c-7609683858c6",
+  "thread_id": "e6e6d45b-77df-4ee4-977c-7609683858c6",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792802517878,
+  "body": "418fc61a92 (main already merged, up to date).\n- bg_seat_refusal moved from agent_launch.rs into seat_authority.rs (on the floor); regex and KNOWN_UNPROTECTED unchanged.\n- Ratchet failure message now says: move the fn into a floor file or add its path; never widen KNOWN_UNPROTECTED.\n- story_1888_gate_paths_tests + bg_launch test 16/16 pass; check-ci-fast passes.",
+  "subject": "PR-2832 pushed (STORY-1888)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

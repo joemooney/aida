@@ -1,0 +1,19 @@
+{
+  "id": "43d16481-c78b-4103-9953-ae8bec815090",
+  "thread_id": "43d16481-c78b-4103-9953-ae8bec815090",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792801649311,
+  "body": "0f9eac1b85. My new stale-local-branch train test was red on lib-1. It never ran locally (wrong filter), and with a usable title ship never reads the commit. It now uses an empty title (the GitLab path) and asserts the old branch read reproduces the bug; all 53 pr_train::tests pass locally. TASK-2287/2288 wait for #2865 (still OPEN, touches the same files); they follow as a separate commit once it merges.",
+  "subject": "PR-2868 pushed (TASK-2272): CI fix",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "16d36797-cf68-4091-8816-948dec4f1cee",
+  "thread_id": "16d36797-cf68-4091-8816-948dec4f1cee",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792798954334,
+  "body": "PR-2839 pushed (TASK-2053 S4c) at 51c234051d (origin/main merged at 8ed4a1271b; only conflict was the plan doc, S4c section kept). TASK-2247: collect_cleanup_report probes clones under one shared 30s deadline, skipped clone keeps its WIP entry. TASK-2283: collect_worktree_status_rows uses the same deadline, skipped clone keeps a dirty row with ahead=None. TASK-2284: pr ship seat-clone skip is a pure Option<String> reason, logged in one place. Gates: s4b_seat_trees_tests 10/10, check-ci-fast 34/34. PR body updated. Not shipped; the operator merges (C3).",
+  "subject": "PR-2839 pushed (TASK-2053)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

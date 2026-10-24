@@ -1,0 +1,19 @@
+{
+  "id": "05cfd9d8-e4d1-4153-925b-e32774743ef2",
+  "thread_id": "05cfd9d8-e4d1-4153-925b-e32774743ef2",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792800105950,
+  "body": "5d18434387 (PR2b). Fixes: (1) launch token gates binding, so unrelated sessions allocate -02; (2) inherited session env is scrubbed in all launch envs, and the session id/CLAUDE_PID are read for the running vendor only (aligned with PR3's agy AIDA_AGENT_TYPE export; no overlapping files, so no cherry-pick); (3) released/expired reservations mint a new UUID with previous_recipients; (4) LaunchReservationGuard and register compare-release on failure; (5) tmux --tmux-pane-pid #{pane_pid} pane resolution, and agy statusline resolves by ancestry (conversationId is verified for hooks per agy 1.4.2 hooks.md, the statusline payload is undocumented upstream); (6) PidObserver::current(); (7) /clear doc; F2 adopt never writes a refused name; F5 ls '-'; F6 one validator. Gates: targeted cargo (488 ok), make check-ci-fast ok. Each fix has a test.",
+  "subject": "PR-2864 pushed (STORY-1843)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

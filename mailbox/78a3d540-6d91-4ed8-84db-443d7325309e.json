@@ -1,0 +1,19 @@
+{
+  "id": "78a3d540-6d91-4ed8-84db-443d7325309e",
+  "thread_id": "78a3d540-6d91-4ed8-84db-443d7325309e",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792799594406,
+  "body": "ef72839fa7. PR-2843 merged, so TASK-2271 is in; the PR title now completes TASK-2272.\n- 2271/1-467: the train car subject is read at the gated approved head sha (git log -1 %B <head>) via derive_pr_ship_squash_subject_from_message; an unreadable head fails closed; stale-local-branch test.\n- 1-468: prs_named_on_command_line wiring tested. 1-469: the test drives ship's derivation. 1-470: doc line re-wrapped.\n- 1833: header row added to the TASK-2067 table comment. 1834: TASK-2252 row added to the PR-2858 body. 1835: process note only (already squashed on main), recorded on that row.\n- The earlier lib-1 red was story_1706 a_live_session_of_the_run_refuses_the_restart, a /proc spawn race unrelated to this diff; I reran it.\nGates: targeted cargo 24 passed (1 path-isolated test fails only on the sandbox's read-only HOME); check-ci-fast 34 passed.",
+  "subject": "PR-2868 pushed (TASK-2272)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}
