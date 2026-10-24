@@ -1,0 +1,29 @@
+id: 01a16ee5-c8b7-7851-ab6e-1df62aa749d0
+spec_id: TASK-1-495
+title: 'cosmetic: story_1698_mandate_tests.rs lines 336/345/353/418 gained unexplained …'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-2168, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  cosmetic: story_1698_mandate_tests.rs lines 336/345/353/418 gained unexplained editor-artifact brace-balancing comments (// }, // }})
+
+  PR: #2886
+  Reviewed sha: 1293093350cd6ec107445dfbd3bb09e83a54e20a
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-24T17:11:55.319602518Z
+modified_at: 2026-10-24T17:11:55.319602518Z
+req_type: Task
+tags:
+- carried-from:TASK-2168
+- finding-hash:9e2d9c17
+- from-review:PR-2886
+- kind:carried-forward
+filed_at:
+  code_sha: 62287fd361ad2ac2096236d2e222d037c0f60fbd
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: eb9846b8f4
+  vendor: claude
