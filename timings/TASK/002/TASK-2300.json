@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-2300",
+  "publishes": [
+    {
+      "at": "2026-10-24T06:26:09.680333516Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-24T01:28:06.734423137Z",
+      "spec": "TASK-2300",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Superseded"
+      }
+    },
+    {
+      "ts": "2026-10-24T05:12:25.203957454Z",
+      "spec": "TASK-2300",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Superseded",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-24T05:18:19.642472223Z",
+      "spec": "TASK-2300",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-24T06:11:20.651076500Z",
+      "spec": "TASK-2300",
+      "kind": {
+        "event": "PhaseDonePr",
+        "pr": 2887
+      }
+    },
+    {
+      "ts": "2026-10-24T06:12:08.404451141Z",
+      "spec": "TASK-2300",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "Done"
+      }
+    },
+    {
+      "ts": "2026-10-24T06:25:45.141568523Z",
+      "spec": "TASK-2300",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-24T06:25:58.936670922Z",
+      "spec": "TASK-2300",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2887
+      }
+    },
+    {
+      "ts": "2026-10-24T06:26:09.547042811Z",
+      "spec": "TASK-2300",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "98f7705e063dd5b8ac190e89a7a023463df4d9a5",
+        "pr": 2887,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
