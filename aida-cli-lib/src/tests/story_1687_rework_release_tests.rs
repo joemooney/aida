@@ -62,6 +62,7 @@ impl Fixture {
             &[Some(&self.req)],
             &sa::GrantCheck::Valid(self.grant.clone()),
             &no_mandate,
+            &held_check(),
         )
     }
     fn refused(&self, why: &str) {
@@ -145,7 +146,8 @@ fn invalid_or_absent_reviewer_grant_cannot_release() {
             HEAD,
             &[Some(&f.req)],
             &authority,
-            &no_mandate
+            &no_mandate,
+            &held_check()
         )
         .unwrap_err()
         .to_string()
@@ -268,7 +270,8 @@ fn missing_covered_specs_and_one_sensitive_member_stay_held() {
         HEAD,
         &[],
         &grant,
-        &no_mandate
+        &no_mandate,
+        &held_check()
     )
     .is_err());
     assert!(eligible(
@@ -278,7 +281,8 @@ fn missing_covered_specs_and_one_sensitive_member_stay_held() {
         HEAD,
         &[None],
         &grant,
-        &no_mandate
+        &no_mandate,
+        &held_check()
     )
     .is_err());
     let mut other = f.req.clone();
@@ -290,7 +294,8 @@ fn missing_covered_specs_and_one_sensitive_member_stay_held() {
         HEAD,
         &[Some(&f.req), Some(&other)],
         &grant,
-        &no_mandate
+        &no_mandate,
+        &held_check()
     )
     .is_err());
 }
@@ -411,6 +416,7 @@ fn expired_revoked_subject_roster_and_parent_grants_stay_held() {
             &[Some(&f.req)],
             &authority,
             &no_mandate,
+            &held_check(),
         )
         .unwrap_err();
         assert!(error.to_string().starts_with("reviewer grant rejected:"));
@@ -874,6 +880,7 @@ fn auto_release_fixture(change: ReleaseChange) {
             },
             approval_authority: &|_| Ok(()),
             mandate: &no_mandate,
+            refusal_release: &|_, _| held_check(),
             comment: &|body| {
                 comments.borrow_mut().push(body.to_string());
                 Ok(())
@@ -921,8 +928,9 @@ fn auto_release_fixture(change: ReleaseChange) {
             "id" | "subject" | "session_id" | "recorded_by" => "identity",
             "recorded_at" | "rounds" => "strictly newer",
             "round_verdict" | "missing_round_verdict" => "ambiguous",
-            "unarmed" => "no earlier",
-            "missing_rounds" => "missing arming",
+            // BUG-2216: with no retained arming round, the hold-marker
+            // fallback is consulted; this fixture's check answers Held.
+            "unarmed" | "missing_rounds" => "no retained arming round",
             "missing_timestamp" => "missing approval timestamp",
             "invalid_timestamp" => "invalid approval timestamp",
             "invalid_round_timestamp" => "invalid arming refusal timestamp",
@@ -1468,6 +1476,7 @@ fn malformed_matching_heads_cannot_authorize_release() {
             &[Some(&f.req)],
             &sa::GrantCheck::Valid(f.grant.clone()),
             &no_mandate,
+            &held_check(),
         )
         .unwrap_err();
         assert!(error.to_string().contains("unverifiable head"));
