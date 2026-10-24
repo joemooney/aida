@@ -1,0 +1,19 @@
+{
+  "id": "25f6e0be-e164-4a61-b7d8-1cf185847421",
+  "thread_id": "25f6e0be-e164-4a61-b7d8-1cf185847421",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792803071766,
+  "body": "Regroup draft v2 ready: .aida/handoff/advisor/regroup-draft-2026-10-23-v2.md\n\nApplied every CHANGED verdict from the 2026-10-23 delta; original draft unchanged. Six operator decisions open the document, with recommended defaults and linked exact ID scopes. TASK-2021 stays deferred; TASK-1715 requires supported ownership reconciliation, rework and fresh independent review; TASK-1222/TASK-1533 are operator-attended; BUG-1679 stays held. The 35 already-un-deferred terminal entries are collapsed into one optional archive list.\n\nVerified 191 unique covered entries: 156 detailed deferred rows and 35 terminal archive IDs. Buckets: REVIVE 14, FOLD 12, REJECT 20, KEEP-DEFERRED 81, RE-ARCHITECTURE INPUT 27, RE-GROOM 1, ACCEPTANCE CHECK 1, ARCHIVE IF DESIRED 35. If all defaults and their stated checks are accepted: 14 revive, 12 fold, 20 reject, 110 stay deferred, 35 archive. EPIC-64 remains conditional; no completion is presumed.\n\nDocs-only effects: v2 file plus this authorized notification. No spec edits/comments/status changes, branch/ref, PR or worktree actions.\n",
+  "subject": "regroup v2 ready",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

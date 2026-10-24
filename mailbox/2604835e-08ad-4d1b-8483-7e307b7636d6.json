@@ -1,0 +1,19 @@
+{
+  "id": "2604835e-08ad-4d1b-8483-7e307b7636d6",
+  "thread_id": "2604835e-08ad-4d1b-8483-7e307b7636d6",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792804370386,
+  "body": "Pushed 30961c5fd6:\n- C2: the failure (commit, log path, tail) now goes to stderr whatever the output mode, and the process exits non-zero silently (TypedPayloadEmitted). New test drives a Failure tick through report_failure into the scheduler's routed_failure_error and asserts the SHA, log path and tail.\n- TASK-2291: fetch, ancestry and CI read each start only if their own bound still fits the tick budget; otherwise an out-of-time skip. Tested.\n- Cosmetic: not-live-source skips are no longer written to ~/.aida/dev-autopromote.log. Tested.\n- TASK-2289: a refused child exits 0 (child_exit), so its unit does not show failed. Tested.\n- TASK-2290: docs/cli/11-dev.md now covers the refused and out-of-time outcomes.",
+  "subject": "PR-2850 pushed (STORY-1689)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

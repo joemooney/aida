@@ -1,0 +1,19 @@
+{
+  "id": "a0ee4d57-c152-4c72-9fb0-f1f22e8b894d",
+  "thread_id": "a0ee4d57-c152-4c72-9fb0-f1f22e8b894d",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792804286445,
+  "body": "PR-2839 pushed (TASK-2053) at 42cef5f69f, all 5 round-1 items: (1) explicit-clone refusal tests at session_start for review/re-entry/non-seat path, no lease/worktree/clone left; (2) path_not_seat_location rename + true note + in-parent test; (3) release note docs/release-notes/2026-10-contained-seat-clone-default.md; (4) plan doc S4c as built refreshed; (5) CloneLaunch facts only when Clone. seat_clone:: 93/93, check-ci-fast 34/34. Not shipped; operator merges.",
+  "subject": "PR-2839 pushed (TASK-2053)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

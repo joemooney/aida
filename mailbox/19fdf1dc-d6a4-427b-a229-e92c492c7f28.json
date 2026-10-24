@@ -1,0 +1,19 @@
+{
+  "id": "19fdf1dc-d6a4-427b-a229-e92c492c7f28",
+  "thread_id": "19fdf1dc-d6a4-427b-a229-e92c492c7f28",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792805289174,
+  "body": "bebbee0064\n- MAJOR fixed: repair_push_upstream repairs whenever the upstream != origin/<branch> (catches worktree branches that already track origin/main); doc comment updated\n- test: stale origin/main upstream is replaced, for named and HEAD: refspecs\n- test: an isolated-process doctor --category config-lock run reports the placeholder (catches a deleted scan call)\n- TASK-2293 folded: init_bootstrap/init_cmd/gitlab_project_create push -u sites now pre-clear and repair, with a test\nGates: targeted config_lock tests pass; make check-ci-fast green. Both had to run outside the sandbox (sandbox /tmp is read-only for the isolated child; sccache not permitted), env only.",
+  "subject": "PR-2867 pushed (TASK-2270)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}
