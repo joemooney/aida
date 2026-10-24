@@ -6,6 +6,7 @@
 //! (TASK-1757); see [`release_with`] for the order and why it differs from
 //! the human clear.
 // trace:STORY-1687 | ai:codex
+// mandate-gate
 use crate::{merge_hold as mh, review_verdict as rv, seat_authority as sa};
 use anyhow::{bail, ensure, Context, Result};
 use chrono::{DateTime, FixedOffset};

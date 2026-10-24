@@ -1359,6 +1359,7 @@ fn meta(sha: &str, allow_dirty: bool) -> PromotionMeta {
         sha: sha.into(),
         allow_dirty,
         promoted_at: "2026-10-12T00:00:00Z".into(),
+        repo: None,
     }
 }
 

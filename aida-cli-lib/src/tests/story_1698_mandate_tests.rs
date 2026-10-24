@@ -156,6 +156,7 @@ impl Case {
             hold: &self.hold,
             carry_over: self.carry_over.clone(),
             changed_paths: Some(&[]),
+            protected: crate::mandate_gates::ProtectedPaths::floor_ref(),
             ship_gate: None,
             hold_clear_gate: None,
         })
@@ -1559,6 +1560,7 @@ fn a_solo_self_approval_never_covers_a_mandate_ship_or_release() {
         hold: &c.hold,
         carry_over: None,
         changed_paths: Some(&[]),
+        protected: crate::mandate_gates::ProtectedPaths::floor_ref(),
         ship_gate: None,
         hold_clear_gate: None,
     });

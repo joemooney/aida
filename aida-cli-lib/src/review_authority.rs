@@ -52,6 +52,7 @@
 //! `proc:`/`shell:`, or `sid:` token — or it is refused: a lease token alone
 //! says where a command ran, not who ran it.
 // trace:BUG-1918 | ai:claude
+// mandate-gate
 
 use std::path::{Path, PathBuf};
 

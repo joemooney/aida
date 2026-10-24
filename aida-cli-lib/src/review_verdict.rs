@@ -26,6 +26,7 @@
 //! This is deliberately NOT a general review subsystem: no threads, no
 //! per-file comments, no history. One current verdict per spec, enough to
 //! answer "may this spec be marked done?".
+// mandate-gate
 //
 // trace:BUG-775 | ai:claude
 

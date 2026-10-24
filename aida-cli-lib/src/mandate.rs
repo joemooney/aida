@@ -24,6 +24,7 @@
 //! Expiry is never cached: every ship decision re-reads the records and
 //! compares them against the clock at that instant.
 // trace:STORY-1698 | ai:claude
+// mandate-gate
 
 use anyhow::{bail, Context, Result};
 use chrono::{DateTime, Duration, Utc};
@@ -1257,6 +1258,9 @@ pub(crate) struct ShipCheck<'a> {
     /// [`ship_decision`].
     // trace:STORY-1700 | ai:claude
     pub changed_paths: Option<&'a [String]>,
+    /// STORY-1888: the effective protected set (floor plus both config
+    /// layers; the floor alone when the layers are unreadable).
+    pub protected: &'a crate::mandate_gates::ProtectedPaths,
     /// STORY-1700: why `ship` is a human gate right now (listed in
     /// `[mandate.human_gates]`, or the gate config is unreadable); `None` =
     /// not gated. Read by [`ship_decision`] and [`rework_release_decision`].
@@ -1282,8 +1286,9 @@ fn gate_checks(
     let paths = c
         .changed_paths
         .ok_or(MandateRefusal::ChangedPathsUnresolved)?;
-    if let Some(path) = crate::mandate_gates::touches_gates(paths) {
-        return Err(MandateRefusal::TouchesGates { path });
+    // trace:STORY-1888 | ai:claude
+    if let Some(hit) = crate::mandate_gates::touches_gates(paths, c.protected) {
+        return Err(MandateRefusal::TouchesGates(hit));
     }
     if let Some(why) = gates.iter().find_map(|g| g.as_ref()) {
         return Err(MandateRefusal::HumanGated { why: why.clone() });
@@ -1350,7 +1355,7 @@ pub(crate) enum MandateRefusal {
     SupervisedNotIncluded { id: String }, // trace:STORY-1697 | ai:claude
     // trace:STORY-1700 | ai:claude
     ChangedPathsUnresolved,
-    TouchesGates { path: String },
+    TouchesGates(crate::mandate_gates::GateMatch), // trace:STORY-1888 | ai:claude
     HumanGated { why: String },
     SoloSelfApproval,
 }
@@ -1415,8 +1420,9 @@ impl MandateRefusal {
             Self::ChangedPathsUnresolved => {
                 "the files the PR changes could not be resolved, so it may touch the mandate's own gates".to_string()
             }
-            Self::TouchesGates { path } => format!(
-                "it changes `{path}`, part of the mandate and its human gates; a human must merge it"
+            Self::TouchesGates(hit) => format!(
+                "it changes {}, part of the mandate and its human gates; a human must merge it",
+                hit.describe()
             ),
             Self::HumanGated { why } => format!("shipping is a human gate ({why})"),
             Self::SoloSelfApproval => "the approval is a solo-human self-approval, not an independent review; a human must ship it".to_string(),
@@ -2098,25 +2104,45 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
             for w in &warnings {
                 eprintln!("warning: {w}");
             }
-            if *json {
-                let mut out = status_json(&state, now);
-                if let (Some(root), Some(m)) = (&audit_root, state_mandate(&state)) {
-                    out["drive_actions"] = crate::mandate_drive::ledger_json(root, &m.id);
-                }
-                println!("{out}");
-            } else {
-                println!("{}", status_text(&state, now));
-                if let (Some(root), Some(m)) = (&audit_root, state_mandate(&state)) {
-                    let gates = crate::mandate_gates::describe(Some(root));
-                    println!("  human gates: {gates}");
-                    if let Some(summary) = crate::mandate_drive::ledger_text(root, &m.id) {
-                        println!("{summary}");
-                    }
-                }
-            }
+            print!(
+                "{}",
+                status_report(&state, now, audit_root.as_deref(), *json)
+            );
             Ok(())
         }
     }
+}
+
+/// The full `aida mandate status` output (text or JSON), newline-terminated.
+// trace:STORY-1888 | ai:claude
+pub(crate) fn status_report(
+    state: &MandateState,
+    now: DateTime<Utc>,
+    audit_root: Option<&Path>,
+    json: bool,
+) -> String {
+    if json {
+        let mut out = status_json(state, now);
+        if let (Some(root), Some(m)) = (audit_root, state_mandate(state)) {
+            out["drive_actions"] = crate::mandate_drive::ledger_json(root, &m.id);
+        }
+        if let Some(root) = audit_root {
+            out["protected_paths"] = crate::mandate_gates::protected_paths_json(root);
+        }
+        return format!("{out}\n");
+    }
+    let mut out = format!("{}\n", status_text(state, now));
+    if let (Some(root), Some(m)) = (audit_root, state_mandate(state)) {
+        let gates = crate::mandate_gates::describe(Some(root));
+        out.push_str(&format!("  human gates: {gates}\n"));
+        if let Some(summary) = crate::mandate_drive::ledger_text(root, &m.id) {
+            out.push_str(&format!("{summary}\n"));
+        }
+    }
+    if let Some(root) = audit_root {
+        out.push_str(&crate::mandate_gates::protected_paths_text(root));
+    }
+    out
 }
 
 #[cfg(test)]

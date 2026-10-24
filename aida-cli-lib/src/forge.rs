@@ -1899,8 +1899,8 @@ impl Forge for GitHubForge {
     fn commit_checks(&self, sha: &str) -> Result<CommitChecks> {
         // trace:STORY-1689 | ai:claude
         anyhow::ensure!(
-            crate::git_arg_guard::is_hex_sha(sha),
-            "invalid commit `{sha}` for a CI read"
+            is_full_commit_sha(sha),
+            "invalid commit `{sha}` for a CI read: a full 40- or 64-character SHA is required"
         );
         let gh = crate::resolve_forge_cli(ForgeKind::GitHub).ok_or_else(|| {
             anyhow::anyhow!("could not invoke `gh` — is the GitHub CLI installed?")
@@ -2504,8 +2504,8 @@ impl Forge for GitLabForge {
     fn commit_checks(&self, sha: &str) -> Result<CommitChecks> {
         // trace:STORY-1689 | ai:claude
         anyhow::ensure!(
-            crate::git_arg_guard::is_hex_sha(sha),
-            "invalid commit `{sha}` for a CI read"
+            is_full_commit_sha(sha),
+            "invalid commit `{sha}` for a CI read: a full 40- or 64-character SHA is required"
         );
         let glab = crate::resolve_forge_cli(ForgeKind::GitLab).ok_or_else(|| {
             anyhow::anyhow!("could not invoke `glab` — is the GitLab CLI installed?")
@@ -3821,8 +3821,14 @@ pub(crate) fn stream_probe_needs_wait(probe: &CiProbeResult) -> bool {
     matches!(probe, CiProbeResult::InProgress { .. })
 }
 
-// trace:TASK-1424 | ai:claude — pub(crate) so gitlab_mirror_link can reuse this
-// mapper for a sha-filtered pipeline query instead of a second implementation.
+/// A full SHA-1 or SHA-256 commit ID. The forge reports every check with
+/// the full SHA, so an abbreviated one could never match and would read as
+/// "no CI" instead of an error.
+// trace:STORY-1689 | ai:claude
+pub(crate) fn is_full_commit_sha(sha: &str) -> bool {
+    matches!(sha.len(), 40 | 64) && sha.bytes().all(|b| b.is_ascii_hexdigit())
+}
+
 /// Bound on one commit-keyed CI API call.
 // trace:STORY-1689 | ai:claude
 const COMMIT_CI_API_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
@@ -3873,6 +3879,8 @@ pub(crate) fn ci_status_from_commit_checks(checks: Result<CommitChecks>) -> CiSt
     }
 }
 
+// trace:TASK-1424 | ai:claude — pub(crate) so gitlab_mirror_link can reuse this
+// mapper for a sha-filtered pipeline query instead of a second implementation.
 pub(crate) fn ci_status_from_glab_pipelines(out: Result<std::process::Output>) -> CiStatus {
     let none = || CiStatus {
         state: CiState::None,
