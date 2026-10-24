@@ -41,6 +41,9 @@ fn survey(root: &Path, worktrees: Vec<WorktreeEntry>) -> Survey {
         include_live: false,
         include_open_prs: false,
         now: SystemTime::now() + COLD,
+        cache_root: None,
+        open_prs: Vec::new(),
+        merged_offline: Default::default(),
     }
 }
 
@@ -151,8 +154,10 @@ fn task_1562_apply_refuses_the_main_checkout_target_even_as_the_only_entry() {
             target: protected.clone(),
             branch: Some("main".to_string()),
             bytes: u64::MAX,
+            why: crate::worktree_reclaim::ReclaimWhy::Stale,
         }],
         skipped: Vec::new(),
+        cache_root: None,
     };
 
     let err = apply(
