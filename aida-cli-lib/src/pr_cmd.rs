@@ -2317,6 +2317,8 @@ pub(crate) fn fetch_ship_refs(
     let out = aida_core::git_ops::host_git_command(project_root)
         .args(["fetch", "--quiet", "--no-tags", "origin"])
         .args(&refspecs)
+        // trace:TASK-1952 | ai:claude
+        .remote_credentials(project_root, "origin")
         .output()
         .map_err(|e| format!("git fetch: {e}"))?;
     if !out.status.success() {
