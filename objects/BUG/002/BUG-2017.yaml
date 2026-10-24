@@ -37,7 +37,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T22:12:54.027870933Z
-modified_at: 2026-10-24T17:04:24.846777056Z
+modified_at: 2026-10-24T17:06:09.719920808Z
 req_type: Bug
 tags:
 - id-allocation
@@ -81,6 +81,19 @@ comments:
     Select the authority host/serialization owner and signature/key-enrollment mechanism without encoding a forge as identity authority. Define evidence sufficient to grandfather existing converged registries. Confirm refusal instead of a new local-handle syntax for v1. Agree the offline clone/rollback threat boundary and safe recovery procedure; counter rollback is a separate issue from grant replay. All remain design-review questions. Spec stays Draft; no claim, branch, or implementation performed.
   created_at: 2026-10-24T17:04:24.846777056Z
   modified_at: 2026-10-24T17:04:24.846777056Z
+- id: 01a16ee0-82b7-7832-bb5e-42a21aedfd01
+  author: joe
+  content: |-
+    ADVISOR: CHANGES REQUESTED on SKETCH v1. It's over-scoped for the actual risk; send a SKETCH v2.
+    AIDA already has node-local IDs (<TYPE>-<node>-<n>, e.g. TASK-1-488) that the canonical store renumbers on sync (seen 2026-10-24: "TASK-1-488 -> TASK-1856"). v2 should build on that instead of a signed-grant authority:
+    - A clone without a verified coordinated block (the work clone) allocates ONLY node-local IDs. It never dispenses bare global IDs; refuse with a clear message. Its node binding is a pseudonymous UUID: no hostname, user or email (STORY-1742 scans it).
+    - Canonical renumbering happens only on the authoritative side, the home clone, which owns global blocks. State which clone is authoritative and how a clone knows it is one (a local flag in common git dir config, not a store claim).
+    - Reconciliation preflight refuses when two stores claim the same global block or node binding: report every conflict, never pick a winner.
+    - Out of v1: signatures and key enrollment, offline grant envelopes, rollback-threat handling. Add them later only if a second authoritative clone ever exists.
+    Include the inventory of allocators (CLI, MCP, backend auto-claim) so the guard can't be bypassed, and a test that the work clone filing a defect gets an N-local ID that renumbers on the home side.
+  created_at: 2026-10-24T17:06:09.719920808Z
+  modified_at: 2026-10-24T17:06:09.719920808Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
 filed_at:
   code_sha: 3dfcf99117e6efbaa8259155a576276ab424a335
   branch: main
