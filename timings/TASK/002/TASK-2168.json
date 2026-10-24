@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-2168",
+  "publishes": [
+    {
+      "at": "2026-10-24T17:11:37.265419664Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-22T11:48:16.744027992Z",
+      "spec": "TASK-2168",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-24T06:06:17.261846896Z",
+      "spec": "TASK-2168",
+      "kind": {
+        "event": "PhaseDonePr",
+        "pr": 2886
+      }
+    },
+    {
+      "ts": "2026-10-24T16:44:29.666823615Z",
+      "spec": "TASK-2168",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-2168",
+        "branch": "pr-2886",
+        "first_seen": "2026-10-24T16:44:29.666766132+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-24T17:11:20.981475359Z",
+      "spec": "TASK-2168",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2886
+      }
+    },
+    {
+      "ts": "2026-10-24T17:11:35.815990122Z",
+      "spec": "TASK-2168",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "62287fd361ad2ac2096236d2e222d037c0f60fbd",
+        "pr": 2886,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
