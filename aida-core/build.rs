@@ -100,6 +100,9 @@ fn main() {
     // trace:STORY-1427 | ai:claude
     embed_directory(&mut code, "templates/gates", "gates");
 
+    // Typed dispatch prompt wrappers (take / impl). trace:STORY-1917 | ai:agy
+    embed_directory(&mut code, "templates/dispatch", "dispatch");
+
     // User-local terminal helpers. trace:STORY-995 | ai:codex
     embed_file(
         &mut code,
@@ -134,6 +137,7 @@ fn main() {
     );
     code.push_str("    (\"memories\", \"Starter memory pack - generic discipline for `aida init --with-memories`\"),\n");
     code.push_str("    (\"gates\", \"Gate library - named checklists invoked by `aida gate` and `aida add --gates`\"),\n");
+    code.push_str("    (\"dispatch\", \"Typed dispatch prompt wrappers for `aida dispatch` (take / impl)\"),\n");
     code.push_str("    (\"terminal/terminator/aida_terminator.py\", \"Terminator DBus plugin for `aida session focus/send`\"),\n");
     code.push_str("];\n");
 

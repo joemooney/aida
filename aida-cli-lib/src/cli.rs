@@ -24,6 +24,9 @@ pub(crate) use crate::config_cmd::config_cmd_args::{
 pub(crate) use crate::db_cmd::db_cmd_args::{BlockCommand, DbCommand};
 pub(crate) use crate::deps_cmd::deps_cmd_args::DepsCommand;
 pub(crate) use crate::dev_cmd::dev_cmd_args::{DevCleanMode, DevCommand};
+pub(crate) use crate::dispatch::dispatch_args::{
+    DispatchAction, DispatchRequestVerb, DispatchStatusFilter, DispatchVendor,
+};
 pub(crate) use crate::doc_cmd::doc_cmd_args::{DocCommand, DocsCommand};
 pub(crate) use crate::doctor_cmd::doctor_cmd_args::DoctorCommand;
 pub(crate) use crate::drain_cmd::drain_cmd_args::DrainCommand;
