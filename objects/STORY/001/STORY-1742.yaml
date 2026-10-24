@@ -38,7 +38,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T22:02:03.191649035Z
-modified_at: 2026-10-24T18:18:42.166089917Z
+modified_at: 2026-10-24T22:13:50.461151322Z
 req_type: Story
 tags:
 - docs:impacted
@@ -121,6 +121,21 @@ comments:
   content: 'CI follow-up: the preceding run later failed the Git auto-maintenance ratchet for the new fixture commit/commit-tree calls. Pushed 6ffc2d712c to route all fixture Git calls through support/test_git.rs; production transport code is unchanged. The maintenance ratchet (8 tests), executable-fixture ratchet (7 tests), split-stack fixtures (44 tests), and sccache fixtures (7 tests) pass locally. CI is now running on 6ffc2d712c; readiness will change only after that full current-head run is green.'
   created_at: 2026-10-24T18:18:42.166089917Z
   modified_at: 2026-10-24T18:18:42.166089917Z
+- id: 01a16ffa-32fd-73e1-81da-3797b2b3cbd1
+  author: joe
+  content: |-
+    Slice 2 opened: https://github.com/joemooney/aida/pull/2910
+    Commit: 7ab3014e59078fcac2be58e879c406d1a8438ea6. Fresh worktree from origin/main after PR-2904 merged (8b523a4422). Non-draft, non-completing PR: title ends (Refs STORY-1742), body declares aida: no-complete; parent remains In Progress.
+
+    The executor makes one non-forced push of the pinned store SHA to the pinned origin's refs/heads/aida-store. It requires an attached, clean, idle store, validates under the existing writer lock and releases the lock before hooks/network I/O. Verified store-only hooks preserve identity policy without project code hooks. Explicit endpoint/refspec/tag/submodule/negotiation controls prevent extra legs; chained URL rewrites, partial clones, dirty/active stores, embedded repositories and unsupported hooks refuse. Raw hook/remote diagnostics are suppressed. No auto-commit, mailbox publication, ID allocation, reconciliation, fan-out, retry, baseline advancement or remote-tracking update.
+
+    LIGHT validation on final source: 16 isolated CLI integration tests passed; make check-ci-fast passed all 34 gates; both changed help sections match the built CLI. Fixtures include real bare-remote receives, identity denial, tampered hooks, dirty/operation-state refusal, non-fast-forward, destination whitespace and chained rewrites, and a receiver acquiring the writer lock while advancing a later local commit (remote receives only the pinned SHA).
+
+    Requested aida ship STORY-1742 --no-merge initially pushed but its PR-creation guard rejected the required non-completing Refs trailer. Opened PR through gh preserving that trailer and reran the requested ship command successfully; it found PR-2910 and queued reviewer STORY-1928. No merge performed. This is a workflow guard limitation, not a reason to add a completing trailer.
+
+    Remaining signed slice 3: refusal-only history/object scanner, local deny list, sanitized intake/template and end-to-end fixtures. Pull stays plan-only; this slice does not establish a safe WORK export path.
+  created_at: 2026-10-24T22:13:50.461151322Z
+  modified_at: 2026-10-24T22:13:50.461151322Z
 history:
 - id: 01a16ee2-ad7a-7b30-aaeb-ec8f892fbe76
   author: joe
