@@ -1,0 +1,37 @@
+id: 01a16e6c-c8fe-7761-8902-c093e81b2a0c
+spec_id: STORY-1922
+agreed_id: STORY-1922
+title: 'Review PR-2900: [AI:claude] fix(train): network steps retry transients; a PR rides one train at a time (BUG-2219 BUG-2220)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `claude/bug-2219-2220`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2900>
+  - Branch: `claude/bug-2219-2220` → `claude/bug-2214-train`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - BUG-2219
+  - BUG-2220
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2900` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-24T14:59:45.534156785Z
+modified_at: 2026-10-24T14:59:45.534156785Z
+req_type: Story
+filed_at:
+  code_sha: 762ffa9f4db408c82e68543462e984046c7b9a53
+  branch: claude/bug-2219-2220
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 194492a69f
+  vendor: claude
+  session: 16800bb8-6bb5-4aad-a6bd-ab9e4ef96b8b
