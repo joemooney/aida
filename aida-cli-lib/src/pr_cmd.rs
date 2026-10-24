@@ -2326,6 +2326,7 @@ pub(crate) fn fetch_ship_refs(
     }
     // TASK-2143: through the host-git chokepoint, which refuses a seat clone.
     let out = aida_core::git_ops::host_git_command(project_root)
+        .env("GIT_TERMINAL_PROMPT", "0")
         .args(["fetch", "--quiet", "--no-tags", "origin"])
         .args(&refspecs)
         // trace:TASK-1952 | ai:claude
