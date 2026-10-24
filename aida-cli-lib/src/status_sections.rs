@@ -391,16 +391,30 @@ mod task_1943_branch_facts_tests {
 /// by the text section and the `--json` projection so they never drift.
 /// trace:STORY-456 | ai:claude
 pub(crate) fn collect_worktree_status_rows(main_root: &std::path::Path) -> Vec<WorktreeStatusRow> {
+    collect_worktree_status_rows_until(
+        main_root,
+        Some(std::time::Instant::now() + CLONE_PROBE_BUDGET),
+    )
+}
+
+/// [`collect_worktree_status_rows`] with the seat-clone probes bounded by one
+/// shared `clone_deadline`.
+// trace:TASK-2053 | ai:claude
+pub(crate) fn collect_worktree_status_rows_until(
+    main_root: &std::path::Path,
+    clone_deadline: Option<std::time::Instant>,
+) -> Vec<WorktreeStatusRow> {
     // TASK-2053: seat clones are listed too, with their branch, unpushed
     // count and dirty count read through the sandboxed probe (a clone's
-    // branch is not in main's refs). An unreadable clone keeps the lease
-    // branch and reads as dirty.
+    // branch is not in main's refs). An unreadable clone, or one the shared
+    // deadline skipped, keeps the lease branch, reads as dirty and has no
+    // ahead count.
     // trace:TASK-2053 | ai:claude
     let mut worktrees = list_worktrees(main_root);
     let mut clone_ahead = std::collections::HashMap::new();
     let mut clone_dirty = std::collections::HashMap::new();
-    for mut wt in clone_seat_trees(main_root) {
-        match crate::seat_clone::probe(main_root, &wt.path) {
+    for (mut wt, probe) in probe_clone_seat_trees(main_root, clone_deadline) {
+        match probe {
             crate::seat_clone::Probe::Known(facts) => {
                 wt.branch = facts.branch.clone().or(wt.branch);
                 clone_ahead.insert(
