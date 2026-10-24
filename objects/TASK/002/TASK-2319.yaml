@@ -1,0 +1,35 @@
+id: 01a16cbc-2da0-71a2-9e0a-15d681220e69
+spec_id: TASK-2319
+agreed_id: TASK-2319
+title: Re-export ratchet misses aliased re-exports (pub use crate::gate as g)
+description: |
+  The STORY-1889 re-export ratchet (`gate_reexports` in
+  aida-cli-lib/src/tests/story_1888_gate_paths_tests.rs) requires `gate` to be
+  followed by `::`, `;`, or `}`. An aliased re-export in an unprotected file —
+  `pub use crate::gate as g;` or `pub use crate::gate::seat_authority as x;` —
+  is not matched, so `no_unprotected_file_reexports_gate_items` would not refuse
+  it. Writing an alias is a deliberate act (the ratchet documents itself as
+  drift protection, not a defence against deliberate subversion), so this did
+  not block PR-2889; still, extending the regex to also match `gate\s+as\b` and
+  `gate::<path> as` closes the gap cheaply.
+
+  Raised in review of PR-2889: https://github.com/joemooney/aida/pull/2889#issuecomment-6381258221
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-24T07:07:14.208443175Z
+modified_at: 2026-10-24T07:07:14.208443175Z
+req_type: Task
+tags:
+- from-review:PR-2889
+- severity:minor
+filed_at:
+  code_sha: b3707363492b655acc3ca632d06956c6179ef536
+  branch: pr-2889
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 43a38f38d2
+  vendor: claude
+  session: 01a16cb47fa9
+  harness_version: 2.1.310 (Claude Code)
