@@ -8,8 +8,14 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-24T12:27:08.977771549Z
-modified_at: 2026-10-24T12:42:05.685784331Z
+modified_at: 2026-10-24T13:44:17.510269596Z
 req_type: Bug
+comments:
+- id: 01a16e27-b166-70b2-8c60-d96e54c79da2
+  author: ai:codex:joe
+  content: 'Implemented in PR-2898 at eb9846b8f4: contained Claude and OS-wrapper launches create and grant only the shared .aida/mailbox directory, refusing symlinked mailbox or state directories without granting surrounding sensitive coordination state. Send errors name the target path and filesystem reason. Three new mailbox regressions and all 17 store-boundary tests passed; make check-ci-fast passed all 34 gates. Existing contained sessions need restart for the new binding. PR remains unmerged for independent review.'
+  created_at: 2026-10-24T13:44:17.510269596Z
+  modified_at: 2026-10-24T13:44:17.510269596Z
 history:
 - id: 01a16de2-65a2-7851-ac33-7b68ed2e6b49
   author: joe
