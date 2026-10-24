@@ -232,6 +232,9 @@ fn main_worktree_store(current: &Path, rel_store: &str) -> Option<PathBuf> {
 /// `current`, or `None` outside a git repo.
 // trace:BUG-331, TASK-2169 | ai:claude
 fn main_worktree_candidate(current: &Path, rel_store: &str) -> Option<PathBuf> {
+    // trace:TASK-1952 | trace:BUG-1992 | ai:claude
+    // raw-git-ok(BUG-1929): a read-only rev-parse in the code checkout; the
+    // hardened builder's own store lookup reaches here, so routing it recurses.
     let out = std::process::Command::new("git")
         .arg("-C")
         .arg(current)
