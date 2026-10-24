@@ -1589,6 +1589,10 @@ pub(crate) fn spawn_vendor_headless_with_seat_granted(
         );
     }
     let tuning = resolve_agent_tuning(&headless_worktree_root(), vendor, seat);
+    // trace:BUG-2218 TASK-2328 | ai:codex
+    if contained {
+        prepare_contained_mailbox_for_launch(&headless_worktree_root())?;
+    }
     let (program, args) = compose_headless_command(
         vendor,
         prompt,
@@ -1602,10 +1606,6 @@ pub(crate) fn spawn_vendor_headless_with_seat_granted(
     // every headless phase behaves identically whoever launched it.
     // trace:TASK-1169 | ai:claude
     let (ceiling_key, ceiling_value) = crate::bg_wait_ceiling_env(Some(&headless_worktree_root()));
-    // trace:BUG-2218 TASK-2328 | ai:codex
-    if contained {
-        prepare_contained_mailbox_for_launch(&headless_worktree_root())?;
-    }
     let child_grant = crate::seat_authority::issue_child(
         &headless_worktree_root(),
         seat.as_str(),
