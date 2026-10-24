@@ -1,0 +1,38 @@
+id: 01a16f52-4187-7370-8a92-f2bb3e039bf1
+spec_id: TASK-2335
+agreed_id: TASK-2335
+title: 'Gate-test #[path] mounts in unprotected files are repointable — ratchet them (found reviewing PR-2907)'
+description: |
+  The #[path] mount of gate/tests/story_1405_review_marker_tests.rs sits in UNPROTECTED
+  aida-cli-lib/src/lib_part5.rs (near line 3436, after the STORY-1889 slice-3 move). The test
+  bodies are protected under the gate/ prefix, but the mount is not: an unprotected diff can
+  repoint the #[path] at a stub (or delete the mount) and the protected gate tests silently
+  stop running — no compile error, no ratchet failure. Same bypass family as the re-export
+  ratchet (TRANSITIONAL_GATE_REEXPORTS / no_unprotected_file_reexports_gate_items).
+
+  Suggested fix: a ratchet test (in the protected test file) that every #[path = "...gate/tests/..."]
+  mount outside the floor is enumerated in a shrink-only allowlist, or relocate the mount so it
+  lives on the floor. May ride STORY-1889 PR 4 (approval/ship + final cleanup).
+
+  Raised in review of PR-2907: https://github.com/joemooney/aida/pull/2907#issuecomment-6388360939
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-24T19:10:24.135843668Z
+modified_at: 2026-10-24T19:10:24.135843668Z
+req_type: Task
+tags:
+- authority
+- from-review:PR-2907
+- ratchet
+- severity:minor
+filed_at:
+  code_sha: df12b9c279302946947760ab534411087d561f89
+  branch: pr-2907
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c7e5160ce3
+  vendor: claude
+  session: 01a16f3fcf36
+  harness_version: 2.1.310 (Claude Code)
