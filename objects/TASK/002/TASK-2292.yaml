@@ -1,0 +1,27 @@
+id: 01a16b48-ae19-79f2-b479-30dce56bcd88
+spec_id: TASK-2292
+agreed_id: TASK-2292
+title: Drop the redundant scratch_root allowance from the roster guard (write_member_seats_allowing)
+description: |
+  aida-core/src/team.rs:272 guard_roster_write_allowing and :345 write_member_seats_allowing add a scratch_root allowance (TASK-2223). Their only caller, seat_authority.rs:2478 test_support, passes the workspace target/. TASK-2238's is_under_workspace_target already accepts that directory, so after the main merge two mechanisms implement one rule. Drop the _allowing variants and call write_member_seats directly.
+
+  Raised in review of PR-2855: https://github.com/joemooney/aida/pull/2855#issuecomment-6377444566
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-24T00:21:27.705684164Z
+modified_at: 2026-10-24T00:21:27.705684164Z
+req_type: Task
+tags:
+- from-review:PR-2855
+- severity:cosmetic
+filed_at:
+  code_sha: 05e2bcd8e78d554b62bddfea65bd071714137cc0
+  branch: pr-2855
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c51da86593
+  vendor: claude
+  session: 01a16b46a7da
+  harness_version: 2.1.310 (Claude Code)
