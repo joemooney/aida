@@ -2449,3 +2449,30 @@ fn task_2238_store_history_ignores_replace_objects() {
         versions.iter().map(|v| &v.title).collect::<Vec<_>>()
     );
 }
+
+/// The Git snapshot's narrower dirt scope grants no ledger bypass: this
+/// separately read home ledger still refuses newly excluded or corrupt data.
+// trace:BUG-2213 | ai:codex
+#[test]
+fn bug_2213_mandate_ledger_updates_still_refuse() {
+    let ledger_dir = tempfile::tempdir().unwrap();
+    let mut c = Case::ok();
+    c.ledger = read_exclusions(ledger_dir.path());
+    assert!(c.decide().is_ok(), "clean home ledger");
+
+    let mut excluded = plain();
+    excluded.tags.insert("security".into());
+    note_exclusions(ledger_dir.path(), "TASK-1", [&excluded]);
+    c.ledger = read_exclusions(ledger_dir.path());
+    assert!(matches!(c.decide(), Err(MandateRefusal::Excluded { .. })));
+
+    let ledger = ledger_dir.path().join(EXCLUSION_LEDGER);
+    let mut text = std::fs::read_to_string(&ledger).unwrap();
+    text.push_str("{partial coordination-era append\n");
+    std::fs::write(&ledger, text).unwrap();
+    c.ledger = read_exclusions(ledger_dir.path());
+    assert!(matches!(
+        c.decide(),
+        Err(MandateRefusal::LedgerUnreadable(_))
+    ));
+}
