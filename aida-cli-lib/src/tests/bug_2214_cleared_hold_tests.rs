@@ -72,6 +72,7 @@ fn qualified_root() -> tempfile::TempDir {
 
 #[test]
 fn all_three_sources_agree_and_the_hold_reads_as_cleared_by_human() {
+    // trace:BUG-2214.ace5f93a | ai:claude
     let tmp = qualified_root();
     assert_eq!(
         cleared_by_human_facts(tmp.path(), PR, || Ok(Some(labels(false, true, true)))),
@@ -88,6 +89,7 @@ fn all_three_sources_agree_and_the_hold_reads_as_cleared_by_human() {
 /// with no attested event is refused — before the forge is even asked.
 #[test]
 fn a_forged_clearance_without_an_attested_event_is_refused() {
+    // trace:BUG-2214.acd6c45c | ai:claude
     let tmp = tempfile::tempdir().unwrap();
     write_clearance(tmp.path(), PR, "human:joe", None);
     assert_eq!(
@@ -100,6 +102,7 @@ fn a_forged_clearance_without_an_attested_event_is_refused() {
 
 #[test]
 fn no_clearance_record_never_reads_the_forge() {
+    // trace:BUG-2214.acd6c45c | ai:claude
     let tmp = tempfile::tempdir().unwrap();
     emit_hold_event(tmp.path(), PR, false, Some("human:joe"), true);
     assert_eq!(
@@ -112,6 +115,7 @@ fn no_clearance_record_never_reads_the_forge() {
 
 #[test]
 fn a_mandate_clearance_is_not_a_human_clearance() {
+    // trace:BUG-2214.ace5f93a | ai:claude
     let tmp = qualified_root();
     write_clearance(tmp.path(), PR, "advisor:joe", Some("mandate-1"));
     assert_eq!(
@@ -122,6 +126,7 @@ fn a_mandate_clearance_is_not_a_human_clearance() {
 
 #[test]
 fn an_agent_clearance_is_not_a_human_clearance() {
+    // trace:BUG-2214.ace5f93a | ai:claude
     let tmp = qualified_root();
     write_clearance(tmp.path(), PR, "agent:drain-worker", None);
     assert_eq!(
@@ -132,6 +137,7 @@ fn an_agent_clearance_is_not_a_human_clearance() {
 
 #[test]
 fn a_hold_placed_after_the_release_cancels_it() {
+    // trace:BUG-2214.acd6c45c | ai:claude
     let tmp = qualified_root();
     // A re-arm after a mandate ship failure is a placement like any other.
     emit_hold_event(tmp.path(), PR, true, None, false);
@@ -143,6 +149,7 @@ fn a_hold_placed_after_the_release_cancels_it() {
 
 #[test]
 fn an_unattested_or_non_human_release_event_is_refused() {
+    // trace:BUG-2214.acd6c45c | ai:claude
     for (principal, attested) in [
         (Some("human:joe"), false),   // no integrity-floor attestation
         (Some("advisor:joe"), true),  // an advisor seat is not a human
@@ -163,6 +170,7 @@ fn an_unattested_or_non_human_release_event_is_refused() {
 
 #[test]
 fn another_prs_release_does_not_qualify() {
+    // trace:BUG-2214.acd6c45c | ai:claude
     let tmp = tempfile::tempdir().unwrap();
     write_clearance(tmp.path(), PR, "human:joe", None);
     emit_hold_event(tmp.path(), PR + 1, false, Some("human:joe"), true);
@@ -175,6 +183,7 @@ fn another_prs_release_does_not_qualify() {
 /// A clearance file copied from another PR's record does not qualify.
 #[test]
 fn a_copied_clearance_record_does_not_qualify() {
+    // trace:BUG-2214.acd6c45c | ai:claude
     let tmp = qualified_root();
     write_clearance(tmp.path(), PR + 1, "human:joe", None);
     let copied = merge_hold::clearance_path(tmp.path(), PR + 1);
@@ -187,6 +196,7 @@ fn a_copied_clearance_record_does_not_qualify() {
 
 #[test]
 fn forge_label_state_must_agree() {
+    // trace:BUG-2214.acd6c45c | ai:claude
     let tmp = qualified_root();
     // A live hold label: the forge still holds the PR.
     assert_eq!(
@@ -218,6 +228,7 @@ fn forge_label_state_must_agree() {
 /// unattested), and an event with the defaults serializes in the old shape.
 #[test]
 fn hold_event_serde_is_backward_compatible() {
+    // trace:BUG-2214.ace5f93a | ai:claude
     let ev = crate::events::Event::new(
         None,
         "",
@@ -273,6 +284,7 @@ fn commit(repo: &std::path::Path, file: &str, message: &str) -> String {
 
 #[test]
 fn the_evidence_fetch_brings_a_forge_moved_head() {
+    // trace:BUG-2214.ac2210da | ai:claude
     let dir = tempfile::tempdir().unwrap();
     let origin = dir.path().join("origin");
     std::fs::create_dir(&origin).unwrap();
@@ -312,6 +324,7 @@ fn the_evidence_fetch_brings_a_forge_moved_head() {
 // trace:BUG-2214 | ai:claude
 #[test]
 fn every_mandate_cover_call_site_passes_the_head_branch() {
+    // trace:BUG-2214.ac2210da | ai:claude
     let rework = include_str!("../rework_hold_release.rs")
         .split("mandate: &||")
         .nth(1)
