@@ -1,0 +1,34 @@
+id: 01a16c9d-367e-7c21-9125-f519f116b580
+spec_id: BUG-2214
+agreed_id: BUG-2214
+title: A mandate cannot land a held PR that is behind main, or a supervised PR whose hold a human already cleared
+description: |
+  ## Problem
+  Overnight under an active `ship-held --include-supervised` mandate, approved PRs could not land without a human, in three ways (2026-10-23):
+  1. A held PR that is BEHIND main: `aida pr ship` refuses "behind main" before it reaches the mandate hold release, and `aida pr train` never releases a hold. So nothing can land it (#2838, #2867).
+  2. A supervised PR whose hold a human already cleared: there is no typed merge-hold marker left for the mandate to release, so ship and train refuse with "a human must ship it" (#2864, #2869). Clearing the hold by hand leaves the PR harder to land than before.
+  3. After `gh pr update-branch`, ship's mandate-evidence read fails ("git merge-base: Not a valid commit name <new head>") because the new head is not fetched locally.
+  ## Acceptance
+  - Under a covering mandate, `aida pr train` releases a member's merge hold exactly when `aida pr ship` would (same cover check, same ledger record, same PR comment), then lands it on the tested train.
+  - A supervised PR whose hold was human-cleared, with an approval at head, is covered by a mandate that includes supervised specs.
+  - Ship/train fetch the PR head before reading mandate evidence.
+  - Fail closed: operator-only (STORY-1129-class) specs, protected gate paths and missing approvals still refuse. Tests cover each refusal.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-24T06:33:24.862508226Z
+modified_at: 2026-10-24T06:33:24.862508226Z
+req_type: Bug
+tags:
+- mandate
+- merge-hold
+- train
+filed_at:
+  code_sha: 98f7705e063dd5b8ac190e89a7a023463df4d9a5
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 43a38f38d2
+  vendor: claude
+  session: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
