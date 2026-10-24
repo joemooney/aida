@@ -212,7 +212,7 @@ fn codex_setup_disables_terminal_title_and_recommends_tmux_status_right() {
     assert!(out.contains("status_line = [\"model-with-reasoning\""));
     assert!(out.contains("terminal_title = null"));
     assert!(out.contains("Codex releases overwrite shell prompt title hooks"));
-    assert!(out.contains("set -g status-right '#(aida statusline --color=never)'"));
+    assert!(out.contains("set -g status-right '#(cd #{q:pane_current_path} && aida statusline --color=never --tmux-pane-pid #{pane_pid})'"));
     assert!(out.contains("set -g status-interval 15"));
     assert!(out.contains("aida statusbar --plain"));
     assert!(out.contains("command-backed `[tui] status_line` item"));
