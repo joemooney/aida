@@ -1807,6 +1807,8 @@ pub(crate) static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
         &["sandbox-config-lock", "config-lock", "git-config-lock"],
         "sandbox-config-lock",
     ),
+    // trace:TASK-2324 | ai:codex
+    (&["rustc-cache", "rustc-info"], "rustc-cache"),
     // BUG-1229 / BUG-2140: store worktree gitdir/rebase/permission integrity.
     // trace:BUG-2140 | ai:antigravity
     (

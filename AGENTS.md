@@ -455,6 +455,13 @@ mutation/gate paths remain strict. See OVERVIEW.md for the read-label contract.
 
 ## Storage Model
 
+Clone-local transport policy lives in the common Git directory, outside the
+shared store. `aida config transport` manages the `work` profile before store
+initialization; enabled push/pull currently supports read-only plans and refuses
+execution pending the executor/sanitization slices. See
+[transport configuration](docs/cli/07-project-setup.md#aida-config-transport).
+<!-- trace:STORY-1742 | ai:codex -->
+
 Store-tree host git runs only the shipped AIDA hooks from a verified, versioned
 profile under the git common directory. Project hook managers never run there.
 Unexpected contents, symlinks, hard links, or unsafe ownership/permissions refuse

@@ -3758,6 +3758,16 @@ fn run_push(
 ) -> anyhow::Result<crate::command_registry::Flow> {
     use crate::*;
     let args = <PushArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    // Inspect local transport policy before storage init or ordinary push scope.
+    // trace:STORY-1742 | ai:codex
+    if ctx.store.is_none()
+        && crate::transport_profile::handle_push(
+            &args,
+            ctx.globals.and_then(|globals| globals.file.as_deref()),
+        )?
+    {
+        return Ok(crate::command_registry::Flow::Return);
+    }
     match &ctx.store {
         None => Ok(crate::command_registry::Flow::Continue),
         Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
@@ -3991,6 +4001,16 @@ fn run_pull(
 ) -> anyhow::Result<crate::command_registry::Flow> {
     use crate::*;
     let args = <PullArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    // A transport plan must never run the ordinary dry-run's fetch/lifecycle path.
+    // trace:STORY-1742 | ai:codex
+    if ctx.store.is_none()
+        && crate::transport_profile::handle_pull(
+            &args,
+            ctx.globals.and_then(|globals| globals.file.as_deref()),
+        )?
+    {
+        return Ok(crate::command_registry::Flow::Return);
+    }
     match &ctx.store {
         None => Ok(crate::command_registry::Flow::Continue),
         Some(crate::command_registry::StoreCtx::Distributed { .. }) => {

@@ -966,6 +966,11 @@ pub(crate) fn handle_intake_command(
     // The skill reads the resolved policy + the bounded fence from env; the
     // prompt stays the human-facing surface (mirrors the advisor tier's
     // env-passed payload). trace:STORY-560
+    // Prepare before issuing authority: a filesystem refusal leaves no grant.
+    // trace:BUG-2218 TASK-2328 | ai:codex
+    if contained {
+        crate::session::prepare_contained_mailbox_for_launch(&project_root)?;
+    }
     let child_grant =
         seat_authority::issue_child(&project_root, "advisor", &current_user_id(None))?;
     let mut command = build_autopilot_intake_command(

@@ -658,7 +658,9 @@ mod linux {
             "{refused:#}"
         );
         assert!(
-            !crate::session::os_wrap_rw_paths(&clone).contains(&elsewhere),
+            !crate::session::os_wrap_rw_paths(&clone)
+                .unwrap_or_default()
+                .contains(&elsewhere),
             "os_wrap binds nothing from the forged lease"
         );
         std::fs::write(&marker_path, &marker).unwrap();

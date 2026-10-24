@@ -227,6 +227,7 @@ mod store_push_pull;
 mod store_sync;
 mod supervise_cmd;
 mod supervisor;
+mod transport_profile;
 // trace:STORY-1218 | ai:claude
 mod schedule_driver;
 mod shift;
@@ -536,6 +537,8 @@ mod rules_sync;
 mod sandbox_cmd;
 // trace:BUG-2211 trace:TASK-2270 | ai:claude — sandbox-left config.lock doctor check.
 mod sandbox_config_lock;
+// trace:TASK-2324 | ai:codex
+mod rustc_cache;
 mod scaffold_cmd;
 mod scaffold_refresh;
 // trace:TASK-1307 | ai:claude — the pre-BUG-1452 stranded-refusal sweep.

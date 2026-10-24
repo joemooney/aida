@@ -345,6 +345,18 @@ pub(crate) fn acquire(
     }
 }
 
+/// BUG-2220: the active merge-leases whose holders are still live — a dead
+/// pid on this host or a TTL-expired holder is dropped, so a stale lease
+/// never blocks a second train.
+// trace:BUG-2220 | ai:claude
+pub(crate) fn live_status(project_root: &Path) -> Vec<(String, Holder)> {
+    let our_host = crate::coordination::hostname();
+    status(project_root)
+        .into_iter()
+        .filter(|(_, h)| stale_reason(h, &our_host).is_none())
+        .collect()
+}
+
 /// Every active merge-lease as `(branch, holder)`, ascending by branch — the
 /// `aida merge-lock status` surface.
 pub(crate) fn status(project_root: &Path) -> Vec<(String, Holder)> {
@@ -712,5 +724,39 @@ mod tests {
         let branches: Vec<_> = st.iter().map(|(b, _)| b.clone()).collect();
         assert_eq!(branches, vec!["main".to_string(), "release_2".to_string()]);
         assert_eq!(st[0].1.pr, Some(1));
+    }
+
+    /// BUG-2220: `live_status` keeps only holders that still gate — a dead
+    /// same-host pid and a TTL-expired holder are dropped, a live one stays.
+    // trace:BUG-2220 | ai:claude
+    #[cfg(unix)]
+    #[test]
+    fn live_status_drops_dead_and_expired_holders() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        std::fs::create_dir_all(locks_dir(root)).unwrap();
+        let dead = Holder {
+            host: crate::coordination::hostname(),
+            pid: 999_999_999,
+            pid_start: None,
+            pr: Some(9),
+            note: "aida pr train".into(),
+            acquired_at: now_secs(),
+            ttl_secs: DEFAULT_TTL_SECS,
+        };
+        std::fs::write(lock_path(root, "dead"), serialize(&dead)).unwrap();
+        let expired = Holder {
+            host: "elsewhere".into(),
+            pid: 1,
+            pid_start: None,
+            pr: Some(10),
+            note: "aida pr train".into(),
+            acquired_at: now_secs().saturating_sub(DEFAULT_TTL_SECS + 60),
+            ttl_secs: DEFAULT_TTL_SECS,
+        };
+        std::fs::write(lock_path(root, "expired"), serialize(&expired)).unwrap();
+        let _live = acquire(root, "main", Some(11), "aida pr train", DEFAULT_WAIT).unwrap();
+        let live: Vec<_> = live_status(root).into_iter().map(|(_, h)| h.pr).collect();
+        assert_eq!(live, vec![Some(11)], "only the live holder gates");
     }
 }
