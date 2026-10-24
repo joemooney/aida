@@ -6,16 +6,25 @@ description: |
   aida-cli-lib/src/session.rs stage_resume_transcript checks the source transcript with symlink_metadata (regular file, owned by this uid), then reads it with std::fs::read, which follows symlinks. A swap between the check and the read gets past the signoff condition 'never a symlinked source'. Open the source with O_NOFOLLOW, fstat the handle and read from it. The source dir (~/.claude/projects/<main slug>) is host-owned, so the risk is low.
 
   Raised in review of PR-2838: https://github.com/joemooney/aida/pull/2838#issuecomment-6380858550
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-24T06:23:10.856248618Z
-modified_at: 2026-10-24T06:23:10.856248618Z
+modified_at: 2026-10-24T06:52:25.498425628Z
 req_type: Task
 tags:
 - from-review:PR-2838
 - severity:minor
+history:
+- id: 01a16cae-9e1a-7321-8118-89fe64e174a3
+  author: joe
+  timestamp: 2026-10-24T06:52:25.498418948Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 1a6c419d58caf00e9a71b07d268518c32f057604
   branch: pr-2838
