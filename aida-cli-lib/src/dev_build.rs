@@ -1209,6 +1209,8 @@ pub(crate) fn rollback_with_steps(
             );
         }
     }
+    // trace:TASK-2272 | ai:claude
+    let rolled_away = read_promotion_meta(&layout.live_dir).map(|m| m.sha);
     // Park the live pair and both records, mark parking done, then per
     // binary prev -> live and the parked copy -> prev, then settle the
     // records. [`recover_live_dir`] finishes or undoes a crash at any step.
@@ -1246,6 +1248,17 @@ pub(crate) fn rollback_with_steps(
     std::fs::remove_file(swap.join(ROLLBACK_MARKER))?;
     step("unmarked")?;
     let _ = std::fs::remove_dir(&swap);
+    let mut notes = notes;
+    // The scheduled autopromote must not rebuild what was just rolled away.
+    // trace:TASK-2272 | ai:claude
+    if let Some(sha) = rolled_away.filter(|s| !s.is_empty()) {
+        if let Err(e) = crate::dev_autopromote::pin_rolled_back(&layout.live_dir, &sha) {
+            notes.push(format!(
+                "could not pin {sha} against the scheduled autopromote ({e:#}); \
+                 disable the dev-autopromote job until main moves"
+            ));
+        }
+    }
     Ok(notes)
 }
 

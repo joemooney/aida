@@ -4941,6 +4941,24 @@ mod tests {
         assert!(agent_tool_launches("t.md", "  - SendMessage").is_empty());
     }
 
+    /// TASK-2272 (TASK-2297, TASK-2298): discipline prose describes the
+    /// standalone implementer launch, not the retired Agent-tool brief.
+    // trace:TASK-2272 | ai:claude
+    #[test]
+    fn discipline_prose_has_no_agent_tool_brief_residue() {
+        let doc = |key: &str| {
+            crate::templates::EMBEDDED_TEMPLATES
+                .get(key)
+                .unwrap_or_else(|| panic!("{key} embedded"))
+        };
+        let review = doc(".aida/discipline/git-sync-and-review.md");
+        assert!(!review.contains("return ONLY the PR URL"));
+        assert!(review.contains("takes no prompt from the caller"));
+        assert!(review.contains("`implementer:` line"));
+        let authoring = doc(".aida/discipline/spec-authoring.md");
+        assert!(!authoring.contains("subagent, brief, or queue-work"));
+    }
+
     /// TASK-2272 (TASK-2287): the advisor pre-creates the fixer's worktree,
     /// which creates its branch, so the fixer prompt must not STOP on it.
     // trace:TASK-2272 | ai:claude

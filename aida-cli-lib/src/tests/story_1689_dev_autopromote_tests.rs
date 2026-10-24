@@ -1050,3 +1050,24 @@ fn a_refused_child_exits_zero_and_a_failed_one_does_not() {
     assert!(child_exit(Err(anyhow::anyhow!("cargo build failed"))).is_err());
     assert!(child_exit(Ok(())).is_ok());
 }
+
+// TASK-2272 (TASK-2301): after `aida dev rollback` pins origin/main's SHA, a
+// green tick skips it instead of re-promoting the commit rolled away from.
+// trace:TASK-2272 | ai:claude
+#[test]
+fn a_tick_skips_the_sha_the_operator_rolled_back_from() {
+    let f = fixture();
+    pin_rolled_back(&f.layout.live_dir, TARGET).unwrap();
+    let mut fake = Fake::green();
+    let outcome = tick(&f, &mut fake);
+    assert_eq!(skip_reason(&outcome), "failed-sha");
+    let TickOutcome::Skipped(skip) = outcome else {
+        unreachable!()
+    };
+    assert!(
+        skip.detail().contains("rolled the live binary back"),
+        "{}",
+        skip.detail()
+    );
+    assert_untouched(&fake);
+}
