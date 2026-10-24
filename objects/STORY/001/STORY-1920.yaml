@@ -1,0 +1,35 @@
+id: 01a16e29-bad5-71f3-8055-4ae2d89f69b0
+spec_id: STORY-1920
+agreed_id: STORY-1920
+title: 'Review PR-2898: [AI:codex] fix(workflow): repair claims, sandbox mail and compiler cache checks (BUG-2215, BUG-2218, TASK-2324)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a16dee`) for branch `codex/bug-2215`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2898>
+  - Branch: `codex/bug-2215` → `main`
+
+  ## Covers
+
+  - BUG-2215
+  - BUG-2218
+  - TASK-2324
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2898` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-24T13:46:30.997117380Z
+modified_at: 2026-10-24T13:46:30.997117380Z
+req_type: Story
+filed_at:
+  code_sha: 194492a69f7358b90006afe525d62056b42d30ce
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 194492a69f
+  vendor: codex
