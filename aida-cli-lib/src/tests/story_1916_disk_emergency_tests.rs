@@ -884,6 +884,45 @@ fn task_1_484_a_repeating_refusal_is_deduped_a_new_one_notifies() {
     );
 }
 
+/// TASK-2322: a partial run (deletes, then a refusal) still records the
+/// refusal, so the next nothing-deleted tick carrying it is deduped; a
+/// deletes-only run records nothing.
+// trace:TASK-2322 | ai:claude
+#[test]
+fn task_2322_partial_run_records_its_refusal_for_dedupe() {
+    let now = Utc::now();
+    let mut partial = outcome_with(
+        vec![candidate(Path::new("/c/take-1"), Reason::Idle, HOUR)],
+        Some(97),
+    );
+    partial.refusal = Some("refusing to delete x".into());
+    let mut state = GuardState::default();
+    assert!(note_emergency_notified(&mut state, now, &partial));
+    assert_eq!(
+        state.last_emergency_refusal.as_deref(),
+        Some("refusing to delete x")
+    );
+    assert_eq!(
+        state.last_emergency_stuck_at, None,
+        "deletes happened: no stuck stamp"
+    );
+
+    // The next stuck tick with the same refusal stays quiet inside the cadence.
+    state.last_emergency_stuck_at = Some(now - chrono::Duration::minutes(30));
+    let mut stuck = outcome_with(Vec::new(), Some(97));
+    stuck.refusal = Some("refusing to delete x".into());
+    assert!(!should_notify_emergency(&state, now, &stuck));
+
+    // Deletes-only: nothing to dedupe, nothing recorded.
+    let deleted = outcome_with(
+        vec![candidate(Path::new("/c/take-2"), Reason::Idle, HOUR)],
+        Some(89),
+    );
+    let mut untouched = GuardState::default();
+    assert!(!note_emergency_notified(&mut untouched, now, &deleted));
+    assert_eq!(untouched, GuardState::default());
+}
+
 /// TASK-1-482: the production glue — the lock, the gh / offline fallback,
 /// the incremental ledger append (TASK-1-481) and the notice dedupe state
 /// write — driven end to end with only the usage probe injected.
@@ -914,7 +953,8 @@ fn task_1_482_run_emergency_glue_locks_ledgers_and_dedupes() {
 
     // Nothing left to delete and still over the margin: the notice dedupe
     // state is written, and a tick 30 m later stays quiet (state unchanged).
-    run_emergency_probed(&main, &root, &cfg, || Some(97)).expect("ran");
+    run_emergency_probed(&main, &root, &cfg, || Some(97))
+        .expect("ran (None here means the tempdir-private lock open/flock failed — a host-level fs error such as EMFILE, not shared test state)");
     let stuck_at = load_guard_state(&main)
         .last_emergency_stuck_at
         .expect("stuck state written");
