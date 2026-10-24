@@ -1,0 +1,29 @@
+id: 01a16bd4-6845-72e0-aa42-a76d8f114971
+spec_id: TASK-1-472
+title: 'minor (non-blocking): aida-core/templates/skills/aida-fire.md fixer prompt stil…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on STORY-1662, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  minor (non-blocking): aida-core/templates/skills/aida-fire.md fixer prompt still says 'If it is already claimed or has a branch or PR, STOP and report' while the new recipe has the advisor pre-create the worktree+branch with 'aida worktree add <SPEC> --role implementer'; a literal fixer sees its own branch and stops. Reword to 'a branch or PR other than the one your worktree is on'.
+
+  PR: #2865
+  Reviewed sha: cb0a96cfe5cc4d4b53592feab097d355858d53c8
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-24T02:54:04.869741835Z
+modified_at: 2026-10-24T02:54:04.869741835Z
+req_type: Task
+tags:
+- carried-from:STORY-1662
+- finding-hash:3ced08ff
+- from-review:PR-2865
+- kind:carried-forward
+filed_at:
+  code_sha: d14a20aaaea1d58be05fdacf97e1ef60c46d02fb
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c016980d03
+  vendor: claude
