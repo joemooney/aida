@@ -393,3 +393,131 @@ fn resumed_contained_child_write_roots_follow_its_worktree_not_the_launcher_cwd(
         "resumed child must not inherit the launcher cwd's write roots"
     );
 }
+
+// TASK-1781 (b): a contained parent may not pass --no-default-flags, which
+// skips the agents.toml contained posture; an uncontained shell still may.
+// trace:TASK-1952 | trace:TASK-1781 | ai:claude
+#[test]
+fn task_1781_contained_parent_refuses_no_default_flags() {
+    let skip = AgentDefaultFlagOptions::new(false, Vec::new(), None);
+    let err = crate::agent_launch::refuse_no_default_flags_under_contained_parent(true, &skip)
+        .expect_err("refused under a contained parent");
+    assert!(format!("{err:#}").contains("--no-default-flags"), "{err:#}");
+    crate::agent_launch::refuse_no_default_flags_under_contained_parent(false, &skip)
+        .expect("the operator's escape hatch from an uncontained shell");
+    let defaults = AgentDefaultFlagOptions::new(true, Vec::new(), None);
+    crate::agent_launch::refuse_no_default_flags_under_contained_parent(true, &defaults)
+        .expect("defaults applied");
+}
+
+// TASK-1781 (d): codex and agy refuse under a contained parent before the
+// role picker or any project lookup runs. `cwd` is not an AIDA project, so
+// reaching the picker would fail with a different error.
+// trace:TASK-1952 | trace:TASK-1781 | ai:claude
+#[test]
+fn task_1781_codex_and_agy_refuse_before_the_role_picker() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (_root, home) = project(tmp.path(), false);
+    let nowhere = tmp.path().join("not-a-project");
+    std::fs::create_dir_all(&nowhere).unwrap();
+    let _env = EnvVarsGuard::apply(&[("AIDA_HOME", Some(&home)), ("AIDA_CONTAINED", Some("1"))]);
+    type Launch = fn(
+        Option<String>,
+        Option<String>,
+        bool,
+        Option<&std::path::Path>,
+        bool,
+        crate::agent_launch::AgentContextOptions,
+        bool,
+        bool,
+        bool,
+        bool,
+        crate::agent_launch::AgentPromptOptions,
+        crate::agent_launch::AgentResumeOptions,
+        AgentDefaultFlagOptions,
+        Option<String>,
+        Option<String>,
+    ) -> anyhow::Result<()>;
+    for (tool, launch) in [
+        ("codex", crate::agent_launch::agent_new_codex as Launch),
+        (
+            "antigravity",
+            crate::agent_launch::agent_new_antigravity as Launch,
+        ),
+    ] {
+        let err = launch(
+            None,
+            None,
+            false,
+            Some(&nowhere),
+            false,
+            crate::agent_launch::AgentContextOptions::new(false, false),
+            false,
+            true,
+            false,
+            false,
+            crate::agent_launch::AgentPromptOptions::new(None, true),
+            crate::agent_launch::AgentResumeOptions::new(false, None, false, false),
+            AgentDefaultFlagOptions::new(true, Vec::new(), None),
+            None,
+            None,
+        )
+        .expect_err("a contained parent refuses");
+        assert!(
+            format!("{err:#}").contains("cannot run an AIDA-contained session"),
+            "{tool}: {err:#}"
+        );
+    }
+}
+
+// TASK-1761 (b): `--sandbox` alone contains a claude child, and a per-tool
+// `--settings` in agents.toml does not make an uncontained launch contained.
+// trace:TASK-1952 | trace:TASK-1761 | ai:claude
+#[test]
+fn task_1761_sandbox_contains_and_per_tool_settings_do_not() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (root, home) = project(tmp.path(), false);
+    let _env = EnvVarsGuard::apply(&[("AIDA_HOME", Some(&home)), ("AIDA_CONTAINED", None)]);
+    let posture = aida_core::git_ops::with_host_git_version("git version 2.43.0", || {
+        resolve_claude_new_posture(None, true, false, false, || Ok(false))
+    })
+    .unwrap();
+    assert!(posture.contained, "--sandbox sets contained");
+    let cfg = AgentLaunchConfig {
+        agent_type: "claude",
+        binary: "claude",
+        default_args: posture.default_args,
+        prompt_style: AgentPromptStyle::Positional,
+        contained: posture.contained,
+    };
+    assert!(crate::agent_launch::is_contained_launch(&cfg));
+
+    std::fs::write(
+        root.join(".aida/agents.toml"),
+        "[agents]\ncontained = false\n\n[agents.claude]\ndefault_flags = [\"--settings\", \"{}\"]\n",
+    )
+    .unwrap();
+    let mut cfg = AgentLaunchConfig {
+        agent_type: "claude",
+        binary: "claude",
+        default_args: Vec::new(),
+        prompt_style: AgentPromptStyle::Positional,
+        contained: false,
+    };
+    apply_agent_default_flags(
+        &mut cfg,
+        &root,
+        AgentDefaultFlagOptions::new(true, Vec::new(), None),
+        false,
+    )
+    .unwrap();
+    assert!(
+        cfg.default_args.iter().any(|a| a == "--settings"),
+        "{:?}",
+        cfg.default_args
+    );
+    assert!(
+        !crate::agent_launch::is_contained_launch(&cfg),
+        "a per-tool --settings reads as uncontained"
+    );
+}
