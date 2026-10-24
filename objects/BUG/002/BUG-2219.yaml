@@ -3,12 +3,12 @@ spec_id: BUG-2219
 agreed_id: BUG-2219
 title: A merge train dies on a transient network failure (DNS) with no retry
 description: 'Observed 2026-10-23: train #2884 (2864+2869) failed on ''Could not resolve host: github.com'' and stopped, needing a manual re-run. ACCEPTANCE: train network steps (fetch, push, gh API) retry a transient failure (DNS, connection reset, 5xx) with bounded backoff, at most about 3 attempts. A non-transient failure (auth, 4xx, conflict) does not retry. When retries run out, the train reports which step failed and leaves a resumable state. Tests with an injected transient failure.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-24T12:27:12.571568239Z
-modified_at: 2026-10-24T19:43:34.877712390Z
+modified_at: 2026-10-24T20:55:47.580467750Z
 req_type: Bug
 relationships:
 - rel_type: Supersedes
@@ -41,6 +41,20 @@ history:
   timestamp: 2026-10-24T19:43:35.754065809Z
   session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
   changes: []
+- id: 01a16fb2-be73-7c23-8226-5041914dffe5
+  author: aida-auto-bump
+  timestamp: 2026-10-24T20:55:47.571781603Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a16fb2-be7c-7170-b67a-64154ccd88d0
+  timestamp: 2026-10-24T20:55:47.580462514Z
+  agent: aida
+  commit_sha: f729f5130b0f30dcd8de4960d022632c362be7e9
+  summary: All train network steps (fetch/push/gh) route through the shared transient-retry runner; non-transient returns at once; exhausted retries name the step; injected-failure tests cover each path; CI green at head.
+  review_verdict: approved
 filed_at:
   code_sha: 6980be3ace8b7b9ae795e4347b8a9d4be01a287e
   branch: main
@@ -49,3 +63,7 @@ filed_at:
   aida_build_sha: 6980be3ace
   vendor: claude
   session: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-24T20:55:47.571776953Z
+  completion_sha: f729f5130b0f30dcd8de4960d022632c362be7e9
