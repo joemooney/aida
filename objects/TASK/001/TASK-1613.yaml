@@ -19,12 +19,12 @@ description: |
 
   ## Handoff
   Inspect aida ship implementation and its --no-merge behavior before writing the redirect. Use existing skill/CLI symmetry discipline. Implementation must occur in an isolated claimed session; advisor review remains independent. This task is a compatibility/documentation update, not a redesign of ship semantics.
-status: NeedsAttention
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-08T04:15:57.651449326Z
-modified_at: 2026-10-24T01:14:00.324465481Z
+modified_at: 2026-10-24T06:44:25.422992974Z
 req_type: Task
 tags:
 - docs:impacted
@@ -527,6 +527,23 @@ history:
   timestamp: 2026-10-24T01:14:02.310848833Z
   session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
   changes: []
+- id: 01a16ca7-4ab5-7331-93dd-d66729e691f1
+  author: aida-auto-bump
+  timestamp: 2026-10-24T06:44:25.397681983Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a16ca7-4ace-7af3-8a6e-7408c0372a3a
+  timestamp: 2026-10-24T06:44:25.422988052Z
+  agent: joe
+  brief_ref: .aida/agent-briefs/codex/TASK-1613-2026-10-08T161605Z.md.acked
+  commit_sha: 0642f7620d159e9fde82d47651b8698515eab681
+  summary: 'All 6 TASK-1613 criteria verified: the thin aida ship --no-merge/--dry-run redirect plus explicit auto-queue-review matches source (pr_cmd.rs StopAtPr does not autoqueue), the orchestrated --no-pr + sentinel-last branch is restored, and the new template test pins it. All 5 round-1 findings fixed; CI green at head. One cosmetic stale reference remains (non-blocking).'
+  punted:
+  - 'punted: session end observed 1 commit ahead on branch `task-1613` with no open PR; work may need manual push/PR recovery'
+  review_verdict: approved
 filed_at:
   code_sha: 5d4180e5ded8a55ad1b02beac5571c190d3da0ac
   branch: main
@@ -536,12 +553,6 @@ filed_at:
   vendor: codex
 implementation_info:
   implemented: false
+  completed_at: 2026-10-24T06:44:25.397674885Z
+  completion_sha: 0642f7620d159e9fde82d47651b8698515eab681
   reopened_at_sha: bdd2846897925f4f2a5ab7cd6fe9560fedf8b6e4
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Thin aida ship redirect is accurate against source (StopAtPr does not autoqueue; 46B description within 48B budget; CI green), but the orchestrated-child exit contract (commit+push, touch AIDA_EXIT_SENTINEL last) was deleted and is now only referenced, and several direct doc references still describe the old ceremony. AC: accaf23d verified (canonical files; .claude mirrors are symlinks; CI template gates green); ac0a656e verified (SKILL.md:35-39, commands/aida-pr.md:14-18); ac1eafcd verified (pr_cmd.rs:1486-1511 StopAtPr has no autoqueue; skill calls auto-queue-review explicitly); acbb1ae4 PARTIAL (independence/draft/no-Completed preserved, headless orchestrated exit lost); aca8b383 verified (no --complexity; aida pr ship distinction SKILL.md:86-90); ac35e6e8 PARTIAL (stale refs remain).'
-  recovery_hint: address the review findings, move TASK-1613 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-24T00:50:54.631186498Z
