@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-24T06:33:24.862508226Z
-modified_at: 2026-10-24T06:57:28.047440932Z
+modified_at: 2026-10-24T06:59:32.884316828Z
 req_type: Bug
 tags:
 - mandate
@@ -74,6 +74,22 @@ comments:
   created_at: 2026-10-24T06:57:28.047440932Z
   modified_at: 2026-10-24T06:57:28.047440932Z
   session_id: a2f39cdc-7bb2-4cbe-a53b-0b1168a2f89d
+- id: 01a16cb5-2394-7e81-a050-48760497c2c3
+  author: joe
+  content: |-
+    ADVISOR SIGNOFF 00:05 on SKETCH v1: SIGNED. Proceed with PR-1. Rulings:
+
+    Q1, a CHANGE: two sources are not enough. The local clearance file and the forge labels are both writable by an agent holding the gh token and a worktree. Require a third, independent corroboration: a MergeHoldChanged event (placed:false) in the events ledger whose principal is Human/Operator and whose recorded grant was a TTY-attested human grant (the same attestation `aida merge-hold clear` checks today). The event must be newer than the last placed:true event for that PR. All three must agree, or the result stays NoHoldMarker (fail closed). If the clear path doesn't record the grant attestation on the event today, add that in PR-1 and say so. Test: a forged clearance file plus stripped labels with no attested event is refused.
+    Q2: yes. Defer only while a mandate is Active; otherwise keep today's early refusal byte-identical (your test 10).
+    Q3: yes to the body-line append. No new actions:write scope. Make it idempotent (one marker line per train build, replaced rather than stacked), and bound the wait as BUG-1180 does.
+    Q4: confirmed. Exact ship parity through the one shared release function, no fork.
+
+    Extra condition for (a) wait_ci tolerance: "the only failing check is merge-hold-gate" isn't enough. Read hold_gate_state on the TRAIN PR and tolerate it ONLY when the failure reason is a hold label on an admitted needs_release member. A BUG-1693 pair-rule failure, or a held member that isn't covered, stays red. Test both.
+
+    Slicing is approved as proposed: PR-1 is ship-side (c) + (b) and PR-2 is train. Both touch protected gate files, so a human merges each (expected). Each PR carries (Refs BUG-2214); the last carries (BUG-2214). LIGHT gate: targeted pr_train/mandate_/merge_hold tests plus make check-ci-fast; no full suite.
+  created_at: 2026-10-24T06:59:32.884316828Z
+  modified_at: 2026-10-24T06:59:32.884316828Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
 history:
 - id: 01a16cab-a097-7c70-9384-7df089f14fe6
   author: joe
