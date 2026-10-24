@@ -923,6 +923,14 @@ fn task_2322_partial_run_records_its_refusal_for_dedupe() {
     assert_eq!(untouched, GuardState::default());
 }
 
+/// TASK-2325: the glue tests inject an EMPTY scratch survey — no jobs
+/// root, no TMPDIR root — so a lib-test run can never reach this host's
+/// real session scratch even with usage pinned over the ceiling.
+// trace:TASK-2325 | ai:claude
+fn empty_scratch() -> crate::scratch_reclaim::ScratchSurvey {
+    crate::scratch_reclaim::ScratchSurvey::empty(SystemTime::now())
+}
+
 /// TASK-1-482: the production glue — the lock, the gh / offline fallback,
 /// the incremental ledger append (TASK-1-481) and the notice dedupe state
 /// write — driven end to end with only the usage probe injected.
@@ -936,12 +944,13 @@ fn task_1_482_run_emergency_glue_locks_ledgers_and_dedupes() {
     let cfg = cfg();
 
     // Under the ceiling: no run, no lock taken, no ledger.
-    assert!(run_emergency_probed(&main, &root, &cfg, || Some(50)).is_none());
+    assert!(run_emergency_probed(&main, &root, &cfg, empty_scratch(), || Some(50)).is_none());
     assert!(!ledger_path(&main).exists());
 
     // Over the ceiling: the idle cache goes, and every row was appended to
     // the ledger as it happened (the file matches the outcome row for row).
-    let outcome = run_emergency_probed(&main, &root, &cfg, || Some(97)).expect("ran");
+    let outcome =
+        run_emergency_probed(&main, &root, &cfg, empty_scratch(), || Some(97)).expect("ran");
     assert_eq!(outcome.deleted.len(), 1);
     assert!(!idle.exists());
     let ledger = std::fs::read_to_string(ledger_path(&main)).unwrap();
@@ -953,12 +962,12 @@ fn task_1_482_run_emergency_glue_locks_ledgers_and_dedupes() {
 
     // Nothing left to delete and still over the margin: the notice dedupe
     // state is written, and a tick 30 m later stays quiet (state unchanged).
-    run_emergency_probed(&main, &root, &cfg, || Some(97))
+    run_emergency_probed(&main, &root, &cfg, empty_scratch(), || Some(97))
         .expect("ran (None here means the tempdir-private lock open/flock failed — a host-level fs error such as EMFILE, not shared test state)");
     let stuck_at = load_guard_state(&main)
         .last_emergency_stuck_at
         .expect("stuck state written");
-    run_emergency_probed(&main, &root, &cfg, || Some(97)).expect("ran");
+    run_emergency_probed(&main, &root, &cfg, empty_scratch(), || Some(97)).expect("ran");
     assert_eq!(
         load_guard_state(&main).last_emergency_stuck_at,
         Some(stuck_at),
@@ -968,7 +977,7 @@ fn task_1_482_run_emergency_glue_locks_ledgers_and_dedupes() {
     // Another holder of the emergency lock: the run steps aside.
     let lock = std::fs::File::create(main.join(".aida/disk-emergency.lock")).unwrap();
     lock.lock_exclusive().unwrap();
-    assert!(run_emergency_probed(&main, &root, &cfg, || Some(97)).is_none());
+    assert!(run_emergency_probed(&main, &root, &cfg, empty_scratch(), || Some(97)).is_none());
 }
 
 // trace:STORY-1916.ac641c6e | ai:claude
@@ -984,4 +993,48 @@ fn story_1916_target_on_device_matches_a_single_filesystem_host() {
     );
     assert!(!target_on_device(&main, dev.wrapping_add(1)));
     assert!(!target_on_device(&tmp.path().join("no-such"), dev));
+}
+
+/// TASK-2325 (PR-2906 round 1): the hard-ceiling scratch pass runs ONLY over
+/// the injected survey. With no injected roots, a run pinned over the
+/// ceiling deletes no scratch — real-looking job and session dirs beside the
+/// caches survive, and no `agent-scratch` row reaches the ledger. The real
+/// TMPDIR/HOME are read only in `run_emergency`'s production glue, above the
+/// injection seam.
+// trace:TASK-2325 | ai:claude
+#[test]
+fn task_2325_emergency_without_injected_roots_touches_no_scratch() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (main, root) = layout(tmp.path());
+    cache(&root, "idle-a", 10, 9 * HOUR);
+    // Real-looking scratch on disk that was NOT injected.
+    let jobs = tmp.path().join("jobs/aaaa1111");
+    std::fs::create_dir_all(jobs.join("tmp")).unwrap();
+    std::fs::write(jobs.join("tmp/out.o"), vec![0u8; 64]).unwrap();
+    std::fs::write(jobs.join("state.json"), r#"{"state":"done"}"#).unwrap();
+    let session = tmp.path().join("claude-1000/-proj/old-session");
+    std::fs::create_dir_all(&session).unwrap();
+    std::fs::write(session.join("x.txt"), b"x").unwrap();
+    age_tree(tmp.path(), SystemTime::now() - 30 * 24 * HOUR);
+
+    let cfg = cfg();
+    let outcome =
+        run_emergency_probed(&main, &root, &cfg, empty_scratch(), || Some(97)).expect("ran");
+    assert!(jobs.join("tmp/out.o").exists(), "job scratch untouched");
+    assert!(session.join("x.txt").exists(), "session scratch untouched");
+    let ledger = std::fs::read_to_string(ledger_path(&main)).unwrap_or_default();
+    assert!(
+        !ledger.contains("agent-scratch"),
+        "no agent-scratch row without injected roots: {ledger}"
+    );
+    assert!(
+        outcome.rows.iter().all(|r| !matches!(
+            r,
+            LedgerRow::Delete {
+                reason: Reason::AgentScratch,
+                ..
+            }
+        )),
+        "no agent-scratch delete in the outcome"
+    );
 }

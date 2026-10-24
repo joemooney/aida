@@ -108,10 +108,16 @@ fn days(d: Duration) -> u64 {
 }
 
 /// The newest write anywhere under `path` (the walk also prices the row).
+/// A plain file prices as its own length — the walk only sums directory
+/// entries (PR-2906 round 1).
 fn aged(survey: &ScratchSurvey, path: &Path) -> Option<(u64, Duration)> {
     let walk = walk_cache(path);
     let idle = idle_for(&walk, survey.now)?;
-    (idle >= survey.min_age).then_some((walk.bytes, idle))
+    let bytes = match std::fs::symlink_metadata(path) {
+        Ok(md) if md.is_file() => md.len(),
+        _ => walk.bytes,
+    };
+    (idle >= survey.min_age).then_some((bytes, idle))
 }
 
 /// `(a)` — terminal jobs' `tmp/` dirs. Held rows say why a job with scratch

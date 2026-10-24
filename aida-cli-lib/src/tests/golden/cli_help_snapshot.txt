@@ -9190,6 +9190,12 @@ Options:
       --json
           Emit machine-readable JSON
 
+      --scratch-age-days <DAYS>
+          Treat agent scratch (terminal jobs' tmp dirs, session scratch, idle build caches) younger
+          than this many days as live and keep it
+          
+          [default: 3]
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -9199,6 +9205,10 @@ Options:
           - human: Human-readable tables / emoji (the interactive default at a TTY)
           - toon:  Token-efficient TOON — the compact agent default when piped/captured
           - json:  Machine JSON, for commands that support a JSON projection
+
+      --no-scratch
+          Skip the agent-scratch scan (jobs tmp, TMPDIR scratch, build caches) and consider only
+          this repository's worktree caches
 
   -h, --help
           Print help (see a summary with '-h')
@@ -33425,6 +33435,16 @@ Working on aida itself
         "name": "min-age-mins",
         "takes_value": true,
         "help": "Treat a `target/` touched within this many minutes as a possible in-flight build and skip it"
+      },
+      {
+        "name": "no-scratch",
+        "takes_value": false,
+        "help": "Skip the agent-scratch scan (jobs tmp, TMPDIR scratch, build caches) and consider only this repository's worktree caches"
+      },
+      {
+        "name": "scratch-age-days",
+        "takes_value": true,
+        "help": "Treat agent scratch (terminal jobs' tmp dirs, session scratch, idle build caches) younger than this many days as live and keep it"
       },
       {
         "name": "target-pct",
