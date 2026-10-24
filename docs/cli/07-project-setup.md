@@ -89,11 +89,13 @@ operator's decision; it does not scan or certify that history.
 
 **Current boundary: ref-only push; pull is plan-only.** While enabled, `aida push --dry-run`
 and `aida pull --dry-run` inspect local metadata without fetching, opening a
-store cache, or running lifecycle actions. `--json` also selects planning.
+store cache, or running lifecycle actions. `--json` also selects planning;
+JSON plans explicitly report `executed: false` and never execute a push.
 Plans name origin, exact store refspecs, locally known source SHA, refs that
 execution could move, flag dispositions, and missing prerequisites. Code legs
 are forbidden even when `AIDA_PUSH_DEFAULT=code`; `aida push --store-only` and
-`aida pull --store-only` are redundant. `aida push --message <text>` and
+`aida pull --store-only` are redundant. Executing pushes also print flag dispositions.
+`aida push --message <text>` and
 `aida pull --auto` refuse. Actual pull execution remains disabled. Ordinary clones with no
 profile retain their existing behavior, including pull dry-run fetching.
 Explicit store overrides such as `aida --file <path> push` refuse when either
@@ -109,6 +111,10 @@ push attempt of the pinned commit to `refs/heads/aida-store` at the enrolled
 origin endpoint: no code refs, tags, submodule pushes, auto-commits, mailbox
 publication, ID allocation, reconciliation, fan-out, or retry. The verified
 store-only hooks preserve the identity gate; project code hooks do not run.
+Relative filesystem origins are resolved and pinned from the invoking checkout;
+the executor uses that absolute destination from the attached store. Credentials
+use the shared environment-backed routing helper; HTTP secrets stay out of push
+arguments. Cleaning authentication userinfo must not select a new URL rewrite.
 Concurrent later store commits remain local for a future push. Remote refusal
 or network errors require operator inspection; acceptance can be uncertain.
 Raw hook/remote diagnostics are suppressed to avoid exposing identifiers.

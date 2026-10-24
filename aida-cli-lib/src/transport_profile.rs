@@ -441,6 +441,7 @@ struct TransportPlan {
     code_leg: &'static str,
     flags: BTreeMap<&'static str, &'static str>,
     execution_available: bool,
+    executed: bool,
     blockers: Vec<&'static str>,
     limitations: Vec<&'static str>,
 }
@@ -476,6 +477,7 @@ fn plan(
         code_leg: "forbidden",
         flags,
         execution_available: push,
+        executed: false,
         blockers,
         limitations: vec![BYPASS_LIMIT, SANITIZATION_PENDING, "Plans inspect local metadata only; no network, scanning, cleanliness, or fast-forward validation is performed."],
     })
@@ -548,6 +550,9 @@ fn handle(
         bail!("{FORBIDDEN}");
     }
     if !dry_run && !json {
+        for (flag, disposition) in &plan.flags {
+            println!("{flag}: {disposition}");
+        }
         if push {
             executor::push(root, &profile, plan.source_sha.as_deref())?;
         } else {

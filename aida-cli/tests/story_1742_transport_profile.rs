@@ -231,6 +231,7 @@ fn plans_are_read_only_and_execution_cannot_fall_through() {
         assert_eq!(plan["code_leg"], "forbidden");
         assert_eq!(plan["flags"]["--store-only"], "redundant");
         assert_eq!(plan["execution_available"], operation == "push");
+        assert_eq!(plan["executed"], false);
         assert_eq!(plan["remote"], "origin");
         assert_eq!(
             plan["refs_that_may_move"].as_array().unwrap().len(),
@@ -538,8 +539,9 @@ fn executor_pushes_one_exact_store_ref_with_identity_hook_and_no_code_hooks() {
     fs::write(fixture.root.join("untracked-product"), "not committed").unwrap();
     let before = fixture.snapshot();
     let profile_before = fs::read(fixture.common.join("aida-transport.json")).unwrap();
-    let output = fixture.aida(&["push"]);
+    let output = fixture.aida(&["push", "--store-only"]);
     assert!(output.status.success(), "{}", diagnostics(&output));
+    assert!(diagnostics(&output).contains("--store-only: redundant"));
     assert_eq!(
         fixture.git_at(
             &remote,
@@ -609,7 +611,9 @@ fn dirty_in_progress_and_tampered_store_hooks_refuse_without_receiving() {
     assert!(diagnostics(&output).contains("hydration"));
     fixture.git(&["config", "--unset", "remote.origin.promisor"]);
     fs::write(store.join("uncommitted"), "must not be auto-committed").unwrap();
-    assert!(!fixture.aida(&["push"]).status.success());
+    let dirty = fixture.aida(&["push"]);
+    assert!(!dirty.status.success());
+    assert!(diagnostics(&dirty).contains("Store is dirty"));
     fs::remove_file(store.join("uncommitted")).unwrap();
     let gitdir = PathBuf::from(fixture.git_at(&store, &["rev-parse", "--absolute-git-dir"]));
     for marker in [
@@ -620,12 +624,24 @@ fn dirty_in_progress_and_tampered_store_hooks_refuse_without_receiving() {
         "index.lock",
     ] {
         fs::write(gitdir.join(marker), &fixture.store_sha).unwrap();
-        assert!(!fixture.aida(&["push"]).status.success(), "{marker}");
+        let refused = fixture.aida(&["push"]);
+        assert!(!refused.status.success(), "{marker}");
+        assert!(
+            diagnostics(&refused).contains("in-progress"),
+            "{}",
+            diagnostics(&refused)
+        );
         fs::remove_file(gitdir.join(marker)).unwrap();
     }
     for marker in ["rebase-merge", "rebase-apply", "sequencer"] {
         fs::create_dir(gitdir.join(marker)).unwrap();
-        assert!(!fixture.aida(&["push"]).status.success(), "{marker}");
+        let refused = fixture.aida(&["push"]);
+        assert!(!refused.status.success(), "{marker}");
+        assert!(
+            diagnostics(&refused).contains("in-progress"),
+            "{}",
+            diagnostics(&refused)
+        );
         fs::remove_dir(gitdir.join(marker)).unwrap();
     }
     let hooks = fs::read_dir(&fixture.common)
@@ -769,4 +785,137 @@ fn endpoint_whitespace_is_preserved_and_multiline_output_is_refused() {
     let output = fixture.aida(&["push"]);
     assert!(!output.status.success());
     assert!(diagnostics(&output).contains("unambiguous"));
+}
+
+// trace:STORY-1742 | ai:codex
+#[test]
+#[cfg(unix)]
+fn credentialed_pinned_push_authenticates_without_exposing_or_redirecting_the_endpoint() {
+    let fixture = Fixture::new();
+    let (_store, remote) = fixture.attach_with_remote();
+    let endpoint = "https://oauth2:aida-1742-secret@gitlab.fixture.invalid/group/store.git";
+    let clean = "https://gitlab.fixture.invalid/group/store.git";
+    fixture.json(&["config", "transport", "disable", "--json"]);
+    fixture.git(&["remote", "set-url", "origin", endpoint]);
+    fixture.enable();
+    let profile = fs::read(fixture.common.join("aida-transport.json")).unwrap();
+    let exec_dir = fixture.home.join("git-exec");
+    let argv_log = fixture.home.join("transport-argv");
+    let real_exec = fixture.git(&["--exec-path"]);
+    hook(&exec_dir.join("git-remote-https"), &format!(
+        "#!/bin/sh\nset -eu\nfor a in \"$@\"; do printf '%s\\n' \"$a\" >> '{}'; done\ncred=$(printf 'protocol=https\\nhost=gitlab.fixture.invalid\\n\\n' | GIT_TERMINAL_PROMPT=0 git credential fill 2>/dev/null)\ncase \"$cred\" in *'password=aida-1742-secret'*) ;; *) exit 91 ;; esac\nexec env -u GIT_CONFIG_PARAMETERS -u GIT_CONFIG_COUNT git -c protocol.ext.allow=always remote-ext \"$1\" \"git %s {}\"\n",
+        argv_log.display(), remote.display()
+    ));
+    hook(
+        &remote.join("hooks/pre-receive"),
+        "#!/bin/sh\nprintf 'attempt\\n' >> attempts\ncat >> received-refs\n",
+    );
+    let output = fixture
+        .command(env!("CARGO_BIN_EXE_aida"), &fixture.root, &["push"])
+        .env("GIT_EXEC_PATH", &exec_dir)
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .env(
+            "PATH",
+            format!("{real_exec}:{}", std::env::var("PATH").unwrap_or_default()),
+        )
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{}", diagnostics(&output));
+    let argv = fs::read_to_string(&argv_log).unwrap();
+    assert!(argv.contains(clean));
+    assert!(!argv.contains("aida-1742-secret"));
+    assert!(!diagnostics(&output).contains("aida-1742-secret"));
+    assert_eq!(
+        fixture.git_at(
+            &remote,
+            &["for-each-ref", "--format=%(refname) %(objectname)"]
+        ),
+        format!("refs/heads/aida-store {}", fixture.store_sha)
+    );
+    assert_eq!(
+        fs::read_to_string(remote.join("attempts")).unwrap(),
+        "attempt\n"
+    );
+    assert_eq!(
+        fixture.git(&["config", "--get", "remote.origin.url"]),
+        endpoint
+    );
+    assert_eq!(
+        fs::read(fixture.common.join("aida-transport.json")).unwrap(),
+        profile
+    );
+
+    // The credentialed pin itself does not match this rule. Its cleaned
+    // destination does, so refuse before handing anything to a remote helper.
+    fixture.git(&[
+        "config",
+        "url.https://other.fixture.invalid/.insteadOf",
+        clean,
+    ]);
+    let refused = fixture.aida(&["push"]);
+    assert!(!refused.status.success());
+    assert!(
+        diagnostics(&refused).contains("rewrites"),
+        "{}",
+        diagnostics(&refused)
+    );
+    assert!(!diagnostics(&refused).contains("aida-1742-secret"));
+    assert_eq!(
+        fs::read_to_string(remote.join("attempts")).unwrap(),
+        "attempt\n"
+    );
+}
+
+// trace:STORY-1742 | ai:codex
+#[test]
+fn relative_origin_executes_against_the_destination_pinned_from_the_caller() {
+    let fixture = Fixture::new();
+    let (_store, remote) = fixture.attach_with_remote();
+    fixture.json(&["config", "transport", "disable", "--json"]);
+    fixture.git(&["remote", "set-url", "origin", "../hub.git"]);
+    fixture.enable();
+    assert_eq!(fixture.json(&["push", "--json"])["executed"], false);
+    assert_eq!(fixture.git_at(&remote, &["for-each-ref"]), "");
+    let output = fixture.aida(&["push"]);
+    assert!(output.status.success(), "{}", diagnostics(&output));
+    assert_eq!(
+        fixture.git_at(&remote, &["rev-parse", "aida-store"]),
+        fixture.store_sha
+    );
+    assert!(!fixture.root.join("hub.git").exists());
+}
+
+// trace:STORY-1742 | ai:codex
+#[test]
+#[cfg(unix)]
+fn busy_store_writer_is_reported_separately_from_dirty_or_active_store() {
+    use std::io::BufRead;
+    use std::process::Stdio;
+    let fixture = Fixture::new();
+    let (store, remote) = fixture.attach_with_remote();
+    fs::create_dir_all(store.join(".aida")).unwrap();
+    let mut holder = Command::new("python3")
+        .args(["-u", "-c", "import fcntl,sys; f=open(sys.argv[1], 'a+'); fcntl.flock(f, fcntl.LOCK_EX); print('ready', flush=True); sys.stdin.read()"])
+        .arg(store.join(".aida/store-write.lock"))
+        .stdin(Stdio::piped()).stdout(Stdio::piped()).spawn().unwrap();
+    let mut ready = String::new();
+    std::io::BufReader::new(holder.stdout.take().unwrap())
+        .read_line(&mut ready)
+        .unwrap();
+    assert_eq!(ready, "ready\n");
+    let output = fixture
+        .command(env!("CARGO_BIN_EXE_aida"), &fixture.root, &["push"])
+        .env("AIDA_STORE_LOCK_TIMEOUT_SECS", "0")
+        .output()
+        .unwrap();
+    drop(holder.stdin.take());
+    assert!(holder.wait().unwrap().success());
+    assert!(!output.status.success());
+    assert!(
+        diagnostics(&output).contains("writer lock"),
+        "{}",
+        diagnostics(&output)
+    );
+    assert!(!diagnostics(&output).contains("Store is dirty"));
+    assert_eq!(fixture.git_at(&remote, &["for-each-ref"]), "");
 }

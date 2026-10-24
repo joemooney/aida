@@ -63,9 +63,15 @@ fn pinned_endpoint(root: &Path, profile: &Profile) -> Result<String> {
     if format!("{:x}", Sha256::digest(endpoint.as_bytes())) != profile.origin_sha256 {
         bail!("Origin changed since transport profile enrollment; push refused.");
     }
+    refuse_endpoint_rewrites(root, &endpoint)?;
+    Ok(endpoint)
+}
+
+// trace:STORY-1742 | ai:codex
+fn refuse_endpoint_rewrites(root: &Path, endpoint: &str) -> Result<()> {
     if single_endpoint(
         root,
-        &["ls-remote", "--get-url", "--end-of-options", &endpoint],
+        &["ls-remote", "--get-url", "--end-of-options", endpoint],
     )? != endpoint
     {
         bail!("Origin has chained or unstable URL rewrites; push refused.");
@@ -100,7 +106,30 @@ fn pinned_endpoint(root: &Path, profile: &Profile) -> Result<String> {
             bail!("Origin has chained or unstable URL rewrites; push refused.");
         }
     }
-    Ok(endpoint)
+    Ok(())
+}
+
+// Only static, locally authored diagnostics escape this preflight. Core lock
+// and hook setup failures are handled separately from these refusal reasons.
+// trace:STORY-1742 | ai:codex
+fn store_preflight(store: &Path, expected: &str) -> Result<()> {
+    check_store_state(store, expected)?;
+    let status = aida_core::git_ops::host_git_command(store)
+        .args(["status", "--porcelain=v1", "--untracked-files=all"])
+        .env("GIT_OPTIONAL_LOCKS", "0")
+        .env("GIT_NO_LAZY_FETCH", "1")
+        .output()
+        .map_err(|_| anyhow::anyhow!("Cannot inspect store cleanliness; push refused."))?;
+    if !status.status.success() {
+        bail!("Cannot verify store cleanliness or store hooks; push refused.");
+    }
+    if !status.stdout.is_empty() {
+        bail!("Store is dirty; push refused. Commit or resolve it explicitly before retrying.");
+    }
+    aida_core::git_ops::refuse_embedded_repos_for_push(store, expected).map_err(|_| {
+        anyhow::anyhow!("Store contains unsupported repository content; push refused.")
+    })?;
+    Ok(())
 }
 
 // trace:STORY-1742 | ai:codex
@@ -126,26 +155,14 @@ pub(super) fn push(root: &Path, profile: &Profile, expected: Option<&str>) -> Re
     }
     let endpoint = pinned_endpoint(root, profile)?;
     let store = attached_store(root, &common)?;
-    if pinned_endpoint(&store, profile)? != endpoint {
-        bail!("Store worktree resolves a different origin; push refused.");
-    }
+    // The destination is already absolute/frozen in the invoking worktree.
+    // Do not reinterpret a relative origin from the nested store checkout.
+    refuse_endpoint_rewrites(&store, &endpoint)?;
     // Pin and validate under the existing writer lock. Do not keep that lock
     // across network IO or hooks: the shipped identity hook is a read-only CLI.
-    aida_core::db::with_store_write_lock(&store, || {
-        check_store_state(&store, expected)?;
-        let status = aida_core::git_ops::host_git_command(&store)
-            .args(["status", "--porcelain=v1", "--untracked-files=all"])
-            .env("GIT_OPTIONAL_LOCKS", "0")
-            .env("GIT_NO_LAZY_FETCH", "1")
-            .output()
-            .map_err(|_| anyhow::anyhow!("Cannot inspect store cleanliness; push refused."))?;
-        if !status.status.success() || !status.stdout.is_empty() {
-            bail!("Store is dirty or its hooks are unsupported; push refused. Commit or resolve it explicitly before retrying.");
-        }
-        aida_core::git_ops::refuse_embedded_repos_for_push(&store, expected)
-            .map_err(|_| anyhow::anyhow!("Store contains unsupported repository content; push refused."))?;
-        Ok(())
-    }).map_err(|_| anyhow::anyhow!("Store preflight refused: require a clean, idle store with supported verified hooks and no embedded repositories."))?;
+    check_store_state(&store, expected)?;
+    aida_core::db::with_store_write_lock(&store, || Ok(store_preflight(&store, expected)))
+        .map_err(|_| anyhow::anyhow!("Store writer lock or verified hook profile unavailable; push refused. Check for a busy writer, lock permissions, or unsupported hooks before retrying."))??;
 
     if aida_core::db::any_store_write_lock_held() {
         bail!("Transport cannot push while a store writer lock is held.");
@@ -155,11 +172,18 @@ pub(super) fn push(root: &Path, profile: &Profile, expected: Option<&str>) -> Re
     }
     check_store_state(&store, expected)?;
     let refspec = format!("{expected}:{STORE_REF}");
+    let (destination, credentials) = aida_core::git_ops::split_http_url_userinfo(&endpoint);
+    if credentials.is_some() && endpoint.trim() != endpoint {
+        bail!("Ambiguous credentialed origin endpoint; push refused.");
+    }
+    // Removing HTTP userinfo must not expose a different rewrite rule. The
+    // scheme/host/path still belong to the enrolled endpoint, never an alias.
+    refuse_endpoint_rewrites(&store, &destination)?;
     // Exactly one attempt. Explicit SHA/refspec, endpoint, tag/submodule flags
     // defeat implicit code refs, remote refspecs and follow-tag configuration.
     // host_git_command preserves the verified store-only identity hook profile.
-    let output = aida_core::git_ops::host_git_command(&store)
-        .args(aida_core::git_ops::NO_AUTO_MAINTENANCE)
+    let mut push = aida_core::git_ops::host_git_command(&store);
+    push.args(aida_core::git_ops::NO_AUTO_MAINTENANCE)
         .args(["-c", "push.negotiate=false"])
         .env("GIT_NO_LAZY_FETCH", "1")
         .args([
@@ -168,13 +192,21 @@ pub(super) fn push(root: &Path, profile: &Profile, expected: Option<&str>) -> Re
             "--recurse-submodules=no",
             "--porcelain",
             "--end-of-options",
-            &endpoint,
+            &destination,
             &refspec,
-        ])
-        .output()
-        .map_err(|_| {
-            anyhow::anyhow!("Could not execute the store push; inspect origin before retrying.")
-        })?;
+        ]);
+    // Route the frozen endpoint's credentials, including GitLab fallback,
+    // through the shared environment-backed helper. Never re-resolve origin
+    // here or put HTTP secrets in the git/transport-helper argument vectors.
+    crate::gitlab_project_create::configure_git_remote_credentials(
+        &mut push,
+        &store,
+        &endpoint,
+        Some(&endpoint),
+    );
+    let output = push.output().map_err(|_| {
+        anyhow::anyhow!("Could not execute the store push; inspect origin before retrying.")
+    })?;
     if !output.status.success() {
         // Hook and remote diagnostics can contain emails, URLs or hostnames.
         bail!("Store push failed or was refused by a hook/remote; no retry was attempted. Remote acceptance may be uncertain; inspect origin and store policy before retrying.");
