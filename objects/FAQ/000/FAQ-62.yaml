@@ -1,0 +1,41 @@
+id: 01a16c13-5f6e-7641-b8fb-9a068591a05e
+spec_id: FAQ-62
+agreed_id: FAQ-62
+title: What is the difference between aida pr ship and aida pr train, and when do I use each?
+description: |
+  **`aida pr ship N` merges one PR that is already up to date with main. `aida pr train N…` lands one or more approved PRs that are behind main: it stacks them on the current main, runs CI once on that combined result, and merges only if it is green.**
+
+  ## Why
+  Two PRs can each be green on their own base and still turn main red together. `aida pr ship` therefore refuses a PR whose head is behind main ("its green was never tested together with them"). A train closes that gap without a merge-main / wait-for-CI / re-review round per PR.
+
+  ## How
+  - **Use `aida pr ship N`** when the PR is current with main and green, for example the first PR to land after a quiet period.
+  - **Use `aida pr train N1 N2 …`** when a PR is behind main, or when you have several approved PRs to land. List them in landing order and put the riskiest (for example a default flip) last. Run `--dry-run` first to see which PRs pass the gates.
+  - A train applies the same gates as ship: open, not a draft, an approval at the head (or carried over a clean merge from main), and no merge hold. It never releases a hold, so run `aida merge-hold clear N` first. Supervised PRs need a human at a terminal (or an active mandate).
+  - The train opens a `train/*` PR, which is one squash commit per PR, each checked by patch-id against its approved diff. When CI is green and main hasn't moved, it merges and closes each member PR with a pointer to its commit.
+  - **Red train:** it reruns once, then splits the PRs in halves until the bad PR is isolated and left out with a comment.
+  - **Main moved:** the train closes and rebuilds itself automatically ("Main moved after this train was built; the train rebuilds").
+
+  ## See also
+  STORY-1690
+status: Completed
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-24T04:02:51.374966123Z
+modified_at: 2026-10-24T04:02:51.374966123Z
+req_type: Faq
+tags:
+- audience:user
+- topic:ship
+filed_at:
+  code_sha: d14a20aaaea1d58be05fdacf97e1ef60c46d02fb
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: d14a20aaae
+  vendor: claude
+  session: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-24T04:02:51.374983961Z
