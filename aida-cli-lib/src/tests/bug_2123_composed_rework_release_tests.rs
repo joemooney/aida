@@ -93,9 +93,24 @@ fn release_hooked(
     heads: &[&str],
     on_read: &dyn Fn(usize),
 ) -> (Result<Outcome>, Vec<String>) {
+    release_hooks(root, heads, on_read, &|_| {}, &|_| {})
+}
+
+/// [`release_hooked`], also calling `on_hold_read(i)` after the `i`th hold
+/// re-read (0: first pass, right after its head check; 1: second pass) and
+/// `on_comment` after each PR comment.
+// trace:TASK-1951 trace:TASK-2285 | ai:claude
+fn release_hooks(
+    root: &Path,
+    heads: &[&str],
+    on_read: &dyn Fn(usize),
+    on_hold_read: &dyn Fn(usize),
+    on_comment: &dyn Fn(&str),
+) -> (Result<Outcome>, Vec<String>) {
     let hold = mh::read_hold_record(root, PR).expect("an armed hold");
     let comments = RefCell::new(Vec::new());
     let reads = Cell::new(0usize);
+    let hold_reads = Cell::new(0usize);
     let store = store();
     let result = auto_release_with(
         root,
@@ -114,7 +129,12 @@ fn release_hooked(
                     cleared_label: false,
                 }))
             },
-            read_hold: &|| mh::read_hold_record(root, PR),
+            read_hold: &|| {
+                let read = mh::read_hold_record(root, PR);
+                on_hold_read(hold_reads.get());
+                hold_reads.set(hold_reads.get() + 1);
+                read
+            },
             covered_specs: &|| Ok((vec![A.into(), B.into()], store.clone())),
             read_body: &|key| {
                 Ok(serde_json::from_slice(&std::fs::read(rv::verdict_path(
@@ -130,6 +150,7 @@ fn release_hooked(
             mandate: &|| bail!("no mandate is active"),
             comment: &|body| {
                 comments.borrow_mut().push(body.to_string());
+                on_comment(body);
                 Ok(())
             },
             labels: &|| Ok(()),
@@ -559,10 +580,14 @@ fn a_withdrawn_clearance_keeps_the_hold_armed() {
     assert!(mh::unrecorded_marker_removals(root).is_empty());
 }
 
-/// TASK-2285 review round: both releases pass their first head check, the
-/// winner records its clearance and removes the marker, and the loser then
-/// finds the lock still held. The busy loser wrote nothing, so it withdraws
-/// nothing: the winner's clearance stands beside the removed marker.
+/// TASK-2285 review round: the loser has passed its first head check when
+/// another release takes the lock (hook A, on the first-pass hold re-read).
+/// The loser must refuse busy having written nothing. Before the fix the
+/// loser recorded its clearance and posted its audit comment outside the
+/// lock; hook B (that comment) lets the winner release in exactly that window,
+/// and the busy loser then withdrew the winner's clearance beside the removed
+/// marker. Under the fix the comment runs under the lock, so hook B never
+/// fires and the winner releases after the busy refusal.
 // trace:TASK-1951 trace:TASK-2285 | ai:claude
 #[test]
 fn a_busy_overlapping_release_keeps_the_winners_clearance() {
@@ -575,28 +600,51 @@ fn a_busy_overlapping_release_keeps_the_winners_clearance() {
     record(root, B, "approved", HEAD);
     mh::HOLD_LOCK_WAIT_OVERRIDE.with(|w| w.set(Some(std::time::Duration::from_millis(200))));
 
+    let lock_path = mh::hold_lock_path(root, PR);
+    std::fs::create_dir_all(lock_path.parent().unwrap()).unwrap();
+    let holder = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(&lock_path)
+        .unwrap();
     let winner = RefCell::new(None);
-    let holder = RefCell::new(None);
-    let (loser, comments) = release_hooked(root, &[HEAD], &|i| {
-        if i == 1 {
-            // The loser has passed its first head check; the winner runs to
-            // completion and is still holding the lock when the loser asks.
-            *winner.borrow_mut() = Some(release(root, &[HEAD]).0);
-            let file = std::fs::OpenOptions::new()
-                .write(true)
-                .open(mh::hold_lock_path(root, PR))
-                .unwrap();
-            file.lock_exclusive().unwrap();
-            *holder.borrow_mut() = Some(file);
-        }
-    });
-    mh::HOLD_LOCK_WAIT_OVERRIDE.with(|w| w.set(None));
-    assert_eq!(
-        winner.into_inner().unwrap().unwrap(),
-        Outcome::Released { mandate: None }
+    let (loser, comments) = release_hooks(
+        root,
+        &[HEAD],
+        &|_| {},
+        &|i| {
+            if i == 0 {
+                holder.lock_exclusive().unwrap();
+            }
+        },
+        &|_| {
+            if winner.borrow().is_none() {
+                FileExt::unlock(&holder).unwrap();
+                *winner.borrow_mut() = Some(release(root, &[HEAD]).0);
+                holder.lock_exclusive().unwrap();
+            }
+        },
     );
     let error = format!("{:#}", loser.unwrap_err());
     assert!(error.contains("merge-hold PR-51 is busy"), "{error}");
+    if winner.borrow().is_none() {
+        assert!(
+            mh::hold_path(root, PR).exists(),
+            "the busy loser left the hold armed"
+        );
+        assert!(
+            !mh::clearance_path(root, PR).exists(),
+            "the busy loser recorded nothing"
+        );
+    }
+
+    FileExt::unlock(&holder).unwrap();
+    mh::HOLD_LOCK_WAIT_OVERRIDE.with(|w| w.set(None));
+    let winner = winner
+        .into_inner()
+        .unwrap_or_else(|| release(root, &[HEAD]).0);
+    assert_eq!(winner.unwrap(), Outcome::Released { mandate: None });
     assert!(!mh::hold_path(root, PR).exists());
     assert!(
         mh::clearance_path(root, PR).exists(),
@@ -609,5 +657,4 @@ fn a_busy_overlapping_release_keeps_the_winners_clearance() {
         "{comments:?}"
     );
     assert!(mh::unrecorded_marker_removals(root).is_empty());
-    FileExt::unlock(holder.borrow().as_ref().unwrap()).unwrap();
 }
