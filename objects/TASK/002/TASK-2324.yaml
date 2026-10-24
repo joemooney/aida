@@ -8,8 +8,14 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-24T12:27:19.917135686Z
-modified_at: 2026-10-24T12:42:13.824836621Z
+modified_at: 2026-10-24T13:44:29.435788409Z
 req_type: Task
+comments:
+- id: 01a16e27-dffb-70e0-a911-77f21d9acdbc
+  author: ai:codex:joe
+  content: 'Implemented in PR-2898 at eb9846b8f4: doctor reports bounded regular .rustc_info.json files caching failed compiler-wrapper probes without invoking Cargo. The dedicated doctor rustc-cache --fix command rechecks and removes only a matching failed cache; ordinary diagnosis and general heal retain it. CARGO_TARGET_DIR relative paths follow the invocation cwd, and default cache scans use the invoked worktree. Four cache regressions passed, including preservation of an unrelated repository-root cache; all 34 fast gates passed. Three author self-check rounds found legacy resolution, claim rollback and target-path issues, now corrected and regression-covered; no self-verdict was recorded. PR remains unmerged for independent review.'
+  created_at: 2026-10-24T13:44:29.435788409Z
+  modified_at: 2026-10-24T13:44:29.435788409Z
 history:
 - id: 01a16de2-797e-7613-8cb1-ff40f680d3a8
   author: joe
