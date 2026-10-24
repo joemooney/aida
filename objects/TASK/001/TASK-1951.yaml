@@ -64,7 +64,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T15:55:48.750553278Z
-modified_at: 2026-10-23T23:38:30.708187727Z
+modified_at: 2026-10-24T00:35:53.750186351Z
 req_type: Task
 tags:
 - reconcile
@@ -881,6 +881,12 @@ history:
   timestamp: 2026-10-23T23:37:33.058583193Z
   session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
   changes: []
+- id: 01a16b55-e5b5-7583-baf3-7b4899c1796e
+  author: joe
+  timestamp: 2026-10-24T00:35:53.909688834Z
+  session_id: 01a16b4e18c0
+  harness_version: 2.1.310 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 6d590ed914dea5135a126f7dae6abb403adec66d
   branch: main
@@ -893,7 +899,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: Completing slice covers nearly every item with tests, but CI lib-0 is red at the head (golden help snapshot lacks the new review_lens field after the TASK-2205 merge), TASK-2131 pure-git and TASK-2132 are only partly fixed, and the human --fields review_lens column is empty.
+  detail: 'CI red at head 704570b7 from this PR''s merge with main: lib-0 (stale search --fields help snapshot) and contracts (manual cites --include-supervised under merge-hold); plus a residual TASK-2285 busy-lock race and an empty search review_lens column'
   recovery_hint: address the review findings, move TASK-1951 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-10-23T17:01:06.365469466Z
+  shelved_at: 2026-10-24T00:35:53.750186351Z
