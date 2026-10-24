@@ -4960,6 +4960,111 @@ fn non_completing_merge_does_not_complete_review_story_covered_specs() {
     }
 }
 
+/// TASK-2114: a squash subject that mixes a `(Refs A)` group with a
+/// completion trailer `(B)` completes B but not A, on the covers path too,
+/// even though the PR's review story implements both.
+// trace:TASK-1951 trace:TASK-2114 | ai:claude
+#[test]
+fn covers_path_skips_a_refs_id_in_a_mixed_subject() {
+    let (_tmp, project_root, store_path) = init_test_project();
+    seed_cluster_pr_review_story(&store_path, "STORY-9211", 61, &["TASK-9211", "TASK-9212"]);
+    let pre_sha = run_git(&project_root, &["rev-parse", "HEAD"]);
+    std::fs::write(project_root.join("m.txt"), "x\n").unwrap();
+    run_git(&project_root, &["add", "m.txt"]);
+    run_git(
+        &project_root,
+        &[
+            "commit",
+            "-m",
+            "fix: mixed (Refs TASK-9211) (TASK-9212) (#61)",
+        ],
+    );
+    let storage = Storage::new(&store_path);
+    let flips =
+        auto_bump_done_to_completed(&project_root, &store_path, Some(&pre_sha), &storage).unwrap();
+    assert!(!has_flip(&flips, "TASK-9211"), "flips: {flips:?}");
+    assert!(has_flip(&flips, "TASK-9212"), "flips: {flips:?}");
+}
+
+/// TASK-1765 (1): a merge the open-PR guard withheld is re-checked on every
+/// later pull, so the spec completes once the holding PR closes, although
+/// the merge commit has left the scan window by then.
+// trace:TASK-1951 trace:TASK-1765 | ai:claude
+#[test]
+fn held_merge_completes_on_a_later_pull_after_the_holder_closes() {
+    let (_tmp, project_root, store_path) = init_test_project();
+    seed_spec_at(&store_path, "BUG-9401", "Done");
+    run_git(
+        &project_root,
+        &[
+            "remote",
+            "add",
+            "origin",
+            "https://github.com/example/aida.git",
+        ],
+    );
+    let open_flag = project_root.join("holder-open");
+    std::fs::write(&open_flag, "").unwrap();
+    let fake_gh = project_root.join("fake-gh");
+    crate::test_exec::write_executable(
+        &fake_gh,
+        format!(
+            "#!/bin/sh\n\
+             if [ \"$1\" = \"--version\" ]; then echo 'gh version test'; exit 0; fi\n\
+             if [ -e '{flag}' ]; then\n\
+             \techo '[{{\"number\":1980,\"title\":\"second deliverable (BUG-9401)\",\"body\":\"\"}}]'\n\
+             else\n\
+             \techo '[]'\n\
+             fi\n",
+            flag = open_flag.display()
+        ),
+    );
+    let _gh = crate::test_env::EnvVarGuard::set(
+        "AIDA_TEST_GH_BINARY",
+        fake_gh.to_string_lossy().as_ref(),
+    );
+    let pre_sha = run_git(&project_root, &["rev-parse", "HEAD"]);
+    std::fs::write(project_root.join("first.txt"), "first\n").unwrap();
+    run_git(&project_root, &["add", "first.txt"]);
+    run_git(
+        &project_root,
+        &["commit", "-m", "fix: first deliverable (BUG-9401)"],
+    );
+    let merge_sha = run_git(&project_root, &["rev-parse", "HEAD"]);
+
+    let storage = Storage::new(&store_path);
+    let flips =
+        auto_bump_done_to_completed(&project_root, &store_path, Some(&pre_sha), &storage).unwrap();
+    assert!(!has_flip(&flips, "BUG-9401"), "held while PR #1980 is open");
+    assert_eq!(
+        crate::db_reconcile::load_held_completions(&project_root),
+        vec![crate::db_reconcile::HeldCompletion {
+            spec_id: "BUG-9401".into(),
+            sha: merge_sha.clone(),
+            open_pr: Some(1980),
+        }]
+    );
+
+    // The holder closes; the next pull's window no longer holds the merge.
+    std::fs::remove_file(&open_flag).unwrap();
+    let flips = auto_bump_done_to_completed(&project_root, &store_path, Some(&merge_sha), &storage)
+        .unwrap();
+    assert!(
+        has_flip(&flips, "BUG-9401"),
+        "retried and completed: {flips:?}"
+    );
+    assert_eq!(
+        storage
+            .load()
+            .unwrap()
+            .get_requirement_by_spec_id("BUG-9401")
+            .unwrap()
+            .status,
+        RequirementStatus::Completed
+    );
+    assert!(crate::db_reconcile::load_held_completions(&project_root).is_empty());
+}
+
 /// TASK-1618: the slice-subject exclusion applies to rebased slice commits
 /// only. A squash merge (`(#N)` subject) of a module extraction or of the
 /// final `[N/N]` slice completes its trailer spec; an unfinished `[k/N]`

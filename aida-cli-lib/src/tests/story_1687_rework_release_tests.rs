@@ -81,6 +81,7 @@ fn current_independent_newer_approval_releases_with_audit() {
         root.path(),
         &f.hold,
         &verdict,
+        &[],
         || Ok(HEAD.into()),
         |body| {
             assert!(
@@ -303,6 +304,7 @@ fn moved_head_before_release_preserves_marker_and_labels() {
         root.path(),
         &f.hold,
         &f.check().unwrap(),
+        &[],
         || {
             count.set(count.get() + 1);
             Ok(if count.get() == 1 {
@@ -328,6 +330,7 @@ fn failed_comment_or_label_keeps_hold_and_label_retry_does_not_repeat_comment() 
         root.path(),
         &f.hold,
         &verdict,
+        &[],
         || Ok(HEAD.into()),
         |_| bail!("comment failed"),
         || panic!()
@@ -338,6 +341,7 @@ fn failed_comment_or_label_keeps_hold_and_label_retry_does_not_repeat_comment() 
         root.path(),
         &f.hold,
         &verdict,
+        &[],
         || Ok(HEAD.into()),
         |_| Ok(()),
         || bail!("labels failed")
@@ -348,6 +352,7 @@ fn failed_comment_or_label_keeps_hold_and_label_retry_does_not_repeat_comment() 
         root.path(),
         &f.hold,
         &verdict,
+        &[],
         || Ok(HEAD.into()),
         |_| panic!("audit was already posted"),
         || Ok(()),
@@ -365,6 +370,7 @@ fn failed_clearance_write_keeps_hold() {
         root.path(),
         &f.hold,
         &f.check().unwrap(),
+        &[],
         || Ok(HEAD.into()),
         |_| panic!(),
         || panic!()
@@ -971,13 +977,20 @@ fn auto_release_fixture(change: ReleaseChange) {
             *expected_marker.borrow()
         );
         if change.after_audit {
-            // A real re-arm invalidates the prior clearance itself. Other races
-            // retain the already-written authorization; none mirror the release.
-            assert_eq!(
-                mh::clearance_path(root.path(), 37).is_file(),
-                !(change.stricter_hold || change.changed_rework)
-            );
-            assert_eq!(comments.borrow().len(), 1);
+            // A real re-arm invalidates the prior clearance itself. TASK-1757
+            // (3): any other refused second pass supersedes the clearance it
+            // wrote and says so on the PR; none mirror the release.
+            // trace:TASK-1951 trace:TASK-1757 | ai:claude
+            assert!(!mh::clearance_path(root.path(), 37).exists());
+            let rearmed = change.stricter_hold || change.changed_rework;
+            let comments = comments.borrow();
+            assert_eq!(comments.len(), if rearmed { 1 } else { 2 }, "{comments:?}");
+            if !rearmed {
+                assert!(
+                    comments[1].contains("authorization withdrawn"),
+                    "{comments:?}"
+                );
+            }
         } else {
             assert!(!mh::clearance_path(root.path(), 37).exists());
             assert!(comments.borrow().is_empty());
@@ -1516,4 +1529,22 @@ fn auto_release_fresh_covered_id_corpus_refusal_at_each_release_phase() {
             ..Default::default()
         });
     }
+}
+
+/// An unreadable recorded-label probe reaches auto-release as a label
+/// failure. The marker is still armed, so the retry it names is the
+/// auto-release itself, not `aida merge-hold clear`.
+// trace:TASK-1951 | ai:claude
+#[test]
+fn label_failure_names_the_auto_release_retry() {
+    let err = auto_release_label_failure(
+        37,
+        &mh::LabelSyncError::Other(
+            "could not read PR #37's labels from the forge (HTTP 502); no label was changed".into(),
+        ),
+    )
+    .to_string();
+    assert!(err.contains("HTTP 502"), "{err}");
+    assert!(err.contains("aida merge-hold auto-release 37"), "{err}");
+    assert!(!err.contains("merge-hold clear"), "{err}");
 }

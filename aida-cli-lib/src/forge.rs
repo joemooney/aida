@@ -2658,7 +2658,13 @@ impl Forge for GitLabForge {
                     // Complete it before the ordinary merge request rather
                     // than degrading Rebase into Merge. trace:BUG-1232 | ai:codex
                     if matches!(opts.method, MergeMethod::Rebase) && !rebase_requested {
-                        let request = gitlab_merge_api_shape(&path, opts, true, &snapshot.head_sha);
+                        let request = gitlab_merge_api_shape(
+                            &path,
+                            opts,
+                            true,
+                            &snapshot.head_sha,
+                            &snapshot.title,
+                        );
                         let rebased = self.glab_api_put(&request.path, &[])?;
                         anyhow::ensure!(
                             rebased.status.success(),
@@ -2669,7 +2675,13 @@ impl Forge for GitLabForge {
                         rebase_requested = true;
                         continue;
                     }
-                    let request = gitlab_merge_api_shape(&path, opts, false, &snapshot.head_sha);
+                    let request = gitlab_merge_api_shape(
+                        &path,
+                        opts,
+                        false,
+                        &snapshot.head_sha,
+                        &snapshot.title,
+                    );
                     let fields: Vec<(&str, &str)> = request
                         .fields
                         .iter()
@@ -3025,8 +3037,15 @@ impl Forge for PureGitForge {
                     branch_head_subject(&self.project_root, &c.branch)
                         .unwrap_or_else(|| format!("Merge {} into {}", c.branch, base))
                 });
+                // TASK-2115: the squash body (the `aida: no-complete`
+                // declaration) is part of the commit on main here too.
+                // trace:TASK-1951 trace:TASK-2115 | ai:claude
+                let mut commit = vec!["commit", "-m", subject.as_str()];
+                if let Some(body) = opts.squash_body.as_deref().filter(|b| !b.trim().is_empty()) {
+                    commit.extend(["-m", body]);
+                }
                 anyhow::ensure!(
-                    git(&["commit", "-m", &subject])?.status.success(),
+                    git(&commit)?.status.success(),
                     "pure-git merge: commit after squash failed"
                 );
             }
@@ -3227,6 +3246,9 @@ struct GitLabMergeSnapshot {
     detailed_merge_status: String,
     rebase_in_progress: bool,
     head_sha: String,
+    /// The MR title: GitLab's own squash subject, kept when AIDA supplies
+    /// only a squash body (TASK-2115).
+    title: String,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -3244,6 +3266,7 @@ fn gitlab_merge_api_shape(
     opts: &MergeOptions,
     request_rebase: bool,
     reviewed_head_sha: &str,
+    mr_title: &str,
 ) -> GitLabMergeApiRequest {
     if matches!(opts.method, MergeMethod::Rebase) && request_rebase {
         return GitLabMergeApiRequest {
@@ -3262,8 +3285,22 @@ fn gitlab_merge_api_shape(
             opts.delete_branch.to_string(),
         ),
     ];
-    if let Some(message) = opts.squash_subject.as_deref() {
-        fields.push(("squash_commit_message".into(), message.into()));
+    // TASK-2115: GitLab's squash message is subject and body in one field,
+    // so a squash body (the `aida: no-complete` declaration) rides along
+    // with the subject, which falls back to the MR title.
+    // trace:TASK-1951 trace:TASK-2115 | ai:claude
+    let subject = opts
+        .squash_subject
+        .as_deref()
+        .or_else(|| (!mr_title.trim().is_empty()).then_some(mr_title));
+    let message = match (subject, opts.squash_body.as_deref()) {
+        (Some(subject), Some(body)) if matches!(opts.method, MergeMethod::Squash) => {
+            Some(format!("{subject}\n\n{body}"))
+        }
+        _ => opts.squash_subject.clone(),
+    };
+    if let Some(message) = message {
+        fields.push(("squash_commit_message".into(), message));
     }
     GitLabMergeApiRequest {
         path: format!("{mr_path}/merge"),
@@ -3290,6 +3327,11 @@ fn classify_gitlab_merge_status(status: &str) -> GitLabMergeGate {
 fn parse_gitlab_merge_snapshot(body: &str) -> Result<GitLabMergeSnapshot> {
     let value: serde_json::Value = serde_json::from_str(body.trim())?;
     Ok(GitLabMergeSnapshot {
+        title: value
+            .get("title")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string(),
         state: value
             .get("state")
             .and_then(|v| v.as_str())
@@ -4167,7 +4209,78 @@ fn configured_ssh_command(project_root: &Path) -> Option<String> {
 /// replacing it, so a custom key or wrapper keeps working for the probe.
 // trace:TASK-1951 trace:TASK-1663 | ai:claude
 pub(crate) fn ssh_command_with_batch_mode(configured: Option<&str>) -> String {
-    format!("{} -o BatchMode=yes", configured.unwrap_or("ssh"))
+    ssh_command_with_batch_mode_for(configured, None)
+}
+
+/// [`ssh_command_with_batch_mode`] for the ssh variant git will pick. PuTTY's
+/// plink rejects OpenSSH's `-o`; its batch flag is `-batch`. The `simple`
+/// variant takes no options, so nothing is appended. `variant` is an explicit
+/// `GIT_SSH_VARIANT` / `ssh.variant`; without one the variant comes from the
+/// command's program name, as git decides it.
+// trace:TASK-1951 trace:TASK-2100 | ai:claude
+pub(crate) fn ssh_command_with_batch_mode_for(
+    configured: Option<&str>,
+    variant: Option<&str>,
+) -> String {
+    let command = configured.unwrap_or("ssh");
+    let variant = variant
+        .map(|v| v.trim().to_ascii_lowercase())
+        .filter(|v| !v.is_empty() && v != "auto")
+        .unwrap_or_else(|| ssh_variant_of(command));
+    match variant.as_str() {
+        "plink" | "putty" | "tortoiseplink" => format!("{command} -batch"),
+        "simple" => command.to_string(),
+        _ => format!("{command} -o BatchMode=yes"),
+    }
+}
+
+/// The ssh variant git infers from a command's program name.
+// trace:TASK-1951 trace:TASK-2100 | ai:claude
+fn ssh_variant_of(command: &str) -> String {
+    // The first shell word, with POSIX quoting undone (`'op'\''s/plink'`).
+    let mut program = String::new();
+    let mut quote: Option<char> = None;
+    let mut chars = command.trim_start().chars();
+    while let Some(c) = chars.next() {
+        match (quote, c) {
+            (None, c) if c.is_whitespace() => break,
+            (None, '\'' | '"') => quote = Some(c),
+            (None, '\\') => program.extend(chars.next()),
+            (Some(q), c) if c == q => quote = None,
+            (Some('"'), '\\') => program.extend(chars.next()),
+            (_, c) => program.push(c),
+        }
+    }
+    let name = program
+        .rsplit(['/', '\\'])
+        .next()
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    match name.strip_suffix(".exe").unwrap_or(&name) {
+        "plink" => "plink".to_string(),
+        "tortoiseplink" => "tortoiseplink".to_string(),
+        _ => "ssh".to_string(),
+    }
+}
+
+/// An explicit ssh variant: `GIT_SSH_VARIANT`, else `ssh.variant`.
+// trace:TASK-1951 trace:TASK-2100 | ai:claude
+fn configured_ssh_variant(project_root: &Path) -> Option<String> {
+    std::env::var("GIT_SSH_VARIANT")
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+        .or_else(|| {
+            Command::new("git")
+                .arg("-C")
+                .arg(project_root)
+                .args(["config", "--get", "ssh.variant"])
+                .output()
+                .ok()
+                .filter(|out| out.status.success())
+                .and_then(|out| String::from_utf8(out.stdout).ok())
+                .map(|v| v.trim().to_owned())
+                .filter(|v| !v.is_empty())
+        })
 }
 
 /// Local `refs/remotes/origin/HEAD`, the only local default-branch evidence;
@@ -4216,7 +4329,10 @@ fn probe_origin_head_symref(project_root: &Path) -> Option<String> {
         // trace:TASK-1803 | ai:claude
         .env(
             "GIT_SSH_COMMAND",
-            ssh_command_with_batch_mode(configured_ssh_command(project_root).as_deref()),
+            ssh_command_with_batch_mode_for(
+                configured_ssh_command(project_root).as_deref(),
+                configured_ssh_variant(project_root).as_deref(),
+            ),
         )
         .args(["ls-remote", "--symref", "origin", "HEAD"]);
     aida_core::git_ops::configure_remote_credentials(&mut cmd, project_root, "origin"); // trace:BUG-2181 | ai:claude
@@ -5426,6 +5542,70 @@ mod tests {
         // trace:STORY-516 | ai:claude
     }
 
+    /// TASK-2115: the non-completing declaration rides in the squash body.
+    /// GitLab sends it inside `squash_commit_message` (subject falling back
+    /// to the MR title); pure-git commits it as the squash commit's body.
+    // trace:TASK-1951 trace:TASK-2115 | ai:claude
+    #[test]
+    fn squash_body_reaches_main_on_gitlab_and_pure_git() {
+        let mut opts = MergeOptions::squash();
+        opts.squash_body = Some("* fix: one\n\naida: no-complete".into());
+        let path = "projects/:id/merge_requests/7";
+        let titled = gitlab_merge_api_shape(path, &opts, false, "abc123", "fix: slice one");
+        assert!(titled.fields.contains(&(
+            "squash_commit_message".into(),
+            "fix: slice one\n\n* fix: one\n\naida: no-complete".into()
+        )));
+        opts.squash_subject = Some("fix: explicit (Refs TASK-9)".into());
+        let explicit = gitlab_merge_api_shape(path, &opts, false, "abc123", "fix: slice one");
+        assert!(explicit
+            .fields
+            .iter()
+            .any(|(k, v)| k == "squash_commit_message"
+                && v.starts_with("fix: explicit (Refs TASK-9)\n\n")
+                && v.ends_with("aida: no-complete")));
+
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let g = |args: &[&str]| {
+            let out = crate::test_git::git_command()
+                .current_dir(root)
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(out.status.success(), "git {args:?}");
+            String::from_utf8_lossy(&out.stdout).to_string()
+        };
+        g(&["init", "-q", "-b", "main"]);
+        g(&["config", "user.email", "t@t.t"]);
+        g(&["config", "user.name", "t"]);
+        std::fs::write(root.join("a"), "1").unwrap();
+        g(&["add", "."]);
+        g(&["commit", "-q", "-m", "base"]);
+        g(&["checkout", "-q", "-b", "feature"]);
+        std::fs::write(root.join("b"), "2").unwrap();
+        g(&["add", "."]);
+        g(&["commit", "-q", "-m", "feat: slice one"]);
+        g(&["checkout", "-q", "main"]);
+        let cref = ChangeRef {
+            id: 0,
+            url: String::new(),
+            branch: "feature".into(),
+            base: "main".into(),
+            title: None,
+        };
+        opts.squash_subject = None;
+        PureGitForge::new(root)
+            .merge_change(&cref, &opts, &mut crate::network_retry::NoopSink)
+            .unwrap();
+        let message = g(&["log", "-1", "--format=%B", "main"]);
+        assert!(message.starts_with("feat: slice one"), "{message}");
+        assert!(
+            crate::db_reconcile::commit_declares_non_completing(&message),
+            "{message}"
+        );
+    }
+
     // ── TASK-1458: match_head pin on every forge ────────────────────────────
     // trace:TASK-1458 | ai:claude
 
@@ -5636,20 +5816,20 @@ mod tests {
         };
         let path = "projects/:id/merge_requests/7";
 
-        let merge = gitlab_merge_api_shape(path, &opts(MergeMethod::Merge), false, "abc123");
+        let merge = gitlab_merge_api_shape(path, &opts(MergeMethod::Merge), false, "abc123", "");
         assert_eq!(merge.path, format!("{path}/merge"));
         assert!(merge.fields.contains(&("squash".into(), "false".into())));
         assert!(merge.fields.contains(&("sha".into(), "abc123".into())));
 
-        let squash = gitlab_merge_api_shape(path, &opts(MergeMethod::Squash), false, "abc123");
+        let squash = gitlab_merge_api_shape(path, &opts(MergeMethod::Squash), false, "abc123", "");
         assert_eq!(squash.path, format!("{path}/merge"));
         assert!(squash.fields.contains(&("squash".into(), "true".into())));
 
-        let rebase = gitlab_merge_api_shape(path, &opts(MergeMethod::Rebase), true, "abc123");
+        let rebase = gitlab_merge_api_shape(path, &opts(MergeMethod::Rebase), true, "abc123", "");
         assert_eq!(rebase.path, format!("{path}/rebase"));
         assert!(rebase.fields.is_empty());
 
-        let after = gitlab_merge_api_shape(path, &opts(MergeMethod::Rebase), false, "def456");
+        let after = gitlab_merge_api_shape(path, &opts(MergeMethod::Rebase), false, "def456", "");
         assert_eq!(after.path, format!("{path}/merge"));
         assert!(after.fields.contains(&("squash".into(), "false".into())));
         assert!(after.fields.contains(&("sha".into(), "def456".into())));
