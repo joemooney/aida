@@ -1,0 +1,581 @@
+//! Clone-local transport policy and read-only plans. Execution and intake
+//! sanitization are later slices: an enabled profile refuses execution here.
+// trace:STORY-1742 | ai:codex
+
+use anyhow::{bail, Context, Result};
+use clap::{Subcommand, ValueEnum};
+use fs2::FileExt;
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
+use std::collections::BTreeMap;
+use std::fs::{self, File, OpenOptions};
+use std::io::Read;
+use std::path::{Component, Path, PathBuf};
+use std::process::Output;
+
+const PROFILE_FILE: &str = "aida-transport.json";
+const STORE_REF: &str = "refs/heads/aida-store";
+const TRACKING_REF: &str = "refs/remotes/origin/aida-store";
+const PUSH_REFSPEC: &str = "refs/heads/aida-store:refs/heads/aida-store";
+const PULL_REFSPEC: &str = "refs/heads/aida-store:refs/remotes/origin/aida-store";
+const BYPASS_LIMIT: &str =
+    "The profile governs aida push/pull only; raw Git bypasses it. No server-side enforcement.";
+const PENDING: &str =
+    "Transport execution and sanitization are not available in this slice; use --dry-run to inspect the plan.";
+const FORBIDDEN: &str = "Flag forbidden by the work transport profile: code push/pull, commit messages, and automatic rebases are disabled. Inspect `aida config transport show`.";
+
+#[derive(Subcommand, Debug)]
+pub enum TransportCommand {
+    /// Enable a named clone-local profile. Does not enable transport execution yet.
+    Enable {
+        #[clap(value_enum)]
+        name: ProfileName,
+        /// Enroll an explicitly reviewed public-safe store commit for later scanning.
+        #[clap(long)]
+        baseline: Option<String>,
+        /// Emit machine-readable JSON.
+        #[clap(long)]
+        json: bool,
+    },
+    /// Show effective policy, fixed refs, and the raw-Git bypass limitation.
+    Show {
+        /// Emit machine-readable JSON.
+        #[clap(long)]
+        json: bool,
+    },
+    /// Remove the clone-local profile; restore ordinary AIDA push/pull behavior.
+    Disable {
+        /// Emit machine-readable JSON.
+        #[clap(long)]
+        json: bool,
+    },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, ValueEnum)]
+#[serde(rename_all = "kebab-case")]
+pub enum ProfileName {
+    Work,
+}
+
+/// Hash the effective single origin endpoint rather than saving credentials or
+/// endpoint text. Fixed refspecs are code-owned, not an extensible local language.
+// trace:STORY-1742 | ai:codex
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Profile {
+    version: u32,
+    name: ProfileName,
+    origin_sha256: String,
+    baseline: Option<String>,
+}
+
+impl Profile {
+    fn validate(&self) -> Result<()> {
+        if self.version != 1
+            || !is_hex_id(&self.origin_sha256, &[64])
+            || self
+                .baseline
+                .as_ref()
+                .is_some_and(|sha| !is_hex_id(sha, &[40, 64]))
+        {
+            bail!("Invalid or unsupported clone-local transport profile; push/pull refused.");
+        }
+        Ok(())
+    }
+}
+
+fn is_hex_id(value: &str, lengths: &[usize]) -> bool {
+    lengths.contains(&value.len()) && value.bytes().all(|c| c.is_ascii_hexdigit())
+}
+
+/// These calls inspect Git metadata only; do not fetch, refresh the store cache,
+/// or invoke any ordinary sync handler. Never forward raw diagnostics (URLs may
+/// carry credentials). The closed callers below use only rev-parse, config,
+/// remote get-url and merge-base: none executes hooks, filters, fsmonitor or
+/// remote helpers. Avoid host_git_command here because its store-hook profile
+/// installation would make inspection write state when invoked from the store.
+// trace:STORY-1742 | ai:codex
+fn git(root: &Path, args: &[&str]) -> Result<Output> {
+    // raw-git-ok(BUG-1929): closed metadata-only lookups; no hook/filter/network execution.
+    std::process::Command::new("git")
+        .current_dir(root)
+        .args(["-c", "core.fsmonitor=false"])
+        .env("GIT_NO_LAZY_FETCH", "1")
+        .env("GIT_OPTIONAL_LOCKS", "0")
+        .args(args)
+        .output()
+        .context("Could not inspect Git transport metadata")
+}
+
+fn git_text(root: &Path, args: &[&str]) -> Result<String> {
+    let output = git(root, args)?;
+    if !output.status.success() {
+        bail!("Could not inspect Git transport metadata; check local origin configuration.");
+    }
+    String::from_utf8(output.stdout)
+        .map(|text| text.trim().to_owned())
+        .map_err(|_| anyhow::anyhow!("Invalid text in Git transport metadata"))
+}
+
+fn common_dir(root: &Path) -> Result<Option<PathBuf>> {
+    let output = git(root, &["rev-parse", "--git-common-dir"])?;
+    if !output.status.success() {
+        // Only a directory outside Git may fall through to ordinary discovery.
+        // A damaged repository must not silently disable an enabled profile.
+        if root.ancestors().any(|p| p.join(".git").exists()) {
+            bail!("Cannot resolve clone-local Git metadata; transport policy is unknown.");
+        }
+        return Ok(None);
+    }
+    let path = PathBuf::from(
+        String::from_utf8(output.stdout)
+            .context("Invalid Git metadata directory")?
+            .trim(),
+    );
+    if path.as_os_str().is_empty() {
+        bail!("Missing Git metadata directory");
+    }
+    let path = if path.is_absolute() {
+        path
+    } else {
+        root.join(path)
+    };
+    Ok(Some(
+        path.canonicalize()
+            .context("Cannot resolve Git metadata directory")?,
+    ))
+}
+
+fn load(common: &Path) -> Result<Option<Profile>> {
+    let path = common.join(PROFILE_FILE);
+    match fs::symlink_metadata(&path) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(_) => bail!("Cannot read clone-local transport profile; push/pull refused."),
+        Ok(meta) if !meta.file_type().is_file() => {
+            bail!("Clone-local transport profile must be a regular file; push/pull refused.")
+        }
+        Ok(_) => {}
+    }
+    let mut bytes = Vec::new();
+    File::open(path)
+        .and_then(|file| file.take(65_537).read_to_end(&mut bytes))
+        .map_err(|_| anyhow::anyhow!("Cannot read clone-local transport profile"))?;
+    if bytes.len() > 65_536 {
+        bail!("Clone-local transport profile exceeds its size limit");
+    }
+    // serde errors can quote values; do not echo a corrupt profile's content.
+    let profile: Profile = serde_json::from_slice(&bytes).map_err(|_| {
+        anyhow::anyhow!("Invalid clone-local transport profile; push/pull refused.")
+    })?;
+    profile.validate()?;
+    Ok(Some(profile))
+}
+
+fn origin_fingerprint(root: &Path) -> Result<String> {
+    let fetch = git_text(root, &["remote", "get-url", "--all", "origin"])?;
+    let push = git_text(root, &["remote", "get-url", "--push", "--all", "origin"])?;
+    if fetch.is_empty() || fetch.lines().count() != 1 || push != fetch {
+        bail!("Transport requires exactly one identical origin fetch/push endpoint.");
+    }
+    let mirror = git(root, &["config", "--bool", "--get", "remote.origin.mirror"])?;
+    if mirror.status.code() != Some(1) && !(mirror.status.success() && mirror.stdout == b"false\n")
+    {
+        bail!("Transport refuses mirror or invalid origin configuration.");
+    }
+    // Git resolves relative filesystem URLs from the invoking worktree. Pin
+    // that effective location, so moving into a nested store cannot silently
+    // select a different local remote with the same configured spelling.
+    let scp_style = fetch
+        .split('/')
+        .next()
+        .is_some_and(|part| part.contains(':'));
+    let endpoint = if !Path::new(&fetch).is_absolute() && scp_style {
+        fetch
+    } else {
+        let base = if Path::new(&fetch).is_absolute() {
+            PathBuf::new()
+        } else {
+            let bare = git_text(root, &["rev-parse", "--is-bare-repository"])?;
+            PathBuf::from(git_text(
+                root,
+                &[
+                    "rev-parse",
+                    if bare == "true" {
+                        "--absolute-git-dir"
+                    } else {
+                        "--show-toplevel"
+                    },
+                ],
+            )?)
+        };
+        let mut normalized = PathBuf::new();
+        for component in base.join(&fetch).components() {
+            match component {
+                Component::ParentDir => {
+                    normalized.pop();
+                }
+                Component::CurDir => {}
+                other => normalized.push(other.as_os_str()),
+            }
+        }
+        normalized
+            .to_str()
+            .context("Origin path must be valid UTF-8")?
+            .to_owned()
+    };
+    Ok(format!("{:x}", Sha256::digest(endpoint.as_bytes())))
+}
+
+fn verify_origin(root: &Path, profile: &Profile) -> Result<()> {
+    if origin_fingerprint(root)? != profile.origin_sha256 {
+        bail!("Origin changed since transport profile enrollment; inspect origin, then explicitly disable/re-enable the profile to repin it.");
+    }
+    Ok(())
+}
+
+fn commit(root: &Path, reference: &str) -> Result<Option<String>> {
+    let revision = format!("{reference}^{{commit}}");
+    let output = git(
+        root,
+        &["rev-parse", "--verify", "--end-of-options", &revision],
+    )?;
+    if !output.status.success() {
+        return Ok(None);
+    }
+    let sha = String::from_utf8(output.stdout).context("Invalid Git object identity")?;
+    let sha = sha.trim();
+    if !is_hex_id(sha, &[40, 64]) {
+        bail!("Invalid Git object identity");
+    }
+    Ok(Some(sha.to_owned()))
+}
+
+fn enroll_baseline(root: &Path, value: &str) -> Result<String> {
+    if !is_hex_id(value, &[40, 64]) {
+        bail!("--baseline requires a full reviewed store commit SHA");
+    }
+    let sha = commit(root, value)?.context("Baseline commit is not available locally")?;
+    let tip = commit(root, STORE_REF)?.context("Local aida-store commit is missing")?;
+    if !git(root, &["merge-base", "--is-ancestor", &sha, &tip])?
+        .status
+        .success()
+    {
+        bail!("Baseline must be an ancestor of the local aida-store tip");
+    }
+    Ok(sha)
+}
+
+#[derive(Debug, Serialize)]
+struct ProfileStatus<'a> {
+    enabled: bool,
+    profile: Option<&'a Profile>,
+    remote: &'static str,
+    push_refspec: &'static str,
+    pull_refspec: &'static str,
+    code_leg: &'static str,
+    execution_available: bool,
+    origin_matches: Option<bool>,
+    limitations: Vec<&'static str>,
+}
+
+fn show(root: &Path, profile: Option<&Profile>, json: bool) -> Result<()> {
+    let status = ProfileStatus {
+        enabled: profile.is_some(),
+        profile,
+        remote: "origin",
+        push_refspec: PUSH_REFSPEC,
+        pull_refspec: PULL_REFSPEC,
+        code_leg: if profile.is_some() {
+            "forbidden"
+        } else {
+            "ordinary behavior"
+        },
+        execution_available: false,
+        origin_matches: profile
+            .map(|p| origin_fingerprint(root).map(|hash| hash == p.origin_sha256))
+            .transpose()?,
+        limitations: vec![PENDING, BYPASS_LIMIT],
+    };
+    if json {
+        println!("{}", serde_json::to_string_pretty(&status)?);
+    } else {
+        println!(
+            "Transport profile: {}",
+            if status.enabled {
+                "work (clone-local)"
+            } else {
+                "disabled; ordinary push/pull behavior"
+            }
+        );
+        if let Some(profile) = profile {
+            println!("Origin fingerprint: {}", profile.origin_sha256);
+            println!(
+                "Origin matches enrollment: {}",
+                status.origin_matches.unwrap_or(false)
+            );
+            println!(
+                "Baseline: {}",
+                profile.baseline.as_deref().unwrap_or("not enrolled")
+            );
+            println!("Code leg: forbidden");
+            println!("Push: origin {PUSH_REFSPEC}");
+            println!("Pull: origin {PULL_REFSPEC} (fast-forward only)");
+        }
+        for limitation in status.limitations {
+            println!("{limitation}");
+        }
+    }
+    Ok(())
+}
+
+// trace:STORY-1742 | ai:codex
+pub(crate) fn configure(command: &TransportCommand) -> Result<()> {
+    let root = std::env::current_dir()?;
+    configure_in(&root, command)
+}
+
+fn configure_in(root: &Path, command: &TransportCommand) -> Result<()> {
+    let common = common_dir(root)?.context("Transport configuration requires a Git clone")?;
+    if let TransportCommand::Show { json } = command {
+        return show(root, load(&common)?.as_ref(), *json);
+    }
+    // Permanent sidecar: never unlink a flock inode while other writers wait.
+    let lock = OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .read(true)
+        .write(true)
+        .open(common.join("aida-transport.lock"))?;
+    lock.try_lock_exclusive()
+        .context("Transport configuration is busy; retry")?;
+    let previous = load(&common)?;
+    match command {
+        TransportCommand::Enable {
+            name,
+            baseline,
+            json,
+        } => {
+            let fingerprint = origin_fingerprint(root)?;
+            let baseline = baseline
+                .as_deref()
+                .map(|sha| enroll_baseline(root, sha))
+                .transpose()?;
+            if let Some(previous) = previous.as_ref() {
+                if previous.origin_sha256 != fingerprint
+                    || (baseline.is_some() && previous.baseline != baseline)
+                {
+                    bail!("Transport profile already enrolled; disable it explicitly before repinning origin or baseline.");
+                }
+                return show(root, Some(previous), *json);
+            }
+            let profile = Profile {
+                version: 1,
+                name: *name,
+                origin_sha256: fingerprint,
+                baseline,
+            };
+            aida_core::write_atomic(
+                &common.join(PROFILE_FILE),
+                serde_json::to_vec_pretty(&profile)?,
+            )?;
+            show(root, Some(&profile), *json)
+        }
+        TransportCommand::Disable { json } => {
+            if previous.is_some() {
+                fs::remove_file(common.join(PROFILE_FILE))?;
+            }
+            show(root, None, *json)
+        }
+        TransportCommand::Show { .. } => unreachable!(),
+    }
+}
+
+#[derive(Debug, Serialize)]
+struct TransportPlan {
+    profile: ProfileName,
+    operation: &'static str,
+    remote: &'static str,
+    source_ref: &'static str,
+    source_sha: Option<String>,
+    destination_ref: &'static str,
+    refspec: &'static str,
+    refs_that_may_move: Vec<&'static str>,
+    code_leg: &'static str,
+    flags: BTreeMap<&'static str, &'static str>,
+    execution_available: bool,
+    blockers: Vec<&'static str>,
+    limitations: Vec<&'static str>,
+}
+
+fn plan(
+    root: &Path,
+    profile: &Profile,
+    push: bool,
+    flags: BTreeMap<&'static str, &'static str>,
+) -> Result<TransportPlan> {
+    verify_origin(root, profile)?;
+    let source_sha = commit(root, if push { STORE_REF } else { TRACKING_REF })?;
+    let mut blockers = vec![PENDING];
+    if flags.values().any(|value| *value == "forbidden") {
+        blockers.push(FORBIDDEN);
+    }
+    if push && profile.baseline.is_none() {
+        blockers.push("No public-safe baseline enrolled; outbound sanitization cannot run yet.");
+    }
+    if source_sha.is_none() {
+        blockers.push(if push {
+            "Local aida-store tip is missing."
+        } else {
+            "Remote aida-store tip is unknown; this plan does not fetch."
+        });
+    }
+    Ok(TransportPlan {
+        profile: profile.name,
+        operation: if push { "push" } else { "pull" },
+        remote: "origin",
+        source_ref: STORE_REF,
+        source_sha,
+        destination_ref: if push { STORE_REF } else { TRACKING_REF },
+        refspec: if push { PUSH_REFSPEC } else { PULL_REFSPEC },
+        refs_that_may_move: if push { vec![STORE_REF, TRACKING_REF] } else { vec![TRACKING_REF, STORE_REF] },
+        code_leg: "forbidden",
+        flags,
+        execution_available: false,
+        blockers,
+        limitations: vec![BYPASS_LIMIT, "Plans inspect local metadata only; no network, scanning, cleanliness, or fast-forward validation is performed."],
+    })
+}
+
+fn render_plan(plan: &TransportPlan, json: bool) -> Result<()> {
+    if json {
+        println!("{}", serde_json::to_string_pretty(plan)?);
+    } else {
+        println!("Transport profile: work (clone-local)");
+        println!("{}: {} {}", plan.operation, plan.remote, plan.refspec);
+        println!(
+            "Source SHA (locally known): {}",
+            plan.source_sha.as_deref().unwrap_or("unknown")
+        );
+        println!(
+            "Refs that may move during execution: {}",
+            plan.refs_that_may_move.join(", ")
+        );
+        println!("Code leg: forbidden");
+        for (flag, disposition) in &plan.flags {
+            println!("{flag}: {disposition}");
+        }
+        for note in plan.blockers.iter().chain(&plan.limitations) {
+            println!("{note}");
+        }
+    }
+    Ok(())
+}
+
+fn active(root: &Path) -> Result<Option<Profile>> {
+    common_dir(root)?
+        .map(|common| load(&common))
+        .transpose()
+        .map(Option::flatten)
+}
+
+fn handle(
+    root: &Path,
+    explicit_file: Option<&str>,
+    push: bool,
+    dry_run: bool,
+    json: bool,
+    flags: BTreeMap<&'static str, &'static str>,
+) -> Result<bool> {
+    let profile = active(root)?;
+    if let Some(file) = explicit_file {
+        let path = root.join(file);
+        let selected = path
+            .ancestors()
+            .find(|path| path.is_dir())
+            .context("Cannot resolve explicit store location")?;
+        if profile.is_some() || active(selected)?.is_some() {
+            bail!("The work transport profile refuses --file overrides; run from the intended clone without --file.");
+        }
+        return Ok(false);
+    }
+    let Some(profile) = profile else {
+        return Ok(false);
+    };
+    let forbidden = flags.values().any(|value| *value == "forbidden");
+    let plan = plan(root, &profile, push, flags)?;
+    if dry_run || json {
+        render_plan(&plan, json)?;
+    }
+    if forbidden {
+        if json {
+            return Err(crate::TypedPayloadEmitted.into());
+        }
+        bail!("{FORBIDDEN}");
+    }
+    if !dry_run && !json {
+        bail!("{PENDING}");
+    }
+    Ok(true)
+}
+
+// trace:STORY-1742 | ai:codex
+pub(crate) fn handle_push(
+    args: &crate::store_push_pull::PushArgs,
+    explicit_file: Option<&str>,
+) -> Result<bool> {
+    let mut flags = BTreeMap::new();
+    if args.code_only {
+        flags.insert("--code-only", "forbidden");
+    }
+    if args.store_only {
+        flags.insert("--store-only", "redundant");
+    }
+    if args.message.is_some() {
+        flags.insert("--message", "forbidden");
+    }
+    if args.no_rebase_check {
+        flags.insert("--no-rebase-check", "redundant");
+    }
+    if args.no_notice {
+        flags.insert("--no-notice", "redundant");
+    }
+    handle(
+        &std::env::current_dir()?,
+        explicit_file,
+        true,
+        args.dry_run,
+        args.json,
+        flags,
+    )
+}
+
+// trace:STORY-1742 | ai:codex
+pub(crate) fn handle_pull(
+    args: &crate::store_push_pull::PullArgs,
+    explicit_file: Option<&str>,
+) -> Result<bool> {
+    let mut flags = BTreeMap::new();
+    if args.code_only {
+        flags.insert("--code-only", "forbidden");
+    }
+    if args.store_only {
+        flags.insert("--store-only", "redundant");
+    }
+    if args.auto {
+        flags.insert("--auto", "forbidden");
+    }
+    if args.no_gate {
+        flags.insert("--no-gate", "redundant");
+    }
+    if args.quiet {
+        flags.insert("--quiet", "redundant");
+    }
+    handle(
+        &std::env::current_dir()?,
+        explicit_file,
+        false,
+        args.dry_run,
+        args.json,
+        flags,
+    )
+}

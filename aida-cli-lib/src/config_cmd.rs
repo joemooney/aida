@@ -23,6 +23,10 @@ pub(crate) fn handle_config_command(cmd: &ConfigCommand, storage: &Storage) -> R
     let mut store = storage.load()?;
 
     match cmd {
+        // trace:STORY-1742 | ai:codex
+        ConfigCommand::Transport(_) => {
+            unreachable!("transport configuration finishes before storage init")
+        }
         ConfigCommand::Show { section } => {
             if let Some(section) = section {
                 match section.as_str() {
@@ -5282,6 +5286,11 @@ fn run_config(
 ) -> anyhow::Result<crate::command_registry::Flow> {
     use crate::*;
     let args = <ConfigArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    // Clone-local configuration must not open or mutate the requirement store.
+    // trace:STORY-1742 | ai:codex
+    if let ConfigCommand::Transport(command) = &args.inner {
+        return crate::command_registry::returned(crate::transport_profile::configure(command));
+    }
     // trace:BUG-2189 | ai:claude
     if matches!(args.inner, ConfigCommand::Format { .. }) {
         crate::command_registry::refuse_global_format(ctx, "config format")?;

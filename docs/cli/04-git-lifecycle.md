@@ -289,6 +289,13 @@ requests one at a time with `aida pr ship N`.
 
 Here's the thing raw git doesn't know about your AIDA project: **there are two branches that must move together** — your **code** branch, and the orphan **`aida-store`** branch that holds the specs. `aida fetch`/`pull`/`push` are the verbs that keep both legs in sync, because doing one and forgetting the other is the mistake everyone makes. Each takes `--code-only` / `--store-only` to scope to one leg when you mean to.
 
+An explicitly enabled clone-local `work` transport profile changes push/pull
+planning to store-only refs. In the current profile-and-plan slice, actual
+push/pull refuses; dry-run/JSON plans perform no fetch or lifecycle actions.
+See [transport configuration](07-project-setup.md#aida-config-transport) for
+enrollment, the execution boundary, and the raw-Git bypass limit.
+<!-- trace:STORY-1742 | ai:codex -->
+
 ### `aida fetch`
 
 **One line** — refresh both remotes' refs without merging or touching your working tree.
