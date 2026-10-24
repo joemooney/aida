@@ -3,17 +3,25 @@ spec_id: BUG-2213
 agreed_id: BUG-2213
 title: Mandate ship refuses when a coordination lease write is mid-commit in the store
 description: 'Observed 2026-10-23 17:2x: mandate ships of PR-2850 and PR-2855 (ship-held mandate) both failed exit=25 with ''mandate exclusion evidence could not be read (mandate exclusion store has uncommitted evidence; retry after the store write completes (3 attempts))''. The cause: store_snapshot (aida-cli-lib/src/mandate_traces.rs:92) refuses on ANY porcelain status, and a concurrent reviewer''s ''claim lease PR-2864'' had coordination/leases/pr-2864-*.toml staged mid-commit. The store was clean seconds later. Leases are not exclusion evidence. With several reviewers claiming and renewing leases, three quick retries lose regularly, and each loss makes a PASSED PR fall back to needing a human. Fix options: scope the dirty check to the paths that hold exclusion evidence (objects/ plus mandate trace refs), or retry with backoff over a longer window. Acceptance: a ship racing a lease write under the mandate succeeds, with a test that stages a lease file during the snapshot.'
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-24T00:35:24.407537052Z
-modified_at: 2026-10-24T00:35:24.407537052Z
+modified_at: 2026-10-24T06:21:03.639192530Z
 req_type: Bug
 tags:
 - coordination
 - mandate
 - ship
+history:
+- id: 01a16c91-e717-7102-8c61-c1ca6d83fb24
+  author: joe
+  timestamp: 2026-10-24T06:21:03.639189488Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: c38043228df6044c6c523a3c6a16805f359d3083
   branch: main
