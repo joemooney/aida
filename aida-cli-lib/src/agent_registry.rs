@@ -791,6 +791,7 @@ pub(crate) fn adopt_bg_session_identity(
                 registry_id: Some(&entry.id),
                 launch_token: token.as_deref(),
                 launcher: false,
+                child_seat: false,
             },
         );
         // Never write a name the namespace refused: the session keeps the
@@ -947,6 +948,7 @@ pub(crate) fn generate_or_validate_name(
         registry_id: None,
         launch_token: None,
         launcher: true,
+        child_seat: false,
     };
     if reserve {
         return Ok(crate::agent_handle::reserve_handle(project_root, &request)?.handle);
