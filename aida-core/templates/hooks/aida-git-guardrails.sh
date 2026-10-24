@@ -560,8 +560,8 @@ fi
 # that is deliberate evasion, not an accident.
 # This guard is defense-in-depth for an advisory hook, not a sandbox: a line
 # scanner cannot parse every shell form, and its exec-prefix and setter lists
-# are not exhaustive. A further bypass shape is a follow-up spec, not a
-# blocker for the change that finds it (PR-2837 review ruling).
+# are not exhaustive. Scope: a further bypass shape is tracked as a follow-up
+# spec rather than widened here.
 # trace:TASK-1952 | trace:TASK-2246 | ai:claude
 # trace:TASK-1948 | ai:claude
 # trace:TASK-1952 | trace:TASK-1643 | ai:claude
