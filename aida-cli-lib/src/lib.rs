@@ -522,13 +522,18 @@ mod report_cmd;
 mod research;
 mod reviewer_summary;
 // trace:BUG-1918 | ai:claude — who may approve: recorder/author identity + authority re-validation.
-mod review_authority;
+// trace:STORY-1889 | ai:claude — transitional re-export; the module lives in gate/.
+pub(crate) use gate::review_authority;
 // trace:STORY-1405 | ai:claude — review-in-progress marker consulted by merge surfaces.
-mod review_marker;
+// trace:STORY-1889 | ai:claude — transitional re-export; the module lives in gate/.
+pub(crate) use gate::review_marker;
 // trace:STORY-1417 | ai:claude
 mod review_classes;
 // trace:BUG-775 | ai:claude — review verdicts as first-class gate-readable state.
-mod review_verdict;
+// trace:STORY-1889 | ai:claude — transitional re-export; the module lives in gate/.
+pub(crate) use gate::review_verdict;
+// trace:STORY-1889 | ai:claude — verdict rendering, outside the gate.
+mod review_verdict_display;
 // trace:TASK-1960 | ai:claude — attested-approval carry-over across clean base merges.
 mod review_carryover;
 mod role_cmd;
@@ -557,6 +562,11 @@ mod grant_keyring;
 // STORY-1889 PR repoints callers to `crate::gate::seat_authority`.
 // trace:STORY-1889 | ai:claude
 pub(crate) use gate::seat_authority;
+// trace:STORY-1889 | ai:claude
+pub(crate) use gate::review_author::{
+    review_author_gate, review_author_refusal, review_record_attribution_refusal,
+    review_recorder_authors, review_stale_lease_refusal, ReviewAuthorGate,
+};
 // trace:BUG-2169 | ai:claude — a contained seat's private clone (the only host accessor).
 mod seat_clone;
 mod seat_occupancy;
@@ -579,7 +589,8 @@ mod shell_eval;
 // trace:STORY-627 | ai:claude — per-repo solo-loop lock + liveness sentinel.
 mod solo_lock;
 // trace:STORY-1655 | ai:claude — audited solo-human self-approval mode (global key only).
-mod solo_review;
+// trace:STORY-1889 | ai:claude — transitional re-export; the module lives in gate/.
+pub(crate) use gate::solo_review;
 mod stacks;
 mod state_snapshot;
 mod status_cleanup;

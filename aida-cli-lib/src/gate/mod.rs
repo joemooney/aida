@@ -6,5 +6,10 @@
 // mandate-gate
 // trace:STORY-1889 | ai:claude
 
+pub(crate) mod review_author;
+pub(crate) mod review_authority;
+pub(crate) mod review_marker;
+pub(crate) mod review_verdict;
 pub(crate) mod role_authority;
 pub(crate) mod seat_authority;
+pub(crate) mod solo_review;

@@ -50,7 +50,7 @@ fn git_head(repo: &std::path::Path) -> String {
 #[test]
 fn findings_recur_only_when_the_last_block_is_identical() {
     use crate::queue_cmd::findings_recur_consecutively;
-    let prefix = crate::review_verdict::FINDINGS_BLOCK_PREFIX;
+    let prefix = crate::review_verdict_display::FINDINGS_BLOCK_PREFIX;
     let a = format!("{prefix}PR #7):\nVerdict: RequestChanges\n- fix A");
     let b = format!("{prefix}PR #7):\nVerdict: RequestChanges\n- fix B");
     let base = chrono::Utc::now();
@@ -88,7 +88,7 @@ fn findings_recur_only_when_the_last_block_is_identical() {
 #[test]
 fn rework_pickup_round_is_derived_from_recorded_findings_blocks() {
     use crate::queue_cmd::{derive_rework_queue_work_prompt, rework_round_from_comments};
-    let prefix = crate::review_verdict::FINDINGS_BLOCK_PREFIX;
+    let prefix = crate::review_verdict_display::FINDINGS_BLOCK_PREFIX;
     let block = |n: usize| format!("{prefix}PR #9):\nVerdict: RequestChanges\n- item {n}");
     let mk = |content: String| aida_core::Comment::new("reviewer".to_string(), content);
     // No findings recorded yet (first rework about to be queued) → round 2.
@@ -153,7 +153,7 @@ fn round_one_reviewer_prompt_requires_a_complete_sweep_only_once() {
 // trace:TASK-1291 | ai:codex
 #[test]
 fn reviewer_round_is_derived_from_all_recorded_findings_blocks() {
-    let prefix = crate::review_verdict::FINDINGS_BLOCK_PREFIX;
+    let prefix = crate::review_verdict_display::FINDINGS_BLOCK_PREFIX;
     let mk = |content: String| aida_core::Comment::new("reviewer".to_string(), content);
     assert_eq!(review_round_from_comments(&[]), 1);
     assert_eq!(
@@ -171,7 +171,7 @@ fn reviewer_round_is_derived_from_all_recorded_findings_blocks() {
 // trace:TASK-1291 | ai:codex
 #[test]
 fn reviewer_round_ignores_embedded_or_quoted_findings_markers() {
-    let prefix = crate::review_verdict::FINDINGS_BLOCK_PREFIX;
+    let prefix = crate::review_verdict_display::FINDINGS_BLOCK_PREFIX;
     let mk = |content: String| aida_core::Comment::new("reviewer".to_string(), content);
 
     assert_eq!(
@@ -189,7 +189,7 @@ fn reviewer_round_ignores_embedded_or_quoted_findings_markers() {
 // trace:TASK-1291 | ai:codex
 #[test]
 fn all_review_history_helpers_reject_noncanonical_marker_placement() {
-    let prefix = crate::review_verdict::FINDINGS_BLOCK_PREFIX;
+    let prefix = crate::review_verdict_display::FINDINGS_BLOCK_PREFIX;
     let mk = |content: String| aida_core::Comment::new("reviewer".to_string(), content);
     let comments = vec![
         mk(format!("preamble: {prefix}PR #12):\nFindings:\n1. example")),
