@@ -715,9 +715,6 @@ fn pr_touching_gate_paths_is_gated() {
         "aida-cli-lib/src/mandate_ship.rs",
         "aida-cli-lib/src/mandate_traces.rs",
         "aida-cli-lib/src/rework_hold_release.rs",
-        "aida-cli-lib/src/review_authority.rs",
-        "aida-cli-lib/src/solo_review.rs",
-        "aida-cli-lib/src/review_verdict.rs",
     ] {
         let paths = vec!["README.md".to_string(), path.to_string()];
         let c = ship_check(&state, &policy, &ledger, &hold, Some(&paths));
@@ -727,6 +724,24 @@ fn pr_touching_gate_paths_is_gated() {
                 crate::mandate_gates::GateMatch {
                     path: path.into(),
                     entry: path.into(),
+                    source: crate::mandate_gates::PathSource::BuiltIn,
+                }
+            ))
+        );
+    }
+    for path in [
+        "aida-cli-lib/src/gate/review_authority.rs",
+        "aida-cli-lib/src/gate/solo_review.rs",
+        "aida-cli-lib/src/gate/review_verdict.rs",
+    ] {
+        let paths = vec!["README.md".to_string(), path.to_string()];
+        let c = ship_check(&state, &policy, &ledger, &hold, Some(&paths));
+        assert_eq!(
+            crate::mandate::ship_decision(&c),
+            Err(MandateRefusal::TouchesGates(
+                crate::mandate_gates::GateMatch {
+                    path: path.into(),
+                    entry: "aida-cli-lib/src/gate/".into(),
                     source: crate::mandate_gates::PathSource::BuiltIn,
                 }
             ))

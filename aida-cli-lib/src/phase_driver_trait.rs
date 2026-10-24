@@ -117,7 +117,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         let Some(verdict) = blocking_rework_verdict(&self.project_root, &self.spec, pr) else {
             return;
         };
-        let reason = review_verdict::rework_findings_comment(
+        let reason = crate::review_verdict_display::rework_findings_comment(
             &self.spec,
             &format!("PR #{}", change.id),
             &verdict,

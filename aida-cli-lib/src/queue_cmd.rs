@@ -7,6 +7,8 @@
 
 use crate::process_retry::RetryEtxtbsy;
 use crate::*;
+// trace:STORY-1889 | ai:claude
+use crate::gate::review_verdict::evaluate_review_verdict_gate;
 use aida_core::git_ops::RemoteCredentialsExt as _;
 use std::path::Path;
 
@@ -4948,7 +4950,7 @@ pub(crate) fn handle_queue_command(
                             &root,
                             &[&display_id_owned, spec_id],
                         ) {
-                            let line = review_verdict::verdict_notice_line(&v);
+                            let line = crate::review_verdict_display::verdict_notice_line(&v);
                             if v.kind.blocks_done() {
                                 println!("  {} {}", "Review verdict:".bold(), line.yellow().bold());
                                 println!(
@@ -5194,7 +5196,7 @@ pub(crate) fn handle_queue_command(
                             "{} --force: overriding the recorded review verdict for {} ({}).",
                             "warning:".yellow().bold(),
                             display_id,
-                            review_verdict::verdict_notice_line(&v)
+                            crate::review_verdict_display::verdict_notice_line(&v)
                         );
                     }
                     _ => {}
@@ -10485,7 +10487,7 @@ pub(crate) fn reviewer_prompt_for_round(pr: u64, round: usize) -> String {
 pub(crate) fn review_round_from_comments(comments: &[aida_core::Comment]) -> usize {
     comments
         .iter()
-        .filter(|comment| crate::review_verdict::is_findings_block(&comment.content))
+        .filter(|comment| crate::review_verdict_display::is_findings_block(&comment.content))
         .count()
         + 1
 }
@@ -10537,7 +10539,7 @@ pub(crate) fn derive_rework_queue_work_prompt(
 pub(crate) fn latest_findings_block(comments: &[aida_core::Comment]) -> Option<&str> {
     comments
         .iter()
-        .filter(|c| review_verdict::is_findings_block(&c.content))
+        .filter(|c| crate::review_verdict_display::is_findings_block(&c.content))
         .max_by_key(|c| c.created_at)
         .map(|c| c.content.as_str())
 }
@@ -10549,7 +10551,7 @@ pub(crate) fn latest_findings_block(comments: &[aida_core::Comment]) -> Option<&
 pub(crate) fn rework_round_from_comments(comments: &[aida_core::Comment]) -> usize {
     let recorded = comments
         .iter()
-        .filter(|c| review_verdict::is_findings_block(&c.content))
+        .filter(|c| crate::review_verdict_display::is_findings_block(&c.content))
         .count();
     recorded.max(1) + 1
 }
@@ -10632,7 +10634,7 @@ pub(crate) fn rework_findings_block_for_spec(
         .filter(|id| !id.trim().is_empty() && **id != "???")
     {
         if let Some(v) = review_verdict::read_recorded_verdict(project_root, id) {
-            return review_verdict::rework_findings_comment(id, id, &v);
+            return crate::review_verdict_display::rework_findings_comment(id, id, &v);
         }
     }
 
@@ -10655,7 +10657,7 @@ pub(crate) fn rework_findings_block_for_spec(
         .iter()
         .find(|(_, v)| verdict_mentions_spec(v, &ids))?;
     let review_ref = review_ref_from_verdict_filename(&selected.0);
-    review_verdict::rework_findings_comment(display_id, &review_ref, &selected.1)
+    crate::review_verdict_display::rework_findings_comment(display_id, &review_ref, &selected.1)
 }
 
 /// BUG-225: render the copy-pasteable `claude` command line for a
@@ -16681,61 +16683,6 @@ pub(crate) fn resolve_done_rework_ids(
             matches!(relation, review_verdict::TipRelation::AtReviewedSha).then_some(id)
         })
         .collect()
-}
-
-/// Resolve the review-verdict gate for a spec about to be marked done.
-///
-/// Reads the recorded verdict (under either id form the caller holds), then —
-/// only when that verdict actually blocks — asks git where the branch tip sits
-/// relative to the commit the review examined. Returns the decision plus the
-/// verdict it was based on, so the caller can name it when `--force`
-/// overrides. All policy lives in the pure `review_verdict` functions; this is
-/// just the wiring.
-// trace:BUG-775 | ai:claude
-pub(crate) fn evaluate_review_verdict_gate(
-    project_root: &std::path::Path,
-    display_id: &str,
-    spec_id: &str,
-) -> (
-    review_verdict::VerdictGate,
-    Option<review_verdict::RecordedVerdict>,
-) {
-    // The verdict may have been recorded in the PRIMARY checkout (where a
-    // reviewer runs) while `queue done` runs in an implementer worktree.
-    // `.aida/` is per-checkout runtime state, so look in both; the reviewed
-    // sha itself resolves either way because worktrees share the object
-    // store. trace:BUG-775 | ai:claude
-    let primary_root = main_worktree_root_from(project_root);
-    let verdict = review_verdict::read_recorded_verdict_any(project_root, &[display_id, spec_id])
-        .or_else(|| {
-            (primary_root != project_root)
-                .then(|| {
-                    review_verdict::read_recorded_verdict_any(&primary_root, &[display_id, spec_id])
-                })
-                .flatten()
-        });
-    let Some(verdict) = verdict else {
-        return (review_verdict::VerdictGate::Proceed, None);
-    };
-    // BUG-1466 / BUG-1538: this used to return early here for every verdict
-    // that does not block_done() — which includes APPROVED, the consequential
-    // direction. That made `queue_done_verdict_gate`'s own `reviewed_sha ==
-    // None` refusal (added for BUG-1467) unreachable from the ONE call site
-    // `aida queue done` actually uses, and it meant an approval recorded
-    // against an earlier commit cleared the gate identically to a fresh one:
-    // relation was never even computed for a non-blocking verdict. The pure
-    // gate function now makes this decision for every verdict kind; this
-    // wiring must always ask it rather than pre-empting it.
-    // trace:BUG-1466 | ai:claude
-    // trace:BUG-1538 | ai:claude
-    let branch = current_branch_at(project_root);
-    let relation = verdict_tip_relation(
-        project_root,
-        branch.as_deref(),
-        verdict.reviewed_sha.as_deref(),
-    );
-    let gate = review_verdict::queue_done_verdict_gate(display_id, Some(&verdict), relation);
-    (gate, Some(verdict))
 }
 
 /// Personal work queue commands
