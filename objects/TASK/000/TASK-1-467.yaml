@@ -1,5 +1,6 @@
 id: 01a16b1f-d5a1-7d31-9715-2c2501c7e431
 spec_id: TASK-1-467
+agreed_id: TASK-1837
 title: 'minor (carry-over, TASK-2271): pr_train.rs:905 car-subject fallback reads branc…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on STORY-1690, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -36,6 +37,10 @@ history:
   author: joe
   timestamp: 2026-10-23T23:37:38.969728682Z
   session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+  changes: []
+- id: 01a16b87-acc3-7533-94e9-70c8caed86d6
+  author: joe
+  timestamp: 2026-10-24T01:30:16.131899162Z
   changes: []
 filed_at:
   code_sha: c38043228df6044c6c523a3c6a16805f359d3083

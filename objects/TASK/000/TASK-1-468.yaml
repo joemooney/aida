@@ -1,5 +1,6 @@
 id: 01a16b1f-de98-74d3-b0af-00c18a371ccd
 spec_id: TASK-1-468
+agreed_id: TASK-1838
 title: 'cosmetic (carry-over): named = !opts.all_ready wiring at pr_train.rs:1641/1702 …'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on STORY-1690, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -36,6 +37,10 @@ history:
   author: joe
   timestamp: 2026-10-23T23:37:46.822251716Z
   session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+  changes: []
+- id: 01a16b87-ace8-7c50-aca0-b1fe3936224d
+  author: joe
+  timestamp: 2026-10-24T01:30:16.168953083Z
   changes: []
 filed_at:
   code_sha: c38043228df6044c6c523a3c6a16805f359d3083
