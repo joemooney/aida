@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-1689",
+  "publishes": [
+    {
+      "at": "2026-10-24T02:54:01.485074446Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-22T01:46:06.849251444Z",
+      "spec": "STORY-1689",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-22T10:49:57.241956509Z",
+      "spec": "STORY-1689",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-23T13:17:27.734132002Z",
+      "spec": "STORY-1689",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-23T16:13:45.898693239Z",
+      "spec": "STORY-1689",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "STORY-1689",
+        "branch": "pr-2850",
+        "first_seen": "2026-10-23T16:13:45.898638117+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-24T02:53:35.930377262Z",
+      "spec": "STORY-1689",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2850
+      }
+    },
+    {
+      "ts": "2026-10-24T02:54:01.346582516Z",
+      "spec": "STORY-1689",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "d14a20aaaea1d58be05fdacf97e1ef60c46d02fb",
+        "pr": 2850,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
