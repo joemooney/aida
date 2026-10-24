@@ -11,12 +11,17 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-24T00:11:32.515522227Z
-modified_at: 2026-10-24T00:13:18.137829852Z
+modified_at: 2026-10-24T00:13:19.040030912Z
 req_type: Task
 tags:
 - from-review:PR-2865
 - severity:minor
 - templates
+relationships:
+- rel_type: SupersededBy
+  target_id: 01a16ab3-20ee-7550-afba-013cc6054d9c
+  created_at: 2026-10-24T00:13:19.040027331Z
+  created_by: joe
 history:
 - id: 01a16b41-35b9-7421-a89c-f61d2bc92614
   author: joe
@@ -26,6 +31,11 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Superseded
+- id: 01a16b41-3ca8-7721-9fd5-ea57355d1530
+  author: joe
+  timestamp: 2026-10-24T00:13:19.912937388Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+  changes: []
 filed_at:
   code_sha: cb0a96cfe5cc4d4b53592feab097d355858d53c8
   branch: pr-2865
