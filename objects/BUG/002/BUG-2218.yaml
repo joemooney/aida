@@ -8,7 +8,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-24T12:27:08.977771549Z
-modified_at: 2026-10-24T17:50:22.767703929Z
+modified_at: 2026-10-24T18:18:38.476423562Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -39,6 +39,11 @@ comments:
   content: 'PR-2898 round-1 rework pushed normally at 9d6d7141ebf88a2bf047a9a058342cf2747bdf45, folding superseded TASK-2326/2327/2328. Mailbox path/settings previews no longer create the mailbox; explicit runtime preparation creates it before sandbox startup. Contained Claude and OS-wrapper paths both refuse symlinked state/mailbox paths. Direct clarify, intake, burndown and headless launch seams prepare before issuing child grants. The Git-denial CI assertion had mistaken the mailbox grant for a store grant; it now distinguishes them and verifies effective Git metadata refusal across Git versions. Final checks passed: 41 bug_221 tests, 20 store-boundary tests, exact Git-denial/help/audit regressions, all 34 fast gates. No merge or self-verdict.'
   created_at: 2026-10-24T17:15:28.013007917Z
   modified_at: 2026-10-24T17:15:28.013007917Z
+- id: 01a16f22-de0c-7b70-90a3-5d3e6557cf48
+  author: mcp
+  content: PR-2898 follow-up pushed normally at 81ccf98de6232236e2ed98604da2f1cbd0ff2fc0 after fast-forwarding to the existing remote merge head 83a34abb9b. Moved contained mailbox preparation above compose_headless_command in spawn_vendor_headless_with_seat_granted, preserving preparation before child-grant issuance. Ratchet test unchanged. On the final branch, the exact queue_cmd::headless_hint_tests::headless_env_launches_route_through_shared_argv_builders test passed (1/1), and make check-ci-fast passed all 34 gates. No full suite, merge, verdict, or hold clearance.
+  created_at: 2026-10-24T18:18:38.476415132Z
+  modified_at: 2026-10-24T18:18:38.476415132Z
 history:
 - id: 01a16de2-65a2-7851-ac33-7b68ed2e6b49
   author: joe
