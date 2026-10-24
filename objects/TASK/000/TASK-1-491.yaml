@@ -1,0 +1,29 @@
+id: 01a16de5-f674-75e0-a33b-3633a0483d62
+spec_id: TASK-1-491
+title: 'cosmetic: disk_emergency.rs run_emergency_probed saves last_emergency_refusal o…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-2272, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  cosmetic: disk_emergency.rs run_emergency_probed saves last_emergency_refusal only when outcome.deleted is empty — a partial run (deletes then Stop::Refused) leaves the state stale, so the next nothing-deleted tick re-notifies the same refusal as new. One extra notification.
+
+  PR: #2893
+  Reviewed sha: 7551db72771f959b7365064c267d16e7657be1a3
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-24T12:32:29.812902477Z
+modified_at: 2026-10-24T12:32:29.812902477Z
+req_type: Task
+tags:
+- carried-from:TASK-2272
+- finding-hash:3c75ebbc
+- from-review:PR-2893
+- kind:carried-forward
+filed_at:
+  code_sha: 194492a69f7358b90006afe525d62056b42d30ce
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6980be3ace
+  vendor: claude
