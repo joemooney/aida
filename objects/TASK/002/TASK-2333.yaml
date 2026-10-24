@@ -1,0 +1,27 @@
+id: 01a16f46-3602-7423-a796-6e911c59a69f
+spec_id: TASK-2333
+agreed_id: TASK-2333
+title: 'Scratch reclaim: ''live session'' protection is own-session + mtime only — decide whether other live-but-idle sessions need lease-based protection'
+description: |
+  scratch_reclaim::plan_tmp (TASK-2325, PR-2906) protects session scratch under the TMPDIR root by two rails only: the CALLING session's own dir (survey.live_session_dirs) and the mtime age window. Another session that is still alive but has not written for >N days (default 3) has its scratch listed and deleted by --apply / the emergency tier. The module doc acknowledges the tradeoff, but there is a stronger liveness source available (session leases / aida ps). Decide whether live_session_dirs should be populated from lease liveness, or record the mtime-only tradeoff as an accepted decision.
+
+  Raised in review of PR-2906: https://github.com/joemooney/aida/pull/2906#issuecomment-6388225690
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-24T18:57:14.754519121Z
+modified_at: 2026-10-24T18:57:14.754519121Z
+req_type: Task
+tags:
+- from-review:PR-2906
+- severity:minor
+filed_at:
+  code_sha: f6bb4a0e951511bd35774fb08343657b54be688b
+  branch: pr-2906
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c7e5160ce3
+  vendor: claude
+  session: 01a16f2cb613
+  harness_version: 2.1.310 (Claude Code)

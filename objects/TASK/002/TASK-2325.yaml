@@ -3,12 +3,12 @@ spec_id: TASK-2325
 agreed_id: TASK-2325
 title: 'Disk reclaim: scan agent scratch outside target/ (~/.claude/jobs/*/tmp, $TMPDIR scratch, stale aida build caches)'
 description: 'Observed 2026-10-24: root hit 95% though the worktree reclaim saw only target/ dirs. The rest was agent scratch the disk guard (STORY-1916) never scans: ~/.claude/jobs/<id>/tmp (127 GiB, 103 GiB of it from jobs older than 3 days: per-job TMPDIR build output), /tmp/claude-1000/* (74 GiB of old session scratch) and ~/.cache/aida-impl-target (23 GiB, untouched since Oct 13). ACCEPTANCE: aida worktree reclaim (dry run by default) also lists (a) ~/.claude/jobs/<id>/tmp of jobs whose state is terminal and older than N days, NEVER touching state.json, timeline.jsonl or ~/.claude/projects transcripts, which are the source for intent harvesting; (b) TMPDIR-root scratch entries older than N days, excluding live session dirs; (c) aida build caches not used in N days. Each row shows its size and reason, and --apply deletes only the listed rows. The emergency path from STORY-1916 may include (a) and (b) at the hard ceiling. A live job (non-terminal state or recently updated) is never listed. Tests use fixture job dirs.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-24T13:16:52.228043273Z
-modified_at: 2026-10-24T18:15:56.735844808Z
+modified_at: 2026-10-24T18:55:43.097030446Z
 req_type: Task
 relationships:
 - rel_type:
@@ -46,6 +46,15 @@ history:
   timestamp: 2026-10-24T18:15:58.186940944Z
   session_id: 16800bb8-6bb5-4aad-a6bd-ab9e4ef96b8b
   changes: []
+- id: 01a16f44-cff9-7462-85cf-40ecc8265952
+  author: aida-orchestrator
+  timestamp: 2026-10-24T18:55:43.097048452Z
+  session_id: 01a16f2cb613
+  harness_version: 2.1.310 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 194492a69f7358b90006afe525d62056b42d30ce
   branch: main
@@ -54,3 +63,11 @@ filed_at:
   aida_build_sha: 194492a69f
   vendor: claude
   session: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Acceptance substantially implemented with solid rails+tests, but CI is red and PR-caused: portability ratchet (8 /tmp literals in the new test file) and a stale golden help snapshot (new reclaim flags); plus a test-isolation hazard where the emergency scratch path reads the real TMPDIR inside unit tests.'
+  recovery_hint: address the review findings, move TASK-2325 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-10-24T18:55:43.097030446Z
