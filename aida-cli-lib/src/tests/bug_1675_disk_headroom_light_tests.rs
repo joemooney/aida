@@ -220,3 +220,118 @@ fn cargo_slot_target_artifacts_ignores_lock_files_and_empty_scratch() {
     assert!(found.contains(&"debug/".to_string()), "{found:?}");
     assert!(found.contains(&".rustc_info.json".to_string()), "{found:?}");
 }
+
+/// A floor no real filesystem meets, so the tempdir is always below it.
+const HUGE_FLOOR_GIB: u64 = 1_000_000_000;
+
+/// TASK-2264 (folded into STORY-1916): a manual light check below the floor
+/// reports the breach and the status block, and never runs the emergency
+/// tier or the stuck scan (a reclaim dry run: `gh`, the offline merge scan,
+/// a walk of every cache).
+// trace:STORY-1916.Visibility | ai:claude
+#[test]
+fn story_1916_manual_light_check_makes_no_gh_call_and_no_cache_walk() {
+    let tmp = project_with_unloadable_store(HUGE_FLOOR_GIB);
+    let cfg = crate::read_project_config_value(tmp.path());
+    let report = disk_headroom_light_report_finish(
+        tmp.path(),
+        cfg.as_ref(),
+        false,
+        || panic!("a manual check must not run the emergency tier"),
+        || disk_headroom_light_report_with(tmp.path(), |_| Some(0), None),
+        |_, _| panic!("a manual check must not run the reclaim scan (gh, cache walk)"),
+    );
+    assert_eq!(report.findings.len(), 1, "{:?}", report.findings);
+    assert_eq!(report.findings[0].id, "disk-headroom");
+    assert!(!report.findings[0].summary.contains("STUCK"));
+    let status = report.disk_status.expect("status block");
+    assert_eq!(status.floor_gib, HUGE_FLOOR_GIB);
+}
+
+/// The substrate run does run both, and a scan that cannot cover the
+/// deficit marks the finding STUCK.
+// trace:STORY-1916.ac641c6e | ai:claude
+#[test]
+fn story_1916_substrate_run_scans_and_marks_a_stuck_floor() {
+    let tmp = project_with_unloadable_store(HUGE_FLOOR_GIB);
+    let cfg = crate::read_project_config_value(tmp.path());
+    let ran = std::cell::Cell::new(false);
+    let scans = std::cell::Cell::new(0);
+    let report = disk_headroom_light_report_finish(
+        tmp.path(),
+        cfg.as_ref(),
+        true,
+        || ran.set(true),
+        || disk_headroom_light_report_with(tmp.path(), |_| Some(0), None),
+        |_, _| {
+            scans.set(scans.get() + 1);
+            (GIB, Vec::new())
+        },
+    );
+    assert!(ran.get(), "the substrate run drives the emergency tier");
+    assert_eq!(scans.get(), 1);
+    assert!(
+        report.findings[0].summary.contains("STUCK"),
+        "{}",
+        report.findings[0].summary
+    );
+}
+
+/// AC3: the `--fail-on-findings` reason is one line that leads with the
+/// STUCK sentence, so the route's last-stderr-line evidence carries it.
+// trace:STORY-1916.ac641c6e | ai:claude
+#[test]
+fn story_1916_fail_reason_leads_with_the_stuck_sentence() {
+    assert_eq!(disk_headroom_fail_reason(&[]), None);
+    let mut finding = disk_headroom_finding(GIB, 60).unwrap();
+    let plain = disk_headroom_fail_reason(std::slice::from_ref(&finding)).unwrap();
+    assert!(
+        plain.starts_with("1 finding(s) in disk-headroom"),
+        "{plain}"
+    );
+    finding.summary = format!(
+        "{}. {}",
+        finding.summary,
+        crate::disk_emergency::stuck_summary(
+            GIB,
+            59 * GIB,
+            &[(std::path::PathBuf::from("/t/worktrees/take-2845"), 39 * GIB)]
+        )
+    );
+    let reason = disk_headroom_fail_reason(&[finding]).unwrap();
+    assert!(reason.starts_with("STUCK:"), "{reason}");
+    assert!(
+        reason.contains("39.0 GiB /t/worktrees/take-2845"),
+        "{reason}"
+    );
+    assert!(
+        reason.contains("failing because --fail-on-findings"),
+        "{reason}"
+    );
+    assert_eq!(reason.lines().count(), 1, "one stderr line: {reason}");
+}
+
+/// AC4: the default agent (TOON) rendering carries the status block too.
+// trace:STORY-1916.Visibility | ai:claude
+#[test]
+fn story_1916_toon_report_carries_the_disk_status() {
+    let tmp = project_with_unloadable_store(60);
+    let cfg = crate::read_project_config_value(tmp.path());
+    let report = disk_headroom_light_report_finish(
+        tmp.path(),
+        cfg.as_ref(),
+        false,
+        || {},
+        || disk_headroom_light_report_with(tmp.path(), |_| Some(100 * GIB), None),
+        |_, _| (0, Vec::new()),
+    );
+    let toon = render_doctor_report_toon(&report);
+    for want in [
+        "disk_floor_gib",
+        "disk_ceiling_pct",
+        "disk_last_guard_run",
+        "disk_last_reclaim",
+    ] {
+        assert!(toon.contains(want), "missing {want}: {toon}");
+    }
+}
