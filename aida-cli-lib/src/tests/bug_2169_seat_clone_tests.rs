@@ -97,8 +97,9 @@ fn write_lease(main: &Path, clone: &Path, kind: &str) {
 }
 
 #[test]
-fn knob_absent_is_worktree_clone_is_clone_and_a_typo_refuses() {
-    assert_eq!(parse_seat_tree_knob(None).unwrap(), TreeKind::Worktree);
+fn knob_absent_is_clone_worktree_opts_out_and_a_typo_refuses() {
+    // TASK-2053 S4c: the default flipped to `clone`.
+    assert_eq!(parse_seat_tree_knob(None).unwrap(), TreeKind::Clone);
     let clone = toml::Value::String("clone".into());
     assert_eq!(parse_seat_tree_knob(Some(&clone)).unwrap(), TreeKind::Clone);
     let worktree = toml::Value::String("Worktree".into());
@@ -128,10 +129,25 @@ fn only_a_contained_seat_under_the_clone_knob_gets_a_clone() {
         tree_kind_for_launch(root, false).unwrap(),
         TreeKind::Worktree
     );
-    // The default stays `worktree` (condition 5: no flip before S4).
+    // TASK-2053 S4c: with no knob a contained seat gets a clone; an
+    // uncontained one still gets a worktree.
     let bare = tempfile::tempdir().unwrap();
     assert_eq!(
         tree_kind_for_launch(bare.path(), true).unwrap(),
+        TreeKind::Clone
+    );
+    assert_eq!(
+        tree_kind_for_launch(bare.path(), false).unwrap(),
+        TreeKind::Worktree
+    );
+    // `worktree` opts a contained seat out.
+    std::fs::write(
+        root.join(".aida/config.toml"),
+        "[contained]\nseat_tree = \"worktree\"\n",
+    )
+    .unwrap();
+    assert_eq!(
+        tree_kind_for_launch(root, true).unwrap(),
         TreeKind::Worktree
     );
 }
@@ -395,16 +411,6 @@ fn fifo_marker_or_alternates_never_hang_and_never_verify() {
 
     mkfifo(&clone.join(MARKER_RELATIVE));
     assert_eq!(main_for(&clone), MainFor::Unverified(clone.clone()));
-}
-
-#[test]
-fn the_clone_knob_is_a_dev_switch_until_s3() {
-    assert!(clone_seats_enabled(true, None));
-    assert!(clone_seats_enabled(false, Some("1")));
-    assert!(clone_seats_enabled(false, Some(" 1 ")));
-    assert!(!clone_seats_enabled(false, None));
-    assert!(!clone_seats_enabled(false, Some("true")));
-    assert!(!clone_seats_enabled(false, Some("0")));
 }
 
 /// A local-path origin must be copied, not hardlinked: a hardlinked pack
@@ -716,33 +722,344 @@ fn session_start_gives_a_contained_seat_a_private_clone() {
         .contains(lease.worktree_path.to_str().unwrap()));
 }
 
-/// O1: when the clone cannot be made the launch refuses, writes no lease and
-/// creates no worktree in its place.
+/// TASK-2053 S4c: with no `seat_tree` knob a contained seat gets a clone,
+/// while a contained launch at an explicit `--path` outside the worktree
+/// parent keeps the worktree it had before the flip (only an explicit
+/// `seat_tree = "clone"` refuses it).
+// trace:TASK-2053 | ai:claude
 #[test]
-fn session_start_refuses_a_contained_seat_it_cannot_clone_for() {
+fn the_default_is_a_clone_and_an_explicit_path_keeps_a_worktree() {
     let fx = fixture();
-    git_ok(&fx.main, &["remote", "remove", "origin"]);
-    git_ok(
-        &fx.main,
-        &["update-ref", "refs/remotes/origin/main", "HEAD"],
-    );
+    let seats = fx.root.join("seats");
     std::fs::create_dir_all(fx.main.join(".aida")).unwrap();
     std::fs::write(
         fx.main.join(".aida/config.toml"),
         format!(
-            "[contained]\nseat_tree = \"clone\"\n\n[worktree_pool]\nworktree_parent = {}\n",
+            "[worktree_pool]\nworktree_parent = {}\n",
+            aida_core::toml_quote::toml_string(&seats.display().to_string())
+        ),
+    )
+    .unwrap();
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+    let start = |owns: &str, path: Option<&str>| {
+        crate::session_start::session_start(
+            owns,
+            None,
+            None,
+            false,
+            path,
+            None,
+            "auto",
+            false,
+            None,
+            false,
+            None,
+            None,
+            false,
+            None,
+            false,
+            Some(false),
+            /* self_claim */ true,
+            /* review_coexistence */ None,
+            /* contained_seat */ true,
+        )
+    };
+    let lease_for = |owns: &str| {
+        crate::list_leases(&fx.main)
+            .into_iter()
+            .find(|l| l.scope == owns)
+            .expect("lease")
+    };
+
+    start("TASK-2172", None).unwrap();
+    assert_eq!(lease_for("TASK-2172").tree_kind, TreeKind::Clone);
+
+    let explicit = fx.root.join("hand-picked");
+    start("TASK-2173", Some(explicit.to_str().unwrap())).unwrap();
+    let lease = lease_for("TASK-2173");
+    assert_eq!(lease.tree_kind, TreeKind::Worktree);
+    assert!(git_ok(&fx.main, &["worktree", "list", "--porcelain"])
+        .contains(lease.worktree_path.to_str().unwrap()));
+}
+
+/// O1: when the clone cannot be made the launch refuses, writes no lease and
+/// creates no worktree in its place. An explicit `seat_tree = "clone"` with
+/// no origin remote refuses up front with the fix (S4c ruling 2); one whose
+/// origin cannot be cloned refuses from the clone step.
+// trace:TASK-2053 | ai:claude
+#[test]
+fn session_start_refuses_a_contained_seat_it_cannot_clone_for() {
+    for (scope, broken_origin, expected) in [
+        (
+            "TASK-2171",
+            None,
+            "add an origin remote or set seat_tree = \"worktree\"",
+        ),
+        (
+            "TASK-2174",
+            Some("/nonexistent/aida-origin.git"),
+            "never falls back to a shared worktree",
+        ),
+    ] {
+        let fx = fixture();
+        git_ok(&fx.main, &["remote", "remove", "origin"]);
+        if let Some(url) = broken_origin {
+            git_ok(&fx.main, &["remote", "add", "origin", url]);
+        }
+        git_ok(
+            &fx.main,
+            &["update-ref", "refs/remotes/origin/main", "HEAD"],
+        );
+        std::fs::create_dir_all(fx.main.join(".aida")).unwrap();
+        std::fs::write(
+            fx.main.join(".aida/config.toml"),
+            format!(
+                "[contained]\nseat_tree = \"clone\"\n\n[worktree_pool]\nworktree_parent = {}\n",
+                aida_core::toml_quote::toml_string(&fx.root.join("seats").display().to_string())
+            ),
+        )
+        .unwrap();
+        let _ambient =
+            crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+
+        let err = contained_start(scope, None).unwrap_err();
+
+        let err = format!("{err:#}");
+        assert!(err.contains(expected), "{err}");
+        assert!(crate::list_leases(&fx.main)
+            .iter()
+            .all(|l| l.scope != scope));
+        let worktrees = git_ok(&fx.main, &["worktree", "list", "--porcelain"]);
+        assert_eq!(worktrees.matches("worktree ").count(), 1, "{worktrees}");
+    }
+}
+
+/// S4c ruling 2: with no `seat_tree` knob and no origin remote, a contained
+/// launch gets a worktree (with a note) instead of refusing.
+// trace:TASK-2053 | ai:claude
+#[test]
+fn the_default_without_an_origin_keeps_a_worktree() {
+    let fx = fixture();
+    git_ok(&fx.main, &["remote", "remove", "origin"]);
+    std::fs::create_dir_all(fx.main.join(".aida")).unwrap();
+    std::fs::write(
+        fx.main.join(".aida/config.toml"),
+        format!(
+            "[worktree_pool]\nworktree_parent = {}\n",
             aida_core::toml_quote::toml_string(&fx.root.join("seats").display().to_string())
         ),
     )
     .unwrap();
     let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
 
-    let err = crate::session_start::session_start(
-        "TASK-2171",
+    contained_start("TASK-2175", None).unwrap();
+
+    let lease = crate::list_leases(&fx.main)
+        .into_iter()
+        .find(|l| l.scope == "TASK-2175")
+        .expect("lease");
+    assert_eq!(lease.tree_kind, TreeKind::Worktree);
+    assert!(git_ok(&fx.main, &["worktree", "list", "--porcelain"])
+        .contains(lease.worktree_path.to_str().unwrap()));
+}
+
+/// S4c rulings 1 and 2: each fallback with no knob names its reason; an
+/// explicit `clone` never falls back, and refuses only a missing origin here.
+// trace:TASK-2053 | ai:claude
+#[test]
+fn default_clone_fallback_notes_each_reason_and_explicit_never_downgrades() {
+    use crate::seat_clone::{default_clone_fallback, CloneLaunch};
+    let launch = |review, reentry, path_not_seat_location, has_origin| CloneLaunch {
+        review,
+        reentry,
+        path_not_seat_location,
+        has_origin,
+    };
+    let plain = launch(false, false, false, true);
+    assert_eq!(
+        default_clone_fallback(TreeKind::Clone, false, &plain).unwrap(),
+        (TreeKind::Clone, None)
+    );
+    for (case, why) in [
+        (launch(false, false, false, false), "no `origin` remote"),
+        (launch(true, false, false, true), "a review session"),
+        (
+            launch(false, true, false, true),
+            "re-enters an existing worktree",
+        ),
+        (
+            launch(false, false, true, true),
+            "not an `aida-seat-*` directory directly in the worktree parent",
+        ),
+    ] {
+        let (kind, note) = default_clone_fallback(TreeKind::Clone, false, &case).unwrap();
+        assert_eq!(kind, TreeKind::Worktree);
+        let note = note.expect("a fallback is never silent");
+        assert!(note.contains(why), "{note}");
+        // An explicit clone keeps the clone (the later checks refuse the
+        // rest) or refuses a missing origin with the fix.
+        match default_clone_fallback(TreeKind::Clone, true, &case) {
+            Ok(kept) => assert_eq!(kept, (TreeKind::Clone, None)),
+            Err(err) => {
+                assert!(!case.has_origin);
+                assert!(err.to_string().contains("add an origin remote"), "{err}");
+            }
+        }
+    }
+    let worktree = launch(true, true, true, false);
+    for explicit in [false, true] {
+        assert_eq!(
+            default_clone_fallback(TreeKind::Worktree, explicit, &worktree).unwrap(),
+            (TreeKind::Worktree, None)
+        );
+    }
+}
+
+/// Review item 2: an explicit --path INSIDE the worktree parent that is not
+/// an `aida-seat-*` directory also keeps a worktree with no knob set; the
+/// note names that condition, not "outside the parent".
+// trace:TASK-2053 | ai:claude
+#[test]
+fn the_default_keeps_a_worktree_for_an_in_parent_path_that_is_not_a_seat_dir() {
+    let fx = fixture();
+    let seats = fx.root.join("seats");
+    std::fs::create_dir_all(&seats).unwrap();
+    std::fs::create_dir_all(fx.main.join(".aida")).unwrap();
+    std::fs::write(
+        fx.main.join(".aida/config.toml"),
+        format!(
+            "[worktree_pool]\nworktree_parent = {}\n",
+            aida_core::toml_quote::toml_string(&seats.display().to_string())
+        ),
+    )
+    .unwrap();
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+    let in_parent = seats.join("foo");
+    assert!(!crate::seat_clone::is_seat_clone_location(
+        &fx.main, &in_parent
+    ));
+
+    contained_start("TASK-2176", Some(in_parent.to_str().unwrap())).unwrap();
+
+    let lease = crate::list_leases(&fx.main)
+        .into_iter()
+        .find(|l| l.scope == "TASK-2176")
+        .expect("lease");
+    assert_eq!(lease.tree_kind, TreeKind::Worktree);
+    assert!(git_ok(&fx.main, &["worktree", "list", "--porcelain"])
+        .contains(lease.worktree_path.to_str().unwrap()));
+}
+
+/// Review item 1: with an explicit `seat_tree = "clone"`, a review session,
+/// a --path re-entry and an explicit --path that is not a seat-clone
+/// location each refuse from session start, name the reason, and leave no
+/// lease, new worktree or clone behind.
+// trace:TASK-2053 | ai:claude
+#[test]
+fn an_explicit_clone_refuses_review_reentry_and_a_non_seat_path() {
+    let fx = fixture();
+    let seats = fx.root.join("seats");
+    std::fs::create_dir_all(&seats).unwrap();
+    std::fs::create_dir_all(fx.main.join(".aida")).unwrap();
+    std::fs::write(
+        fx.main.join(".aida/config.toml"),
+        format!(
+            "[contained]\nseat_tree = \"clone\"\n\n[worktree_pool]\nworktree_parent = {}\n",
+            aida_core::toml_quote::toml_string(&seats.display().to_string())
+        ),
+    )
+    .unwrap();
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+    // An existing registered worktree to re-enter.
+    let existing = fx.root.join("existing");
+    git_ok(
+        &fx.main,
+        &[
+            "worktree",
+            "add",
+            "-b",
+            "task-2178",
+            existing.to_str().unwrap(),
+        ],
+    );
+    // Worktree paths only: session start may move main's HEAD (its store write).
+    let worktree_paths = || {
+        git_ok(&fx.main, &["worktree", "list", "--porcelain"])
+            .lines()
+            .filter(|l| l.starts_with("worktree "))
+            .map(str::to_string)
+            .collect::<Vec<_>>()
+    };
+    let worktrees_before = worktree_paths();
+    let hand_picked = fx.root.join("hand-picked");
+    assert_eq!(std::fs::read_dir(&seats).unwrap().count(), 0);
+    let start = |owns: &str, path: Option<&std::path::Path>, force_claim: bool| {
+        crate::session_start::session_start(
+            owns,
+            None,
+            None,
+            false,
+            path.map(|p| p.to_str().unwrap()),
+            None,
+            "auto",
+            false,
+            None,
+            false,
+            None,
+            None,
+            false,
+            None,
+            force_claim,
+            Some(false),
+            /* self_claim */ true,
+            /* review_coexistence */ None,
+            /* contained_seat */ true,
+        )
+    };
+
+    for (owns, path, force_claim, expected) in [
+        ("PR-7", None, false, "cannot start a review session yet"),
+        (
+            "TASK-2178",
+            Some(existing.as_path()),
+            true,
+            "cannot re-enter an existing --path yet",
+        ),
+        (
+            "TASK-2179",
+            Some(hand_picked.as_path()),
+            false,
+            "is not one. Drop --path",
+        ),
+    ] {
+        let err = format!("{:#}", start(owns, path, force_claim).unwrap_err());
+        assert!(err.contains(expected), "{owns}: {err}");
+        assert!(
+            crate::list_leases(&fx.main).iter().all(|l| l.scope != owns),
+            "{owns} left a lease"
+        );
+        assert_eq!(
+            worktree_paths(),
+            worktrees_before,
+            "{owns} changed the worktrees"
+        );
+        assert_eq!(
+            std::fs::read_dir(&seats).unwrap().count(),
+            0,
+            "{owns} left a clone"
+        );
+    }
+    assert!(!hand_picked.exists());
+}
+
+/// A contained `session start` owning `owns`, optionally at `path`.
+fn contained_start(owns: &str, path: Option<&str>) -> anyhow::Result<()> {
+    crate::session_start::session_start(
+        owns,
         None,
         None,
         false,
-        None,
+        path,
         None,
         "auto",
         false,
@@ -758,18 +1075,6 @@ fn session_start_refuses_a_contained_seat_it_cannot_clone_for() {
         /* review_coexistence */ None,
         /* contained_seat */ true,
     )
-    .unwrap_err();
-
-    let err = format!("{err:#}");
-    assert!(
-        err.contains("never falls back to a shared worktree"),
-        "{err}"
-    );
-    assert!(crate::list_leases(&fx.main)
-        .iter()
-        .all(|l| l.scope != "TASK-2171"));
-    let worktrees = git_ok(&fx.main, &["worktree", "list", "--porcelain"]);
-    assert_eq!(worktrees.matches("worktree ").count(), 1, "{worktrees}");
 }
 
 /// A failure after the clone exists but before the lease is written removes

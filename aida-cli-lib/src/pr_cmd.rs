@@ -4194,14 +4194,17 @@ pub(crate) fn pr_ship_with_method(
             &ShipStep::Pull,
             &StepOutcome::Skipped("--no-pull".into()),
         );
-    } else if skip_seat_clone_post_merge_pull(&project_root, &main_worktree, pr_number) {
-    } else if let Some(reason) = post_merge_pull_skip_reason(slice_marker_failed) {
+    } else if let Some(reason) = seat_clone_post_merge_pull_skip_reason(&project_root)
+        .or_else(|| post_merge_pull_skip_reason(slice_marker_failed).map(str::to_string))
+    {
+        // TASK-2053: both skip reasons are pure; the note and the log happen here.
+        // trace:TASK-2053 | ai:claude
         eprintln!("  step 4: skipping `aida pull` ({reason})");
         log_ship_activity(
             &main_worktree,
             Some(pr_number),
             &ShipStep::Pull,
-            &StepOutcome::Skipped(reason.into()),
+            &StepOutcome::Skipped(reason),
         );
     } else {
         eprintln!(
@@ -6180,34 +6183,19 @@ pub(crate) fn branch_in_sibling_worktree(
     false
 }
 
-/// The ship step calls this before any post-merge host sync.
-// trace:TASK-2053 | ai:codex
-pub(crate) fn skip_seat_clone_post_merge_pull(
+/// Why step 4 skips `aida pull` when ship runs from a contained seat's
+/// private clone: the main checkout is read-only to the seat, so the host
+/// syncs it (reap, the heartbeat, or the operator's next `aida pull`). Pure;
+/// the ship step prints and logs the reason.
+// trace:TASK-2053 | ai:claude
+pub(crate) fn seat_clone_post_merge_pull_skip_reason(
     project_root: &std::path::Path,
-    main_worktree: &std::path::Path,
-    pr_number: u64,
-) -> bool {
-    use pr_ship::{ShipStep, StepOutcome};
-    let Some(clone) = aida_core::seat_clone_detect::seat_clone_root(project_root) else {
-        return false;
-    };
-    // BUG-2169 slice S4: shipped from a contained seat's private clone.
-    // The main checkout is read-only to the seat, so the host syncs it
-    // (reap, the heartbeat, or the operator's next `aida pull`).
-    // trace:TASK-2053 | ai:claude
-    eprintln!(
-        "  step 4: skipping `aida pull`: this session works in a contained seat's private \
-             clone ({}), and the main checkout is synced from outside the seat (next `aida pull` \
-             there)",
+) -> Option<String> {
+    let clone = aida_core::seat_clone_detect::seat_clone_root(project_root)?;
+    Some(format!(
+        "seat clone {}: the main checkout is synced from outside the seat; run `aida pull` there",
         clone.display()
-    );
-    log_ship_activity(
-        main_worktree,
-        Some(pr_number),
-        &ShipStep::Pull,
-        &StepOutcome::Skipped("seat clone: main is synced by the host".into()),
-    );
-    true
+    ))
 }
 
 /// Append a JSONL activity-log entry to `<main_worktree>/.aida/advisor-activity.jsonl`.
