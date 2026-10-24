@@ -4814,6 +4814,37 @@ mod tests {
         "subagent fanout",
     ];
 
+    /// Names of the in-session launcher that, on a line naming seat work
+    /// with no negation, mean "run that seat as a subagent".
+    // trace:TASK-2272 | ai:claude
+    const AGENT_TOOL_NAMES: &[&str] = &["agent tool", "task tool", "via task", "with task"];
+
+    /// Words that turn a line naming the Agent tool into a prohibition.
+    const AGENT_TOOL_NEGATIONS: &[&str] = &[
+        "never", "not", "no", "don't", "without", "instead", "rather", "nor",
+    ];
+
+    /// `lower` names the Agent/Task tool (as a whole word) alongside seat work
+    /// and no negation, e.g. "launch the implementer with the Agent tool".
+    // trace:TASK-2272 | ai:claude
+    fn names_agent_tool_for_seat_work(lower: &str) -> bool {
+        let whole = |needle: &str| {
+            lower.match_indices(needle).any(|(at, _)| {
+                let before = lower[..at].chars().next_back();
+                let after = lower[at + needle.len()..].chars().next();
+                !before.is_some_and(|c| c.is_alphanumeric())
+                    && !after.is_some_and(|c| c.is_alphanumeric() || c == '-')
+            })
+        };
+        let seat = ["implementer", "fixer", "architect", "advisor"]
+            .iter()
+            .any(|w| lower.contains(w));
+        let negated = lower
+            .split(|c: char| !(c.is_alphanumeric() || c == '\''))
+            .any(|w| AGENT_TOOL_NEGATIONS.contains(&w));
+        seat && !negated && AGENT_TOOL_NAMES.iter().any(|n| whole(n))
+    }
+
     /// Every `key:line: pattern` in `body` that launches seat work through
     /// the Agent tool, skipping lines the research marker covers.
     // trace:STORY-1662 | ai:claude
@@ -4845,6 +4876,12 @@ mod tests {
                 if lower.contains(pattern) {
                     violations.push(format!("{key}:{}: `{pattern}`", idx + 1));
                 }
+            }
+            if names_agent_tool_for_seat_work(&lower) {
+                violations.push(format!(
+                    "{key}:{}: seat work through the Agent tool",
+                    idx + 1
+                ));
             }
         }
         violations
@@ -4882,7 +4919,43 @@ mod tests {
             vec!["t.md:3: `Agent(`"]
         );
         assert!(agent_tool_launches("t.md", "launch a separate implementer process").is_empty());
+        // trace:TASK-2272 | ai:claude
+        for line in [
+            "launch the implementer with the Agent tool",
+            "spawn each fixer via Task",
+            "the advisor starts an architect with the Task tool",
+        ] {
+            assert!(
+                !agent_tool_launches("t.md", line).is_empty(),
+                "not refused: {line}"
+            );
+        }
+        for line in [
+            "Never fan implementers out through the Agent tool.",
+            "launch the implementer as a process, not with the Agent tool",
+            "the implementer works with task-specific notes",
+            "use the Agent tool for read-only research",
+        ] {
+            assert!(agent_tool_launches("t.md", line).is_empty(), "{line}");
+        }
         assert!(agent_tool_launches("t.md", "  - SendMessage").is_empty());
+    }
+
+    /// TASK-2272 (TASK-2287): the advisor pre-creates the fixer's worktree,
+    /// which creates its branch, so the fixer prompt must not STOP on it.
+    // trace:TASK-2272 | ai:claude
+    #[test]
+    fn fire_fixer_prompt_does_not_stop_on_its_own_worktree_branch() {
+        let body = crate::templates::EMBEDDED_TEMPLATES
+            .get("skills/aida-fire.md")
+            .expect("aida-fire skill embedded");
+        let prompt = body.split("#### Fixer prompt template").nth(1).unwrap();
+        let flat = prompt.split_whitespace().collect::<Vec<_>>().join(" ");
+        assert!(
+            flat.contains("an unmerged branch or open PR other than this worktree's branch, STOP"),
+            "{flat}"
+        );
+        assert!(!flat.contains("has a branch or PR, STOP"), "{flat}");
     }
 
     /// Seat skills, commands and discipline launch implementers and fixers as
