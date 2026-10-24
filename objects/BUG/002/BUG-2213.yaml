@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-24T00:35:24.407537052Z
-modified_at: 2026-10-24T07:33:33.331948216Z
+modified_at: 2026-10-24T07:34:40.161754354Z
 req_type: Bug
 tags:
 - coordination
@@ -28,6 +28,18 @@ comments:
   content: Commit 14065b6254 references this requirement
   created_at: 2026-10-24T07:33:33.331948216Z
   modified_at: 2026-10-24T07:33:33.331948216Z
+- id: 01a16cd5-4b21-74c0-812e-14ab0b8160f6
+  author: ai:codex:joe
+  content: |
+    PR-2892 opened: https://github.com/joemooney/aida/pull/2892 . Pushed head c2fc72576ad1f007e3c44e4cf09481b4a169f0b9 after a clean aida ship BUG-2213 --no-merge rebase onto current main; not merged.
+
+    Final implementation uses plain objects at the store-root cwd for BOTH status and ignore-independent ls-files --others. This replaces the initial magic-pathspec draft: GIT_LITERAL_PATHSPECS=1 disables :(...) magic and could otherwise hide dirty objects. Per-command environment regressions prove both queries retain evidence under default/literal/glob/noglob/icase modes. No process-global env mutation. Coordination/mail/timing and other non-evidence dirt permit a snapshot; modified/staged/untracked/deleted/renamed-out/replaced objects refuse. Home ledger trust/coverage remains independently fail-closed per operator clarification. HEAD/ref/worktree stability unchanged.
+
+    Final targeted cargo test -p aida-cli-lib --lib --profile agent mandate_:251 passed/0 failed/1 ignored (existing local corpus replay), including all four BUG-2213 regressions and amended BUG-2178 timing test. An earlier completed run was250/1/1 because the older timing test expected timing-only dirt to refuse; its expectation now matches the approved scope while preserving object refusal. Final make check-ci-fast:34/34. Logs:/tmp/bug2213-targeted-pass.log and /tmp/bug2213-fast.log.
+
+    Three spawned author-checker passes starting fresh, final no remaining findings before the timing-only test adaptation. No author review verdict. Local gates preceded clean main rebase; CI/independent review pending on pushed head.
+  created_at: 2026-10-24T07:34:40.161754354Z
+  modified_at: 2026-10-24T07:34:40.161754354Z
 history:
 - id: 01a16c91-e717-7102-8c61-c1ca6d83fb24
   author: joe
