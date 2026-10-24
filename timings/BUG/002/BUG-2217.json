@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2217",
+  "publishes": [
+    {
+      "at": "2026-10-24T17:31:29.006641866Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-24T12:28:35.484115040Z",
+      "spec": "BUG-2217",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-24T12:29:35.806883935Z",
+      "spec": "BUG-2217",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-24T13:16:34.418058769Z",
+      "spec": "BUG-2217",
+      "seat": "implementer",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-24T13:16:39.030690267Z",
+      "spec": "BUG-2217",
+      "seat": "implementer",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-24T17:31:02.220350224Z",
+      "spec": "BUG-2217",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2899
+      }
+    },
+    {
+      "ts": "2026-10-24T17:31:28.580837048Z",
+      "spec": "BUG-2217",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "c7e5160ce3e086f1defb1c00c685ba8ad0d3c8f1",
+        "pr": 2899,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
