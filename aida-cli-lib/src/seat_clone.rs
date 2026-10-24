@@ -26,13 +26,6 @@ use anyhow::{Context, Result};
 // trace:BUG-2169 | ai:claude
 pub(crate) use aida_core::seat_clone_detect::{CLONE_DIR_PREFIX, MARKER_RELATIVE};
 
-/// Until slice S4 moves the host's status and listing paths off plain git
-/// (S3 moved session end, reap and dismiss), `seat_tree = "clone"` is a
-/// development switch: it works under test or with
-/// this variable set to `1`, and refuses otherwise (advisor ruling on #2699).
-// trace:BUG-2169 | ai:claude
-pub(crate) const DEV_ENABLE_ENV: &str = "AIDA_DEV_SEAT_CLONE";
-
 /// Where [`crate::worktree_gc::main_worktree_root_from`] points a seat clone
 /// that does not verify: a path under `/dev/null`, so every read, write or
 /// `git -C` aimed at it fails instead of treating the clone as main.
@@ -82,19 +75,26 @@ impl TreeKind {
 }
 
 /// The `[contained] seat_tree` knob: which tree a CONTAINED seat gets. The
-/// default stays `worktree` until slice S4 is approved (condition 5).
-// trace:BUG-2169 | ai:claude
+/// default is `clone` since slice S4c (TASK-2053); `worktree` opts out.
+// trace:BUG-2169 | trace:TASK-2053 | ai:claude
 pub(crate) fn seat_tree_knob(project_root: &Path) -> Result<TreeKind> {
     let cfg = crate::read_project_config_value(project_root);
     parse_seat_tree_knob(crate::config_lookup(cfg.as_ref(), "contained", "seat_tree"))
 }
 
-/// Parse a raw `[contained] seat_tree` value. Absent means `worktree`; an
+/// Whether `[contained] seat_tree` is set at all, rather than defaulted.
+// trace:TASK-2053 | ai:claude
+pub(crate) fn seat_tree_is_explicit(project_root: &Path) -> bool {
+    let cfg = crate::read_project_config_value(project_root);
+    crate::config_lookup(cfg.as_ref(), "contained", "seat_tree").is_some()
+}
+
+/// Parse a raw `[contained] seat_tree` value. Absent means `clone`; an
 /// unknown value is an error, so a typo never silently picks a posture.
-// trace:BUG-2169 | ai:claude
+// trace:BUG-2169 | trace:TASK-2053 | ai:claude
 pub(crate) fn parse_seat_tree_knob(raw: Option<&toml::Value>) -> Result<TreeKind> {
     let Some(raw) = raw else {
-        return Ok(TreeKind::Worktree);
+        return Ok(TreeKind::Clone);
     };
     match raw
         .as_str()
@@ -118,22 +118,60 @@ pub(crate) fn tree_kind_for_launch(project_root: &Path, contained_seat: bool) ->
     if !contained_seat {
         return Ok(TreeKind::Worktree);
     }
-    let kind = seat_tree_knob(project_root)?;
-    let dev_switch = std::env::var(DEV_ENABLE_ENV).ok();
-    if kind == TreeKind::Clone && !clone_seats_enabled(cfg!(test), dev_switch.as_deref()) {
-        anyhow::bail!(
-            "[contained] seat_tree = \"clone\" is not available yet: host status and listing \
-             paths still run git in a seat's tree, which is unsafe for a private clone. Set seat_tree = \"worktree\", or {DEV_ENABLE_ENV}=1 for development only."
-        );
-    }
-    Ok(kind)
+    seat_tree_knob(project_root)
 }
 
-/// Whether clone seats may be created: under test, or with the development
-/// switch set to exactly `1`.
-// trace:BUG-2169 | ai:claude
-pub(crate) fn clone_seats_enabled(under_test: bool, dev_switch: Option<&str>) -> bool {
-    under_test || dev_switch.map(str::trim) == Some("1")
+/// What a contained launch asks of its tree, for [`default_clone_fallback`].
+// trace:TASK-2053 | ai:claude
+pub(crate) struct CloneLaunch {
+    pub(crate) review: bool,
+    pub(crate) reentry: bool,
+    /// An explicit --path that is not an `aida-seat-*` directory directly in
+    /// the worktree parent ([`is_seat_clone_location`]).
+    pub(crate) path_not_seat_location: bool,
+    pub(crate) has_origin: bool,
+}
+
+/// The tree a contained launch gets once the default is `clone`, plus a
+/// one-line note when it falls back. With the knob unset, a launch a clone
+/// cannot serve keeps a worktree and says why; never silently. With an
+/// explicit `seat_tree = "clone"` a missing origin refuses here, and the
+/// other cases refuse later in session start with their own reasons.
+// trace:TASK-2053 | ai:claude
+pub(crate) fn default_clone_fallback(
+    kind: TreeKind,
+    explicit: bool,
+    launch: &CloneLaunch,
+) -> Result<(TreeKind, Option<String>)> {
+    if kind != TreeKind::Clone {
+        return Ok((kind, None));
+    }
+    if explicit {
+        if !launch.has_origin {
+            anyhow::bail!(
+                "[contained] seat_tree = \"clone\" needs an `origin` remote to clone from, and \
+                 this checkout has none: add an origin remote or set seat_tree = \"worktree\""
+            );
+        }
+        return Ok((kind, None));
+    }
+    let why = if !launch.has_origin {
+        "this checkout has no `origin` remote to clone from"
+    } else if launch.review {
+        "a review session runs in a worktree"
+    } else if launch.reentry {
+        "it re-enters an existing worktree"
+    } else if launch.path_not_seat_location {
+        "its --path is not an `aida-seat-*` directory directly in the worktree parent"
+    } else {
+        return Ok((kind, None));
+    };
+    Ok((
+        TreeKind::Worktree,
+        Some(format!(
+            "this contained seat gets a linked worktree, not a private clone: {why}"
+        )),
+    ))
 }
 
 /// A fresh directory for a seat clone of `project_root` working `slug`:
