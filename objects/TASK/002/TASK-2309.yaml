@@ -1,0 +1,26 @@
+id: 01a16c0b-97f0-7622-bcec-2391e44b29ac
+spec_id: TASK-2309
+agreed_id: TASK-2309
+title: 'upgrade_release.rs: find_aida_repo_above''s doc comment now sits on release_repo_from'
+description: |
+  aida-cli-lib/src/upgrade_release.rs:2202-2213: release_repo_from was inserted between find_aida_repo_above's rustdoc and its fn. Move the walk-up doc back.
+  Raised in review of PR-2868: https://github.com/joemooney/aida/pull/2868#issuecomment-6379539506
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-24T03:54:21.552119934Z
+modified_at: 2026-10-24T03:54:21.552119934Z
+req_type: Task
+tags:
+- from-review:PR-2868
+- severity:cosmetic
+filed_at:
+  code_sha: a9d3b605f17f4ca868fbbfb1e16c6f8e4da94976
+  branch: pr-2868
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: d14a20aaae
+  vendor: claude
+  session: 01a16c020ca8
+  harness_version: 2.1.310 (Claude Code)
