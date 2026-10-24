@@ -406,7 +406,8 @@ it has no override flag and never merges. Refused candidates remain held and
 produce a nonzero exit with a reason. The review-record handler runs the same
 release after a verified APPROVED write. A hold composed with any non-Rework
 kind keeps the human clear, and so does a sensitive spec unless a mandate
-started with `--include-supervised` covers it. See [clearance policy](08-reporting.md#merge-hold-gate-and-clearance-limits)
+started with `aida mandate start --include-supervised` covers it (see
+[`aida mandate`](#aida-mandate)). See [clearance policy](08-reporting.md#merge-hold-gate-and-clearance-limits)
 for grant, arming-round, metadata and audit requirements.
 
 - **Composed Rework holds.** When refusals on several specs compose into one

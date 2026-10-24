@@ -327,19 +327,20 @@ pub(crate) fn approval_attested(
 /// human is present to retry, so the marker stays armed until the forge
 /// agrees. The human `aida merge-hold clear` records the clearance, removes
 /// the marker, then drops the labels, because the operator at the terminal
-/// sees a label failure and re-runs it. The second validation pass, the
-/// label drop and the marker removal run under the hold lock
-/// ([`mh::with_hold_lock`]), so a re-arm cannot land between the check and
+/// sees a label failure and re-runs it. The clearance record, the second
+/// validation pass, the label drop and the marker removal run under the hold
+/// lock ([`mh::with_hold_lock`]), so a re-arm cannot land between the check and
 /// the removal. A second pass that refuses supersedes the clearance it
 /// recorded, so it is never read as a release.
 ///
 /// TASK-2285: two auto-releases of one PR can overlap (the record-time
-/// release and an `aida merge-hold auto-release` sweep). The loser never
-/// withdraws the winner's clearance: under the lock it supersedes only while
-/// the marker is still armed, a busy refusal supersedes only a clearance this
-/// run wrote, and the marker is removed only while the clearance it answers
-/// still exists. No interleaving leaves the marker gone without a clearance,
-/// which the tamper check would report as a hand-deletion.
+/// release and an `aida merge-hold auto-release` sweep). The clearance is
+/// read, compared and written only under the lock, after re-checking that the
+/// marker is still armed, so the loser either finds the winner done and
+/// changes nothing or refuses busy having written nothing. The marker is
+/// removed only while the clearance it answers still exists. No interleaving
+/// leaves the marker gone without a clearance, which the tamper check would
+/// report as a hand-deletion.
 // trace:TASK-1951 trace:TASK-1757 trace:TASK-2285 | ai:claude
 fn release_with(
     root: &Path,
@@ -355,64 +356,71 @@ fn release_with(
         Some(validate()?.as_str()) == verdict.reviewed_sha.as_deref(),
         "PR head moved before release"
     );
-    let path = mh::clearance_path(root, hold.pr);
-    let existing = std::fs::read(&path)
-        .ok()
-        .and_then(|b| serde_json::from_slice::<Value>(&b).ok());
-    let also_json = serde_json::to_value(also)?;
-    let same = existing.as_ref().is_some_and(|v| {
-        v.get("cleared_by").and_then(Value::as_str) == Some(PRINCIPAL)
-            && v.get("released_by_verdict") == serde_json::to_value(verdict).ok().as_ref()
-            && v.get("also_released_by")
-                .unwrap_or(&Value::Array(Vec::new()))
-                == &also_json
-    });
-    if !same {
-        let mut approved_hold = hold.clone();
-        approved_hold.target_head_sha = verdict.reviewed_sha.clone();
-        mh::record_clearance_by(root, &approved_hold, PRINCIPAL, Some(verdict.clone()))?;
-        // trace:STORY-1697 trace:BUG-2123 | ai:claude
-        if release.mandate.is_some() || !also.is_empty() {
+    // Every clearance read and write happens under the lock: an overlapping
+    // release either finished first (its clearance stands, the marker is
+    // gone) or waits, and a busy refusal has written nothing (TASK-2285).
+    // trace:TASK-1951 trace:TASK-2285 | ai:claude
+    let locked = mh::with_hold_lock(root, hold.pr, || -> Result<()> {
+        if !mh::hold_path(root, hold.pr).exists() {
+            bail!("a concurrent release already removed the hold; its clearance stands");
+        }
+        let path = mh::clearance_path(root, hold.pr);
+        let existing = std::fs::read(&path)
+            .ok()
+            .and_then(|b| serde_json::from_slice::<Value>(&b).ok());
+        let also_json = serde_json::to_value(also)?;
+        let same = existing.as_ref().is_some_and(|v| {
+            v.get("cleared_by").and_then(Value::as_str) == Some(PRINCIPAL)
+                && v.get("released_by_verdict") == serde_json::to_value(verdict).ok().as_ref()
+                && v.get("also_released_by")
+                    .unwrap_or(&Value::Array(Vec::new()))
+                    == &also_json
+        });
+        if !same {
+            let mut approved_hold = hold.clone();
+            approved_hold.target_head_sha = verdict.reviewed_sha.clone();
+            mh::record_clearance_by(root, &approved_hold, PRINCIPAL, Some(verdict.clone()))?;
+            // trace:STORY-1697 trace:BUG-2123 | ai:claude
+            if release.mandate.is_some() || !also.is_empty() {
+                let mut audit: Value = serde_json::from_slice(&std::fs::read(&path)?)?;
+                if let Some(id) = &release.mandate {
+                    audit["released_under_mandate"] = Value::String(id.clone());
+                }
+                if !also.is_empty() {
+                    audit["also_released_by"] = also_json.clone();
+                }
+                aida_core::fs_atomic::write_atomic(&path, &serde_json::to_vec_pretty(&audit)?)?;
+            }
+        }
+        if !same
+            || !existing
+                .as_ref()
+                .is_some_and(|v| v.get("audit_comment_posted") == Some(&Value::Bool(true)))
+        {
+            let specs = match &release.mandate {
+                None => "covered specs require no human signoff".to_string(),
+                Some(id) => format!(
+                    "a sensitive covered spec is {}",
+                    crate::mandate::release_note(id)
+                ),
+            };
+            let answered = if also.is_empty() {
+                String::new()
+            } else {
+                format!(
+                    " It also answers the absorbed refusals {}.",
+                    also.iter()
+                        .map(mh::VerdictRef::path)
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            };
+            comment(&format!("Recorded auto-release authorization: {} by {} at {}. Recorded clearance principal `{PRINCIPAL}`; all hold kinds are Rework and {specs}.{answered}",
+                verdict.path(), verdict.recorded_by.as_deref().unwrap_or_default(), verdict.reviewed_sha.as_deref().unwrap_or_default()))?;
             let mut audit: Value = serde_json::from_slice(&std::fs::read(&path)?)?;
-            if let Some(id) = &release.mandate {
-                audit["released_under_mandate"] = Value::String(id.clone());
-            }
-            if !also.is_empty() {
-                audit["also_released_by"] = also_json.clone();
-            }
+            audit["audit_comment_posted"] = Value::Bool(true);
             aida_core::fs_atomic::write_atomic(&path, &serde_json::to_vec_pretty(&audit)?)?;
         }
-    }
-    if !same
-        || !existing
-            .as_ref()
-            .is_some_and(|v| v.get("audit_comment_posted") == Some(&Value::Bool(true)))
-    {
-        let specs = match &release.mandate {
-            None => "covered specs require no human signoff".to_string(),
-            Some(id) => format!(
-                "a sensitive covered spec is {}",
-                crate::mandate::release_note(id)
-            ),
-        };
-        let answered = if also.is_empty() {
-            String::new()
-        } else {
-            format!(
-                " It also answers the absorbed refusals {}.",
-                also.iter()
-                    .map(mh::VerdictRef::path)
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            )
-        };
-        comment(&format!("Recorded auto-release authorization: {} by {} at {}. Recorded clearance principal `{PRINCIPAL}`; all hold kinds are Rework and {specs}.{answered}",
-            verdict.path(), verdict.recorded_by.as_deref().unwrap_or_default(), verdict.reviewed_sha.as_deref().unwrap_or_default()))?;
-        let mut audit: Value = serde_json::from_slice(&std::fs::read(&path)?)?;
-        audit["audit_comment_posted"] = Value::Bool(true);
-        aida_core::fs_atomic::write_atomic(&path, &serde_json::to_vec_pretty(&audit)?)?;
-    }
-    let locked = mh::with_hold_lock(root, hold.pr, || -> Result<()> {
         let second = validate().and_then(|head| {
             ensure!(
                 Some(head.as_str()) == verdict.reviewed_sha.as_deref(),
@@ -441,17 +449,8 @@ fn release_with(
     });
     match locked {
         Ok(released) => released,
-        // Busy: the second pass never ran, so the clearance just recorded
-        // must not stand either. One this run found already recorded belongs
-        // to the release holding the lock (TASK-2285).
-        // trace:TASK-1951 trace:TASK-2285 | ai:claude
-        Err(busy) => {
-            let why = anyhow::Error::new(busy);
-            if !same {
-                supersede_clearance(root, hold.pr, &why, &comment);
-            }
-            Err(why)
-        }
+        // Busy: nothing was recorded, so there is nothing to withdraw.
+        Err(busy) => Err(anyhow::Error::new(busy)),
     }
 }
 

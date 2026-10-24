@@ -558,3 +558,56 @@ fn a_withdrawn_clearance_keeps_the_hold_armed() {
     assert!(mh::hold_path(root, PR).exists(), "the hold stays armed");
     assert!(mh::unrecorded_marker_removals(root).is_empty());
 }
+
+/// TASK-2285 review round: both releases pass their first head check, the
+/// winner records its clearance and removes the marker, and the loser then
+/// finds the lock still held. The busy loser wrote nothing, so it withdraws
+/// nothing: the winner's clearance stands beside the removed marker.
+// trace:TASK-1951 trace:TASK-2285 | ai:claude
+#[test]
+fn a_busy_overlapping_release_keeps_the_winners_clearance() {
+    use fs2::FileExt;
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let _env = AmbientGuard::hermetic_with_seat(root, "reviewer", &[]);
+    refuse_both(root);
+    record(root, A, "approved", HEAD);
+    record(root, B, "approved", HEAD);
+    mh::HOLD_LOCK_WAIT_OVERRIDE.with(|w| w.set(Some(std::time::Duration::from_millis(200))));
+
+    let winner = RefCell::new(None);
+    let holder = RefCell::new(None);
+    let (loser, comments) = release_hooked(root, &[HEAD], &|i| {
+        if i == 1 {
+            // The loser has passed its first head check; the winner runs to
+            // completion and is still holding the lock when the loser asks.
+            *winner.borrow_mut() = Some(release(root, &[HEAD]).0);
+            let file = std::fs::OpenOptions::new()
+                .write(true)
+                .open(mh::hold_lock_path(root, PR))
+                .unwrap();
+            file.lock_exclusive().unwrap();
+            *holder.borrow_mut() = Some(file);
+        }
+    });
+    mh::HOLD_LOCK_WAIT_OVERRIDE.with(|w| w.set(None));
+    assert_eq!(
+        winner.into_inner().unwrap().unwrap(),
+        Outcome::Released { mandate: None }
+    );
+    let error = format!("{:#}", loser.unwrap_err());
+    assert!(error.contains("merge-hold PR-51 is busy"), "{error}");
+    assert!(!mh::hold_path(root, PR).exists());
+    assert!(
+        mh::clearance_path(root, PR).exists(),
+        "the winner's clearance stands"
+    );
+    assert!(
+        !comments
+            .iter()
+            .any(|c| c.contains("authorization withdrawn")),
+        "{comments:?}"
+    );
+    assert!(mh::unrecorded_marker_removals(root).is_empty());
+    FileExt::unlock(holder.borrow().as_ref().unwrap()).unwrap();
+}

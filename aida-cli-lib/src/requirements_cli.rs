@@ -9497,9 +9497,25 @@ fn run_search(
                         if results.is_empty() {
                             println!("No results for: {}", query);
                         } else {
+                            // TASK-2003: the same NeedsAttention lens `aida list` shows,
+                            // computed only when the column is asked for.
+                            // trace:TASK-1951 trace:TASK-2003 | ai:claude
+                            let review_lens = if selected.iter().any(|f| f == "review_lens") {
+                                crate::needs_attention_lens::lens_map(
+                                    find_project_root().ok().as_deref(),
+                                    &results,
+                                )
+                            } else {
+                                Default::default()
+                            };
                             println!(
                                 "{}",
-                                render_search_fields(&results, &selected, agent_output_mode())
+                                render_search_fields(
+                                    &results,
+                                    &selected,
+                                    agent_output_mode(),
+                                    &review_lens
+                                )
                             );
                         }
                         return crate::command_registry::returned(Ok(()));
@@ -9516,7 +9532,10 @@ fn run_search(
                     // human TTY path keeps the box-table unchanged. trace:BUG-672
                     if agent_output_mode() {
                         let selected = toon_list_fields(None)?;
-                        println!("{}", render_search_fields(&results, &selected, true));
+                        println!(
+                            "{}",
+                            render_search_fields(&results, &selected, true, &Default::default())
+                        );
                         // BUG-672 (Finding #4): trailing drill-in next-step block —
                         // `aida show <id>` is the move an agent reaching for a search
                         // result is missing. Placeholder id (multi-row surface), same

@@ -21386,10 +21386,10 @@ Options:
           `--fields 'id title opened'`; entries are separated by commas and/or whitespace. Renders
           exactly those columns in that order. Valid fields: id, title, status, type, priority,
           feature, owner, assignee, tags, heft, modified_at, opened, weight, queued, in_flight,
-          blocked, mode, origin, deferred_reason, driver, driver_kind. `opened` is the creation
-          time. Aliases: req_type = type, created_at = opened, created = opened. Search rows carry
-          no work-routing state, so queued, in_flight and blocked render false. Default keeps the
-          standard layout. Mirrors `aida list --fields`
+          blocked, mode, origin, deferred_reason, driver, driver_kind, review_lens. `opened` is the
+          creation time. Aliases: req_type = type, created_at = opened, created = opened. Search
+          rows carry no work-routing state, so queued, in_flight and blocked render false. Default
+          keeps the standard layout. Mirrors `aida list --fields`
 
   -h, --help
           Print help (see a summary with '-h')
@@ -45020,7 +45020,7 @@ Working on aida itself
       {
         "name": "fields",
         "takes_value": true,
-        "help": "Select AND order the displayed columns, e.g. `--fields id,title,status,priority,tags` or `--fields 'id title opened'`; entries are separated by commas and/or whitespace. Renders exactly those columns in that order. Valid fields: id, title, status, type, priority, feature, owner, assignee, tags, heft, modified_at, opened, weight, queued, in_flight, blocked, mode, origin, deferred_reason, driver, driver_kind. `opened` is the creation time. Aliases: req_type = type, created_at = opened, created = opened. Search rows carry no work-routing state, so queued, in_flight and blocked render false. Default keeps the standard layout. Mirrors `aida list --fields`"
+        "help": "Select AND order the displayed columns, e.g. `--fields id,title,status,priority,tags` or `--fields 'id title opened'`; entries are separated by commas and/or whitespace. Renders exactly those columns in that order. Valid fields: id, title, status, type, priority, feature, owner, assignee, tags, heft, modified_at, opened, weight, queued, in_flight, blocked, mode, origin, deferred_reason, driver, driver_kind, review_lens. `opened` is the creation time. Aliases: req_type = type, created_at = opened, created = opened. Search rows carry no work-routing state, so queued, in_flight and blocked render false. Default keeps the standard layout. Mirrors `aida list --fields`"
       },
       {
         "name": "format",

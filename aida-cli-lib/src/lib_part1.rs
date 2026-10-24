@@ -972,13 +972,19 @@ where
 /// surfaces resolve cells through [`toon_list_cell`] over the already-validated
 /// `selected` field set, so the two surfaces never drift in field vocabulary.
 /// Search rows carry no work-routing axis, so queued/in_flight/blocked render
-/// false. Returned as a `String` so the branch is unit-testable.
+/// false; `review_lens` answers the `review_lens` column as in `aida list`.
+/// Returned as a `String` so the branch is unit-testable.
 // trace:STORY-734 trace:BUG-668 | ai:claude — plain `//` keeps the marker out of any doc/help.
+// trace:TASK-1951 trace:TASK-2003 | ai:claude
 pub(crate) fn render_search_fields(
     results: &[aida_core::RequirementSummary],
     selected: &[String],
     agent: bool,
+    review_lens: &std::collections::HashMap<uuid::Uuid, String>,
 ) -> String {
+    let cell = |r: &aida_core::RequirementSummary, f: &str| {
+        (f == "review_lens").then(|| review_lens.get(&r.id).cloned().unwrap_or_default())
+    };
     if agent {
         let field_refs: Vec<&str> = selected.iter().map(String::as_str).collect();
         let rows: Vec<Vec<String>> = results
@@ -986,7 +992,9 @@ pub(crate) fn render_search_fields(
             .map(|r| {
                 selected
                     .iter()
-                    .map(|f| toon_list_cell(r, (false, false, false), f))
+                    .map(|f| {
+                        cell(r, f).unwrap_or_else(|| toon_list_cell(r, (false, false, false), f))
+                    })
                     .collect()
             })
             .collect();
@@ -994,7 +1002,8 @@ pub(crate) fn render_search_fields(
         out.push_str(&crate::toon::table_raw("specs", &field_refs, &rows));
         out
     } else {
-        let mut lines = build_list_fields_lines(results, selected, |_| (false, false, false));
+        let mut lines =
+            build_list_fields_lines_with(results, selected, |_| (false, false, false), cell);
         lines.push(format!("\n{} results", results.len()));
         lines.join("\n")
     }
