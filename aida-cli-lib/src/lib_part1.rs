@@ -732,6 +732,8 @@ pub(crate) const TOON_LIST_KNOWN_FIELDS: &[&str] = &[
     // trace:STORY-1653 | ai:claude — derived driver of an in-progress spec.
     "driver",
     "driver_kind",
+    // trace:TASK-1951 trace:TASK-2003 | ai:claude — NeedsAttention review lens.
+    "review_lens",
 ];
 
 /// Accepted alternate spellings for `--fields` entries, as `(alias, field)`.
@@ -838,6 +840,8 @@ pub(crate) fn list_field_header(field: &str) -> String {
         "queued" => "Queued",
         "in_flight" => "In-Flight",
         "blocked" => "Blocked",
+        // trace:TASK-1951 trace:TASK-2003 | ai:claude
+        "review_lens" => "Review",
         // Validated against the known set upstream, so this is unreachable in
         // practice; fall back to the raw name for robustness.
         other => return other.to_string(),
@@ -862,6 +866,23 @@ pub(crate) fn build_list_fields_lines<F>(
 where
     F: Fn(&aida_core::RequirementSummary) -> (bool, bool, bool),
 {
+    build_list_fields_lines_with(reqs, fields, routing_of, |_, _| None)
+}
+
+/// [`build_list_fields_lines`] with `cell_of` answering the columns that need
+/// state beyond the summary (the TASK-2003 `review_lens`); `None` falls back
+/// to [`toon_list_cell`].
+// trace:TASK-1951 trace:TASK-2003 | ai:claude
+pub(crate) fn build_list_fields_lines_with<F, C>(
+    reqs: &[aida_core::RequirementSummary],
+    fields: &[String],
+    routing_of: F,
+    cell_of: C,
+) -> Vec<String>
+where
+    F: Fn(&aida_core::RequirementSummary) -> (bool, bool, bool),
+    C: Fn(&aida_core::RequirementSummary, &str) -> Option<String>,
+{
     // Plain (uncoloured) cell text per row per column — width math runs on this.
     let plain: Vec<Vec<String>> = reqs
         .iter()
@@ -869,7 +890,7 @@ where
             let routing = routing_of(r);
             fields
                 .iter()
-                .map(|f| toon_list_cell(r, routing, f))
+                .map(|f| cell_of(r, f).unwrap_or_else(|| toon_list_cell(r, routing, f)))
                 .collect()
         })
         .collect();
@@ -951,13 +972,19 @@ where
 /// surfaces resolve cells through [`toon_list_cell`] over the already-validated
 /// `selected` field set, so the two surfaces never drift in field vocabulary.
 /// Search rows carry no work-routing axis, so queued/in_flight/blocked render
-/// false. Returned as a `String` so the branch is unit-testable.
+/// false; `review_lens` answers the `review_lens` column as in `aida list`.
+/// Returned as a `String` so the branch is unit-testable.
 // trace:STORY-734 trace:BUG-668 | ai:claude — plain `//` keeps the marker out of any doc/help.
+// trace:TASK-1951 trace:TASK-2003 | ai:claude
 pub(crate) fn render_search_fields(
     results: &[aida_core::RequirementSummary],
     selected: &[String],
     agent: bool,
+    review_lens: &std::collections::HashMap<uuid::Uuid, String>,
 ) -> String {
+    let cell = |r: &aida_core::RequirementSummary, f: &str| {
+        (f == "review_lens").then(|| review_lens.get(&r.id).cloned().unwrap_or_default())
+    };
     if agent {
         let field_refs: Vec<&str> = selected.iter().map(String::as_str).collect();
         let rows: Vec<Vec<String>> = results
@@ -965,7 +992,9 @@ pub(crate) fn render_search_fields(
             .map(|r| {
                 selected
                     .iter()
-                    .map(|f| toon_list_cell(r, (false, false, false), f))
+                    .map(|f| {
+                        cell(r, f).unwrap_or_else(|| toon_list_cell(r, (false, false, false), f))
+                    })
                     .collect()
             })
             .collect();
@@ -973,7 +1002,8 @@ pub(crate) fn render_search_fields(
         out.push_str(&crate::toon::table_raw("specs", &field_refs, &rows));
         out
     } else {
-        let mut lines = build_list_fields_lines(results, selected, |_| (false, false, false));
+        let mut lines =
+            build_list_fields_lines_with(results, selected, |_| (false, false, false), cell);
         lines.push(format!("\n{} results", results.len()));
         lines.join("\n")
     }
