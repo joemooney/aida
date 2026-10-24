@@ -9,6 +9,7 @@
 //! move.
 // trace:STORY-1700 | ai:claude
 // trace:STORY-1699 | ai:claude
+// mandate-gate
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
