@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T09:53:13.924066900Z
-modified_at: 2026-10-24T01:57:25.189969370Z
+modified_at: 2026-10-24T04:53:01.766065687Z
 req_type: Task
 relationships:
 - rel_type: References
@@ -316,6 +316,24 @@ comments:
   created_at: 2026-10-24T01:57:25.189969370Z
   modified_at: 2026-10-24T01:57:25.189969370Z
   session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+- id: 01a16c41-4ec6-78b2-83bf-f9e19079d7d4
+  author: ai:codex:joe
+  content: |
+    S5 scope clarification requested before implementation (2026-10-23 21:52 MST assignment).
+
+    The new assignment requests TASK-2053 S5 host clone pool plus folded TASK-2300 and TASK-1-471 (current display ID TASK-1840), building on origin/main after S4b/S4c. It explicitly directs me to stop, comment here and mail the advisor if the S5 comments are ambiguous or implementation exceeds the signed sketch.
+
+    The canonical scope conflicts with a pool implementation:
+    - Advisor 2026-10-22 14:16: pack loose objects first; if cold p95 <=20 s, S5 is only packing plus a doctor check; otherwise post SKETCH S5 before building a pool.
+    - Packing outcome comment 01a1661b-de3e-78b3-bd33-6967561c0ecd reports cold p95 3.3 s and explicitly says “No host clone pool and no SKETCH.”
+    - docs/plans/2026-10-16-bug-2169-contained-clone.md lines 695-702 records packing plus the loose-object doctor check (#2847), with no pool built.
+    - TASK-2053 is currently canonically Completed. Latest 18:28/18:57 rulings fold TASK-2300 and TASK-1-471 into S5, but do not explicitly reverse the no-pool ruling.
+
+    Question: should this assignment (A, recommended) retain the no-pool ruling and implement only the folded default-origin-unreachable worktree fallback with a note, documentation and tests, treating packing/doctor as already delivered; or (B) reopen the host clone pool architecture, with a new explicit scope/sketch approval before implementation? Please also confirm whether TASK-2053 should reopen for the folded work and which trailer applies given its current Completed state.
+
+    Stopped before fetch, worktree/branch creation, claim, code edits, tests, commits, pushes or PR actions. No automatic reopen or claim attempted. Awaiting scope ruling; no pool design inferred.
+  created_at: 2026-10-24T04:53:01.766065687Z
+  modified_at: 2026-10-24T04:53:01.766065687Z
 history:
 - id: 01a15de1-409d-7c42-b18e-94acbd5eb19d
   author: joe
