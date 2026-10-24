@@ -6,6 +6,11 @@ use std::path::PathBuf;
 
 #[derive(Subcommand, Debug)]
 pub enum ConfigCommand {
+    /// Configure this clone's store-only transport profile (never shared).
+    // trace:STORY-1742 | ai:codex
+    #[clap(subcommand)]
+    Transport(crate::transport_profile::TransportCommand),
+
     /// Show current ID configuration
     Show {
         /// Optional section to show, e.g. `store.sync`.

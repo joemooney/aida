@@ -69,6 +69,47 @@ The one-time and once-in-a-while plumbing: the commands that *establish* an AIDA
 
 ---
 
+### `aida config transport`
+
+Enable the clone-local `work` profile with `aida config transport enable work`,
+inspect it with `aida config transport show`, and restore ordinary push/pull
+behavior with `aida config transport disable`. Each supports `--json` and
+`--format json`. Settings live in `aida-transport.json` under the common Git
+directory, shared by linked worktrees; no tracked project file or store object
+is changed. Configuration works before AIDA store/projection initialization.
+
+The profile pins a fingerprint of origin's single resolved fetch/push endpoint.
+Multiple endpoints, a different push endpoint, mirror mode, or later endpoint
+changes refuse planning. To change the pin, inspect the Git configuration and
+explicitly disable/re-enable the profile. Output and persisted profile data
+contain the fingerprint rather than URLs or credentials. An optional
+`--baseline <full-sha>` explicitly enrolls a reviewed public-safe commit from
+the local store history for the later outbound scanner. Enrollment records the
+operator's decision; it does not scan or certify that history.
+
+**Current boundary: profile and plans only.** While enabled, `aida push --dry-run`
+and `aida pull --dry-run` inspect local metadata without fetching, opening a
+store cache, or running lifecycle actions. `--json` also selects planning.
+Plans name origin, exact store refspecs, locally known source SHA, refs that
+execution could move, flag dispositions, and missing prerequisites. Code legs
+are forbidden even when `AIDA_PUSH_DEFAULT=code`; `aida push --store-only` and
+`aida pull --store-only` are redundant. `aida push --message <text>` and
+`aida pull --auto` refuse. Actual push/pull refuses until
+the executor and sanitization slices are available. Ordinary clones with no
+profile retain their existing behavior, including pull dry-run fetching.
+Explicit store overrides such as `aida --file <path> push` refuse when either
+clone has an enabled profile; run from the intended clone without the override.
+
+The intended transport is a ref-only store push and a store-only fetch followed
+by fast-forward. These plans do not yet validate cleanliness, fast-forward
+eligibility, hook compatibility, or content safety. The profile governs only
+`aida push/pull`; raw Git and other sync entry points bypass it. There is no
+server-side enforcement. Keep work-filed defects generic and sanitized before
+they enter any store that may become public.
+<!-- trace:STORY-1742 | ai:codex -->
+
+---
+
 ### `aida type`
 
 **One line** — manage the set of requirement types (the 19 built-ins, plus any project-specific ones).

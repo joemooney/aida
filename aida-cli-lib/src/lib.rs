@@ -227,6 +227,7 @@ mod store_push_pull;
 mod store_sync;
 mod supervise_cmd;
 mod supervisor;
+mod transport_profile;
 // trace:STORY-1218 | ai:claude
 mod schedule_driver;
 mod shift;
