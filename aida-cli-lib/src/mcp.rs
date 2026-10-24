@@ -2105,6 +2105,12 @@ impl<'a> McpServer<'a> {
 
         if let Some(status) = args.get("status").and_then(|v| v.as_str()) {
             if let Some(new_status) = parse_status(status) {
+                // A deferred spec reads `deferred`; refuse a status write
+                // nobody would see, as `aida edit` does.
+                // trace:TASK-1955 | ai:claude (slice 7 round-1 finding 5)
+                if let Some(msg) = crate::requirements_cli::deferred_status_edit_refusal(req) {
+                    return Err(msg);
+                }
                 // BUG-449 (TASK-647/ADR-3 caller parity): MCP is not advisor
                 // authority (the launching shell isn't the advisor seat), so it
                 // must not self-advance a spec into a status that is the
@@ -11243,6 +11249,54 @@ mod tests {
         let store = server.storage.load().unwrap();
         let req = store.get_requirement_by_spec_id(&id).unwrap();
         assert_eq!(req.status, RequirementStatus::Done);
+    }
+
+    /// TASK-1955 (slice 7 round-1 finding 5): MCP refuses a status write on a
+    /// deferred spec (flag or legacy `deferred:*` tag) as `aida edit` does —
+    /// it reads `deferred`, so the write would report success and show
+    /// nothing. Other fields still update.
+    // trace:TASK-1955 | ai:claude
+    #[test]
+    fn mcp_update_requirement_refuses_a_status_write_on_a_deferred_spec() {
+        let dir = tempdir().unwrap();
+        let _ambient = crate::test_env::AmbientGuard::hermetic(dir.path(), None);
+        let server = mk_server(dir.path());
+        let added = server
+            .tool_add_requirement(&json!({
+                "title": "Deferred target",
+                "description": "deferred status gate",
+                "type": "task",
+            }))
+            .unwrap();
+        let id = added_spec_id(&added).to_string();
+        force_status(&server, &id, RequirementStatus::Approved);
+        let set = |f: &dyn Fn(&mut Requirement)| {
+            let mut store = server.storage.load().unwrap();
+            f(store.get_requirement_by_spec_id_mut(&id).unwrap());
+            server.storage.save(&store).unwrap();
+        };
+        set(&|r| r.deferred = true);
+        let err = server
+            .tool_update_requirement(&json!({ "id": id, "status": "in-progress" }))
+            .expect_err("a status write on a deferred spec must be refused");
+        assert!(err.contains("aida undefer"), "{err}");
+        server
+            .tool_update_requirement(&json!({ "id": id, "title": "still editable" }))
+            .expect("non-status fields stay editable");
+
+        set(&|r| {
+            r.deferred = false;
+            r.tags.insert("deferred:later".to_string());
+        });
+        let err = server
+            .tool_update_requirement(&json!({ "id": id, "status": "in-progress" }))
+            .expect_err("a legacy deferred:* tag defers too");
+        assert!(err.contains("--remove-tag deferred:later"), "{err}");
+
+        let store = server.storage.load().unwrap();
+        let req = store.get_requirement_by_spec_id(&id).unwrap();
+        assert_eq!(req.status, RequirementStatus::Approved);
+        assert_eq!(req.title, "still editable");
     }
 
     /// BUG-481: the update_requirement status gate keyed only on the TARGET
