@@ -86,6 +86,24 @@ impl Scope {
             Self::RelayRestart => "relay-restart",
         }
     }
+
+    // trace:STORY-1917 | ai:agy
+    pub(crate) fn parse(raw: &str) -> Result<Self> {
+        let s = raw.trim();
+        for scope in Self::ALL {
+            if scope.as_str() == s {
+                return Ok(scope);
+            }
+        }
+        bail!(
+            "unknown mandate scope `{s}` (expected one of: {})",
+            Self::ALL
+                .iter()
+                .map(|sc| sc.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    }
 }
 
 /// One mandate record.
@@ -452,6 +470,33 @@ pub(crate) fn start_with(
     drive: bool,
     now: DateTime<Utc>,
 ) -> Result<Mandate> {
+    start_with_scopes(
+        dir,
+        human,
+        principal,
+        ttl,
+        reason,
+        include_supervised,
+        drive,
+        BTreeSet::new(),
+        now,
+    )
+}
+
+/// [`start_with`], plus explicit extra [`Scope`]s (`--scope dispatch`).
+// trace:STORY-1917 | ai:agy
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn start_with_scopes(
+    dir: &Path,
+    human: &dyn Fn() -> Result<()>,
+    principal: &str,
+    ttl: Duration,
+    reason: Option<String>,
+    include_supervised: bool,
+    drive: bool,
+    extra_scopes: BTreeSet<Scope>,
+    now: DateTime<Utc>,
+) -> Result<Mandate> {
     if let Err(err) = human() {
         bail!("a mandate can only be started by a human at an interactive terminal ({err})");
     }
@@ -469,6 +514,12 @@ pub(crate) fn start_with(
             active.expires_at.to_rfc3339()
         );
     }
+    let mut scopes = if drive {
+        Scope::ALL.into_iter().collect()
+    } else {
+        extra_scopes
+    };
+    scopes.remove(&Scope::ShipHeld);
     let mandate = Mandate {
         id: Uuid::new_v4().to_string(),
         principal: principal.to_string(),
@@ -482,11 +533,7 @@ pub(crate) fn start_with(
         expires_at: now + ttl,
         revoked_at: None,
         revoked_by: None,
-        scopes: if drive {
-            Scope::ALL.into_iter().collect()
-        } else {
-            BTreeSet::new()
-        },
+        scopes,
         kind: drive.then(|| KIND_DRIVE.to_string()),
     };
     write_private(
@@ -2077,14 +2124,19 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
     match action {
         crate::cli::MandateAction::Start {
             ship_held,
+            scopes,
             drive,
             ttl,
             reason,
             include_supervised,
             exclude_supervised,
         } => {
-            if !ship_held && !drive {
-                bail!("say what the mandate covers: `aida mandate start --ship-held`, or `--drive` for a drive mandate");
+            let mut parsed_scopes = BTreeSet::new();
+            for raw in scopes {
+                parsed_scopes.insert(Scope::parse(raw)?);
+            }
+            if !ship_held && !drive && parsed_scopes.is_empty() {
+                bail!("say what the mandate covers: `aida mandate start --ship-held`, `--scope dispatch`, or `--drive` for a drive mandate");
             }
             let ttl = match ttl {
                 Some(raw) => parse_ttl(raw)?,
@@ -2094,7 +2146,7 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
             // human opts out. trace:STORY-1700 | ai:claude
             let include =
                 drive_includes_supervised(*drive, *include_supervised, *exclude_supervised);
-            let m = start_with(
+            let m = start_with_scopes(
                 &dir,
                 &human,
                 &crate::current_user_id(None),
@@ -2102,6 +2154,7 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
                 reason.clone(),
                 include,
                 *drive,
+                parsed_scopes,
                 Utc::now(),
             )?;
             if let Some(root) = &audit_root {

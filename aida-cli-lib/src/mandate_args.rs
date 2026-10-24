@@ -17,6 +17,10 @@ pub enum MandateAction {
         /// Cover shipping held PRs (required unless --drive).
         #[clap(long)]
         ship_held: bool,
+        /// Additional scopes to cover (e.g. `--scope dispatch`).
+        // trace:STORY-1917 | ai:agy
+        #[clap(long = "scope", value_name = "SCOPE")]
+        scopes: Vec<String>,
         /// A DRIVE mandate: also covers advisor signoff of sketches
         /// and dispatching fixers, and turns on the 15-minute drive tick that
         /// routes every stalled lane. Implies --ship-held and covers sensitive

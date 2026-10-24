@@ -475,8 +475,12 @@ mandate.
 
 **Options.** `--ttl` sets the duration (`8h` by default, `90m` style also
 accepted, at most `24h`). A mandate cannot be extended: stop it and start
-another. `--reason` records why. `--include-supervised` also covers sensitive
-specs (security, containment, review or merge authority, guided, keystone).
+another. `--reason` records why. `--scope <scope>` adds explicit scopes such
+as `dispatch` (`aida mandate start --ship-held --scope dispatch`), and
+`--drive` starts a drive mandate covering all scopes. `--include-supervised`
+also covers sensitive specs (security, containment, review or merge authority,
+guided, keystone); with `--drive`, `--exclude-supervised` keeps sensitive
+specs human-only.
 Specs tagged `operator-only` or with execution mode `operator` or `decide`
 always stay human-only. Exclusion is sticky: a spec that was ever in an
 excluded class, in any stored version or in the local exclusion ledger
