@@ -164,6 +164,8 @@ fn reviewer_fallback_that_cannot_resolve_says_why() {
             && err.contains("multiple backing specs: TASK-1, TASK-2"),
         "{err}"
     );
+    // BUG-2217: the refusal names the fix.
+    assert!(err.contains("aida pr auto-queue-review"), "{err}");
 }
 
 /// TASK-2255: the whole auto-queue path on a Refs-only range files a review
