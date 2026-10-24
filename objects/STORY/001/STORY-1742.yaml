@@ -22,7 +22,7 @@ description: |
 
   ## Constraints
 
-  - Repository Git hooks continue to run; the profile changes AIDA orchestration, not Git's hook contract.
+  - Store-ref transport runs the existing verified host-owned store Git hook profile, including the identity gate. Project code/mirror hooks do not execute on the store push; the profile does not bypass store-hook validation.
   - Non-fast-forward pushes remain refused and no transport operation force-pushes shared refs.
   - A profile cannot silently broaden its permitted remotes or refspecs after configuration.
   - Configuration and diagnostics must not embed credentials.
@@ -31,14 +31,14 @@ description: |
 
   - Replacing structural store reconciliation for ordinary multi-hub project clones.
   - Defining a general-purpose synchronization language or plugin system.
-  - Disabling repository security hooks.
+  - Disabling the verified store security hooks, including the identity gate.
   - Automatically resolving diverged code or store history.
 status: NeedsAttention
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T22:02:03.191649035Z
-modified_at: 2026-10-24T22:56:25.667253274Z
+modified_at: 2026-10-24T23:29:40.635245960Z
 req_type: Story
 tags:
 - docs:impacted
@@ -183,6 +183,10 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1703f-a41e-7021-a545-b78f940afb8f
+  author: joe
+  timestamp: 2026-10-24T23:29:41.406758707Z
+  changes: []
 filed_at:
   code_sha: 3dfcf99117e6efbaa8259155a576276ab424a335
   branch: main
