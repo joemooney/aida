@@ -112,6 +112,12 @@ fn release(root: &Path, labels_fail: bool) -> (Result<Outcome>, Vec<String>) {
             grant_check: &|id, subject| sa::grant_check_for(root, id, subject),
             approval_authority: &|_| Ok(()),
             mandate: &|| bail!("no mandate is active"),
+            // The real release-condition check over this root's verdicts, so
+            // the no-history fallback is exercised end to end.
+            // trace:BUG-2216 | ai:claude
+            refusal_release: &|record, head| {
+                crate::pr_cmd::ship_refusal_release(&[root], record, Some(head))
+            },
             comment: &|body| {
                 comments.borrow_mut().push(body.to_string());
                 Ok(())
@@ -135,6 +141,25 @@ fn assert_released(root: &Path, result: Result<Outcome>) {
         serde_json::from_slice(&std::fs::read(mh::clearance_path(root, PR)).unwrap()).unwrap();
     assert_eq!(audit["cleared_by"], PRINCIPAL);
     assert_eq!(audit["target_head_sha"], HEAD);
+    // BUG-2216: the release emits the hold-release event exactly once, with
+    // the auto-release principal and no human attestation.
+    // trace:BUG-2216 | ai:claude
+    let releases: Vec<_> = crate::events::read_all(root)
+        .into_iter()
+        .filter(|e| {
+            matches!(
+                &e.kind,
+                crate::events::EventKind::MergeHoldChanged {
+                    pr: 41,
+                    placed: false,
+                    principal: Some(principal),
+                    human_attested: false,
+                    ..
+                } if principal == PRINCIPAL
+            )
+        })
+        .collect();
+    assert_eq!(releases.len(), 1, "exactly one release event");
 }
 
 #[test]
@@ -174,8 +199,12 @@ fn auto_release_retry_releases_after_the_in_place_attempt_failed() {
     assert!(comments.is_empty(), "the audit comment was already posted");
 }
 
+/// BUG-2216: a fresh reviewer worktree keeps no round history, so the hold
+/// marker is the arming evidence and the approval at the live head releases
+/// through the same path (#2885, #2886, #2868 needed a human clear).
+// trace:BUG-2216 | ai:claude
 #[test]
-fn missing_refusal_history_stays_held_and_names_where_it_looked() {
+fn missing_refusal_history_releases_on_the_hold_markers_own_evidence() {
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path();
     let _env = AmbientGuard::hermetic_with_seat(root, "reviewer", &[]);
@@ -187,14 +216,113 @@ fn missing_refusal_history_stays_held_and_names_where_it_looked() {
     std::fs::remove_dir_all(&archive).unwrap();
     record(root, "approved", HEAD);
 
+    let (result, comments) = release(root, false);
+    assert_released(root, result);
+    assert_eq!(comments.len(), 1);
+}
+
+/// BUG-2216: with no history AND no approval at the live head, the fallback
+/// fails closed and says why the release condition is not met.
+// trace:BUG-2216 | ai:claude
+#[test]
+fn missing_history_with_a_stale_approval_stays_held() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let _env = AmbientGuard::hermetic_with_seat(root, "reviewer", &[]);
+    record(root, "request-changes", OLD);
+    arm(root);
+    launch_reviewer(root);
+    let archive = rv::verdict_archive_dir(&rv::verdict_path(root, KEY)).unwrap();
+    std::fs::remove_dir_all(&archive).unwrap();
+    // The approval is at the arming head, not the live head.
+    record(root, "approved", OLD);
+
     let (result, _) = release(root, false);
     let error = result.unwrap_err().to_string();
-    assert!(
-        error.contains("no earlier request-changes/rejected"),
-        "{error}"
+    assert!(error.contains("stale or unverifiable head"), "{error}");
+    assert!(mh::hold_path(root, PR).exists());
+}
+
+/// BUG-2216: the release happens exactly once — a second attempt after the
+/// marker is gone reports no hold and records nothing new.
+// trace:BUG-2216 | ai:claude
+#[test]
+fn a_released_hold_is_released_exactly_once() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let _env = AmbientGuard::hermetic_with_seat(root, "reviewer", &[]);
+    record(root, "request-changes", OLD);
+    arm(root);
+    launch_reviewer(root);
+    let archive = rv::verdict_archive_dir(&rv::verdict_path(root, KEY)).unwrap();
+    std::fs::remove_dir_all(&archive).unwrap();
+    record(root, "approved", HEAD);
+
+    let (first, comments) = release(root, false);
+    assert_released(root, first);
+    assert_eq!(comments.len(), 1);
+    let clearance = std::fs::read(mh::clearance_path(root, PR)).unwrap();
+
+    let hold = mh::read_hold_record(root, PR);
+    assert!(hold.is_none(), "the marker is gone after the release");
+    assert_eq!(
+        std::fs::read(mh::clearance_path(root, PR)).unwrap(),
+        clearance,
+        "nothing rewrites the recorded clearance"
     );
-    assert!(error.contains(&archive.display().to_string()), "{error}");
-    assert!(error.contains(env!("CARGO_PKG_VERSION")), "{error}");
+}
+
+/// BUG-2216: holds of any other kind never take the no-history fallback —
+/// the Rework-only eligibility refuses them before it is consulted.
+// trace:BUG-2216 | ai:claude
+#[test]
+fn only_rework_holds_release_on_the_markers_evidence() {
+    for kind in [
+        mh::HoldReasonKind::Recusal,
+        mh::HoldReasonKind::Supervision,
+        mh::HoldReasonKind::Decision,
+    ] {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let _env = AmbientGuard::hermetic_with_seat(root, "reviewer", &[]);
+        record(root, "request-changes", OLD);
+        let mut hold = mh::typed_hold(PR, kind, "held", Some(OLD.into()));
+        hold.verdict_ref = Some(mh::VerdictRef::new(
+            KEY,
+            Some(PR),
+            Some(OLD.into()),
+            Some(REVIEWER.into()),
+        ));
+        hold.spec = Some(KEY.into());
+        if kind == mh::HoldReasonKind::Recusal {
+            hold.recused_principals = vec!["advisor:recused".into()];
+        }
+        mh::write_typed_hold(root, &hold).unwrap();
+        launch_reviewer(root);
+        // One recording leaves no per-commit archive yet.
+        let archive = rv::verdict_archive_dir(&rv::verdict_path(root, KEY)).unwrap();
+        let _ = std::fs::remove_dir_all(&archive);
+        record(root, "approved", HEAD);
+
+        let (result, _) = release(root, false);
+        let error = result.unwrap_err().to_string();
+        assert!(error.contains("Rework-only"), "{kind:?}: {error}");
+        assert!(mh::hold_path(root, PR).exists(), "{kind:?}");
+    }
+
+    // A legacy (plaintext) hold is refused the same way.
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let _env = AmbientGuard::hermetic_with_seat(root, "reviewer", &[]);
+    record(root, "request-changes", OLD);
+    mh::write_hold(root, PR, &format!("CHANGES REQUESTED for {KEY} at {OLD}")).unwrap();
+    launch_reviewer(root);
+    record(root, "approved", HEAD);
+    let (result, _) = release(root, false);
+    // A legacy marker never reaches eligibility: it carries no typed arming
+    // verdict reference, so the release has nothing to answer.
+    let error = result.unwrap_err().to_string();
+    assert!(error.contains("no arming verdict reference"), "{error}");
     assert!(mh::hold_path(root, PR).exists());
 }
 
