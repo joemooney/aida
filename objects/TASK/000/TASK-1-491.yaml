@@ -1,5 +1,6 @@
 id: 01a16de5-f674-75e0-a33b-3633a0483d62
 spec_id: TASK-1-491
+agreed_id: TASK-1859
 title: 'cosmetic: disk_emergency.rs run_emergency_probed saves last_emergency_refusal o…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-2272, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -38,6 +39,10 @@ history:
   author: joe
   timestamp: 2026-10-24T12:34:12.913817724Z
   session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+  changes: []
+- id: 01a16ec0-144d-71c1-95d5-3d72984e4d47
+  author: joe
+  timestamp: 2026-10-24T16:30:44.301602855Z
   changes: []
 filed_at:
   code_sha: 194492a69f7358b90006afe525d62056b42d30ce
