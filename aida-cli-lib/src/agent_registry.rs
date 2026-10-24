@@ -658,7 +658,10 @@ pub(crate) fn touch_session_start_agent(
     let env_scope = env_nonempty("AIDA_SESSION_SCOPE").filter(|s| looks_like_spec_id(s));
     let env_name = match &linked {
         Some(lease) if env_scope.as_deref() != Some(lease.scope.as_str()) => None,
-        _ => env_nonempty("AIDA_AGENT_NAME"),
+        // A headless child's own handle, else its launch name.
+        // trace:STORY-1843 | ai:claude
+        _ => env_nonempty(crate::agent_handle::HANDLE_ENV)
+            .or_else(|| env_nonempty("AIDA_AGENT_NAME")),
     };
     let mut entry = std::fs::read_to_string(&path)
         .ok()

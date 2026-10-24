@@ -50,6 +50,11 @@ const UNVERIFIED_HOLDER_TTL_SECS: i64 = 24 * 60 * 60;
 /// Carries a launcher's reservation token to the process it launches.
 pub(crate) const LAUNCH_TOKEN_ENV: &str = "AIDA_HANDLE_LAUNCH_TOKEN";
 
+/// Carries a headless child's own handle. `AIDA_AGENT_NAME` stays the
+/// child's `<vendor>-<seat>` seat identity (what review attestation records);
+/// this is the address its mail is sent from and read under.
+pub(crate) const HANDLE_ENV: &str = "AIDA_HANDLE";
+
 /// Session identity a client sets for its own children. A launched agent of
 /// any vendor must not inherit its parent's: it would resolve the parent's
 /// handle and read the parent's mail.
@@ -60,6 +65,7 @@ pub(crate) const INHERITED_SESSION_ENV: &[&str] = &[
     "CODEX_SESSION_ID",
     "AIDA_HOOK_PAYLOAD",
     LAUNCH_TOKEN_ENV,
+    HANDLE_ENV,
 ];
 
 /// Vendor names and aliases. A handle may not be one: `--to codex` must
@@ -550,6 +556,15 @@ fn decide(
         }
     }
     unreachable!("the handle sequence is unbounded")
+}
+
+/// The handle a native session already holds, so a resume of it keeps it.
+// trace:STORY-1843 | ai:claude
+pub(crate) fn handle_of_session(project_root: &Path, native_session_id: &str) -> Option<String> {
+    list_reservations(project_root)
+        .into_iter()
+        .find(|r| session_matches(r, Some(native_session_id)))
+        .map(|r| r.handle)
 }
 
 /// Whether `r` is already the requester's: its session, its launcher's
@@ -1282,7 +1297,9 @@ mod tests {
             aida_core::mailbox::NOTICE_DEFAULT_CAP,
         );
         assert_eq!(notice.total, 1, "{notice:?}");
-        // Another session's notice does not see it.
+        // Another session's notice does not see it. (Pinned: a parallel test
+        // points `CLAUDE_PID` at this process.)
+        let _env = crate::test_env::EnvVarsGuard::apply(&[("CLAUDE_PID", None)]);
         assert!(current_session_handle(project, Some("sess-other")).is_none());
         // A handle no live agent holds is refused with a hint, before any write.
         let err = dir
@@ -1694,6 +1711,55 @@ mod tests {
         }
     }
 
+    fn command_env(cmd: &std::process::Command, key: &str) -> Option<String> {
+        cmd.get_envs()
+            .find(|(k, _)| *k == key)
+            .and_then(|(_, v)| v)
+            .map(|v| v.to_string_lossy().into_owned())
+    }
+
+    // Round 5 F2: a resumed headless child keeps the handle its session
+    // holds; the resume reserves no new one.
+    // trace:STORY-1843 | ai:claude
+    #[test]
+    fn a_resumed_child_keeps_its_sessions_handle() {
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path();
+        let _cwd = crate::session::contained_cwd_seam::pin(project);
+        let held = reserve_handle(
+            project,
+            &HandleRequest {
+                role: Some("reviewer"),
+                ..req(None, Some("sess-r"))
+            },
+        )
+        .unwrap();
+        let mut cmd = std::process::Command::new("true");
+        crate::session::apply_resumed_child_agent_identity(
+            &mut cmd,
+            crate::session::HeadlessVendor::Claude,
+            "reviewer",
+            "sess-r",
+        );
+        assert_eq!(
+            command_env(&cmd, HANDLE_ENV).as_deref(),
+            Some(held.handle.as_str())
+        );
+        assert_eq!(command_env(&cmd, LAUNCH_TOKEN_ENV), None);
+        assert_eq!(list_reservations(project).len(), 1, "no new reservation");
+        // The resumed session's start keeps its handle and recipient.
+        let mut resumed = entry(project, "claude-r", Some(&held.handle), Some("sess-r"));
+        resumed.role = Some("reviewer".to_string());
+        assign_session_handle(project, &mut resumed, Some("sess-r"));
+        assert_eq!(resumed.name.as_deref(), Some(held.handle.as_str()));
+        assert_eq!(
+            load_reservation(project, &held.handle)
+                .unwrap()
+                .recipient_id,
+            held.recipient_id
+        );
+    }
+
     // Round 4 F1/F7: concurrent headless children of one seat each get a
     // launcher-reserved handle, bound by that child's launch token, and a
     // reply to each sender reaches only that child.
@@ -1710,14 +1776,15 @@ mod tests {
                 crate::session::HeadlessVendor::Claude,
                 "reviewer",
             );
-            let env = |key: &str| {
-                cmd.get_envs()
-                    .find(|(k, _)| *k == key)
-                    .and_then(|(_, v)| v)
-                    .map(|v| v.to_string_lossy().into_owned())
-                    .unwrap()
-            };
-            (env("AIDA_AGENT_NAME"), env(LAUNCH_TOKEN_ENV))
+            // The seat identity attestation records is unchanged.
+            assert_eq!(
+                command_env(&cmd, "AIDA_AGENT_NAME").as_deref(),
+                Some("claude-reviewer")
+            );
+            (
+                command_env(&cmd, HANDLE_ENV).unwrap(),
+                command_env(&cmd, LAUNCH_TOKEN_ENV).unwrap(),
+            )
         };
         let children = [launch(), launch()];
         assert_eq!(children[0].0, "claude-reviewer-01");
@@ -1725,7 +1792,8 @@ mod tests {
         for (i, (name, token)) in children.iter().enumerate() {
             let sid = format!("child-{i}");
             let _env = crate::test_env::EnvVarsGuard::apply(&[
-                ("AIDA_AGENT_NAME", Some(name.as_str())),
+                ("AIDA_AGENT_NAME", Some("claude-reviewer")),
+                (HANDLE_ENV, Some(name.as_str())),
                 (LAUNCH_TOKEN_ENV, Some(token.as_str())),
             ]);
             let mut child = entry(

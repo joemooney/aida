@@ -1652,8 +1652,8 @@ pub(crate) fn spawn_claude_resume_with_grant(
     if let Some(grant) = grant_id {
         cmd.env(crate::seat_authority::GRANT_ENV, grant)
             .env("AIDA_SESSION_ROLE", "reviewer");
-        // trace:BUG-2187 | ai:claude
-        apply_child_agent_identity(&mut cmd, HeadlessVendor::Claude, "reviewer");
+        // A resume keeps the session's handle. trace:BUG-2187 | ai:claude
+        apply_resumed_child_agent_identity(&mut cmd, HeadlessVendor::Claude, "reviewer", id);
     }
     // trace:BUG-2139 | ai:claude
     scrub_launcher_session_env(&mut cmd);
@@ -4037,8 +4037,8 @@ pub(crate) fn apply_headless_child_seat_env(
 ///
 /// Every seat gets it, not only the reviewer, deliberately: an implementer
 /// child launched from an `aida agent new` lane is labelled
-/// `<vendor>-implementer-NN` rather than inheriting the lane's name. Inheriting
-/// would attribute the child's writes to whatever seat launched it (an
+/// `<vendor>-implementer` (its own handle rides in `AIDA_HANDLE`) rather
+/// than inheriting the lane's name. Inheriting would attribute the child's writes to whatever seat launched it (an
 /// advisor's `queue work`, say). Lane attribution in `aida ps` does not
 /// depend on this label: BUG-2010 binds a lane by the lease the child
 /// claims itself, and skips children that claim none.
@@ -4049,21 +4049,53 @@ pub(crate) fn apply_child_agent_identity(
     vendor: HeadlessVendor,
     seat: &str,
 ) {
+    apply_child_identity(cmd, vendor, seat, None);
+}
+
+/// [`apply_child_agent_identity`] for a resume of native session
+/// `session_id`: the session keeps the handle it already holds, and no new
+/// one is reserved.
+// trace:STORY-1843 | ai:claude
+pub(crate) fn apply_resumed_child_agent_identity(
+    cmd: &mut std::process::Command,
+    vendor: HeadlessVendor,
+    seat: &str,
+    session_id: &str,
+) {
+    apply_child_identity(cmd, vendor, seat, Some(session_id));
+}
+
+fn apply_child_identity(
+    cmd: &mut std::process::Command,
+    vendor: HeadlessVendor,
+    seat: &str,
+    resumed_session: Option<&str>,
+) {
     let agent_type = match vendor {
         HeadlessVendor::Claude => "claude",
         HeadlessVendor::Codex => "codex",
         HeadlessVendor::Agy => "antigravity",
     };
-    // Each child gets its own handle, reserved here and bound by the child
-    // with the launch token, so concurrent children of one seat never share
-    // the From address their mail is sent under. Without a project to
-    // reserve in, the bare seat label stays (not an address).
+    // `AIDA_AGENT_NAME` is the seat identity review attestation records.
+    // The child's own address is a separate handle in `AIDA_HANDLE`:
+    // reserved here and bound by the child with the launch token, so
+    // concurrent children of one seat never share a From address; a resume
+    // keeps the handle its session holds. Without a project to reserve in,
+    // no handle is exported and session start allocates one.
     // trace:STORY-1843 | ai:claude
-    cmd.env_remove(crate::agent_handle::LAUNCH_TOKEN_ENV);
-    let name = reserve_child_handle(cmd, agent_type, seat)
-        .unwrap_or_else(|| format!("{agent_type}-{seat}"));
+    cmd.env_remove(crate::agent_handle::LAUNCH_TOKEN_ENV)
+        .env_remove(crate::agent_handle::HANDLE_ENV);
+    let handle = match resumed_session {
+        Some(sid) => {
+            child_handle_root().and_then(|root| crate::agent_handle::handle_of_session(&root, sid))
+        }
+        None => reserve_child_handle(cmd, agent_type, seat),
+    };
+    if let Some(handle) = handle {
+        cmd.env(crate::agent_handle::HANDLE_ENV, handle);
+    }
     cmd.env("AIDA_AGENT_TYPE", agent_type)
-        .env("AIDA_AGENT_NAME", name);
+        .env("AIDA_AGENT_NAME", format!("{agent_type}-{seat}"));
 }
 
 /// Reserve a generated `<vendor>-<seat>-NN` handle for a child about to be

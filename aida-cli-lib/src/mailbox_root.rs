@@ -299,12 +299,13 @@ pub(crate) fn inbox_identities() -> Vec<String> {
     // `AIDA_USER = AIDA_AGENT_NAME`, which is why this was latent; any future
     // override inside a launched agent splits send-identity from
     // read-identity without this union.
-    if let Some(agent_name) = std::env::var("AIDA_AGENT_NAME")
-        .ok()
-        .filter(|s| !s.trim().is_empty())
-    {
-        if !ids.iter().any(|i| i == &agent_name) {
-            ids.push(agent_name);
+    // A headless child also reads its own handle's inbox (STORY-1843).
+    // trace:STORY-1843 | ai:claude
+    for key in [crate::agent_handle::HANDLE_ENV, "AIDA_AGENT_NAME"] {
+        if let Some(agent_name) = std::env::var(key).ok().filter(|s| !s.trim().is_empty()) {
+            if !ids.iter().any(|i| i == &agent_name) {
+                ids.push(agent_name);
+            }
         }
     }
     if let Some(raw) = std::env::var("AIDA_SESSION_ROLE")
