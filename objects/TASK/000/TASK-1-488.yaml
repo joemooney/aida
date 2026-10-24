@@ -1,5 +1,6 @@
 id: 01a16cb8-1006-76a3-9e43-ea856b1eb133
 spec_id: TASK-1-488
+agreed_id: TASK-1856
 title: 'non-blocking (cosmetic): task_1781_contained_parent_refuses_no_default_flags te…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-1952, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -38,6 +39,10 @@ history:
   author: joe
   timestamp: 2026-10-24T07:12:24.662465903Z
   session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+  changes: []
+- id: 01a16ce6-a480-7672-b983-0b842c7d615e
+  author: joe
+  timestamp: 2026-10-24T07:53:37.152132907Z
   changes: []
 filed_at:
   code_sha: 14065b6254e5edc2d364a3d8281a5a0cc2d08fc3

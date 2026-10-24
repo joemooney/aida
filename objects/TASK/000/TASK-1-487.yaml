@@ -1,5 +1,6 @@
 id: 01a16cb7-f822-72e3-b745-b4e268b662e3
 spec_id: TASK-1-487
+agreed_id: TASK-1857
 title: 'non-blocking (minor): drain_lock.rs stamp_drain_lock_child_grant read-modify-wr…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-1952, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -38,6 +39,10 @@ history:
   author: joe
   timestamp: 2026-10-24T07:12:16.655626914Z
   session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+  changes: []
+- id: 01a16ce6-a499-7100-bfab-7d5cfed49177
+  author: joe
+  timestamp: 2026-10-24T07:53:37.177716249Z
   changes: []
 filed_at:
   code_sha: 14065b6254e5edc2d364a3d8281a5a0cc2d08fc3
