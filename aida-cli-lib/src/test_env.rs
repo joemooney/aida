@@ -953,6 +953,14 @@ pub(crate) fn pub_crate_helper_without_guard() {
 pub(super) async fn async_helper_without_guard() {
     std::env::set_current_dir("fixture-async").unwrap();
 }
+
+#[test]
+fn guarded_by_output_variant() {
+    if let Some(out) = crate::test_env::run_path_isolated_test_output() {
+        return;
+    }
+    std::env::set_current_dir("fixture-output").unwrap();
+}
 "#;
         let mut offenders = Vec::new();
         scan_block_for_unisolated_cwd(Path::new("seeded.rs"), sample, 1, &mut offenders);
@@ -1105,7 +1113,10 @@ fn scan_block_for_unisolated_cwd(
         if trimmed.starts_with("#[test]") || is_fn_item_start(trimmed) {
             current_fn_has_isolated_guard = false;
         }
-        if line.contains("run_path_isolated_test()") {
+        // trace:TASK-2270 | ai:claude
+        if line.contains("run_path_isolated_test()")
+            || line.contains("run_path_isolated_test_output()")
+        {
             current_fn_has_isolated_guard = true;
         }
         if line.contains("set_current_dir(") && !current_fn_has_isolated_guard {
