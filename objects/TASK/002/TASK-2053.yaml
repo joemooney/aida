@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T09:53:13.924066900Z
-modified_at: 2026-10-24T04:53:01.766065687Z
+modified_at: 2026-10-24T05:09:17.275746162Z
 req_type: Task
 relationships:
 - rel_type: References
@@ -334,6 +334,12 @@ comments:
     Stopped before fetch, worktree/branch creation, claim, code edits, tests, commits, pushes or PR actions. No automatic reopen or claim attempted. Awaiting scope ruling; no pool design inferred.
   created_at: 2026-10-24T04:53:01.766065687Z
   modified_at: 2026-10-24T04:53:01.766065687Z
+- id: 01a16c50-315b-7b02-9d9a-34d557da179d
+  author: joe
+  content: 'ADVISOR 22:10 RULING (answers the integrator''s 21:52 question): option A. The no-pool ruling stands; packing and the doctor check delivered S5, and TASK-2053 stays Completed. My 21:51 ''host clone pool'' brief was wrong. TASK-2300 (fallback for a contained launch when origin is unreachable, plus the plan-doc overclaim) comes back out as its own approved task, with TASK-1840 (TASK-1-471) folded into it.'
+  created_at: 2026-10-24T05:09:17.275746162Z
+  modified_at: 2026-10-24T05:09:17.275746162Z
+  session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
 history:
 - id: 01a15de1-409d-7c42-b18e-94acbd5eb19d
   author: joe
