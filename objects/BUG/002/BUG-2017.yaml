@@ -1,0 +1,51 @@
+id: 01a16ad2-fa8b-7961-ae04-837e24cec35d
+spec_id: BUG-2017
+agreed_id: BUG-2017
+title: Prevent uncoordinated ID-block allocation in partitioned stores
+description: |
+  ## Problem
+
+  A git-canonical AIDA store can be intentionally partitioned from another store while still retaining commands that acquire nodes and allocate apparently global display-ID blocks. Without a shared allocation authority or eventual registry convergence, those reservations are only local claims. Two trust domains can therefore allocate overlapping nodes or numeric blocks while each reports globally unique IDs, making a later reconciliation ambiguous or unsafe.
+
+  ## Acceptance
+
+  - AIDA distinguishes globally coordinated allocation from trust-domain-local allocation in configuration, status, and machine-readable output.
+  - A clone cannot acquire a globally scoped node or numeric block unless it can prove that the configured allocation authority reserved that identity.
+  - A partitioned clone can import a one-way, authority-issued allocation grant without importing the authority's full requirement store.
+  - Allocation grants identify their authority, trust domain, node identity, type ranges, issuance revision, and integrity proof.
+  - When no authority grant is available, AIDA either refuses bare global display-ID allocation or emits an explicitly namespaced local handle that cannot be mistaken for a global ID.
+  - Store reconciliation detects overlapping node identities and block ranges before attempting a union and reports every conflict without choosing a winner.
+  - An audit command identifies nodes and blocks that exist only locally, distinguishes valid authority grants from uncoordinated claims, and emits a repair plan.
+  - Existing converged multi-hub stores retain their current allocation behavior when their common registry ancestry and authority are verifiable.
+  - Documentation explains that direct connectivity to every forge is unnecessary when one trusted hub serves as allocation authority and distributes grants inward.
+
+  ## Constraints
+
+  - Allocation authority metadata must not require copying requirement objects, comments, queues, coordination records, credentials, or machine-local paths across trust boundaries.
+  - Grants are append-only or superseded explicitly; a previously issued block cannot silently move to another node.
+  - Offline operation remains possible within the ranges of a previously verified grant.
+  - The design must tolerate non-fast-forward and replay attempts without issuing duplicate authority grants.
+
+  ## Non-goals
+
+  - Automatically merging complete stores across trust boundaries.
+  - Treating forge access as the source of identity authority.
+  - Reusing an uncoordinated local block merely because no collision is currently observed.
+  - Replacing requirement UUIDs or portable-intent checksums as durable machine identities.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-23T22:12:54.027870933Z
+modified_at: 2026-10-23T22:12:54.027870933Z
+req_type: Bug
+tags:
+- id-allocation
+- partitioned-store
+filed_at:
+  code_sha: 3dfcf99117e6efbaa8259155a576276ab424a335
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 3dfcf99117
+  vendor: codex
