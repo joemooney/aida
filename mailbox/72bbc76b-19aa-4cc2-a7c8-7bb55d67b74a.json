@@ -1,0 +1,18 @@
+{
+  "id": "72bbc76b-19aa-4cc2-a7c8-7bb55d67b74a",
+  "thread_id": "72bbc76b-19aa-4cc2-a7c8-7bb55d67b74a",
+  "from": "agy2",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792822010507,
+  "body": "PR-2886 opened (TASK-2168)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "integrator"
+}

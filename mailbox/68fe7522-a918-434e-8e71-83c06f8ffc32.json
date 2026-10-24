@@ -1,0 +1,19 @@
+{
+  "id": "68fe7522-a918-434e-8e71-83c06f8ffc32",
+  "thread_id": "68fe7522-a918-434e-8e71-83c06f8ffc32",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792822335468,
+  "body": "PR-2887 opened (TASK-2300): https://github.com/joemooney/aida/pull/2887\n\nHead 167012ce0a0771cdf4c04ec654c3cede012ecff9, branch codex/task-2300. Implements the approved default-origin failure fallback plus folded TASK-1840 (formerly TASK-1-471), tests and plan/release-note correction. TASK-2053 stays Completed; no host clone pool.\n\nTargeted seat_clone::tests:32 passed/0 failed. Subsequent test-only change adds cfg(unix) to the shell timeout regression, leaving Linux compiled behavior unchanged. Final make check-ci-fast:34/34. Gates ran before the ceremony cleanly rebased to current main; CI and independent review remain pending on pushed head. Three spawned author-checker passes, final no further confirmed findings, no author verdict.\n\nImportant edge: an explicit --path using the reserved aida-seat-* clone location cannot host a linked worktree; an origin failure there refuses before worktree allocation and asks to drop --path or choose an ordinary worktree path. Automatic default fallback works; explicit seat_tree=clone remains refusal. Failed clone and pin cleanup must both succeed before fallback. Full detail and test evidence are in the PR body and TASK-2300 comment.\n\nOpened with aida ship TASK-2300 --no-merge; not merged.\n",
+  "subject": "PR-2887 opened (TASK-2300)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "f1e9ccb6-a3d7-4f6a-907e-547f732e8b44",
+  "thread_id": "f1e9ccb6-a3d7-4f6a-907e-547f732e8b44",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792822772789,
+  "body": "head f8e532d680. Member table in the PR body.\n- TASK-2250 on main 3dfcf99117 (#2861); TASK-2265 and TASK-2266 on main 8a85163a34 (#2866).\n- TASK-2248/2249: ef2de95c9a, tests added; the fetch uses .remote_credentials().\n- TASK-2313: f8e532d680; the aida-rebase master and the pr/auto-queue-review help are reworded to hold before and after #2869 (still OPEN); golden snapshot regenerated; check-templates OK. sync-templates could not write .claude/skills from the sandbox (symlinks, no drift).\n- Gap found, not fixed: `aida ship --no-merge` never queues a review itself; only the session-end backup catches it. Worth a spec.\n- TASK-1-477: prefer_hold (ready head first, then newest PR) + test.\n- TASK-1-476: trade-off documented in release_with's doc (comment/validate/labels stay under the lock by design; fails closed).\n- TASK-1-478: #2845 already merged; nothing to edit, noted in the table.\nGates: targeted 3/3 + 4/4 + snapshot, check-ci-fast 34/34.",
+  "subject": "PR-2885 pushed (TASK-2251)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}
