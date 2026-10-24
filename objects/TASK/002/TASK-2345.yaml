@@ -1,0 +1,31 @@
+id: 01a1703f-0dde-7b41-b544-f6ec236fd5f4
+spec_id: TASK-2345
+agreed_id: TASK-2345
+title: inbox_identities() depends on real process ancestry (STORY-1843 PR-2909)
+description: |
+  PR-2909 changed inbox_identities() (aida-cli-lib/src/mailbox_root.rs:292) to call current_session_handle_for_cwd(), which walks the actual OS process ancestry (session_start_agent_pid over std::process::id()) and resolves a handle from the registry.
+
+  Consequence: the pre-existing test bug_231_findings_promote_tests::inbox_identities_stable_name_only_when_no_agent_type (aida-cli-lib/src/tests/bug_231_findings_promote_tests.rs:294) is no longer hermetic. It passes in CI only because the GitHub runner has no claude/codex/agy process in the ancestry (own_handle resolves to None). Run the lib suite under a live vendor session — e.g. an interactive /aida-review under a claude process — and own_handle resolves to the live reviewer handle (observed: ["solo-user","claude-reviewer-21","claude-reviewer"] vs expected ["solo-user"]), failing the test.
+
+  Not a merge blocker (green in CI), but a latent test-fragility: a function on the per-turn mailbox-notice path now depends on the real process tree. Consider a fixture seam (inject the ancestry/registry lookup) so the test asserts behaviour without reaching outside its hermetic root.
+
+  Raised in review of PR-2909: https://github.com/joemooney/aida/pull/2909#issuecomment-6390882870
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-24T23:29:02.942675586Z
+modified_at: 2026-10-24T23:29:02.942675586Z
+req_type: Task
+tags:
+- from-review:PR-2909
+- severity:minor
+filed_at:
+  code_sha: de9c0ffb7f27102fbf477a2c7aa5155724fe20bc
+  branch: pr-2909
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 8b523a4422
+  vendor: claude
+  session: 01a16ff80ae6
+  harness_version: 2.1.310 (Claude Code)
