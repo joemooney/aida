@@ -18,26 +18,42 @@ CI, merge, sync, and cleanup; **opening work for review uses `--no-merge`**.
 
 | Path | What happens | Why |
 |---|---|---|
-| ⇒ Independent review | Authorized publication uses `aida ship <SPEC> --no-merge`, then `aida pr auto-queue-review` | The implementer stops before merge and hands off to an independent reviewer |
-| ⏸ Parent-owned publication | Follow the managed child stop/handoff contract | The parent owns preflight and publication; the child must not race that boundary |
+| ▶ Independent review | Authorized publication uses `aida ship <SPEC> --no-merge`, then `aida pr auto-queue-review` | The implementer stops before merge and hands off to an independent reviewer |
+| ⇒ Preview first | Run `aida ship <SPEC> --no-merge --dry-run` before publishing | Inspects the commit, rebase, push, and PR steps without mutating Git or the forge |
+| ⏸ Parent-owned publication | In corroborated `orchestrated` mode, commit and push (`aida ship <SPEC> --no-pr`), do not open the PR, then exit (touch `$AIDA_EXIT_SENTINEL` last in headless/zen) | The parent owns preflight and publication; the child must not race that boundary |
 
 ## Preview and review handoff
 
 Resolve the implemented spec from the assignment/current session. Inspect
 `aida ship --help` for supported options; legacy skill options are retired.
-Before publishing, run `aida orchestrator status`. If it reports
-`orchestrated`, the parent owns preflight and PR creation: do not execute the
-review-publication sequence below in the child. Follow its commit/push/exit
-contract (use `aida ship <SPEC> --no-pr` only if that contract authorizes it),
-leaving PR creation and autoqueue to the parent. Do not infer authority from a
-bare environment flag. Other managed contracts may also forbid publication.
-For a normal, authorized review handoff outside that boundary:
+Before publishing, run `aida orchestrator status` (do not infer authority from a
+bare environment flag):
 
-```bash
-aida ship <SPEC> --no-merge --dry-run
-aida ship <SPEC> --no-merge
-aida pr auto-queue-review
-```
+- **Orchestrated child (`aida orchestrator status` = `orchestrated`, TASK-1289 / TASK-329):**
+  the parent phase owns preflight and PR creation. Do **not** open a PR or run
+  autoqueue in this child session. Commit and push the branch, then exit — in
+  headless/zen mode, touch `$AIDA_EXIT_SENTINEL` as the session's absolute last
+  action so the orchestrator reaps the REPL:
+
+  ```bash
+  aida ship <SPEC> --no-pr
+  [ -n "${AIDA_EXIT_SENTINEL:-}" ] && touch "$AIDA_EXIT_SENTINEL"
+  ```
+
+  In interactive orchestrated mode, do not touch the sentinel; tell the user to
+  press Ctrl+D so the orchestrator advances. Other managed contracts that forbid
+  publication follow their own stop boundary.
+- **Normal authorized review handoff (outside `orchestrated` mode):**
+
+  ```bash
+  aida ship <SPEC> --no-merge --dry-run
+  aida ship <SPEC> --no-merge
+  aida pr auto-queue-review
+  ```
+
+  If a non-orchestrated headless/zen caller provides `$AIDA_EXIT_SENTINEL`,
+  touch it (`[ -n "${AIDA_EXIT_SENTINEL:-}" ] && touch "$AIDA_EXIT_SENTINEL"`) as
+  the absolute last action after reporting the handoff outcome.
 
 Run the last command only after PR creation/reuse succeeds. `--no-merge`
 stops at the open PR: it does **not** watch CI, merge, clean up, or queue

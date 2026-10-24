@@ -106,8 +106,8 @@ Example: `[STORY-305] feat(skills): per-project skill extensions`
 
 If the title you assembled does not match `^\[[A-Z]+-[0-9]+\] `, rewrite
 it through the existing forge edit tooling after PR creation and before
-review handoff. Retain every linked spec in the trailing parenthesized group;
-the repo's PR title lint will block the merge otherwise.
+review handoff — the repo's PR title lint will block the merge otherwise.
+Retain every linked spec in the trailing parenthesized group.
 EOF
 
 git add .claude/skills/aida-pr.local.md
