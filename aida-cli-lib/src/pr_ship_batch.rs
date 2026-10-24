@@ -795,9 +795,9 @@ impl BatchPorts for GitHubPorts {
 
     fn staleness(&mut self, pr: u64, view: &PrView, fetch: bool) -> Result<Staleness> {
         if fetch {
-            let out = std::process::Command::new("git")
-                .arg("-C")
-                .arg(&self.project_root)
+            // TASK-2001: a host fetch keeps origin's stored token out of argv.
+            // trace:TASK-1952 | trace:TASK-2001 | ai:claude
+            let out = aida_core::git_ops::host_remote_git_command(&self.project_root, "origin")
                 .args(["fetch", "--quiet", "origin"])
                 .output()?;
             anyhow::ensure!(
