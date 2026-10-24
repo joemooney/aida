@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-24T13:16:52.228043273Z
-modified_at: 2026-10-24T21:45:59.599746803Z
+modified_at: 2026-10-24T22:50:54.928792024Z
 req_type: Task
 relationships:
 - rel_type:
@@ -79,6 +79,12 @@ history:
   session_id: 01a16fdb2e4e
   harness_version: 2.1.310 (Claude Code)
   changes: []
+- id: 01a1701c-24d0-7283-b634-3e33ea70679f
+  author: joe
+  timestamp: 2026-10-24T22:50:55.056193675Z
+  session_id: 01a17016f123
+  harness_version: 2.1.310 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 194492a69f7358b90006afe525d62056b42d30ce
   branch: main
@@ -91,7 +97,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'Round 2: no rework since round 1 — the only new commit is a merge of main (a2ec44d148). All four round-1 blockers persist, CI red in the same PR-caused lanes (gates: portability ratchet reproduced locally; lib-1: golden help snapshot still missing the new reclaim flags).'
+  detail: Scan rails and per-spec acceptance are well covered, but the hard-ceiling emergency pass bypasses RunOutcome accounting (silent 100+ GiB deletes with no operator notice and a wrong doctor 'last reclaim' line), --apply aborts on an unfiltered symlink under the TMPDIR root, and --target-pct is ignored for scratch rows.
   recovery_hint: address the review findings, move TASK-2325 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-10-24T21:45:59.599746803Z
+  shelved_at: 2026-10-24T22:50:54.928792024Z
