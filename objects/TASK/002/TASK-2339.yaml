@@ -1,0 +1,37 @@
+id: 01a1700e-2ed5-7573-b808-f765d68714dd
+spec_id: TASK-2339
+agreed_id: TASK-2339
+title: 'STORY-1917: wrong-seat, principal-mismatch and missing-reviewer-delegation dispatch refusals have no tests'
+description: |
+  Three authority refusal branches in check_request_authority have no test:
+
+  - wrong grant seat: aida-cli-lib/src/dispatch.rs:990-1004 (a reviewer/implementer grant must not dispatch)
+  - grant/mandate principal mismatch: aida-cli-lib/src/dispatch.rs:1006-1020
+  - missing 'reviewer' delegation for review/flow: aida-cli-lib/src/dispatch.rs:1026-1046
+
+  Fixture::new(delegable) in aida-cli-lib/src/tests/story_1917_dispatch_request_tests.rs:81 takes its parameter precisely to vary the third case, yet all 7 call sites pass &["reviewer", "implementer"]. A Fixture::new(&[]) case asserting that review/flow refuse would close it.
+
+  All three checks are correct on inspection; the gap is regression protection. dispatch.rs is in GATE_PROTECTED_PATHS, so a future refactor silently dropping one of these would have no test to catch it.
+
+  Raised in review of PR-2905: https://github.com/joemooney/aida/pull/2905#issuecomment-6390394038
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-24T22:35:40.117352674Z
+modified_at: 2026-10-24T22:35:40.117352674Z
+req_type: Task
+tags:
+- authority
+- from-review:PR-2905
+- severity:minor
+- test-coverage
+filed_at:
+  code_sha: 9457e495247a3c9de111d15507fabd2cd0923079
+  branch: pr-2905
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 8b523a4422
+  vendor: claude
+  session: 01a17005a69c
+  harness_version: 2.1.310 (Claude Code)

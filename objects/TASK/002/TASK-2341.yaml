@@ -1,0 +1,34 @@
+id: 01a1700e-97c8-7c52-b90d-5ef69f690d08
+spec_id: TASK-2341
+agreed_id: TASK-2341
+title: 'STORY-1917: validate_branch misses the repo''s actual default branch that the signed sketch requires rejecting'
+description: |
+  validate_branch (aida-cli-lib/src/dispatch.rs:492) rejects only the literal names 'main', 'master' and 'HEAD'.
+
+  The signed SKETCH v1 requires the branch 'must not be main, master, or the repo's default branch'. On a clone whose default branch is e.g. 'develop' or 'trunk', 'aida dispatch request take --branch develop' passes validation at both the request end and the execution end (revalidate_request calls the same validator).
+
+  Slice 2's take runner does 'git -C <worktree> checkout -B <branch> origin/<branch>' in a takeover worktree, so the blast radius is bounded, but the named sketch condition is unimplemented and untested.
+
+  Fix: resolve the default branch (origin/HEAD or the configured default) and reject it alongside main/master, with a test.
+
+  Raised in review of PR-2905: https://github.com/joemooney/aida/pull/2905#issuecomment-6390394038
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-24T22:36:06.984229716Z
+modified_at: 2026-10-24T22:36:06.984229716Z
+req_type: Task
+tags:
+- from-review:PR-2905
+- severity:minor
+- validation
+filed_at:
+  code_sha: 9457e495247a3c9de111d15507fabd2cd0923079
+  branch: pr-2905
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 8b523a4422
+  vendor: claude
+  session: 01a17005a69c
+  harness_version: 2.1.310 (Claude Code)

@@ -1,0 +1,33 @@
+id: 01a1700e-0774-7a11-b5f8-014df6b2d97e
+spec_id: TASK-2338
+agreed_id: TASK-2338
+title: 'STORY-1917: expired-mandate dispatch refusal is untested though the test doc and signed test plan both name it'
+description: |
+  The expired-mandate refusal branch in check_request_authority (aida-cli-lib/src/dispatch.rs:884-892) has no test.
+
+  The test module doc (aida-cli-lib/src/tests/story_1917_dispatch_request_tests.rs:8-9) claims coverage for 'when the mandate is expired or stopped', and the signed SKETCH v1 slice-1 test plan item 2 names 'mandate is expired/stopped' explicitly. Only the stopped branch is exercised (tests:471-476).
+
+  This is the same doc-claims-coverage-it-lacks shape as round 1 finding 4 (HumanGates), which was fixed.
+
+  Raised in review of PR-2905: https://github.com/joemooney/aida/pull/2905#issuecomment-6390394038
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-24T22:35:30.036362668Z
+modified_at: 2026-10-24T22:35:30.036362668Z
+req_type: Task
+tags:
+- authority
+- from-review:PR-2905
+- severity:minor
+- test-coverage
+filed_at:
+  code_sha: 9457e495247a3c9de111d15507fabd2cd0923079
+  branch: pr-2905
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 8b523a4422
+  vendor: claude
+  session: 01a17005a69c
+  harness_version: 2.1.310 (Claude Code)

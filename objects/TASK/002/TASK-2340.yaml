@@ -1,0 +1,39 @@
+id: 01a1700e-57b0-7073-aeb3-31efb3e1db75
+spec_id: TASK-2340
+agreed_id: TASK-2340
+title: 'STORY-1917: dispatch refusals on mandate scope leave no ledger row despite the ''each request leaves a ledger row'' acceptance'
+description: |
+  STORY-1917 acceptance says 'each request leaves a ledger row', and the signed SKETCH v1 section 5.3 says 'Every request write, start, completion, and refusal appends an audit event'.
+
+  check_request_authority (aida-cli-lib/src/dispatch.rs:880-922) bails on all five mandate-state paths before reaching any emit_dispatch_event call:
+  - no active mandate
+  - mandate expired
+  - mandate stopped
+  - mandate does not cover Scope::Dispatch
+  - mandate does not cover Scope::ShipHeld (shipping flow/train)
+
+  The first three have no mandate id to attribute, which plausibly justifies the omission. The last two already hold mandate.id in scope and could emit an Outcome::Refused row at no cost.
+
+  human_gates_gate_dispatch_and_ship_with_gated_audit_rows:818 asserts exactly 2 Gated rows, which pins the current behaviour; that assertion needs updating alongside any fix.
+
+  Raised in review of PR-2905: https://github.com/joemooney/aida/pull/2905#issuecomment-6390394038
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-24T22:35:50.576500759Z
+modified_at: 2026-10-24T22:35:50.576500759Z
+req_type: Task
+tags:
+- audit
+- from-review:PR-2905
+- severity:minor
+filed_at:
+  code_sha: 9457e495247a3c9de111d15507fabd2cd0923079
+  branch: pr-2905
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 8b523a4422
+  vendor: claude
+  session: 01a17005a69c
+  harness_version: 2.1.310 (Claude Code)

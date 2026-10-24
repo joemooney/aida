@@ -1,0 +1,35 @@
+id: 01a1700e-e952-76e2-969e-ffe570c90cbf
+spec_id: TASK-2344
+agreed_id: TASK-2344
+title: 'STORY-1917: orphan dispatch request files are never reaped and warn on every invocation'
+description: |
+  submit_request writes requests/<id>.json then results/<id>.json (aida-cli-lib/src/dispatch.rs:1324-1331). A crash between the two leaves an orphan request with no result.
+
+  Round 1 finding 5 correctly fixed the wedge: load_all_pairs now skips the orphan instead of erroring. Two residues remain:
+
+  1. The orphan is never reaped, so load_all_pairs prints 'warning: ignoring malformed dispatch record <id>: ...' on stderr for every 'aida dispatch request/list/show/cancel' invocation indefinitely.
+  2. The orphan's target_key is invisible to the collision scan (dispatch.rs:1234-1266), so a second request can be queued against a target an orphan still nominally holds. Inert in slice 1; slice 2's executor does its own live-worktree preflight.
+
+  Options: write the result record first, or reap orphans older than a TTL during the lock held by submit_request/cancel_request.
+
+  Raised in review of PR-2905: https://github.com/joemooney/aida/pull/2905#issuecomment-6390394038
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-24T22:36:27.858473051Z
+modified_at: 2026-10-24T22:36:27.858473051Z
+req_type: Task
+tags:
+- from-review:PR-2905
+- robustness
+- severity:cosmetic
+filed_at:
+  code_sha: 9457e495247a3c9de111d15507fabd2cd0923079
+  branch: pr-2905
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 8b523a4422
+  vendor: claude
+  session: 01a17005a69c
+  harness_version: 2.1.310 (Claude Code)

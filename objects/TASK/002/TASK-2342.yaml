@@ -1,0 +1,38 @@
+id: 01a1700e-a25a-74d0-9c20-caeb74100929
+spec_id: TASK-2342
+agreed_id: TASK-2342
+title: 'STORY-1917: mandate statusline shows only one scope, hiding live dispatch authority and disagreeing with status_text'
+description: |
+  mandate::status_line (aida-cli-lib/src/mandate.rs:1964-1975) reports only one scope for a non-drive mandate:
+
+  - a '--ship-held --scope dispatch' mandate prints 'MANDATE ship-held', hiding that dispatch authority is live
+  - a multi-scope non-ship mandate prints only effective_scopes().iter().next(), e.g. 'dispatch' for {Dispatch, RelayRestart}
+
+  mandate::status_text (aida-cli-lib/src/mandate.rs:2083-2091) correctly joins every scope, so the one-line statusline and 'aida mandate status' disagree about the same mandate's authority. The statusline is the surface an operator sees on every hook fire.
+
+  The unwrap_or(SCOPE_SHIP_HELD) fallback at the end is unreachable (effective_scopes never returns empty) but, in wording, would display ship-held for a mandate covering nothing.
+
+  Fix: join all scopes in status_line as status_text does, abbreviating if the width budget requires it.
+
+  Raised in review of PR-2905: https://github.com/joemooney/aida/pull/2905#issuecomment-6390394038
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-24T22:36:09.690369218Z
+modified_at: 2026-10-24T22:36:09.690369218Z
+req_type: Task
+tags:
+- authority
+- from-review:PR-2905
+- severity:minor
+- ux
+filed_at:
+  code_sha: 9457e495247a3c9de111d15507fabd2cd0923079
+  branch: pr-2905
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 8b523a4422
+  vendor: claude
+  session: 01a17005a69c
+  harness_version: 2.1.310 (Claude Code)
