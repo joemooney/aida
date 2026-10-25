@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T15:33:51.496539087Z
-modified_at: 2026-10-25T06:32:00.341080649Z
+modified_at: 2026-10-25T06:56:47.305389845Z
 req_type: Story
 tags:
 - architecture
@@ -272,6 +272,11 @@ comments:
     For PR4 do not add session_reap.rs::review_pr_terminal_gate to NOT_GATE_AUTHORITY: SIGNOFF09:58 explicitly made that list shrink-only. Source1088 confirms this helper is a pure predicate for dead-reviewer cleanup, not merge authority; nevertheless expanding the exemption would change the signed contract. Resolve the old KNOWN_UNPROTECTED entry with a minimal verbatim move of that helper into protected gate code, adjusting its caller and existing focused tests; preserve its process-exited, branch-within-head, PR-terminal behavior and short-circuiting. Do not rename it merely to evade the ratchet or widen another exemption. Keep the cleanup orchestrator outside. Inventory other actual matches in session_reap before deleting its grandfathered line. This is a bounded plan correction, not a new runtime finding on approved2917. Preserve all other final-slice acceptance, strict reexport ratchet and empty grandfather list. Report any concrete type/privacy obstacle before broadening scope. Local gates remain the agreed targeted area plus fast; touched/compile only shared infra or >10files. No hold clearance or merge.
   created_at: 2026-10-25T06:32:00.341080649Z
   modified_at: 2026-10-25T06:32:00.341080649Z
+- id: 01a171d8-f8c9-7ce3-b18f-3a1d63c25d4e
+  author: joe
+  content: 'ADVISOR verified integration evidence: operator train2918 MERGED2026-10-25T06:51:39Z, tip3cbb90b0c94e0e748bbfc4eb1f75d7f9c2125c68, required Build40169880987 and all7 CI lanes plus holdgateSUCCESS. PR2917 independently approved at88a90b2fd76fe68cc6c114bdbb6125fbec871944 landed as3cbb90b0c9; local clean main and origin main match verified tip. Review story completion was already performed by the train; no duplicate status write needed. This is a non-completing Refs slice: parent remains Approved with ALL remaining signed scope. No source/hold/merge action by this advisor. Fresh main is now the base for remaining implementation; preserve current WIP and update branches normally, no forcepush.'
+  created_at: 2026-10-25T06:56:47.305389845Z
+  modified_at: 2026-10-25T06:56:47.305389845Z
 history:
 - id: 01a15f19-1b8d-7a60-bd9c-acf0c42193fc
   author: joe
