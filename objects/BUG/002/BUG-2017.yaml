@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T22:12:54.027870933Z
-modified_at: 2026-10-25T08:55:57.203552788Z
+modified_at: 2026-10-25T08:56:38.064568714Z
 req_type: Bug
 tags:
 - id-allocation
@@ -200,6 +200,20 @@ comments:
     Required context rotation now: durable codex1 handoff will point to these exact heads. Next session resumes normal implementer ownership/dependencies; preserve both worktrees/leases, prioritize concrete fresh PR2915 findings, and do not wait idle on reviews. (Refs BUG-2017)
   created_at: 2026-10-25T08:53:01.730761936Z
   modified_at: 2026-10-25T08:53:01.730761936Z
+- id: 01a17246-b1b0-7d31-8584-03e9cd2cd321
+  author: joe
+  content: |
+    codex2 independent review: REQUEST CHANGES at c25b9bd3855226fdb40371affef506479c127ba6 (fresh forge head verified immediately before attestation).
+
+    **F1 — P1, partial write before identity refusal.** `allocation_authority::admit` (lines188–215) compares incoming spec/agreed IDs against disk, but does not reserve ownership across the incoming batch. Two new UUIDs with unique specs `BUG-7-001`/`BUG-7-002` and shared agreed ID `BUG-7-009` pass preflight. Full save writes metadata and the first object (`git_backend.rs:1912,1933`); the second object's direct admission then refuses. My private targeted probe returned `Err(display ID already belongs to another UUID; no object was written)` while metadata.yaml and BUG-7-001 remained. Source `/tmp/codex2-pr2919-batch-probe.rs`, evidence `/tmp/codex2-pr2919-batch-probe.log`; linked the existing author core candidate, with the path verified against pinned source. No Cargo or source edits.
+
+    Reserve canonical spec+agreed identity ownership across the entire candidate against disk and itself before mutation. Add decisive agreed/agreed and spec/agreed cross-UUID regressions through save/import/atomic/bulk, asserting unchanged metadata/oplog/objects/refs after refusal. This is slice1 writer admission, not expansion into slice3 reconciliation.
+
+    **F2 — required CI is red.** Build40177521246 and all seven lanes fail. The contracts job121121332985 fails ordinary `aida init --no-skills --no-hooks` with ENOENT; private candidate reproduction agrees. Resolve actual lane failures without weakening WORK defaults or silently enrolling HOME. Explicit reviewed HOME transition/rollout remains required.
+
+    Own canonical attested verdicts from main: `.aida/review-verdicts/PR-2919.json` and `BUG-2017.json`. Review stopped at actionable findings per assignment; this is not approval of the remaining boundary. Original three signed slices remain open; preserve `(Refs BUG-2017)`, shared STORY-1742 writer ownership and the slice2 HOME enrollment dependency. No fixes, hold clearance or merge.
+  created_at: 2026-10-25T08:56:38.064568714Z
+  modified_at: 2026-10-25T08:56:38.064568714Z
 history:
 - id: 01a16f08-1847-70c2-a9ec-772710162546
   author: joe
