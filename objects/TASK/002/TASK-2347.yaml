@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T02:08:29.032100054Z
-modified_at: 2026-10-25T03:06:59.427303870Z
+modified_at: 2026-10-25T03:07:45.867937390Z
 req_type: Task
 tags:
 - codex
@@ -102,6 +102,11 @@ comments:
   content: 'Consolidated UCAMI-informed architectural REVIEW DRAFT for the operator to share with another agent: /home/joe/ai/aida/.aida/handoff/advisor/ucami-aida-mail-review-draft-2026-10-24.md. It distinguishes approved current watcher/shared-receipt work from proposed later adapter contracts, lifecycle visibility and conformance tests; contains observed failures and exact reviewer questions. This is an advisor review artifact, not another source of requirement truth or a rewrite request. Current implementation status must still come from this spec.'
   created_at: 2026-10-25T03:06:59.427303870Z
   modified_at: 2026-10-25T03:06:59.427303870Z
+- id: 01a17107-4b4b-7643-9246-6affaf17c45b
+  author: joe
+  content: 'Read-only live preview found 580 cross-worktree candidate IDs, of which 554 have existing explicit advisor read receipts in main. Nothing queued. Implemented bounded read-metadata reconciliation: same advisor unions existing receipt IDs and root-known watermark acknowledgements, removes stale replicas, preserves unseen private IDs. 19 hermetic Python fixtures pass. Prior 35 fast gates and 61 touched Rust/mailbox/registry tests pass; JSON audit still compiling, then new snapshot regression and compile gate. Candidate binary must be rebuilt before live preview/install.'
+  created_at: 2026-10-25T03:07:45.867937390Z
+  modified_at: 2026-10-25T03:07:45.867937390Z
 history:
 - id: 01a170d1-497a-7282-8dcb-91782bba7dc3
   author: joe
