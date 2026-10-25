@@ -1,7 +1,7 @@
 job: aida-codex-mail-64a51940ec58c39e-health-route
-due_since: 2026-10-25T15:27:30.262349608Z
-due_reason: on CronJobFailed:aida-codex-mail-64a51940ec58c39e-health
-due_failure:
-  trip_id: aida-codex-mail-64a51940ec58c39e-health@2026-10-25T15:25:04.512016381Z
-  job: aida-codex-mail-64a51940ec58c39e-health
-  error: 'exit 1: Codex mail health: health registration/snapshot missing, invalid or unavailable'
+last_run: 2026-10-25T15:27:57.829280511Z
+last_by:
+  seat: advisor
+  vendor: codex
+result: done
+note: 'Inspected actual15:25 trip: current-thread service active with permanent lock, native health correctly refuses absent usable snapshot. Repeated mailbox receipt2s budget refusals, zero accepted/pending/inflight and no ACK. Routed bounded sameTASK2347 fix to existing author via verified brief152650/native queue01a173ab-756b; no retry/accepted recovery action because no inflight. Not healed; live synthetic proof remains pending with explicit consent retained.'
