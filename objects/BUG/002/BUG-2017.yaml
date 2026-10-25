@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T22:12:54.027870933Z
-modified_at: 2026-10-25T13:08:35.311480442Z
+modified_at: 2026-10-25T14:01:34.321849090Z
 req_type: Bug
 tags:
 - id-allocation
@@ -543,6 +543,11 @@ comments:
     Execution: finish these preview corrections in owned branch before normal final push, retain separate meaningful Refs BUG2017 commits and update PRbody fullS1+S2/evidence. Mainc7b must be integrated normally, noforce. One meaningful affected core module/filter Cargo run (AIDA_CARGO_TIMEOUT budget, background), existing native bootstrap contract including published-schema/UUID-edge checks plus current fast gates; no fresh broad runtime solely for old mixed touched logs. Reuse prior compiled/touched evidence honestly as prior-artifact evidence, run mandatory touched/compile if this delta actually changes shared infrastructure/>10files. No unfiltered workspace runtime/slot bypass/nested timeout. Serialize same-target tests and native build rather than consuming a second slot waiting on the same directory. Source/native source hashes remain qualified; final exact pushed-head CI/full independent delta review is mandatory. All signed S3/1742/1843 gates remain; no source-only release, real HOME flag, grant/mandate change, live service/mail/transport test or merge. Mandate expired. If already corrected since d5, show actual latest SHA/diff/evidence rather than duplicate patch/retry.
   created_at: 2026-10-25T13:08:35.311480442Z
   modified_at: 2026-10-25T13:08:35.311480442Z
+- id: 01a1735d-df71-7bf3-84c2-f6c7c823a769
+  author: joe
+  content: 'ADVISOR source review and routing update2026-10-25T1401Z: actual PR2919 pushed eff2bcaa5f6d791ec2cc30885f69de3aad5f51fb, GHbase main; currentmaina01a6989984ee2c6261074fa5f9d415719d3130a is NOT an ancestor of authorhead (merge-base --is-ancestor exits1). Ownerlocalclean/trackingremoteeff2. ActualheadCI40199729918 lanespending; intentionalhold40199729986failed. Immediate independent codex2 final bounded current-head sufficiency/delta review routed via existingnativethread01a16edb, acceptance01a1735a-64d4-7fc1-b306-8590310012ec, prompt/tmp/advisor-pr2919-eff2-final-sufficiency.txt. Do not waitCIto review or open an unboundedthirdreworkcycle; actualheadindependentattestation and greenCI stillrequired before anyship. Rootfreshsource stillfinds bootstrapcopieslegacyseq withoutNodeConfig/old.modevalidation, so F4unproven/unresolved until reviewerchecksfullchain; F5/F6authoreff2claims require actualdiff/nativeassertion inspection. Existing13:08F4brief and freshownercontinuation01a1734e remain; no duplicateworker or rootpatch. FullsignedS1+S2 and allS3/scanner/docs/rollout remain, noparentcompletion or holdclear. Full PRbody nowaccurately says expandedS1+S2 Refs and S3incomplete; authornativecandidateprovenance qualified as equivalentproductioneditsprecommit, notcleanheadbinary. Reviewtask1931 staysopen untilindependentresult.'
+  created_at: 2026-10-25T14:01:34.321849090Z
+  modified_at: 2026-10-25T14:01:34.321849090Z
 history:
 - id: 01a16f08-1847-70c2-a9ec-772710162546
   author: joe
