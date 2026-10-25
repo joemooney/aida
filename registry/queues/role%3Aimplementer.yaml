@@ -70,14 +70,6 @@
   for_role: implementer
   added_by_machine: imac
 - user_id: role:implementer
-  requirement_id: 01a1703f-0dde-7b41-b544-f6ec236fd5f4
-  position: 479000
-  added_by: role:implementer
-  note: 'Signed STORY1843 preparation A: one bounded PR covers TASK2345 ancestry fixture seam and TASK2346 duplicate native lookup, no env bypass'
-  added_at: 2026-10-25T05:23:10.045833396Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
   requirement_id: 01a170d1-0568-70a1-9e28-9498511707b8
   position: 481000
   added_by: role:implementer
@@ -90,5 +82,12 @@
   position: 482000
   added_by: role:implementer
   added_at: 2026-10-25T09:32:15.146257005Z
+  for_role: implementer
+  added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a1703f-0dde-7b41-b544-f6ec236fd5f4
+  position: 483000
+  added_by: role:implementer
+  added_at: 2026-10-25T10:47:12.083443362Z
   for_role: implementer
   added_by_machine: imac
