@@ -1,0 +1,47 @@
+id: 01a173df-cdd9-76c3-8c51-03424375f429
+spec_id: TASK-2348
+agreed_id: TASK-2348
+title: Prove shared ship deadlines without wall-clock inference
+description: |
+  ## Problem and evidence
+
+  `aida-cli/tests/task_1287_label_only_merge_hold.rs::ownership_and_ci_share_one_wait_deadline` starts an Instant before spawning the CLI and infers that ownership plus CI did not receive two allowances from whole-process elapsed <3500ms. Historical pinned-worktree measurement at 3cbb90b0c9 reported three failures around3.9s. This does not establish a renewed production budget or identify the cost of an individual stage. Startup, preflight, an intentionally excluded mandate scan, scheduling and the required first CI poll can consume the assertion's slack without granting another two seconds.
+
+  Independent codex2 read-only diagnosis at committed main54c64e26a58810f213f0a0fa1720a69bcce37ea3 is AIDA message de601800 (request009d04d7). The relevant budget functions and test are byte-identical at historical3cbb and current54c. No current executable failure was reproduced; the defect established by source is the test's indirect, nondeterministic inference, not a production timing regression or a proven contention root cause.
+
+  The production contract remains TASK-1606/TASK-1339 plus BUG-2184: one deadline across ownership and CI, mandate-scan time deliberately excluded, and at least one real CI observation even when the remainder is zero. STORY-1853's operator-amended AC2 is unchanged; its old local ten-minute wall target must not be revived by this task.
+
+  ## Primary callers
+
+  Ubuntu CI/nextest and a targeted local Cargo test, both noninteractive and potentially scheduled under load. All fixtures use existing private HOME/Git/PATH-isolation conventions. No live forge, actual seat grant, production HOME enrollment, runtime service or real PR merge is involved.
+
+  ## Acceptance
+
+  1. Add structural coverage of the actual forwarded CI remainder at the shipping handoff, not a parallel arithmetic formula or source-text assertion. Replacing the actual callsite remainder with a renewed Some(2s) must make the regression fail. Use a narrow injected callback/port if the existing seam is insufficient; no environment authority switch, general clock framework or new runtime configuration.
+  2. Cover an explicit two-second allowance with synthetic consumed ownership/preflight time: exhausted yields ZERO; partially consumed yields the exact remainder; excluding mandate-scan duration never replenishes consumed ownership; None remains unbounded. Reuse `ship_ci_budget` and existing pure duration tests.
+  3. Feed that computed ZERO into the actual `wait_for_ship_ci` fake-forge path. A pending Build gets one registration/row observation, timeout exit21 with its real check name, no second poll and no merge. Retain zero-budget green/red behavior. Reuse the existing counting-FakeForge and exhausted-budget tests.
+  4. Preserve the black-box ownership-release, timeout21 and no-merge assertions, with an independent bounded child watchdog. Replace the misleading <3500ms inference only after the stronger handoff/remainder/poll-count proof exists. Do not merely raise3500, relax production --wait or test ceilings, add sleeps/retries, skip/ignore the case, or serialize away the failure.
+  5. Keep production deadline, excluded-scan, authority, hold and merge behavior unchanged. Any actual forwarded-budget mismatch discovered during this repair must be reported separately with evidence before broadening the implementation. Coordinate before editing symbols currently owned by STORY-1917/STORY-1889; preserve their unmerged work and normal integration order.
+  6. Normal independent exact-head review, green required CI and integration prove completion. One meaningful targeted local run plus `make check-ci-fast`; full suites remain CI's job. Use `AIDA_CARGO_TIMEOUT=<duration>` and background long Cargo; no nested timeout or slot bypass. Shared test-infrastructure or >10-file changes alone justify touched/compile expansion.
+
+  ## Source pointers
+
+  Current54c: pr_cmd.rs wait_started/scan_spent/ship_ci_budget and its actual CI handoff; ci_gate.rs::wait_for_ship_ci; existing `ship_ci_budget_excludes_the_mandate_scan`, `exhausted_ship_budget_still_polls_ci_once`, and the named CLI ownership test. Line numbers in the diagnostic are navigation hints, not acceptance evidence. The complete independent report is preserved in AIDA message de601800; historical measurement is on STORY-1853, not a new acceptance floor.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-25T16:23:29.497775220Z
+modified_at: 2026-10-25T16:23:29.497775220Z
+req_type: Task
+tags:
+- ship-deadline
+- source-diagnosed
+- testing
+filed_at:
+  code_sha: 54c64e26a58810f213f0a0fa1720a69bcce37ea3
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: a01a698998
+  vendor: codex
