@@ -12,7 +12,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-25T09:15:27.132994258Z
-modified_at: 2026-10-25T09:15:54.238657194Z
+modified_at: 2026-10-25T09:25:50.001157533Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -24,6 +24,11 @@ comments:
   content: 'PROXY DECISION (advisor for joe): approved narrowly as a syntax/adapter correction, with no new terminal authority. Independent local parser evidence: busctl --user call net.aida.DoesNotExist /net/aida/DoesNotExist net.aida.DoesNotExist Send s uuid s text exits1 Too many parameters for signature; same nonexistent target with ss uuid text passes parsing and fails missing-service instead. Neither contacts any live agent. Preserve token checks and separate argument values; do not change plugin deployment/grants. Same three-string parser test required for SendToken. Source main terminal_cmd tests currently ratify split-token bug. Actual installed service unavailable on this bus is a separate observed readiness condition, not fixed by argv alone.'
   created_at: 2026-10-25T09:15:54.238657194Z
   modified_at: 2026-10-25T09:15:54.238657194Z
+- id: 01a17261-6d31-7ff3-8d4f-024ca75cf53e
+  author: joe
+  content: 'ADVISOR PRIORITY UPDATE: at codex1 next safe checkpoint, take this bounded adapter fix BEFORE further BUG2017 rework, because native sends to BOTH live Agy implementers fail client-side argument parsing. Do not kill current tests, discard dirt, or repurpose the BUG2017 branch. Preserve that checkpoint and use a separate sibling branch/worktree. Same parser proof, token/auth boundaries, independent review and normal CI gates remain. Source correction alone does not prove live delivery or authorize plugin deployment. BUG2017 F1/F2 and all three slices remain mandatory; this is ordering, not deferral.'
+  created_at: 2026-10-25T09:25:50.001157533Z
+  modified_at: 2026-10-25T09:25:50.001157533Z
 history:
 - id: 01a17258-2379-77b1-94f6-5d70e2e9c83c
   author: joe
