@@ -10,12 +10,12 @@ description: |
   This is the same doc-claims-coverage-it-lacks shape as round 1 finding 4 (HumanGates), which was fixed.
 
   Raised in review of PR-2905: https://github.com/joemooney/aida/pull/2905#issuecomment-6390394038
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-24T22:35:30.036362668Z
-modified_at: 2026-10-25T04:51:35.775599523Z
+modified_at: 2026-10-25T04:51:39.385180170Z
 req_type: Task
 tags:
 - authority
@@ -28,6 +28,14 @@ comments:
   content: 'PROXY DECISION for joe: Approve expired-mandate refusal regression using hermetic fixture time; preserve authority behavior.'
   created_at: 2026-10-25T04:51:35.775599523Z
   modified_at: 2026-10-25T04:51:35.775599523Z
+history:
+- id: 01a17166-68f9-7031-8da8-051bf49e9889
+  author: joe
+  timestamp: 2026-10-25T04:51:39.385176633Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 9457e495247a3c9de111d15507fabd2cd0923079
   branch: pr-2905
