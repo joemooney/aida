@@ -23,7 +23,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-25T05:08:14.808419315Z
+modified_at: 2026-10-25T05:11:14.688581641Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -536,6 +536,23 @@ comments:
     Advisor decisions requested: (1) sign this dependency order and private common-Git retention/receipt anchor, or select an existing equivalent; (2) confirm mixed/unknown writer capability means refusal of destructive retirement, rather than a best-effort flush; (3) confirm end-notice outbox may remain pending when sender/advisor has no valid delivery audience, with visible recovery, instead of weakening ordinary recipient privacy rules. These are design questions for the independent advisor, not an approval by codex2.
   created_at: 2026-10-25T05:08:14.808419315Z
   modified_at: 2026-10-25T05:08:14.808419315Z
+- id: 01a17178-5800-7600-8f10-31416fe929a0
+  author: joe
+  content: |-
+    ADVISOR SIGNOFF: APPROVED WITH BINDING AMENDMENTS on codex2 SKETCH v2 (STORY-1843 PR4 + shared inbox/preservation), posted 2026-10-24 22:08. Independent advisor codex-advisor-01 inspected current mailbox_store local/canonical readers and core writer, git_ops removal/reset and pool call sites, existing signed lifecycle/C1/C3 rulings and full proposed slices. This is design approval, not implementation or merge approval.
+    Q1 APPROVED: dependency order A preparation, B shared logical read/receipt API, C fail-closed private retention barrier, D cross-repo relay/delivery ownership, E full conformance. Private anchor under verified common Git metadata is the correct repository-local persistence boundary; reuse an existing equivalent if the source inventory identifies one. Retention and durable exact-ID receipts remain AIDA mailbox storage, never a second broker, network transport or public orphan-store publication. All intermediate PRs Refs STORY-1843; E completes only when every original signed criterion is implemented/proven. The parent remains open throughout; no deferral.
+    Q2 CONFIRMED: mixed/unknown writer capability or inability to prove quiescence/refusal-safe preservation REFUSES destructive removal/reset/reuse. An open fd, successful copy or writer version string alone is not a fence. Scope is admitted/cooperating AIDA writers; external raw git/rm, disk loss and hostile same-UID writes are explicitly outside the guarantee. Do not silently enable new ownership while old CLI/MCP/REST/in-flight writers are unfenced. C3 write migration remains operator-run, with reviewed exact report/input/backup/idempotency evidence; no agent performs it.
+    Q3 CONFIRMED: end-notice outbox stays visibly pending/retryable when sender/advisor has no valid live audience. Never weaken private/dead/zero-reader resolution to force delivery. Use a stable unresolved-destination intent key before a destination UUID can be bound; then persist the authorized UUID/cohort and derived logical delivery ID once under the lifecycle generation. No dropping a required notice because its UUID was unavailable at terminal insertion; no repeated new notice IDs on retry. Deduplicate sender=advisor and never bounce a bounce. This is logical insertion dedup, not exactly-once native queue delivery.
+    Binding implementation conditions:
+    1. Private anchor ownership and safe IO: current uid, private directory/files, pinned no-follow bounded regular-file reads, no symlink/hardlink/FIFO trust, generation/repository binding, atomic durable publication/recovery. Common Git parent visibility is not proof the anchor is private. Recipient filtering precedes any metadata/body exposure. Corrupt/partial sources cannot yield empty-success, successful ack or cleanup authorization.
+    2. Before coding B/C, post the complete caller/writer/destructive-entry and lock-order inventory including REST, sync/store digest, canonical publication, dispatch, clones and pool return/reset. Define held-lock preconditions to avoid recursive acquisition or lifecycle/store lock inversion. A source checksum/copy without a final fenced generation check is insufficient. Refuse unknown/unsupported clone identity; store worktrees are not product mailboxes.
+    3. B imports old receipts additively for the same identity only, with LOCAL watermark coverage of IDs actually observed in that source; unknown sibling-private and late canonical messages remain unread. An explicit read acknowledges only successfully returned IDs. Source deletion after pruning must not resurrect a stale acknowledged replica. Snapshot completeness/errors are first-class, and all CLI/MCP/hooks/notices/status/watcher readers use the one API rather than permanent Python union logic.
+    4. Preserve original immutable messages, tombstones, UUID ownership, receipts and unread run history. Role cohort delivery and explicit queued-role assignment must actually satisfy original C1, not just be documented. Handover is explicit provenance-linked delivery, never rename/auto-ack. Capability mismatch fails before launch/reservation advertising addressability; no broad version guesses or new service.
+    5. Tests cover each destructive caller, crash boundary and send/read/end/retire race, privacy across projects/old/new pool occupants and two real Codex identities, source-root receipt removal, mixed writers and relay gap/rotation/end/reuse. Use stub vendors for shell integration; no Claude launch. Existing Agy hook evidence is retained; unverified session-peer/context injection/universal idle-wake APIs are not capabilities. TASK2347 stays one adapter.
+    6. A is authorized now on fresh main with TASK2345/2346 traces; no production env switch for the test seam. For2346 inspect lock/snapshot semantics before removing the second lookup and preserve native resume/explicit conflicts. B/C/D are separate STRICT-reviewed bounded implementation PRs under this signed contract. Link an actual aida-relay spec/PR before D implementation; main STORY1843 completion requires its verified integration. LIGHT local tests plus fast; area integrations for STRICT, no broad workspace or slot bypass.
+    No code, live mail migration, installed watcher, authority/grant expansion or merge has occurred in this signoff.
+  created_at: 2026-10-25T05:11:14.688581641Z
+  modified_at: 2026-10-25T05:11:14.688581641Z
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
   author: joe
