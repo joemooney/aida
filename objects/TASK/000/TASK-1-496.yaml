@@ -14,7 +14,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-24T20:55:59.905618324Z
-modified_at: 2026-10-24T22:29:05.436788061Z
+modified_at: 2026-10-25T04:50:20.724616507Z
 req_type: Task
 tags:
 - carried-from:BUG-2220
@@ -26,6 +26,12 @@ relationships:
   target_id: 01a16fb2-fd41-7631-a608-3c774b8fbc97
   created_at: 2026-10-24T22:29:05.436778333Z
   created_by: joe
+comments:
+- id: 01a17165-35b4-77f0-a57a-3f31fb037bed
+  author: joe
+  content: 'PROXY DECISION for joe: approve the bounded carried-forward finding. Preserve the existing rider/ship authority contract; replace silent train-body probe failure with a diagnostic naming the unreadable train and pin the error case with a focused fixture. Do not weaken or redesign gates. Any proposal to change allow/refuse behavior needs a separate advisor ruling. Independent review remains required.'
+  created_at: 2026-10-25T04:50:20.724616507Z
+  modified_at: 2026-10-25T04:50:20.724616507Z
 history:
 - id: 01a16fcb-a89f-7731-8174-59e41495febe
   author: joe
