@@ -38,7 +38,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T22:02:03.191649035Z
-modified_at: 2026-10-25T06:34:08.363619942Z
+modified_at: 2026-10-25T06:35:32.898239893Z
 req_type: Story
 tags:
 - docs:impacted
@@ -318,6 +318,11 @@ comments:
   content: 'ADVISOR preparation dispatch: codex2 (existing reviewer/design session) received native queue acceptance01a171c3-ee45-7ce1-a917-da53ad42eba5 for a pinned-main source/lock inventory of signed-v2 STORY-1742 remaining transport work. Required mapping: every push/pull/intake adapter, prepared writes before counters/objects/oplog/refs, writer lock ownership/order and decisive acceptance regressions, with BUG-2017/STORY-1843 overlap. No source implementation or authority changes; watcher PR2915 final-head independent review remains higher priority. Queue acceptance is not proof of consumption or completed inventory. Existing signed scope remains unchanged.'
   created_at: 2026-10-25T06:34:08.363619942Z
   modified_at: 2026-10-25T06:34:08.363619942Z
+- id: 01a171c5-86a2-7e11-8889-2878ed4d5f6c
+  author: joe
+  content: 'ADVISOR stale attention-state reconciliation: PR2910 approved at47a41444bbc2b8a07c0949e432350d6efe0b680e; the origin-normalization refusal is resolved. Signed-v2 remaining scanner/intake/FF-pull scope is approved with binding amendments; writer inventory is assigned to codex2. Returning parent from Needs Attention to Approved for remaining authorized work. This does not clear any hold, waive supervision/protected-floor gates, approve unreviewed implementation, or claim parent completion. The original failure and independent resolution remain in the audit trail.'
+  created_at: 2026-10-25T06:35:32.898239893Z
+  modified_at: 2026-10-25T06:35:32.898239893Z
 history:
 - id: 01a16ee2-ad7a-7b30-aaeb-ec8f892fbe76
   author: joe
