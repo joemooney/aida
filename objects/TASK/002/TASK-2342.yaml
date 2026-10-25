@@ -15,12 +15,12 @@ description: |
   Fix: join all scopes in status_line as status_text does, abbreviating if the width budget requires it.
 
   Raised in review of PR-2905: https://github.com/joemooney/aida/pull/2905#issuecomment-6390394038
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-24T22:36:09.690369218Z
-modified_at: 2026-10-25T04:52:13.422916933Z
+modified_at: 2026-10-25T04:52:15.424566089Z
 req_type: Task
 tags:
 - authority
@@ -33,6 +33,14 @@ comments:
   content: 'PROXY DECISION for joe: Approve rendering all effective mandate scopes consistently with status_text; display changes grant no authority.'
   created_at: 2026-10-25T04:52:13.422916933Z
   modified_at: 2026-10-25T04:52:13.422916933Z
+history:
+- id: 01a17166-f5c0-7330-a2e7-8c3d863d1cf3
+  author: joe
+  timestamp: 2026-10-25T04:52:15.424562624Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 9457e495247a3c9de111d15507fabd2cd0923079
   branch: pr-2905
