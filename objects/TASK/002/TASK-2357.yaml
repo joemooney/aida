@@ -1,0 +1,28 @@
+id: 01a174c1-82ec-70b1-b165-fa3d691025b3
+spec_id: TASK-2357
+agreed_id: TASK-2357
+title: Test that a failed origin lookup makes the auto-queue report needs-attention
+description: |
+  PR-2931 tests `origin_remote_presence` directly (bug_2169_seat_clone_tests.rs). No test covers the wiring at review_gates.rs:1079-1086, where an Err must become `AutoQueueStatus::SkippedNeedsAttention` and not `SkippedByDesign`. Add one try_auto_queue_pr_review_unbumped test that passes a non-repo or unverified seat-clone project_root and asserts the needs-attention status. Side effect to note: a project_root that is not a git repo now gets a yellow needs-attention skip where it used to get the dim local-only skip.
+
+  Raised in review of PR-2931: https://github.com/joemooney/aida/pull/2931
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-25T20:30:01.452748522Z
+modified_at: 2026-10-25T20:30:01.452748522Z
+req_type: Task
+tags:
+- from-review:PR-2931
+- severity:cosmetic
+- test
+filed_at:
+  code_sha: 78765dde1e777bcbb11079d580864afaea9f70ea
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: a01a698998
+  vendor: claude
+  session: 01a174b6c563
+  harness_version: 2.1.310 (Claude Code)

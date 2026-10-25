@@ -1,0 +1,27 @@
+id: 01a174c1-71e3-7480-b993-1880606554ed
+spec_id: TASK-2356
+agreed_id: TASK-2356
+title: Other has_remote(origin) callers still read a seat-clone refusal as 'no origin'
+description: |
+  PR-2931 (TASK-2350) fixed the review auto-queue only. `git_ops::has_remote` still returns false when host git refuses to run in a seat clone (BUG-2169). Callers that can run from a seat clone may still take a "local-only" path by mistake. Examples: aida-cli-lib/src/status_prs.rs:636, which hides the "open a PR" hint when origin is missing, and aida-cli-lib/src/session_start.rs:1857 (CloneLaunch.has_origin). Check each `has_remote(.., "origin")` caller that can run with a seat-clone cwd, and move the ones that can to `review_gates::origin_remote_presence` / `git_ops::probe_remote`.
+
+  Raised in review of PR-2931: https://github.com/joemooney/aida/pull/2931
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-25T20:29:57.091353456Z
+modified_at: 2026-10-25T20:29:57.091353456Z
+req_type: Task
+tags:
+- from-review:PR-2931
+- severity:minor
+filed_at:
+  code_sha: 78765dde1e777bcbb11079d580864afaea9f70ea
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: a01a698998
+  vendor: claude
+  session: 01a174b6c563
+  harness_version: 2.1.310 (Claude Code)
