@@ -909,7 +909,7 @@ blocks:
   type_prefix: BUG
   range_start: 2217
   range_end: 2316
-  next: 2224
+  next: 2225
   allocated_at: 2026-10-21T03:56:18.242488289Z
 - node_id: '1'
   owner: redacted@node.invalid
