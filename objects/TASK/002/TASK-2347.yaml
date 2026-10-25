@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T02:08:29.032100054Z
-modified_at: 2026-10-25T15:26:52.202321907Z
+modified_at: 2026-10-25T15:30:31.648804531Z
 req_type: Task
 tags:
 - codex
@@ -436,6 +436,11 @@ comments:
   content: 'Actual current-thread watcher installed/enabled, service64a51940ec58c39e active after ordinary restart recovered install-lock collision. Live acceptance blocked: repeated main wake-snapshot receipt scan budget refusal (~2.15–2.28s), source read_evidence2s per directory. No queue/ACK/synthetic/wake claim. Native doctor correctly fails missing usable snapshot. Evidence /tmp/task2347-current-thread-main-snapshot.json and /tmp/task2347-current-thread-crossroot-scan.json; bounded same-spec rework /tmp/advisor-task2347-runtime-scan-rework.txt handed to existing author via AIDA7b4d95d7 and native queue receipt01a173ab-756b-7ce3-b349-b457696ef677. No receipt deletion/baseline/bound weakening; original acceptance and independent review required. Consent for this target remains valid and pending test; no repeated question needed.'
   created_at: 2026-10-25T15:26:52.202321907Z
   modified_at: 2026-10-25T15:26:52.202321907Z
+- id: 01a173af-5060-7563-9da6-98b78c272e08
+  author: joe
+  content: Ordinary watcher scan recovered without code/bound changes. Native doctor0findings, actual pre-synthetic crossroot6.11s/1292ACK/0unread (/tmp/task2347-current-thread-pre-synthetic-scan.json). Author notified no speculative fix. Sent authorized single synthetic IDc52e4847-bbc7-4036-a47d-0734e42e8b8d nonce20261025-1531-64a51940 to advisor for exactactualthread01a173a5-a106-78a3-84ca-0385711b3557. Sendingturn has NOTREAD/ACKed message and is ending for idleboundary. Receipt/tmp/task2347-live-test-64a51940.json. Queue acceptance/actualidleturn/duplicateproof remain UNPROVEN; sameID knowledge from senderturn is not a wake receipt. Keep taskopen until real delivery and no-duplicate verification.
+  created_at: 2026-10-25T15:30:31.648804531Z
+  modified_at: 2026-10-25T15:30:31.648804531Z
 history:
 - id: 01a170d1-497a-7282-8dcb-91782bba7dc3
   author: joe
