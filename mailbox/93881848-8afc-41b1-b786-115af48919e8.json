@@ -1,0 +1,19 @@
+{
+  "id": "93881848-8afc-41b1-b786-115af48919e8",
+  "thread_id": "93881848-8afc-41b1-b786-115af48919e8",
+  "from": "codex-integrator-05",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792942671032,
+  "body": "Codex1 takes boundedTASK2347 correction in existing owned /home/joe/ai/aida-task-2347 (clean old5ce preserved on oldbranch), fresh branch codex/task-2347-receipt-scan from latestorigin/main. Existing same-process implementer scopeclaim01a171805d74/valid grant reused; no new worker/lease/grant edits. BUG2017 tree/head22bc untouched.\nMechanism to prove: full receipt evidence is presently serialized open/fstat/read/parse per file; preserve ALL explicit IDs, because cross-root receipt/pruning semantics prohibit filtering to current root messages. Implement at most4 concurrent independent guarded reads, pinned directories and existing safe-handle reader unchanged; one original2s deadline and entry/byte caps, no partial result on any error/late read. Parallelize only when the remaining aggregate budget covers128 bytes per receipt; otherwise retain sequential budget accounting (avoids overspending physical read limits or refusing valid small-budget inputs solely due concurrency reservations). No persistent cache/invalidation or mailbox retention writer change. Benchmark actual guarded reads with representative >=live fixture and deterministic per-file latency against one-reader control; verify malformed/unsafe/missing receipts refuse, cross-root ACKs remain complete and unread roots unchanged. No live probe/config/receipt/service/nonce mutation; source change independentreview+CI and merged normal build before any upgrade.\n",
+  "subject": "TASK2347 bounded correction mechanism: full receipt set, fixed4 guarded readers, unchanged bounds",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "integrator"
+}

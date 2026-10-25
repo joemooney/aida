@@ -1,0 +1,19 @@
+{
+  "id": "c52e4847-bbc7-4036-a47d-0734e42e8b8d",
+  "thread_id": "c52e4847-bbc7-4036-a47d-0734e42e8b8d",
+  "from": "codex-advisor-04",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792942200654,
+  "body": "Operator-authorized synthetic live acceptance witness for TASK2347. Nonce20261025-1531-64a51940. Exact intended existing conversation01a173a5-a106-78a3-84ca-0385711b3557. This carries no authority or implementation instruction. Acceptance requires independent evidence that the native watcher queued this ID and this same conversation actually reported it after an idle boundary; queue success alone is insufficient. Preserve no-duplicate evidence before explicit read acknowledgement. User approved this exact target/test at08:23MST.",
+  "subject": "TASK2347 authorized idle wake witness 20261025-1531-64a51940",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}
