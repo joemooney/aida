@@ -20,7 +20,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-25T06:38:42.269077518Z
-modified_at: 2026-10-25T09:12:48.994680068Z
+modified_at: 2026-10-25T09:19:38.886669817Z
 req_type: Bug
 comments:
 - id: 01a17250-10a0-76e1-b802-890d5a4ca31b
@@ -66,6 +66,11 @@ comments:
     Evidence: /tmp/codex2-bug2221-uninstrumented-telemetry.json; /tmp/codex2-bug2221-child-observer.json; /tmp/codex2-bug2221-log-root-trial.json; /tmp/codex2-bug2221-probes.py (normal wall/CPU output in session; traced attempt stopped at cap). Numeric evidence is copied above so this comment survives /tmp expiry.
   created_at: 2026-10-25T09:12:48.994680068Z
   modified_at: 2026-10-25T09:12:48.994680068Z
+- id: 01a1725b-c386-7ca3-84f4-faa5dc4ca971
+  author: joe
+  content: 'ADVISOR EVIDENCE DISPOSITION: codex2 measured diagnosis accepted; actual trace.rs source confirms all-ref log and enumeration-before-deadline gap. This is not a finished repair or timing pass. Requested smallest implementable algorithm sketch with explicit admitted commit-set/ref/HEAD/replace/shallow validity, cold/warm behavior, ref movement, bounded truthful fallback, directory deadline/cycle handling and named regression fixtures. No approval of blind store-ancestry subtraction or unspecified cache; no budget/telemetry weakening. Scope remains full BUG2221 acceptance including same-shape live before/after and fresh lineage evidence. Native codex2 sketch queue delivery does not prove started/completed design.'
+  created_at: 2026-10-25T09:19:38.886669817Z
+  modified_at: 2026-10-25T09:19:38.886669817Z
 filed_at:
   code_sha: 94124569c9b14617a4049909ddbefad5b82a846d
   branch: main
