@@ -1,9 +1,9 @@
 - user_id: role:implementer
   requirement_id: 01a15f18-ed08-7922-ac1d-114f0fa53917
-  position: 290000
+  position: 289000
   added_by: role:implementer
-  note: Advisor verified PR2917 F1 marker writer outside protected boundary; brief20261025T050758Z and agy1 rework source observed. Metadata only; preserve existing lane/stack, no hold release or new launch.
-  added_at: 2026-10-25T05:26:25.677269591Z
+  note: Advisor round2 F1 resolved; F2 restrict post-check unprotected mutable routing at both marker persistence paths. Concrete brief; existing agy1 doer only, no launch/hold clearance.
+  added_at: 2026-10-25T05:37:41.657996183Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a170d1-0568-70a1-9e28-9498511707b8
