@@ -22,7 +22,7 @@ description: |
   3. Feed that computed ZERO into the actual `wait_for_ship_ci` fake-forge path. A pending Build gets one registration/row observation, timeout exit21 with its real check name, no second poll and no merge. Retain zero-budget green/red behavior. Reuse the existing counting-FakeForge and exhausted-budget tests.
   4. Preserve the black-box ownership-release, timeout21 and no-merge assertions, with an independent bounded child watchdog. Replace the misleading <3500ms inference only after the stronger handoff/remainder/poll-count proof exists. Do not merely raise3500, relax production --wait or test ceilings, add sleeps/retries, skip/ignore the case, or serialize away the failure.
   5. Keep production deadline, excluded-scan, authority, hold and merge behavior unchanged. Any actual forwarded-budget mismatch discovered during this repair must be reported separately with evidence before broadening the implementation. Coordinate before editing symbols currently owned by STORY-1917/STORY-1889; preserve their unmerged work and normal integration order.
-  6. Normal independent exact-head review, green required CI and integration prove completion. One meaningful targeted local run plus `make check-ci-fast`; full suites remain CI's job. Use `AIDA_CARGO_TIMEOUT=<duration>` and background long Cargo; no nested timeout or slot bypass. Shared test-infrastructure or >10-file changes alone justify touched/compile expansion.
+  6. Normal independent exact-head review, green required CI and integration prove completion. For a test-only delta, the FASTTRACK local gate is `make check-ci-fast` with no Cargo. If an actual production handoff seam changes, use LIGHT: one meaningful affected-crate/filter run plus `make check-ci-fast`. Full suites remain CI's job. Any Cargo uses `AIDA_CARGO_TIMEOUT=<duration>` and background mode when long, with no nested timeout or slot bypass. Shared test-infrastructure or >10-file changes alone justify touched/compile expansion.
 
   ## Source pointers
 
@@ -32,12 +32,17 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-25T16:23:29.497775220Z
-modified_at: 2026-10-25T16:23:29.497775220Z
+modified_at: 2026-10-25T16:24:52.666224140Z
 req_type: Task
 tags:
 - ship-deadline
 - source-diagnosed
 - testing
+history:
+- id: 01a173e1-136f-7122-b735-d8e8f1e2d5fe
+  author: joe
+  timestamp: 2026-10-25T16:24:52.848004722Z
+  changes: []
 filed_at:
   code_sha: 54c64e26a58810f213f0a0fa1720a69bcce37ea3
   branch: main
