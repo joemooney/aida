@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T02:08:29.032100054Z
-modified_at: 2026-10-25T02:19:13.328371055Z
+modified_at: 2026-10-25T02:26:00.534895383Z
 req_type: Task
 tags:
 - codex
@@ -37,6 +37,11 @@ comments:
   content: 'LIVE NATIVE QUEUE PREFLIGHT VERIFIED 2026-10-24 19:18 MST: codex queue submitted receipt 01a170d4-2e7f-7a01-8376-78abcda21a38 for existing advisor thread 01a1700b-717d-71f2-b7e0-0569b05f3dee, nonce aida-mail-wake-20261024-1915. Parent deliberately ended its active turn. The exact queued message subsequently arrived as a user message in that same conversation, starting this continuation. This proves queue acceptance AND actual post-turn model delivery, not yet the full AIDA-mail watcher path. No second preflight was sent; watcher installation/full-path test remain pending independent review and build.'
   created_at: 2026-10-25T02:19:13.328371055Z
   modified_at: 2026-10-25T02:19:13.328371055Z
+- id: 01a170e1-10d6-7460-8e44-bf3d4ee0ed8d
+  author: joe
+  content: 'Implementation checkpoint: source commit ef9a8c4afe on codex/task-2347 in /home/joe/ai/aida-task-2347. New mailbox wake-snapshot read-only JSON IDs seam; host scripts/codex-mail-wake.py with cross-worktree scan, bounded process IO, private locked atomic ledger, explicit uncertain-queue recovery, optional user-systemd service. Python fixture suite15/15 passed, no live mail/queue/install by implementer. Fresh-context checker findings addressed (cwd, aggregate32MiB read cap, existing0664 mail compatibility, strict ledger schema, process-creation-vs-uncertain queue distinction, dry-run safety, systemd dollar escaping); checker is not an authority-bearing review. Normal cold Rust test build is running, dev build queued behind target lock, fast gates minimal-feature and standalone TUI compile passed so far. Logs: /tmp/task2347-rust-tests.log, /tmp/task2347-fast-gates.log, /tmp/task2347-dev-build.log, /tmp/task2347-python-tests.log. Generated help/audit refresh, remaining required checks, push/PR and formal review still pending. No live binary promotion. Parent verified native queue actually resumes same idle advisor thread; parent owns live service install + synthetic AIDA test after formal approval. Initial worktree unread backlog requires explicit inspection, no silent baseline.'
+  created_at: 2026-10-25T02:26:00.534895383Z
+  modified_at: 2026-10-25T02:26:00.534895383Z
 history:
 - id: 01a170d1-497a-7282-8dcb-91782bba7dc3
   author: joe
