@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T02:08:29.032100054Z
-modified_at: 2026-10-25T02:49:45.984213980Z
+modified_at: 2026-10-25T02:54:14.373793060Z
 req_type: Task
 tags:
 - codex
@@ -82,6 +82,11 @@ comments:
   content: 'Candidate production build succeeded and smoke-tested without global promotion. Binary: /home/joe/ai/aida-task-2347/target/agent/aida (build label a920740caa+dirty; runtime Rust source is committed a920, dirty files were generated help/JSON audit and CI fixture wiring). Authorized read-only live dry-run against main plus registered sibling local mailboxes succeeded:580 pending distinct unread IDs, queue_submitted=false, no mailbox acknowledgement. Evidence /tmp/task2347-live-preview-qwfrng0b/result.json. This is initial unread backlog, including canonical history that fresh sibling read-watermarks may still regard as unread. The adapter deliberately does not silently baseline it as delivered. Before enabling service, advisor/operator must explicitly decide whether to notify that backlog (64IDs/batch, one-time dedup) or resolve historical unread state through the existing mailbox workflow. Do not mistake queue acceptance for actual mail reading. New CI fast fixture step is wired; final35-gate run and required test-touched/compile continue.'
   created_at: 2026-10-25T02:49:45.984213980Z
   modified_at: 2026-10-25T02:49:45.984213980Z
+- id: 01a170fa-e965-7e60-ad01-a30137089c13
+  author: joe
+  content: 'Initial backlog handling improvement, superseding the prior64-ID chunk note: batches now pack IDs up to a hard24KB wake-text budget and1024 IDs, rather than arbitrarily waking repeatedly for64-ID chunks. Fixture verifies dense580-ID backlog fits one notification, and larger batches split deterministically without exceeding the byte bound. New live read-only dry-run proves all580 actual distinct unread IDs fit ONE22,660-byte notification: pending580,next_batch580,queue_submitted=false. Evidence /tmp/task2347-live-preview-9em47qgh/result.json. No silent baseline, acknowledgement, native queue, or installation occurred. Python suite17/17 passes. This preserves first-scan notification semantics while avoiding10 model turns for current backlog. Final35-gate and touched-test jobs are waiting on normal global cargo slots; no bypass. Candidate CLI built/smoke-tested and available at /home/joe/ai/aida-task-2347/target/agent/aida. Required compile gate still follows touched tests.'
+  created_at: 2026-10-25T02:54:14.373793060Z
+  modified_at: 2026-10-25T02:54:14.373793060Z
 history:
 - id: 01a170d1-497a-7282-8dcb-91782bba7dc3
   author: joe
