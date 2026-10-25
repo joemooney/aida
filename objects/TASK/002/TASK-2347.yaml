@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T02:08:29.032100054Z
-modified_at: 2026-10-25T05:26:19.696871832Z
+modified_at: 2026-10-25T05:26:21.036180614Z
 req_type: Task
 tags:
 - codex
@@ -223,6 +223,19 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Codex2 STRICT independent review: LOCAL watermark and accepted pruning pass; exact-head Build green. P2 recovery --dry-run mutates acceptance state, and advisor-required due-job health alert is unwired. Full live watcher proof remains advisor-owned after approval. Refs TASK-2347.. Triage reason: Advisor-approved rework of codex2 F1/F2 at91071afddc; concrete brief20261025T045538Z and due-job boundary comment. Existing codex1 lane is editing; metadata only, no new launch or hold clearance.'
   created_at: 2026-10-25T05:26:19.696870093Z
   modified_at: 2026-10-25T05:26:19.696870093Z
+- id: 01a17186-2bbc-7ec1-a794-2c4da4b4ef77
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-2347):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 91071afddc41
+    Recorded: 2026-10-25T04:54:35.160024619+00:00
+    Findings:
+    1. P2 F1 (contract-drift): scripts/codex-mail-wake.py:480-498 ignores global --dry-run in recover. Exact-head fake-HOME/temp-state reproduction of recover --accepted --dry-run exits0/recovered:true and durably moves pending IDs to accepted, clears inflight/first_pending and changes ledger bytes; --retry dry-run also clears uncertainty. Honor preview without writes or reject unsupported recover+dry-run before persistence. Add accepted and retry dry-run cases proving byte-identical ledger and unchanged uncertain state, plus normal recovery. Evidence /tmp/codex2-pr2915-recover-dryrun-evidence.json; no live mail/queue/service.
+    2. P2 F2 (contract-drift): advisor DESIGN REVIEW TASK-2347 comment19 requires accepted-unacknowledged health alert via a due job, never auto-requeue. health() at scripts/codex-mail-wake.py:276-283 is consumed only by explicit status:478; normal run:504-507 emits no accepted-age/recovery health, and no existing due-job/operator health integration is wired. A targeted first-tick fake-state probe with one accepted unread ID aged86400s emits no stdout/stderr/alert, while explicit status reports age/count. Wire the smallest existing due-job/health surface with bounded dedup and no model polling/accepted-ID requeue, and test its alert/queue/inbox behavior; or obtain an explicit scope amendment. Evidence /tmp/codex2-pr2915-health-alert-evidence.json. The explicitly deferred receipt-root-removal limitation is not this finding.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-10-25T05:26:20.860696095Z
+  modified_at: 2026-10-25T05:26:20.860696095Z
 history:
 - id: 01a170d1-497a-7282-8dcb-91782bba7dc3
   author: joe
