@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T15:33:51.496539087Z
-modified_at: 2026-10-25T05:37:40.383457540Z
+modified_at: 2026-10-25T05:56:18.096545351Z
 req_type: Story
 tags:
 - architecture
@@ -245,6 +245,11 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-10-25T05:37:40.124278370Z
   modified_at: 2026-10-25T05:37:40.124278370Z
+- id: 01a171a1-9830-7980-8546-2859d69a3742
+  author: joe
+  content: 'PR #2917 F2 rework pushed at 82b90b8af07cff379a5b56acfb8d1e674a8052e1 on claude/story-1889-hold-r2: restricted recusal route reconciliation at write_marker and reconcile_recusal_hold to copy back only routed_to and routing_state from a cloned proposal in protected gate/merge_hold_core.rs, with adversarial unit test routing_proposal_boundary_cannot_mutate_non_routing_fields_at_persistence. 98/98 merge_hold unit tests + 34/34 make check-ci-fast gates passed.'
+  created_at: 2026-10-25T05:56:18.096545351Z
+  modified_at: 2026-10-25T05:56:18.096545351Z
 history:
 - id: 01a15f19-1b8d-7a60-bd9c-acf0c42193fc
   author: joe
