@@ -1969,8 +1969,10 @@ pub(crate) fn status_line(state: &MandateState, now: DateTime<Utc>, gates: &str)
             .map(|s| s.as_str())
             .collect::<Vec<_>>()
             .join(", ");
+        // A mandate with no effective scope covers nothing; say so rather
+        // than borrow a scope it does not hold. trace:TASK-2342 | ai:claude
         if scopes.is_empty() {
-            SCOPE_SHIP_HELD.to_string()
+            "(no scopes)".to_string()
         } else {
             scopes
         }

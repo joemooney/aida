@@ -2572,15 +2572,16 @@ every = "15m"
 enabled = true
 
 # STORY-1917: execute pending `take` and `impl` dispatch requests outside any
-# agent sandbox while a mandate covering `dispatch` is active. A silent no-op
-# when no dispatch mandate is active or no requests are pending; `review`,
-# `flow`, and `train` remain Pending (`waiting for serve`).
+# agent sandbox. `while` gates the 2-minute cadence: the tick runs (and the
+# schedule ledger is written) only while a mandate covering `dispatch` is
+# active and requests are pending, so with no dispatch mandate it never runs.
+# `review`, `flow`, and `train` remain Pending (`waiting for serve`).
 # trace:STORY-1917 | ai:agy
 [[schedule.jobs]]
 name = "dispatch-tick"
 command = "dispatch tick"
 every = "2m"
-when = "mandate.dispatch_active == true && dispatch.pending > 0"
+while = "mandate.dispatch_active == true && dispatch.pending > 0"
 enabled = true
 
 # The performance guard. Scaffolded DISABLED and commented, deliberately: a
@@ -2817,8 +2818,9 @@ mod story_1226_init_schedule_section_tests {
             .expect("dispatch-tick scaffolded");
         assert_eq!(dispatch["command"].as_str(), Some("dispatch tick"));
         assert_eq!(dispatch["every"].as_str(), Some("2m"));
+        assert!(dispatch.get("when").is_none());
         assert_eq!(
-            dispatch["when"].as_str(),
+            dispatch["while"].as_str(),
             Some("mandate.dispatch_active == true && dispatch.pending > 0")
         );
         // trace:TASK-1527 | ai:claude

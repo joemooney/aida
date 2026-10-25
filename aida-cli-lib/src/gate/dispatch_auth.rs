@@ -142,6 +142,10 @@ impl DispatchExecutionContext {
         &self.mandate_id
     }
 
+    pub(crate) fn principal(&self) -> &str {
+        &self.principal
+    }
+
     pub(crate) fn claim(&self) -> &WorkerClaim {
         &self.claim
     }

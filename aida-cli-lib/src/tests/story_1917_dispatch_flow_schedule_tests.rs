@@ -1287,3 +1287,823 @@ fn r5_mixed_and_serve_only_schedule_predicate_and_tick_integration() {
         "corrupt request fence must block claim pass regardless of pending count, got: {err_blocked:#}"
     );
 }
+
+// ── Review round 1, finding 1: the Q2 checkpoints on the REAL native paths ──
+//
+// The tests below drive the production `LiveTrainForge` ports through the
+// production `ForgeRails` landing, and the production `pr ship` entry, with a
+// fake forge standing in only for the network. Authority is changed at the
+// exact native wait or checkpoint, and the test proves nothing irreversible
+// happens afterwards. trace:STORY-1917 trace:TASK-2344 | ai:claude
+
+/// Mark `id` Running for this test process and return its claim token.
+fn claim_for_this_process(root: &Path, id: &str) -> String {
+    let token = Uuid::new_v4().to_string();
+    let pid = std::process::id();
+    let _lock = acquire_dispatch_lock(root).unwrap();
+    let (_, mut res) = load_pair(root, id).unwrap();
+    res.status = DispatchStatus::Running;
+    res.started_at = Some(Utc::now());
+    res.worker_pid = Some(pid);
+    res.worker_start = crate::process_probe::process_start_identity(pid);
+    res.claim_token = Some(token.clone());
+    write_private_atomic(
+        &result_path(root, id),
+        &serde_json::to_vec_pretty(&res).unwrap(),
+    )
+    .unwrap();
+    token
+}
+
+/// A fixture with a bare `origin` so the real `fetch_main` runs. With
+/// `home_mandates`, mandates live in the AIDA home, where the native hold
+/// release and the schedule snapshot read them; such a test must run in its
+/// own process (`run_path_isolated_test`) because that home is per process.
+fn native_fixture(home_mandates: bool) -> FlowFixture {
+    let mut f = FlowFixture::new(&["reviewer", "implementer"]);
+    if home_mandates {
+        assert!(crate::test_env::is_path_isolated_process());
+        f.mandate_dir = mandate::mandate_dir().unwrap();
+        std::fs::create_dir_all(&f.mandate_dir).unwrap();
+    }
+    let origin = f._tmp.path().join("origin.git");
+    git(
+        f._tmp.path(),
+        &["init", "-q", "--bare", origin.to_str().unwrap()],
+    );
+    git(
+        &f.root,
+        &["remote", "add", "origin", origin.to_str().unwrap()],
+    );
+    git(&f.root, &["push", "-q", "origin", "main"]);
+    f
+}
+
+fn establish_train_ctx(f: &FlowFixture, prs: Vec<u64>) -> DispatchExecutionContext {
+    let sub = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Train { prs },
+        Utc::now(),
+    )
+    .unwrap();
+    let token = claim_for_this_process(&f.root, &sub.request.id);
+    DispatchExecutionContext::establish(
+        &f.root,
+        &f.mandate_dir,
+        &sub.request.id,
+        &token,
+        Utc::now(),
+    )
+    .unwrap()
+}
+
+fn origin_main(root: &Path) -> String {
+    let out = crate::test_git::git_command()
+        .arg("-C")
+        .arg(root)
+        .args(["rev-parse", "origin/main"])
+        .output()
+        .unwrap();
+    String::from_utf8(out.stdout).unwrap().trim().to_string()
+}
+
+/// Commit a `[mandate.human_gates]` config and make it the committed
+/// `origin/main` the authority check reads.
+fn add_human_ship_gate(root: &Path) {
+    std::fs::write(
+        root.join(".aida/config.toml"),
+        "store_path = \".aida-store\"\n\n[mandate.human_gates]\nops = [\"ship\"]\n",
+    )
+    .unwrap();
+    git(root, &["add", ".aida/config.toml"]);
+    git(root, &["commit", "-qm", "gate shipping on a human"]);
+    let out = crate::test_git::git_command()
+        .arg("-C")
+        .arg(root)
+        .args(["rev-parse", "HEAD"])
+        .output()
+        .unwrap();
+    let sha = String::from_utf8(out.stdout).unwrap().trim().to_string();
+    git(root, &["update-ref", "refs/remotes/origin/main", &sha]);
+}
+
+type Hook = std::cell::RefCell<Option<Box<dyn FnMut()>>>;
+
+/// The network only: CI is registered and green, hold-gate rows are absent,
+/// merges are counted. `on_watch_ci` / `on_check_rows` fire inside the
+/// native waits.
+#[derive(Default)]
+struct NetForge {
+    on_watch_ci: Hook,
+    on_check_rows: Hook,
+    merges: std::cell::Cell<usize>,
+    closed: std::cell::Cell<usize>,
+}
+
+fn fire(hook: &Hook) {
+    if let Some(h) = hook.borrow_mut().as_mut() {
+        h();
+    }
+}
+
+impl crate::forge::Forge for NetForge {
+    fn kind(&self) -> crate::forge::ForgeKind {
+        crate::forge::ForgeKind::GitHub
+    }
+    fn authenticated_user_login(&self) -> anyhow::Result<String> {
+        Ok("fake".into())
+    }
+    fn change_metadata(
+        &self,
+        _: u64,
+        _: &mut dyn crate::network_retry::RetrySink,
+    ) -> anyhow::Result<crate::forge::ChangeMetadata> {
+        unimplemented!()
+    }
+    fn change_commit_headlines(
+        &self,
+        _: u64,
+        _: &mut dyn crate::network_retry::RetrySink,
+    ) -> anyhow::Result<Vec<String>> {
+        unimplemented!()
+    }
+    fn change_reviews(
+        &self,
+        _: u64,
+        _: &mut dyn crate::network_retry::RetrySink,
+    ) -> anyhow::Result<crate::forge::ChangeReviews> {
+        unimplemented!()
+    }
+    fn merge_change(
+        &self,
+        _: &crate::forge::ChangeRef,
+        _: &crate::forge::MergeOptions,
+        _: &mut dyn crate::network_retry::RetrySink,
+    ) -> anyhow::Result<crate::forge::MergeResult> {
+        self.merges.set(self.merges.get() + 1);
+        Ok(crate::forge::MergeResult {
+            merged: true,
+            sha: None,
+            method: crate::forge::MergeMethod::Rebase,
+        })
+    }
+    fn open_change(&self, _: crate::forge::OpenChange) -> anyhow::Result<crate::forge::ChangeRef> {
+        unimplemented!()
+    }
+    fn change_for_branch(&self, _: &str) -> anyhow::Result<crate::forge::ChangeLookup> {
+        unimplemented!()
+    }
+    fn change_for_spec(&self, _: &str) -> anyhow::Result<crate::forge::ChangeLookup> {
+        unimplemented!()
+    }
+    fn merged_change_for_branch(&self, _: &str) -> anyhow::Result<crate::forge::ChangeLookup> {
+        unimplemented!()
+    }
+    fn change_status(
+        &self,
+        _: &crate::forge::ChangeRef,
+    ) -> anyhow::Result<crate::forge::ChangeStatus> {
+        unimplemented!()
+    }
+    fn diff_change(&self, _: u64) -> anyhow::Result<()> {
+        unimplemented!()
+    }
+    fn ci_status(&self, _: crate::forge::CiTarget) -> anyhow::Result<crate::forge::CiStatus> {
+        unimplemented!()
+    }
+    fn ci_probe_for_branch(&self, _: &str) -> anyhow::Result<crate::forge::CiProbeResult> {
+        unimplemented!()
+    }
+    fn watch_ci(&self, _: &crate::forge::ChangeRef) -> anyhow::Result<crate::forge::CiState> {
+        fire(&self.on_watch_ci);
+        Ok(crate::forge::CiState::Success)
+    }
+    fn stream_ci_for_branch(
+        &self,
+        _: &str,
+        _: bool,
+    ) -> anyhow::Result<crate::forge::CiProbeResult> {
+        unimplemented!()
+    }
+    fn comment(&self, _: &crate::forge::ChangeRef, _: &str) -> anyhow::Result<()> {
+        Ok(())
+    }
+    fn close_change(&self, _: &crate::forge::ChangeRef, _: &str) -> anyhow::Result<()> {
+        self.closed.set(self.closed.get() + 1);
+        Ok(())
+    }
+    fn mark_change_ready(&self, _: &crate::forge::ChangeRef) -> anyhow::Result<()> {
+        unimplemented!()
+    }
+    fn checkout_change(&self, _: &crate::forge::ChangeRef) -> anyhow::Result<()> {
+        unimplemented!()
+    }
+    fn list_changes(
+        &self,
+        _: crate::forge::ChangeFilter,
+    ) -> anyhow::Result<Vec<crate::forge::ChangeRef>> {
+        unimplemented!()
+    }
+    fn checks_registered(
+        &self,
+        _: &crate::forge::ChangeRef,
+    ) -> anyhow::Result<crate::forge::CheckRegistration> {
+        Ok(crate::forge::CheckRegistration::Registered)
+    }
+    fn check_rows(
+        &self,
+        _: &crate::forge::ChangeRef,
+    ) -> anyhow::Result<Vec<crate::ci_gate::CheckRow>> {
+        fire(&self.on_check_rows);
+        Ok(Vec::new())
+    }
+}
+
+/// Real `LiveTrainForge` ports for every authority-bearing step (fetch,
+/// lease, CI wait, hold release/re-arm, hold-gate wait, merge, retire);
+/// only member gating, building and opening (forge metadata and pushes) are
+/// stubbed. `after_fetch` fires after the real `fetch_main` returns, i.e.
+/// after its own check and before the next native checkpoint.
+struct NativePorts<'a> {
+    live: crate::pr_train::LiveTrainForge<'a>,
+    member: crate::pr_train::Member,
+    fetches: usize,
+    after_fetch: Option<(usize, Box<dyn FnMut()>)>,
+}
+
+impl crate::pr_train::TrainForge for NativePorts<'_> {
+    fn fetch_main(&mut self) -> anyhow::Result<String> {
+        let tip = self.live.fetch_main()?;
+        self.fetches += 1;
+        if let Some((nth, hook)) = self.after_fetch.as_mut() {
+            if *nth == self.fetches {
+                hook();
+            }
+        }
+        Ok(tip)
+    }
+    fn lease(&mut self, pr: u64) -> std::result::Result<Box<dyn std::any::Any>, String> {
+        self.live.lease(pr)
+    }
+    fn build(
+        &mut self,
+        base: &str,
+        members: &[crate::pr_train::Member],
+    ) -> anyhow::Result<crate::pr_train::Built> {
+        self.live.dispatch_check()?;
+        Ok(crate::pr_train::Built {
+            base: base.to_string(),
+            tip: "7121a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1".into(),
+            cars: members
+                .iter()
+                .cloned()
+                .map(|m| crate::pr_train::Car {
+                    member: m,
+                    commit: "7121a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1".into(),
+                    patch_id: "patch".into(),
+                })
+                .collect(),
+            dropped: vec![],
+        })
+    }
+    fn gate(&mut self, _pr: u64) -> std::result::Result<crate::pr_train::Member, String> {
+        self.live.dispatch_check().map_err(|e| format!("{e:#}"))?;
+        Ok(self.member.clone())
+    }
+    fn open(
+        &mut self,
+        _train: &crate::pr_train::Built,
+        branch: &str,
+    ) -> anyhow::Result<crate::forge::ChangeRef> {
+        self.live.dispatch_check()?;
+        Ok(crate::forge::ChangeRef {
+            id: 9700,
+            url: String::new(),
+            branch: branch.to_string(),
+            base: "main".into(),
+            title: None,
+        })
+    }
+    fn wait_ci(
+        &mut self,
+        change: &crate::forge::ChangeRef,
+        train: &crate::pr_train::Built,
+    ) -> anyhow::Result<crate::pr_train::CiVerdict> {
+        self.live.wait_ci(change, train)
+    }
+    fn release_hold(
+        &mut self,
+        member: &crate::pr_train::Member,
+    ) -> std::result::Result<crate::merge_hold::MergeHoldRecord, String> {
+        self.live.release_hold(member)
+    }
+    fn rearm_hold(&mut self, record: &crate::merge_hold::MergeHoldRecord) -> String {
+        self.live.rearm_hold(record)
+    }
+    fn hold_gate_green_after_release(
+        &mut self,
+        change: &crate::forge::ChangeRef,
+        covers: &[String],
+    ) -> anyhow::Result<bool> {
+        self.live.hold_gate_green_after_release(change, covers)
+    }
+    fn retire(&mut self, change: &crate::forge::ChangeRef, why: &str) {
+        self.live.retire(change, why)
+    }
+    fn merge(&mut self, change: &crate::forge::ChangeRef, tip: &str) -> anyhow::Result<()> {
+        self.live.merge(change, tip)
+    }
+    fn landed(
+        &mut self,
+        _base: &str,
+        _main: &str,
+        cars: &[crate::pr_train::Car],
+    ) -> Vec<Option<String>> {
+        cars.iter().map(|_| None).collect()
+    }
+    fn parent(&mut self, _commit: &str) -> Option<String> {
+        None
+    }
+    fn member_landed(
+        &mut self,
+        _change: &crate::forge::ChangeRef,
+        _train: &crate::pr_train::Built,
+        _car: &crate::pr_train::Car,
+        _sha: Option<&str>,
+    ) {
+    }
+    fn comment(&mut self, _pr: u64, _note: &str) {}
+    fn dispatch_abort(&self) -> Option<&str> {
+        self.live.dispatch_abort()
+    }
+}
+
+fn live_ports<'a>(
+    f: &FlowFixture,
+    forge: &'a NetForge,
+    ctx: &'a DispatchExecutionContext,
+    member: crate::pr_train::Member,
+) -> NativePorts<'a> {
+    NativePorts {
+        live: crate::pr_train::LiveTrainForge {
+            project_root: f.root.clone(),
+            main_worktree: f.root.clone(),
+            base: "main".into(),
+            forge,
+            named: true,
+            dispatch_ctx: Some(ctx),
+            dispatch_abort: None,
+        },
+        member,
+        fetches: 0,
+        after_fetch: None,
+    }
+}
+
+fn member(pr: u64, release: Option<crate::pr_cmd::MandateCover>) -> crate::pr_train::Member {
+    crate::pr_train::Member {
+        pr,
+        head: "4ead000000000000000000000000000000000000".into(),
+        subject: format!("feat: member {pr} (TASK-100)"),
+        body: String::new(),
+        release,
+    }
+}
+
+fn hold_record(pr: u64) -> crate::merge_hold::MergeHoldRecord {
+    crate::merge_hold::MergeHoldRecord {
+        schema_version: 1,
+        pr,
+        reason_kind: crate::merge_hold::HoldReasonKind::Supervision,
+        detail: "held for the native checkpoint test".into(),
+        recused_principals: vec![],
+        routed_to: vec![],
+        routing_state: crate::merge_hold::HoldRoutingState::Pending,
+        target_head_sha: Some("4ead000000000000000000000000000000000000".into()),
+        label_state: None,
+        legacy: false,
+        verdict_ref: None,
+        release_condition: None,
+        spec: Some("TASK-100".into()),
+        placed_by: Some("reviewer".into()),
+        absorbed: vec![],
+    }
+}
+
+/// A `gh` on PATH for the train's own `gh pr view/edit` body refresh.
+fn put_fake_gh_on_path(f: &mut FlowFixture) {
+    let bin = f._tmp.path().join("fake-bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    crate::test_exec::write_executable(&bin.join("gh"), "#!/bin/sh\nexit 0\n");
+    let path = format!(
+        "{}:{}",
+        bin.display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+    f.ambient.set_key("PATH", &path);
+    f.ambient
+        .set_key("AIDA_TEST_GH_BINARY", bin.join("gh").to_str().unwrap());
+}
+
+/// HELD member: the original mandate is stopped and a replacement started
+/// while the real hold-gate wait runs after the real release. The real
+/// post-wait checkpoint refuses, the train aborts with the typed error, the
+/// released hold is re-armed on disk, and nothing merges.
+#[test]
+fn story_1917_native_train_held_member_mandate_replaced_during_hold_gate_wait_never_merges() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let mut f = native_fixture(true);
+    put_fake_gh_on_path(&mut f);
+    let mandate_a = f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
+    let ctx = establish_train_ctx(&f, vec![9701]);
+    let hold_root = crate::pr_cmd::pr_ship_hold_root(&f.root);
+    crate::merge_hold::rearm_typed_hold(&hold_root, &hold_record(9701)).unwrap();
+
+    let forge = NetForge::default();
+    let (mdir, principal) = (f.mandate_dir.clone(), f.principal.clone());
+    *forge.on_check_rows.borrow_mut() = Some(Box::new(move || {
+        mandate::stop(&mdir, &|| Ok(()), &principal, Utc::now()).unwrap();
+        let set: BTreeSet<Scope> = [Scope::ShipHeld, Scope::Dispatch].into_iter().collect();
+        mandate::start_with_scopes(
+            &mdir,
+            &|| Ok(()),
+            &principal,
+            Duration::hours(2),
+            Some("replacement B".into()),
+            false,
+            false,
+            set,
+            Utc::now(),
+        )
+        .unwrap();
+    }));
+    let cover = crate::pr_cmd::MandateCover {
+        id: mandate_a.id.clone(),
+        principal: f.principal.clone(),
+    };
+    let mut ports = live_ports(&f, &forge, &ctx, member(9701, Some(cover)));
+    let base = origin_main(&f.root);
+    let mut rails = crate::pr_train::ForgeRails::new(&mut ports, "native".into());
+    let m = rails.ports.gate(9701).unwrap();
+    let built = crate::pr_train::Rails::build(&mut rails, &base, &[m]).unwrap();
+    let verdicts = crate::pr_train::Rails::test(&mut rails, std::slice::from_ref(&built)).unwrap();
+    assert_eq!(verdicts, vec![crate::pr_train::CiVerdict::Green]);
+    // The real release ran: the marker is gone until the abort re-arms it.
+    let err = crate::pr_train::Rails::land(&mut rails, &built).unwrap_err();
+    assert!(
+        crate::gate::dispatch_auth::is_dispatch_authority_aborted(&err),
+        "typed abort expected: {err:#}"
+    );
+    assert!(format!("{err:#}").contains(&mandate_a.id), "{err:#}");
+    assert_eq!(forge.merges.get(), 0, "nothing merges after the abort");
+    assert!(forge.closed.get() >= 1, "the train PR is retired");
+    assert!(
+        crate::merge_hold::read_hold_record(&hold_root, 9701).is_some(),
+        "the released hold is re-armed"
+    );
+}
+
+/// UNHELD member: the requester grant is revoked after the last real
+/// `fetch_main` and before the merge. The real merge checkpoint refuses
+/// with the typed error and the forge sees no merge call.
+#[test]
+fn story_1917_native_train_unheld_member_grant_revoked_before_merge_never_merges() {
+    let f = native_fixture(false);
+    f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
+    let ctx = establish_train_ctx(&f, vec![9702]);
+    let forge = NetForge::default();
+    let mut ports = live_ports(&f, &forge, &ctx, member(9702, None));
+    let grant_id = std::env::var(crate::gate::seat_authority::GRANT_ENV).unwrap();
+    // fetch 1 = wave base, 2 = land's lease check, 3 = the pre-merge re-read.
+    ports.after_fetch = Some((
+        3,
+        Box::new(move || {
+            let file = crate::gate::seat_authority::grant_dir()
+                .unwrap()
+                .join(format!("{grant_id}.json"));
+            let mut g = crate::gate::seat_authority::read_grant(&grant_id).unwrap();
+            g.revoked_at = Some(Utc::now());
+            write_private_atomic(&file, &serde_json::to_vec_pretty(&g).unwrap()).unwrap();
+        }),
+    ));
+    let mut rails = crate::pr_train::ForgeRails::new(&mut ports, "native".into());
+    let base = crate::pr_train::Rails::main_tip(&mut rails).unwrap();
+    let m = rails.ports.gate(9702).unwrap();
+    let built = crate::pr_train::Rails::build(&mut rails, &base, &[m]).unwrap();
+    crate::pr_train::Rails::test(&mut rails, std::slice::from_ref(&built)).unwrap();
+    let err = crate::pr_train::Rails::land(&mut rails, &built).unwrap_err();
+    assert!(
+        crate::gate::dispatch_auth::is_dispatch_authority_aborted(&err),
+        "typed abort expected: {err:#}"
+    );
+    assert_eq!(forge.merges.get(), 0);
+    assert!(ports.live.dispatch_abort.is_some());
+}
+
+/// A human gate added, or the worker's claim changed, while the real CI wait
+/// runs: the real post-wait checkpoint refuses and the train never lands.
+#[test]
+fn story_1917_native_train_human_gate_or_claim_change_during_ci_wait_refuses() {
+    for case in ["human-gate", "claim"] {
+        let f = native_fixture(false);
+        f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
+        let ctx = establish_train_ctx(&f, vec![9703]);
+        let forge = NetForge::default();
+        let root = f.root.clone();
+        let req_id = ctx.request_id().to_string();
+        *forge.on_watch_ci.borrow_mut() = Some(Box::new(move || {
+            if case == "human-gate" {
+                add_human_ship_gate(&root);
+            } else {
+                let path = result_path(&root, &req_id);
+                let mut res: DispatchResult =
+                    serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+                res.claim_token = Some("another-worker".into());
+                write_private_atomic(&path, &serde_json::to_vec_pretty(&res).unwrap()).unwrap();
+            }
+        }));
+        let mut ports = live_ports(&f, &forge, &ctx, member(9703, None));
+        let base = origin_main(&f.root);
+        let mut rails = crate::pr_train::ForgeRails::new(&mut ports, "native".into());
+        let m = rails.ports.gate(9703).unwrap();
+        let built = crate::pr_train::Rails::build(&mut rails, &base, &[m]).unwrap();
+        let err =
+            crate::pr_train::Rails::test(&mut rails, std::slice::from_ref(&built)).unwrap_err();
+        assert!(
+            crate::gate::dispatch_auth::is_dispatch_authority_aborted(&err),
+            "{case}: typed abort expected: {err:#}"
+        );
+        let text = format!("{err:#}");
+        let expected = if case == "human-gate" {
+            "gated by human gates"
+        } else {
+            "does not match worker claim"
+        };
+        assert!(text.contains(expected), "{case}: {text}");
+        assert_eq!(forge.merges.get(), 0, "{case}");
+    }
+}
+
+/// The real `pr ship` entry checkpoint: authority withdrawn after the
+/// context was established refuses before any forge or git call, with the
+/// typed error, and the checkpoint observer saw exactly the entry point.
+#[test]
+fn story_1917_native_pr_ship_entry_checkpoint_refuses_before_any_side_effect() {
+    let mut f = native_fixture(false);
+    f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
+    let sub = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Flow {
+            pr: 9704,
+            no_ship: false,
+            vendor: None,
+        },
+        Utc::now(),
+    )
+    .unwrap();
+    let token = claim_for_this_process(&f.root, &sub.request.id);
+    let ctx = DispatchExecutionContext::establish(
+        &f.root,
+        &f.mandate_dir,
+        &sub.request.id,
+        &token,
+        Utc::now(),
+    )
+    .unwrap();
+    let calls = f._tmp.path().join("gh-calls");
+    let gh = f.write_executable_script(
+        "logging-gh.sh",
+        &format!("#!/bin/sh\necho \"$*\" >> '{}'\nexit 1\n", calls.display()),
+    );
+    f.ambient
+        .set_key("AIDA_TEST_GH_BINARY", gh.to_str().unwrap());
+
+    let seen: std::rc::Rc<std::cell::RefCell<Vec<crate::pr_cmd::ShipCheckpoint>>> =
+        Default::default();
+    let seen_in = seen.clone();
+    let mdir = f.mandate_dir.clone();
+    let principal = f.principal.clone();
+    crate::pr_cmd::TEST_SHIP_CHECKPOINT_OBSERVER.with(|c| {
+        *c.borrow_mut() = Some(Box::new(move |at| {
+            seen_in.borrow_mut().push(at);
+            mandate::stop(&mdir, &|| Ok(()), &principal, Utc::now()).unwrap();
+        }))
+    });
+    struct Reset;
+    impl Drop for Reset {
+        fn drop(&mut self) {
+            crate::pr_cmd::TEST_SHIP_CHECKPOINT_OBSERVER.with(|c| *c.borrow_mut() = None);
+        }
+    }
+    let _reset = Reset;
+
+    let err = crate::pr_cmd::pr_ship_with_method_and_dispatch_ctx(
+        Some(9704),
+        true,
+        true,
+        false,
+        false,
+        None,
+        None,
+        true,
+        false,
+        false,
+        Some(60),
+        false,
+        crate::forge::MergeMethod::Squash,
+        false,
+        Some(&ctx),
+    )
+    .unwrap_err();
+    assert!(
+        crate::gate::dispatch_auth::is_dispatch_authority_aborted(&err),
+        "{err:#}"
+    );
+    assert_eq!(*seen.borrow(), vec![crate::pr_cmd::ShipCheckpoint::Entry]);
+    assert!(!calls.exists(), "no forge call before the entry checkpoint");
+}
+
+/// Every native `pr ship` checkpoint is wired, once, in order, and the last
+/// one sits after the hold-gate wait and before the merge call; the
+/// pre-merge refusal re-arms only a hold this ship released.
+#[test]
+fn story_1917_pr_ship_checkpoints_are_wired_in_order_around_every_wait() {
+    let src = include_str!("../pr_cmd.rs");
+    let body = src
+        .split("pub(crate) fn pr_ship_with_method_and_dispatch_ctx(")
+        .nth(1)
+        .unwrap();
+    let body = body.split("\npub(crate) fn ").next().unwrap();
+    let mut last = 0;
+    for at in [
+        "Entry",
+        "PreMandateCover",
+        "PostCiWait",
+        "UnderMergeLease",
+        "PreHoldRelease",
+        "PreMerge",
+    ] {
+        let needle = format!("ShipCheckpoint::{at})");
+        assert_eq!(body.matches(&needle).count(), 1, "{at}");
+        let pos = body.find(&needle).unwrap();
+        assert!(pos > last, "{at} is out of order");
+        last = pos;
+    }
+    let ci_wait = body.find("wait_for_ship_ci(").unwrap();
+    assert!(body.find("ShipCheckpoint::PostCiWait)").unwrap() > ci_wait);
+    let lease = body.find("acquire_merge_lease(").unwrap();
+    assert!(body.find("ShipCheckpoint::UnderMergeLease)").unwrap() > lease);
+    let pre_merge = body.find("ShipCheckpoint::PreMerge)").unwrap();
+    assert!(pre_merge > body.find("wait_hold_gate_green(").unwrap());
+    assert!(pre_merge < body.find(".merge_change(").unwrap());
+    // Unheld PRs are never told to re-place a hold they never had.
+    let window = &body[pre_merge..body.find(".merge_change(").unwrap()];
+    assert!(window.contains("if mandate_release.is_some() {"));
+    assert!(window.contains("NO_HOLD_RELEASED_NOTE"));
+    assert!(window.contains("Some(err) => err.context(refusal)"));
+    // No dispatch reverify bypasses the named checkpoint function.
+    assert!(!body.contains("reverify_now("));
+}
+
+/// Review round 1: R5 through the actual scheduler. The shipped
+/// `dispatch-tick` job definition is loaded from the `aida init` scaffold,
+/// and each tick runs the real registry loader, the real `collect_snapshot`
+/// (`mandate.dispatch_active`, `dispatch.pending`), the real `tick_core`
+/// trigger logic and, when it fires, the real dispatch tick. Serve-only
+/// requests stay waiting for serve; a mixed queue runs only the lane; with
+/// no dispatch mandate the cadence never fires; a broken record is counted,
+/// never a false zero.
+// trace:STORY-1917 | ai:claude
+#[test]
+fn story_1917_r5_dispatch_tick_through_collect_snapshot_and_tick_core() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let f = native_fixture(true);
+    let _hooks = FlowHookGuard;
+    let agent_log = f._tmp.path().join("r5-sched-agent.log");
+    let fake_agent = f.write_executable_script(
+        "fake-r5-sched-agent.sh",
+        &format!(
+            "#!/bin/sh\necho \"$*\" >> '{}'\necho 'claude logs 55556666'\nexit 0\n",
+            agent_log.display()
+        ),
+    );
+    TEST_AGENT_BIN.with(|c| *c.borrow_mut() = Some(fake_agent));
+
+    // The exact job `aida init` scaffolds.
+    let scaffold = crate::init_cmd::init_schedule_config_section();
+    let start = scaffold
+        .find("[[schedule.jobs]]\nname = \"dispatch-tick\"")
+        .expect("dispatch-tick scaffolded");
+    let job = scaffold[start..].split("\n\n").next().unwrap();
+    assert!(
+        job.contains("while = ") && !job.contains("\nwhen = "),
+        "{job}"
+    );
+    std::fs::write(
+        f.root.join(".aida/config.toml"),
+        format!("store_path = \".aida-store\"\n\n[schedule]\n{job}\n"),
+    )
+    .unwrap();
+
+    let ran = std::cell::RefCell::new(Vec::<DispatchPassSummary>::new());
+    let (root, mdir) = (f.root.clone(), f.mandate_dir.clone());
+    let run = |command: &str| -> anyhow::Result<i32> {
+        assert_eq!(command, "dispatch tick");
+        let summary = run_dispatch_tick_sync(&root, &mdir, Utc::now())?;
+        ran.borrow_mut().push(summary);
+        Ok(0)
+    };
+    let t0 = Utc::now();
+    let tick = |minutes: i64| {
+        crate::maintenance_schedule::tick_project_registry_for_test(
+            &f.root,
+            t0 + Duration::minutes(minutes),
+            &run,
+        )
+        .unwrap()
+    };
+
+    // No mandate, nothing pending: the gate holds the cadence back.
+    tick(0);
+    assert!(ran.borrow().is_empty());
+
+    // Mandate active but nothing pending: still no run.
+    let mandate_a = f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
+    tick(3);
+    assert!(ran.borrow().is_empty());
+
+    // Serve-only queue: the tick fires and is a cheap no-op.
+    let review = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Review {
+            pr: 720,
+            vendor: None,
+        },
+        Utc::now(),
+    )
+    .unwrap();
+    tick(6);
+    assert_eq!(ran.borrow().len(), 1);
+    assert_eq!(ran.borrow()[0].spawned, 0);
+    assert_eq!(ran.borrow()[0].waiting_for_serve, 1);
+    assert!(!agent_log.exists(), "cron never launches a reviewer");
+    assert_eq!(
+        load_pair(&f.root, &review.request.id).unwrap().1.status,
+        DispatchStatus::Pending
+    );
+
+    // The 2m cadence still applies while the gate is open.
+    tick(7);
+    assert_eq!(ran.borrow().len(), 1);
+
+    // Mixed queue: only the lane runs; the review keeps waiting for serve.
+    let brief = f._tmp.path().join("r5-sched.md");
+    std::fs::write(&brief, "Implement the scheduled lane.\n").unwrap();
+    let lane = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Impl {
+            name: "r5-sched-lane".into(),
+            branch: "claude/r5-sched".into(),
+            spec: "TASK-100".into(),
+            brief,
+            vendor: Some(DispatchVendor::Claude),
+        },
+        Utc::now(),
+    )
+    .unwrap();
+    tick(9);
+    assert_eq!(ran.borrow().len(), 2);
+    assert_eq!(ran.borrow()[1].spawned, 1);
+    assert_eq!(ran.borrow()[1].waiting_for_serve, 1);
+    assert_eq!(
+        load_pair(&f.root, &lane.request.id).unwrap().1.status,
+        DispatchStatus::Done
+    );
+
+    // A broken record is counted, never a false zero.
+    let before = pending_request_count(&f.root);
+    std::fs::write(
+        request_path(&f.root, &Uuid::new_v4().to_string()),
+        b"{broken",
+    )
+    .unwrap();
+    assert_eq!(pending_request_count(&f.root), before + 1);
+
+    // With the dispatch mandate stopped, pending work never fires the job.
+    mandate::stop(&f.mandate_dir, &|| Ok(()), &f.principal, Utc::now()).unwrap();
+    assert!(!mandate::recheck(&f.mandate_dir, &mandate_a.id, &f.principal, Utc::now()).is_ok());
+    tick(15);
+    assert_eq!(ran.borrow().len(), 2, "no run without a dispatch mandate");
+}

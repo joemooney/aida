@@ -2863,11 +2863,17 @@ fn task_2344_tri_state_probe_retains_unknown_missing_pid_missing_start_and_corru
     );
 }
 
+/// The activation hooks and the `/proc` allowlist are process-global, so the
+/// tests that set them run one at a time.
+// trace:STORY-1917 | ai:claude
+static Q1_HOOK_SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 // trace:STORY-1917 trace:TASK-2344 | ai:agy
 #[test]
 fn task_2344_q1_physical_tick_lock_directory_migration_and_legacy_mutator_refusal() {
     use fs2::FileExt;
     use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
+    let _serial = Q1_HOOK_SERIAL.lock().unwrap_or_else(|e| e.into_inner());
 
     struct ResetQ1Hooks;
     impl Drop for ResetQ1Hooks {
@@ -3246,4 +3252,266 @@ fn task_2344_q1_physical_tick_lock_directory_migration_and_legacy_mutator_refusa
     )
     .expect("v2 submit_request succeeds after explicit quiescent activation");
     assert_eq!(sub_v2.result.status, DispatchStatus::Pending);
+}
+
+/// Review round 1, findings 3 and 4 and the legacy-mode minor: a legacy lock
+/// with the umask's default mode is accepted; a failed rollback is reported
+/// and leaves a marker-less v2 directory that every mutator refuses; the
+/// activation command then resumes only after quiescence is proven again.
+// trace:STORY-1917 trace:TASK-2344 | ai:claude
+#[test]
+fn task_2344_q1_failed_rollback_is_fenced_and_activation_resumes_only_when_quiescent() {
+    use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
+    let _serial = Q1_HOOK_SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    struct Reset;
+    impl Drop for Reset {
+        fn drop(&mut self) {
+            if let Ok(mut g) = TEST_PROC_PID_ALLOWLIST.lock() {
+                *g = None;
+            }
+            if let Ok(mut g) = TEST_POST_EXCHANGE_HOOK.lock() {
+                *g = None;
+            }
+            TEST_FAIL_ROLLBACK_EXCHANGE.store(false, std::sync::atomic::Ordering::SeqCst);
+        }
+    }
+    let _reset = Reset;
+
+    let f = ExecFixture::new(&["reviewer", "implementer"]);
+    f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
+    let now = Utc::now();
+    let disp_dir = dispatch_root(&f.root);
+    let _ = open_pinned_dispatch_subdir(&f.root, None).unwrap();
+    let lock_path = disp_dir.join("tick.lock");
+    let staging = disp_dir.join(".tick.lock.v2-staging");
+
+    // Slice 1/2 created the lock with OpenOptions::create, i.e. the umask's mode.
+    let legacy = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .read(true)
+        .write(true)
+        .mode(0o644)
+        .open(&lock_path)
+        .unwrap();
+    let orig_ino = legacy.metadata().unwrap().ino();
+    drop(legacy);
+    *TEST_PROC_PID_ALLOWLIST.lock().unwrap() = Some(vec![std::process::id()]);
+
+    // Second scan sees an extra descriptor AND the exchange-back fails.
+    let extra: std::sync::Arc<std::sync::Mutex<Option<std::fs::File>>> = Default::default();
+    let extra_hook = extra.clone();
+    let staging_hook = staging.clone();
+    *TEST_POST_EXCHANGE_HOOK.lock().unwrap() = Some(Box::new(move || {
+        *extra_hook.lock().unwrap() = Some(std::fs::File::open(&staging_hook).unwrap());
+        TEST_FAIL_ROLLBACK_EXCHANGE.store(true, std::sync::atomic::Ordering::SeqCst);
+    }));
+    let err = activate_dispatch_v2_lock_quiescent(&f.root).expect_err("second scan must refuse");
+    let text = format!("{err:#}");
+    assert!(
+        text.contains("rolling back the dispatch lock activation failed")
+            && text.contains("open-before-flock or waiter race detected")
+            && text.contains("aida dispatch activate-lock"),
+        "{text}"
+    );
+    // The fenced state: v2 directory without its marker; legacy inode at staging.
+    assert!(lock_path.is_dir());
+    assert!(!lock_path.join("version").exists());
+    assert_eq!(std::fs::symlink_metadata(&staging).unwrap().ino(), orig_ino);
+
+    // Every v2 mutator refuses the marker-less directory; nothing auto-adopts it.
+    let refused = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Review {
+            pr: 882,
+            vendor: None,
+        },
+        now,
+    )
+    .unwrap_err();
+    let refused = format!("{refused:#}");
+    assert!(
+        refused.contains("has no version marker")
+            && refused.contains("aida dispatch activate-lock"),
+        "{refused}"
+    );
+    assert!(
+        !lock_path.join("version").exists(),
+        "a refusal must not write the marker"
+    );
+    assert!(run_dispatch_tick_sync(&f.root, &f.mandate_dir, now)
+        .unwrap_err()
+        .to_string()
+        .contains("has no version marker"));
+    // Old binaries fail at the OS boundary.
+    let old_open = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .read(true)
+        .write(true)
+        .open(&lock_path)
+        .unwrap_err();
+    assert_eq!(old_open.raw_os_error(), Some(libc::EISDIR));
+
+    // Resume re-proves quiescence: the extra descriptor still refuses it.
+    let resume_err = activate_dispatch_v2_lock_quiescent(&f.root).unwrap_err();
+    assert!(
+        format!("{resume_err:#}").contains("open-before-flock or waiter race detected"),
+        "{resume_err:#}"
+    );
+    assert!(!lock_path.join("version").exists());
+
+    // Once quiescent, the activation command finishes the migration.
+    *extra.lock().unwrap() = None;
+    drop(activate_dispatch_v2_lock_quiescent(&f.root).expect("resume once quiescent"));
+    assert_eq!(
+        std::fs::read_to_string(lock_path.join("version")).unwrap(),
+        "2\n"
+    );
+    assert!(!staging.exists());
+    submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Review {
+            pr: 883,
+            vendor: None,
+        },
+        now,
+    )
+    .expect("dispatch works after the resumed activation");
+}
+
+/// Review round 1, finding 4: a fresh root gets its marker atomically, and a
+/// marker-less directory with no legacy inode left is refused by both the
+/// mutators and the activation command, with manual guidance.
+// trace:STORY-1917 trace:TASK-2344 | ai:claude
+#[test]
+fn task_2344_q1_missing_version_is_never_initialised_outside_fresh_creation() {
+    use std::os::unix::fs::PermissionsExt;
+    let f = ExecFixture::new(&["reviewer", "implementer"]);
+    f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
+    let now = Utc::now();
+    let disp_dir = dispatch_root(&f.root);
+    let lock_path = disp_dir.join("tick.lock");
+
+    // Fresh creation: the directory appears with its marker, no leftovers.
+    drop(acquire_dispatch_lock(&f.root).unwrap());
+    assert_eq!(
+        std::fs::read_to_string(lock_path.join("version")).unwrap(),
+        "2\n"
+    );
+    assert_eq!(
+        std::fs::metadata(&lock_path).unwrap().permissions().mode() & 0o7777,
+        0o700
+    );
+    let leftovers: Vec<_> = std::fs::read_dir(&disp_dir)
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .filter(|n| n.starts_with(".tick.lock"))
+        .collect();
+    assert!(leftovers.is_empty(), "{leftovers:?}");
+
+    // Simulate an activation interrupted after its exchange whose legacy
+    // inode is gone: the marker is missing and nothing proves quiescence.
+    std::fs::remove_file(lock_path.join("version")).unwrap();
+    let err = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Review {
+            pr: 884,
+            vendor: None,
+        },
+        now,
+    )
+    .unwrap_err();
+    assert!(
+        format!("{err:#}").contains("has no version marker"),
+        "{err:#}"
+    );
+    let act = activate_dispatch_v2_lock_quiescent(&f.root).unwrap_err();
+    let act = format!("{act:#}");
+    assert!(
+        act.contains("no legacy lock file remains") && act.contains("remove"),
+        "{act}"
+    );
+    assert!(!lock_path.join("version").exists());
+}
+
+/// Review round 1, suspected item: a fence reserves its target at execution
+/// too. A request queued on a target before another record on that target
+/// lost its evidence is neither claimed by a pass nor run directly.
+// trace:STORY-1917 trace:TASK-2344 | ai:claude
+#[test]
+fn task_2344_fenced_target_is_reserved_at_execution_not_only_submission() {
+    let f = ExecFixture::new(&["reviewer", "implementer"]);
+    f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
+    let now = Utc::now();
+    let verb = DispatchRequestVerb::Review {
+        pr: 891,
+        vendor: None,
+    };
+    // A: finished earlier on pr:891.
+    let a = submit_request(&f.root, &f.mandate_dir, &f.principal, &verb, now).unwrap();
+    {
+        let _lock = acquire_dispatch_lock(&f.root).unwrap();
+        let (_, mut res) = load_pair(&f.root, &a.request.id).unwrap();
+        res.status = DispatchStatus::Done;
+        res.finished_at = Some(now);
+        write_private_atomic(
+            &result_path(&f.root, &a.request.id),
+            &serde_json::to_vec_pretty(&res).unwrap(),
+        )
+        .unwrap();
+    }
+    // B: queued on the same target once A was terminal.
+    let b = submit_request(&f.root, &f.mandate_dir, &f.principal, &verb, now).unwrap();
+    assert_ne!(a.request.id, b.request.id);
+    assert_eq!(b.result.status, DispatchStatus::Pending);
+    // A's result is lost: A becomes a fence on pr:891.
+    std::fs::remove_file(result_path(&f.root, &a.request.id)).unwrap();
+
+    let pass = claim_and_dispatch_pass(&f.root, true, false, now).unwrap();
+    assert!(pass.claimed_ids.is_empty(), "{:?}", pass.claimed_ids);
+    assert_eq!(
+        load_pair(&f.root, &b.request.id).unwrap().1.status,
+        DispatchStatus::Pending
+    );
+    let err = execute_one_request(&f.root, &f.mandate_dir, &b.request.id, true, now).unwrap_err();
+    let text = format!("{err:#}");
+    assert!(
+        text.contains("is reserved by dispatch record") && text.contains(&a.request.id),
+        "{text}"
+    );
+    assert!(
+        text.contains("recovery.json"),
+        "names the recovery procedure: {text}"
+    );
+    assert_eq!(
+        load_pair(&f.root, &b.request.id).unwrap().1.status,
+        DispatchStatus::Pending
+    );
+    // Unknown state is never a false zero for the schedule predicate.
+    assert_eq!(pending_request_count(&f.root), 2, "B pending + A's fence");
+}
+
+/// Review round 1: the recovery index writer holds itself to the reader's
+/// bounds, so it never writes an index every later read would reject.
+// trace:STORY-1917 trace:TASK-2344 | ai:claude
+#[test]
+fn task_2344_recovery_index_writer_respects_reader_bounds() {
+    assert!(check_recovery_index_bounds(MAX_DISPATCH_INVENTORY_ENTRIES, 1024).is_ok());
+    let over_count = check_recovery_index_bounds(MAX_DISPATCH_INVENTORY_ENTRIES + 1, 1024)
+        .unwrap_err()
+        .to_string();
+    assert!(
+        over_count.contains("more than the recovery index can hold"),
+        "{over_count}"
+    );
+    assert!(over_count.contains("recovery.json"), "{over_count}");
+    assert!(check_recovery_index_bounds(1, MAX_RECOVERY_FILE_BYTES + 1).is_err());
 }

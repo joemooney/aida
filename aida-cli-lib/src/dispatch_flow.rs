@@ -27,6 +27,30 @@ use crate::gate::review_verdict::{self, VerdictKind};
 const MAX_FLOW_TRIES: usize = 4;
 const FLOW_SHIP_WAIT_SECS: u64 = 3600;
 const TRAIN_LOCK_FILE: &str = "train.lock";
+/// Bound on one `gh` call the runners make (R6: bounded subprocesses).
+const FLOW_GH_TIMEOUT: Duration = Duration::from_secs(120);
+/// Bound on the `git fetch` after a branch update.
+const FLOW_FETCH_TIMEOUT: Duration = Duration::from_secs(300);
+
+/// Run `cmd` under `timeout`, naming `what` in the error when it cannot be
+/// spawned or overruns, so a hung forge never holds a flow/train claim.
+// trace:STORY-1917 | ai:claude
+fn bounded_output(
+    cmd: std::process::Command,
+    timeout: Duration,
+    what: &str,
+) -> Result<std::process::Output> {
+    match crate::command_output_with_timeout_detail(cmd, timeout) {
+        crate::BoundedCommandOutput::Completed(out) => Ok(out),
+        crate::BoundedCommandOutput::SpawnFailed => bail!("failed to run `{what}`"),
+        crate::BoundedCommandOutput::TimedOut => {
+            bail!(
+                "`{what}` did not finish within {}s and was killed",
+                timeout.as_secs()
+            )
+        }
+    }
+}
 
 /// Exclusive flock over `.aida/dispatch/train.lock` (mode 0600, `O_NOFOLLOW`),
 /// explicitly unlocked on Drop so only one `dispatch train` (or `flow` train
@@ -92,8 +116,18 @@ pub(crate) fn acquire_train_dispatch_lock(main_worktree: &Path) -> Result<TrainD
             meta.mode() & 0o7777
         );
     }
-    file.lock_exclusive()
-        .context("failed to acquire .aida/dispatch/train.lock")?;
+    // Non-blocking: a second train refuses instead of parking a worker (and
+    // its claim and cap slot) behind the first. trace:STORY-1917 | ai:claude
+    if let Err(e) = file.try_lock_exclusive() {
+        if e.kind() == std::io::ErrorKind::WouldBlock || e.raw_os_error() == Some(libc::EWOULDBLOCK)
+        {
+            bail!(
+                "another dispatch train holds {}; this train refuses rather than wait",
+                display_path.display()
+            );
+        }
+        return Err(e).with_context(|| format!("cannot lock {}", display_path.display()));
+    }
     Ok(TrainDispatchLock(file))
 }
 
@@ -116,8 +150,8 @@ fn query_flow_pr_view(main_worktree: &Path, pr: u64) -> Result<FlowPrView> {
     let gh = crate::resolve_gh_binary()
         .ok_or_else(|| anyhow::anyhow!("cannot locate `gh` executable on PATH"))?;
     let pr_str = pr.to_string();
-    let out = std::process::Command::new(gh)
-        .current_dir(main_worktree)
+    let mut cmd = std::process::Command::new(gh);
+    cmd.current_dir(main_worktree)
         .args([
             "pr",
             "view",
@@ -125,9 +159,8 @@ fn query_flow_pr_view(main_worktree: &Path, pr: u64) -> Result<FlowPrView> {
             "--json",
             "headRefOid,headRefName,baseRefName,state,mergeStateStatus,title",
         ])
-        .stdin(std::process::Stdio::null())
-        .output()
-        .with_context(|| format!("failed to run `gh pr view {pr}`"))?;
+        .stdin(std::process::Stdio::null());
+    let out = bounded_output(cmd, FLOW_GH_TIMEOUT, &format!("gh pr view {pr}"))?;
     if !out.status.success() {
         bail!(
             "`gh pr view {pr}` failed: {}",
@@ -159,12 +192,11 @@ fn update_pr_branch_non_force(
         req_id,
         &format!("running `gh pr update-branch {pr}` (non-force)\n"),
     );
-    let out = std::process::Command::new(gh)
-        .current_dir(main_worktree)
+    let mut cmd = std::process::Command::new(gh);
+    cmd.current_dir(main_worktree)
         .args(["pr", "update-branch", &pr_str])
-        .stdin(std::process::Stdio::null())
-        .output()
-        .with_context(|| format!("failed to run `gh pr update-branch {pr}`"))?;
+        .stdin(std::process::Stdio::null());
+    let out = bounded_output(cmd, FLOW_GH_TIMEOUT, &format!("gh pr update-branch {pr}"))?;
     let combined = format!(
         "{}{}",
         String::from_utf8_lossy(&out.stdout),
@@ -178,22 +210,26 @@ fn update_pr_branch_non_force(
         );
     }
     // Refresh origin/<base> and origin/<head> in main_worktree if origin remote exists.
-    let has_origin = aida_core::git_ops::host_git_command(main_worktree)
-        .args(["remote", "get-url", "origin"])
-        .output()
+    let mut probe = aida_core::git_ops::host_git_command(main_worktree);
+    probe.args(["remote", "get-url", "origin"]);
+    let has_origin = bounded_output(probe, FLOW_GH_TIMEOUT, "git remote get-url origin")
         .map(|o| o.status.success())
         .unwrap_or(false);
     if has_origin {
-        let _ = aida_core::git_ops::host_remote_git_command(main_worktree, "origin")
-            .args([
-                "fetch",
-                "--quiet",
-                "--no-tags",
-                "origin",
-                &format!("+refs/heads/{base_ref}:refs/remotes/origin/{base_ref}"),
-                &format!("+refs/heads/{head_ref}:refs/remotes/origin/{head_ref}"),
-            ])
-            .output();
+        let mut fetch = aida_core::git_ops::host_remote_git_command(main_worktree, "origin");
+        fetch.args([
+            "fetch",
+            "--quiet",
+            "--no-tags",
+            "origin",
+            &format!("+refs/heads/{base_ref}:refs/remotes/origin/{base_ref}"),
+            &format!("+refs/heads/{head_ref}:refs/remotes/origin/{head_ref}"),
+        ]);
+        // The fetch only refreshes local refs; every later step re-reads the
+        // PR from the forge, so a failed or slow fetch is logged, not fatal.
+        if let Err(e) = bounded_output(fetch, FLOW_FETCH_TIMEOUT, "git fetch origin") {
+            let _ = append_dispatch_log(main_worktree, req_id, &format!("{e:#}\n"));
+        }
     }
     Ok(())
 }
@@ -323,10 +359,23 @@ fn wait_for_pr_ci_with_ctx(
         Duration::from_secs(10),
     )?;
     ctx.reverify_now(requires_ship_held)?;
-    if matches!(state, crate::forge::CiState::Failed) {
-        bail!("CI failed for PR #{pr}");
+    // R6: green means the forge reported success for the exact head. No CI,
+    // a pending run or a failure is never reported as green.
+    // trace:STORY-1917 | ai:claude
+    ci_state_is_green(pr, state)
+}
+
+/// Accept only [`crate::forge::CiState::Success`] as green CI.
+// trace:STORY-1917 | ai:claude
+pub(crate) fn ci_state_is_green(pr: u64, state: crate::forge::CiState) -> Result<()> {
+    match state {
+        crate::forge::CiState::Success => Ok(()),
+        crate::forge::CiState::Failed => bail!("CI failed for PR #{pr}"),
+        crate::forge::CiState::None => {
+            bail!("PR #{pr} has no CI checks; flow reports green only after CI passes")
+        }
+        other => bail!("CI for PR #{pr} did not pass (state {other:?})"),
     }
-    Ok(())
 }
 
 /// Verify `.aida-store` has no uncommitted changes before starting a train pass.
@@ -337,10 +386,9 @@ pub(crate) fn ensure_clean_aida_store(main_worktree: &Path) -> Result<()> {
         return Ok(());
     }
     if store_dir.join(".git").exists() {
-        let out = aida_core::git_ops::host_git_command(&store_dir)
-            .args(["status", "--porcelain"])
-            .output()
-            .context("failed to run `git status --porcelain` in .aida-store")?;
+        let mut cmd = aida_core::git_ops::host_git_command(&store_dir);
+        cmd.args(["status", "--porcelain"]);
+        let out = bounded_output(cmd, FLOW_GH_TIMEOUT, "git status --porcelain (.aida-store)")?;
         if !out.status.success() {
             bail!(
                 "cannot inspect .aida-store cleanliness: {}",

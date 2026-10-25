@@ -14,7 +14,8 @@ use serde::{Deserialize, Serialize};
 pub(crate) mod pr_cmd_args;
 pub(crate) use pr_cmd_args::*;
 
-/// `aida pr <subcommand>` dispatcher. trace:STORY-90 | ai:claude
+/// `aida pr <subcommand>` dispatcher.
+// trace:STORY-90 | ai:claude
 pub(crate) fn handle_pr_command(cmd: &PrCommand) -> Result<()> {
     match cmd {
         PrCommand::AutoQueueReview { branch } => pr_auto_queue_review(branch.as_deref()),
@@ -107,7 +108,8 @@ pub(crate) fn handle_pr_command(cmd: &PrCommand) -> Result<()> {
 /// worktree root (the handshake is worktree-resolution-independent, exactly
 /// like the punt signal); a standalone invocation still drops the marker under
 /// the main root's `.aida/pr-holds/` so the state is recorded. Prints the hint
-/// for opening the PR once the gate passes. trace:BUG-250 | ai:claude
+/// for opening the PR once the gate passes.
+// trace:BUG-250 | ai:claude
 pub(crate) fn pr_hold_handler(reason: Option<&str>) -> Result<()> {
     let project_root = find_main_worktree_root()?;
     let cwd = std::env::current_dir().context("could not resolve the current directory")?;
@@ -428,7 +430,7 @@ pub(crate) fn pr_gc_handler(dry_run: bool) -> Result<()> {
 
 /// Mode selector for `aida pr rebase`. Computed once from the CLI
 /// flags so the rest of the handler is a flat match on intent.
-/// trace:TASK-308 | ai:claude
+// trace:TASK-308 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum PrRebaseMode {
     /// Default: auto-rebase if clean, abort + recipe on conflict.
@@ -461,7 +463,7 @@ fn preserve_pr_rebase_diagnostic(project_root: &std::path::Path, n: u64, detail:
 /// stderr shows the branch is checked out in a worktree (the pr-N reviewer
 /// worktree), surface a clear, actionable hint — end the lease or remove the
 /// worktree — instead of the misleading "is the PR number correct?" line.
-/// trace:BUG-289 | ai:claude
+// trace:BUG-289 | ai:claude
 pub(crate) fn pr_fetch_failure_message(stderr: &str, n: u64, pr_local_branch: &str) -> String {
     // external-prose-classifier: pr_cmd::pr_fetch_failure_message
     if aida_core::external_tool_output::contains_any_case_insensitive(
@@ -502,7 +504,7 @@ pub(crate) fn status_output_says_rebasing(out: std::io::Result<std::process::Out
 /// `aida pr rebase <N>` — orchestrates the temp-worktree / fetch /
 /// rebase / smoke / force-push-with-lease / cleanup recipe.
 ///
-/// trace:TASK-308 | ai:claude
+// trace:TASK-308 | ai:claude
 pub(crate) fn pr_rebase_handler(
     n: u64,
     check: bool,
@@ -1095,7 +1097,7 @@ pub(crate) fn fetch_change_info_via_resolved_forge(
 /// Run `gh pr view <N> --json …` and return the parsed JSON. Pulled
 /// out of `pr_rebase_handler` so the side-effecting call is isolated
 /// (parse rules are pinned by `pr_rebase::parse_pr_info` tests).
-/// trace:TASK-308 | ai:claude
+// trace:TASK-308 | ai:claude
 pub(crate) fn fetch_pr_info_via_gh_bin(
     project_root: &std::path::Path,
     n: u64,
@@ -1145,7 +1147,7 @@ pub(crate) fn fetch_pr_info_via_gh_bin(
 /// cwd warning, the auto-bump scan, the live-claude refusal) without
 /// double-implementing them.
 ///
-/// trace:TASK-458 | ai:claude
+// trace:TASK-458 | ai:claude
 /// STORY-529/BUG-727: the ship-time spec-gate lookup — the spec-IDs
 /// referenced by the commits about to ship, joined against the store as
 /// `(id, tags, execution_mode)`. Reuses the trailer-gate machinery (range →
@@ -2657,9 +2659,7 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
         branch_pr_resolution_from_lookup, format_activity_event, format_dry_run_plan_with_method,
         recovery_hint, BranchPrResolution, PrShipOptions, ShipStep, StepOutcome,
     };
-    if let Some(ctx) = dispatch_ctx {
-        ctx.reverify_now(true)?;
-    }
+    dispatch_ship_checkpoint(dispatch_ctx, ShipCheckpoint::Entry)?;
     // The one merge path behind `aida pr ship` and `aida ship`: a standalone
     // implementer stops at an open PR. trace:STORY-1662 | ai:claude
     crate::standalone_implementer::refuse_under_marker("pr ship")?;
@@ -3045,9 +3045,7 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
         already_merged =
             pr_is_merged_with_sink(&project_root, pr_number as u32, &mut probe_sink) == Some(true);
     }
-    if let Some(ctx) = dispatch_ctx {
-        ctx.reverify_now(true)?;
-    }
+    dispatch_ship_checkpoint(dispatch_ctx, ShipCheckpoint::PreMandateCover)?;
 
     // ---- STORY-1698: the fire-fighting mandate. A human at a terminal
     // needs none; any other caller may release a hold only when an active
@@ -3378,9 +3376,7 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
             &StepOutcome::Ok,
         );
     }
-    if let Some(ctx) = dispatch_ctx {
-        ctx.reverify_now(true)?;
-    }
+    dispatch_ship_checkpoint(dispatch_ctx, ShipCheckpoint::PostCiWait)?;
 
     // ---- Step 3: merge. Use retry-wrapper so a transient gh
     // network blip doesn't abort. ----
@@ -3394,9 +3390,7 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
     // released when this handler returns. Bounded-wait-then-refuse on contention.
     // trace:STORY-1171 | ai:claude
     let _merge_lease = acquire_merge_lease(&main_worktree, pr_number)?;
-    if let Some(ctx) = dispatch_ctx {
-        ctx.reverify_now(true)?;
-    }
+    dispatch_ship_checkpoint(dispatch_ctx, ShipCheckpoint::UnderMergeLease)?;
     // STORY-1698: re-read the mandate under the merge lease. A mandate that
     // covered the early gate but lapsed (or whose approval moved) since
     // refuses here, before any hold is touched. trace:STORY-1698 | ai:claude
@@ -3676,9 +3670,7 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
         // `aida merge-hold clear <PR>` run by a human. A reviewer's "clear on
         // my re-review" hold therefore moves to a human once approved.
         // trace:BUG-1167 trace:BUG-1566 | ai:claude
-        if let Some(ctx) = dispatch_ctx {
-            ctx.reverify_now(true)?;
-        }
+        dispatch_ship_checkpoint(dispatch_ctx, ShipCheckpoint::PreHoldRelease)?;
         let marker_reason = crate::merge_hold::read_hold(&hold_root, pr_number);
         // BUG-1499: a LABEL-ONLY hold (no marker) is never released here —
         // not even for a human — because a ship leaves no clearance record.
@@ -3959,29 +3951,29 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
         // If it lapsed after the hold was released (the hold-gate wait above
         // can take minutes), re-arm the hold and refuse.
         // trace:STORY-1698 trace:STORY-1917 trace:TASK-2344 | ai:claude
-        let dispatch_ctx_err = dispatch_ctx.and_then(|ctx| ctx.reverify_now(true).err());
-        if dispatch_ctx_err.is_some()
-            || mandate_release
-                .as_ref()
-                .is_some_and(|cover| !mandate_still_active(&cover.id))
-        {
-            let cover_id = mandate_release
-                .as_ref()
-                .map(|c| c.id.as_str())
-                .or_else(|| dispatch_ctx.map(|c| c.mandate_id()))
-                .unwrap_or("unknown");
-            let detail = match dispatch_ctx_err {
-                Some(err) => format!("{cover_id} ({err:#})"),
-                None => cover_id.to_string(),
+        // STORY-1917 Q2: a dispatch-originated ship re-checks its request's
+        // authority here too. The refusal names the actual cause, and only a
+        // hold this ship released is re-armed: an unheld PR is never told to
+        // re-place a hold it never had. A dispatch refusal keeps its typed
+        // error. trace:STORY-1698 trace:STORY-1917 trace:TASK-2344 | ai:claude
+        let dispatch_err = dispatch_ship_checkpoint(dispatch_ctx, ShipCheckpoint::PreMerge).err();
+        let lapsed = mandate_release
+            .as_ref()
+            .filter(|cover| !mandate_still_active(&cover.id));
+        if dispatch_err.is_some() || lapsed.is_some() {
+            let cause = match (&dispatch_err, lapsed) {
+                (Some(err), _) => {
+                    format!("its dispatch request no longer has authority to merge ({err:#})")
+                }
+                (None, Some(cover)) => format!("mandate {} ended before the merge", cover.id),
+                (None, None) => String::new(),
             };
-            let refusal = format!(
-                "PR-{pr_number} left OPEN — mandate {detail} ended before the merge.{}",
-                rearm_after_mandate_failure(
-                    &hold_root,
-                    hold_record.as_ref().filter(|_| mandate_release.is_some()),
-                    pr_number,
-                )
-            );
+            let rearm = if mandate_release.is_some() {
+                rearm_after_mandate_failure(&hold_root, hold_record.as_ref(), pr_number)
+            } else {
+                NO_HOLD_RELEASED_NOTE.to_string()
+            };
+            let refusal = format!("PR-{pr_number} left OPEN — {cause}.{rearm}");
             crate::events::record_gate_held(
                 &hold_root,
                 crate::events::GATE_MANDATE_SHIP,
@@ -3989,14 +3981,16 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
                 Some(pr_number),
                 &refusal,
             );
+            // An unheld dispatch ship is ledgered under its request's mandate.
             // trace:TASK-1915 | ai:claude
-            ledger_mandate_ship_failure(
-                &main_worktree,
-                mandate_release.as_ref(),
-                pr_number,
-                &refusal,
-            );
-            return Err(pr_ship::ShipRefusal::MergeHold.error(refusal));
+            let ledger_cover = mandate_release
+                .clone()
+                .or_else(|| dispatch_ctx.map(dispatch_ledger_cover));
+            ledger_mandate_ship_failure(&main_worktree, ledger_cover.as_ref(), pr_number, &refusal);
+            return Err(match dispatch_err {
+                Some(err) => err.context(refusal),
+                None => pr_ship::ShipRefusal::MergeHold.error(refusal),
+            });
         }
         // TASK-1960: a carried-over approval is bound to the base it was
         // proven against; re-read the PR's base immediately before merging.
@@ -4671,7 +4665,8 @@ pub(crate) fn pr_ship_post_merge_aida_exe() -> std::path::PathBuf {
 /// but a merged one) and exit 0 instead of failing in `pr_ship_create_pr`'s
 /// "no commits between" path. Best-effort: any `gh` failure (missing binary,
 /// auth, network) returns `None`, so a probe blip never converts an otherwise-
-/// fine create into a spurious already-merged short-circuit. trace:BUG-574 | ai:claude
+/// fine create into a spurious already-merged short-circuit.
+// trace:BUG-574 | ai:claude
 pub(crate) fn latest_merged_pr_for_branch(
     project_root: &std::path::Path,
     branch: &str,
@@ -4993,7 +4988,8 @@ pub(crate) fn recover_open_change(probe_repo: &std::path::Path, branch: &str) ->
 /// TASK-140: the full HEAD commit message of a BRANCH (not the local cwd HEAD).
 /// Tries the local ref first, then `origin/<branch>` (shipping a PR whose branch
 /// isn't checked out locally). `None` when neither resolves. Caller takes the
-/// first line as the squash subject. trace:TASK-140 | ai:claude
+/// first line as the squash subject.
+// trace:TASK-140 | ai:claude
 pub(crate) fn branch_head_commit_message(
     project_root: &std::path::Path,
     branch: &str,
@@ -6417,6 +6413,76 @@ mod task_140_squash_subject_tests;
 #[path = "tests/bug_2203_refs_subject_tests.rs"]
 mod bug_2203_refs_subject_tests;
 
+/// STORY-1917 Q2: the points inside `pr ship` where a dispatch-originated
+/// ship re-checks its request's authority (original mandate, grants, human
+/// gates, claim) before going on. Ordinary ships carry no context and are
+/// unaffected.
+// trace:STORY-1917 trace:TASK-2344 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ShipCheckpoint {
+    /// Before anything else runs.
+    Entry,
+    /// After the PR is resolved, before the mandate cover is taken.
+    PreMandateCover,
+    /// After the CI wait.
+    PostCiWait,
+    /// Under the merge lease, before the mandate is re-read.
+    UnderMergeLease,
+    /// Immediately before a merge-hold is released.
+    PreHoldRelease,
+    /// Immediately before the merge call, after every wait.
+    PreMerge,
+}
+
+#[cfg(test)]
+type ShipCheckpointObserver = Box<dyn FnMut(ShipCheckpoint)>;
+
+#[cfg(test)]
+std::thread_local! {
+    /// Runs at each [`ShipCheckpoint`] just before the authority check, so a
+    /// test can change authority at that exact point of a real ship.
+    pub(crate) static TEST_SHIP_CHECKPOINT_OBSERVER: std::cell::RefCell<Option<ShipCheckpointObserver>> =
+        std::cell::RefCell::new(None);
+}
+
+/// Re-check a dispatch-originated ship's authority at `at`; a no-op without
+/// a dispatch context. The error is a typed
+/// [`crate::gate::dispatch_auth::DispatchAuthorityAbortedError`].
+// trace:STORY-1917 trace:TASK-2344 | ai:claude
+pub(crate) fn dispatch_ship_checkpoint(
+    dispatch_ctx: Option<&crate::gate::dispatch_auth::DispatchExecutionContext>,
+    at: ShipCheckpoint,
+) -> Result<()> {
+    let Some(ctx) = dispatch_ctx else {
+        return Ok(());
+    };
+    #[cfg(test)]
+    TEST_SHIP_CHECKPOINT_OBSERVER.with(|cell| {
+        if let Some(observe) = cell.borrow_mut().as_mut() {
+            observe(at);
+        }
+    });
+    ctx.reverify_now(true)
+}
+
+/// Appended to a pre-merge dispatch refusal for a PR whose hold this ship did
+/// not release.
+// trace:STORY-1917 trace:TASK-2344 | ai:claude
+pub(crate) const NO_HOLD_RELEASED_NOTE: &str =
+    " No merge-hold was released for it, so there is nothing to re-arm.";
+
+/// The dispatch request's own mandate, for ledgering a refusal on a PR that
+/// had no mandate-released hold.
+// trace:STORY-1917 trace:TASK-2344 | ai:claude
+pub(crate) fn dispatch_ledger_cover(
+    ctx: &crate::gate::dispatch_auth::DispatchExecutionContext,
+) -> MandateCover {
+    MandateCover {
+        id: ctx.mandate_id().to_string(),
+        principal: ctx.principal().to_string(),
+    }
+}
+
 /// A ship a mandate covered that stops short of its merge is a
 /// mandate-driven action too: ledger its refusal under the mandate. Every
 /// exit between the mandate release decision and the merge calls this (a
@@ -6494,7 +6560,7 @@ pub(crate) fn fetch_pr_ship_metadata_via_gh(
 /// `lifecycle:no-ci-wait` token in `AIDA_LIFECYCLE_TAGS`); (2) no GitHub Actions
 /// workflow files configured (`.github/workflows/*.{yml,yaml}` absent or empty)
 /// — the quizdom "no `.github/workflows` at all" case. `None` ⇒ wait normally.
-/// trace:BUG-417 | ai:claude
+// trace:BUG-417 | ai:claude
 pub(crate) fn pr_ship_ci_wait_skip_reason(project_root: &std::path::Path) -> Option<String> {
     // Explicit opt-out (env-level honoring of lifecycle:no-ci-wait, which the
     // direct `pr ship` path does not otherwise read from a spec).
@@ -6524,7 +6590,7 @@ pub(crate) fn pr_ship_ci_wait_skip_reason(project_root: &std::path::Path) -> Opt
 /// BUG-417: true when the project has at least one GitHub Actions workflow file
 /// (`.github/workflows/*.{yml,yaml}`). The pure file-name rule lives in
 /// `pr_ship::workflow_files_indicate_ci`; this only does the directory read.
-/// trace:BUG-417 | ai:claude
+// trace:BUG-417 | ai:claude
 pub(crate) fn repo_has_ci_workflows(project_root: &std::path::Path) -> bool {
     let dir = project_root.join(".github").join("workflows");
     let Ok(entries) = std::fs::read_dir(&dir) else {
@@ -6641,7 +6707,7 @@ pub(crate) fn prepare_main_worktree_for_pr_ship_pull(
 /// would auto-close if `branch` were deleted. Best-effort: returns empty on
 /// any `gh` error (offline, not a GitHub remote, gh absent), so the guard
 /// degrades to the stacks.json-only signal rather than blocking the ship.
-/// trace:BUG-434 | ai:claude
+// trace:BUG-434 | ai:claude
 pub(crate) fn open_child_prs(project_root: &std::path::Path, branch: &str) -> Vec<u64> {
     // Route the stacked-children guard's PR list through the forge (GitHub:
     // `gh pr list --base <branch>`; GitLab: `glab mr list --target-branch`).
@@ -6773,7 +6839,7 @@ pub(crate) fn append_ship_activity_line(main_worktree: &std::path::Path, line: &
 
 /// `aida pr rebase <N> --check` — print the stale-base / overlap /
 /// conflict-prediction report and exit zero. Modifies nothing.
-/// trace:TASK-308 | ai:claude
+// trace:TASK-308 | ai:claude
 pub(crate) fn pr_rebase_check_report(
     project_root: &std::path::Path,
     info: &pr_rebase::PrInfo,
@@ -6916,7 +6982,8 @@ pub(crate) fn pr_rebase_check_report(
 /// reviewer or proceed. The convention here is "fail open with a
 /// warning" so a transient network blip never blocks an autonomous
 /// drain, but a stale-base + overlap that we *did* successfully
-/// detect always blocks. trace:STORY-281 | ai:claude
+/// detect always blocks.
+// trace:STORY-281 | ai:claude
 pub(crate) fn preflight_stale_base_check(
     project_root: &std::path::Path,
     n: u64,
@@ -7054,7 +7121,7 @@ pub(crate) fn preflight_stale_base_check_with_info(
 /// Files touched by `git log --name-only --pretty=format:` over a range.
 /// Local helper for `pr_rebase_check_report` so we don't depend on
 /// `aida_core::rebase`'s internal helpers (which are crate-private).
-/// trace:TASK-308 | ai:claude
+// trace:TASK-308 | ai:claude
 pub(crate) fn files_in_range(repo: &std::path::Path, range: &str) -> Vec<String> {
     std::process::Command::new("git")
         .arg("-C")
@@ -7097,7 +7164,7 @@ pub(crate) fn preflight_stale_base_file_sets(
 /// git infra errors surface as `Err` and the caller proceeds with a
 /// warning — we never block an autonomous drain on a transient blip.
 /// A *successfully detected* intermediate-only diff always refuses.
-/// trace:TASK-480 | ai:claude
+// trace:TASK-480 | ai:claude
 pub(crate) fn preflight_intermediate_only_check(
     project_root: &std::path::Path,
     n: u64,
@@ -7180,7 +7247,8 @@ pub(crate) fn preflight_intermediate_only_check_with_info(
 /// Run the pure classifier with a `git check-ignore`-backed gitignore
 /// predicate. Pulled out so the wiring (build the predicate, call the
 /// classifier) is reused by the preflight and unit-testable in
-/// isolation. trace:TASK-480 | ai:claude
+/// isolation.
+// trace:TASK-480 | ai:claude
 pub(crate) fn classify_intermediate_only_with_gitignore(
     project_root: &std::path::Path,
     changed: &[String],
@@ -7193,7 +7261,8 @@ pub(crate) fn classify_intermediate_only_with_gitignore(
 /// its ignore status (we OR this with the generated-path heuristic; a
 /// tracked-but-ignored build output is exactly the intermediate case we
 /// want to catch). Any spawn/other error ⇒ treat as not-ignored (fail
-/// open). trace:TASK-480 | ai:claude
+/// open).
+// trace:TASK-480 | ai:claude
 pub(crate) fn git_path_is_ignored(project_root: &std::path::Path, path: &str) -> bool {
     std::process::Command::new("git")
         .arg("-C")
@@ -7808,7 +7877,8 @@ mod pr_ship_environment_tests {
 /// Implementation of `aida pr auto-queue-review` — files (or skips, if
 /// already filed) the reviewer story for the PR open on `branch` (default
 /// to `git branch --show-current`). Designed to be invoked by /aida-pr
-/// right after `gh pr create` returns. trace:STORY-90 | ai:claude
+/// right after `gh pr create` returns.
+// trace:STORY-90 | ai:claude
 pub(crate) fn pr_auto_queue_review(branch_override: Option<&str>) -> Result<()> {
     let project_root = find_project_root()?;
 
