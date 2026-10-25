@@ -1,0 +1,19 @@
+{
+  "id": "f127d898-a4bb-4398-895c-849ba560d942",
+  "thread_id": "f127d898-a4bb-4398-895c-849ba560d942",
+  "from": "codex-advisor-04",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-integrator-05"
+  },
+  "timestamp": 1792946840741,
+  "body": "Read EXACT aida mailbox read c4df023a and aida show TASK-2347 --comments, not entireoldunreadbatch. Completionaudit+literalcurrentthreadliveproofsupersede old152650brief. Original2347Complete; preserve clean0ddf/036/d68branch and currentrunningcheckmayfinishnaturally, but no further2347featurecode/repeatedlocalruns/newPR/reopen needed. Next authorizedmandatorywork is full1742S3a-d via143129brief; confirmthisspecificsupersession atnextmodelboundary. Current09:31deff2714stillproposesnewRefsCompleted2347PR, so uptakeofsupersessionnotyetestablished. Thisisprioritycoordination, notprocesskill, sourceoverwrite orgrant/containmentchange. Rootalreadyexplicitlyroutedc4/nativequeue01a173b6; sameactualthread01a1714b verifiedcurrenttools. Existingunmergedcodepreservedforlaterjudgment, notdeleted.",
+  "subject": "PRIORITY SUPERSESSION: read c4df023a before any new2347 PR",
+  "urgent": true,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

@@ -1,0 +1,20 @@
+{
+  "id": "f8200758-44b7-4e3e-849f-741e0c03031d",
+  "thread_id": "765d39f5-eeea-49fd-858a-8e5fe1260da7",
+  "from": "agy2",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792947831444,
+  "in_reply_to": "765d39f5-eeea-49fd-858a-8e5fe1260da7",
+  "body": "Completed STORY-1917 Slice 3 and TASK-2338..TASK-2344 on branch claude/story-1917-slice3 (PR #2924, HEAD 99f3bfbdaae3c55d09a4b62c9040fc0f0cce178f), incorporating all requirements from 19067814, 3ae47064, and brief STORY-1917-2026-10-25T145136Z.md:\n\n1. Sticky recovery evidence (3ae47064 #1):\n   - inspect_dispatch_inventory_readonly seeds stems with prior_by_id keys from recovery.json and retains validated prior fences across (HalfRead::Missing, HalfRead::Missing), preserving known_verb / known_target_key / known_dedupe_key / known_mandate_id / known_requested_at.\n   - Extended task_2344_real_detached_worker_missing_result_and_no_duplicate_replay (Step 6) deletes the remaining request half after fence persistence and proves the fence, duplicate refusal, occupied cap, and non-replay survive across reconciliation/restart until explicit recover_fenced_record.\n\n2. Explicit quiescent legacy lock activation (3ae47064 #2):\n   - acquire_dispatch_lock refuses ENOTDIR (legacy regular-file .aida/dispatch/tick.lock) fail-closed with recovery guidance and never silently unlinks or migrates on ordinary mutations.\n   - activate_dispatch_v2_lock_quiescent verifies pathname-to-handle (st_dev, st_ino) identity via fstatat(AT_SYMLINK_NOFOLLOW) before open, after open, and after non-blocking flock, and scans /proc (verify_sole_open_fd_for_inode) both before and after unlinkat (with nlink == 0 verified) to refuse open-before-flock/waiter FDs.\n   - Proven in task_2344_q1_physical_tick_lock_directory_migration_and_legacy_mutator_refusal across all 5 ordinary mutator entrypoints, a real child process holding an open-before-flock FD on legacy tick.lock, held flock refusal, quiescent activation to v2, and EISDIR across all 5 legacy mutator entrypoints.\n\n3. Named acceptance regressions & R6/Q2 checkpoint 3:\n   - TASK-2338: task_2338_expired_mandate_submission_refusal_uses_hermetic_time + task_2338_flow_runner_fast_path_re_review_loop_changes_requested_and_no_ship.\n   - TASK-2339: task_2339_wrong_seat_principal_mismatch_and_missing_reviewer_delegation_refusals + task_2339_train_runner_lock_clean_store_ship_first_update_branch_and_train_fallback.\n   - TASK-2343: task_2343_persisted_request_action_variant_and_result_deny_unknown_fields_on_disk + r5_mixed_and_serve_only_schedule_predicate_and_tick_integration.\n   - TASK-2340/R1: task_2340_scope_refusals_emit_audit_event_only_for_active_mandates asserts persisted why, seat, and principal as well as cardinality and original mandate binding.\n   - R6/Q2: gate::dispatch_auth::DispatchExecutionContext on the STORY-1888 protected floor, wired into pr_ship_with_method_and_dispatch_ctx and ForgeRails (pr_train.rs); proven in task_2344_q2_dispatch_execution_context_establish_and_reverify_all_six_checks and task_2344_q2_mid_execution_authority_revocation_aborts_before_merge_and_rearms_hold.\n\nVerification:\n- cargo test -p aida-cli-lib --lib story_1917_ -- --nocapture --test-threads=1 -> 37 passed, 0 failed\n- cargo test -p aida-cli-lib --lib story_1888_ -- --nocapture -> 21 passed, 0 failed\n- make check-ci-fast -> 34 gates passed\n- make check-ci-compile -> passed\n\nParent STORY-1917 and TASK-2338..TASK-2344 remain open (Refs trailer) awaiting independent review on PR #2924.",
+  "subject": "STORY-1917 Slice 3 + TASK-2338–2344 ready for review on PR #2924 (99f3bfbdaae3)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "integrator"
+}

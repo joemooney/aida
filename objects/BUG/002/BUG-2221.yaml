@@ -28,7 +28,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T06:38:42.269077518Z
-modified_at: 2026-10-25T16:48:01.987590854Z
+modified_at: 2026-10-25T16:54:30.005015942Z
 req_type: Bug
 comments:
 - id: 01a17250-10a0-76e1-b802-890d5a4ca31b
@@ -146,6 +146,33 @@ comments:
   content: 'ADVISOR performance-guard-route disposition, verified 2026-10-25 fresh session: exact routed trip performance-guard@2026-10-25T12:39:37.789157732Z matches .aida-store/schedule/performance-guard.yaml failure_trips record: show budget1000ms, 215/318 over budget (67.610%), tolerated10%, worst14953ms, ceiling5000ms breached, 24h window, excluded1, lineage_scoped=true. Real regression; retain unchanged budgets and existing approved full three-slice repair/sketch/pickup brief. No claim of repair or new exclusion/threshold adjustment. Fresh aida list still Approved; work remains queued behind current allocator owner. This records disposition of this exact trip, not completion of BUG-2221.'
   created_at: 2026-10-25T13:43:28.544857257Z
   modified_at: 2026-10-25T13:43:28.544857257Z
+- id: 01a173fc-3175-7d43-a0fe-9838bc863096
+  author: joe
+  content: |-
+    ## Implementer approach (contained implementer, headless pickup 2026-10-25)
+
+    Executing the approved codex2 SKETCH v1 under the advisor's APPROVED WITH BINDING AMENDMENTS ruling: all three slices, no budget/tolerance/ceiling change, no telemetry relabeling or deletion.
+
+    ### Acceptance criteria as tests
+    - **AC1 (reproduce + stage attribution):** command-level before/after wall measurements of `show <spec> --format json` default vs `--no-git` on a pinned source + pinned built artifact, reported in a completion comment (cold/warm/load distinguished). New finer phases (`argv`, `notice`, `relationships`, `render`, `linkage.log`, `linkage.enum`, `linkage.content`) land in the existing usage-event `phases` vec; **command-level** extension of `aida-cli/tests/bug_1993_show_phase_timings.rs` proves the new sub-phases appear and aggregate `open/lookup/context/linkage` meanings are preserved (`show_phase_accounting_preserves_aggregate_semantics`). Slice-1 clap fix proved structurally by a build-counter test (`show_builds_one_pristine_tree_and_preserves_dispatch`, **unit** in aida-cli-lib) asserting one pristine tree across alias-guard, extension shadowing, parse and capability reparse, with dispatch/alias/extension precedence preserved.
+    - **AC2 (fix without weakening):** slice 2 negative-proof probe gated to the show (deadline) path only; positive hits fall back to the unchanged `git log --all -F --date-order` collector; unsupported shallow/graft/replace/semantic contexts refuse the fast path and keep the original bounded query; 4s SHOW_LINKAGE_DEADLINE, 1000ms/10%/5000ms guard values untouched. **Unit/fixture** tests per sketch: `negative_proof_requires_every_parent_closed`, `warm_negative_skips_all_ref_history`, `positive_hit_uses_original_date_order` (incl. a commit reachable from both store and code roots so naive store-subtraction would fail), `bare_mention_and_case_filter_match_existing_git` (oracle comparison vs original collector), `shallow_graft_replace_and_config_change_disable_reuse`. BUG-1801/BUG-1594/BUG-1993 behavior preserved by keeping their existing tests green (`bug_1674_show_bounded_under_writer`, `bug_1993_show_deadline_tests`).
+    - **AC3 (decisive hermetic regression):** real temp Git DAGs + PATH git shim counting/structurally asserting avoided work (no `--all` history grep on warm negative), child-watchdog bounded, no tight wall-clock assertions. Cold/resume/bounds: `cold_batches_resume_without_false_complete`, `new_ref_and_detached_other_worktree_head_break_coverage`, `rewind_and_deleted_ref_reuse_only_negative_cones`, `moving_refs_retry_once_then_unknown`, `missing_object_or_truncated_batch_never_certifies`, `cache_lock_corruption_and_size_limit_degrade`, plus amendment-7 `aggregate_limits_evict_deterministically_under_query_flood` and `stable_dag_eventually_completes_over_repeated_shows`. Slice 3: `trace_deadline_expires_during_enumeration` (injected clock spends budget before first content file), `trace_symlink_cycle_and_alias_preserve_truth`, `trace_partial_read_is_incomplete`.
+    - **AC4 (demonstrate <1000ms + fresh telemetry):** after `aida dev build` in this worktree, run pinned same-shape default/no-git measurements against the live-shape repo; report cold (resumable incomplete) vs warm (COMPLETE, semantically equivalent) separately; collect fresh lineage-scoped telemetry without touching old 24h samples. **No automated test** for the live-shape number itself (fleet-load dependent — reported as measurement evidence per the signoff; the hermetic structural tests are the regression gate). Sandbox note: this contained seat cannot write `/home/joe/ai/aida/.git/aida-cache` or `~/.aida/usage.jsonl`; live-shape measurement will use a same-shape full local clone under $TMPDIR and will be labeled as such — if the advisor requires the measurement on the primary checkout itself, that single step needs an operator run and I will say so in the completion report rather than relabel evidence.
+
+    ### Expected files
+    - `aida-cli-lib/src/command_registry.rs` (pristine-tree OnceLock + build counter), `aida-cli-lib/src/user_alias.rs`, `aida-cli-lib/src/external_cmd.rs`, `aida-cli-lib/src/lib_part1.rs` (argv phase, one-tree wiring)
+    - `aida-cli-lib/src/usage.rs` (only if phase helpers need extension), `aida-cli-lib/src/git_backend_cmd.rs` (open/discovery/notice phases), `aida-cli-lib/src/requirements_cli.rs` (relationships/render phases around run_show), `aida-cli-lib/src/report_cmd.rs` (notice phase) — narrow insertions only
+    - `aida-cli-lib/src/show_negative.rs` (new: CLOSED-negative proof cache, S/R snapshots, bounded batches, bounded persistence under `<common-git-dir>/aida-cache/show-negative-v1`)
+    - `aida-cli-lib/src/trace.rs` (probe integration in the show-deadline log path; streaming deadline/cycle-aware traversal for `scan_trace_graph_bounded`; unbounded wrapper preserved for other callers)
+    - Tests: `aida-cli-lib/src/tests/bug_2221_pristine_tree_tests.rs`, `aida-cli-lib/src/tests/bug_2221_negative_proof_tests.rs`, `aida-cli-lib/src/tests/bug_2221_trace_traversal_tests.rs`, extension of `aida-cli/tests/bug_1993_show_phase_timings.rs`
+    - `docs/cli/show.md` (cold/incomplete linkage behavior)
+
+    ### Ambiguities / conflicts as questions
+    - None blocking: the signoff already rules on cold resumable unknown, the cache namespace, and foreground scheduling. Two execution notes rather than questions: (a) the sketch's "existing three message-parser/schema versions" have no version constants in source — I will key the cache on a single versioned schema const documented to be bumped with any parser change, plus a parser-behavior pin test, which satisfies the intent without inventing per-parser version plumbing; (b) per the sandbox note above, live-primary-checkout measurement may need one operator-run step; all other acceptance evidence is in-scope here.
+  created_at: 2026-10-25T16:54:30.005015942Z
+  modified_at: 2026-10-25T16:54:30.005015942Z
+  session_id: 01a173f641ad
+  harness_version: 2.1.310 (Claude Code)
 history:
 - id: 01a173f1-1a2e-7c12-a2a1-e6bdafd814de
   author: joe

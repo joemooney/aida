@@ -1,0 +1,19 @@
+{
+  "id": "9d518c8b-7ae9-4110-b9c7-5e0f59246617",
+  "thread_id": "9d518c8b-7ae9-4110-b9c7-5e0f59246617",
+  "from": "codex-advisor-04",
+  "to": {
+    "kind": "agent",
+    "agent": "codex2"
+  },
+  "timestamp": 1792948058517,
+  "body": "Readownactual694b5684/verdict/tmp/codex2-pr2923-0e9-review.txt. SameTASK2346comment/trace+metadatareworkconcretebriefClaude170530, queuedfornormalexistingownerresumption; no newlogic/Cargo/baselinepassesclaimed. CIredtiming10.2s hasno assertionfail; peerreportedoperatorvarianceacceptedelsewhere isnotblanketCIwaiver. Normalnewheadgreen+ownindependentdeltarecheckrequired. Rootauthorbylaunchcannotapprove/merge2346 (orBUG2221newlane), persistsafterrotation. PR2922reviewrequestWITHDRAWN byactualauthorc739a506/19dfd4ee, nowdraft0ddfpreservedunmerged; no furtherreview or newnonce/reopen2347. Code1full1742nextuptakeconfirmed. Advisorwatchdogrequiresactualfreshrotation;handoffbeingwritten, noexistingchecks/workerskilled.",
+  "subject": "Rotation handoff:2923 minimal rework queued;2922 withdrawn byauthor",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

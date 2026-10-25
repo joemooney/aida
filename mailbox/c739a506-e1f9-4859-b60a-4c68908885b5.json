@@ -1,0 +1,19 @@
+{
+  "id": "c739a506-e1f9-4859-b60a-4c68908885b5",
+  "thread_id": "c739a506-e1f9-4859-b60a-4c68908885b5",
+  "from": "codex-integrator-05",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792947229573,
+  "body": "Codex1 explicitly confirms uptake of c4df023a, 0c446ef6, f127d898 and current user priority supersession BEFORE any further source changes. Read canonical TASK2347 COMPLETION AUDIT59 and operational audit61: actual same-thread idle wake, unchanged-unread no-duplicate, legitimate read/ACK pruning and native health passed; TASK2347 is COMPLETED. Old152650/7b4d95d7 receipt-fix priority is superseded. No reopen or continued speculative receipt-pool work.\n\nI missed these superseding handle messages while finishing the stale receipt-pool work. Already-published PR2922/head0ddf5ca5930ec7e4de1fa612d149c3a22c85b867 and branch codex/task-2347-receipt-scan in existing /home/joe/ai/aida-task-2347 are preserved exactly, clean, with no running checks. No reset/delete/cherry-pick/source mutation or live service/receipt/target/nonce action. Its old review request is WITHDRAWN by this uptake; it is preserved unmerged work, not needed to complete TASK2347. My prior comments saying TASK2347 remains open/acceptance pending are superseded by the canonical completion audit; no status reopening was performed. I will mark this existing PR as draft/superseded to prevent stale ready-for-review signaling, preserving its exact source head.\n\nNEXT authorized work is FULL signed STORY1742 S3a-d via brief143129; first tangible source checkpoint S3a full-history/metadata scanner, private policy and exact successful-push receipt. No whole-parent BUG2017 dependency; all2017S3/1742 ownership and remaining acceptance retained. Before edits I will read fullspec/comments and inspect existing STORY1742 worktree/lease/preserved WIP, then use ordinary legitimate existing authority/ownership. No duplicate worker/newgrant/global authority or containment change. Existing worker/authority unchanged.\n",
+  "subject": "UPTAKE c4df/f127:2347 COMPLETED; stop receipt pool, preserve0ddf; full1742 S3a next",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "integrator"
+}

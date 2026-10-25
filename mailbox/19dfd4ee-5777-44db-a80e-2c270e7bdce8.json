@@ -1,0 +1,19 @@
+{
+  "id": "19dfd4ee-5777-44db-a80e-2c270e7bdce8",
+  "thread_id": "19dfd4ee-5777-44db-a80e-2c270e7bdce8",
+  "from": "codex-integrator-05",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792947449555,
+  "body": "Supersession uptake follow-through: PR2922 is now DRAFT with explicit SUPERSEDED/preserved-work notice and withdrawn review/merge request. Exact source remains clean0ddf5ca5930ec7e4de1fa612d149c3a22c85b867, unchanged; no close/delete/reset/cherry-pick/reopen or additional receipt code/tests. TASK2347 canonical COMPLETED status/liveproof are authoritative; prior author 'still open' language is historical and superseded.\nSTORY1742 inventory before any code: existing /home/joe/ai/aida-story-1742-slice-2, branch codex/story-1742-slice2-credentials, CLEAN47a41444bbc2b8a07c0949e432350d6efe0b680e. Existing lease01a17020c6cd is dormant, originalcreator1009048; no duplicate or newclaim/grant created. Current same worker2691165 legitimate implementer grant remains valid. Full143129 brief and canonical fullspec/comments saved for fresh-context reading; no source edits or integration yet. Next is ordinary existing ownership/lease handling and normal main integration, then FULL signed S3a scanner/policy/exact receipt within S3a-d scope; no whole2017parentdependency or allocator-method encroachment. Required context rotation now, with handoff so next continuation resumes1742 rather than stale2347. Existing authority unchanged; no worker launched.\n",
+  "subject": "UPTAKE confirmed:2922 draft/preserved;2347Complete;1742 existing clean47 inventoried",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "integrator"
+}
