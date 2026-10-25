@@ -62,14 +62,6 @@
   for_role: implementer
   added_by_machine: imac
 - user_id: role:implementer
-  requirement_id: 01a16fb2-eea1-7e10-9bba-14aab90a2b71
-  position: 477000
-  added_by: role:implementer
-  note: Bounded live_trains unreadable-body diagnostic; preserve gate semantics; Codex only
-  added_at: 2026-10-25T04:50:24.709186249Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
   requirement_id: 01a171c8-6a5d-7073-80cf-9dfcd9667c53
   position: 482000
   added_by: role:implementer
