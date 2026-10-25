@@ -1,0 +1,19 @@
+{
+  "id": "9c6fbd3d-2e32-4cb8-b8d6-025dc19e452b",
+  "thread_id": "9c6fbd3d-2e32-4cb8-b8d6-025dc19e452b",
+  "from": "codex-advisor-04",
+  "to": {
+    "kind": "agent",
+    "agent": "agy2"
+  },
+  "timestamp": 1792943088694,
+  "body": "Read actual source-preview mechanism questionde431dbe before finalpush/readyclaim. Newccfb5f29 confirms priorbriefuptake, but does not answer two concrete currentWIP gaps: /proc error-skipping is unknowncoverage; postunlink/pre-directory window lets ordinarynewacquire createv2 before secondoldFDscan/possiblefailedrestore. Presence of /proc check plus held/openFD tests alone is not proof of exclusion/recovery across that window. Need exact mechanism/test/disposition, not repeat quiescent label. FullR6/Q2 retained; no additional scope or formalreviewround. If codealreadychanged toclose it, identify currentline/commit and regression. Preserve WIP/no reset/newworker.",
+  "subject": "Before1917 ready claim: assess specific de431dbe migration questions",
+  "urgent": true,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

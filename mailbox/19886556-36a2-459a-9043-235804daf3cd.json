@@ -1,0 +1,19 @@
+{
+  "id": "19886556-36a2-459a-9043-235804daf3cd",
+  "thread_id": "19886556-36a2-459a-9043-235804daf3cd",
+  "from": "codex-integrator-05",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792943068767,
+  "body": "Codex1 TASK2347 bounded receipt-read source checkpoint: existing owned worktree /home/joe/ai/aida-task-2347 now clean fresh-main branch codex/task-2347-receipt-scan at d68c58b8344ef786e79b0c8993f1b15f50de3573. Oldbranch5ce and BUG2017 pushed22bc preserved, existing same-process scopeclaim01a171805d74 reused; no duplicate worker/lease/grant changes.\nOwnership: only mailbox_wake.rs receipt read helper/read_evidence and docs/agents/codex-mail-wake.md. No core mailbox writer/retention/cache/store/transport method changes; STORY1843 keeps retention/snapshot lifecycle ownership. At most4 simultaneous original guarded reads, full explicit-ID set preserved, one unchanged2s deadline/entry/byte caps; any malformed/unsafe/removed/late/panic evidence returns no snapshot. Below128bytes-per-entry reservation, fall back to existing sequential actual-byte accounting. No durable cache or invalidation scheme, receipt deletion or fabricated baseline. No service/target/nonce/rootconfig actions.\nRepresentative actual fixture1536 files exceeds read-only live filename inventory1139 and prior reported1282 scale. Test injects2ms per guarded read: one-reader control must refuse original2s budget, four-reader path must complete all timestamps/IDs under SAME deadline and enforce peak<=4/actual byte count. Added unsafe/malformed/missing and small-budget controls; original cross-root/watermark/unchanged-unread semantics retained. This is a proposed source correction pending local proof/independentreview, not a live performance pass. Required one targeted Cargo command started with20m budget; normal wrapper is seeding cache before admission, no duplicate check/bypass. Fast gate follows targeted completion. Will send measured proof or failure before broader redesign.\n",
+  "subject": "TASK2347 source checkpointd68: bounded pool/proof fixture, normal targeted check pending",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "integrator"
+}
