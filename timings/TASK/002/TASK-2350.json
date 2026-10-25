@@ -5,9 +5,34 @@
     {
       "at": "2026-10-25T20:17:24.115458641Z",
       "closed_by": "queue-done"
+    },
+    {
+      "at": "2026-10-25T20:45:42.266050580Z",
+      "closed_by": "auto-bump"
     }
   ],
   "events": [
+    {
+      "ts": "2026-10-25T17:30:57.913213366Z",
+      "spec": "TASK-2350",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-25T19:36:27.933338400Z",
+      "spec": "TASK-2350",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
     {
       "ts": "2026-10-25T19:36:46.674819141Z",
       "spec": "TASK-2350",
@@ -16,6 +41,33 @@
         "event": "DispositionChanged",
         "before": "In Progress",
         "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-25T20:45:02.079545679Z",
+      "spec": "TASK-2350",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-25T20:45:27.206011177Z",
+      "spec": "TASK-2350",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2931
+      }
+    },
+    {
+      "ts": "2026-10-25T20:45:42.058054876Z",
+      "spec": "TASK-2350",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "2799be1e03bdaba0d499ad8f15529d9ed065eaa8",
+        "closed_by": "auto-bump"
       }
     }
   ]
