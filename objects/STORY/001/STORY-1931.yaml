@@ -1,0 +1,35 @@
+id: 01a17238-6493-73a3-9bd6-0040bec38df3
+spec_id: STORY-1931
+agreed_id: STORY-1931
+title: 'Review PR-2919: [AI:codex] fix(allocation): enforce node-local WORK admission (Refs BUG-2017)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a17162`) for branch `codex/bug-2017-slice1`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2919>
+  - Branch: `codex/bug-2017-slice1` → `main`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - BUG-2017
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2919` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-25T08:41:00.819616054Z
+modified_at: 2026-10-25T08:41:00.819616054Z
+req_type: Story
+filed_at:
+  code_sha: c25b9bd3855226fdb40371affef506479c127ba6
+  branch: codex/bug-2017-slice1
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 3cbb90b0c9
+  vendor: codex
