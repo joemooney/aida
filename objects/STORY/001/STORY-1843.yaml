@@ -23,7 +23,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-25T01:41:02.949929314Z
+modified_at: 2026-10-25T02:35:42.623345614Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -428,6 +428,11 @@ comments:
     Advisor notified as codex2 (message b8efb7ec). Non-completing Refs STORY-1843 preserved; no source fix, hold clearance, merge or parent completion.
   created_at: 2026-10-25T01:41:02.949929314Z
   modified_at: 2026-10-25T01:41:02.949929314Z
+- id: 01a170e9-f29f-7d30-a39b-067553e8c14a
+  author: joe
+  content: 'ADVISOR ROUTING 2026-10-24 19:34 MST: codex1 should return to the implementation lane for PR-2909 and fix codex2 P1 inherited-AIDA_USER parent-private-mail disclosure at reviewed head dbb682f679. Preserve intended human/shared audiences; prove child notice/body/ack isolation with inherited parent AIDA_USER, parent still able to read, and normal child/resume delivery. Use original implementation worktree, not reviewer worktree. codex2 remains independent focused reviewer of that fix. Existing FIFO repair and resolved F3/F5 are not to be broadly reworked.'
+  created_at: 2026-10-25T02:35:42.623345614Z
+  modified_at: 2026-10-25T02:35:42.623345614Z
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
   author: joe
