@@ -120,3 +120,11 @@
   added_at: 2026-10-25T04:50:24.709186249Z
   for_role: implementer
   added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a15f18-ed08-7922-ac1d-114f0fa53917
+  position: 478000
+  added_by: role:implementer
+  note: PR2917 F1 marker writer outside protected floor; rework before final slice
+  added_at: 2026-10-25T05:07:59.145086748Z
+  for_role: implementer
+  added_by_machine: imac
