@@ -23,7 +23,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-25T06:35:39.558393705Z
+modified_at: 2026-10-25T08:22:35.028864399Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -583,6 +583,16 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: PR3 independently reviewed: F3/F5, FIFO repair and current-head CI pass; F4 still leaks parent private mail via inherited AIDA_USER. Non-completing Refs STORY-1843.. No triage reason was given.'
   created_at: 2026-10-25T06:35:39.558386330Z
   modified_at: 2026-10-25T06:35:39.558386330Z
+- id: 01a17227-8514-7610-90a8-60a93dd4a685
+  author: joe
+  content: |-
+    ADVISOR actual-reader conformance case for signed STORY1843 B (no new scope): read-only wake-snapshot saw advisor IDs7568da31-661c-4c54-84e4-14faaeb901ba andb9aa8608-457a-4d8c-b99f-2739ce60534d physically in aida-pool-aida-0; ordinary immutable LIVE mailbox read by exactID from that cwd returned message-not-found. Pool0 had no local .aida-store link. Source handle_mailbox_command derives project_root from the resolved store_path parent, so BUG331 canonical-store fallback loses the originating checkout's local mailbox. Pool1/2347 with local links could read their private mail.
+
+    Applied the standard AGENTS.md store-link setup to pool0 ONLY after independently verifying main/pool0/store common Git identity and canonical aida-store branch, owned parent and absent destination; atomic os.symlink never replaced an existing path. Both exact-ID reads then succeeded, plus the pool0 correction messagefd8bf90f. The link is a runtime alias to the existing canonical store; no message or source file copy/deletion, branch/grant/authority setting or live watcher state change. This is a local workaround, not completion of shared read API.
+
+    The approved central reader must retain actual local checkout identity separately from canonical store root and serve CLI/MCP/notices/wake through one resolver, including missing-local-alias and pooled/reused roots. Add this exact before/after shape to B conformance; do not require callers to manufacture links or derive local root from physical canonical path. Preserve private receipt/unknown-watermark boundaries and C retention-before-recycle. Current inbox drain: all31 metadata-pending IDs were genuinely read via AIDA exact-ID API (including recovered pool cases); six older referenced owning specs1930/1981/2169/1677/1784/1744 verifiedCompleted and2910/2913/2906 review notes superseded by actual later approval/landing. Then normal recipient=advisor inbox read/ack succeeded across9source roots; returned records all matched previously read IDs or existing exact-recipient acknowledgement evidence, with no concurrent unknown message. Audit /tmp/advisor-inbox-read-ack-j67bi8ku.json. This is normal coordinator read/ack, not unread baselining, live watcher testing or delivery-acceptance evidence. Verify fresh global snapshot before claiming caught up.
+  created_at: 2026-10-25T08:22:35.028864399Z
+  modified_at: 2026-10-25T08:22:35.028864399Z
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
   author: joe
