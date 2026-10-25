@@ -696,7 +696,7 @@ fn mandate_stopped_expired_human_gates_or_grant_revoked_at_execution_time_refuse
         .refusal_reason
         .as_deref()
         .unwrap_or("")
-        .contains("was stopped before execution"));
+        .contains("was stopped"));
     assert!(res1.notified_at.is_some());
     assert_eq!(count_advisor_mail(&f.root), mail_before + 1);
     let rows1 = crate::mandate_drive::ledger_rows(&f.root, &m1.id);
@@ -1066,4 +1066,635 @@ fn clean_stale_git_config_lock_removes_only_empty_0444_stale_regular_file() {
     std::os::unix::fs::symlink(&target, &lock_path).unwrap();
     assert!(!clean_stale_git_config_lock(&repo, future).unwrap());
     assert!(std::fs::symlink_metadata(&lock_path).is_ok());
+}
+
+// trace:STORY-1917 | ai:agy
+#[test]
+fn f1_log_symlink_and_directory_symlink_refused_without_disclosing_or_modifying_outside_file() {
+    let f = ExecFixture::new(&["reviewer", "implementer"]);
+    f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
+    let now = Utc::now();
+
+    let outside_file = f._tmp.path().join("private-outside-secret.txt");
+    let secret_payload = "SYNTHETIC-PRIVATE-CONTENT-DO-NOT-DISCLOSE\n";
+    std::fs::write(&outside_file, secret_payload).unwrap();
+
+    let sub = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Review {
+            pr: 601,
+            vendor: None,
+        },
+        now,
+    )
+    .unwrap();
+
+    // Plant a symlink at `.aida/dispatch/logs/<id>.log` pointing to the outside private file.
+    let logs = f.root.join(".aida/dispatch/logs");
+    std::fs::create_dir_all(&logs).unwrap();
+    let log_symlink = logs.join(format!("{}.log", sub.request.id));
+    std::os::unix::fs::symlink(&outside_file, &log_symlink).unwrap();
+
+    // 1. `append_dispatch_log` must refuse the symlink without reading or replacing it.
+    let err = append_dispatch_log(&f.root, &sub.request.id, "refusal log line\n").unwrap_err();
+    assert!(
+        err.to_string().contains("symlink"),
+        "expected symlink refusal from append_dispatch_log, got: {err:#}"
+    );
+    assert!(
+        std::fs::symlink_metadata(&log_symlink)
+            .unwrap()
+            .file_type()
+            .is_symlink(),
+        "log symlink must not be replaced by a regular file"
+    );
+    assert_eq!(
+        std::fs::read_to_string(&outside_file).unwrap(),
+        secret_payload,
+        "outside file must remain completely untouched"
+    );
+
+    // 2. `spawn_detached_worker` must also refuse when the log file is a symlink.
+    let spawn_err = spawn_detached_worker(&f.root, &sub.request.id, true, "tok-1").unwrap_err();
+    assert!(
+        spawn_err.to_string().contains("symlink"),
+        "expected symlink refusal from spawn_detached_worker, got: {spawn_err:#}"
+    );
+    assert_eq!(
+        std::fs::read_to_string(&outside_file).unwrap(),
+        secret_payload,
+        "outside file must not be written by worker stdout/stderr redirect"
+    );
+
+    // 3. Even when `execute_one_request` takes a refusal path (e.g. revoked grant),
+    //    no file under `.aida/dispatch/` may contain the outside secret content.
+    crate::gate::seat_authority::revoke_by_id(&sub.request.requester_grant_id).unwrap();
+    let res = execute_one_request(&f.root, &f.mandate_dir, &sub.request.id, true, now).unwrap();
+    assert_eq!(res.status, DispatchStatus::Refused);
+    assert!(
+        std::fs::symlink_metadata(&log_symlink)
+            .unwrap()
+            .file_type()
+            .is_symlink(),
+        "log symlink must still not be replaced with a regular file containing outside bytes"
+    );
+    assert_eq!(
+        std::fs::read_to_string(&outside_file).unwrap(),
+        secret_payload
+    );
+
+    // 4. Replacing `.aida/dispatch/logs` itself with a symlink to an outside directory must be refused.
+    std::fs::remove_file(&log_symlink).unwrap();
+    std::fs::remove_dir(&logs).unwrap();
+    let outside_dir = f._tmp.path().join("outside-logs-dir");
+    std::fs::create_dir_all(&outside_dir).unwrap();
+    std::os::unix::fs::symlink(&outside_dir, &logs).unwrap();
+
+    let dir_err = append_dispatch_log(&f.root, &sub.request.id, "attempt\n").unwrap_err();
+    assert!(
+        dir_err.to_string().contains("symlink"),
+        "expected directory symlink refusal, got: {dir_err:#}"
+    );
+    assert!(
+        !outside_dir.join(format!("{}.log", sub.request.id)).exists(),
+        "must not create log inside symlinked directory"
+    );
+}
+
+// trace:STORY-1917 | ai:agy
+#[test]
+fn f2_worker_claim_persisted_before_spawn_and_fenced_against_unowned_or_concurrent_run() {
+    let f = ExecFixture::new(&["reviewer", "implementer"]);
+    f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
+    let now = Utc::now();
+    let brief = f.write_brief("f2.md", "F2 brief.\n");
+
+    let sub = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Impl {
+            name: "lane-f2".into(),
+            branch: "claude/lane-f2".into(),
+            spec: "TASK-100".into(),
+            brief: brief.clone(),
+            vendor: None,
+        },
+        now,
+    )
+    .unwrap();
+
+    // 1. `claim_and_dispatch_pass` persists `Running` + `claim_token` on disk under `tick.lock`.
+    let pass = claim_and_dispatch_pass(&f.root, false, false, now).unwrap();
+    assert_eq!(pass.claimed_ids, vec![sub.request.id.clone()]);
+    let (_, claimed_res) = load_pair(&f.root, &sub.request.id).unwrap();
+    assert_eq!(claimed_res.status, DispatchStatus::Running);
+    let owner_token = claimed_res
+        .claim_token
+        .clone()
+        .expect("claim_token must be persisted on Running record");
+
+    // Stamp live worker ownership `(my_pid, my_start, owner_token)` on disk.
+    let my_pid = std::process::id();
+    let my_start = crate::process_probe::process_start_identity(my_pid);
+    let mut running_res = claimed_res;
+    running_res.worker_pid = Some(my_pid);
+    running_res.worker_start = my_start.clone();
+    write_private_atomic(
+        &result_path(&f.root, &sub.request.id),
+        &serde_json::to_vec_pretty(&running_res).unwrap(),
+    )
+    .unwrap();
+
+    // 2. An unowned or wrong-token `execute_one_request_with_token` call must fail
+    //    BEFORE touching `results/<id>.json` — even if request JSON is tampered so
+    //    `revalidate_request` would otherwise record a tampered refusal!
+    let req_file = request_path(&f.root, &sub.request.id);
+    let orig_req_bytes = std::fs::read(&req_file).unwrap();
+    let mut tampered_val: serde_json::Value = serde_json::from_slice(&orig_req_bytes).unwrap();
+    tampered_val["action"]["branch"] = serde_json::Value::String("--upload-pack=evil".into());
+    write_private_atomic(
+        &req_file,
+        &serde_json::to_vec_pretty(&tampered_val).unwrap(),
+    )
+    .unwrap();
+
+    let unowned_err =
+        execute_one_request_with_token(&f.root, &f.mandate_dir, &sub.request.id, false, None, now)
+            .unwrap_err();
+    assert!(
+        unowned_err.to_string().contains("claim token mismatch"),
+        "expected claim token mismatch refusal for unowned caller, got: {unowned_err:#}"
+    );
+    let wrong_tok_err = execute_one_request_with_token(
+        &f.root,
+        &f.mandate_dir,
+        &sub.request.id,
+        false,
+        Some("wrong-token"),
+        now,
+    )
+    .unwrap_err();
+    assert!(
+        wrong_tok_err.to_string().contains("claim token mismatch"),
+        "expected claim token mismatch refusal for wrong token, got: {wrong_tok_err:#}"
+    );
+
+    // Verify on-disk result is STILL `Running` with `owner_token` (not clobbered to `Refused`).
+    let (_, after_unowned) = load_pair(&f.root, &sub.request.id).unwrap();
+    assert_eq!(
+        after_unowned.status,
+        DispatchStatus::Running,
+        "unowned caller must never overwrite Running result"
+    );
+    assert_eq!(
+        after_unowned.claim_token.as_deref(),
+        Some(owner_token.as_str())
+    );
+
+    // Restore valid request JSON and verify the legitimate owner with `owner_token`
+    // can still execute or finalize only while its claim matches.
+    write_private_atomic(&req_file, &orig_req_bytes).unwrap();
+
+    // 3. Direct `execute_one_request` on a Pending request enforces concurrency caps:
+    //    with 2 live Running reviews, a 3rd Pending review called via direct `execute_one_request`
+    //    must bail on the concurrency cap and leave its status `Pending`.
+    for pr in [610, 611] {
+        let rsub = submit_request(
+            &f.root,
+            &f.mandate_dir,
+            &f.principal,
+            &DispatchRequestVerb::Review { pr, vendor: None },
+            now,
+        )
+        .unwrap();
+        let mut r = rsub.result;
+        r.status = DispatchStatus::Running;
+        r.started_at = Some(now);
+        r.worker_pid = Some(my_pid);
+        r.worker_start = my_start.clone();
+        r.claim_token = Some(format!("tok-{pr}"));
+        write_private_atomic(
+            &result_path(&f.root, &rsub.request.id),
+            &serde_json::to_vec_pretty(&r).unwrap(),
+        )
+        .unwrap();
+    }
+    let third_rev = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Review {
+            pr: 612,
+            vendor: None,
+        },
+        now,
+    )
+    .unwrap();
+    let cap_err =
+        execute_one_request(&f.root, &f.mandate_dir, &third_rev.request.id, true, now).unwrap_err();
+    assert!(
+        cap_err.to_string().contains("concurrency cap"),
+        "direct run must enforce concurrency cap, got: {cap_err:#}"
+    );
+    let (_, third_after) = load_pair(&f.root, &third_rev.request.id).unwrap();
+    assert_eq!(third_after.status, DispatchStatus::Pending);
+}
+
+// trace:STORY-1917 | ai:agy
+#[test]
+fn f3_stopped_or_expired_mandate_a_followed_by_replacement_mandate_b_refuses_request_under_a() {
+    let f = ExecFixture::new(&["reviewer", "implementer"]);
+    let now = Utc::now();
+    let brief = f.write_brief("f3.md", "F3 brief.\n");
+
+    // 1. Start Mandate A (without `--include-supervised`), queue request `sub_a`,
+    //    stop Mandate A, then start replacement Mandate B WITH `--include-supervised`.
+    let m_a = f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
+    let sub_a = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Impl {
+            name: "lane-f3-a".into(),
+            branch: "claude/lane-f3-a".into(),
+            spec: "TASK-100".into(),
+            brief: brief.clone(),
+            vendor: None,
+        },
+        now,
+    )
+    .unwrap();
+    assert_eq!(sub_a.request.mandate_id, m_a.id);
+
+    mandate::stop(&f.mandate_dir, &|| Ok(()), &f.principal, now).unwrap();
+    let m_b = f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], true);
+    assert_ne!(m_a.id, m_b.id);
+
+    // Executing `sub_a` while replacement Mandate B is active must refuse citing Mandate A!
+    let res_a =
+        execute_one_request(&f.root, &f.mandate_dir, &sub_a.request.id, false, now).unwrap();
+    assert_eq!(res_a.status, DispatchStatus::Refused);
+    let reason_a = res_a.refusal_reason.as_deref().unwrap_or("");
+    assert!(
+        reason_a.contains(&m_a.id) && reason_a.contains("was stopped or superseded"),
+        "expected refusal citing stopped/superseded mandate A ({}), got: {reason_a}",
+        m_a.id
+    );
+
+    // 2. Also test when Mandate B expires and Mandate C is started later: a request queued
+    //    under Mandate B must still be refused when executed under Mandate C.
+    let sub_b = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Impl {
+            name: "lane-f3-b".into(),
+            branch: "claude/lane-f3-b".into(),
+            spec: "TASK-100".into(),
+            brief,
+            vendor: None,
+        },
+        now,
+    )
+    .unwrap();
+    let after_b_expiry = now + Duration::hours(5);
+    let m_c = mandate::start_with_scopes(
+        &f.mandate_dir,
+        &|| Ok(()),
+        &f.principal,
+        Duration::hours(4),
+        Some("test dispatch c".into()),
+        false,
+        true,
+        [Scope::ShipHeld, Scope::Dispatch].into_iter().collect(),
+        after_b_expiry,
+    )
+    .unwrap();
+    assert_ne!(m_b.id, m_c.id);
+
+    let res_b = execute_one_request(
+        &f.root,
+        &f.mandate_dir,
+        &sub_b.request.id,
+        false,
+        after_b_expiry,
+    )
+    .unwrap();
+    assert_eq!(res_b.status, DispatchStatus::Refused);
+    let reason_b = res_b.refusal_reason.as_deref().unwrap_or("");
+    assert!(
+        reason_b.contains(&m_b.id),
+        "expected refusal citing superseded mandate B ({}), got: {reason_b}",
+        m_b.id
+    );
+}
+
+// trace:STORY-1917 | ai:agy
+#[test]
+fn f4_reviewer_hold_preservation_failure_aborts_cleanup_and_concurrent_destination_is_no_clobber() {
+    let f = ExecFixture::new(&["reviewer", "implementer"]);
+    let wt_root = worktrees_root(&f.root);
+    std::fs::create_dir_all(&wt_root).unwrap();
+
+    // Create dead reviewer worktree `aida-pr-78` with a merge-hold marker.
+    let rev_wt = wt_root.join("aida-pr-78");
+    git(
+        &f.root,
+        &[
+            "worktree",
+            "add",
+            "-B",
+            "pr-78",
+            rev_wt.to_str().unwrap(),
+            "HEAD",
+        ],
+    );
+    let wt_hold_dir = rev_wt.join(".aida/merge-holds");
+    std::fs::create_dir_all(&wt_hold_dir).unwrap();
+    let src_hold = wt_hold_dir.join("PR-78");
+    let hold_payload = r#"{"pr":78,"reason":"hold-from-78"}"#;
+    std::fs::write(&src_hold, hold_payload).unwrap();
+
+    // 1a. Unreadable source hold (mode 0o000) -> preservation fails and aborts worktree removal.
+    std::fs::set_permissions(&src_hold, std::fs::Permissions::from_mode(0o000)).unwrap();
+    let err1a = cleanup_dead_reviewer_worktree(&f.root, 78).unwrap_err();
+    std::fs::set_permissions(&src_hold, std::fs::Permissions::from_mode(0o600)).unwrap();
+    let err1a_full = format!("{err1a:#}");
+    assert!(
+        err1a_full.contains("cannot open") || err1a_full.contains("Permission denied"),
+        "expected unreadable source hold error, got: {err1a_full}"
+    );
+    assert!(
+        rev_wt.exists() && src_hold.exists(),
+        "reviewer worktree and source hold must remain intact when source hold is unreadable"
+    );
+
+    // 1b. Invalid/unwritable destination directory (`.aida/merge-holds` is a regular file) ->
+    //     preservation fails and aborts worktree removal.
+    let main_hold_dir = f.root.join(".aida/merge-holds");
+    std::fs::write(&main_hold_dir, "blocking-file").unwrap();
+    let err1b = cleanup_dead_reviewer_worktree(&f.root, 78).unwrap_err();
+    std::fs::remove_file(&main_hold_dir).unwrap();
+    std::fs::create_dir_all(&main_hold_dir).unwrap();
+    let err1b_full = format!("{err1b:#}");
+    assert!(
+        err1b_full.contains("cannot create")
+            || err1b_full.contains("cannot stage")
+            || err1b_full.contains("File exists"),
+        "expected hold destination error, got: {err1b_full}"
+    );
+    assert!(
+        rev_wt.exists() && src_hold.exists(),
+        "reviewer worktree and source hold must remain intact when destination staging fails"
+    );
+
+    // 2. Empty/corrupt source hold -> preservation refuses and aborts worktree removal.
+    std::fs::write(&src_hold, b"").unwrap();
+    let err2 = cleanup_dead_reviewer_worktree(&f.root, 78).unwrap_err();
+    assert!(
+        err2.to_string().contains("empty"),
+        "expected empty hold refusal, got: {err2:#}"
+    );
+    assert!(
+        rev_wt.exists(),
+        "reviewer worktree must not be removed when source hold is empty/corrupt"
+    );
+
+    // 3. Symlink at destination `.aida/merge-holds/PR-78` -> no-clobber verification refuses
+    //    because destination is a symlink, aborting worktree removal.
+    std::fs::write(&src_hold, hold_payload).unwrap();
+    let outside_target = f._tmp.path().join("outside-hold-target");
+    std::fs::write(&outside_target, "outside").unwrap();
+    let main_hold = main_hold_dir.join("PR-78");
+    std::os::unix::fs::symlink(&outside_target, &main_hold).unwrap();
+
+    let err3 = cleanup_dead_reviewer_worktree(&f.root, 78).unwrap_err();
+    let err3_full = format!("{err3:#}");
+    assert!(
+        err3_full.contains("symlink"),
+        "expected destination symlink refusal, got: {err3_full}"
+    );
+    assert!(
+        rev_wt.exists(),
+        "reviewer worktree must not be removed when destination hold is a symlink"
+    );
+    std::fs::remove_file(&main_hold).unwrap();
+
+    // 4. Valid existing destination hold -> atomic no-clobber (`AlreadyExists`) verifies
+    //    the existing destination hold and preserves it without overwriting.
+    let winner_payload = r#"{"pr":78,"reason":"existing-winner-hold"}"#;
+    std::fs::write(&main_hold, winner_payload).unwrap();
+    cleanup_dead_reviewer_worktree(&f.root, 78).unwrap();
+    assert!(
+        !rev_wt.exists(),
+        "dead reviewer worktree should be removed once hold is verified"
+    );
+    assert_eq!(
+        std::fs::read_to_string(&main_hold).unwrap(),
+        winner_payload,
+        "existing destination hold must win without clobber"
+    );
+}
+
+// trace:STORY-1917 | ai:agy
+#[test]
+fn f5_live_registered_agent_or_unknown_occupant_without_lease_blocks_cleanup_and_branch_reset() {
+    let f = ExecFixture::new(&["reviewer", "implementer"]);
+    f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
+    let now = Utc::now();
+    let wt_root = worktrees_root(&f.root);
+    std::fs::create_dir_all(&wt_root).unwrap();
+
+    // 1. Live registered agent in `.aida/agents/` with NO session lease in `.aida/sessions/`
+    //    occupying `aida-pr-91` / `PR-91` blocks `cleanup_dead_reviewer_worktree`.
+    let rev_wt = wt_root.join("aida-pr-91");
+    git(
+        &f.root,
+        &[
+            "worktree",
+            "add",
+            "-B",
+            "pr-91",
+            rev_wt.to_str().unwrap(),
+            "HEAD",
+        ],
+    );
+    let my_pid = std::process::id();
+    let agents_dir = f.root.join(".aida/agents");
+    std::fs::create_dir_all(&agents_dir).unwrap();
+    let rev_agent = crate::agent_registry::AgentRegistryEntry {
+        id: "rev91".into(),
+        agent_type: "codex".into(),
+        pid: my_pid,
+        pid_start: crate::process_probe::process_start_identity(my_pid),
+        pid_namespace: crate::agent_registry::current_pid_namespace(),
+        name: Some("rev91".into()),
+        description: None,
+        tty: None,
+        terminal: None,
+        started_at: now,
+        last_active_at: now,
+        role: Some("reviewer".into()),
+        current_spec: Some("PR-91".into()),
+        worktree_path: rev_wt.clone(),
+        source: "test".into(),
+        binary_version: None,
+        build_sha: None,
+        availability: Default::default(),
+        paused_since: None,
+        paused_reason: None,
+        expected_back: None,
+        native_session_id: None,
+        claude_session_id: None,
+        ended_at: None,
+        resumed_from: None,
+        spec_status_at_end: None,
+    };
+    let rev_agent_file = agents_dir.join("rev91.toml");
+    std::fs::write(&rev_agent_file, toml::to_string_pretty(&rev_agent).unwrap()).unwrap();
+
+    let err_rev = cleanup_dead_reviewer_worktree(&f.root, 91).unwrap_err();
+    assert!(
+        err_rev
+            .to_string()
+            .contains("currently occupied by live registered agent"),
+        "expected live registered agent refusal without lease, got: {err_rev:#}"
+    );
+    assert!(
+        rev_wt.exists(),
+        "occupied reviewer worktree must be retained"
+    );
+    std::fs::remove_file(&rev_agent_file).unwrap();
+
+    // 2. Unobservable-namespace registered agent (`pid_namespace` mismatch, `ended_at: None`)
+    //    is treated as an unknown occupant (fail closed) and also blocks cleanup.
+    let foreign_ns_agent = crate::agent_registry::AgentRegistryEntry {
+        id: "foreign91".into(),
+        agent_type: "codex".into(),
+        pid: 999_999_992,
+        pid_start: Some("foreign-start".into()),
+        pid_namespace: Some(1),
+        name: Some("foreign91".into()),
+        description: None,
+        tty: None,
+        terminal: None,
+        started_at: now,
+        last_active_at: now,
+        role: Some("reviewer".into()),
+        current_spec: Some("PR-91".into()),
+        worktree_path: rev_wt.clone(),
+        source: "test".into(),
+        binary_version: None,
+        build_sha: None,
+        availability: Default::default(),
+        paused_since: None,
+        paused_reason: None,
+        expected_back: None,
+        native_session_id: None,
+        claude_session_id: None,
+        ended_at: None,
+        resumed_from: None,
+        spec_status_at_end: None,
+    };
+    let foreign_file = agents_dir.join("foreign91.toml");
+    std::fs::write(
+        &foreign_file,
+        toml::to_string_pretty(&foreign_ns_agent).unwrap(),
+    )
+    .unwrap();
+    let err_foreign = cleanup_dead_reviewer_worktree(&f.root, 91).unwrap_err();
+    assert!(
+        err_foreign.to_string().contains("unknown-liveness")
+            || err_foreign.to_string().contains("occupied"),
+        "expected unobservable-namespace agent refusal, got: {err_foreign:#}"
+    );
+    assert!(rev_wt.exists());
+    std::fs::remove_file(&foreign_file).unwrap();
+
+    // 3. Live registered agent occupying `take-100` / branch `claude/fix-100` (with NO lease)
+    //    blocks `take` runner BEFORE `git checkout -B` can reset the branch or touch the worktree.
+    let take_wt = wt_root.join("take-100");
+    git(
+        &f.root,
+        &[
+            "worktree",
+            "add",
+            "-B",
+            "claude/fix-100",
+            take_wt.to_str().unwrap(),
+            "HEAD",
+        ],
+    );
+    let dirty_marker = take_wt.join("uncommitted-occupant-work.txt");
+    std::fs::write(&dirty_marker, "do not lose my work").unwrap();
+
+    let take_agent = crate::agent_registry::AgentRegistryEntry {
+        id: "impl100".into(),
+        agent_type: "claude".into(),
+        pid: my_pid,
+        pid_start: crate::process_probe::process_start_identity(my_pid),
+        pid_namespace: crate::agent_registry::current_pid_namespace(),
+        name: Some("impl100".into()),
+        description: None,
+        tty: None,
+        terminal: None,
+        started_at: now,
+        last_active_at: now,
+        role: Some("implementer".into()),
+        current_spec: Some("TASK-100".into()),
+        worktree_path: take_wt.clone(),
+        source: "test".into(),
+        binary_version: None,
+        build_sha: None,
+        availability: Default::default(),
+        paused_since: None,
+        paused_reason: None,
+        expected_back: None,
+        native_session_id: None,
+        claude_session_id: None,
+        ended_at: None,
+        resumed_from: None,
+        spec_status_at_end: None,
+    };
+    let take_agent_file = agents_dir.join("impl100.toml");
+    std::fs::write(
+        &take_agent_file,
+        toml::to_string_pretty(&take_agent).unwrap(),
+    )
+    .unwrap();
+
+    let brief = f.write_brief("f5-take.md", "Take brief.\n");
+    let sub_take = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Take {
+            pr: 100,
+            branch: "claude/fix-100".into(),
+            spec: "TASK-100".into(),
+            brief,
+            vendor: None,
+        },
+        now,
+    )
+    .unwrap();
+    let res_take =
+        execute_one_request(&f.root, &f.mandate_dir, &sub_take.request.id, false, now).unwrap();
+    assert_eq!(res_take.status, DispatchStatus::Refused);
+    assert!(
+        res_take
+            .refusal_reason
+            .as_deref()
+            .unwrap_or("")
+            .contains("currently occupied by live registered agent"),
+        "expected live registered agent refusal in take runner, got: {res_take:?}"
+    );
+    assert_eq!(
+        std::fs::read_to_string(&dirty_marker).unwrap(),
+        "do not lose my work",
+        "occupant worktree files must remain untouched"
+    );
 }
