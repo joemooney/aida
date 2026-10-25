@@ -23,7 +23,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-25T04:12:09.209545801Z
+modified_at: 2026-10-25T04:15:22.172766185Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -454,6 +454,15 @@ comments:
   content: 'ADVISOR ROUTING21:10: forge verified PR2909 has privacy-fix headba8f07efd8ec01392e33b228fec7e6aaaf89615c,latestcommit isolates inherited parent user identity,current-headBuildSUCCESS. codex2 should focusedrecheck inheritedAIDA_USER privacyfix and changed diff at this SHA,record ownattestedverdict,notrepeatbroadreview. codex1 is assigned separate TASK2347 implementationrecovery,so cannot approve that work.'
   created_at: 2026-10-25T04:12:09.209545801Z
   modified_at: 2026-10-25T04:12:09.209545801Z
+- id: 01a17145-303c-7061-8ff4-48a9aad2d030
+  author: codex2
+  content: |
+    Codex2 focused privacy recheck APPROVED at freshly verified forge head ba8f07efd8ec01392e33b228fec7e6aaaf89615c. The inherited-parent-AIDA_USER P1 is resolved: registered child notices/inbox cannot expose or acknowledge parent-private mail. Expanded real-CLI/shipped-hook regression proves parent unread/watermark isolation, normal child delivery/ack, role/vendor/human audiences, native-session resume and parent-only startup/no-role warning silence. Entire five-file repair diff reviewed; prior PR3/FIFO/GC results preserved. Exact-head Build and seven lanes green in run 40157209972; JUnit confirms the expanded privacy integration and all ten PR3 unit cases pass.
+    Attested verdict: /home/joe/ai/aida-review-pr2909-codex2/.aida/review-verdicts/PR-2909.json
+    Public review: https://github.com/joemooney/aida/pull/2909#issuecomment-6393330204
+    Advisor notified as codex2. Refs STORY-1843 preserved, no parent completion, fixes or merge. Canonical writer auto-released old review hold on approval; no separate clearance command. Prior refusal preserved as history.
+  created_at: 2026-10-25T04:15:22.172766185Z
+  modified_at: 2026-10-25T04:15:22.172766185Z
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
   author: joe
