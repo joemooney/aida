@@ -12,7 +12,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T09:15:27.132994258Z
-modified_at: 2026-10-25T11:36:58.610898150Z
+modified_at: 2026-10-25T11:41:59.801803962Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -81,6 +81,12 @@ comments:
     INTEGRATION AUDIT — advisor codex-advisor-01 shipped PR2920 via aida pr ship2920 --wait60 --no-cleanup (exit0). Independent codex2 attested APPROVE covers ab591048e10caf8d366c6c34cee83842320c7838; required Build40188196889/job121156046991 and all7lanes/holdgate SUCCESS. Forge confirms MERGED2026-10-25T11:32:21Z at c7b3f26d68e6b60c26757ee520887f6f89bbdaad; local clean main and origin main match. Post-pull canonical reconciliation completed BUG2222 and review STORY1932; fresh open count19. No parent1843 completion or live-delivery claim. Ship retained current live BUG2222 worktree; post-merge reap/GC also reported it kept and0reclaimable; no manual cleanup/restart/hold or authority bypass. The deployed binary still needs the normal reviewed-main build to pick up the fix; AIDA Terminator plugin remains absent. No live terminal sends or plugin install occurred.
   created_at: 2026-10-25T11:36:58.610898150Z
   modified_at: 2026-10-25T11:36:58.610898150Z
+- id: 01a172de-1679-7c00-9d77-2893370cb0ad
+  author: joe
+  content: |
+    DEPLOYMENT EVIDENCE: normal clean-main AIDA_CARGO_TIMEOUT=20m aida dev build completed exit0 in3m50s, smoke passed and atomic live promotion succeeded2026-10-25T11:40:54Z. Actual live version reports c7b3f26d68; live/aida and target/agent/aida SHA256 both c1c18001cc6915ef45de5dd13fba8506edc7f1e37f2f9d840537c7a4a405d776. Clean main remains exact c7b; previous3cbb pair retained for ordinary rollback. Builder's standard stale-MCP restart reported PIDs1827271/2081608 and clients respawn on next request. No unmerged watcher/allocator binary promoted, no terminal/plugin setup or live-send test, no broader1843/2347 completion claim.
+  created_at: 2026-10-25T11:41:59.801803962Z
+  modified_at: 2026-10-25T11:41:59.801803962Z
 history:
 - id: 01a17258-2379-77b1-94f6-5d70e2e9c83c
   author: joe
