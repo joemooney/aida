@@ -38,7 +38,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T22:02:03.191649035Z
-modified_at: 2026-10-25T17:08:49.358784919Z
+modified_at: 2026-10-25T17:21:58.290783995Z
 req_type: Story
 tags:
 - docs:impacted
@@ -373,6 +373,11 @@ comments:
   content: 'ADVISOR verified integration evidence: operator train2918 MERGED2026-10-25T06:51:39Z, tip3cbb90b0c94e0e748bbfc4eb1f75d7f9c2125c68, required Build40169880987 and all7 CI lanes plus holdgateSUCCESS. PR2910 independently approved at47a41444bbc2b8a07c0949e432350d6efe0b680e landed asfbbb7ef193; local clean main and origin main match verified tip. Review story completion was already performed by the train; no duplicate status write needed. This is a non-completing Refs slice: parent remains Approved with ALL remaining signed scope. No source/hold/merge action by this advisor. Fresh main is now the base for remaining implementation; preserve current WIP and update branches normally, no forcepush.'
   created_at: 2026-10-25T06:56:44.803868009Z
   modified_at: 2026-10-25T06:56:44.803868009Z
+- id: 01a17415-5812-7f31-91e8-eb5a6f19b7a0
+  author: ai:codex:joe
+  content: 'S3a continuation by fresh codex-integrator-06 harness: human-issued process-bound implementer authority validated; ordinary claim recorded; preserved clean codex/story-1742-slice2-credentials worktree reused and current main integrated by normal merge 615bb73d27 without conflicts or force. Full 22 canonical comments, binding R1-R3/S3a-d and accepted writer/lock inventory read; TASK-2347 supersession respected. WIP introduces shared refusal grammar, anchored private policy/receipt storage, full-history scanner and exact pinned push gate. First transport run passed all29 fixtures including prior23 regressions; initial core filter2 passed. Author self-check identified duplicate-key decoded-scalar and lexical IPv6/network-path URL misses; fixes and regressions now present, final-head verification pending. No approval/completion/merge or real policy enrollment. S3b all-adapter preparation and explicit shared-method ownership handoff, S3c actual recoverable FF pull, S3d full conformance/docs remain required. S3a does not edit allocator/model/backend methods.'
+  created_at: 2026-10-25T17:21:58.290783995Z
+  modified_at: 2026-10-25T17:21:58.290783995Z
 history:
 - id: 01a16ee2-ad7a-7b30-aaeb-ec8f892fbe76
   author: joe
