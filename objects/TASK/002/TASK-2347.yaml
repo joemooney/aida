@@ -14,12 +14,12 @@ description: |
   6. Separate live synthetic test, explicitly authorized by operator, proves synthetic advisor mail wakes SAME idle conversation and repeated scans do not duplicate it. Distinguish accepted queue from observed executed turn. Include durable receipt evidence and installation/uninstallation instructions.
 
   Implementation boundary: smallest maintainable script/service and CLI seam using native codex queue; no general orchestration framework. Existing aida advisor watch cold-boots Codex, so it is not sufficient. Requires independent review; implementation session must not approve/merge its own code. User authorization includes enabling this one watcher and the synthetic test.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T02:08:29.032100054Z
-modified_at: 2026-10-25T05:23:13.057074720Z
+modified_at: 2026-10-25T05:26:19.696871832Z
 req_type: Task
 tags:
 - codex
@@ -218,6 +218,11 @@ comments:
   content: 'F1/F2 bounded rework approach before implementation: reject recover --dry-run before State creation, preserving existing status preview and all uncertainty bytes. F2 will use the EXISTING substrate scheduler and CronJobFailed-to-advisor due route: one allow-listed doctor health category reads a bounded data-only health snapshot maintained with the watcher ledger. No stored executable path/shell dispatch, extra daemon, model timer, or direct queue. Private clone-local registration pins exact project/thread, snapshot location and configurable accepted-age threshold; missing/stale snapshot, unknown legacy age and recovery-required fail visibly with counts/ages only. Script install/uninstall registers/removes only its exact owned job+route block and private registration, refusing conflicts or edited/user-owned entries. Existing scheduler route semantics deduplicate due failures; healthy/current snapshot and schedule status expose recovery. Hermetic tests cover registration ownership, healthy/stale/unknown/uncertain/recovered states and dry-run byte preservation. This adds a small native doctor reader/allow-list entry (so targeted native test/build evidence will be included); preserves prior Rust watermark and accepted pruning. No live job/service/mail/queue installation or execution in this author session.'
   created_at: 2026-10-25T05:23:13.057074720Z
   modified_at: 2026-10-25T05:23:13.057074720Z
+- id: 01a17186-2730-7592-87c6-a400c329a0a3
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Codex2 STRICT independent review: LOCAL watermark and accepted pruning pass; exact-head Build green. P2 recovery --dry-run mutates acceptance state, and advisor-required due-job health alert is unwired. Full live watcher proof remains advisor-owned after approval. Refs TASK-2347.. Triage reason: Advisor-approved rework of codex2 F1/F2 at91071afddc; concrete brief20261025T045538Z and due-job boundary comment. Existing codex1 lane is editing; metadata only, no new launch or hold clearance.'
+  created_at: 2026-10-25T05:26:19.696870093Z
+  modified_at: 2026-10-25T05:26:19.696870093Z
 history:
 - id: 01a170d1-497a-7282-8dcb-91782bba7dc3
   author: joe
@@ -240,6 +245,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a17186-2730-7592-87c6-a3f9f46426e1
+  author: joe
+  timestamp: 2026-10-25T05:26:19.696862569Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 2db1d977b0615f01ae82216f3b9c8ce2d009550f
   branch: main
@@ -247,11 +259,3 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 2db1d977b0
   vendor: codex
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Codex2 STRICT independent review: LOCAL watermark and accepted pruning pass; exact-head Build green. P2 recovery --dry-run mutates acceptance state, and advisor-required due-job health alert is unwired. Full live watcher proof remains advisor-owned after approval. Refs TASK-2347.'
-  recovery_hint: address the review findings, move TASK-2347 back to In Progress, and clear the PR hold only after approval
-  shelved_by: product
-  shelved_at: 2026-10-25T04:54:35.368708377Z
