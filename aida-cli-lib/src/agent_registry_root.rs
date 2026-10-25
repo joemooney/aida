@@ -196,6 +196,22 @@ pub(crate) fn agent_gc(dry_run: bool, older_than: Option<u64>) -> Result<()> {
     let project_root =
         main_worktree_root_from(&find_aida_project_root_from(&std::env::current_dir()?)?);
     let report = agent_registry::gc_dead_agents(&project_root, dry_run, older_than)?;
+    // Retention work belongs to explicit maintenance, never a turn hook.
+    // trace:STORY-1843 | ai:codex
+    let archived = crate::agent_handle::collect_retired_reservations(&project_root, dry_run)?;
+    let archived_rows = agent_registry::archive_ended_entries(&project_root, dry_run)?;
+    if archived_rows > 0 {
+        println!(
+            "Agent registry history: {} {archived_rows} ended records.",
+            if dry_run { "would archive" } else { "archived" }
+        );
+    }
+    if archived > 0 {
+        println!(
+            "Handle reservations: {} {archived} retired records.",
+            if dry_run { "would archive" } else { "archived" }
+        );
+    }
     let verb = if dry_run { "would remove" } else { "removed" };
     println!(
         "Agent registry gc: {} {} dead entr{}{}.",

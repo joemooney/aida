@@ -59,9 +59,12 @@ pub(crate) fn mailbox_latency_warning(
     project_root: &std::path::Path,
     role: Option<&str>,
 ) -> Option<String> {
+    // A no-role child must not warn about its inherited parent's private mail.
+    // trace:STORY-1843 | ai:codex
     let identity = role
         .filter(|s| !s.trim().is_empty())
         .map(str::to_owned)
+        .or_else(crate::agent_handle::current_session_handle_for_cwd)
         .unwrap_or_else(|| current_user_id(None));
     let store_root = project_root.join(".aida-store");
     let local = mailbox_store::read_local_messages(project_root).ok()?;
@@ -280,8 +283,9 @@ pub(crate) fn mailbox_line_body(m: &aida_core::mailbox::Message) -> String {
     }
 }
 
-/// The identity set whose mail a session should see: the shell's agent/user id
-/// (BUG-89 resolution) plus the session role (`AIDA_SESSION_ROLE`) when set and
+/// The identity set whose mail a session should see: its persisted handle,
+/// the shell's user identity (when unbound or a known person), and the session
+/// role (`AIDA_SESSION_ROLE`) when set and
 /// distinct. A handoff addressed `--to advisor` lands in the role's inbox, not
 /// the shell user's, so surfacing only `current_user_id` would miss it — this
 /// is the union both the notice and the statusline urgent counter resolve over,
@@ -290,7 +294,27 @@ pub(crate) fn mailbox_line_body(m: &aida_core::mailbox::Message) -> String {
 // trace:TASK-818 | ai:claude
 // trace:BUG-1592 | ai:claude
 pub(crate) fn inbox_identities() -> Vec<String> {
-    let mut ids = vec![current_user_id(None)];
+    // A raw child can inherit a parent's launch aliases. Its persisted
+    // process/session binding wins for private mail, as on the sender side.
+    // trace:STORY-1843 | ai:codex
+    let own_session = crate::agent_handle::current_session_entry_for_cwd();
+    let own_handle = own_session.as_ref().and_then(|e| e.name.clone());
+    let user = current_user_id(None);
+    // AIDA_USER is also inherited by raw children. Once a session has its
+    // own handle, an unrelated user string cannot add another private agent
+    // inbox. Keep intentional human inboxes from the people catalog; shared
+    // role/vendor audiences are added independently below. This changes only
+    // mail visibility, never the principal used for grants or queue ownership.
+    // trace:STORY-1843 | ai:codex
+    let include_user = own_handle
+        .as_deref()
+        .is_none_or(|own| own.eq_ignore_ascii_case(&user))
+        || std::env::current_dir()
+            .ok()
+            .and_then(|cwd| crate::find_aida_project_root_from(&cwd).ok())
+            .map(|root| crate::main_worktree_root_from(&root).join(".aida-store"))
+            .is_some_and(|store| known_mailbox_people(&store).contains_key(&user.to_lowercase()));
+    let mut ids = if include_user { vec![user] } else { Vec::new() };
     // BUG-1592: `resolve_mail_sender_identity` puts `AIDA_AGENT_NAME` FIRST in
     // the send-side precedence (ahead of `AIDA_USER`), but this read-side set
     // never included it — a seat whose launcher sets `AIDA_AGENT_NAME` to
@@ -303,6 +327,9 @@ pub(crate) fn inbox_identities() -> Vec<String> {
     // trace:STORY-1843 | ai:claude
     for key in [crate::agent_handle::HANDLE_ENV, "AIDA_AGENT_NAME"] {
         if let Some(agent_name) = std::env::var(key).ok().filter(|s| !s.trim().is_empty()) {
+            if own_handle.as_deref().is_some_and(|own| own != agent_name) {
+                continue;
+            }
             if !ids.iter().any(|i| i == &agent_name) {
                 ids.push(agent_name);
             }
@@ -330,8 +357,11 @@ pub(crate) fn inbox_identities() -> Vec<String> {
     // `<type>` watermark and the others won't see it via the type identity
     // (their stable-name inboxes are unaffected). Acceptable for the rare
     // multi-instance-same-type case.
-    if let Some(raw) = std::env::var("AIDA_AGENT_TYPE")
-        .ok()
+    // Prefer the child's registered vendor to an inherited parent vendor.
+    // trace:STORY-1843 | ai:codex
+    if let Some(raw) = own_session
+        .map(|e| e.agent_type)
+        .or_else(|| std::env::var("AIDA_AGENT_TYPE").ok())
         .filter(|s| !s.trim().is_empty())
     {
         let type_name = agent_registry::normalize_agent_type(raw);
@@ -343,7 +373,7 @@ pub(crate) fn inbox_identities() -> Vec<String> {
     // registry binding (hook payload or the client's per-session env), so
     // mail sent to the handle reaches a session no launcher named.
     // trace:STORY-1843 | ai:claude
-    if let Some(handle) = crate::agent_handle::current_session_handle_for_cwd() {
+    if let Some(handle) = own_handle {
         if !ids.iter().any(|i| i.eq_ignore_ascii_case(&handle)) {
             ids.push(handle);
         }

@@ -804,8 +804,21 @@ pub(crate) fn collect_awaiting_report_inner(
         let canonical = mailbox_store::read_canonical_messages(&store_root).unwrap_or_default();
         let merged = aida_core::mailbox::merge_dedup(&local, &canonical);
         let watermarks = mailbox_store::read_all_watermarks(project_root).unwrap_or_default();
-        let operator = current_user_id(None);
-        let mut shared: Vec<String> = Vec::new();
+        // Registered clients report their own private handle, never an
+        // inherited parent's AIDA_USER. Shell/operator reads retain BUG-767's
+        // user-only headline. Other permitted inbox identities stay labelled
+        // separately, matching mailbox notice and explicit acknowledgement.
+        // trace:STORY-1843 | ai:codex
+        let own_handle = crate::agent_handle::current_session_handle_for_cwd();
+        let operator = own_handle.clone().unwrap_or_else(|| current_user_id(None));
+        let mut shared: Vec<String> = if own_handle.is_some() {
+            inbox_identities()
+                .into_iter()
+                .filter(|id| id != &operator)
+                .collect()
+        } else {
+            Vec::new()
+        };
         if let Some(raw) = ctx
             .role
             .clone()
@@ -813,7 +826,7 @@ pub(crate) fn collect_awaiting_report_inner(
             .filter(|s| !s.trim().is_empty())
         {
             let (role, _is_default) = resolve_effective_role(Some(raw.as_str()));
-            if role != operator {
+            if role != operator && !shared.contains(&role) {
                 shared.push(role);
             }
         }
