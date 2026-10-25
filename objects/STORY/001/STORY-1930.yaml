@@ -24,8 +24,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-25T04:56:28.496460627Z
-modified_at: 2026-10-25T04:56:28.496460627Z
+modified_at: 2026-10-25T04:56:47.426823001Z
 req_type: Story
+relationships:
+- rel_type:
+    custom: covers
+  target_id: 01a15f18-ed08-7922-ac1d-114f0fa53917
+  created_at: 2026-10-25T04:56:47.426819327Z
+  created_by: joe
+history:
+- id: 01a1716b-1fc9-7a22-bffc-eddea1193730
+  author: joe
+  timestamp: 2026-10-25T04:56:48.329229760Z
+  changes: []
 filed_at:
   code_sha: 791af3b22f0a68d8e5588d337946141b08e69f52
   branch: claude/story-1889-hold-r2
