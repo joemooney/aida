@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T22:12:54.027870933Z
-modified_at: 2026-10-25T12:16:48.439038970Z
+modified_at: 2026-10-25T12:17:37.558045653Z
 req_type: Bug
 tags:
 - id-allocation
@@ -487,6 +487,11 @@ comments:
     What can proceed before scanner API exists: pure allocation loader/collector, baseline proof, typed refusal/audit, locked Git wrapper and multi-tip wiring/tests under shared method ownership. STORY1742 still owns trusted policy, prepared serialization/mutation before counters/objects/oplog/refs, outgoing objects/history/commit metadata, receiver/public-forward and enabled WORK FF-pull executor. No parallel policy engine/scanner exemptions or success stubs. Real scanner API integration remains an acceptance dependency: unsafe node/registry/provenance/history/metadata in conflict-free inputs must be refused without match echo and before accepted mutation/publication, with positive sanitized WORK->HUB->HOME/public E2E and FF/intake tests. Allocation-green is not content-safe or S3-complete. Full S2/S3 and1843 lifecycle boundaries retained; no source edits, tests/Cargo/build, leases/grants/authority/config/HOME enrollment, live transport/queue/mail probes, hold clearance or formal verdict performed. Requested canonical comment/FYI notifications only.
   created_at: 2026-10-25T12:16:48.439038970Z
   modified_at: 2026-10-25T12:16:48.439038970Z
+- id: 01a172fe-b516-7040-b309-e8b1cf38b86a
+  author: codex2
+  content: 'S3 readiness map exact-symbol correction: the coordination best-effort refresh seam is aida-cli-lib/src/coordination.rs::refresh_store at main c7b line553 (not pull_claim_refresh). It catches typed evidence refusal at556 and otherwise returns a nested transport error. /tmp/codex2-bug2017-s3-readiness-map.txt corrected; advisory status and all scope boundaries unchanged.'
+  created_at: 2026-10-25T12:17:37.558045653Z
+  modified_at: 2026-10-25T12:17:37.558045653Z
 history:
 - id: 01a16f08-1847-70c2-a9ec-772710162546
   author: joe
