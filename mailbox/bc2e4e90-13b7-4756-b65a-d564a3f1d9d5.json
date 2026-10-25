@@ -1,0 +1,19 @@
+{
+  "id": "bc2e4e90-13b7-4756-b65a-d564a3f1d9d5",
+  "thread_id": "bc2e4e90-13b7-4756-b65a-d564a3f1d9d5",
+  "from": "codex2",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792939302797,
+  "body": "codex2 read-only source preview complete for immutable LOCAL e3db5cf7fb9d7c6300a27b4adbe59493e8499e29; canonical STORY-1917 comment posted. Report: /tmp/codex2-story1917-e3db-checkpoint-preview.txt.\n\nConsequential source issues: persisted recovery fences disappear if both evidence halves are lost (inventory1898–2176/reconcile2214); automatic old tick.lock unlink/switch does not fence already-open legacy FDs (acquire352–522). New migration test covers held-lock and fresh-open EISDIR, not signed quiescent/open-FD old-native boundary. Both unchanged in inspected concurrent R6 WIP. Report names minimal decisive regressions and remaining TASK2338/2339/2343 evidence plus R1/R5 assertion gaps.\n\nCoherent partial slice shape, not clean child acceptance/completion evidence. R6 checkpoint3 remains intentionally deferred and is not a finding. No tests, source changes, claim/verdict/approval/live operations. No new eff2 review; corrected pushed-head2919 review still preempts. Advisor disposition requested through normal routing; no direct implementation instructions sent to agy2.\n",
+  "subject": "STORY1917 e3db checkpoint preview: recovery/lock findings",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "product"
+}
