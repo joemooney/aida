@@ -933,6 +933,24 @@ pub(crate) fn auto_queue_skip_reason(
     None
 }
 
+/// Whether `project_root`'s project has an `origin` remote, asked where host
+/// git may run. Host git refuses to run in a contained seat's private clone
+/// (BUG-2169), so for a seat clone the verified host main checkout answers
+/// instead; an unverified clone, or any failed lookup, is an `Err`, never a
+/// "no remote" that would mislabel the project local-only.
+// trace:TASK-2350 | ai:claude
+pub(crate) fn origin_remote_presence(project_root: &std::path::Path) -> anyhow::Result<bool> {
+    let repo = match crate::seat_clone::main_for(project_root) {
+        crate::seat_clone::MainFor::NotAClone => project_root.to_path_buf(),
+        crate::seat_clone::MainFor::Verified(main) => main,
+        crate::seat_clone::MainFor::Unverified(clone_root) => anyhow::bail!(
+            "{} is a seat clone whose host main checkout could not be verified",
+            clone_root.display()
+        ),
+    };
+    aida_core::git_ops::probe_remote(&repo, "origin")
+}
+
 #[cfg(test)]
 #[path = "tests/bug776_auto_queue_gate_tests.rs"]
 mod bug776_auto_queue_gate_tests;
@@ -1067,11 +1085,16 @@ pub(crate) fn try_auto_queue_pr_review_unbumped(
     // covering no specs on every single `aida session end`. Gate the whole
     // path on the same remote check `aida db sync --pull` uses before it
     // even talks to the forge. trace:BUG-776 | ai:claude
-    if let Some(reason) = auto_queue_skip_reason(
-        aida_core::git_ops::has_remote(project_root, "origin"),
-        None,
-        None,
-    ) {
+    // TASK-2350: a lookup failure is not "local-only" — report it instead.
+    let has_origin = match origin_remote_presence(project_root) {
+        Ok(present) => present,
+        Err(e) => {
+            return AutoQueueOutcome::skipped_needs_attention(format!(
+                "auto-queue: could not determine whether an `origin` remote exists ({e:#}) — no reviewer story was filed"
+            ))
+        }
+    };
+    if let Some(reason) = auto_queue_skip_reason(has_origin, None, None) {
         return AutoQueueOutcome::skipped_by_design(reason);
     }
 

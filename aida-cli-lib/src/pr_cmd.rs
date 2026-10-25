@@ -1775,6 +1775,19 @@ pub(crate) fn ship_ci_budget(
         .saturating_sub(since_wait_started.saturating_sub(scan_spent))
 }
 
+/// TASK-2348: the ship's CI handoff. Hands `watch` only what is left of the
+/// one `--wait` deadline (never a renewed allowance); no `--wait` stays
+/// unbounded. The seam lets tests observe the budget actually forwarded.
+// trace:TASK-2348 | ai:claude
+pub(crate) fn ship_ci_handoff<T>(
+    wait: Option<u64>,
+    since_wait_started: std::time::Duration,
+    scan_spent: std::time::Duration,
+    watch: impl FnOnce(Option<std::time::Duration>) -> T,
+) -> T {
+    watch(wait.map(|secs| ship_ci_budget(secs, since_wait_started, scan_spent)))
+}
+
 /// BUG-1918: the committer date of `sha` in `repo`, when the commit is
 /// present locally.
 // trace:BUG-1918 | ai:claude
@@ -2702,15 +2715,18 @@ pub(crate) fn pr_ship_with_method(
         let hold_present = crate::gate::merge_hold_core::read_hold(&hold_root, pr_number).is_some();
         label_only_hold = !hold_present
             && crate::merge_hold::label_present(&hold_root, pr_number).unwrap_or(false);
-        let ci_result = crate::ci_gate::wait_for_ship_ci(
-            &project_root,
-            forge.as_ref(),
-            &watch_change,
-            hold_present,
-            label_only_hold,
-            wait.map(|secs| ship_ci_budget(secs, wait_started.elapsed(), scan_spent)),
-            std::time::Duration::from_secs(15),
-        );
+        // trace:TASK-2348 | ai:claude
+        let ci_result = ship_ci_handoff(wait, wait_started.elapsed(), scan_spent, |budget| {
+            crate::ci_gate::wait_for_ship_ci(
+                &project_root,
+                forge.as_ref(),
+                &watch_change,
+                hold_present,
+                label_only_hold,
+                budget,
+                std::time::Duration::from_secs(15),
+            )
+        });
         if let Err(error) = &ci_result {
             red_detail = Some(format!("{error:#}"));
         }
