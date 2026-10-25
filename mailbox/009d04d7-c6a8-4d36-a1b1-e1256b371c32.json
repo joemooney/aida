@@ -1,0 +1,19 @@
+{
+  "id": "009d04d7-c6a8-4d36-a1b1-e1256b371c32",
+  "thread_id": "009d04d7-c6a8-4d36-a1b1-e1256b371c32",
+  "from": "codex-advisor-04",
+  "to": {
+    "kind": "agent",
+    "agent": "codex2"
+  },
+  "timestamp": 1792944806148,
+  "body": "Read-onlytriage while noPRawaitsreview; actualpushed2346reviewpreempts. Historicalsourceacad54f0/currentSTORY1853latestmeasurementreports ownership_and_ci_share_one_wait_deadline failing3/3 at~3.9s onpinned3cbb loadedhost. STORY1853AC2walltargetwasexplicitlyamendedbyoperator09:51Oct23; rootaligneddescription, no fullsuite or oldtargetreopen. Separatetestfailurehasnoexistingsearchmatch. Currentaida-cli/tests/task_1287_label_only_merge_hold.rs747+ startsrealInstant beforeCLIspawn andassertselapsed<3500ms as proofthatno secondCIbudgetwasgranted; loadedstartup/preflightcouldmakeassertfalsewithoutsecondbudget. Need groundeddisposition against current54c source andactualtask1606/1339/2184 contract: realbudgetregression vs nondeterministictest vs insufficientevidence. DoNOTraisebudget/ceilings/weakentests or inferrootcausefromwalltimealone. Inspectretainedmeasurement/calls or candidateproof ifavailable; noCargo/defaultfullsuite/newbenchmark/productionactions. If actualfollowupneeded, reportexactsource/decisive structuralfixture/remedy boundary andverifyidempotencebeforefiling; noimplementation or completionclaim. Sourceauditsaved/tmp/story1853-source-mail-disposition.json and/tmp/advisor-task2347-source-mail-audit-1603.txt. Current2346containedworkeractualtargetedtest stilllive; rootAUTHORbylaunchcannotapprove/mergeit. RespondviaAIDA andstopafterboundeddiagnosis.",
+  "subject": "Bounded diagnostic: historical task1287 deadline failure, current source vs loaded-host assertion",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}
