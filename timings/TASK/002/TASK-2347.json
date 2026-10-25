@@ -1,0 +1,128 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-2347",
+  "publishes": [
+    {
+      "at": "2026-10-25T15:36:01.095336046Z",
+      "closed_by": "edit"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-25T02:08:49.040021063Z",
+      "spec": "TASK-2347",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-25T02:09:43.226507640Z",
+      "spec": "TASK-2347",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-25T04:54:35.263509840Z",
+      "spec": "TASK-2347",
+      "seat": "reviewer",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2915,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "91071afddc41add0e43d29a9cfb463a36cd97f50"
+      }
+    },
+    {
+      "ts": "2026-10-25T04:54:37.791015606Z",
+      "spec": "TASK-2347",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Codex2 STRICT independent review: LOCAL watermark and accepted pruning pass; exact-head Build green. P2 recovery --dry-run mutates acceptance state, and advisor-required due-job health alert is unwired. Full live watcher proof remains advisor-owned after approval. Refs TASK-2347.",
+        "recovery_hint": "address the review findings, move TASK-2347 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-10-25T05:26:20.709387240Z",
+      "spec": "TASK-2347",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-25T06:46:29.961296161Z",
+      "spec": "TASK-2347",
+      "seat": "reviewer",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2915,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "b07904778fbae163a246c3d7144bebb1c7934378"
+      }
+    },
+    {
+      "ts": "2026-10-25T06:46:30.816442632Z",
+      "spec": "TASK-2347",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Codex2 independent delta: F1 resolved; global namespace and health consumer pass source/focused checks; F2 install ownership/recovery remains incomplete. Exact-head Build pending, hold check separate. Advisor sufficiency decision under two-round cap.",
+        "recovery_hint": "address the review findings, move TASK-2347 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-10-25T08:09:37.793080490Z",
+      "spec": "TASK-2347",
+      "seat": "reviewer",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "verdict": "APPROVED",
+        "reviewed_sha": "a74aafe83e8c22df9e6d0306e63b0a725f066953"
+      }
+    },
+    {
+      "ts": "2026-10-25T08:47:57.687596765Z",
+      "spec": "TASK-2347",
+      "seat": "reviewer",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "verdict": "APPROVED",
+        "reviewed_sha": "5ce0706e4a4deed55d70c756186a94c8bb767763"
+      }
+    },
+    {
+      "ts": "2026-10-25T15:36:00.890809094Z",
+      "spec": "TASK-2347",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "Completed"
+      }
+    },
+    {
+      "ts": "2026-10-25T15:36:00.958826988Z",
+      "spec": "TASK-2347",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "",
+        "closed_by": "edit"
+      }
+    }
+  ]
+}
