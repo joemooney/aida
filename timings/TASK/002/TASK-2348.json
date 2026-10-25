@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-2348",
+  "publishes": [
+    {
+      "at": "2026-10-25T20:26:48.009125117Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-25T16:24:59.618214414Z",
+      "spec": "TASK-2348",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-25T17:33:47.205402377Z",
+      "spec": "TASK-2348",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-25T19:45:59.784296213Z",
+      "spec": "TASK-2348",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-2348",
+        "branch": "origin/task-2348",
+        "first_seen": "2026-10-25T19:45:59.784242053+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-25T20:25:55.684601742Z",
+      "spec": "TASK-2348",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-25T20:26:18.883389397Z",
+      "spec": "TASK-2348",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2927
+      }
+    },
+    {
+      "ts": "2026-10-25T20:26:47.737327549Z",
+      "spec": "TASK-2348",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "78765dde1e777bcbb11079d580864afaea9f70ea",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
