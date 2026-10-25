@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T22:12:54.027870933Z
-modified_at: 2026-10-25T11:42:30.431748378Z
+modified_at: 2026-10-25T11:44:35.499865277Z
 req_type: Bug
 tags:
 - id-allocation
@@ -397,6 +397,16 @@ comments:
   content: 'S2 checkpoint: additive common-Git work_binding.rs uses version+UUID-only binding and existing FileDispenser state, store-write then permanent dispenser locks; recover interrupted counter-before-binding publication, reject missing/mismatched live counter, migrate old per-type high waters once without rewriting old node/object records. First3 focused bootstrap/migration/restart tests pass; expanded concurrency/promotion proofs queued behind normal CLI build. Default, separate-store and post-clone init now attach loaded backend provider before seed; node acquire on WORK repairs opaque binding and refuses host/name/hijack/global registration flags. Implicit global auto-claim remains disabled. Exact caller ownership notice: only the post-pull canonical-promotion conditional in store_push_pull.rs is changed to skip merge_gate on WORK/HUB; no transport profile/scanner/prepared-candidate methods or outer lock touched. Explicit config allocation enroll-home workflow requires direct human TTY and writes only the exact common Git setting; never executed on real HOME. F2 fixture change owns only temp store1 Git root, WORK init/sibling remain no-flag, synthetic grants scoped to fake HOME. Current uncommitted work is not ready or a final-green assertion.'
   created_at: 2026-10-25T11:42:30.431748378Z
   modified_at: 2026-10-25T11:42:30.431748378Z
+- id: 01a172e0-76ab-72a0-8abb-ac721fde0b1d
+  author: joe
+  content: |
+    ADVISOR SIGNED SEQUENCING/OWNERSHIP AMENDMENT — BUG2017 signed-v2 S2, 2026-10-25. Current PR2919 remains held/RC at766; no approval or deployment waiver.
+    The old start-after-STORY1742-scanner-in-review sequence is amended for the FULL S2 work now explicitly combined with S1. Bootstrap must be delivered coherently before S1 reaches main, and no other doer currently edits the transport/scanner. Permit code1 to implement S2 before that scanner PR, with the following narrow ownership boundary: allocation binding/provider/bootstrap/migration/enrollment and existing HOME canonical-promotion adapters belong to BUG2017; transport privacy policy, scanner, trusted baselines/receipts, prepared content mutation and actual enabled-WORK FF-pull executor remain STORY1742-owned.
+    Inspected current seven-line WIP store_push_pull.rs::pull_store_leg_locked change at the existing auto merge_gate call: checking actual clone-local authoritative mode before canonical promotion is an explicit signed-S2 caller obligation. Permit this particular adapter edit; it is not permission to modify transport run_push/run_pull, credentials/origin resolution, enabled profile behavior, scanner/intake policy, refs/reconciliation semantics or receipt handling. Preserve existing23transport regressions and all signed1742 rows. Share actual method ownership before any further overlap; no parallel edits to shared backend candidate/ID methods, and never acquire a new outer policy lock inside a held store/cache/dispenser lock.
+    Retain signed S3 all-conflict preflight/audit/scanner integration and final docs, all1742 prepared-write/FF-pull/E2E work and1843 lifecycle locks. This changes ordering to remove a concrete dependency cycle, not acceptance, private-data detection or authority floors. No actual HOME enrollment, unmerged global promotion, weakened missing-authority refusal or source-only hold release. New config allocation CLI must have ordinary help/manual contracts before its CI is called green.
+    Read codex2 source-only report /tmp/codex2-bug2017-s2-compat-advisory.txt and canonical comment. Accept its five decisive compatibility cases as applications of existing signed scope: additive opaque-only schema without broadly defaulting damaged legacy person records; actual provider before ALL seed/reseed paths and correct Git topology; retained last-consumed high-water including reserved-unsaved and linked-worktree/interrupted migration; stable UUID/old aliases and case lookup; synthetic WORK/HUB/HOME promotion twice with no second counter/ref churn. They are not implementation evidence or a substitute for real cold WORK CLI/MCP/restart coverage. Code1 chooses the compatible implementation; code2 remains independent final reviewer. No new architecture or live capability test authorized.
+  created_at: 2026-10-25T11:44:35.499865277Z
+  modified_at: 2026-10-25T11:44:35.499865277Z
 history:
 - id: 01a16f08-1847-70c2-a9ec-772710162546
   author: joe
