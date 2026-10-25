@@ -23,7 +23,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-25T09:35:05.215768234Z
+modified_at: 2026-10-25T09:39:42.164589278Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -618,6 +618,11 @@ comments:
     Exact lexical callsite map is a starting inventory, not an AST-complete proof; implementer/reviewer must account for aliases/indirect callers. This refines mechanics inside already-signed scope, grants no broader mailbox access and introduces no second mail architecture.
   created_at: 2026-10-25T09:35:05.215768234Z
   modified_at: 2026-10-25T09:35:05.215768234Z
+- id: 01a1726e-1fd4-75f2-8794-71787f47b939
+  author: joe
+  content: 'ADVISOR ROUTING: independent codex2 asked for bounded implementable B shared logical snapshot/API sketch against current reader inventory and mainempty/sibling-only mail repro. No source changes/new mail architecture/live migration. Core/CLI/MCP/TUI parity, safe source inventory and canonical-once read, recipient/privacy/receipt scope, concurrent delivered-snapshot ack, explicit partial/unknown behavior and bounded latency must be concrete. Source-local writer intents remain separate; C retention barriers/all A-E scope not waived. Existing ready PR reviews preempt sketch. This records delivery intent, not implementation uptake or completion.'
+  created_at: 2026-10-25T09:39:42.164589278Z
+  modified_at: 2026-10-25T09:39:42.164589278Z
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
   author: joe
