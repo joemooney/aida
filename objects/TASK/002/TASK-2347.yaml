@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T02:08:29.032100054Z
-modified_at: 2026-10-25T03:10:12.221671786Z
+modified_at: 2026-10-25T03:11:56.141411810Z
 req_type: Task
 tags:
 - codex
@@ -117,6 +117,17 @@ comments:
   content: 'Correction to continuation comment13: source-advisor caution12 and implementer findings15-16 supersede the proposed initial580-ID wake. DO NOT queue unreconciled historical580. Existing explicit read metadata must be reconciled without new acknowledgements; fresh candidate3883aa67 plus separate review must prove this. Started normal aida queue work PR-2915 --role reviewer --no-human --vendor codex; awaiting enforcement/result. No installation or queue submission occurred.'
   created_at: 2026-10-25T03:10:12.221671786Z
   modified_at: 2026-10-25T03:10:12.221671786Z
+- id: 01a1710a-7ef4-7d70-a2fc-8e177aadf203
+  author: joe
+  content: 'FORMAL REVIEW BLOCKER from fresh contained advisor continuation: normal queue work PR-2915 --role reviewer --no-human --vendor codex refused because Codex cannot run the required contained session. Supported --vendor claude path then encountered read-only .git on fetch/store refs/index locks. It auto-classified external implementation lease01a170d21d3e as exited despite this task explicitly documenting an active external child, deleted the lease, and attempted worktree removal; filesystem enforcement refused removal of /home/joe/ai/aida-task-2347 and .git/worktrees/aida-task-2347. I interrupted launch (exit130). Source worktree remains, no source edit/commit/merge performed; no grant minted or sandbox config changed. Implementer must retain existing files/processes; do not treat absent lease as implementation completion. Normal formal-review launch is BLOCKED in this session by immutable .git and cross-PID visibility; candidate installation/synthetic send remain gated and NOT done. No unreviewed live deployment, target switch, second preflight or original-thread direct queue. Existing author/canonical session recovery must occur through authorized AIDA host context, not fabricated authority.'
+  created_at: 2026-10-25T03:11:15.700896666Z
+  modified_at: 2026-10-25T03:11:15.700896666Z
+- id: 01a1710b-1ced-7ea1-bdc0-2737a430e223
+  author: joe
+  content: 'ADVISOR DESIGN REVIEW of .aida/handoff/advisor/ucami-aida-mail-review-draft-2026-10-24.md: direction APPROVED as scoped; verified against worktree head 98e19e6b96. Rulings: (1) Semantic-owner fork: per-root reconciliation stays in the mailbox_wake.rs seam for THIS delivery; the lasting cross-root logical-inbox resolver belongs in the mailbox store API under STORY-1843 so inbox/MCP/watcher share one owner. The watcher''s union is a bounded compatibility consumer, not a second permanent resolver. (2) Current gap, fix before install: ledger ''accepted'' IDs are never pruned when acknowledgement evidence later appears; the list grows monotonically and the 100k validation cap will eventually refuse the ledger and brick the watcher. Prune accepted-intersect-acknowledged on each tick; this also closes the delivery-confirmation loop. (3) Current gap: accepted-but-never-acknowledged mail has no visibility or TTL; the pinned thread UUID can die or rotate (rotation was observed this very session), making queue acceptance a silent sink. Smallest fix: status surfaces count and oldest age of accepted-unacknowledged IDs; alert via due job, never auto-requeue. (4) Uncertain-queue halt-until-manual-recover is accepted for v1; state it plainly in install instructions. (5) Backlog decision confirmed: notify the reconciled remainder (~26 IDs) once; never queue the raw 580. Formal independent code review at final PR head remains required before any install.'
+  created_at: 2026-10-25T03:11:56.141411810Z
+  modified_at: 2026-10-25T03:11:56.141411810Z
+  session_id: 93cd3489-b290-4bf3-8bf6-7b5d837716cb
 history:
 - id: 01a170d1-497a-7282-8dcb-91782bba7dc3
   author: joe
