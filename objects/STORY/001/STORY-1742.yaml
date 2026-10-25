@@ -38,7 +38,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T22:02:03.191649035Z
-modified_at: 2026-10-25T05:25:47.373110137Z
+modified_at: 2026-10-25T05:30:13.806893858Z
 req_type: Story
 tags:
 - docs:impacted
@@ -308,6 +308,11 @@ comments:
     Before implementation post full writer/adapters/callers and lock-order inventory; reconcile with BUG2017 shared allocation admission and STORY1843 retention/store locks instead of duplicating policy/readers or reversing locks. Every unsupported enabled-WORK intake adapter must explicitly refuse before persistence until wired; outbound scanning is not a substitute. No live hub hooks, public forwarding, actual work data, C3 migration or new service. Receiver ingress and history export tooling remain OUT of signed v1; show/docs state that boundary and unsafe-history refusal accurately. STRICT independent review of privacy/identity/security boundaries, LIGHT targeted+fast local gate plus area integrations; broad workspace/slot bypass prohibited. Parent remains open until all retained criteria including pull and end-to-end chain pass.
   created_at: 2026-10-25T05:25:47.373110137Z
   modified_at: 2026-10-25T05:25:47.373110137Z
+- id: 01a17189-b9ae-7a43-975f-b1e9186b15f7
+  author: joe
+  content: 'IMPLEMENTATION ADMISSION: full SKETCHv2 is signed with binding rulings, but parent remains open and PR2910 remains an explicitly unmerged dependency. Ready for the next legitimate Codex implementer after watcher/allocator priorities and dependency landing. No new headless launch is authorized to evade the observed required-containment refusal; do not use Claude or another seat grant. Baseline/policy/schema/scanner/pull preparation is design-ready, not implementation evidence.'
+  created_at: 2026-10-25T05:30:13.806893858Z
+  modified_at: 2026-10-25T05:30:13.806893858Z
 history:
 - id: 01a16ee2-ad7a-7b30-aaeb-ec8f892fbe76
   author: joe
