@@ -59,6 +59,14 @@ def main():
         first = added(run("add", "--title", "generic", "--type", "functional", "--status", "draft").stdout, "FR")
         bug = added(run("add", "--title", "defect", "--type", "bug", "--status", "draft").stdout, "BUG")
         assert first.endswith("001") and bug.endswith("001"), (first, bug)
+        def rows():
+            return {str(row["id"]): row for path in (store / "objects").rglob("*.yaml")
+                    if (row := yaml.safe_load(path.read_text()))}
+
+        before_mcp = rows()
+        assert any(row.get("spec_id", "").startswith("META-") for row in before_mcp.values())
+        first_uuid = next(key for key, row in before_mcp.items() if row.get("spec_id") == first)
+        bug_uuid = next(key for key, row in before_mcp.items() if row.get("spec_id") == bug)
         with patch.dict(os.environ, env, clear=True):
             client = McpClient(binary, root, 60)
             try:
@@ -70,8 +78,10 @@ def main():
                 assert len(id_patterns) >= 10
                 for pattern in id_patterns:
                     assert re.fullmatch(pattern, f"BUG-{node}-001"), pattern
-                    assert re.fullmatch(pattern, "BUG-1-2-003"), pattern
-                    assert not re.fullmatch(pattern, "other#BUG-001"), pattern
+                    for valid in ["BUG-001", "BUG-1-2-003", "BUG-team_a--west-003"]:
+                        assert re.fullmatch(pattern, valid), (pattern, valid)
+                    for invalid in ["other#BUG-001", "BUG-../001", "BUG-_bad-001", "BUG-001/other"]:
+                        assert not re.fullmatch(pattern, invalid), (pattern, invalid)
                 response = client.tool("add_requirement", {"title": "MCP defect", "description": "native WORK MCP allocation", "type": "bug", "status": "draft"})
                 assert added(content_text(response), "BUG").endswith("002")
                 generic = client.tool("add_requirement", {"title": "MCP generic", "description": "native WORK generic allocation", "type": "functional", "status": "draft"})
@@ -80,6 +90,12 @@ def main():
             finally:
                 client.close()
         assert added(run("add", "--title", "restart defect", "--type", "bug", "--status", "draft").stdout, "BUG").endswith("003")
+        reloaded = rows()
+        assert set(before_mcp) <= set(reloaded), "seeded META/CLI UUID lost during MCP writes"
+        assert reloaded[first_uuid]["spec_id"] == first
+        assert reloaded[bug_uuid]["spec_id"] == bug
+        assert any(str(edge["target_id"]) == first_uuid and edge["rel_type"].lower() == "references"
+                   for edge in reloaded[bug_uuid].get("relationships", [])), reloaded[bug_uuid]
         run("node", "acquire")
         assert tomllib.loads((common / "aida-work-node.toml").read_text()) == binding
         # Concurrent fresh CLI processes use the same persistent allocator.
@@ -167,6 +183,35 @@ def main():
         (legacy_store / ".aida/node.toml").write_text("node_id='7'\nuser_id=0\nhostname=''\nregistered_at='2026-01-01T00:00:00Z'\n")
         legacy_counter = legacy_store / ".aida/dispenser.toml"
         old_bytes = b"[mode.Distributed]\nnode_id='7'\n[sequences]\nBUG=41\n"
+        legacy_counter.write_bytes(old_bytes)
+        node_file = legacy_store / ".aida/node.toml"
+        valid_node = node_file.read_bytes()
+
+        def legacy_snapshot():
+            paths = list((legacy_store / "objects").rglob("*.yaml"))
+            paths += [legacy_store / name for name in ["metadata.yaml", "oplog.yaml", ".aida/node.toml", ".aida/dispenser.toml"]]
+            paths += [legacy / ".git" / name for name in ["aida-work-node.toml", "aida-work-dispenser.toml"]]
+            return {str(p): p.read_bytes() if p.exists() else None for p in paths}, git("show-ref", cwd=legacy)
+
+        for bad_node, bad_counter in [
+            (valid_node, old_bytes.replace(b"node_id='7'", b"node_id='8'")),
+            (valid_node, b"mode='Centralized'\n[sequences]\nBUG=41\n"),
+            (b"node_id='7'\nhostname=''\n", old_bytes),
+            (b"invalid toml !", old_bytes),
+            (valid_node, None),
+            (None, old_bytes),
+        ]:
+            for path, value in [(node_file, bad_node), (legacy_counter, bad_counter)]:
+                if value is None:
+                    path.unlink(missing_ok=True)
+                else:
+                    path.write_bytes(value)
+            before_invalid = legacy_snapshot()
+            run("node", "acquire", cwd=legacy, ok=False)
+            assert legacy_snapshot() == before_invalid
+            run("add", "--title", "invalid legacy migration", "--type", "bug", cwd=legacy, ok=False)
+            assert legacy_snapshot() == before_invalid
+        node_file.write_bytes(valid_node)
         legacy_counter.write_bytes(old_bytes)
         before_objects = {p: p.read_bytes() for p in (legacy_store / "objects").rglob("*.yaml")}
         before_ref = git("show-ref", cwd=legacy)

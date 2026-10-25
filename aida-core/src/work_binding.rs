@@ -154,7 +154,24 @@ pub fn bootstrap(root: &Path) -> Result<Option<WorkBinding>> {
             // Old native IDs/aliases/UUIDs are never rewritten by migration.
             let legacy = root.join(".aida/dispenser.toml");
             crate::BlockRegistry::with_dispense_lock(&legacy, || {
-                if let Some(old) = read::<DispenserState>(&legacy)? {
+                // A legacy node without its provider may have lost consumed
+                // counters. Require the complete original pair; only absence of
+                // both records is cold bootstrap. Never infer a zero high-water.
+                // trace:BUG-2017 | ai:codex
+                let node = read::<crate::node::NodeConfig>(&root.join(".aida/node.toml"))?;
+                let old = read::<DispenserState>(&legacy)?;
+                match (&node, &old) {
+                    (None, None) => {}
+                    (Some(node), Some(old)) => {
+                        crate::node::validate_node_id(&node.node_id).map_err(anyhow::Error::msg)?;
+                        anyhow::ensure!(
+                            old.mode == node.id_mode(),
+                            "legacy node/provider binding mismatch"
+                        );
+                    }
+                    _ => bail!("incomplete legacy node/provider pair; explicit recovery required"),
+                }
+                if let Some(old) = old {
                     for (prefix, n) in old.sequences {
                         let high = state.sequences.entry(prefix).or_default();
                         *high = (*high).max(n);
@@ -212,6 +229,11 @@ mod tests {
         let d = tempfile::tempdir().unwrap();
         crate::git_ops::init(d.path()).unwrap();
         std::fs::create_dir_all(d.path().join(".aida")).unwrap();
+        std::fs::write(
+            d.path().join(".aida/node.toml"),
+            "node_id='7'\nuser_id=0\nhostname=''\nregistered_at='2026-01-01T00:00:00Z'\n",
+        )
+        .unwrap();
         let old = "[mode.Distributed]\nnode_id='7'\n[sequences]\nBUG=91\nFR=8\n";
         std::fs::write(d.path().join(".aida/dispenser.toml"), old).unwrap();
         let b = bootstrap(d.path()).unwrap().unwrap();
@@ -235,6 +257,56 @@ mod tests {
             old
         );
     }
+    #[test]
+    fn legacy_bootstrap_refuses_invalid_or_incomplete_pairs_without_writes() {
+        let valid = "node_id='7'\nuser_id=0\nhostname=''\nregistered_at='2026-01-01T00:00:00Z'\n";
+        let provider = "[mode.Distributed]\nnode_id='7'\n[sequences]\nBUG=91\n";
+        for (node, counter) in [
+            (
+                Some(valid),
+                Some(provider.replace("node_id='7'", "node_id='8'")),
+            ),
+            (
+                Some(valid),
+                Some("mode='Centralized'\n[sequences]\nBUG=91\n".into()),
+            ),
+            (Some("node_id='7'\nhostname=''\n"), Some(provider.into())),
+            (Some("invalid toml !"), Some(provider.into())),
+            (Some(valid), None),
+            (None, Some(provider.into())),
+        ] {
+            let d = tempfile::tempdir().unwrap();
+            crate::git_ops::init(d.path()).unwrap();
+            std::fs::create_dir(d.path().join(".aida")).unwrap();
+            if let Some(n) = node {
+                std::fs::write(d.path().join(".aida/node.toml"), n).unwrap();
+            }
+            if let Some(c) = counter {
+                std::fs::write(d.path().join(".aida/dispenser.toml"), c).unwrap();
+            }
+            let files = [
+                ".aida/node.toml",
+                ".aida/dispenser.toml",
+                "metadata.yaml",
+                "oplog.yaml",
+                ".git/HEAD",
+            ];
+            let before: Vec<_> = files
+                .iter()
+                .map(|p| std::fs::read(d.path().join(p)).ok())
+                .collect();
+            assert!(bootstrap(d.path()).is_err());
+            let after: Vec<_> = files
+                .iter()
+                .map(|p| std::fs::read(d.path().join(p)).ok())
+                .collect();
+            assert_eq!(before, after);
+            assert!(!d.path().join(".git").join(BINDING_FILE).exists());
+            assert!(!counter_path(d.path()).unwrap().exists());
+            assert!(!d.path().join("objects").exists());
+        }
+    }
+
     #[test]
     fn linked_worktrees_share_one_opaque_binding_and_concurrent_counter() {
         let d = tempfile::tempdir().unwrap();

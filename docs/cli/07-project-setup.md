@@ -322,6 +322,10 @@ shared by linked worktrees. IDs have the form `BUG-<node>-001`; restarting or
 running `aida node acquire` again retains the binding and consumed counters.
 Legacy node files retain their schema and existing object IDs; migration creates
 the opaque binding once and carries forward consumed counter high-water marks.
+Migration requires a complete, valid legacy node and matching distributed counter;
+a missing or contradictory record requires explicit recovery. Cold bootstrap
+requires both legacy records to be absent. An interrupted opaque bootstrap can
+recover its existing valid counter and UUID without resetting consumed values.
 WORK does not register hostname, user, email or friendly node names, claim global
 blocks, or assign agreed IDs. Missing bindings outside the supported init/repair
 lifecycle refuse writes rather than falling back to global counters.
