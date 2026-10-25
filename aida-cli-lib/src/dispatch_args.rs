@@ -144,4 +144,27 @@ pub enum DispatchAction {
         /// Request ID (UUID or unique prefix).
         id: String,
     },
+    /// Execute one substrate scheduler pass over pending `take` and `impl`
+    /// requests (leaves `review`, `flow`, and `train` waiting for `serve`).
+    Tick,
+    /// Long-running executor started from a human advisor terminal after
+    /// `eval "$(aida role enter advisor ...)"` to run grant-requiring verbs
+    /// (`review`, `flow`, `train`) as well as `take` and `impl`.
+    Serve {
+        /// Run a single pass and exit instead of polling.
+        #[clap(long)]
+        once: bool,
+        /// Poll interval in milliseconds when running continuously.
+        #[clap(long, default_value_t = 2000)]
+        poll_ms: u64,
+    },
+    /// Internal per-request worker spawned by `dispatch tick` or `dispatch serve`.
+    #[clap(hide = true)]
+    Run {
+        /// Exact request UUID.
+        id: String,
+        /// Set when spawned by `aida dispatch serve` from a bound advisor terminal.
+        #[clap(long)]
+        via_serve: bool,
+    },
 }

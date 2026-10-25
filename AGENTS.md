@@ -1,3 +1,8 @@
+A host-side Codex mail adapter can queue notifications to one existing thread
+without model polling. Read [setup and recovery](docs/agents/codex-mail-wake.md);
+queue acceptance and inbox acknowledgement remain distinct.
+<!-- trace:TASK-2347 | ai:codex -->
+
 Mailbox explicit sends and mentions share live-recipient resolution. Unknown or
 dead agent recipients and role/vendor addresses with zero live readers refuse
 before writing; group sends list current readers. Known human inboxes and
@@ -457,8 +462,9 @@ mutation/gate paths remain strict. See OVERVIEW.md for the read-label contract.
 
 Clone-local transport policy lives in the common Git directory, outside the
 shared store. `aida config transport` manages the `work` profile before store
-initialization; enabled push/pull currently supports read-only plans and refuses
-execution pending the executor/sanitization slices. See
+initialization. Enabled push performs one pinned store-ref push through verified
+store hooks, without lifecycle actions; pull is plan-only. Sanitization and
+sanitized intake remain pending. See
 [transport configuration](docs/cli/07-project-setup.md#aida-config-transport).
 <!-- trace:STORY-1742 | ai:codex -->
 

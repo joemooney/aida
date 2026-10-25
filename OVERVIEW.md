@@ -385,8 +385,11 @@ profile is versioned JSON in the common Git directory, shared by linked
 worktrees. Its endpoint fingerprint and optional explicitly enrolled public-safe
 baseline never enter the requirement store. Profile configuration and push/pull
 plans dispatch before store initialization; plans do not fetch or run lifecycle
-actions. Execution currently refuses pending the executor and sanitization
-slices. Fixed store refspecs cannot expand through environment defaults, and
+actions. Push execution validates the attached clean store under its writer
+lock, releases the lock, and makes one attempt to push the pinned commit through
+verified store-only hooks. It preserves identity policy without code hooks or
+other lifecycle actions. Pull execution, sanitization and sanitized intake remain
+pending. Fixed store refspecs cannot expand through environment defaults, and
 changed/ambiguous origin endpoints refuse. Raw Git and other sync commands are
 outside this client-only boundary; there is no receiving-side enforcement.
 See [transport configuration](docs/cli/07-project-setup.md#aida-config-transport).
@@ -1203,3 +1206,13 @@ perform optimistic conflict detection; the inventory distinguishes that
 protection from in-lock reloads. See
 [store writer inventory](docs/plans/2026-10-19-store-writer-inventory.md).
 <!-- trace:TASK-1981 | ai:codex -->
+
+## Codex mail wake adapter
+
+The opt-in host adapter in `scripts/codex-mail-wake.py` reads bounded AIDA
+`mailbox wake-snapshot` envelopes across sibling checkouts, deduplicates message
+IDs in a private durable ledger, and uses native `codex queue` to notify an
+explicit existing advisor thread. Quiet scans use no model inference. Uncertain
+queue results require explicit recovery; a queue receipt is not mail read/ack
+evidence. See [installation and recovery](docs/agents/codex-mail-wake.md).
+<!-- trace:TASK-2347 | ai:codex -->

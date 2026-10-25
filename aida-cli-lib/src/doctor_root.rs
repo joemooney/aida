@@ -1678,6 +1678,8 @@ pub(crate) static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
         &["loose-objects", "loose-object", "git-objects", "repack"],
         "loose-objects",
     ),
+    // trace:TASK-2347 | ai:codex
+    (&["codex-mail-wake"], "codex-mail-wake"),
     // STORY-1699: relay runs stopped at `state=blocked` / `exited` with no
     // `.done` acknowledgement. trace:STORY-1699 | ai:claude
     (

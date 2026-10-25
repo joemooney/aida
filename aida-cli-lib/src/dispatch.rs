@@ -8,7 +8,7 @@
 //! process/session-key-bound `advisor` seat grant ([`grant_check`]).
 //!
 //! Per the signed SKETCH v1 and ADVISOR SIGNOFF:
-//! - No `DispatchGrantBindGuard`: no code path ever appends `proc:` tokens to
+//! - No self-binding grant guard: no code path ever appends `proc:` tokens to
 //!   an advisor grant outside `aida role enter` / `--bind-pid`.
 //! - The cron/schedule `dispatch tick` executes only `take` and `impl`;
 //!   `review`, `flow`, and `train` require `aida dispatch serve` started by the
@@ -275,6 +275,8 @@ pub(crate) struct DispatchResult {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub worker_start: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub claim_token: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub spawned_session: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub exit_code: Option<i32>,
@@ -346,11 +348,28 @@ fn acquire_dispatch_lock(main_worktree: &Path) -> Result<DispatchLock> {
 }
 
 /// Write `body` to `path` as a 0600 regular file, atomically (temp + rename).
+/// Refuses if `dir` or `path` is a symlink.
 // trace:STORY-1917 | ai:agy
 pub(crate) fn write_private_atomic(path: &Path, body: &[u8]) -> Result<()> {
     use std::io::Write;
     let dir = path.parent().context("dispatch path has no parent")?;
     std::fs::create_dir_all(dir)?;
+    let dir_meta = std::fs::symlink_metadata(dir)
+        .with_context(|| format!("cannot stat parent directory {}", dir.display()))?;
+    if dir_meta.file_type().is_symlink() || !dir_meta.is_dir() {
+        bail!(
+            "{} is a symlink or not a directory (refused)",
+            dir.display()
+        );
+    }
+    match std::fs::symlink_metadata(path) {
+        Ok(m) if m.file_type().is_symlink() => {
+            bail!("{} is a symlink (refused)", path.display());
+        }
+        Ok(_) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(e).with_context(|| format!("cannot stat {}", path.display())),
+    }
     let tmp = dir.join(format!(
         ".{}.tmp-{}",
         path.file_name()
@@ -363,14 +382,184 @@ pub(crate) fn write_private_atomic(path: &Path, body: &[u8]) -> Result<()> {
     #[cfg(unix)]
     {
         use std::os::unix::fs::OpenOptionsExt;
-        opts.mode(0o600);
+        opts.mode(0o600).custom_flags(libc::O_NOFOLLOW);
     }
     let mut file = opts.open(&tmp)?;
     file.write_all(body)?;
     file.sync_all()?;
     drop(file);
+    if let Ok(m) = std::fs::symlink_metadata(path) {
+        if m.file_type().is_symlink() {
+            let _ = std::fs::remove_file(&tmp);
+            bail!("{} is a symlink (refused)", path.display());
+        }
+    }
     std::fs::rename(&tmp, path)?;
     Ok(())
+}
+
+/// Ensure and open a child directory under a held parent directory descriptor
+/// without following symlinks (`mkdirat` + `openat(O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)`),
+/// verifying it is owned by the current uid.
+// trace:STORY-1917 | ai:agy
+fn open_or_create_pinned_child_dir(
+    parent: &std::fs::File,
+    name: &str,
+    display_path: &Path,
+) -> Result<std::fs::File> {
+    use std::os::fd::{AsRawFd, FromRawFd};
+    use std::os::unix::fs::MetadataExt;
+    let c_name = std::ffi::CString::new(name.as_bytes())
+        .with_context(|| format!("invalid directory component `{name}`"))?;
+    let mk_rc = unsafe { libc::mkdirat(parent.as_raw_fd(), c_name.as_ptr(), 0o700) };
+    if mk_rc != 0 {
+        let err = std::io::Error::last_os_error();
+        if err.raw_os_error() != Some(libc::EEXIST) {
+            return Err(err).with_context(|| format!("cannot create {}", display_path.display()));
+        }
+    }
+    let fd = unsafe {
+        libc::openat(
+            parent.as_raw_fd(),
+            c_name.as_ptr(),
+            libc::O_RDONLY | libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC,
+            0,
+        )
+    };
+    if fd < 0 {
+        let err = std::io::Error::last_os_error();
+        if matches!(err.raw_os_error(), Some(libc::ELOOP) | Some(libc::ENOTDIR)) {
+            bail!(
+                "{} is a symlink or not a directory (refused)",
+                display_path.display()
+            );
+        }
+        return Err(err).with_context(|| format!("cannot open {}", display_path.display()));
+    }
+    let dir = unsafe { std::fs::File::from_raw_fd(fd) };
+    let meta = dir
+        .metadata()
+        .with_context(|| format!("cannot stat {}", display_path.display()))?;
+    if !meta.is_dir() {
+        bail!("{} is not a directory (refused)", display_path.display());
+    }
+    let uid = unsafe { libc::geteuid() };
+    if meta.uid() != uid {
+        bail!(
+            "{} is owned by uid {}, not current uid {uid}",
+            display_path.display(),
+            meta.uid()
+        );
+    }
+    Ok(dir)
+}
+
+/// Pin `.aida/dispatch[/<subdir>]` relative to `main_worktree` using descriptor-relative
+/// `openat(O_DIRECTORY | O_NOFOLLOW)` traversal so no symlink at `.aida`,
+/// `.aida/dispatch`, or `.aida/dispatch/<subdir>` is ever followed.
+// trace:STORY-1917 | ai:agy
+fn open_pinned_dispatch_subdir(
+    main_worktree: &Path,
+    subdir: Option<&str>,
+) -> Result<std::fs::File> {
+    use std::os::unix::fs::OpenOptionsExt;
+    let root_fd = std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_DIRECTORY | libc::O_CLOEXEC)
+        .open(main_worktree)
+        .with_context(|| format!("cannot open main worktree {}", main_worktree.display()))?;
+    let aida_path = main_worktree.join(".aida");
+    let aida_fd = open_or_create_pinned_child_dir(&root_fd, ".aida", &aida_path)?;
+    let disp_path = aida_path.join(DISPATCH_DIR);
+    let disp_fd = open_or_create_pinned_child_dir(&aida_fd, DISPATCH_DIR, &disp_path)?;
+    match subdir {
+        Some(sub) => {
+            let sub_path = disp_path.join(sub);
+            open_or_create_pinned_child_dir(&disp_fd, sub, &sub_path)
+        }
+        None => Ok(disp_fd),
+    }
+}
+
+/// Open `.aida/dispatch/logs/<id>.log` relative to the pinned `logs` directory
+/// descriptor using `O_NOFOLLOW | O_NONBLOCK`, verifying it is a singly-linked
+/// (`nlink == 1`) regular file owned by the current uid with mode `0600` and
+/// size `<= MAX_DISPATCH_LOG_BYTES`. Never follows symlinks and never replaces
+/// a symlink or hardlink.
+// trace:STORY-1917 | ai:agy
+fn open_pinned_log_file(
+    main_worktree: &Path,
+    id: &str,
+    append_mode: bool,
+) -> Result<std::fs::File> {
+    use std::os::fd::{AsRawFd, FromRawFd};
+    use std::os::unix::fs::MetadataExt;
+    if Uuid::parse_str(id).is_err() {
+        bail!("invalid dispatch request id `{id}` for log file");
+    }
+    let logs_fd = open_pinned_dispatch_subdir(main_worktree, Some(LOGS_SUBDIR))?;
+    let file_name = format!("{id}.log");
+    let display_path = logs_dir(main_worktree).join(&file_name);
+    let c_name = std::ffi::CString::new(file_name.as_bytes())?;
+    let mut flags =
+        libc::O_RDWR | libc::O_CREAT | libc::O_NOFOLLOW | libc::O_NONBLOCK | libc::O_CLOEXEC;
+    if append_mode {
+        flags |= libc::O_APPEND;
+    }
+    let fd = unsafe { libc::openat(logs_fd.as_raw_fd(), c_name.as_ptr(), flags, 0o600) };
+    if fd < 0 {
+        let err = std::io::Error::last_os_error();
+        if err.raw_os_error() == Some(libc::ELOOP) {
+            bail!("{} is a symlink (refused)", display_path.display());
+        }
+        return Err(err).with_context(|| format!("cannot open {}", display_path.display()));
+    }
+    let file = unsafe { std::fs::File::from_raw_fd(fd) };
+    let meta = file
+        .metadata()
+        .with_context(|| format!("cannot stat {}", display_path.display()))?;
+    if !meta.is_file() {
+        bail!("{} is not a regular file (refused)", display_path.display());
+    }
+    if meta.nlink() != 1 {
+        bail!(
+            "{} has {} hard links, expected 1 (refused)",
+            display_path.display(),
+            meta.nlink()
+        );
+    }
+    let uid = unsafe { libc::geteuid() };
+    if meta.uid() != uid {
+        bail!(
+            "{} is owned by uid {}, not current uid {uid}",
+            display_path.display(),
+            meta.uid()
+        );
+    }
+    let mode = meta.mode() & 0o7777;
+    if mode != 0o600 {
+        bail!(
+            "{} has mode {:04o}, expected 0600 (refused)",
+            display_path.display(),
+            mode
+        );
+    }
+    if meta.len() > MAX_DISPATCH_LOG_BYTES as u64 {
+        bail!(
+            "{} exceeds maximum log size ({} bytes > {} bytes)",
+            display_path.display(),
+            meta.len(),
+            MAX_DISPATCH_LOG_BYTES
+        );
+    }
+    // Clear O_NONBLOCK now that we have verified the descriptor is a regular file.
+    unsafe {
+        let cur = libc::fcntl(file.as_raw_fd(), libc::F_GETFL);
+        if cur >= 0 {
+            let _ = libc::fcntl(file.as_raw_fd(), libc::F_SETFL, cur & !libc::O_NONBLOCK);
+        }
+    }
+    Ok(file)
 }
 
 /// Open `path` with `O_NOFOLLOW | O_NONBLOCK`, verify it is a regular file
@@ -1315,6 +1504,7 @@ pub(crate) fn submit_request(
         mandate_id: caller.mandate.id.clone(),
         worker_pid: None,
         worker_start: None,
+        claim_token: None,
         spawned_session: None,
         exit_code: None,
         summary: summary.clone(),
@@ -1630,12 +1820,2391 @@ pub(crate) fn handle_dispatch(action: &DispatchAction) -> Result<()> {
             println!("cancelled: {} ({})", res.id, res.summary);
             Ok(())
         }
+        DispatchAction::Tick => {
+            let summary = run_dispatch_tick(&main_worktree, &mandate_dir, now)?;
+            if summary.spawned > 0 || summary.reaped > 0 {
+                println!(
+                    "dispatch tick: spawned={}, reaped={}, waiting_for_serve={}",
+                    summary.spawned, summary.reaped, summary.waiting_for_serve
+                );
+            }
+            Ok(())
+        }
+        DispatchAction::Serve { once, poll_ms } => {
+            run_dispatch_serve(&main_worktree, &mandate_dir, *once, *poll_ms)
+        }
+        DispatchAction::Run { id, via_serve } => {
+            let res = execute_one_request(&main_worktree, &mandate_dir, id, *via_serve, now)?;
+            println!("{}: {} ({})", res.status.as_str(), res.id, res.summary);
+            Ok(())
+        }
+    }
+}
+
+// ── Slice 2: Executor Core, Serve, and Review / Take / Impl Runners ─────────
+
+pub(crate) const MAX_CONCURRENT_REVIEWS: usize = 2;
+pub(crate) const MAX_CONCURRENT_FLOWS: usize = 4;
+pub(crate) const MAX_CONCURRENT_TRAINS: usize = 1;
+pub(crate) const MAX_DISPATCH_LOG_BYTES: usize = 1024 * 1024;
+pub(crate) const STALE_GIT_CONFIG_LOCK_AGE_SECS: u64 = 120;
+
+/// Summary of one `dispatch tick` or `dispatch serve` claim/reap pass.
+// trace:STORY-1917 | ai:agy
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct DispatchPassSummary {
+    pub reaped: usize,
+    pub spawned: usize,
+    pub claimed_ids: Vec<String>,
+    pub waiting_for_serve: usize,
+}
+
+/// Safe stale `.git/config.lock` cleanup: unlinks `<main_worktree>/.git/config.lock`
+/// ONLY when `symlink_metadata` confirms a regular file (never a symlink),
+/// `len() == 0`, mode `0o444`, and `mtime >= 120s` in the past relative to `now`.
+/// Returns `Ok(true)` when a stale lock was removed, `Ok(false)` otherwise.
+// trace:STORY-1917 | ai:agy
+pub(crate) fn clean_stale_git_config_lock(
+    main_worktree: &Path,
+    now: std::time::SystemTime,
+) -> Result<bool> {
+    use std::os::unix::fs::MetadataExt;
+    let lock_path = main_worktree.join(".git").join("config.lock");
+    let meta = match std::fs::symlink_metadata(&lock_path) {
+        Ok(m) => m,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(e) => return Err(e).with_context(|| format!("cannot stat {}", lock_path.display())),
+    };
+    if meta.file_type().is_symlink() || !meta.is_file() {
+        return Ok(false);
+    }
+    if meta.len() != 0 {
+        return Ok(false);
+    }
+    if (meta.mode() & 0o777) != 0o444 {
+        return Ok(false);
+    }
+    let Ok(mtime) = meta.modified() else {
+        return Ok(false);
+    };
+    let Ok(age) = now.duration_since(mtime) else {
+        return Ok(false);
+    };
+    if age < std::time::Duration::from_secs(STALE_GIT_CONFIG_LOCK_AGE_SECS) {
+        return Ok(false);
+    }
+    match std::fs::remove_file(&lock_path) {
+        Ok(()) => Ok(true),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(e) => Err(e).with_context(|| format!("cannot unlink {}", lock_path.display())),
+    }
+}
+
+/// Send one best-effort mailbox notification to `advisor` when a request
+/// reaches a terminal state (`Done`, `Refused`, or `Failed`), and return the
+/// notification timestamp if delivery succeeded.
+// trace:STORY-1917 | ai:agy
+pub(crate) fn notify_advisor_outcome(
+    main_worktree: &Path,
+    req: &DispatchRequest,
+    res: &DispatchResult,
+    now: DateTime<Utc>,
+) -> Option<DateTime<Utc>> {
+    use aida_core::mailbox::{Intent, Message, Recipient};
+    let subject = format!(
+        "dispatch {} {}: {} ({})",
+        req.action.verb_str(),
+        req.action.subject_label(),
+        res.status.as_str(),
+        &req.id[..8.min(req.id.len())]
+    );
+    let body = match &res.refusal_reason {
+        Some(reason) => format!(
+            "Dispatch request {} ({} {}) {}: {}\nreason: {}\nlog: {}",
+            req.id,
+            req.action.verb_str(),
+            req.action.subject_label(),
+            res.status.as_str(),
+            res.summary,
+            reason,
+            res.log_path
+        ),
+        None => format!(
+            "Dispatch request {} ({} {}) {}: {}\nlog: {}",
+            req.id,
+            req.action.verb_str(),
+            req.action.subject_label(),
+            res.status.as_str(),
+            res.summary,
+            res.log_path
+        ),
+    };
+    let msg_id = Uuid::new_v4().to_string();
+    let msg = Message {
+        id: msg_id.clone(),
+        thread_id: msg_id,
+        from: "dispatch".to_string(),
+        to: Recipient::Agent("advisor".to_string()),
+        timestamp: now.timestamp_millis(),
+        in_reply_to: None,
+        body,
+        subject: Some(subject),
+        urgent: matches!(res.status, DispatchStatus::Refused | DispatchStatus::Failed),
+        intent: Intent::Fyi,
+        retracted: false,
+        deleted: false,
+        archived: false,
+        from_source: aida_core::mailbox::SenderSource::Explicit,
+        from_role: Some("dispatch".to_string()),
+        relayed_from: None,
+    };
+    if crate::mailbox_store::write_message(main_worktree, &msg).is_ok() {
+        crate::events::emit(
+            main_worktree,
+            &crate::events::Event::new(
+                None,
+                "",
+                crate::events::EventKind::MailReceived {
+                    to: "advisor".to_string(),
+                },
+            ),
+        );
+        Some(now)
+    } else {
+        None
+    }
+}
+
+pub(crate) const DISPATCH_CLAIM_TOKEN_ENV: &str = "AIDA_DISPATCH_CLAIM_TOKEN";
+
+/// Fenced worker claim owning an in-flight `Running` dispatch record.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct WorkerClaim {
+    pub(crate) worker_pid: u32,
+    pub(crate) worker_start: Option<String>,
+    pub(crate) claim_token: String,
+}
+
+/// Append bounded log text to `.aida/dispatch/logs/<id>.log` (mode 0600, capped
+/// at [`MAX_DISPATCH_LOG_BYTES`]) through a pinned, no-follow regular-file
+/// descriptor so symlinks and hardlinks can neither disclose outside files nor
+/// redirect writes (F1).
+// trace:STORY-1917 | ai:agy
+pub(crate) fn append_dispatch_log(main_worktree: &Path, id: &str, text: &str) -> Result<()> {
+    use std::io::{Read, Seek, SeekFrom, Write};
+    let mut file = open_pinned_log_file(main_worktree, id, false)?;
+    file.seek(SeekFrom::Start(0))?;
+    let mut existing = Vec::new();
+    (&file)
+        .take((MAX_DISPATCH_LOG_BYTES as u64) + 1)
+        .read_to_end(&mut existing)
+        .with_context(|| format!("cannot read log for {id}"))?;
+    if existing.len() > MAX_DISPATCH_LOG_BYTES {
+        bail!("log for {id} exceeds maximum size ({MAX_DISPATCH_LOG_BYTES} bytes)");
+    }
+    existing.extend_from_slice(text.as_bytes());
+    if existing.len() > MAX_DISPATCH_LOG_BYTES {
+        let drop_len = existing.len() - MAX_DISPATCH_LOG_BYTES;
+        existing.drain(..drop_len);
+    }
+    file.set_len(0)?;
+    file.seek(SeekFrom::Start(0))?;
+    file.write_all(&existing)?;
+    file.sync_all()?;
+    Ok(())
+}
+
+/// Verify that `aida dispatch serve` is running with a valid, bound `advisor`
+/// seat grant (`GrantCheck::Valid` with `seat == "advisor"`).
+///
+/// Per ADVISOR SIGNOFF: `serve` never self-binds or mutates
+/// `grant.binding`; it inherits the advisor terminal's `proc:`/`sid:`/`key:`
+/// binding the ordinary way. If the grant is absent, rejected, expired, or
+/// revoked, `serve` refuses to start (or stops mid-run and leaves unclaimed
+/// requests `Pending`).
+// trace:STORY-1917 | ai:agy
+pub(crate) fn check_serve_grant(
+    main_worktree: &Path,
+    now: DateTime<Utc>,
+) -> Result<crate::gate::seat_authority::SeatGrant> {
+    let grant = match crate::gate::seat_authority::grant_check_at(main_worktree, now) {
+        GrantCheck::Valid(g) => g,
+        GrantCheck::Absent => {
+            bail!(
+                "`aida dispatch serve` requires a bound `advisor` seat grant (no session grant is set); enter the role at your terminal with `eval \"$(aida role enter advisor --delegate-seat reviewer --delegate-seat implementer)\"` before starting `aida dispatch serve`"
+            )
+        }
+        GrantCheck::Rejected { id, seat, reason } => {
+            let seat_str = seat.as_deref().unwrap_or("unknown");
+            bail!(
+                "`aida dispatch serve` advisor seat grant {id} ({seat_str}) is not valid: {reason}; re-enter with `eval \"$(aida role enter advisor --delegate-seat reviewer --delegate-seat implementer)\"`"
+            )
+        }
+    };
+    if crate::canonical_role_name(&grant.seat) != crate::gate::mandate::MANDATE_SEAT {
+        bail!(
+            "`aida dispatch serve` requires the `advisor` seat grant, but current grant {} holds seat `{}`",
+            grant.id,
+            grant.seat
+        );
+    }
+    let presenter = crate::gate::seat_authority::presenter_tokens_for(&grant);
+    if crate::gate::seat_authority::matched_binding(&grant, &presenter).is_empty() {
+        bail!(
+            "`aida dispatch serve` grant {} has no presenter binding matching this process; run `eval \"$(aida role enter advisor --delegate-seat reviewer --delegate-seat implementer)\"` in this terminal first",
+            grant.id
+        );
+    }
+    Ok(grant)
+}
+
+/// Reap any `Running` request whose recorded `(worker_pid, worker_start)` is
+/// provably dead without having recorded completion. Caller must hold
+/// `acquire_dispatch_lock`.
+// trace:STORY-1917 | ai:agy
+fn reap_dead_workers_locked(main_worktree: &Path, now: DateTime<Utc>) -> Result<usize> {
+    let mut reaped = 0usize;
+    for (req, mut res) in load_all_pairs(main_worktree)? {
+        if res.status != DispatchStatus::Running {
+            continue;
+        }
+        let alive = match res.worker_pid {
+            Some(pid) => {
+                crate::process_probe::process_identity_is_alive(pid, res.worker_start.as_deref())
+            }
+            None => false,
+        };
+        if alive {
+            continue;
+        }
+        let reason = format!(
+            "worker (pid {:?}) exited unexpectedly without recording completion",
+            res.worker_pid
+        );
+        res.status = DispatchStatus::Failed;
+        res.finished_at = Some(now);
+        res.summary = format!(
+            "failed {} {}: {reason}",
+            req.action.verb_str(),
+            req.action.subject_label()
+        );
+        res.refusal_reason = Some(reason.clone());
+        res.notified_at = notify_advisor_outcome(main_worktree, &req, &res, now);
+        write_private_atomic(
+            &result_path(main_worktree, &req.id),
+            &serde_json::to_vec_pretty(&res)?,
+        )?;
+        emit_dispatch_event(
+            main_worktree,
+            &req.mandate_id,
+            req.action.verb_str(),
+            &req.action.subject_label(),
+            Outcome::Skipped,
+            Some(reason),
+        );
+        reaped += 1;
+    }
+    Ok(reaped)
+}
+
+/// Spawn a detached `aida dispatch run <id> [--via-serve]` worker process,
+/// redirecting stdout/stderr to the pinned `.aida/dispatch/logs/<id>.log`
+/// (mode 0600, `O_NOFOLLOW`) and passing `claim_token` via
+/// [`DISPATCH_CLAIM_TOKEN_ENV`].
+// trace:STORY-1917 | ai:agy
+pub(crate) fn spawn_detached_worker(
+    main_worktree: &Path,
+    id: &str,
+    via_serve: bool,
+    claim_token: &str,
+) -> Result<(std::process::Child, u32, Option<String>)> {
+    let aida_bin = resolve_aida_bin()?;
+    let log_out = open_pinned_log_file(main_worktree, id, true)?;
+    let log_err = log_out.try_clone()?;
+
+    let mut cmd = std::process::Command::new(aida_bin);
+    cmd.current_dir(main_worktree)
+        .args(["dispatch", "run", id])
+        .env(DISPATCH_CLAIM_TOKEN_ENV, claim_token);
+    if via_serve {
+        cmd.arg("--via-serve");
+    } else {
+        // Cron/schedule tick workers never inherit ambient session grants/roles.
+        for key in crate::mandate_drive::SESSION_ENV {
+            cmd.env_remove(key);
+        }
+    }
+    cmd.stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::from(log_out))
+        .stderr(std::process::Stdio::from(log_err));
+
+    let child = cmd
+        .spawn()
+        .with_context(|| format!("failed to spawn `aida dispatch run {id}`"))?;
+    let pid = child.id();
+    let start = crate::process_probe::process_start_identity(pid);
+    Ok((child, pid, start))
+}
+
+fn publish_spawned_worker_claim(
+    main_worktree: &Path,
+    id: &str,
+    res: &DispatchResult,
+) -> Result<()> {
+    #[cfg(test)]
+    if TEST_FAIL_POST_SPAWN_PUBLICATION.with(|c| c.get()) {
+        bail!("simulated post-spawn worker PID publication failure");
+    }
+    write_private_atomic(
+        &result_path(main_worktree, id),
+        &serde_json::to_vec_pretty(res)?,
+    )
+}
+
+/// Claim eligible `Pending` requests under `tick.lock` (moving `Pending ->
+/// Running` and persisting `claim_token` BEFORE spawning so no unrecorded child
+/// can race ahead of `Running` publication), enforcing concurrency caps
+/// (2 reviews, 4 flows, 1 train).
+// trace:STORY-1917 | ai:agy
+pub(crate) fn claim_and_dispatch_pass(
+    main_worktree: &Path,
+    via_serve: bool,
+    spawn_detached: bool,
+    now: DateTime<Utc>,
+) -> Result<DispatchPassSummary> {
+    let _ = clean_stale_git_config_lock(main_worktree, std::time::SystemTime::from(now));
+    let _lock = acquire_dispatch_lock(main_worktree)?;
+    let reaped = reap_dead_workers_locked(main_worktree, now)?;
+    let pairs = load_all_pairs(main_worktree)?;
+
+    let mut running_reviews = 0usize;
+    let mut running_flows = 0usize;
+    let mut running_trains = 0usize;
+    for (req, res) in &pairs {
+        if res.status == DispatchStatus::Running {
+            match req.action {
+                DispatchVerb::Review { .. } => running_reviews += 1,
+                DispatchVerb::Flow { .. } => running_flows += 1,
+                DispatchVerb::Train { .. } => running_trains += 1,
+                DispatchVerb::Take { .. } | DispatchVerb::Impl { .. } => {}
+            }
+        }
+    }
+
+    let mut summary = DispatchPassSummary {
+        reaped,
+        ..Default::default()
+    };
+
+    let self_pid = std::process::id();
+    let self_start = crate::process_probe::process_start_identity(self_pid);
+
+    for (req, mut res) in pairs {
+        if res.status != DispatchStatus::Pending {
+            continue;
+        }
+        if req.action.requires_serve() && !via_serve {
+            summary.waiting_for_serve += 1;
+            continue;
+        }
+        match req.action {
+            DispatchVerb::Review { .. } => {
+                if running_reviews >= MAX_CONCURRENT_REVIEWS {
+                    continue;
+                }
+                running_reviews += 1;
+            }
+            DispatchVerb::Flow { .. } => {
+                if running_flows >= MAX_CONCURRENT_FLOWS {
+                    continue;
+                }
+                running_flows += 1;
+            }
+            DispatchVerb::Train { .. } => {
+                if running_trains >= MAX_CONCURRENT_TRAINS {
+                    continue;
+                }
+                running_trains += 1;
+            }
+            DispatchVerb::Take { .. } | DispatchVerb::Impl { .. } => {}
+        }
+
+        // Persist the Running claim and fresh claim_token BEFORE spawning (F2).
+        // When `spawn_detached` is true, `worker_pid` starts as `None` until the
+        // spawned child's `(pid, start)` is durably published under `tick.lock`;
+        // if post-spawn publication fails, the child is immediately killed and
+        // reaped under `tick.lock` and the claim is rolled back to `Failed`.
+        let claim_token = Uuid::new_v4().to_string();
+        res.status = DispatchStatus::Running;
+        res.started_at = Some(now);
+        res.worker_pid = if spawn_detached { None } else { Some(self_pid) };
+        res.worker_start = if spawn_detached {
+            None
+        } else {
+            self_start.clone()
+        };
+        res.claim_token = Some(claim_token.clone());
+        res.summary = format!(
+            "running {} {}",
+            req.action.verb_str(),
+            req.action.subject_label()
+        );
+        write_private_atomic(
+            &result_path(main_worktree, &req.id),
+            &serde_json::to_vec_pretty(&res)?,
+        )?;
+
+        if spawn_detached {
+            match spawn_detached_worker(main_worktree, &req.id, via_serve, &claim_token) {
+                Ok((mut child, pid, start)) => {
+                    res.worker_pid = Some(pid);
+                    res.worker_start = start;
+                    res.summary = format!(
+                        "running {} {} (pid {pid})",
+                        req.action.verb_str(),
+                        req.action.subject_label()
+                    );
+                    if let Err(pub_err) = publish_spawned_worker_claim(main_worktree, &req.id, &res)
+                    {
+                        // Parent publication failed: kill and reap the spawned
+                        // child while still holding `tick.lock` so no unowned
+                        // child can ever execute work, then fail the claim.
+                        let _ = child.kill();
+                        let _ = child.wait();
+                        match req.action {
+                            DispatchVerb::Review { .. } => {
+                                running_reviews = running_reviews.saturating_sub(1);
+                            }
+                            DispatchVerb::Flow { .. } => {
+                                running_flows = running_flows.saturating_sub(1);
+                            }
+                            DispatchVerb::Train { .. } => {
+                                running_trains = running_trains.saturating_sub(1);
+                            }
+                            DispatchVerb::Take { .. } | DispatchVerb::Impl { .. } => {}
+                        }
+                        let reason = format!(
+                            "failed to publish dispatch worker claim for pid {pid}: {pub_err:#}"
+                        );
+                        res.status = DispatchStatus::Failed;
+                        res.finished_at = Some(now);
+                        res.worker_pid = None;
+                        res.worker_start = None;
+                        res.claim_token = None;
+                        res.summary = reason.clone();
+                        res.refusal_reason = Some(reason);
+                        res.notified_at = notify_advisor_outcome(main_worktree, &req, &res, now);
+                        let _ = write_private_atomic(
+                            &result_path(main_worktree, &req.id),
+                            &serde_json::to_vec_pretty(&res)?,
+                        );
+                        continue;
+                    }
+                }
+                Err(err) => {
+                    match req.action {
+                        DispatchVerb::Review { .. } => {
+                            running_reviews = running_reviews.saturating_sub(1);
+                        }
+                        DispatchVerb::Flow { .. } => {
+                            running_flows = running_flows.saturating_sub(1);
+                        }
+                        DispatchVerb::Train { .. } => {
+                            running_trains = running_trains.saturating_sub(1);
+                        }
+                        DispatchVerb::Take { .. } | DispatchVerb::Impl { .. } => {}
+                    }
+                    let reason = format!("failed to spawn dispatch worker: {err:#}");
+                    res.status = DispatchStatus::Failed;
+                    res.finished_at = Some(now);
+                    res.worker_pid = None;
+                    res.worker_start = None;
+                    res.claim_token = None;
+                    res.summary = reason.clone();
+                    res.refusal_reason = Some(reason);
+                    res.notified_at = notify_advisor_outcome(main_worktree, &req, &res, now);
+                    write_private_atomic(
+                        &result_path(main_worktree, &req.id),
+                        &serde_json::to_vec_pretty(&res)?,
+                    )?;
+                    continue;
+                }
+            }
+        }
+
+        summary.spawned += 1;
+        summary.claimed_ids.push(req.id);
+    }
+
+    Ok(summary)
+}
+
+/// Run one substrate `aida dispatch tick` pass: executes only `take` and `impl`
+/// requests (leaves `review`, `flow`, and `train` `Pending` as `waiting for serve`).
+// trace:STORY-1917 | ai:agy
+pub(crate) fn run_dispatch_tick(
+    main_worktree: &Path,
+    _mandate_dir: &Path,
+    now: DateTime<Utc>,
+) -> Result<DispatchPassSummary> {
+    claim_and_dispatch_pass(main_worktree, false, true, now)
+}
+
+/// Synchronous test/in-process tick helper: claims eligible `take`/`impl`
+/// requests (`via_serve = false`) and runs them in-process, leaving `review`,
+/// `flow`, and `train` `Pending`.
+// trace:STORY-1917 | ai:agy
+pub(crate) fn run_dispatch_tick_sync(
+    main_worktree: &Path,
+    mandate_dir: &Path,
+    now: DateTime<Utc>,
+) -> Result<DispatchPassSummary> {
+    let summary = claim_and_dispatch_pass(main_worktree, false, false, now)?;
+    for id in &summary.claimed_ids {
+        let token = load_pair(main_worktree, id)
+            .ok()
+            .and_then(|(_, res)| res.claim_token);
+        let _ = execute_one_request_with_token(
+            main_worktree,
+            mandate_dir,
+            id,
+            false,
+            token.as_deref(),
+            now,
+        );
+    }
+    Ok(summary)
+}
+
+/// Synchronous `serve --once` helper: verifies the caller's bound `advisor`
+/// grant first (refusing to start without one), then claims and executes
+/// eligible requests.
+// trace:STORY-1917 | ai:agy
+pub(crate) fn run_dispatch_serve_once_sync(
+    main_worktree: &Path,
+    mandate_dir: &Path,
+    now: DateTime<Utc>,
+) -> Result<DispatchPassSummary> {
+    let _grant = check_serve_grant(main_worktree, now)?;
+    let summary = claim_and_dispatch_pass(main_worktree, true, false, now)?;
+    let self_pid = std::process::id();
+    let self_start = crate::process_probe::process_start_identity(self_pid);
+    for id in &summary.claimed_ids {
+        let token = load_pair(main_worktree, id)
+            .ok()
+            .and_then(|(_, res)| res.claim_token);
+        // Re-check the advisor grant before each request so mid-pass expiry
+        // stops immediately and reverts unclaimed requests back to Pending.
+        if check_serve_grant(main_worktree, Utc::now()).is_err() {
+            if let Ok(_lock) = acquire_dispatch_lock(main_worktree) {
+                if let Ok((_req, mut res)) = load_pair(main_worktree, id) {
+                    if res.status == DispatchStatus::Running
+                        && res.worker_pid == Some(self_pid)
+                        && res.worker_start == self_start
+                        && res.claim_token == token
+                    {
+                        res.status = DispatchStatus::Pending;
+                        res.started_at = None;
+                        res.worker_pid = None;
+                        res.worker_start = None;
+                        res.claim_token = None;
+                        let _ = write_private_atomic(
+                            &result_path(main_worktree, id),
+                            &serde_json::to_vec_pretty(&res)?,
+                        );
+                    }
+                }
+            }
+            continue;
+        }
+        let _ = execute_one_request_with_token(
+            main_worktree,
+            mandate_dir,
+            id,
+            true,
+            token.as_deref(),
+            now,
+        );
+    }
+    Ok(summary)
+}
+
+/// Long-running `aida dispatch serve` loop started from a human advisor
+/// terminal after `eval "$(aida role enter advisor ...)"`.
+// trace:STORY-1917 | ai:agy
+pub(crate) fn run_dispatch_serve(
+    main_worktree: &Path,
+    _mandate_dir: &Path,
+    once: bool,
+    poll_ms: u64,
+) -> Result<()> {
+    let now = Utc::now();
+    let grant = check_serve_grant(main_worktree, now)?;
+    println!(
+        "dispatch serve: bound advisor grant {} active until {}",
+        &grant.id[..8.min(grant.id.len())],
+        grant.expires_at.to_rfc3339()
+    );
+    loop {
+        let tick_now = Utc::now();
+        if let Err(err) = check_serve_grant(main_worktree, tick_now) {
+            eprintln!("dispatch serve stopping (pending requests left pending): {err:#}");
+            return Ok(());
+        }
+        let summary = claim_and_dispatch_pass(main_worktree, true, true, tick_now)?;
+        if summary.spawned > 0 || summary.reaped > 0 {
+            println!(
+                "dispatch serve: spawned={}, reaped={}",
+                summary.spawned, summary.reaped
+            );
+        }
+        if once {
+            return Ok(());
+        }
+        std::thread::sleep(std::time::Duration::from_millis(poll_ms.clamp(100, 60_000)));
+    }
+}
+
+/// Execute a single dispatch request (`aida dispatch run <id> [--via-serve]`).
+///
+/// Enforces:
+/// 1. Atomic claim/ownership check under `tick.lock` (F2): a `Running` request
+///    requires this process's `(worker_pid, worker_start, claim_token)` to
+///    match the persisted claim; a `Pending` request checks concurrency caps
+///    and persists a fresh claim before running.
+/// 2. Dual-end re-validation of `requests/<id>.json` and any frozen brief file
+///    (`O_NOFOLLOW | O_NONBLOCK`, mode 0600, current uid, SHA-256 match).
+/// 3. Hard Boundary B rule (ADVISOR SIGNOFF): if `req.action.requires_serve()`
+///    (`review`, `flow`, `train`) and `!via_serve`, refuses immediately without
+///    touching any grant. When `via_serve` is true, verifies `check_serve_grant`
+///    (inherited binding; never self-binds the grant).
+/// 4. Exact-ID Mandate re-check (`mandate::recheck(mandate_dir, &req.mandate_id, ...)` — F3),
+///    `HumanGates` (`GateOp::Dispatch` / `GateOp::Ship`), and requester grant
+///    re-check on disk (`seat_authority::grant_authorized_at`).
+// trace:STORY-1917 | ai:agy
+pub(crate) fn execute_one_request(
+    main_worktree: &Path,
+    mandate_dir: &Path,
+    id: &str,
+    via_serve: bool,
+    now: DateTime<Utc>,
+) -> Result<DispatchResult> {
+    let env_token = std::env::var(DISPATCH_CLAIM_TOKEN_ENV)
+        .ok()
+        .filter(|s| !s.trim().is_empty());
+    execute_one_request_with_token(
+        main_worktree,
+        mandate_dir,
+        id,
+        via_serve,
+        env_token.as_deref(),
+        now,
+    )
+}
+
+pub(crate) fn execute_one_request_with_token(
+    main_worktree: &Path,
+    mandate_dir: &Path,
+    id: &str,
+    via_serve: bool,
+    presented_token: Option<&str>,
+    now: DateTime<Utc>,
+) -> Result<DispatchResult> {
+    let _ = clean_stale_git_config_lock(main_worktree, std::time::SystemTime::from(now));
+
+    if Uuid::parse_str(id).is_err() {
+        bail!("invalid dispatch request id `{id}`");
+    }
+
+    let self_pid = std::process::id();
+    let self_start = crate::process_probe::process_start_identity(self_pid);
+
+    // Acquire `tick.lock` to verify or establish exclusive worker ownership (F2)
+    // BEFORE reading/validating the request or recording any refusal.
+    let (mut res, claim, raw_req_res) = {
+        let _lock = acquire_dispatch_lock(main_worktree)?;
+
+        let res_bytes =
+            read_bounded_regular_file(&result_path(main_worktree, id), MAX_BRIEF_BYTES, true)?;
+        let mut res: DispatchResult = serde_json::from_slice(&res_bytes)
+            .with_context(|| format!("malformed result JSON for {id}"))?;
+        if res.id != id {
+            bail!("result file {id}.json has mismatched id `{}`", res.id);
+        }
+        if matches!(
+            res.status,
+            DispatchStatus::Done
+                | DispatchStatus::Refused
+                | DispatchStatus::Failed
+                | DispatchStatus::Cancelled
+        ) {
+            bail!(
+                "dispatch request {id} is already in terminal state `{}` (refusing execution)",
+                res.status.as_str()
+            );
+        }
+
+        let raw_req_res =
+            read_bounded_regular_file(&request_path(main_worktree, id), MAX_BRIEF_BYTES, true)
+                .and_then(|bytes| {
+                    serde_json::from_slice::<DispatchRequest>(&bytes)
+                        .with_context(|| format!("malformed request JSON for {id}"))
+                });
+
+        let claim = match res.status {
+            DispatchStatus::Running => {
+                let Some(expected_token) = res.claim_token.clone() else {
+                    bail!(
+                        "dispatch request {id} is already running without a claim token (refusing unowned execution)"
+                    );
+                };
+                if presented_token != Some(expected_token.as_str()) {
+                    bail!(
+                        "dispatch request {id} is already running under worker pid {:?} (claim token mismatch; refusing to overwrite live worker)",
+                        res.worker_pid
+                    );
+                }
+                let Some(recorded_pid) = res.worker_pid else {
+                    // Parent crashed or failed after pre-spawn claim write before
+                    // publishing the child PID: fail closed so an unowned child can
+                    // never perform work or leave a replaceable live claim.
+                    let reason =
+                        "worker claim publication did not complete (worker_pid is None); refusing unowned execution"
+                            .to_string();
+                    res.status = DispatchStatus::Failed;
+                    res.finished_at = Some(now);
+                    res.worker_pid = None;
+                    res.worker_start = None;
+                    res.claim_token = None;
+                    res.summary = reason.clone();
+                    res.refusal_reason = Some(reason.clone());
+                    let _ = write_private_atomic(
+                        &result_path(main_worktree, id),
+                        &serde_json::to_vec_pretty(&res)?,
+                    );
+                    bail!("dispatch request {id} has an incomplete Running claim without worker_pid: {reason}");
+                };
+                let pid_matches = recorded_pid == self_pid && res.worker_start == self_start;
+                if !pid_matches {
+                    let recorded_alive = crate::process_probe::process_identity_is_alive(
+                        recorded_pid,
+                        res.worker_start.as_deref(),
+                    );
+                    if !recorded_alive {
+                        let _ = reap_dead_workers_locked(main_worktree, now);
+                    }
+                    bail!(
+                        "dispatch request {id} is already running under worker pid {recorded_pid} (start {:?}), not this process {self_pid} (start {:?}); refusing duplicate or replacement execution",
+                        res.worker_start,
+                        self_start
+                    );
+                }
+                WorkerClaim {
+                    worker_pid: self_pid,
+                    worker_start: self_start.clone(),
+                    claim_token: expected_token,
+                }
+            }
+            DispatchStatus::Pending => {
+                let _ = reap_dead_workers_locked(main_worktree, now);
+                // Enforce concurrency caps on direct `aida dispatch run <id>` as well.
+                if let Ok(ref req) = raw_req_res {
+                    let pairs = load_all_pairs(main_worktree)?;
+                    let mut running_reviews = 0usize;
+                    let mut running_flows = 0usize;
+                    let mut running_trains = 0usize;
+                    for (other_req, other_res) in &pairs {
+                        if other_req.id != id && other_res.status == DispatchStatus::Running {
+                            match other_req.action {
+                                DispatchVerb::Review { .. } => running_reviews += 1,
+                                DispatchVerb::Flow { .. } => running_flows += 1,
+                                DispatchVerb::Train { .. } => running_trains += 1,
+                                DispatchVerb::Take { .. } | DispatchVerb::Impl { .. } => {}
+                            }
+                        }
+                    }
+                    match req.action {
+                        DispatchVerb::Review { .. }
+                            if running_reviews >= MAX_CONCURRENT_REVIEWS =>
+                        {
+                            bail!(
+                                "cannot run dispatch request {id}: review concurrency cap ({MAX_CONCURRENT_REVIEWS}) reached"
+                            );
+                        }
+                        DispatchVerb::Flow { .. } if running_flows >= MAX_CONCURRENT_FLOWS => {
+                            bail!(
+                                "cannot run dispatch request {id}: flow concurrency cap ({MAX_CONCURRENT_FLOWS}) reached"
+                            );
+                        }
+                        DispatchVerb::Train { .. } if running_trains >= MAX_CONCURRENT_TRAINS => {
+                            bail!(
+                                "cannot run dispatch request {id}: train concurrency cap ({MAX_CONCURRENT_TRAINS}) reached"
+                            );
+                        }
+                        _ => {}
+                    }
+                }
+                let claim_token = Uuid::new_v4().to_string();
+                res.status = DispatchStatus::Running;
+                res.started_at = Some(now);
+                res.worker_pid = Some(self_pid);
+                res.worker_start = self_start.clone();
+                res.claim_token = Some(claim_token.clone());
+                write_private_atomic(
+                    &result_path(main_worktree, id),
+                    &serde_json::to_vec_pretty(&res)?,
+                )?;
+                WorkerClaim {
+                    worker_pid: self_pid,
+                    worker_start: self_start.clone(),
+                    claim_token,
+                }
+            }
+            _ => unreachable!(),
+        };
+
+        (res, claim, raw_req_res)
+    };
+
+    let req: DispatchRequest = match raw_req_res {
+        Ok(req) if req.id == id => req,
+        Ok(req) => {
+            let reason = format!(
+                "tampered request JSON for {id}: inner id `{}` does not match `{id}`",
+                req.id
+            );
+            return record_tampered_refusal(main_worktree, id, &claim, &mut res, &reason, now);
+        }
+        Err(err) => {
+            let reason = format!("request validation failed on disk: {err:#}");
+            return record_tampered_refusal(main_worktree, id, &claim, &mut res, &reason, now);
+        }
+    };
+
+    // 1. Boundary B check: `review`, `flow`, and `train` may ONLY execute under
+    // `aida dispatch serve` (never under `dispatch tick`).
+    if req.action.requires_serve() && !via_serve {
+        let reason = format!(
+            "verb `{}` requires an advisor seat grant and can only run under `aida dispatch serve` (refused by `dispatch tick`)",
+            req.action.verb_str()
+        );
+        return finalize_request(
+            main_worktree,
+            &req,
+            &claim,
+            res,
+            DispatchStatus::Refused,
+            Outcome::Refused,
+            None,
+            None,
+            reason.clone(),
+            Some(reason),
+            now,
+        );
+    }
+
+    if via_serve {
+        if let Err(err) = check_serve_grant(main_worktree, now) {
+            let reason = format!("serve advisor grant check failed at execution time: {err:#}");
+            return finalize_request(
+                main_worktree,
+                &req,
+                &claim,
+                res,
+                DispatchStatus::Refused,
+                Outcome::Refused,
+                None,
+                None,
+                reason.clone(),
+                Some(reason),
+                now,
+            );
+        }
+    }
+
+    // 2. Re-validate the exact recorded mandate ID on disk (`mandate::recheck`, F3).
+    //    A replacement mandate B must never revive requests stopped or expired under A.
+    let active_mandate =
+        match crate::gate::mandate::recheck(mandate_dir, &req.mandate_id, &req.principal, now) {
+            Ok(m) => m,
+            Err(crate::gate::mandate::MandateRefusal::Expired { id: mid }) => {
+                let reason = format!("mandate {mid} expired before execution");
+                return finalize_request(
+                    main_worktree,
+                    &req,
+                    &claim,
+                    res,
+                    DispatchStatus::Refused,
+                    Outcome::Refused,
+                    None,
+                    None,
+                    reason.clone(),
+                    Some(reason),
+                    now,
+                );
+            }
+            Err(crate::gate::mandate::MandateRefusal::Stopped { id: mid }) => {
+                let reason = format!("mandate {mid} was stopped or superseded before execution");
+                return finalize_request(
+                    main_worktree,
+                    &req,
+                    &claim,
+                    res,
+                    DispatchStatus::Refused,
+                    Outcome::Refused,
+                    None,
+                    None,
+                    reason.clone(),
+                    Some(reason),
+                    now,
+                );
+            }
+            Err(other) => {
+                let reason = format!(
+                    "mandate {} recheck refused before execution: {other:?}",
+                    req.mandate_id
+                );
+                return finalize_request(
+                    main_worktree,
+                    &req,
+                    &claim,
+                    res,
+                    DispatchStatus::Refused,
+                    Outcome::Refused,
+                    None,
+                    None,
+                    reason.clone(),
+                    Some(reason),
+                    now,
+                );
+            }
+        };
+
+    if !active_mandate.covers(Scope::Dispatch) {
+        let reason = format!(
+            "active mandate {} no longer covers `dispatch`",
+            active_mandate.id
+        );
+        return finalize_request(
+            main_worktree,
+            &req,
+            &claim,
+            res,
+            DispatchStatus::Refused,
+            Outcome::Refused,
+            None,
+            None,
+            reason.clone(),
+            Some(reason),
+            now,
+        );
+    }
+    if req.action.ships_pr() && !active_mandate.covers(Scope::ShipHeld) {
+        let reason = format!(
+            "active mandate {} does not cover `ship-held`, which `{}` requires",
+            active_mandate.id,
+            req.action.verb_str()
+        );
+        return finalize_request(
+            main_worktree,
+            &req,
+            &claim,
+            res,
+            DispatchStatus::Refused,
+            Outcome::Refused,
+            None,
+            None,
+            reason.clone(),
+            Some(reason),
+            now,
+        );
+    }
+
+    // 3. Re-validate HumanGates at execution time.
+    let gates =
+        crate::gate::mandate_gates::load_human_gates(main_worktree).map_err(|e| format!("{e:#}"));
+    if let Some(why) = crate::gate::mandate_gates::gate_reason(&gates, GateOp::Dispatch) {
+        let reason = format!("dispatch is gated by human gates at execution time ({why})");
+        return finalize_request(
+            main_worktree,
+            &req,
+            &claim,
+            res,
+            DispatchStatus::Refused,
+            Outcome::Gated,
+            None,
+            None,
+            reason.clone(),
+            Some(reason),
+            now,
+        );
+    }
+    if req.action.ships_pr() {
+        if let Some(why) = crate::gate::mandate_gates::gate_reason(&gates, GateOp::Ship) {
+            let reason = format!("shipping is gated by human gates at execution time ({why})");
+            return finalize_request(
+                main_worktree,
+                &req,
+                &claim,
+                res,
+                DispatchStatus::Refused,
+                Outcome::Gated,
+                None,
+                None,
+                reason.clone(),
+                Some(reason),
+                now,
+            );
+        }
+    }
+
+    // 4. Re-validate the requester's advisor grant on disk (`grant_authorized_at`),
+    //    and treat any `revoked_at` stamp as immediate revocation regardless of
+    //    clock skew.
+    let grant_unrevoked = crate::gate::seat_authority::read_grant(&req.requester_grant_id)
+        .map(|g| g.revoked_at.is_none())
+        .unwrap_or(false);
+    if !grant_unrevoked
+        || !crate::gate::seat_authority::grant_authorized_at(
+            main_worktree,
+            &req.requester_grant_id,
+            crate::gate::mandate::MANDATE_SEAT,
+            now,
+            &req.matched_binding,
+        )
+    {
+        let reason = format!(
+            "requester advisor grant {} is no longer valid (expired, revoked, or binding mismatch)",
+            req.requester_grant_id
+        );
+        return finalize_request(
+            main_worktree,
+            &req,
+            &claim,
+            res,
+            DispatchStatus::Refused,
+            Outcome::Refused,
+            None,
+            None,
+            reason.clone(),
+            Some(reason),
+            now,
+        );
+    }
+    if req.action.delegates_reviewer() {
+        let delegable_ok = crate::gate::seat_authority::read_grant(&req.requester_grant_id)
+            .map(|g| {
+                g.delegable_seats
+                    .iter()
+                    .any(|s| crate::canonical_role_name(s) == "reviewer")
+            })
+            .unwrap_or(false);
+        if !delegable_ok {
+            let reason = format!(
+                "requester advisor grant {} does not delegate `reviewer`",
+                req.requester_grant_id
+            );
+            return finalize_request(
+                main_worktree,
+                &req,
+                &claim,
+                res,
+                DispatchStatus::Refused,
+                Outcome::Refused,
+                None,
+                None,
+                reason.clone(),
+                Some(reason),
+                now,
+            );
+        }
+    }
+
+    // 5. Dual-end validation of request fields + frozen brief SHA-256 + spec store checks.
+    if let Err(err) = revalidate_request(
+        main_worktree,
+        mandate_dir,
+        &req,
+        active_mandate.include_supervised,
+    ) {
+        let reason = format!("execution-time validation refused request: {err:#}");
+        return finalize_request(
+            main_worktree,
+            &req,
+            &claim,
+            res,
+            DispatchStatus::Refused,
+            Outcome::Refused,
+            None,
+            None,
+            reason.clone(),
+            Some(reason),
+            now,
+        );
+    }
+
+    // 6. Execute the verb's runner.
+    let runner_outcome = match &req.action {
+        DispatchVerb::Review { pr, vendor } => run_review_verb(main_worktree, &req, *pr, *vendor),
+        DispatchVerb::Take {
+            pr,
+            branch,
+            spec,
+            brief_relpath,
+            brief_sha256,
+            vendor,
+        } => run_take_verb(
+            main_worktree,
+            &req,
+            *pr,
+            branch,
+            spec,
+            brief_relpath,
+            brief_sha256,
+            *vendor,
+            now,
+        ),
+        DispatchVerb::Impl {
+            name,
+            branch,
+            spec,
+            brief_relpath,
+            brief_sha256,
+            vendor,
+        } => run_impl_verb(
+            main_worktree,
+            &req,
+            name,
+            branch,
+            spec,
+            brief_relpath,
+            brief_sha256,
+            *vendor,
+            now,
+        ),
+        DispatchVerb::Flow { .. } | DispatchVerb::Train { .. } => RunnerOutcome::Refused {
+            reason: format!(
+                "verb `{}` runner is not enabled in this build (scheduled for Slice 3)",
+                req.action.verb_str()
+            ),
+        },
+    };
+
+    match runner_outcome {
+        RunnerOutcome::Done {
+            summary,
+            spawned_session,
+            exit_code,
+        } => finalize_request(
+            main_worktree,
+            &req,
+            &claim,
+            res,
+            DispatchStatus::Done,
+            Outcome::Done,
+            spawned_session,
+            exit_code,
+            summary,
+            None,
+            now,
+        ),
+        RunnerOutcome::Refused { reason } => finalize_request(
+            main_worktree,
+            &req,
+            &claim,
+            res,
+            DispatchStatus::Refused,
+            Outcome::Refused,
+            None,
+            None,
+            reason.clone(),
+            Some(reason),
+            now,
+        ),
+        RunnerOutcome::Failed { summary, exit_code } => finalize_request(
+            main_worktree,
+            &req,
+            &claim,
+            res,
+            DispatchStatus::Failed,
+            Outcome::Skipped,
+            None,
+            exit_code,
+            summary.clone(),
+            Some(summary),
+            now,
+        ),
+    }
+}
+
+#[derive(Debug)]
+enum RunnerOutcome {
+    Done {
+        summary: String,
+        spawned_session: Option<String>,
+        exit_code: Option<i32>,
+    },
+    Refused {
+        reason: String,
+    },
+    Failed {
+        summary: String,
+        exit_code: Option<i32>,
+    },
+}
+
+/// Verify under `tick.lock` that the on-disk result for `id` is still `Running`
+/// and owned by `claim` before allowing a terminal state write (F2).
+pub(crate) fn verify_claim_locked(
+    main_worktree: &Path,
+    id: &str,
+    claim: &WorkerClaim,
+) -> Result<()> {
+    let on_disk_bytes =
+        read_bounded_regular_file(&result_path(main_worktree, id), MAX_BRIEF_BYTES, true)?;
+    let on_disk: DispatchResult = serde_json::from_slice(&on_disk_bytes)
+        .with_context(|| format!("malformed result JSON for {id}"))?;
+    if on_disk.status != DispatchStatus::Running
+        || on_disk.worker_pid != Some(claim.worker_pid)
+        || on_disk.worker_start != claim.worker_start
+        || on_disk.claim_token.as_deref() != Some(claim.claim_token.as_str())
+    {
+        bail!(
+            "fenced result transition refused for {id}: on-disk claim {:?}/{:?} (status {}) does not match worker claim {}/{:?}",
+            on_disk.worker_pid,
+            on_disk.claim_token,
+            on_disk.status.as_str(),
+            claim.worker_pid,
+            claim.claim_token
+        );
+    }
+    Ok(())
+}
+
+pub(crate) fn record_tampered_refusal(
+    main_worktree: &Path,
+    id: &str,
+    claim: &WorkerClaim,
+    res: &mut DispatchResult,
+    reason: &str,
+    now: DateTime<Utc>,
+) -> Result<DispatchResult> {
+    let _lock = acquire_dispatch_lock(main_worktree)?;
+    verify_claim_locked(main_worktree, id, claim)?;
+    let _ = append_dispatch_log(main_worktree, id, &format!("refused: {reason}\n"));
+    res.status = DispatchStatus::Refused;
+    res.finished_at = Some(now);
+    res.summary = reason.to_string();
+    res.refusal_reason = Some(reason.to_string());
+    write_private_atomic(
+        &result_path(main_worktree, id),
+        &serde_json::to_vec_pretty(res)?,
+    )?;
+    emit_dispatch_event(
+        main_worktree,
+        &res.mandate_id,
+        &res.verb,
+        &res.target,
+        Outcome::Refused,
+        Some(reason.to_string()),
+    );
+    Ok(res.clone())
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn finalize_request(
+    main_worktree: &Path,
+    req: &DispatchRequest,
+    claim: &WorkerClaim,
+    mut res: DispatchResult,
+    status: DispatchStatus,
+    event_outcome: Outcome,
+    spawned_session: Option<String>,
+    exit_code: Option<i32>,
+    summary: String,
+    refusal_reason: Option<String>,
+    now: DateTime<Utc>,
+) -> Result<DispatchResult> {
+    let _lock = acquire_dispatch_lock(main_worktree)?;
+    verify_claim_locked(main_worktree, &req.id, claim)?;
+    let _ = append_dispatch_log(
+        main_worktree,
+        &req.id,
+        &format!("{}: {}\n", status.as_str(), summary),
+    );
+    res.status = status;
+    res.finished_at = Some(now);
+    res.spawned_session = spawned_session;
+    res.exit_code = exit_code;
+    res.summary = summary.clone();
+    res.refusal_reason = refusal_reason.clone();
+    res.notified_at = notify_advisor_outcome(main_worktree, req, &res, now);
+    write_private_atomic(
+        &result_path(main_worktree, &req.id),
+        &serde_json::to_vec_pretty(&res)?,
+    )?;
+    emit_dispatch_event(
+        main_worktree,
+        &req.mandate_id,
+        req.action.verb_str(),
+        &req.action.subject_label(),
+        event_outcome,
+        refusal_reason.or(Some(summary)),
+    );
+    Ok(res)
+}
+
+/// Resolve the sibling `<project>-worktrees` root directory next to `main_worktree`.
+// trace:STORY-1917 | ai:agy
+pub(crate) fn worktrees_root(main_worktree: &Path) -> PathBuf {
+    let parent = main_worktree.parent().unwrap_or(main_worktree);
+    let repo_name = main_worktree
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("aida");
+    parent.join(format!("{repo_name}-worktrees"))
+}
+
+fn worktree_current_branch(wt: &Path) -> Option<String> {
+    if !wt.exists() {
+        return None;
+    }
+    let out = aida_core::git_ops::host_git_command(wt)
+        .args(["symbolic-ref", "--quiet", "--short", "HEAD"])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let b = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    (!b.is_empty()).then_some(b)
+}
+
+/// Scan `/proc/<pid>/cwd` for any live non-zombie process (excluding the calling
+/// process) whose current working directory is equal to or inside `wt_canon`.
+fn find_live_proc_with_cwd_in(wt_canon: &Path) -> Option<u32> {
+    let self_pid = std::process::id();
+    let entries = std::fs::read_dir("/proc").ok()?;
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let Some(name_str) = name.to_str() else {
+            continue;
+        };
+        if !name_str.bytes().all(|b| b.is_ascii_digit()) {
+            continue;
+        }
+        let Ok(pid) = name_str.parse::<u32>() else {
+            continue;
+        };
+        if pid == self_pid {
+            continue;
+        }
+        let Ok(raw_cwd) = std::fs::read_link(format!("/proc/{pid}/cwd")) else {
+            continue;
+        };
+        let raw_str = raw_cwd.to_string_lossy();
+        let cleaned = Path::new(raw_str.strip_suffix(" (deleted)").unwrap_or(&raw_str));
+        let proc_canon = cleaned
+            .canonicalize()
+            .unwrap_or_else(|_| cleaned.to_path_buf());
+        if proc_canon == wt_canon || proc_canon.starts_with(wt_canon) {
+            if crate::process_probe::pid_is_alive(pid) {
+                return Some(pid);
+            }
+        }
+    }
+    None
+}
+
+/// Check if any live or unknown occupant owns `worktree`, `branch`, or `scope`
+/// across session leases (`.aida/sessions/`), the agent process registry
+/// (`.aida/agents/`), or live OS processes running inside the target worktree
+/// (F5). Returns a descriptive refusal reason when occupied or when registry/lease
+/// state is unreadable/unknown.
+// trace:STORY-1917 | ai:agy
+pub(crate) fn check_live_worktree_or_branch_occupant(
+    main_worktree: &Path,
+    worktree: &Path,
+    branch: Option<&str>,
+    scope: Option<&str>,
+) -> Option<String> {
+    let live_sessions = crate::process_probe::probe_live_claude_sessions();
+    let now = Utc::now();
+    let main_canon = main_worktree
+        .canonicalize()
+        .unwrap_or_else(|_| main_worktree.to_path_buf());
+    let target_canon = worktree
+        .canonicalize()
+        .unwrap_or_else(|_| worktree.to_path_buf());
+
+    // 1. Check `.aida/sessions/` leases (treating unreadable/corrupt lease files
+    //    as unknown occupants so cleanup/branch reset fails closed).
+    let leases_dir = crate::leases::leases_dir(main_worktree);
+    match std::fs::read_dir(&leases_dir) {
+        Ok(entries) => {
+            for entry in entries {
+                let Ok(entry) = entry else {
+                    return Some(format!(
+                        "unknown occupant: unreadable entry in {}",
+                        leases_dir.display()
+                    ));
+                };
+                let p = entry.path();
+                if p.extension().and_then(|s| s.to_str()) != Some("toml") {
+                    continue;
+                }
+                let Ok(body) = std::fs::read_to_string(&p) else {
+                    return Some(format!(
+                        "unknown occupant: cannot read session lease {}",
+                        p.display()
+                    ));
+                };
+                if toml::from_str::<crate::SessionLease>(&body).is_err() {
+                    return Some(format!(
+                        "unknown occupant: malformed session lease {}",
+                        p.display()
+                    ));
+                }
+            }
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => {
+            return Some(format!(
+                "unknown occupant: cannot read {}: {e}",
+                leases_dir.display()
+            ));
+        }
+    }
+
+    for lease in crate::leases::list_leases(main_worktree) {
+        let state = crate::leases::lease_state_for(&lease, &live_sessions, now);
+        let active_pid_live = lease.active_pid.is_some_and(|pid| {
+            crate::process_probe::process_identity_is_alive(
+                pid,
+                lease.active_pid_start_time.as_deref(),
+            )
+        });
+        let is_live = matches!(state, crate::LeaseState::Live)
+            || active_pid_live
+            || crate::agent_registry::live_agents_covering_cwd(main_worktree, &lease.worktree_path)
+                > 0;
+        if !is_live {
+            continue;
+        }
+        let lease_canon = lease
+            .worktree_path
+            .canonicalize()
+            .unwrap_or_else(|_| lease.worktree_path.clone());
+        if !lease.worktree_path.as_os_str().is_empty() && lease_canon == target_canon {
+            return Some(format!(
+                "worktree {} is currently occupied by live session lease {} (scope `{}`, role `{}`)",
+                worktree.display(),
+                lease.id,
+                lease.scope,
+                lease.role.as_deref().unwrap_or("unspecified")
+            ));
+        }
+        if let Some(b) = branch {
+            if !lease.branch.is_empty() && lease.branch == b {
+                return Some(format!(
+                    "branch `{b}` is currently occupied by live session lease {} in {}",
+                    lease.id,
+                    lease.worktree_path.display()
+                ));
+            }
+        }
+        if let Some(s) = scope {
+            if lease.scope.eq_ignore_ascii_case(s) {
+                return Some(format!(
+                    "scope `{s}` is currently occupied by live session lease {} in {}",
+                    lease.id,
+                    lease.worktree_path.display()
+                ));
+            }
+        }
+    }
+
+    // 2. Check `.aida/agents/*.toml` independently of leases (F5): any live or
+    //    unobservable/unknown agent (or unreadable/corrupt registry file)
+    //    retains its worktree, branch, and scope.
+    let observer = crate::agent_registry::PidObserver::current();
+    let mut agent_dirs = vec![crate::agent_registry::agents_dir(main_worktree)];
+    let wt_agents_dir = worktree.join(".aida").join("agents");
+    if wt_agents_dir.exists() {
+        let main_agents_canon = agent_dirs[0]
+            .canonicalize()
+            .unwrap_or_else(|_| agent_dirs[0].clone());
+        let wt_agents_canon = wt_agents_dir
+            .canonicalize()
+            .unwrap_or_else(|_| wt_agents_dir.clone());
+        if wt_agents_canon != main_agents_canon {
+            agent_dirs.push(wt_agents_dir);
+        }
+    }
+    let wt_dir_name = worktree.file_name().and_then(|n| n.to_str());
+    for ag_dir in agent_dirs {
+        let entries = match std::fs::read_dir(&ag_dir) {
+            Ok(e) => e,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(e) => {
+                return Some(format!(
+                    "unknown occupant: cannot read agent registry {}: {e}",
+                    ag_dir.display()
+                ));
+            }
+        };
+        for entry in entries {
+            let Ok(entry) = entry else {
+                return Some(format!(
+                    "unknown occupant: unreadable entry in {}",
+                    ag_dir.display()
+                ));
+            };
+            let path = entry.path();
+            if path.extension().and_then(|s| s.to_str()) != Some("toml") {
+                continue;
+            }
+            let Ok(body) = std::fs::read_to_string(&path) else {
+                return Some(format!(
+                    "unknown occupant: cannot read agent registry record {}",
+                    path.display()
+                ));
+            };
+            let Ok(record) = toml::from_str::<crate::agent_registry::AgentRegistryEntry>(&body)
+            else {
+                return Some(format!(
+                    "unknown occupant: malformed agent registry record {}",
+                    path.display()
+                ));
+            };
+            if record.ended_at.is_some() {
+                continue;
+            }
+            let observable = observer.can_observe(record.pid_namespace);
+            let live_or_unknown = if !observable {
+                true
+            } else {
+                crate::process_probe::process_identity_is_alive(
+                    record.pid,
+                    record.pid_start.as_deref(),
+                )
+            };
+            if !live_or_unknown {
+                continue;
+            }
+            let state_word = if observable {
+                "live"
+            } else {
+                "unknown-liveness"
+            };
+            let label = record.name.as_deref().unwrap_or(&record.id);
+            let rec_wt = record
+                .worktree_path
+                .canonicalize()
+                .unwrap_or_else(|_| record.worktree_path.clone());
+            let wt_matches = !record.worktree_path.as_os_str().is_empty()
+                && (rec_wt == target_canon
+                    || (rec_wt != main_canon
+                        && target_canon != main_canon
+                        && (target_canon.starts_with(&rec_wt)
+                            || rec_wt.starts_with(&target_canon))));
+            if wt_matches {
+                return Some(format!(
+                    "worktree {} is currently occupied by {state_word} registered agent `{label}` (pid {})",
+                    worktree.display(),
+                    record.pid
+                ));
+            }
+            if let Some(wt_name) = wt_dir_name {
+                if record
+                    .name
+                    .as_deref()
+                    .is_some_and(|n| n.eq_ignore_ascii_case(wt_name))
+                {
+                    return Some(format!(
+                        "lane `{wt_name}` is currently occupied by {state_word} registered agent `{label}` (pid {})",
+                        record.pid
+                    ));
+                }
+            }
+            if let Some(s) = scope {
+                if record
+                    .current_spec
+                    .as_deref()
+                    .is_some_and(|cs| cs.eq_ignore_ascii_case(s))
+                    || record
+                        .name
+                        .as_deref()
+                        .is_some_and(|n| n.eq_ignore_ascii_case(s))
+                {
+                    return Some(format!(
+                        "scope `{s}` is currently occupied by {state_word} registered agent `{label}` (pid {}) in {}",
+                        record.pid,
+                        record.worktree_path.display()
+                    ));
+                }
+            }
+            if let Some(b) = branch {
+                if !record.worktree_path.as_os_str().is_empty() && rec_wt != main_canon {
+                    if worktree_current_branch(&record.worktree_path).as_deref() == Some(b) {
+                        return Some(format!(
+                            "branch `{b}` is currently occupied by {state_word} registered agent `{label}` (pid {}) in {}",
+                            record.pid,
+                            record.worktree_path.display()
+                        ));
+                    }
+                }
+            }
+        }
+    }
+
+    // 3. Direct process / cwd liveness probe for `worktree` and any linked
+    //    worktree currently holding `branch` (independent of both leases and
+    //    registry entries — catches raw vendor processes launched by take/impl).
+    let mut probe_wts = Vec::new();
+    if target_canon != main_canon && worktree.exists() {
+        probe_wts.push((worktree.to_path_buf(), target_canon.clone()));
+    }
+    if let Some(b) = branch {
+        if let Some(b_wt) = find_worktree_for_branch(main_worktree, b) {
+            let b_canon = b_wt.canonicalize().unwrap_or_else(|_| b_wt.clone());
+            if b_canon != main_canon && !probe_wts.iter().any(|(_, c)| *c == b_canon) {
+                probe_wts.push((b_wt, b_canon));
+            }
+        }
+    }
+    for (wt_display, wt_canon) in &probe_wts {
+        for sess in &live_sessions {
+            let sess_canon = sess.cwd.canonicalize().unwrap_or_else(|_| sess.cwd.clone());
+            if sess_canon == *wt_canon || sess_canon.starts_with(wt_canon) {
+                return Some(format!(
+                    "worktree {} is currently occupied by live claude process (pid {})",
+                    wt_display.display(),
+                    sess.pid
+                ));
+            }
+        }
+        if let Some(pid) = find_live_proc_with_cwd_in(wt_canon) {
+            return Some(format!(
+                "worktree {} is currently occupied by live process (pid {pid})",
+                wt_display.display()
+            ));
+        }
+    }
+
+    None
+}
+
+/// Preserve any merge-hold marker `<rev_wt>/.aida/merge-holds/PR-<pr>` into
+/// `<main_worktree>/.aida/merge-holds/PR-<pr>` using atomic no-clobber
+/// publication and post-transfer verification (F4). Any read, write, symlink,
+/// or verification error aborts worktree cleanup so a hold is never lost.
+// trace:STORY-1917 | ai:agy
+fn preserve_reviewer_worktree_hold(
+    main_worktree: &Path,
+    rev_wt: &Path,
+    pr_scope: &str,
+) -> Result<bool> {
+    let wt_aida = rev_wt.join(".aida");
+    match std::fs::symlink_metadata(&wt_aida) {
+        Ok(m) if m.file_type().is_symlink() => {
+            let main_aida_canon = main_worktree
+                .join(".aida")
+                .canonicalize()
+                .unwrap_or_else(|_| main_worktree.join(".aida"));
+            let wt_aida_canon = wt_aida.canonicalize().unwrap_or_else(|_| wt_aida.clone());
+            if wt_aida_canon != main_aida_canon {
+                bail!(
+                    "refusing reviewer worktree cleanup: {} is a symlink outside main worktree .aida",
+                    wt_aida.display()
+                );
+            }
+        }
+        Ok(_) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(e) => {
+            return Err(e).with_context(|| format!("cannot stat {}", wt_aida.display()));
+        }
+    }
+
+    let wt_hold_dir = wt_aida.join("merge-holds");
+    match std::fs::symlink_metadata(&wt_hold_dir) {
+        Ok(m) if m.file_type().is_symlink() || !m.is_dir() => {
+            bail!(
+                "refusing reviewer worktree cleanup: {} is a symlink or not a directory",
+                wt_hold_dir.display()
+            );
+        }
+        Ok(_) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(e) => {
+            return Err(e).with_context(|| format!("cannot stat {}", wt_hold_dir.display()));
+        }
+    }
+
+    let wt_hold = wt_hold_dir.join(pr_scope);
+    match std::fs::symlink_metadata(&wt_hold) {
+        Ok(_) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(e) => {
+            return Err(e)
+                .with_context(|| format!("cannot stat reviewer merge-hold {}", wt_hold.display()));
+        }
+    }
+
+    // Source hold exists in `rev_wt`: read and validate it with `O_NOFOLLOW`.
+    // If unreadable, empty, or a symlink, abort cleanup immediately!
+    let wt_bytes = read_bounded_regular_file(&wt_hold, MAX_BRIEF_BYTES, false)
+        .with_context(|| format!("cannot read reviewer merge-hold {}", wt_hold.display()))?;
+    if wt_bytes.is_empty() {
+        bail!(
+            "refusing reviewer worktree cleanup: merge-hold {} is empty",
+            wt_hold.display()
+        );
+    }
+
+    let main_hold_dir = main_worktree.join(".aida").join("merge-holds");
+    std::fs::create_dir_all(&main_hold_dir)
+        .with_context(|| format!("cannot create {}", main_hold_dir.display()))?;
+    let main_dir_meta = std::fs::symlink_metadata(&main_hold_dir)
+        .with_context(|| format!("cannot stat {}", main_hold_dir.display()))?;
+    if main_dir_meta.file_type().is_symlink() || !main_dir_meta.is_dir() {
+        bail!(
+            "refusing reviewer worktree cleanup: {} is a symlink or not a directory",
+            main_hold_dir.display()
+        );
+    }
+
+    let main_hold = main_hold_dir.join(pr_scope);
+    let tmp_hold = main_hold_dir.join(format!(".{pr_scope}.tmp-{}", Uuid::new_v4()));
+    {
+        use std::io::Write;
+        let mut opts = std::fs::OpenOptions::new();
+        opts.write(true).create_new(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            opts.mode(0o600).custom_flags(libc::O_NOFOLLOW);
+        }
+        let mut f = opts.open(&tmp_hold).with_context(|| {
+            format!(
+                "cannot stage merge-hold transfer in {}",
+                main_hold_dir.display()
+            )
+        })?;
+        if let Err(e) = f.write_all(&wt_bytes).and_then(|()| f.sync_all()) {
+            drop(f);
+            let _ = std::fs::remove_file(&tmp_hold);
+            return Err(e).with_context(|| {
+                format!("failed writing staged merge-hold {}", tmp_hold.display())
+            });
+        }
+    }
+
+    match crate::gate::review_verdict::publish_verdict_no_replace(&tmp_hold, &main_hold) {
+        Ok(()) => {
+            let landed = read_bounded_regular_file(&main_hold, MAX_BRIEF_BYTES, false)
+                .with_context(|| {
+                    format!(
+                        "cannot verify transferred merge-hold at {}",
+                        main_hold.display()
+                    )
+                })?;
+            if landed != wt_bytes {
+                bail!(
+                    "transferred merge-hold {} content did not match source {}",
+                    main_hold.display(),
+                    wt_hold.display()
+                );
+            }
+            Ok(true)
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+            let _ = std::fs::remove_file(&tmp_hold);
+            // Destination hold already exists (pre-existing or concurrently placed);
+            // verify it is a valid non-empty regular file before allowing cleanup.
+            let existing = read_bounded_regular_file(&main_hold, MAX_BRIEF_BYTES, false)
+                .with_context(|| {
+                    format!(
+                        "existing destination merge-hold {} is invalid or unreadable",
+                        main_hold.display()
+                    )
+                })?;
+            if existing.is_empty() {
+                bail!(
+                    "existing destination merge-hold {} is empty; refusing reviewer worktree cleanup",
+                    main_hold.display()
+                );
+            }
+            Ok(true)
+        }
+        Err(e) => {
+            let _ = std::fs::remove_file(&tmp_hold);
+            Err(e).with_context(|| {
+                format!(
+                    "failed atomic no-clobber transfer of merge-hold to {}",
+                    main_hold.display()
+                )
+            })
+        }
+    }
+}
+
+/// Prepare a dead reviewer worktree (`aida-pr-<pr>`) before launching a fresh
+/// review:
+/// 1. Refuses if a live or unknown occupant (lease, registered agent, or live
+///    process) currently occupies `rev_wt`, `pr-<pr>`, or `PR-<pr>` (F5).
+/// 2. Atomically preserves any `<rev_wt>/.aida/merge-holds/PR-<pr>` marker into
+///    `<main_worktree>/.aida/merge-holds/PR-<pr>` with verified no-clobber
+///    transfer, aborting cleanup on any preservation failure (F4).
+/// 3. Removes `rev_wt` via `git worktree remove --force`.
+// trace:STORY-1917 | ai:agy
+pub(crate) fn cleanup_dead_reviewer_worktree(main_worktree: &Path, pr: u64) -> Result<()> {
+    let pr_scope = format!("PR-{pr}");
+    let pr_branch = format!("pr-{pr}");
+    let candidates = [
+        worktrees_root(main_worktree).join(format!("aida-pr-{pr}")),
+        main_worktree
+            .parent()
+            .unwrap_or(main_worktree)
+            .join(format!("aida-pr-{pr}")),
+    ];
+    for rev_wt in candidates {
+        if let Some(busy) = check_live_worktree_or_branch_occupant(
+            main_worktree,
+            &rev_wt,
+            Some(&pr_branch),
+            Some(&pr_scope),
+        ) {
+            bail!("refusing to clean up reviewer worktree: {busy}");
+        }
+        if !rev_wt.exists() && std::fs::symlink_metadata(&rev_wt).is_err() {
+            continue;
+        }
+        preserve_reviewer_worktree_hold(main_worktree, &rev_wt, &pr_scope)?;
+        let out = aida_core::git_ops::host_git_command(main_worktree)
+            .args(["worktree", "remove", "--force"])
+            .arg(&rev_wt)
+            .output()
+            .with_context(|| {
+                format!("failed to run git worktree remove on {}", rev_wt.display())
+            })?;
+        if !out.status.success() && rev_wt.exists() {
+            let _ = aida_core::git_ops::host_git_command(main_worktree)
+                .args(["worktree", "prune"])
+                .output();
+        }
+    }
+    // Best-effort cleanup of a leftover `pr-<pr>` branch after removing any dead
+    // reviewer worktree, matching `review-one.sh`.
+    let _ = aida_core::git_ops::host_git_command(main_worktree)
+        .args(["branch", "-D", &pr_branch])
+        .output();
+    Ok(())
+}
+
+#[cfg(test)]
+std::thread_local! {
+    pub(crate) static TEST_AIDA_BIN: std::cell::RefCell<Option<PathBuf>> = const { std::cell::RefCell::new(None) };
+    pub(crate) static TEST_AGENT_BIN: std::cell::RefCell<Option<PathBuf>> = const { std::cell::RefCell::new(None) };
+    pub(crate) static TEST_FAIL_POST_SPAWN_PUBLICATION: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+fn resolve_aida_bin() -> Result<PathBuf> {
+    #[cfg(test)]
+    if let Some(p) = TEST_AIDA_BIN.with(|c| c.borrow().clone()) {
+        return Ok(p);
+    }
+    crate::aida_bin::process()
+        .map(|r| r.path)
+        .or_else(|_| Ok(crate::aida_exe_path().to_path_buf()))
+}
+
+fn resolve_vendor_bin(vendor: DispatchVendor) -> PathBuf {
+    #[cfg(test)]
+    if let Some(p) = TEST_AGENT_BIN.with(|c| c.borrow().clone()) {
+        return p;
+    }
+    let name = match vendor {
+        DispatchVendor::Claude => "claude",
+        DispatchVendor::Codex => "codex",
+        DispatchVendor::Agy => "agy",
+    };
+    crate::find_executable_on_path(name).unwrap_or_else(|| PathBuf::from(name))
+}
+
+/// Run the `review` verb (`aida queue work PR-<pr> --role reviewer --no-human [--vendor <v>]`).
+/// Runs only under `aida dispatch serve` so it inherits the human advisor's
+/// bound seat grant directly.
+// trace:STORY-1917 | ai:agy
+fn run_review_verb(
+    main_worktree: &Path,
+    req: &DispatchRequest,
+    pr: u64,
+    vendor: Option<DispatchVendor>,
+) -> RunnerOutcome {
+    if let Err(err) = cleanup_dead_reviewer_worktree(main_worktree, pr) {
+        return RunnerOutcome::Refused {
+            reason: format!("{err:#}"),
+        };
+    }
+
+    let aida_bin = match resolve_aida_bin() {
+        Ok(b) => b,
+        Err(err) => {
+            return RunnerOutcome::Failed {
+                summary: format!("cannot locate aida binary: {err:#}"),
+                exit_code: None,
+            }
+        }
+    };
+
+    let pr_arg = format!("PR-{pr}");
+    let mut cmd = std::process::Command::new(aida_bin);
+    cmd.current_dir(main_worktree).args([
+        "queue",
+        "work",
+        &pr_arg,
+        "--role",
+        "reviewer",
+        "--no-human",
+    ]);
+    if let Some(v) = vendor {
+        cmd.args(["--vendor", v.as_str()]);
+    }
+    cmd.env_remove("AIDA_SESSION_PURPOSE")
+        .env_remove(DISPATCH_CLAIM_TOKEN_ENV);
+
+    match cmd.output() {
+        Ok(out) => {
+            let combined = format!(
+                "{}{}",
+                String::from_utf8_lossy(&out.stdout),
+                String::from_utf8_lossy(&out.stderr)
+            );
+            let _ = append_dispatch_log(main_worktree, &req.id, &combined);
+            let code = out.status.code();
+            if out.status.success() {
+                RunnerOutcome::Done {
+                    summary: format!("completed review of PR #{pr}"),
+                    spawned_session: None,
+                    exit_code: code,
+                }
+            } else {
+                RunnerOutcome::Failed {
+                    summary: format!("review of PR #{pr} exited with {:?}", code),
+                    exit_code: code,
+                }
+            }
+        }
+        Err(err) => RunnerOutcome::Failed {
+            summary: format!("failed to spawn `aida queue work PR-{pr}`: {err:#}"),
+            exit_code: None,
+        },
+    }
+}
+
+/// If `refs/heads/<branch>` is already checked out in a linked worktree, return
+/// that worktree's path so `take` can reuse it rather than failing `git worktree add`.
+// trace:STORY-1917 | ai:agy
+fn find_worktree_for_branch(main_worktree: &Path, branch: &str) -> Option<PathBuf> {
+    let out = aida_core::git_ops::host_git_command(main_worktree)
+        .args(["worktree", "list", "--porcelain"])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let want_branch = format!("branch refs/heads/{branch}");
+    let main_canon = main_worktree
+        .canonicalize()
+        .unwrap_or_else(|_| main_worktree.to_path_buf());
+    let mut current_wt: Option<PathBuf> = None;
+    for line in String::from_utf8_lossy(&out.stdout).lines() {
+        if let Some(rest) = line.strip_prefix("worktree ") {
+            current_wt = Some(PathBuf::from(rest.trim()));
+        } else if line.trim() == want_branch {
+            if let Some(wt) = current_wt.take() {
+                let wt_canon = wt.canonicalize().unwrap_or_else(|_| wt.clone());
+                if wt_canon != main_canon {
+                    return Some(wt);
+                }
+            }
+        } else if line.trim().is_empty() {
+            current_wt = None;
+        }
+    }
+    None
+}
+
+fn git_ref_exists(repo: &Path, git_ref: &str) -> bool {
+    aida_core::git_ops::host_git_command(repo)
+        .args(["rev-parse", "--verify", "--quiet", git_ref])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
+/// Prepare or reuse a worktree at `wt_path` on `branch` tracking `start_ref`
+/// (e.g. `origin/<branch>` for `take`, or `origin/main` for `impl`) without
+/// ever force-pushing. Refuses if `wt_path` or `branch` is currently occupied
+/// by a live or unknown process/agent/lease (F5).
+// trace:STORY-1917 | ai:agy
+pub(crate) fn prepare_lane_worktree(
+    main_worktree: &Path,
+    wt_path: &Path,
+    branch: &str,
+    fetch_ref: &str,
+    start_ref: &str,
+) -> Result<()> {
+    if let Some(busy) =
+        check_live_worktree_or_branch_occupant(main_worktree, wt_path, Some(branch), None)
+    {
+        bail!("refusing to modify occupied worktree or branch: {busy}");
+    }
+    if let Some(parent) = wt_path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+
+    // Best-effort fetch of the base/branch from origin if `origin` remote is configured.
+    let has_origin = aida_core::git_ops::host_git_command(main_worktree)
+        .args(["remote", "get-url", "origin"])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+    if has_origin {
+        let fetch_out = aida_core::git_ops::host_remote_git_command(main_worktree, "origin")
+            .args(["fetch", "origin", fetch_ref])
+            .output()
+            .with_context(|| format!("failed to run git fetch origin {fetch_ref}"))?;
+        if !fetch_out.status.success() {
+            bail!(
+                "git fetch origin {fetch_ref} failed: {}",
+                String::from_utf8_lossy(&fetch_out.stderr).trim()
+            );
+        }
+    }
+
+    let resolved_start = if git_ref_exists(main_worktree, start_ref) {
+        start_ref.to_string()
+    } else if git_ref_exists(main_worktree, &format!("refs/heads/{fetch_ref}")) {
+        fetch_ref.to_string()
+    } else if git_ref_exists(main_worktree, &format!("refs/heads/{branch}")) {
+        branch.to_string()
+    } else {
+        "HEAD".to_string()
+    };
+
+    if wt_path.exists() {
+        let out = aida_core::git_ops::host_git_command(wt_path)
+            .args(["checkout", "-B", branch, &resolved_start])
+            .output()
+            .with_context(|| format!("failed to checkout {branch} in {}", wt_path.display()))?;
+        if !out.status.success() {
+            bail!(
+                "git checkout -B {branch} {resolved_start} in {} failed: {}",
+                wt_path.display(),
+                String::from_utf8_lossy(&out.stderr).trim()
+            );
+        }
+    } else {
+        let out = aida_core::git_ops::host_git_command(main_worktree)
+            .args(["worktree", "add", "-B", branch])
+            .arg(wt_path)
+            .arg(&resolved_start)
+            .output()
+            .with_context(|| format!("failed to add worktree {}", wt_path.display()))?;
+        if !out.status.success() {
+            bail!(
+                "git worktree add -B {branch} {} {resolved_start} failed: {}",
+                wt_path.display(),
+                String::from_utf8_lossy(&out.stderr).trim()
+            );
+        }
+    }
+
+    // Ensure `.aida` inside the worktree links back to `main_worktree/.aida`
+    // so the implementer sees the project config, sessions, and mailbox.
+    let wt_aida = wt_path.join(".aida");
+    if !wt_aida.exists() && std::fs::symlink_metadata(&wt_aida).is_err() {
+        #[cfg(unix)]
+        let _ = std::os::unix::fs::symlink(main_worktree.join(".aida"), &wt_aida);
+    }
+    Ok(())
+}
+
+/// Build the scrubbed `Command` that launches an implementer worker in `wt_path`
+/// with the session grant and purpose environment variables cleared and
+/// `AIDA_SESSION_ROLE="implementer"`.
+// trace:STORY-1917 | ai:agy
+pub(crate) fn build_implementer_launch_command(
+    agent_bin: &Path,
+    main_worktree: &Path,
+    wt_path: &Path,
+    spec: &str,
+    prompt_text: &str,
+    name: &str,
+    vendor: DispatchVendor,
+) -> std::process::Command {
+    let mut cmd = std::process::Command::new(agent_bin);
+    cmd.current_dir(wt_path);
+    match vendor {
+        DispatchVendor::Claude => {
+            cmd.args(["--bg", "-n", name, prompt_text]);
+        }
+        DispatchVendor::Codex => {
+            cmd.args(["exec", "--full-auto", "-C"])
+                .arg(wt_path)
+                .arg(prompt_text);
+        }
+        DispatchVendor::Agy => {
+            cmd.args(["--prompt", prompt_text]);
+        }
+    }
+    // Critical Boundary B requirement: implementer lanes never inherit or hold
+    // any session grant, purpose, or dispatch worker claim token.
+    cmd.env(crate::gate::seat_authority::GRANT_ENV, "")
+        .env(crate::gate::seat_authority::GRANT_FILE_ENV, "")
+        .env("AIDA_SESSION_PURPOSE", "")
+        .env_remove(DISPATCH_CLAIM_TOKEN_ENV)
+        .env("AIDA_SESSION_ROLE", "implementer")
+        .env("AIDA_SESSION_SCOPE", spec)
+        .env("AIDA_PROJECT_ROOT", main_worktree)
+        .env("AIDA_AGENT_NAME", name)
+        .env("AIDA_USER", name);
+    cmd
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_take_verb(
+    main_worktree: &Path,
+    req: &DispatchRequest,
+    pr: u64,
+    branch: &str,
+    spec: &str,
+    brief_relpath: &str,
+    brief_sha256: &str,
+    vendor: Option<DispatchVendor>,
+    now: DateTime<Utc>,
+) -> RunnerOutcome {
+    let brief_body = match verify_frozen_brief(main_worktree, &req.id, brief_relpath, brief_sha256)
+    {
+        Ok(b) => b,
+        Err(err) => {
+            return RunnerOutcome::Refused {
+                reason: format!("frozen brief verification failed: {err:#}"),
+            }
+        }
+    };
+
+    let wt_name = format!("take-{pr}");
+    let default_wt = worktrees_root(main_worktree).join(&wt_name);
+    // Reuse an existing worktree that already has `branch` checked out when
+    // `take-<pr>` does not exist yet (matching `take.sh`).
+    let wt_path = if !default_wt.exists() {
+        find_worktree_for_branch(main_worktree, branch).unwrap_or(default_wt)
+    } else {
+        default_wt
+    };
+    if let Some(busy) =
+        check_live_worktree_or_branch_occupant(main_worktree, &wt_path, Some(branch), Some(spec))
+    {
+        return RunnerOutcome::Refused {
+            reason: format!("cannot launch takeover on PR #{pr}: {busy}"),
+        };
+    }
+
+    let start_ref = format!("origin/{branch}");
+    if let Err(err) = prepare_lane_worktree(main_worktree, &wt_path, branch, branch, &start_ref) {
+        return RunnerOutcome::Failed {
+            summary: format!("takeover worktree setup failed for PR #{pr}: {err:#}"),
+            exit_code: None,
+        };
+    }
+
+    let prompt_text =
+        match render_lane_prompt(main_worktree, &wt_path, &req.action, &brief_body, now) {
+            Ok(p) => p,
+            Err(err) => {
+                return RunnerOutcome::Failed {
+                    summary: format!("failed to render takeover prompt: {err:#}"),
+                    exit_code: None,
+                }
+            }
+        };
+    let rendered_prompt_path = briefs_dir(main_worktree).join(format!("{}.prompt.md", req.id));
+    if let Err(err) = write_private_atomic(&rendered_prompt_path, prompt_text.as_bytes()) {
+        return RunnerOutcome::Failed {
+            summary: format!("failed to write rendered prompt: {err:#}"),
+            exit_code: None,
+        };
+    }
+
+    launch_implementer_lane(
+        main_worktree,
+        req,
+        &wt_path,
+        spec,
+        &prompt_text,
+        &wt_name,
+        vendor.unwrap_or(DispatchVendor::Claude),
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_impl_verb(
+    main_worktree: &Path,
+    req: &DispatchRequest,
+    name: &str,
+    branch: &str,
+    spec: &str,
+    brief_relpath: &str,
+    brief_sha256: &str,
+    vendor: Option<DispatchVendor>,
+    now: DateTime<Utc>,
+) -> RunnerOutcome {
+    let brief_body = match verify_frozen_brief(main_worktree, &req.id, brief_relpath, brief_sha256)
+    {
+        Ok(b) => b,
+        Err(err) => {
+            return RunnerOutcome::Refused {
+                reason: format!("frozen brief verification failed: {err:#}"),
+            }
+        }
+    };
+
+    let wt_path = worktrees_root(main_worktree).join(name);
+    if let Some(busy) =
+        check_live_worktree_or_branch_occupant(main_worktree, &wt_path, Some(branch), Some(spec))
+    {
+        return RunnerOutcome::Refused {
+            reason: format!("cannot launch impl lane `{name}` ({spec}): {busy}"),
+        };
+    }
+
+    if let Err(err) = prepare_lane_worktree(main_worktree, &wt_path, branch, "main", "origin/main")
+    {
+        return RunnerOutcome::Failed {
+            summary: format!("impl worktree setup failed for `{name}`: {err:#}"),
+            exit_code: None,
+        };
+    }
+
+    let prompt_text =
+        match render_lane_prompt(main_worktree, &wt_path, &req.action, &brief_body, now) {
+            Ok(p) => p,
+            Err(err) => {
+                return RunnerOutcome::Failed {
+                    summary: format!("failed to render impl prompt: {err:#}"),
+                    exit_code: None,
+                }
+            }
+        };
+    let rendered_prompt_path = briefs_dir(main_worktree).join(format!("{}.prompt.md", req.id));
+    if let Err(err) = write_private_atomic(&rendered_prompt_path, prompt_text.as_bytes()) {
+        return RunnerOutcome::Failed {
+            summary: format!("failed to write rendered prompt: {err:#}"),
+            exit_code: None,
+        };
+    }
+
+    launch_implementer_lane(
+        main_worktree,
+        req,
+        &wt_path,
+        spec,
+        &prompt_text,
+        name,
+        vendor.unwrap_or(DispatchVendor::Claude),
+    )
+}
+
+fn parse_spawned_bg_session_id(stdout: &str) -> Option<String> {
+    if let Some(id) = crate::agent_launch::parse_bg_session_id(stdout) {
+        return Some(id);
+    }
+    for line in stdout.lines() {
+        if let Some((_, rest)) = line.split_once("claude logs ") {
+            let token = rest
+                .split_whitespace()
+                .next()
+                .unwrap_or("")
+                .trim_matches(|c: char| !c.is_ascii_alphanumeric() && c != '-');
+            if !token.is_empty() && token.chars().all(|c| c.is_ascii_hexdigit() || c == '-') {
+                return Some(token.to_string());
+            }
+        }
+    }
+    None
+}
+
+fn launch_implementer_lane(
+    main_worktree: &Path,
+    req: &DispatchRequest,
+    wt_path: &Path,
+    spec: &str,
+    prompt_text: &str,
+    lane_name: &str,
+    vendor: DispatchVendor,
+) -> RunnerOutcome {
+    let agent_bin = resolve_vendor_bin(vendor);
+
+    let mut cmd = build_implementer_launch_command(
+        &agent_bin,
+        main_worktree,
+        wt_path,
+        spec,
+        prompt_text,
+        lane_name,
+        vendor,
+    );
+
+    match cmd.output() {
+        Ok(out) => {
+            let stdout = String::from_utf8_lossy(&out.stdout);
+            let stderr = String::from_utf8_lossy(&out.stderr);
+            let combined = format!("{stdout}{stderr}");
+            let _ = append_dispatch_log(main_worktree, &req.id, &combined);
+            let code = out.status.code();
+            if out.status.success() {
+                let bg_id = parse_spawned_bg_session_id(&stdout);
+                RunnerOutcome::Done {
+                    summary: format!(
+                        "launched {} {} in {}",
+                        req.action.verb_str(),
+                        req.action.subject_label(),
+                        wt_path.display()
+                    ),
+                    spawned_session: bg_id,
+                    exit_code: code,
+                }
+            } else {
+                RunnerOutcome::Failed {
+                    summary: format!(
+                        "{} {} launcher exited with {:?}: {}",
+                        req.action.verb_str(),
+                        req.action.subject_label(),
+                        code,
+                        stderr.lines().next().unwrap_or("launch failed").trim()
+                    ),
+                    exit_code: code,
+                }
+            }
+        }
+        Err(err) => RunnerOutcome::Failed {
+            summary: format!("failed to spawn implementer launcher: {err:#}"),
+            exit_code: None,
+        },
     }
 }
 
 #[cfg(test)]
 #[path = "tests/story_1917_dispatch_request_tests.rs"]
 mod story_1917_dispatch_request_tests;
+
+#[cfg(test)]
+#[path = "tests/story_1917_dispatch_exec_tests.rs"]
+mod story_1917_dispatch_exec_tests;
 
 /// Queue and inspect typed dispatch requests (`flow`, `review`, `take`,
 /// `impl`, `train`) from a sandboxed advisor seat for unsandboxed execution.
