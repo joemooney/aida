@@ -432,11 +432,57 @@ pub(crate) fn parse_ttl(raw: &str) -> Result<Duration> {
     Ok(ttl)
 }
 
-/// Mint a mandate. `human` is the terminal floor
-/// ([`crate::seat_authority::require_direct_human`] in production) and runs
-/// before anything is read or written. Refuses while one is active: there is
-/// no extension, only stop and mint again.
+/// STORY-1700: `--include-supervised` is ON by default for `--drive`.
+// trace:STORY-1700 | ai:claude
+pub(crate) fn drive_includes_supervised(drive: bool, include: bool, exclude: bool) -> bool {
+    if drive {
+        !exclude
+    } else {
+        include
+    }
+}
+
+/// `aida mandate start`: mint a mandate with the terminal floor
+/// ([`require_mandate_human`]) bound here, in the gate, so no caller can
+/// choose a different human check. `include_supervised` / `exclude_supervised`
+/// are the raw CLI flags; [`drive_includes_supervised`] decides the default.
+// trace:STORY-1889 | ai:claude
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn start_as_human(
+    dir: &Path,
+    principal: &str,
+    ttl: Duration,
+    reason: Option<String>,
+    drive: bool,
+    include_supervised: bool,
+    exclude_supervised: bool,
+    requested_scopes: BTreeSet<Scope>,
+    now: DateTime<Utc>,
+) -> Result<Mandate> {
+    mint(
+        dir,
+        &require_mandate_human,
+        principal,
+        ttl,
+        reason,
+        drive_includes_supervised(drive, include_supervised, exclude_supervised),
+        drive,
+        requested_scopes,
+        now,
+    )
+}
+
+/// `aida mandate stop`, with the terminal floor bound here (see
+/// [`start_as_human`]).
+// trace:STORY-1889 | ai:claude
+pub(crate) fn stop_as_human(dir: &Path, by: &str, now: DateTime<Utc>) -> Result<Vec<Mandate>> {
+    tombstone_all(dir, &require_mandate_human, by, now)
+}
+
+/// Test seam: mint a mandate with an injected `human` floor. Production
+/// mints only through [`start_as_human`].
 // trace:STORY-1698 | ai:claude
+#[cfg(test)]
 pub(crate) fn start(
     dir: &Path,
     human: &dyn Fn() -> Result<()>,
@@ -462,6 +508,7 @@ pub(crate) fn start(
 /// `kind = "drive"` and every [`Scope`]. Same floor, cap and no-extension
 /// rule.
 // trace:STORY-1700 | ai:claude
+#[cfg(test)]
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn start_with(
     dir: &Path,
@@ -488,8 +535,39 @@ pub(crate) fn start_with(
 
 /// [`start_with`], with explicit [`Scope`]s (e.g. `Scope::ShipHeld`, `Scope::Dispatch`).
 // trace:STORY-1917 | ai:agy
+#[cfg(test)]
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn start_with_scopes(
+    dir: &Path,
+    human: &dyn Fn() -> Result<()>,
+    principal: &str,
+    ttl: Duration,
+    reason: Option<String>,
+    include_supervised: bool,
+    drive: bool,
+    requested_scopes: BTreeSet<Scope>,
+    now: DateTime<Utc>,
+) -> Result<Mandate> {
+    mint(
+        dir,
+        human,
+        principal,
+        ttl,
+        reason,
+        include_supervised,
+        drive,
+        requested_scopes,
+        now,
+    )
+}
+
+/// Mint a mandate. `human` is the terminal floor and runs before anything
+/// is read or written. Refuses while one is active: there is no extension,
+/// only stop and mint again. Private: production binds `human` in
+/// [`start_as_human`].
+// trace:STORY-1698 | ai:claude
+#[allow(clippy::too_many_arguments)]
+fn mint(
     dir: &Path,
     human: &dyn Fn() -> Result<()>,
     principal: &str,
@@ -549,12 +627,25 @@ pub(crate) fn start_with_scopes(
     Ok(mandate)
 }
 
+/// Test seam: [`stop_as_human`] with an injected `human` floor.
+// trace:STORY-1698 | ai:claude
+#[cfg(test)]
+pub(crate) fn stop(
+    dir: &Path,
+    human: &dyn Fn() -> Result<()>,
+    by: &str,
+    now: DateTime<Utc>,
+) -> Result<Vec<Mandate>> {
+    tombstone_all(dir, human, by, now)
+}
+
 /// Stop mandates now: writes a never-removed `<id>.stopped` tombstone for
 /// EVERY record file in `dir` not already tombstoned (valid or not), so no
-/// edit to a record can revive it. Same floor as [`start`]. Returns the
-/// valid mandates that were active.
+/// edit to a record can revive it. Same floor as [`mint`]. Returns the
+/// valid mandates that were active. Private: production binds `human` in
+/// [`stop_as_human`].
 // trace:STORY-1698 | ai:claude
-pub(crate) fn stop(
+fn tombstone_all(
     dir: &Path,
     human: &dyn Fn() -> Result<()>,
     by: &str,

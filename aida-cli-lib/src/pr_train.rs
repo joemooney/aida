@@ -1072,7 +1072,7 @@ impl MemberChecks for LiveChecks<'_> {
         head: &str,
     ) -> std::result::Result<crate::gate::mandate_ship::MandateCover, Option<String>> {
         let hold_root = crate::pr_cmd::pr_ship_hold_root(self.project_root);
-        crate::gate::mandate_ship::mandate_ship_cover(
+        crate::gate::mandate_ship::mandate_ship_cover_for_ship(
             self.project_root,
             self.main_worktree,
             &hold_root,
@@ -1081,8 +1081,6 @@ impl MemberChecks for LiveChecks<'_> {
             Some(head_ref),
             || Some(head.to_string()),
             false,
-            crate::gate::mandate::ship_decision,
-            true,
         )
         .map_err(|r| match r {
             crate::gate::mandate::MandateRefusal::NoMandate => None,

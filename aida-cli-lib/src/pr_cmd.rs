@@ -2470,7 +2470,7 @@ pub(crate) fn pr_ship_with_method(
         if pr_number == 0 || already_merged || floor_authority {
             return Err(crate::gate::mandate::MandateRefusal::NoMandate);
         }
-        mandate_ship_cover(
+        mandate_ship_cover_for_ship(
             &project_root,
             &main_worktree,
             &hold_root,
@@ -2479,8 +2479,6 @@ pub(crate) fn pr_ship_with_method(
             Some(&ship_branch),
             || pr_head_sha_for_merge_gate(&project_root, pr_number, &ship_branch),
             override_stale_approval,
-            crate::gate::mandate::ship_decision,
-            true,
         )
     };
     // BUG-2184: the mandate scan has its own cost and must not eat the --wait

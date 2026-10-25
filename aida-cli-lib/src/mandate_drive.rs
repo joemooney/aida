@@ -11,12 +11,13 @@
 use crate::gate::fleet_lanes::{Lane, LaneClass};
 use crate::gate::mandate::{Mandate, MandateState};
 use crate::gate::mandate_drive::{
-    active_drive_mandate, active_drive_records, collect_held_prs_with, crashed_head, dispatch_head,
+    active_drive_mandate, active_drive_records, collect_held_prs, crashed_head, dispatch_head,
     dispatch_key, is_store_dependent_decision, missing_scope_reason, plan_held_pr, plan_relay_lane,
     plan_unowned_spec, planned_gate, preview_json, preview_lines, recheck_drive_mandate,
-    restart_verdict, spec_always_human_from, spec_signoff_from, verify_fresh_restart_plan,
-    DriveAction, HeldPr, LaneDecision, Planned, PreviewGates, RestartPlan, RestartVerdict, Route,
-    UnownedSpec, BACKOFF_TICKS, DEFAULT_MAX_ACTIONS, TICK_INTERVAL,
+    record_fresh_restart, restart_verdict, spec_always_human_from, spec_signoff_from,
+    tick_restart_verdict, with_live_tick_inputs, DriveAction, HeldPr, LaneDecision, Planned,
+    PreviewGates, RestartPlan, RestartRefused, RestartVerdict, Route, TickInputs, UnownedSpec,
+    BACKOFF_TICKS, DEFAULT_MAX_ACTIONS, TICK_INTERVAL,
 };
 use crate::gate::mandate_gates::HumanGates;
 use anyhow::{Context, Result};
@@ -435,33 +436,6 @@ fn try_drive_lock(project_root: &Path) -> Result<Option<DriveLock>> {
 
 // ── Tick execution ──────────────────────────────────────────────────────────
 
-/// What a tick reads to act.
-// trace:STORY-1700 | ai:claude
-pub(crate) struct TickInputs<'a> {
-    /// Where the lock, the state file and the ledger live.
-    pub project_root: &'a Path,
-    pub mandate_dir: &'a Path,
-    /// The principal this tick resolves (`current_user_id`).
-    pub principal: &'a str,
-    /// The tick's clock, read afresh before every action.
-    pub clock: &'a dyn Fn() -> DateTime<Utc>,
-    pub gates: std::result::Result<HumanGates, String>,
-    pub lanes: Vec<Lane>,
-    pub held_prs: Vec<HeldPr>,
-    pub advisor_live: bool,
-    /// Did the tick's own environment carry a session grant/role/purpose?
-    pub inherited_session_env: bool,
-    /// `Some(class)` when a spec is always human (operator-only, decide).
-    pub spec_always_human: &'a dyn Fn(&str) -> Option<String>,
-    /// `None` = not a store spec; `Some(awaiting a signoff)` otherwise.
-    pub spec_signoff: &'a dyn Fn(&str) -> Option<bool>,
-    /// Could the store be read? When not, every gated seat action is
-    /// withheld: the spec checks it needs cannot be made (fail closed).
-    pub store_readable: bool,
-    /// Approved specs and who (if anyone) already owns them (AC1).
-    pub unowned_specs: Vec<UnownedSpec>,
-}
-
 /// Test seams.
 #[derive(Default)]
 pub(crate) struct TickHooks<'a> {
@@ -541,11 +515,11 @@ impl Tick<'_, '_> {
             hook(self.side_effects);
         }
         self.side_effects += 1;
-        let now = (self.inp.clock)();
+        let now = self.inp.now();
         recheck_drive_mandate(
-            self.inp.mandate_dir,
+            self.inp.mandate_dir(),
             &self.mandate_id,
-            self.inp.principal,
+            self.inp.principal(),
             now,
         )
     }
@@ -563,20 +537,21 @@ fn principal_mismatches(
     told: &dyn Fn(&str) -> bool,
 ) -> Vec<(String, bool, ActionRow)> {
     let mut out = Vec::new();
-    for m in active_drive_records(inp.mandate_dir, now) {
-        if m.principal.trim() == inp.principal.trim() || told(&m.id) {
+    for m in active_drive_records(inp.mandate_dir(), now) {
+        if m.principal.trim() == inp.principal().trim() || told(&m.id) {
             continue;
         }
         let sent = fx.notify_operator(
             "AIDA drive mandate is not acting",
             &format!(
                 "Drive mandate {} belongs to `{}`, but the drive tick resolves `{}`. Set AIDA_USER={} in the schedule driver's environment.",
-                m.id, m.principal, inp.principal, m.principal
+                m.id, m.principal, inp.principal(), m.principal
             ),
         );
         let mut why = format!(
             "principal mismatch: record={} tick={}",
-            m.principal, inp.principal
+            m.principal,
+            inp.principal()
         );
         if let Err(e) = &sent {
             why.push_str(&format!("; notify failed: {e:#}"));
@@ -602,21 +577,9 @@ fn restart_crashed(
 ) -> BTreeMap<String, Option<String>> {
     const ACTION: &str = "relay-restart";
     let inp = tick.inp;
-    let known = |id: &str| (inp.spec_signoff)(id).is_some();
-    let verdict = |lane: &Lane| {
-        restart_verdict(
-            lane,
-            mandate,
-            inp.project_root,
-            &inp.gates,
-            inp.spec_always_human,
-            &known,
-            (inp.clock)(),
-        )
-    };
     let mut notes = BTreeMap::new();
-    for lane in &inp.lanes {
-        let Some(v) = verdict(lane) else {
+    for lane in inp.lanes() {
+        let Some(v) = tick_restart_verdict(inp, lane, mandate) else {
             continue;
         };
         let key = format!("relay:{}", lane.run_id);
@@ -720,28 +683,21 @@ fn restart_crashed(
             notes.insert(key.clone(), Some(why));
             continue;
         }
-        // Judge the lane again from fresh reads: the lock, the owner, the
-        // status, the record, the lineage, the profile and the clock.
-        let fresh = crate::gate::fleet_lanes::probe_lane(lane.run_dir.clone());
-        let again = fresh.as_ref().and_then(|l| verdict(l));
-        if let Err(why) = verify_fresh_restart_plan(again, &plan) {
-            refuse(tick, why);
-            notes.insert(key.clone(), None);
-            continue;
-        }
-        let line = crate::gate::relay_launch::RestartLine {
-            generation: plan.generation,
-            at: (inp.clock)(),
-            launch: plan.launch_sha.clone(),
-            mandate: tick.mandate_id.clone(),
-            max_sessions: plan.max_sessions,
-            used_before: plan.used_before,
-        };
-        if let Err(why) = crate::gate::relay_launch::append_restart(&plan.run_dir, &line) {
-            let why = format!("cannot record the restart, so it does not run: {why}");
-            refuse(tick, why.clone());
-            notes.insert(key.clone(), Some(why));
-            continue;
+        // The gate re-judges the lane from fresh reads, then appends the
+        // lineage line: no line, no exec.
+        match record_fresh_restart(inp, lane, mandate, &plan) {
+            Ok(()) => {}
+            Err(RestartRefused::Changed(why)) => {
+                refuse(tick, why);
+                notes.insert(key.clone(), None);
+                continue;
+            }
+            Err(RestartRefused::Unrecorded(why)) => {
+                let why = format!("cannot record the restart, so it does not run: {why}");
+                refuse(tick, why.clone());
+                notes.insert(key.clone(), Some(why));
+                continue;
+            }
         }
         *acted += 1;
         match tick.fx.restart_relay(&plan) {
@@ -779,8 +735,8 @@ pub(crate) fn run_tick(
     hooks: &TickHooks<'_>,
     fx: &mut dyn DriveEffects,
 ) -> TickReport {
-    let now = (inp.clock)();
-    let mandate = active_drive_mandate(inp.mandate_dir, inp.principal, now);
+    let now = inp.now();
+    let mandate = active_drive_mandate(inp.mandate_dir(), inp.principal(), now);
 
     // The dedicated lock, held for the whole tick.
     let lock = match try_drive_lock(inp.project_root) {
@@ -932,7 +888,7 @@ pub(crate) fn run_tick(
     };
 
     let budget = inp
-        .gates
+        .gates()
         .as_ref()
         .ok()
         .and_then(|g| g.max_actions_per_tick)
@@ -1029,9 +985,9 @@ pub(crate) fn run_tick(
     let mut acted = 0usize;
     let restart_notes = restart_crashed(&mut tick, per, &mandate, &mut acted);
     let mut decisions: Vec<LaneDecision> = inp
-        .lanes
+        .lanes()
         .iter()
-        .map(|l| plan_relay_lane(l, inp.spec_signoff))
+        .map(|l| plan_relay_lane(l, inp.spec_signoff()))
         .filter_map(|d| match d {
             LaneDecision::Act(mut p) => match restart_notes.get(&p.lane) {
                 Some(None) => None,
@@ -1044,8 +1000,8 @@ pub(crate) fn run_tick(
             d => Some(d),
         })
         .collect();
-    let protected = crate::gate::mandate_gates::ProtectedPaths::of(&inp.gates);
-    decisions.extend(inp.held_prs.iter().map(|pr| plan_held_pr(pr, &protected)));
+    let protected = crate::gate::mandate_gates::ProtectedPaths::of(inp.gates());
+    decisions.extend(inp.held_prs().iter().map(|pr| plan_held_pr(pr, &protected)));
     // Each unowned spec carries its dispatch epoch, so a dead fixer's spec
     // is routed again. trace:TASK-1915 | ai:claude
     let mut epochs: BTreeMap<String, u32> = BTreeMap::new();
@@ -1056,12 +1012,12 @@ pub(crate) fn run_tick(
         plan_unowned_spec(&s)
     }));
     // trace:TASK-1955 | ai:claude (TASK-2080) (TASK-1694)
-    per.prune(inp.store_readable.then_some(&epochs), reaped.as_ref());
+    per.prune(inp.store_readable().then_some(&epochs), reaped.as_ref());
     // An unreadable store: no operator-only or signoff check can be made,
     // so every gated seat action is withheld, with one ledgered refusal and
     // one operator notice per episode. trace:STORY-1700 | ai:claude
     const STORE_KEY: &str = "store|unreadable";
-    if inp.store_readable {
+    if inp.store_readable() {
         per.emitted.remove(STORE_KEY);
     } else {
         let withheld = decisions
@@ -1134,7 +1090,7 @@ pub(crate) fn run_tick(
             tick.skip_once(per, &key, r);
             continue;
         }
-        let now = (inp.clock)();
+        let now = inp.now();
         if let Some(b) = per.backoff.get(&planned.backoff_key()) {
             if b.next_eligible_at.is_some_and(|at| now < at) {
                 let r = row(Outcome::Skipped, "backoff".into());
@@ -1155,7 +1111,7 @@ pub(crate) fn run_tick(
             tick.skip_once(per, &key, r);
             continue;
         }
-        let gate = planned_gate(&planned, &inp.gates, inp.spec_always_human);
+        let gate = planned_gate(&planned, inp.gates(), inp.spec_always_human());
         if let Err(why) = tick.recheck() {
             let r = row(Outcome::Refused, why.clone());
             tick.row(r);
@@ -1517,34 +1473,6 @@ pub(crate) fn ship_refused(root: &Path, pr: u64, message: &str) {
     emit_session_ship(root, &id, pr, Outcome::Refused, Some(message.to_string()));
 }
 
-/// Held PRs from the main checkout's merge-hold markers.
-fn collect_held_prs(main_root: &Path) -> Vec<HeldPr> {
-    collect_held_prs_with(main_root, &changed_paths)
-}
-
-/// Paths `head` changes against its merge base with `origin/main`, through a
-/// scrubbed git child. `None` when git cannot say.
-fn changed_paths(main_root: &Path, head: &str) -> Option<Vec<String>> {
-    let mut cmd = aida_core::git_ops::host_git_command(main_root);
-    scrub(&mut cmd);
-    let out = cmd
-        .args(["diff", "--name-only", "-z", "--no-renames"])
-        .arg(format!("origin/main...{head}"))
-        .arg("--")
-        .output()
-        .ok()?;
-    if !out.status.success() {
-        return None;
-    }
-    Some(
-        out.stdout
-            .split(|b| *b == 0)
-            .filter(|p| !p.is_empty())
-            .map(|p| String::from_utf8_lossy(p).into_owned())
-            .collect(),
-    )
-}
-
 /// Is an advisor seat live: a valid advisor grant whose per-turn notice ran
 /// within 30 minutes? BUG-1934: from a process the grant is bound to, as the
 /// stamp recorded.
@@ -1742,49 +1670,30 @@ fn collect_unowned_specs(root: &Path, reqs: &[aida_core::Requirement]) -> Vec<Un
         .collect()
 }
 
-/// One live tick for the main checkout.
+/// One live tick for the main checkout. The gate assembles its authority
+/// inputs ([`with_live_tick_inputs`]).
 // trace:STORY-1700 | ai:claude
+// trace:STORY-1889 | ai:claude
 pub(crate) fn run_tick_live(main_root: &Path, inherited_session_env: bool) -> Result<TickReport> {
-    let dir = crate::gate::mandate::mandate_dir()?;
-    let now = Utc::now();
     // The 15m job runs whether or not a mandate exists; with no drive
     // record it is a no-op that reads nothing else.
-    if active_drive_records(&dir, now).is_empty() {
-        return Ok(TickReport {
-            idle: Some("no active drive mandate".into()),
-            ..Default::default()
-        });
-    }
-    let principal = crate::current_user_id(None);
-    // Never default an unreadable store to "no specs": the tick withholds
-    // every gated action instead (`store_readable`).
-    let store = crate::load_store_for_lookup(main_root);
-    let store_readable = store.is_some();
-    let reqs: Vec<aida_core::Requirement> = store.map(|s| s.requirements).unwrap_or_default();
-    let ledger = crate::gate::mandate::read_exclusions(&dir).ok();
-    let always_human = spec_always_human_from(&reqs, ledger.as_ref());
-    let signoff = spec_signoff_from(&reqs);
-    let inputs = TickInputs {
-        project_root: main_root,
-        mandate_dir: &dir,
-        principal: &principal,
-        clock: &Utc::now,
-        gates: crate::gate::mandate_gates::load_human_gates(main_root)
-            .map_err(|e| format!("{e:#}")),
-        lanes: crate::gate::fleet_lanes::classify_lanes(main_root, now),
-        held_prs: collect_held_prs(main_root),
-        advisor_live: advisor_live(main_root, now),
+    let report = with_live_tick_inputs(
+        main_root,
         inherited_session_env,
-        spec_always_human: &always_human,
-        spec_signoff: &signoff,
-        store_readable,
-        unowned_specs: collect_unowned_specs(main_root, &reqs),
-    };
-    Ok(run_tick(
-        &inputs,
-        &TickHooks::default(),
-        &mut LiveEffects { root: main_root },
-    ))
+        |now| advisor_live(main_root, now),
+        |reqs| collect_unowned_specs(main_root, reqs),
+        |inputs| {
+            run_tick(
+                inputs,
+                &TickHooks::default(),
+                &mut LiveEffects { root: main_root },
+            )
+        },
+    )?;
+    Ok(report.unwrap_or_else(|| TickReport {
+        idle: Some("no active drive mandate".into()),
+        ..Default::default()
+    }))
 }
 
 // ── Principal under the scheduler (R4) ──────────────────────────────────────

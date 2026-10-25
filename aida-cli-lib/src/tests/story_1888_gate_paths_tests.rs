@@ -763,3 +763,173 @@ fn no_unprotected_file_reexports_gate_items() {
         unlisted.join("\n")
     );
 }
+
+// ── authority inputs bound inside the gate (STORY-1889 review F1-F3) ───────
+
+/// The non-test source of the gate file `name` (under `aida-cli-lib/src/gate/`).
+fn gate_source(name: &str) -> String {
+    let text =
+        std::fs::read_to_string(workspace_root().join("aida-cli-lib/src/gate").join(name)).unwrap();
+    non_test_lines(&text).join("\n")
+}
+
+/// The body of `fn name` in `text` (from its signature to the next item).
+fn fn_body<'a>(text: &'a str, name: &str) -> &'a str {
+    let start = text
+        .find(&format!("fn {name}("))
+        .or_else(|| text.find(&format!("fn {name}<")))
+        .unwrap_or_else(|| panic!("fn {name} is defined"));
+    let rest = &text[start..];
+    let end = rest[1..]
+        .find("\nfn ")
+        .or_else(|| rest[1..].find("\npub"))
+        .unwrap_or(rest.len() - 1);
+    &rest[..end + 1]
+}
+
+/// Names whose use decides gate authority. Outside the floor nothing may
+/// name them: a caller that picks the human floor, the ship decision or the
+/// supervised default could pick a permissive one without a human merge.
+const GATE_ONLY_NAMES: &[&str] = &[
+    "require_mandate_human",
+    "ship_decision",
+    "rework_release_decision",
+    "drive_includes_supervised",
+    "collect_held_prs_with",
+    "verify_fresh_restart_plan",
+    "append_restart",
+];
+
+// trace:STORY-1889 | ai:claude
+#[test]
+fn no_unprotected_file_names_a_gate_only_authority_input() {
+    let word = |n: &str| regex::Regex::new(&format!(r"\b{n}\b")).unwrap();
+    let names: Vec<(&str, regex::Regex)> = GATE_ONLY_NAMES.iter().map(|n| (*n, word(n))).collect();
+    let bad: Vec<String> = sources()
+        .into_iter()
+        .filter(|(path, _)| !on_floor(path))
+        .filter_map(|(path, text)| {
+            let body = non_test_lines(&text).join("\n");
+            let hits: Vec<&str> = names
+                .iter()
+                .filter(|(_, re)| re.is_match(&body))
+                .map(|(n, _)| *n)
+                .collect();
+            (!hits.is_empty()).then(|| format!("  {path}: {}", hits.join(", ")))
+        })
+        .collect();
+    assert!(
+        bad.is_empty(),
+        "unprotected files name gate-only authority inputs:\n{}\n\
+         Call the gate entry that binds them instead (`start_as_human`, \
+         `stop_as_human`, `mandate_ship_cover_for_ship`, `with_live_tick_inputs`, \
+         `record_fresh_restart`).",
+        bad.join("\n")
+    );
+}
+
+// F1: mandate start/stop bind the human floor in the gate; the injectable
+// seams exist only under `cfg(test)`.
+// trace:STORY-1889 | ai:claude
+#[test]
+fn mandate_start_and_stop_bind_the_human_floor_in_the_gate() {
+    let src = gate_source("mandate.rs");
+    let fns = defined_fns(&src);
+    for seam in ["start", "start_with", "start_with_scopes", "stop"] {
+        assert!(
+            !fns.iter().any(|f| f == seam),
+            "gate::mandate::{seam} takes an injectable human floor; it must be #[cfg(test)]"
+        );
+    }
+    for private in ["mint", "tombstone_all"] {
+        assert!(
+            src.contains(&format!("\nfn {private}(")),
+            "gate::mandate::{private} must stay private to the gate module"
+        );
+    }
+    assert!(fn_body(&src, "start_as_human").contains("&require_mandate_human,"));
+    assert!(fn_body(&src, "start_as_human").contains("drive_includes_supervised("));
+    assert!(fn_body(&src, "stop_as_human").contains("&require_mandate_human,"));
+}
+
+// F2: the drive tick's authority inputs are private to the gate, built only
+// by `with_live_tick_inputs`.
+// trace:STORY-1889 | ai:claude
+#[test]
+fn drive_tick_authority_inputs_are_private_to_the_gate() {
+    let src = gate_source("mandate_drive.rs");
+    let body = src
+        .split("pub(crate) struct TickInputs<'a> {")
+        .nth(1)
+        .and_then(|s| s.split("\n}").next())
+        .expect("TickInputs is defined in gate/mandate_drive.rs");
+    for field in [
+        "mandate_dir",
+        "principal",
+        "clock",
+        "gates",
+        "lanes",
+        "held_prs",
+        "spec_always_human",
+        "spec_signoff",
+        "store_readable",
+    ] {
+        let decl = body
+            .lines()
+            .map(str::trim)
+            .find(|l| l.starts_with(&format!("{field}:")) || l.contains(&format!(" {field}:")))
+            .unwrap_or_else(|| panic!("TickInputs::{field} is declared"));
+        assert!(
+            !decl.starts_with("pub"),
+            "TickInputs::{field} must be private to the gate: {decl}"
+        );
+    }
+    let live = fn_body(&src, "with_live_tick_inputs");
+    for input in [
+        "load_store_for_lookup(",
+        "read_exclusions(",
+        "spec_always_human_from(",
+        "spec_signoff_from(",
+        "load_human_gates(",
+        "collect_held_prs(",
+        "current_user_id(",
+    ] {
+        assert!(
+            live.contains(input),
+            "with_live_tick_inputs must call {input}"
+        );
+    }
+    assert!(fn_body(&src, "collect_held_prs").contains("&changed_paths)"));
+    assert!(
+        src.contains("\nfn changed_paths("),
+        "changed_paths stays gate-private"
+    );
+    let restart = fn_body(&src, "record_fresh_restart");
+    let verify = restart.find("verify_fresh_restart_plan(").expect("verify");
+    let append = restart.find("append_restart(").expect("append");
+    assert!(
+        verify < append,
+        "the fresh re-check runs before the lineage line"
+    );
+    for (path, text) in sources() {
+        if !on_floor(&path) {
+            assert!(
+                !non_test_lines(&text).join("\n").contains("TickInputs {"),
+                "{path} constructs TickInputs outside the gate"
+            );
+        }
+    }
+}
+
+// F3: the ship cover's decision is bound in the gate.
+// trace:STORY-1889 | ai:claude
+#[test]
+fn the_ship_cover_decision_is_bound_in_the_gate() {
+    let src = gate_source("mandate_ship.rs");
+    assert!(
+        src.contains("pub(in crate::gate) fn mandate_ship_cover("),
+        "the decision-taking cover must be gate-private"
+    );
+    let ship = fn_body(&src, "mandate_ship_cover_for_ship");
+    assert!(ship.contains("crate::gate::mandate::ship_decision,\n        true,"));
+}

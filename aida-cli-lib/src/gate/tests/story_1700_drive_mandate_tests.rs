@@ -1164,7 +1164,7 @@ fn a_drive_record_loads_in_the_story_1698_loader_as_ship_held() {
 // trace:STORY-1700.ace038d6 | ai:claude
 #[test]
 fn include_supervised_defaults_on_with_drive() {
-    use crate::mandate::drive_includes_supervised as inc;
+    use crate::gate::mandate::drive_includes_supervised as inc;
     assert!(inc(true, false, false));
     assert!(!inc(true, false, true));
     assert!(!inc(false, false, false));
@@ -1632,6 +1632,7 @@ fn a_mandate_cannot_release_a_rework_hold_on_a_pr_touching_the_gates() {
         );
     }
     for path in [
+        "aida-cli-lib/src/gate/mandate.rs",
         "aida-cli-lib/src/gate/mandate_traces.rs",
         "aida-cli-lib/src/gate/mandate_drive.rs",
     ] {

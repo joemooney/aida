@@ -873,6 +873,229 @@ pub(crate) fn verify_fresh_restart_plan(
     }
 }
 
+/// Why the tick's last restart gate refused a planned restart.
+// trace:STORY-1889 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum RestartRefused {
+    /// The freshly probed lane no longer yields the same plan.
+    Changed(String),
+    /// The lineage line could not be appended, so the restart does not run.
+    Unrecorded(String),
+}
+
+/// [`restart_verdict`] for one lane under the tick's own authority inputs.
+// trace:STORY-1706 | ai:claude
+// trace:STORY-1889 | ai:claude
+pub(crate) fn tick_restart_verdict(
+    inp: &TickInputs<'_>,
+    lane: &Lane,
+    mandate: &Mandate,
+) -> Option<RestartVerdict> {
+    let known = |id: &str| (inp.spec_signoff)(id).is_some();
+    restart_verdict(
+        lane,
+        mandate,
+        inp.project_root,
+        &inp.gates,
+        inp.spec_always_human,
+        &known,
+        (inp.clock)(),
+    )
+}
+
+/// STORY-1706 (R4/R5): the restart's last gate, in its fixed order. Re-probe
+/// the lane and judge it again from fresh reads (the lock, the owner, the
+/// status, the record, the lineage, the profile and the clock); the plan
+/// must be unchanged. Then append the lineage line. Only `Ok` lets the
+/// caller exec: no line, no exec.
+// trace:STORY-1706 | ai:claude
+// trace:STORY-1889 | ai:claude
+pub(crate) fn record_fresh_restart(
+    inp: &TickInputs<'_>,
+    lane: &Lane,
+    mandate: &Mandate,
+    plan: &RestartPlan,
+) -> std::result::Result<(), RestartRefused> {
+    let fresh = crate::gate::fleet_lanes::probe_lane(lane.run_dir.clone());
+    let again = fresh
+        .as_ref()
+        .and_then(|l| tick_restart_verdict(inp, l, mandate));
+    verify_fresh_restart_plan(again, plan).map_err(RestartRefused::Changed)?;
+    let line = crate::gate::relay_launch::RestartLine {
+        generation: plan.generation,
+        at: (inp.clock)(),
+        launch: plan.launch_sha.clone(),
+        mandate: mandate.id.clone(),
+        max_sessions: plan.max_sessions,
+        used_before: plan.used_before,
+    };
+    crate::gate::relay_launch::append_restart(&plan.run_dir, &line)
+        .map_err(RestartRefused::Unrecorded)
+}
+
+// ── Tick inputs ─────────────────────────────────────────────────────────────
+
+/// What a tick reads to act.
+///
+/// STORY-1889: the authority-bearing fields (the mandate dir, principal,
+/// clock, human gates, lanes, held-PR evidence, always-human and signoff
+/// predicates, and the store fail-closed flag) are private to the gate.
+/// Production assembles them only in [`with_live_tick_inputs`]; the tick
+/// reads them through the accessors. Tests under `gate/tests/` build
+/// fixtures directly.
+// trace:STORY-1700 | ai:claude
+// trace:STORY-1889 | ai:claude
+pub(crate) struct TickInputs<'a> {
+    /// Where the lock, the state file and the ledger live.
+    pub project_root: &'a Path,
+    mandate_dir: &'a Path,
+    /// The principal this tick resolves (`current_user_id`).
+    principal: &'a str,
+    /// The tick's clock, read afresh before every action.
+    clock: &'a dyn Fn() -> DateTime<Utc>,
+    gates: std::result::Result<HumanGates, String>,
+    lanes: Vec<Lane>,
+    held_prs: Vec<HeldPr>,
+    pub advisor_live: bool,
+    /// Did the tick's own environment carry a session grant/role/purpose?
+    pub inherited_session_env: bool,
+    /// `Some(class)` when a spec is always human (operator-only, decide).
+    spec_always_human: &'a dyn Fn(&str) -> Option<String>,
+    /// `None` = not a store spec; `Some(awaiting a signoff)` otherwise.
+    spec_signoff: &'a dyn Fn(&str) -> Option<bool>,
+    /// Could the store be read? When not, every gated seat action is
+    /// withheld: the spec checks it needs cannot be made (fail closed).
+    store_readable: bool,
+    /// Approved specs and who (if anyone) already owns them (AC1).
+    pub unowned_specs: Vec<UnownedSpec>,
+}
+
+impl<'a> TickInputs<'a> {
+    pub(crate) fn mandate_dir(&self) -> &'a Path {
+        self.mandate_dir
+    }
+
+    pub(crate) fn principal(&self) -> &'a str {
+        self.principal
+    }
+
+    /// The tick's clock, read afresh.
+    pub(crate) fn now(&self) -> DateTime<Utc> {
+        (self.clock)()
+    }
+
+    pub(crate) fn gates(&self) -> &std::result::Result<HumanGates, String> {
+        &self.gates
+    }
+
+    pub(crate) fn lanes(&self) -> &[Lane] {
+        &self.lanes
+    }
+
+    pub(crate) fn held_prs(&self) -> &[HeldPr] {
+        &self.held_prs
+    }
+
+    pub(crate) fn spec_always_human(&self) -> &'a dyn Fn(&str) -> Option<String> {
+        self.spec_always_human
+    }
+
+    pub(crate) fn spec_signoff(&self) -> &'a dyn Fn(&str) -> Option<bool> {
+        self.spec_signoff
+    }
+
+    pub(crate) fn store_readable(&self) -> bool {
+        self.store_readable
+    }
+}
+
+/// One live tick's inputs for the main checkout, assembled here so every
+/// authority field comes from gate code: the principal, the operator's human
+/// gates, the always-human ledger and signoff predicates, the store
+/// fail-closed flag, the lanes and the held-PR evidence (with its changed
+/// paths). `None` when no drive mandate is active: the 15m job then reads
+/// nothing else. Never defaults an unreadable store to "no specs": the tick
+/// withholds every gated action instead (`store_readable`).
+/// `advisor_live` and `unowned_specs` are routing facts the caller collects.
+// trace:STORY-1700 | ai:claude
+// trace:STORY-1889 | ai:claude
+pub(crate) fn with_live_tick_inputs<R>(
+    main_root: &Path,
+    inherited_session_env: bool,
+    advisor_live: impl FnOnce(DateTime<Utc>) -> bool,
+    unowned_specs: impl FnOnce(&[aida_core::Requirement]) -> Vec<UnownedSpec>,
+    run: impl FnOnce(&TickInputs<'_>) -> R,
+) -> anyhow::Result<Option<R>> {
+    let dir = crate::gate::mandate::mandate_dir()?;
+    let now = Utc::now();
+    if active_drive_records(&dir, now).is_empty() {
+        return Ok(None);
+    }
+    let principal = crate::current_user_id(None);
+    let store = crate::load_store_for_lookup(main_root);
+    let store_readable = store.is_some();
+    let reqs: Vec<aida_core::Requirement> = store.map(|s| s.requirements).unwrap_or_default();
+    let ledger = crate::gate::mandate::read_exclusions(&dir).ok();
+    let always_human = spec_always_human_from(&reqs, ledger.as_ref());
+    let signoff = spec_signoff_from(&reqs);
+    let inputs = TickInputs {
+        project_root: main_root,
+        mandate_dir: &dir,
+        principal: &principal,
+        clock: &Utc::now,
+        gates: crate::gate::mandate_gates::load_human_gates(main_root)
+            .map_err(|e| format!("{e:#}")),
+        lanes: crate::gate::fleet_lanes::classify_lanes(main_root, now),
+        held_prs: collect_held_prs(main_root),
+        advisor_live: advisor_live(now),
+        inherited_session_env,
+        spec_always_human: &always_human,
+        spec_signoff: &signoff,
+        store_readable,
+        unowned_specs: unowned_specs(&reqs),
+    };
+    Ok(Some(run(&inputs)))
+}
+
+/// Held PRs from the main checkout's merge-hold markers, with the paths
+/// each releasable, approved head changes ([`changed_paths`]).
+// trace:STORY-1700 | ai:claude
+// trace:STORY-1889 | ai:claude
+pub(crate) fn collect_held_prs(main_root: &Path) -> Vec<HeldPr> {
+    collect_held_prs_with(main_root, &changed_paths)
+}
+
+/// Paths `head` changes against its merge base with `origin/main`, through a
+/// scrubbed git child. `None` when git cannot say. This list decides whether
+/// a held PR touches the gates, so it is built here, in the gate. The child
+/// only has the session variables removed (never added), so the unprotected
+/// list of their names cannot point git anywhere else.
+// trace:STORY-1700 | ai:claude
+// trace:STORY-1889 | ai:claude
+fn changed_paths(main_root: &Path, head: &str) -> Option<Vec<String>> {
+    let mut cmd = aida_core::git_ops::host_git_command(main_root);
+    for var in crate::mandate_drive::SESSION_ENV {
+        cmd.env_remove(var);
+    }
+    cmd.env("AIDA_SCHEDULE_CHILD", "1");
+    let out = cmd
+        .args(["diff", "--name-only", "-z", "--no-renames"])
+        .arg(format!("origin/main...{head}"))
+        .arg("--")
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    Some(
+        out.stdout
+            .split(|b| *b == 0)
+            .filter(|p| !p.is_empty())
+            .map(|p| String::from_utf8_lossy(p).into_owned())
+            .collect(),
+    )
+}
+
 /// Held PRs from the main checkout's merge-hold markers.
 pub(crate) fn collect_held_prs_with(
     main_root: &Path,

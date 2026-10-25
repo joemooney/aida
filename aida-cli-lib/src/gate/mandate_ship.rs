@@ -268,14 +268,46 @@ fn collect_on_stable_store<S, T>(
     }
 }
 
+/// [`mandate_ship_cover`] for a ship (`aida pr ship` and the train): the
+/// decision is bound here to [`crate::gate::mandate::ship_decision`], with the
+/// carry-over proof, so no caller outside the gate can choose a different
+/// one.
+// trace:STORY-1698 | ai:claude
+// trace:STORY-1889 | ai:claude
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn mandate_ship_cover_for_ship(
+    project_root: &std::path::Path,
+    main_worktree: &std::path::Path,
+    hold_root: &std::path::Path,
+    pr: u64,
+    known_ids: &[String],
+    head_branch: Option<&str>,
+    head: impl FnOnce() -> Option<String>,
+    override_stale_approval: bool,
+) -> std::result::Result<MandateCover, crate::gate::mandate::MandateRefusal> {
+    mandate_ship_cover(
+        project_root,
+        main_worktree,
+        hold_root,
+        pr,
+        known_ids,
+        head_branch,
+        head,
+        override_stale_approval,
+        crate::gate::mandate::ship_decision,
+        true,
+    )
+}
+
 /// STORY-1698: does an active fire-fighting mandate let THIS session ship PR
 /// `pr` past its merge-hold? Reads the mandate records from disk at this
 /// instant (never cached); only when one is active does it read the forge,
 /// the verdicts and the store. `head` is read lazily for the same reason.
+/// Gate-private: callers outside the gate use [`mandate_ship_cover_for_ship`].
 // trace:STORY-1698 | ai:claude
 // trace:TASK-1800 | ai:antigravity
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn mandate_ship_cover(
+pub(in crate::gate) fn mandate_ship_cover(
     project_root: &std::path::Path,
     main_worktree: &std::path::Path,
     hold_root: &std::path::Path,

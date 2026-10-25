@@ -1238,6 +1238,49 @@ fn task_1790_mandate_human_errors_use_mandate_commands() {
     }
 }
 
+// STORY-1889 review F1: the production entries bind the human floor
+// themselves; off a terminal they refuse before reading or writing anything.
+// trace:STORY-1889 | ai:claude
+#[test]
+fn start_and_stop_as_human_refuse_off_a_terminal() {
+    let tmp = tempfile::tempdir().unwrap();
+    let dir = tmp.path().join("mandates");
+    let _ambient =
+        crate::test_env::AmbientGuard::hermetic_with_seat_and(tmp.path(), "advisor", &[], &[]);
+    crate::test_ambient::replace(Some(crate::test_ambient::Ambient {
+        project_root: tmp.path().to_owned(),
+        stdin_is_terminal: false,
+        stdout_is_terminal: false,
+        stderr_is_terminal: false,
+    }));
+    let err = start_as_human(
+        &dir,
+        "joe",
+        Duration::hours(1),
+        None,
+        true,
+        false,
+        false,
+        std::collections::BTreeSet::new(),
+        Utc::now(),
+    )
+    .unwrap_err()
+    .to_string();
+    assert!(
+        err.starts_with("a mandate can only be started by a human at an interactive terminal ("),
+        "{err}"
+    );
+    assert!(err.contains("mandates require a direct human"), "{err}");
+    assert!(!dir.exists(), "nothing is written before the floor");
+    let err = stop_as_human(&dir, "joe", Utc::now())
+        .unwrap_err()
+        .to_string();
+    assert!(
+        err.starts_with("a mandate can only be stopped by a human at an interactive terminal ("),
+        "{err}"
+    );
+}
+
 // trace:TASK-1790 | ai:codex
 #[test]
 fn task_1790_rearm_audit_follows_release_before_label_and_keeps_reason() {

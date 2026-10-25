@@ -684,16 +684,6 @@ fn status_text(state: &MandateState, now: DateTime<Utc>) -> String {
     }
 }
 
-/// STORY-1700: `--include-supervised` is ON by default for `--drive`.
-// trace:STORY-1700 | ai:claude
-pub(crate) fn drive_includes_supervised(drive: bool, include: bool, exclude: bool) -> bool {
-    if drive {
-        !exclude
-    } else {
-        include
-    }
-}
-
 fn state_mandate(state: &MandateState) -> Option<&Mandate> {
     match state {
         MandateState::None => None,
@@ -706,7 +696,6 @@ fn state_mandate(state: &MandateState) -> Option<&Mandate> {
 pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
     let dir = mandate_dir()?;
     let audit_root = crate::find_main_worktree_root().ok();
-    let human = require_mandate_human;
     match action {
         crate::cli::MandateAction::Start {
             ship_held,
@@ -732,17 +721,16 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
                 None => DEFAULT_TTL,
             };
             // STORY-1700: a drive mandate covers sensitive specs unless the
-            // human opts out. trace:STORY-1700 | ai:claude
-            let include =
-                drive_includes_supervised(*drive, *include_supervised, *exclude_supervised);
-            let m = start_with_scopes(
+            // human opts out; the gate decides, and binds the human floor.
+            // trace:STORY-1700 | ai:claude
+            let m = start_as_human(
                 &dir,
-                &human,
                 &crate::current_user_id(None),
                 ttl,
                 reason.clone(),
-                include,
                 *drive,
+                *include_supervised,
+                *exclude_supervised,
                 parsed_scopes,
                 Utc::now(),
             )?;
@@ -787,7 +775,7 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
             Ok(())
         }
         crate::cli::MandateAction::Stop => {
-            let stopped = stop(&dir, &human, &crate::current_user_id(None), Utc::now())?;
+            let stopped = stop_as_human(&dir, &crate::current_user_id(None), Utc::now())?;
             if stopped.is_empty() {
                 println!("No mandate was active.");
             }
