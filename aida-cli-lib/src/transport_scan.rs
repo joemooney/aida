@@ -487,6 +487,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn story_1742_exited_parent_cannot_leave_a_stdout_holding_helper() {
         let temp = tempfile::tempdir().unwrap();
         let marker = temp.path().join("survived");
