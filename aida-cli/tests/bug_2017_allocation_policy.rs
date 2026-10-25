@@ -107,6 +107,12 @@ impl Fixture {
 #[test]
 fn bug_2017_cli_local_and_global_refusals() {
     let f = Fixture::new();
+    // Positive migration requires a complete original node/provider pair.
+    fs::write(
+        f.store.join(".aida/dispenser.toml"),
+        "[mode.Distributed]\nnode_id='7'\n[sequences]\n",
+    )
+    .unwrap();
     // Simulate a cached/imported global block: WORK must ignore it, and an
     // explicit claim refusal must not advance or rewrite its consumption.
     let blocks_path = f.store.join("registry/blocks.yaml");
@@ -193,6 +199,11 @@ fn bug_2017_cli_blocks_only_refuses_before_counter_or_object_write() {
 #[test]
 fn bug_2017_mcp_uses_same_node_local_writer() {
     let f = Fixture::new();
+    fs::write(
+        f.store.join(".aida/dispenser.toml"),
+        "[mode.Distributed]\nnode_id='7'\n[sequences]\n",
+    )
+    .unwrap();
     let mut child = f
         .command(false, &["mcp-serve"])
         .stdin(Stdio::piped())
