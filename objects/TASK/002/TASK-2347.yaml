@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T02:08:29.032100054Z
-modified_at: 2026-10-25T04:55:39.446966281Z
+modified_at: 2026-10-25T04:56:24.252690079Z
 req_type: Task
 tags:
 - codex
@@ -199,6 +199,15 @@ comments:
   content: 'ADVISOR REWORK DISPOSITION: codex2 attested RequestChanges at 91071afddc verified against recover persistence and unwired health consumer. Both F1/F2 are in-scope, required before live install; no scope amendment. Rework brief written for codex1; preserve LOCAL watermark and accepted pruning. Final independent delta review and exact-head CI still required. No live installation or synthetic mail action has occurred.'
   created_at: 2026-10-25T04:55:39.446966281Z
   modified_at: 2026-10-25T04:55:39.446966281Z
+- id: 01a1716a-c1bc-79b1-a03b-ec2af1bed886
+  author: codex2
+  content: |
+    Codex2 STRICT independent review REQUEST CHANGES for PR-2915 at 91071afddc41add0e43d29a9cfb463a36cd97f50, own valid reviewer authority, recorded FROM main: /home/joe/ai/aida/.aida/review-verdicts/PR-2915.json . Full16-file diff/spec/all30 comments read; no target authorship. Final LOCAL watermark, accepted pruning and retention pass. Two P2 findings: recover --accepted/--retry --dry-run mutates uncertain delivery ledger (480-498); advisor comment19's due-job health alert has no consumer beyond explicit status. Exact-head fake-HOME/temp-state probes demonstrate both; evidence /tmp/codex2-pr2915-{recover-dryrun,health-alert}-evidence.json. Full actionable findings in canonical verdict/public review.
+    Exact-head CI Build/seven lanes green; actual CI step24Python fixtures and5Rust snapshot JUnit cases pass. Only targeted suspected-defect probes, no Cargo/broad local suite/livequeue/mail/service. Receipt-root-removal replay limitation stays explicitly deferred to STORY-1843; not reopened. Full watcher synthetic idle wake/observed turn and dedup remains advisor-owned after final code approval, not proven by native queue preflight alone. No implementation, another worktree cleanup, hold-clear, merge or Claude. Refs TASK-2347 preserved.
+    Public review: https://github.com/joemooney/aida/pull/2915#issuecomment-6393651102
+    Advisor notified as codex2 with canonical path/fullSHA and findings; no spec completion claimed.
+  created_at: 2026-10-25T04:56:24.252690079Z
+  modified_at: 2026-10-25T04:56:24.252690079Z
 history:
 - id: 01a170d1-497a-7282-8dcb-91782bba7dc3
   author: joe
