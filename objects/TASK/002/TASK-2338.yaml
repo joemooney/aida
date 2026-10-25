@@ -15,13 +15,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-24T22:35:30.036362668Z
-modified_at: 2026-10-24T22:35:30.036362668Z
+modified_at: 2026-10-25T04:51:35.775599523Z
 req_type: Task
 tags:
 - authority
 - from-review:PR-2905
 - severity:minor
 - test-coverage
+comments:
+- id: 01a17166-5adf-7ae2-828d-f868c45679bf
+  author: joe
+  content: 'PROXY DECISION for joe: Approve expired-mandate refusal regression using hermetic fixture time; preserve authority behavior.'
+  created_at: 2026-10-25T04:51:35.775599523Z
+  modified_at: 2026-10-25T04:51:35.775599523Z
 filed_at:
   code_sha: 9457e495247a3c9de111d15507fabd2cd0923079
   branch: pr-2905
