@@ -16,7 +16,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-24T23:29:09.066068020Z
-modified_at: 2026-10-25T04:52:39.463184856Z
+modified_at: 2026-10-25T10:46:02.177565021Z
 req_type: Task
 tags:
 - from-review:PR-2909
@@ -27,6 +27,17 @@ comments:
   content: 'PROXY DECISION for joe: Approve removal of proven-unreachable duplicate native-session lookup; retain explicit-name conflicts and native resume behavior.'
   created_at: 2026-10-25T04:52:37.551092463Z
   modified_at: 2026-10-25T04:52:37.551092463Z
+- id: 01a172aa-dac1-7771-ae24-50301499d5c3
+  author: joe
+  content: |-
+    ADVISOR SOURCE RULING — TASK-2346, main3cbb90b0c94e. Bounded cleanup remains approved with this corrected proof.
+    The later lookup is NOT literally unreachable: req.explicit=None and a nonempty sid with no reservation at the first read reaches it. Its successful-result branch is redundant under a stable namespace snapshot. Do not repeat the original description as a control-flow proof.
+    Actual production callers of private decide603 are reserve_handle567 and preview_handle600. reserve_handle acquires namespace lock before decide and retains it through take/release_other_bindings. Inspected production reservation mutation helpers share that namespace lock (take via reserve; release_other_bindings under reserve; release_unbound via locked variant; collect_retired_reservations). Thus for cooperating AIDA allocation writers, first-missing session lookup cannot become a different binding midway through the LOCKED decision. Explicit-name branch always returns/refuses, and a first-found native binding returns before registry enumeration.
+    preview_handle is deliberately unlocked/read-only and already documented stale by launch time. Approve one first-observed native lookup per preview as best effort; the actual locked reservation redecides. Do not add a namespace write/lock to preview or claim freshness it does not supply. Raw same-UID writes are not covered by the cooperating-writer proof.
+    Implementation: remove only the redundant later lookup, preserve the early native resume fast path, explicit-name collision/refusal semantics, bounded generation probes/counters and reservation ownership/recipient behavior. Update the explanatory comment to the actual locked-snapshot/best-effort-preview rationale. No TTL, lock scope/order, identity, grant, counter format or liveness-policy change.
+    Retain existing allocation_skips_live_holders_and_the_same_session_keeps_its_recipient, explicit_live_collision_refuses_and_a_launch_reservation_binds_to_its_session, a_resumed_child_keeps_its_sessions_handle, story_1843_pr3_named_resume_keeps_recipient, retired-resume and bounded-probe coverage. Use one meaningful existing agent_handle filtered run+fast; do not add a source-text mirror test or unexplained wall-clock test for this deletion. No broad runtime/slot bypass/nested timeout. This can be a separate TASK-2346 traced commit alongside approved A preparation when scope/lease permits, without disturbing BUG2222 priority. Independent current-head review/CI remains; no completion before implementation/integration and no full STORY1843 credit.
+  created_at: 2026-10-25T10:46:02.177565021Z
+  modified_at: 2026-10-25T10:46:02.177565021Z
 history:
 - id: 01a17167-53a7-7ab2-ab8c-4f99d35ae6fd
   author: joe
