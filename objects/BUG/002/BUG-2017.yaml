@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T22:12:54.027870933Z
-modified_at: 2026-10-25T05:23:11.745867926Z
+modified_at: 2026-10-25T06:45:14.869982361Z
 req_type: Bug
 tags:
 - id-allocation
@@ -150,6 +150,16 @@ comments:
   content: 'Operator priority interrupt: safely checkpointed slice1 locally at 80b25c3025301c2f3e3b0c15d8dd45b5c9669d2b on codex/bug-2017-slice1; clean worktree, not pushed/review-ready. Returning after bounded TASK2347 F1/F2 rework. Durable resume /tmp/bug2017-checkpoint.json lists source/evidence/remaining fixture migration and required gates. No real HOME authority file; no transport overlap.'
   created_at: 2026-10-25T05:23:11.745867926Z
   modified_at: 2026-10-25T05:23:11.745867926Z
+- id: 01a171ce-67f5-77b3-acfc-e6897bc20581
+  author: ai:codex:joe
+  content: |
+    codex1 resumes BUG-2017 slice1 in place at /home/joe/ai/aida-bug-2017-slice1, branch codex/bug-2017-slice1, checkpoint80b25c3025301c2f3e3b0c15d8dd45b5c9669d2b plus existing7dirty files. Human-bound implementer grant validated; no duplicate claim/worktree or HOME enrollment. Signedv2 reread with current comments and codex2 STORY1742 writer/lock inventory94124569.
+
+    Shared-method ownership for this commit remains BUG2017: models generate_spec_id[_with_override]/assign_spec_ids/add_requirement_with_id and prefix/meta counter paths; dispenser File/SQLite/guarded CloneDispenser; node/block registry writers; GitBackend assembly/allocation admission/add_requirement/full save/save_imported/update_atomically/BulkWriter add/finish collision reassignment; CachedGitBackend delegates these methods. CLI requirements_cli/db_block/rel_cards/node_cmd/team_cmd allocation adapters. STORY1742 must coordinate before editing these same methods. This slice adds allocation admission only, no transport scanner/preparation/policy locks; existing store-writer then dispenser lock order stays intact. In particular, STORY1742 cannot assume candidate assembly using an attached live dispenser is pure: next() already persists counters. Its future content gate must reject unsafe serialized candidates before any allocation/oplog/object/ref persistence and consume the admitted candidate plan; no outer transport-policy lock may be acquired from an already-held CachedGitBackend/store lock.
+
+    No transport files/scanner are edited here. Remaining pseudonymous bootstrap/home promotion is slice2; all-conflict reconciliation/audit/scanner integration is slice3. Parent stays In Progress; slice1 ships Refs BUG-2017. Running relevant allocation/CLI-MCP tests and required touched/compile/fast because the overall change exceeds10files and shared core infrastructure. No broad workspace runtime suite, slot bypass or real HOME authority flag.
+  created_at: 2026-10-25T06:45:14.869982361Z
+  modified_at: 2026-10-25T06:45:14.869982361Z
 history:
 - id: 01a16f08-1847-70c2-a9ec-772710162546
   author: joe
