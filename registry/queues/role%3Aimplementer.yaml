@@ -78,18 +78,17 @@
   for_role: implementer
   added_by_machine: imac
 - user_id: role:implementer
-  requirement_id: 01a171c8-6a5d-7073-80cf-9dfcd9667c53
-  position: 480000
-  added_by: role:implementer
-  note: Fresh performance regression, not budget recalibration. Diagnose bounded show hot path from durable measured evidence; preserve active watcher/BUG2017 work priority.
-  added_at: 2026-10-25T06:39:55.919602211Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
   requirement_id: 01a170d1-0568-70a1-9e28-9498511707b8
   position: 481000
   added_by: role:implementer
   note: Existing codex1 owns in-place same-F2 install correction; no duplicate implementation. Bounded advisor sufficiency ruling and urgent brief.
   added_at: 2026-10-25T06:46:02.767709476Z
+  for_role: implementer
+  added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a171c8-6a5d-7073-80cf-9dfcd9667c53
+  position: 482000
+  added_by: role:implementer
+  added_at: 2026-10-25T09:32:15.146257005Z
   for_role: implementer
   added_by_machine: imac
