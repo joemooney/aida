@@ -202,6 +202,8 @@ mod loose_objects;
 mod rel_cards;
 mod relay_launch; // trace:STORY-1706 | ai:claude
 mod relay_stall;
+// trace:TASK-2347 | ai:codex
+mod codex_mail_health;
 mod remote_cmd;
 mod requirements_cli;
 mod review_cmd;

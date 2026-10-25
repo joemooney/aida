@@ -13,8 +13,11 @@ Use an AIDA binary containing `mailbox wake-snapshot`. Before merging a candidat
 keep both that binary and the reviewed adapter in a private release directory
 keyed by the reviewed commit; do not promote an unmerged binary globally. After
 merging, the ordinary installed AIDA binary is suitable. The adapter's `install`
-command copies its script into its private state directory and creates one user
-systemd service, with an explicit AIDA executable and Codex thread.
+command copies its script into its private state directory, creates one user
+systemd service, and registers one existing AIDA substrate health check with its
+advisor failure route. Use Python 3.11 or newer for installation. The AIDA binary
+must also contain `doctor check codex-mail-wake`; do not install an older candidate.
+The service uses an explicit AIDA executable and Codex thread.
 
 ```bash
 python3 /path/to/reviewed/codex-mail-wake.py once \
@@ -26,6 +29,8 @@ python3 /path/to/reviewed/codex-mail-wake.py install \
   --aida /path/to/reviewed/aida
 ```
 
+Use the main checkout as `--project` for installation; linked-checkout installs
+refuse before deployment because scheduled doctor checks resolve the main project.
 Use the exact thread UUID; a role name, `--last`, or a vendor name is not a
 conversation identifier. `--codex /absolute/path/to/codex` can pin a non-default
 Codex executable. For a systemd service, prefer the native Codex executable,
@@ -64,8 +69,8 @@ of the last successful scan; status itself does not scan or acknowledge inboxes.
 Notification age starts at the recorded queue submission attempt, including an
 attempt later confirmed with `recover --accepted`. Legacy accepted IDs without
 per-ID timestamps retain unknown ages; the last batch's time is never assigned
-to unrelated IDs. Use these fields in existing operator health reporting to
-notice an unavailable or abandoned target. They do not automatically requeue mail.
+to unrelated IDs. The installed substrate health check consumes a bounded counts-only snapshot
+written alongside the ledger. It does not automatically requeue mail.
 
 After a complete successful scan, accepted IDs and their timestamps are pruned
 only when AIDA supplies acknowledgement evidence for the same logical advisor.
@@ -80,6 +85,51 @@ unread replica in another root can become eligible again. The adapter does not
 retain permanent read tombstones or write shared acknowledgement state; durable
 logical-inbox reconciliation belongs to AIDA's mailbox store. Preserve receipt
 roots when retiring worktrees until that shared reconciliation is available.
+
+## Owned scheduled health check
+
+`install` appends an exact project/thread-owned job block to `.aida/config.toml`
+and writes private `.aida/codex-mail-health.json` registration data. It registers
+`doctor check codex-mail-wake --fail-on-findings` every 15 minutes plus an advisor
+seat route keyed only to that job's `CronJobFailed` event. The existing scheduler
+marks the advisor job due; it does not launch a model or submit a Codex wake.
+Already-due failures stay one due job. Successful recovery is visible in the
+substrate job's normal schedule status and in the doctor check.
+
+An existing AIDA scheduler driver must be running with a binary containing this
+health category for unattended checks. `--aida` pins the watcher subprocess; it
+does not repoint an existing scheduler driver. The advisor must verify the reviewed
+driver binary before enabling the job, using the ordinary driver deployment path.
+Verify with `aida schedule status`; if none is installed, the operator uses the existing
+`aida schedule install-systemd` or `install-cron` workflow. The watcher never
+installs another timer or replaces an existing driver.
+
+The check fails visibly for uncertain delivery, any accepted legacy IDs with
+unknown ages, accepted unread IDs aged at least one hour, or an unavailable/stale
+snapshot. `--health-max-age <seconds>` at install configures the accepted age
+limit (60–604800 seconds; default 3600). Snapshot freshness allows the larger of
+15 minutes or three scan intervals. Neither clock nor health failures infer a
+mail acknowledgement. Diagnostics contain counts, ages and recovery state;
+no message IDs, subjects or bodies are included.
+
+```bash
+aida doctor check codex-mail-wake --json --fail-on-findings
+aida schedule due --seat advisor
+```
+
+Installation is idempotent only for the exact owned registration and unchanged
+job block. A user job with either owned name, another target registration, or an
+edited owned block refuses before replacement. To change the configured age,
+uninstall the owned setup first, then reinstall with the desired threshold.
+Repeat the original `--state-dir`, `--interval` and `--health-max-age` settings
+when uninstalling; edited or mismatched registrations refuse rather than guessing.
+`uninstall` removes only that exact block and registration, retaining other jobs,
+notification state and historical scheduler evidence. The permanent health
+install lock is retained. `stop` leaves the health check armed, so a stopped
+watcher eventually reports unavailable; use `uninstall` to retire its monitoring.
+Runtime registration and snapshots belong in ignored per-clone state, as in
+AIDA's default `.aida/*` ignore policy. No live check is installed by fixture tests.
+
 
 ## Delivery and recovery
 
@@ -126,6 +176,8 @@ python3 /path/to/reviewed/codex-mail-wake.py recover \
   --project /path/to/project --thread <advisor-thread-uuid> --retry
 ```
 
+`recover --dry-run` is rejected before state-directory creation or locking; use
+`status` for read-only inspection. Both normal recovery choices remain explicit.
 Then start the service again. Recovery changes the adapter's delivery ledger,
 never AIDA's inbox read state. Queueing and local persistence are not a single
 transaction, so this adapter does not claim exactly-once delivery. A ledger that

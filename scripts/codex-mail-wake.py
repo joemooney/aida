@@ -134,16 +134,23 @@ class State:
     def __init__(self, directory, exclusive=True):
         # The state root is explicitly supplied; never follow an existing link
         # at the final state directory or in the ledger/lock filenames.
-        directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+        if exclusive:
+            directory.mkdir(mode=0o700, parents=True, exist_ok=True)
         self.fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
         meta = os.fstat(self.fd)
         if meta.st_uid != os.getuid() or meta.st_mode & 0o077:
             os.close(self.fd)
             raise Refusal("state directory must be owned by this user with mode 0700")
-        self.lockfd = os.open("watch.lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK,
-                              0o600, dir_fd=self.fd)
-        self._check(self.lockfd)
         self.running = False
+        self.lockfd = None
+        try:
+            self.lockfd = os.open("watch.lock", (os.O_RDWR | os.O_CREAT if exclusive else os.O_RDONLY)
+                                  | os.O_NOFOLLOW | os.O_NONBLOCK, 0o600, dir_fd=self.fd)
+        except FileNotFoundError:
+            if not exclusive:
+                return
+            raise
+        self._check(self.lockfd)
         try:
             fcntl.flock(self.lockfd, fcntl.LOCK_EX | fcntl.LOCK_NB)
             if not exclusive:
@@ -176,6 +183,16 @@ class State:
             os.close(fd)
 
     def write(self, value):
+        self._write("ledger.json", value)
+        stamps = value.get("accepted_at", {})
+        self._write("health.json", {"version": 1, "project": value["project"],
+            "thread": value["thread"], "observed_at": time.time(),
+            "accepted_unacknowledged_count": len(value["accepted"]),
+            "accepted_unknown_age_count": len(value["accepted"]) - len(stamps),
+            "oldest_known_notification_at": min(stamps.values()) if stamps else None,
+            "recovery_required": value["inflight"] is not None})
+
+    def _write(self, target, value):
         data = json.dumps(value, sort_keys=True).encode()
         if len(data) > LIMIT:
             raise Refusal("ledger exceeds its bound")
@@ -187,7 +204,7 @@ class State:
                 output.write(data)
                 output.flush()
                 os.fsync(fd)
-            os.replace(name, "ledger.json", src_dir_fd=self.fd, dst_dir_fd=self.fd)
+            os.replace(name, target, src_dir_fd=self.fd, dst_dir_fd=self.fd)
             os.fsync(self.fd)
         finally:
             os.close(fd)
@@ -348,6 +365,12 @@ def tick(state, ledger, project, thread, aida, codex, batch_seconds, dry_run=Fal
     return {"pending": len(ledger["pending"]), "queue_submitted": True, "ids": batch}
 
 
+def status_output(args, project, ledger, running):
+    print(json.dumps({"thread": args.thread, "service": service_name(project, args.thread),
+                      "state_dir": str(args.state_dir), "running": running,
+                      "notification_ledger": ledger, "health": health(ledger)}))
+
+
 def service_name(project, thread):
     digest = hashlib.sha256((str(project) + "\0" + thread).encode()).hexdigest()[:16]
     return "aida-codex-mail-" + digest + ".service"
@@ -391,15 +414,139 @@ def write_unit(unit, text):
         os.close(directory)
 
 
+# trace:TASK-2347 | ai:codex
+def health_registration(args, project):
+    name = service_name(project, args.thread).removesuffix(".service") + "-health"
+    return {"version": 1, "project": str(project), "thread": args.thread,
+            "state_dir": str(args.state_dir.resolve()), "job": name,
+            "max_age_seconds": args.health_max_age,
+            "snapshot_max_age_seconds": max(900, int(3 * args.interval))}
+
+
+def health_job_block(registration):
+    name = registration["job"]
+    return (f"# {name}:begin\n[[schedule.jobs]]\nname = {json.dumps(name)}\n"
+            'command = "doctor check codex-mail-wake --fail-on-findings"\n'
+            'every = "15m"\nenabled = true\n\n[[schedule.jobs]]\n'
+            f'name = {json.dumps(name + "-route")}\nseats = ["advisor"]\n'
+            f'on = [{json.dumps("CronJobFailed:" + name)}]\n'
+            'prompt = "Inspect the routed counts/ages and aida doctor check codex-mail-wake; '
+            'recover uncertain delivery explicitly or repair the target. Never requeue accepted mail automatically."\n'
+            f'enabled = true\n# {name}:end\n')
+
+
+def own_health_job(args, project, remove=False):
+    """Edit only the exact owned block under a permanent project install lock."""
+    import tomllib
+    directory = project / ".aida"
+    directory.mkdir(exist_ok=True)
+    anchor = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    lock = None
+    try:
+        meta = os.fstat(anchor)
+        if meta.st_uid != os.getuid() or meta.st_mode & 0o022:
+            raise Refusal("health project directory must be owned without shared writes")
+        lock = os.open("codex-mail-health.lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK,
+                       0o600, dir_fd=anchor)
+        State._check(lock)
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        def read(name, private=False):
+            try:
+                fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=anchor)
+            except FileNotFoundError:
+                return None
+            try:
+                meta = os.fstat(fd)
+                if not stat.S_ISREG(meta.st_mode) or meta.st_nlink != 1 or meta.st_uid != os.getuid():
+                    raise Refusal("health registration/config identity refused")
+                if private:
+                    State._check(fd)
+                with os.fdopen(fd, "rb", closefd=False) as source:
+                    data = source.read(LIMIT + 1)
+                if len(data) > LIMIT:
+                    raise Refusal("health registration/config exceeded bound")
+                return data.decode()
+            finally:
+                os.close(fd)
+        registration = health_registration(args, project)
+        expected = json.dumps(registration, sort_keys=True) + "\n"
+        prior = read("codex-mail-health.json", private=True)
+        if prior is not None and prior != expected:
+            raise Refusal("health registration belongs to another target or was edited; refusing replacement")
+        text = read("config.toml") or ""
+        config = tomllib.loads(text)
+        block = "\n" + health_job_block(registration)
+        marker = f'# {registration["job"]}:begin'
+        exists = marker in text
+        if exists and (text.count(block) != 1 or text.count(marker) != 1):
+            raise Refusal("owned health job was edited; refusing replacement/removal")
+        schedule = config.get("schedule", {})
+        if not isinstance(schedule, dict) or any(not isinstance(schedule.get(key, []), list) for key in ("jobs", "tasks")):
+            raise Refusal("invalid scheduler registration shape")
+        jobs = [job for key in ("jobs", "tasks") for job in schedule.get(key, [])]
+        if any(not isinstance(job, dict) or not isinstance(job.get("name"), str) for job in jobs):
+            raise Refusal("invalid scheduler job identity")
+        names = {job["name"] for job in jobs}
+        owned = {registration["job"], registration["job"] + "-route"}
+        if (not exists and names.intersection(owned)) or (exists and any(
+                sum(job["name"] == name for job in jobs) != 1 for name in owned)):
+            raise Refusal("health job name already belongs to a user entry or is duplicated")
+        if remove and prior is None and not exists:
+            return
+        if remove and (prior is None or not exists):
+            raise Refusal("incomplete health ownership; inspect registration and job block")
+        updated = text.replace(block, "", 1) if remove else text if exists else text + block
+        def replace(name, data, mode=0o600):
+            temporary = ".health-" + str(uuid.uuid4())
+            fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, mode, dir_fd=anchor)
+            try:
+                with os.fdopen(fd, "w", closefd=False) as out:
+                    out.write(data)
+                    out.flush()
+                    os.fsync(fd)
+                os.replace(temporary, name, src_dir_fd=anchor, dst_dir_fd=anchor)
+                os.fsync(anchor)
+            finally:
+                os.close(fd)
+                try:
+                    os.unlink(temporary, dir_fd=anchor)
+                except FileNotFoundError:
+                    pass
+        # Both ownership checks precede either write. A partial install fails
+        # visibly; never remove or overwrite a conflicting registration.
+        if (read("config.toml") or "") != text or read("codex-mail-health.json", private=True) != prior:
+            raise Refusal("health configuration changed during installation; retry without overwriting it")
+        if not remove:
+            replace("codex-mail-health.json", expected)
+        if (read("config.toml") or "") != text:
+            raise Refusal("scheduler config changed; registration retained for safe install retry")
+        mode = stat.S_IMODE(os.stat("config.toml", dir_fd=anchor, follow_symlinks=False).st_mode) if text else 0o600
+        replace("config.toml", updated, mode)
+        if remove:
+            os.unlink("codex-mail-health.json", dir_fd=anchor)
+            os.fsync(anchor)
+    finally:
+        if lock is not None:
+            os.close(lock)
+        os.close(anchor)
+
+
 def service(args, project):
     name = service_name(project, args.thread)
     config = Path(os.environ.get("XDG_CONFIG_HOME", str(Path.home() / ".config")))
     unit = config / "systemd/user" / name
     if args.dry_run:
         print(json.dumps({"service": name, "action": args.action, "dry_run": True,
-                          "unit": str(unit), "state_dir": str(args.state_dir), "queue_submitted": False}))
+                          "unit": str(unit), "state_dir": str(args.state_dir),
+                          "health_job": health_registration(args, project)["job"],
+                          "health_max_age_seconds": args.health_max_age, "queue_submitted": False}))
         return
     if args.action == "install":
+        # Native scheduled health resolves the main project, as do AIDA's
+        # other scheduled checks. Refuse a linked-root install, never move
+        # an existing notification ledger silently to another project key.
+        if worktrees(project)[0].resolve() != project:
+            raise Refusal("install requires the main checkout as --project for scheduled health")
         # Pin the deployed adapter independently of an implementation worktree.
         args.state_dir.mkdir(parents=True, mode=0o700, exist_ok=True)
         with_state = State(args.state_dir)
@@ -426,6 +573,7 @@ def service(args, project):
                 "[Service]\nType=simple\nUMask=0077\nExecStart="
                 + " ".join(map(systemd_escape, argv))
                 + "\nRestart=on-failure\nRestartSec=30\n[Install]\nWantedBy=default.target\n")
+        own_health_job(args, project)
         write_unit(unit, text)
         command(["systemctl", "--user", "daemon-reload"])
         command(["systemctl", "--user", "enable", "--now", name])
@@ -434,6 +582,8 @@ def service(args, project):
     elif args.action == "start":
         command(["systemctl", "--user", "enable", "--now", name])
     elif args.action == "uninstall":
+        # Verify/remove only this target's owned check; other jobs are retained.
+        own_health_job(args, project, remove=True)
         command(["systemctl", "--user", "disable", "--now", name])
         if unit.is_symlink():
             raise Refusal("service unit symlink refused")
@@ -453,10 +603,17 @@ def main():
     parser.add_argument("--interval", type=float, default=30)
     parser.add_argument("--batch-seconds", type=float, default=5)
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--health-max-age", type=int, default=3600,
+                        help="accepted unread age limit in seconds (60..604800)")
     recovery = parser.add_mutually_exclusive_group()
     recovery.add_argument("--accepted", action="store_true")
     recovery.add_argument("--retry", action="store_true")
     args = parser.parse_args()
+    # Reject before project lookup, State directory creation, or lock acquisition.
+    if args.action == "recover" and args.dry_run:
+        parser.error("recover --dry-run is unsupported; use status to inspect uncertainty")
+    if not 60 <= args.health_max_age <= 604800:
+        parser.error("health max age must be 60..604800 seconds")
     if args.interval < 1 or args.interval > 3600 or not 0 <= args.batch_seconds <= 300:
         parser.error("interval must be 1..3600 seconds and batching 0..300 seconds")
     project = args.project.resolve(strict=True)
@@ -467,15 +624,19 @@ def main():
     if args.action in ("install", "start", "stop", "uninstall"):
         service(args, project)
         return
+    if args.action == "status":
+        try:
+            os.lstat(args.state_dir)
+        except FileNotFoundError:
+            status_output(args, project, initial(project, args.thread), False)
+            return
     state = State(args.state_dir, exclusive=args.action != "status")
     try:
         existing = state.read()
         ledger = initial(project, args.thread) if existing is None else existing
         validate(ledger, project, args.thread, allow_inflight=args.action in ("status", "recover"))
         if args.action == "status":
-            print(json.dumps({"thread": args.thread, "service": service_name(project, args.thread),
-                              "state_dir": str(args.state_dir), "running": state.running,
-                              "notification_ledger": ledger, "health": health(ledger)}))
+            status_output(args, project, ledger, state.running)
             return
         if args.action == "recover":
             if ledger.get("thread") != args.thread or ledger.get("project") != str(project):

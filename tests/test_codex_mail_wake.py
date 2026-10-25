@@ -8,6 +8,7 @@ import subprocess
 import tempfile
 import unittest
 import uuid
+from types import SimpleNamespace
 from unittest.mock import patch
 
 MODULE = Path(__file__).resolve().parents[1] / "scripts/codex-mail-wake.py"
@@ -307,6 +308,151 @@ class WatcherTests(unittest.TestCase):
         self.assertEqual(wake.health(recovered, now=150)["oldest_known_notification_age_seconds"], 50)
         self.assertIsNone(recovered["inflight"])
         self.assertFalse((self.root / ".aida").exists())
+
+    def test_recover_dry_run_rejected_before_state_or_lock_mutation(self):
+        for decision in ("--accepted", "--retry"):
+            directory = self.root / decision.removeprefix("--")
+            state = wake.State(directory)
+            ledger = wake.initial(self.root, THREAD)
+            ledger["pending"] = {"uncertain": ["/fixture"]}
+            ledger["first_pending"] = 100
+            ledger["inflight"] = {"ids": ["uncertain"], "submitted_at": 100}
+            state.write(ledger)
+            state.close()
+            before = {p.name: p.read_bytes() for p in directory.iterdir()}
+            argv = ["python3", str(MODULE), "recover", "--project", str(self.root),
+                    "--thread", THREAD, "--state-dir", str(directory), decision, "--dry-run"]
+            result = subprocess.run(argv, capture_output=True)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(b"recover --dry-run is unsupported", result.stderr)
+            self.assertEqual({p.name: p.read_bytes() for p in directory.iterdir()}, before)
+            missing = self.root / (directory.name + "-missing")
+            argv[argv.index(str(directory))] = str(missing)
+            self.assertNotEqual(subprocess.run(argv, capture_output=True).returncode, 0)
+            self.assertFalse(missing.exists())
+
+    def test_status_missing_state_and_missing_lock_creates_nothing(self):
+        directory = self.root / "absent-status"
+        argv = ["python3", str(MODULE), "status", "--project", str(self.root),
+                "--thread", THREAD, "--state-dir", str(directory)]
+        result = json.loads(subprocess.check_output(argv))
+        self.assertFalse(result["running"])
+        self.assertFalse(directory.exists())
+        directory.mkdir(mode=0o700)
+        path = directory / "ledger.json"
+        path.write_text(json.dumps(self.ledger))
+        path.chmod(0o600)
+        before = path.read_bytes()
+        subprocess.check_output(argv)
+        self.assertEqual(path.read_bytes(), before)
+        self.assertEqual([p.name for p in directory.iterdir()], ["ledger.json"])
+
+    def test_normal_retry_recovery_keeps_pending_and_does_not_claim_acceptance(self):
+        directory = self.root / "retry-state"
+        state = wake.State(directory)
+        ledger = wake.initial(self.root, THREAD)
+        ledger["pending"] = {"uncertain": ["/fixture"]}
+        ledger["first_pending"] = 100
+        ledger["inflight"] = {"ids": ["uncertain"], "submitted_at": 100}
+        state.write(ledger)
+        state.close()
+        result = subprocess.run(["python3", str(MODULE), "recover", "--project", str(self.root),
+                                "--thread", THREAD, "--state-dir", str(directory), "--retry"],
+                                capture_output=True, check=True)
+        self.assertTrue(json.loads(result.stdout)["recovered"])
+        after = json.loads((directory / "ledger.json").read_text())
+        self.assertEqual(after["pending"], ledger["pending"])
+        self.assertEqual(after["accepted"], [])
+        self.assertIsNone(after["inflight"])
+        self.assertFalse(json.loads((directory / "health.json").read_text())["recovery_required"])
+
+    def test_health_snapshot_contains_counts_only_and_tracks_uncertainty_recovery(self):
+        self.ledger["accepted"] = ["legacy", "known"]
+        self.ledger["accepted_at"] = {"known": 100}
+        self.state.write(self.ledger)
+        path = self.root / "state/health.json"
+        snapshot = json.loads(path.read_text())
+        self.assertEqual(snapshot["accepted_unacknowledged_count"], 2)
+        self.assertEqual(snapshot["accepted_unknown_age_count"], 1)
+        self.assertEqual(snapshot["oldest_known_notification_at"], 100)
+        self.assertNotIn("known", snapshot.values())
+        self.assertNotIn("legacy", snapshot.values())
+        self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+        self.ledger["pending"] = {"uncertain": ["/fixture"]}
+        self.ledger["first_pending"] = 100
+        self.ledger["inflight"] = {"ids": ["uncertain"], "submitted_at": 100}
+        self.state.write(self.ledger)
+        self.assertTrue(json.loads(path.read_text())["recovery_required"])
+        self.ledger["inflight"] = None
+        self.state.write(self.ledger)
+        self.assertFalse(json.loads(path.read_text())["recovery_required"])
+
+    def health_args(self):
+        return SimpleNamespace(thread=THREAD, state_dir=self.root / "state",
+                               health_max_age=3600, interval=30)
+
+    def test_owned_health_job_install_idempotent_and_remove_preserves_user_jobs(self):
+        directory = self.root / ".aida"
+        directory.mkdir()
+        original = '[schedule]\nmin_gap="30s"\n[[schedule.jobs]]\nname="user-job"\ncommand="cache verify"\nevery="1h"\nenabled=true\n'
+        config = directory / "config.toml"
+        config.write_text(original)
+        args = self.health_args()
+        wake.own_health_job(args, self.root)
+        first = config.read_bytes()
+        registration = json.loads((directory / "codex-mail-health.json").read_text())
+        self.assertEqual(registration["thread"], THREAD)
+        self.assertEqual(registration["max_age_seconds"], 3600)
+        self.assertIn(b"doctor check codex-mail-wake --fail-on-findings", first)
+        self.assertIn(("CronJobFailed:" + registration["job"]).encode(), first)
+        wake.own_health_job(args, self.root)
+        self.assertEqual(config.read_bytes(), first)
+        wake.own_health_job(args, self.root, remove=True)
+        self.assertEqual(config.read_text(), original)
+        self.assertFalse((directory / "codex-mail-health.json").exists())
+        self.assertTrue((directory / "codex-mail-health.lock").exists())
+
+    def test_health_job_refuses_user_collision_edited_block_and_other_target(self):
+        directory = self.root / ".aida"
+        directory.mkdir()
+        args = self.health_args()
+        name = wake.health_registration(args, self.root)["job"]
+        config = directory / "config.toml"
+        config.write_text('[[schedule.jobs]]\nname=' + json.dumps(name) + '\nprompt="user-owned"\nevery="1h"\n')
+        before = config.read_bytes()
+        with self.assertRaises(wake.Refusal):
+            wake.own_health_job(args, self.root)
+        self.assertEqual(config.read_bytes(), before)
+        self.assertFalse((directory / "codex-mail-health.json").exists())
+        config.write_text("")
+        wake.own_health_job(args, self.root)
+        config.write_text(config.read_text().replace('every = "15m"', 'every = "30m"'))
+        before = config.read_bytes()
+        with self.assertRaises(wake.Refusal):
+            wake.own_health_job(args, self.root, remove=True)
+        self.assertEqual(config.read_bytes(), before)
+        other = self.health_args()
+        other.thread = str(uuid.uuid4())
+        with self.assertRaises(wake.Refusal):
+            wake.own_health_job(other, self.root)
+        self.assertEqual(config.read_bytes(), before)
+
+    def test_health_job_refuses_duplicate_owned_names_even_with_exact_owned_block(self):
+        for suffix in ("", "-route"):
+            project = self.root / ("duplicate" + suffix)
+            (project / ".aida").mkdir(parents=True)
+            args = self.health_args()
+            wake.own_health_job(args, project)
+            config = project / ".aida/config.toml"
+            name = wake.health_registration(args, project)["job"] + suffix
+            config.write_text(config.read_text() + '\n[[schedule.jobs]]\nname=' + json.dumps(name) + '\nprompt="user-owned"\nevery="1h"\n')
+            before = config.read_bytes()
+            registration = (project / ".aida/codex-mail-health.json").read_bytes()
+            for remove in (False, True):
+                with self.assertRaises(wake.Refusal):
+                    wake.own_health_job(args, project, remove=remove)
+                self.assertEqual(config.read_bytes(), before)
+                self.assertEqual((project / ".aida/codex-mail-health.json").read_bytes(), registration)
 
     def test_post_spawn_pipe_failure_keeps_uncertain_claim(self):
         with patch.object(wake.os, "set_blocking", side_effect=OSError("fixture pipe failure")):
