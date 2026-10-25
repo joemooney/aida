@@ -1,3 +1,4 @@
+// trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
 use super::*;
 use clap::Parser;
 use tempfile::TempDir;
@@ -150,7 +151,7 @@ fn guided_review_real_launch_plan_leaves_done_spec_and_leases_untouched() {
     let root = tmp.path();
     std::fs::create_dir_all(root.join(".aida")).unwrap();
     std::fs::create_dir_all(root.join(".aida-store")).unwrap();
-    let storage = Storage::new(root.join(".aida-store"));
+    let storage = crate::test_env::home_fixture_storage(root.join(".aida-store"));
     let mut req = Requirement::new("guided review fixture".into(), String::new());
     req.spec_id = Some("STORY-818".into());
     req.status = RequirementStatus::Done;
@@ -202,7 +203,7 @@ fn derisk_real_launch_plan_leaves_target_spec_and_leases_untouched() {
     let root = tmp.path();
     std::fs::create_dir_all(root.join(".aida")).unwrap();
     std::fs::create_dir_all(root.join(".aida-store")).unwrap();
-    let storage = Storage::new(root.join(".aida-store"));
+    let storage = crate::test_env::home_fixture_storage(root.join(".aida-store"));
     let mut req = Requirement::new("derisk fixture".into(), String::new());
     req.spec_id = Some("TASK-1235".into());
     req.status = RequirementStatus::Approved;

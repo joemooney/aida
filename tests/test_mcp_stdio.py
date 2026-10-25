@@ -366,6 +366,12 @@ def test_parse_spec_id_fixtures() -> None:
 
 def setup_project(aida: Path, root: Path) -> str:
     run(["git", "init"], root)
+    # trace:BUG-2017 | ai:codex — positive global-ID fixture, explicit HOME.
+    git_dir = root / ".git"
+    require(git_dir.is_dir() and not git_dir.is_symlink(), "private standalone Git fixture required")
+    require(not (git_dir / "commondir").exists(), "shared Git fixture refused")
+    with (git_dir / "aida-allocation.toml").open("x", encoding="utf-8") as setting:
+        setting.write("version=1\nauthoritative=true\n")
     init = run([str(aida), "init", "--no-skills", "--no-hooks"], root)
     require(init.returncode == 0, f"aida init failed:\nstdout={init.stdout}\nstderr={init.stderr}")
 

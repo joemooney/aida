@@ -1,3 +1,4 @@
+// trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
 use super::*;
 
 fn git(root: &std::path::Path, args: &[&str]) {
@@ -90,7 +91,7 @@ fn bug_1957_pr_ship_squash_subject_returns_completion_trailer() {
             requirements: vec![req],
             ..Default::default()
         };
-        let backend = aida_core::GitBackend::new(&root.join(".aida-store")).unwrap();
+        let backend = crate::test_env::home_fixture_backend(&root.join(".aida-store")).unwrap();
         aida_core::DatabaseBackend::save(&backend, &store).unwrap();
     };
 
@@ -160,7 +161,7 @@ fn bug_1997_pr_ship_squash_subject_never_none_when_ids_withheld() {
         requirements: vec![req],
         ..Default::default()
     };
-    let backend = aida_core::GitBackend::new(&root.join(".aida-store")).unwrap();
+    let backend = crate::test_env::home_fixture_backend(&root.join(".aida-store")).unwrap();
     aida_core::DatabaseBackend::save(&backend, &store).unwrap();
     // The store save commits too, so the subject-matching head commit
     // ("fix: prose", the normalized clean title) comes after it.

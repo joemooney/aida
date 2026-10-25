@@ -1,3 +1,4 @@
+// trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
 use super::*;
 use std::path::{Path, PathBuf};
 
@@ -598,7 +599,7 @@ fn test_queue_work_respects_no_launch_for_calling_lane_attribution() {
     );
 
     let store_root = root.join(".aida-store");
-    let backend = aida_core::GitBackend::new(&store_root).unwrap();
+    let backend = crate::test_env::home_fixture_backend(&store_root).unwrap();
     let storage = Storage::new(&store_root);
 
     let registry_dir = store_root.join("registry");

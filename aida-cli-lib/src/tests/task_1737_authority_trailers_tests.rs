@@ -5,6 +5,7 @@
 //! `aida history events` surfaces the authority on `status_change` rows.
 // trace:TASK-1737 | ai:antigravity
 
+// trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
 use crate::history::{
     collect_filtered_events_git, collect_filtered_events_sourced, events_json,
     parse_authority_trailers, render_events_toon, EventAuthority, EventKind, HistoryOpts,
@@ -26,7 +27,7 @@ fn setup_store() -> (tempfile::TempDir, PathBuf, aida_core::CachedGitBackend) {
     let store = crate::detect_distributed_store_from(root).unwrap();
     aida_core::git_ops::init(&store).unwrap();
     aida_core::git_ops::configure_user(&store, "fixture", "fixture@localhost").unwrap();
-    let backend = aida_core::CachedGitBackend::open(
+    let backend = crate::test_env::home_fixture_cached_backend(
         &store,
         &aida_core::CachedGitBackend::default_cache_path(&store),
     )

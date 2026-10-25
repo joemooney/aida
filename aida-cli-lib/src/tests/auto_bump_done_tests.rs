@@ -1,3 +1,4 @@
+// trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
 use super::*;
 
 /// TASK-740: exhaustive parity — `auto_bump_eligible_status` (now delegating
@@ -2721,7 +2722,7 @@ fn auto_bump_git_canonical_store_writes_targeted_commits_per_spec() {
     let (_tmp, project_root, store_dir) = init_git_canonical_test_project();
 
     // Seed two Done specs straight into the git-canonical store.
-    let backend = aida_core::db::GitBackend::new(&store_dir).unwrap();
+    let backend = crate::test_env::home_fixture_backend(&store_dir).unwrap();
     let mut store = aida_core::RequirementsStore::default();
     for spec_id in ["STORY-9701", "STORY-9702"] {
         let mut req = aida_core::Requirement::new(format!("test-{}", spec_id), String::new());
@@ -2801,7 +2802,7 @@ fn reconcile_status_draft_landing_git_canonical_store_writes_targeted_commits_an
     let (_tmp, project_root, store_dir) = init_git_canonical_test_project();
 
     // Seed a Draft spec straight into the git-canonical store.
-    let backend = aida_core::db::GitBackend::new(&store_dir).unwrap();
+    let backend = crate::test_env::home_fixture_backend(&store_dir).unwrap();
     let mut store = aida_core::RequirementsStore::default();
     let mut req = aida_core::Requirement::new("test-STORY-9720".to_string(), String::new());
     req.spec_id = Some("STORY-9720".to_string());
@@ -3197,7 +3198,7 @@ fn aida_done_emits_the_ship_record() {
     std::fs::create_dir_all(&store).unwrap();
     std::fs::create_dir_all(project_root.join(".aida")).unwrap();
 
-    let backend = aida_core::CachedGitBackend::open(
+    let backend = crate::test_env::home_fixture_cached_backend(
         &store,
         &aida_core::CachedGitBackend::default_cache_path(&store),
     )
@@ -3248,7 +3249,7 @@ fn queue_close_is_tty_gated_so_the_emission_is_unreachable_headlessly() {
     std::fs::create_dir_all(&store).unwrap();
     std::fs::create_dir_all(project_root.join(".aida")).unwrap();
 
-    let backend = aida_core::CachedGitBackend::open(
+    let backend = crate::test_env::home_fixture_cached_backend(
         &store,
         &aida_core::CachedGitBackend::default_cache_path(&store),
     )
@@ -3264,7 +3265,7 @@ fn queue_close_is_tty_gated_so_the_emission_is_unreachable_headlessly() {
     crate::queue_cmd::advance_dispatch(crate::burndown::AdvanceAction::Close, "BUG-12861", &store)
         .expect("the close call itself must not error");
 
-    let after = aida_core::CachedGitBackend::open(
+    let after = crate::test_env::home_fixture_cached_backend(
         &store,
         &aida_core::CachedGitBackend::default_cache_path(&store),
     )
@@ -3294,7 +3295,7 @@ fn queue_advance_close_dispatch_without_shipped_commit_warns() {
     let (_tmp, project_root, store_dir) = init_git_canonical_test_project();
     std::fs::create_dir_all(project_root.join(".aida")).unwrap();
 
-    let backend = aida_core::CachedGitBackend::open(
+    let backend = crate::test_env::home_fixture_cached_backend(
         &store_dir,
         &aida_core::CachedGitBackend::default_cache_path(&store_dir),
     )
@@ -3324,7 +3325,7 @@ fn queue_advance_close_dispatch_without_shipped_commit_warns() {
         "warning must describe missing commit on default branch:\n{warning}"
     );
 
-    let after = aida_core::CachedGitBackend::open(
+    let after = crate::test_env::home_fixture_cached_backend(
         &store_dir,
         &aida_core::CachedGitBackend::default_cache_path(&store_dir),
     )
@@ -3345,7 +3346,7 @@ fn queue_advance_close_dispatch_opted_out_does_not_warn() {
     let (_tmp, project_root, store_dir) = init_git_canonical_test_project();
     std::fs::create_dir_all(project_root.join(".aida")).unwrap();
 
-    let backend = aida_core::CachedGitBackend::open(
+    let backend = crate::test_env::home_fixture_cached_backend(
         &store_dir,
         &aida_core::CachedGitBackend::default_cache_path(&store_dir),
     )
@@ -3371,7 +3372,7 @@ fn queue_advance_close_dispatch_opted_out_does_not_warn() {
         "doctor:no-code spec must not emit a warning on close"
     );
 
-    let after = aida_core::CachedGitBackend::open(
+    let after = crate::test_env::home_fixture_cached_backend(
         &store_dir,
         &aida_core::CachedGitBackend::default_cache_path(&store_dir),
     )
@@ -3392,7 +3393,7 @@ fn queue_advance_close_dispatch_with_shipped_commit_does_not_warn() {
     let (_tmp, project_root, store_dir) = init_git_canonical_test_project();
     std::fs::create_dir_all(project_root.join(".aida")).unwrap();
 
-    let backend = aida_core::CachedGitBackend::open(
+    let backend = crate::test_env::home_fixture_cached_backend(
         &store_dir,
         &aida_core::CachedGitBackend::default_cache_path(&store_dir),
     )
@@ -3425,7 +3426,7 @@ fn queue_advance_close_dispatch_with_shipped_commit_does_not_warn() {
         "shipped spec must not emit a warning on close"
     );
 
-    let after = aida_core::CachedGitBackend::open(
+    let after = crate::test_env::home_fixture_cached_backend(
         &store_dir,
         &aida_core::CachedGitBackend::default_cache_path(&store_dir),
     )
@@ -3449,7 +3450,7 @@ fn queue_advance_yes_leaves_ready_to_close_parent_open() {
     let (_tmp, project_root, store_dir) = init_git_canonical_test_project();
     std::fs::create_dir_all(project_root.join(".aida")).unwrap();
 
-    let backend = aida_core::CachedGitBackend::open(
+    let backend = crate::test_env::home_fixture_cached_backend(
         &store_dir,
         &aida_core::CachedGitBackend::default_cache_path(&store_dir),
     )
@@ -3486,7 +3487,7 @@ fn queue_advance_yes_leaves_ready_to_close_parent_open() {
     crate::queue_cmd::handle_queue_advance(&storage, Some("EPIC-19960"), /* yes */ true, None)
         .expect("handle_queue_advance should succeed");
 
-    let after = aida_core::CachedGitBackend::open(
+    let after = crate::test_env::home_fixture_cached_backend(
         &store_dir,
         &aida_core::CachedGitBackend::default_cache_path(&store_dir),
     )

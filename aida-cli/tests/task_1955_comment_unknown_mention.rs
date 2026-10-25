@@ -57,6 +57,8 @@ fn comment_add_with_an_unknown_mention_warns_and_opens_no_mailbox() {
             .unwrap()
             .success());
     }
+    // trace:BUG-2017 | ai:codex — explicit positive HOME fixture.
+    test_git::enroll_synthetic_home(&repo);
     assert!(run(
         &repo,
         &home,

@@ -4,6 +4,7 @@
 //! store.
 // trace:BUG-1629 | ai:claude
 
+// trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
 use super::{list_leases, orchestrated_lease_receipt_path, RealPhaseDriver};
 use crate::auto_complete::{FailureKind, ImplementerOutcome, PhaseDriver};
 
@@ -711,7 +712,7 @@ fn store(root: &std::path::Path, spec: &str, status: aida_core::RequirementStatu
     std::fs::create_dir_all(&store_root).unwrap();
     aida_core::git_ops::init(&store_root).unwrap();
     aida_core::git_ops::configure_user(&store_root, "Test", "test@example.invalid").unwrap();
-    let backend = aida_core::GitBackend::new(&store_root).unwrap();
+    let backend = crate::test_env::home_fixture_backend(&store_root).unwrap();
     let mut req = aida_core::Requirement::new(format!("spec {spec}"), "body".into());
     req.spec_id = Some(spec.to_string());
     req.status = status.clone();

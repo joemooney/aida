@@ -85,6 +85,17 @@ impl DispenserState {
 /// 2. Persistence — values survive process restarts
 /// 3. Thread safety — concurrent callers get distinct values
 pub trait Dispenser: Send + Sync {
+    /// Whether feature/type global formats must refuse before counter changes.
+    // trace:BUG-2017 | ai:codex
+    fn node_local_only(&self) -> bool {
+        false
+    }
+    /// Reject explicit identities before advancing any counter.
+    // trace:BUG-2017 | ai:codex
+    fn admit_requirement(&self, _requirement: &crate::Requirement) -> Result<()> {
+        Ok(())
+    }
+
     /// Get the next sequence number for the given object type.
     /// Increments the counter atomically.
     fn next(&self, object_type: &str) -> Result<u32>;
@@ -150,7 +161,9 @@ impl Dispenser for MemoryDispenser {
             .sequences
             .entry(object_type.to_uppercase())
             .or_insert(0);
-        *counter += 1;
+        *counter = counter
+            .checked_add(1)
+            .ok_or_else(|| anyhow::anyhow!("sequence exhausted"))?;
         Ok(*counter)
     }
 
@@ -161,7 +174,9 @@ impl Dispenser for MemoryDispenser {
             .get(&object_type.to_uppercase())
             .copied()
             .unwrap_or(0);
-        Ok(current + 1)
+        current
+            .checked_add(1)
+            .ok_or_else(|| anyhow::anyhow!("sequence exhausted"))
     }
 
     fn state(&self) -> Result<DispenserState> {
@@ -183,29 +198,53 @@ impl FileDispenser {
     /// Create or open a file-backed dispenser.
     /// The file will be created if it doesn't exist.
     pub fn open(path: std::path::PathBuf, mode: IdMode) -> Result<Self> {
+        // trace:BUG-2017 | ai:codex
+        crate::allocation_authority::admit_file_dispenser(&path, &mode)?;
         // Ensure parent directory exists
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        // Create file if it doesn't exist
-        if !path.exists() {
-            let state = DispenserState::new(mode.clone());
-            let content = toml::to_string_pretty(&state)?;
-            // Atomic write: concurrent `aida add` from parallel sessions can
-            // race the counter file — a torn write hands out duplicate
-            // SPEC-IDs or blocks allocation entirely. trace:TASK-331 | ai:claude
-            crate::write_atomic(&path, content)?;
-        }
+        // trace:BUG-2017 | ai:codex — initialization and consumption share the
+        // permanent sidecar. Atomic rename alone can reset an already-used
+        // counter when two first-time initializers race.
+        crate::BlockRegistry::with_dispense_lock(&path, || {
+            crate::allocation_authority::admit_file_dispenser(&path, &mode)?;
+            if !path.try_exists()? {
+                let state = DispenserState::new(mode.clone());
+                let content = toml::to_string_pretty(&state)?;
+                crate::write_atomic(&path, content)?;
+            }
+            Ok(())
+        })?;
         Ok(Self { path, mode })
     }
 
+    /// Open an already-bound provider without ever recreating lost state.
+    // trace:BUG-2017 | ai:codex
+    pub fn open_existing(path: std::path::PathBuf, mode: IdMode) -> Result<Self> {
+        crate::allocation_authority::admit_file_dispenser(&path, &mode)?;
+        let provider = Self { path, mode };
+        crate::BlockRegistry::with_dispense_lock(&provider.path, || {
+            let state = provider.load_state()?;
+            anyhow::ensure!(state.mode == provider.mode, "dispenser mode mismatch");
+            Ok(())
+        })?;
+        Ok(provider)
+    }
+
     fn load_state(&self) -> Result<DispenserState> {
+        // trace:BUG-2017 | ai:codex — no following links or blocking on bound state.
+        if let Some(state) = crate::work_binding::bound_counter_state(&self.path)? {
+            return Ok(state);
+        }
         // Reader can race a concurrent `aida add` writer mid-`write_atomic`;
         // on Windows that surfaces as a transient PermissionDenied/NotFound
         // from `CreateFile`. Retry through `read_atomic` so the dispenser
         // never spuriously fails to allocate. trace:TASK-346 | ai:claude
         let content = crate::read_atomic(&self.path)?;
         let state: DispenserState = toml::from_str(&content)?;
+        // trace:BUG-2017 | ai:codex — formatting cannot mask stale/cross-node state.
+        crate::allocation_authority::admit_file_dispenser(&self.path, &state.mode)?;
         Ok(state)
     }
 
@@ -222,6 +261,9 @@ impl FileDispenser {
 #[cfg(feature = "native")]
 impl Dispenser for FileDispenser {
     fn next(&self, object_type: &str) -> Result<u32> {
+        // trace:BUG-2017 | ai:codex
+        crate::allocation_authority::admit_file_dispenser(&self.path, &self.mode)?;
+
         use fs2::FileExt;
         use std::fs::OpenOptions;
 
@@ -240,7 +282,9 @@ impl Dispenser for FileDispenser {
                 .sequences
                 .entry(object_type.to_uppercase())
                 .or_insert(0);
-            *counter += 1;
+            *counter = counter
+                .checked_add(1)
+                .ok_or_else(|| anyhow::anyhow!("node-local sequence exhausted"))?;
             let value = *counter;
             self.save_state(&state)?;
             Ok(value)
@@ -257,7 +301,9 @@ impl Dispenser for FileDispenser {
             .get(&object_type.to_uppercase())
             .copied()
             .unwrap_or(0);
-        Ok(current + 1)
+        current
+            .checked_add(1)
+            .ok_or_else(|| anyhow::anyhow!("sequence exhausted"))
     }
 
     fn state(&self) -> Result<DispenserState> {
@@ -289,18 +335,53 @@ impl Dispenser for FileDispenser {
 /// ```
 #[cfg(feature = "native")]
 pub struct SqliteDispenser {
+    // trace:BUG-2017 | ai:codex
+    path: std::path::PathBuf,
     conn: std::sync::Mutex<rusqlite::Connection>,
     mode: IdMode,
 }
 
 #[cfg(feature = "native")]
 impl SqliteDispenser {
+    // trace:BUG-2017 | ai:codex — inspect existing mode before writable setup.
+    fn admit_stored_mode(conn: &rusqlite::Connection, path: &std::path::Path) -> Result<()> {
+        use rusqlite::OptionalExtension;
+        let has_meta: bool = conn.query_row(
+            "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='dispenser_meta')",
+            [],
+            |row| row.get(0),
+        )?;
+        if has_meta {
+            let previous: Option<String> = conn
+                .query_row(
+                    "SELECT value FROM dispenser_meta WHERE key = 'mode'",
+                    [],
+                    |row| row.get(0),
+                )
+                .optional()?;
+            if let Some(previous) = previous {
+                let previous: IdMode = serde_json::from_str(&previous)?;
+                crate::allocation_authority::admit_file_dispenser(path, &previous)?;
+            }
+        }
+        Ok(())
+    }
+
     /// Open or create a SQLite-backed dispenser.
     ///
     /// If `db_path` points to an existing database (e.g., the local read model),
     /// the dispenser tables are created alongside existing tables. If it doesn't
     /// exist, a new database is created.
     pub fn open(db_path: std::path::PathBuf, mode: IdMode) -> Result<Self> {
+        // trace:BUG-2017 | ai:codex
+        crate::allocation_authority::admit_file_dispenser(&db_path, &mode)?;
+        if db_path.try_exists()? {
+            let existing = rusqlite::Connection::open_with_flags(
+                &db_path,
+                rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
+            )?;
+            Self::admit_stored_mode(&existing, &db_path)?;
+        }
         if let Some(parent) = db_path.parent() {
             std::fs::create_dir_all(parent)?;
         }
@@ -322,6 +403,8 @@ impl SqliteDispenser {
             );",
         )?;
 
+        // Recheck after opening in case another connection changed the mode.
+        Self::admit_stored_mode(&conn, &db_path)?;
         // Store the mode
         let mode_json = serde_json::to_string(&mode)?;
         conn.execute(
@@ -330,6 +413,7 @@ impl SqliteDispenser {
         )?;
 
         Ok(Self {
+            path: db_path,
             conn: std::sync::Mutex::new(conn),
             mode,
         })
@@ -352,6 +436,9 @@ impl SqliteDispenser {
 #[cfg(feature = "native")]
 impl Dispenser for SqliteDispenser {
     fn next(&self, object_type: &str) -> Result<u32> {
+        // trace:BUG-2017 | ai:codex
+        crate::allocation_authority::admit_file_dispenser(&self.path, &self.mode)?;
+
         let conn = self.conn.lock().unwrap();
         let node_id = self.node_id();
         let type_upper = object_type.to_uppercase();
@@ -364,6 +451,7 @@ impl Dispenser for SqliteDispenser {
                  VALUES (?1, ?2, 1)
                  ON CONFLICT (node_id, type_prefix)
                  DO UPDATE SET next_val = next_val + 1
+                 WHERE next_val >= 0 AND next_val < 4294967295
                  RETURNING next_val",
                 rusqlite::params![node_id.clone(), type_upper],
                 |row| row.get(0),
@@ -390,7 +478,12 @@ impl Dispenser for SqliteDispenser {
             .optional()?;
 
         // If no row exists, next value will be 1
-        Ok(current.map(|v| v + 1).unwrap_or(1))
+        current
+            .map(|v| {
+                v.checked_add(1)
+                    .ok_or_else(|| anyhow::anyhow!("sequence exhausted"))
+            })
+            .unwrap_or(Ok(1))
     }
 
     fn state(&self) -> Result<DispenserState> {

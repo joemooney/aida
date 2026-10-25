@@ -15,6 +15,7 @@
 //! Every test uses a temporary git-canonical store. The fixture helpers are
 //! shared with BUG-1647's `bug_1647_findings_atomic_tests`.
 //! trace:BUG-1638 | ai:claude
+// trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
 use std::cell::Cell;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
@@ -60,7 +61,7 @@ pub(crate) fn project_with(
 
 pub(crate) fn open_backend(store_root: &Path) -> aida_core::CachedGitBackend {
     let cache = aida_core::CachedGitBackend::default_cache_path(store_root);
-    aida_core::CachedGitBackend::open(store_root, &cache).unwrap()
+    crate::test_env::home_fixture_cached_backend(store_root, &cache).unwrap()
 }
 
 pub(crate) fn on_disk(store_root: &Path) -> Option<Requirement> {

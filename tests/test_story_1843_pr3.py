@@ -106,6 +106,12 @@ def check(binary):
                    PATH=str(bin_dir) + os.pathsep + env['PATH'])
         (bin_dir / 'aida').symlink_to(binary)
         checked(['git', 'init', '-q', '-b', 'main'], root, env)
+        # trace:BUG-2017 | ai:codex — positive cross-vendor global-ID fixture.
+        git_dir = root / '.git'
+        assert git_dir.is_dir() and not git_dir.is_symlink()
+        assert not (git_dir / 'commondir').exists()
+        with (git_dir / 'aida-allocation.toml').open('x', encoding='utf-8') as setting:
+            setting.write('version=1\nauthoritative=true\n')
         checked([binary, 'init', '--no-skills', '--no-hooks'], root, env)
         hook = root / '.agents/hooks/aida-mail-notice.sh'
         hook.parent.mkdir(parents=True, exist_ok=True)

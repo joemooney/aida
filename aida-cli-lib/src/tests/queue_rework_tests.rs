@@ -4,6 +4,7 @@
 //! integration-test smoke (built-binary + temp store) for the
 //! side-effecting glue.
 //! trace:TASK-218 | ai:claude
+// trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
 use super::*;
 
 fn queue_entry_for_test(
@@ -258,7 +259,7 @@ fn rework_writes_blocking_review_findings_comment() {
     .unwrap();
 
     let store_root = root.join(".aida-store");
-    let backend = aida_core::GitBackend::new(&store_root).unwrap();
+    let backend = crate::test_env::home_fixture_backend(&store_root).unwrap();
     let storage = Storage::new(&store_root);
     let mut req = aida_core::Requirement::new("queue rework loop".to_string(), String::new());
     req.spec_id = Some("BUG-814".to_string());
@@ -311,7 +312,7 @@ fn rework_inherits_existing_route_and_requeues_at_head() {
     // stops here instead of continuing into the shared system temp dir.
     // trace:BUG-1598 | ai:claude
     std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
-    let backend = aida_core::GitBackend::new(&store_root).unwrap();
+    let backend = crate::test_env::home_fixture_backend(&store_root).unwrap();
     let storage = Storage::new(&store_root);
 
     let rework_req = req_for_test("BUG-851", RequirementStatus::Done);
@@ -375,7 +376,7 @@ fn rework_for_override_wins_over_existing_route() {
     // stops here instead of continuing into the shared system temp dir.
     // trace:BUG-1598 | ai:claude
     std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
-    let backend = aida_core::GitBackend::new(&store_root).unwrap();
+    let backend = crate::test_env::home_fixture_backend(&store_root).unwrap();
     let storage = Storage::new(&store_root);
 
     let req = req_for_test("BUG-851", RequirementStatus::Done);
@@ -425,7 +426,7 @@ fn rework_tail_keeps_append_semantics() {
     // stops here instead of continuing into the shared system temp dir.
     // trace:BUG-1598 | ai:claude
     std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
-    let backend = aida_core::GitBackend::new(&store_root).unwrap();
+    let backend = crate::test_env::home_fixture_backend(&store_root).unwrap();
     let storage = Storage::new(&store_root);
 
     let rework_req = req_for_test("BUG-851", RequirementStatus::Done);
@@ -492,7 +493,7 @@ fn metadata_rework_needs_attention_spec_becomes_pickable_queue_head() {
     // stops here instead of continuing into the shared system temp dir.
     // trace:BUG-1598 | ai:claude
     std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
-    let backend = aida_core::GitBackend::new(&store_root).unwrap();
+    let backend = crate::test_env::home_fixture_backend(&store_root).unwrap();
     let storage = Storage::new(&store_root);
 
     let rework_req = req_for_test("BUG-1056", RequirementStatus::NeedsAttention);
@@ -599,7 +600,7 @@ fn work_rework_of_needs_attention_spec_is_refused_without_advisor_authority() {
     // stops here instead of continuing into the shared system temp dir.
     // trace:BUG-1598 | ai:claude
     std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
-    let backend = aida_core::GitBackend::new(&store_root).unwrap();
+    let backend = crate::test_env::home_fixture_backend(&store_root).unwrap();
     let storage = Storage::new(&store_root);
 
     let req = req_for_test("BUG-1494", RequirementStatus::NeedsAttention);
@@ -787,7 +788,7 @@ fn rework_for_implementer_lands_on_role_queue_visible_to_batch_drain() {
     // stops here instead of continuing into the shared system temp dir.
     // trace:BUG-1598 | ai:claude
     std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
-    let backend = aida_core::GitBackend::new(&store_root).unwrap();
+    let backend = crate::test_env::home_fixture_backend(&store_root).unwrap();
     let storage = Storage::new(&store_root);
 
     let req = req_for_test("BUG-1277", RequirementStatus::Done);
@@ -844,7 +845,7 @@ fn rework_moves_existing_entry_from_other_user_instead_of_duplicating() {
     // stops here instead of continuing into the shared system temp dir.
     // trace:BUG-1598 | ai:claude
     std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
-    let backend = aida_core::GitBackend::new(&store_root).unwrap();
+    let backend = crate::test_env::home_fixture_backend(&store_root).unwrap();
     let storage = Storage::new(&store_root);
 
     let req = req_for_test("BUG-1277", RequirementStatus::Done);
@@ -913,7 +914,7 @@ fn rework_moves_existing_entries_from_every_other_identity() {
     // stops here instead of continuing into the shared system temp dir.
     // trace:BUG-1598 | ai:claude
     std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
-    let backend = aida_core::GitBackend::new(&store_root).unwrap();
+    let backend = crate::test_env::home_fixture_backend(&store_root).unwrap();
     let storage = Storage::new(&store_root);
 
     let req = req_for_test("BUG-1427", RequirementStatus::Done);
@@ -984,7 +985,7 @@ fn rework_explicit_user_still_overrides_role_default() {
     // stops here instead of continuing into the shared system temp dir.
     // trace:BUG-1598 | ai:claude
     std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
-    let backend = aida_core::GitBackend::new(&store_root).unwrap();
+    let backend = crate::test_env::home_fixture_backend(&store_root).unwrap();
     let storage = Storage::new(&store_root);
 
     let req = req_for_test("BUG-1277", RequirementStatus::Done);
@@ -1042,7 +1043,7 @@ fn metadata_rework_of_a_draft_is_refused_without_advisor_authority() {
     // stops here instead of continuing into the shared system temp dir.
     // trace:BUG-1598 | ai:claude
     std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
-    let backend = aida_core::GitBackend::new(&store_root).unwrap();
+    let backend = crate::test_env::home_fixture_backend(&store_root).unwrap();
     let storage = Storage::new(&store_root);
 
     let req = req_for_test("BUG-14700", RequirementStatus::Draft);
@@ -1101,7 +1102,7 @@ fn requeue_by_non_tty_advisor_keeps_the_escalation_tag() {
     // stops here instead of continuing into the shared system temp dir.
     // trace:BUG-1598 | ai:claude
     std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
-    let backend = aida_core::GitBackend::new(&store_root).unwrap();
+    let backend = crate::test_env::home_fixture_backend(&store_root).unwrap();
     let storage = Storage::new(&store_root);
 
     let mut req = req_for_test("BUG-13110", RequirementStatus::NeedsAttention);
@@ -1183,7 +1184,7 @@ fn story_1429_fixture(reqs: Vec<aida_core::Requirement>) -> (tempfile::TempDir, 
     let tmp = tempfile::tempdir().unwrap();
     let store_root = tmp.path().join(".aida-store");
     std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
-    let backend = aida_core::GitBackend::new(&store_root).unwrap();
+    let backend = crate::test_env::home_fixture_backend(&store_root).unwrap();
     let storage = Storage::new(&store_root);
     let mut store = aida_core::RequirementsStore::default();
     store.requirements = reqs;
@@ -1491,7 +1492,7 @@ fn storage_door_status_check_happens_under_the_write() {
 #[test]
 fn backend_door_status_check_happens_under_the_write() {
     let tmp = tempfile::tempdir().unwrap();
-    let backend = aida_core::GitBackend::new(&tmp.path().join(".aida-store")).unwrap();
+    let backend = crate::test_env::home_fixture_backend(&tmp.path().join(".aida-store")).unwrap();
     let r = req_for_test("BUG-9109", RequirementStatus::Approved);
     let id = r.id;
     let mut store = aida_core::RequirementsStore::default();

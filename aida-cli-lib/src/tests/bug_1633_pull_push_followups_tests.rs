@@ -4,6 +4,7 @@
 //! multi-URL push skip, and the behind-origin wording. Temp repos only.
 // trace:BUG-1633 | ai:claude
 
+// trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
 use super::*;
 use aida_core::db::DatabaseBackend;
 use std::cell::RefCell;
@@ -136,7 +137,7 @@ fn init_store(path: &Path, reqs: Vec<aida_core::Requirement>) {
     git(path, &["init", "-q", "-b", "aida-store"]);
     git(path, &["config", "user.email", "t@example.invalid"]);
     git(path, &["config", "user.name", "t"]);
-    let backend = aida_core::db::GitBackend::new(path).unwrap();
+    let backend = crate::test_env::home_fixture_backend(path).unwrap();
     let store = aida_core::RequirementsStore {
         requirements: reqs,
         ..Default::default()
@@ -325,7 +326,7 @@ fn bug_1633_followup_failed_add_counts_as_already_filed() {
     let hook_store = store_path.clone();
     let (_guard, calls) = install_add_hook(move |_, _, title, plan| {
         // Another clone files it first; our add then fails.
-        let backend = aida_core::db::GitBackend::new(&hook_store).unwrap();
+        let backend = crate::test_env::home_fixture_backend(&hook_store).unwrap();
         let mut store = backend.load().unwrap();
         let mut r = aida_core::Requirement::new(title.to_string(), String::new());
         r.spec_id = Some("TASK-9813".to_string());
@@ -389,7 +390,7 @@ fn bug_1633_pull_followup_filed_only_remotely_is_not_refiled() {
     let other = tmp.path().join("other-store");
     let hub = remote_with_clone(tmp.path(), "store-hub", "aida-store", &other);
     {
-        let backend = aida_core::db::GitBackend::new(&other).unwrap();
+        let backend = crate::test_env::home_fixture_backend(&other).unwrap();
         let store = aida_core::RequirementsStore {
             requirements: vec![spec(parent, "Done")],
             ..Default::default()
@@ -409,7 +410,7 @@ fn bug_1633_pull_followup_filed_only_remotely_is_not_refiled() {
 
     // The other machine files the followup as a child of the parent.
     {
-        let backend = aida_core::db::GitBackend::new(&other).unwrap();
+        let backend = crate::test_env::home_fixture_backend(&other).unwrap();
         let mut store = backend.load().unwrap();
         let mut child = aida_core::Requirement::new(bullet.to_string(), String::new());
         child.spec_id = Some("TASK-9817".to_string());

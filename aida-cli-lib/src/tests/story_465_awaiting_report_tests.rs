@@ -1,3 +1,4 @@
+// trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
 use super::*;
 use aida_core::models::Requirement;
 use aida_core::{CachedGitBackend, DatabaseBackend, RequirementStatus};
@@ -19,7 +20,7 @@ fn open_backend(project_root: &std::path::Path) -> CachedGitBackend {
     let store_root = project_root.join("store");
     let cache_path = project_root.join(".aida").join("cache.db");
     std::fs::create_dir_all(&store_root).unwrap();
-    CachedGitBackend::open(&store_root, &cache_path).unwrap()
+    crate::test_env::home_fixture_cached_backend(&store_root, &cache_path).unwrap()
 }
 
 /// BUG-697 / TASK-1532: hold the process-wide env lock and clear ambient env

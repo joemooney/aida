@@ -22,6 +22,8 @@ pub(crate) fn handle_team_command(store_path: &std::path::Path, json: bool) -> R
     // STORY-646: per-user roles from the RBAC roster (`registry/team.toml`).
     let roles = team::roles_by_user(store_path);
     let now = chrono::Utc::now();
+    // trace:BUG-2017 | ai:codex — additive reporting on an existing JSON surface.
+    let allocation = aida_core::allocation_authority::resolve(store_path)?;
 
     if json {
         let nodes: Vec<serde_json::Value> = members
@@ -48,11 +50,22 @@ pub(crate) fn handle_team_command(store_path: &std::path::Path, json: bool) -> R
             .iter()
             .map(|(user, role)| serde_json::json!({ "user": user, "role": role }))
             .collect();
-        let out = serde_json::json!({ "nodes": nodes, "roles": role_rows });
+        let out = serde_json::json!({ "nodes": nodes, "roles": role_rows,
+            "allocation": { "version": allocation.version, "authoritative": allocation.authoritative,
+                "effective_scope": if allocation.authoritative { "global" } else { "node-local" },
+                "source": "clone-common-git-dir" } });
         println!("{}", serde_json::to_string_pretty(&out)?);
         return Ok(());
     }
 
+    println!(
+        "Allocation: {} (clone common Git directory)",
+        if allocation.authoritative {
+            "authoritative"
+        } else {
+            "node-local only"
+        }
+    );
     if members.is_empty() {
         println!("{}", "Team roster".bold());
         println!();

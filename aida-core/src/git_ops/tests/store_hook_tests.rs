@@ -836,7 +836,7 @@ fn bug_2140_deferral_notice_and_host_commit_and_oplog_coherence() {
     let objects = main.join(".git/objects");
 
     // 1. Simulate a contained / unwritable store git directory and add a requirement.
-    let backend = crate::db::GitBackend::new(&store).unwrap();
+    let backend = crate::allocation_authority::home_fixture_backend(&store).unwrap();
     let head_before = git(&store, &["rev-parse", "HEAD"]).unwrap().stdout;
     std::fs::set_permissions(&objects, std::fs::Permissions::from_mode(0o555)).unwrap();
     let notice = format_store_commit_deferred_notice(&store);

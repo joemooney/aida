@@ -197,3 +197,26 @@ fn template_dir_trusted(dir: &std::path::Path, owner: u32) -> bool {
     }
     true
 }
+
+/// Explicit opt-in for a positive legacy global-ID fixture, never a Git
+/// template default. Both the clone and its common directory must be temporary.
+// trace:BUG-2017 | ai:codex
+#[allow(dead_code)]
+pub fn enroll_synthetic_home(root: &std::path::Path) {
+    use std::io::Write;
+    let root = root.canonicalize().expect("private fixture root");
+    let temporary = std::env::temp_dir().canonicalize().unwrap();
+    assert!(root.starts_with(&temporary), "fixture must be temporary");
+    let common = aida_core::allocation_authority::common_dir(&root).unwrap();
+    assert!(
+        common.starts_with(&temporary),
+        "common Git dir must be temporary"
+    );
+    let setting = common.join(aida_core::allocation_authority::CONFIG_FILE);
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(setting)
+        .expect("fresh explicit synthetic HOME binding");
+    file.write_all(b"version=1\nauthoritative=true\n").unwrap();
+}

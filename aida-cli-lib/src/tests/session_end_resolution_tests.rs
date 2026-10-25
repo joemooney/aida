@@ -1,3 +1,4 @@
+// trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
 use super::*;
 use std::process::Command;
 
@@ -338,7 +339,7 @@ fn session_end_unshipped_work_suppressed_when_completed() {
     std::fs::create_dir_all(&store_dir).unwrap();
 
     // Create a completed requirement in the mock store
-    let storage = Storage::new(&store_dir);
+    let storage = crate::test_env::home_fixture_storage(&store_dir);
     let mut req = Requirement::new("Completed Spec Test".to_string(), "".to_string());
     req.spec_id = Some("BUG-367".to_string());
     req.status = RequirementStatus::Completed;
@@ -350,7 +351,7 @@ fn session_end_unshipped_work_suppressed_when_completed() {
     // Load store and verify is_completed resolves to true
     let mut is_completed = false;
     if store_dir.exists() {
-        if let Ok(storage) = Storage::new(&store_dir).load() {
+        if let Ok(storage) = crate::test_env::home_fixture_storage(&store_dir).load() {
             if let Some(req) = storage.get_requirement_by_spec_id("BUG-367") {
                 if req.status == RequirementStatus::Completed {
                     is_completed = true;

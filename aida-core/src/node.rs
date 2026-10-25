@@ -606,6 +606,8 @@ impl NodeRegistry {
     /// Save to a TOML file.
     #[cfg(feature = "native")]
     pub fn save(&self, path: &Path) -> anyhow::Result<()> {
+        // trace:BUG-2017 | ai:codex
+        crate::allocation_authority::admit_registry_write(path)?;
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
         }
@@ -854,6 +856,8 @@ impl BlockRegistry {
     /// trace:BUG-474 | ai:claude
     #[cfg(feature = "native")]
     pub fn save(&self, path: &Path) -> anyhow::Result<()> {
+        // trace:BUG-2017 | ai:codex
+        crate::allocation_authority::admit_registry_write(path)?;
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
         }
