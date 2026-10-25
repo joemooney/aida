@@ -18,12 +18,12 @@ description: |
   - Complete only after an independently reviewed current-head PR, green required CI and integration. This task supplies no full STORY-1843 completion credit.
 
   Raised in review of PR-2909: https://github.com/joemooney/aida/pull/2909#issuecomment-6390882870. The original finding and the corrected source proof remain in the comment history.
-status: Done
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-24T23:29:09.066068020Z
-modified_at: 2026-10-25T16:46:14.500497047Z
+modified_at: 2026-10-25T16:59:24.138029621Z
 req_type: Task
 tags:
 - from-review:PR-2909
@@ -73,6 +73,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a17400-ae6a-7893-a590-3043ccc5b120
+  author: aida-orchestrator
+  timestamp: 2026-10-25T16:59:24.138050571Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 filed_at:
   code_sha: de9c0ffb7f27102fbf477a2c7aa5155724fe20bc
   branch: pr-2909
@@ -86,3 +93,11 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-25T16:46:14.500497047Z
   implemented_by: joe
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'codex2 independent: bounded deletion fits corrected lock/preview proof, but required nearby rationale/TASK2346 trace and accurate PR explanation are absent. Operator accepts 10.2s timing variance; actual CI is still red, not a new source finding. Evidence /tmp/codex2-pr2923-0e9-review.txt.'
+  recovery_hint: address the review findings, move TASK-2346 back to In Progress, and clear the PR hold only after approval
+  shelved_by: product
+  shelved_at: 2026-10-25T16:59:24.138029621Z
