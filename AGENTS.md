@@ -1,3 +1,8 @@
+A host-side Codex mail adapter can queue notifications to one existing thread
+without model polling. Read [setup and recovery](docs/agents/codex-mail-wake.md);
+queue acceptance and inbox acknowledgement remain distinct.
+<!-- trace:TASK-2347 | ai:codex -->
+
 Mailbox explicit sends and mentions share live-recipient resolution. Unknown or
 dead agent recipients and role/vendor addresses with zero live readers refuse
 before writing; group sends list current readers. Known human inboxes and

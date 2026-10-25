@@ -10,6 +10,19 @@ use std::path::PathBuf;
 // trace:STORY-493 | ai:claude
 #[derive(Subcommand, Debug)]
 pub enum MailboxCommand {
+    /// Read bounded unread message IDs without bodies or acknowledgement.
+    // trace:TASK-2347 | ai:codex
+    WakeSnapshot {
+        /// Local checkout whose mailbox is inspected (defaults to the main checkout).
+        #[clap(long)]
+        local_root: Option<PathBuf>,
+        /// Exact inbox identity; does not inherit the caller's identity union.
+        #[clap(long, default_value = "advisor")]
+        recipient: String,
+        /// Print the versioned read-only envelope as JSON.
+        #[clap(long)]
+        json: bool,
+    },
     /// Preview legacy mailbox reconciliation before recipient migration.
     // trace:STORY-1843 | ai:codex
     Migrate {
