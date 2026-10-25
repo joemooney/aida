@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T02:08:29.032100054Z
-modified_at: 2026-10-25T03:18:17.680134973Z
+modified_at: 2026-10-25T03:20:59.418009625Z
 req_type: Task
 tags:
 - codex
@@ -153,6 +153,11 @@ comments:
   content: 'Native advisor successor log /tmp/task2347-advisor-successor.jsonl ended blocked: Codex review refused containment; Claude fallback immutable Git metadata failed and deleted implementer lease before interruption. Source/worktree intact. This explains authority/lease failure. Checker cleared staged LOCAL-watermark correction blob a1b9f780b9a3fe0f7a7e7536f96b321766f1ea6c; portable patch /tmp/task2347-final-fix.patch. Ready marker updated. Parent must recover authorized host doer and formal independent reviewer; no authority/containment bypass attempted. Scoped final candidate rebuild active, no global promotion/service/livequeue.'
   created_at: 2026-10-25T03:18:17.680134973Z
   modified_at: 2026-10-25T03:18:17.680134973Z
+- id: 01a17113-671a-7492-a446-7d9fb94d1f07
+  author: joe
+  content: Final scoped candidate build completed3m26 and smoke passed, not promoted. Includes checker-cleared staged LOCAL-watermark correction (still needs legitimate doer commit). Real read-only cross-worktree preview now26 remaining IDs /1608bytes, down from580; queue_submitted=false, no acknowledgements or baseline changes. Evidence /tmp/task2347-reconciled-preview-3tdvfwvu/result.json . Required compile gate now active normally /tmp/task2347-compile-gates-final.log . Ready marker updated. Do not silently baseline or queue remaining26; advisor must inspect/select backlog before enable. Formal review/implementer authority remain blockers.
+  created_at: 2026-10-25T03:20:59.418009625Z
+  modified_at: 2026-10-25T03:20:59.418009625Z
 history:
 - id: 01a170d1-497a-7282-8dcb-91782bba7dc3
   author: joe
