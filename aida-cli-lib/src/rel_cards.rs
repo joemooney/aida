@@ -55,8 +55,11 @@ pub(crate) fn load_dispenser(
 
     // trace:BUG-2017 | ai:codex — no default node or global fallback on WORK.
     if !aida_core::allocation_authority::resolve(store_path)?.authoritative {
-        return aida_core::allocation_authority::dispenser(store_path, None)
-            .ok_or_else(|| anyhow::anyhow!("node-local allocator unavailable"));
+        // trace:BUG-2017 | ai:codex — migration happens on admitted allocation,
+        // not provider loading before a global-request refusal.
+        return Ok(aida_core::allocation_authority::lifecycle_dispenser(
+            store_path,
+        ));
     }
     let aida_dir = store_path.join(".aida");
     let node_config_path = aida_dir.join("node.toml");

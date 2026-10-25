@@ -4428,11 +4428,12 @@ pub(crate) fn handle_init_distributed_worktree(
         // the node-id setup. Reliable now that node.toml is strictly per-clone
         // (BUG-430): a missing `.aida-store/.aida/node.toml` means no id yet.
         // trace:TASK-623 | ai:claude
-        let node_configured = cwd
-            .join(worktree_dir)
-            .join(".aida")
-            .join("node.toml")
-            .exists();
+        let node_configured = aida_core::work_binding::load(&cwd.join(worktree_dir))?.is_some()
+            || cwd
+                .join(worktree_dir)
+                .join(".aida")
+                .join("node.toml")
+                .exists();
         if worktree_present
             && !node_configured
             && git_ops::remote_branch_exists(&cwd, "origin", branch_name)
@@ -4557,8 +4558,10 @@ pub(crate) fn handle_init_distributed_worktree(
     git_ops::configure_user(&store_path, &git_name, &git_email)?;
 
     // Initialize the git backend
+    // trace:BUG-2017 | ai:codex — bind the WORK provider before meta seeding.
+    aida_core::work_binding::bootstrap(&store_path)?;
     let backend = aida_core::GitBackend::new(&store_path)?;
-    let mut store = aida_core::models::RequirementsStore::new();
+    let mut store = backend.load()?;
     // Project name: explicit --name wins; otherwise default to the cwd
     // basename ("/home/joe/projects/tzconv" → "tzconv"). trace:BUG-25
     let project_name = name
@@ -4728,7 +4731,9 @@ pub(crate) fn handle_init_distributed_worktree(
     // adding a remote — exactly the kind of friction kernel should hide.
     // trace:EPIC-9 Story 1, BUG-40 | ai:claude
     let has_origin = git_ops::has_remote(&cwd, "origin");
-    {
+    // WORK has an opaque binding; never capture legacy host/user identity.
+    // trace:BUG-2017 | ai:codex
+    if aida_core::allocation_authority::resolve(&store_path)?.authoritative {
         let hn = hostname();
         // Prefer email from `git config user.email`; fall back to
         // `~/.aida/preferences.toml`. trace:STORY-44 | ai:claude
@@ -5220,10 +5225,10 @@ fn handle_init_post_clone(
 
     // Run scaffolding (CLAUDE.md, .claude/, hooks, etc.)
     // Load the store via GitBackend just for scaffolding metadata.
+    // trace:BUG-2017 | ai:codex — attach/migrate before any scaffold writer.
+    let work_binding = aida_core::work_binding::bootstrap(&store_path)?;
     let backend = aida_core::GitBackend::new(&store_path)?;
-    let store = backend
-        .load()
-        .unwrap_or_else(|_| aida_core::models::RequirementsStore::new());
+    let store = backend.load()?;
     let storage_label = format!(
         "{}{}your specs live here (git-tracked, synced with your code)",
         worktree_dir.white().bold(),
@@ -5246,6 +5251,15 @@ fn handle_init_post_clone(
         // trace:BUG-570 | ai:claude
         !commit_scaffold,
     )?;
+
+    // trace:BUG-2017 | ai:codex
+    if let Some(binding) = work_binding {
+        println!(
+            "WORK node {} ready (node-local allocation).",
+            binding.node_id
+        );
+        return Ok(());
+    }
 
     // Prompt the user to acquire a node id. Auto-allocate happens inside
     // `aida node acquire` per Phase 3; we just wire up the same code path.
@@ -5578,6 +5592,8 @@ pub(crate) fn handle_init_distributed_sibling(
     // register). Create builds+seeds+saves a fresh store. Both yield `store`
     // for the shared scaffolding below. trace:STORY-674 | ai:claude
     let store = if attaching {
+        // trace:BUG-2017 | ai:codex — clone-local runtime binding only; no shared object write.
+        aida_core::work_binding::bootstrap(&store_dir)?;
         let mut s = aida_core::models::RequirementsStore::new();
         let pn = name.map(|s| s.to_string()).or_else(|| {
             std::env::current_dir()
@@ -5617,8 +5633,10 @@ pub(crate) fn handle_init_distributed_sibling(
         }
 
         // Initialize the git backend (creates objects/ and metadata.yaml)
+        // trace:BUG-2017 | ai:codex — separate store Git identity exists now.
+        aida_core::work_binding::bootstrap(&store_dir)?;
         let backend = aida_core::GitBackend::new(&store_dir)?;
-        let mut store = aida_core::models::RequirementsStore::new();
+        let mut store = backend.load()?;
         // Project name from --name or cwd basename. trace:BUG-25 | ai:claude
         let project_name = name
             .map(|s| s.to_string())
@@ -5666,23 +5684,27 @@ pub(crate) fn handle_init_distributed_sibling(
                 }
             }
 
-            // Register this node
-            let hostname = hostname::get()
-                .map(|h| h.to_string_lossy().to_string())
-                .unwrap_or_else(|_| "unknown".to_string());
+            // WORK bootstrap already bound an opaque node without global claims.
+            // trace:BUG-2017 | ai:codex
+            if aida_core::allocation_authority::resolve(&store_dir)?.authoritative {
+                // Register this node
+                let hostname = hostname::get()
+                    .map(|h| h.to_string_lossy().to_string())
+                    .unwrap_or_else(|_| "unknown".to_string());
 
-            match git_ops::register_node(&store_dir, 1, &hostname) {
-                Ok(node_id) => {
-                    println!(
-                        "  {} node {} ({})",
-                        "Registered".green(),
-                        node_id.to_string().white().bold(),
-                        hostname
-                    );
-                }
-                Err(e) => {
-                    eprintln!("  {} Node registration failed: {}", "Warning:".yellow(), e);
-                    eprintln!("  You can register later when the remote is available.");
+                match git_ops::register_node(&store_dir, 1, &hostname) {
+                    Ok(node_id) => {
+                        println!(
+                            "  {} node {} ({})",
+                            "Registered".green(),
+                            node_id.to_string().white().bold(),
+                            hostname
+                        );
+                    }
+                    Err(e) => {
+                        eprintln!("  {} Node registration failed: {}", "Warning:".yellow(), e);
+                        eprintln!("  You can register later when the remote is available.");
+                    }
                 }
             }
         } else {

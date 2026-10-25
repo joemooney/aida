@@ -313,6 +313,37 @@ they enter any store that may become public.
 
 ---
 
+## Clone-local allocation authority
+
+<!-- trace:BUG-2017 | ai:codex -->
+Ordinary clones are WORK by default. `aida init` establishes a random opaque
+UUID node and persistent per-type counters in the clone's common Git directory,
+shared by linked worktrees. IDs have the form `BUG-<node>-001`; restarting or
+running `aida node acquire` again retains the binding and consumed counters.
+Legacy node files retain their schema and existing object IDs; migration creates
+the opaque binding once and carries forward consumed counter high-water marks.
+WORK does not register hostname, user, email or friendly node names, claim global
+blocks, or assign agreed IDs. Missing bindings outside the supported init/repair
+lifecycle refuse writes rather than falling back to global counters.
+
+`aida config allocation show` reads the local mode without opening the store.
+The operator may explicitly run `aida config allocation enroll-home` at a direct
+human terminal in the intended HOME clone. This writes only that clone's common
+Git setting; tracked files, environment variables and a shared store never confer
+authority. Enrollment is a deliberate live operator action, separate from source
+installation. It is never performed automatically by init or migration. Restart
+long-running MCP sessions after enrollment; a captured WORK provider refuses a
+stale mode instead of gaining a global fallback.
+
+Only HOME may run `aida db merge-gate`. Promotion adds an agreed-ID alias while
+retaining UUID, native node-local ID, relationships, comments and trace text.
+Repeated promotion is a no-op. `db retire-legacy-ids` refuses destructive
+collapse of native node IDs: those IDs remain permanent lookup aliases, and
+`merge-gate` already supplies the canonical display ID. WORK/HUB post-pull processing skips promotion;
+Git ref transport does not enroll a clone or allocate display IDs. Conflict audit
+and transport serialization scanning are separate, remaining BUG-2017 slice 3
+and STORY-1742 work; this slice does not make an arbitrary union safe.
+
 ## Extending aida with external commands
 
 <!-- trace:STORY-1641 | ai:claude -->

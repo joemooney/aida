@@ -14,7 +14,7 @@
 /// trace:FR-1-071 | ai:claude
 pub(crate) fn handle_retire_legacy_ids(
     backend: &aida_core::CachedGitBackend,
-    _store_path: &std::path::Path,
+    store_path: &std::path::Path,
     dry_run: bool,
 ) -> Result<()> {
     use aida_core::DatabaseBackend;
@@ -56,6 +56,15 @@ pub(crate) fn handle_retire_legacy_ids(
         );
     }
 
+    // trace:BUG-2017 | ai:codex — native node IDs are permanent lookup aliases.
+    // Canonical display is already supplied by agreed_id; destructive collapse
+    // has no compatible place to retain the old native alias in this schema.
+    if !dry_run {
+        aida_core::allocation_authority::require_global(store_path)?;
+        anyhow::ensure!(renames.iter().all(|(old, _, _)| aida_core::git_ops::is_global_id_format(old)),
+            "node-local IDs are permanent aliases; use HOME merge-gate for canonical display, without retiring old lookup IDs");
+    }
+
     if dry_run {
         println!();
         println!("{} Dry run — no changes made.", "→".cyan());
@@ -66,10 +75,11 @@ pub(crate) fn handle_retire_legacy_ids(
     // update_atomically reloads canonical state and holds store-write.lock
     // through rename persistence and cache refresh. trace:TASK-1981 | ai:codex
     let mut retired_count = 0usize;
+    // Admission below also rejects any concurrently introduced unsupported node rename.
     backend.update_atomically(|mutable| {
         for req in mutable.requirements.iter_mut() {
             let needs = match (req.spec_id.as_deref(), req.agreed_id.as_deref()) {
-                (Some(s), Some(a)) if s != a => Some(a.to_string()),
+                (Some(s), Some(a)) if s != a && aida_core::git_ops::is_global_id_format(s) => Some(a.to_string()),
                 _ => None,
             };
             if let Some(new_spec) = needs {

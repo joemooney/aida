@@ -12,7 +12,7 @@ fn task_1981_retirement_waits_and_preserves_concurrent_edit() {
     let backend = crate::test_env::home_fixture_backend(&store).unwrap();
     aida_core::git_ops::configure_user(&store, "Test", "test@example.com").unwrap();
     let mut req = aida_core::Requirement::new("before".into(), "desc".into());
-    req.spec_id = Some("TASK-1-001".into());
+    req.spec_id = Some("TASK-100".into());
     req.agreed_id = Some("TASK-101".into());
     backend.add_requirement(req).unwrap();
     let cache = dir.path().join("cache.db");
@@ -57,5 +57,28 @@ fn task_1981_retirement_waits_and_preserves_concurrent_edit() {
     assert_eq!(saved.requirements[0].spec_id.as_deref(), Some("TASK-101"));
     assert_eq!(saved.requirements[0].title, "concurrent edit");
     assert!(saved.requirements[0].agreed_id.is_none());
-    assert!(aida_core::object_store::read_object(&store.join("objects"), "TASK-1-001").is_err());
+    assert!(aida_core::object_store::read_object(&store.join("objects"), "TASK-100").is_err());
+}
+
+// trace:BUG-2017 | ai:codex — canonical display never destroys node lookup aliases.
+#[test]
+fn node_alias_retirement_refuses_before_objects_or_refs_change() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("store");
+    let backend = crate::test_env::home_fixture_backend(&root).unwrap();
+    aida_core::git_ops::configure_user(&root, "Test", "test@example.invalid").unwrap();
+    let mut req = aida_core::Requirement::new("permanent alias".into(), "trace:BUG-2017".into());
+    req.spec_id = Some("BUG-7-001".into());
+    req.agreed_id = Some("BUG-101".into());
+    let uuid = req.id;
+    backend.add_requirement(req).unwrap();
+    let original = std::fs::read(root.join("objects/BUG/000/BUG-7-001.yaml")).unwrap();
+    let before = aida_core::git_ops::head_sha(&root).unwrap();
+    let cached = crate::test_env::home_fixture_cached_backend(&root, &dir.path().join("cache.db")).unwrap();
+    let error = handle_retire_legacy_ids(&cached, &root, false).unwrap_err();
+    assert!(error.to_string().contains("permanent aliases"));
+    assert_eq!(std::fs::read(root.join("objects/BUG/000/BUG-7-001.yaml")).unwrap(), original);
+    assert_eq!(aida_core::git_ops::head_sha(&root).unwrap(), before);
+    assert_eq!(backend.get_requirement_by_spec_id("BUG-7-001").unwrap().unwrap().id, uuid);
+    assert_eq!(backend.get_requirement_by_spec_id("BUG-101").unwrap().unwrap().id, uuid);
 }
