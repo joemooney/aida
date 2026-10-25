@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T02:08:29.032100054Z
-modified_at: 2026-10-25T10:55:54.855105617Z
+modified_at: 2026-10-25T13:46:07.972633787Z
 req_type: Task
 tags:
 - codex
@@ -416,6 +416,11 @@ comments:
   content: 'ADVISOR runtime-brief disposition: OBE-briefs doctor returned0findings because spec remains open; manual PR-state check verified clean worktree/current5ce0706e and own canonical codex2APPROVED exacthead. Old041208 and045538 code-rework pickup briefs are superseded and acknowledged as obsolete routing by advisor, NOT as proof a new implementer consumed them or task completed. A fresh state/hold-only brief preserves independent integration/operatorhold, normal reviewed binary/scheduler inventory and still-incomplete authorized stable-idle/liveproof. No new rework/duplicate lineage, no install/ACKtest/holdclear/merge. TASK2347 remains incomplete.'
   created_at: 2026-10-25T10:55:54.855105617Z
   modified_at: 2026-10-25T10:55:54.855105617Z
+- id: 01a1734f-bce4-71f1-8949-6d95a10ee673
+  author: mcp
+  content: 'ADVISOR fresh-session verification 2026-10-25: operator reported PR2915 completed. Forge audit confirms source PR2915 CLOSED with train comment, train2921 MERGED2026-10-25T13:38:39Z to a01a6989984ee2c6261074fa5f9d415719d3130a. Train headf52cf4bfd4487ac7ff11436ca96ceca86f63dc5c had Build40197614025/job121184509198 SUCCESS, all seven CI lanes and merge-hold-gate SUCCESS. Primary main/origin nowa01a6989 clean at check. Source reviewed head5ce remains established separate evidence. Task remains open: live binary stillc7b and doctor lacks codex-mail-wake, so started ordinary merged-main aida dev build under AIDA_CARGO_TIMEOUT20m (live tool session12267), no unmerged promotion. Existing user timer aida-tick-2b20e8a3 ExecStart/home/joe/.local/bin/aida schedule tick must resolve qualified new live binary before install. New actual advisor thread01a17340-52b5-7e33-8d73-3809b3268f90 differs from original target01a1700b: no implicit retarget, live notification or repeated nonce1915 test. Operator target/idle-phase consent still required before retargeted installation/proof; preparing capability/inventory first. Root retains original watcher authorship and did not merge it.'
+  created_at: 2026-10-25T13:46:07.972625641Z
+  modified_at: 2026-10-25T13:46:07.972625641Z
 history:
 - id: 01a170d1-497a-7282-8dcb-91782bba7dc3
   author: joe
