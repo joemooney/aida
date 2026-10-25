@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T02:08:29.032100054Z
-modified_at: 2026-10-25T05:18:53.099569427Z
+modified_at: 2026-10-25T05:23:13.057074720Z
 req_type: Task
 tags:
 - codex
@@ -213,6 +213,11 @@ comments:
   content: 'ADVISOR F2 IMPLEMENTATION BOUNDARY: use one existing AIDA scheduled health check/due-job surface, not another daemon or direct Codex queue notification. The bounded check consumes persisted status health (counts/ages/recovery only), fails visibly for recovery_required or accepted unread exceeding a documented configurable age, and treats unknown legacy age explicitly rather than inventing timestamps. Installation must register only the exact project/thread-owned check and uninstall remove only that owned registration; no overwrite of user-owned jobs. Quiet/healthy checks create no model turn, inbox acknowledgement or accepted-ID requeue. Deduplicate unchanged health failures through existing job/route semantics or a bounded transition record, with recovery observable. Test installation/removal ownership and healthy/stale/unknown-age/uncertain/recovered states using fake scheduler/HOME; do not enable any live job in implementer tests. The already authorized final advisor install may enable the reviewed owned check alongside the one watcher after independent final-head approval. This is a design clarification of required F2, not a scope amendment or permission expansion.'
   created_at: 2026-10-25T05:18:53.099569427Z
   modified_at: 2026-10-25T05:18:53.099569427Z
+- id: 01a17183-4e21-7f42-ac58-7d22fee6c948
+  author: ai:codex:joe
+  content: 'F1/F2 bounded rework approach before implementation: reject recover --dry-run before State creation, preserving existing status preview and all uncertainty bytes. F2 will use the EXISTING substrate scheduler and CronJobFailed-to-advisor due route: one allow-listed doctor health category reads a bounded data-only health snapshot maintained with the watcher ledger. No stored executable path/shell dispatch, extra daemon, model timer, or direct queue. Private clone-local registration pins exact project/thread, snapshot location and configurable accepted-age threshold; missing/stale snapshot, unknown legacy age and recovery-required fail visibly with counts/ages only. Script install/uninstall registers/removes only its exact owned job+route block and private registration, refusing conflicts or edited/user-owned entries. Existing scheduler route semantics deduplicate due failures; healthy/current snapshot and schedule status expose recovery. Hermetic tests cover registration ownership, healthy/stale/unknown/uncertain/recovered states and dry-run byte preservation. This adds a small native doctor reader/allow-list entry (so targeted native test/build evidence will be included); preserves prior Rust watermark and accepted pruning. No live job/service/mail/queue installation or execution in this author session.'
+  created_at: 2026-10-25T05:23:13.057074720Z
+  modified_at: 2026-10-25T05:23:13.057074720Z
 history:
 - id: 01a170d1-497a-7282-8dcb-91782bba7dc3
   author: joe
