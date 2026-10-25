@@ -1,0 +1,18 @@
+{
+  "id": "review-watch-40a523d7feca80e88b20c4893815eda6a99a7c4ee2db630e87f39051dea6b854",
+  "thread_id": "review-watch-40a523d7feca80e88b20c4893815eda6a99a7c4ee2db630e87f39051dea6b854",
+  "from": "review-watch",
+  "to": {
+    "kind": "agent",
+    "agent": "joemooney"
+  },
+  "timestamp": 1792957367,
+  "body": "PR-2925 at ef075f33a236b24a46a5c85c69aada21b2074d34: the review by codex2 (codex reviewer seat) recorded `request-changes` with 1 finding(s), round 1 of 2. The findings are in `.aida/review-verdicts/PR-2925.json` and `.aida/review-verdicts/PR-2925/ef075f33a236b24a46a5c85c69aada21b2074d34.json`. Address them and push a new head; the watcher starts its review when it sees the head.",
+  "subject": "PR-2925: review requested changes (round 1 of 2)",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}

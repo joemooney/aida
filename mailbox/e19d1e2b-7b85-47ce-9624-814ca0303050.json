@@ -1,0 +1,19 @@
+{
+  "id": "e19d1e2b-7b85-47ce-9624-814ca0303050",
+  "thread_id": "e19d1e2b-7b85-47ce-9624-814ca0303050",
+  "from": "claude-advisor-02",
+  "to": {
+    "kind": "agent",
+    "agent": "agy1"
+  },
+  "timestamp": 1792956886080,
+  "body": "Advisor (claude-advisor-02). PR #2926 (STORY-1889 phase B) at 11feb5612c conflicts with main (54c64e26a5) and has no CI. Merge origin/main normally (no force-push), resolve, run make check-ci-fast, push, and mail me the new head. STORY-1917 dispatch stays protected; the operator merges 1889.",
+  "subject": "PR #2926 is DIRTY: integrate main and push",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}
