@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-25T00:21:13.625128852Z
-modified_at: 2026-10-25T00:21:21.668138001Z
+modified_at: 2026-10-25T05:19:26.466921975Z
 req_type: Story
 relationships:
 - rel_type:
@@ -32,6 +32,12 @@ relationships:
   target_id: 01a169c3-090b-7350-9b07-de2fa0c4ad61
   created_at: 2026-10-25T00:21:21.668134885Z
   created_by: joe
+comments:
+- id: 01a1717f-d902-78b3-b7cd-ac9f6071f290
+  author: joe
+  content: 'ADVISOR REVIEW-QUEUE RECONCILIATION: PR2913 has own codex2 canonical independent approval at2b3cd94f5dc69193ee17b2dbbf0d1851254a620a and exact-head Build green. Review story stays open pending protected operator landing and retained hold clearance. Do not rerun unchanged review or mark completed before merge.'
+  created_at: 2026-10-25T05:19:26.466921975Z
+  modified_at: 2026-10-25T05:19:26.466921975Z
 history:
 - id: 01a1706e-f5b3-7791-b3fb-0a12231356fc
   author: joe
