@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T02:08:29.032100054Z
-modified_at: 2026-10-25T03:09:47.519331392Z
+modified_at: 2026-10-25T03:10:12.221671786Z
 req_type: Task
 tags:
 - codex
@@ -112,6 +112,11 @@ comments:
   content: 'Reviewable non-draft PR #2915 opened at 3883aa67a60c35a2d7550324ab1d1ea2c0e51756: https://github.com/joemooney/aida/pull/2915 . Final shared-read reconciliation source committed/pushed. 19 Python fixtures green; prior 35 fast gates and 61 touched Rust tests green. Final new Rust regression, JSON audit completion, compile gate, rebuilt candidate and reconciled live dryrun remain. Runtime marker /tmp/task2347-implementation-ready.json has exact state/pending/logs; candidate /home/joe/ai/aida-task-2347/target/agent/aida currently predates shared-read fix and MUST be rebuilt before service use. No live service/queue. Formal independent AIDA review may begin now; implementation continues required checks. Do not queue unreconciled 580-ID backlog.'
   created_at: 2026-10-25T03:09:47.519331392Z
   modified_at: 2026-10-25T03:09:47.519331392Z
+- id: 01a17109-86fd-7b10-b11b-6a2cbf1c063a
+  author: joe
+  content: 'Correction to continuation comment13: source-advisor caution12 and implementer findings15-16 supersede the proposed initial580-ID wake. DO NOT queue unreconciled historical580. Existing explicit read metadata must be reconciled without new acknowledgements; fresh candidate3883aa67 plus separate review must prove this. Started normal aida queue work PR-2915 --role reviewer --no-human --vendor codex; awaiting enforcement/result. No installation or queue submission occurred.'
+  created_at: 2026-10-25T03:10:12.221671786Z
+  modified_at: 2026-10-25T03:10:12.221671786Z
 history:
 - id: 01a170d1-497a-7282-8dcb-91782bba7dc3
   author: joe

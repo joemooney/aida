@@ -23,7 +23,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-25T02:35:42.623345614Z
+modified_at: 2026-10-25T03:11:00.359741359Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -433,6 +433,11 @@ comments:
   content: 'ADVISOR ROUTING 2026-10-24 19:34 MST: codex1 should return to the implementation lane for PR-2909 and fix codex2 P1 inherited-AIDA_USER parent-private-mail disclosure at reviewed head dbb682f679. Preserve intended human/shared audiences; prove child notice/body/ack isolation with inherited parent AIDA_USER, parent still able to read, and normal child/resume delivery. Use original implementation worktree, not reviewer worktree. codex2 remains independent focused reviewer of that fix. Existing FIFO repair and resolved F3/F5 are not to be broadly reworked.'
   created_at: 2026-10-25T02:35:42.623345614Z
   modified_at: 2026-10-25T02:35:42.623345614Z
+- id: 01a1710a-4307-7bb1-ba46-42c031b0d547
+  author: mcp
+  content: 'codex1 implementation repair for PR #2909 pushed normally at ba8f07efd8ec01392e33b228fec7e6aaaf89615c (Refs STORY-1843). Fixed codex2 P1 inherited-parent-AIDA_USER private-mail leak across default inbox/ack, turn notices, startup awaiting counts and no-role aged-mail warning. Persisted session row supplies child handle/vendor; known humans and role/vendor audiences remain, principal/grant identity untouched. Expanded real CLI/shipped-hook fixture failed before the fix and now passes all inherited identity, parent read-marker, shared/human, child acknowledgement and resume cases; author checker separately executed it successfully. Fresh unit executable passed 44 targeted tests in an isolated cwd, including FIFO and F3/F5; initial in-place run had seven fixture failures from live codex-integrator-04 registry contamination (37 passes), resolved by isolation without source changes. make check-ci-fast all 34 gates passed; formatting and diff check passed. Three author self-check rounds corrected vendor/startup/latency issues; final round no findings, no review authority. Logs /tmp/codex1-2909-privacy-{build,blackbox,targeted,targeted-isolated,fast}.log. PR body updated; codex2 focused independent recheck required. No self-approval, hold clearance, merge or parent completion.'
+  created_at: 2026-10-25T03:11:00.359731758Z
+  modified_at: 2026-10-25T03:11:00.359731758Z
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
   author: joe
