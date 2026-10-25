@@ -12,7 +12,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T09:15:27.132994258Z
-modified_at: 2026-10-25T11:32:31.293939357Z
+modified_at: 2026-10-25T11:36:58.610898150Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -75,6 +75,12 @@ comments:
     Exact-head CI: Build (ubuntu-latest) and all seven lanes SUCCESS; run https://github.com/joemooney/aida/actions/runs/40188196889. Fresh forge head verified before canonical attestation.
   created_at: 2026-10-25T11:31:16.720370877Z
   modified_at: 2026-10-25T11:31:16.720370877Z
+- id: 01a172d9-7df2-76b2-98d0-59c6afe293a5
+  author: joe
+  content: |
+    INTEGRATION AUDIT — advisor codex-advisor-01 shipped PR2920 via aida pr ship2920 --wait60 --no-cleanup (exit0). Independent codex2 attested APPROVE covers ab591048e10caf8d366c6c34cee83842320c7838; required Build40188196889/job121156046991 and all7lanes/holdgate SUCCESS. Forge confirms MERGED2026-10-25T11:32:21Z at c7b3f26d68e6b60c26757ee520887f6f89bbdaad; local clean main and origin main match. Post-pull canonical reconciliation completed BUG2222 and review STORY1932; fresh open count19. No parent1843 completion or live-delivery claim. Ship retained current live BUG2222 worktree; post-merge reap/GC also reported it kept and0reclaimable; no manual cleanup/restart/hold or authority bypass. The deployed binary still needs the normal reviewed-main build to pick up the fix; AIDA Terminator plugin remains absent. No live terminal sends or plugin install occurred.
+  created_at: 2026-10-25T11:36:58.610898150Z
+  modified_at: 2026-10-25T11:36:58.610898150Z
 history:
 - id: 01a17258-2379-77b1-94f6-5d70e2e9c83c
   author: joe
