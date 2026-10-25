@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T22:12:54.027870933Z
-modified_at: 2026-10-25T11:57:17.571020578Z
+modified_at: 2026-10-25T11:57:17.863225474Z
 req_type: Bug
 tags:
 - id-allocation
@@ -439,6 +439,14 @@ comments:
     No author edits, Cargo/build/native rerun, lease/grant/authority changes, real HOME enrollment, transport/live queue/mail probes, hold clearance or formal verdict. Full signed S2/S3 and1742/1843 boundaries remain retained. Only requested advisory notifications follow.
   created_at: 2026-10-25T11:57:17.571020578Z
   modified_at: 2026-10-25T11:57:17.571020578Z
+- id: 01a172ec-18a7-7b01-95e3-b7c7cb3f1db3
+  author: ai:codex:joe
+  content: |
+    Grounded S2 alias disposition: author's checker independently reproduced WORK item -> synthetic HOME merge-gate -> db retire-legacy-ids deleting the only old-node alias (/tmp/bug2017-s2-authorcheck-retire-alias.json). Existing Requirement has only native spec_id and canonical agreed_id, both with established meanings; swapping agreed_id into historical alias or emptying it loses a supported lookup. Full multi-history aliases would broaden schema/cache/collision ownership substantially.
+
+    Concrete bounded choice implemented for advisor sufficiency: HOME merge-gate continues canonical agreed display and permanently retains the native node alias/UUID/content. Destructive db retire-legacy-ids now explicitly refuses any node-ID collapse before writes, including when called on HOME; under the locked closure it never collapses a newly introduced node alias either. WORK mutation also refuses. Existing legacy global-to-global collapse concurrency fixture remains as positive writer-lock proof, with exact private HOME and a global native fixture; new node-alias test asserts both lookups/UUID/object bytes/refs unchanged. Documentation explains the refusal; no claim that unsupported destructive retirement succeeded. Native WORK/HUB/HOME contract also invokes retirement expecting refusal and checks old lookup survives. This preserves all signed new WORK old-node identities without repurposing legacy fields or adding an unowned alias engine. Please rule if you require a distinct additive historical-alias implementation beyond this safe refusal; remaining eligible tests/bootstrap work continues now.
+  created_at: 2026-10-25T11:57:17.863225474Z
+  modified_at: 2026-10-25T11:57:17.863225474Z
 history:
 - id: 01a16f08-1847-70c2-a9ec-772710162546
   author: joe
