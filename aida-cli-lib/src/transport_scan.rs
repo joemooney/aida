@@ -684,19 +684,25 @@ impl Batch {
         std::thread::spawn(move || loop {
             let mut header = Vec::new();
             let response = (|| -> Result<(String, Vec<u8>)> {
-                (&mut stdout).take(256).read_until(b'\n', &mut header)?;
-                let header = std::str::from_utf8(&header)?;
+                // Fixed, value-free diagnostics only; `get` passes them on.
+                let incomplete =
+                    || anyhow::anyhow!("Transport graph incomplete or unsupported; refused");
+                (&mut stdout)
+                    .take(256)
+                    .read_until(b'\n', &mut header)
+                    .map_err(|_| incomplete())?;
+                let header = std::str::from_utf8(&header).map_err(|_| incomplete())?;
                 let mut fields = header.trim_end().split(' ').skip(1);
                 let (Some(kind), Some(size), None) = (fields.next(), fields.next(), fields.next())
                 else {
                     bail!("Transport graph object is missing");
                 };
-                let size: usize = size.parse()?;
+                let size: usize = size.parse().map_err(|_| incomplete())?;
                 if size > MAX_BYTES {
                     bail!("Transport object exceeds size limit");
                 }
                 let mut bytes = vec![0; size + 1];
-                stdout.read_exact(&mut bytes)?;
+                stdout.read_exact(&mut bytes).map_err(|_| incomplete())?;
                 if bytes.pop() != Some(b'\n') {
                     bail!("Invalid graph object framing");
                 }
@@ -722,13 +728,7 @@ impl Batch {
             .map_err(|_| anyhow::anyhow!("Transport graph reader failed"))?;
         let wait = self.deadline.saturating_duration_since(Instant::now());
         let (actual, bytes) = match self.rx.recv_timeout(wait) {
-            Ok(response) => response.map_err(|error| {
-                if error.to_string().contains("size limit") {
-                    anyhow::anyhow!("Transport object exceeds size limit")
-                } else {
-                    anyhow::anyhow!("Transport graph incomplete or unsupported; refused")
-                }
-            })?,
+            Ok(response) => response?,
             Err(_) => {
                 self.group.signal(libc::SIGKILL);
                 bail!("Transport scan deadline exceeded");
