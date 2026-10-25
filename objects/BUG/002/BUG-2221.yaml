@@ -1,0 +1,31 @@
+id: 01a171c8-6a5d-7073-80cf-9dfcd9667c53
+spec_id: BUG-2221
+agreed_id: BUG-2221
+title: aida show again exceeds its unchanged latency budget on live94124569c9 (27/40 calls)
+description: |-
+  ## Symptom and current evidence
+  Advisor performance-guard-route disposition: real regression, not a budget change. Native doctor performance JSON on 2026-10-25 reports 168/241 in-lineage show calls over1000ms (69.710%, tolerance10%), worst6434ms over the5000ms ceiling. LIVE94124569c9 alone has27/40 overbudget (67.5%); this is not solely stale binary history. Matching schedule trip performance-guard@2026-10-25T06:33:36.771748653Z records154/226,68.142%,worst6434ms. Existing .aida/config.toml budget is1000ms/ceiling5000ms; keep it.
+  Fresh non-instrumented show TASK-2347 --format json calls measured1445,1099,1005ms, then2437,2412ms. Two --no-git calls measured383 and1952ms, so Git linkage is a candidate contributor, not a proven sole cause. All calls exited0. Fleet contention exists; isolate it instead of assuming it explains every slow call.
+  A separate strace -f -c summary (instrumented, NOT a wall-time benchmark) recorded37618openat and14224getdents64 calls,78wait4. Evidence /tmp/advisor-performance-current.json, /tmp/advisor-show-latency-probe.json, /tmp/advisor-show-latency-isolation.json, /tmp/advisor-show-syscall-summary.txt. Durable numeric evidence is copied here so temporary files are not required for triage.
+  ## Prior work and scope
+  BUG-1801 completed the zero-refresh-wait canonical show path, delegated rebuild and isolated writer fixtures. Related prior guard bugs are completed, so capture this current recurrence separately rather than reopening completed credit. Inspect show entry/startup, trace::collect_git_linkage_until and scan_trace_graph/store_sync budgets plus default/no-git render paths. Root cause is UNPROVEN; do not invent a cache/lock explanation from syscall totals.
+  ## Acceptance
+  1. Pin live/source artifact and reproduce the current slow path with bounded stage timing, comparing default and --no-git under representative fleet load and controlled fixtures; identify the actual responsible calls and owner.
+  2. Fix that path without changing1000ms budget,10%tolerance,5000msceiling, lineage filtering, security/authority checks, canonical object correctness or truthful incomplete linkage/stale labels. Preserve BUG-1801 bounded writer behavior and existing show formats.
+  3. Add a decisive hermetic regression for the identified mechanism using existing load-aware/child-process test idioms; report before/after timings on the same shape/artifact conditions. Do not add an unexplained fragile wall-clock assertion.
+  4. Demonstrate the reproduced slow case under1000ms after the fix, and collect fresh lineage-scoped telemetry for the unchanged guard; distinguish old24h samples from new-build evidence. Do not declare an old-window guard green by relabeling binaries or deleting samples.
+  Independent review and normal PR gates required. Local verification: one targeted regression run plus check-ci-fast; touched/compile only shared test infra or>10files. No broad Cargo or slot bypass. Implementer first produces narrow diagnosis if the source change remains unclear.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-25T06:38:42.269077518Z
+modified_at: 2026-10-25T06:38:42.269077518Z
+req_type: Bug
+filed_at:
+  code_sha: 94124569c9b14617a4049909ddbefad5b82a846d
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 94124569c9
+  vendor: codex
