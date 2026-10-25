@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T17:15:51.947160848Z
-modified_at: 2026-10-24T18:45:23.347651970Z
+modified_at: 2026-10-25T01:29:22.086833291Z
 req_type: Story
 relationships:
 - rel_type:
@@ -342,6 +342,11 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a170ad-361d-7590-b9c2-9c767d5aa8e3
+  author: joe
+  timestamp: 2026-10-25T01:29:22.205237157Z
+  session_id: 01a1709f69bf
+  changes: []
 filed_at:
   code_sha: a9e78d34914e43b30fc9d2b590d83ab96feb48b2
   branch: main
@@ -354,7 +359,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: Slice 1 implementation is substantially correct and matches the signed sketch + signoff conditions, but CI is red at the reviewed head (Build, cli-0, contracts, lib-0, lib-1) and --scope dispatch silently implies ship-held coverage
+  detail: Signed tick/serve split and guards pass, but log symlinks disclose outside files, worker claims are not fenced, stopped mandates can revive, and cleanup/liveness can discard protected work.
   recovery_hint: address the review findings, move STORY-1917 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-10-24T18:45:23.347651970Z
+  shelved_at: 2026-10-25T01:29:22.086833291Z
