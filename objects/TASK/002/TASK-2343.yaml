@@ -10,12 +10,12 @@ description: |
   Test: write a request JSON with an extra top-level key and an extra key inside the action object, and assert load_pair refuses both.
 
   Raised in review of PR-2905: https://github.com/joemooney/aida/pull/2905#issuecomment-6390394038
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-24T22:36:25.133277125Z
-modified_at: 2026-10-25T04:52:17.674882013Z
+modified_at: 2026-10-25T04:52:21.550282672Z
 req_type: Task
 tags:
 - from-review:PR-2905
@@ -27,6 +27,14 @@ comments:
   content: 'PROXY DECISION for joe: Approve adversarial persisted-JSON tests for top-level and tagged-action unknown fields; any parser repair must retain strict rejection.'
   created_at: 2026-10-25T04:52:17.674882013Z
   modified_at: 2026-10-25T04:52:17.674882013Z
+history:
+- id: 01a17167-0dae-72d3-a87d-24d9abb31ea7
+  author: joe
+  timestamp: 2026-10-25T04:52:21.550279342Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 9457e495247a3c9de111d15507fabd2cd0923079
   branch: pr-2905
