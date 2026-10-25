@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T02:08:29.032100054Z
-modified_at: 2026-10-25T03:20:59.418009625Z
+modified_at: 2026-10-25T03:32:13.721686581Z
 req_type: Task
 tags:
 - codex
@@ -158,6 +158,11 @@ comments:
   content: Final scoped candidate build completed3m26 and smoke passed, not promoted. Includes checker-cleared staged LOCAL-watermark correction (still needs legitimate doer commit). Real read-only cross-worktree preview now26 remaining IDs /1608bytes, down from580; queue_submitted=false, no acknowledgements or baseline changes. Evidence /tmp/task2347-reconciled-preview-3tdvfwvu/result.json . Required compile gate now active normally /tmp/task2347-compile-gates-final.log . Ready marker updated. Do not silently baseline or queue remaining26; advisor must inspect/select backlog before enable. Formal review/implementer authority remain blockers.
   created_at: 2026-10-25T03:20:59.418009625Z
   modified_at: 2026-10-25T03:20:59.418009625Z
+- id: 01a1711d-b119-79b1-8723-c6d9920c8532
+  author: joe
+  content: 'Required make check-ci-compile PASSED all workspace test targets (658.5s), log /tmp/task2347-compile-gates-final.log . Ran newly compiled final staged-source mailbox_wake suite:5/5 PASS including late canonical private-mail regression, log /tmp/task2347-final-snapshot-tests.log . Final fast gates rerun active. All implementation verification now green apart from final gate completion. Exact remaining blockers: legitimate doer must commit/push staged LOCAL-watermark fix (advisor grant currently refuses), formal independent AIDA review, advisor inspection/selection of26 remaining unread IDs, reviewed immutable runtime install and one synthetic idle wake. No mailbox ack or live queue/service.'
+  created_at: 2026-10-25T03:32:13.721686581Z
+  modified_at: 2026-10-25T03:32:13.721686581Z
 history:
 - id: 01a170d1-497a-7282-8dcb-91782bba7dc3
   author: joe
