@@ -23,7 +23,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-25T06:21:17.935852898Z
+modified_at: 2026-10-25T06:35:37.538380741Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -573,6 +573,11 @@ comments:
   content: 'AUTHORIZED ORCHESTRATION METADATA REPAIR23:18: native grant records match current kernel PID/start, are unrevoked/unexpired:2691165 implementer,3369882 reviewer. Corrected only their AIDA registry role/spec labels through agent register, retaining handles codex-integrator-05 andcodex2; no grant/authority/session/handle-name changes. This repairs role-addressed reader metadata that previously labelled the implementer integrator and reviewer implementer. Code1 currentBUG2017, code2 independentTASK2347 reviewer. Initial broad JSON scan encountered a non-grant shape; narrow exact-record validation passed and is the evidence relied on. Fleet runtime snapshot .aida/fleet-watch/state.json records unmanaged native sessions separately from empty managed ps; no completion/zero-work inference from ps alone.'
   created_at: 2026-10-25T06:21:17.935852898Z
   modified_at: 2026-10-25T06:21:17.935852898Z
+- id: 01a171c5-98c2-76a0-ae6c-b8e89e6ba8d4
+  author: joe
+  content: 'ADVISOR stale attention-state reconciliation: PR2909 approved atba8f07efd8ec01392e33b228fec7e6aaaf89615c; the inherited AIDA_USER private-mail finding is resolved. Signed-v2 shared-inbox/retention/relay scope and preparation TASK2345/2346 remain approved and incomplete. Returning parent from Needs Attention to Approved for remaining authorized work. This does not clear any hold, waive supervision/protected-floor gates, approve unreviewed implementation, or claim parent completion. The original failure and independent resolution remain in the audit trail.'
+  created_at: 2026-10-25T06:35:37.538380741Z
+  modified_at: 2026-10-25T06:35:37.538380741Z
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
   author: joe
