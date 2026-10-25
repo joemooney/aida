@@ -32,12 +32,17 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-25T16:23:29.497775220Z
-modified_at: 2026-10-25T16:24:57.789396170Z
+modified_at: 2026-10-25T16:25:00.692519004Z
 req_type: Task
 tags:
 - ship-deadline
 - source-diagnosed
 - testing
+relationships:
+- rel_type: References
+  target_id: 01a113ff-b37a-7e43-9a25-2611b8c00bf2
+  created_at: 2026-10-25T16:25:00.692514801Z
+  created_by: joe
 comments:
 - id: 01a173e1-1c27-7be2-b965-f5c30a7e3c41
   author: joe
@@ -56,6 +61,10 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a173e1-3809-7db0-b50e-24116f7d18e7
+  author: joe
+  timestamp: 2026-10-25T16:25:02.217910937Z
+  changes: []
 filed_at:
   code_sha: 54c64e26a58810f213f0a0fa1720a69bcce37ea3
   branch: main
