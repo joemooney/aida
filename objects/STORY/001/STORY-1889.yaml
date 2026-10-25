@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T15:33:51.496539087Z
-modified_at: 2026-10-25T05:07:35.116067193Z
+modified_at: 2026-10-25T05:26:24.421929965Z
 req_type: Story
 tags:
 - architecture
@@ -206,6 +206,11 @@ comments:
   content: '-'
   created_at: 2026-10-25T01:13:02.740322040Z
   modified_at: 2026-10-25T01:13:02.740322040Z
+- id: 01a17186-38eb-70c2-a1ac-4902846c9f34
+  author: joe
+  content: Advisor verified PR2917 F1 marker writer outside protected boundary; brief20261025T050758Z and agy1 rework source observed. Metadata only; preserve existing lane/stack, no hold release or new launch.
+  created_at: 2026-10-25T05:26:24.235911004Z
+  modified_at: 2026-10-25T05:26:24.235911004Z
 history:
 - id: 01a15f19-1b8d-7a60-bd9c-acf0c42193fc
   author: joe
