@@ -30,8 +30,7 @@
 // trace:STORY-1917 | ai:agy
 
 use super::*;
-use crate::gate::mandate::{Mandate, Scope};
-use crate::mandate::{self};
+use crate::gate::mandate::{self, Mandate, Scope};
 use chrono::Duration;
 use std::collections::BTreeSet;
 use std::os::unix::fs::PermissionsExt;

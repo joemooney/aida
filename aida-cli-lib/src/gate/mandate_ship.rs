@@ -253,7 +253,10 @@ fn collect_on_stable_store<S, T>(
         if attempt >= MANDATE_COLLECT_ATTEMPTS {
             return Err(
                 crate::gate::mandate::MandateRefusal::TraceEvidenceUnreadable(if dirty {
-                    format!("{} ({attempt} attempts)", crate::mandate_traces::StoreDirty)
+                    format!(
+                        "{} ({attempt} attempts)",
+                        crate::gate::mandate_traces::StoreDirty
+                    )
                 } else {
                     format!(
                         "the store changed while collecting exclusions ({attempt} attempts); retry"
@@ -347,7 +350,7 @@ pub(crate) fn mandate_ship_cover(
             let _ = crate::pr_cmd::fetch_ship_refs(main_worktree, &info.base_ref, branch);
         }
     }
-    let trace_evidence = crate::mandate_traces::collect_pr(
+    let trace_evidence = crate::gate::mandate_traces::collect_pr(
         main_worktree,
         &info.base_ref,
         head.as_deref().unwrap_or(""),
@@ -368,14 +371,14 @@ pub(crate) fn mandate_ship_cover(
     // BUG-2195 / TASK-2019: a dirty store is retried within the bound, and
     // two snapshots are compared by the exclusion reader's stability rule.
     // trace:TASK-2067 | ai:antigravity
-    let snapshot = || match crate::mandate_traces::store_snapshot(&store_root) {
+    let snapshot = || match crate::gate::mandate_traces::store_snapshot(&store_root) {
         Ok(snap) => Ok(Some(snap)),
-        Err(e) if e.is::<crate::mandate_traces::StoreDirty>() => Ok(None),
+        Err(e) if e.is::<crate::gate::mandate_traces::StoreDirty>() => Ok(None),
         Err(e) => Err(unreadable(e)),
     };
-    let stable = |before: &crate::mandate_traces::StoreSnapshot,
-                  after: &crate::mandate_traces::StoreSnapshot| {
-        crate::mandate_traces::store_snapshot_stable(&store_root, before, after)
+    let stable = |before: &crate::gate::mandate_traces::StoreSnapshot,
+                  after: &crate::gate::mandate_traces::StoreSnapshot| {
+        crate::gate::mandate_traces::store_snapshot_stable(&store_root, before, after)
     };
     let (specs, ledger) = collect_on_stable_store(
         snapshot,

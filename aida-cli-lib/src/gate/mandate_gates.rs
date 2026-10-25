@@ -273,14 +273,12 @@ pub(crate) fn gate_reason(
 /// path filter cannot see which table a hunk touches. This floor is never
 /// read from config, so no layer can shrink it (STORY-1888).
 // trace:STORY-1700 | ai:claude
+// trace:STORY-1889 | ai:agy
 pub(crate) const GATE_PROTECTED_PATHS: &[&str] = &[
     ".aida/config.toml",
+    // Retained while STORY-1917 finishes on dispatch.rs; shared dispatch
+    // extraction completes after STORY-1917 lands (STORY-1889 advisor signoff).
     "aida-cli-lib/src/dispatch.rs",
-    "aida-cli-lib/src/mandate_drive.rs",
-    "aida-cli-lib/src/mandate_traces.rs",
-    "aida-cli-lib/src/relay_launch.rs",
-    // STORY-1887: the batch that drives human-gated merges. trace:STORY-1887 | ai:claude
-    "aida-cli-lib/src/pr_ship_batch.rs",
     // Gate authority, code and its tests together (STORY-1889).
     "aida-cli-lib/src/gate/",
     // The drift ratchet that keeps this list complete (STORY-1888 C1).

@@ -6,7 +6,10 @@
 
 use super::*;
 use crate::gate::fleet_lanes::{LaneEvidence, SeatKind};
+use crate::mandate_drive::*;
+use anyhow::Result;
 use std::cell::Cell;
+use std::collections::BTreeSet;
 
 fn ok_human() -> Result<()> {
     Ok(())
@@ -712,7 +715,7 @@ fn pr_touching_gate_paths_is_gated() {
     let policy = Default::default();
     let ledger = Ok(Default::default());
     let hold = crate::gate::mandate::HoldFacts::None;
-    for path in [".aida/config.toml", "aida-cli-lib/src/mandate_traces.rs"] {
+    for path in [".aida/config.toml", "aida-cli-lib/src/dispatch.rs"] {
         let paths = vec!["README.md".to_string(), path.to_string()];
         let c = ship_check(&state, &policy, &ledger, &hold, Some(&paths));
         assert_eq!(
@@ -728,7 +731,11 @@ fn pr_touching_gate_paths_is_gated() {
     }
     for path in [
         "aida-cli-lib/src/gate/mandate.rs",
+        "aida-cli-lib/src/gate/mandate_drive.rs",
         "aida-cli-lib/src/gate/mandate_ship.rs",
+        "aida-cli-lib/src/gate/mandate_traces.rs",
+        "aida-cli-lib/src/gate/pr_ship_batch.rs",
+        "aida-cli-lib/src/gate/relay_launch.rs",
         "aida-cli-lib/src/gate/rework_hold_release.rs",
         "aida-cli-lib/src/gate/merge_hold_core.rs",
         "aida-cli-lib/src/gate/review_authority.rs",
@@ -1610,7 +1617,7 @@ fn a_mandate_cannot_release_a_rework_hold_on_a_pr_touching_the_gates() {
         kind: crate::gate::merge_hold_core::HoldReasonKind::Rework,
         legacy: false,
     };
-    for path in [".aida/config.toml", "aida-cli-lib/src/mandate_traces.rs"] {
+    for path in [".aida/config.toml", "aida-cli-lib/src/dispatch.rs"] {
         let paths = vec![path.to_string()];
         let c = ship_check(&state, &policy, &ledger, &hold, Some(&paths));
         assert_eq!(
@@ -1619,6 +1626,23 @@ fn a_mandate_cannot_release_a_rework_hold_on_a_pr_touching_the_gates() {
                 crate::gate::mandate_gates::GateMatch {
                     path: path.into(),
                     entry: path.into(),
+                    source: crate::gate::mandate_gates::PathSource::BuiltIn,
+                }
+            ))
+        );
+    }
+    for path in [
+        "aida-cli-lib/src/gate/mandate_traces.rs",
+        "aida-cli-lib/src/gate/mandate_drive.rs",
+    ] {
+        let paths = vec![path.to_string()];
+        let c = ship_check(&state, &policy, &ledger, &hold, Some(&paths));
+        assert_eq!(
+            crate::gate::mandate::rework_release_decision(&c),
+            Err(MandateRefusal::TouchesGates(
+                crate::gate::mandate_gates::GateMatch {
+                    path: path.into(),
+                    entry: "aida-cli-lib/src/gate/".into(),
                     source: crate::gate::mandate_gates::PathSource::BuiltIn,
                 }
             ))
@@ -1735,7 +1759,7 @@ fn mandate_status_shows_counts_and_the_last_ten_actions_newest_first() {
 // trace:STORY-1700.Durability | ai:claude
 #[test]
 fn session_start_hook_prints_the_mandate_line() {
-    let hook = include_str!("../../../aida-core/templates/hooks/aida-session-context.sh");
+    let hook = include_str!("../../../../aida-core/templates/hooks/aida-session-context.sh");
     assert!(hook.contains("aida mandate status --line"));
     assert!(hook.contains("[ -n \"$mandate_note\" ] && printf '%s\\n' \"$mandate_note\""));
 }

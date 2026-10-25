@@ -2981,7 +2981,7 @@ fn bug_2180_reviewer_request_changes_leaves_store_worktree_clean() {
         "the shelve is written and left for the host: {}",
         porcelain()
     );
-    assert!(crate::mandate_traces::store_snapshot(&store_root).is_err());
+    assert!(crate::gate::mandate_traces::store_snapshot(&store_root).is_err());
 
     // The host launcher, after the reviewer exits.
     let committed =
@@ -2995,7 +2995,7 @@ fn bug_2180_reviewer_request_changes_leaves_store_worktree_clean() {
         "",
         "reviewer request-changes left the store dirty"
     );
-    assert!(crate::mandate_traces::store_snapshot(&store_root).is_ok());
+    assert!(crate::gate::mandate_traces::store_snapshot(&store_root).is_ok());
     let reloaded = aida_core::GitBackend::new(&store_root)
         .unwrap()
         .load()

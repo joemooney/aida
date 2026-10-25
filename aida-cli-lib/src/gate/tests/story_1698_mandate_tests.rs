@@ -1498,7 +1498,7 @@ fn mandate_ship_cover_passes_committed_trace_ids_to_the_decision() {
     // that setup before exercising the production clean-store boundary.
     git(&store, &["add", "-A"]);
     git(&store, &["commit", "-qm", "seed fixture seat roster"]);
-    assert!(crate::mandate_traces::store_snapshot(&store).is_ok());
+    assert!(crate::gate::mandate_traces::store_snapshot(&store).is_ok());
     let mut mandate = active(false);
     mandate.principal = crate::current_user_id(None);
     mandate.issued_at = Utc::now() - Duration::minutes(1);

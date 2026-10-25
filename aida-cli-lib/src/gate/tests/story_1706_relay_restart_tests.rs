@@ -5,8 +5,11 @@
 // trace:STORY-1706 | ai:claude
 
 use super::*;
-use crate::relay_launch::{self as rl, RestartLine};
+use crate::gate::relay_launch::{self as rl, RestartLine};
+use crate::mandate_drive::*;
+use anyhow::Result;
 use std::cell::{Cell, RefCell};
+use std::collections::BTreeSet;
 use std::os::unix::fs::PermissionsExt;
 
 /// Each fixture's run id is unique: the orphan-session check scans every

@@ -198,7 +198,6 @@ mod lane_liveness;
 // trace:TASK-2053 | ai:claude
 mod loose_objects;
 mod rel_cards;
-mod relay_launch; // trace:STORY-1706 | ai:claude
 mod relay_stall;
 // trace:TASK-2347 | ai:codex
 mod codex_mail_health;
@@ -450,7 +449,6 @@ mod merge_hold;
 mod mandate;
 mod mandate_drive;
 mod mandate_gates;
-mod mandate_traces;
 mod merge_lock;
 mod metrics;
 mod metrics_cmd;
