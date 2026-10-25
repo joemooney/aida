@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T17:15:51.947160848Z
-modified_at: 2026-10-25T14:41:36.330391833Z
+modified_at: 2026-10-25T14:51:33.735946951Z
 req_type: Story
 relationships:
 - rel_type:
@@ -557,6 +557,24 @@ comments:
     The changes have a reasonable non-completing slice boundary, but not demonstrated satisfaction of all seven children as committed. Any publication/review description must retain these gaps and parent scope. Unimplemented checkpoint3/R6/Q2 is intentionally NOT a finding against this partial checkpoint. Parent remains incomplete; no child completion, approval, claim, hold clearance or verdict. Preserve signed1917-first/1889-dispatch-extraction-after-landed-review ordering. Advisor owns disposition.
   created_at: 2026-10-25T14:41:36.330391833Z
   modified_at: 2026-10-25T14:41:36.330391833Z
+- id: 01a1738b-a3e7-7120-a2da-15f44522b39a
+  author: joe
+  content: |-
+    ADVISOR SOURCE-PREVIEW DISPOSITION — STORY-1917 local checkpoint e3db5cf7fb9d7c6300a27b4adbe59493e8499e29. Read complete /tmp/codex2-story1917-e3db-checkpoint-preview.txt and independently checked the immutable inventory/migration paths. This is not a forge verdict, new worker, formal approval or a request to implement checkpoint3 twice. Current R6 WIP was separately qualified by reviewer; preserve it and current source ownership.
+    Required bounded corrections to the already-signed R4/Q1 boundary:
+    1. Sticky recovery evidence: inspect_dispatch_inventory_readonly loads prior_by_id but builds stems only from requests/results; (Missing,Missing) contributes no fence. reconcile_inventory_locked then deletes recovery.json when inv.fences is empty. Loss of the remaining record half is not positive recovery. Retain validated prior unresolved fences even when both halves are absent, with their target/dedupe/mandate/cap meaning; no inferred Pending/Failed/replay or silent capacity release. Extend the actual detached-worker missing-result fixture to delete the remaining request after fence persistence, reconcile/restart, and prove fence, duplicate refusal, occupied cap and no replay survive. Preserve explicit recovery ownership and all shared admission consumers.
+    2. Legacy activation: acquire_dispatch_lock automatically flocks then unlinks the legacy tick.lock inode and returns a v2 guard after dropping legacy_guard. An old native process can already have the old FD open but not yet flocked; it can lock the orphan later while new mutators lock v2. Fresh pathname EISDIR does not fence that FD or establish quiescence. Ordinary mutation must not silently perform this migration. Implement the already-signed explicit quiescent activation boundary with actual old-native open-before-flock/waiter and all old mutator entrypoint evidence; an unlocked flock or an untested assertion of quiescence is insufficient. Until that boundary is established, legacy activation refuses with concrete recovery guidance; do not claim compatibility/parent complete with the phase missing. Verify pathname-to-handle identity before destructive replacement under the accepted boundary. No broad daemon/authority framework, OS bypass, forced cleanup, signal/PTY injection or new policy. Report exact symbols/feasibility obstacle to advisor before broadening the agreed mechanism.
+    Required acceptance evidence already named by children:
+    - TASK-2338: actual expired-submission refusal, not only missing/stopped mandate or replacement-at-execution.
+    - TASK-2339: distinct wrong-seat, principal mismatch and missing reviewer delegation cases, with a valid baseline so each tested condition is actually reached.
+    - TASK-2343: persisted top-level/request-action-variant/result unknown-field rejection. Static serde attributes are not the requested parser regression.
+    - TASK-2340/R1: assert persisted Refused reason and principal as well as cardinality/original mandate binding.
+    - R5: mixed and serve-only pending requests through the actual scheduler predicate/tick integration, not only the expression evaluator; pending counting grants no execution authority.
+    Retain positive default-branch checks, scope rendering, result-first publication/exact cleanup, tri-state process identity, cap/claim fences and non-replay, plus full checkpoint3 R6/Q2 native post-wait/pre-side-effect gates. The checkpoint is a coherent possible non-completing slice boundary, but all seven children are not yet independently proven complete. Keep parent and unproved children open; no source-only completion or stale-WIP approval. Do not turn deliberately unimplemented checkpoint3 into an unrelated new defect.
+    Continue in the existing agy2 worktree/branch. STORY-1889 shared dispatch extraction remains AFTER independently reviewed, landed current1917 behavior; no competing stale dispatch rewrite. If source has already corrected a preview issue, show exact changed commit/diff/test rather than duplicate work. One affected dispatch/core filter plus fast local gates; touched/compile only actual shared test infrastructure or >10 changed files. Budget long Cargo with AIDA_CARGO_TIMEOUT and background mode; no workspace full runtime, slot bypass or outer timeout. Final actual pushed-head independent review and green CI still required.
+    Evidence paths and exact lines are preserved in the reviewer report. This decision authorizes correction of retained acceptance; it does not approve source, waive any grant/hold gate, enact a live lock migration, change production dispatcher state, mint a mandate or permit real service/queue probes.
+  created_at: 2026-10-25T14:51:33.735946951Z
+  modified_at: 2026-10-25T14:51:33.735946951Z
 history:
 - id: 01a16c5e-51c4-73b2-b8a3-3b764dc7e5cd
   author: joe
