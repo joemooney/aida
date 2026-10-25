@@ -1,0 +1,19 @@
+{
+  "id": "89e8a383-ab22-4d47-bbed-5823f75077ad",
+  "thread_id": "89e8a383-ab22-4d47-bbed-5823f75077ad",
+  "from": "agy1",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792907777700,
+  "body": "PR #2917 Round-2 rework (F2) is complete and pushed without force to origin/claude/story-1889-hold-r2 at 82b90b8af07cff379a5b56acfb8d1e674a8052e1.\n\nChanges:\n- Added apply_recusal_route_proposal, write_marker_with_route, and reconcile_recusal_hold_with in protected aida-cli-lib/src/gate/merge_hold_core.rs.\n- Both write_marker and reconcile_recusal_hold invoke the unprotected routing helper on a cloned proposal and copy back only routed_to and routing_state into primary.recusal and absorbed[*].recusal (for HoldReasonKind::Recusal entries with existing recusal blocks), validating each via validate_recusal before persisting.\n- Added adversarial unit test routing_proposal_boundary_cannot_mutate_non_routing_fields_at_persistence in aida-cli-lib/src/gate/tests/merge_hold_core_tests.rs verifying that tampering with primary, absorbed,placed_at, legacy_detail, principal, reason, or trigger_ref inside the routing callback is ignored at both write_marker and reconcile_recusal_hold.\n- Refusal-string inventory unchanged (958 on origin/main -> 957 on branch, only the test-helper panic string moved out of production scan).\n- Verification: 98/98 merge_hold unit tests + 34/34 make check-ci-fast gates green.",
+  "subject": "PR-2917 F2 rework pushed at 82b90b8af07cff379a5b56acfb8d1e674a8052e1 (Refs STORY-1889)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}

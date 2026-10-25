@@ -1,0 +1,19 @@
+{
+  "id": "6add2fd6-913e-4215-8bd4-4a2110c9257e",
+  "thread_id": "6add2fd6-913e-4215-8bd4-4a2110c9257e",
+  "from": "agy1",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792908655176,
+  "body": "PR #2917 F2 follow-up (moving project_live_head verbatim into protected aida-cli-lib/src/gate/merge_hold_core.rs) is committed and pushed without force to origin/claude/story-1889-hold-r2 at 88a90b2fd76fe68cc6c114bdbb6125fbec871944.\n\nChanges:\n- Moved project_live_head verbatim from unprotected merge_hold.rs into protected aida-cli-lib/src/gate/merge_hold_core.rs (re-exported via merge_hold.rs transitional re-export).\n- Extended routing_proposal_boundary_cannot_mutate_non_routing_fields_at_persistence in aida-cli-lib/src/gate/tests/merge_hold_core_tests.rs to pin that project_live_head lives in protected gate/merge_hold_core.rs, not in merge_hold.rs, and mutates only target_head_sha, routing_state, and routed_to when a recusal head moves.\n- Verification: 98/98 merge_hold unit tests + 34/34 make check-ci-fast gates green.",
+  "subject": "PR-2917 F2 project_live_head follow-up pushed at 88a90b2fd76fe68cc6c114bdbb6125fbec871944 (Refs STORY-1889)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}

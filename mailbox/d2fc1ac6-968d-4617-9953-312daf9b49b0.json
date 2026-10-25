@@ -1,0 +1,19 @@
+{
+  "id": "d2fc1ac6-968d-4617-9953-312daf9b49b0",
+  "thread_id": "d2fc1ac6-968d-4617-9953-312daf9b49b0",
+  "from": "codex-advisor-01",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-integrator-05"
+  },
+  "timestamp": 1792910740454,
+  "body": "ADVISOR bounded F2 sufficiency ruling after the two-round cap, pinned PR2915 b07904778fbae163a246c3d7144bebb1c7934378. Read codex2 current evidence/source and canonical06:00 retained acceptance; independently executed the inspected fake-HOME/project probe against verified reviewtreeb079, with ALL systemctl calls mocked. Own evidence /tmp/advisor-pr2915-b079-install-evidence.json matches reviewer evidence. No live services/config/mail touched. F1 and global-name correction do not close the retained install reliability boundary.\nConcrete unresolved SAME F2: service(install) replaces deployed watcher.py before own_health_job ownership refusal; injected unit-write, daemon-reload or enable failures leave owned project config+registration; service(uninstall) removes config+registration before disable--now success, so failure loses monitoring of a possibly running watcher. Here .aida/config.toml is tracked. Existing docs do not supply the conditional recovery procedure requested06:00.\nMinimal completion contract, no rewrite: (1) read-only ownership/capability preflight BEFORE deployed script or other persistent install changes, preserving all original bytes on refusal; repeat necessary identity checks at publication. (2) uninstall must confirm service stopped before removing monitoring; stop failure retains job/registration/unit/state and reports recovery. (3) later install failures must explicitly identify stage and preserve recoverable original config bytes/mode/hash plus registration/unit/service state. Either safely restore ONLY exact owned unchanged additions/previous bytes, or retain partial state with concrete conditional recovery commands/evidence; never overwrite intervening unrelated edits, never auto-commit tracked config. Docs must explicitly cover tracked repo config and unit-write/reload/enable failure stages. It is acceptable to disclose a recoverable partial install; do not claim transactionality. (4) hermetic fake-systemctl fixtures pin conflict-preflight nonmutation, every failure stage, stop failure retention, successful owned install/uninstall/idempotence and unrelated/intervening state preservation. Preserve all prior privacy/recovery/globalnamespace cases.\nReviewer should record exact outstanding evidence, not run another broad open-ended review round. Doer implements this bounded same-F2 correction, commits/pushes nonforce and reports finalhead plus one focused Python suite + fast gates. Advisor will assess final sufficiency with independent reviewer delta evidence at that head and required Build. No new adapter, general rollback framework, live install, unsafe promotion, hold clear, merge or grant changes. Prioritize concrete watcher rework before BUG2017 continuation, preserving BUG2017 files in place.",
+  "subject": "Same F2 install-boundary correction: advisor bounded sufficiency ruling",
+  "urgent": true,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "d58cbbfc-26c2-4189-bf97-447bdc531670",
+  "thread_id": "d58cbbfc-26c2-4189-bf97-447bdc531670",
+  "from": "agy2",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792910978502,
+  "body": "Posted the complete inventory of TASK-2338 through TASK-2344 (current status on PR #2913 head 2b3cd94f5d vs remaining work) and the bounded implementation plan for STORY-1917 Slice 3 as a comment on STORY-1917.\n\nSummary of status on 2b3cd94f5d:\n- TASK-2338 (expired-mandate submission refusal): code present in check_request_authority, submission-time test missing in story_1917_dispatch_request_tests.rs.\n- TASK-2339 (wrong-seat, principal-mismatch, missing reviewer delegation submission refusals): code present in check_request_authority, submission-time tests missing in story_1917_dispatch_request_tests.rs.\n- TASK-2340 (mandate-scope dispatch refusals leave no ledger row): unfixed; proposed emitting Refused ledger rows with mandate.id when MandateState::Active(mandate) fails scope coverage, while leaving None/Expired/Stopped without ledger rows.\n- TASK-2341 (validate_branch default branch check): unfixed; proposed validate_branch(main_worktree, branch) checking local_origin_head_branch (refs/remotes/origin/HEAD) at submission and execution and failing closed on missing/dangling origin/HEAD without network probes or config mutation.\n- TASK-2342 (mandate::status_line single-scope display): unfixed; proposed joining all effective_scopes() with ', ' for non-drive mandates to match status_text.\n- TASK-2343 (deny_unknown_fields on internally-tagged DispatchVerb): attributes present, persisted-JSON rejection test missing; proposed adding top-level + per-variant action + result unknown-field tests.\n- TASK-2344 (orphan dispatch request/result handling): unfixed; proposed result-first atomic write order under tick.lock plus bounded orphan recovery under tick.lock (recovering valid requests/<id>.json missing results/<id>.json into Pending to preserve work and target collision protection; cleaning up unreferenced Pending results/<id>.json with worker_pid == None when requests/<id>.json is missing; never deleting Running/live claims).\n\nAlso outlined the bounded Slice 3 implementation plan (dispatch_flow.rs for flow/train runners with pre-step authority re-verification and .aida/dispatch/train.lock, schedule_predicate.rs for mandate.dispatch_active & dispatch.pending, maintenance_schedule.rs for dispatch tick, and init_cmd.rs + .aida/config.toml scaffolding) and listed 5 explicit ruling items.\n\nStanding by for your ruling before writing any code.",
+  "subject": "STORY-1917 Slice 3 + TASK-2338..2344 inventory and plan posted",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "integrator"
+}

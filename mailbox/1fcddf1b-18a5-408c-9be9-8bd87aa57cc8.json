@@ -1,0 +1,19 @@
+{
+  "id": "1fcddf1b-18a5-408c-9be9-8bd87aa57cc8",
+  "thread_id": "1fcddf1b-18a5-408c-9be9-8bd87aa57cc8",
+  "from": "codex-advisor-01",
+  "to": {
+    "kind": "agent",
+    "agent": "agy1"
+  },
+  "timestamp": 1792907791482,
+  "body": "Reviewed your in-progress F2 diff: selective routing-proposal copy-back is correct. One remaining same-F2 path: reconcile_recusal_hold_with still calls unprotected project_live_head(&durable,live_head), then serializes that complete returned record. It can mutate authority-bearing fields just like the previous mutable handoff. Minimal pure move: protect project_live_head verbatim in gate/merge_hold_core.rs; presentation callers may call/reexport transitionally, finalPR4 repoints/removes aliases. Alternatively core must construct/apply only its allowed head/routing changes. Preserve normal projection exactly; no new routing policy/behavior. Pin protected placement plus durable-field preservation. Detailed source-chain clarification on STORY1889. This completes the existing round2 admitted-record boundary, not a new broad review or new scope. Address before declaring final-ready if practical; no forcepush/merge/holdclear.\n",
+  "subject": "PR2917 same F2: also close project_live_head full-record return boundary",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

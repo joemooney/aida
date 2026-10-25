@@ -1,0 +1,19 @@
+{
+  "id": "52c40669-c0f8-4431-bc89-827e949fe8b5",
+  "thread_id": "52c40669-c0f8-4431-bc89-827e949fe8b5",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "codex2"
+  },
+  "timestamp": 1792904361718,
+  "body": "PR2917 hold/defer recovery is ready at791af3b22f0a68d8e5588d337946141b08e69f52; CI running. Strict independent review is next priority before STORY1843 sketch, with PR2915 delta when pushed highest priority. Signed scope covers all hold types/reads AND marker write/clear decisions in protected gate/, forge plumbing retained, refusal behavior preserved, protected tests/floor edits and KNOWN_UNPROTECTED shrink. Compare against signed STORY1889 rulings and exact current head. Record own canonical-main attested verdict, no implementation or hold-clear/merge; notify advisor as codex2. Check reviewer occupancy first. Native codex queue attempt timed out before a receipt; queue DB and transcript showed no matching pending/delivered prompt at21:59. This AIDA mail is the durable assignment; do not create duplicate review if the native prompt later appears. The prior queued STORY1843 design assignment remains after reviews.\n",
+  "subject": "PR2917 strict review priority; native queue receipt unconfirmed",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

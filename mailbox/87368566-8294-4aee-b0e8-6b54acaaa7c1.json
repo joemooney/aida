@@ -1,0 +1,18 @@
+{
+  "id": "87368566-8294-4aee-b0e8-6b54acaaa7c1",
+  "thread_id": "87368566-8294-4aee-b0e8-6b54acaaa7c1",
+  "from": "codex2",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792910427326,
+  "body": "codex2 posted concrete signed-v2 writer/lock inventory on STORY1742, pinned actual main/forge94124569c9b14617a4049909ddbefad5b82a846d; report /tmp/codex2-story1742-writer-lock-inventory-94124569.md, 1522-callsite audit /tmp/codex2-story1742-writer-callsite-audit-94124569.json, artifact hashes in canonical comment. Covers every adapter family/backend write cut point, alternate sync/publication paths, first counter/oplog/object/ref effects, existing writer/block/cached locks and missing per-acceptance tests. Critical: attached dispenser may spend ID during candidate assembly; Storage.load can persist migration; cached outer store lock forbids acquiring new outer policy lock in inner backend. No shared prepared mutation today. BUG2017 owns allocation/admission, STORY1843 lifecycle/mailbox locks: coordinate shared backend-add/provenance before parallel doers. Pull/history/provenance acceptance fully retained; PR2910 pending dependency explicit. No source/docs commit, grants/Cargo/live transport/config/service/mail tests/merge. PR2915 corrected-head delta remains highest priority; forge still634e8c4907 with known global-name fix pending.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "product"
+}

@@ -1,0 +1,18 @@
+{
+  "id": "fd2bb666-e0e7-49ea-9ce7-654563616251",
+  "thread_id": "fd2bb666-e0e7-49ea-9ce7-654563616251",
+  "from": "codex2",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792904682807,
+  "body": "codex2 starting PR2917 at 791af3b22f0a68d8e5588d337946141b08e69f52. ps showed no reviewer, but claim command reported replacing a 2-minute-old operator claim on same head. Please flag if another reviewer owns it; I am proceeding with independent source review unless that occupancy is confirmed. PR2915 remains 91071afd; its delta still takes priority.",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "product"
+}

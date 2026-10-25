@@ -1,0 +1,19 @@
+{
+  "id": "dc85ba99-febe-46bd-ab48-d0531511e420",
+  "thread_id": "dc85ba99-febe-46bd-ab48-d0531511e420",
+  "from": "codex2",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792904150338,
+  "body": "Codex2 STRICT independent reviewer lane, no target authorship. PR-2915 REQUEST CHANGES at current forge head 91071afddc41add0e43d29a9cfb463a36cd97f50.\nCanonical own attested path: /home/joe/ai/aida/.aida/review-verdicts/PR-2915.json\nCovered spec: /home/joe/ai/aida/.aida/review-verdicts/TASK-2347.json\nPublic review: https://github.com/joemooney/aida/pull/2915#issuecomment-6393651102\nWorksheet: /home/joe/ai/aida-review-pr2915-codex2/.aida/review-prompt-pr-2915.md\n\nFull16-file diff and full spec/all30 comments reviewed. Final LOCAL watermark blob passes late-canonical/private safety; accepted/pruning/read evidence and absent/error retention pass. Health fields/unknown age and uncertain-queue recovery semantics present; documented receipt-root-removal limitation remains assigned to STORY-1843, not reopened.\n\nTwo actionable P2 findings:\nF1 recovery dry-run mutates delivery: scripts/codex-mail-wake.py:480-498 ignores --dry-run. Exact-head fake-HOME/temp-state recover --accepted --dry-run exits0/recovered:true and moves pending to accepted, clears inflight and changes ledger. Retry dry-run also clears uncertainty. Honor preview or reject unsupported combo before writes; add both dry-run cases with byte-identical ledger/unchanged uncertainty. Evidence /tmp/codex2-pr2915-recover-dryrun-evidence.json.\nF2 advisor DESIGN REVIEW comment19 requires alert via a due job for accepted-unacknowledged health. health() is consumed only by explicit status; no due-job/operator-health consumer is wired. Targeted first-tick fake-state probe with accepted unread aged86400s has no stdout/stderr/alert; explicit health would report count/age. Wire smallest existing due-job/health surface with bounded dedup and no model loop/requeue, test it, or explicitly amend that condition. Evidence /tmp/codex2-pr2915-health-alert-evidence.json.\n\nExact-head CI40162395904 Build/seven lanes green; actual CI step ran24 Python fixtures OK; JUnit confirms5 Rust snapshot cases including final LOCAL correction. No Cargo, broad local suite or live service/mail/queue; only the two targeted suspected-defect probes. Full installed-watcher synthetic idle wake/observed-turn dedup proof is still pending operationally after code approval, separate from earlier native queue preflight. No live deployment/task completion claimed.\n\nRecord written FROM main under valid codex2 reviewer authority, no JSON copying/impersonation. Refs TASK-2347 preserved. No implementation, worktree cleanup, hold-clear, merge or Claude.\n\nOther assigned item is finished: PR-2913 APPROVED at 2b3cd94f5dc69193ee17b2dbbf0d1851254a620a, canonical /home/joe/ai/aida/.aida/review-verdicts/PR-2913.json, public https://github.com/joemooney/aida/pull/2913#issuecomment-6393632234 . Real detached F2 regression AND publication-failure production fix pass; Build green. Recorded via supported PR-keyed CLI without --pr auto-release to honor no-hold-clear; hold remains present.\n",
+  "subject": "PR-2915 STRICT REQUEST CHANGES 91071afddc41add0e43d29a9cfb463a36cd97f50; PR-2913 APPROVED",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "product"
+}

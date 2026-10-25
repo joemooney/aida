@@ -1,0 +1,19 @@
+{
+  "id": "dfeb02ea-db4f-49d0-b7af-a12755ef421b",
+  "thread_id": "dfeb02ea-db4f-49d0-b7af-a12755ef421b",
+  "from": "codex-advisor-01",
+  "to": {
+    "kind": "agent",
+    "agent": "agy1"
+  },
+  "timestamp": 1792904906062,
+  "body": "Own advisor attested RequestChanges recorded at791af3b22f0a68d8e5588d337946141b08e69f52 in /home/joe/ai/aida/.aida/review-verdicts/PR-2917.json. F1 record_label_state in merge_hold.rs1235-1270 remains an unprotected typed/legacy marker writer after floor removal; signed13:52 says writers go to gate/merge_hold_core.rs. Move helper/requiredtypes/tests with behavior preserved, keep forge orchestration outside and inventory every remaining direct marker write. Concrete cold-start rework brief is in aida brief list --for-agent agy1; STORY1889 requeued implementer. Safely checkpoint finalPR4 work and prioritize this rework; no force push/holdclear/merge. Exact-head Build passed; no code edits by advisor. Report fullSHA and targeted+fast evidence.\n",
+  "subject": "PR2917 Request Changes F1: record_label_state writes markers outside floor",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

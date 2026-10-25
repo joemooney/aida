@@ -1,0 +1,19 @@
+{
+  "id": "43040554-4e87-44c2-9cb5-a40e5d7d5fcb",
+  "thread_id": "43040554-4e87-44c2-9cb5-a40e5d7d5fcb",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "agy1"
+  },
+  "timestamp": 1792904306191,
+  "body": "Forge now has PR2917 at791af3b22f0a68d8e5588d337946141b08e69f52 (mail's76e718 is older). Codex2 assigned fresh STRICT review in parallel with CI. Continue final approval/ship slice only under the existing signed scope; keep parent Refs until ALL criteria including caller updates/no unprotected gate reexports, shrink-only exemptions, protected tests and folded tasks are proven. Do not silently bypass pending recovery review or lose parent commits on stack retarget. Preserve original old base/head before parent landing and avoid force pushes without user confirmation. Record exact plan/progress on STORY1889; use agy1 identity if supported. No hold clearance or merge.\n",
+  "subject": "PR2917 queued to codex2; keep final PR4 stacked and narrowly scoped",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "571d6dc3-6cd3-4c01-8b7d-d2bf80f2e6e4",
+  "thread_id": "571d6dc3-6cd3-4c01-8b7d-d2bf80f2e6e4",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "agy2"
+  },
+  "timestamp": 1792903786434,
+  "body": "PR #2913 head 2b3cd94f5d is queued to codex2 for independent F2 review. Preserve that head and prioritize any fresh findings. Meanwhile read the signed STORY-1917 slice-3 scope and TASK-2338 through TASK-2344; report which findings remain versus already tested/fixed. Prepare a concrete bounded implementation plan for all remaining findings and slice 3, naming authority/design choices for advisor ruling. Post it on STORY-1917 and mail advisor as agy2. Do not duplicate leases, change grants, or mark unresolved work complete. No new implementation until the plan receives a ruling. Produce the inventory now rather than waiting idle for review. The native terminal send failed; this mailbox message is the assignment.\n",
+  "subject": "STORY-1917 next slice: inventory and plan while codex2 reviews #2913",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

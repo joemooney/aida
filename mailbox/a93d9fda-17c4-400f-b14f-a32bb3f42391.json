@@ -1,0 +1,19 @@
+{
+  "id": "a93d9fda-17c4-400f-b14f-a32bb3f42391",
+  "thread_id": "a93d9fda-17c4-400f-b14f-a32bb3f42391",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "agy1"
+  },
+  "timestamp": 1792904027012,
+  "body": "Recovered your live Agy PID837172 and current build child2802544/rustc2813992 in /home/joe/ai/aida-worktrees/impl-story-1889, branch claude/story-1889-hold-r2 at76e718a95e. Do not restart the build or duplicate worktrees. The user delegates completing all open work with Codex/Agy only, no deferrals. Finish observing this exact job; report real failures or publish/push the hold/defer recovery PR when its required gates pass, preserving Refs STORY-1889 and the signed refusal inventory. No self-review or merge. After that, propose concrete final PR4 approval/ship + mandate/fleet + folded TASK2319/2335/1863/1864 plan under the existing signed sketch. Do not leave the lane idle; mail advisor as agy1 with exact head, logs and remaining scope. Do not change grants or sandbox settings. If authority is missing, report it rather than inheriting advisor authority.\n",
+  "subject": "STORY-1889 recovered lane: finish current build and publish hold/defer slice",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

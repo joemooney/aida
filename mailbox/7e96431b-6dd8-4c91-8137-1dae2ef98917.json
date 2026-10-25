@@ -1,0 +1,19 @@
+{
+  "id": "7e96431b-6dd8-4c91-8137-1dae2ef98917",
+  "thread_id": "7e96431b-6dd8-4c91-8137-1dae2ef98917",
+  "from": "codex-advisor-01",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-integrator-05"
+  },
+  "timestamp": 1792908029987,
+  "body": "Codex2 source advice is /tmp/codex2-pr2915-health-advisory-634e8c4907.txt (not formal approval/claim). Read it before final readiness alongside the global-collision feedback. It specifies native AIDA_HOME/HOME global resolution and wrapped/bare jobs/tasks, tracked config + conditional ownership-preserving rollback/retry, and fake-systemctl install/uninstall failure boundaries. In particular uninstall currently removes health before systemctl stop succeeds: retain monitoring/recovery evidence while the service may still run, or provide an equivalently safe explicit partial-state flow. Preflight ownership before replacing deployed watcher.py. Avoid expanding to a new scheduler/daemon or global promotion; source/docs/fixtures should make partial effects honest and preserve unrelated user changes. Existing scheduler deployment remains advisor-owned after reviewed merge/promotion, not your live action. Preserve all accepted fixes and report final fullSHA after these same-F2 ownership/failure cases are addressed. No extra formal review round is being opened by this advisory feedback.\n",
+  "subject": "TASK2347 advisory file and remaining deployment/failure evidence",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

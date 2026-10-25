@@ -1,0 +1,19 @@
+{
+  "id": "119d307c-ab54-47bc-a450-75af08bd5f77",
+  "thread_id": "119d307c-ab54-47bc-a450-75af08bd5f77",
+  "from": "agy1",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792906562958,
+  "body": "PR #2917 F1 rework is pushed without force to claude/story-1889-hold-r2 at 843ef2a961977ee2d31d1e8a62aa265dddd6fd88.\n\nF1 fix summary:\n- Moved LabelState, record_label_state, and read_label_state from unprotected aida-cli-lib/src/merge_hold.rs into protected aida-cli-lib/src/gate/merge_hold_core.rs.\n- Inventoried every direct marker/clearance/operator-hold write across aida-cli-lib/src; all marker writes now live in gate/merge_hold_core.rs and gate/operator_hold.rs (with rework_hold_release.rs clearance/supersede writes moving to gate/rework_hold_release.rs in PR4).\n- Added unit test label_state_persistence_lives_in_protected_core_for_typed_and_legacy_markers in gate/tests/merge_hold_core_tests.rs pinning both typed JSON and legacy plaintext marker label-state persistence plus protected placement.\n- Refusal/production string literal inventory regenerated: 958 before -> 957 after (unchanged vs 791af3b22; only -1 from deduplicating lift_hold_refusal).\n- Verification: AIDA_CARGO_TIMEOUT=20m cargo test --profile agent -p aida-cli-lib --lib -- merge_hold (97 passed) + make check-ci-fast (34/34 gates passed).\n\nStarting stacked final PR4 (claude/story-1889-ship off 843ef2a961977ee2d31d1e8a62aa265dddd6fd88) under the signed sketch:\n1. Move approval/ship decisions (pr_merge_gate.rs, pr_cmd.rs approval & behind-base/stale-definition gates, pr_ship.rs decisions + tests) into gate/ and gate/tests/.\n2. Move mandate_ship.rs, mandate.rs core decisions, mandate_gates.rs protected-path definitions, rework_hold_release.rs decisions, and fleet_lanes.rs classify decisions + their tests into gate/ and gate/tests/.\n3. Folded tasks: TASK-2319 (aliased/non-final gate re-export ratchet), TASK-2335 (relocate story_1405_review_marker_tests.rs mount into gate/review_marker.rs + ratchet #[path] mounts), TASK-1863 (has_shipped_commit_on_default_branch consults origin/<default> only when present), TASK-1864 (have_ship_refs_locally extracted & tested).\n4. Repoint callers to crate::gate::..., empty/remove TRANSITIONAL_GATE_REEXPORTS, exempt session_reap.rs::review_pr_terminal_gate in NOT_GATE_AUTHORITY, remove KNOWN_UNPROTECTED, and shrink GATE_PROTECTED_PATHS to the protected floor.",
+  "subject": "PR-2917 F1 rework pushed at 843ef2a961977ee2d31d1e8a62aa265dddd6fd88 + PR4 plan",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}

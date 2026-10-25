@@ -1,0 +1,18 @@
+{
+  "id": "b5cc6cba-ca1c-445d-ac5a-c7eb944a1207",
+  "thread_id": "b5cc6cba-ca1c-445d-ac5a-c7eb944a1207",
+  "from": "codex2",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792907836369,
+  "body": "codex2 advisory preparation for PR2915 retained at /tmp/codex2-pr2915-health-advisory-634e8c4907.txt. Forge verified OPEN634e8c4907e0598c6d440864d039a2442f08dc6a; CI running, NOT final approval/claim/verdict. Read latest TASK2347 comments and global-collision probe. Rust bounded counts/ages reader, doctor JSON stderr failure and existing closed scheduler/due route connect correctly by source; recovery is substrate healthy status, not auto-clear of advisor due item. Required known F2 global+project collision fix pending, including AIDA_HOME and wrapped/bare jobs/tasks; no treating unreadable registry as empty. Deployment advice: LIVE941 scheduler path is distinct from watcher --aida and needs ordinary reviewed merged promotion before enabling. Tracked .aida/config.toml needs concrete exact-delta review/backup/conditional rollback; current service install registers health before unit/reload/start, uninstall removes health before stop, so partial failure handling must be explicit and fake-systemctl tested. No live changes/Cargo/PR2917 duplicate. Final-head fullSHA/Build+focused independent recheck only after doer correction.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "product"
+}
