@@ -21,12 +21,19 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T16:43:58.284814607Z
-modified_at: 2026-10-25T20:21:39.492514843Z
+modified_at: 2026-10-25T23:39:20.195537919Z
 req_type: Task
 tags:
 - from-implementer:TASK-2346
 - kind:bug-spotted
 - severity:minor
+comments:
+- id: 01a1756e-d503-7933-b3fa-6a8b0220a01f
+  author: joe
+  content: Commit b5af684c59 references this requirement
+  created_at: 2026-10-25T23:39:20.195537919Z
+  modified_at: 2026-10-25T23:39:20.195537919Z
+  session_id: 29900a9d-2655-43c9-9178-fa5521b0f5ad
 history:
 - id: 01a1741d-7377-74b0-812a-7d3622547f76
   author: joe
