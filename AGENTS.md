@@ -457,8 +457,9 @@ mutation/gate paths remain strict. See OVERVIEW.md for the read-label contract.
 
 Clone-local transport policy lives in the common Git directory, outside the
 shared store. `aida config transport` manages the `work` profile before store
-initialization; enabled push/pull currently supports read-only plans and refuses
-execution pending the executor/sanitization slices. See
+initialization. Enabled push performs one pinned store-ref push through verified
+store hooks, without lifecycle actions; pull is plan-only. Sanitization and
+sanitized intake remain pending. See
 [transport configuration](docs/cli/07-project-setup.md#aida-config-transport).
 <!-- trace:STORY-1742 | ai:codex -->
 

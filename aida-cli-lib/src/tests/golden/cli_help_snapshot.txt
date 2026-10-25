@@ -15854,7 +15854,7 @@ Configure this clone's store-only transport profile (never shared)
 Usage: aida config transport [OPTIONS] <COMMAND>
 
 Commands:
-  enable   Enable a named clone-local profile. Does not enable transport execution yet
+  enable   Enable a named clone-local store-only profile
   show     Show effective policy, fixed refs, and the raw-Git bypass limitation
   disable  Remove the clone-local profile; restore ordinary AIDA push/pull behavior
   help     Print this message or the help of the given subcommand(s)
@@ -15873,7 +15873,7 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 ===== aida config transport enable
-Enable a named clone-local profile. Does not enable transport execution yet
+Enable a named clone-local store-only profile
 
 Usage: aida config transport enable [OPTIONS] <NAME>
 
@@ -40019,7 +40019,7 @@ Working on aida itself
       "transport",
       "enable"
     ],
-    "about": "Enable a named clone-local profile. Does not enable transport execution yet",
+    "about": "Enable a named clone-local store-only profile",
     "flags": [
       {
         "name": "baseline",
