@@ -1,8 +1,7 @@
 job: fleet-heartbeat
-last_run: 2026-10-25T06:21:19.243049349Z
+last_run: 2026-10-25T09:08:21.698813054Z
 last_by:
   seat: advisor
   vendor: codex
 result: done
-due_since: 2026-10-25T07:31:00.836695652Z
-due_reason: every 1h
+note: '19 open;2 open PRs:2919 RequestChanges/red CI routed concrete F1/F2 to codex1 native queue;2915 own codex2 exact5ce approval/all7green, aggregate Failing is retained operator hold, not product CI failure. Codex2 bounded BUG2221 diagnosis queued. Agy1889 dirty WIP and1917 clean old branch unchanged, PIDs live/no tool children: uptake unverified, no duplicate workers. Historical blocked relay PIDs absent;1981/2053 handoffs already contain verified merged retirement; no completed-work restart. Human waits:2915 independent integration/operator hold and safe Agy resume/context rotation. Next checkpoint on actual new SHA/result; no recurring model poll installed.'
