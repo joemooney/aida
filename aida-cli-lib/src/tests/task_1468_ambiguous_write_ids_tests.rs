@@ -54,6 +54,7 @@ fn cli_edge_writers_refuse_an_ambiguous_id() {
     let store_root = dir.path().join("store");
     let cache_path = dir.path().join(".aida").join("cache.db");
     std::fs::create_dir_all(&store_root).unwrap();
+    crate::test_env::enroll_synthetic_home(&store_root).unwrap();
     let backend = CachedGitBackend::open(&store_root, &cache_path).unwrap();
     backend
         .add_requirement(req("BUG-34", None, "fixture"))

@@ -92,6 +92,8 @@ fn fixture() -> Fixture {
         std::fs::set_permissions(&gh, std::fs::Permissions::from_mode(0o755)).unwrap();
     }
     git(&repo, &["init", "-q", "-b", "main"]);
+    // trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
+    test_git::enroll_synthetic_home(&repo);
     git(&repo, &["config", "user.email", "test@example.com"]);
     git(&repo, &["config", "user.name", "BUG-1594 Test"]);
     git(&repo, &["commit", "-q", "--allow-empty", "-m", "init"]);
@@ -285,6 +287,12 @@ fn bug_1594_first_add_to_fresh_file_store_is_visible_to_list() {
     let home = root.join("home");
     std::fs::create_dir_all(&store).unwrap();
     std::fs::create_dir_all(&home).unwrap();
+    // trace:BUG-2017 | ai:codex — explicit HOME clone identity for this
+    // positive global-ID fixture; the fresh store directory stays gitless.
+    git(root, &["init", "-q"]);
+    git(root, &["config", "user.name", "File store fixture"]);
+    git(root, &["config", "user.email", "fixture@example.invalid"]);
+    test_git::enroll_synthetic_home(root);
     let run = |args: &[&str]| -> Output {
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_aida"));
         cmd.current_dir(root)

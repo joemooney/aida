@@ -24,6 +24,9 @@ pub(crate) fn handle_config_command(cmd: &ConfigCommand, storage: &Storage) -> R
 
     match cmd {
         // trace:STORY-1742 | ai:codex
+        ConfigCommand::Allocation(_) => {
+            unreachable!("allocation configuration precedes storage init")
+        }
         ConfigCommand::Transport(_) => {
             unreachable!("transport configuration finishes before storage init")
         }
@@ -5291,6 +5294,10 @@ fn run_config(
     if let ConfigCommand::Transport(command) = &args.inner {
         return crate::command_registry::returned(crate::transport_profile::configure(command));
     }
+    // trace:BUG-2017 | ai:codex — no requirement store or authority inference.
+    if let ConfigCommand::Allocation(command) = &args.inner {
+        return crate::command_registry::returned(configure_allocation(command));
+    }
     // trace:BUG-2189 | ai:claude
     if matches!(args.inner, ConfigCommand::Format { .. }) {
         crate::command_registry::refuse_global_format(ctx, "config format")?;
@@ -5413,4 +5420,33 @@ fn config_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::Cmd
         skip_role_restore_prompt: false,
         team_identity_write: false,
     }
+}
+
+// trace:BUG-2017 | ai:codex
+fn configure_allocation(command: &AllocationCommand) -> Result<()> {
+    let root = std::env::current_dir()?;
+    let mode = aida_core::allocation_authority::resolve(&root)?;
+    match command {
+        AllocationCommand::Show => println!(
+            "{}",
+            if mode.authoritative {
+                "HOME (authoritative)"
+            } else {
+                "WORK (node-local)"
+            }
+        ),
+        AllocationCommand::EnrollHome => {
+            crate::seat_authority::require_direct_human()?;
+            let common = aida_core::allocation_authority::common_dir(&root)?;
+            let path = common.join(aida_core::allocation_authority::CONFIG_FILE);
+            aida_core::BlockRegistry::with_dispense_lock(&path, || {
+                // Revalidate existing settings under the local writer lock.
+                aida_core::allocation_authority::resolve(&root)?;
+                aida_core::write_atomic(&path, "version = 1\nauthoritative = true\n")?;
+                Ok(())
+            })?;
+            println!("This clone is now HOME allocation authority.");
+        }
+    }
+    Ok(())
 }

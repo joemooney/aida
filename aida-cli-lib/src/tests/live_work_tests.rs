@@ -1,6 +1,7 @@
 //! BUG-1944: live-work evidence and the shared start-of-work bump.
 // trace:BUG-1944 | ai:claude
 
+// trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
 use super::*;
 use aida_core::{Requirement, RequirementStatus, Storage};
 
@@ -38,7 +39,7 @@ fn project(spec_id: &str, status: RequirementStatus) -> tempfile::TempDir {
     commit_file(root, "base.txt");
     std::fs::create_dir_all(root.join(".aida")).unwrap();
     std::fs::create_dir_all(root.join(".aida-store")).unwrap();
-    let storage = Storage::new(root.join(".aida-store"));
+    let storage = crate::test_env::home_fixture_storage(root.join(".aida-store"));
     let mut req = Requirement::new("live work spec".into(), String::new());
     req.spec_id = Some(spec_id.to_string());
     req.status = status;
@@ -49,7 +50,7 @@ fn project(spec_id: &str, status: RequirementStatus) -> tempfile::TempDir {
 }
 
 fn status_of(root: &std::path::Path, spec_id: &str) -> RequirementStatus {
-    Storage::new(root.join(".aida-store"))
+    crate::test_env::home_fixture_storage(root.join(".aida-store"))
         .load()
         .unwrap()
         .get_requirement_by_spec_id(spec_id)
@@ -320,7 +321,7 @@ fn concurrently_edit(root: &std::path::Path, spec_id: &str, edit: impl FnOnce(&m
     use aida_core::DatabaseBackend;
     let store_root = root.join(".aida-store");
     let cache = aida_core::CachedGitBackend::default_cache_path(&store_root);
-    let backend = aida_core::CachedGitBackend::open(&store_root, &cache).unwrap();
+    let backend = crate::test_env::home_fixture_cached_backend(&store_root, &cache).unwrap();
     let mut r = backend
         .get_requirement_unambiguous(spec_id)
         .unwrap()
@@ -372,7 +373,7 @@ fn doctor_revert_does_not_overwrite_a_change_made_after_its_verdict() {
         crate::doctor_cmd::heal_doctor_spec_status(dir.path(), &revert_finding("BUG-9948"))
             .unwrap();
     assert_eq!(result.status, "healed", "{}", result.action);
-    let after = Storage::new(dir.path().join(".aida-store"))
+    let after = crate::test_env::home_fixture_storage(dir.path().join(".aida-store"))
         .load()
         .unwrap()
         .get_requirement_by_spec_id("BUG-9948")

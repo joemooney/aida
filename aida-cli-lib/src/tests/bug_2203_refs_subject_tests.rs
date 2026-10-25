@@ -1,3 +1,4 @@
+// trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
 use super::*;
 
 fn git(root: &std::path::Path, args: &[&str]) {
@@ -53,7 +54,7 @@ fn bug_2203_refs_subject_ship_appends_no_trailer_and_completes_nothing() {
     control.req_type = aida_core::RequirementType::Bug;
     control.status = aida_core::RequirementStatus::Done;
     let store_dir = root.join(".aida-store");
-    let backend = aida_core::GitBackend::new(&store_dir).unwrap();
+    let backend = crate::test_env::home_fixture_backend(&store_dir).unwrap();
     aida_core::DatabaseBackend::save(
         &backend,
         &aida_core::RequirementsStore {
@@ -158,7 +159,7 @@ fn bug_2203_refs_body_bullet_never_suppresses_a_subject_trailer() {
         done.req_type = aida_core::RequirementType::Bug;
         done.status = aida_core::RequirementStatus::Done;
         let store_dir = root.join(".aida-store");
-        let backend = aida_core::GitBackend::new(&store_dir).unwrap();
+        let backend = crate::test_env::home_fixture_backend(&store_dir).unwrap();
         aida_core::DatabaseBackend::save(
             &backend,
             &aida_core::RequirementsStore {

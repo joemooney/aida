@@ -31,9 +31,61 @@ pub(crate) fn handle_node_command(cmd: &NodeCommand, store_path: &std::path::Pat
     let registry_path = store_path.join("registry").join("nodes.toml");
     let node_config_path = store_path.join(".aida").join("node.toml");
 
+    // trace:BUG-2017 | ai:codex — local repair never claims a global registry/block.
+    if !aida_core::allocation_authority::resolve(store_path)?.authoritative {
+        match cmd {
+            NodeCommand::Acquire {
+                id,
+                hostname,
+                email,
+                node_name,
+                hijack,
+                remote_only,
+                ..
+            } => {
+                anyhow::ensure!(
+                    id.is_none()
+                        && hostname.is_none()
+                        && email.is_none()
+                        && node_name.is_none()
+                        && hijack.is_none()
+                        && !remote_only,
+                    "WORK binding is opaque; global registration options require HOME authority"
+                );
+                let binding = aida_core::work_binding::bootstrap(store_path)?.ok_or_else(|| {
+                    anyhow::anyhow!("allocation mode changed during WORK repair; retry")
+                })?;
+                println!(
+                    "WORK node {} ready (node-local allocation).",
+                    binding.node_id
+                );
+                return Ok(());
+            }
+            NodeCommand::List | NodeCommand::Show { id: None } => {
+                if let Some(binding) = aida_core::work_binding::load(store_path)? {
+                    println!(
+                        "WORK node {} (node-local allocation; no global blocks).",
+                        binding.node_id
+                    );
+                    return Ok(());
+                }
+            }
+            _ => {}
+        }
+    }
     match cmd {
         NodeCommand::List => {
             let registry = NodeRegistry::load(&registry_path).unwrap_or_default();
+            // trace:BUG-2017 | ai:codex — use existing surface; no transport help snapshot overlap.
+            let allocation = aida_core::allocation_authority::resolve(store_path)?;
+            println!(
+                "Allocation: {} (clone common Git directory)",
+                if allocation.authoritative {
+                    "authoritative"
+                } else {
+                    "node-local only"
+                }
+            );
             let current_id = if node_config_path.exists() {
                 aida_core::NodeConfig::load(&node_config_path)
                     .ok()
@@ -95,6 +147,16 @@ pub(crate) fn handle_node_command(cmd: &NodeCommand, store_path: &std::path::Pat
                 anyhow::anyhow!("Node {} is not in the shared registry", target_id)
             })?;
 
+            // trace:BUG-2017 | ai:codex
+            let allocation = aida_core::allocation_authority::resolve(store_path)?;
+            println!(
+                "Allocation: {} (clone common Git directory)",
+                if allocation.authoritative {
+                    "authoritative"
+                } else {
+                    "node-local only"
+                }
+            );
             println!("Node {}", entry.id);
             println!("  User ID:    {}", entry.user_id);
             println!("  Hostname:   {}", entry.hostname);
@@ -124,6 +186,9 @@ pub(crate) fn handle_node_command(cmd: &NodeCommand, store_path: &std::path::Pat
             hijack,
             remote_only,
         } => {
+            // trace:BUG-2017 | ai:codex — legacy global registration is not WORK bootstrap.
+            aida_core::allocation_authority::require_global(store_path)?;
+
             // FR-265 remote-only path: backfill a registry entry for some
             // OTHER (legacy) clone and push, without touching this clone's
             // identity. Requires explicit --id/--hostname/--email since the

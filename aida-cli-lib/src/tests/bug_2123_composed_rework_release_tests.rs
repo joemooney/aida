@@ -6,6 +6,7 @@
 //! BUG-2186 tests.
 // trace:TASK-1951 trace:BUG-2123 trace:TASK-1757 | ai:claude
 
+// trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
 use super::*;
 use crate::test_env::AmbientGuard;
 use std::cell::{Cell, RefCell};
@@ -407,7 +408,7 @@ fn production_auto_release_reads_the_forge_hold_verdict_and_store() {
         .success());
     let mut other = aida_core::Requirement::new("Other".into(), "fixture".into());
     other.spec_id = Some("TASK-62".into());
-    aida_core::db::GitBackend::new(&store_dir)
+    crate::test_env::home_fixture_backend(&store_dir)
         .unwrap()
         .save(&aida_core::RequirementsStore {
             requirements: vec![other],

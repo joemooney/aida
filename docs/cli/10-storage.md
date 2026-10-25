@@ -180,3 +180,34 @@ You've seen the floor the whole system stands on — the git-canonical store and
 - **[Chapter 4 — Git & lifecycle](04-git-lifecycle.md)**: the everyday two-leg sync verbs (`fetch`/`pull`/`push`/`rebase`) that move this store *with* your code — and where the Done→Completed auto-bump (that `db reconcile-status` recovers) actually happens.
 - **[Chapter 1 — Getting started](01-getting-started.md)**: `aida init`, which creates the store, cache, and worktree described here in the first place.
 - **[Chapter 7 — Project setup](07-project-setup.md)**: `node` identity, remotes, and the rest of the per-clone setup the distributed store relies on.
+
+### Clone-local allocation authority
+
+<!-- trace:BUG-2017 | ai:codex -->
+
+Global allocation requires an explicit local setting in the clone's common Git
+directory, shared by its linked worktrees. `aida-allocation.toml` uses version 1
+and an `authoritative` boolean. Missing means non-authoritative; malformed or
+unsafe files refuse allocation. A normal Git clone does not inherit this file.
+Store contents, cached blocks, transport enrollment, forge URLs, user preferences
+and environment variables do not grant authority.
+
+`aida node team --format json` includes the
+allocation scope and its clone-local source. Human output shows the same mode.
+Inspection does not enroll or change a clone. The allocation guard is also
+applied in core backend, bulk/import, repair, block persistence and canonical
+promotion entry points.
+
+A non-authoritative clone uses its existing explicit node binding and persistent
+node-local dispenser. New IDs have the existing `<TYPE>-<node>-<n>` form; imported
+canonical IDs remain readable and editable by UUID. Explicit global IDs, new
+global aliases, block claims, and `blocks-only` allocation refuse. Other tracked
+block policies are effectively node-aware-only on that clone. Missing/broken
+bindings or dispensers refuse without internal-global-counter fallback.
+
+This is the first enforcement slice. Pseudonymous UUID bootstrap and the complete
+WORK-to-HOME canonical-promotion workflow are delivered in the next slice;
+reconciliation conflict preflight/audit follows separately. The operator explicitly
+enrolls HOME during that later rollout. Do not create an authority setting merely
+to make an unproven global allocation succeed. The remaining implementation scope
+and writer checklist are in the [allocation inventory](../plans/2026-10-24-bug-2017-allocation-writer-inventory.md).

@@ -116,6 +116,8 @@ fn session_leases_renders_stale_spec_lease_and_hides_stale_harness_lease() {
         &home,
         &["commit", "-q", "--allow-empty", "-m", "init"],
     );
+    // trace:BUG-2017 | ai:codex — explicit positive HOME fixture.
+    test_git::enroll_synthetic_home(&repo);
     let init = aida(&repo, &home)
         .args([
             "init",

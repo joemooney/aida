@@ -10,6 +10,7 @@ fn open_backend() -> (tempfile::TempDir, CachedGitBackend) {
     let store_root = dir.path().join("store");
     let cache_path = dir.path().join(".aida").join("cache.db");
     std::fs::create_dir_all(&store_root).unwrap();
+    crate::test_env::enroll_synthetic_home(&store_root).unwrap();
     let backend = CachedGitBackend::open(&store_root, &cache_path).unwrap();
     (dir, backend)
 }

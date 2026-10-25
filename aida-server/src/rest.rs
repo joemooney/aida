@@ -4675,6 +4675,22 @@ mod bug_1612_save_conflict_tests {
         aida_core::Requirement,
     ) {
         let store_dir = root.join("store");
+        // trace:BUG-2017 | ai:codex — explicit temporary HOME fixture.
+        assert!(root
+            .canonicalize()
+            .unwrap()
+            .starts_with(std::env::temp_dir().canonicalize().unwrap()));
+        std::fs::create_dir_all(&store_dir).unwrap();
+        aida_core::git_ops::init(&store_dir).unwrap();
+        let setting = store_dir.join(".git/aida-allocation.toml");
+        use std::io::Write;
+        std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(setting)
+            .unwrap()
+            .write_all(b"version=1\nauthoritative=true\n")
+            .unwrap();
         let raw = aida_core::GitBackend::new(&store_dir).unwrap();
         let mut seed = RequirementsStore::new();
         seed.add_user(models::User::new(

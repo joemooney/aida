@@ -3,6 +3,9 @@
 //! that made every open status appear empty in agent output.
 // trace:BUG-2190 | ai:codex
 
+#[path = "support/test_git.rs"]
+mod test_git;
+
 use std::path::PathBuf;
 use std::process::{Command, Output};
 
@@ -99,6 +102,8 @@ impl Fixture {
                 .unwrap()
                 .success());
         }
+        // trace:BUG-2017 | ai:codex — explicit positive HOME fixture.
+        test_git::enroll_synthetic_home(&repo);
         let mut fixture = Self {
             _temp: temp,
             repo,

@@ -10413,7 +10413,7 @@ mod story_462_doctor_tests {
         std::fs::create_dir_all(project.join(".aida").join("sessions")).unwrap();
         std::fs::create_dir_all(project.join(".aida-store")).unwrap();
 
-        let storage = Storage::new(project.join(".aida-store"));
+        let storage = crate::test_env::home_fixture_storage(project.join(".aida-store"));
         let mut req = Requirement::new("lease/status drift".into(), String::new());
         req.spec_id = Some("TASK-1207".into());
         req.status = RequirementStatus::Approved;
@@ -11417,7 +11417,7 @@ User content.
         g(root, &["config", "user.email", "t@t.t"]);
         g(root, &["config", "user.name", "t"]);
         std::fs::create_dir_all(root.join(".aida-store")).unwrap();
-        let storage = Storage::new(root.join(".aida-store"));
+        let storage = crate::test_env::home_fixture_storage(root.join(".aida-store"));
         (tmp, storage)
     }
 
@@ -11966,7 +11966,7 @@ User content.
         let project_root = dir.path();
         std::fs::create_dir_all(project_root.join(".aida")).unwrap();
         std::fs::create_dir_all(project_root.join(".aida-store")).unwrap();
-        let storage = Storage::new(project_root.join(".aida-store"));
+        let storage = crate::test_env::home_fixture_storage(project_root.join(".aida-store"));
         let mut req = Requirement::new("orphaned in-progress".into(), String::new());
         req.spec_id = Some("TASK-667".into());
         req.status = RequirementStatus::InProgress;
@@ -12364,7 +12364,7 @@ User content.
         let project_root = dir.path();
         std::fs::create_dir_all(project_root.join(".aida")).unwrap();
         std::fs::create_dir_all(project_root.join(".aida-store")).unwrap();
-        let storage = Storage::new(project_root.join(".aida-store"));
+        let storage = crate::test_env::home_fixture_storage(project_root.join(".aida-store"));
         let mut req = Requirement::new("orphaned in-progress".into(), String::new());
         req.spec_id = Some("TASK-561".into());
         req.status = RequirementStatus::InProgress;
@@ -12411,7 +12411,7 @@ User content.
         let project_root = dir.path();
         std::fs::create_dir_all(project_root.join(".aida")).unwrap();
         std::fs::create_dir_all(project_root.join(".aida-store")).unwrap();
-        let storage = Storage::new(project_root.join(".aida-store"));
+        let storage = crate::test_env::home_fixture_storage(project_root.join(".aida-store"));
         let mut req = Requirement::new("already fixed".into(), String::new());
         req.spec_id = Some("TASK-561".into());
         req.status = RequirementStatus::Approved;
@@ -12462,7 +12462,7 @@ User content.
         std::fs::create_dir_all(project_root.join(".aida")).unwrap();
         std::fs::create_dir_all(project_root.join(".aida-store")).unwrap();
 
-        let storage = Storage::new(project_root.join(".aida-store"));
+        let storage = crate::test_env::home_fixture_storage(project_root.join(".aida-store"));
         let store = aida_core::models::RequirementsStore::new();
         storage.save(&store).unwrap();
 
@@ -12505,7 +12505,7 @@ User content.
         std::fs::create_dir_all(project_root.join(".aida")).unwrap();
         std::fs::create_dir_all(project_root.join(".aida-store")).unwrap();
 
-        let storage = Storage::new(project_root.join(".aida-store"));
+        let storage = crate::test_env::home_fixture_storage(project_root.join(".aida-store"));
         let store = aida_core::models::RequirementsStore::new();
         storage.save(&store).unwrap();
 

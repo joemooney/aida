@@ -28,6 +28,18 @@ git -C "$project" config user.name 'BUG-1796 test'
 git -C "$project" commit --quiet --allow-empty -m 'test: initialize project'
 git -C "$project" push origin main >/dev/null 2>&1
 
+# trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
+python3 - "$project" <<'PY_HOME'
+from pathlib import Path
+import sys
+root = Path(sys.argv[1])
+git_dir = root / ".git"
+assert git_dir.is_dir() and not git_dir.is_symlink()
+assert not (git_dir / "commondir").exists()
+with (git_dir / "aida-allocation.toml").open("x", encoding="utf-8") as setting:
+    setting.write("version=1\nauthoritative=true\n")
+PY_HOME
+
 (cd "$project" && "$AIDA" init --no-skills --no-hooks --no-post-hooks --no-roles --no-agent-config --no-schedule --footprint minimal >/dev/null)
 
 # `aida init` already creates the canonical local `.aida-store` worktree and

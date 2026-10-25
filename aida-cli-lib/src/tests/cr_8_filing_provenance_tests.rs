@@ -3,6 +3,7 @@
 // from the in-memory copy (`object_store::write_object`). Before the fix the
 // rewrite dropped the stamp the full-store save had just written.
 // trace:CR-8 | ai:claude
+// trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
 use super::*;
 use aida_core::db::DatabaseBackend;
 use aida_core::CachedGitBackend;
@@ -17,8 +18,11 @@ fn fixture() -> Fixture {
     let dir = tempfile::tempdir().unwrap();
     let store = dir.path().join("store");
     std::fs::create_dir_all(&store).unwrap();
-    let backend =
-        CachedGitBackend::open(&store, &dir.path().join(".aida").join("cache.db")).unwrap();
+    let backend = crate::test_env::home_fixture_cached_backend(
+        &store,
+        &dir.path().join(".aida").join("cache.db"),
+    )
+    .unwrap();
     Fixture {
         _dir: dir,
         store,

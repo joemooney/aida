@@ -7,6 +7,7 @@
 //! both a pickable Approved row and in-flight/leased (the observed BUG-754
 //! contradiction). trace:BUG-754 | ai:claude
 
+// trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
 use super::{
     bump_spec_in_progress_at_lease_take, harness_lease_spec_scope, Requirement, RequirementStatus,
     Storage,
@@ -20,7 +21,7 @@ fn project_with_spec(spec_id: &str, status: RequirementStatus) -> tempfile::Temp
     let root = dir.path();
     std::fs::create_dir_all(root.join(".aida")).unwrap();
     std::fs::create_dir_all(root.join(".aida-store")).unwrap();
-    let storage = Storage::new(root.join(".aida-store"));
+    let storage = crate::test_env::home_fixture_storage(root.join(".aida-store"));
     let mut req = Requirement::new("fanout pickup spec".into(), String::new());
     req.spec_id = Some(spec_id.to_string());
     req.status = status;
@@ -31,7 +32,7 @@ fn project_with_spec(spec_id: &str, status: RequirementStatus) -> tempfile::Temp
 }
 
 fn spec_status(root: &std::path::Path, spec_id: &str) -> RequirementStatus {
-    let storage = Storage::new(root.join(".aida-store"));
+    let storage = crate::test_env::home_fixture_storage(root.join(".aida-store"));
     let store = storage.load().unwrap();
     store
         .requirements
