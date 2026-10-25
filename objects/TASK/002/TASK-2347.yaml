@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T02:08:29.032100054Z
-modified_at: 2026-10-25T04:07:29.203092616Z
+modified_at: 2026-10-25T04:34:53.451010343Z
 req_type: Task
 tags:
 - codex
@@ -173,6 +173,27 @@ comments:
   content: '-'
   created_at: 2026-10-25T04:07:29.203092616Z
   modified_at: 2026-10-25T04:07:29.203092616Z
+- id: 01a17157-0f8b-7613-91cb-b0d7c1110a94
+  author: ai:codex:joe
+  content: |
+    TASK-2347 rework ready for a DIFFERENT formal reviewer at head 91071afddc41add0e43d29a9cfb463a36cd97f50. Legitimate human-issued implementer grant validated for current harness; normal claim and commit succeeded, no gate bypass.
+
+    Preserved and committed exact staged LOCAL-watermark Rust blob a1b9f780b9a3fe0f7a7e7536f96b321766f1ea6c. New Python rework prunes accepted IDs/timestamps only after full-scan same-advisor acknowledgement evidence; unread IDs persist across missing/error inventories. Status reports accepted-unacknowledged count, known oldest submission age, unknown legacy count and uncertain-recovery state. Recovery and pause behavior documented.
+
+    Validation: 24/24 hermetic Python fixtures; make check-ci-fast 35/35. Unchanged Rust correction retains prior 5 snapshot tests, 61 touched tests, 9 JSON audit tests, workspace test compile, scoped binary build/smoke evidence. Logs: /tmp/task2347-rework-python.log and /tmp/task2347-rework-fast.log; earlier logs in /tmp/task2347-implementation-ready.json. Current-head CI has not been claimed green.
+
+    Author self-check: one fresh-context checker ran its own 24/24 fixtures and inspected substrate acceptance plus actual source. No blocking requested-rework findings. Inherited receipt-root-removal repro was explicitly deferred under advisor comment19/STORY-1843 and documented: after pruning, losing the sole read-evidence root can make a stale replica eligible again. Permanent Python tombstones would recreate unbounded read history. This checker is not independent approval.
+
+    Exact private read-only candidate snapshot:
+    /tmp/task2347-candidate-91071afddc41add0e43d29a9cfb463a36cd97f50/
+    Manifest: manifest.json (pins final script/docs/tests plus reused tested binary).
+    AIDA binary SHA256: df43b4fce39c18c8334d15e69556671222ed6659bb75cfad8077af0d91e2cb92
+    Script SHA256: 8b0e15a429cadade06141ac574af7d938ee9a90ecf889b5405afe1d900685ddf
+    Binary contains exact final Rust blob, but embedded build label predates final commit; no Rust edits in this rework. Not installed/promoted.
+
+    No live queue, mailbox acknowledgement, service installation, preflight repeat, synthetic wake, spec completion, self-approval or merge. Keep (Refs TASK-2347) and PR open. Advisor owns formal reviewer handoff, 26-ID backlog inspection and post-approval installation/full-path idle wake targeting original UUID 01a1700b-717d-71f2-b7e0-0569b05f3dee.
+  created_at: 2026-10-25T04:34:53.451010343Z
+  modified_at: 2026-10-25T04:34:53.451010343Z
 history:
 - id: 01a170d1-497a-7282-8dcb-91782bba7dc3
   author: joe
