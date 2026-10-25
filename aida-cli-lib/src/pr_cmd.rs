@@ -1327,7 +1327,10 @@ pub(crate) fn run_human_finish_ceremony(opts: HumanFinishOptions) -> Result<()> 
         })?;
 
     let mode = ship::finish_mode(opts.no_pr, opts.no_merge);
-    let dirty = working_tree_is_dirty(&project_root);
+    // Tracked/staged changes only: untracked paths (sandbox device mounts,
+    // stray scratch files) never trigger or join the step-1 commit.
+    // trace:TASK-2351 | ai:claude
+    let dirty = ship::tracked_changes_pending(&project_root);
 
     // ---- Dry-run: print the resolved plan and exit. ----
     if opts.dry_run {
@@ -1348,11 +1351,11 @@ pub(crate) fn run_human_finish_ceremony(opts: HumanFinishOptions) -> Result<()> 
         eprintln!("  step 1: committing uncommitted work — {}", subject);
         let add = std::process::Command::new("git")
             .current_dir(&project_root)
-            .args(["add", "-A"])
+            .args(["add", "-u"])
             .status()
             .context("could not invoke `git add`")?;
         if !add.success() {
-            anyhow::bail!("`git add -A` failed — investigate before retrying");
+            anyhow::bail!("`git add -u` failed — investigate before retrying");
         }
         let commit = std::process::Command::new("git")
             .current_dir(&project_root)
@@ -1368,6 +1371,14 @@ pub(crate) fn run_human_finish_ceremony(opts: HumanFinishOptions) -> Result<()> 
         );
     } else {
         eprintln!("  step 1: no uncommitted work — nothing to commit");
+    }
+    if let Some(note) = ship::untracked_left_out_note(&ship::untracked_regular_files(&project_root))
+    {
+        eprintln!(
+            "  {} {}",
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
+            note
+        );
     }
 
     // ---- Step 2: rebase onto the branch's REAL base, not a hardcoded
@@ -2008,6 +2019,19 @@ pub(crate) fn ship_ci_budget(
 ) -> std::time::Duration {
     std::time::Duration::from_secs(secs)
         .saturating_sub(since_wait_started.saturating_sub(scan_spent))
+}
+
+/// TASK-2348: the ship's CI handoff. Hands `watch` only what is left of the
+/// one `--wait` deadline (never a renewed allowance); no `--wait` stays
+/// unbounded. The seam lets tests observe the budget actually forwarded.
+// trace:TASK-2348 | ai:claude
+pub(crate) fn ship_ci_handoff<T>(
+    wait: Option<u64>,
+    since_wait_started: std::time::Duration,
+    scan_spent: std::time::Duration,
+    watch: impl FnOnce(Option<std::time::Duration>) -> T,
+) -> T {
+    watch(wait.map(|secs| ship_ci_budget(secs, since_wait_started, scan_spent)))
 }
 
 // STORY-1700 (C1): the mandate ship cover lives in `mandate_ship.rs`.
@@ -3314,15 +3338,18 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
         let hold_present = crate::merge_hold::read_hold(&hold_root, pr_number).is_some();
         label_only_hold = !hold_present
             && crate::merge_hold::label_present(&hold_root, pr_number).unwrap_or(false);
-        let ci_result = crate::ci_gate::wait_for_ship_ci(
-            &project_root,
-            forge.as_ref(),
-            &watch_change,
-            hold_present,
-            label_only_hold,
-            wait.map(|secs| ship_ci_budget(secs, wait_started.elapsed(), scan_spent)),
-            std::time::Duration::from_secs(15),
-        );
+        // trace:TASK-2348 | ai:claude
+        let ci_result = ship_ci_handoff(wait, wait_started.elapsed(), scan_spent, |budget| {
+            crate::ci_gate::wait_for_ship_ci(
+                &project_root,
+                forge.as_ref(),
+                &watch_change,
+                hold_present,
+                label_only_hold,
+                budget,
+                std::time::Duration::from_secs(15),
+            )
+        });
         if let Err(error) = &ci_result {
             red_detail = Some(format!("{error:#}"));
         }
