@@ -23,7 +23,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-25T08:22:35.028864399Z
+modified_at: 2026-10-25T09:28:20.953070208Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -596,6 +596,11 @@ comments:
     The approved central reader must retain actual local checkout identity separately from canonical store root and serve CLI/MCP/notices/wake through one resolver, including missing-local-alias and pooled/reused roots. Add this exact before/after shape to B conformance; do not require callers to manufacture links or derive local root from physical canonical path. Preserve private receipt/unknown-watermark boundaries and C retention-before-recycle. Current inbox drain: all31 metadata-pending IDs were genuinely read via AIDA exact-ID API (including recovered pool cases); six older referenced owning specs1930/1981/2169/1677/1784/1744 verifiedCompleted and2910/2913/2906 review notes superseded by actual later approval/landing. Then normal recipient=advisor inbox read/ack succeeded across9source roots; returned records all matched previously read IDs or existing exact-recipient acknowledgement evidence, with no concurrent unknown message. Audit /tmp/advisor-inbox-read-ack-j67bi8ku.json. This is normal coordinator read/ack, not unread baselining, live watcher testing or delivery-acceptance evidence. Verify fresh global snapshot before claiming caught up.
   created_at: 2026-10-25T08:22:35.028864399Z
   modified_at: 2026-10-25T08:22:35.028864399Z
+- id: 01a17263-bad9-7553-813b-7c89c2c1fa26
+  author: joe
+  content: 'CURRENT CONFORMANCE EVIDENCE 2026-10-25T09:30Z: main advisor inbox --peek --unread reported empty, while pure reviewed5ce watcher scan (no State/queue/ack/install) completed8877ms and found three pending exact IDs: f441e319 and6753f132 in /home/joe/ai/aida-bug-2017-slice1;3c0a6bd8 in /home/joe/ai/aida-task-2347 (1259 logical acknowledged IDs). Advisor read all3 via ordinary exact-ID mailbox read in their source checkout. Current useful6753f132 reports normal-pushed259f57eb19 history fixture, isolated history contract+34fast pass, F1explicitlyunresolved. Other2 are historicalauthorcheckpoints already covered by newerverifiedreview, no replay. This pins remaining B shared logical inbox resolver: every reader must discover sibling-local mail, not only the watcher consumer; unknown sibling-private receipt semantics remain required. Parent not complete. Source manifest /tmp/advisor-crossroot-current.json, no mail bodies sent through wake text. No live watcher installed/tested.'
+  created_at: 2026-10-25T09:28:20.953070208Z
+  modified_at: 2026-10-25T09:28:20.953070208Z
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
   author: joe
