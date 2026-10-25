@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T02:08:29.032100054Z
-modified_at: 2026-10-25T02:31:22.472392206Z
+modified_at: 2026-10-25T02:32:27.452384261Z
 req_type: Task
 tags:
 - codex
@@ -62,6 +62,11 @@ comments:
   content: '-'
   created_at: 2026-10-25T02:31:22.472392206Z
   modified_at: 2026-10-25T02:31:22.472392206Z
+- id: 01a170e6-f83c-7972-86c2-6eabeb493755
+  author: joe
+  content: 'Build scheduling correction: make check-ci-fast finished all34 gates green. The parallel aida dev build was only waiting on this worktree target lock (cargo ps showed0CPU); I stopped that owned waiting subprocess tree, preserving the active targeted test build and all other agents, to release its occupied build slot. Production build will be restarted sequentially after the test build, not concurrently. Python fixture suite16/16 now passes, including atomic service-unit hardlink/symlink refusal. Source pin ef9a8c4afe plus narrow service-unit safety follow-up; final generated goldens and PR still pending normal cold compile.'
+  created_at: 2026-10-25T02:32:27.452384261Z
+  modified_at: 2026-10-25T02:32:27.452384261Z
 history:
 - id: 01a170d1-497a-7282-8dcb-91782bba7dc3
   author: joe
