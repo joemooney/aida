@@ -396,3 +396,201 @@ fn task_2325_nested_symlink_to_external_tree_does_not_inflate_bytes_or_pin_age()
         "external symlink target bytes must not be counted in tmp/ size"
     );
 }
+
+/// F1 (PR-2906 round 3): `plan_on_device` and `check_on_device` reject unknown
+/// (`None`) and foreign devices while admitting rows on the pressured device.
+// trace:TASK-2325 | ai:agy
+#[test]
+fn task_2325_f1_plan_and_check_on_device_reject_foreign_and_unknown_devices() {
+    let fx = tempfile::tempdir().unwrap();
+    let now = SystemTime::now();
+    let jobs = fx.path().join("jobs");
+    let job_local = job(&jobs, "local111", Some("done"));
+    let job_foreign = job(&jobs, "fore2222", Some("done"));
+    age(&jobs, now, 6);
+
+    let tmp_root = fx.path().join("tmp-root");
+    let sess_local = tmp_root.join("-proj/sess-local");
+    let sess_unknown = tmp_root.join("-proj/sess-unknown");
+    std::fs::create_dir_all(&sess_local).unwrap();
+    std::fs::write(sess_local.join("a.bin"), vec![0u8; 200]).unwrap();
+    std::fs::create_dir_all(&sess_unknown).unwrap();
+    std::fs::write(sess_unknown.join("b.bin"), vec![0u8; 300]).unwrap();
+    age(&tmp_root, now, 6);
+
+    let sv = survey(fx.path(), now);
+    let dev_of = |p: &Path| -> Option<u64> {
+        if p.starts_with(&job_foreign) {
+            Some(200)
+        } else if p.starts_with(&sess_unknown) {
+            None
+        } else {
+            Some(100)
+        }
+    };
+
+    let (rows, held) = plan_on_device(&sv, Some(Some(100)), dev_of);
+    let planned_paths: Vec<&Path> = rows.iter().map(|r| r.path.as_path()).collect();
+    assert_eq!(rows.len(), 2, "{rows:?}");
+    assert!(planned_paths.contains(&job_local.join("tmp").as_path()));
+    assert!(planned_paths.contains(&sess_local.as_path()));
+    assert!(held
+        .iter()
+        .any(|(p, why)| p == &job_foreign.join("tmp") && why.contains("device 200")));
+    assert!(held
+        .iter()
+        .any(|(p, why)| p == &sess_unknown && why.contains("could not be determined")));
+
+    // Delete-site recheck refuses when a row is on a foreign or unknown device,
+    // or when the pressured device itself is unknown (`None`).
+    for r in &rows {
+        assert!(check_on_device(&sv, r, Some(100), dev_of).is_ok());
+        assert!(check_on_device(&sv, r, Some(999), dev_of).is_err());
+        assert!(check_on_device(&sv, r, None, dev_of).is_err());
+    }
+}
+
+/// F2 (PR-2906 round 3): `apply` revalidates mtime against a fresh clock and
+/// re-reads `<job>/state.json` at the delete boundary — covering both
+/// `plan -> mutate -> apply` and mutation between scratch rows during `apply`.
+// trace:TASK-2325 | ai:agy
+#[test]
+fn task_2325_f2_apply_revalidates_freshness_and_job_state_at_delete_boundary() {
+    let fx = tempfile::tempdir().unwrap();
+    let now = SystemTime::now();
+    let jobs = fx.path().join("jobs");
+    let job_ok = job(&jobs, "aaaa1111", Some("done"));
+    let job_resumed = job(&jobs, "bbbb2222", Some("done"));
+    let job_unreadable = job(&jobs, "cccc3333", Some("done"));
+    age(&jobs, now, 6);
+
+    let tmp_root = fx.path().join("tmp-root");
+    let slug = tmp_root.join("-proj");
+    let sess_first = slug.join("sess-first");
+    let sess_mutated_between = slug.join("sess-mutated-between");
+    let sess_pre_touched = slug.join("sess-pre-touched");
+    std::fs::create_dir_all(&sess_first).unwrap();
+    std::fs::write(sess_first.join("1.bin"), vec![0u8; 900]).unwrap();
+    std::fs::create_dir_all(&sess_mutated_between).unwrap();
+    std::fs::write(sess_mutated_between.join("2.bin"), vec![0u8; 500]).unwrap();
+    std::fs::create_dir_all(&sess_pre_touched).unwrap();
+    std::fs::write(sess_pre_touched.join("3.bin"), vec![0u8; 400]).unwrap();
+    age(&tmp_root, now, 6);
+
+    let sv = survey(fx.path(), now);
+    let (rows, _) = plan(&sv);
+    assert_eq!(rows.len(), 6, "all 6 rows eligible at plan time: {rows:?}");
+
+    // Phase 1: mutate between `plan` and `apply`.
+    // - job_resumed becomes non-terminal ("working"), keeping old mtime so the
+    //   state re-read itself is proven.
+    std::fs::write(job_resumed.join("state.json"), r#"{"state":"working"}"#).unwrap();
+    age(&job_resumed, now, 6);
+    // - job_unreadable loses its state.json.
+    std::fs::remove_file(job_unreadable.join("state.json")).unwrap();
+    age(&job_unreadable, now, 6);
+    // - sess_pre_touched receives a fresh write before `apply`.
+    std::fs::write(sess_pre_touched.join("fresh.txt"), b"active").unwrap();
+
+    // Phase 2: during `apply`, deleting the largest row (`sess_first`) mutates
+    // `sess_mutated_between` before its delete boundary is reached.
+    let res = apply(
+        &sv,
+        &rows,
+        None,
+        |_| None,
+        |p| {
+            std::fs::remove_dir_all(p)?;
+            if p == sess_first.as_path() {
+                std::fs::write(sess_mutated_between.join("mid-run.txt"), b"woke up")?;
+            }
+            Ok(())
+        },
+    )
+    .unwrap();
+
+    let deleted_paths: Vec<&Path> = res.deleted.iter().map(|(p, _)| p.as_path()).collect();
+    assert_eq!(
+        deleted_paths,
+        vec![sess_first.as_path(), job_ok.join("tmp").as_path()],
+        "only still-aged, still-terminal rows may be deleted: {res:?}"
+    );
+    assert!(
+        job_resumed.join("tmp").exists(),
+        "resumed job tmp preserved"
+    );
+    assert!(
+        job_unreadable.join("tmp").exists(),
+        "unreadable-state job tmp preserved"
+    );
+    assert!(
+        sess_pre_touched.exists(),
+        "pre-apply touched session scratch preserved"
+    );
+    assert!(
+        sess_mutated_between.exists(),
+        "session scratch touched between rows preserved"
+    );
+
+    assert_eq!(res.held.len(), 4, "{:?}", res.held);
+    assert!(res
+        .held
+        .iter()
+        .any(|(p, r)| p == &job_resumed.join("tmp") && r.contains("not terminal")));
+    assert!(res
+        .held
+        .iter()
+        .any(|(p, r)| p == &job_unreadable.join("tmp") && r.contains("state unreadable")));
+    assert!(res
+        .held
+        .iter()
+        .any(|(p, r)| p == &sess_pre_touched && r.contains("inside the age window")));
+    assert!(res
+        .held
+        .iter()
+        .any(|(p, r)| p == &sess_mutated_between && r.contains("inside the age window")));
+}
+
+/// F3 (PR-2906 round 3, TASK-2334): `survey_with_roots` discovers configured
+/// job and session scratch roots even when `TMPDIR` is unset or has no
+/// `claude-*` ancestor, while still protecting `own_session_dir` when `TMPDIR`
+/// sits inside the configured root.
+// trace:TASK-2325 | ai:agy
+// trace:TASK-2334 | ai:agy
+#[test]
+fn task_2325_f3_survey_with_roots_discovers_configured_roots_without_claude_tmpdir() {
+    let fx = tempfile::tempdir().unwrap();
+    let now = SystemTime::now();
+    let cfg_jobs = fx.path().join("cfg-jobs");
+    let cfg_tmp = fx.path().join("cfg-claude-1000");
+    std::fs::create_dir_all(&cfg_jobs).unwrap();
+    std::fs::create_dir_all(&cfg_tmp).unwrap();
+
+    // Unset TMPDIR: configured roots are still used.
+    let sv_unset = survey_with_roots(3, now, Some(&cfg_jobs), Some(&cfg_tmp), None, None);
+    assert_eq!(sv_unset.jobs_root.as_deref(), Some(cfg_jobs.as_path()));
+    assert_eq!(sv_unset.tmp_root.as_deref(), Some(cfg_tmp.as_path()));
+    assert!(sv_unset.live_session_dirs.is_empty());
+
+    // Non-claude TMPDIR (e.g. systemd/cron `/tmp` or private dir): configured
+    // roots still win instead of collapsing to `None`.
+    let non_claude_tmp = fx.path().join("systemd-private-tmp");
+    let sv_non_claude = survey_with_roots(
+        3,
+        now,
+        Some(&cfg_jobs),
+        Some(&cfg_tmp),
+        Some(&non_claude_tmp),
+        None,
+    );
+    assert_eq!(sv_non_claude.jobs_root.as_deref(), Some(cfg_jobs.as_path()));
+    assert_eq!(sv_non_claude.tmp_root.as_deref(), Some(cfg_tmp.as_path()));
+
+    // When TMPDIR sits inside the configured root, own-session protection still
+    // records the active session dir.
+    let inside = cfg_tmp.join("-proj/live-sess/scratchpad");
+    let sv_inside = survey_with_roots(3, now, Some(&cfg_jobs), Some(&cfg_tmp), Some(&inside), None);
+    assert!(sv_inside
+        .live_session_dirs
+        .contains(&cfg_tmp.join("-proj/live-sess")));
+}

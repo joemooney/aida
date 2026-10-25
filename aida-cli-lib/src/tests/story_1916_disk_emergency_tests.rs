@@ -49,6 +49,8 @@ fn cfg() -> EmergencyConfig {
         used_pct: 95,
         margin_pct: 5,
         idle_hours: 2,
+        scratch_jobs_root: None,
+        scratch_tmp_root: None,
     }
 }
 
@@ -87,7 +89,9 @@ fn story_1916_config_defaults_overrides_and_disable() {
         EmergencyConfig {
             used_pct: 95,
             margin_pct: 5,
-            idle_hours: 2
+            idle_hours: 2,
+            scratch_jobs_root: None,
+            scratch_tmp_root: None,
         }
     );
     let tuned: toml::Value = "[doctor.disk_headroom]\nemergency_used_pct = 90\nemergency_margin_pct = 10\nemergency_idle_hours = 6\n"
@@ -1096,6 +1100,8 @@ fn task_2325_emergency_hard_ceiling_scratch_deletes_ledgers_stops_and_notifies()
         used_pct: 95,
         margin_pct: 5,
         idle_hours: 96,
+        scratch_jobs_root: None,
+        scratch_tmp_root: None,
     };
     let mut scratch = crate::scratch_reclaim::ScratchSurvey {
         jobs_root: Some(jobs_root.clone()),
@@ -1247,4 +1253,333 @@ fn task_2325_emergency_cache_refusal_skips_scratch_tier() {
     let last = last_reclaim(&main).expect("Run row written");
     assert_eq!(last.stopped, "refused");
     assert_eq!(last.deleted, 0);
+}
+
+/// F1 (PR-2906 round 3): emergency scratch deletion is restricted to the
+/// pressured build-cache filesystem (`cache_root`'s device). Scratch rows on a
+/// foreign device or with an unknown (`None`) device survive untouched, and an
+/// unknown `cache_root` device deletes no scratch at all.
+// trace:TASK-2325 | ai:agy
+#[test]
+fn task_2325_f1_emergency_scratch_restricts_to_pressured_filesystem_device() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (main, root) = layout(tmp.path());
+    let now = SystemTime::now();
+    let day = 24 * HOUR;
+
+    let jobs_root = tmp.path().join("jobs");
+    let job_foreign = jobs_root.join("fore1111");
+    std::fs::create_dir_all(job_foreign.join("tmp")).unwrap();
+    std::fs::write(job_foreign.join("tmp/foreign.o"), vec![0u8; 500]).unwrap();
+    std::fs::write(job_foreign.join("state.json"), r#"{"state":"done"}"#).unwrap();
+    age_tree(&job_foreign, now - 6 * day);
+
+    let tmp_root = tmp.path().join("claude-1000");
+    let sess_unknown = tmp_root.join("-proj/sess-unknown");
+    std::fs::create_dir_all(&sess_unknown).unwrap();
+    std::fs::write(sess_unknown.join("unk.bin"), vec![0u8; 400]).unwrap();
+    age_tree(&sess_unknown, now - 6 * day);
+
+    let sess_local = tmp_root.join("-proj/sess-local");
+    std::fs::create_dir_all(&sess_local).unwrap();
+    std::fs::write(sess_local.join("local.bin"), vec![0u8; 300]).unwrap();
+    age_tree(&sess_local, now - 6 * day);
+    std::fs::File::open(tmp_root.join("-proj"))
+        .unwrap()
+        .set_modified(now - 6 * day)
+        .unwrap();
+    std::fs::File::open(&tmp_root)
+        .unwrap()
+        .set_modified(now - 6 * day)
+        .unwrap();
+
+    let scratch = crate::scratch_reclaim::ScratchSurvey {
+        jobs_root: Some(jobs_root),
+        tmp_root: Some(tmp_root),
+        build_caches: Vec::new(),
+        live_session_dirs: BTreeSet::new(),
+        min_age: 3 * day,
+        now,
+    };
+
+    // Case 1: cache_root device is unknown (`None`) -> nothing is deleted.
+    let outcome_unknown_cache =
+        run_emergency_probed_with_dev(&main, &root, &cfg(), scratch.clone(), || Some(97), |_| None)
+            .expect("ran");
+    assert!(outcome_unknown_cache.deleted.is_empty());
+    assert!(job_foreign.join("tmp/foreign.o").exists());
+    assert!(sess_unknown.join("unk.bin").exists());
+    assert!(sess_local.join("local.bin").exists());
+
+    // Case 2: cache_root is on device 100, job_foreign on device 200,
+    // sess_unknown has device None, and sess_local is on device 100.
+    let dev_of = |p: &Path| -> Option<u64> {
+        if p.starts_with(&job_foreign) {
+            Some(200)
+        } else if p.starts_with(&sess_unknown) {
+            None
+        } else {
+            Some(100)
+        }
+    };
+    let probe = || {
+        if sess_local.exists() {
+            Some(97)
+        } else {
+            Some(88)
+        }
+    };
+    let outcome =
+        run_emergency_probed_with_dev(&main, &root, &cfg(), scratch, probe, dev_of).expect("ran");
+
+    assert!(
+        job_foreign.join("tmp/foreign.o").exists(),
+        "foreign-filesystem job scratch must survive"
+    );
+    assert!(
+        sess_unknown.join("unk.bin").exists(),
+        "unknown-device session scratch must survive"
+    );
+    assert!(
+        !sess_local.exists(),
+        "pressured-device session scratch is reclaimed"
+    );
+    assert_eq!(outcome.deleted.len(), 1);
+    assert_eq!(outcome.deleted[0].path, sess_local);
+    assert_eq!(outcome.freed_bytes, 300);
+    assert_eq!(outcome.stopped, Stop::BelowMargin);
+}
+
+/// F2 (PR-2906 round 3): `scratch_at_hard_ceiling` revalidates scratch mtime
+/// and job state at the delete boundary, including when a later scratch row is
+/// written or a job resumes while earlier scratch rows are being deleted.
+// trace:TASK-2325 | ai:agy
+#[test]
+fn task_2325_f2_emergency_revalidates_mtime_and_job_state_between_scratch_rows() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (main, root) = layout(tmp.path());
+    let now = SystemTime::now();
+    let day = 24 * HOUR;
+
+    let jobs_root = tmp.path().join("jobs");
+    // Largest row (500 B): stays terminal and old -> deleted first.
+    let job_first = jobs_root.join("aaaa1111");
+    std::fs::create_dir_all(job_first.join("tmp")).unwrap();
+    std::fs::write(job_first.join("tmp/1.o"), vec![0u8; 500]).unwrap();
+    std::fs::write(job_first.join("state.json"), r#"{"state":"done"}"#).unwrap();
+    age_tree(&job_first, now - 6 * day);
+
+    // Second row (400 B): transitions to "working" while job_first is being deleted.
+    let job_resumed = jobs_root.join("bbbb2222");
+    std::fs::create_dir_all(job_resumed.join("tmp")).unwrap();
+    std::fs::write(job_resumed.join("tmp/2.o"), vec![0u8; 400]).unwrap();
+    std::fs::write(job_resumed.join("state.json"), r#"{"state":"done"}"#).unwrap();
+    age_tree(&job_resumed, now - 6 * day);
+
+    let tmp_root = tmp.path().join("claude-1000");
+    // Third row (300 B): receives a fresh write while job_first is being deleted.
+    let sess_woken = tmp_root.join("-proj/sess-woken");
+    std::fs::create_dir_all(&sess_woken).unwrap();
+    std::fs::write(sess_woken.join("3.bin"), vec![0u8; 300]).unwrap();
+    age_tree(&sess_woken, now - 6 * day);
+
+    // Fourth row (200 B): stays old -> deleted and brings usage below margin.
+    let sess_last = tmp_root.join("-proj/sess-last");
+    std::fs::create_dir_all(&sess_last).unwrap();
+    std::fs::write(sess_last.join("4.bin"), vec![0u8; 200]).unwrap();
+    age_tree(&sess_last, now - 6 * day);
+    std::fs::File::open(tmp_root.join("-proj"))
+        .unwrap()
+        .set_modified(now - 6 * day)
+        .unwrap();
+    std::fs::File::open(&tmp_root)
+        .unwrap()
+        .set_modified(now - 6 * day)
+        .unwrap();
+
+    let scratch = crate::scratch_reclaim::ScratchSurvey {
+        jobs_root: Some(jobs_root),
+        tmp_root: Some(tmp_root),
+        build_caches: Vec::new(),
+        live_session_dirs: BTreeSet::new(),
+        min_age: 3 * day,
+        now,
+    };
+
+    let mutated = std::cell::Cell::new(false);
+    let probe = || {
+        // Right after the first scratch row (`job_first/tmp`) is deleted,
+        // simulate concurrent activity before rows 2 and 3 reach their delete
+        // boundaries: `job_resumed` flips to `working` (keeping old mtime so
+        // the state check itself fires) and `sess_woken` gets a fresh write.
+        if !job_first.join("tmp").exists() && !mutated.get() {
+            mutated.set(true);
+            std::fs::write(job_resumed.join("state.json"), r#"{"state":"working"}"#).unwrap();
+            age_tree(&job_resumed, now - 6 * day);
+            std::fs::write(sess_woken.join("active.txt"), b"fresh write").unwrap();
+        }
+        if !sess_last.exists() {
+            Some(88)
+        } else {
+            Some(96)
+        }
+    };
+
+    let outcome = run_emergency_probed(&main, &root, &cfg(), scratch, probe).expect("ran");
+    assert!(!job_first.join("tmp").exists(), "first aged row deleted");
+    assert!(
+        job_resumed.join("tmp").exists(),
+        "job that resumed mid-run must survive"
+    );
+    assert!(
+        sess_woken.exists(),
+        "session scratch written mid-run must survive"
+    );
+    assert!(
+        !sess_last.exists(),
+        "subsequent still-aged row deleted to relieve pressure"
+    );
+    assert_eq!(outcome.deleted.len(), 2);
+    assert_eq!(outcome.freed_bytes, 700);
+    assert_eq!(outcome.stopped, Stop::BelowMargin);
+
+    let skip_reasons: Vec<(&str, &str)> = outcome
+        .rows
+        .iter()
+        .filter_map(|r| match r {
+            LedgerRow::Skip {
+                path,
+                reason: Reason::AgentScratch,
+                why,
+                ..
+            } => Some((path.as_str(), why.as_str())),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(skip_reasons.len(), 2, "{:?}", outcome.rows);
+    let resumed_tmp = job_resumed.join("tmp").display().to_string();
+    assert!(skip_reasons
+        .iter()
+        .any(|(p, why)| *p == resumed_tmp && why.contains("not terminal")));
+    assert!(skip_reasons
+        .iter()
+        .any(|(p, why)| p.ends_with("sess-woken") && why.contains("inside the age window")));
+}
+
+/// F3 (PR-2906 round 3, TASK-2334): `[doctor.disk_headroom]` configures
+/// `scratch_jobs_root` and `scratch_tmp_root`, and `run_emergency_configured_with`
+/// (the real production root-discovery and `min_age.max(cfg.idle())` path)
+/// reclaims aged job and session scratch even when `TMPDIR` is unset or points
+/// to a non-claude directory.
+// trace:TASK-2325 | ai:agy
+// trace:TASK-2334 | ai:agy
+#[test]
+fn task_2325_f3_scheduled_emergency_uses_configured_scratch_roots_without_claude_tmpdir() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (main, root) = layout(tmp.path());
+    let now = SystemTime::now();
+    let day = 24 * HOUR;
+
+    let jobs_root = tmp.path().join("configured-jobs");
+    let job_old = jobs_root.join("aaaa1111");
+    std::fs::create_dir_all(job_old.join("tmp")).unwrap();
+    std::fs::write(job_old.join("tmp/build.o"), vec![0u8; 400]).unwrap();
+    std::fs::write(job_old.join("state.json"), r#"{"state":"done"}"#).unwrap();
+    age_tree(&job_old, now - 5 * day);
+
+    let tmp_root = tmp.path().join("configured-claude-1000");
+    let sess_old_1 = tmp_root.join("-proj/sess-old-1");
+    let sess_old_2 = tmp_root.join("-proj/sess-old-2");
+    // 3.5 days old: older than the 3-day scratch default, but younger than the
+    // 4-day (`emergency_idle_hours = 96`) emergency floor, proving production
+    // `emergency_scratch_survey` applies `min_age.max(cfg.idle())`.
+    let sess_3d = tmp_root.join("-proj/sess-3d");
+    std::fs::create_dir_all(&sess_old_1).unwrap();
+    std::fs::write(sess_old_1.join("a.bin"), vec![0u8; 300]).unwrap();
+    std::fs::create_dir_all(&sess_old_2).unwrap();
+    std::fs::write(sess_old_2.join("b.bin"), vec![0u8; 250]).unwrap();
+    std::fs::create_dir_all(&sess_3d).unwrap();
+    std::fs::write(sess_3d.join("c.bin"), vec![0u8; 900]).unwrap();
+    age_tree(&sess_old_1, now - 5 * day);
+    age_tree(&sess_old_2, now - 5 * day);
+    age_tree(&sess_3d, now - 80 * HOUR);
+    std::fs::File::open(tmp_root.join("-proj"))
+        .unwrap()
+        .set_modified(now - 5 * day)
+        .unwrap();
+    std::fs::File::open(&tmp_root)
+        .unwrap()
+        .set_modified(now - 5 * day)
+        .unwrap();
+
+    let cfg_toml = format!(
+        "[doctor.disk_headroom]\n\
+         emergency_used_pct = 95\n\
+         emergency_margin_pct = 5\n\
+         emergency_idle_hours = 96\n\
+         scratch_jobs_root = {:?}\n\
+         scratch_tmp_root = {:?}\n",
+        jobs_root.display().to_string(),
+        tmp_root.display().to_string(),
+    );
+    std::fs::create_dir_all(main.join(".aida")).unwrap();
+    std::fs::write(main.join(".aida/config.toml"), &cfg_toml).unwrap();
+
+    let parsed = crate::read_project_config_value(&main);
+    let ecfg = emergency_config(parsed.as_ref());
+    assert_eq!(ecfg.scratch_jobs_root.as_deref(), Some(jobs_root.as_path()));
+    assert_eq!(ecfg.scratch_tmp_root.as_deref(), Some(tmp_root.as_path()));
+    assert_eq!(ecfg.idle_hours, 96);
+
+    // Run 1: TMPDIR is unset (`None`) and HOME is `None`.
+    let out_unset = run_emergency_configured_with(&main, &root, &ecfg, None, None, || {
+        if !sess_old_1.exists() {
+            Some(88)
+        } else {
+            Some(97)
+        }
+    })
+    .expect("ran with unset TMPDIR");
+    assert!(
+        !job_old.join("tmp").exists(),
+        "configured jobs_root reclaimed without TMPDIR/HOME"
+    );
+    assert!(
+        !sess_old_1.exists(),
+        "configured tmp_root reclaimed without TMPDIR"
+    );
+    assert!(
+        sess_old_2.exists(),
+        "stopped once below ceiling; remaining scratch preserved"
+    );
+    assert!(
+        sess_3d.exists(),
+        "production min_age.max(cfg.idle()) held back 80h-old scratch under 96h floor"
+    );
+    assert_eq!(out_unset.deleted.len(), 2);
+    assert_eq!(out_unset.freed_bytes, 700);
+
+    // Run 2: TMPDIR is a non-claude directory (e.g. `/tmp/systemd-private`);
+    // configured tmp_root still discovers and reclaims `sess_old_2`.
+    let non_claude_tmpdir = tmp.path().join("systemd-private-guard");
+    std::fs::create_dir_all(&non_claude_tmpdir).unwrap();
+    let out_non_claude =
+        run_emergency_configured_with(&main, &root, &ecfg, Some(&non_claude_tmpdir), None, || {
+            if !sess_old_2.exists() {
+                Some(88)
+            } else {
+                Some(97)
+            }
+        })
+        .expect("ran with non-claude TMPDIR");
+    assert!(
+        !sess_old_2.exists(),
+        "configured tmp_root reclaimed with non-claude TMPDIR"
+    );
+    assert!(
+        sess_3d.exists(),
+        "80h-old scratch still held back by 96h emergency idle floor"
+    );
+    assert_eq!(out_non_claude.deleted.len(), 1);
+    assert_eq!(out_non_claude.freed_bytes, 250);
 }

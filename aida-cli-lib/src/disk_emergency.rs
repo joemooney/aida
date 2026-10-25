@@ -65,12 +65,23 @@ const GUARD_JOB: &str = "disk-headroom-guard";
 
 /// `[doctor.disk_headroom]` emergency keys.
 // trace:STORY-1916 | ai:claude
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+// trace:TASK-2325 | ai:agy
+// trace:TASK-2334 | ai:agy
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub(crate) struct EmergencyConfig {
     /// 0 disables the emergency tier.
     pub used_pct: u8,
     pub margin_pct: u8,
     pub idle_hours: u64,
+    /// Optional configured `~/.claude/jobs` root for the emergency scratch
+    /// tier (TASK-2325 / TASK-2334).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scratch_jobs_root: Option<PathBuf>,
+    /// Optional configured session-scratch root (e.g. `/tmp/claude-1000`) for
+    /// the emergency scratch tier, independent of the guard process's own
+    /// `$TMPDIR` ancestry (TASK-2325 / TASK-2334).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scratch_tmp_root: Option<PathBuf>,
 }
 
 impl EmergencyConfig {
@@ -91,11 +102,21 @@ impl EmergencyConfig {
 /// Read the emergency keys, falling back to the defaults for an absent or
 /// out-of-range value. `emergency_used_pct = 0` disables the tier.
 // trace:STORY-1916 | ai:claude
+// trace:TASK-2325 | ai:agy
+// trace:TASK-2334 | ai:agy
 pub(crate) fn emergency_config(cfg: Option<&toml::Value>) -> EmergencyConfig {
     let table = cfg
         .and_then(|c| c.get("doctor"))
         .and_then(|d| d.get("disk_headroom"));
     let int = |key: &str| table.and_then(|t| t.get(key)).and_then(|v| v.as_integer());
+    let path_key = |key: &str| {
+        table
+            .and_then(|t| t.get(key))
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(PathBuf::from)
+    };
     EmergencyConfig {
         used_pct: int("emergency_used_pct")
             .filter(|v| (0..=100).contains(v))
@@ -106,6 +127,8 @@ pub(crate) fn emergency_config(cfg: Option<&toml::Value>) -> EmergencyConfig {
         idle_hours: int("emergency_idle_hours")
             .filter(|v| *v >= 1)
             .map_or(DEFAULT_EMERGENCY_IDLE_HOURS, |v| v as u64),
+        scratch_jobs_root: path_key("scratch_jobs_root"),
+        scratch_tmp_root: path_key("scratch_tmp_root"),
     }
 }
 
@@ -1304,27 +1327,70 @@ fn mail_holder(main_root: &Path, c: &Candidate) {
     let _ = crate::mailbox_store::write_message(main_root, &msg);
 }
 
-/// The scheduled emergency run. `None` when the tier is off, the cache
-/// filesystem is under the ceiling, or another run holds the lock.
-// trace:STORY-1916 | ai:claude
-pub(crate) fn run_emergency(main_root: &Path, cfg: &EmergencyConfig) -> Option<RunOutcome> {
-    let cache_root = crate::worktree_reclaim::cache_root_of(main_root)?;
-    let probe_root = cache_root.clone();
-    // TASK-2325: the hard-ceiling scratch pass reads the REAL environment
-    // only here, in the production glue — never below the injection seam, so
-    // a test can never reach this host's jobs or session scratch. The age
-    // floor is the longer of the emergency idle window and the scratch
-    // default, and build caches are never part of the emergency tier.
-    // trace:TASK-2325 | ai:claude
-    let mut scratch = crate::scratch_reclaim::survey_from_env(
+/// Construct the emergency scratch survey from `cfg` (`scratch_jobs_root`,
+/// `scratch_tmp_root`) with fallback to `home` and `tmpdir`. The age floor is
+/// the longer of the emergency idle window and the scratch default, and build
+/// caches are never part of the emergency tier (TASK-2325 / TASK-2334).
+// trace:TASK-2325 | ai:agy
+// trace:TASK-2334 | ai:agy
+pub(crate) fn emergency_scratch_survey(
+    cfg: &EmergencyConfig,
+    tmpdir: Option<&Path>,
+    home: Option<&Path>,
+    now: SystemTime,
+) -> crate::scratch_reclaim::ScratchSurvey {
+    let mut scratch = crate::scratch_reclaim::survey_with_roots(
         crate::scratch_reclaim::DEFAULT_MIN_AGE_DAYS,
-        SystemTime::now(),
+        now,
+        cfg.scratch_jobs_root.as_deref(),
+        cfg.scratch_tmp_root.as_deref(),
+        tmpdir,
+        home,
     );
     scratch.min_age = scratch.min_age.max(cfg.idle());
     scratch.build_caches.clear();
-    run_emergency_probed(main_root, &cache_root, cfg, scratch, move || {
-        fs_stats(&probe_root).map(|s| s.used_pct())
-    })
+    scratch
+}
+
+/// The scheduled emergency run. `None` when the tier is off, the cache
+/// filesystem is under the ceiling, or another run holds the lock.
+// trace:STORY-1916 | ai:claude
+// trace:TASK-2325 | ai:claude
+// trace:TASK-2334 | ai:agy
+pub(crate) fn run_emergency(main_root: &Path, cfg: &EmergencyConfig) -> Option<RunOutcome> {
+    let cache_root = crate::worktree_reclaim::cache_root_of(main_root)?;
+    let probe_root = cache_root.clone();
+    // TASK-2325 / TASK-2334: the hard-ceiling scratch pass resolves configured
+    // roots from `[doctor.disk_headroom]` first, reading the REAL environment
+    // only here in the production glue — never below the injection seam, so a
+    // test can never reach this host's jobs or session scratch.
+    let tmpdir = std::env::var_os("TMPDIR").map(PathBuf::from);
+    let home = crate::home_dir();
+    run_emergency_configured_with(
+        main_root,
+        &cache_root,
+        cfg,
+        tmpdir.as_deref(),
+        home.as_deref(),
+        move || fs_stats(&probe_root).map(|s| s.used_pct()),
+    )
+}
+
+/// [`run_emergency`] with the cache root, `TMPDIR`/`HOME` fallback inputs, and
+/// usage probe injected, exercising the production [`emergency_scratch_survey`]
+/// root-resolution and age-floor path without touching host env (TASK-2334).
+// trace:TASK-2325 | ai:agy
+// trace:TASK-2334 | ai:agy
+pub(crate) fn run_emergency_configured_with(
+    main_root: &Path,
+    cache_root: &Path,
+    cfg: &EmergencyConfig,
+    tmpdir: Option<&Path>,
+    home: Option<&Path>,
+    used_pct: impl Fn() -> Option<u8>,
+) -> Option<RunOutcome> {
+    let scratch = emergency_scratch_survey(cfg, tmpdir, home, SystemTime::now());
+    run_emergency_probed(main_root, cache_root, cfg, scratch, used_pct)
 }
 
 /// [`run_emergency`] with the cache root, usage probe and hard-ceiling
@@ -1340,6 +1406,28 @@ pub(crate) fn run_emergency_probed(
     cfg: &EmergencyConfig,
     scratch: crate::scratch_reclaim::ScratchSurvey,
     used_pct: impl Fn() -> Option<u8>,
+) -> Option<RunOutcome> {
+    run_emergency_probed_with_dev(
+        main_root,
+        cache_root,
+        cfg,
+        scratch,
+        used_pct,
+        crate::scratch_reclaim::device_of_path,
+    )
+}
+
+/// [`run_emergency_probed`] with the filesystem-device lookup injected so
+/// mixed-device and unknown-device scratch isolation can be verified on a
+/// single-filesystem tempdir (TASK-2325, PR-2906 round 3).
+// trace:TASK-2325 | ai:agy
+pub(crate) fn run_emergency_probed_with_dev(
+    main_root: &Path,
+    cache_root: &Path,
+    cfg: &EmergencyConfig,
+    scratch: crate::scratch_reclaim::ScratchSurvey,
+    used_pct: impl Fn() -> Option<u8>,
+    dev_of: impl Fn(&Path) -> Option<u64>,
 ) -> Option<RunOutcome> {
     use fs2::FileExt;
     if !cfg.enabled() {
@@ -1402,10 +1490,21 @@ pub(crate) fn run_emergency_probed(
         },
     );
     // TASK-2325: at the hard ceiling the repo's caches alone may not be
-    // enough — terminal jobs' tmp dirs and old session scratch (never build
-    // caches, never a live job or session) are then reclaimed too, until
+    // enough — terminal jobs' tmp dirs and old session scratch on the
+    // pressured build-cache filesystem (never build caches, never a live job
+    // or session, never a foreign filesystem) are then reclaimed too, until
     // usage drops below the ceiling. trace:TASK-2325 | ai:claude
-    let outcome = scratch_at_hard_ceiling(main_root, cfg, now, &scratch, &used_pct, outcome);
+    let pressured_dev = dev_of(cache_root);
+    let outcome = scratch_at_hard_ceiling_with_dev(
+        main_root,
+        cfg,
+        now,
+        &scratch,
+        &used_pct,
+        pressured_dev,
+        &dev_of,
+        outcome,
+    );
     let mut state = load_guard_state(main_root);
     let now_utc = Utc::now();
     if let Some((title, body)) = emergency_notice(&outcome, cfg) {
@@ -1423,11 +1522,10 @@ pub(crate) fn run_emergency_probed(
 /// TASK-2325: the emergency tier's last resort. Runs only while usage is
 /// still AT OR ABOVE the hard ceiling after the cache candidates (and only
 /// when the cache tier did not stop with an allowlist refusal): terminal
-/// jobs' tmp dirs and old session scratch — never build caches, never a live
-/// job or session — each re-checked at the delete site and ledgered like
-/// every other emergency delete. The age window is the emergency idle window
-/// or the scratch default, whichever is longer, so this never deletes
-/// younger scratch than the ordinary scan would list.
+/// jobs' tmp dirs and old session scratch on the pressured filesystem — never
+/// build caches, never a live job or session, never a foreign or unknown
+/// device — each re-checked and re-validated for freshness/terminal state at
+/// the delete site and ledgered like every other emergency delete.
 // trace:TASK-2325 | ai:claude
 fn scratch_at_hard_ceiling(
     main_root: &Path,
@@ -1435,6 +1533,30 @@ fn scratch_at_hard_ceiling(
     now: SystemTime,
     survey: &crate::scratch_reclaim::ScratchSurvey,
     used_pct: &impl Fn() -> Option<u8>,
+    outcome: RunOutcome,
+) -> RunOutcome {
+    let pressured_dev = crate::scratch_reclaim::device_of_path(main_root);
+    scratch_at_hard_ceiling_with_dev(
+        main_root,
+        cfg,
+        now,
+        survey,
+        used_pct,
+        pressured_dev,
+        crate::scratch_reclaim::device_of_path,
+        outcome,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn scratch_at_hard_ceiling_with_dev(
+    main_root: &Path,
+    cfg: &EmergencyConfig,
+    now: SystemTime,
+    survey: &crate::scratch_reclaim::ScratchSurvey,
+    used_pct: &impl Fn() -> Option<u8>,
+    pressured_dev: Option<u64>,
+    dev_of: impl Fn(&Path) -> Option<u64>,
     mut outcome: RunOutcome,
 ) -> RunOutcome {
     let ts = DateTime::<Utc>::from(now);
@@ -1455,7 +1577,8 @@ fn scratch_at_hard_ceiling(
         emit_run(&mut outcome);
         return outcome;
     }
-    let (rows, _held) = crate::scratch_reclaim::plan(survey);
+    let (rows, _held) =
+        crate::scratch_reclaim::plan_on_device(survey, Some(pressured_dev), &dev_of);
     let mut push = |outcome: &mut RunOutcome, row: LedgerRow| {
         let _ = append_ledger(main_root, std::slice::from_ref(&row));
         outcome.rows.push(row);
@@ -1486,6 +1609,34 @@ fn scratch_at_hard_ceiling(
             outcome.refusal = Some(e.to_string());
             outcome.stopped = Stop::Refused;
             break;
+        }
+        if let Err(e) =
+            crate::scratch_reclaim::check_on_device(survey, &row, pressured_dev, &dev_of)
+        {
+            push(
+                &mut outcome,
+                LedgerRow::Skip {
+                    ts,
+                    path,
+                    reason: Reason::AgentScratch,
+                    why: e.to_string(),
+                },
+            );
+            continue;
+        }
+        let fresh_now = SystemTime::now().max(now);
+        if let Some(why) = crate::scratch_reclaim::revalidate_before_delete(survey, &row, fresh_now)
+        {
+            push(
+                &mut outcome,
+                LedgerRow::Skip {
+                    ts,
+                    path,
+                    reason: Reason::AgentScratch,
+                    why,
+                },
+            );
+            continue;
         }
         let removed = if row.path.is_dir() {
             std::fs::remove_dir_all(&row.path)

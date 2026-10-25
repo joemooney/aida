@@ -107,24 +107,57 @@ fn days(d: Duration) -> u64 {
     d.as_secs() / (24 * 3600)
 }
 
-/// The newest write anywhere under `path` (the walk also prices the row).
+/// How long `path` has been idle against `now`, plus its byte size.
 /// A plain file prices as its own length — the walk only sums directory
 /// entries (PR-2906 round 1).
-fn aged(survey: &ScratchSurvey, path: &Path) -> Option<(u64, Duration)> {
+fn aged_at(survey: &ScratchSurvey, path: &Path, now: SystemTime) -> Option<(u64, Duration)> {
     let md = std::fs::symlink_metadata(path).ok()?;
     if md.file_type().is_symlink() {
         return None;
     }
     let walk = walk_cache(path);
-    let idle = idle_for(&walk, survey.now)?;
+    let idle = idle_for(&walk, now)?;
     let bytes = if md.is_file() { md.len() } else { walk.bytes };
     (idle >= survey.min_age).then_some((bytes, idle))
+}
+
+fn aged(survey: &ScratchSurvey, path: &Path) -> Option<(u64, Duration)> {
+    aged_at(survey, path, survey.now)
+}
+
+/// Device id (`st_dev`) of `path` via `symlink_metadata`, without following
+/// symlinks.
+pub(crate) fn device_of_path(path: &Path) -> Option<u64> {
+    use std::os::unix::fs::MetadataExt;
+    std::fs::symlink_metadata(path).ok().map(|m| m.dev())
+}
+
+fn device_hold_reason(
+    path: &Path,
+    required_dev: Option<Option<u64>>,
+    dev_of: &impl Fn(&Path) -> Option<u64>,
+) -> Option<String> {
+    let target_dev = required_dev?;
+    let Some(expected) = target_dev else {
+        return Some("pressured build-cache filesystem device could not be determined".into());
+    };
+    let Some(actual) = dev_of(path) else {
+        return Some("scratch filesystem device could not be determined".into());
+    };
+    if actual != expected {
+        return Some(format!(
+            "scratch is on device {actual}, not pressured build-cache device {expected}"
+        ));
+    }
+    None
 }
 
 /// `(a)` — terminal jobs' `tmp/` dirs. Held rows say why a job with scratch
 /// stays: the operator under disk pressure needs the reason, not a silence.
 fn plan_jobs(
     survey: &ScratchSurvey,
+    required_dev: Option<Option<u64>>,
+    dev_of: &impl Fn(&Path) -> Option<u64>,
     rows: &mut Vec<ScratchRow>,
     held: &mut Vec<(PathBuf, String)>,
 ) {
@@ -142,6 +175,10 @@ fn plan_jobs(
             Ok(m) if m.is_dir() && !m.file_type().is_symlink() => {}
             // No scratch (or a symlink posing as it): nothing to say.
             _ => continue,
+        }
+        if let Some(why) = device_hold_reason(&tmp, required_dev, dev_of) {
+            held.push((tmp, why));
+            continue;
         }
         let state = std::fs::read_to_string(job.join("state.json"))
             .ok()
@@ -178,7 +215,13 @@ fn plan_jobs(
 /// `(b)` — aged entries under the TMPDIR root. Entries inside the age window
 /// are silently kept (they are the common case, not news); live session dirs
 /// are held with the reason.
-fn plan_tmp(survey: &ScratchSurvey, rows: &mut Vec<ScratchRow>, held: &mut Vec<(PathBuf, String)>) {
+fn plan_tmp(
+    survey: &ScratchSurvey,
+    required_dev: Option<Option<u64>>,
+    dev_of: &impl Fn(&Path) -> Option<u64>,
+    rows: &mut Vec<ScratchRow>,
+    held: &mut Vec<(PathBuf, String)>,
+) {
     let Some(tmp_root) = &survey.tmp_root else {
         return;
     };
@@ -220,6 +263,10 @@ fn plan_tmp(survey: &ScratchSurvey, rows: &mut Vec<ScratchRow>, held: &mut Vec<(
             held.push((path, "live session scratch (this session)".into()));
             continue;
         }
+        if let Some(why) = device_hold_reason(&path, required_dev, dev_of) {
+            held.push((path, why));
+            continue;
+        }
         let Some((bytes, idle)) = aged(survey, &path) else {
             continue;
         };
@@ -234,11 +281,21 @@ fn plan_tmp(survey: &ScratchSurvey, rows: &mut Vec<ScratchRow>, held: &mut Vec<(
 }
 
 /// `(c)` — named build caches not written in the age window.
-fn plan_build_caches(survey: &ScratchSurvey, rows: &mut Vec<ScratchRow>) {
+fn plan_build_caches(
+    survey: &ScratchSurvey,
+    required_dev: Option<Option<u64>>,
+    dev_of: &impl Fn(&Path) -> Option<u64>,
+    rows: &mut Vec<ScratchRow>,
+    held: &mut Vec<(PathBuf, String)>,
+) {
     for cache in &survey.build_caches {
         match std::fs::symlink_metadata(cache) {
             Ok(m) if m.is_dir() && !m.file_type().is_symlink() => {}
             _ => continue,
+        }
+        if let Some(why) = device_hold_reason(cache, required_dev, dev_of) {
+            held.push((cache.clone(), why));
+            continue;
         }
         let Some((bytes, idle)) = aged(survey, cache) else {
             continue;
@@ -256,11 +313,23 @@ fn plan_build_caches(survey: &ScratchSurvey, rows: &mut Vec<ScratchRow>) {
 /// Classify every scratch entry: the deletable rows (largest first) and what
 /// was held back with why.
 pub(crate) fn plan(survey: &ScratchSurvey) -> (Vec<ScratchRow>, Vec<(PathBuf, String)>) {
+    plan_on_device(survey, None, device_of_path)
+}
+
+/// [`plan`] with an optional required filesystem device (`Some(pressured_dev)`)
+/// so the emergency tier restricts scratch deletion to the pressured
+/// build-cache filesystem and rejects unknown (`None`) or foreign devices
+/// (TASK-2325, PR-2906 round 3).
+pub(crate) fn plan_on_device(
+    survey: &ScratchSurvey,
+    required_dev: Option<Option<u64>>,
+    dev_of: impl Fn(&Path) -> Option<u64>,
+) -> (Vec<ScratchRow>, Vec<(PathBuf, String)>) {
     let mut rows = Vec::new();
     let mut held = Vec::new();
-    plan_jobs(survey, &mut rows, &mut held);
-    plan_tmp(survey, &mut rows, &mut held);
-    plan_build_caches(survey, &mut rows);
+    plan_jobs(survey, required_dev, &dev_of, &mut rows, &mut held);
+    plan_tmp(survey, required_dev, &dev_of, &mut rows, &mut held);
+    plan_build_caches(survey, required_dev, &dev_of, &mut rows, &mut held);
     rows.sort_by(|a, b| b.bytes.cmp(&a.bytes));
     (rows, held)
 }
@@ -314,11 +383,81 @@ pub(crate) fn check(survey: &ScratchSurvey, row: &ScratchRow) -> anyhow::Result<
     Ok(())
 }
 
+/// Delete-site check that additionally requires `row.path` to live on
+/// `pressured_dev`, failing closed when either device is unknown (`None`) or
+/// does not match (TASK-2325, PR-2906 round 3).
+pub(crate) fn check_on_device(
+    survey: &ScratchSurvey,
+    row: &ScratchRow,
+    pressured_dev: Option<u64>,
+    dev_of: impl Fn(&Path) -> Option<u64>,
+) -> anyhow::Result<()> {
+    check(survey, row)?;
+    if let Some(why) = device_hold_reason(&row.path, Some(pressured_dev), &dev_of) {
+        anyhow::bail!(
+            "refusing to delete {}: {why}; reaching this means the scratch plan was built wrong",
+            row.path.display()
+        );
+    }
+    Ok(())
+}
+
+/// Delete-boundary freshness and job-state revalidation (TASK-2325, PR-2906
+/// round 3). Between `plan` and deleting `row`, a concurrent writer may touch
+/// a scratch entry or transition a job back to a non-terminal/unreadable state
+/// while worktree caches or preceding scratch rows are being removed. Re-reads
+/// `<job>/state.json` and re-walks the entry against a fresh clock `now`;
+/// returns `Some(reason)` when the row must be held back instead of deleted.
+pub(crate) fn revalidate_before_delete(
+    survey: &ScratchSurvey,
+    row: &ScratchRow,
+    now: SystemTime,
+) -> Option<String> {
+    let clock = now.max(survey.now);
+    match row.kind {
+        ScratchKind::JobTmp => {
+            let Some(job) = row.path.parent() else {
+                return Some("job directory missing".into());
+            };
+            let state = std::fs::read_to_string(job.join("state.json"))
+                .ok()
+                .and_then(|body| serde_json::from_str::<serde_json::Value>(&body).ok())
+                .and_then(|v| v.get("state").and_then(|s| s.as_str()).map(str::to_owned));
+            let Some(state) = state else {
+                return Some("job state unreadable — a live job is never listed".into());
+            };
+            if !job_state_terminal(&state) {
+                return Some(format!("job state `{state}` is not terminal"));
+            }
+            if aged_at(survey, job, clock).is_none() || aged_at(survey, &row.path, clock).is_none()
+            {
+                return Some("job updated inside the age window".into());
+            }
+            None
+        }
+        ScratchKind::SessionScratch => {
+            if aged_at(survey, &row.path, clock).is_none() {
+                return Some("session scratch updated inside the age window".into());
+            }
+            None
+        }
+        ScratchKind::BuildCache => {
+            if aged_at(survey, &row.path, clock).is_none() {
+                return Some("build cache updated inside the age window".into());
+            }
+            None
+        }
+    }
+}
+
 /// What `apply` did across the scratch rows.
 #[derive(Debug, Clone, Default)]
 pub(crate) struct ScratchReclaimed {
     pub deleted: Vec<(PathBuf, u64)>,
     pub failed: Vec<(PathBuf, String)>,
+    /// Entries held back at the delete boundary because their mtime or job
+    /// state changed after `plan`.
+    pub held: Vec<(PathBuf, String)>,
     /// Entries left alone because `--target-pct` was already satisfied.
     pub stopped_early: Vec<PathBuf>,
 }
@@ -327,7 +466,9 @@ pub(crate) struct ScratchReclaimed {
 /// `stop_at_pct` is set, `disk_pct` is probed on each row's parent directory
 /// before deleting and the row is skipped once its filesystem is at or below
 /// the target percentage, matching the worktree-cache tier. A check refusal
-/// fails the whole run, like worktree reclaim's rail-2 re-check.
+/// fails the whole run, like worktree reclaim's rail-2 re-check; a row whose
+/// mtime or job state became fresh/non-terminal since `plan` is held back with
+/// its reason instead of deleted.
 pub(crate) fn apply(
     survey: &ScratchSurvey,
     rows: &[ScratchRow],
@@ -347,6 +488,10 @@ pub(crate) fn apply(
                 }
             }
         }
+        if let Some(why) = revalidate_before_delete(survey, row, SystemTime::now()) {
+            out.held.push((row.path.clone(), why));
+            continue;
+        }
         match remove(&row.path) {
             Ok(()) => out.deleted.push((row.path.clone(), row.bytes)),
             Err(e) => out.failed.push((row.path.clone(), e.to_string())),
@@ -359,7 +504,7 @@ pub(crate) fn apply(
 /// name starts with `claude-` (e.g. `/tmp/claude-1000` from a session's
 /// `/tmp/claude-1000/<slug>/<id>/scratchpad`). `None` when TMPDIR is unset
 /// or no such ancestor exists — the session-scratch scan is then skipped
-/// rather than guessed.
+/// rather than guessed unless a root is explicitly configured.
 pub(crate) fn tmp_root_from(tmpdir: Option<&Path>) -> Option<PathBuf> {
     let tmpdir = tmpdir?;
     tmpdir
@@ -390,25 +535,34 @@ pub(crate) fn own_session_dir(tmp_root: &Path, tmpdir: Option<&Path>) -> Option<
     components.next().map(|second| first_path.join(second))
 }
 
-/// Build the production survey: `~/.claude/jobs`, the TMPDIR root, and the
-/// known `aida` build caches (`~/.cache/aida-impl-target`), with this
-/// session's own scratch dir excluded.
-pub(crate) fn survey_from_env(min_age_days: u64, now: SystemTime) -> ScratchSurvey {
-    let home = crate::home_dir();
-    let jobs_root = home
-        .as_deref()
-        .map(|h| h.join(".claude").join("jobs"))
+/// Build a survey from explicit/configured roots (`configured_jobs_root`,
+/// `configured_tmp_root`) with fallback to `home` (`~/.claude/jobs`,
+/// `~/.cache/aida-impl-target`) and `tmpdir` (`tmp_root_from`), excluding the
+/// calling session's own scratch dir when `tmpdir` sits inside `tmp_root`
+/// (TASK-2325 / TASK-2334).
+pub(crate) fn survey_with_roots(
+    min_age_days: u64,
+    now: SystemTime,
+    configured_jobs_root: Option<&Path>,
+    configured_tmp_root: Option<&Path>,
+    tmpdir: Option<&Path>,
+    home: Option<&Path>,
+) -> ScratchSurvey {
+    let jobs_root = configured_jobs_root
+        .map(Path::to_path_buf)
+        .or_else(|| home.map(|h| h.join(".claude").join("jobs")))
         .filter(|p| p.is_dir());
-    let tmpdir = std::env::var_os("TMPDIR").map(PathBuf::from);
-    let tmp_root = tmp_root_from(tmpdir.as_deref()).filter(|p| p.is_dir());
+    let tmp_root = configured_tmp_root
+        .map(Path::to_path_buf)
+        .or_else(|| tmp_root_from(tmpdir))
+        .filter(|p| p.is_dir());
     let mut live_session_dirs = BTreeSet::new();
     if let Some(root) = &tmp_root {
-        if let Some(own) = own_session_dir(root, tmpdir.as_deref()) {
+        if let Some(own) = own_session_dir(root, tmpdir) {
             live_session_dirs.insert(own);
         }
     }
     let build_caches = home
-        .as_deref()
         .map(|h| h.join(".cache").join("aida-impl-target"))
         .filter(|p| p.is_dir())
         .into_iter()
@@ -421,6 +575,33 @@ pub(crate) fn survey_from_env(min_age_days: u64, now: SystemTime) -> ScratchSurv
         min_age: Duration::from_secs(min_age_days.max(1) * 24 * 3600),
         now,
     }
+}
+
+/// Build the production survey with optional configured roots from
+/// `[doctor.disk_headroom]`, falling back to `~/.claude/jobs` and `$TMPDIR`.
+pub(crate) fn survey_from_env_with_roots(
+    min_age_days: u64,
+    now: SystemTime,
+    configured_jobs_root: Option<&Path>,
+    configured_tmp_root: Option<&Path>,
+) -> ScratchSurvey {
+    let home = crate::home_dir();
+    let tmpdir = std::env::var_os("TMPDIR").map(PathBuf::from);
+    survey_with_roots(
+        min_age_days,
+        now,
+        configured_jobs_root,
+        configured_tmp_root,
+        tmpdir.as_deref(),
+        home.as_deref(),
+    )
+}
+
+/// Build the production survey: `~/.claude/jobs`, the TMPDIR root, and the
+/// known `aida` build caches (`~/.cache/aida-impl-target`), with this
+/// session's own scratch dir excluded.
+pub(crate) fn survey_from_env(min_age_days: u64, now: SystemTime) -> ScratchSurvey {
+    survey_from_env_with_roots(min_age_days, now, None, None)
 }
 
 #[cfg(test)]

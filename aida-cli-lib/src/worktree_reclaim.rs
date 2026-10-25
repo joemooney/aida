@@ -1139,7 +1139,14 @@ pub fn run(opts: &ReclaimOptions) -> Result<()> {
     let scratch_survey = if opts.no_scratch {
         crate::scratch_reclaim::ScratchSurvey::empty(SystemTime::now())
     } else {
-        crate::scratch_reclaim::survey_from_env(opts.scratch_age_days, SystemTime::now())
+        let cfg = crate::read_project_config_value(&survey.main_root);
+        let ecfg = crate::disk_emergency::emergency_config(cfg.as_ref());
+        crate::scratch_reclaim::survey_from_env_with_roots(
+            opts.scratch_age_days,
+            SystemTime::now(),
+            ecfg.scratch_jobs_root.as_deref(),
+            ecfg.scratch_tmp_root.as_deref(),
+        )
     };
     let (scratch_rows, scratch_held) = crate::scratch_reclaim::plan(&scratch_survey);
 
@@ -1231,6 +1238,9 @@ pub fn run(opts: &ReclaimOptions) -> Result<()> {
         },
     )?;
     println!();
+    for (path, why) in &scratch_done.held {
+        println!("  skip  {}  — {why}", path.display());
+    }
     for (path, bytes) in done.deleted.iter().chain(&scratch_done.deleted) {
         println!("deleted {:>10}  {}", human_bytes(*bytes), path.display());
     }
@@ -1338,6 +1348,13 @@ fn render_json(
             },
         )?;
         let scratch_freed: u64 = scratch_done.deleted.iter().map(|(_, b)| b).sum();
+        if !scratch_done.held.is_empty() {
+            let mut all_skipped = scratch_skipped;
+            all_skipped.extend(scratch_done.held.iter().map(
+                |(p, why)| serde_json::json!({"path": p.display().to_string(), "reason": why}),
+            ));
+            body["scratch_skipped"] = serde_json::Value::Array(all_skipped);
+        }
         body["freed_bytes"] = serde_json::json!(done.freed_bytes + scratch_freed);
         body["deleted"] = serde_json::json!(done
             .deleted
