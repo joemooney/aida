@@ -134,3 +134,11 @@
   added_at: 2026-10-25T05:23:10.045833396Z
   for_role: implementer
   added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a171c8-6a5d-7073-80cf-9dfcd9667c53
+  position: 480000
+  added_by: role:implementer
+  note: Fresh performance regression, not budget recalibration. Diagnose bounded show hot path from durable measured evidence; preserve active watcher/BUG2017 work priority.
+  added_at: 2026-10-25T06:39:55.919602211Z
+  for_role: implementer
+  added_by_machine: imac
