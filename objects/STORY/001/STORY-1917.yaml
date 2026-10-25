@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T17:15:51.947160848Z
-modified_at: 2026-10-25T06:35:44.789678498Z
+modified_at: 2026-10-25T06:49:06.503527763Z
 req_type: Story
 relationships:
 - rel_type:
@@ -347,6 +347,80 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Codex1 independent recheck: F1/F3/F4/F5 resolved and exact-head Build passes; F2 still lacks the requested real detached-worker handoff/race and terminal-fencing regression. Refs STORY-1917.. No triage reason was given.'
   created_at: 2026-10-25T06:35:44.789669616Z
   modified_at: 2026-10-25T06:35:44.789669616Z
+- id: 01a171d1-f0c7-7820-b8fe-553b5bb9904a
+  author: joe
+  content: |-
+    ## STORY-1917 Slice 3 & TASK-2338..2344 Inventory and Bounded Implementation Plan (`agy2`)
+
+    ### Part 1: Inventory of Follow-Up Findings (`TASK-2338` – `TASK-2344`) on PR #2913 Head (`2b3cd94f5d`)
+
+    | Task | Current Status on `2b3cd94f5d` | Remaining Work & Proposed Design / State Transitions |
+    |---|---|---|
+    | **TASK-2338** — Expired-mandate dispatch refusal at request submission time | **Code present, test missing.** `check_request_authority` (`aida-cli-lib/src/dispatch.rs:1075-1081`) already handles `MandateState::Expired(m)` and refuses with `mandate {} expired at {}`. Execution-time mandate expiry is tested (`story_1917_dispatch_exec_tests.rs:706-740`), but submission-time (`submit_request`) expiry in `story_1917_dispatch_request_tests.rs` only tests `None` and `Stopped`. | Add hermetic submission-time expired-mandate refusal assertion (`now + Duration::hours(5)`) to `refuses_without_active_dispatch_mandate_or_bound_advisor_grant` in `aida-cli-lib/src/tests/story_1917_dispatch_request_tests.rs` (`// trace:TASK-2338`). |
+    | **TASK-2339** — Wrong-seat, principal-mismatch, and missing-`reviewer`-delegation request refusals | **Code present, submission-time tests missing.** `check_request_authority` (`aida-cli-lib/src/dispatch.rs:1179-1235`) implements all three refusals and emits `Outcome::Refused` rows, but `story_1917_dispatch_request_tests.rs` only tests happy-path advisor grants. | Add `refuses_wrong_seat_principal_mismatch_and_missing_reviewer_delegation` in `aida-cli-lib/src/tests/story_1917_dispatch_request_tests.rs` (`// trace:TASK-2339`) covering: (1) `reviewer` / `implementer` seat grant refused at submission with `Outcome::Refused`, (2) grant principal != mandate principal refused with `Outcome::Refused`, and (3) advisor grant with `delegable_seats = []` refuses `review` and `flow` while allowing `take`, `impl`, and `train`. |
+    | **TASK-2340** — Mandate-scope dispatch refusals leave no ledger row | **Still unfixed.** In `check_request_authority` (`aida-cli-lib/src/dispatch.rs:1091-1111`), when `MandateState::Active(mandate)` is found, `mandate.id` is verified and known, yet `!mandate.covers(Scope::Dispatch)` and `ships_pr && !mandate.covers(Scope::ShipHeld)` bail before `emit_dispatch_event`. | **Design choice for ruling:** Emit `emit_dispatch_event(main_worktree, &mandate.id, verb_name_of(verb), &verb_subject_of(verb), Outcome::Refused, Some(msg.clone()))` in both active-mandate scope-refusal branches (`!mandate.covers(Scope::Dispatch)` and `ships_pr && !mandate.covers(Scope::ShipHeld)`), where `mandate.id` is an authentic active mandate for the caller principal. Keep `MandateState::None`, `Expired`, and `Stopped` without ledger rows so missing/inactive mandate checks never borrow an unrelated/stale mandate ID. Pin exact event cardinality, `mandate_id`, and refusal reasons in `story_1917_dispatch_request_tests.rs` (`// trace:TASK-2340`). |
+    | **TASK-2341** — `validate_branch` misses the repo's actual default branch | **Still unfixed.** `validate_branch(branch: &str)` (`aida-cli-lib/src/dispatch.rs:676-711`) currently checks only literal `"main"`, `"master"`, and `"HEAD"`. | **Design choice for ruling:** Change signature to `validate_branch(main_worktree: &Path, branch: &str) -> Result<String>` and invoke it at both submission (`submit_request`) and execution (`revalidate_request`). In addition to rejecting literal `"main"`, `"master"`, and `"HEAD"`, resolve the repository default branch via read-only local `crate::forge::local_origin_head_branch(main_worktree)` (`git -C <main_worktree> symbolic-ref --quiet --short refs/remotes/origin/HEAD`, stripping `origin/`). **Fail-closed on unknown/missing/stale evidence:** if `refs/remotes/origin/HEAD` is unset, unreadable, or does not point to a valid `refs/remotes/origin/<branch>` target (or if `refs/remotes/origin/<default>` does not resolve to an existing commit via `rev-parse --verify --quiet`), refuse with an explicit remediation message without probing the network or mutating git/forge config. Reject `branch == default_branch` (e.g., `develop`, `trunk`). Update dispatch test fixtures to set `refs/remotes/origin/HEAD -> refs/remotes/origin/main` and add tests for nonstandard default branches (`develop`/`trunk`) and missing/dangling `origin/HEAD` at both submission and execution (`// trace:TASK-2341`). |
+    | **TASK-2342** — `mandate::status_line` shows only one scope, hiding live dispatch authority and disagreeing with `status_text` | **Still unfixed.** `mandate::status_line` (`aida-cli-lib/src/mandate.rs:1963-1976`) renders `"MANDATE ship-held"` whenever `m.covers(Scope::ShipHeld)` is true (hiding `dispatch` on a `--ship-held --scope dispatch` mandate) and otherwise prints only `.iter().next()`. | **Design choice for ruling:** In `mandate::status_line`, keep `"MANDATE drive"` when `m.is_drive()`, and for non-drive mandates render all `m.effective_scopes()` joined with `", "` in canonical `Scope` enum order (`m.effective_scopes().iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", ")`), matching `status_text` (`mandate.rs:2086-2090`). Single-scope `ship-held` remains `"MANDATE ship-held · ..."`; `--ship-held --scope dispatch` renders `"MANDATE ship-held, dispatch · ..."`. Display-only; grants no authority. Add unit tests in `story_1917_dispatch_request_tests.rs` (`// trace:TASK-2342`). |
+    | **TASK-2343** — Pin `deny_unknown_fields` on internally-tagged `DispatchVerb` with a test | **Code present, test missing.** `DispatchRequest` (`dispatch.rs:53`), `DispatchVerb` (`dispatch.rs:71`), and `DispatchResult` (`dispatch.rs:258`) carry `#[serde(deny_unknown_fields)]`, but no test verifies persisted JSON rejection of injected keys across `serde`'s internal tag replay. | Add `persisted_request_and_result_json_reject_unknown_fields` in `story_1917_dispatch_request_tests.rs` (`// trace:TASK-2343`) asserting `load_pair` and `execute_one_request` fail closed when an extra field is injected into: (1) top-level `requests/<id>.json`, (2) inside `action` for each internally-tagged `DispatchVerb` variant (`flow`, `review`, `take`, `impl`, `train`), and (3) `results/<id>.json`. |
+    | **TASK-2344** — Orphan dispatch request files are never reaped and warn on every invocation | **Still unfixed.** `submit_request` writes `requests/<id>.json` before `results/<id>.json`, and `load_all_pairs` warns on every call without reconciling interrupted submissions. | **Proposed state transitions for ruling (under `tick.lock`):**<br>1. **Result-first atomic publication in `submit_request` (under `tick.lock`):** Write `briefs/<id>.md` (if any), then `results/<id>.json` (`status: Pending`), then `requests/<id>.json`. If writing `requests/<id>.json` fails, remove the unpublished `results/<id>.json` (and `briefs/<id>.md`) before releasing `tick.lock`.<br>2. **Bounded orphan reconciliation under `tick.lock` (`reconcile_orphan_records_locked`, called under `tick.lock` in `submit_request`, `cancel_request`, and `claim_and_dispatch_pass`):**<br>   - **Transition A (valid `requests/<id>.json` + missing `results/<id>.json`):** Parse and validate `requests/<id>.json` (`req.id == id`). Synthesize and atomically write the missing `results/<id>.json` in `DispatchStatus::Pending` (`requested_at = req.requested_at`, `mandate_id = req.mandate_id`, `requester_grant_prefix`, `summary = "recovered pending request after interrupted submission"`). This preserves queued work and target/dedupe collision protection without deleting valid requests.<br>   - **Transition B (orphan `results/<id>.json` with missing `requests/<id>.json`):** If `res.status == DispatchStatus::Pending && res.worker_pid.is_none()`, remove the unreferenced pre-request staging `results/<id>.json` (and any orphan `briefs/<id>.md`) once under `tick.lock`. If `res.status == DispatchStatus::Running` or `res.worker_pid.is_some()`, **never delete**: if the worker PID/start is still alive, retain untouched; if dead/missing, transition `results/<id>.json` to `DispatchStatus::Failed` (`refusal_reason = "orphaned running result without request file"`).<br>   - **Transition C (corrupt/unparseable `requests/<id>.json` where `results/<id>.json` is missing or `Pending` with no worker):** Record/transition `results/<id>.json` to `DispatchStatus::Failed` (or quarantine `requests/<id>.json` to `requests/<id>.json.corrupt` mode 0600 once) so `load_all_pairs` does not warn on every subsequent read, while never deleting any live/unknown-owned `Running` claim (`// trace:TASK-2344`). |
+
+    ---
+
+    ### Part 2: Bounded Implementation Plan for `STORY-1917` Slice 3
+
+    #### 1. `flow` and `train` Runners (`aida-cli-lib/src/dispatch.rs` + `aida-cli-lib/src/dispatch_flow.rs`)
+    - Keep `dispatch.rs` modular by placing the `flow` and `train` step-runner implementation in `aida-cli-lib/src/dispatch_flow.rs` (`#[path = "dispatch_flow.rs"] mod dispatch_flow;`) wired into `execute_one_request_with_token` (`dispatch.rs:2981`).
+    - **Pre-step authority re-verification helper (`reverify_step_authority`)**:
+      - Before **every** step in `flow` (step 1 review, step 2 rebase/update-branch, step 3 CI wait/ship) and before **every** PR in `train`:
+        1. Re-verify `check_serve_grant(main_worktree, Utc::now())` (inherited advisor grant binding; never self-binds).
+        2. Re-verify `mandate::recheck(mandate_dir, &req.mandate_id, &req.principal, Utc::now())`, confirming `Scope::Dispatch` (and `Scope::ShipHeld` before shipping).
+        3. Re-verify `HumanGates` (`GateOp::Dispatch`, and `GateOp::Ship` before shipping).
+        4. Re-verify requester grant on disk (`seat_authority::read_grant` unrevoked + `seat_authority::grant_authorized_at` + `"reviewer"` in `delegable_seats` for `flow`).
+    - **`run_flow_verb(main_worktree, mandate_dir, &req, pr, no_ship, vendor)`**:
+      - **Step 1 (Attested Review)**: Inspect `.aida/review-verdicts/PR-<pr>.json` via existing non-symlink bounded verdict reader (`crate::gate::review_verdict::read_verdict_for_pr`) against the current PR head SHA (`gh pr view <pr> --json headRefOid,headRefName,baseRefName,state`). If no current-head `APPROVED` verdict exists, run `run_review_verb(main_worktree, &req, pr, vendor)` and re-read `.aida/review-verdicts/PR-<pr>.json`.
+        - If verdict is `CHANGES_REQUESTED` or missing/mismatched SHA: stop immediately, leave any merge hold untouched, return `RunnerOutcome::Failed` (notifying `advisor` with the blocking findings summary).
+      - **Step 2 (Branch Freshness)**: Re-run `reverify_step_authority`. If the PR is behind its base branch (`mergeStateStatus == "BEHIND"`), update via `gh pr update-branch <pr>` (bounded timeout via `command_output_with_timeout`). If `update-branch` changes the head SHA, require a fresh current-head `APPROVED` review before shipping (re-running Step 1 once on the updated head, or stopping with a clear message if `--no-ship` / review fails).
+      - **Step 3 (Ship or `--no-ship`)**:
+        - If `no_ship == true`: return `RunnerOutcome::Done { summary: "PR #<pr> reviewed and green (--no-ship)", .. }`.
+        - If `no_ship == false`: Re-run `reverify_step_authority` (including `Scope::ShipHeld` and `GateOp::Ship`), then invoke `<aida_exe_path()> pr ship <pr> --wait 1800` as a child process with output logged via `append_log_bounded_nofollow`.
+        - **Hold preservation invariant**: `flow` never calls `aida merge-hold clear` or bypasses `pr_merge_gate`. `aida pr ship` enforces its own review, CI, and mandate/rework hold gates; if a human-only hold blocks shipping (exit codes 20–25 / non-zero), `flow` leaves the hold in place and returns `RunnerOutcome::Failed` (or `Refused` on gate refusal) and notifies `advisor`.
+    - **`run_train_verb(main_worktree, mandate_dir, &req, prs)`**:
+      - Acquire exclusive non-blocking `.aida/dispatch/train.lock` (`O_NOFOLLOW | O_CREAT | O_RDWR`, mode 0600, `flock(LOCK_EX | LOCK_NB)`) in addition to the `MAX_CONCURRENT_TRAINS = 1` worker claim cap.
+      - Validate that every PR in `prs` has a current-head `APPROVED` verdict before starting, and re-run `reverify_step_authority` before each PR.
+      - Delegate to `<aida_exe_path()> pr train <prs...>` (or sequential pre-checked `pr train` execution with per-PR authority recheck if invoked step-by-step), streaming output to `logs/<id>.log` via `append_log_bounded_nofollow`. Stop on the first failure and notify `advisor` with the merged prefix and failed PR.
+
+    #### 2. Schedule Integration (`aida-cli-lib/src/schedule_predicate.rs` & `aida-cli-lib/src/maintenance_schedule.rs`)
+    - **`schedule_predicate.rs`**:
+      - Add `Field::MandateDispatchActive` (`"mandate.dispatch_active"`, `FieldType::Flag`) and `Field::DispatchPending` (`"dispatch.pending"`, `FieldType::Count`) to `Field` and `Field::ALL` (growing `Field::ALL` from 10 to 12).
+      - Add `pub mandate_dispatch_active: bool` and `pub dispatch_pending: i64` to `Snapshot` and wire `Snapshot::get`.
+    - **`maintenance_schedule.rs`**:
+      - In `collect_snapshot`:
+        - When `fields.contains(&Field::MandateDispatchActive)`, compute `snap.mandate_dispatch_active = crate::dispatch::dispatch_mandate_record_active(now)` (local file read of active mandate covering `Scope::Dispatch`, zero git/network).
+        - When `fields.contains(&Field::DispatchPending)`, compute `snap.dispatch_pending = crate::dispatch::pending_tick_eligible_count(project_root)` (count of `Pending` `take`/`impl` requests in `.aida/dispatch/`, or total `Pending` requests — see ruling item 5 below).
+      - In `command_table()`:
+        - Add `(&["dispatch tick"], ScheduledCommand { display: "dispatch tick", args: &["dispatch", "tick"], hook_allowed: false })` (never on the per-turn hook path).
+
+    #### 3. `aida init` & Repo Schedule Scaffolding (`aida-cli-lib/src/init_cmd.rs`, `.aida/config.toml`, `docs/cli/03-work-autonomy.md`)
+    - In `init_cmd::init_schedule_config_section()` (`aida-cli-lib/src/init_cmd.rs:2560`) and `.aida/config.toml`:
+      - Add the default substrate job:
+        ```toml
+        [[schedule.jobs]]
+        name = "dispatch-tick"
+        command = "dispatch tick"
+        every = "2m"
+        when = "mandate.dispatch_active == true && dispatch.pending > 0"
+        enabled = true
+        ```
+      - Update `story_1226_init_schedule_section_tests::init_schedule_section_lists_default_jobs` in `init_cmd.rs` and `docs/cli/03-work-autonomy.md` predicate field table to document `mandate.dispatch_active`, `dispatch.pending`, and `dispatch tick`.
+
+    #### 4. Explicit Items Requested for Advisor Ruling Before Coding
+    1. **`TASK-2340` scope-refusal ledger attribution**: Confirm that `check_request_authority` emits `Outcome::Refused` ledger rows with `mandate.id` when `MandateState::Active(mandate)` fails scope coverage (`!covers(Scope::Dispatch)` or `ships_pr && !covers(Scope::ShipHeld)`), while `MandateState::None`/`Expired`/`Stopped` continue to refuse without fabricating or borrowing a `mandate_id`.
+    2. **`TASK-2341` default-branch resolution & fail-closed behavior**: Confirm `validate_branch(main_worktree, branch)` should resolve the default branch from local `refs/remotes/origin/HEAD` (`local_origin_head_branch`) and **fail closed** when `refs/remotes/origin/HEAD` is missing or dangling (no network/forge fallback, no git/config mutation).
+    3. **`TASK-2342` `mandate::status_line` multi-scope separator**: Confirm joining non-drive `m.effective_scopes()` with `", "` (`MANDATE ship-held, dispatch · ...`), matching `status_text`.
+    4. **`TASK-2344` crash-safe write order & orphan recovery transitions**: Confirm (a) writing `results/<id>.json` (`Pending`) before `requests/<id>.json` under `tick.lock` in `submit_request`, and (b) under `tick.lock`, recovering a valid `requests/<id>.json` with missing `results/<id>.json` into `DispatchStatus::Pending` (preserving active request + collision protection) while cleaning up an unreferenced `Pending` (`worker_pid == None`) `results/<id>.json` that has no `requests/<id>.json`.
+    5. **`dispatch.pending` predicate count scope**: Confirm whether `dispatch.pending` should count **tick-runnable** pending requests (`take` and `impl`, since `dispatch tick` only runs `take`/`impl` and leaves `review`/`flow`/`train` for `dispatch serve`) or **all** `Pending` requests (with `dispatch tick` remaining a fast no-op when only `serve`-only requests are pending).
+  created_at: 2026-10-25T06:49:06.503527763Z
+  modified_at: 2026-10-25T06:49:06.503527763Z
 history:
 - id: 01a16c5e-51c4-73b2-b8a3-3b764dc7e5cd
   author: joe
