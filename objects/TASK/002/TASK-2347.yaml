@@ -14,12 +14,12 @@ description: |
   6. Separate live synthetic test, explicitly authorized by operator, proves synthetic advisor mail wakes SAME idle conversation and repeated scans do not duplicate it. Distinguish accepted queue from observed executed turn. Include durable receipt evidence and installation/uninstallation instructions.
 
   Implementation boundary: smallest maintainable script/service and CLI seam using native codex queue; no general orchestration framework. Existing aida advisor watch cold-boots Codex, so it is not sufficient. Requires independent review; implementation session must not approve/merge its own code. User authorization includes enabling this one watcher and the synthetic test.
-status: Approved
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T02:08:29.032100054Z
-modified_at: 2026-10-25T15:35:57.230496416Z
+modified_at: 2026-10-25T15:35:58.883630916Z
 req_type: Task
 tags:
 - codex
@@ -488,6 +488,13 @@ history:
   author: joe
   timestamp: 2026-10-25T15:35:53.561260448Z
   changes: []
+- id: 01a173b4-4ea3-7c90-b3d9-d87f653bcde8
+  author: joe
+  timestamp: 2026-10-25T15:35:58.883621645Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
 filed_at:
   code_sha: 2db1d977b0615f01ae82216f3b9c8ce2d009550f
   branch: main
@@ -495,6 +502,9 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 2db1d977b0
   vendor: codex
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-25T15:35:58.883596981Z
 failure_reason:
   phase: reviewer
   phase_index: 3
