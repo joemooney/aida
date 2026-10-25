@@ -1,0 +1,96 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-2346",
+  "publishes": [
+    {
+      "at": "2026-10-25T19:45:20.657457273Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-25T04:52:40.935808890Z",
+      "spec": "TASK-2346",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-25T15:46:40.807058963Z",
+      "spec": "TASK-2346",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-25T16:59:24.038220891Z",
+      "spec": "TASK-2346",
+      "seat": "reviewer",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2923,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "0e9ace7b6ef91dd4ad13d90bc85c171c76fcb360"
+      }
+    },
+    {
+      "ts": "2026-10-25T16:59:25.281201320Z",
+      "spec": "TASK-2346",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "codex2 independent: bounded deletion fits corrected lock/preview proof, but required nearby rationale/TASK2346 trace and accurate PR explanation are absent. Operator accepts 10.2s timing variance; actual CI is still red, not a new source finding. Evidence /tmp/codex2-pr2923-0e9-review.txt.",
+        "recovery_hint": "address the review findings, move TASK-2346 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-10-25T17:07:41.212215114Z",
+      "spec": "TASK-2346",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-25T19:40:12.111520399Z",
+      "spec": "TASK-2346",
+      "seat": "reviewer",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2923,
+        "verdict": "APPROVED",
+        "reviewed_sha": "04ac3bc6772c216b22dad8143cfc76f201361aac"
+      }
+    },
+    {
+      "ts": "2026-10-25T19:44:00.520522984Z",
+      "spec": "TASK-2346",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-25T19:45:20.447945500Z",
+      "spec": "TASK-2346",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "011e33b65ee2ee1ecd96518e3cab472108cc18c5",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
