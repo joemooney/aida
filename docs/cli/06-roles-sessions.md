@@ -330,6 +330,14 @@ A manifest that claims the layout this build already uses is reported as damaged
 
 ---
 
+For host notification adapters, `aida mailbox wake-snapshot --recipient advisor
+--local-root <checkout> --json` emits a version-1 envelope containing unread
+message IDs and existing acknowledged IDs. It uses bounded no-follow reads, merges the canonical mailbox, and
+never acknowledges mail. Invoke from the main project directory while selecting
+a sibling's local mailbox with `--local-root`. See the [Codex mail wake adapter](../agents/codex-mail-wake.md)
+for opt-in setup, deduplication, and uncertain-delivery recovery.
+<!-- trace:TASK-2347 | ai:codex -->
+
 ### `aida driver`
 
 **One line** — register the long-running loops (relays, drains, headless agents) that work in-progress specs, so every view can say *who* is driving each one.

@@ -17,6 +17,8 @@ from pathlib import Path
 
 
 VERIFIED = {
+    # trace:TASK-2347 | ai:codex
+    "aida mailbox wake-snapshot": "mailbox wake-snapshot --recipient advisor",
     "aida fasttrack status": "fasttrack status",
     "aida show": "show <SPEC> --no-git",
     "aida list": "list --limit 1",
