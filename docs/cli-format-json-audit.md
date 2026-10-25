@@ -482,6 +482,9 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida comment edit` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida comment delete` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida config` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida config allocation` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida config allocation show` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida config allocation enroll-home` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida config transport` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida config transport enable` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida config transport show` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
