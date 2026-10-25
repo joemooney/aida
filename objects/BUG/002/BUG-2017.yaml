@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T22:12:54.027870933Z
-modified_at: 2026-10-25T14:37:21.247256656Z
+modified_at: 2026-10-25T15:26:15.440279805Z
 req_type: Bug
 tags:
 - id-allocation
@@ -644,6 +644,33 @@ comments:
   content: 'ADVISOR source-root evidence update2026-10-25T14:36UTC: whole read-only cross-root batch refused safely in3877ms (/tmp/advisor-crossroot-20261025-1435.json), no watcher state/acceptance/queue/ACK was touched by that scan and no global caught-up claim. Direct source-root inbox read yielded six full headers; prior-known1741/1889/reviewer messages plus code1 eff2 publish4eb94f39, CI repair45d46eaa and NEW a20a4f14. Read all, then ordinary source inbox ACK saved /tmp/advisor-bug2017-source-mail-read-1436.txt. In a20 code1 explicitly confirms currentea280 local clean/remoteeff2; F4 trulyopen, F6preMCPUUID+persistededge stilltodo; nextcheckpoint strictlegacy-pair negatives/nativeproof/maina01integration/focusednativefast/push, valid existing implementer grant and no duplicate worker. This is actual owner uptake, not just nativequeue acceptance. Existing compile3366344 remained live under a pidfd-based50s observation; no kill/retry. CI-only ea280 source/touched37pass/goldenpass does not close F4/F6; no new verdict/hold release or completion.'
   created_at: 2026-10-25T14:37:21.247256656Z
   modified_at: 2026-10-25T14:37:21.247256656Z
+- id: 01a173ab-6790-7840-b1ef-a72dc65d6a7d
+  author: ai:codex:joe
+  content: |
+    Codex1 bounded PR2919 rework is pushed normally at fullSHA 22bc8fa65dc49dad227151e5b13022645ca71a28, non-draft OPEN https://github.com/joemooney/aida/pull/2919. Forge confirms head22bc and base a01a6989984ee2c6261074fa5f9d415719d3130a. Main integrated by ordinary merge2e241e7c4c92ee8bd229ef2691c93a213c91f9bd; no force. Existing WORK defaults, full signed S1+S2, F1 eight batch-alias no-write regressions and all remaining S3 are retained.
+
+    F4: bootstrap reads strict original NodeConfig and DispenserState under existing store/common/legacy locks before opaque publication. A present pair must match node/mode; wrong node, Centralized, malformed/missing-required fields, node-only and provider-only states refuse with no binding/common+legacy counter/object/metadata/oplog/ref changes. No person defaults, global fallback or identity inference. Supported legacy first-use evidence is a valid matching provider with empty sequences; positive CLI/MCP fixtures now supply that exact pair. Cold bootstrap requires both legacy records absent; valid interrupted opaque publication recovers its UUID/high-water state. Existing bound-counter loss/mismatch refusal remains.
+    F6: actual seeded META plus CLI FR/BUG UUID inventory captured BEFORE opening MCP; survival asserted after EACH add/relationship save; actual close/restart/reload proves the source CLI BUG UUID retains its references edge to the original CLI FR UUID. Existing HOME semantic/alias/comment/trace/idempotency and no-write/CAS checks retained.
+    F5 prior numeric multipart compatibility stays. One concrete additional accepted-node edge was found: core permits team_a--west, while eff2's published descriptor rejects BUG-team_a--west-003 and accepts invalid leading underscore. Narrow descriptor alignment now retains global/numeric multipart/opaque IDs and permitted hyphen/underscore aliases; actual published-descriptor positives/negatives pass. No ID redesign or server-side schema-enforcement claim.
+
+    CI corrections retained in ea280: bounded reopening only for nlink0 cooperative atomic replacement, with every accepted handle still regular/singly linked/current uid/safe mode/size/nofollow/nonblock; no counter recreation/allocation retry. Private HOME fixture supplies local Git author, managed help golden regenerated/verified, manual visible spec IDs removed. Adversarial guards preserved. Prior candidate genuinely fails the new wrong-provider native case (old node acquire succeeds); evidence /tmp/bug2017-f4-before-native.log. No claim prior83-target runs fixed F4.
+
+    CURRENT clean-source local gates, all PASS:
+    - Integrated workspace compile-only976.2s, /tmp/bug2017-f456-compile.log (no whole-workspace runtime).
+    - work_binding filtered11/11, /tmp/bug2017-f456-core.log, including linked160unique/next161, valid migration, malformed/incomplete pairs, bound loss/unsafe handles, partial recovery and full-save/CAS.
+    - CLI allocation policy4/4, /tmp/bug2017-f456-cli-policy.log.
+    - Published MCP schema1/1 and exact managed help1/1 without update mode, /tmp/bug2017-f456-schema.log and /tmp/bug2017-f456-help.log.
+    - Strong native WORK init/CLI/MCP/restart/concurrency/HUB/HOME/legacy refusal/raw read-only contract PASS, /tmp/bug2017-f456-native.log.
+    - Actual affected manual audit spec-IDs/subcommands/flags PASS, /tmp/bug2017-f456-manual.log.
+    - Final fast35/35 PASS, /tmp/bug2017-f456-fast-final.log.
+
+    Qualified native candidate /tmp/bug2017-f456-native-XlSw0V/debug/aida SHA2564a8b98e9df29a7097d8b6472449ba590f51c2a938b9f7b0a13e30eb10d595d1d; manifest beside it records clean head22bc, tree75a0866573db6394086fa557966f6a1a9874b1cf and actual CLI-policy integration build. Prior touched/83target/candidates remain historical qualified evidence, not a new clean aggregate. All Cargo used ordinary slots and AIDA_CARGO_TIMEOUT=20m; existing checks preserved, no broad runtime or slot bypass.
+
+    PR body updated with full S1+S2/remaining-S3 ledger and exact current evidence. Initial exact-head CI run40206777816 has all7 lanes IN_PROGRESS; separate merge-hold-gate remains FAILURE intentionally. No CI-green/approval/final acceptance claim. Ready for codex2's independent exact-pushed-head sufficiency recheck immediately; this is the existing bounded correction, not a new open-ended review cycle. No verdict/hold/authority/grant/merge changes, real HOME enrollment, install or live service/nonce test. Parent remains open/Refs; all S3 conflict preflight/audit/scanner integration/final documentation remain. TASK2347 source merged but deployment/idle proof still separate; BUG2222 source remains merged with no churn. Other full queued work remains.
+
+    Primary .aida/config.toml now has a watcher-health schedule block from concurrent activity; I did not edit/remove it or include it in BUG2017. BUG2017 source worktree is clean and primary common allocation/binding/counter files remain absent.
+  created_at: 2026-10-25T15:26:15.440279805Z
+  modified_at: 2026-10-25T15:26:15.440279805Z
 history:
 - id: 01a16f08-1847-70c2-a9ec-772710162546
   author: joe
