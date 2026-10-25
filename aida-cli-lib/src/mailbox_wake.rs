@@ -154,10 +154,11 @@ where
         Ok(bytes.len())
     };
     let mut seen = std::collections::BTreeSet::new();
-    // A parallel batch may read at most 128 bytes per entry in total. When the
-    // remaining aggregate budget cannot cover that reservation, preserve the
+    // Reserve the 128-byte file bound plus read_regular's growth-detection
+    // byte for every parallel entry. When the remaining aggregate budget
+    // cannot cover that reservation, preserve the
     // original sequential actual-byte accounting rather than overspending.
-    if readers <= 1 || (entries.len() as u64) * 128 > *budget {
+    if readers <= 1 || (entries.len() as u64) * 129 > *budget {
         for (id, path) in entries {
             let used = read_one(&path, 128.min(*budget))?;
             *budget = budget
@@ -571,5 +572,36 @@ mod tests {
             &read_regular
         )
         .is_err());
+    }
+    #[test]
+    fn task_2347_receipt_pool_reserves_growth_detection_bytes() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let root = tempfile::tempdir().unwrap();
+        let timestamp = format!("{}1", " ".repeat(127));
+        for id in ["one", "two"] {
+            std::fs::write(root.path().join(format!("{id}.txt")), &timestamp).unwrap();
+        }
+        let anchor = open_directory(root.path()).unwrap().unwrap();
+        let mut budget = 256;
+        let active = AtomicUsize::new(0);
+        let ids = read_receipts(
+            &anchor,
+            &mut budget,
+            Instant::now() + Duration::from_secs(2),
+            RECEIPT_READERS,
+            &|path, limit| {
+                let concurrent = active.fetch_add(1, Ordering::SeqCst) + 1;
+                // Two guarded reads can consume 258 bytes with growth sentinels,
+                // so this valid 256-byte input must retain sequential accounting.
+                assert!(concurrent * 129 <= 256);
+                std::thread::sleep(Duration::from_millis(2));
+                let result = read_regular(path, limit);
+                active.fetch_sub(1, Ordering::SeqCst);
+                result
+            },
+        )
+        .unwrap();
+        assert_eq!(ids.len(), 2);
+        assert_eq!(budget, 0);
     }
 }
