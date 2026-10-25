@@ -280,9 +280,20 @@ pub(crate) fn resolve_mail_sender_identity(
         .ok();
     // A headless child sends as its own handle, not its shared seat name.
     // trace:STORY-1843 | ai:claude
-    let agent_name = [crate::agent_handle::HANDLE_ENV, "AIDA_AGENT_NAME"]
-        .iter()
-        .find_map(|key| std::env::var(key).ok().filter(|v| !v.trim().is_empty()));
+    // Raw hooks cannot export into the parent. Resolve their persisted
+    // session handle before falling back to the launch's seat label.
+    // trace:STORY-1843 | ai:codex
+    let agent_name = crate::agent_handle::current_session_handle_for_cwd()
+        .or_else(|| {
+            std::env::var(crate::agent_handle::HANDLE_ENV)
+                .ok()
+                .filter(|v| !v.trim().is_empty())
+        })
+        .or_else(|| {
+            std::env::var("AIDA_AGENT_NAME")
+                .ok()
+                .filter(|v| !v.trim().is_empty())
+        });
     aida_core::mailbox::resolve_sender(
         explicit,
         agent_name.as_deref(),

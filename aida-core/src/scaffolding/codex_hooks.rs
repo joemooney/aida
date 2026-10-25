@@ -646,6 +646,14 @@ mod tests {
         "command": "custom-mail"
       }
     ]
+  },
+  "aida-mail-notice-turn": {
+    "PreInvocation": [
+      {
+        "type": "command",
+        "command": "custom-mail-turn"
+      }
+    ]
   }
 }
 "#;
@@ -704,6 +712,17 @@ mod tests {
             .as_str()
             .unwrap()
             .contains("aida-mail-notice.sh"));
+        // An existing install also gains the independently managed turn
+        // handler while retaining its customized expiry wiring.
+        // trace:STORY-1843.ac0eef56 | ai:codex
+        assert!(v["aida-mail-notice-turn"]["PreInvocation"][0]["command"]
+            .as_str()
+            .unwrap()
+            .contains("--event PreInvocation"));
+        assert_eq!(
+            v["aida-mail-notice-turn"]["PreInvocation"][0]["timeout"],
+            10
+        );
         assert!(root
             .join(AGY_HOOKS_DIR_REL)
             .join("aida-mail-notice.sh")
