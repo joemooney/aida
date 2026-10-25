@@ -1677,6 +1677,28 @@ pub(crate) fn place_hand_hold(
     write_typed_hold_replacing(project_root, record).map_err(|e| e.to_string())
 }
 
+/// Read-only view of a hold against the PR's live head. A recusal routed at an
+/// older head is shown as `StaleHead` with no current route; nothing is
+/// written. The durable refresh is [`reconcile_recusal_hold`].
+// trace:STORY-1397 | ai:claude
+pub(crate) fn project_live_head(
+    record: &MergeHoldRecord,
+    live_head: Option<&str>,
+) -> MergeHoldRecord {
+    let mut view = record.clone();
+    if view.reason_kind != HoldReasonKind::Recusal || view.legacy {
+        return view;
+    }
+    if let Some(head) = live_head.map(str::trim).filter(|head| !head.is_empty()) {
+        if view.target_head_sha.as_deref() != Some(head) {
+            view.target_head_sha = Some(head.to_string());
+            view.routing_state = HoldRoutingState::StaleHead;
+            view.routed_to.clear();
+        }
+    }
+    view
+}
+
 /// Run `route_fn` on a cloned proposal and copy ONLY `routed_to` and
 /// `routing_state` back onto the admitted `record`, so unprotected routing
 /// plumbing outside `gate/` can never mutate `reason_kind`, `legacy`,

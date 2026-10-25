@@ -1381,5 +1381,25 @@ fn routing_proposal_boundary_cannot_mutate_non_routing_fields_at_persistence() {
     expected_after_refresh.routing_state = HoldRoutingState::Routed;
     assert_eq!(refreshed, expected_after_refresh);
     assert_eq!(reread, expected_after_refresh);
-    assert_eq!(reread.absorbed, vec![absorbed_rework]);
+    assert_eq!(reread.absorbed, vec![absorbed_rework.clone()]);
+
+    // 3. project_live_head lives in protected gate/merge_hold_core.rs (not unprotected merge_hold.rs)
+    // and mutates only target_head_sha, routing_state, and routed_to when a recusal head moves.
+    let core_src = include_str!("../merge_hold_core.rs");
+    let wrapper_src = include_str!("../../merge_hold.rs");
+    assert!(
+        core_src.contains("pub(crate) fn project_live_head("),
+        "project_live_head must live in protected gate/merge_hold_core.rs"
+    );
+    assert!(
+        !wrapper_src.contains("fn project_live_head("),
+        "unprotected merge_hold.rs must not define project_live_head"
+    );
+    let projected = project_live_head(&expected_after_refresh, Some("112233445566"));
+    let mut expected_projected = expected_after_refresh;
+    expected_projected.target_head_sha = Some("112233445566".into());
+    expected_projected.routing_state = HoldRoutingState::StaleHead;
+    expected_projected.routed_to.clear();
+    assert_eq!(projected, expected_projected);
+    assert_eq!(projected.absorbed, vec![absorbed_rework]);
 }
