@@ -23,7 +23,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-25T10:17:35.599285628Z
+modified_at: 2026-10-25T11:24:00.237731507Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -791,6 +791,13 @@ comments:
     8. The reader inventory prerequisite is now concrete enough for the already-approved A preparation and then B1 read-only/context/conformance work, with retention coverage explicitly unestablished until C. B2 shared ACK and C source lifecycle must be integrated in their real supported ordering; do not expose a success-shaped stub or deploy a binary whose ordinary ACK has no real compatible lifecycle provider. Full B/C/D/E, TASK2345/46 and relay STORY122 remain mandatory. A helper/slice is non-completing Refs only. Complete the exact canonical-permit and mixed-mutator/clone failure fixtures in the implementation plan and independent STRICT review before claiming those guarantees. No full parent completion, scope reduction or permission/role change is implied.
   created_at: 2026-10-25T10:17:35.599285628Z
   modified_at: 2026-10-25T10:17:35.599285628Z
+- id: 01a172cd-9d6d-7041-bac4-ad1e5c5bfa49
+  author: joe
+  content: |
+    ADVISOR capability checkpoint (read-only Codex investigator; report read by advisor): /tmp/agy-existing-session-wake-capability-20261025.txt. No supported live Agy session-injection channel was established. Public CLI --conversation/--continue starts/resumes a process, not proof of safe existing-generation ingress; remote-control is startup-only in advertised help and actual daemon status is inactive; session-peer remains absent/unverified. Native Terminator introspection/source exposes no Send or reload API. Its plugin registry discovers modules once; already discovered disabled plugins can toggle live in Preferences, but newly copied modules cannot be assumed loadable without restart. No sends, new sessions, config/plugin mutation, signals or restart occurred.
+    Compatibility consequence for signed C3/D/E inventories: actual agy1 reports1.4.7 while agy2 runs a deleted1.4.4 executable. Installed1.4.7 help is not evidence about the older running process. Preserve both live owners/worktrees; do not substitute new resume processes, fake generation identities or guess internal injectors. Supported future ingress still needs a separate bounded consented synthetic capability proof, not UCAMI claims treated as APIs. Current work advances through proven Codex native queues. PR2920 signature correction under review is necessary parser repair, not proof of plugin activation or Agy delivery. This is evidence/boundary clarification within retained full A-E scope, not a deferral, rewrite or permission to narrow acceptance.
+  created_at: 2026-10-25T11:24:00.237731507Z
+  modified_at: 2026-10-25T11:24:00.237731507Z
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
   author: joe
