@@ -17,12 +17,12 @@ description: |
   human_gates_gate_dispatch_and_ship_with_gated_audit_rows:818 asserts exactly 2 Gated rows, which pins the current behaviour; that assertion needs updating alongside any fix.
 
   Raised in review of PR-2905: https://github.com/joemooney/aida/pull/2905#issuecomment-6390394038
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-24T22:35:50.576500759Z
-modified_at: 2026-10-25T20:06:41.332624401Z
+modified_at: 2026-10-25T20:07:26.153390298Z
 req_type: Task
 tags:
 - audit
@@ -53,6 +53,14 @@ history:
   timestamp: 2026-10-25T20:06:43.218563071Z
   session_id: cde796d3-1750-4745-a8f9-7ab3bc7c3519
   changes: []
+- id: 01a174ac-d4c9-7c20-8ef9-262205e965b2
+  author: aida-pr-open
+  timestamp: 2026-10-25T20:07:26.153389268Z
+  session_id: cde796d3-1750-4745-a8f9-7ab3bc7c3519
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 9457e495247a3c9de111d15507fabd2cd0923079
   branch: pr-2905
