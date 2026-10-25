@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T22:12:54.027870933Z
-modified_at: 2026-10-25T10:54:49.849263355Z
+modified_at: 2026-10-25T11:02:00.327401623Z
 req_type: Bug
 tags:
 - id-allocation
@@ -282,6 +282,29 @@ comments:
     Additional non-CI exploratory cache-output contract reached its deferred-label assertion after a temporary fixture enrollment and failed; that unrelated file has no final diff and its assertions remain unchanged. Evidence /tmp/bug2017-cache-output-ci-repair.log is retained rather than treating it as a passing check.
   created_at: 2026-10-25T10:54:49.849263355Z
   modified_at: 2026-10-25T10:54:49.849263355Z
+- id: 01a172b9-7987-7543-bf82-bd8051109bc8
+  author: joe
+  content: |
+    codex2 — remaining four allocation-fixture diagnosis (read-only)
+
+    Checkpoint correction: current doer /home/joe/ai/aida-bug-2017-slice1 is CLEAN at766bbcbc4c726118d625002f04583111b3fdbaed (03:52-07:00). The requested fixture corrections are already committed there, not currently uncommitted. /tmp/advisor-bug2017-eight-failures.txt predates this checkpoint (03:07). I compared259f57eb19→766 and inspected current callchains. This is source sufficiency advice, NOT a test-pass claim, fresh forge-head review or verdict. No builds/repro/edits/claims/grants/real HOME changes.
+
+    Exact contexts and minimum corrections (T = each owned TempDir)
+    1. task_1981_writer_tests::task_1981_relationship_repair_intersects_confirmed_edges_and_rechecks_targets: project fixture T, actual store T/store, independent Git/common dir T/store/.git. Direct write_object(T/store/objects,TASK-1) invokes allocation_authority::admit_object_file→resolve(store). Before enrollment missing local flag means WORK; admit attempts node(store) before accepting a new ID and cannot read T/store/.aida/node.toml, hence ENOENT at old76. list_objects explicitly accepts absent objects dir, so this is not a missing objects-directory repair. Minimum: init(store), then enroll ONLY store before either direct global-ID object write. Current lines47–49 already do this. HOME admission bypasses the WORK binding requirement, as intended for this legacy positive global-ID heal fixture. Do NOT add a fake node/bare-global fallback or change TASK-1/TASK-2 to make the refusal disappear. Preserve confirmed References intersection, the unconfirmed Parent edge and newly appeared target assertions.
+
+    2. task_1981_stale_block_repair_leaves_unconfirmed_blocks: store T/store, common T/store/.git, write target T/store/registry/blocks.yaml. BlockRegistry::save→admit_registry_write→require_global resolves the store's common dir, NOT T or user prefs. With no flag the initial registry.save (old120) correctly refused before the doctor logic. Current init117/enroll119 before save124 is the minimum correct setup. Leave nodes.toml absent: the node's staleness is part of the original test! Preserve only-confirmed first block exhaustion, second block next=11, then unrestricted repair of the remaining block. No allocation/node/config/dispenser setup beyond the store-local HOME flag is needed.
+
+    3. task_1981_counter_migration_refuses_unconfirmed_active_blocks_before_writing: project=T with T/.aida/config.toml `[id_format] counter_scope=per_type`; store=T/.aida-store initialized as a SEPARATE repo, common=T/.aida-store/.git. Project is not itself Git here. Config selects migration policy; it does NOT grant allocation authority. Initial BlockRegistry::save(T/.aida-store/registry/blocks.yaml) failed at old147 before migration could check its confirmed set. Current init147/enroll149 before save153 is correct. Enroll only store, not T or T/.aida. doctor_migrate_counter_scope_in_store14664 uses project config but store writer/dispense locks and that exact store registry; it checks the new unconfirmed active BUG block before mutation. Preserve error containing `changed since confirmation` and exact old_blocks/old_config byte equality. No production require_global weakening.
+
+    4. findings_gate::story_1421_carry_forward_findings_tests::emit_writes_targeted_commits_and_preserves_concurrent_spec: project=T is a real main code repo/common T/.git; store=T/.aida-store is ANOTHER independently initialized Git repo/common T/.aida-store/.git, not a linked worktree. Therefore enrolling T does not authorize the store. Before enrollment load_dispenser(store) sees WORK and returns a lazy CloneDispenser with no inner provider and no store/.aida/node.toml. Its later formatting/allocation refuses; model's infallible API produces empty identity and backend rejects it (old156), rather than falling back globally.
+    Important ordering trap with the new helper: calling home_fixture_backend(store) AFTER load_dispenser is too late. The previously captured lazy WORK CloneDispenser still has inner=None; once enrollment makes mode authoritative, CloneDispenser::inner returns `authoritative allocator has no configured dispenser`. Constructing a backend that enrolls later does not retroactively create a proper HOME provider. Initialize BOTH fixture repos first, enroll actual STORE, THEN load_dispenser. Current init_git_canonical_test_store125 now does exactly that before its return; load_dispenser150 and later producer at findings_gate2037 therefore get the actual HOME FileDispenser at store/.aida/dispenser.toml (existing HOME default node1 behavior), without needing a WORK node binding. Parent code repo can remain unmarked. Preserve concurrent UUID survival, two tagged successors, one targeted add commit each and rerun idempotency.
+
+    General helper boundary (not blanket enrollment)
+    CLI test_env::home_fixture_backend creates backend structure then enroll_synthetic_home(root); that enrollment uses the nearest EXISTING filesystem Git/common identity and initializes Git only when none resolves. It does not force every supplied child directory to become a separate repo. If a fixture intends a nested/separate store repo, finish that topology BEFORE enrollment/provider construction; creating a new child .git afterward would change the effective common dir and lose the earlier flag. Prefer assertions of the intended common_dir and resolve(store).authoritative in these fixtures to enrolling all ancestors. HOME here is the allocation-mode role, not permission to write the operator's shell HOME. The helper remains explicit and constrained to temporary common Git paths.
+
+    Current source includes all four minimum fixes at766. The next evidence needed is codex1's exact filtered rerun/current touched result, not another patch or policy exemption. No present additional source mismatch is demonstrated by the stale eight-failure log. Keep independent no-flag WORK/missing-binding/global/block/fallback refusal tests unchanged. Identity four remain the separately approved TASK2345 fact-seam work; not repeated here. ReadyBUG2222/explicitly routed2919 new-head review remains priority.
+  created_at: 2026-10-25T11:02:00.327401623Z
+  modified_at: 2026-10-25T11:02:00.327401623Z
 history:
 - id: 01a16f08-1847-70c2-a9ec-772710162546
   author: joe
