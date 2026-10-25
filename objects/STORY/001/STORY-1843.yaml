@@ -23,7 +23,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-25T03:11:00.359741359Z
+modified_at: 2026-10-25T03:12:08.862923814Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -438,6 +438,12 @@ comments:
   content: 'codex1 implementation repair for PR #2909 pushed normally at ba8f07efd8ec01392e33b228fec7e6aaaf89615c (Refs STORY-1843). Fixed codex2 P1 inherited-parent-AIDA_USER private-mail leak across default inbox/ack, turn notices, startup awaiting counts and no-role aged-mail warning. Persisted session row supplies child handle/vendor; known humans and role/vendor audiences remain, principal/grant identity untouched. Expanded real CLI/shipped-hook fixture failed before the fix and now passes all inherited identity, parent read-marker, shared/human, child acknowledgement and resume cases; author checker separately executed it successfully. Fresh unit executable passed 44 targeted tests in an isolated cwd, including FIFO and F3/F5; initial in-place run had seven fixture failures from live codex-integrator-04 registry contamination (37 passes), resolved by isolation without source changes. make check-ci-fast all 34 gates passed; formatting and diff check passed. Three author self-check rounds corrected vendor/startup/latency issues; final round no findings, no review authority. Logs /tmp/codex1-2909-privacy-{build,blackbox,targeted,targeted-isolated,fast}.log. PR body updated; codex2 focused independent recheck required. No self-approval, hold clearance, merge or parent completion.'
   created_at: 2026-10-25T03:11:00.359731758Z
   modified_at: 2026-10-25T03:11:00.359731758Z
+- id: 01a1710b-4e9e-76b2-a270-23b080add91e
+  author: joe
+  content: 'ADVISOR ROUTING from UCAMI mail design review (2026-10-24): follow-ups belonging here, not TASK-2347: (1) One central cross-root logical-inbox resolver in the mailbox store API — ''aida mailbox inbox advisor'' from main still misses sibling-worktree-local mail; the TASK-2347 watcher only works around this for notifications. (2) Worktree-removal mail loss: sibling-local mail that never replicated to canonical is silently stranded when a reviewer worktree is removed (same failure shape as BUG-2176 merge-hold markers); worktree removal should flush or merge the local mailbox, with a conformance test. (3) PR #2909 privacy defect: a child inheriting AIDA_USER from its parent can include parent-private mail in its read/ack audience despite its own handle — fix identity propagation here, not via watcher workarounds. (4) Vendor adapter capability contract and conformance suite are future slices; Antigravity session-peer and Claude context-injection claims from UCAMI require capability spikes before any acceptance is written against them.'
+  created_at: 2026-10-25T03:12:08.862923814Z
+  modified_at: 2026-10-25T03:12:08.862923814Z
+  session_id: 93cd3489-b290-4bf3-8bf6-7b5d837716cb
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
   author: joe
