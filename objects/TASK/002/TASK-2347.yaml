@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T02:08:29.032100054Z
-modified_at: 2026-10-25T02:37:19.956239120Z
+modified_at: 2026-10-25T02:49:45.984213980Z
 req_type: Task
 tags:
 - codex
@@ -77,6 +77,11 @@ comments:
   content: 'Targeted Rust snapshot safety tests passed4/4 (normal cold agent-profile build completed in20m53s); Python fixture suite16/16 passed; make check-ci-fast passed all34 gates. Production aida dev build restarted sequentially after targeted tests to produce the private candidate executable. Reusing the freshly compiled libtest runner for golden help regeneration avoids another redundant Cargo target-lock waiter. Remaining: generated JSON audit with candidate binary, required test-touched/check-ci-compile, final push/PR and formal reviewer. Root handoff successor should await /tmp/task2347-implementation-ready.json and this comment trail; no install or live queue by implementer.'
   created_at: 2026-10-25T02:37:19.956239120Z
   modified_at: 2026-10-25T02:37:19.956239120Z
+- id: 01a170f6-d100-7652-b1b5-c8c302cf74e0
+  author: joe
+  content: 'Candidate production build succeeded and smoke-tested without global promotion. Binary: /home/joe/ai/aida-task-2347/target/agent/aida (build label a920740caa+dirty; runtime Rust source is committed a920, dirty files were generated help/JSON audit and CI fixture wiring). Authorized read-only live dry-run against main plus registered sibling local mailboxes succeeded:580 pending distinct unread IDs, queue_submitted=false, no mailbox acknowledgement. Evidence /tmp/task2347-live-preview-qwfrng0b/result.json. This is initial unread backlog, including canonical history that fresh sibling read-watermarks may still regard as unread. The adapter deliberately does not silently baseline it as delivered. Before enabling service, advisor/operator must explicitly decide whether to notify that backlog (64IDs/batch, one-time dedup) or resolve historical unread state through the existing mailbox workflow. Do not mistake queue acceptance for actual mail reading. New CI fast fixture step is wired; final35-gate run and required test-touched/compile continue.'
+  created_at: 2026-10-25T02:49:45.984213980Z
+  modified_at: 2026-10-25T02:49:45.984213980Z
 history:
 - id: 01a170d1-497a-7282-8dcb-91782bba7dc3
   author: joe
