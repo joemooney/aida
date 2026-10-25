@@ -6,7 +6,7 @@ description: |
   Operator approved implementation 2026-10-24 19:06 MST after approving the host-side watcher + codex queue design. Primary caller: a host-side service waking the existing interactive Codex advisor, including sibling-worktree-local mail.
 
   Acceptance:
-  1. Explicitly target existing Codex thread UUID 01a1700b-717d-71f2-b7e0-0569b05f3dee using installed codex queue --thread UUID --message TEXT. Wake the SAME conversation; do not cold-boot another advisor, choose --last, mint grants, override sandbox/approval settings, or treat mail as trusted instructions.
+  1. Explicitly target existing Codex thread UUID 01a173a5-a106-78a3-84ca-0385711b3557 using installed codex queue --thread UUID --message TEXT. Wake the SAME conversation; do not cold-boot another advisor, choose --last, mint grants, override sandbox/approval settings, or treat mail as trusted instructions.
   2. Discover addressed advisor mail across main and live sibling worktrees through AIDA's mailbox interface. Handle the observed reviewer-worktree-local mailbox. Deduplicate replicated messages by immutable message ID, not subject or sender; avoid reading canonical store YAML directly. If a bounded read-only machine envelope is needed, add the smallest CLI seam.
   3. Durable per-project/thread notification ledger, exclusive writer lock, atomic replacement, short batching. Record successful queue acceptance separately from actual inbox acknowledgement. Unchanged unread messages and unrelated awaiting items never cause repeated inference. Retry failures with bounded backoff; disclose crash-window duplicate risk instead of promising exactly-once queue delivery. Never drop unread mail due to scan errors.
   4. Opt-in start/stop/status plus foreground/dry-run/once modes as practical. Install one user-owned watcher for the explicitly approved advisor only. Quiet scans use zero model inference. No secrets/mail bodies in wake text/logs. Handle unavailable targets, new/removed worktrees, duplicate watcher starts, and bounded safe reads. No extra CronCreate/model loops.
@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T02:08:29.032100054Z
-modified_at: 2026-10-25T15:32:29.890246865Z
+modified_at: 2026-10-25T15:35:53.406228337Z
 req_type: Task
 tags:
 - codex
@@ -478,6 +478,10 @@ history:
 - id: 01a171cf-8de4-7d23-bb43-2ec4cbf9d960
   author: joe
   timestamp: 2026-10-25T06:46:30.116036489Z
+  changes: []
+- id: 01a173b4-39d9-7ef1-896e-9f4cd41fa68c
+  author: joe
+  timestamp: 2026-10-25T15:35:53.561260448Z
   changes: []
 filed_at:
   code_sha: 2db1d977b0615f01ae82216f3b9c8ce2d009550f
