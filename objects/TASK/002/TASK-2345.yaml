@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-24T23:29:02.942675586Z
-modified_at: 2026-10-25T10:56:44.261774383Z
+modified_at: 2026-10-25T23:39:13.871010849Z
 req_type: Task
 tags:
 - from-review:PR-2909
@@ -72,6 +72,12 @@ comments:
   content: 'ADVISOR runtime-brief disposition: older combined prep brief052312 acknowledged as superseded by current TASK2345brief104909 and TASK2346brief104604, both verified pending and implementer queued. All A1/A2 criteria remain required; this is routing cleanup, not implementation completion or evidence another agent consumed a brief. Live-parent identity/privacy safeguards and TASK2346 locked-snapshot/preview correction are preserved in canonical rulings.'
   created_at: 2026-10-25T10:56:44.261774383Z
   modified_at: 2026-10-25T10:56:44.261774383Z
+- id: 01a1756e-bc4f-74a1-a3d2-ea2646dad0e2
+  author: joe
+  content: Commit b5af684c59 references this requirement
+  created_at: 2026-10-25T23:39:13.871010849Z
+  modified_at: 2026-10-25T23:39:13.871010849Z
+  session_id: 29900a9d-2655-43c9-9178-fa5521b0f5ad
 history:
 - id: 01a17167-4438-7c81-b6ce-974f9bde8cc8
   author: joe
