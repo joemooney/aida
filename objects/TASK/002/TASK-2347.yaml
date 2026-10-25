@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T02:08:29.032100054Z
-modified_at: 2026-10-25T15:35:53.406228337Z
+modified_at: 2026-10-25T15:35:57.230496416Z
 req_type: Task
 tags:
 - codex
@@ -446,6 +446,11 @@ comments:
   content: 'Native watcher ledger now records queue acceptance of syntheticc52e4847-bbc7-4036-a47d-0734e42e8b8d and actualauthorreply7a919800-c7ba-4700-9b68-7f187e7e1cb3 at1792942256.6321847 (15:30:56UTC), no inflight/recovery. Postacceptance health scans15:31:09 and15:31:44 retain acceptedunread IDs without new last_acceptance. Actualidleturn remains unproven: currentturn originated automaticgoalcontinuation before queueacceptance, not watcher wake. Peek reads only, noACK. Receipt/tmp/task2347-live-test-64a51940.json updated. Ordinary scan recovery means no speculative source fix required; author fullreceipt/crossroot reasoning accepted and routed back to full1742S3a via existingbrief. If persistent scanfailures recur, fixedconcurrency proposal requires isolated evidence before code; bounds/semantics unchanged.'
   created_at: 2026-10-25T15:32:29.890246865Z
   modified_at: 2026-10-25T15:32:29.890246865Z
+- id: 01a173b4-482e-7203-8690-ac93f29437dc
+  author: joe
+  content: 'COMPLETION AUDIT2026-10-25: all retained acceptance verified. (1) Operator explicitly retargeted authorized exact actualthread01a173a5-a106-78a3-84ca-0385711b3557 at08:23MST; acceptance target updated to match that explicit instruction, no scope reduction. (2-5) Independent codex2 canonical approval5ce0706e4a4deed55d70c756186a94c8bb767763 verified through aida review verdict; retained original/final tests cover crossworktree IDdedup/exactreceipt/pruning/removedroots, no-mail/dryrun, fixedtarget/privateatomiclock/concurrency, retry-vs-uncertainpause/recovery, health age/globalnamespace/install-stop safeguards. Current main/deployedscriptSHA256a3152382947a966dcd48157b62f9db5cb10aefc82049e0ed336450389696c8e5 matches reviewed5ce artifact. Final44fixtures plus actual-native typedglobal12case evidence in independent PR2915 comment6395651876; train2921 actuallymerged13:38:39UTC maina01a6989984ee2c6261074fa5f9d415719d3130a with exacttrainBuild40197614025/job121184509198 SUCCESS and all7lanes/holdgate green. Normalmain livebuild/smoke/promotion and health-capable existing scheduler driver previously recorded and reverified; one nativeuser service64a51940 active/enabled. Docs installation/uninstallation/recovery/privacy limits in docs/agents/codex-mail-wake.md. (6) LIVEPROOF: syntheticc52e4847-bbc7-4036-a47d-0734e42e8b8d nonce20261025-1531-64a51940 sent08:30; adapter recorded nativequeue acceptance1792942256.6321847 (15:30:56UTC), distinct from actual idle-turn USERnotification received in SAMEthread08:33MST naming both syntheticc52e4847 and realpeer7a919800. This exact observed turn reports bothIDs; not automaticgoalcontinuation and not senderknowledge. Multiple actualservice scans15:31:09/15:31:44 and preACK08:33 retainedsameacceptedIDs/SAME last_acceptance, proving no duplicate while unread. Only AFTER live notification and full AIDA reading did ordinary inbox --unread ACKboth at08:33; followingservice scan pruned bothaccepted/timestamps, nativehealth0findings. Local detailed receipt/tmp/task2347-live-test-64a51940.json; numeric durableproof is copied here. Expected boundedcoldIOrefusal recovered through unchanged normalretry, no code/budget/receiptdeletion/baseline. Receipt-root-removal limitation remains documented and alreadyowned by STORY1843; this audit does not claim it solved. No human blocker. Originaladvisor did not merge ownauthored code; independentoperator train had alreadylanded it. TASK2347 can now complete; global19itemgoal remains incomplete.'
+  created_at: 2026-10-25T15:35:57.230496416Z
+  modified_at: 2026-10-25T15:35:57.230496416Z
 history:
 - id: 01a170d1-497a-7282-8dcb-91782bba7dc3
   author: joe
