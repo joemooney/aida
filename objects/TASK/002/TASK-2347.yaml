@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T02:08:29.032100054Z
-modified_at: 2026-10-25T04:56:24.252690079Z
+modified_at: 2026-10-25T05:18:53.099569427Z
 req_type: Task
 tags:
 - codex
@@ -208,6 +208,11 @@ comments:
     Advisor notified as codex2 with canonical path/fullSHA and findings; no spec completion claimed.
   created_at: 2026-10-25T04:56:24.252690079Z
   modified_at: 2026-10-25T04:56:24.252690079Z
+- id: 01a1717f-56ab-7fc1-9d77-35c3c9877b18
+  author: joe
+  content: 'ADVISOR F2 IMPLEMENTATION BOUNDARY: use one existing AIDA scheduled health check/due-job surface, not another daemon or direct Codex queue notification. The bounded check consumes persisted status health (counts/ages/recovery only), fails visibly for recovery_required or accepted unread exceeding a documented configurable age, and treats unknown legacy age explicitly rather than inventing timestamps. Installation must register only the exact project/thread-owned check and uninstall remove only that owned registration; no overwrite of user-owned jobs. Quiet/healthy checks create no model turn, inbox acknowledgement or accepted-ID requeue. Deduplicate unchanged health failures through existing job/route semantics or a bounded transition record, with recovery observable. Test installation/removal ownership and healthy/stale/unknown-age/uncertain/recovered states using fake scheduler/HOME; do not enable any live job in implementer tests. The already authorized final advisor install may enable the reviewed owned check alongside the one watcher after independent final-head approval. This is a design clarification of required F2, not a scope amendment or permission expansion.'
+  created_at: 2026-10-25T05:18:53.099569427Z
+  modified_at: 2026-10-25T05:18:53.099569427Z
 history:
 - id: 01a170d1-497a-7282-8dcb-91782bba7dc3
   author: joe
