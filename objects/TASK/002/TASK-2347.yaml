@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T02:08:29.032100054Z
-modified_at: 2026-10-25T08:56:36.820242508Z
+modified_at: 2026-10-25T10:55:54.855105617Z
 req_type: Task
 tags:
 - codex
@@ -411,6 +411,11 @@ comments:
     Own attested canonical records from main: `.aida/review-verdicts/PR-2915.json` and `TASK-2347.json`. Operator hold retained byte-for-byte. No merge or live deployment. Deployment still requires the reviewed health-capable driver, full inventory and literal idle proof; cold scan refusal remains an expected degraded retry outcome, not stable cold/idle evidence.
   created_at: 2026-10-25T08:56:36.820242508Z
   modified_at: 2026-10-25T08:56:36.820242508Z
+- id: 01a172b3-e5e7-70e3-bacc-0c107543b96a
+  author: joe
+  content: 'ADVISOR runtime-brief disposition: OBE-briefs doctor returned0findings because spec remains open; manual PR-state check verified clean worktree/current5ce0706e and own canonical codex2APPROVED exacthead. Old041208 and045538 code-rework pickup briefs are superseded and acknowledged as obsolete routing by advisor, NOT as proof a new implementer consumed them or task completed. A fresh state/hold-only brief preserves independent integration/operatorhold, normal reviewed binary/scheduler inventory and still-incomplete authorized stable-idle/liveproof. No new rework/duplicate lineage, no install/ACKtest/holdclear/merge. TASK2347 remains incomplete.'
+  created_at: 2026-10-25T10:55:54.855105617Z
+  modified_at: 2026-10-25T10:55:54.855105617Z
 history:
 - id: 01a170d1-497a-7282-8dcb-91782bba7dc3
   author: joe
