@@ -5,3 +5,9 @@ last_by:
   vendor: codex
 result: done
 note: 'Matched trip2026-10-25T14:27:06Z. Plan proved no fork: gitlab b39 was ancestor of origin539 and local71dee. Ordinary mirror-sync fast-forwarded gitlab to origin539; main a01 and store539 now agree across hubs. Status still exits2 solely for existing v0.16.0 tag/release drift on GitLab; that remains recorded, not claimed repaired. No union merge, force push, release publication or local-only store commit mirrored.'
+due_since: 2026-10-25T20:40:43.807867243Z
+due_reason: on CronJobFailed:hub-drift-guard
+due_failure:
+  trip_id: hub-drift-guard@2026-10-25T20:33:38.827548985Z
+  job: hub-drift-guard
+  error: 'exit 1: '
