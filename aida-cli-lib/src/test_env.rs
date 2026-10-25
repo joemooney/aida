@@ -1406,3 +1406,28 @@ mod documentation_tests {
         assert!(constant.contains("live-bwrap CI gate"), "{constant}");
     }
 }
+
+/// Explicit HOME mode for legacy global-ID fixtures, never a production clone.
+// trace:BUG-2017 | ai:codex
+pub(crate) fn enroll_synthetic_home(root: &Path) -> anyhow::Result<()> {
+    let resolved = root.canonicalize()?;
+    anyhow::ensure!(
+        resolved.starts_with(std::env::temp_dir().canonicalize()?),
+        "fixture authority requires a temporary repository"
+    );
+    if aida_core::allocation_authority::common_dir(&resolved).is_err() {
+        aida_core::git_ops::init(&resolved)?;
+    }
+    let common = aida_core::allocation_authority::common_dir(&resolved)?;
+    anyhow::ensure!(
+        common.starts_with(std::env::temp_dir().canonicalize()?),
+        "fixture authority requires a temporary common Git directory"
+    );
+    let setting = common.join(aida_core::allocation_authority::CONFIG_FILE);
+    if setting.exists() {
+        aida_core::allocation_authority::require_global(&resolved)?;
+    } else {
+        aida_core::write_atomic(&setting, "version=1\nauthoritative=true\n")?;
+    }
+    Ok(())
+}

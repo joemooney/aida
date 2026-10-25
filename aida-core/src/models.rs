@@ -6561,6 +6561,11 @@ impl RequirementsStore {
                     }
                 };
 
+                // trace:BUG-2017 | ai:codex — a failed attached allocator is
+                // not a legitimate zero-valued ID in the HOME legacy format.
+                if number == 0 {
+                    return String::new();
+                }
                 format!(
                     "{}-{}-{:0>width$}",
                     feat,

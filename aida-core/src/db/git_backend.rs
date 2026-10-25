@@ -1257,22 +1257,37 @@ impl GitBackend {
 
     // trace:BUG-2017 | ai:codex — repair/import cannot advance internal global counters.
     fn admit_metadata(&self, incoming: &StoreMetadata) -> Result<()> {
-        if crate::allocation_authority::resolve(&self.root)?.authoritative {
-            return Ok(());
-        }
-        let prior = self.load_metadata()?;
+        let mode = crate::allocation_authority::resolve(&self.root)?;
         let incoming_ids: Vec<_> = incoming
             .users
             .iter()
             .map(|u| (u.id, u.spec_id.clone()))
             .chain(incoming.teams.iter().map(|t| (t.id, t.spec_id.clone())))
             .collect();
+        if mode.authoritative && !incoming_ids.iter().any(|(_, id)| id.as_deref() == Some("")) {
+            return Ok(());
+        }
+        let prior = self.load_metadata()?;
         let prior_ids: Vec<_> = prior
             .users
             .iter()
             .map(|u| (u.id, u.spec_id.clone()))
             .chain(prior.teams.iter().map(|t| (t.id, t.spec_id.clone())))
             .collect();
+        // Failed infallible metadata allocation must not publish an empty ID,
+        // including on HOME. Preserve an unchanged pre-existing legacy value.
+        // trace:BUG-2017 | ai:codex
+        if incoming_ids.iter().any(|(uuid, id)| {
+            id.as_deref() == Some("")
+                && !prior_ids
+                    .iter()
+                    .any(|(old_uuid, old_id)| old_uuid == uuid && old_id == id)
+        }) {
+            anyhow::bail!("metadata ID allocation failed; nothing was written")
+        }
+        if mode.authoritative {
+            return Ok(());
+        }
         crate::allocation_authority::admit_meta_ids(&self.root, &incoming_ids, &prior_ids)?;
         if incoming.next_spec_number != prior.next_spec_number
             || incoming.next_feature_number != prior.next_feature_number
@@ -1288,6 +1303,12 @@ impl GitBackend {
 
     // trace:BUG-2017 | ai:codex
     fn admit_allocations(&self, incoming: &[Requirement]) -> Result<()> {
+        // The legacy infallible model API signals allocation failure with an
+        // empty ID. Refuse before metadata/oplog even on explicit HOME.
+        // trace:BUG-2017 | ai:codex
+        if incoming.iter().any(|r| r.spec_id.as_deref() == Some("")) {
+            anyhow::bail!("requirement ID allocation failed; no metadata or object was written")
+        }
         if crate::allocation_authority::resolve(&self.root)?.authoritative {
             return Ok(());
         }

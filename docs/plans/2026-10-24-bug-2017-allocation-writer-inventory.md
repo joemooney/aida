@@ -39,8 +39,12 @@ repositories receive an authoritative setting during validation.
 - [x] Backend direct add, full save/import, atomic closure, bulk add/finish and
   collision reassignment (`db/git_backend.rs`): load clone policy and disk UUID
   identities independently of caller state. New global spec/agreed IDs refuse;
-  existing UUID/global-ID edits remain valid. Internal global counter mutations
-  refuse on WORK, including repair/reset/import paths.
+  existing UUID/global-ID edits remain valid. A new UUID cannot overwrite an
+  existing local handle; bulk collisions use the existing local dispenser to
+  select an unused ID. Internal global counter mutations refuse on WORK,
+  including repair/reset/import paths. Empty failed-allocation identities are
+  refused before metadata/oplog/objects on WORK and HOME; valid HOME formatting
+  remains unchanged.
 - [x] CachedGitBackend and Storage: directory-backed operations delegate to the
   guarded GitBackend. An unattached model or centralized source cannot bypass
   the destination's admission by saving/importing into a distributed store.
@@ -54,8 +58,12 @@ repositories receive an authoritative setting during validation.
   not authority; serialized registries do not carry an authority override.
 - [x] File and SQLite dispensers: clone mode/binding admission before opening
   state or spending counters, regardless of filename; aliased destinations are
-  resolved before clone discovery. Independent centralized database backends
-  retain their own allocation behavior.
+  resolved before clone discovery. Lazy and supplied providers both require the
+  bound local mode, including an aliased counter outside the clone. First-use
+  initialization shares the permanent dispense lock, so concurrent loaded-model
+  writers cannot reset consumed counters. SQLite existing-mode preflight is
+  read-only before writable setup; exhausted counters refuse without wrapping.
+  Independent centralized database backends retain their own allocation behavior.
 - [x] Legacy node acquire (`node_cmd.rs`): refuses on WORK before CAS/global
   registration; slice 2 supplies pseudonymous WORK bootstrap. Existing explicit
   node bindings are required for slice-1 node-local allocation.
@@ -87,3 +95,10 @@ suite, `make check-ci-fast`, touched-test selection and workspace test compilati
 because this slice changes shared persistence infrastructure. Do not run broad
 unfiltered test suites. No service, forge publication, or real HOME authority
 configuration is part of fixture validation.
+
+Legacy global-ID CRUD/relationship/lock fixtures explicitly model synthetic HOME.
+Their cfg(test)-only helpers constrain both canonical root and common Git directory
+to temporary locations. There is no automatic global test-template enrollment;
+WORK candidate fixtures deliberately leave the authority setting absent. The CLI
+case seeds an imported global block and verifies local allocation plus unchanged
+cached consumption. Parent completion and actual HOME enrollment remain excluded.

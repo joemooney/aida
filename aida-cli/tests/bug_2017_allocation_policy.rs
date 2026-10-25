@@ -107,6 +107,38 @@ impl Fixture {
 #[test]
 fn bug_2017_cli_local_and_global_refusals() {
     let f = Fixture::new();
+    // Simulate a cached/imported global block: WORK must ignore it, and an
+    // explicit claim refusal must not advance or rewrite its consumption.
+    let blocks_path = f.store.join("registry/blocks.yaml");
+    fs::create_dir_all(blocks_path.parent().unwrap()).unwrap();
+    let mut blocks = aida_core::BlockRegistry::default();
+    blocks.blocks.push(aida_core::AgreedIdBlock {
+        node_id: "7".into(),
+        owner: "fixture".into(),
+        hostname: "fixture".into(),
+        type_prefix: "BUG".into(),
+        range_start: 500,
+        range_end: 599,
+        next: 500,
+        allocated_at: chrono::Utc::now(),
+    });
+    let incoming = f._dir.path().join("incoming-blocks.yaml");
+    blocks.save(&incoming).unwrap();
+    let cached = fs::read_to_string(incoming).unwrap();
+    fs::write(&blocks_path, &cached).unwrap();
+    f.git(&[
+        "-C",
+        f.store.to_str().unwrap(),
+        "add",
+        "registry/blocks.yaml",
+    ]);
+    f.git(&[
+        "-C",
+        f.store.to_str().unwrap(),
+        "commit",
+        "-qm",
+        "imported cached block",
+    ]);
     let status = f.aida(&["node", "team", "--format", "json"]);
     assert!(
         status.status.success(),
@@ -139,7 +171,7 @@ fn bug_2017_cli_local_and_global_refusals() {
         counter
     );
     assert_eq!(f.git(&["rev-parse", "aida-store"]), head);
-    assert!(!f.store.join("registry/blocks.yaml").exists());
+    assert_eq!(fs::read_to_string(blocks_path).unwrap(), cached);
 }
 #[test]
 fn bug_2017_cli_blocks_only_refuses_before_counter_or_object_write() {

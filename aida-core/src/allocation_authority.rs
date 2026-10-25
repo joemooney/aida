@@ -203,6 +203,18 @@ pub fn admit(
                 continue;
             }
             if let Some(id) = id {
+                // trace:BUG-2017 | ai:codex — local admission must not replace
+                // another UUID's object when imported IDs outrun the dispenser.
+                let canonical = crate::object_store::canonical_spec_id(id);
+                if existing.iter().any(|other| {
+                    other.id != req.id
+                        && [other.spec_id.as_deref(), other.agreed_id.as_deref()]
+                            .into_iter()
+                            .flatten()
+                            .any(|old| crate::object_store::canonical_spec_id(old) == canonical)
+                }) {
+                    bail!("display ID already belongs to another UUID; no object was written")
+                }
                 let binding = match &binding {
                     Some(b) => b,
                     None => binding.insert(node(root)?),
@@ -313,18 +325,24 @@ impl CloneDispenser {
                 .context("authoritative allocator has no configured dispenser");
         }
         let binding = node(&self.root)?;
-        if let Some(inner) = &self.inner {
-            if inner.state()?.mode != (crate::dispenser::IdMode::Distributed { node_id: binding }) {
-                bail!("dispenser does not match this clone's node binding")
-            }
-            return Ok(inner.clone());
+        let inner = if let Some(inner) = &self.inner {
+            inner.clone()
+        } else {
+            crate::models::DispenserHandle(std::sync::Arc::new(
+                crate::dispenser::FileDispenser::open(
+                    self.root.join(".aida/dispenser.toml"),
+                    crate::dispenser::IdMode::Distributed {
+                        node_id: binding.clone(),
+                    },
+                )?,
+            ))
+        };
+        // Check lazy and supplied providers alike, even when a local counter
+        // path aliases an independent file outside this clone.
+        if inner.state()?.mode != (crate::dispenser::IdMode::Distributed { node_id: binding }) {
+            bail!("dispenser does not match this clone's node binding")
         }
-        Ok(crate::models::DispenserHandle(std::sync::Arc::new(
-            crate::dispenser::FileDispenser::open(
-                self.root.join(".aida/dispenser.toml"),
-                crate::dispenser::IdMode::Distributed { node_id: binding },
-            )?,
-        )))
+        Ok(inner)
     }
 }
 impl crate::dispenser::Dispenser for CloneDispenser {
@@ -422,6 +440,10 @@ pub(crate) fn home_fixture_backend(root: &Path) -> Result<crate::GitBackend> {
         crate::git_ops::init(root)?;
     }
     let common = common_dir(root)?;
+    anyhow::ensure!(
+        common.starts_with(std::env::temp_dir().canonicalize()?),
+        "fixture authority requires a temporary common Git directory"
+    );
     let setting = common.join(CONFIG_FILE);
     if setting.exists() {
         require_global(root)?;
@@ -496,6 +518,57 @@ mod tests {
             backend.load().unwrap().next_spec_number,
             crate::RequirementsStore::new().next_spec_number
         );
+    }
+    #[test]
+    fn bug_2017_imported_local_id_cannot_be_overwritten_by_new_uuid() {
+        let (_dir, backend) = fixture(false);
+        let mut imported = Requirement::new("imported local".into(), "fixture".into());
+        imported.req_type = crate::RequirementType::Bug;
+        imported.spec_id = Some("BUG-7-001".into());
+        let imported = backend.add_requirement(imported).unwrap();
+        let mut next = Requirement::new("new local".into(), "fixture".into());
+        next.req_type = crate::RequirementType::Bug;
+        assert!(backend.add_requirement(next.clone()).is_err());
+        assert_eq!(
+            backend
+                .get_requirement_by_spec_id("BUG-7-001")
+                .unwrap()
+                .unwrap()
+                .id,
+            imported.id
+        );
+        assert_eq!(
+            backend.add_requirement(next).unwrap().spec_id.as_deref(),
+            Some("BUG-7-002")
+        );
+    }
+    #[test]
+    fn bug_2017_bulk_collision_reassigns_only_to_an_unused_local_id() {
+        let (_dir, backend) = fixture(false);
+        let mut batch = backend.bulk_writer().unwrap();
+        let mut req = Requirement::new("batch local".into(), "fixture".into());
+        req.req_type = crate::RequirementType::Bug;
+        let batch_uuid = req.id;
+        assert_eq!(
+            batch.add(req).unwrap().spec_id.as_deref(),
+            Some("BUG-7-001")
+        );
+        let mut imported = Requirement::new("intervening import".into(), "fixture".into());
+        imported.req_type = crate::RequirementType::Bug;
+        imported.spec_id = Some("BUG-7-001".into());
+        let imported = backend.add_requirement(imported).unwrap();
+        assert_eq!(batch.finish("fixture").unwrap(), 1);
+        assert_eq!(
+            backend
+                .get_requirement_by_spec_id("BUG-7-001")
+                .unwrap()
+                .unwrap()
+                .id,
+            imported.id
+        );
+        let reassigned = backend.get_requirement(&batch_uuid).unwrap().unwrap();
+        assert_eq!(reassigned.spec_id.as_deref(), Some("BUG-7-002"));
+        assert!(reassigned.agreed_id.is_none());
     }
     #[test]
     fn bug_2017_explicit_global_and_agreed_ids_refuse_without_counter_or_object_write() {
@@ -778,6 +851,68 @@ mod tests {
         backend.save(&store).unwrap();
     }
     #[test]
+    fn bug_2017_home_allocator_failure_refuses_before_metadata_or_object_write() {
+        struct Failed;
+        impl crate::dispenser::Dispenser for Failed {
+            fn next(&self, _: &str) -> Result<u32> {
+                bail!("fixture failure")
+            }
+            fn peek(&self, _: &str) -> Result<u32> {
+                bail!("fixture failure")
+            }
+            fn state(&self) -> Result<crate::dispenser::DispenserState> {
+                Ok(crate::dispenser::DispenserState::new(
+                    crate::dispenser::IdMode::Centralized,
+                ))
+            }
+        }
+        for format in [
+            crate::models::IdFormat::SingleLevel,
+            crate::models::IdFormat::TwoLevel,
+        ] {
+            let (dir, backend) = fixture(true);
+            let mut store = backend.load().unwrap();
+            store.id_config.format = format;
+            backend.save(&store).unwrap();
+            let metadata = std::fs::read(dir.path().join("metadata.yaml")).unwrap();
+            let oplog = std::fs::read(dir.path().join("oplog.yaml")).ok();
+            let backend =
+                backend.with_dispenser(crate::models::DispenserHandle(std::sync::Arc::new(Failed)));
+            assert!(backend
+                .add_requirement(Requirement::new("failure".into(), "fixture".into()))
+                .is_err());
+            assert_eq!(
+                std::fs::read(dir.path().join("metadata.yaml")).unwrap(),
+                metadata
+            );
+            assert!(
+                crate::object_store::list_objects(&dir.path().join("objects"))
+                    .unwrap()
+                    .is_empty()
+            );
+            assert_eq!(std::fs::read(dir.path().join("oplog.yaml")).ok(), oplog);
+            for team in [false, true] {
+                let mut store = backend.load().unwrap();
+                let id = if team {
+                    store.add_team_with_id("fixture".into(), "fixture".into(), None)
+                } else {
+                    store.add_user_with_id(
+                        "fixture".into(),
+                        "fixture@example.invalid".into(),
+                        "fixture".into(),
+                    )
+                };
+                assert!(id.is_empty());
+                assert!(backend.save(&store).is_err());
+                assert_eq!(
+                    std::fs::read(dir.path().join("metadata.yaml")).unwrap(),
+                    metadata
+                );
+                assert_eq!(std::fs::read(dir.path().join("oplog.yaml")).ok(), oplog);
+            }
+        }
+    }
+    #[test]
     fn bug_2017_two_level_work_refuses_before_counters_home_retains_format() {
         let (dir, backend) = fixture(false);
         let mut store = backend.load().unwrap();
@@ -806,13 +941,27 @@ mod tests {
             },
         ] {
             let (dir, backend) = fixture(false);
-            let state = toml::to_string(&crate::dispenser::DispenserState::new(mode)).unwrap();
+            let state =
+                toml::to_string(&crate::dispenser::DispenserState::new(mode.clone())).unwrap();
             let path = dir.path().join(".aida/dispenser.toml");
             std::fs::write(&path, &state).unwrap();
             assert!(backend
                 .add_requirement(Requirement::new("stale state".into(), "fixture".into()))
                 .is_err());
             assert_eq!(std::fs::read_to_string(path).unwrap(), state);
+            assert!(!dir.path().join("metadata.yaml").exists());
+            let outside = tempfile::tempdir().unwrap();
+            let counter = outside.path().join("counter.toml");
+            std::fs::write(&counter, &state).unwrap();
+            std::fs::remove_file(dir.path().join(".aida/dispenser.toml")).unwrap();
+            std::os::unix::fs::symlink(&counter, dir.path().join(".aida/dispenser.toml")).unwrap();
+            assert!(backend
+                .add_requirement(Requirement::new(
+                    "aliased stale state".into(),
+                    "fixture".into()
+                ))
+                .is_err());
+            assert_eq!(std::fs::read_to_string(counter).unwrap(), state);
             assert!(!dir.path().join("metadata.yaml").exists());
         }
     }
