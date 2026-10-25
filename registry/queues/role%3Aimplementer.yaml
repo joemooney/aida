@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a15f18-ed08-7922-ac1d-114f0fa53917
+  position: 290000
+  added_by: role:implementer
+  note: Advisor verified PR2917 F1 marker writer outside protected boundary; brief20261025T050758Z and agy1 rework source observed. Metadata only; preserve existing lane/stack, no hold release or new launch.
+  added_at: 2026-10-25T05:26:25.677269591Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a170d1-0568-70a1-9e28-9498511707b8
   position: 291000
   added_by: role:implementer
@@ -117,14 +124,6 @@
   added_by: role:implementer
   note: Bounded live_trains unreadable-body diagnostic; preserve gate semantics; Codex only
   added_at: 2026-10-25T04:50:24.709186249Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
-  requirement_id: 01a15f18-ed08-7922-ac1d-114f0fa53917
-  position: 478000
-  added_by: role:implementer
-  note: PR2917 F1 marker writer outside protected floor; rework before final slice
-  added_at: 2026-10-25T05:07:59.145086748Z
   for_role: implementer
   added_by_machine: imac
 - user_id: role:implementer
