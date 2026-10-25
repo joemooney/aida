@@ -4,3 +4,9 @@ last_by:
   seat: advisor
   vendor: codex
 result: done
+due_since: 2026-10-25T08:30:36.765554002Z
+due_reason: on CronJobFailed:hub-drift-guard
+due_failure:
+  trip_id: hub-drift-guard@2026-10-25T08:18:51.773747223Z
+  job: hub-drift-guard
+  error: 'exit 1: '
