@@ -2867,6 +2867,13 @@ pub(crate) fn collect_snapshot(
     if fields.contains(&Field::MandateDriveActive) {
         snap.mandate_drive_active = crate::mandate_drive::drive_record_active(now);
     }
+    // trace:STORY-1917 | ai:agy
+    if fields.contains(&Field::MandateDispatchActive) {
+        snap.mandate_dispatch_active = crate::dispatch::dispatch_record_active(now);
+    }
+    if fields.contains(&Field::DispatchPending) {
+        snap.dispatch_pending = crate::dispatch::pending_request_count(project_root);
+    }
     if fields.contains(&Field::QueueDepth) {
         snap.queue_depth = crate::read_queue_depth(project_root, None).unwrap_or(0) as i64;
     }
@@ -3165,6 +3172,18 @@ fn command_table() -> &'static [(&'static [&'static str], ScheduledCommand)] {
             ScheduledCommand {
                 display: "fleet drive --tick",
                 args: &["fleet", "drive", "--tick"],
+                hook_allowed: false,
+            },
+        ),
+        // STORY-1917: the typed dispatch substrate tick. Executes only `take`
+        // and `impl` requests (leaving `review`, `flow`, and `train` Pending
+        // for `aida dispatch serve`), never on the per-turn hook path.
+        // trace:STORY-1917 | ai:agy
+        (
+            &["dispatch tick"],
+            ScheduledCommand {
+                display: "dispatch tick",
+                args: &["dispatch", "tick"],
                 hook_allowed: false,
             },
         ),

@@ -113,6 +113,14 @@ impl ExecFixture {
         git(&root, &["update-ref", "refs/remotes/origin/main", &sha]);
         git(
             &root,
+            &[
+                "symbolic-ref",
+                "refs/remotes/origin/HEAD",
+                "refs/remotes/origin/main",
+            ],
+        );
+        git(
+            &root,
             &["update-ref", "refs/remotes/origin/claude/fix-100", &sha],
         );
 
@@ -847,7 +855,7 @@ fn reap_dead_workers_and_enforce_concurrency_caps() {
     dead_res.status = DispatchStatus::Running;
     dead_res.started_at = Some(now);
     dead_res.worker_pid = Some(999_999_991);
-    dead_res.worker_start = Some("dead-start".into());
+    dead_res.worker_start = Some("linux-starttime:12345".into());
     write_private_atomic(
         &result_path(&f.root, &dead_sub.request.id),
         &serde_json::to_vec_pretty(&dead_res).unwrap(),
@@ -2264,5 +2272,527 @@ fn f5_live_registered_agent_or_unknown_occupant_without_lease_blocks_cleanup_and
         std::fs::read_to_string(&dirty_marker).unwrap(),
         "do not lose my work",
         "occupant worktree files must remain untouched"
+    );
+}
+
+// trace:STORY-1917 trace:TASK-2341 | ai:agy
+#[test]
+fn task_2341_default_branch_change_between_submit_and_execute_refuses_and_impl_uses_verified_default(
+) {
+    let f = ExecFixture::new(&["reviewer", "implementer"]);
+    f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
+    let now = Utc::now();
+
+    let head = crate::test_git::git_command()
+        .arg("-C")
+        .arg(&f.root)
+        .args(["rev-parse", "HEAD"])
+        .output()
+        .unwrap();
+    let sha = String::from_utf8(head.stdout).unwrap().trim().to_string();
+    git(&f.root, &["update-ref", "refs/remotes/origin/trunk", &sha]);
+
+    // 1. Submit request targeting branch `trunk` while `origin/HEAD` points to `origin/main`.
+    let brief1 = f.write_brief("b-trunk-drift.md", "Default branch drift test.\n");
+    let sub_drift = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Impl {
+            name: "drift-lane".into(),
+            branch: "trunk".into(),
+            spec: "TASK-100".into(),
+            brief: brief1,
+            vendor: None,
+        },
+        now,
+    )
+    .unwrap();
+
+    // Switch `refs/remotes/origin/HEAD` to `refs/remotes/origin/trunk` BEFORE execution.
+    git(
+        &f.root,
+        &[
+            "symbolic-ref",
+            "refs/remotes/origin/HEAD",
+            "refs/remotes/origin/trunk",
+        ],
+    );
+
+    let res_drift =
+        execute_one_request(&f.root, &f.mandate_dir, &sub_drift.request.id, false, now).unwrap();
+    assert_eq!(res_drift.status, DispatchStatus::Refused);
+    assert!(
+        res_drift
+            .refusal_reason
+            .as_deref()
+            .unwrap_or("")
+            .contains("cannot target the repository default branch `trunk` directly"),
+        "execution must re-verify default branch and refuse `trunk`, got: {res_drift:?}"
+    );
+
+    // 2. With `origin/HEAD` -> `origin/trunk` (and `origin/trunk` advanced one
+    //    commit ahead of `origin/main`), `impl` creates its worktree from the
+    //    verified `origin/trunk` commit rather than hardcoded `origin/main`.
+    std::fs::write(f.root.join("trunk-marker.txt"), "on trunk\n").unwrap();
+    git(&f.root, &["add", "trunk-marker.txt"]);
+    git(&f.root, &["commit", "-qm", "advance trunk"]);
+    let trunk_head = crate::test_git::git_command()
+        .arg("-C")
+        .arg(&f.root)
+        .args(["rev-parse", "HEAD"])
+        .output()
+        .unwrap();
+    let trunk_sha = String::from_utf8(trunk_head.stdout)
+        .unwrap()
+        .trim()
+        .to_string();
+    git(
+        &f.root,
+        &["update-ref", "refs/remotes/origin/trunk", &trunk_sha],
+    );
+    let fake_agent = f.write_executable_script(
+        "ok-agent-trunk.sh",
+        "#!/bin/sh\necho 'Started background session (aida claude logs 11112222)'\nexit 0\n",
+    );
+    let _bins = install_test_bins(Some(fake_agent.clone()), Some(fake_agent));
+
+    let brief2 = f.write_brief("b-trunk-impl.md", "Impl off trunk.\n");
+    let sub_ok = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Impl {
+            name: "trunk-ok-lane".into(),
+            branch: "claude/from-trunk".into(),
+            spec: "TASK-100".into(),
+            brief: brief2,
+            vendor: None,
+        },
+        now,
+    )
+    .unwrap();
+    let res_ok =
+        execute_one_request(&f.root, &f.mandate_dir, &sub_ok.request.id, false, now).unwrap();
+    assert_eq!(
+        res_ok.status,
+        DispatchStatus::Done,
+        "impl must succeed using verified `origin/trunk`: {res_ok:?}"
+    );
+    let wt_head = crate::test_git::git_command()
+        .arg("-C")
+        .arg(worktrees_root(&f.root).join("trunk-ok-lane"))
+        .args(["rev-parse", "HEAD"])
+        .output()
+        .unwrap();
+    let wt_sha = String::from_utf8(wt_head.stdout)
+        .unwrap()
+        .trim()
+        .to_string();
+    assert_eq!(
+        wt_sha, trunk_sha,
+        "impl worktree must be based on verified default branch `origin/trunk`, not `origin/main`"
+    );
+}
+
+// trace:STORY-1917 trace:TASK-2344 | ai:agy
+#[test]
+fn task_2344_real_detached_worker_missing_result_and_no_duplicate_replay() {
+    let f = ExecFixture::new(&["reviewer", "implementer"]);
+    f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
+    let now = Utc::now();
+
+    let barrier_dir = f._tmp.path().join("task-2344-barriers");
+    std::fs::create_dir_all(&barrier_dir).unwrap();
+    let mut watchdog = DetachedWorkerWatchdog::new(barrier_dir.clone());
+
+    let parent_home = crate::aida_home_dir().expect("hermetic test home");
+    let test_bin = crate::aida_bin::current_executable_path().expect("current test binary");
+    let fake_aida_path = f._tmp.path().join("fake-aida-2344.sh");
+    let fake_aida = f.write_executable_script(
+        "fake-aida-2344.sh",
+        &format!(
+            "#!/bin/sh\nset -eu\n\
+             if [ \"${{1:-}}\" = \"dispatch\" ] && [ \"${{2:-}}\" = \"run\" ]; then\n\
+               req_id=\"$3\"\n\
+               via_serve=\"0\"\n\
+               if [ \"${{4:-}}\" = \"--via-serve\" ]; then\n\
+                 via_serve=\"1\"\n\
+               fi\n\
+               export AIDA_HOME='{}'\n\
+               export AIDA_TEST_1917_CHILD_ID=\"$req_id\"\n\
+               export AIDA_TEST_1917_CHILD_VIA_SERVE=\"$via_serve\"\n\
+               export AIDA_TEST_1917_MAIN_WORKTREE='{}'\n\
+               export AIDA_TEST_1917_MANDATE_DIR='{}'\n\
+               export AIDA_TEST_1917_BARRIER_DIR='{}'\n\
+               export AIDA_TEST_1917_SYNTHETIC_AIDA='{}'\n\
+               exec '{}' --exact dispatch::story_1917_dispatch_exec_tests::story_1917_detached_worker_child_entry --nocapture --test-threads=1\n\
+             fi\n\
+             if [ \"${{1:-}}\" = \"queue\" ] && [ \"${{2:-}}\" = \"work\" ]; then\n\
+               pr_tag=\"${{3:-PR-0}}\"\n\
+               echo \"$$:$pr_tag\" >> '{}'\n\
+               echo \"$$\" > '{}/entered-'\"$pr_tag\"\n\
+               i=0\n\
+               while [ \"$i\" -lt 500 ]; do\n\
+                 if [ -f '{}/release-'\"$pr_tag\" ] || [ -f '{}/release-all' ]; then\n\
+                   echo \"done\" > '{}/completed-'\"$pr_tag\"\n\
+                   exit 0\n\
+                 fi\n\
+                 sleep 0.02\n\
+                 i=$((i + 1))\n\
+               done\n\
+               echo \"watchdog timeout waiting for release-$pr_tag\" >&2\n\
+               exit 124\n\
+             fi\n\
+             exit 1\n",
+            parent_home.display(),
+            f.root.display(),
+            f.mandate_dir.display(),
+            barrier_dir.display(),
+            fake_aida_path.display(),
+            test_bin.display(),
+            barrier_dir.join("runner-invocations.log").display(),
+            barrier_dir.display(),
+            barrier_dir.display(),
+            barrier_dir.display(),
+            barrier_dir.display(),
+        ),
+    );
+    let _bins = install_test_bins(Some(fake_aida), None);
+    let watchdog_timeout = std::time::Duration::from_secs(10);
+
+    let rev_810 = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Review {
+            pr: 810,
+            vendor: None,
+        },
+        now + Duration::seconds(1),
+    )
+    .unwrap();
+    let rev_811 = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Review {
+            pr: 811,
+            vendor: None,
+        },
+        now + Duration::seconds(2),
+    )
+    .unwrap();
+    let rev_812 = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Review {
+            pr: 812,
+            vendor: None,
+        },
+        now + Duration::seconds(3),
+    )
+    .unwrap();
+
+    // 1. Spawn two real detached workers (PR #810 and PR #811), hitting MAX_CONCURRENT_REVIEWS = 2.
+    let pass1 = claim_and_dispatch_pass(&f.root, true, true, now).unwrap();
+    assert_eq!(pass1.spawned, 2);
+    wait_for_barrier_file(&barrier_dir.join("entered-PR-810"), watchdog_timeout);
+    wait_for_barrier_file(&barrier_dir.join("entered-PR-811"), watchdog_timeout);
+
+    let (_, res_810_live) = load_pair(&f.root, &rev_810.request.id).unwrap();
+    let (_, res_811_live) = load_pair(&f.root, &rev_811.request.id).unwrap();
+    let pid_810 = res_810_live.worker_pid.expect("real child PID for 810");
+    let pid_811 = res_811_live.worker_pid.expect("real child PID for 811");
+    watchdog.track(pid_810, res_810_live.worker_start.clone());
+    watchdog.track(pid_811, res_811_live.worker_start.clone());
+    assert_eq!(
+        probe_worker_identity(Some(pid_810), res_810_live.worker_start.as_deref()),
+        aida_core::process_probe::Probe::Alive
+    );
+
+    // 2. Delete `results/<id_810>.json` while the real detached child for 810 is STILL ALIVE.
+    std::fs::remove_file(result_path(&f.root, &rev_810.request.id)).unwrap();
+
+    // 3. `claim_and_dispatch_pass` must:
+    //    - NOT reset 810 to Pending or spawn a replacement worker for 810;
+    //    - count 810 (`needs-recovery`, known verb `review`) + 811 (`Running`, `review`) = 2 slots,
+    //      holding 812 `Pending` (`spawned == 0`) so concurrency cap is never exceeded!
+    let pass2 = claim_and_dispatch_pass(&f.root, true, true, now).unwrap();
+    assert_eq!(pass2.reaped, 0);
+    assert_eq!(
+        pass2.spawned, 0,
+        "broken/live review record 810 must still consume 1 review cap slot so 812 cannot exceed MAX_CONCURRENT_REVIEWS"
+    );
+    assert!(
+        !result_path(&f.root, &rev_810.request.id).exists(),
+        "reconciler must never synthesize a Pending result for a missing-result record"
+    );
+    assert!(
+        recovery_path(&f.root).exists(),
+        "reconciler must persist .aida/dispatch/recovery.json under tick.lock"
+    );
+
+    // 4. Submitting a duplicate or conflicting request for `pr:810` must be refused
+    //    naming the `needs-recovery` record.
+    let dup_err = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Review {
+            pr: 810,
+            vendor: None,
+        },
+        now,
+    )
+    .unwrap_err();
+    assert!(
+        dup_err.to_string().contains(&rev_810.request.id)
+            && dup_err.to_string().contains("needs-recovery"),
+        "expected needs-recovery refusal on pr:810, got: {dup_err:#}"
+    );
+
+    // 5. Release Child 810 so it completes its runner side effect and exits.
+    //    Even after Child 810 is `Probe::Dead`, subsequent passes must NEVER replay
+    //    `rev_810` (`runner_count == 1`).
+    std::fs::write(barrier_dir.join("release-PR-810"), b"1").unwrap();
+    wait_for_barrier_file(&barrier_dir.join("completed-PR-810"), watchdog_timeout);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while crate::process_probe::pid_is_alive(pid_810) && std::time::Instant::now() < deadline {
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    assert!(
+        !result_path(&f.root, &rev_810.request.id).exists(),
+        "verify_claim_locked must refuse to recreate a deleted result file when child 810 exits"
+    );
+
+    // Release Child 811 so 812 can now claim the 2nd review slot while 810 holds 1 slot.
+    std::fs::write(barrier_dir.join("release-PR-811"), b"1").unwrap();
+    let res_811_done = wait_for_request_status(
+        &f.root,
+        &rev_811.request.id,
+        DispatchStatus::Done,
+        watchdog_timeout,
+    );
+    assert_eq!(res_811_done.status, DispatchStatus::Done);
+
+    let pass3 = claim_and_dispatch_pass(&f.root, true, true, now).unwrap();
+    assert_eq!(
+        pass3.spawned, 1,
+        "only 812 may spawn; 810 (`needs-recovery`) must NEVER be replayed"
+    );
+    assert_eq!(pass3.claimed_ids, vec![rev_812.request.id.clone()]);
+    wait_for_barrier_file(&barrier_dir.join("entered-PR-812"), watchdog_timeout);
+    let (_, res_812_live) = load_pair(&f.root, &rev_812.request.id).unwrap();
+    watchdog.track(
+        res_812_live.worker_pid.unwrap(),
+        res_812_live.worker_start.clone(),
+    );
+    std::fs::write(barrier_dir.join("release-PR-812"), b"1").unwrap();
+    let res_812_done = wait_for_request_status(
+        &f.root,
+        &rev_812.request.id,
+        DispatchStatus::Done,
+        watchdog_timeout,
+    );
+    assert_eq!(res_812_done.status, DispatchStatus::Done);
+
+    let invocations =
+        std::fs::read_to_string(barrier_dir.join("runner-invocations.log")).unwrap_or_default();
+    let pr810_runs = invocations
+        .lines()
+        .filter(|l| l.ends_with(":PR-810"))
+        .count();
+    assert_eq!(
+        pr810_runs, 1,
+        "missing-result record 810 must never be replayed after child exit; log:\n{invocations}"
+    );
+}
+
+// trace:STORY-1917 trace:TASK-2344 | ai:agy
+#[test]
+fn task_2344_tri_state_probe_retains_unknown_missing_pid_missing_start_and_corrupt_request() {
+    let f = ExecFixture::new(&["reviewer", "implementer"]);
+    f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
+    let now = Utc::now();
+
+    let sub1 = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Review {
+            pr: 820,
+            vendor: None,
+        },
+        now,
+    )
+    .unwrap();
+    let sub2 = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Review {
+            pr: 821,
+            vendor: None,
+        },
+        now,
+    )
+    .unwrap();
+    let sub3 = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Review {
+            pr: 822,
+            vendor: None,
+        },
+        now,
+    )
+    .unwrap();
+
+    // 1. Sub1: Running with `worker_pid = None` -> `Probe::Unknown`, retained as `Running`.
+    let (_, mut res1) = load_pair(&f.root, &sub1.request.id).unwrap();
+    res1.status = DispatchStatus::Running;
+    res1.started_at = Some(now);
+    res1.worker_pid = None;
+    res1.worker_start = None;
+    res1.claim_token = Some(Uuid::new_v4().to_string());
+    write_private_atomic(
+        &result_path(&f.root, &sub1.request.id),
+        &serde_json::to_vec_pretty(&res1).unwrap(),
+    )
+    .unwrap();
+
+    // 2. Sub2: Running with `worker_pid = Some(999_991)` but `worker_start = None` -> `Probe::Unknown`, retained as `Running`.
+    let (_, mut res2) = load_pair(&f.root, &sub2.request.id).unwrap();
+    res2.status = DispatchStatus::Running;
+    res2.started_at = Some(now);
+    res2.worker_pid = Some(999_991);
+    res2.worker_start = None;
+    res2.claim_token = Some(Uuid::new_v4().to_string());
+    write_private_atomic(
+        &result_path(&f.root, &sub2.request.id),
+        &serde_json::to_vec_pretty(&res2).unwrap(),
+    )
+    .unwrap();
+
+    // 3. Sub3: Running with dead PID, but `TEST_FORCE_WORKER_PROBE` injects `Probe::Unknown` -> retained as `Running`.
+    let (_, mut res3) = load_pair(&f.root, &sub3.request.id).unwrap();
+    res3.status = DispatchStatus::Running;
+    res3.started_at = Some(now);
+    res3.worker_pid = Some(999_992);
+    res3.worker_start = Some("linux-starttime:12345".into());
+    res3.claim_token = Some(Uuid::new_v4().to_string());
+    write_private_atomic(
+        &result_path(&f.root, &sub3.request.id),
+        &serde_json::to_vec_pretty(&res3).unwrap(),
+    )
+    .unwrap();
+
+    TEST_FORCE_WORKER_PROBE.with(|c| {
+        *c.borrow_mut() = Some(aida_core::process_probe::Probe::Unknown(
+            "simulated /proc permission error".into(),
+        ));
+    });
+    let reaped_unknown = {
+        let _lock = acquire_dispatch_lock(&f.root).unwrap();
+        reap_dead_workers_locked(&f.root, now).unwrap()
+    };
+    TEST_FORCE_WORKER_PROBE.with(|c| {
+        *c.borrow_mut() = None;
+    });
+    assert_eq!(
+        reaped_unknown, 0,
+        "Probe::Unknown must never reap a Running worker"
+    );
+
+    // Without the forced override, sub1 (missing pid) and sub2 (missing start) are still Unknown,
+    // while sub3 (dead pid + valid linux-starttime format) is Probe::Dead and gets reaped!
+    let reaped_real = {
+        let _lock = acquire_dispatch_lock(&f.root).unwrap();
+        reap_dead_workers_locked(&f.root, now).unwrap()
+    };
+    assert_eq!(
+        reaped_real, 1,
+        "only sub3 has positive Probe::Dead evidence"
+    );
+    assert_eq!(
+        load_pair(&f.root, &sub1.request.id).unwrap().1.status,
+        DispatchStatus::Running
+    );
+    assert_eq!(
+        load_pair(&f.root, &sub2.request.id).unwrap().1.status,
+        DispatchStatus::Running
+    );
+    assert_eq!(
+        load_pair(&f.root, &sub3.request.id).unwrap().1.status,
+        DispatchStatus::Failed
+    );
+}
+
+// trace:STORY-1917 trace:TASK-2344 | ai:agy
+#[test]
+fn task_2344_q1_physical_tick_lock_directory_migration_and_legacy_mutator_refusal() {
+    use fs2::FileExt;
+    let f = ExecFixture::new(&["reviewer", "implementer"]);
+
+    let disp_dir = dispatch_root(&f.root);
+    std::fs::create_dir_all(&disp_dir).unwrap();
+    let legacy_lock_path = disp_dir.join("tick.lock");
+
+    // 1. Create a legacy Slice 1/2 regular-file `.aida/dispatch/tick.lock` and hold
+    //    an exclusive flock on it (simulating an active legacy mutator).
+    let legacy_holder = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .read(true)
+        .write(true)
+        .open(&legacy_lock_path)
+        .unwrap();
+    std::fs::set_permissions(&legacy_lock_path, std::fs::Permissions::from_mode(0o600)).unwrap();
+    legacy_holder.lock_exclusive().unwrap();
+
+    // New binary must refuse concurrent migration fail-closed while the legacy lock is held.
+    let held_err = match acquire_dispatch_lock(&f.root) {
+        Ok(_) => panic!("expected migration refusal while legacy tick.lock is actively held"),
+        Err(e) => e,
+    };
+    assert!(
+        held_err
+            .to_string()
+            .contains("actively held by another process"),
+        "expected active legacy lock refusal, got: {held_err:#}"
+    );
+
+    // 2. Release the legacy lock; quiescent `acquire_dispatch_lock` migrates
+    //    `.aida/dispatch/tick.lock` into a 0700 directory containing `v2.lock`.
+    let _ = fs2::FileExt::unlock(&legacy_holder);
+    drop(legacy_holder);
+
+    let new_lock = acquire_dispatch_lock(&f.root).unwrap();
+    drop(new_lock);
+    assert!(
+        legacy_lock_path.is_dir(),
+        ".aida/dispatch/tick.lock must now be a directory"
+    );
+    assert!(
+        legacy_lock_path.join("v2.lock").is_file(),
+        ".aida/dispatch/tick.lock/v2.lock must exist as the v2 lock file"
+    );
+
+    // 3. Any pre-Slice-3 binary calling the legacy `OpenOptions::new().create(true).read(true).write(true).open(dir.join("tick.lock"))`
+    //    across any of the 5 legacy mutation entrypoints fails at the OS boundary with `EISDIR`.
+    let legacy_open_err = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .read(true)
+        .write(true)
+        .open(&legacy_lock_path)
+        .unwrap_err();
+    assert_eq!(
+        legacy_open_err.raw_os_error(),
+        Some(libc::EISDIR),
+        "legacy mutator lock open must fail with EISDIR on migrated tick.lock directory"
     );
 }

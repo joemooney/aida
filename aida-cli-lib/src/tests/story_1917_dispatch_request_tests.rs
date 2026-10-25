@@ -104,6 +104,14 @@ impl Fixture {
             .unwrap();
         let sha = String::from_utf8(head.stdout).unwrap().trim().to_string();
         git(&root, &["update-ref", "refs/remotes/origin/main", &sha]);
+        git(
+            &root,
+            &[
+                "symbolic-ref",
+                "refs/remotes/origin/HEAD",
+                "refs/remotes/origin/main",
+            ],
+        );
 
         let store = root.join(".aida-store");
         std::fs::create_dir_all(store.join("objects")).unwrap();
@@ -821,9 +829,9 @@ fn human_gates_gate_dispatch_and_ship_with_gated_audit_rows() {
     );
 }
 
-// trace:STORY-1917 | ai:agy
+// trace:STORY-1917 trace:TASK-2344 | ai:agy
 #[test]
-fn load_all_pairs_skips_and_warns_on_malformed_or_orphan_entries() {
+fn load_all_pairs_and_recovery_fence_handle_orphan_and_corrupt_entries() {
     let f = Fixture::new(&["reviewer", "implementer"]);
     f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
     let now = Utc::now();
@@ -840,25 +848,51 @@ fn load_all_pairs_skips_and_warns_on_malformed_or_orphan_entries() {
     )
     .unwrap();
 
-    // Write a corrupt JSON request file with a UUID stem and an orphan request
-    // file with no companion result file (simulating a crash mid-submit).
-    let corrupt_id = Uuid::new_v4().to_string();
-    write_private_atomic(&request_path(&f.root, &corrupt_id), b"{not valid json").unwrap();
-
+    // 1. Write an orphan request file for PR #705 with no companion result file.
     let orphan_id = Uuid::new_v4().to_string();
     let mut orphan_req = good.request.clone();
     orphan_req.id = orphan_id.clone();
+    orphan_req.action = DispatchVerb::Review {
+        pr: 705,
+        vendor: None,
+    };
+    orphan_req.target_key = orphan_req.action.target_key();
+    orphan_req.dedupe_key = orphan_req.action.dedupe_key();
     write_private_atomic(
         &request_path(&f.root, &orphan_id),
         &serde_json::to_vec_pretty(&orphan_req).unwrap(),
     )
     .unwrap();
 
-    // `load_all_pairs` must skip both broken records and still return the valid one,
-    // and subsequent `submit_request` / `cancel_request` calls must not wedge.
+    // Read-only `load_all_pairs` returns only valid pairs without mutating disk,
+    // while `inspect_dispatch_inventory_readonly` surfaces `orphan_id` as `needs-recovery`.
     let pairs = load_all_pairs(&f.root).unwrap();
     assert_eq!(pairs.len(), 1);
     assert_eq!(pairs[0].0.id, good.request.id);
+    let inv = inspect_dispatch_inventory_readonly(&f.root).unwrap();
+    assert_eq!(inv.fences.len(), 1);
+    assert_eq!(inv.fences[0].id, orphan_id);
+    assert!(!inv.fences[0].blocks_all_admission);
+
+    // Submitting a second request for the orphan's target (`pr:705`) is refused
+    // naming the `needs-recovery` record, while an unrelated target (`pr:701`)
+    // is admitted and can be cancelled.
+    let clash_err = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Review {
+            pr: 705,
+            vendor: None,
+        },
+        now,
+    )
+    .unwrap_err();
+    assert!(
+        clash_err.to_string().contains(&orphan_id)
+            && clash_err.to_string().contains("needs-recovery"),
+        "expected needs-recovery target refusal for pr:705, got: {clash_err:#}"
+    );
 
     let second = submit_request(
         &f.root,
@@ -873,4 +907,366 @@ fn load_all_pairs_skips_and_warns_on_malformed_or_orphan_entries() {
     .unwrap();
     let cancelled = cancel_request(&f.root, &second.request.id, now).unwrap();
     assert_eq!(cancelled.status, DispatchStatus::Cancelled);
+
+    // 2. A corrupt request file with an unknown target/verb sets `blocks_all_admission`
+    //    and causes new `submit_request` admissions to fail closed.
+    let corrupt_id = Uuid::new_v4().to_string();
+    write_private_atomic(&request_path(&f.root, &corrupt_id), b"{not valid json").unwrap();
+    let blocked_err = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Review {
+            pr: 702,
+            vendor: None,
+        },
+        now,
+    )
+    .unwrap_err();
+    assert!(
+        blocked_err.to_string().contains(&corrupt_id)
+            && blocked_err.to_string().contains("needs-recovery"),
+        "corrupt request with unknown target must fail closed on new admission, got: {blocked_err:#}"
+    );
+}
+
+// trace:STORY-1917 trace:TASK-2340 | ai:agy
+#[test]
+fn task_2340_scope_refusals_emit_audit_event_only_for_active_mandates() {
+    let f = Fixture::new(&["reviewer", "implementer"]);
+    let now = Utc::now();
+
+    // 1. Active mandate lacking `Scope::Dispatch` emits exactly one `Outcome::Refused`
+    //    row under its exact `mandate.id`.
+    let m_ship_only = f.start_mandate(&[Scope::ShipHeld], false);
+    let err1 = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Review {
+            pr: 801,
+            vendor: None,
+        },
+        now,
+    )
+    .unwrap_err();
+    assert!(err1.to_string().contains("does not cover `dispatch`"));
+    let rows1 = crate::mandate_drive::ledger_rows(&f.root, &m_ship_only.id);
+    assert_eq!(
+        rows1.len(),
+        1,
+        "missing Scope::Dispatch must emit 1 audit row"
+    );
+    assert_eq!(rows1[0].2.outcome, Outcome::Refused);
+    assert_eq!(rows1[0].2.action, "review");
+    assert_eq!(rows1[0].2.subject, "PR #801");
+
+    // 2. Active mandate covering `Scope::Dispatch` but lacking `Scope::ShipHeld`
+    //    emits one `Outcome::Refused` row for shipping `flow` and one for `train`.
+    mandate::stop(&f.mandate_dir, &|| Ok(()), &f.principal, now).unwrap();
+    let m_dispatch_only = f.start_mandate(&[Scope::Dispatch], false);
+    let err_flow = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Flow {
+            pr: 802,
+            no_ship: false,
+            vendor: None,
+        },
+        now,
+    )
+    .unwrap_err();
+    assert!(err_flow.to_string().contains("does not cover `ship-held`"));
+    let err_train = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Train {
+            prs: vec![802, 803],
+        },
+        now,
+    )
+    .unwrap_err();
+    assert!(err_train.to_string().contains("does not cover `ship-held`"));
+    let rows2 = crate::mandate_drive::ledger_rows(&f.root, &m_dispatch_only.id);
+    assert_eq!(rows2.len(), 2);
+    assert!(rows2.iter().all(|r| r.2.outcome == Outcome::Refused));
+
+    // 3. Stopped mandate must NOT emit a new audit row borrowing the stopped ID.
+    mandate::stop(&f.mandate_dir, &|| Ok(()), &f.principal, now).unwrap();
+    let _ = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Review {
+            pr: 804,
+            vendor: None,
+        },
+        now,
+    )
+    .unwrap_err();
+    let rows_after_stop = crate::mandate_drive::ledger_rows(&f.root, &m_dispatch_only.id);
+    assert_eq!(
+        rows_after_stop.len(),
+        2,
+        "Stopped mandate refusal must not append ledger rows under the stopped mandate ID"
+    );
+}
+
+// trace:STORY-1917 trace:TASK-2341 | ai:agy
+#[test]
+fn task_2341_validate_branch_rejects_verified_local_default_branch_and_missing_origin_head() {
+    let f = Fixture::new(&["reviewer", "implementer"]);
+    f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
+    let now = Utc::now();
+    let brief = f.write_brief("trunk.md", "Test default branch check.\n");
+
+    let head = crate::test_git::git_command()
+        .arg("-C")
+        .arg(&f.root)
+        .args(["rev-parse", "HEAD"])
+        .output()
+        .unwrap();
+    let sha = String::from_utf8(head.stdout).unwrap().trim().to_string();
+
+    // 1. Point `refs/remotes/origin/HEAD` to `refs/remotes/origin/trunk`:
+    //    `trunk` must be rejected while `claude/feature-trunk` succeeds.
+    git(&f.root, &["update-ref", "refs/remotes/origin/trunk", &sha]);
+    git(
+        &f.root,
+        &[
+            "symbolic-ref",
+            "refs/remotes/origin/HEAD",
+            "refs/remotes/origin/trunk",
+        ],
+    );
+    let trunk_err = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Impl {
+            name: "trunk-lane".into(),
+            branch: "trunk".into(),
+            spec: "TASK-100".into(),
+            brief: brief.clone(),
+            vendor: None,
+        },
+        now,
+    )
+    .unwrap_err();
+    assert!(
+        trunk_err
+            .to_string()
+            .contains("cannot target the repository default branch `trunk` directly"),
+        "expected default branch `trunk` refusal, got: {trunk_err:#}"
+    );
+
+    let ok_sub = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Impl {
+            name: "feature-lane".into(),
+            branch: "claude/feature-trunk".into(),
+            spec: "TASK-100".into(),
+            brief: brief.clone(),
+            vendor: None,
+        },
+        now,
+    )
+    .unwrap();
+    assert_eq!(ok_sub.result.status, DispatchStatus::Pending);
+
+    // 2. Dangling `refs/remotes/origin/HEAD` -> fails closed.
+    git(
+        &f.root,
+        &[
+            "symbolic-ref",
+            "refs/remotes/origin/HEAD",
+            "refs/remotes/origin/nonexistent",
+        ],
+    );
+    let dangling_err = validate_branch(&f.root, "claude/other").unwrap_err();
+    assert!(
+        dangling_err
+            .to_string()
+            .contains("is missing, dangling, or does not resolve to a commit"),
+        "expected dangling default branch refusal, got: {dangling_err:#}"
+    );
+
+    // 3. Non-origin target (`refs/heads/main`) -> fails closed.
+    git(
+        &f.root,
+        &[
+            "symbolic-ref",
+            "refs/remotes/origin/HEAD",
+            "refs/heads/main",
+        ],
+    );
+    let non_origin_err = validate_branch(&f.root, "claude/other").unwrap_err();
+    assert!(
+        non_origin_err
+            .to_string()
+            .contains("points to non-origin target"),
+        "expected non-origin symref refusal, got: {non_origin_err:#}"
+    );
+
+    // 4. Missing `refs/remotes/origin/HEAD` -> fails closed without falling back to `main`.
+    git(
+        &f.root,
+        &["symbolic-ref", "--delete", "refs/remotes/origin/HEAD"],
+    );
+    let missing_err = validate_branch(&f.root, "claude/other").unwrap_err();
+    assert!(
+        missing_err
+            .to_string()
+            .contains("symbolic-ref is missing or unreadable"),
+        "expected missing origin/HEAD refusal, got: {missing_err:#}"
+    );
+}
+
+// trace:STORY-1917 trace:TASK-2342 | ai:agy
+#[test]
+fn task_2342_mandate_status_line_renders_all_effective_scopes_in_canonical_order() {
+    let f = Fixture::new(&["reviewer", "implementer"]);
+    let now = Utc::now();
+
+    // 1. Multi-scope non-drive mandate renders all scopes in canonical order (`ship-held, dispatch`).
+    let m = f.start_mandate(&[Scope::Dispatch, Scope::ShipHeld], false);
+    let line = mandate::current_status_line(&f.mandate_dir, Some(&f.root), now).unwrap();
+    assert!(
+        line.starts_with("MANDATE ship-held, dispatch ·"),
+        "expected `MANDATE ship-held, dispatch · ...`, got: {line}"
+    );
+    let _ = m;
+
+    // 2. Single-scope `dispatch` renders `MANDATE dispatch · ...`.
+    mandate::stop(&f.mandate_dir, &|| Ok(()), &f.principal, now).unwrap();
+    f.start_mandate(&[Scope::Dispatch], false);
+    let line_single = mandate::current_status_line(&f.mandate_dir, Some(&f.root), now).unwrap();
+    assert!(
+        line_single.starts_with("MANDATE dispatch ·"),
+        "expected `MANDATE dispatch · ...`, got: {line_single}"
+    );
+
+    // 3. Drive mandate retains `MANDATE drive · ...` shorthand.
+    mandate::stop(&f.mandate_dir, &|| Ok(()), &f.principal, now).unwrap();
+    let drive_scopes: BTreeSet<Scope> = [Scope::ShipHeld, Scope::Dispatch].into_iter().collect();
+    mandate::start_with_scopes(
+        &f.mandate_dir,
+        &|| Ok(()),
+        &f.principal,
+        Duration::hours(2),
+        None,
+        false,
+        true,
+        drive_scopes,
+        now,
+    )
+    .unwrap();
+    let line_drive = mandate::current_status_line(&f.mandate_dir, Some(&f.root), now).unwrap();
+    assert!(
+        line_drive.starts_with("MANDATE drive ·"),
+        "expected `MANDATE drive · ...`, got: {line_drive}"
+    );
+}
+
+// trace:STORY-1917 | ai:agy
+#[test]
+fn schedule_predicates_and_result_first_submit_rollbacks() {
+    let f = Fixture::new(&["reviewer", "implementer"]);
+    let now = Utc::now();
+
+    // Predicates parse and evaluate cleanly.
+    let expr =
+        crate::schedule_predicate::parse("mandate.dispatch_active == true && dispatch.pending > 0")
+            .unwrap();
+    let mut snap = crate::schedule_predicate::Snapshot::default();
+    assert!(!crate::schedule_predicate::eval(&expr, &snap).unwrap());
+    snap.mandate_dispatch_active = true;
+    snap.dispatch_pending = 2;
+    assert!(crate::schedule_predicate::eval(&expr, &snap).unwrap());
+
+    f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
+    assert_eq!(pending_request_count(&f.root), 0);
+
+    // Stage 1 and Stage 2 in-invocation submit failures clean up exact owned files.
+    let brief = f.write_brief("stage.md", "Stage rollback test.\n");
+    TEST_FAIL_SUBMIT_STAGE.with(|c| c.set(1));
+    let e1 = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Impl {
+            name: "stage-one".into(),
+            branch: "claude/stage-one".into(),
+            spec: "TASK-100".into(),
+            brief: brief.clone(),
+            vendor: None,
+        },
+        now,
+    );
+    TEST_FAIL_SUBMIT_STAGE.with(|c| c.set(0));
+    assert!(e1.is_err());
+    assert_eq!(
+        inspect_dispatch_inventory_readonly(&f.root)
+            .unwrap()
+            .fences
+            .len(),
+        0,
+        "stage-1 failure must clean up frozen brief and leave zero recovery fences"
+    );
+
+    TEST_FAIL_SUBMIT_STAGE.with(|c| c.set(2));
+    let e2 = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Impl {
+            name: "stage-two".into(),
+            branch: "claude/stage-two".into(),
+            spec: "TASK-100".into(),
+            brief: brief.clone(),
+            vendor: None,
+        },
+        now,
+    );
+    TEST_FAIL_SUBMIT_STAGE.with(|c| c.set(0));
+    assert!(e2.is_err());
+    assert_eq!(
+        inspect_dispatch_inventory_readonly(&f.root)
+            .unwrap()
+            .fences
+            .len(),
+        0,
+        "same-invocation stage-2 failure must clean up Pending result + frozen brief"
+    );
+
+    // Simulated hard crash after result write leaves orphan Pending result on disk,
+    // which the next inspection classifies as `needs-recovery` (`RequestMissing`)
+    // without deleting it.
+    TEST_SIMULATE_CRASH_AFTER_RESULT_WRITE.with(|c| c.set(true));
+    let crash_res = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Review {
+            pr: 990,
+            vendor: None,
+        },
+        now,
+    );
+    TEST_SIMULATE_CRASH_AFTER_RESULT_WRITE.with(|c| c.set(false));
+    assert!(crash_res.is_err());
+    let inv_after_crash = inspect_dispatch_inventory_readonly(&f.root).unwrap();
+    assert_eq!(inv_after_crash.fences.len(), 1);
+    assert_eq!(
+        inv_after_crash.fences[0].known_target_key.as_deref(),
+        Some("pr:990")
+    );
+    assert!(
+        result_path(&f.root, &inv_after_crash.fences[0].id).exists(),
+        "orphan Pending result after hard crash must never be auto-deleted on restart"
+    );
 }
