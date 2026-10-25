@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T22:12:54.027870933Z
-modified_at: 2026-10-25T18:02:21.608929014Z
+modified_at: 2026-10-25T18:06:03.492394268Z
 req_type: Bug
 tags:
 - id-allocation
@@ -701,6 +701,11 @@ comments:
   created_at: 2026-10-25T18:02:21.608929014Z
   modified_at: 2026-10-25T18:02:21.608929014Z
   session_id: cde796d3-1750-4745-a8f9-7ab3bc7c3519
+- id: 01a1743d-b4e4-76e1-b6ba-e8f80fffb797
+  author: mcp
+  content: OPERATOR METHOD HANDOFF — 2026-10-25 11:03 Arizona, received directly in this Codex session. Authorized for S3b only. Preserve BUG-2017 S1+S2 allocation authority and lock order exactly. The previously recorded one-use candidate lifetime and admission boundaries on STORY-1742 are now the signed contract; changing them needs a new sketch first. BUG-2017 existing tests must remain unchanged and green. This implementer is sole owner of the shared methods until the S3b PR merges; BUG-2017 S3 will not be dispatched onto them before then. S3a ships as its own PR. S3b PR trailer must be (Refs STORY-1742, Refs BUG-2017), with independent strict review of lock order and allocation authority. No S3b source edits yet at this checkpoint; S3a final verification/publication remains first. No allocation-authority, grant, HOME enrollment, containment or merge permission was inferred beyond this explicit handoff.
+  created_at: 2026-10-25T18:06:03.492385533Z
+  modified_at: 2026-10-25T18:06:03.492385533Z
 history:
 - id: 01a16f08-1847-70c2-a9ec-772710162546
   author: joe
