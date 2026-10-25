@@ -1215,3 +1215,72 @@ fn explicit_reconciliation_refreshes_routes_and_render_stays_read_only() {
         .join(".aida/agent-briefs/codex/PR-44-def.md")
         .exists());
 }
+
+// trace:STORY-1889 | ai:agy
+#[test]
+fn label_state_persistence_lives_in_protected_core_for_typed_and_legacy_markers() {
+    let core_src = include_str!("../merge_hold_core.rs");
+    let outer_src = include_str!("../../merge_hold.rs");
+    assert!(
+        core_src.contains("pub(crate) fn record_label_state(")
+            && core_src.contains("pub(crate) fn read_label_state("),
+        "record_label_state and read_label_state must live inside protected gate/merge_hold_core.rs"
+    );
+    assert!(
+        !outer_src.contains("fn record_label_state(")
+            && !outer_src.contains("fn read_label_state("),
+        "unprotected merge_hold.rs must not define label-state marker writers"
+    );
+
+    let dir = tempfile::tempdir().unwrap();
+    // Missing marker is a no-op.
+    record_label_state(dir.path(), 100, &LabelState::Synced).unwrap();
+    assert!(!hold_path(dir.path(), 100).exists());
+    assert_eq!(read_label_state(dir.path(), 100), LabelState::Unknown);
+
+    // Legacy plaintext marker round-trips Synced, Unsynced, and Unknown while preserving reason.
+    write_hold(dir.path(), 101, "guided").unwrap();
+    record_label_state(
+        dir.path(),
+        101,
+        &LabelState::Unsynced("gh: 503\ndetail".into()),
+    )
+    .unwrap();
+    assert_eq!(
+        read_label_state(dir.path(), 101),
+        LabelState::Unsynced("gh: 503".into())
+    );
+    assert_eq!(read_hold(dir.path(), 101).as_deref(), Some("guided"));
+    record_label_state(dir.path(), 101, &LabelState::Synced).unwrap();
+    assert_eq!(read_label_state(dir.path(), 101), LabelState::Synced);
+    record_label_state(dir.path(), 101, &LabelState::Unknown).unwrap();
+    assert_eq!(read_label_state(dir.path(), 101), LabelState::Unknown);
+    assert_eq!(read_hold(dir.path(), 101).as_deref(), Some("guided"));
+
+    // Typed JSON marker round-trips Synced, Unsynced, and Unknown while preserving record fields.
+    let record = typed_hold(
+        102,
+        HoldReasonKind::Supervision,
+        "manual check",
+        Some("abc1234".into()),
+    );
+    write_typed_hold(dir.path(), &record).unwrap();
+    record_label_state(
+        dir.path(),
+        102,
+        &LabelState::Unsynced("glab: 502\nextra".into()),
+    )
+    .unwrap();
+    assert_eq!(
+        read_label_state(dir.path(), 102),
+        LabelState::Unsynced("glab: 502".into())
+    );
+    record_label_state(dir.path(), 102, &LabelState::Synced).unwrap();
+    assert_eq!(read_label_state(dir.path(), 102), LabelState::Synced);
+    record_label_state(dir.path(), 102, &LabelState::Unknown).unwrap();
+    assert_eq!(read_label_state(dir.path(), 102), LabelState::Unknown);
+    let reread = read_hold_record(dir.path(), 102).unwrap();
+    assert_eq!(reread.reason_kind, HoldReasonKind::Supervision);
+    assert_eq!(reread.detail, "manual check");
+    assert_eq!(reread.target_head_sha.as_deref(), Some("abc1234"));
+}

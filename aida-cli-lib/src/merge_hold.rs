@@ -15,10 +15,10 @@
 //! auto-merge is unaffected (the granularity the branch-protection concern needs).
 // trace:BUG-1167 | ai:claude
 
-// STORY-1889: the hold record types, the hold read path and the hold
-// decisions live in the protected gate module; this file keeps marker
-// writes, forge labels and the pinned-change plumbing. Transitional
-// re-export; the final STORY-1889 PR repoints the callers.
+// STORY-1889: the hold record types, the hold read path, the marker write path
+// and the hold decisions live in the protected gate module; this file keeps
+// forge labels and the pinned-change plumbing. Transitional re-export; the
+// final STORY-1889 PR repoints the callers.
 // trace:STORY-1889 | ai:claude
 pub(crate) use crate::gate::merge_hold_core::*;
 
@@ -1216,83 +1216,6 @@ pub(crate) fn premise_stale(
         }
     }
     (!why.is_empty()).then(|| why.join("; "))
-}
-
-/// BUG-1236: whether the `aida:merge-hold` label on the change mirrors the
-/// marker, as RECORDED when the marker's label was last synced. TASK-189: this
-/// is the marker's claim, not the forge's state — `aida merge-hold list` shows
-/// it as `recorded:` beside a live forge read ([`ForgeLabel`]).
-// trace:BUG-1236 | ai:claude
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum LabelState {
-    Synced,
-    Unsynced(String),
-    Unknown,
-}
-
-/// Record the label sync state on an existing marker (no-op without one).
-// trace:BUG-1236 | ai:claude
-pub(crate) fn record_label_state(
-    project_root: &Path,
-    pr: u64,
-    state: &LabelState,
-) -> std::io::Result<()> {
-    let path = hold_path(project_root, pr);
-    let body = match std::fs::read_to_string(&path) {
-        Ok(b) => b,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
-        Err(e) => return Err(e),
-    };
-    if body.trim_start().starts_with('{') {
-        let Some(mut record) = read_hold_record(project_root, pr) else {
-            return Ok(());
-        };
-        record.label_state = Some(match state {
-            LabelState::Synced => "synced".to_string(),
-            LabelState::Unsynced(err) => format!("unsynced: {}", err.lines().next().unwrap_or("")),
-            LabelState::Unknown => "unknown".to_string(),
-        });
-        return write_typed_hold(project_root, &record);
-    }
-    let reason = body.lines().next().unwrap_or("").trim();
-    let line = match state {
-        LabelState::Synced => "label: synced".to_string(),
-        LabelState::Unsynced(err) => {
-            format!("label: unsynced: {}", err.lines().next().unwrap_or(""))
-        }
-        LabelState::Unknown => String::new(),
-    };
-    let out = if line.is_empty() {
-        format!("{reason}\n")
-    } else {
-        format!("{reason}\n{line}\n")
-    };
-    std::fs::write(path, out)
-}
-
-/// The recorded label state for `pr` (Unknown when the marker predates
-/// BUG-1236 or carries no state line).
-// trace:BUG-1236 | ai:claude
-pub(crate) fn read_label_state(project_root: &Path, pr: u64) -> LabelState {
-    let Ok(body) = std::fs::read_to_string(hold_path(project_root, pr)) else {
-        return LabelState::Unknown;
-    };
-    if body.trim_start().starts_with('{') {
-        return match read_hold_record(project_root, pr).and_then(|r| r.label_state) {
-            Some(s) if s == "synced" => LabelState::Synced,
-            Some(s) if s.starts_with("unsynced:") => {
-                LabelState::Unsynced(s.trim_start_matches("unsynced:").trim().to_string())
-            }
-            _ => LabelState::Unknown,
-        };
-    }
-    match body.lines().nth(1).map(str::trim) {
-        Some("label: synced") => LabelState::Synced,
-        Some(l) if l.starts_with("label: unsynced:") => {
-            LabelState::Unsynced(l["label: unsynced:".len()..].trim().to_string())
-        }
-        _ => LabelState::Unknown,
-    }
 }
 
 /// Mirror active hold state and its history/clearance proof to forge labels so
