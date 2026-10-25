@@ -14,12 +14,12 @@ description: |
   All three checks are correct on inspection; the gap is regression protection. dispatch.rs is in GATE_PROTECTED_PATHS, so a future refactor silently dropping one of these would have no test to catch it.
 
   Raised in review of PR-2905: https://github.com/joemooney/aida/pull/2905#issuecomment-6390394038
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-24T22:35:40.117352674Z
-modified_at: 2026-10-25T20:06:33.710535372Z
+modified_at: 2026-10-25T20:07:22.088550118Z
 req_type: Task
 tags:
 - authority
@@ -51,6 +51,14 @@ history:
   timestamp: 2026-10-25T20:06:35.183346366Z
   session_id: cde796d3-1750-4745-a8f9-7ab3bc7c3519
   changes: []
+- id: 01a174ac-c4e8-7283-bd71-6ee9e7792e63
+  author: aida-pr-open
+  timestamp: 2026-10-25T20:07:22.088539096Z
+  session_id: cde796d3-1750-4745-a8f9-7ab3bc7c3519
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 9457e495247a3c9de111d15507fabd2cd0923079
   branch: pr-2905
