@@ -10,12 +10,12 @@ description: |-
   No path re-launches a worker in the existing orphaned worktree. Workaround: trust the worktree and run `claude --bg` inside it.
   Also: with the advisor seat left at a codex default, every headless launch failed with the containment-vendor error ('codex vendor cannot run a contained session'); consider defaulting contained headless launches to a vendor that supports containment or naming AIDA_HEADLESS_VENDOR in the first line.
   Acceptance: when the lease is orphaned and no claude session is recorded, the hint offers a working in-place relaunch (e.g. --resume falls back to a cold launch in the orphaned worktree on its existing branch), and the two error messages never point at each other.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T17:38:11.351372157Z
-modified_at: 2026-10-25T21:06:20.472836966Z
+modified_at: 2026-10-25T21:06:23.013548176Z
 req_type: Bug
 tags:
 - from-advisor
@@ -35,6 +35,12 @@ comments:
     Gate LIGHT (targeted cargo + check-ci-fast; check-ci-compile if >10 files). trace:BUG-2223.
   created_at: 2026-10-25T21:06:20.472836966Z
   modified_at: 2026-10-25T21:06:20.472836966Z
+  session_id: cde796d3-1750-4745-a8f9-7ab3bc7c3519
+- id: 01a174e2-cca5-7b20-8132-aabd58ade28c
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: design-fork: Acceptance asks for a working in-place relaunch into the orphaned seat, but no such path exists today, so fixing the messages alone cannot satisfy it. Evidence: (1) queue_cmd.rs conflict loop (~L12107-12325) bails on EVERY existing same-scope lease even with --resume: the DormantDirty+--resume branch says ''re-run with --resume <uuid>'', which bails the same way, and the Live/StaleDirty hints claim ''--resume re-attaches in place'', which no code does. (2) The only re-entry path is session_start.rs reuse_existing_worktree_path (~L1822), which needs --path + --force-claim + a REGISTERED git worktree. The orphaned seats (aida-worktrees/aida-seat-aida-*) are contained private CLONES (TASK-2053), and session_start.rs ~L2135 explicitly refuses ''contained seat ... cannot re-enter an existing --path yet''. (3) resolve_queue_work_launch (session_misc.rs ~L1786) runs before the conflict loop and knows nothing about the lease. Choices: (A) adopt the orphaned lease in place: in the conflict loop, when --resume is passed and the lease is dormant/stale with its tree present, keep the lease+tree+branch, rewrite its pids, skip session_start, and launch there, cold with a freshly minted id when no claude session is recorded. Note session_start''s status bump, claim ledger, and BUG-2169 contained-seat setup would need to be re-run or factored out. (B) teach session_start to re-enter an existing contained clone (lift the L2135 refusal, extend reuse_existing_worktree_path to clones and their pins/cleanup guards), then have --resume release only the orphaned lease FILE and call session_start with path=orphan tree and branch=orphan branch. (C) messages only: stop the two errors pointing at each other and name the manual workaround. Cheap, but fails the ''working in-place relaunch'' acceptance. A or B changes the lease/containment lifecycle (architecture, which needs a sketch + advisor signoff per CLAUDE.md).. No triage reason was given.'
+  created_at: 2026-10-25T21:06:23.013537076Z
+  modified_at: 2026-10-25T21:06:23.013537076Z
   session_id: cde796d3-1750-4745-a8f9-7ab3bc7c3519
 history:
 - id: 01a1748f-4497-7a10-9411-9d32f09101ee
@@ -68,6 +74,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a174e2-cca5-7b20-8132-aaab53518393
+  author: joe
+  timestamp: 2026-10-25T21:06:23.013526013Z
+  session_id: cde796d3-1750-4745-a8f9-7ab3bc7c3519
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 54c64e26a58810f213f0a0fa1720a69bcce37ea3
   branch: main
@@ -76,9 +90,3 @@ filed_at:
   aida_build_sha: a01a698998
   vendor: claude
   session: cde796d3-1750-4745-a8f9-7ab3bc7c3519
-attention_reason:
-  category: design-fork
-  detail: 'Acceptance asks for a working in-place relaunch into the orphaned seat, but no such path exists today, so fixing the messages alone cannot satisfy it. Evidence: (1) queue_cmd.rs conflict loop (~L12107-12325) bails on EVERY existing same-scope lease even with --resume: the DormantDirty+--resume branch says ''re-run with --resume <uuid>'', which bails the same way, and the Live/StaleDirty hints claim ''--resume re-attaches in place'', which no code does. (2) The only re-entry path is session_start.rs reuse_existing_worktree_path (~L1822), which needs --path + --force-claim + a REGISTERED git worktree. The orphaned seats (aida-worktrees/aida-seat-aida-*) are contained private CLONES (TASK-2053), and session_start.rs ~L2135 explicitly refuses ''contained seat ... cannot re-enter an existing --path yet''. (3) resolve_queue_work_launch (session_misc.rs ~L1786) runs before the conflict loop and knows nothing about the lease. Choices: (A) adopt the orphaned lease in place: in the conflict loop, when --resume is passed and the lease is dormant/stale with its tree present, keep the lease+tree+branch, rewrite its pids, skip session_start, and launch there, cold with a freshly minted id when no claude session is recorded. Note session_start''s status bump, claim ledger, and BUG-2169 contained-seat setup would need to be re-run or factored out. (B) teach session_start to re-enter an existing contained clone (lift the L2135 refusal, extend reuse_existing_worktree_path to clones and their pins/cleanup guards), then have --resume release only the orphaned lease FILE and call session_start with path=orphan tree and branch=orphan branch. (C) messages only: stop the two errors pointing at each other and name the manual workaround. Cheap, but fails the ''working in-place relaunch'' acceptance. A or B changes the lease/containment lifecycle (architecture, which needs a sketch + advisor signoff per CLAUDE.md).'
-  lean: 'B: reuse session_start (keeps status bump, claim ledger, and containment setup in one place) by letting it re-enter an existing clone or worktree at an orphaned lease''s path. --resume with no recorded session becomes Fresh(minted id) in that tree. Ship C''s message fixes in the same PR. Split the codex-vendor containment default (second paragraph of the description) into its own task.'
-  raised_by: implementer
-  raised_at: 2026-10-25T19:47:05.213837193Z
