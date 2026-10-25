@@ -6,13 +6,6 @@
   added_at: 2026-10-25T05:37:41.657996183Z
   for_role: implementer
 - user_id: role:implementer
-  requirement_id: 01a170d1-0568-70a1-9e28-9498511707b8
-  position: 291000
-  added_by: role:implementer
-  note: Advisor-approved rework of codex2 F1/F2 at91071afddc; concrete brief20261025T045538Z and due-job boundary comment. Existing codex1 lane is editing; metadata only, no new launch or hold clearance.
-  added_at: 2026-10-25T05:26:21.719754501Z
-  for_role: implementer
-- user_id: role:implementer
   requirement_id: 01a16ad2-fa8b-7961-ae04-837e24cec35d
   position: 292000
   added_by: role:implementer
@@ -140,5 +133,13 @@
   added_by: role:implementer
   note: Fresh performance regression, not budget recalibration. Diagnose bounded show hot path from durable measured evidence; preserve active watcher/BUG2017 work priority.
   added_at: 2026-10-25T06:39:55.919602211Z
+  for_role: implementer
+  added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a170d1-0568-70a1-9e28-9498511707b8
+  position: 481000
+  added_by: role:implementer
+  note: Existing codex1 owns in-place same-F2 install correction; no duplicate implementation. Bounded advisor sufficiency ruling and urgent brief.
+  added_at: 2026-10-25T06:46:02.767709476Z
   for_role: implementer
   added_by_machine: imac
