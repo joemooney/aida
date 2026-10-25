@@ -49,7 +49,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T02:43:59.810701479Z
-modified_at: 2026-10-23T17:58:45.612961846Z
+modified_at: 2026-10-25T10:21:52.152572112Z
 req_type: Story
 tags:
 - architecture
@@ -382,6 +382,50 @@ comments:
     These are branch-artifact verdicts, not completion or dispatch/merge authority. No spec status, branch, PR or active worktree changed. Full 14-branch table: .aida/handoff/advisor/unshipped-audit-2026-10-23.md (8 SHIPPED-ELSEWHERE, 3 SALVAGE, 3 ABANDON).
   created_at: 2026-10-23T17:58:45.612961846Z
   modified_at: 2026-10-23T17:58:45.612961846Z
+- id: 01a17294-ba98-7473-8f99-900b187518b4
+  author: joe
+  content: |
+    ## AC2 local measurement #3 (nextest, pinned worktree): MISSED. 30:24 warm vs the 10 min target (+20.4 min)
+
+    **Setup.** Dedicated detached worktree `aida-worktrees/aida-ac2-measure`, pinned to 3cbb90b0c9; its HEAD was unchanged across both runs. cargo-nextest 0.9.149. `AIDA_CARGO_FORCE_BUILD=1`, because the host cargo wrapper otherwise skips every build at a no-diff SHA (attempt 2b, 2026-10-24 02:50, "ran" 0 tests in 2 s for that reason). The gate was load1 < 2, load5 < 2.5, no build processes, no aida flow/review processes, and no live reviewer/implementer sessions. It first opened at 2026-10-25 02:00, after 32 hourly checks. `make test` was run twice back to back.
+
+    | Run | Wall | CPU | Passed / ignored / failed | load1 min / median / max |
+    |---|---|---|---|---|
+    | 1, cold (includes compile) | 49:43 | 228% | 13,119 / 11 / 3 | 2.1 / 22.4 / 70.7 |
+    | **2, warm (the AC2 figure)** | **30:24** | 202% | 13,120 / 11 / 2 | 17.5 / 25.5 / 41.8 |
+
+    Compile in run 1: 8m57 (lib) + 4m27 + 17 s + 3m27 (rest) + 6m55 (aida-cli-lib doc tests), about 24 min. In run 2 every compile step was a < 2 s no-op.
+
+    **Caveat: the window did not stay quiet.** Load climbed past 6 within 4 minutes and stayed at 20–40. After the run ended it was still about 25, with 0 cargo processes and no live aida sessions. vmstat showed about 40 blocked processes and about 62% iowait (sda, fsync-heavy writes). So the host's load is mostly I/O wait from other sessions, not CPU, and "load < 2" rarely holds for long. Treat 30:24 as an upper bound under contention.
+
+    **Why it misses even ignoring load (structural).** `make test` runs its lane invocations one after another. Each nextest run is parallel inside, but the next one waits for it to finish. Warm execution per invocation:
+
+    | Invocation | Seconds | Tests |
+    |---|---|---|
+    | aida-cli-lib unit binary | 771 | 10,493 |
+    | aida-cli integration batch A | 518 | 223 |
+    | aida-cli integration batch B | 298 | 152 |
+    | rest of the workspace | 109 | 2,239 |
+    | lib guardrails | 7 | 13 |
+    | doc tests | ~1 | |
+    | **Total** | **~1,703 s (28.4 min)** | |
+
+    The lib binary alone is 12.9 min, past the target. Its long pole is `task_1507_history_cache_tests`: 6 tests at 69–103 s each, plus a 180 s TIMEOUT. In CI the same work is split across lib-0/lib-1/cli-0/cli-1/rest runners in parallel, which is why AC1 is met at about 6 min.
+
+    **What would close AC2** (advisor to choose):
+    1. Have `make test` run the lanes concurrently, or as one nextest invocation over the union, instead of one after another. That removes the serial sum.
+    2. Slim or budget-split `task_1507_history_cache_tests` (about 9 min of lib-lane test time).
+    3. The S5 lib split.
+
+    **Failures (local only; CI is green on the same tests):**
+    - `task_1507_history_cache_tests::bug_1620_id_every_cut_across_merges_matches_the_walk`: TIMEOUT at 180 s in run 2, and also in attempt 2. Consistently too slow locally under load.
+    - `task_1287_label_only_merge_hold::ownership_and_ci_share_one_wait_deadline`: FAIL at about 3.9 s in both runs here and in attempt 2. Reproducible locally; worth a bug.
+    - Run 1 only (passed in run 2), each failing in 0.01–0.02 s: `bug_1745_error_channel_tests::performance_command_stdout_round_trips_into_failure_trip`, `bug_1749_doctor_toon_tests::json_spellings_match_and_human_pin_stays_on_stderr`, `bug_1749_doctor_toon_tests::performance_failure_stdout_is_one_parseable_toon_document`. Flaky; likely ordering or environment.
+
+    Artifacts (integrator scratchpad): `ac2-pinned-20261025T0200.{warm,measured}.{log,time,load}`.
+  created_at: 2026-10-25T10:21:52.152572112Z
+  modified_at: 2026-10-25T10:21:52.152572112Z
+  session_id: f91fd366-4181-4735-8802-dfc810a1c42e
 history:
 - id: 01a152ec-592c-7ec2-af4d-e6cf3cea3865
   author: joe
