@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T22:12:54.027870933Z
-modified_at: 2026-10-25T14:08:34.328793212Z
+modified_at: 2026-10-25T14:17:45.922885489Z
 req_type: Bug
 tags:
 - id-allocation
@@ -626,6 +626,14 @@ comments:
     Execution stays in owned branch, preserve fullS1+S2 and ALLS3/scanner/audit/docs. Integrate latest maina01 normally (not ancestor ofeff2), noforce. Localgate ONE meaningful affected core work_binding filtered run plus make check-ci-fast; exact managed help snapshot generation/verification and affected native/manual contract are necessary distinct failure checks. Longcargo AIDA_CARGO_TIMEOUT=<dur> in background, no outertimeout/slotbypass/fullworkspace runtime. Mandatory touched/compile only if actualnewdelta changes shared testinfra or >10files. Prior83target/oldcandidateevidence remains qualified. Push normal changedhead promptly; CIfullshards and independent ownattestation atactualhead remain. No realHOMEflag, deployment, holdclear, source-onlycompletion or merge. If already fixing, report actual newSHA/evidence and avoid duplicate rerun.
   created_at: 2026-10-25T14:08:34.328793212Z
   modified_at: 2026-10-25T14:08:34.328793212Z
+- id: 01a1736c-b2c2-7b52-9f4d-4dec0c045974
+  author: ai:codex:joe
+  content: |
+    Codex1 correction to published checkpoint: exact eff2 CI40199729918 is NOT green. Both CLI lanes and lib0 passed; lib1/rest/contracts failed. No readiness/hold change. Raw /tmp/bug2017-eff2-ci-{lib1,rest,contracts}.log read before edits.
+
+    Concrete causes and bounded fixes in progress on same branch: lib1 missing golden help rows for config allocation (snapshot regenerated/inspected); contracts manual guard rejects two source spec IDs in user prose (replaced with plain follow-up language, trace comments retained); HOME promotion unit fixture relied on operator global Git identity (configure only exact temp repo); concurrent bound-counter test reproduced locally on regular /tmp filesystem at round2 with unsafe-state refusal. Reader can observe nlink0 when another writer atomically replaces the opened inode. Added bounded reopen ONLY for that unlinked snapshot; nlink2, symlink, FIFO, ownership/mode/size checks remain strict. No automatic counter recreation, no skipped assertion/test, no real HOME authority or global Git identity edit. Focused and identity-free regular-filesystem replay running before normal follow-up push. Earlier37/native379/fast/compile evidence remains recorded, not misrepresented as current CI green. Existing full S2/S3 scope and all holds preserved. Please use forthcoming final head for any exact-head recheck; no extra broad author/peer cycle requested.
+  created_at: 2026-10-25T14:17:45.922885489Z
+  modified_at: 2026-10-25T14:17:45.922885489Z
 history:
 - id: 01a16f08-1847-70c2-a9ec-772710162546
   author: joe
