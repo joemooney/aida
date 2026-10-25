@@ -455,6 +455,17 @@ mutation/gate paths remain strict. See OVERVIEW.md for the read-label contract.
 
 ## Storage Model
 
+Allocation defaults to WORK: init establishes an opaque UUID binding and persistent
+per-type node-local counters in the clone common Git directory, shared by linked
+worktrees. Legacy state migrates on admitted local allocation; refused global
+requests cannot trigger migration. Only an explicitly enrolled HOME clone can
+claim global blocks or promote agreed IDs. `config allocation enroll-home` is a
+direct-human workflow; implementation never enrolls real HOME. Native aliases
+survive promotion, and destructive node-alias retirement refuses. See
+[allocation setup](docs/cli/07-project-setup.md#clone-local-allocation-authority).
+All-conflict audit/scanner integration remains BUG-2017 slice 3.
+<!-- trace:BUG-2017 | ai:codex -->
+
 Clone-local transport policy lives in the common Git directory, outside the
 shared store. `aida config transport` manages the `work` profile before store
 initialization. Enabled push performs one pinned store-ref push through verified

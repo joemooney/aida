@@ -63,6 +63,15 @@ def main():
             client = McpClient(binary, root, 60)
             try:
                 client.request("initialize", {"protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "bootstrap-contract", "version": "1"}})
+                descriptors = client.request("tools/list")["result"]["tools"]
+                id_patterns = [field["pattern"] for tool in descriptors
+                               for field in tool.get("inputSchema", {}).get("properties", {}).values()
+                               if field.get("pattern", "").startswith("^[A-Z]+-")]
+                assert len(id_patterns) >= 10
+                for pattern in id_patterns:
+                    assert re.fullmatch(pattern, f"BUG-{node}-001"), pattern
+                    assert re.fullmatch(pattern, "BUG-1-2-003"), pattern
+                    assert not re.fullmatch(pattern, "other#BUG-001"), pattern
                 response = client.tool("add_requirement", {"title": "MCP defect", "description": "native WORK MCP allocation", "type": "bug", "status": "draft"})
                 assert added(content_text(response), "BUG").endswith("002")
                 generic = client.tool("add_requirement", {"title": "MCP generic", "description": "native WORK generic allocation", "type": "functional", "status": "draft"})

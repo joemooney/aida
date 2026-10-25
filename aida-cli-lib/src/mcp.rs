@@ -7113,7 +7113,7 @@ pub fn tool_descriptors() -> Value {
                     "parent": {
                         "type": "string",
                         "description": "Restrict to direct children of this parent SPEC-ID (mirrors `aida list --parent`).",
-                        "pattern": "^[A-Z]+(?:-[A-Za-z0-9_]+)?-[0-9]+$",
+                        "pattern": "^[A-Z]+-(?:[A-Za-z0-9_]+-)*[0-9]+$",
                         "example": "EPIC-27"
                     },
                     "role": {
@@ -7178,7 +7178,7 @@ pub fn tool_descriptors() -> Value {
                     "id": {
                         "type": "string",
                         "description": "The unique SPEC-ID of the requirement (e.g., FR-0042). Must follow the canonical spec format.",
-                        "pattern": "^[A-Z]+(?:-[A-Za-z0-9_]+)?-[0-9]+$",
+                        "pattern": "^[A-Z]+-(?:[A-Za-z0-9_]+-)*[0-9]+$",
                         "example": "FR-0042"
                     },
                     "include_git": {
@@ -7246,7 +7246,7 @@ pub fn tool_descriptors() -> Value {
                     "parent": {
                         "type": "string",
                         "description": "SPEC-ID of a parent to link this requirement under (adds a Parent/Child edge, mirroring `aida add --parent`). The parent must exist and not be terminal-status.",
-                        "pattern": "^[A-Z]+(?:-[A-Za-z0-9_]+)?-[0-9]+$",
+                        "pattern": "^[A-Z]+-(?:[A-Za-z0-9_]+-)*[0-9]+$",
                         "example": "EPIC-27"
                     },
                     "tags": {
@@ -7277,7 +7277,7 @@ pub fn tool_descriptors() -> Value {
                     "id": {
                         "type": "string",
                         "description": "The unique SPEC-ID of the requirement to update.",
-                        "pattern": "^[A-Z]+(?:-[A-Za-z0-9_]+)?-[0-9]+$",
+                        "pattern": "^[A-Z]+-(?:[A-Za-z0-9_]+-)*[0-9]+$",
                         "example": "FR-0042"
                     },
                     "title": {
@@ -7328,7 +7328,7 @@ pub fn tool_descriptors() -> Value {
                     "parent": {
                         "type": "string",
                         "description": "Re-parent the requirement under this SPEC-ID (adds a Parent/Child edge to the new parent; existing parent edges are left in place). The parent must exist and not be terminal-status.",
-                        "pattern": "^[A-Z]+(?:-[A-Za-z0-9_]+)?-[0-9]+$",
+                        "pattern": "^[A-Z]+-(?:[A-Za-z0-9_]+-)*[0-9]+$",
                         "example": "EPIC-27"
                     },
                     "assignee": {
@@ -7415,7 +7415,7 @@ pub fn tool_descriptors() -> Value {
                     "id": {
                         "type": "string",
                         "description": "The unique SPEC-ID of the requirement to comment on.",
-                        "pattern": "^[A-Z]+(?:-[A-Za-z0-9_]+)?-[0-9]+$",
+                        "pattern": "^[A-Z]+-(?:[A-Za-z0-9_]+-)*[0-9]+$",
                         "example": "FR-0042"
                     },
                     "text": {
@@ -7444,7 +7444,7 @@ pub fn tool_descriptors() -> Value {
                     "spec_id": {
                         "type": "string",
                         "description": "Source requirement SPEC-ID.",
-                        "pattern": "^[A-Z]+(?:-[A-Za-z0-9_]+)?-[0-9]+$",
+                        "pattern": "^[A-Z]+-(?:[A-Za-z0-9_]+-)*[0-9]+$",
                         "example": "TASK-551"
                     },
                     "relationship_type": {
@@ -7456,7 +7456,7 @@ pub fn tool_descriptors() -> Value {
                     "target_spec_id": {
                         "type": "string",
                         "description": "Target requirement SPEC-ID.",
-                        "pattern": "^[A-Z]+(?:-[A-Za-z0-9_]+)?-[0-9]+$",
+                        "pattern": "^[A-Z]+-(?:[A-Za-z0-9_]+-)*[0-9]+$",
                         "example": "STORY-398"
                     },
                     "bidirectional": {
@@ -7485,7 +7485,7 @@ pub fn tool_descriptors() -> Value {
                     "spec_id": {
                         "type": "string",
                         "description": "Root requirement SPEC-ID to query from.",
-                        "pattern": "^[A-Z]+(?:-[A-Za-z0-9_]+)?-[0-9]+$",
+                        "pattern": "^[A-Z]+-(?:[A-Za-z0-9_]+-)*[0-9]+$",
                         "example": "STORY-489"
                     },
                     "mode": {
@@ -7690,7 +7690,7 @@ pub fn tool_descriptors() -> Value {
                     "spec_id": {
                         "type": "string",
                         "description": "The SPEC-ID of the punted requirement.",
-                        "pattern": "^[A-Z]+(?:-[A-Za-z0-9_]+)?-[0-9]+$",
+                        "pattern": "^[A-Z]+-(?:[A-Za-z0-9_]+-)*[0-9]+$",
                         "example": "FR-0042"
                     }
                 },
@@ -7709,7 +7709,7 @@ pub fn tool_descriptors() -> Value {
                     "spec_id": {
                         "type": "string",
                         "description": "The unique SPEC-ID of the requirement facing the obstacle.",
-                        "pattern": "^[A-Z]+(?:-[A-Za-z0-9_]+)?-[0-9]+$",
+                        "pattern": "^[A-Z]+-(?:[A-Za-z0-9_]+-)*[0-9]+$",
                         "example": "FR-0042"
                     },
                     "detail": {
@@ -7754,7 +7754,7 @@ pub fn tool_descriptors() -> Value {
                     "spec_id": {
                         "type": "string",
                         "description": "The unique SPEC-ID of the requirement to resolve.",
-                        "pattern": "^[A-Z]+(?:-[A-Za-z0-9_]+)?-[0-9]+$",
+                        "pattern": "^[A-Z]+-(?:[A-Za-z0-9_]+-)*[0-9]+$",
                         "example": "FR-0042"
                     },
                     "answer": {
@@ -7789,7 +7789,7 @@ pub fn tool_descriptors() -> Value {
                     "spec_id": {
                         "type": "string",
                         "description": "The unique SPEC-ID of the requirement being escalated.",
-                        "pattern": "^[A-Z]+(?:-[A-Za-z0-9_]+)?-[0-9]+$",
+                        "pattern": "^[A-Z]+-(?:[A-Za-z0-9_]+-)*[0-9]+$",
                         "example": "FR-0042"
                     },
                     "reasoning": {
@@ -7873,7 +7873,7 @@ pub fn tool_descriptors() -> Value {
                     "spec_id": {
                         "type": "string",
                         "description": "Associated requirement SPEC-ID (required when source is 'implementer').",
-                        "pattern": "^[A-Z]+(?:-[A-Za-z0-9_]+)?-[0-9]+$",
+                        "pattern": "^[A-Z]+-(?:[A-Za-z0-9_]+-)*[0-9]+$",
                         "example": "FR-0042"
                     },
                     "pr": {
@@ -7910,7 +7910,7 @@ pub fn tool_descriptors() -> Value {
                     "id": {
                         "type": "string",
                         "description": "The SPEC-ID of the finding to triage (typically a draft TASK-N).",
-                        "pattern": "^[A-Z]+(?:-[A-Za-z0-9_]+)?-[0-9]+$",
+                        "pattern": "^[A-Z]+-(?:[A-Za-z0-9_]+-)*[0-9]+$",
                         "example": "TASK-123"
                     },
                     "action": {
@@ -7942,7 +7942,7 @@ pub fn tool_descriptors() -> Value {
                     "spec_id": {
                         "type": "string",
                         "description": "The unique SPEC-ID of the requirement to claim.",
-                        "pattern": "^[A-Z]+(?:-[A-Za-z0-9_]+)?-[0-9]+$",
+                        "pattern": "^[A-Z]+-(?:[A-Za-z0-9_]+-)*[0-9]+$",
                         "example": "FR-0042"
                     },
                     "role": {
@@ -14560,13 +14560,14 @@ mod bug_2017_schema_tests {
         for tool in tools {
             if let Some(properties) = tool["inputSchema"]["properties"].as_object() {
                 for field in properties.values() {
-                    if field["pattern"].as_str() == Some("^[A-Z]+(?:-[A-Za-z0-9_]+)?-[0-9]+$") {
+                    if field["pattern"].as_str() == Some("^[A-Z]+-(?:[A-Za-z0-9_]+-)*[0-9]+$") {
                         let regex = regex::Regex::new(field["pattern"].as_str().unwrap()).unwrap();
                         for valid in [
                             "BUG-001",
                             "BUG-7-001",
                             "BUG-0123456789abcdef0123456789abcdef-001",
                             "TASK-JM-201",
+                            "BUG-1-2-003",
                         ] {
                             assert!(regex.is_match(valid), "{valid}");
                         }
