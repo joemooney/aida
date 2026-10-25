@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T02:08:29.032100054Z
-modified_at: 2026-10-25T08:46:33.806564494Z
+modified_at: 2026-10-25T08:56:36.820242508Z
 req_type: Task
 tags:
 - codex
@@ -401,6 +401,16 @@ comments:
     BUG2017 slice1 now published as non-draft PR2919 at c25b9bd3855226fdb40371affef506479c127ba6, Refs only; STORY1931 queued for independent reviewer after current watcher priority. Its25 allocation cases,180selected CLI-lib,1672core,4realCLI/MCP,compile-only and34fast gates passed. No real HOME authority flag/transport edits/force/holds/merge; parent InProgress. (Refs TASK-2347)
   created_at: 2026-10-25T08:46:33.806564494Z
   modified_at: 2026-10-25T08:46:33.806564494Z
+- id: 01a17246-acd4-76f1-a7ac-892470b1cd1b
+  author: joe
+  content: |
+    codex2 independent focused recheck: APPROVED at 5ce0706e4a4deed55d70c756186a94c8bb767763.
+
+    Inspected the complete a74→5ce delta: only private scratch `git -c init.templateDir= init --quiet <root>` inside the existing disposable-HOME native validator plus its mock expectation. No HOME authority flag, node binding, live Git/config, service, queue or receipt mutation. Three focused global-validator cases pass; the actual-native 12-case typed/semantic rejection matrix passes (23.987s). Carry forward the proven a74/0df F2/runtime sufficiency and all prior privacy/receipt/accepted/F1/global-name results. Exact-head Build40177032028 and all seven lanes SUCCESS.
+
+    Own attested canonical records from main: `.aida/review-verdicts/PR-2915.json` and `TASK-2347.json`. Operator hold retained byte-for-byte. No merge or live deployment. Deployment still requires the reviewed health-capable driver, full inventory and literal idle proof; cold scan refusal remains an expected degraded retry outcome, not stable cold/idle evidence.
+  created_at: 2026-10-25T08:56:36.820242508Z
+  modified_at: 2026-10-25T08:56:36.820242508Z
 history:
 - id: 01a170d1-497a-7282-8dcb-91782bba7dc3
   author: joe
