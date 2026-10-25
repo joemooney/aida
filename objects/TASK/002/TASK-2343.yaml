@@ -10,12 +10,12 @@ description: |
   Test: write a request JSON with an extra top-level key and an extra key inside the action object, and assert load_pair refuses both.
 
   Raised in review of PR-2905: https://github.com/joemooney/aida/pull/2905#issuecomment-6390394038
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-24T22:36:25.133277125Z
-modified_at: 2026-10-25T20:07:03.023821258Z
+modified_at: 2026-10-25T20:07:34.105983247Z
 req_type: Task
 tags:
 - from-review:PR-2905
@@ -46,6 +46,14 @@ history:
   timestamp: 2026-10-25T20:07:05.009133127Z
   session_id: cde796d3-1750-4745-a8f9-7ab3bc7c3519
   changes: []
+- id: 01a174ac-f3d9-72c3-a34a-a73d9797b8f6
+  author: aida-pr-open
+  timestamp: 2026-10-25T20:07:34.105980745Z
+  session_id: cde796d3-1750-4745-a8f9-7ab3bc7c3519
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 9457e495247a3c9de111d15507fabd2cd0923079
   branch: pr-2905
