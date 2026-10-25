@@ -23,7 +23,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-25T05:14:15.870659926Z
+modified_at: 2026-10-25T05:18:54.551165414Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -558,6 +558,11 @@ comments:
   content: 'CROSS-REPO IMPLEMENTATION LINK: aida-relay STORY-122 (Bind relay runs to AIDA logical mail recipients across rotation and terminal end) is Approved, guided, strict-review, captured from codex2 SKETCHv2 plus independent binding signoff. It owns only relay half D/E; AIDA B/C remain prerequisites and this parent cannot complete before verified relay integration/conformance. Capture is not implementation or deferral. Read with aida show STORY-122 from /home/joe/ai/aida-relay. No live migration, new service or authority expansion.'
   created_at: 2026-10-25T05:14:15.870659926Z
   modified_at: 2026-10-25T05:14:15.870659926Z
+- id: 01a1717f-5c57-7982-877b-7b1fa3c0dba4
+  author: joe
+  content: 'MAIL RUNTIME VERIFICATION 22:17: installed aida --version and aida dev status resolve live94124569c9 (main train2916 privacy fix), promoted05:04:37Z. Current recipient peek shows agy1 has no unread rework and its worktree has protected-core/test edits, while agy2 assignment571d6dc3 remains unread. No other recipient was acknowledged (peek only). Codex native queue timeout previously delivered late; continue reconciliation before retries and keep queue acceptance distinct from inbox consumption. Root activation status text also says ACTIVATED BUT NOT IN USE despite resolved live SHA exact; no extra build/promotion needed.'
+  created_at: 2026-10-25T05:18:54.551165414Z
+  modified_at: 2026-10-25T05:18:54.551165414Z
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
   author: joe
