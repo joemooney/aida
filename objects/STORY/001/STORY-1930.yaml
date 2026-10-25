@@ -19,12 +19,12 @@ description: |
   - Generate a structured review prompt with `aida review prompt --pr 2917` and verify each spec's acceptance criteria.
   - Approve and merge, or request changes by spec id.
   - Mark this story `completed` once the PR is merged.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-25T04:56:28.496460627Z
-modified_at: 2026-10-25T05:19:31.964512157Z
+modified_at: 2026-10-25T06:52:07.472622597Z
 req_type: Story
 relationships:
 - rel_type:
@@ -43,6 +43,11 @@ comments:
   content: 'ADVISOR REVIEW-QUEUE RECONCILIATION: PR2917 independent advisor review recorded RequestChanges at791af3b22f0a68d8e5588d337946141b08e69f52; F1 protected marker-writer relocation routed to agy1 and source rework is observable. This review is In Progress for focused current-head recheck after push; parent and review story stay open.'
   created_at: 2026-10-25T05:19:30.289642949Z
   modified_at: 2026-10-25T05:19:30.289642949Z
+- id: 01a171d4-b3b0-7d53-88f3-da681c4ea882
+  author: aida-auto-bump
+  content: 'Auto-completed: PR #2917 merged without a re-review iteration — the review story was left at In Progress.'
+  created_at: 2026-10-25T06:52:07.472620842Z
+  modified_at: 2026-10-25T06:52:07.472620842Z
 history:
 - id: 01a1716b-1fc9-7a22-bffc-eddea1193730
   author: joe
@@ -55,6 +60,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: InProgress
+- id: 01a171d4-b3b0-7d53-88f3-da5f3def9f37
+  author: aida-auto-bump
+  timestamp: 2026-10-25T06:52:07.472605474Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
 filed_at:
   code_sha: 791af3b22f0a68d8e5588d337946141b08e69f52
   branch: claude/story-1889-hold-r2
@@ -62,3 +74,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: a10d44f312
   vendor: antigravity
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-25T06:52:07.472598343Z
+  completion_sha: 3cbb90b0c94e0e748bbfc4eb1f75d7f9c2125c68
