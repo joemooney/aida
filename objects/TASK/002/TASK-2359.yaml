@@ -6,17 +6,26 @@ description: |
   PR-2932 (TASK-2351) changed aida ship step 1 from `git add -A` to `git add -u` (aida-cli-lib/src/pr_cmd.rs:1352). The new unit tests cover only the probes (tracked_changes_pending, untracked_regular_files, untracked_left_out_note), so reverting the staging flag to -A would still pass every test. Add an end-to-end step-1 test: a repo with a tracked edit and an untracked stray file. After step 1, HEAD should contain the edit and the stray file should still be untracked.
 
   Raised in review of PR-2932: https://github.com/joemooney/aida/pull/2932#issuecomment-6403120664
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-25T20:53:10.804761312Z
-modified_at: 2026-10-25T20:53:10.804761312Z
+modified_at: 2026-10-25T23:06:55.430770713Z
 req_type: Task
 tags:
 - from-review:PR-2932
 - severity:minor
 - test-coverage
+history:
+- id: 01a17551-2846-7f12-adfe-a404c48cd2da
+  author: joe
+  timestamp: 2026-10-25T23:06:55.430762589Z
+  session_id: cde796d3-1750-4745-a8f9-7ab3bc7c3519
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 24edd8a0b8f6371a1685f94d02a843c0d4bd9a0a
   branch: pr-2932
