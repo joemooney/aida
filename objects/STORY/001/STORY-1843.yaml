@@ -23,7 +23,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-25T05:18:54.551165414Z
+modified_at: 2026-10-25T06:14:07.299304477Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -563,6 +563,11 @@ comments:
   content: 'MAIL RUNTIME VERIFICATION 22:17: installed aida --version and aida dev status resolve live94124569c9 (main train2916 privacy fix), promoted05:04:37Z. Current recipient peek shows agy1 has no unread rework and its worktree has protected-core/test edits, while agy2 assignment571d6dc3 remains unread. No other recipient was acknowledged (peek only). Codex native queue timeout previously delivered late; continue reconciliation before retries and keep queue acceptance distinct from inbox consumption. Root activation status text also says ACTIVATED BUT NOT IN USE despite resolved live SHA exact; no extra build/promotion needed.'
   created_at: 2026-10-25T05:18:54.551165414Z
   modified_at: 2026-10-25T05:18:54.551165414Z
+- id: 01a171b1-e8c3-70d0-bf88-eb3c458e2773
+  author: joe
+  content: 'CODEX CAPABILITY SPIKE, READ-ONLY (no adapter change): native0.164 queue help and actual queue DB confirm queued user input waits for response completion (codex1 global-feedback item still pending). Official OpenAI docs distinguish Queue from active-turn Steer and document turn/steer with exact expectedTurnId and no turn-level model/cwd/sandbox overrides: https://learn.chatgpt.com/docs/app-server and https://developers.openai.com/blog/mastering-codex-remote-for-engineering . Installed daemon version reports0.164 socket/home/joe/.codex/app-server-control/app-server-control.sock. Read-only WebSocket-over-Unix initialize+thread/read succeeded, but it reports codex1 thread notLoaded despite the separate TUI working; the shared endpoint is not proven to own that active turn. No thread/resume/start, steer, policy/grant change, cold boot or inference was attempted. Do not turn metadata knowledge into a claim of live steering capability; exact runtime endpoint/turn ownership must be established first. Prior raw-JSON-to-Unix proxy timeout is explained by documented HTTP-Upgrade/WebSocket framing, not lack of JSON-RPC. TASK2347 remains nativequeue-only; no rewritten broker/new adapter.'
+  created_at: 2026-10-25T06:14:07.299304477Z
+  modified_at: 2026-10-25T06:14:07.299304477Z
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
   author: joe
