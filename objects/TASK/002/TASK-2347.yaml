@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T02:08:29.032100054Z
-modified_at: 2026-10-25T15:44:26.290493994Z
+modified_at: 2026-10-25T16:18:51.778399575Z
 req_type: Task
 tags:
 - codex
@@ -459,6 +459,11 @@ comments:
     Representative actual fixture1536 files exceeds read-only live filename inventory1139 and prior reported1282 scale. Test injects2ms per guarded read: one-reader control must refuse original2s budget, four-reader path must complete all timestamps/IDs under SAME deadline and enforce peak<=4/actual byte count. Added unsafe/malformed/missing and small-budget controls; original cross-root/watermark/unchanged-unread semantics retained. This is a proposed source correction pending local proof/independentreview, not a live performance pass. Required one targeted Cargo command started with20m budget; normal wrapper is seeding cache before admission, no duplicate check/bypass. Fast gate follows targeted completion. Will send measured proof or failure before broader redesign.
   created_at: 2026-10-25T15:44:26.290493994Z
   modified_at: 2026-10-25T15:44:26.290493994Z
+- id: 01a173db-9102-7591-beb6-bdd6bbc8b2d1
+  author: joe
+  content: 'Operational mail audit2026-10-25~16:12UTC: actualnative notification19886556-36a2-459a-9043-235804daf3cd read through AIDAagain and assessed against latercompletion/supersession; it is old08:44sourcecheckpoint, not newreceiptpoolauthorization. MaininboxhadalreadyACKedthisID; no fabricatednewACK/completionorwatcherchange. Source-root ordinaryinbox alsoadvancedhistorical32 receipts before capturedoutputcouldbeinspectedinfull. Correctedbyreading the complete32-message batch in boundedchunks (13alreadyfullyreadimmutableIDs plus19remainingbodyrecords); no messageleftunassessed, no receiptdeletion/rewrite or fakeprecisetiming. Fullcapturedsource/tmp/advisor-task2347-source-mail-audit-1603.txt; thiscommentrecordsorderinglimitation ratherthanclaimingthoseearlytimestampsareexactbodyreadtimes. Historical1853wallreportwasagainstexplicitlysupersededoperatorAC2; descriptionalignedwithrecorded09:51Oct23ruling, separatedeadline-testfailure routedboundedindependentdiagnosis009d04d7/nativequeue01a173d6. Allotherhistoricalfindingsalreadyresolved2919orretainedinfullopen1742/1843/1889/1917/2221scope. Existingc4dfsupersessionremains: preserveunmerged2347receiptpoolWIP/no reopen, resume1742fullS3a-d; actualuptakestillpending. Original2347liveproof/Completedstatusunchanged.'
+  created_at: 2026-10-25T16:18:51.778399575Z
+  modified_at: 2026-10-25T16:18:51.778399575Z
 history:
 - id: 01a170d1-497a-7282-8dcb-91782bba7dc3
   author: joe
