@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T02:08:29.032100054Z
-modified_at: 2026-10-25T05:30:11.833887603Z
+modified_at: 2026-10-25T05:46:58.400505314Z
 req_type: Task
 tags:
 - codex
@@ -241,6 +241,11 @@ comments:
   content: 'ADVISOR DEPLOYMENT EVIDENCE UPDATE 22:29: current doer delta now includes Rust doctor/maintenance integration as well as Python/tests. Therefore the old private candidate91071... and its reused prior Rust binary are NOT final deployment evidence. After final commit and independent review, build/smoke a candidate that contains the new health integration and wake-snapshot seam, pin executable/script/test/docs hashes to that reviewed source, and use that exact artifact for authorized one-service install/health registration/full-path proof. Preserve scoped local gates (new Rust module + Python fixtures + fast, shared-infra/touched only when required); do not claim old binary implements new doctor behavior. No unmerged global promotion or live notifications by implementer.'
   created_at: 2026-10-25T05:30:11.833887603Z
   modified_at: 2026-10-25T05:30:11.833887603Z
+- id: 01a17199-0de0-70f1-8d37-c9b570871eba
+  author: joe
+  content: 'ADVISOR HOST DEPLOYMENT PREFLIGHT22:48: actual aida-tick-2b20e8a3.service ExecStart is /home/joe/.local/bin/aida schedule tick; current live resolves merged94124569c9, which predates the new doctor health category. --aida only pins watcher subprocess, not this scheduler (new docs correctly say so). Therefore final enabling of the owned health job requires reviewed health-capable scheduler deployment first; do not globally promote unmerged code or redirect unrelated scheduled jobs as a workaround. Normal reviewed merge+ordinary promotion is the straightforward path. Also .aida/config.toml is TRACKED in this repository, despite default .aida ignore in ordinary projects: inspect the exact owned job delta and preserve unrelated content/restore on failure as part of the authorized installation plan. No live job/service/config change has occurred in this preflight; source rework/tests continue.'
+  created_at: 2026-10-25T05:46:58.400505314Z
+  modified_at: 2026-10-25T05:46:58.400505314Z
 history:
 - id: 01a170d1-497a-7282-8dcb-91782bba7dc3
   author: joe
