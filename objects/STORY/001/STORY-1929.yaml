@@ -1,0 +1,35 @@
+id: 01a1706e-d319-7910-87e9-4ec9ea94d9e8
+spec_id: STORY-1929
+agreed_id: STORY-1929
+title: 'Review PR-2913: [AI:agy] feat(dispatch): add executor core, serve, and review/take/impl runners (Refs STORY-1917)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `claude/story-1917-slice2`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2913>
+  - Branch: `claude/story-1917-slice2` → `main`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - STORY-1917
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2913` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-25T00:21:13.625128852Z
+modified_at: 2026-10-25T00:21:13.625128852Z
+req_type: Story
+filed_at:
+  code_sha: 6eb378ea21f52f60887b7558a9db29d85f3b5dbf
+  branch: claude/story-1917-slice2
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 2db1d977b0
+  vendor: antigravity
