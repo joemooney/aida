@@ -14,6 +14,7 @@ import select
 import subprocess
 import sys
 import tempfile
+import time
 
 WORKER = r'''
 import json, os, subprocess, sys
@@ -37,8 +38,15 @@ print(json.dumps(notice('SessionStart')), flush=True)
 for line in sys.stdin:
     task = json.loads(line)
     if task['op'] == 'notice': out = notice('PreInvocation' if vendor == 'agy' else 'UserPromptSubmit')
+    elif task['op'] == 'startup': out = notice('SessionStart')
     elif task['op'] == 'send': out = run([binary, 'mailbox', 'send', '--to', task['handle'], '--subject', 'cross-vendor-proof', task.get('body', 'hello agy from Claude')])
     elif task['op'] == 'inbox': out = run([binary, 'mailbox', 'inbox', '--format', 'human'])
+    elif task['op'] == 'user':
+        os.environ['AIDA_USER'] = task['identity']
+        out = 'user updated'
+    elif task['op'] == 'clear-role':
+        os.environ.pop('AIDA_SESSION_ROLE', None)
+        out = 'role cleared'
     else: raise RuntimeError(task)
     print(json.dumps(out), flush=True)
 '''
@@ -116,9 +124,11 @@ def check(binary):
                     # commands must use its own nearest process, not the parent.
                     parent_rows = list_agents(binary, root, env)
                     parent_handle = next(row['name'] for row in parent_rows if row['pid'] == workers[0].pid)
+                    ask(workers[0], op='user', identity=parent_handle)
                     client_env.update(AIDA_AGENT_TYPE='claude', CLAUDE_PID=str(workers[0].pid),
                                       CLAUDE_CODE_SESSION_ID='claude-native-session',
-                                      AIDA_HANDLE=parent_handle, AIDA_AGENT_NAME=parent_handle)
+                                      AIDA_HANDLE=parent_handle, AIDA_AGENT_NAME=parent_handle,
+                                      AIDA_USER=parent_handle)
                 worker = subprocess.Popen([sys.executable, str(script), binary, str(hook), json.dumps(wiring), vendor],
                                           cwd=root, env=client_env, text=True, stdin=subprocess.PIPE,
                                           stdout=subprocess.PIPE)
@@ -136,9 +146,17 @@ def check(binary):
             # comes from a third fixture identity through the real send CLI.
             checked([binary, 'mailbox', 'send', '--to', sender, '--from', 'fixture-operator',
                      '--subject', 'private-parent-control', 'parent-private-only'], root, env)
+            parent_read = root / '.aida/mailbox/.read' / (sender + '.txt')
+            assert not parent_read.exists(), 'fixture parent already acknowledged mail'
             assert 'unread mailbox' not in notice_text(ask(agy, op='notice')), 'Agy inherited parent private inbox'
+            child_inbox = ask(agy, op='inbox')
+            assert 'parent-private-only' not in child_inbox, child_inbox
+            assert not parent_read.exists(), 'child acknowledged parent private mail'
+            assert '1 mail' in ask(claude, op='notice'), 'parent mail stopped being unread'
             parent_inbox = ask(claude, op='inbox')
             assert 'parent-private-only' in parent_inbox, parent_inbox
+            assert parent_read.exists(), 'parent inbox did not acknowledge its own mail'
+            assert '1 mail' not in ask(claude, op='notice')
             sent = ask(claude, op='send', handle=recipient)
             assert 'sent' in sent, sent
             # The actual configured PreInvocation command and camelCase payload
@@ -150,7 +168,73 @@ def check(binary):
             inbox = ask(agy, op='inbox')
             assert 'hello agy from Claude' in inbox and sender in inbox, inbox
             assert 'unread mailbox' not in notice_text(ask(agy, op='notice')), 'explicit inbox did not acknowledge'
-            print('PASS STORY-1843.ac0eef56: Claude handle -> agy native PreInvocation -> private inbox/ack')
+            # Shared role and vendor audiences remain visible even while the
+            # child carries the parent's private AIDA_USER.
+            for audience in ('implementer', 'antigravity'):
+                checked([binary, 'mailbox', 'send', '--to', audience, '--from', 'fixture-operator',
+                         '--subject', 'shared-' + audience, 'shared-body-' + audience], root, env)
+            shared = notice_text(ask(agy, op='notice'))
+            assert 'shared-implementer' in shared and 'shared-antigravity' in shared, shared
+            shared_inbox = ask(agy, op='inbox')
+            assert 'shared-body-implementer' in shared_inbox and 'shared-body-antigravity' in shared_inbox, shared_inbox
+            assert 'unread mailbox' not in notice_text(ask(agy, op='notice'))
+
+            # A known human AIDA_USER remains an intentional additional inbox.
+            roster = root / '.aida-store/registry/team.toml'
+            roster.parent.mkdir(parents=True, exist_ok=True)
+            roster.write_text('[members]\nfixture-human = ["operator"]\n')
+            ask(agy, op='user', identity='fixture-human')
+            checked([binary, 'mailbox', 'send', '--to', 'fixture-human', '--from', 'fixture-operator',
+                     '--subject', 'human-control', 'human-body'], root, env)
+            assert 'human-control' in notice_text(ask(agy, op='notice'))
+            assert 'human-body' in ask(agy, op='inbox')
+            assert 'human-control' not in notice_text(ask(agy, op='notice'))
+
+            # Resume the same native session with the actual inherited parent
+            # aliases again; its handle and unread delivery must survive.
+            ask(claude, op='send', handle=recipient, body='resume-private-body')
+            checked([binary, 'mailbox', 'send', '--to', sender, '--from', 'fixture-operator',
+                     '--subject', 'parent-after-resume', 'parent-resume-private'], root, env)
+            parent_watermark = parent_read.read_text()
+            agy.stdin.close()
+            agy.wait(timeout=5)
+            resumed = subprocess.Popen([sys.executable, str(script), binary, str(hook), json.dumps(wiring), 'agy'],
+                                       cwd=root, env=client_env, text=True, stdin=subprocess.PIPE,
+                                       stdout=subprocess.PIPE)
+            workers.append(resumed)
+            startup = notice_text(response(resumed))
+            assert '1 mail' in startup and '2 mail' not in startup, startup
+            resumed_rows = list_agents(binary, root, env)
+            assert next(row['name'] for row in resumed_rows if row['pid'] == resumed.pid) == recipient, resumed_rows
+            resumed_inbox = ask(resumed, op='inbox')
+            assert 'resume-private-body' in resumed_inbox, resumed_inbox
+            assert 'parent-resume-private' not in resumed_inbox, resumed_inbox
+            assert parent_read.read_text() == parent_watermark, 'resumed child acknowledged parent mail'
+            # With only parent-private mail pending, a second startup must
+            # emit neither a private-mail count nor a shared-mail count.
+            resumed.stdin.close()
+            resumed.wait(timeout=5)
+            resumed_again = subprocess.Popen([sys.executable, str(script), binary, str(hook), json.dumps(wiring), 'agy'],
+                                             cwd=root, env=client_env, text=True, stdin=subprocess.PIPE,
+                                             stdout=subprocess.PIPE)
+            workers.append(resumed_again)
+            parent_only_startup = notice_text(response(resumed_again))
+            assert 'mail' not in parent_only_startup.lower(), parent_only_startup
+            assert parent_read.read_text() == parent_watermark
+            # The aged-mail warning is another startup notice path. Without
+            # an explicit role it must not fall back to the parent's user.
+            config = root / '.aida/config.toml'
+            with config.open('a') as f:
+                f.write('\n[mailbox]\nunread_warn_after = "1s"\n')
+            time.sleep(1.1)
+            ask(resumed_again, op='clear-role')
+            no_role_startup = notice_text(ask(resumed_again, op='startup'))
+            assert 'mail' not in no_role_startup.lower(), no_role_startup
+            assert parent_read.read_text() == parent_watermark
+            assert '1 mail' in ask(claude, op='notice')
+            assert 'parent-resume-private' in ask(claude, op='inbox')
+            assert 'unread mailbox' not in notice_text(ask(resumed_again, op='notice'))
+            print('PASS STORY-1843.ac0eef56: inherited parent AIDA_USER isolation, child delivery/ack, shared/human audiences and resume')
         finally:
             for worker in workers:
                 worker.stdin.close()

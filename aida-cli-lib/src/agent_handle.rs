@@ -1133,6 +1133,18 @@ pub(crate) fn current_session_handle_for(
     native_session_id: Option<&str>,
     vendor: &str,
 ) -> Option<String> {
+    current_session_entry_for(project_root, native_session_id, vendor)
+        .and_then(|e| valid_handle(&e))
+}
+
+// Keep handle and vendor from the same resolved session row: raw children
+// can inherit both a parent's handle aliases and its AIDA_AGENT_TYPE.
+// trace:STORY-1843 | ai:codex
+fn current_session_entry_for(
+    project_root: &Path,
+    native_session_id: Option<&str>,
+    vendor: &str,
+) -> Option<AgentRegistryEntry> {
     let req = HandleRequest {
         native_session_id: native_session_id.filter(|s| !s.trim().is_empty()),
         ..Default::default()
@@ -1149,7 +1161,7 @@ pub(crate) fn current_session_handle_for(
             .iter()
             .filter(|e| hit(e))
             .max_by_key(|e| e.last_active_at)
-            .and_then(valid_handle)
+            .cloned()
     };
     newest(&|e| same_session(e, &req)).or_else(|| newest(&by_pid))
 }
@@ -1193,6 +1205,12 @@ pub(crate) fn session_handle_by_ancestry(project_root: &Path, pid: u32) -> Optio
 /// [`current_session_handle`] for the project containing the cwd, using
 /// this process's own session evidence.
 pub(crate) fn current_session_handle_for_cwd() -> Option<String> {
+    current_session_entry_for_cwd().and_then(|e| valid_handle(&e))
+}
+
+/// The same persisted session used for private mail, including its vendor.
+// trace:STORY-1843 | ai:codex
+pub(crate) fn current_session_entry_for_cwd() -> Option<AgentRegistryEntry> {
     let cwd = std::env::current_dir().ok()?;
     let root = crate::main_worktree_root_from(&crate::find_aida_project_root_from(&cwd).ok()?);
     // A raw client may inherit its parent's vendor/session environment.
@@ -1212,12 +1230,15 @@ pub(crate) fn current_session_handle_for_cwd() -> Option<String> {
     if let Some((_, pid, vendor)) = nearest {
         return live_session_entries(&root, |e| e.pid == pid && e.agent_type == vendor)
             .into_iter()
-            .max_by_key(|e| e.last_active_at)
-            .and_then(|e| valid_handle(&e));
+            .max_by_key(|e| e.last_active_at);
     }
     // Inside a PID namespace the host client may be invisible; its native
     // session evidence remains the supported lookup in that case.
-    current_session_handle(&root, current_native_session_id().as_deref())
+    current_session_entry_for(
+        &root,
+        current_native_session_id().as_deref(),
+        &agent_registry::detect_agent_type(),
+    )
 }
 
 #[cfg(test)]

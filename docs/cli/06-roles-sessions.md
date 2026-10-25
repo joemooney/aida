@@ -264,6 +264,12 @@ it. Raw clients resolve their startup-registered handle from their nearest
 vendor process, ahead of potentially inherited vendor/session variables.
 Native session evidence remains the fallback inside a PID namespace where
 the host client process is invisible.
+Once registered, a raw child's default inbox and notices use its own handle
+for private mail. Inherited `AIDA_USER`, `AIDA_HANDLE` and `AIDA_AGENT_NAME`
+cannot add a parent's private inbox or acknowledge its messages. A cataloged
+human `AIDA_USER` remains an additional inbox; session role and vendor inboxes
+remain shared audiences. This mail filtering does not change the principal
+used for grants or queue ownership. <!-- trace:STORY-1843 | ai:codex -->
 Refresh existing wiring with `aida init --force` to install the turn handler.
 <!-- trace:STORY-1843.ac0eef56 | ai:codex -->
 
