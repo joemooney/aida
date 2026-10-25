@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T22:12:54.027870933Z
-modified_at: 2026-10-25T12:17:37.558045653Z
+modified_at: 2026-10-25T12:31:51.705576361Z
 req_type: Bug
 tags:
 - id-allocation
@@ -492,6 +492,19 @@ comments:
   content: 'S3 readiness map exact-symbol correction: the coordination best-effort refresh seam is aida-cli-lib/src/coordination.rs::refresh_store at main c7b line553 (not pull_claim_refresh). It catches typed evidence refusal at556 and otherwise returns a nested transport error. /tmp/codex2-bug2017-s3-readiness-map.txt corrected; advisory status and all scope boundaries unchanged.'
   created_at: 2026-10-25T12:17:37.558045653Z
   modified_at: 2026-10-25T12:17:37.558045653Z
+- id: 01a1730b-bd99-7873-8829-cc5616fdc684
+  author: joe
+  content: |
+    ADVISOR S3 READINESS RULING — accepted as source-grounded inventory with binding clarifications, NOT an implemented/approved source head. Read /tmp/codex2-bug2017-s3-readiness-map.txt; independently inspected four git_ops sync wrappers/evidence::with_sync_lock, remote_create batch/frontier/rollback flow and node union routines. Main c7b, pending766 plus S2 work remain distinct; current PR2919 is still RC until final exact-head review/CI.
+    1. Approved implementation direction within signed v2: strict pinned-tree loader + complete pure allocation conflict/unknown collector + context-stable typed refusal, reused by all four sync wrappers before their first Git advancement and by a whole-candidate-set remote reconcile check before topology no-op/first merge. Preserve BUG2162 preflight/finalize and its no-reset refusal semantics. Direct callers retain wrapper checks. Audit uses already-local pinned commits and that collector; never reuse the existing fetch-before-dry-run path as a read-only audit.
+    2. Baseline-established repetition and independently introduced equal block keys must remain distinct. Equal payload/timestamp/hostname is not issuance proof. All merge bases, missing ancestry and malformed/duplicate rows need explicit truthful treatment; ambiguous evidence refuses, reports all known conflicts plus unknown/incomplete status, never silently empty/safe. Do not demand signatures/another authority service excluded from v2. Preserve valid existing legacy schema semantics; specify how finalized additive opaque WORK claims are represented/shared and compared before treating local common-Git state or requirement UUID as remote ownership proof.
+    3. Match global '*' versus per-type range overlap, within/across-tree spec+agreed UUID ownership and duplicate/bound-node conflicts in one deterministic report. Existing HashMap overwrite/max(next)/first-error unions do not prove this. Diagnostic categories, safe fixed locations, object/commit IDs and opaque record references only: raw legacy node names, filenames, host/email/user/parser snippets must not leak. Manual repair directions must identify retained evidence without auto repair/renumbering.
+    4. New typed refusal must survive every existing best-effort sync/allocation/coordination/init publisher and batch rollback adapter. Check the actual coordination::refresh_store symbol (report correction), no swallowed Err then writes/pushes. Store/cache writer ownership and store->dispenser order unchanged; pure committed inspection needs no dispenser/lifecycle/new outer policy lock. No implicit repairing Storage::load/GitBackend constructor on the read-only audit path.
+    5. Resource bounds must support the real baseline rather than silently truncate it: read-only size probe /tmp/advisor-bug2017-s3-sizing.json at storecommit3c56f6423f596d85b877a6757480e48eda5ec7b2 counts6153 allocation blobs,28330369bytes total, largest718412bytes,0nonblobs (metadata only; no content printed). State explicit per-blob/per-tip/aggregate candidate/history bounds with headroom and fail-closed incomplete status. This is sizing evidence, not performance or completeness proof.
+    6. SCOPE CORRECTION to peer wording: signed STORY1742 v1 owns outgoing privacy/history/metadata policy, complete prepared intake mutations, trusted baseline/receipts and actual enabled-WORK recoverable FF pull/E2E. Receiver ingress/public forwarding and history-export tooling remain OUT of signed v1; this map does not add them to BUG2017/1742 acceptance. No second scanner/policy service, privacy exemption or success stub. Real scanner integration still required before BUG2017 final completion; allocation-green is not content-safe. Clarify the additive claim schema, audit CLI routing and exact bound/refusal handling in the doer's small implementation note before source changes, not a new architecture rewrite.
+    7. Conformance retains all wrappers including clean/FF/no-op paths, last-frontier conflict before any first mutation, multi-category conflicts together, equal-key provenance negatives/baseline positives, same-UUID aliases, unknown/malformed inputs, sanitized output and BUG2162 composition. Distinguish existing fetch acquisition/private refs from accepted HEAD/index/worktree; audit changes none. Exact evidence must prove no counter/oplog/push/reset effects on refusal. New S2 changed-head review takes priority over S3 preparation; no stale source approval or parent completion. No live transport/grant/enrollment/mandate/hold authorization by this ruling.
+  created_at: 2026-10-25T12:31:51.705576361Z
+  modified_at: 2026-10-25T12:31:51.705576361Z
 history:
 - id: 01a16f08-1847-70c2-a9ec-772710162546
   author: joe
