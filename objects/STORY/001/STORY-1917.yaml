@@ -13,12 +13,12 @@ description: |-
   - aida init installs the job with the rest of the schedule (enabled only when a mandate allows it). Nothing new to start by hand.
 
   Acceptance: a sandboxed advisor can take a PR from READY to shipped, and launch a takeover fixer and a new lane, with no operator command, while a mandate is active; with no mandate every request is refused with the reason; a request with a non-enumerated verb or a malformed argument is refused at both ends; each request leaves a ledger row.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T17:15:51.947160848Z
-modified_at: 2026-10-25T06:35:42.144928519Z
+modified_at: 2026-10-25T06:35:44.789678498Z
 req_type: Story
 relationships:
 - rel_type:
@@ -342,6 +342,11 @@ comments:
   content: 'ADVISOR stale attention-state reconciliation: PR2913 approved at2b3cd94f5dc69193ee17b2dbbf0d1851254a620a; real detached-child regression resolves the F2 finding cited by the old failure reason. Existing signed overall dispatch scope remains approved; agy2 must produce the bounded final-slice/TASK2338-2344 implementation plan before new code. Returning parent from Needs Attention to Approved for remaining authorized work. This does not clear any hold, waive supervision/protected-floor gates, approve unreviewed implementation, or claim parent completion. The original failure and independent resolution remain in the audit trail.'
   created_at: 2026-10-25T06:35:42.144928519Z
   modified_at: 2026-10-25T06:35:42.144928519Z
+- id: 01a171c5-b515-7df0-90fb-e2f47c303bc0
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Codex1 independent recheck: F1/F3/F4/F5 resolved and exact-head Build passes; F2 still lacks the requested real detached-worker handoff/race and terminal-fencing regression. Refs STORY-1917.. No triage reason was given.'
+  created_at: 2026-10-25T06:35:44.789669616Z
+  modified_at: 2026-10-25T06:35:44.789669616Z
 history:
 - id: 01a16c5e-51c4-73b2-b8a3-3b764dc7e5cd
   author: joe
@@ -384,6 +389,13 @@ history:
   timestamp: 2026-10-25T04:03:25.951022717Z
   session_id: 01a1709f69bf
   changes: []
+- id: 01a171c5-b515-7df0-90fb-e2e5f7706a6d
+  author: joe
+  timestamp: 2026-10-25T06:35:44.789661609Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: a9e78d34914e43b30fc9d2b590d83ab96feb48b2
   branch: main
@@ -392,11 +404,3 @@ filed_at:
   aida_build_sha: c6bb0dc4f1
   vendor: claude
   session: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Codex1 independent recheck: F1/F3/F4/F5 resolved and exact-head Build passes; F2 still lacks the requested real detached-worker handoff/race and terminal-fencing regression. Refs STORY-1917.'
-  recovery_hint: address the review findings, move STORY-1917 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-25T04:03:25.858708411Z
