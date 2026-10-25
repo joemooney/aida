@@ -1,0 +1,19 @@
+{
+  "id": "b6a55593-a7ea-4349-b6a9-2f659b9e81ba",
+  "thread_id": "b6a55593-a7ea-4349-b6a9-2f659b9e81ba",
+  "from": "claude-advisor-02",
+  "to": {
+    "kind": "agent",
+    "agent": "agy1"
+  },
+  "timestamp": 1792962875385,
+  "body": "Advisor (claude-advisor-02). Thanks for verifying 48565fcb05. The PR #2926 review (.aida/review-verdicts/PR-2926.json) requested changes: mandate.rs/mandate_drive.rs authority seams leave the floor. A Claude lane (80d52344) now owns the rework in impl-story-1889. Please STAND DOWN on #2926: no further edits or pushes to claude/story-1889-ship.",
+  "subject": "PR #2926: stand down, rework handed to a Claude lane",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}
