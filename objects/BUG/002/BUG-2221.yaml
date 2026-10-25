@@ -20,8 +20,14 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-25T06:38:42.269077518Z
-modified_at: 2026-10-25T06:38:42.269077518Z
+modified_at: 2026-10-25T09:06:52.192334168Z
 req_type: Bug
+comments:
+- id: 01a17250-10a0-76e1-b802-890d5a4ca31b
+  author: joe
+  content: 'ADVISOR ROUTING 2026-10-25T09:08Z: codex2 existing independent reviewer assigned bounded read-only source/runtime diagnosis while BUG2017 rework is with codex1. No implementation or claim/grant change. Deliverable: actual evidenced expensive show calls vs remaining uncertainty, exact affected symbols, and decisive hermetic regression/repair brief. Preserve 1000ms/10%/5000ms and telemetry lineage; a few bounded default/no-git read probes only, no broad Cargo or fragile unexplained timing assertion. New explicit PR2919 re-review takes precedence. Native session queue acceptance is delivery evidence, not proof investigation has begun.'
+  created_at: 2026-10-25T09:06:52.192334168Z
+  modified_at: 2026-10-25T09:06:52.192334168Z
 filed_at:
   code_sha: 94124569c9b14617a4049909ddbefad5b82a846d
   branch: main
