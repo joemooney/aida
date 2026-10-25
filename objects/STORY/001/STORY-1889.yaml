@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T15:33:51.496539087Z
-modified_at: 2026-10-25T05:56:30.031228035Z
+modified_at: 2026-10-25T05:58:18.215703511Z
 req_type: Story
 tags:
 - architecture
@@ -255,6 +255,11 @@ comments:
   content: 'ADVISOR F2 CALL-CHAIN CLARIFICATION during rework (same round2 finding): current apply_recusal_route_proposal correctly copies only routed_to/routing_state, but reconcile_recusal_hold_with still first calls UNPROTECTED project_live_head(&durable,live_head) and persists its complete returned record. That pure helper legitimately changes target_head_sha/routing fields; an unprotected edit could also change any other authority field, so the admitted-record boundary remains open through the return value. Protect project_live_head verbatim in gate core (UI callers can call/reexport it transitionally), or construct/apply its narrowly allowed changes only inside protected core. This is the same full-record persistence-boundary obligation, not a behavior-change request or a new broad review. Preserve exact current live-head projection and error behavior; pin that the durable refresh cannot accept non-routing/non-authorized-head changes from outside. Do not stop at only the two &mut call expressions.'
   created_at: 2026-10-25T05:56:30.031228035Z
   modified_at: 2026-10-25T05:56:30.031228035Z
+- id: 01a171a3-6d67-7801-829f-3d11dd04dbb8
+  author: joe
+  content: 'ADVISOR ROUND2 SUFFICIENCY CHECK at new82b90b8af07cff379a5b56acfb8d1e674a8052e1 (not a new broad review/verdict): selective routing proposal fixes the two mutable-callee outputs, but same F2 remains through unprotected project_live_head full-record return before durable refresh serialization. Clarification mail1fcddf1b is currently unread at agy1; wait for that correction before final sufficiency/approval. Existing hold remains; no third requested-changes round opened. Evidence correction: actual82b90 source has flat routed_to/routing_state copy-back; it does NOT contain validate_recusal or nested primary.recusal/absorbed[*].recusal logic described in the doer mail. Judge actual source/tests, not that summary. Preserve the good selective-copy fix and original behavior; protect pure project_live_head or enforce its allowed fields in core. Exact current-head CI still required before approval/landing.'
+  created_at: 2026-10-25T05:58:18.215703511Z
+  modified_at: 2026-10-25T05:58:18.215703511Z
 history:
 - id: 01a15f19-1b8d-7a60-bd9c-acf0c42193fc
   author: joe
