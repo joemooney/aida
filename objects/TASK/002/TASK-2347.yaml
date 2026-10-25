@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T02:08:29.032100054Z
-modified_at: 2026-10-25T05:26:21.036180614Z
+modified_at: 2026-10-25T05:30:11.833887603Z
 req_type: Task
 tags:
 - codex
@@ -236,6 +236,11 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-10-25T05:26:20.860696095Z
   modified_at: 2026-10-25T05:26:20.860696095Z
+- id: 01a17189-b1f9-78a1-a717-adac68d50c12
+  author: joe
+  content: 'ADVISOR DEPLOYMENT EVIDENCE UPDATE 22:29: current doer delta now includes Rust doctor/maintenance integration as well as Python/tests. Therefore the old private candidate91071... and its reused prior Rust binary are NOT final deployment evidence. After final commit and independent review, build/smoke a candidate that contains the new health integration and wake-snapshot seam, pin executable/script/test/docs hashes to that reviewed source, and use that exact artifact for authorized one-service install/health registration/full-path proof. Preserve scoped local gates (new Rust module + Python fixtures + fast, shared-infra/touched only when required); do not claim old binary implements new doctor behavior. No unmerged global promotion or live notifications by implementer.'
+  created_at: 2026-10-25T05:30:11.833887603Z
+  modified_at: 2026-10-25T05:30:11.833887603Z
 history:
 - id: 01a170d1-497a-7282-8dcb-91782bba7dc3
   author: joe
