@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-24T13:16:52.228043273Z
-modified_at: 2026-10-25T02:41:43.365455848Z
+modified_at: 2026-10-25T03:01:46.099163785Z
 req_type: Task
 relationships:
 - rel_type:
@@ -39,6 +39,11 @@ comments:
     Advisor notified as codex2. Previous rounds preserved; no new actionable findings.
   created_at: 2026-10-25T02:41:43.365455848Z
   modified_at: 2026-10-25T02:41:43.365455848Z
+- id: 01a17101-cdf3-7250-a5a6-477b48636b6c
+  author: joe
+  content: 'LANDING PREFLIGHT 2026-10-24 20:01 MST: canonical codex2 APPROVE/current head6cfa4d340e8dc72f939ff4cabb8ed2f46298d39f,Build green,Rework hold auto-released confirmed. aida pr train2906 --dry-run completed with0cars: supervised task requires HUMAN at terminal because no typed merge-hold marker remains for mandate release. Nothing pushed/opened/merged. Operator action: aida pr train2906 from terminal; no extra hold clear needed. This is the known mandate-after-auto-release gap, not a review or CI failure.'
+  created_at: 2026-10-25T03:01:46.099163785Z
+  modified_at: 2026-10-25T03:01:46.099163785Z
 history:
 - id: 01a16e0f-b9d9-7320-8c6d-649e1f002904
   author: joe
