@@ -23,7 +23,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-25T04:07:30.765616187Z
+modified_at: 2026-10-25T04:12:09.209545801Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -449,6 +449,11 @@ comments:
   content: 'UCAMI follow-up adoption: keep the eventual central same-logical-recipient cross-root inbox/read resolver in mailbox store API for CLI/MCP/hooks/watcher, not permanently only Python. Preserve sibling-local mail before worktree removal, or refuse removal until safely retained; do not silently discard its private/durable mail or bypass transport policy. Add a removed-worktree/late-private-mail conformance case. Reuse existing ownership/receipt semantics and avoid another transport. Future second-adapter/lifecycle-engine watcher growth belongs in scoped Rust design here; currentTASK2347 stays one adapter.'
   created_at: 2026-10-25T04:07:30.765616187Z
   modified_at: 2026-10-25T04:07:30.765616187Z
+- id: 01a17142-3e79-7522-a221-e85fc0b1976d
+  author: joe
+  content: 'ADVISOR ROUTING21:10: forge verified PR2909 has privacy-fix headba8f07efd8ec01392e33b228fec7e6aaaf89615c,latestcommit isolates inherited parent user identity,current-headBuildSUCCESS. codex2 should focusedrecheck inheritedAIDA_USER privacyfix and changed diff at this SHA,record ownattestedverdict,notrepeatbroadreview. codex1 is assigned separate TASK2347 implementationrecovery,so cannot approve that work.'
+  created_at: 2026-10-25T04:12:09.209545801Z
+  modified_at: 2026-10-25T04:12:09.209545801Z
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
   author: joe
