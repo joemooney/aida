@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T17:15:51.947160848Z
-modified_at: 2026-10-25T07:05:30.079990194Z
+modified_at: 2026-10-25T07:11:11.700513844Z
 req_type: Story
 relationships:
 - rel_type:
@@ -505,6 +505,24 @@ comments:
   content: 'Symbol-name correction to my TASK2344/authority advisory: pr_train.rs:1512 is LiveTrainForge::wait_ci (TrainForge implementation), and the pre-land path at1864 is ForgeRails::land (Rails implementation), not ForgePorts/LiveRails. LiveChecks::mandate_cover is1066. The cited source lines, checkpoint behavior and recommendations are unchanged.'
   created_at: 2026-10-25T07:05:30.079990194Z
   modified_at: 2026-10-25T07:05:30.079990194Z
+- id: 01a171e6-2954-7922-aef6-555338961829
+  author: joe
+  content: |-
+    ADVISOR Q1/Q2 RULING on codex2 TASK2344/flow-train seam advisory, main3cbb90b0c9, implementing prior R4/R6 without narrowing acceptance.
+
+    Q1 SIGNED: conservative private versioned RecoveryRequired inventory/fence, NO automatic orphan replay. Keep original evidence; do not invent Pending/Running/Failed owners. All current submit/claim/direct-run/reap/cancel/finalize admission paths consume the shared bounded inventory under existing dispatch lock, preserving known target/dedupe/cap reservations without double count. Unknown target/kind/owner or unsafe/unbounded inventory refuses affected admission, never false-zero. Read/list are read-only stable needs-recovery views; only reconciler creates/deduplicates events by evidence fingerprint. Exact-owned same-invocation unpublished cleanup allowed; a restart/crash loses that proof. Alive/Dead/Unknown process probe: Unknown is retained; even Dead does not authorize replay. Existing owner completion requires exact claim identity and cannot erase a changed fence.
+
+    Rollout is NOT mixed-version safe merely from a sidecar/version number. Before activation, stop/quiesce old submit/tick/serve/run/finalizer mutators and establish an independently tested PHYSICAL refusal boundary for old mutators. Do not assume registry PID absence proves quiescence or that an old-ignored marker protects anything. Candidate for a bounded compatibility spike: old acquire_dispatch_lock opens fixed tick.lock read+write; a permanent directory at that legacy lock path causes the old API to refuse, while a separately versioned current lock may serve the new reader. This is a CANDIDATE, not permission to change live lock inodes: prove all old mutation entrypoints/refusal and held/open-fd races with old native fixture processes, secure identity/nonreplacement handling and explicit quiescent migration first; use a smaller verified physical fence if found. Never unlink/replace an active lock, guess old workers stopped, or silently upgrade live state. Keep rollout refused if proof is incomplete. Implement the current safe inventory/tests while returning concrete migration evidence before activation; original queued work stays preserved, no replay. No new daemon or framework.
+
+    Q2 SELECT typed IN-PROCESS dispatch execution context/recheck seam through native Rust ship/train entrypoints, avoiding new CLI/environment authority assertions or an opaque child with only parent pre/post checks. The context is constructed from canonical immutable request plus CURRENT exact Running claim/PID/start/token, never a caller boolean or cached success. Keep its admission/binding/check decision in protected gate code; source/factory must not expose mutable authority fields to unprotected orchestration. It only RESTRICTS existing native authority; never grants or bypasses it. Native protected shipping/hold-release/merge checkpoints must invoke the request-bound check, including unheld members, after CI/hold waits, immediately before irreversible release/merge, each member/rebuild/fallback and every update/review/retry step. Ordinary non-dispatch entrypoints retain current semantics. Document how context is mandatory for a dispatch-originated operation and cannot be silently dropped by an unprotected wrapper/alternate path.
+
+    Check exact ORIGINAL req.mandate_id/principal via recheck, Dispatch scope and required ShipHeld, requester grant/revocation/delegation, serving grant/binding, human gates and claim ownership. Active replacement B cannot revive A. Preserve all native head/CI/corpus/hold/operator-floor checks and existing hold rearm recovery. No self-binding, grant writes, arbitrary serialized callback or raw gh merge. If actual current APIs need refactoring to carry the context, limit it to closed entrypoint/checkpoint plumbing, and coordinate with agy1's gate/mandate moves before editing shared methods.
+
+    Tests must hit ACTUAL native post-wait/last-side-effect checkpoints with bounded barriers/fake forge, not only a parent helper: stopA/startB, grant revocation, added human gate, result loss/claim change, unheld and held PR, between members/fallback, zero unauthorized merge/update/hold-clear; existing recovery rearm remains. Preserve actual-child missing/completed-result-loss and duplicate/cap cases from advisory.
+
+    Agy2 may continue already approved TASK2338-2343/default branch/status/schema and final runners now under these bounded choices; return precise API/migration obstruction rather than pausing the whole plan. All TASK2344/fullparent criteria remain required before final completion; no live dispatcher activation/migration/service/config/grant changes. Independent final-head review remains required.
+  created_at: 2026-10-25T07:11:11.700513844Z
+  modified_at: 2026-10-25T07:11:11.700513844Z
 history:
 - id: 01a16c5e-51c4-73b2-b8a3-3b764dc7e5cd
   author: joe
