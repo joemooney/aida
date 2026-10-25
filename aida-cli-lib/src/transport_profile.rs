@@ -10,7 +10,7 @@ use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::fs::{self, File, OpenOptions};
 use std::io::Read;
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 use std::process::Output;
 
 #[path = "transport_executor.rs"]
@@ -213,22 +213,43 @@ fn origin_endpoint(root: &Path) -> Result<String> {
                 ],
             )?)
         };
-        let mut normalized = PathBuf::new();
-        for component in base.join(&fetch).components() {
-            match component {
-                Component::ParentDir => {
-                    normalized.pop();
-                }
-                Component::CurDir => {}
-                other => normalized.push(other.as_os_str()),
-            }
-        }
-        normalized
+        filesystem_endpoint(&base.join(&fetch))?
             .to_str()
             .context("Origin path must be valid UTF-8")?
             .to_owned()
     };
     Ok(endpoint)
+}
+
+// Resolve symlinks BEFORE parent components, just as Git's filesystem access
+// does. Lexically popping `link/..` could select a different repository. Both
+// enrollment and every origin verification use this same destination identity.
+// trace:STORY-1742 | ai:codex
+fn filesystem_endpoint(path: &Path) -> Result<PathBuf> {
+    match path.canonicalize() {
+        Ok(resolved) => Ok(resolved),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            // Plans may name a repository not created yet. Only an absent final
+            // entry under a resolvable parent is unambiguous; dangling links,
+            // missing intermediate components and unreadable paths refuse.
+            if !matches!(fs::symlink_metadata(path), Err(error) if error.kind() == std::io::ErrorKind::NotFound)
+            {
+                bail!("Cannot resolve filesystem origin safely; push/pull refused.");
+            }
+            let name = path
+                .file_name()
+                .context("Ambiguous filesystem origin; push/pull refused.")?;
+            let parent = path
+                .parent()
+                .context("Ambiguous filesystem origin; push/pull refused.")?
+                .canonicalize()
+                .map_err(|_| {
+                    anyhow::anyhow!("Cannot resolve filesystem origin safely; push/pull refused.")
+                })?;
+            Ok(parent.join(name))
+        }
+        Err(_) => bail!("Cannot resolve filesystem origin safely; push/pull refused."),
+    }
 }
 
 // Preserve endpoint bytes rather than trimming a filesystem destination into a

@@ -79,6 +79,12 @@ directory, shared by linked worktrees; no tracked project file or store object
 is changed. Configuration works before AIDA store/projection initialization.
 
 The profile pins a fingerprint of origin's single resolved fetch/push endpoint.
+Filesystem endpoints resolve symlinks and parent components in filesystem order;
+symlink target changes invalidate the pin. Missing intermediate components,
+dangling links and unreadable paths refuse. A missing final repository name is
+allowed for planning only when its parent resolves unambiguously. Older profiles
+whose lexical path pin differs from the real destination refuse until explicitly
+disabled/re-enrolled after inspection.
 Multiple endpoints, a different push endpoint, mirror mode, or later endpoint
 changes refuse planning. To change the pin, inspect the Git configuration and
 explicitly disable/re-enable the profile. Output and persisted profile data

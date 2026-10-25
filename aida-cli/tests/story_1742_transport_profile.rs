@@ -139,6 +139,27 @@ impl Fixture {
         (store, remote)
     }
 
+    #[cfg(unix)]
+    fn symlink_parent_remotes(&self) -> (PathBuf, PathBuf) {
+        let external = self.root.parent().unwrap().join("external");
+        fs::create_dir_all(external.join("child")).unwrap();
+        let intended = external.join("hub.git");
+        let wrong = self.root.join("hub.git");
+        for remote in [&intended, &wrong] {
+            self.git(&["init", "--bare", "-q", remote.to_str().unwrap()]);
+        }
+        std::os::unix::fs::symlink(external.join("child"), self.root.join("link")).unwrap();
+        self.git(&["remote", "set-url", "origin", "link/../hub.git"]);
+        self.git(&[
+            "worktree",
+            "add",
+            "-q",
+            self.root.join(".aida-store").to_str().unwrap(),
+            "aida-store",
+        ]);
+        (intended, wrong)
+    }
+
     fn git_at(&self, root: &Path, args: &[&str]) -> String {
         let output = self.command("git", root, args).output().unwrap();
         assert!(output.status.success(), "{}", diagnostics(&output));
@@ -918,4 +939,117 @@ fn busy_store_writer_is_reported_separately_from_dirty_or_active_store() {
     );
     assert!(!diagnostics(&output).contains("Store is dirty"));
     assert_eq!(fixture.git_at(&remote, &["for-each-ref"]), "");
+}
+
+// trace:STORY-1742 | ai:codex
+#[test]
+#[cfg(unix)]
+fn symlink_then_parent_pushes_only_to_gits_actual_origin() {
+    for absolute in [false, true] {
+        let fixture = Fixture::new();
+        let (intended, wrong) = fixture.symlink_parent_remotes();
+        if absolute {
+            fixture.git(&[
+                "remote",
+                "set-url",
+                "origin",
+                fixture.root.join("link/../hub.git").to_str().unwrap(),
+            ]);
+        }
+        fixture.enable();
+        let before = fixture.snapshot();
+        let output = fixture.aida(&["push"]);
+        assert!(output.status.success(), "{}", diagnostics(&output));
+        assert_eq!(
+            fixture.git_at(&wrong, &["for-each-ref"]),
+            "",
+            "wrong repository must receive nothing"
+        );
+        assert_eq!(
+            fixture.git_at(
+                &intended,
+                &["for-each-ref", "--format=%(refname) %(objectname)"]
+            ),
+            format!("refs/heads/aida-store {}", fixture.store_sha)
+        );
+        assert_eq!(
+            fixture.git(&["ls-remote", "origin"]),
+            format!("{}\trefs/heads/aida-store", fixture.store_sha)
+        );
+        assert_eq!(fixture.snapshot(), before);
+    }
+}
+
+// trace:STORY-1742 | ai:codex
+#[test]
+#[cfg(unix)]
+fn changing_a_symlink_target_after_enrollment_refuses_both_remotes() {
+    let fixture = Fixture::new();
+    let (intended, wrong) = fixture.symlink_parent_remotes();
+    fixture.enable();
+    let enrolled = fs::read(fixture.common.join("aida-transport.json")).unwrap();
+    let changed = fixture.root.parent().unwrap().join("changed");
+    fs::create_dir_all(changed.join("child")).unwrap();
+    let other = changed.join("hub.git");
+    fixture.git(&["init", "--bare", "-q", other.to_str().unwrap()]);
+    fs::remove_file(fixture.root.join("link")).unwrap();
+    std::os::unix::fs::symlink(changed.join("child"), fixture.root.join("link")).unwrap();
+    let output = fixture.aida(&["push"]);
+    assert!(!output.status.success());
+    assert!(
+        diagnostics(&output).contains("Origin changed"),
+        "{}",
+        diagnostics(&output)
+    );
+    assert_eq!(fixture.git_at(&intended, &["for-each-ref"]), "");
+    assert_eq!(fixture.git_at(&other, &["for-each-ref"]), "");
+    assert_eq!(fixture.git_at(&wrong, &["for-each-ref"]), "");
+    assert_eq!(
+        fs::read(fixture.common.join("aida-transport.json")).unwrap(),
+        enrolled
+    );
+}
+
+// trace:STORY-1742 | ai:codex
+#[test]
+#[cfg(unix)]
+fn an_old_lexical_destination_pin_cannot_confirm_the_wrong_repository() {
+    let fixture = Fixture::new();
+    let (intended, wrong) = fixture.symlink_parent_remotes();
+    // Enroll the old normalizer's result, then restore the configured path
+    // that the old code incorrectly considered the same destination.
+    fixture.git(&["remote", "set-url", "origin", wrong.to_str().unwrap()]);
+    fixture.enable();
+    fixture.git(&["remote", "set-url", "origin", "link/../hub.git"]);
+    assert_eq!(
+        fixture.json(&["config", "transport", "show", "--json"])["origin_matches"],
+        false
+    );
+    let output = fixture.aida(&["push"]);
+    assert!(!output.status.success());
+    assert!(diagnostics(&output).contains("Origin changed"));
+    assert_eq!(fixture.git_at(&intended, &["for-each-ref"]), "");
+    assert_eq!(fixture.git_at(&wrong, &["for-each-ref"]), "");
+}
+
+// trace:STORY-1742 | ai:codex
+#[test]
+#[cfg(unix)]
+fn unresolved_filesystem_components_refuse_without_lexical_parent_collapse() {
+    let fixture = Fixture::new();
+    let (intended, wrong) = fixture.symlink_parent_remotes();
+    fs::write(fixture.root.join("plain-file"), b"not a directory").unwrap();
+    std::os::unix::fs::symlink(fixture.root.join("absent"), fixture.root.join("dangling")).unwrap();
+    for path in [
+        "missing/../hub.git",
+        "plain-file/../hub.git",
+        "dangling/../hub.git",
+    ] {
+        fixture.git(&["remote", "set-url", "origin", path]);
+        let output = fixture.aida(&["config", "transport", "enable", "work"]);
+        assert!(!output.status.success(), "{path}: {}", diagnostics(&output));
+        assert!(!fixture.common.join("aida-transport.json").exists());
+    }
+    assert_eq!(fixture.git_at(&intended, &["for-each-ref"]), "");
+    assert_eq!(fixture.git_at(&wrong, &["for-each-ref"]), "");
 }
