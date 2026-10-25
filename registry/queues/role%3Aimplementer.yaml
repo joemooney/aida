@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a170d1-0568-70a1-9e28-9498511707b8
+  position: 291000
+  added_by: role:implementer
+  note: Advisor-approved rework of codex2 F1/F2 at91071afddc; concrete brief20261025T045538Z and due-job boundary comment. Existing codex1 lane is editing; metadata only, no new launch or hold clearance.
+  added_at: 2026-10-25T05:26:21.719754501Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a16ad2-fa8b-7961-ae04-837e24cec35d
   position: 292000
   added_by: role:implementer
@@ -102,14 +109,6 @@
   position: 475000
   added_by: role:implementer
   added_at: 2026-10-18T03:06:32.021503902Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
-  requirement_id: 01a170d1-0568-70a1-9e28-9498511707b8
-  position: 476000
-  added_by: role:implementer
-  note: Operator-approved implementation in progress in isolated mail_watcher_impl session; do not duplicate pickup
-  added_at: 2026-10-25T02:11:30.101031700Z
   for_role: implementer
   added_by_machine: imac
 - user_id: role:implementer
