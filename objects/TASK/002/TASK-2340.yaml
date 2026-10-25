@@ -17,12 +17,12 @@ description: |
   human_gates_gate_dispatch_and_ship_with_gated_audit_rows:818 asserts exactly 2 Gated rows, which pins the current behaviour; that assertion needs updating alongside any fix.
 
   Raised in review of PR-2905: https://github.com/joemooney/aida/pull/2905#issuecomment-6390394038
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-24T22:35:50.576500759Z
-modified_at: 2026-10-25T04:51:47.026354703Z
+modified_at: 2026-10-25T04:52:02.985052423Z
 req_type: Task
 tags:
 - audit
@@ -34,6 +34,14 @@ comments:
   content: 'PROXY DECISION for joe: Approve completion of the signed audit contract: known-mandate scope refusals append Refused events with that exact mandate ID; invalid/missing mandate identity must not borrow another mandate or disclose secrets. Pin event cardinality/reasons. Preserve refusal decisions.'
   created_at: 2026-10-25T04:51:47.026354703Z
   modified_at: 2026-10-25T04:51:47.026354703Z
+history:
+- id: 01a17166-c529-7770-8dcb-2ba76ebef242
+  author: joe
+  timestamp: 2026-10-25T04:52:02.985049011Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 9457e495247a3c9de111d15507fabd2cd0923079
   branch: pr-2905
