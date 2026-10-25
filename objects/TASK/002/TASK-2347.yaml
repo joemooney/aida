@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T02:08:29.032100054Z
-modified_at: 2026-10-25T06:46:30.032174662Z
+modified_at: 2026-10-25T07:23:05.934884106Z
 req_type: Task
 tags:
 - codex
@@ -300,6 +300,22 @@ comments:
     Reviewer should record exact outstanding evidence, not run another broad open-ended review round. Doer implements this bounded same-F2 correction, commits/pushes nonforce and reports finalhead plus one focused Python suite + fast gates. Advisor will assess final sufficiency with independent reviewer delta evidence at that head and required Build. No new adapter, general rollback framework, live install, unsafe promotion, hold clear, merge or grant changes. Prioritize concrete watcher rework before BUG2017 continuation, preserving BUG2017 files in place.
   created_at: 2026-10-25T06:45:37.567221146Z
   modified_at: 2026-10-25T06:45:37.567221146Z
+- id: 01a171f1-0f4e-7260-a3dd-f5b463fb8801
+  author: ai:codex:joe
+  content: |
+    codex1 bounded SAME-F2 install-boundary correction pushed for advisor final sufficiency/delta evidence: PR2915 fullSHA0dfceea00ac371445ff4aa755801f6cdce5a4668 (forward from b07904778fbae163a246c3d7144bebb1c7934378; no rebase/force push). This addresses advisor d2fc1ac6, not a new broad formal cycle. No author verdict/approval.
+
+    Read-only project/global ownership, selected native-health capability, file identity and service-state preflight precedes deployed script or other install persistence. Publication rechecks original file snapshots and exact ownership. Partial-install failures identify script-deploy/health-registration/unit-write/daemon-reload/enable stage and retain a private0600 recovery bundle in0700 state: original config/registration/unit/script bytes, modes/hashes, original service state and safely observed state. No automatic whole-config restoration or commit/publication; unrelated/intervening edits are retained. Docs explicitly cover tracked .aida/config.toml here, private backup handling and conditional same-args retry/uninstall; exact unit ownership requires original AIDA/Codex/batch/interval/state/health settings and Python executable.
+
+    Uninstall validates ownership, confirms disable--now + inactive/failed state BEFORE removing health registration/job/unit. Failed, unknown or still-active stop retains monitoring/unit/state with recovery instructions. Explicit typed inactive/not-found state can represent an absent unit even with show status1/4; absent inactive uninstall does not require disabling a nonexistent unit. Other nonzero/unknown results refuse. Subprocess stderr remains private; default command semantics unchanged.
+
+    Validation:43/43 focused Python tests WITH explicit native candidate; includes prior F1/globalnamespace/LOCAL-pruning and new ownership nonmutation, capabilities, every introduced install stage, private original byte/mode/hash evidence, stop failure retention, still-active refusal, idempotent owned install/uninstall, intervening user config/unit preservation and typed absent-unit cases. make check-ci-fast35/35. Logs /tmp/task2347-install-boundary-python.log and /tmp/task2347-install-boundary-fast.log. Required author-check independently ran43 cases (42pass1optional skip), separate command-status fixture plus script/register/uninstall-reload injections; corrected docs/settings issue, final no remaining concrete bounded-delta findings. No real systemctl, service/config/job installation, synthetic mail/queue or inbox acknowledgement was executed. Explicit advisor notification is informational, not a mail test.
+
+    Only3files script/tests/docs changed; no Rust. Exact candidate /tmp/task2347-candidate-0dfceea00ac371445ff4aa755801f6cdce5a4668/manifest.json; native binary unchanged from634, SHA2569d50dac2e1be84fa903a05857d82ff11f45070e4f0ea3fcf483f743acf3dbb30, not installed/promoted. Formal final-head sufficiency/required Build and ordinary reviewed health-capable driver deployment remain advisor/reviewer responsibilities; no current-head CI or live readiness claim, no hold clear, merge or parent completion.
+
+    Returning BUG2017 in place at e715043bc01f47041c6451a2ca3f7648e0ab7592 on rebased main3cbb90b0c9.22new allocation tests pass after isolated core artifact repair. Required touched run reached CLI-lib tests and found24legacy fixture authority failures (138pass), to be migrated explicitly as synthetic HOME; no production weakening or global fixture enrollment. Core full/compile/fast remain pending; BUG parent InProgress. (Refs TASK-2347)
+  created_at: 2026-10-25T07:23:05.934884106Z
+  modified_at: 2026-10-25T07:23:05.934884106Z
 history:
 - id: 01a170d1-497a-7282-8dcb-91782bba7dc3
   author: joe
