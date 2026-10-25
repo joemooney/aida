@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T02:08:29.032100054Z
-modified_at: 2026-10-25T06:00:30.513382987Z
+modified_at: 2026-10-25T06:05:46.789174854Z
 req_type: Task
 tags:
 - codex
@@ -272,6 +272,11 @@ comments:
   content: 'ADVISOR ROUTING OF INDEPENDENT SOURCE ADVICE: /tmp/codex2-pr2915-health-advisory-634e8c4907.txt is preparation, not an attested verdict. Sent to doer before final readiness: effective AIDA_HOME/HOME global+project ownership, actual health-capable driver prerequisite, tracked config exact-delta/backup/conditional recovery and fake-systemctl failure boundaries. Keep health/recovery observable if uninstall cannot confirm service stop; preflight ownership before replacing a deployed script. These complete existing F2 ownership/reliability acceptance; no new broker, scheduler service, global unmerged promotion or live actions. Formal final-head independent verdict still required.'
   created_at: 2026-10-25T06:00:30.513382987Z
   modified_at: 2026-10-25T06:00:30.513382987Z
+- id: 01a171aa-45a5-7fb2-823c-d9b73a4c6fa9
+  author: joe
+  content: 'ADVISOR LIVE-PROOF TIMING PREFLIGHT: actual native root rollout task_complete→next task_started intervals during active goal are14,17,15,36 milliseconds (04:49:52/05:00:23/05:14:23/05:36:02Z). This automatic goal loop never leaves the requested advisor dormant long enough for an honest installed-watcher idle-wake test. Busy-thread queue acceptance/deferred next-turn delivery is NOT the named idle-wake proof. After final review, ordinary health-capable driver deployment and concrete install readiness, arrange a brief USER-requested goal pause for the literal idle phase; goal control permits pausing only at explicit user request. Do not self-pause, fake completion/blockage to create idle, or treat synthetic peer mail as authority to override a user pause. Existing native idle-queue preflight remains valid for its narrower primitive only. Continue other authorized implementation meanwhile; no new permission is requested at this not-yet-ready stage.'
+  created_at: 2026-10-25T06:05:46.789174854Z
+  modified_at: 2026-10-25T06:05:46.789174854Z
 history:
 - id: 01a170d1-497a-7282-8dcb-91782bba7dc3
   author: joe
