@@ -11,6 +11,8 @@
 //! See `docs/plans/2026-05-16-story-246-auto-complete.md`.
 //! trace:STORY-246 | ai:claude
 
+// trace:STORY-1889 | ai:claude
+use crate::gate::branch_policy::is_branch_policy_merge_refusal;
 use std::path::Path;
 use std::time::Instant;
 
@@ -1183,18 +1185,6 @@ pub(crate) fn is_merge_conflict_failure(reason: &str) -> bool {
     aida_core::external_tool_output::contains_any_case_insensitive(
         reason,
         aida_core::external_tool_output::GH_MERGE_CONFLICT,
-    )
-}
-
-/// BUG-1447: GitHub prefixes both policy refusals and genuine conflicts with
-/// "not mergeable". Recognize the stable policy detail before consulting the
-/// broader conflict vocabulary so a supervised hold can neither spend the
-/// transient retry budget nor reach the destructive auto-rebase path.
-// trace:BUG-1447 | ai:codex
-pub(crate) fn is_branch_policy_merge_refusal(reason: &str) -> bool {
-    aida_core::external_tool_output::contains_any_case_insensitive(
-        reason,
-        aida_core::external_tool_output::GH_BRANCH_POLICY_MERGE_REFUSAL,
     )
 }
 

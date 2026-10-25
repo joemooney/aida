@@ -730,6 +730,7 @@ fn pr_touching_gate_paths_is_gated() {
         );
     }
     for path in [
+        "aida-cli-lib/src/gate/merge_hold_core.rs",
         "aida-cli-lib/src/gate/review_authority.rs",
         "aida-cli-lib/src/gate/solo_review.rs",
         "aida-cli-lib/src/gate/review_verdict.rs",
