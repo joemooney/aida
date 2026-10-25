@@ -79,6 +79,12 @@ directory, shared by linked worktrees; no tracked project file or store object
 is changed. Configuration works before AIDA store/projection initialization.
 
 The profile pins a fingerprint of origin's single resolved fetch/push endpoint.
+Filesystem endpoints resolve symlinks and parent components in filesystem order;
+symlink target changes invalidate the pin. Missing intermediate components,
+dangling links and unreadable paths refuse. A missing final repository name is
+allowed for planning only when its parent resolves unambiguously. Older profiles
+whose lexical path pin differs from the real destination refuse until explicitly
+disabled/re-enrolled after inspection.
 Multiple endpoints, a different push endpoint, mirror mode, or later endpoint
 changes refuse planning. To change the pin, inspect the Git configuration and
 explicitly disable/re-enable the profile. Output and persisted profile data
@@ -87,22 +93,45 @@ contain the fingerprint rather than URLs or credentials. An optional
 the local store history for the later outbound scanner. Enrollment records the
 operator's decision; it does not scan or certify that history.
 
-**Current boundary: profile and plans only.** While enabled, `aida push --dry-run`
+**Current boundary: ref-only push; pull is plan-only.** While enabled, `aida push --dry-run`
 and `aida pull --dry-run` inspect local metadata without fetching, opening a
-store cache, or running lifecycle actions. `--json` also selects planning.
+store cache, or running lifecycle actions. `--json` also selects planning;
+JSON plans explicitly report `executed: false` and never execute a push.
 Plans name origin, exact store refspecs, locally known source SHA, refs that
 execution could move, flag dispositions, and missing prerequisites. Code legs
 are forbidden even when `AIDA_PUSH_DEFAULT=code`; `aida push --store-only` and
-`aida pull --store-only` are redundant. `aida push --message <text>` and
-`aida pull --auto` refuse. Actual push/pull refuses until
-the executor and sanitization slices are available. Ordinary clones with no
+`aida pull --store-only` are redundant. Executing pushes also print flag dispositions.
+`aida push --message <text>` and
+`aida pull --auto` refuse. Actual pull execution remains disabled. Ordinary clones with no
 profile retain their existing behavior, including pull dry-run fetching.
 Explicit store overrides such as `aida --file <path> push` refuse when either
 clone has an enabled profile; run from the intended clone without the override.
 
-The intended transport is a ref-only store push and a store-only fetch followed
-by fast-forward. These plans do not yet validate cleanliness, fast-forward
-eligibility, hook compatibility, or content safety. The profile governs only
+Actual `aida push` requires an existing attached `aida-store` worktree in the
+same clone. It refuses dirty stores, active Git operations, unsupported hooks,
+embedded repositories, and partial-clone configuration that could fetch objects
+implicitly. Hydrate such clones explicitly outside this command.
+Under the store writer lock it validates the tip and
+cleanliness, then releases that lock before network I/O. It makes exactly one
+push attempt of the pinned commit to `refs/heads/aida-store` at the enrolled
+origin endpoint: no code refs, tags, submodule pushes, auto-commits, mailbox
+publication, ID allocation, reconciliation, fan-out, or retry. The verified
+store-only hooks preserve the identity gate; project code hooks do not run.
+Relative filesystem origins are resolved and pinned from the invoking checkout;
+the executor uses that absolute destination from the attached store. Credentials
+use the shared environment-backed routing helper; HTTP secrets stay out of push
+arguments. Cleaning authentication userinfo must not select a new URL rewrite.
+Concurrent later store commits remain local for a future push. Remote refusal
+or network errors require operator inspection; acceptance can be uncertain.
+Raw hook/remote diagnostics are suppressed to avoid exposing identifiers.
+The profile baseline and local remote-tracking refs are not advanced by this
+slice. Local hook-profile installation/verification is the existing store Git
+policy; it does not change the canonical store.
+
+**Sanitization is still pending.** This slice does not establish a safe WORK
+export path. Only manually sanitized generic AIDA defects may be exported;
+refusal scanning and sanitized intake are the next slice. Plans do not validate
+cleanliness, hook compatibility, fast-forward eligibility, or content safety. The profile governs only
 `aida push/pull`; raw Git and other sync entry points bypass it. There is no
 server-side enforcement. Keep work-filed defects generic and sanitized before
 they enter any store that may become public.

@@ -1,5 +1,5 @@
-//! Clone-local transport policy and read-only plans. Execution and intake
-//! sanitization are later slices: an enabled profile refuses execution here.
+//! Clone-local transport policy, read-only plans, and ref-only store pushes.
+//! Pull execution and intake sanitization remain separate work.
 // trace:STORY-1742 | ai:codex
 
 use anyhow::{bail, Context, Result};
@@ -10,8 +10,11 @@ use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::fs::{self, File, OpenOptions};
 use std::io::Read;
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 use std::process::Output;
+
+#[path = "transport_executor.rs"]
+mod executor;
 
 const PROFILE_FILE: &str = "aida-transport.json";
 const STORE_REF: &str = "refs/heads/aida-store";
@@ -21,12 +24,13 @@ const PULL_REFSPEC: &str = "refs/heads/aida-store:refs/remotes/origin/aida-store
 const BYPASS_LIMIT: &str =
     "The profile governs aida push/pull only; raw Git bypasses it. No server-side enforcement.";
 const PENDING: &str =
-    "Transport execution and sanitization are not available in this slice; use --dry-run to inspect the plan.";
+    "Transport pull execution is not available in this slice; use --dry-run to inspect the plan.";
+const SANITIZATION_PENDING: &str = "Outbound sanitization is not available in this slice; export only operator-sanitized generic AIDA defects.";
 const FORBIDDEN: &str = "Flag forbidden by the work transport profile: code push/pull, commit messages, and automatic rebases are disabled. Inspect `aida config transport show`.";
 
 #[derive(Subcommand, Debug)]
 pub enum TransportCommand {
-    /// Enable a named clone-local profile. Does not enable transport execution yet.
+    /// Enable a named clone-local store-only profile.
     Enable {
         #[clap(value_enum)]
         name: ProfileName,
@@ -60,7 +64,7 @@ pub enum ProfileName {
 /// Hash the effective single origin endpoint rather than saving credentials or
 /// endpoint text. Fixed refspecs are code-owned, not an extensible local language.
 // trace:STORY-1742 | ai:codex
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Profile {
     version: u32,
@@ -91,7 +95,8 @@ fn is_hex_id(value: &str, lengths: &[usize]) -> bool {
 /// These calls inspect Git metadata only; do not fetch, refresh the store cache,
 /// or invoke any ordinary sync handler. Never forward raw diagnostics (URLs may
 /// carry credentials). The closed callers below use only rev-parse, config,
-/// remote get-url and merge-base: none executes hooks, filters, fsmonitor or
+/// remote get-url, ls-remote --get-url (URL expansion only), worktree list,
+/// symbolic-ref and merge-base: none executes hooks, filters, fsmonitor or
 /// remote helpers. Avoid host_git_command here because its store-hook profile
 /// installation would make inspection write state when invoked from the store.
 // trace:STORY-1742 | ai:codex
@@ -171,10 +176,10 @@ fn load(common: &Path) -> Result<Option<Profile>> {
     Ok(Some(profile))
 }
 
-fn origin_fingerprint(root: &Path) -> Result<String> {
-    let fetch = git_text(root, &["remote", "get-url", "--all", "origin"])?;
-    let push = git_text(root, &["remote", "get-url", "--push", "--all", "origin"])?;
-    if fetch.is_empty() || fetch.lines().count() != 1 || push != fetch {
+fn origin_endpoint(root: &Path) -> Result<String> {
+    let fetch = single_endpoint(root, &["remote", "get-url", "--all", "origin"])?;
+    let push = single_endpoint(root, &["remote", "get-url", "--push", "--all", "origin"])?;
+    if push != fetch {
         bail!("Transport requires exactly one identical origin fetch/push endpoint.");
     }
     let mirror = git(root, &["config", "--bool", "--get", "remote.origin.mirror"])?;
@@ -208,22 +213,64 @@ fn origin_fingerprint(root: &Path) -> Result<String> {
                 ],
             )?)
         };
-        let mut normalized = PathBuf::new();
-        for component in base.join(&fetch).components() {
-            match component {
-                Component::ParentDir => {
-                    normalized.pop();
-                }
-                Component::CurDir => {}
-                other => normalized.push(other.as_os_str()),
-            }
-        }
-        normalized
+        filesystem_endpoint(&base.join(&fetch))?
             .to_str()
             .context("Origin path must be valid UTF-8")?
             .to_owned()
     };
-    Ok(format!("{:x}", Sha256::digest(endpoint.as_bytes())))
+    Ok(endpoint)
+}
+
+// Resolve symlinks BEFORE parent components, just as Git's filesystem access
+// does. Lexically popping `link/..` could select a different repository. Both
+// enrollment and every origin verification use this same destination identity.
+// trace:STORY-1742 | ai:codex
+fn filesystem_endpoint(path: &Path) -> Result<PathBuf> {
+    match path.canonicalize() {
+        Ok(resolved) => Ok(resolved),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            // Plans may name a repository not created yet. Only an absent final
+            // entry under a resolvable parent is unambiguous; dangling links,
+            // missing intermediate components and unreadable paths refuse.
+            if !matches!(fs::symlink_metadata(path), Err(error) if error.kind() == std::io::ErrorKind::NotFound)
+            {
+                bail!("Cannot resolve filesystem origin safely; push/pull refused.");
+            }
+            let name = path
+                .file_name()
+                .context("Ambiguous filesystem origin; push/pull refused.")?;
+            let parent = path
+                .parent()
+                .context("Ambiguous filesystem origin; push/pull refused.")?
+                .canonicalize()
+                .map_err(|_| {
+                    anyhow::anyhow!("Cannot resolve filesystem origin safely; push/pull refused.")
+                })?;
+            Ok(parent.join(name))
+        }
+        Err(_) => bail!("Cannot resolve filesystem origin safely; push/pull refused."),
+    }
+}
+
+// Preserve endpoint bytes rather than trimming a filesystem destination into a
+// different path. Ambiguous line-based remote output refuses without echoing it.
+// trace:STORY-1742 | ai:codex
+fn single_endpoint(root: &Path, args: &[&str]) -> Result<String> {
+    let output = git(root, args)?;
+    let text = String::from_utf8(output.stdout)
+        .map_err(|_| anyhow::anyhow!("Invalid origin endpoint encoding; push/pull refused."))?;
+    let endpoint = text.strip_suffix('\n').unwrap_or(&text);
+    if !output.status.success() || endpoint.is_empty() || endpoint.contains(['\n', '\r']) {
+        bail!("Transport requires exactly one unambiguous origin endpoint.");
+    }
+    Ok(endpoint.to_owned())
+}
+
+fn origin_fingerprint(root: &Path) -> Result<String> {
+    Ok(format!(
+        "{:x}",
+        Sha256::digest(origin_endpoint(root)?.as_bytes())
+    ))
 }
 
 fn verify_origin(root: &Path, profile: &Profile) -> Result<()> {
@@ -274,6 +321,8 @@ struct ProfileStatus<'a> {
     pull_refspec: &'static str,
     code_leg: &'static str,
     execution_available: bool,
+    pull_execution_available: bool,
+    sanitization_available: bool,
     origin_matches: Option<bool>,
     limitations: Vec<&'static str>,
 }
@@ -290,11 +339,13 @@ fn show(root: &Path, profile: Option<&Profile>, json: bool) -> Result<()> {
         } else {
             "ordinary behavior"
         },
-        execution_available: false,
+        execution_available: profile.is_some(),
+        pull_execution_available: false,
+        sanitization_available: false,
         origin_matches: profile
             .map(|p| origin_fingerprint(root).map(|hash| hash == p.origin_sha256))
             .transpose()?,
-        limitations: vec![PENDING, BYPASS_LIMIT],
+        limitations: vec![PENDING, SANITIZATION_PENDING, BYPASS_LIMIT],
     };
     if json {
         println!("{}", serde_json::to_string_pretty(&status)?);
@@ -319,7 +370,8 @@ fn show(root: &Path, profile: Option<&Profile>, json: bool) -> Result<()> {
             );
             println!("Code leg: forbidden");
             println!("Push: origin {PUSH_REFSPEC}");
-            println!("Pull: origin {PULL_REFSPEC} (fast-forward only)");
+            println!("Push execution: available (clean attached store required)");
+            println!("Pull plan: origin {PULL_REFSPEC} (fast-forward only)");
         }
         for limitation in status.limitations {
             println!("{limitation}");
@@ -339,15 +391,7 @@ fn configure_in(root: &Path, command: &TransportCommand) -> Result<()> {
     if let TransportCommand::Show { json } = command {
         return show(root, load(&common)?.as_ref(), *json);
     }
-    // Permanent sidecar: never unlink a flock inode while other writers wait.
-    let lock = OpenOptions::new()
-        .create(true)
-        .truncate(false)
-        .read(true)
-        .write(true)
-        .open(common.join("aida-transport.lock"))?;
-    lock.try_lock_exclusive()
-        .context("Transport configuration is busy; retry")?;
+    let _lock = configuration_lock(&common)?;
     let previous = load(&common)?;
     match command {
         TransportCommand::Enable {
@@ -390,6 +434,21 @@ fn configure_in(root: &Path, command: &TransportCommand) -> Result<()> {
     }
 }
 
+// Permanent sidecar: never unlink a flock inode while other writers wait.
+// Execution retains it so profile edits cannot race a pinned push.
+// trace:STORY-1742 | ai:codex
+fn configuration_lock(common: &Path) -> Result<File> {
+    let lock = OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .read(true)
+        .write(true)
+        .open(common.join("aida-transport.lock"))?;
+    lock.try_lock_exclusive()
+        .context("Transport configuration is busy; retry")?;
+    Ok(lock)
+}
+
 #[derive(Debug, Serialize)]
 struct TransportPlan {
     profile: ProfileName,
@@ -403,6 +462,7 @@ struct TransportPlan {
     code_leg: &'static str,
     flags: BTreeMap<&'static str, &'static str>,
     execution_available: bool,
+    executed: bool,
     blockers: Vec<&'static str>,
     limitations: Vec<&'static str>,
 }
@@ -415,12 +475,9 @@ fn plan(
 ) -> Result<TransportPlan> {
     verify_origin(root, profile)?;
     let source_sha = commit(root, if push { STORE_REF } else { TRACKING_REF })?;
-    let mut blockers = vec![PENDING];
+    let mut blockers = if push { vec![] } else { vec![PENDING] };
     if flags.values().any(|value| *value == "forbidden") {
         blockers.push(FORBIDDEN);
-    }
-    if push && profile.baseline.is_none() {
-        blockers.push("No public-safe baseline enrolled; outbound sanitization cannot run yet.");
     }
     if source_sha.is_none() {
         blockers.push(if push {
@@ -437,12 +494,13 @@ fn plan(
         source_sha,
         destination_ref: if push { STORE_REF } else { TRACKING_REF },
         refspec: if push { PUSH_REFSPEC } else { PULL_REFSPEC },
-        refs_that_may_move: if push { vec![STORE_REF, TRACKING_REF] } else { vec![TRACKING_REF, STORE_REF] },
+        refs_that_may_move: if push { vec![STORE_REF] } else { vec![TRACKING_REF, STORE_REF] },
         code_leg: "forbidden",
         flags,
-        execution_available: false,
+        execution_available: push,
+        executed: false,
         blockers,
-        limitations: vec![BYPASS_LIMIT, "Plans inspect local metadata only; no network, scanning, cleanliness, or fast-forward validation is performed."],
+        limitations: vec![BYPASS_LIMIT, SANITIZATION_PENDING, "Plans inspect local metadata only; no network, scanning, cleanliness, or fast-forward validation is performed."],
     })
 }
 
@@ -513,7 +571,14 @@ fn handle(
         bail!("{FORBIDDEN}");
     }
     if !dry_run && !json {
-        bail!("{PENDING}");
+        for (flag, disposition) in &plan.flags {
+            println!("{flag}: {disposition}");
+        }
+        if push {
+            executor::push(root, &profile, plan.source_sha.as_deref())?;
+        } else {
+            bail!("{PENDING}");
+        }
     }
     Ok(true)
 }
