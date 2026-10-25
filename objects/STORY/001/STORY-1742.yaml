@@ -38,7 +38,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T22:02:03.191649035Z
-modified_at: 2026-10-25T05:30:13.806893858Z
+modified_at: 2026-10-25T06:34:08.363619942Z
 req_type: Story
 tags:
 - docs:impacted
@@ -313,6 +313,11 @@ comments:
   content: 'IMPLEMENTATION ADMISSION: full SKETCHv2 is signed with binding rulings, but parent remains open and PR2910 remains an explicitly unmerged dependency. Ready for the next legitimate Codex implementer after watcher/allocator priorities and dependency landing. No new headless launch is authorized to evade the observed required-containment refusal; do not use Claude or another seat grant. Baseline/policy/schema/scanner/pull preparation is design-ready, not implementation evidence.'
   created_at: 2026-10-25T05:30:13.806893858Z
   modified_at: 2026-10-25T05:30:13.806893858Z
+- id: 01a171c4-3c6b-7122-87de-b53145ec1a3b
+  author: joe
+  content: 'ADVISOR preparation dispatch: codex2 (existing reviewer/design session) received native queue acceptance01a171c3-ee45-7ce1-a917-da53ad42eba5 for a pinned-main source/lock inventory of signed-v2 STORY-1742 remaining transport work. Required mapping: every push/pull/intake adapter, prepared writes before counters/objects/oplog/refs, writer lock ownership/order and decisive acceptance regressions, with BUG-2017/STORY-1843 overlap. No source implementation or authority changes; watcher PR2915 final-head independent review remains higher priority. Queue acceptance is not proof of consumption or completed inventory. Existing signed scope remains unchanged.'
+  created_at: 2026-10-25T06:34:08.363619942Z
+  modified_at: 2026-10-25T06:34:08.363619942Z
 history:
 - id: 01a16ee2-ad7a-7b30-aaeb-ec8f892fbe76
   author: joe
