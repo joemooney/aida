@@ -2797,7 +2797,7 @@ fn resolve_aida_bin() -> Result<PathBuf> {
     }
     crate::aida_bin::process()
         .map(|r| r.path)
-        .or_else(|_| Ok(std::env::current_exe()?))
+        .or_else(|_| Ok(crate::aida_exe_path().to_path_buf()))
 }
 
 fn resolve_vendor_bin(vendor: DispatchVendor) -> PathBuf {
@@ -2946,7 +2946,7 @@ pub(crate) fn prepare_lane_worktree(
         .map(|o| o.status.success())
         .unwrap_or(false);
     if has_origin {
-        let fetch_out = aida_core::git_ops::host_git_command(main_worktree)
+        let fetch_out = aida_core::git_ops::host_remote_git_command(main_worktree, "origin")
             .args(["fetch", "origin", fetch_ref])
             .output()
             .with_context(|| format!("failed to run git fetch origin {fetch_ref}"))?;

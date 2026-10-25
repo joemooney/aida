@@ -81,7 +81,7 @@ struct ExecFixture {
     store: PathBuf,
     mandate_dir: PathBuf,
     principal: String,
-    _ambient: crate::test_env::AmbientGuard,
+    ambient: crate::test_env::AmbientGuard,
 }
 
 impl ExecFixture {
@@ -133,7 +133,7 @@ impl ExecFixture {
             store,
             mandate_dir,
             principal,
-            _ambient: ambient,
+            ambient,
         }
     }
 
@@ -334,7 +334,7 @@ fn tick_executes_only_take_and_impl_and_refuses_review_flow_train() {
 // trace:STORY-1917 | ai:agy
 #[test]
 fn serve_refuses_without_bound_advisor_grant_and_executes_review_with_grant() {
-    let f = ExecFixture::new(&["reviewer", "implementer"]);
+    let mut f = ExecFixture::new(&["reviewer", "implementer"]);
     f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
     let now = Utc::now();
 
@@ -417,7 +417,7 @@ fn serve_refuses_without_bound_advisor_grant_and_executes_review_with_grant() {
     assert!(check_serve_grant(&f.root, now).is_err());
 
     // 4. Missing grant env -> `check_serve_grant` refuses.
-    std::env::remove_var(crate::gate::seat_authority::GRANT_ENV);
+    f.ambient.unset_key(crate::gate::seat_authority::GRANT_ENV);
     let missing_err = check_serve_grant(&f.root, now).unwrap_err();
     assert!(
         missing_err.to_string().contains("no session grant is set"),
