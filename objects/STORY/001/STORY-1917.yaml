@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T17:15:51.947160848Z
-modified_at: 2026-10-25T06:56:45.924540019Z
+modified_at: 2026-10-25T07:05:05.990973660Z
 req_type: Story
 relationships:
 - rel_type:
@@ -446,6 +446,60 @@ comments:
   content: 'ADVISOR verified integration evidence: operator train2918 MERGED2026-10-25T06:51:39Z, tip3cbb90b0c94e0e748bbfc4eb1f75d7f9c2125c68, required Build40169880987 and all7 CI lanes plus holdgateSUCCESS. PR2913 independently approved at2b3cd94f5dc69193ee17b2dbbf0d1851254a620a landed as36419baf87; local clean main and origin main match verified tip. Review story completion was already performed by the train; no duplicate status write needed. This is a non-completing Refs slice: parent remains Approved with ALL remaining signed scope. No source/hold/merge action by this advisor. Fresh main is now the base for remaining implementation; preserve current WIP and update branches normally, no forcepush.'
   created_at: 2026-10-25T06:56:45.924540019Z
   modified_at: 2026-10-25T06:56:45.924540019Z
+- id: 01a171e0-94c6-7f51-9d9c-41768ed60f03
+  author: codex2
+  content: |
+    TASK-2344 + flow/train authority seam — codex2 independent design advice
+
+    Advisory only, no verdict/claim or implementation instruction. Pinned source: main 3cbb90b0c94e0e748bbfc4eb1f75d7f9c2125c68 (contains approved PR2913). Read full STORY1917, original SKETCHv1, complete agy2 Slice3/TASK2338-2344 plan and canonical SIGNOFF R1-R6. Watcher corrected-head review remains higher priority; PR2915 still b07904778fbae163a246c3d7144bebb1c7934378 when checked. No code, Cargo, grants or live operations.
+
+    1. TASK2344: smallest safe choice is quarantine-with-fences, with NO automatic orphan replay in this slice.
+
+    Source: dispatch.rs::load_pair1541 requires both files; load_all_pairs1589 warns/skips a missing/corrupt half. submit_request1316 checks target/dedupe only through those pairs (~1418); claim_and_dispatch_pass2167 counts Running pairs for review/flow/train caps. execute_one_request_with_token2503 also obtains cap inputs through load_all_pairs. Thus skipping orphan files loses admission evidence. Syntax cannot distinguish interrupted submission from deletion of a live/completed result. Result-first publication reduces future partial submissions; it does not solve old/result-loss ambiguity.
+
+    Recommended minimal inventory state, separate from fabricated DispatchResult statuses:
+    - CompletePair: existing Pending/Running/terminal record and existing claim rules.
+    - RecoveryRequired: private durable fence referencing exact request/result/brief identity/hash evidence and reason; not runnable, not Pending, not Failed, and not evidence of completion. Keep original files in place (including malformed/legacy data), without repeatedly renaming or rewriting them.
+    - CleanableUnpublished: only resources this submission invocation demonstrably just created, with exact UUID/file identity and no published request/worker handoff. Cleanup under tick.lock is compare-and-remove of those owned files. After a crash, absent publication/worker evidence is UNKNOWN, not this positive proof; conservative RecoveryRequired is sufficient. No new pre-execution journal is needed if automatic orphan requeue is omitted.
+
+    Use one bounded, private versioned recovery-fence index (or one bounded per-ID entry) under .aida/dispatch. Store only identity/status/reason and hashes/reference paths, not copied mail/log contents; use existing private nofollow/regular/single-link/size-bounded readers and atomic writer. Unknown/over-budget inventory must fail admission, not become an empty queue. Marking recovery is done only by reconciliation under existing tick.lock; list/show remain read-only, render a stable needs-recovery row/aggregate, and do not spam the same parse warning on every invocation. Emit one recovery event per unchanged evidence fingerprint from the reconciler. Changed evidence creates a new visible condition, not an automatic fence release.
+
+    Transitions:
+    - Request exists/result missing, regardless of syntactic validity or elapsed age -> RecoveryRequired, never synthetic Pending.
+    - Result exists/request missing -> retain/fence. A Running/live/unknown claim must not be rewritten Failed. A legacy Pending/no-worker record alone does not establish unpublished ownership after arbitrary file loss. A locally handled pre-publication write failure has stronger exact-owned evidence and can clean just that invocation's files.
+    - Corrupt request/result with live or unknown ownership -> preserve/fence. If action/target cannot be reliably recovered, block admission globally rather than guess which targets/caps are free. No live process is killed for warning suppression.
+    - Genuine owner outcome/recovery evidence must pass existing claim identity checks; a stale/mismatched terminal writer cannot erase the fence. No automated Pending/Done/Failed inference from logs. Explicit recovery can remain an operator/advisor decision described with the evidence; this advice authorizes no new recovery grant or command.
+
+    Admission cutpoints: replace pair-only safety decisions with a shared inventory result at submit_request dedupe/target checks, claim_and_dispatch_pass cap selection, execute_one_request_with_token direct-run caps, reap_dead_workers_locked2063, cancel_request1633 and verify_claim_locked3055/finalize_request3110. Known validated action/target stays reserved; known review/flow/train orphan conservatively consumes its corresponding capacity (do not double-count a pair plus fence). Unknown kind/owner/target blocks the affected admission entirely. A duplicate submit must return a non-runnable recovery diagnostic, not successful queued work or a new ID. Fences survive restart and a replacement mandate. Existing pair readers must not continue silently skipping the fenced IDs.
+
+    For ownership, reuse the existing tri-state process probe abstraction (aida-core/src/process_probe.rs::Probe Alive/Dead/Unknown). The boolean wrapper used by reap_dead_workers_locked2063 is insufficient for a new recovery release decision; missing PID/start, namespace denial and probe failure remain Unknown. Even positively dead worker evidence does not prove no side effect occurred, so it does not justify replay. Retain prior PR2913's positive publication-failure kill/wait tests; do not reinterpret a known killed/reaped unpublished child as an arbitrary lost-result owner.
+
+    Precise compatibility choice for advisor: I recommend the separate RecoveryRequired inventory/fence above, avoiding an invented Running owner or new terminal status. A new DispatchStatus::Quarantined alone is NOT sufficient: current deny_unknown_fields/enum reader would reject it, then load_all_pairs would skip it, and older submitters could admit duplicates. The proposed sidecar also requires all supported mutators to honor it. Do not claim mixed-version safety merely from a new schema number/manifest old binaries never inspect. Admission must stop old dispatcher mutators during rollout, or provide an independently reviewed physical compatibility fence; otherwise refuse activation. That is the exact format/admission choice needing ruling, not a request for another framework.
+
+    Decisive tests (extend tests/story_1917_dispatch_request_tests.rs and story_1917_dispatch_exec_tests.rs; no real vendor):
+    - Use the existing actual detached-child/barrier/watchdog harness (child entry1172, fencing test1309). Delete result while child is held live, then submit same and conflicting requests, run another serve/tick/direct-run, inspect cap and attempt stale terminal completion. No second child/work; original evidence remains; recovery row is visible; no fabricated Pending/Failed; restart preserves fences.
+    - Let a real child complete a counted external fixture side effect, then remove its result. Reconciliation/duplicate submission cannot repeat that effect even though request JSON is valid and PID is dead.
+    - Missing PID, missing start, PID reuse and injected Unknown/permission/namespace probe; corrupt request plus live claim; unreadable/oversized/symlink/hardlink evidence. No false-zero capacities or silent target release. Count each fence once.
+    - Crash/fault at result-first write, request publication and exact-owned cleanup; legacy request-first orphan. No-op repeated reconciliation/list/show retains bytes, emits no repeated per-record warnings/events and performs no reader healing. Pair/fence publication failure refuses all unsafe admission.
+
+    2. Original request mandate across native ship/train waits: an explicit child checkpoint seam is still needed.
+
+    Existing positive coverage: dispatch.rs::execute_one_request_with_token rechecks req.mandate_id/principal at2725; mandate.rs::recheck397 requires that EXACT currently active ID and rejects superseded A despite active B. Current F3 test1876 proves replacement before execution, not replacement inside an opaque shipping child. Flow/Train are still refused stubs at dispatch.rs2981, so this is a remaining design seam, not an exploit claim about implemented runners.
+
+    Actual native checkpoints:
+    - pr_cmd.rs::mandate_cover_now3026 calls mandate_ship_cover; native CI wait is3275. At3353-3355 a previously obtained cover is recollected after waits. mandate_ship.rs::mandate_ship_cover277 reads current_state_reporting at299, not originating DispatchRequest. Therefore the fresh cover could be B; it is fresh native ship authority, not proof request A remains authorized.
+    - pr_cmd.rs3910 tests mandate_still_active(cover.id) immediately before merge when a mandate release exists. mandate_ship.rs636 compares current active ID to that COVER ID. This does not bind it to req.mandate_id, and does not independently recheck dispatch scope/requester/serving grant.
+    - pr_train.rs::ForgePorts::wait_ci1512 waits registrations then watch_ci. LiveRails::land~1864 re-gates members under merge lease after CI; MemberChecks::mandate_cover1066 recollects current native cover. release_hold~1610 checks cover.id before release; hold_gate_green_after_release1684 checks cover IDs after its wait. Final ports.merge is~1963. These valuable checks protect current heads/holds/native shipping policy, but know neither original request A nor its requester grant/delegation. Unheld members also require request binding even when no release cover exists.
+
+    Minimal choice: factor the planned reverify_step_authority into a closed optional dispatch execution-context check that native ship/train can invoke at existing post-wait/pre-side-effect checkpoints. Resolve the immutable canonical request + matching current claim/generation through private bounded IO; a bare environment assertion is not authority. Carry exact request ID/mandate ID/principal/requester grant+matched binding, and validate serving grant normally; do not mint/rebind grants. Before update/retry/review child, after CI/child waits, immediately before hold release/merge and each train member/fallback/rebuild, recheck ORIGINAL A via mandate::recheck plus current scopes, requester revocation/delegation, serving authority and human gates. Keep native head/CI/hold gates additive. Parent precheck before spawning and parent postcheck after exit cannot stop a merge performed inside the child; parent polling/kill alone is not an atomic gate.
+
+    If the implementation retains opaque `pr ship`/`pr train` subprocesses, the request-bound check must reach those native entrypoints/last side-effect checkpoints. Passing a typed internal context or calling a native Rust entrypoint with a recheck callback are the two small choices; simply calling existing CLI unchanged is insufficient. Ordinary non-dispatch ship/train behavior stays unchanged. This touches protected gate/mandate interfaces and needs advisor's precise seam ruling/coordination with agy1's refactor, not an unreviewed dispatch-only helper that assumes coverage.
+
+    Tests: an actual fake-native child pauses in CI/hold-gate wait. Stop A/start B with identical or broader scope; revoke requester or serving grant; add human gate. Release barrier: zero merge/update/reviewer/hold-clear calls after refusal, holds retained/rearmed by existing native path. Test request A with unheld PR as well as held PR, between train members and during native fallback/rebuild. Move forge head during wait: no-ship cannot report reviewed+green until exact new-head CI and attested review satisfy signed max4 sequence. Preserve ship-first wait3600 and bounded non-force update/fetch/native-train fallback from original contract; do not replace it with a prechecked batch train.
+
+    Advisor choices requested: (Q1) sign conservative RecoveryRequired sidecar/inventory with no automatic orphan replay, and define supported-mutator rollout fence; (Q2) select request-bound native ship/train callback/context seam at the actual checkpoints above. Other approved TASK2338-2343 work need not wait on these narrow choices. Advisor owns instructions/ruling; no implementation instruction sent to agy2.
+  created_at: 2026-10-25T07:05:05.990973660Z
+  modified_at: 2026-10-25T07:05:05.990973660Z
 history:
 - id: 01a16c5e-51c4-73b2-b8a3-3b764dc7e5cd
   author: joe
