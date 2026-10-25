@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-24T23:29:02.942675586Z
-modified_at: 2026-10-25T04:52:35.512865003Z
+modified_at: 2026-10-25T10:34:08.080849223Z
 req_type: Task
 tags:
 - from-review:PR-2909
@@ -26,6 +26,35 @@ comments:
   content: 'PROXY DECISION for joe: Approve hermetic ancestry/registry seam for inbox identity test while retaining production handle resolution and parent-private mail isolation.'
   created_at: 2026-10-25T04:52:32.874006947Z
   modified_at: 2026-10-25T04:52:32.874006947Z
+- id: 01a1729f-f550-7f33-89f2-3f894f48e2ef
+  author: joe
+  content: |
+    TASK-2345 — codex2 bounded diagnostic / smallest deterministic fixture repair
+    Source main3cbb90b0c94e0e748bbfc4eb1f75d7f9c2125c68; doer checkout HEAD259f57eb19c2432710f6a106a773731e0d977451 has no diff from that main in mailbox_root.rs/agent_handle.rs/lib_part3.rs/status_awaiting.rs. Read full approved acceptance and proxy decision: inject ancestry/registry facts while retaining production handle resolution and parent-private isolation. Evidence /tmp/advisor-bug2017-eight-failures.txt is sufficient; no additional build/precompiled repro, source edits, claims/grants, real mail/ACK or migration performed. Codex1 owns implementation.
+
+    Causal diagnosis (four identity failures, separate from four allocation fixtures)
+    - mailbox_root::inbox_identities296 calls agent_handle::current_session_entry_for_cwd1213. That resolves std::env::current_dir() to the actual repository, walks REAL vendor process ancestry, and loads a live registry binding. Clearing CODEX/CLAUDE_SESSION/HANDLE env does not erase that process tree or change cwd to the temp root passed to a reader.
+    - Once own_handle exists, an unrelated AIDA_USER is intentionally excluded unless a known person; the registered vendor overrides even an empty AIDA_AGENT_TYPE, and the own handle is included. Failure `[codex,codex-integrator-05]` instead of `[solo-user]` therefore matches current privacy/native identity behavior. It is NOT evidence that current_user_id ignores AIDA_USER (kernel.rs662 is a plain env/explicit override resolver).
+    - lib_part3::read_urgent_unread_count1158 uses that same ambient union before build_notice. The test only marks synthetic `operator` at2000; the real handle still has no watermark, so its broadcast remains unread and Some(1) rather than Some(0) is expected under the accidentally different facts. Changing message/watermark semantics is not the fixture repair.
+    - status_awaiting::collect_awaiting_report_inner504/mail block~802 resolves current_session_handle_for_cwd again, then calls inbox_identities (another native lookup) to build shared scopes. With the actual bound handle it adds registered vendor codex; split_mail_scopes968 faithfully renders `advisor + codex`, while this fixture intended an unbound human with shared role advisor only. This is input contamination, not a split_mail_scopes label bug.
+
+    Smallest fact seam (proposal inside existing approved TASK2345)
+    1. Extract a PURE `inbox_identities_from_facts(&MailIdentityFacts)` from the existing policy. Facts contain the resolved current session's private-handle/vendor projection, resolved user, whether that user is an intentional known person, inherited handle/name aliases, supplied/normalized role and fallback vendor. All env/catalog/ancestry/registry reads stay in ONE production collector. Production inbox_identities() remains collector→pure composition, with exactly existing precedence, case/dedup/normalization, empty/default and known-human behavior. Do not add a production env switch/global override, suppress ancestry or borrow a caller-selected name as authority. Preserve existing validated-handle semantics when projecting a session entry; do not silently turn raw names into newly trusted private handles.
+    2. Keep an internal IO helper for urgent count accepting the explicit composed identities (or facts); production read_urgent_unread_count(root) still obtains production facts. Temp-root tests pass identities composed from their own facts, while exercising the SAME local+canonical merge/read_all_watermarks/build_notice path. No fixture should reach native resolution merely because its intended scenario is a human.
+    3. Extract awaiting's MAIL-scope composition to a pure helper taking the SAME facts plus ctx.role; preserve current ctx.role-before-env-role precedence, operator headline and intentional shared labels. A small internal `collect_awaiting_report_inner_with_mail_facts`/supplier seam allows the full report tests to inject mail facts; the public/production wrapper retains its existing signature and native collector. This is preferable to adding mail-only test fields to UserStatusContext or changing its unrelated channels. Reuse one resolved fact set in that mail block rather than independently looking up the handle twice. Do not call the production collector from the injected helper, directly or through inbox_identities(). This task is not TASK2346's separate handle allocator cleanup.
+
+    Exact fixture changes / assertions to retain
+    - bug_231::inbox_identities_stable_name_only_when_no_agent_type: facts `{session:None,user:solo-user,known_person:false,aliases:empty,role:None,vendor:None}` → EXACT `[solo-user]`.
+    - bug_231::inbox_identities_unions_stable_name_and_agent_type: no session; user codex-implementer-1, fallback vendor codex → both exact synthetic identities. Also convert message_to_agent_type_reaches_inbox: it currently happens to pass with Codex ancestry but is not hermetic.
+    - Both BUG625 urgent-count fixtures use explicit no-session/operator facts with no aliases/role/vendor. Retain real temp local/canonical IO and exact before1/after0 after the fixture's operator watermark; do not ACK the real handle or rewrite expected counts.
+    - story_465::role_addressed_mail_does_not_inflate_the_operator_mail_count: full report path with no-session/operator-under-test facts and ctx.role advisor → own0/shared3/shared_scope EXACT advisor. Use the same seam for other mail-related awaiting tests, including ctx_role_includes_shared_role_mail_when_env_role_is_absent; clearing env alone is not isolation.
+    - Add table cases for injected child handle/vendor overriding inherited parent AIDA_USER/AIDA_AGENT_NAME/HANDLE/vendor; intentional catalog human + child/shared role retained; no bound session; same-session facts/resume; role alias/dedup. Existing real child/native binding privacy regressions remain wrapper integration coverage. Do not replace them with only pure-policy tests. New tests assert production rules from explicit facts, not the developer machine's handle.
+
+    Why this is bounded
+    Likely files mailbox_root.rs, lib_part3.rs, status_awaiting.rs and the two fixture modules; keep function signatures private/internal. No agent_handle production resolver weakening, process-tree fabrication, current-directory mutation, real-registry deletion or HOME authority changes. Existing env guards remain where tests deliberately exercise env adapters, but pure tests need no env for facts. Preserve all unrelated BUG2017 admission refusals; the other four failures are allocation fixture work, not justification for a blanket synthetic HOME or privacy bypass. The current four failures do not require a new mailbox architecture, B receipt behavior, or changed expected values.
+    Validation for codex1: the exact affected filtered tests under the existing native-session harness plus the new pure cases; retain ordinary standalone/CI and current child-private/native-resume evidence. Follow the current owner's touched/fast/compile routing; this diagnosis runs no Cargo or competing implementation. ReadyBUG2222/explicitly routed2919newhead review preempts further advisory work.
+  created_at: 2026-10-25T10:34:08.080849223Z
+  modified_at: 2026-10-25T10:34:08.080849223Z
 history:
 - id: 01a17167-4438-7c81-b6ce-974f9bde8cc8
   author: joe
