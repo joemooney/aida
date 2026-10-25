@@ -49,7 +49,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T02:43:59.810701479Z
-modified_at: 2026-10-25T10:21:52.152572112Z
+modified_at: 2026-10-25T16:07:57.968163403Z
 req_type: Story
 tags:
 - architecture
@@ -426,6 +426,11 @@ comments:
   created_at: 2026-10-25T10:21:52.152572112Z
   modified_at: 2026-10-25T10:21:52.152572112Z
   session_id: f91fd366-4181-4735-8802-dfc810a1c42e
+- id: 01a173d1-9710-7803-be66-ff25a1a23f99
+  author: joe
+  content: 'ADVISOR historicalmail disposition2026-10-25: read complete sourceacad54f0 and current measurement#3. Its30:24 warm loaded-host figure is measured evidence, not a missed currentAC2: operator explicitly superseded <=10min localwalltime at2026-10-23T16:51:59Z (09:51MST), accepting same localnextestlanes/no serialcargo-testfallback and slowestlanebudget instead. Preserve numeric measurements and real testfailures as diagnostics, not newapproval/greenproof; do not reopencompletedstory or start anotherfullsuite basedon supersededtarget. Currentcanonicaldescription will be aligned onlywith that already-recordedoperatorruling, no newacceptancechange. Existing CI/pertestbudget/coveragefloorsremain; source/budgetchange would require ownproperrequirement/evidence. Parentfullgoalstillall17open completed, not deferred.'
+  created_at: 2026-10-25T16:07:57.968163403Z
+  modified_at: 2026-10-25T16:07:57.968163403Z
 history:
 - id: 01a152ec-592c-7ec2-af4d-e6cf3cea3865
   author: joe
