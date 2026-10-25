@@ -3,6 +3,14 @@ spec_id: BUG-2221
 agreed_id: BUG-2221
 title: aida show again exceeds its unchanged latency budget on live94124569c9 (27/40 calls)
 description: |-
+  ## Approved execution basis — read before editing
+
+  Read `aida show BUG-2221 --full --comments`, including the complete codex2 SKETCH v1 and the advisor APPROVED WITH BINDING AMENDMENTS comment. A card without comments is insufficient. The plan already authorizes all three named slices: one pristine clap tree and phase accounting; exact-query CLOSED-negative ancestry proof with bounded local cache and actual Git root/context semantics; streaming deadline/cycle-aware trace traversal and whole-command integration. Preserve every named test, resource bound and final measurement in that signoff. No single slice completes this bug.
+
+  The previous allocator-checkpoint scheduling barrier has passed: BUG-2222 is complete and BUG-2017 S1+S2 landed as54c64e26a5. A separate, exclusive contained implementer may now own BUG-2221; the existing allocator/transport owner retains STORY-1742 and remaining BUG-2017 work. This changes scheduling only, not scope or authority. Do not duplicate a live BUG-2221 owner.
+
+  Pin CURRENT source and live artifact independently before comparisons; the installed AIDA may still report a01 while source is54c. Keep current and original reproduced positive/negative shapes distinguishable. Preserve the four-second outer fallback, useful positive/unsupported linkage, warm COMPLETE equivalent default performance, cold/eventual progress and unchanged1000ms/10%/5000ms guard. If the accepted mechanisms leave a measured remainder over budget, continue diagnosis and seek a bounded design ruling rather than claim completion or suppress useful answers.
+
   ## Symptom and current evidence
   Advisor performance-guard-route disposition: real regression, not a budget change. Native doctor performance JSON on 2026-10-25 reports 168/241 in-lineage show calls over1000ms (69.710%, tolerance10%), worst6434ms over the5000ms ceiling. LIVE94124569c9 alone has27/40 overbudget (67.5%); this is not solely stale binary history. Matching schedule trip performance-guard@2026-10-25T06:33:36.771748653Z records154/226,68.142%,worst6434ms. Existing .aida/config.toml budget is1000ms/ceiling5000ms; keep it.
   Fresh non-instrumented show TASK-2347 --format json calls measured1445,1099,1005ms, then2437,2412ms. Two --no-git calls measured383 and1952ms, so Git linkage is a candidate contributor, not a proven sole cause. All calls exited0. Fleet contention exists; isolate it instead of assuming it explains every slow call.
@@ -20,7 +28,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-25T06:38:42.269077518Z
-modified_at: 2026-10-25T13:43:28.544882484Z
+modified_at: 2026-10-25T16:42:22.932351090Z
 req_type: Bug
 comments:
 - id: 01a17250-10a0-76e1-b802-890d5a4ca31b
@@ -138,6 +146,11 @@ comments:
   content: 'ADVISOR performance-guard-route disposition, verified 2026-10-25 fresh session: exact routed trip performance-guard@2026-10-25T12:39:37.789157732Z matches .aida-store/schedule/performance-guard.yaml failure_trips record: show budget1000ms, 215/318 over budget (67.610%), tolerated10%, worst14953ms, ceiling5000ms breached, 24h window, excluded1, lineage_scoped=true. Real regression; retain unchanged budgets and existing approved full three-slice repair/sketch/pickup brief. No claim of repair or new exclusion/threshold adjustment. Fresh aida list still Approved; work remains queued behind current allocator owner. This records disposition of this exact trip, not completion of BUG-2221.'
   created_at: 2026-10-25T13:43:28.544857257Z
   modified_at: 2026-10-25T13:43:28.544857257Z
+history:
+- id: 01a173f1-1a2e-7c12-a2a1-e6bdafd814de
+  author: joe
+  timestamp: 2026-10-25T16:42:23.150896045Z
+  changes: []
 filed_at:
   code_sha: 94124569c9b14617a4049909ddbefad5b82a846d
   branch: main
