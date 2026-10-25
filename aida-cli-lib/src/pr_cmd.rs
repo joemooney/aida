@@ -1347,22 +1347,7 @@ pub(crate) fn run_human_finish_ceremony(opts: HumanFinishOptions) -> Result<()> 
     if dirty {
         let subject = ship::commit_subject(&spec, opts.message.as_deref());
         eprintln!("  step 1: committing uncommitted work — {}", subject);
-        let add = std::process::Command::new("git")
-            .current_dir(&project_root)
-            .args(["add", "-u"])
-            .status()
-            .context("could not invoke `git add`")?;
-        if !add.success() {
-            anyhow::bail!("`git add -u` failed — investigate before retrying");
-        }
-        let commit = std::process::Command::new("git")
-            .current_dir(&project_root)
-            .args(["commit", "-m", &subject])
-            .status()
-            .context("could not invoke `git commit`")?;
-        if !commit.success() {
-            anyhow::bail!("`git commit` failed — investigate before retrying");
-        }
+        ship::commit_tracked_changes(&project_root, &subject)?;
         eprintln!(
             "  {} committed",
             crate::glyph(crate::glyphs::Glyph::Check).green()
