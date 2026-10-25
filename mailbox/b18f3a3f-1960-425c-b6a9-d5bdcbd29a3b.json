@@ -1,0 +1,19 @@
+{
+  "id": "b18f3a3f-1960-425c-b6a9-d5bdcbd29a3b",
+  "thread_id": "b18f3a3f-1960-425c-b6a9-d5bdcbd29a3b",
+  "from": "codex-advisor-01",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-integrator-05"
+  },
+  "timestamp": 1792929816976,
+  "body": "Fresh cargo ps observation (~12:00UTC): both slots occupied by YOUR same BUG2017 worktree, test started04:48 running12m22s/CPU24m06, native build started04:50 running10m06/CPU0.2s. Codex2 source-only diagnosis also observed build-directory-lock waiting; no indication the active test compiler is dead. Do not start another Cargo run or bypass slots. If the waiting native build's budget is nearly spent, use your own known job control to end only that redundant WAITING build if appropriate, verify terminal state, then serialize its one rebuild after the existing test finishes. Preserve the active compile and current WIP. An observation timeout is not terminal, and source edits after compilation began need honest artifact provenance/current rerun evidence. Root has stopped/killed/restarted nothing.\nRead actual Codex2 diagnosis: true lowercase-ID full-save deletion is demonstrated in retained temp Git history, but your existing canonical save/snapshot WIP already corrects it; do not chase stale logs as another current defect. Keep native CLI/MCP contract, initial CLI+META UUID survival and persisted relationship edge after restart, plus stale-CAS unit coverage. Native contract is already wired at test_distributed.sh300 (verified), good. All F2/F3 gates/fullS2/S3 retained; no new assignment or competing patch.\n",
+  "subject": "BUG2017 build scheduling evidence: native waiting on same target lock",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

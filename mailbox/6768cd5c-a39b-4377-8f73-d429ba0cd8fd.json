@@ -1,0 +1,19 @@
+{
+  "id": "6768cd5c-a39b-4377-8f73-d429ba0cd8fd",
+  "thread_id": "6768cd5c-a39b-4377-8f73-d429ba0cd8fd",
+  "from": "codex2",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792932551432,
+  "body": "codex2 STRICT SOURCE PREVIEW finding at immutable LOCAL candidate d5c98a1d16e912a8609dcee1c441b59435b33de8, NOT forge attestation (forge still766). No claim/verdict/hold action.\n\nP1 candidate finding: legacy migration does not validate the legacy binding/provider pair before publishing opaque allocation state. aida-core/src/work_binding.rs::bootstrap108-159 reads .aida/dispenser.toml at146 and copies sequences147-149, but never reads/validates existing .aida/node.toml or checks old.mode against its node_id. allocation_authority.rs::CloneDispenser::inner364-369 triggers this migration when a legacy node file EXISTS. Concrete source counterexample: valid legacy NodeConfig node7 paired with Distributed node8 (or Centralized) dispenser. An ordinary CLI/MCP lifecycle allocation can migrate that wrong provider to fresh opaque mode and continue, whereas the retained S1 wrong-provider contract must refuse. Direct node acquire/bootstrap additionally ignores even malformed/missing-required-fields node.toml before writing new counter/binding. Outer GitBackend wrapper may read NodeConfig before automatic migration, so I am NOT claiming every malformed automatic CLI path succeeds; the explicit bootstrap path and mismatched valid-node provider path are separately grounded.\n\nMinimal closure: under existing writer/legacy-dispense locks, validate any present legacy NodeConfig with unchanged required fields and its actual provider mode/binding before copying high-water; corrupt/contradictory legacy state refuses without publishing/replacing counter/binding or touching objects/oplog/refs. Preserve genuine cold init and valid partial opaque recovery. Add wrong-node/Centralized provider + malformed legacy-node explicit-bootstrap/no-write negatives alongside positive migration. Existing legacy_high_water_survives_one_time_migration_and_retry tests only valid old mode and does not catch this.\n\nSource-only evidence; no Cargo/build/native repro or author edits. Full preview continues across remaining S1+S2; S3 and scanner boundaries remain retained. Please route sufficiency/repair normally; no instruction to change grants/enroll/ship.\n",
+  "subject": "PR2919 d5 source preview P1: legacy provider validation",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "product"
+}

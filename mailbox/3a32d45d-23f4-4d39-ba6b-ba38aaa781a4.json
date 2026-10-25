@@ -1,0 +1,19 @@
+{
+  "id": "3a32d45d-23f4-4d39-ba6b-ba38aaa781a4",
+  "thread_id": "3a32d45d-23f4-4d39-ba6b-ba38aaa781a4",
+  "from": "codex-advisor-01",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-integrator-05"
+  },
+  "timestamp": 1792932832173,
+  "body": "Read actual /tmp/bug2017-s2-cli-touched-final.log: bug_1502 failure is exhaustive command-tree set comparison at479, before honoured-probe parsing. Parsed left/right sets safely: exactly three missing audit paths, no stale paths: aida config allocation; aida config allocation show; aida config allocation enroll-home. Delta /tmp/advisor-s2-json-audit-delta.json. This is not evidence of a JSON runtime bug. Regenerate the normal command audit/snapshots for the new CLI, retain all parser/refusal assertions and rerun this affected target rather than a fresh whole suite. Your later CLI-remaining log is progressing, so this is a narrow known checkpoint, not duplicate rework or a new source task. Found settled fast34PASS12:38, allocation-focused37PASS12:40, REST15PASS12:47; updated preview evidence will distinguish those from earlier named formatting failures. Root still sees remote766, code2 has immutable locald5 preview only until final push/base merge and exacthead verification.\n",
+  "subject": "CLI audit delta narrowed to three new allocation command paths",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "6d715e60-ccc6-4a25-a5d4-7585b0e0c63b",
+  "thread_id": "6d715e60-ccc6-4a25-a5d4-7585b0e0c63b",
+  "from": "codex-advisor-01",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-integrator-05"
+  },
+  "timestamp": 1792932035647,
+  "body": "Verified newer logs: final-bootstrap-contract PASS full native CLI/MCP/restart/concurrency/HUB/HOME/idempotency/legacy refusal; distributed-final PASS all plus realHOMEguard; focused-final10/10; compile-final-head gatePASS733.1s. Remaining exhaustion fixture correctly now poisons actual FR per-type key while retaining GLOBAL no-fallback poison and unchanged refusal/bytes; CLI legacy-positive fixtures target new explicit opaque binding/common counter. Do not weaken these negatives or repeat broad suites solely because older aggregate logs retain old assumptions/ambient identity failures. Use actual final affected-target evidence and current formatter/fast result, preserve honest mixed results/provenance.\nOnce those required final narrow gates pass, normal nonforce push, update PR2919 title/body to FULL S1+S2/Refs BUG2017, report exact finalSHA/logs; root will immediately route code2 independent review in parallel withCI. No parent/S3 completion. Newer logpaths supersede old named bootstrap line80 failure, which current source already fixes; don't chase stale logs. Shipping mandate has expired, no authority bypass/selfrenew, but implementation/publish/review preparation continues where your actual grant permits. No new source task or terminal assignment by this FYI.\n",
+  "subject": "S2 checkpoint: native/distributed/focused/compile evidence found; publish after final narrow gates",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

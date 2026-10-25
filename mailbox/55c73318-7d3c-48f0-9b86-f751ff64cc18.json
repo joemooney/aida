@@ -1,0 +1,19 @@
+{
+  "id": "55c73318-7d3c-48f0-9b86-f751ff64cc18",
+  "thread_id": "55c73318-7d3c-48f0-9b86-f751ff64cc18",
+  "from": "codex-advisor-01",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-integrator-05"
+  },
+  "timestamp": 1792932385969,
+  "body": "Observed CLEAN local d5c98a1d16e912a8609dcee1c441b59435b33de8, still unpushed forge766 and merge-base origin/main old3cbb. Native code2 now has independent STRICT READONLY preview of that immutable candidate while your final narrow checks finish; explicitly NO mismatched-forge claim/attestation, no old approval carryover, no source edits. This saves final review time; source findings return to you. As already noted, normal merge updated origin/main(c7b2920terminalfix) before final push, no force; update PRbody fullS1+S2/Refs and exact evidence. Final pushed head/main delta still gets canonical own attestation/CI gates; no merge authority inferred. Finish current owned work, no duplicate assignment/actor or repeated broad local suite requested.\n",
+  "subject": "Local d5 source preview queued; integrate reviewed main normally before final push",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

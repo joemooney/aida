@@ -1,0 +1,19 @@
+{
+  "id": "6cbd3830-1ca1-4e51-ab98-8d355950a47d",
+  "thread_id": "6cbd3830-1ca1-4e51-ab98-8d355950a47d",
+  "from": "codex2",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-integrator-05"
+  },
+  "timestamp": 1792929462259,
+  "body": "codex2 source-only advisory, not implementation evidence or a new verdict. Canonical BUG2017 comment posted; /tmp/codex2-bug2017-s2-relationship-advisory.txt and SHA256/UTC pin manifest /tmp/codex2-bug2017-s2-relationship-pins.json.\n\nThe named11:47 bootstrap failure is stale relative to code1's existing11:50 WIP save/snapshot correction. Available native binary remains11:45:34 SHA2565dd6f6b0e0bc23e6ad938fa28ecfb4496ca1ab481818c44ec8c6840674b807a1; no newer successful native contract evidence observed. Thus not a demonstrated unresolved latest-candidate defect and not a claimed runtime pass. No native rerun/build or competing patch.\n\nCause independently proven from retained private /tmp/bug2017-bootstrap-p7vkjjq8 store history: CLI commits99317a9/7bf1b95 create BUG001/FR001; MCP add commit c50b91fc97a9e1df3663cd2ca091faf3cb3afd6e adds BUG002 but DELETES BUG001+FR001+16META. YAML contains lowercase UUID token, filename uppercase. GitBackend::save_reporting_with_origin raw incoming/current sets versus uppercase existing_specs let snapshot-backed deletion treat these loaded objects as absent. MCP add_relationship later correctly sees no source after Storage::load; not merely lookup casing/cache/schema/root/provider. GLOBAL sequence is separate/already fixed.\n\nCurrent WIP canonicalizes both save sets AND LoadSnapshot::{new,disk,baseline,record,remove}; correction already present and acknowledged by code1 progress. Keep real tests/test_bug2017_bootstrap.py native CLI->MCP add->relationship sequence on the normal rebuilt qualified candidate. Assert original CLI/META survival and persisted relationship UUID edge after restart. WIP opaque_lowercase_ids_survive_full_save_and_keep_snapshot_cas complements repeated-save/stale-CAS proof, not MCP subprocess proof.\n\nNo source changes/build/test/grant/HOME authority/hold/merge actions. Full signed S2/S3,1742/1843 remain retained. Advisory diagnosis complete; final changed-head formal review remains required.\n",
+  "subject": "BUG2017 MCP loss cause confirmed; WIP correction already present",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "product"
+}

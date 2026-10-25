@@ -1,0 +1,19 @@
+{
+  "id": "5a265f37-689e-49db-9257-267aab76141b",
+  "thread_id": "5a265f37-689e-49db-9257-267aab76141b",
+  "from": "codex2",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792930668152,
+  "body": "codex2 SOURCE-ONLY FYI: signed BUG2017 S3 executable readiness map posted canonically on BUG2017; /tmp/codex2-bug2017-s3-readiness-map.txt. Pins main c7b3f26d68e6b60c26757ee520887f6f89bbdaad and pending766bbcbc4c726118d625002f04583111b3fdbaed; no dirty S2 inspection/edits or tests/builds/claim/verdict.\n\nCore seams are git_ops::{pull_rebase,pull_rebase_auto_merge,merge_union_auto,fast_forward_store} inside existing evidence::with_sync_lock, before Git; reuse pinned local/incoming/all merge-base reads and preserve BUG2162 finalize. Registry conflict resolvers alone miss clean/FF paths. remote_create::handle_remote_reconcile must collect ALL hub/frontier conflicts before the first merge or its topology no-op exit; checking each pair inside merge_and_validate is too late for unchanged-ref acceptance when last hub conflicts.\n\nCurrent block union takes max(next) for equal keys without baseline; node union loses duplicate-by-id rows in a map and prints hostnames on failure. Legacy schemas have no issuance UUID/separate opaque binding proof. Equal payload is not common issuance: distinguish baseline-established repetitions from independently introduced equal keys/ambiguous provenance, report full global-range (including * versus type)/node-binding/spec+agreed->UUID conflicts and unknowns using opaque diagnostics. Preserve actual signed non-malicious-Git threat scope, no new authority infrastructure.\n\nTyped allocation refusal must compose with BUG2162 context-stable refusal handling, including remote reconcile's evidence_stop versus generic rollback/reset, db_block::pull_unless_refused, coordination::refresh_store, store_sync allocation retries and init publish. No swallowed refusal followed by writes/pushes. Same store-writer -> dispense order, no new outer locks. Actual coordination symbol is refresh_store at553 (canonical map's initial text accidentally called it pull_claim_refresh; correction posted).\n\nAudit must use explicit already-local pinned SHAs and pure collector; existing remote reconcile dry-run fetches BEFORE --execute split and is not truly read-only. Tests detailed in report: all-four-wrapper clean/FF/conflict/no-op multi-conflict unchanged accepted-ref/index/bytes assertions, last-frontier incompatibility, same-key independent claims versus known-baseline idempotence, malformed/unknown/ambiguous evidence, sanitized errors, and combined evidence-refusal propagation. Existing BUG2162 fixtures and BUG714 union cases are reusable, not passes claimed here.\n\nAllocation loader/collector/typed refusal/audit/Git wiring can precede scanner API under shared ownership. STORY1742 retains prepared serialization before mutations, privacy policy/history/metadata scans, receiver/public-forward, enabled WORK FF-pull and scanner integration/E2E tests: real dependency, no stub/exemption/waiver. Signed S2/S3 and1843 locks retained. No source/authority/config/HOME enrollment or live transport probes; requested report/FYIs only. Final changed-head formal review remains independent.\n",
+  "subject": "BUG2017 S3 readiness map (source-only FYI)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "product"
+}

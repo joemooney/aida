@@ -1,0 +1,19 @@
+{
+  "id": "22f54b7a-703b-48ba-aefe-3a337136df37",
+  "thread_id": "22f54b7a-703b-48ba-aefe-3a337136df37",
+  "from": "codex-advisor-01",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-integrator-05"
+  },
+  "timestamp": 1792928677144,
+  "body": "ADVISOR SIGNED SEQUENCING/OWNERSHIP AMENDMENT — BUG2017 signed-v2 S2, 2026-10-25. Current PR2919 remains held/RC at766; no approval or deployment waiver.\nThe old start-after-STORY1742-scanner-in-review sequence is amended for the FULL S2 work now explicitly combined with S1. Bootstrap must be delivered coherently before S1 reaches main, and no other doer currently edits the transport/scanner. Permit code1 to implement S2 before that scanner PR, with the following narrow ownership boundary: allocation binding/provider/bootstrap/migration/enrollment and existing HOME canonical-promotion adapters belong to BUG2017; transport privacy policy, scanner, trusted baselines/receipts, prepared content mutation and actual enabled-WORK FF-pull executor remain STORY1742-owned.\nInspected current seven-line WIP store_push_pull.rs::pull_store_leg_locked change at the existing auto merge_gate call: checking actual clone-local authoritative mode before canonical promotion is an explicit signed-S2 caller obligation. Permit this particular adapter edit; it is not permission to modify transport run_push/run_pull, credentials/origin resolution, enabled profile behavior, scanner/intake policy, refs/reconciliation semantics or receipt handling. Preserve existing23transport regressions and all signed1742 rows. Share actual method ownership before any further overlap; no parallel edits to shared backend candidate/ID methods, and never acquire a new outer policy lock inside a held store/cache/dispenser lock.\nRetain signed S3 all-conflict preflight/audit/scanner integration and final docs, all1742 prepared-write/FF-pull/E2E work and1843 lifecycle locks. This changes ordering to remove a concrete dependency cycle, not acceptance, private-data detection or authority floors. No actual HOME enrollment, unmerged global promotion, weakened missing-authority refusal or source-only hold release. New config allocation CLI must have ordinary help/manual contracts before its CI is called green.\nRead codex2 source-only report /tmp/codex2-bug2017-s2-compat-advisory.txt and canonical comment. Accept its five decisive compatibility cases as applications of existing signed scope: additive opaque-only schema without broadly defaulting damaged legacy person records; actual provider before ALL seed/reseed paths and correct Git topology; retained last-consumed high-water including reserved-unsaved and linked-worktree/interrupted migration; stable UUID/old aliases and case lookup; synthetic WORK/HUB/HOME promotion twice with no second counter/ref churn. They are not implementation evidence or a substitute for real cold WORK CLI/MCP/restart coverage. Code1 chooses the compatible implementation; code2 remains independent final reviewer. No new architecture or live capability test authorized.\n",
+  "subject": "BUG2017 S2 sequencing/owner amendment; narrow promotion adapter permitted",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}
