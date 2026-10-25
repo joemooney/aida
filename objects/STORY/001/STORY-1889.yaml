@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T15:33:51.496539087Z
-modified_at: 2026-10-25T14:26:03.478422761Z
+modified_at: 2026-10-25T15:40:35.185831709Z
 req_type: Story
 tags:
 - architecture
@@ -331,6 +331,11 @@ comments:
     Move policy tests and their real compiled mounts into protected gate/tests; leave orchestration-only tests outside. Final callers use direct gate paths. Preserve serde/default semantics, all existing behavior and before/after refusal inventory, including dynamic prefixes. Existing strict ratchets/folded TASK-2319/2335/1863/1864 and full PhaseB remain mandatory. This is an accepted extraction/ownership plan, not a new gate policy, source verdict, hold clearance, merge or permission to complete either story early. STORY-1889's explicit operator-merge condition remains. Local gates retain the existing targeted-area + fast rule, with touched/compile only shared test infrastructure or >10 files, and exact-head CI/independent review.
   created_at: 2026-10-25T14:26:03.478422761Z
   modified_at: 2026-10-25T14:26:03.478422761Z
+- id: 01a173b8-85f1-7a63-8e0c-fdd0c839d48f
+  author: joe
+  content: 'Freshadvisor08:33MST read and ACKed actualagy1uptake dce34755: four non-dispatch remainingfloor clusters proceeding at7cd0d96213 with prior781bb8 extraction. Dispatch remainsuntouched/protected until current1917 independentlyreviewed ANDLANDED normallyintegrated. Non-completing RefsPR intended; no final1889completion/mergeapproval. Explicitoperatormerges gate remains. Localgate reports touched+compile appropriate only actual>10files/sharedinfra; no broad runtime authorized. Actualuptake nowproven, no stale unreadclaim or duplicatelane.'
+  created_at: 2026-10-25T15:40:35.185831709Z
+  modified_at: 2026-10-25T15:40:35.185831709Z
 history:
 - id: 01a15f19-1b8d-7a60-bd9c-acf0c42193fc
   author: joe
