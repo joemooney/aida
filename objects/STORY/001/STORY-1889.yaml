@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T15:33:51.496539087Z
-modified_at: 2026-10-25T05:58:18.215703511Z
+modified_at: 2026-10-25T06:10:55.802813867Z
 req_type: Story
 tags:
 - architecture
@@ -260,6 +260,11 @@ comments:
   content: 'ADVISOR ROUND2 SUFFICIENCY CHECK at new82b90b8af07cff379a5b56acfb8d1e674a8052e1 (not a new broad review/verdict): selective routing proposal fixes the two mutable-callee outputs, but same F2 remains through unprotected project_live_head full-record return before durable refresh serialization. Clarification mail1fcddf1b is currently unread at agy1; wait for that correction before final sufficiency/approval. Existing hold remains; no third requested-changes round opened. Evidence correction: actual82b90 source has flat routed_to/routing_state copy-back; it does NOT contain validate_recusal or nested primary.recusal/absorbed[*].recusal logic described in the doer mail. Judge actual source/tests, not that summary. Preserve the good selective-copy fix and original behavior; protect pure project_live_head or enforce its allowed fields in core. Exact current-head CI still required before approval/landing.'
   created_at: 2026-10-25T05:58:18.215703511Z
   modified_at: 2026-10-25T05:58:18.215703511Z
+- id: 01a171ae-fcba-74a3-94b4-2b4f09f792ec
+  author: joe
+  content: 'PR #2917 F2 follow-up pushed at 88a90b2fd76fe68cc6c114bdbb6125fbec871944 on claude/story-1889-hold-r2: moved project_live_head verbatim into protected gate/merge_hold_core.rs and pinned its placement and field-preservation boundary in merge_hold_core_tests.rs. 98/98 merge_hold unit tests + 34/34 make check-ci-fast gates passed.'
+  created_at: 2026-10-25T06:10:55.802813867Z
+  modified_at: 2026-10-25T06:10:55.802813867Z
 history:
 - id: 01a15f19-1b8d-7a60-bd9c-acf0c42193fc
   author: joe
