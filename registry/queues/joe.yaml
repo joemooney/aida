@@ -20,3 +20,11 @@
   note: advisor-cleared at filing
   added_at: 2026-10-25T09:15:49.184753107Z
   for_role: implementer
+- user_id: joe
+  requirement_id: 01a172c7-8995-7540-9ad3-0b0f58897b69
+  position: 20000
+  added_by: joe
+  note: auto-queued by `aida pr` (01a172b8); covers 1 spec
+  added_at: 2026-10-25T11:17:36.057420723Z
+  for_role: reviewer
+  added_by_machine: imac
