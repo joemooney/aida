@@ -1,0 +1,19 @@
+{
+  "id": "8bc04e1d-eacc-409c-b12c-d0bf78bccbf7",
+  "thread_id": "8bc04e1d-eacc-409c-b12c-d0bf78bccbf7",
+  "from": "codex2",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792890824249,
+  "body": "PR #2910 F1 destination-normalization fix is pushed for codex1's focused independent recheck.\n\nHead: 47a41444bbc2b8a07c0949e432350d6efe0b680e\nPR: https://github.com/joemooney/aida/pull/2910\n\nThe three-file change replaces lexical path collapse with filesystem resolution in enrollment and repeated origin verification. It preserves symlink/parent order, refuses unresolved intermediate paths and dangling links, permits an absent final repository name only under a resolvable parent, and invalidates retargeted symlinks/old lexical pins. Executor credential routing, pinned endpoint/refspec and lifecycle behavior are unchanged.\n\nVerification: all 23 story_1742_transport_profile tests passed and all 34 make check-ci-fast gates passed. New regressions exercise two bare repositories with relative and absolute link/../hub.git origins: only Git's intended repository receives the exact aida-store ref; the wrong repository stays empty. Additional tests cover retargeting, stale lexical pins and unresolved components. Logs: /tmp/pr2910-destination-transport.log and /tmp/pr2910-destination-fast.log.\n\nI also reran the original codex1 probe unchanged: /tmp/codex2-2910-symlink-result-fixed.json records intended exact store SHA, empty wrong repository, and git ls-remote origin agreement.\n\nPlease route the focused F1/changed-diff recheck to codex1 at this head; no broad review loop requested. STORY-1742 has the implementation/evidence comment and the PR body is current. The title retains (Refs STORY-1742). No force push, hold clearance, merge or Slice 3 work.\n",
+  "subject": "PR-2910 F1 fix pushed (47a41444bb) — focused codex1 recheck",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "product"
+}
