@@ -12,7 +12,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T09:15:27.132994258Z
-modified_at: 2026-10-25T11:17:59.333513514Z
+modified_at: 2026-10-25T11:18:27.153478711Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -40,6 +40,19 @@ comments:
     ADVISOR verified pushed PR2920 exactab591048e10caf8d366c6c34cee83842320c7838, one source file; seven focused terminal tests and34fast passed in author logs. Independent codex2 review accepted nativequeue01a172c7-a819-7d13-a62f-32c79454a989; review starts in parallel with exact-head CI, currently seven lanes running and holdgate green. No approval/merge/live-delivery claim. Actual current userbus is the same for advisor+agents, and net.aida.Terminator is absent despite native Terminator service present. No plugin install/restart or live send performed; this concrete signature bug and broader plugin/fleet readiness remain distinct. Code1 returns to approved BUG2017 F2/F3 work, preserving this branch for recheck if needed.
   created_at: 2026-10-25T11:17:59.333513514Z
   modified_at: 2026-10-25T11:17:59.333513514Z
+- id: 01a172c8-8851-7a02-be45-bf2266df85f4
+  author: ai:codex:joe
+  content: |
+    Codex1 bounded BUG-2222 submitted for codex2 independent review: PR2920 https://github.com/joemooney/aida/pull/2920, full head ab591048e10caf8d366c6c34cee83842320c7838. Separate sibling /home/joe/ai/aida-bug-2222, branch codex/bug-2222, normal implementer lease01a172b8febd, normal nonforce push. One source file only.
+
+    Builders emit Send ss UUID TEXT / SendToken sss UUID TEXT TOKEN. A -- marker before call also prevents leading-option text from being interpreted by busctl; own private-bus probe established this was necessary for literal payload boundaries. Focus retains s UUID, SendToken selection/auth/token handling unchanged. Real parser regression creates private buses, disables activation, uses unique nonexistent destinations, checks split syntax fails Too many parameters and combined syntax reaches missing-service for2/3strings with spaces/newlines/options. It cannot claim delivery on connection failure. No real credentials/log changes, plugin install/enablement, live agent sends, grants/holds or merge.
+
+    Focused terminal_cmd suite7/7 and fast34/34 pass, diff clean. A fresh author checker independently ran both positive/negative private-bus parser probes, no findings; not independent approval. Logs /tmp/bug2222-terminal-tests.log and /tmp/bug2222-fast.log. Review autoqueued normally; please route existing review to codex2. A reviewed normal binary and actual plugin readiness remain prerequisites; neither idle Agy lane delivery nor parent STORY1843 completion is claimed.
+
+    BUG2017 preserved clean at766bbcbc4c726118d625002f04583111b3fdbaed. One read-only CI check found run40186656417:6of7lanes success, contracts121148770301 now fails later distributed/sibling integration with allocation requires a clone-local Git identity. Exact log /tmp/bug2017-766-contracts.log line1829. F1/F2 and slices2/3 are not abandoned or complete; next follow-up is this remaining fixture contract, not another broad Rust run or forced merge. Existing review/hold records unchanged.
+  created_at: 2026-10-25T11:18:27.153478711Z
+  modified_at: 2026-10-25T11:18:27.153478711Z
+  session_id: 01a172b8febd
 history:
 - id: 01a17258-2379-77b1-94f6-5d70e2e9c83c
   author: joe
