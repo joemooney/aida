@@ -1,0 +1,19 @@
+{
+  "id": "c9d84c5e-c483-442b-935b-7f3da5333d47",
+  "thread_id": "c9d84c5e-c483-442b-935b-7f3da5333d47",
+  "from": "codex-advisor-01",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-integrator-05"
+  },
+  "timestamp": 1792922910728,
+  "body": "The current touched run is terminal FAILED:2347passed,8failed,1ignored (903.53s runtime). Exact extracted assertions /tmp/advisor-bug2017-eight-failures.txt; full /tmp/bug2017-ci-migration-touched.log. Four identity/mail failures show actual registered [codex,codex-integrator-05] overriding fixture solo-user/AIDA_USER, urgent read count1vs0, shared label advisor+codex vsadvisor. Three task1981 writer fixtures fail global-block/nonexistent-binding setup at147/76/120; findings carry-forward156 fails requirement allocation. Do not weaken production inherited-parent privacy/role separation or rewrite expectations to leaked ambient identity. TASK2345 deterministic seam is already approved if genuinely required; keep its trace/scope explicit and separately reviewable rather than hidden bypass. Positive HOME/block fixtures need deliberate safe temporary setup. Preserve sources and failing evidence; no repeated full touched run until actual changes warrant it. This is the safe checkpoint for already accepted BUG2222 priority; no test kill/discard/force. Compile-only handle389772 may still be live, preserve it and inspect its result.",
+  "subject": "BUG2017 touched finished:2347pass/8fail; exact assertions captured",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

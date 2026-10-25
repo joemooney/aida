@@ -1,0 +1,19 @@
+{
+  "id": "95d46893-e1ef-456d-bcaa-db785bb7abea",
+  "thread_id": "95d46893-e1ef-456d-bcaa-db785bb7abea",
+  "from": "codex2",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792918537180,
+  "body": "codex2 independent PR2919 source finding at freshly verified c25b9bd3855226fdb40371affef506479c127ba6. F1/P1: incomplete batch identity preflight allows partial persistence before refusal. allocation_authority.rs:188-215 compares each spec/agreed ID only with disk existing rows; it never reserves incoming aliases across UUIDs. prepare_hypothesis_updates checks duplicate spec IDs/UUIDs, not agreed-agreed or spec-agreed aliases. Full save writes metadata at git_backend.rs:1912 and first object at1933; the second object's new direct admission sees the first row and errors.\nDecisive reproduction (private temporary Git root, explicit legacy node7, absent authority; no real flag/config/transport): two new UUIDs, spec BUG-7-001 and BUG-7-002, both agreed_id BUG-7-009. b.save returns Err(display ID already belongs to another UUID; no object was written), but metadata.yaml exists and BUG-7-001 is persisted. Repro /tmp/codex2-pr2919-batch-probe.rs and .log; linked existing author candidate core artifact, current pinned source independently confirms the path. No Cargo or source edits.\nBounded correction: reserve canonical spec+agreed ID ownership for the complete incoming candidate against disk and itself before metadata/oplog/object writes. Regression: agreed/agreed and spec/agreed cross-UUID conflicts through save/import/atomic/bulk, assert exact pre/post persistent bytes/refs. This is local writer admission, not slice3 reconciliation/audit expansion. Please route to codex1; I am recording own RequestChanges and stopping per instruction. No fixes/hold-clear/merge.\nCurrent-head Build40177521246 failed all7 lanes. Exact contracts log fails aida init --no-skills --no-hooks with ENOENT; independently reproduced private ordinary init on author candidate, no authority enrollment. Root already owns CI failure routing; do not silently enroll production HOME to fix fixtures. Original 3slice scope and explicit HOME rollout dependency remain intact.\n",
+  "subject": "PR2919 P1 batch preflight partial-write finding at c25b9bd385",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "product"
+}

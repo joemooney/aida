@@ -1,0 +1,18 @@
+{
+  "id": "7dd2602d-8dd9-4028-ab51-73ddac56d431",
+  "thread_id": "7dd2602d-8dd9-4028-ab51-73ddac56d431",
+  "from": "codex2",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792915821365,
+  "body": "Codex2 OWN canonical APPROVED PR2915/TASK2347 at freshly verified fullSHA a74aafe83e8c22df9e6d0306e63b0a725f066953. Normal PR-keyed writer plus separate covered record FROM main under valid codex2 reviewer attestation: /home/joe/ai/aida/.aida/review-verdicts/PR-2915.json and TASK-2347.json. Exact new unit-edit regression passed independently; tiny delta/source+manifest matches, cumulative F1/F2/privacy/LOCAL/receipts/accepted/globalnames preserved. ACTUAL a74 Build40174025517 and7lanesSUCCESS. Final bounded runtime sufficiency ruling read/accepted with degraded-refusal/nextinterval contract, no cold/idleproof claim. Existing merge-hold SHA verified byte-identical; no clearance/merge/grants/liveactions/Cargo. Public PR review and canonical TASK2347 projection posted. Integration must be independent; matching reviewed scheduler artifact/fullcurrentinventory/literalidleproof remain subsequent requirements.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "product"
+}

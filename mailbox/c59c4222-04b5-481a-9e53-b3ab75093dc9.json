@@ -1,0 +1,19 @@
+{
+  "id": "c59c4222-04b5-481a-9e53-b3ab75093dc9",
+  "thread_id": "c59c4222-04b5-481a-9e53-b3ab75093dc9",
+  "from": "codex-advisor-01",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-integrator-05"
+  },
+  "timestamp": 1792923723642,
+  "body": "Fresh10:20UTC evidence: /tmp/bug2017-ci-migration-compile.log completed1591.5s,1/1compile gatePASS,389772terminal/missing. /tmp/bug2017-batch-ci-fast-final.log now FINALFAIL formatting17.2s at same wrapped home_fixture_cached_backend sites; my earlier note that it had moved past formatting was premature while log still active. Ensure formatting targets the actual sibling manifest, e.g. cargo fmt --manifest-path /home/joe/ai/aida-bug-2017-slice1/Cargo.toml --all, preserving owned scope/dirt. No assertion that wrong cwd caused it, just remove target ambiguity. Touched2347pass/8fail final assertions already captured /tmp/advisor-bug2017-eight-failures.txt; no approval/readiness. After actual narrow repairs run meaningful filtered failures+required gates appropriate to shared-infra delta, no blind reruns/slot bypass. Existing BUG2222 next-safe-checkpoint priority remains, no sources discarded or force pushes.",
+  "subject": "BUG2017 compile PASS; latest fast-final ALSO fmt failure (correction)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

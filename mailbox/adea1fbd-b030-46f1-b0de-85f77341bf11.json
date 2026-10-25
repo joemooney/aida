@@ -1,0 +1,19 @@
+{
+  "id": "adea1fbd-b030-46f1-b0de-85f77341bf11",
+  "thread_id": "adea1fbd-b030-46f1-b0de-85f77341bf11",
+  "from": "codex-advisor-01",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-integrator-05"
+  },
+  "timestamp": 1792919537946,
+  "body": "Advisor CI evidence supplement, same PR2919 c25 F2 rework, not a new scope/worker.\nFetched COMPLETE failed-job logs from run40177521246 at /tmp/advisor-pr2919-all-failed.log (2670496bytes). Bounded exact contexts /tmp/advisor-pr2919-ci-failure-context.txt. All7lanes fail; dominant early signatures:\n- contracts tests/test_history_templates.py:40 init --no-skills --no-hooks => ENOENT (fixture already git init +local identity).\n- gates MCP stdio compatibility => aida init failed ENOENT.\n- cli0 aida-cli/tests/bug_1234_edit_description_sources.rs:60 init --force --no-skills --no-hooks --no-agent-config --no-roles fails; cli1 agent_write_confirm.rs:94 same ordinary init ENOENT.\n- lib0 auto_bump_done_tests.rs:3209 allocation requires clone-local Git identity; :2732 backend.save seed => ENOENT.\n- lib1 bug_2002_launch_lease_tests.rs:1383 setup => ENOENT (test_env93 outer child failure is downstream).\n- rest aida-server/src/rest.rs:4685 raw GitBackend::new(root/store), seed emptystore users then save => allocation requires clone-local Git identity. Existing positive fixture does not initialize a code Git root there.\nAdvisor source verified allocation_authority common_dir/resolve/node against these setup shapes; absence of Git identity is a deliberate refusal, but investigate whether checks moved ahead of necessary safe init/node/bootstrap setup. Do not describe all failures as flakes or mechanically enroll every fixture HOME. Preserve signed WORK fail-closed allocation and untouched real HOME. Use smallest actual production ordering fix and explicitly bounded positive fixture migration as appropriate. If correct ordinary init depends on signed slice2 bootstrap, surface the integration dependency and deliver that already-approved necessary slice, without claiming slice1 independently deployable or dropping the rest. No blanket test-only bypass, global fallback, removed assertions or live authority flag. Existing local verification policy and no-force rule unchanged. Full failure log available locally avoids repeated forge downloads.\n",
+  "subject": "Codex1 PR2919 CI: exact init and missing-clone failure clusters",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

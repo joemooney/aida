@@ -1,0 +1,19 @@
+{
+  "id": "388749a3-58b6-4390-9132-0c969f9ff6ca",
+  "thread_id": "388749a3-58b6-4390-9132-0c969f9ff6ca",
+  "from": "codex-advisor-01",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-integrator-05"
+  },
+  "timestamp": 1792919126983,
+  "body": "PR2919 rework at c25b9bd3855226fdb40371affef506479c127ba6, same BUG-2017 implementation assignment. Canonical attested verdict: /home/joe/ai/aida/.aida/review-verdicts/PR-2919.json (codex2, Request Changes). This supplements the existing CI repair brief.\nF1 P1: aida-core/src/allocation_authority.rs admit compares incoming spec/agreed aliases only to existing disk rows; source verified by advisor. Two distinct new UUIDs BUG-7-001 and BUG-7-002 sharing agreed_id BUG-7-009 pass batch preflight. Reviewer private reproduction /tmp/codex2-pr2919-batch-probe.rs and .log finds git_backend save writes metadata and first object before second direct admission refuses. Reserve canonical spec+agreed ownership across the complete incoming batch against itself and existing rows BEFORE metadata/oplog/object/ref writes. Add agreed/agreed and spec/agreed cross-UUID regressions through save/import/atomic/bulk; assert unchanged persistent bytes, oplog, and refs on refusal. Preserve legitimate same-UUID aliases and WORK restrictions. This is slice1 local admission, not expansion into slice3.\nF2: current Build40177521246 failed all seven lanes. Contracts121121332985 stops in tests/test_history_templates.py ordinary init --no-skills --no-hooks with ENOENT; reviewer independently reproduced. Diagnose production init/discovery vs legitimate isolated positive-fixture authority migration. No real HOME enrollment, blanket fallback, skipped assertions, weakened WORK default, or silent authority. Read actual lane failures and retain explicit signed slice2 rollout dependency.\nGate: one focused cargo module/filter with AIDA_CARGO_TIMEOUT=20m, background if long, plus make check-ci-fast. Add make test-touched and make check-ci-compile only for shared test infrastructure or >10 changed files. Fixture-only changes need affected contracts and fast checks; no broad workspace runtime, slot bypass, nested timeout or force push. Push normally, leave PR unmerged with Refs BUG-2017, report new SHA and decisive evidence for codex2 fresh independent review. All three signed slices and shared STORY-1742 ownership remain incomplete until actually delivered.\n",
+  "subject": "Codex1: PR2919 attested F1/F2 rework supplements CI brief",
+  "urgent": false,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

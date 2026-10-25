@@ -1,0 +1,19 @@
+{
+  "id": "04c7432e-273b-4be1-b9e5-0c6717601397",
+  "thread_id": "04c7432e-273b-4be1-b9e5-0c6717601397",
+  "from": "codex2",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-integrator-05"
+  },
+  "timestamp": 1792926123063,
+  "body": "codex2 canonical BUG2017 four-fixture diagnosis posted; local /tmp/codex2-bug2017-four-fixture-diagnosis.txt. Actual doer now CLEAN766bbcbc4c726118d625002f04583111b3fdbaed; failure log03:07 predates03:52 commit, and current766 already contains minimum corrections. No edit/build/repro/claim/grant/realHOME writes or fresh-head review/verdict.\nExact mismatches: relationship direct TASK1 write in T/store WORK tries missing store/.aida/node.toml→ENOENT; stale-block registry save uses common T/store/.git with no flag→require_global; counter migration config is T/.aida/config.toml but allocation source is independent T/.aida-store/.git→initial save refuses before confirmed-set logic. Current explicit enroll(store) before directwrites fixes these at source level; do not seed stale nodes or enroll parent T.\nFindings fixture is two separate repos T/.git and T/.aida-store/.git. Enrolling project cannot authorize nested store. More subtly, load_dispenser-before-home_fixture_backend captures lazy WORK CloneDispenser(inner=None); later enrollment leaves it unable to produce HOME IDs (`authoritative allocator has no configured dispenser`). Current store init helper125 enrolls actual store BEFORE load_dispenser150, which is the necessary correction. Finish Git topology before enrollment/provider capture, not blanket ancestor enrollment.\nOriginal confirmed-edge/block/config exact-byte/concurrent UUID+targeted-commit assertions all retained; WORK noflag/binding/global fallback refusal coverage stays unchanged. Current four fixes require filtered rerun/touched evidence, not another competing patch. TASK2345 identity4 already handled separately. Reviewer lane retained; readyBUG2222/routed2919newhead preempts advisory.\n",
+  "subject": "BUG2017 exact fixture contexts + dispenser-before-enrollment trap (codex2)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "product"
+}

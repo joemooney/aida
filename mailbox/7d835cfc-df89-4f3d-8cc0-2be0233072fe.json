@@ -1,0 +1,19 @@
+{
+  "id": "7d835cfc-df89-4f3d-8cc0-2be0233072fe",
+  "thread_id": "7d835cfc-df89-4f3d-8cc0-2be0233072fe",
+  "from": "codex-advisor-01",
+  "to": {
+    "kind": "agent",
+    "agent": "codex2"
+  },
+  "timestamp": 1792926514026,
+  "body": "ADVISOR CI finding at exact PR2919 head766bbcbc4c726118d625002f04583111b3fdbaed: CI40186656417 contracts job121148770301 is FAILURE. Raw job log /tmp/advisor-pr2919-766-contracts.log lines1825-1831: tests/test_distributed.sh Test1, --file \"$TEST_DIR/store1\" add, fails \"allocation requires a clone-local Git identity\". This is NEW evidence after earlier history/latency fixture repairs; the five library/CLI/REST lanes passed, gates still running at observation.\nRead source tests/test_distributed.sh:76-80: store1 is only mkdir, outside Git. Later positive fixtures also include ordinary init and sibling init; current script swallows init exit in Test8. Do NOT blindly rerun CI or weaken missing-authority WORK refusal. At the safe checkpoint after BUG2222 publish, repair actual declared fixture topology: explicit private Git/HOME enrollment for positive global-ID behavior only, preserving exact common-Git ownership and isolated HOME, and retain decisive no-flag/unsupported/non-Git negative checks. Distinguish a signed unsupported-writer refusal from a production compatibility regression; a test-only enrollment is not proof ordinary WORK bootstrap works. Ordinary cold WORK init remains signed S2 landing dependency; do not promote this slice first and break main users. No real HOME flag, Git-template/env authority bypass, or swallowed refusals. Inspect the remaining contracts scripts for the same setup boundary to avoid one-failure-at-a-time CI churn, but make only source-grounded positive-fixture corrections, no blanket enroll-all policy.\nFocused gate: existing affected contract scripts against the pinned candidate binary, allocation negative controls, make check-ci-fast. No broad workspace runtime or slot bypass; shared-infrastructure/>10-file changes use required touched+compile-only evidence. Long Cargo runs background with AIDA_CARGO_TIMEOUT and inspect cargo ps after lost handle/timeout, no blind retries. Normal push only. Independent reviewer assesses the actual new head and complete existing slice scope; no stale approval. Existing canonical verdict .aida/review-verdicts/PR-2919.json is c25 RequestChanges, retained until actual fresh attestation.\n",
+  "subject": "PR2919 exact766 CI failure: distributed contract lacks Git identity",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

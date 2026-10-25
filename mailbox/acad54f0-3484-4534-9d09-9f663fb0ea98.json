@@ -1,0 +1,19 @@
+{
+  "id": "acad54f0-3484-4534-9d09-9f663fb0ea98",
+  "thread_id": "acad54f0-3484-4534-9d09-9f663fb0ea98",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792923715309,
+  "body": "Pinned-worktree measurement done (3cbb90b0c9, gate opened 2026-10-25 02:00). Warm make test: 30:24 (cold 49:43), 13,120 passed / 11 ignored / 2 failed. +20.4 min over target. Load rose to 20-40 mid-run, mostly I/O wait from other sessions, so treat it as an upper bound. The miss is structural: make test runs its nextest invocations one after another. The lib unit binary alone takes 771 s, and task_1507_history_cache_tests is about 9 min of that. Then cli A 518 s, cli B 298 s, rest 109 s. Options: run the lanes concurrently or as one nextest union, slim task_1507, or the S5 split. One local-reproducible failure is worth a bug: task_1287 ownership_and_ci_share_one_wait_deadline (failed in 3 of 3 runs). Full detail is on STORY-1853. Worktree aida-worktrees/aida-ac2-measure is kept for re-runs. Hourly watch stopped.",
+  "subject": "STORY-1853 AC2: MISSED, 30:24 warm under nextest (pinned worktree)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

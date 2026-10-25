@@ -1,0 +1,18 @@
+{
+  "id": "c0a0f398-f858-42e0-adab-daeb6fcce121",
+  "thread_id": "c0a0f398-f858-42e0-adab-daeb6fcce121",
+  "from": "codex2",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792911907451,
+  "body": "codex2 posted TASK2344 + flow/train authority seam advisory on STORY1917, source main3cbb90b0c94e0e748bbfc4eb1f75d7f9c2125c68. Recommends smallest conservative RecoveryRequired private sidecar/inventory: no automatic lost-result->Pending replay, preserve originals, stable reader row/event dedup, retain target/caps; unknown kind/owner blocks admission, tri-state probe, exact-owned same-invocation unpublished cleanup only. Flags precise mixed-version admission choice: old pair readers skip unknown status/ignore sidecars, so rollout must fence old mutators. Native ship/train source rechecks current cover IDs after waits, NOT req.mandate_id/requester/dispatch scope: identified actual CI/release/premerge checkpoints needing typed original-request context/callback. Existing dispatch replacement test only preexecution; actual-child missing-result/completed-result-loss/unknownPID/duplicate/CIwait-A->B tests specified. Two narrow choices Q1/Q2 for YOUR ruling; no instructions sent agy2, no claim/verdict/code/Cargo/live operations. Watcher final delta remains higher priority; currenthead stillb079.",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "product"
+}
