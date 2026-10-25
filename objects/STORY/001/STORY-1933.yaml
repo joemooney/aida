@@ -1,0 +1,35 @@
+id: 01a1748d-2c82-74d2-bfb7-43d121a200b7
+spec_id: STORY-1933
+agreed_id: STORY-1933
+title: 'Review PR-2929: [AI:codex] feat(transport): gate pinned pushes on reviewed history (Refs STORY-1742)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a17020`) for branch `codex/story-1742-slice2-credentials`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2929>
+  - Branch: `codex/story-1742-slice2-credentials` → `main`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - STORY-1742
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2929` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-25T19:32:51.458432179Z
+modified_at: 2026-10-25T19:32:51.458432179Z
+req_type: Story
+filed_at:
+  code_sha: 3e0b31357e306f592fad7f1912b910b38ac7bca8
+  branch: codex/story-1742-slice2-credentials
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: a01a698998
+  vendor: codex
