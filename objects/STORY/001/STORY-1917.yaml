@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T17:15:51.947160848Z
-modified_at: 2026-10-25T04:56:22.846418234Z
+modified_at: 2026-10-25T06:35:42.144928519Z
 req_type: Story
 relationships:
 - rel_type:
@@ -337,6 +337,11 @@ comments:
     Advisor notified as codex2 with full SHA/path.
   created_at: 2026-10-25T04:56:22.846418234Z
   modified_at: 2026-10-25T04:56:22.846418234Z
+- id: 01a171c5-aac0-7fd1-8629-48c1ddefcdab
+  author: joe
+  content: 'ADVISOR stale attention-state reconciliation: PR2913 approved at2b3cd94f5dc69193ee17b2dbbf0d1851254a620a; real detached-child regression resolves the F2 finding cited by the old failure reason. Existing signed overall dispatch scope remains approved; agy2 must produce the bounded final-slice/TASK2338-2344 implementation plan before new code. Returning parent from Needs Attention to Approved for remaining authorized work. This does not clear any hold, waive supervision/protected-floor gates, approve unreviewed implementation, or claim parent completion. The original failure and independent resolution remain in the audit trail.'
+  created_at: 2026-10-25T06:35:42.144928519Z
+  modified_at: 2026-10-25T06:35:42.144928519Z
 history:
 - id: 01a16c5e-51c4-73b2-b8a3-3b764dc7e5cd
   author: joe
