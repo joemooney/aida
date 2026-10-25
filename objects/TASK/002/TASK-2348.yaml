@@ -32,7 +32,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T16:23:29.497775220Z
-modified_at: 2026-10-25T17:33:43.358932742Z
+modified_at: 2026-10-25T17:35:40.678456807Z
 req_type: Task
 tags:
 - ship-deadline
@@ -57,6 +57,30 @@ comments:
   content: 'AI quality evaluation / advisor disposition: clarity9/10, testability10/10, completeness9/10, consistency9/10, overall9.25. Primarycallers UbuntuCI/nextest and noninteractivefilteredlocaltests underload are explicit; everycriterion canbeverifiedwithoutquiet-host/TTY assumptions. Strongnegativeoracle replaces actualforwardedremainder withrenewedSome2s andmustfailstructurally; zero-budgetone-poll/timeout21/no-merge andgreen/redretained. No splitneeded: onefixture-evidence contract acrossexistingpurebudget/CIhandoff/blackboxseams. Issuecorrectedbeforeapproval: test-onlyFASTTRACKisfastonly/noCargo; actualproductionseamdeltaLIGHTonefilter+fast, preserving standingorders. Independentcodex2source diagnosisde601800/54c supports boundedtestrepair, NOT productionregression or currentreproducedtimingfailure. Approvedtoimplement withinexactscope; no deadlinetestceilingchange/ignore/retry/runtimeenvswitch. Coordinateexisting1917/1889symbolownershipbeforeoverlap; independentexactheadreview+CI+integrationrequired. Userfullopen-goalnowincludes thisneededcapturedfollowup, nodeferral or prematurecompletion.'
   created_at: 2026-10-25T16:24:55.079012509Z
   modified_at: 2026-10-25T16:24:55.079012509Z
+- id: 01a17421-e486-7a31-a33d-74a0cf512bf0
+  author: joe
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria as tests
+    - **AC1 (unit + command-level):** extract a narrow `ship_ci_handoff(wait, since_wait_started, scan_spent, watch)` seam in pr_cmd.rs that the real CI callsite uses to forward its budget to `wait_for_ship_ci`; a unit test asserts the budget the injected `watch` callback actually receives. The black-box CLI test additionally counts real CI row reads in the fake-gh call log and asserts no second-poll progress line, so a callsite renewed to `Some(2s)` fails (verified by a local mutation run).
+    - **AC2 (unit):** `ship_ci_handoff_forwards_only_the_remainder` with `Some(2)`: exhausted ownership → ZERO; partial → exact remainder; scan excluded but never replenishing consumed ownership; `None` → unbounded `None`. Reuses `ship_ci_budget` / extends existing pure tests.
+    - **AC3 (unit):** the handoff-computed ZERO fed into `wait_for_ship_ci` with the counting FakeForge and a pending Build: exit 21, `still pending: Build`, (row_reads, registration_polls) == (1,1). Existing zero-budget green/red assertions retained.
+    - **AC4 (command-level):** `ownership_and_ci_share_one_wait_deadline` keeps ownership-release, exit 21, no-merge; adds an independent kill watchdog thread on the child; replaces the `<3500ms` wall-clock inference with: ownership was released (not timed out), CI timed out naming `Build`, exactly one CI row read, no `CI pending for PR-` re-poll line.
+    - **AC5:** no production behavior change — the seam is pure forwarding of the same expression.
+    - **AC6:** LIGHT: one targeted cargo filter run (+ the integration test binary) and `make check-ci-fast`.
+
+    ### Expected files
+    - `aida-cli-lib/src/pr_cmd.rs` (handoff seam + callsite)
+    - `aida-cli-lib/src/ci_gate.rs` (unit tests)
+    - `aida-cli/tests/task_1287_label_only_merge_hold.rs`
+
+    ### Ambiguities / conflicts as questions
+    - None (STORY-1917/1889 work is merged on main; the seam touches only the CI-budget handoff lines, not their symbols).
+  created_at: 2026-10-25T17:35:40.678456807Z
+  modified_at: 2026-10-25T17:35:40.678456807Z
+  session_id: 01a174200fd7
+  harness_version: 2.1.310 (Claude Code)
 history:
 - id: 01a173e1-136f-7122-b735-d8e8f1e2d5fe
   author: joe
