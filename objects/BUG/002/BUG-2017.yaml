@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T22:12:54.027870933Z
-modified_at: 2026-10-25T09:05:25.001342097Z
+modified_at: 2026-10-25T09:12:16.009137737Z
 req_type: Bug
 tags:
 - id-allocation
@@ -223,6 +223,20 @@ comments:
     Gate: one focused cargo module/filter with AIDA_CARGO_TIMEOUT=20m, background if long, plus make check-ci-fast. Add make test-touched and make check-ci-compile only for shared test infrastructure or >10 changed files. Fixture-only changes need affected contracts and fast checks; no broad workspace runtime, slot bypass, nested timeout or force push. Push normally, leave PR unmerged with Refs BUG-2017, report new SHA and decisive evidence for codex2 fresh independent review. All three signed slices and shared STORY-1742 ownership remain incomplete until actually delivered.
   created_at: 2026-10-25T09:05:25.001342097Z
   modified_at: 2026-10-25T09:05:25.001342097Z
+- id: 01a17255-0189-7da3-a975-3d72b404e24e
+  author: joe
+  content: |-
+    Advisor CI evidence supplement, same PR2919 c25 F2 rework, not a new scope/worker.
+    Fetched COMPLETE failed-job logs from run40177521246 at /tmp/advisor-pr2919-all-failed.log (2670496bytes). Bounded exact contexts /tmp/advisor-pr2919-ci-failure-context.txt. All7lanes fail; dominant early signatures:
+    - contracts tests/test_history_templates.py:40 init --no-skills --no-hooks => ENOENT (fixture already git init +local identity).
+    - gates MCP stdio compatibility => aida init failed ENOENT.
+    - cli0 aida-cli/tests/bug_1234_edit_description_sources.rs:60 init --force --no-skills --no-hooks --no-agent-config --no-roles fails; cli1 agent_write_confirm.rs:94 same ordinary init ENOENT.
+    - lib0 auto_bump_done_tests.rs:3209 allocation requires clone-local Git identity; :2732 backend.save seed => ENOENT.
+    - lib1 bug_2002_launch_lease_tests.rs:1383 setup => ENOENT (test_env93 outer child failure is downstream).
+    - rest aida-server/src/rest.rs:4685 raw GitBackend::new(root/store), seed emptystore users then save => allocation requires clone-local Git identity. Existing positive fixture does not initialize a code Git root there.
+    Advisor source verified allocation_authority common_dir/resolve/node against these setup shapes; absence of Git identity is a deliberate refusal, but investigate whether checks moved ahead of necessary safe init/node/bootstrap setup. Do not describe all failures as flakes or mechanically enroll every fixture HOME. Preserve signed WORK fail-closed allocation and untouched real HOME. Use smallest actual production ordering fix and explicitly bounded positive fixture migration as appropriate. If correct ordinary init depends on signed slice2 bootstrap, surface the integration dependency and deliver that already-approved necessary slice, without claiming slice1 independently deployable or dropping the rest. No blanket test-only bypass, global fallback, removed assertions or live authority flag. Existing local verification policy and no-force rule unchanged. Full failure log available locally avoids repeated forge downloads.
+  created_at: 2026-10-25T09:12:16.009137737Z
+  modified_at: 2026-10-25T09:12:16.009137737Z
 history:
 - id: 01a16f08-1847-70c2-a9ec-772710162546
   author: joe
