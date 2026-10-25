@@ -16,12 +16,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-25T20:12:43.920654607Z
-modified_at: 2026-10-25T20:12:43.920654607Z
+modified_at: 2026-10-25T23:07:00.824222712Z
 req_type: Task
 tags:
 - from-implementer:TASK-2350
 - kind:bug-spotted
 - severity:major
+comments:
+- id: 01a17551-3d58-7a61-ba3a-044987045d23
+  author: joe
+  content: 'Advisor triage 2026-10-25 16:08: fixed by TASK-2351 (PR #2932, merged): ship step 1 now stages tracked changes only (git add -u), so untracked sandbox deny-mask placeholders are never committed and the step-2 rebase/abort failure that followed from that commit cannot occur. Re-open with a fresh reproduction on a post-#2932 build if it recurs.'
+  created_at: 2026-10-25T23:07:00.824222712Z
+  modified_at: 2026-10-25T23:07:00.824222712Z
+  session_id: cde796d3-1750-4745-a8f9-7ab3bc7c3519
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: a01a698998
