@@ -22,12 +22,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-24T22:35:50.576500759Z
-modified_at: 2026-10-24T22:35:50.576500759Z
+modified_at: 2026-10-25T04:51:47.026354703Z
 req_type: Task
 tags:
 - audit
 - from-review:PR-2905
 - severity:minor
+comments:
+- id: 01a17166-86d2-7f33-96e0-ab24abec351c
+  author: joe
+  content: 'PROXY DECISION for joe: Approve completion of the signed audit contract: known-mandate scope refusals append Refused events with that exact mandate ID; invalid/missing mandate identity must not borrow another mandate or disclose secrets. Pin event cardinality/reasons. Preserve refusal decisions.'
+  created_at: 2026-10-25T04:51:47.026354703Z
+  modified_at: 2026-10-25T04:51:47.026354703Z
 filed_at:
   code_sha: 9457e495247a3c9de111d15507fabd2cd0923079
   branch: pr-2905
