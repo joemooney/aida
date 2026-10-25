@@ -1,0 +1,26 @@
+id: 01a174ca-d3eb-7bd0-bfae-99da0219b27e
+spec_id: TASK-2358
+agreed_id: TASK-2358
+title: Sandboxed seat cannot create its CARGO_TARGET_DIR under target/worktrees/
+description: |
+  In seat aida-seat-aida-task-2351, CARGO_TARGET_DIR=/home/joe/ai/aida/target/worktrees/aida-seat-aida-task-2351 didn't exist. The sandbox allows writes to that path but not to its parent, so cargo (and `mkdir -p`) failed with "Read-only file system (os error 30)". This broke `cargo test` and `make check-ci-fast` until I set CARGO_TARGET_DIR=$TMPDIR/target, which then needed a cold full build (~30 min). The seat launcher should pre-create the target dir before entering the sandbox.
+
+  Raised by the implementer while working TASK-2351.
+  Branch: task-2351  ·  Commit: 24edd8a0b8  ·  PR #2932
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-25T20:40:12.011993597Z
+modified_at: 2026-10-25T20:40:12.011993597Z
+req_type: Task
+tags:
+- from-implementer:TASK-2351
+- kind:bug-spotted
+- severity:minor
+filed_at:
+  aida_version: 0.16.0
+  aida_build_sha: a01a698998
+  vendor: claude
+  session: 01a17497b0d5
+  harness_version: 2.1.310 (Claude Code)
