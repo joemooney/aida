@@ -73,7 +73,10 @@ an immediate one-shot submission.
 Git's NUL-delimited worktree inventory identifies sibling checkouts. Each local
 mailbox is inspected using the version-1 AIDA `mailbox wake-snapshot` interface
 with the main project as the AIDA subprocess working directory. The envelope
-contains only unread message IDs and does not move read watermarks. The adapter
+contains unread message IDs and existing acknowledged IDs, without moving read
+watermarks. Existing per-ID receipts are shared across these roots for the same
+advisor. A root watermark acknowledges only messages actually present in that
+root; it never suppresses unknown private mail from another checkout. The adapter
 keeps all source checkout paths for each ID so the advisor can find mail that
 has not yet been published from a sibling. Replicated IDs cause one notification.
 New or removed checkouts are discovered at each scan. Failed scans do not record

@@ -52,6 +52,31 @@ class WatcherTests(unittest.TestCase):
             self.assertEqual(cmd.call_count, 1)
             self.assertEqual(self.ledger["accepted"], ["mail-a", "mail-b"])
 
+    def test_shared_read_receipts_remove_stale_replica_but_preserve_private_mail(self):
+        sibling = self.root / "sibling"
+        (sibling / ".aida/mailbox").mkdir(parents=True)
+        envelopes = [
+            {"version": 1, "messages": [], "acknowledged_ids": ["replica"]},
+            {"version": 1, "messages": [{"id": "replica"}, {"id": "private"}], "acknowledged_ids": []},
+        ]
+        with patch.object(wake, "worktrees", return_value=[self.root, sibling]), patch.object(
+                wake, "command", side_effect=[json.dumps(e).encode() for e in envelopes]):
+            inventory, acknowledged = wake.scan(self.root, "fixture-aida")
+        self.assertEqual(inventory, {"private": {str(sibling)}})
+        self.assertEqual(acknowledged, {"replica"})
+        self.tick({"replica": {str(sibling)}})
+        with patch.object(wake, "command") as command:
+            self.tick({}, now=110, acknowledged=acknowledged)
+            command.assert_not_called()
+        self.assertEqual(self.ledger["pending"], {})
+        self.assertEqual(self.ledger["accepted"], [])
+
+    def test_snapshot_without_read_evidence_refuses(self):
+        with patch.object(wake, "worktrees", return_value=[self.root]), patch.object(
+                wake, "command", return_value=b'{"version":1,"messages":[]}'):
+            with self.assertRaises(wake.Refusal):
+                wake.scan(self.root, "fixture-aida")
+
     def test_dense_backlog_batches_once_with_a_hard_byte_bound(self):
         pending = {str(uuid.uuid4()): ["/source"] for _ in range(580)}
         batch, message = wake.notification(pending)
@@ -127,9 +152,9 @@ class WatcherTests(unittest.TestCase):
                 return (f"worktree {self.root}\0\0worktree {sibling}\0\0").encode()
             self.assertIn("wake-snapshot", argv)
             self.assertEqual(kwargs.get("cwd"), self.root)
-            return json.dumps({"version": 1, "messages": [{"id": "shared-id"}]}).encode()
+            return json.dumps({"version": 1, "messages": [{"id": "shared-id"}], "acknowledged_ids": []}).encode()
         with patch.object(wake, "command", side_effect=fake):
-            result = wake.scan(self.root, "fixture-aida")
+            result, acknowledged = wake.scan(self.root, "fixture-aida")
         self.assertEqual(result, {"shared-id": {str(self.root), str(sibling)}})
         self.assertEqual(len(calls), 3)
         with patch.object(wake, "command", side_effect=[b"worktree /one\0", wake.Refusal("scan failed")]):
@@ -238,7 +263,7 @@ class WatcherTests(unittest.TestCase):
         (sibling / ".aida/mailbox").mkdir(parents=True)
         (repo / ".aida/mailbox").mkdir(parents=True)
         fake_aida = self.root / "fixture-aida"
-        fake_aida.write_text("#!/usr/bin/env python3\nimport json\nprint(json.dumps({'version':1,'messages':[{'id':'fixture-message'}]}))\n")
+        fake_aida.write_text("#!/usr/bin/env python3\nimport json\nprint(json.dumps({'version':1,'messages':[{'id':'fixture-message'}],'acknowledged_ids':[]}))\n")
         fake_aida.chmod(0o700)
         capture = self.root / "queue.json"
         fake_codex = self.root / "fixture-codex"

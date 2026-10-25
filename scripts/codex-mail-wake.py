@@ -94,6 +94,7 @@ def worktrees(project):
 def scan(project, aida):
     """Read envelopes only. Any failed root keeps the entire batch pending."""
     ids = {}
+    acknowledged = set()
     deadline = time.monotonic() + 120
     roots = worktrees(project)
     if len(roots) > 512:
@@ -108,8 +109,16 @@ def scan(project, aida):
         raw = command([aida, "mailbox", "wake-snapshot", "--local-root", str(root),
                        "--recipient", "advisor", "--json"], timeout=20, cwd=project, env=repo_environment())
         result = json.loads(raw)
-        if result.get("version") != 1 or not isinstance(result.get("messages"), list):
+        if (result.get("version") != 1 or not isinstance(result.get("messages"), list)
+                or not isinstance(result.get("acknowledged_ids"), list)):
             raise Refusal("unsupported mailbox snapshot")
+        for ident in result["acknowledged_ids"]:
+            if not isinstance(ident, str) or not ident or len(ident) > 200 or not all(
+                    c.isascii() and (c.isalnum() or c in "-_") for c in ident):
+                raise Refusal("invalid acknowledged identity in snapshot")
+            acknowledged.add(ident)
+            if len(acknowledged) > 100_000:
+                raise Refusal("acknowledgement inventory exceeds its bound")
         for message in result["messages"]:
             ident = message.get("id", "")
             if not isinstance(ident, str) or not ident or len(ident) > 200 or not all(
@@ -118,7 +127,7 @@ def scan(project, aida):
             ids.setdefault(ident, set()).add(str(root))
             if len(ids) > 100_000:
                 raise Refusal("message inventory exceeds its bound")
-    return ids
+    return {ident: roots for ident, roots in ids.items() if ident not in acknowledged}, acknowledged
 
 
 class State:
@@ -260,12 +269,18 @@ def notification(pending):
 
 
 def tick(state, ledger, project, thread, aida, codex, batch_seconds, dry_run=False,
-         now=None, inventory=None):
+         now=None, inventory=None, acknowledged=None):
     now = time.time() if now is None else now
-    inventory = scan(project, aida) if inventory is None else inventory
+    if inventory is None:
+        inventory, acknowledged = scan(project, aida)
+    acknowledged = set() if acknowledged is None else acknowledged
+    for ident in acknowledged:
+        ledger["pending"].pop(ident, None)
+    if not ledger["pending"]:
+        ledger["first_pending"] = None
     accepted = set(ledger["accepted"])
     for ident, roots in inventory.items():
-        if ident not in accepted:
+        if ident not in accepted and ident not in acknowledged:
             ledger["pending"][ident] = sorted(roots)
     if ledger["pending"] and ledger["first_pending"] is None:
         ledger["first_pending"] = now

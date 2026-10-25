@@ -18,6 +18,7 @@ const TOTAL_BYTES: u64 = 32 * 1024 * 1024;
 pub(crate) struct Snapshot {
     version: u8,
     messages: Vec<Envelope>,
+    acknowledged_ids: Vec<String>,
 }
 #[derive(Serialize)]
 struct Envelope {
@@ -93,6 +94,75 @@ fn messages(dir: &Path, budget: &mut u64) -> Result<Vec<Message>> {
     Ok(output)
 }
 
+fn safe_id(id: &str) -> bool {
+    !id.is_empty()
+        && id.len() <= 200
+        && id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+}
+
+// Reuse the existing acknowledgement contract without moving any watermark or
+// inventing a baseline. Explicit ID receipts also survive a stale watermark.
+fn read_evidence(
+    mail: &Path,
+    recipient: &str,
+    budget: &mut u64,
+) -> Result<(i64, std::collections::BTreeSet<String>)> {
+    let Some(anchor) = open_directory(mail)? else {
+        return Ok((i64::MIN, Default::default()));
+    };
+    let watermark = if let Some(read) = open_directory(&pinned(&anchor).join(".read"))? {
+        match read_regular(&pinned(&read).join(format!("{recipient}.txt")), 128) {
+            Ok(bytes) => std::str::from_utf8(&bytes)?.trim().parse::<i64>()?,
+            Err(error)
+                if error
+                    .downcast_ref::<std::io::Error>()
+                    .is_some_and(|error| error.kind() == std::io::ErrorKind::NotFound) =>
+            {
+                i64::MIN
+            }
+            Err(error) => return Err(error).context("Cannot safely read mailbox watermark"),
+        }
+    } else {
+        i64::MIN
+    };
+    let mut seen = std::collections::BTreeSet::new();
+    if let Some(receipts) = open_directory(&pinned(&anchor).join(".read-receipts"))? {
+        if let Some(recipient_dir) = open_directory(&pinned(&receipts).join(recipient))? {
+            let deadline = Instant::now() + Duration::from_secs(2);
+            for (count, entry) in std::fs::read_dir(pinned(&recipient_dir))?.enumerate() {
+                if count >= MAX_ENTRIES || Instant::now() >= deadline {
+                    bail!("Mailbox receipt scan budget exceeded");
+                }
+                let entry = entry?;
+                let path = entry.path();
+                if path.extension().and_then(|s| s.to_str()) != Some("txt") {
+                    continue;
+                }
+                let id = path
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .context("Invalid receipt identity")?;
+                if !safe_id(id) {
+                    bail!("Invalid receipt identity");
+                }
+                let bytes = read_regular(&path, 128.min(*budget))
+                    .context("Cannot safely read mailbox receipt")?;
+                *budget = budget
+                    .checked_sub(bytes.len() as u64)
+                    .context("Mailbox byte budget exceeded")?;
+                std::str::from_utf8(&bytes)?
+                    .trim()
+                    .parse::<i64>()
+                    .context("Invalid mailbox receipt")?;
+                seen.insert(id.to_owned());
+            }
+        }
+    }
+    Ok((watermark, seen))
+}
+
 pub(crate) fn snapshot(root: &Path, store: &Path, recipient: &str) -> Result<Snapshot> {
     if recipient.is_empty()
         || recipient.len() > 128
@@ -113,48 +183,26 @@ pub(crate) fn snapshot(root: &Path, store: &Path, recipient: &str) -> Result<Sna
     };
     let canonical = messages(&store.join("mailbox"), &mut budget)?;
     let merged = merge_dedup(&local, &canonical);
-    let watermark = if let Some(dir) = local_dir.as_ref() {
-        if let Some(mail) = open_directory(dir)? {
-            if let Some(read) = open_directory(&pinned(&mail).join(".read"))? {
-                let path = pinned(&read).join(format!("{recipient}.txt"));
-                match read_regular(&path, 128) {
-                    Ok(bytes) => std::str::from_utf8(&bytes)?.trim().parse::<i64>()?,
-                    Err(e)
-                        if e.downcast_ref::<std::io::Error>()
-                            .is_some_and(|e| e.kind() == std::io::ErrorKind::NotFound) =>
-                    {
-                        i64::MIN
-                    }
-                    Err(e) => return Err(e).context("Cannot safely read mailbox watermark"),
-                }
-            } else {
-                i64::MIN
-            }
-        } else {
-            i64::MIN
-        }
-    } else {
-        i64::MIN
+    let (watermark, mut acknowledged) = match &local_dir {
+        Some(dir) => read_evidence(dir, recipient, &mut budget)?,
+        None => (i64::MIN, Default::default()),
     };
     let mut unread = Vec::new();
     for m in inbox_for(recipient, &merged) {
-        if !m.archived && m.timestamp > watermark {
-            // Only immutable UUIDs may enter a host wake; never mail body/subject.
-            if m.id.is_empty()
-                || m.id.len() > 200
-                || !m
-                    .id
-                    .chars()
-                    .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
-            {
-                bail!("Mailbox message ID is not a bounded safe identity");
-            }
+        if !safe_id(&m.id) {
+            bail!("Mailbox message ID is not a bounded safe identity");
+        }
+        if m.timestamp <= watermark {
+            acknowledged.insert(m.id.clone());
+        }
+        if !m.archived && m.timestamp > watermark && !acknowledged.contains(&m.id) {
             unread.push(Envelope { id: m.id.clone() });
         }
     }
     Ok(Snapshot {
         version: 1,
         messages: unread,
+        acknowledged_ids: acknowledged.into_iter().collect(),
     })
 }
 
@@ -198,7 +246,10 @@ mod tests {
         let before = std::fs::read(read.join("advisor.txt")).unwrap();
         let value =
             serde_json::to_string(&snapshot(root.path(), &store, "advisor").unwrap()).unwrap();
-        assert_eq!(value, r#"{"version":1,"messages":[{"id":"new-id"}]}"#);
+        assert_eq!(
+            value,
+            r#"{"version":1,"messages":[{"id":"new-id"}],"acknowledged_ids":["old-id"]}"#
+        );
         assert_eq!(std::fs::read(read.join("advisor.txt")).unwrap(), before);
     }
 
@@ -244,5 +295,40 @@ mod tests {
         std::fs::write(dir.join("advisor.txt"), "not a timestamp").unwrap();
         assert!(snapshot(root.path(), &store, "advisor").is_err());
         assert!(snapshot(root.path(), &store, "../advisor").is_err());
+    }
+    #[test]
+    fn task_2347_read_metadata_is_id_scoped_and_preserves_unknown_private_mail() {
+        let main = tempfile::tempdir().unwrap();
+        let sibling = tempfile::tempdir().unwrap();
+        let store = main.path().join("store");
+        fixture(main.path(), "replicated", "advisor", 10);
+        fixture(sibling.path(), "replicated", "advisor", 10);
+        fixture(sibling.path(), "private-unseen", "advisor", 5);
+        let read = main.path().join(".aida/mailbox/.read");
+        std::fs::create_dir(&read).unwrap();
+        std::fs::write(read.join("advisor.txt"), "100").unwrap();
+        let known = snapshot(main.path(), &store, "advisor").unwrap();
+        let private = snapshot(sibling.path(), &store, "advisor").unwrap();
+        assert_eq!(known.acknowledged_ids, vec!["replicated"]);
+        assert!(!known
+            .acknowledged_ids
+            .contains(&"private-unseen".to_string()));
+        assert_eq!(private.messages.len(), 2);
+        let remaining: Vec<_> = private
+            .messages
+            .iter()
+            .filter(|m| !known.acknowledged_ids.contains(&m.id))
+            .map(|m| m.id.as_str())
+            .collect();
+        assert_eq!(remaining, vec!["private-unseen"]);
+        let receipts = sibling.path().join(".aida/mailbox/.read-receipts/advisor");
+        std::fs::create_dir_all(&receipts).unwrap();
+        std::fs::write(receipts.join("private-unseen.txt"), "120").unwrap();
+        let acknowledged = snapshot(sibling.path(), &store, "advisor").unwrap();
+        assert!(acknowledged
+            .acknowledged_ids
+            .contains(&"private-unseen".to_string()));
+        assert_eq!(acknowledged.messages.len(), 1);
+        assert!(!sibling.path().join(".aida/mailbox/.read").exists());
     }
 }
