@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T02:08:29.032100054Z
-modified_at: 2026-10-25T03:35:22.766350842Z
+modified_at: 2026-10-25T04:07:29.203092616Z
 req_type: Task
 tags:
 - codex
@@ -168,6 +168,11 @@ comments:
   content: 'FINAL implementation handoff: PR2915 committed head3883aa67a60c35a2d7550324ab1d1ea2c0e51756; final10-line LOCAL-watermark correction STAGED, not committed because inherited advisor grant refuses and failed reviewer fallback removed implementer lease. Patch /tmp/task2347-final-fix.patch, checker-cleared blob a1b9f780b9a3fe0f7a7e7536f96b321766f1ea6c. ALL verification passed:19Python fixtures;5finalRust snapshot tests;61earlier touched Rust tests;9JSONaudit tests;35/35finalfastgates;make check-ci-compile allworkspace testtargets658.5s;scoped candidate build+smoke3m26. Binary /home/joe/ai/aida-task-2347/target/agent/aida includes staged fix, not promoted; SHA256df43b4fce39c18c8334d15e69556671222ed6659bb75cfad8077af0d91e2cb92. Live read-only preview26IDs/1608bytes,noqueue/ack/baseline. IDs+roots /tmp/task2347-remaining-inventory.json. Exact ready marker /tmp/task2347-implementation-ready.json lists logs/nextactions. Needs legitimate host doer commit/push, formal independent reviewer at finalSHA+Build, advisor backlog inspection, immutable scoped runtime service install, one synthetic idle wake and dedup proof. Original targetUUID01a1700b-717d-71f2-b7e0-0569b05f3dee preserved. No livequeue/service/speccompletion/merge by implementation. Worktree/source retained.'
   created_at: 2026-10-25T03:35:22.766350842Z
   modified_at: 2026-10-25T03:35:22.766350842Z
+- id: 01a1713d-f8b3-7093-a2af-88ea3d8c0a40
+  author: joe
+  content: '-'
+  created_at: 2026-10-25T04:07:29.203092616Z
+  modified_at: 2026-10-25T04:07:29.203092616Z
 history:
 - id: 01a170d1-497a-7282-8dcb-91782bba7dc3
   author: joe
