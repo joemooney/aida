@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T22:12:54.027870933Z
-modified_at: 2026-10-25T09:25:20.656602073Z
+modified_at: 2026-10-25T10:54:49.849263355Z
 req_type: Bug
 tags:
 - id-allocation
@@ -264,6 +264,24 @@ comments:
     Fresh-context author self-check: one round, no fixture-delta findings; its own full isolated history contract exited0 and verified real ~/.aida unchanged (/tmp/history-fixture-author-check.log). This is not independent review. Separate codex2 P1 F1 batch-candidate ownership/partial-persistence finding remains UNRESOLVED and blocking; this commit does not assert final readiness, current-head CI success, review approval or parent completion. Signed slices2/3 remain pending. Normal push to existing branch/PR; no force/merge/live operations.
   created_at: 2026-10-25T09:25:20.656602073Z
   modified_at: 2026-10-25T09:25:20.656602073Z
+- id: 01a172b2-e7f9-7b63-b2bb-9d36e29d93ce
+  author: ai:codex:joe
+  content: |
+    Codex1 BUG-2017 slice1 rework pushed: 766bbcbc4c726118d625002f04583111b3fdbaed, existing branch codex/bug-2017-slice1 / PR2919 (Refs BUG-2017).
+
+    F1/P1: Work admission now reserves canonical spec+agreed identity ownership across the complete incoming candidate against itself and disk BEFORE persistence. Shared same-UUID aliases remain valid. Regression matrix covers agreed/agreed and spec/agreed cross-UUID save/import/atomic/bulk, with unchanged metadata/oplog/objects/dispenser/refs. No transport/scanner changes, new allocator, authority enrollment on real HOME, force push, grant/hold edits, self-verdict or merge.
+
+    F2 actual CI: read failed run40177521246 and history-only run40180566381, including the later show-latency init failure. Explicit synthetic-HOME setup at positive legacy fixture sites fixes their unsupported cold-WORK assumptions. Additional fresh directory, owned workspace TempDir, tracker dispatch and new peer-clone setups are explicit and confined; no template-wide authority, fallback, assertion weakening or skipped test. Node-local import fixture remains WORK with explicit node7 binding. Cold WORK bootstrap stays signed slice2.
+
+    Local evidence: focused27/27; library2347pass/8initialfail/1ignored with all8 corrected-or-hermetic reruns plus2 controls passing10/10; regular-file negative1/1. Core1673pass/1timingfail/3ignored, exact unchanged bounded-reader rerun passes. CLI83 compiled targets account for379 non-ignored cases:375 first-pass cases plus4 corrected cases; affected target reruns11/11. REST15/15. Full compile-only workspace gate passes plus late exact target no-run compiles. Final fast34/34, diff clean. Full annotated evidence and writer checklist in updated PR body; no claim that initial aggregate touched runs were clean.
+
+    Private frozen native candidate SHA2568e59b2f73b7ac1c5ee3aeaf1d64086dceb69eb0f540e53a6f85c13e5a47a3508 passes all6 affected isolated Python/shell contracts (history, MCPstdio, show latency, MCPdocs, both local pull contracts). Manifest /tmp/bug2017-f1-candidate-wviqu1gp/manifest.json; not installed/promoted or claimed as a clean-source-labelled binary. Author loop3 rounds ended with no finding in core/special fixtures; late2 caller-only fixture fixes separately tested, no independent approval implied.
+
+    Remaining parent ledger: slice2 pseudonymous UUID bootstrap/migration, operator HOME enrollment and alias-preserving promotion; slice3 complete all-conflict preflight/audit and STORY1742 scanner integration. Attached live dispenser candidate assembly can persist counters; preserve BUG-owned exact ID/dispenser/backend admission methods and store-writer-before-dispense order; no outer transportpolicy lock inside a held cached backend lock. Real primary .git/aida-allocation.toml remains absent. Parent is not Done/Completed; current RequestChanges/holds remain untouched. Please route this exact SHA to codex2's existing recheck, not a duplicate assignment or self-review. Current-head CI is not yet asserted green.
+
+    Additional non-CI exploratory cache-output contract reached its deferred-label assertion after a temporary fixture enrollment and failed; that unrelated file has no final diff and its assertions remain unchanged. Evidence /tmp/bug2017-cache-output-ci-repair.log is retained rather than treating it as a passing check.
+  created_at: 2026-10-25T10:54:49.849263355Z
+  modified_at: 2026-10-25T10:54:49.849263355Z
 history:
 - id: 01a16f08-1847-70c2-a9ec-772710162546
   author: joe
