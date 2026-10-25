@@ -14,6 +14,7 @@ import signal
 import stat
 import subprocess
 import sys
+import tempfile
 import time
 import uuid
 
@@ -435,6 +436,93 @@ def health_job_block(registration):
             f'enabled = true\n# {name}:end\n')
 
 
+# trace:TASK-2347 | ai:codex
+def scheduler_jobs(config):
+    """Read the namespace without silently treating malformed identities as empty."""
+    if not isinstance(config, dict) or any(
+            not isinstance(config.get(key, []), list) for key in ("jobs", "tasks")):
+        raise Refusal("invalid scheduler registration shape")
+    jobs = [job for key in ("jobs", "tasks") for job in config.get(key, [])]
+    if any(not isinstance(job, dict) or not isinstance(job.get("name"), str)
+           or not job["name"] for job in jobs):
+        raise Refusal("invalid scheduler job identity")
+    return jobs
+
+
+def validate_global_scheduler_snapshot(data, aida):
+    """Let native parsing validate captured bytes, never the live global path."""
+    with tempfile.TemporaryDirectory(prefix="aida-health-registry-") as temporary:
+        root = Path(temporary)
+        (root / ".aida").mkdir()
+        (root / ".aida-store/objects").mkdir(parents=True)
+        home = root / "home"
+        (home / ".aida").mkdir(parents=True)
+        (home / ".aida/schedule.toml").write_bytes(data)
+        (root / ".aida/config.toml").write_text(
+            '[store]\nmode="distributed"\nstore_path=".aida-store"\n')
+        env = {key: value for key, value in os.environ.items()
+               if not key.startswith(("AIDA_", "GIT_", "XDG_"))}
+        env.update(HOME=str(home), XDG_CONFIG_HOME=str(home / "config"),
+                   XDG_CACHE_HOME=str(home / "cache"), XDG_STATE_HOME=str(home / "state"),
+                   GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL=str(home / "gitconfig"),
+                   AIDA_TELEMETRY="0")
+        # Resolve explicit relative executables before changing the child cwd.
+        executable = str(Path(aida).resolve()) if os.sep in aida else aida
+        try:
+            result = json.loads(command([executable, "schedule", "list", "--json"],
+                                        cwd=root, env=env))
+            if not isinstance(result, list):
+                raise ValueError("invalid registry response")
+        except (Refusal, CreationFailure, ValueError) as error:
+            raise Refusal("global scheduler registry failed native validation") from error
+
+
+def global_health_namespace(owned, aida):
+    """Inspect both native global shapes; never write or follow registry links."""
+    import tomllib
+    home = Path(os.environ.get("AIDA_HOME") or Path.home())
+    descriptors = []
+    try:
+        # Pin the home and registry directory separately. Only an absent .aida
+        # or schedule.toml is an empty registry; other failures are unknown.
+        root = os.open(home, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        descriptors.append(root)
+        try:
+            directory = os.open(".aida", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_NONBLOCK,
+                                dir_fd=root)
+        except FileNotFoundError:
+            return
+        descriptors.append(directory)
+        meta = os.fstat(directory)
+        if meta.st_uid != os.getuid() or meta.st_mode & 0o022:
+            raise Refusal("global scheduler directory identity refused")
+        try:
+            fd = os.open("schedule.toml", os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory)
+        except FileNotFoundError:
+            return
+        descriptors.append(fd)
+        meta = os.fstat(fd)
+        if (not stat.S_ISREG(meta.st_mode) or meta.st_nlink != 1
+                or meta.st_uid != os.getuid() or meta.st_mode & 0o022):
+            raise Refusal("global scheduler registry identity refused")
+        with os.fdopen(fd, "rb", closefd=False) as source:
+            data = source.read(LIMIT + 1)
+        if len(data) > LIMIT:
+            raise Refusal("global scheduler registry exceeded bound")
+        config = tomllib.loads(data.decode())
+        # Match native load_global_config: a present schedule table wins;
+        # otherwise bare jobs/tasks is the supported registry shape.
+        jobs = scheduler_jobs(config["schedule"] if "schedule" in config else config)
+        if owned.intersection(job["name"] for job in jobs):
+            raise Refusal("health job name already belongs to a global user entry")
+        validate_global_scheduler_snapshot(data, aida)
+    except (OSError, ValueError, UnicodeError) as error:
+        raise Refusal("global scheduler registry unreadable or malformed") from error
+    finally:
+        for fd in reversed(descriptors):
+            os.close(fd)
+
+
 def own_health_job(args, project, remove=False):
     """Edit only the exact owned block under a permanent project install lock."""
     import tomllib
@@ -480,14 +568,10 @@ def own_health_job(args, project, remove=False):
         exists = marker in text
         if exists and (text.count(block) != 1 or text.count(marker) != 1):
             raise Refusal("owned health job was edited; refusing replacement/removal")
-        schedule = config.get("schedule", {})
-        if not isinstance(schedule, dict) or any(not isinstance(schedule.get(key, []), list) for key in ("jobs", "tasks")):
-            raise Refusal("invalid scheduler registration shape")
-        jobs = [job for key in ("jobs", "tasks") for job in schedule.get(key, [])]
-        if any(not isinstance(job, dict) or not isinstance(job.get("name"), str) for job in jobs):
-            raise Refusal("invalid scheduler job identity")
+        jobs = scheduler_jobs(config.get("schedule", {}))
         names = {job["name"] for job in jobs}
         owned = {registration["job"], registration["job"] + "-route"}
+        global_health_namespace(owned, args.aida)
         if (not exists and names.intersection(owned)) or (exists and any(
                 sum(job["name"] == name for job in jobs) != 1 for name in owned)):
             raise Refusal("health job name already belongs to a user entry or is duplicated")
@@ -516,6 +600,9 @@ def own_health_job(args, project, remove=False):
         # visibly; never remove or overwrite a conflicting registration.
         if (read("config.toml") or "") != text or read("codex-mail-health.json", private=True) != prior:
             raise Refusal("health configuration changed during installation; retry without overwriting it")
+        # Recheck the effective global namespace immediately before local
+        # publication, including idempotent installs and removals.
+        global_health_namespace(owned, args.aida)
         if not remove:
             replace("codex-mail-health.json", expected)
         if (read("config.toml") or "") != text:

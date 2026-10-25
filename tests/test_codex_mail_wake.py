@@ -25,10 +25,13 @@ class WatcherTests(unittest.TestCase):
         self.root = Path(self.tmp.name)
         home = self.root / "home"
         home.mkdir()
-        env = patch.dict(os.environ, {"HOME": str(home), "XDG_CONFIG_HOME": str(home / ".config"),
+        env = patch.dict(os.environ, {"HOME": str(home), "AIDA_HOME": "", "XDG_CONFIG_HOME": str(home / ".config"),
                                       "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": str(home / "gitconfig")})
         env.start()
         self.addCleanup(env.stop)
+        validator = patch.object(wake, "validate_global_scheduler_snapshot")
+        self.native_validator = validator.start()
+        self.addCleanup(validator.stop)
         self.state = wake.State(self.root / "state")
         self.addCleanup(self.state.close)
         self.ledger = wake.initial(self.root, THREAD)
@@ -388,7 +391,7 @@ class WatcherTests(unittest.TestCase):
         self.assertFalse(json.loads(path.read_text())["recovery_required"])
 
     def health_args(self):
-        return SimpleNamespace(thread=THREAD, state_dir=self.root / "state",
+        return SimpleNamespace(thread=THREAD, aida="fixture-aida", state_dir=self.root / "state",
                                health_max_age=3600, interval=30)
 
     def test_owned_health_job_install_idempotent_and_remove_preserves_user_jobs(self):
@@ -453,6 +456,188 @@ class WatcherTests(unittest.TestCase):
                     wake.own_health_job(args, project, remove=remove)
                 self.assertEqual(config.read_bytes(), before)
                 self.assertEqual((project / ".aida/codex-mail-health.json").read_bytes(), registration)
+
+    def test_global_health_names_refused_in_both_shapes_and_lists_without_local_changes(self):
+        global_dir = Path.home() / ".aida"
+        global_dir.mkdir()
+        global_config = global_dir / "schedule.toml"
+        for wrapped in (False, True):
+            for collection in ("jobs", "tasks"):
+                for suffix in ("", "-route"):
+                    for installed in (False, True):
+                        with self.subTest(wrapped=wrapped, collection=collection,
+                                          suffix=suffix, installed=installed):
+                            project = Path(tempfile.mkdtemp(dir=self.root))
+                            args = self.health_args()
+                            directory = project / ".aida"
+                            directory.mkdir()
+                            config = directory / "config.toml"
+                            config.write_text("# preserve user project config\n")
+                            global_config.unlink(missing_ok=True)
+                            if installed:
+                                wake.own_health_job(args, project)
+                            registration = directory / "codex-mail-health.json"
+                            before = config.read_bytes()
+                            prior = registration.read_bytes() if installed else None
+                            name = wake.health_registration(args, project)["job"] + suffix
+                            table = "schedule." if wrapped else ""
+                            body = ('[[' + table + collection + ']]\nname=' + json.dumps(name)
+                                    + '\ncommand="cache verify"\nevery="1h"\nenabled=false\n')
+                            global_config.write_text(body)
+                            for remove in (False, True):
+                                with self.assertRaises(wake.Refusal):
+                                    wake.own_health_job(args, project, remove=remove)
+                                self.assertEqual(config.read_bytes(), before)
+                                self.assertEqual(registration.read_bytes() if registration.exists() else None, prior)
+                                self.assertEqual(global_config.read_text(), body)
+
+    def test_global_health_namespace_honors_aida_home_and_preserves_unrelated_jobs(self):
+        args = self.health_args()
+        alternate = self.root / "aida-home"
+        (alternate / ".aida").mkdir(parents=True)
+        config = alternate / ".aida/schedule.toml"
+        name = wake.health_registration(args, self.root)["job"]
+        config.write_text('[[jobs]]\nname=' + json.dumps(name) + '\n')
+        with patch.dict(os.environ, {"AIDA_HOME": str(alternate)}):
+            with self.assertRaises(wake.Refusal):
+                wake.own_health_job(args, self.root)
+            self.assertFalse((self.root / ".aida/config.toml").exists())
+            self.assertFalse((self.root / ".aida/codex-mail-health.json").exists())
+            config.write_text('[[tasks]]\nname="unrelated-global"\ncommand="cache verify"\nevery="1h"\n')
+            before = config.read_bytes()
+            wake.own_health_job(args, self.root)
+            wake.own_health_job(args, self.root)
+            wake.own_health_job(args, self.root, remove=True)
+            self.assertEqual(config.read_bytes(), before)
+        # Missing global registry remains a supported, healthy installation.
+        wake.own_health_job(args, self.root)
+
+    def test_global_health_registry_unknown_or_unsafe_refuses_before_local_registration(self):
+        directory = Path.home() / ".aida"
+        directory.mkdir()
+        config = directory / "schedule.toml"
+        args = self.health_args()
+        malformed = ('[schedule]\njobs="wrong"\n', '[schedule]\ntasks=[1]\n',
+                     '[[jobs]]\nname=7\n', '[[tasks]]\n',
+                     'schedule="wrong"\n', 'not toml')
+        for body in malformed:
+            with self.subTest(body=body):
+                config.write_text(body)
+                before = config.read_bytes()
+                with self.assertRaises(wake.Refusal):
+                    wake.own_health_job(args, self.root)
+                self.assertEqual(config.read_bytes(), before)
+                self.assertFalse((self.root / ".aida/config.toml").exists())
+                self.assertFalse((self.root / ".aida/codex-mail-health.json").exists())
+        config.write_bytes(b"\xff")
+        with self.assertRaises(wake.Refusal):
+            wake.own_health_job(args, self.root)
+        config.write_bytes(b" " * (wake.LIMIT + 1))
+        with self.assertRaises(wake.Refusal):
+            wake.own_health_job(args, self.root)
+        config.unlink()
+        target = self.root / "private-global"
+        target.write_text("")
+        config.symlink_to(target)
+        with self.assertRaises(wake.Refusal):
+            wake.own_health_job(args, self.root)
+        config.unlink()
+        os.link(target, config)
+        with self.assertRaises(wake.Refusal):
+            wake.own_health_job(args, self.root)
+        config.unlink()
+        os.mkfifo(config)
+        with self.assertRaises(wake.Refusal):
+            wake.own_health_job(args, self.root)
+        config.unlink()
+        config.write_text("[schedule]\n")
+        config.chmod(0o666)
+        with self.assertRaises(wake.Refusal):
+            wake.own_health_job(args, self.root)
+        config.chmod(0o600)
+        real_open = wake.os.open
+        def deny_registry(path, *args, **kwargs):
+            if path == "schedule.toml":
+                raise PermissionError("fixture unreadable")
+            return real_open(path, *args, **kwargs)
+        with patch.object(wake.os, "open", side_effect=deny_registry):
+            with self.assertRaises(wake.Refusal):
+                wake.own_health_job(args, self.root)
+        self.assertFalse((self.root / ".aida/config.toml").exists())
+        self.assertFalse((self.root / ".aida/codex-mail-health.json").exists())
+        wake.own_health_job(args, self.root)
+
+    def test_native_global_validation_failure_cannot_publish_local_registration(self):
+        directory = Path.home() / ".aida"
+        directory.mkdir()
+        config = directory / "schedule.toml"
+        config.write_text('[[jobs]]\nname="other"\ncommand=7\nevery="1h"\n')
+        before = config.read_bytes()
+        self.native_validator.side_effect = wake.Refusal("native registry error")
+        with self.assertRaises(wake.Refusal):
+            wake.own_health_job(self.health_args(), self.root)
+        self.assertFalse((self.root / ".aida/config.toml").exists())
+        self.assertFalse((self.root / ".aida/codex-mail-health.json").exists())
+        self.assertEqual(config.read_bytes(), before)
+        self.native_validator.assert_called_once_with(before, "fixture-aida")
+
+    def test_native_global_validation_uses_only_disposable_snapshot(self):
+        # Reach the real helper while the other ownership fixtures mock this
+        # subprocess boundary. No system binary, live project or HOME is used.
+        # Resolve the function from a separate module instance, without patches.
+        spec = importlib.util.spec_from_file_location("native_snapshot_fixture", MODULE)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        for wrapped in (False, True):
+            prefix = "schedule." if wrapped else ""
+            body = ('[[' + prefix + 'jobs]]\nname="other"\ncommand="cache verify"\nevery="1h"\n').encode()
+            def inspect(argv, **kwargs):
+                root = kwargs["cwd"]
+                self.assertNotEqual(root, self.root)
+                snapshot = root / "home/.aida/schedule.toml"
+                self.assertEqual(snapshot.read_bytes(), body)
+                self.assertNotEqual(kwargs["env"]["HOME"], str(Path.home()))
+                self.assertNotIn("AIDA_HOME", kwargs["env"])
+                self.assertEqual(argv, ["fixture-aida", "schedule", "list", "--json"])
+                return b"[]"
+            with patch.object(module, "command", side_effect=inspect) as command:
+                module.validate_global_scheduler_snapshot(body, "fixture-aida")
+                root = command.call_args.kwargs["cwd"]
+            self.assertFalse(root.exists())
+            with patch.object(module, "command", side_effect=module.Refusal("fixture failure")):
+                with self.assertRaises(module.Refusal):
+                    module.validate_global_scheduler_snapshot(body, "fixture-aida")
+
+    @unittest.skipUnless(os.environ.get("TASK2347_AIDA_BIN"), "requires an explicit native candidate")
+    def test_native_candidate_rejects_typed_and_semantic_global_errors(self):
+        spec = importlib.util.spec_from_file_location("native_candidate_fixture", MODULE)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        directory = Path.home() / ".aida"
+        directory.mkdir()
+        config = directory / "schedule.toml"
+        cases = ('command=7\nevery="1h"',
+                 'command="cache verify"\nevery="nonsense"',
+                 'prompt="inspect"\non=["NotAnEvent"]',
+                 'prompt="inspect"\nwhen="mail.bad nope"',
+                 'command="cache verify"\nevery="1h"\nquiet_hours="impossible"')
+        for wrapped in (False, True):
+            for index, fields in enumerate(cases + ('command="cache verify"\nevery="1h"',)):
+                with self.subTest(wrapped=wrapped, fields=fields):
+                    project = Path(tempfile.mkdtemp(dir=self.root))
+                    args = self.health_args()
+                    args.aida = os.environ["TASK2347_AIDA_BIN"]
+                    body = ('[[' + ('schedule.' if wrapped else '') + 'jobs]]\n'
+                            'name="unrelated"\n' + fields + '\n')
+                    config.write_text(body)
+                    if index < len(cases):
+                        with self.assertRaises(module.Refusal):
+                            module.own_health_job(args, project)
+                    else:
+                        module.own_health_job(args, project)
+                    self.assertEqual((project / ".aida/config.toml").exists(), index == len(cases))
+                    self.assertEqual((project / ".aida/codex-mail-health.json").exists(), index == len(cases))
+                    self.assertEqual(config.read_text(), body)
 
     def test_post_spawn_pipe_failure_keeps_uncertain_claim(self):
         with patch.object(wake.os, "set_blocking", side_effect=OSError("fixture pipe failure")):

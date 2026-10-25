@@ -96,6 +96,17 @@ marks the advisor job due; it does not launch a model or submit a Codex wake.
 Already-due failures stay one due job. Successful recovery is visible in the
 substrate job's normal schedule status and in the doctor check.
 
+Both derived job names must be free in the effective global registry as well as
+the project registry. The installer reads `$AIDA_HOME/.aida/schedule.toml` when
+`AIDA_HOME` is nonempty, otherwise `~/.aida/schedule.toml`, accepting native
+`[schedule]` and bare `jobs`/`tasks` shapes. Even disabled global name collisions
+refuse installation, idempotent installation and removal before either local
+registration file changes. Unsafe, unreadable, oversized or malformed global
+registries also refuse; global configuration is never modified. Captured global
+bytes are validated with the selected AIDA binary's read-only `schedule list` in
+a disposable project and HOME, preserving native cadence/event/predicate checks
+without running jobs or rereading the live global path.
+
 An existing AIDA scheduler driver must be running with a binary containing this
 health category for unattended checks. `--aida` pins the watcher subprocess; it
 does not repoint an existing scheduler driver. The advisor must verify the reviewed
