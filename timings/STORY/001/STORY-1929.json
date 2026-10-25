@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-1929",
+  "publishes": [
+    {
+      "at": "2026-10-25T06:52:12.213267335Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-25T05:19:29.757320390Z",
+      "spec": "STORY-1929",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-25T06:52:11.933436287Z",
+      "spec": "STORY-1929",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "36419baf87209251508883ff1694ecec0a8e75ea",
+        "pr": 2913,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
