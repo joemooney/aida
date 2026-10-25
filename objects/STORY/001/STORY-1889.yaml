@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T15:33:51.496539087Z
-modified_at: 2026-10-25T05:26:24.421929965Z
+modified_at: 2026-10-25T05:26:25.123976842Z
 req_type: Story
 tags:
 - architecture
@@ -211,6 +211,18 @@ comments:
   content: Advisor verified PR2917 F1 marker writer outside protected boundary; brief20261025T050758Z and agy1 rework source observed. Metadata only; preserve existing lane/stack, no hold release or new launch.
   created_at: 2026-10-25T05:26:24.235911004Z
   modified_at: 2026-10-25T05:26:24.235911004Z
+- id: 01a17186-3bdf-7d42-9766-d7270b1b18de
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-1889):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 791af3b22f0a
+    Recorded: 2026-10-25T05:07:34.623942981+00:00
+    Findings:
+    1. P1 F1 (contract-drift): at PR2917 head791af3b22, aida-cli-lib/src/merge_hold.rs:1235-1270 record_label_state remains unprotected while mandate_gates.rs removes merge_hold.rs from GATE_PROTECTED_PATHS. Its typed branch mutates a MergeHoldRecord then calls write_typed_hold (1255); its legacy branch directly writes the hold_path via std::fs::write (1270). The signed ADVISOR13:52 split explicitly requires marker write paths in gate/merge_hold_core.rs. Label/forge transport may stay outside, but this helper persists gate state and must move with required types/tests into protected core before floor removal. Preserve typed/legacy label-state behavior, existing failure handling and refusal strings; keep forge orchestration outside. Inventory every remaining direct marker write so no alternate writer is missed; pin typed and legacy paths plus protected placement. No current runtime hold bypass is alleged; the defect is exposing a hold writer to future unprotected edits.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-10-25T05:26:24.991471618Z
+  modified_at: 2026-10-25T05:26:24.991471618Z
 history:
 - id: 01a15f19-1b8d-7a60-bd9c-acf0c42193fc
   author: joe
