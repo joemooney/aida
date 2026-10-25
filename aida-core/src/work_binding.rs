@@ -32,28 +32,39 @@ impl WorkBinding {
 fn read<T: serde::de::DeserializeOwned>(path: &Path) -> Result<Option<T>> {
     use std::io::Read;
     use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
-    let mut f = match std::fs::OpenOptions::new()
-        .read(true)
-        .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
-        .open(path)
-    {
-        Ok(f) => f,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(e) => return Err(e.into()),
-    };
-    let m = f.metadata()?;
-    anyhow::ensure!(
-        m.is_file()
-            && m.nlink() == 1
-            && m.uid() == unsafe { libc::geteuid() }
-            && m.mode() & 0o022 == 0
-            && m.len() <= 1024 * 1024,
-        "unsafe WORK allocation state"
-    );
-    let mut s = String::new();
-    f.by_ref().take(1024 * 1024 + 1).read_to_string(&mut s)?;
-    anyhow::ensure!(s.len() <= 1024 * 1024, "oversize WORK allocation state");
-    Ok(Some(toml::from_str(&s)?))
+    // Atomic replacement can unlink the inode between open and fstat. Reopen
+    // that transient snapshot only; hard links and every unsafe type still
+    // refuse. Each attempt retains O_NOFOLLOW/O_NONBLOCK and the byte bound.
+    // trace:BUG-2017 | ai:codex
+    for attempt in 0..8 {
+        let mut f = match std::fs::OpenOptions::new()
+            .read(true)
+            .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
+            .open(path)
+        {
+            Ok(f) => f,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(e) => return Err(e.into()),
+        };
+        let m = f.metadata()?;
+        if m.nlink() == 0 && attempt < 7 {
+            std::thread::yield_now();
+            continue;
+        }
+        anyhow::ensure!(
+            m.is_file()
+                && m.nlink() == 1
+                && m.uid() == unsafe { libc::geteuid() }
+                && m.mode() & 0o022 == 0
+                && m.len() <= 1024 * 1024,
+            "unsafe WORK allocation state"
+        );
+        let mut s = String::new();
+        f.by_ref().take(1024 * 1024 + 1).read_to_string(&mut s)?;
+        anyhow::ensure!(s.len() <= 1024 * 1024, "oversize WORK allocation state");
+        return Ok(Some(toml::from_str(&s)?));
+    }
+    bail!("WORK allocation state changed repeatedly while opening")
 }
 
 pub fn load(root: &Path) -> Result<Option<WorkBinding>> {
@@ -300,6 +311,7 @@ mod tests {
         let d = tempfile::tempdir().unwrap();
         let root = d.path();
         crate::git_ops::init(root).unwrap();
+        crate::git_ops::configure_user(root, "Synthetic HOME", "home@example.invalid").unwrap();
         bootstrap(root).unwrap();
         let backend = crate::GitBackend::new(root)
             .unwrap()

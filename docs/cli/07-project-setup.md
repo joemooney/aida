@@ -341,8 +341,8 @@ Repeated promotion is a no-op. `db retire-legacy-ids` refuses destructive
 collapse of native node IDs: those IDs remain permanent lookup aliases, and
 `merge-gate` already supplies the canonical display ID. WORK/HUB post-pull processing skips promotion;
 Git ref transport does not enroll a clone or allocate display IDs. Conflict audit
-and transport serialization scanning are separate, remaining BUG-2017 slice 3
-and STORY-1742 work; this slice does not make an arbitrary union safe.
+and transport serialization scanning remain separate follow-up work; this
+change does not make an arbitrary union safe.
 
 ## Extending aida with external commands
 
