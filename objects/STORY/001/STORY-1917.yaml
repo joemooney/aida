@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T17:15:51.947160848Z
-modified_at: 2026-10-25T14:26:05.065320916Z
+modified_at: 2026-10-25T14:41:36.330391833Z
 req_type: Story
 relationships:
 - rel_type:
@@ -539,6 +539,24 @@ comments:
     Move policy tests and their real compiled mounts into protected gate/tests; leave orchestration-only tests outside. Final callers use direct gate paths. Preserve serde/default semantics, all existing behavior and before/after refusal inventory, including dynamic prefixes. Existing strict ratchets/folded TASK-2319/2335/1863/1864 and full PhaseB remain mandatory. This is an accepted extraction/ownership plan, not a new gate policy, source verdict, hold clearance, merge or permission to complete either story early. STORY-1889's explicit operator-merge condition remains. Local gates retain the existing targeted-area + fast rule, with touched/compile only shared test infrastructure or >10 files, and exact-head CI/independent review.
   created_at: 2026-10-25T14:26:05.065320916Z
   modified_at: 2026-10-25T14:26:05.065320916Z
+- id: 01a17382-864a-72d2-b495-437e9e513ada
+  author: codex2
+  content: |
+    codex2 SOURCE PREVIEW — local checkpoint e3db5cf7fb9d7c6300a27b4adbe59493e8499e29, NOT a forge attestation/approval.
+
+    Read complete parent/rulings R1–R6/Q1/Q2 and TASK2338–2344, inspected immutable eight-file checkpoint diff. Report: /tmp/codex2-story1917-e3db-checkpoint-preview.txt (source pins, exact symbols, fixtures and acceptance matrix). No tests/build/Cargo or live operations.
+
+    Two consequential checkpoint findings:
+    1. dispatch.rs::inspect_dispatch_inventory_readonly1898–2176 loads prior recovery fences but enumerates IDs only from request/result directories. When both halves of a previously fenced record disappear, its durable fence vanishes from inventory; reconcile_inventory_locked2214–2217 then removes recovery.json if no fences remain. Unknown execution loses target/cap protection without explicit recovery. Retain prior fences absent positive recovery; extend actual-child missing-result fixture2400 with loss of the remaining half plus restart/duplicate/cap assertions.
+    2. acquire_dispatch_lock352–522 automatically flocks/unlinks the legacy inode and switches to tick.lock/v2.lock. A legacy process with an already-open, not-yet-locked FD can later lock the orphan inode while new mutators use v2. New test2736 covers an already-held lock and a fresh postmigration EISDIR open, dropping the old FD before migration; it does not prove signed Q1 open-FD races/quiescence/all old-native mutator entrypoints. Keep legacy activation refused until explicit quiescent physical-boundary proof; ordinary unlocked legacy-file discovery is insufficient. The claimed inode identity check also lacks a path/handle comparison before unlink.
+
+    Neither area is changed in inspected concurrent R6 WIP (dispatch SHA256065c4b9abd95751c5e65a07008b8ab066f4bc295a23d3d4ca8d3cb70303024c2, mtime2026-10-25T07:24:42.056366083-07:00); this is a qualified snapshot, not an R6 review.
+
+    Evidence limits: named TASK2338 expired-submission, TASK2339 wrong-seat/principal/delegation, and TASK2343 persisted unknown-field regressions are absent here. serde strict attributes remain, but are not parser regression proof. TASK2340 test935 needs explicit persisted reason/principal assertions; R5 expression test1177 is not mixed/serve-only scheduler integration evidence. Positive source evidence includes local default validation at both admissions, canonical status scope rendering, result-first publication/owned cleanup, real detached-child missing-result duplicate/cap/non-replay fixture, tri-state ownership and shared lock/inventory consumers. No independent pass claim.
+
+    The changes have a reasonable non-completing slice boundary, but not demonstrated satisfaction of all seven children as committed. Any publication/review description must retain these gaps and parent scope. Unimplemented checkpoint3/R6/Q2 is intentionally NOT a finding against this partial checkpoint. Parent remains incomplete; no child completion, approval, claim, hold clearance or verdict. Preserve signed1917-first/1889-dispatch-extraction-after-landed-review ordering. Advisor owns disposition.
+  created_at: 2026-10-25T14:41:36.330391833Z
+  modified_at: 2026-10-25T14:41:36.330391833Z
 history:
 - id: 01a16c5e-51c4-73b2-b8a3-3b764dc7e5cd
   author: joe
