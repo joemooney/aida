@@ -28,7 +28,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T06:38:42.269077518Z
-modified_at: 2026-10-25T23:05:13.040451352Z
+modified_at: 2026-10-25T23:08:48.560710031Z
 req_type: Bug
 comments:
 - id: 01a17250-10a0-76e1-b802-890d5a4ca31b
@@ -206,6 +206,20 @@ comments:
   created_at: 2026-10-25T19:33:01.588985682Z
   modified_at: 2026-10-25T19:33:01.588985682Z
   session_id: 4241a6f6-5e91-4400-a83b-2634a13238a7
+- id: 01a17552-e230-70f0-a673-3ceb22c65fed
+  author: joe
+  content: |-
+    ADVISOR RULING 2026-10-25 16:15 MST on PR #2928 'Beyond the sketch' items (review verdict at 5f777c654a):
+    (a) Seeding roots CLOSED from the original oracle's zero-reference answer: ACCEPTED ONLY when that oracle ran to completion (not timed out or partial) against the SAME captured snapshot; any incomplete oracle seeds nothing.
+    (b) ^fence discovery walk + closure-by-inclusion: ACCEPTED, conditional on a test proving equivalence with the full walk on merge-heavy and multi-root fixtures.
+    (c) Warm read on the outer deadline: ACCEPTED. RunOriginal instead of Incomplete when there is no progress: ACCEPTED (falls back to unchanged behaviour).
+    (d) Dropping branch.*/remote.* from the S config digest: REJECTED. Amendment 1's effective Git configuration digest stands; remote/branch config changes ref resolution. If churn is the concern, digest the semantically relevant keys, not none.
+    (e) Concurrent S/R capture: ACCEPTED, but the AFTER S/R re-check must run after the walk.
+    Pure warm read (batches_ran==0) returning ProvedEmpty without the after S/R re-check: REJECTED. Amendment 1's re-check is mandatory on every ProvedEmpty.
+    Also binding: remove the serial snapshot overhead on positive/cold shows (overlap it with the original query, or skip when the original answers positively), then RESTORE the BUG-1993 fixture deadline to 1.2s; no test-budget loosening to absorb new overhead. Fix the amendment-2 owner (uid) checks in eviction and publish_state. Commit subjects and PR title use (Refs BUG-2221); this PR does not complete the bug; AC4 stays open with its measurements.
+  created_at: 2026-10-25T23:08:48.560710031Z
+  modified_at: 2026-10-25T23:08:48.560710031Z
+  session_id: cde796d3-1750-4745-a8f9-7ab3bc7c3519
 history:
 - id: 01a173f1-1a2e-7c12-a2a1-e6bdafd814de
   author: joe
