@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T17:15:51.947160848Z
-modified_at: 2026-10-25T03:17:46.886956080Z
+modified_at: 2026-10-25T04:03:25.858708411Z
 req_type: Story
 relationships:
 - rel_type:
@@ -366,6 +366,11 @@ history:
   author: joe
   timestamp: 2026-10-25T03:16:49.607976074Z
   changes: []
+- id: 01a1713a-427f-7a41-94fa-14211deb0373
+  author: joe
+  timestamp: 2026-10-25T04:03:25.951022717Z
+  session_id: 01a1709f69bf
+  changes: []
 filed_at:
   code_sha: a9e78d34914e43b30fc9d2b590d83ab96feb48b2
   branch: main
@@ -378,7 +383,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'Focused independent recheck: F1/F3/F4/F5 resolved; F2 ownership code improved but required real detached-worker race/terminal-fencing regression remains absent. All 13 executor and 7 request CI tests pass; Build required before landing. Refs STORY-1917.'
+  detail: 'Codex1 independent recheck: F1/F3/F4/F5 resolved and exact-head Build passes; F2 still lacks the requested real detached-worker handoff/race and terminal-fencing regression. Refs STORY-1917.'
   recovery_hint: address the review findings, move STORY-1917 back to In Progress, and clear the PR hold only after approval
-  shelved_by: product
-  shelved_at: 2026-10-25T03:16:49.490214676Z
+  shelved_by: reviewer
+  shelved_at: 2026-10-25T04:03:25.858708411Z
