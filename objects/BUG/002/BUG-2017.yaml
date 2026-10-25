@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T22:12:54.027870933Z
-modified_at: 2026-10-25T07:27:18.901677963Z
+modified_at: 2026-10-25T08:52:19.469251689Z
 req_type: Bug
 tags:
 - id-allocation
@@ -173,6 +173,17 @@ comments:
   content: 'ADVISOR pre-review rollout checkpoint at local slice1 e715043bc01f47041c6451a2ca3f7648e0ab7592 (not a verdict): current canonical HOME/common-Git has NO aida-allocation.toml flag. The new resolve() intentionally defaults every unmarked clone to non-authoritative, including this existing HOME. Before merge/promotion, independently prove/document the supported existing-HOME dispenser/node/block transition as well as cold WORK behavior; do not assume an existing HOME remains authoritative by hostname/shared store data, or silently enroll it from a test helper. Keep original three-slice signed-v2 scope and explicit reviewed HOME enrollment; no real flag changes now. Use private candidate artifacts for testing, never globally promote unmerged allocation code. The eventual rollout must sequence reviewed enrollment/ordinary main promotion and writer quiescence so current agents do not silently switch namespaces or hit an unexplained global-allocation refusal. If core slice1 cannot be deployed safely without slice2, keep that dependency explicit in PR/release evidence rather than declaring the parent done or weakening the default. This requests concrete compatibility/rollout evidence, not a new authority bypass or premature production mutation. Local inspection also shows24 changed files versus main, so the existing >10-file touched/compile gate applies in addition to focused tests/fast; no extra broad suite.'
   created_at: 2026-10-25T07:27:18.901677963Z
   modified_at: 2026-10-25T07:27:18.901677963Z
+- id: 01a17242-bf8d-7611-b99c-2836795798e7
+  author: joe
+  content: |-
+    ADVISOR CI rework on PR2919 at c25b9bd3855226fdb40371affef506479c127ba6 (independent review may proceed while this is fixed):
+    Completed CI(contracts) job121121332985, run40177521246, fails FIRST in bash tests/test_history_templates.sh. Actual log /tmp/advisor-pr2919-contracts.log lines1378-1388: tests/test_history_templates.py:40 run("init","--no-skills","--no-hooks") exits1 after "Setting up AIDA..." with Error: No such file or directory(os error2). The test already creates a REAL Git repo and synthetic user identity at lines37-39, with isolated HOME from shell wrapper. History/template assertions have not run. This is NOT a Cargo/test timing flake and no root cause is yet asserted.
+
+    Reproduce with the exact candidate artifact and the existing isolated history contract. Determine whether this unrelated positive fixture needs EXPLICIT synthetic-HOME enrollment (consistent with the other legacy positive fixtures) or whether an actual init/discovery ordering regression violates signed slice1 behavior. Correct the responsible mechanism; no blanket authority for all fixtures, no real HOME/common-Git flag, no global/centralized fallback, no skipped test or weakened expectation merely to green CI. Keep WORK-without-authority and missing/broken binding refusals covered, and preserve ALL signed slice2 pseudonymous bootstrap/enrollment and slice3 audit/reconcile scope; don't silently claim cold WORK bootstrap complete in slice1. If supporting cold init needs a signed slice boundary change, return a concrete minimal plan while retaining safe refusal.
+
+    For a fixture-only repair reuse the validated candidate, run affected isolated Python contract and fast; no unnecessary Rust rebuild/broad suite. If production/shared Rust changes, run the relevant focused/touched/compile checks warranted by the existing24-file PR. Background longCargo AIDA_CARGO_TIMEOUT, no slot bypass or outertimeout. Commit/push normally; aida ship dryrun force-with-lease refusal is correctly handled by normal nonforce Git/PR flow, no completion bypass. Report the final SHA as codex1 and preserve independent reviewer handoff. Main3cbb; current watcher compatibility fix5ce queued for tiny independent recheck, no need mix it into BUG PR.
+  created_at: 2026-10-25T08:52:19.469251689Z
+  modified_at: 2026-10-25T08:52:19.469251689Z
 history:
 - id: 01a16f08-1847-70c2-a9ec-772710162546
   author: joe
