@@ -416,6 +416,22 @@ fn configure_in(root: &Path, command: &TransportCommand) -> Result<()> {
     if let TransportCommand::Show { json } = command {
         return show(root, load(&common)?.as_ref(), *json);
     }
+    // Disable must clear any safely stored profile, including a corrupt or
+    // legacy one, without parsing it (TASK-2336). Unsafe storage refuses
+    // with a recovery hint rather than following or deleting it.
+    // trace:STORY-1742 | ai:claude
+    if let TransportCommand::Disable { json } = command {
+        if let Err(error) = fs::symlink_metadata(common.join(PROFILE_FILE)) {
+            if error.kind() == std::io::ErrorKind::NotFound {
+                return show(root, None, *json);
+            }
+        }
+        let _lock = configuration_lock(&common)?;
+        let private = private::Private::open(&common)?;
+        private.remove("aida-transport-receipt.json")?;
+        private.remove(PROFILE_FILE)?;
+        return show(root, None, *json);
+    }
     let _lock = configuration_lock(&common)?;
     let previous = load(&common)?;
     match command {
@@ -447,15 +463,7 @@ fn configure_in(root: &Path, command: &TransportCommand) -> Result<()> {
                 .write(PROFILE_FILE, &serde_json::to_vec_pretty(&profile)?)?;
             show(root, Some(&profile), *json)
         }
-        TransportCommand::Disable { json } => {
-            if previous.is_some() {
-                let private = private::Private::open(&common)?;
-                private.remove("aida-transport-receipt.json")?;
-                private.remove(PROFILE_FILE)?;
-            }
-            show(root, None, *json)
-        }
-        TransportCommand::Show { .. } => unreachable!(),
+        TransportCommand::Show { .. } | TransportCommand::Disable { .. } => unreachable!(),
         TransportCommand::Policy { file, reviewed } => {
             if !reviewed || previous.is_none() {
                 bail!("Enable the WORK profile and explicitly review the policy first");

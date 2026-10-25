@@ -9,6 +9,13 @@ use std::os::fd::{AsRawFd, FromRawFd};
 use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 
+/// Names that predate owner-only private storage (see `Private::file`).
+const LEGACY_NAMES: &[&str] = &["aida-transport.json", "aida-transport.lock"];
+
+fn unsafe_hint(name: &str) -> String {
+    format!("Transport private file {name} in the Git common directory is unsafe: it must be a regular file you own, with one link and owner-only permissions. If it is yours, restore it with `chmod 600`; otherwise move it aside and re-enroll. Nothing was changed.")
+}
+
 pub(super) struct Private {
     dir: File,
     path: PathBuf,
@@ -23,7 +30,7 @@ impl Private {
             .map_err(|_| anyhow::anyhow!("Transport private directory unavailable"))?;
         let meta = dir.metadata()?;
         if meta.uid() != unsafe { libc::geteuid() } || meta.mode() & 0o022 != 0 {
-            bail!("Transport private directory has unsafe ownership or permissions");
+            bail!("Transport private directory (the clone's Git common directory) must be owned by you and not group- or other-writable; correct its ownership or permissions (for example `chmod go-w`) before retrying.");
         }
         Ok(Self {
             dir,
@@ -52,20 +59,29 @@ impl Private {
                 libc::O_RDONLY
             };
         let fd = unsafe { libc::openat(self.dir.as_raw_fd(), name.as_ptr(), flags, 0o600) };
+        let display = name.to_string_lossy().into_owned();
         if fd < 0 {
             if !create && std::io::Error::last_os_error().kind() == std::io::ErrorKind::NotFound {
                 return Ok(None);
             }
-            bail!("Transport private file unavailable or unsafe");
+            bail!("{}", unsafe_hint(&display));
         }
         let file = unsafe { File::from_raw_fd(fd) };
         let m = file.metadata()?;
+        // Profiles and locks created before private storage existed were
+        // written with the umask (0644). Tolerate exactly that legacy shape
+        // for those two names: still a singly linked regular file you own,
+        // with no group/other write or special bits. Policy and receipt
+        // stay owner-only; link, type and owner checks are never relaxed.
+        // trace:STORY-1742 | ai:claude
+        let mode = m.mode() & 0o7777;
+        let legacy = LEGACY_NAMES.contains(&display.as_str()) && mode & 0o7022 == 0;
         if !m.is_file()
             || m.nlink() != 1
             || m.uid() != unsafe { libc::geteuid() }
-            || m.mode() & 0o777 != 0o600
+            || (mode != 0o600 && !legacy)
         {
-            bail!("Transport private file requires singly linked owner-only regular storage");
+            bail!("{}", unsafe_hint(&display));
         }
         Ok(Some(file))
     }
@@ -91,6 +107,12 @@ impl Private {
         let file = self.file("aida-transport.lock", true)?.unwrap();
         file.try_lock_exclusive()
             .map_err(|_| anyhow::anyhow!("Transport configuration is busy"))?;
+        // Migrate a legacy lock in place: same inode, never unlinked.
+        if file.metadata()?.mode() & 0o777 != 0o600
+            && unsafe { libc::fchmod(file.as_raw_fd(), 0o600) } != 0
+        {
+            bail!("{}", unsafe_hint("aida-transport.lock"));
+        }
         // Ensure the path still names the locked inode. Never unlink it.
         let named = self.file("aida-transport.lock", false)?.unwrap();
         if named.metadata()?.ino() != file.metadata()?.ino() {
