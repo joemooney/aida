@@ -24563,6 +24563,11 @@ Commands:
   list     List queued, running, and completed dispatch requests
   show     Show one dispatch request and its current result record
   cancel   Cancel a pending dispatch request
+  tick     Execute one substrate scheduler pass over pending `take` and `impl` requests (leaves
+           `review`, `flow`, and `train` waiting for `serve`)
+  serve    Long-running executor started from a human advisor terminal after `eval "$(aida role
+           enter advisor ...)"` to run grant-requiring verbs (`review`, `flow`, `train`) as well as
+           `take` and `impl`
   help     Print this message or the help of the given subcommand(s)
 
 Options:
@@ -24838,6 +24843,77 @@ Arguments:
           Request ID (UUID or unique prefix)
 
 Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida dispatch tick
+Execute one substrate scheduler pass over pending `take` and `impl` requests (leaves `review`,
+`flow`, and `train` waiting for `serve`)
+
+Usage: aida dispatch tick [OPTIONS]
+
+Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida dispatch serve
+Long-running executor started from a human advisor terminal after `eval "$(aida role enter advisor
+...)"` to run grant-requiring verbs (`review`, `flow`, `train`) as well as `take` and `impl`
+
+Usage: aida dispatch serve [OPTIONS]
+
+Options:
+      --once
+          Run a single pass and exit instead of polling
+
+      --poll-ms <POLL_MS>
+          Poll interval in milliseconds when running continuously
+          
+          [default: 2000]
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida dispatch run
+Internal per-request worker spawned by `dispatch tick` or `dispatch serve`
+
+Usage: aida dispatch run [OPTIONS] <ID>
+
+Arguments:
+  <ID>
+          Exact request UUID
+
+Options:
+      --via-serve
+          Set when spawned by `aida dispatch serve` from a bound advisor terminal
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -48828,5 +48904,83 @@ Working on aida itself
       }
     ],
     "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "dispatch",
+      "tick"
+    ],
+    "about": "Execute one substrate scheduler pass over pending `take` and `impl` requests (leaves `review`, `flow`, and `train` waiting for `serve`)",
+    "flags": [
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "dispatch",
+      "serve"
+    ],
+    "about": "Long-running executor started from a human advisor terminal after `eval \"$(aida role enter advisor ...)\"` to run grant-requiring verbs (`review`, `flow`, `train`) as well as `take` and `impl`",
+    "flags": [
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "once",
+        "takes_value": false,
+        "help": "Run a single pass and exit instead of polling"
+      },
+      {
+        "name": "poll-ms",
+        "takes_value": true,
+        "help": "Poll interval in milliseconds when running continuously"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "dispatch",
+      "run"
+    ],
+    "about": "Internal per-request worker spawned by `dispatch tick` or `dispatch serve`",
+    "flags": [
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "via-serve",
+        "takes_value": false,
+        "help": "Set when spawned by `aida dispatch serve` from a bound advisor terminal"
+      }
+    ],
+    "hidden": true
   }
 ]
