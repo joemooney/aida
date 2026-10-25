@@ -1,0 +1,23 @@
+id: 01a17257-ec1c-7ed2-89b4-d1caaf591945
+spec_id: BUG-2222
+agreed_id: BUG-2222
+title: Terminator send emits split busctl signatures and refuses agent delivery
+description: |
+  Actual fleet failure: installed aida session send agy1/ag y2 with --enter refuses before delivery: Terminator plugin send failed: Too many parameters for signature. No raw terminal workaround or delivery claim.
+  Source main3cbb90b0c94e aida-cli-lib/src/terminal_cmd.rs terminator_send_command emits busctl call ... Send s UUID s TEXT; terminator_send_token_command emits SendToken s UUID s TEXT s TOKEN. busctl requires ONE combined SIGNATURE argument then values (local busctl --help). Correct shape is Send ss UUID TEXT; SendToken sss UUID TEXT TOKEN. Focus s UUID already has the correct one-string shape. Existing terminator_uses_busctl_session_bus test incorrectly pins the broken argv and thus mirrors the bug.
+  Acceptance: correct the builders narrowly; preserve SendToken selection, authenticated token handling, argument boundaries (spaces/newlines/options never shell-evaluated), no logging credentials; add a decisive busctl/parser-level regression for two and three strings in an isolated test environment, alongside exact argv tests, so a repeated signature-token sequence fails. A non-existent destination service proves parsing independently of installed plugin and sends no live agent message. Positive syntax may fail at missing service, but must pass parsing; distinguish those errors rather than falsely claim delivery. Existing live bus introspection currently reports net.aida.Terminator service unavailable; no plugin install or remote enablement is authorized by this source fix.
+  Priority: bounded fleet-unblocking repair, own separate branch/worktree, preserve dirty BUG2017 work. Independent reviewer then exact-head CI, normal push/no force; do not self-review/merge, change grants, or use raw TTY/signals. Local: AIDA_CARGO_TIMEOUT=20m focused terminal_cmd test filter plus make check-ci-fast, long Cargo background; no broad runtime/slot bypass/nested timeout. touched/compile only shared infra or>10files. Parent STORY1843 routing, not a second mail architecture.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-25T09:15:27.132994258Z
+modified_at: 2026-10-25T09:15:27.132994258Z
+req_type: Bug
+filed_at:
+  code_sha: 3cbb90b0c94e0e748bbfc4eb1f75d7f9c2125c68
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 3cbb90b0c9
+  vendor: codex
