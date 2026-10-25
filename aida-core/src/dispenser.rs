@@ -219,7 +219,24 @@ impl FileDispenser {
         Ok(Self { path, mode })
     }
 
+    /// Open an already-bound provider without ever recreating lost state.
+    // trace:BUG-2017 | ai:codex
+    pub fn open_existing(path: std::path::PathBuf, mode: IdMode) -> Result<Self> {
+        crate::allocation_authority::admit_file_dispenser(&path, &mode)?;
+        let provider = Self { path, mode };
+        crate::BlockRegistry::with_dispense_lock(&provider.path, || {
+            let state = provider.load_state()?;
+            anyhow::ensure!(state.mode == provider.mode, "dispenser mode mismatch");
+            Ok(())
+        })?;
+        Ok(provider)
+    }
+
     fn load_state(&self) -> Result<DispenserState> {
+        // trace:BUG-2017 | ai:codex — no following links or blocking on bound state.
+        if let Some(state) = crate::work_binding::bound_counter_state(&self.path)? {
+            return Ok(state);
+        }
         // Reader can race a concurrent `aida add` writer mid-`write_atomic`;
         // on Windows that surfaces as a transient PermissionDenied/NotFound
         // from `CreateFile`. Retry through `read_atomic` so the dispenser

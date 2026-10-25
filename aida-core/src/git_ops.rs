@@ -6640,6 +6640,8 @@ pub fn merge_gate(store_path: &Path) -> Result<Vec<(String, String)>> {
 }
 
 fn merge_gate_locked(store_path: &Path) -> Result<Vec<(String, String)>> {
+    // trace:BUG-2017 | ai:codex — check authority again at the write boundary.
+    crate::allocation_authority::require_global(store_path)?;
     use crate::node::AgreedCounters;
     use crate::object_store;
 

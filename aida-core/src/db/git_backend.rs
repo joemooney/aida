@@ -1703,10 +1703,12 @@ impl GitBackend {
         // Only an on-disk spec missing from the incoming store can be a
         // rename's old path, so the map reads just those (none: no reads).
         // trace:STORY-1674 | ai:claude
-        let incoming_specs: std::collections::HashSet<&str> = store
+        // trace:BUG-2017 | ai:codex — compare the on-disk canonical namespace.
+        let incoming_specs: std::collections::HashSet<String> = store
             .requirements
             .iter()
             .filter_map(|r| r.spec_id.as_deref())
+            .map(object_store::canonical_spec_id)
             .collect();
         let mut previous_by_uuid: Option<std::collections::HashMap<uuid::Uuid, Requirement>> = None;
 
@@ -1714,7 +1716,7 @@ impl GitBackend {
             let Some(ref spec_id) = req.spec_id else {
                 continue;
             };
-            current_specs.insert(spec_id.clone());
+            current_specs.insert(object_store::canonical_spec_id(spec_id));
             let disk_text = object_store::read_object_text(&self.objects_root, spec_id)?;
             if let Some(snapshot) = snapshot {
                 let loaded_fp = snapshot.disk(spec_id);

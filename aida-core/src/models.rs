@@ -5379,13 +5379,19 @@ pub struct SnapshotEntry {
     pub caller: Option<u64>,
 }
 
+// trace:BUG-2017 | ai:codex — filenames and snapshot keys share one namespace.
 impl LoadSnapshot {
     /// A snapshot fresh from a load: object id -> disk fingerprint.
     pub fn new(map: std::collections::BTreeMap<String, u64>) -> Self {
         Self {
             objects: std::sync::Mutex::new(
                 map.into_iter()
-                    .map(|(k, disk)| (k, SnapshotEntry { disk, caller: None }))
+                    .map(|(k, disk)| {
+                        (
+                            crate::object_store::canonical_spec_id(&k),
+                            SnapshotEntry { disk, caller: None },
+                        )
+                    })
                     .collect(),
             ),
             metadata: std::sync::Mutex::new(None),
@@ -5406,26 +5412,33 @@ impl LoadSnapshot {
 
     /// Disk fingerprint recorded for `id`, if the store saw that object.
     pub fn disk(&self, id: &str) -> Option<u64> {
-        self.map().get(id).map(|e| e.disk)
+        self.map()
+            .get(&crate::object_store::canonical_spec_id(id))
+            .map(|e| e.disk)
     }
 
     /// Caller baseline for `id`: the in-memory copy's fingerprint as of the
     /// last load or save.
     pub fn baseline(&self, id: &str) -> Option<u64> {
-        self.map().get(id).map(|e| e.caller.unwrap_or(e.disk))
+        self.map()
+            .get(&crate::object_store::canonical_spec_id(id))
+            .map(|e| e.caller.unwrap_or(e.disk))
     }
 
     /// Record that `id` now holds content with disk fingerprint `disk`, and
     /// the in-memory copy has fingerprint `caller`.
     pub fn record(&self, id: &str, disk: u64, caller: u64) {
         let caller = (caller != disk).then_some(caller);
-        self.map()
-            .insert(id.to_string(), SnapshotEntry { disk, caller });
+        self.map().insert(
+            crate::object_store::canonical_spec_id(id),
+            SnapshotEntry { disk, caller },
+        );
     }
 
     /// Record that `id` no longer exists.
     pub fn remove(&self, id: &str) {
-        self.map().remove(id);
+        self.map()
+            .remove(&crate::object_store::canonical_spec_id(id));
     }
 
     /// The caller's store-level metadata baseline (as of the load or last
@@ -6517,10 +6530,15 @@ impl RequirementsStore {
                 {
                     return String::new();
                 }
-                let number = match self.id_config.numbering {
-                    NumberingStrategy::Global => self.get_next_global_number(),
-                    NumberingStrategy::PerPrefix | NumberingStrategy::PerFeatureType => {
-                        self.get_next_counter_for_prefix(&prefix)
+                let number = if self.dispenser.as_ref().is_some_and(|d| d.node_local_only()) {
+                    // trace:BUG-2017 | ai:codex — WORK sequences are per type.
+                    self.get_next_counter_for_prefix(&prefix)
+                } else {
+                    match self.id_config.numbering {
+                        NumberingStrategy::Global => self.get_next_global_number(),
+                        NumberingStrategy::PerPrefix | NumberingStrategy::PerFeatureType => {
+                            self.get_next_counter_for_prefix(&prefix)
+                        }
                     }
                 };
 
@@ -6627,11 +6645,16 @@ impl RequirementsStore {
             return String::new();
         }
 
-        let number = match self.id_config.numbering {
-            NumberingStrategy::Global => self.get_next_global_number(),
-            NumberingStrategy::PerPrefix | NumberingStrategy::PerFeatureType => {
-                // Treat the override prefix as its own counter
-                self.get_next_counter_for_prefix(&prefix_upper)
+        let number = if self.dispenser.as_ref().is_some_and(|d| d.node_local_only()) {
+            // trace:BUG-2017 | ai:codex — WORK overrides share per-type counters.
+            self.get_next_counter_for_prefix(&prefix_upper)
+        } else {
+            match self.id_config.numbering {
+                NumberingStrategy::Global => self.get_next_global_number(),
+                NumberingStrategy::PerPrefix | NumberingStrategy::PerFeatureType => {
+                    // Treat the override prefix as its own counter
+                    self.get_next_counter_for_prefix(&prefix_upper)
+                }
             }
         };
 

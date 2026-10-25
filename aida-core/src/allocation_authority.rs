@@ -150,7 +150,10 @@ pub fn effective_policy(
     Ok(crate::IdFormatPolicy::NodeAwareOnly)
 }
 
-fn node(root: &Path) -> Result<String> {
+pub fn node(root: &Path) -> Result<String> {
+    if let Some(binding) = crate::work_binding::load(root)? {
+        return Ok(binding.node_id);
+    }
     let node = crate::NodeConfig::load(&root.join(".aida/node.toml"))?.node_id;
     if node.is_empty()
         || node.len() > 128
@@ -304,6 +307,8 @@ pub fn admit_object_file(objects: &Path, req: &crate::Requirement) -> Result<()>
 
 /// Direct file dispensers under a clone cannot spend centralized counters.
 pub fn admit_file_dispenser(path: &Path, mode: &crate::dispenser::IdMode) -> Result<()> {
+    // trace:BUG-2017 | ai:codex — inspect the original bound path before resolving aliases.
+    crate::work_binding::bound_counter_state(path)?;
     let resolved = destination(path)?;
     let path = resolved.as_path();
     let parent = path.parent().context("invalid dispenser location")?;
@@ -317,6 +322,15 @@ pub fn admit_file_dispenser(path: &Path, mode: &crate::dispenser::IdMode) -> Res
     }
     if resolve(root)?.authoritative {
         return Ok(());
+    }
+    // trace:BUG-2017 | ai:codex — opaque nodes have one existing counter,
+    // including direct provider construction, not merely the model wrapper.
+    if crate::work_binding::load(root)?.is_some() {
+        if path != crate::work_binding::counter_path(root)? || !path.try_exists()? {
+            bail!(
+                "bound WORK counter missing or alternate provider path; explicit recovery required"
+            )
+        }
     }
     if mode
         != &(crate::dispenser::IdMode::Distributed {
@@ -333,6 +347,7 @@ pub fn admit_file_dispenser(path: &Path, mode: &crate::dispenser::IdMode) -> Res
 struct CloneDispenser {
     root: PathBuf,
     inner: Option<crate::models::DispenserHandle>,
+    migrate_registered_legacy: bool,
 }
 impl CloneDispenser {
     fn inner(&self) -> Result<crate::models::DispenserHandle> {
@@ -343,22 +358,43 @@ impl CloneDispenser {
                 .clone()
                 .context("authoritative allocator has no configured dispenser");
         }
+        // trace:BUG-2017 | ai:codex — lifecycle migration is lazy, after model
+        // identity admission. Loading a provider for a refused global request
+        // must never publish a new binding or advance any counter.
+        if self.migrate_registered_legacy
+            && crate::work_binding::load(&self.root)?.is_none()
+            && self.root.join(".aida/node.toml").try_exists()?
+        {
+            crate::work_binding::bootstrap(&self.root)?;
+        }
         let binding = node(&self.root)?;
         let inner = if let Some(inner) = &self.inner {
             inner.clone()
         } else {
-            crate::models::DispenserHandle(std::sync::Arc::new(
+            // trace:BUG-2017 | ai:codex — a bound counter may never be re-created.
+            let provider = if crate::work_binding::load(&self.root)?.is_some() {
+                crate::dispenser::FileDispenser::open_existing(
+                    crate::work_binding::counter_path(&self.root)?,
+                    crate::dispenser::IdMode::Distributed {
+                        node_id: binding.clone(),
+                    },
+                )?
+            } else {
                 crate::dispenser::FileDispenser::open(
                     self.root.join(".aida/dispenser.toml"),
                     crate::dispenser::IdMode::Distributed {
                         node_id: binding.clone(),
                     },
-                )?,
-            ))
+                )?
+            };
+            crate::models::DispenserHandle(std::sync::Arc::new(provider))
         };
         // Check lazy and supplied providers alike, even when a local counter
         // path aliases an independent file outside this clone.
-        if inner.state()?.mode != (crate::dispenser::IdMode::Distributed { node_id: binding }) {
+        let state = inner.state()?;
+        // A supplied lifecycle provider may have performed one-time migration.
+        let binding = node(&self.root)?;
+        if state.mode != (crate::dispenser::IdMode::Distributed { node_id: binding }) {
             bail!("dispenser does not match this clone's node binding")
         }
         Ok(inner)
@@ -442,8 +478,20 @@ pub fn dispenser(
         CloneDispenser {
             root: root.into(),
             inner,
+            migrate_registered_legacy: false,
         },
     )))
+}
+
+/// Supported CLI/MCP lifecycle provider: migrate registered legacy state on
+/// the first admitted allocation, never merely while dispatching a request.
+// trace:BUG-2017 | ai:codex
+pub fn lifecycle_dispenser(root: &Path) -> crate::models::DispenserHandle {
+    crate::models::DispenserHandle(std::sync::Arc::new(CloneDispenser {
+        root: root.into(),
+        inner: None,
+        migrate_registered_legacy: true,
+    }))
 }
 
 /// Existing CRUD fixtures explicitly model HOME; never enroll a real clone.
