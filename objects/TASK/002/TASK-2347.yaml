@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T02:08:29.032100054Z
-modified_at: 2026-10-25T15:30:31.648804531Z
+modified_at: 2026-10-25T15:32:29.890246865Z
 req_type: Task
 tags:
 - codex
@@ -441,6 +441,11 @@ comments:
   content: Ordinary watcher scan recovered without code/bound changes. Native doctor0findings, actual pre-synthetic crossroot6.11s/1292ACK/0unread (/tmp/task2347-current-thread-pre-synthetic-scan.json). Author notified no speculative fix. Sent authorized single synthetic IDc52e4847-bbc7-4036-a47d-0734e42e8b8d nonce20261025-1531-64a51940 to advisor for exactactualthread01a173a5-a106-78a3-84ca-0385711b3557. Sendingturn has NOTREAD/ACKed message and is ending for idleboundary. Receipt/tmp/task2347-live-test-64a51940.json. Queue acceptance/actualidleturn/duplicateproof remain UNPROVEN; sameID knowledge from senderturn is not a wake receipt. Keep taskopen until real delivery and no-duplicate verification.
   created_at: 2026-10-25T15:30:31.648804531Z
   modified_at: 2026-10-25T15:30:31.648804531Z
+- id: 01a173b1-1e42-7930-907d-2f2e9876d776
+  author: joe
+  content: 'Native watcher ledger now records queue acceptance of syntheticc52e4847-bbc7-4036-a47d-0734e42e8b8d and actualauthorreply7a919800-c7ba-4700-9b68-7f187e7e1cb3 at1792942256.6321847 (15:30:56UTC), no inflight/recovery. Postacceptance health scans15:31:09 and15:31:44 retain acceptedunread IDs without new last_acceptance. Actualidleturn remains unproven: currentturn originated automaticgoalcontinuation before queueacceptance, not watcher wake. Peek reads only, noACK. Receipt/tmp/task2347-live-test-64a51940.json updated. Ordinary scan recovery means no speculative source fix required; author fullreceipt/crossroot reasoning accepted and routed back to full1742S3a via existingbrief. If persistent scanfailures recur, fixedconcurrency proposal requires isolated evidence before code; bounds/semantics unchanged.'
+  created_at: 2026-10-25T15:32:29.890246865Z
+  modified_at: 2026-10-25T15:32:29.890246865Z
 history:
 - id: 01a170d1-497a-7282-8dcb-91782bba7dc3
   author: joe
