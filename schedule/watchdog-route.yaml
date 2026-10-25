@@ -1,13 +1,6 @@
 job: watchdog-route
-last_run: 2026-10-15T15:42:32.902957762Z
+last_run: 2026-10-25T13:46:20.257536855Z
 last_by:
   seat: advisor
-  session: 4be6f69d-3d6a-4fba-b6e3-41190732a1be
-  vendor: claude
+  vendor: codex
 result: done
-due_since: 2026-10-20T06:56:23.440307551Z
-due_reason: on CronJobFailed:watchdog
-due_failure:
-  trip_id: watchdog@2026-10-24T17:21:02.260001254Z
-  job: watchdog
-  error: 'exit 1: '
