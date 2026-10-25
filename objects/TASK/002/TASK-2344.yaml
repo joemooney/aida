@@ -18,12 +18,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-24T22:36:27.858473051Z
-modified_at: 2026-10-24T22:36:27.858473051Z
+modified_at: 2026-10-25T04:52:25.101403879Z
 req_type: Task
 tags:
 - from-review:PR-2905
 - robustness
 - severity:cosmetic
+comments:
+- id: 01a17167-1b8d-71a1-81b4-de1c1a2c56c6
+  author: joe
+  content: 'PROXY DECISION for joe: Approve crash-safe request/result publication and bounded orphan recovery under the existing lock. Preserve active records and collision protection; no arbitrary age-based deletion of live/unknown-owned work. Implementer proposes exact recovery state transitions before coding.'
+  created_at: 2026-10-25T04:52:25.101403879Z
+  modified_at: 2026-10-25T04:52:25.101403879Z
 filed_at:
   code_sha: 9457e495247a3c9de111d15507fabd2cd0923079
   branch: pr-2905
