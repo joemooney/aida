@@ -35,7 +35,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T21:07:20.910348370Z
-modified_at: 2026-10-25T13:55:49.865250059Z
+modified_at: 2026-10-25T13:59:21.005857621Z
 req_type: Story
 tags:
 - portable-intake
@@ -133,6 +133,11 @@ comments:
   content: 'Readiness map bootstrap symbol addendum at pinned main a01a6989984ee2c6261074fa5f9d415719d3130a: the concrete init callers are init_cmd::handle_init_distributed_worktree, handle_init_post_clone, and handle_init_distributed_sibling. Their store-location/attachment work must be separated from existing product-writing scaffold/commit paths for adoption mode; whole init is not a zero-product-write bootstrap. Local report updated. Planning evidence only; signed predecessor and all acceptance unchanged.'
   created_at: 2026-10-25T13:55:49.865250059Z
   modified_at: 2026-10-25T13:55:49.865250059Z
+- id: 01a1735b-d6ad-7941-a259-474bbe7faee9
+  author: joe
+  content: 'ADVISOR readiness-map disposition2026-10-25: read full codex2 /tmp/codex2-story1741-readiness-map.txt plus canonical signed1741comments; independently spot-checked maina01 store_locate::locate_distributed_store_from_with_roots config-before-location, trusted_config default-product-branch reader, config_commit::finish_config_change staging exact product.aida/config.toml, and transport_profile::SANITIZATION_PENDING. ACCEPT map as source-grounded planning evidence for ALL3signedslices, not implementation/completion. Actual pure Git/common-dir discovery+inertnamespace/localversion first; deterministic owned ignoredprojection plus allconfig/scaffold/hook/harnesslaunchwriters second; inventory-onlymigration/localowneduninstall/explicitCIrevision+docs third. Hard sequencing after REALSTORY1742v1scanner/preparedoutgoinghistory+metadata/trustedbaseline/WORKFFpull+E2E, and integrate finalreviewedBUG2017commonidentity/bootstrap/storelockcontracts. No source-only scanner substitute/adoptionexemption or implementationbeforepredecessor. No newtrustanchor/executableplaneconfig, trackedAGENTS/CLAUDE/harnessoverwrite, auto initialproductcommit, migrationfiledeletion, or authority/credential export. Existing owned watcher schedulerlocalconfig writers must not become sharedadoption content/sideeffects. Future implementation must prove actual supported harness consumption, trackedbytes/index/refs/remotes invariance onclean+predirtyfixtures, stricttrust/unknownrevision/ownership/concurrency/interruption/uninstall preservation. Userfullgoal includes allacceptance; lastsliceonlycompletesafterrealintegrationsandindependentreview. Queued1741bottomimplementer withpredecessornote, no prematurelaunch. Code2newheadPR2919eff2review preempts otherreadinesswork.'
+  created_at: 2026-10-25T13:59:21.005857621Z
+  modified_at: 2026-10-25T13:59:21.005857621Z
 history:
 - id: 01a16a97-f720-7ad0-b09e-3e490758eade
   author: joe.mooney
