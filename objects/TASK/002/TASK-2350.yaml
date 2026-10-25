@@ -13,12 +13,12 @@ description: |
 
   Raised by the implementer while working TASK-2346.
   Branch: task-2346  ·  Commit: 7a71a9c (PR #2923)
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T16:46:44.257241034Z
-modified_at: 2026-10-25T20:17:23.250144891Z
+modified_at: 2026-10-25T20:45:38.187899535Z
 req_type: Task
 tags:
 - from-implementer:TASK-2346
@@ -56,6 +56,21 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a174cf-ce02-7a30-a701-8747adea892a
+  author: aida-auto-bump
+  timestamp: 2026-10-25T20:45:38.178763649Z
+  session_id: cde796d3-1750-4745-a8f9-7ab3bc7c3519
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a174cf-ce0b-7d20-9459-883fb89dc90b
+  timestamp: 2026-10-25T20:45:38.187890741Z
+  agent: implementer
+  commit_sha: 2799be1e03bdaba0d499ad8f15529d9ed065eaa8
+  summary: probe_remote separates 'no such remote' (Ok(false)) from a failed lookup (Err); a seat clone's origin is read from its verified host main; a failed lookup now shows as needs-attention, not 'local-only'. Covered by origin_presence_answers_for_a_seat_clone_and_never_guesses_absent; PR CI green at 4f04aa6.
+  review_verdict: approved
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: a01a698998
@@ -66,3 +81,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-25T20:17:23.250144891Z
   implemented_by: joe
+  completed_at: 2026-10-25T20:45:38.178759010Z
+  completion_sha: 2799be1e03bdaba0d499ad8f15529d9ed065eaa8
