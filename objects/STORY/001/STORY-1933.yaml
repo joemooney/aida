@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-25T19:32:51.458432179Z
-modified_at: 2026-10-25T19:33:06.266328796Z
+modified_at: 2026-10-25T19:34:14.295282653Z
 req_type: Story
 relationships:
 - rel_type:
@@ -32,6 +32,12 @@ relationships:
   target_id: 01a16ac9-0c37-7d72-a140-fa29d8b4b141
   created_at: 2026-10-25T19:33:06.266325643Z
   created_by: joe
+comments:
+- id: 01a1748e-7017-7493-acbd-d9cb2bbe8422
+  author: mcp
+  content: Independent STRICT S3a review requested at full head3e0b31357e306f592fad7f1912b910b38ac7bca8, PR2929. This is a non-completing slice of STORY1742 signed-v2 (S3a only). Please audit full-parent/historical graph closure, raw+decoded and declared opaque encoding refusals, structural path scoping, anchored private policy/receipt trust, exact identity/hook/credential preservation, source/policy revalidation and store-lock release before one pinned non-forced push, uncertain-publication/receipt outcomes, ordinary unprofiled clone behavior. Existing23 regressions retained within31transportfixtures; author-controlled3round findings checks are NOT independent approval. S3b allocator/shared-backend changes are isolated uncommitted in another worktree and not part of this PR. All intake/pull/e2e rows remain required on the parent; do not mark parent Completed from this Refs PR. CI running, no merge/hold-clear permission.
+  created_at: 2026-10-25T19:34:14.295264444Z
+  modified_at: 2026-10-25T19:34:14.295264444Z
 history:
 - id: 01a1748d-69bb-7e12-9991-61063cbb7965
   author: joe
