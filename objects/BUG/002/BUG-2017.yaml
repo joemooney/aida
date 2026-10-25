@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T22:12:54.027870933Z
-modified_at: 2026-10-25T06:45:14.869982361Z
+modified_at: 2026-10-25T07:23:30.139795600Z
 req_type: Bug
 tags:
 - id-allocation
@@ -160,6 +160,14 @@ comments:
     No transport files/scanner are edited here. Remaining pseudonymous bootstrap/home promotion is slice2; all-conflict reconciliation/audit/scanner integration is slice3. Parent stays In Progress; slice1 ships Refs BUG-2017. Running relevant allocation/CLI-MCP tests and required touched/compile/fast because the overall change exceeds10files and shared core infrastructure. No broad workspace runtime suite, slot bypass or real HOME authority flag.
   created_at: 2026-10-25T06:45:14.869982361Z
   modified_at: 2026-10-25T06:45:14.869982361Z
+- id: 01a171f1-6ddb-72b3-9f6d-bd6045d43241
+  author: ai:codex:joe
+  content: |
+    codex1 resumed after bounded watcher priority correction0dfceea00ac371445ff4aa755801f6cdce5a4668 was pushed/notified. BUG branch rebased without conflicts onto main3cbb90b0c9, current checkpoint e715043bc01f47041c6451a2ca3f7648e0ab7592.22new allocation tests pass, including locked first-use32writer reservations and SQLite preflight exact bytes. Isolated stale core archive caused LLVM hidden-symbol linker errors; cleared only this worktree's generated core package artifacts and normal rebuild reached CLI-lib runtime tests.
+
+    Touched CLI-lib selection:138pass24fail, all currently observed legacy fixtures seeded bare global IDs/blocks without explicit synthetic HOME. I own a new cfg(test)-only test_env::enroll_synthetic_home helper plus explicit migration of the8 affected fixture files (bug1602,bug1611,task1426,task1468,task1488,task928,tags_replace_warning,task1981_add). No global test template auto-enrollment or production authority weakening. Test helper canonicalizes and restricts enrollment to synthetic temporary roots, initializes their Git identity when missing, and writes only their local flag. Existing new WORK candidate tests remain un-enrolled. Overall>10files/shared test infrastructure retains required touched+compile+fast. No transport/scanner method changes, no outer lock, no real HOME authority. Parent remains In Progress and slice1 Refs only.
+  created_at: 2026-10-25T07:23:30.139795600Z
+  modified_at: 2026-10-25T07:23:30.139795600Z
 history:
 - id: 01a16f08-1847-70c2-a9ec-772710162546
   author: joe
