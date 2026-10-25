@@ -1,0 +1,10 @@
+job: aida-codex-mail-64a51940ec58c39e-health
+last_run: 2026-10-25T15:25:04.512016381Z
+last_by:
+  seat: substrate
+  vendor: tick
+result: failed:1
+failure_trips:
+- trip_id: aida-codex-mail-64a51940ec58c39e-health@2026-10-25T15:25:04.512016381Z
+  at: 2026-10-25T15:25:04.512016381Z
+  status: 1
