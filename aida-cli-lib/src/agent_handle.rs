@@ -624,6 +624,13 @@ fn decide(
         }
         return Ok((name.to_string(), existing));
     }
+    // No second native-session lookup here: the early one above already ran
+    // for this request. Under `reserve_handle` the namespace lock gives a
+    // stable snapshot of cooperating reservation writers, so a repeat lookup
+    // could not find a binding the first one missed. `preview_handle` is
+    // unlocked and best effort by design; the real reservation redecides
+    // under the lock.
+    // trace:TASK-2346 | ai:claude
     let prefix = generated_handle(req.agent_type, req.role, 0);
     let counter = handles_dir(project_root).join("counters").join(&prefix);
     let start = match read_allocation_text(&counter, 64)? {
