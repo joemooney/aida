@@ -85,6 +85,12 @@ impl DispenserState {
 /// 2. Persistence — values survive process restarts
 /// 3. Thread safety — concurrent callers get distinct values
 pub trait Dispenser: Send + Sync {
+    /// Reject explicit identities before advancing any counter.
+    // trace:BUG-2017 | ai:codex
+    fn admit_requirement(&self, _requirement: &crate::Requirement) -> Result<()> {
+        Ok(())
+    }
+
     /// Get the next sequence number for the given object type.
     /// Increments the counter atomically.
     fn next(&self, object_type: &str) -> Result<u32>;
@@ -183,6 +189,8 @@ impl FileDispenser {
     /// Create or open a file-backed dispenser.
     /// The file will be created if it doesn't exist.
     pub fn open(path: std::path::PathBuf, mode: IdMode) -> Result<Self> {
+        // trace:BUG-2017 | ai:codex
+        crate::allocation_authority::admit_file_dispenser(&path, &mode)?;
         // Ensure parent directory exists
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
@@ -222,6 +230,9 @@ impl FileDispenser {
 #[cfg(feature = "native")]
 impl Dispenser for FileDispenser {
     fn next(&self, object_type: &str) -> Result<u32> {
+        // trace:BUG-2017 | ai:codex
+        crate::allocation_authority::admit_file_dispenser(&self.path, &self.mode)?;
+
         use fs2::FileExt;
         use std::fs::OpenOptions;
 
@@ -289,6 +300,8 @@ impl Dispenser for FileDispenser {
 /// ```
 #[cfg(feature = "native")]
 pub struct SqliteDispenser {
+    // trace:BUG-2017 | ai:codex
+    path: std::path::PathBuf,
     conn: std::sync::Mutex<rusqlite::Connection>,
     mode: IdMode,
 }
@@ -301,6 +314,8 @@ impl SqliteDispenser {
     /// the dispenser tables are created alongside existing tables. If it doesn't
     /// exist, a new database is created.
     pub fn open(db_path: std::path::PathBuf, mode: IdMode) -> Result<Self> {
+        // trace:BUG-2017 | ai:codex
+        crate::allocation_authority::admit_file_dispenser(&db_path, &mode)?;
         if let Some(parent) = db_path.parent() {
             std::fs::create_dir_all(parent)?;
         }
@@ -330,6 +345,7 @@ impl SqliteDispenser {
         )?;
 
         Ok(Self {
+            path: db_path,
             conn: std::sync::Mutex::new(conn),
             mode,
         })
@@ -352,6 +368,9 @@ impl SqliteDispenser {
 #[cfg(feature = "native")]
 impl Dispenser for SqliteDispenser {
     fn next(&self, object_type: &str) -> Result<u32> {
+        // trace:BUG-2017 | ai:codex
+        crate::allocation_authority::admit_file_dispenser(&self.path, &self.mode)?;
+
         let conn = self.conn.lock().unwrap();
         let node_id = self.node_id();
         let type_upper = object_type.to_uppercase();

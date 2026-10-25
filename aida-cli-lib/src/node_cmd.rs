@@ -34,6 +34,16 @@ pub(crate) fn handle_node_command(cmd: &NodeCommand, store_path: &std::path::Pat
     match cmd {
         NodeCommand::List => {
             let registry = NodeRegistry::load(&registry_path).unwrap_or_default();
+            // trace:BUG-2017 | ai:codex — use existing surface; no transport help snapshot overlap.
+            let allocation = aida_core::allocation_authority::resolve(store_path)?;
+            println!(
+                "Allocation: {} (clone common Git directory)",
+                if allocation.authoritative {
+                    "authoritative"
+                } else {
+                    "node-local only"
+                }
+            );
             let current_id = if node_config_path.exists() {
                 aida_core::NodeConfig::load(&node_config_path)
                     .ok()
@@ -95,6 +105,16 @@ pub(crate) fn handle_node_command(cmd: &NodeCommand, store_path: &std::path::Pat
                 anyhow::anyhow!("Node {} is not in the shared registry", target_id)
             })?;
 
+            // trace:BUG-2017 | ai:codex
+            let allocation = aida_core::allocation_authority::resolve(store_path)?;
+            println!(
+                "Allocation: {} (clone common Git directory)",
+                if allocation.authoritative {
+                    "authoritative"
+                } else {
+                    "node-local only"
+                }
+            );
             println!("Node {}", entry.id);
             println!("  User ID:    {}", entry.user_id);
             println!("  Hostname:   {}", entry.hostname);
@@ -124,6 +144,9 @@ pub(crate) fn handle_node_command(cmd: &NodeCommand, store_path: &std::path::Pat
             hijack,
             remote_only,
         } => {
+            // trace:BUG-2017 | ai:codex — legacy global registration is not WORK bootstrap.
+            aida_core::allocation_authority::require_global(store_path)?;
+
             // FR-265 remote-only path: backfill a registry entry for some
             // OTHER (legacy) clone and push, without touching this clone's
             // identity. Requires explicit --id/--hostname/--email since the

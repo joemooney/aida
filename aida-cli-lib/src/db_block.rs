@@ -234,6 +234,8 @@ pub(crate) fn handle_block_command(cmd: &BlockCommand, store_path: &std::path::P
 
     match cmd {
         BlockCommand::Claim { r#type, size } => {
+            // trace:BUG-2017 | ai:codex
+            aida_core::allocation_authority::require_global(store_path)?;
             let type_prefix = r#type.to_uppercase();
 
             // Load or create registry, push-wins loop
@@ -757,6 +759,11 @@ pub(crate) fn auto_allocate_initial_blocks_with_scope(
     email: Option<&str>,
     scope: aida_core::IdCounterScope,
 ) -> Result<Vec<String>> {
+    // trace:BUG-2017 | ai:codex — implicit refill is disabled on WORK.
+    if !aida_core::allocation_authority::resolve(store_path)?.authoritative {
+        return Ok(Vec::new());
+    }
+
     let mut allocated = Vec::new();
     if scope == aida_core::IdCounterScope::Global {
         // One shared block per node, size 1000. Dispense formats with
@@ -868,6 +875,9 @@ pub(crate) fn auto_allocate_block_inner(
     size: u32,
     reason: BlockClaimReason,
 ) -> Result<Option<String>> {
+    // trace:BUG-2017 | ai:codex
+    aida_core::allocation_authority::require_global(store_path)?;
+
     use aida_core::BlockRegistry;
 
     let blocks_path = store_path.join("registry").join("blocks.yaml");
@@ -1154,6 +1164,11 @@ pub(crate) fn ensure_block_capacity(
     node_id: &str,
     type_prefix: &str,
 ) -> Result<Option<AutoClaimOutcome>> {
+    // trace:BUG-2017 | ai:codex — implicit refill is disabled on WORK.
+    if !aida_core::allocation_authority::resolve(store_path)?.authoritative {
+        return Ok(None);
+    }
+
     use aida_core::BlockRegistry;
 
     let cfg = read_block_allocation_config(project_dir)?;
@@ -1254,6 +1269,11 @@ pub(crate) fn claim_first_block(
     type_prefix: &str,
     size: u32,
 ) -> Result<Option<AutoClaimOutcome>> {
+    // trace:BUG-2017 | ai:codex — implicit refill is disabled on WORK.
+    if !aida_core::allocation_authority::resolve(store_path)?.authoritative {
+        return Ok(None);
+    }
+
     use aida_core::BlockRegistry;
 
     if !is_auto_alloc_prefix(type_prefix) {
@@ -1440,6 +1460,13 @@ mod task_1930_tests {
             .unwrap()
             .success());
 
+        // trace:BUG-2017 | ai:codex — this allocation-lock fixture explicitly models HOME.
+        let common = aida_core::allocation_authority::common_dir(&store_path).unwrap();
+        std::fs::write(
+            common.join(aida_core::allocation_authority::CONFIG_FILE),
+            "version=1\nauthoritative=true\n",
+        )
+        .unwrap();
         // Seed node registry (`n1` registered, `n_stale` unregistered) and blocks.yaml.
         let nodes_path = store_path.join("registry").join("nodes.toml");
         let mut nodes = aida_core::NodeRegistry::default();

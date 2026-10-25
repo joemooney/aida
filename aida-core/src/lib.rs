@@ -73,6 +73,9 @@ pub mod ai;
 pub mod alias;
 pub mod analytics;
 pub mod block_allocation;
+// trace:BUG-2017 | ai:codex
+#[cfg(all(unix, feature = "native"))]
+pub mod allocation_authority;
 pub mod conflict;
 // Explicit, data-only host constraint checks. trace:STORY-1673 | ai:codex
 pub mod constraints;

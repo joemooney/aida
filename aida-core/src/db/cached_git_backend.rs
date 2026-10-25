@@ -2282,7 +2282,7 @@ mod tests {
         // commits another row, advancing the store HEAD to HEAD-B underneath the
         // long-lived backend. Stands in for an external `git pull`.
         {
-            let external = GitBackend::new(&store_root).unwrap();
+            let external = crate::allocation_authority::home_fixture_backend(&store_root).unwrap();
             external
                 .add_requirement(sample_req("FR-1-002", "b (external)"))
                 .unwrap();
@@ -2338,7 +2338,7 @@ mod tests {
         // (a) capture the pre-write HEAD, as the write paths do.
         let pre_write_head = backend.current_head_sha();
         // (b) an external commit lands in the window.
-        GitBackend::new(&store_root)
+        crate::allocation_authority::home_fixture_backend(&store_root)
             .unwrap()
             .add_requirement(sample_req("FR-1-002", "b (external)"))
             .unwrap();
@@ -2379,7 +2379,7 @@ mod tests {
         let post_write_head = backend.current_head_sha();
         assert_ne!(pre_write_head, post_write_head);
         // A commit lands after the lock would have been released.
-        GitBackend::new(&store_root)
+        crate::allocation_authority::home_fixture_backend(&store_root)
             .unwrap()
             .add_requirement(sample_req("FR-1-003", "c (external)"))
             .unwrap();
@@ -2482,7 +2482,7 @@ mod tests {
 
         // External raw GitBackend flip — the auto-bump write shape.
         {
-            let external = GitBackend::new(&store_root).unwrap();
+            let external = crate::allocation_authority::home_fixture_backend(&store_root).unwrap();
             let mut child = external.get_requirement(&child_id).unwrap().unwrap();
             child.status = RequirementStatus::Completed;
             external.update_requirement(&child).unwrap();
@@ -2540,7 +2540,7 @@ mod tests {
         // External raw write (another agent's `aida edit`): the cache is now
         // stale, and the next read replays it incrementally.
         {
-            let external = GitBackend::new(&store_root).unwrap();
+            let external = crate::allocation_authority::home_fixture_backend(&store_root).unwrap();
             let mut child = external
                 .get_requirement_by_spec_id("STORY-1")
                 .unwrap()
@@ -2584,7 +2584,7 @@ mod tests {
 
         // External commit to the child: the catch-up will replay it.
         {
-            let external = GitBackend::new(&store_root).unwrap();
+            let external = crate::allocation_authority::home_fixture_backend(&store_root).unwrap();
             let mut child = external
                 .get_requirement_by_spec_id("STORY-1")
                 .unwrap()
@@ -2702,7 +2702,7 @@ mod tests {
         // External raw-GitBackend write — the `aida pull` auto-bump shape,
         // replayed through the incremental cache catch-up.
         {
-            let external = GitBackend::new(&store_root).unwrap();
+            let external = crate::allocation_authority::home_fixture_backend(&store_root).unwrap();
             let mut child = external.get_requirement(&child_id).unwrap().unwrap();
             child.status = RequirementStatus::Approved;
             external.update_requirement(&child).unwrap();
@@ -2842,7 +2842,7 @@ mod tests {
         // External writer advances HEAD with one of each change kind:
         // add FR-1-004, modify FR-1-002's title, delete FR-1-001.
         {
-            let external = GitBackend::new(&store_root).unwrap();
+            let external = crate::allocation_authority::home_fixture_backend(&store_root).unwrap();
             external
                 .add_requirement(sample_req("FR-1-004", "d"))
                 .unwrap();
@@ -2915,7 +2915,7 @@ mod tests {
         // incremental freshen; requirement_count is a raw cache read and does
         // NOT freshen, so check it only after a read.)
         {
-            let ext = GitBackend::new(&store_root).unwrap();
+            let ext = crate::allocation_authority::home_fixture_backend(&store_root).unwrap();
             ext.add_requirement(sample_req("FR-1-003", "added"))
                 .unwrap();
         }
@@ -2925,7 +2925,7 @@ mod tests {
 
         // MODIFY via external writer.
         {
-            let ext = GitBackend::new(&store_root).unwrap();
+            let ext = crate::allocation_authority::home_fixture_backend(&store_root).unwrap();
             let mut r = ext.get_requirement_by_spec_id("FR-1-002").unwrap().unwrap();
             r.title = "edited".into();
             ext.update_requirement(&r).unwrap();
@@ -2936,7 +2936,7 @@ mod tests {
 
         // DELETE via external writer.
         {
-            let ext = GitBackend::new(&store_root).unwrap();
+            let ext = crate::allocation_authority::home_fixture_backend(&store_root).unwrap();
             let r = ext.get_requirement_by_spec_id("FR-1-001").unwrap().unwrap();
             ext.delete_requirement(&r.id).unwrap();
         }
@@ -3030,7 +3030,7 @@ mod tests {
         // One more external commit, then an incremental update on `backend`
         // (recorded HEAD is an ancestor of the new HEAD → incremental path).
         {
-            let ext = GitBackend::new(&store_root).unwrap();
+            let ext = crate::allocation_authority::home_fixture_backend(&store_root).unwrap();
             ext.add_requirement(sample_req("FR-1-9999", "new")).unwrap();
         }
         let t1 = Instant::now();
@@ -3067,7 +3067,7 @@ mod tests {
 
         // add FR-1-003, modify FR-1-001, delete FR-1-002.
         {
-            let ext = GitBackend::new(&store_root).unwrap();
+            let ext = crate::allocation_authority::home_fixture_backend(&store_root).unwrap();
             ext.add_requirement(sample_req("FR-1-003", "c")).unwrap();
             let mut r = ext.get_requirement_by_spec_id("FR-1-001").unwrap().unwrap();
             r.title = "a2".into();
@@ -3322,7 +3322,7 @@ mod tests {
                 [],
             )
             .unwrap();
-        GitBackend::new(&store_root)
+        crate::allocation_authority::home_fixture_backend(&store_root)
             .unwrap()
             .add_requirement(sample_req("BUG-2", "second"))
             .unwrap();
@@ -3340,7 +3340,7 @@ mod tests {
         let root = tempdir().unwrap();
         let (store_root, cache_path) = bug_1956_migration_pending_fixture(root.path());
         let backend = CachedGitBackend::with_inner_cache_snapshot(
-            GitBackend::new(&store_root).unwrap(),
+            crate::allocation_authority::home_fixture_backend(&store_root).unwrap(),
             &cache_path,
         )
         .unwrap();
@@ -3437,7 +3437,7 @@ mod tests {
         }
 
         // The store moves on without the cache (it is now stale) ...
-        GitBackend::new(&store_root)
+        crate::allocation_authority::home_fixture_backend(&store_root)
             .unwrap()
             .add_requirement(sample_req("BUG-2", "second"))
             .unwrap();
@@ -3461,7 +3461,7 @@ mod tests {
 
         assert!(
             CachedGitBackend::with_inner_cache_snapshot(
-                GitBackend::new(&store_root).unwrap(),
+                crate::allocation_authority::home_fixture_backend(&store_root).unwrap(),
                 &wt_cache
             )
             .unwrap()
@@ -3522,7 +3522,10 @@ mod tests {
         let first = Cache::open(&path).unwrap();
         let second = Cache::open(&path).unwrap();
         assert!(first.migration_pending() && second.migration_pending());
-        let store = GitBackend::new(&root).unwrap().load().unwrap();
+        let store = crate::allocation_authority::home_fixture_backend(&root)
+            .unwrap()
+            .load()
+            .unwrap();
         first.rebuild_for_refresh(&store, &head, &root).unwrap();
         let raw = rusqlite::Connection::open(&path).unwrap();
         raw.execute_batch("CREATE TRIGGER no_refill BEFORE DELETE ON requirements_cache BEGIN SELECT RAISE(ABORT, 'redundant refill'); END;").unwrap();
@@ -3686,7 +3689,7 @@ mod tests {
     /// External writer: retitle FR-1-001 and FR-1-002 in ONE store commit.
     // trace:TASK-1515 | ai:claude
     fn task_1515_external_retitle(store_root: &Path, title: &str) -> String {
-        let ext = GitBackend::new(store_root).unwrap();
+        let ext = crate::allocation_authority::home_fixture_backend(store_root).unwrap();
         let reqs: Vec<Requirement> = ["FR-1-001", "FR-1-002"]
             .iter()
             .map(|id| {
@@ -3870,7 +3873,7 @@ mod tests {
         }
         // Open without a refresh, so the migration stays pending.
         let writer = CachedGitBackend::with_inner_cache_snapshot(
-            GitBackend::new(&store_root).unwrap(),
+            crate::allocation_authority::home_fixture_backend(&store_root).unwrap(),
             &cache_path,
         )
         .unwrap();
@@ -4102,7 +4105,7 @@ mod tests {
                         return; // one mid-load commit; retries see a stable tree
                     }
                     let before = crate::git_ops::head_sha(&root).unwrap();
-                    let ext = GitBackend::new(&root).unwrap();
+                    let ext = crate::allocation_authority::home_fixture_backend(&root).unwrap();
                     let req = ext
                         .add_requirement(sample_req("FR-1-004", "ghost"))
                         .unwrap();
@@ -4132,7 +4135,7 @@ mod tests {
         let built_at = backend.cache().built_at().unwrap();
 
         // A later commit deletes the spec again, BEFORE any refresh runs.
-        GitBackend::new(&store_root)
+        crate::allocation_authority::home_fixture_backend(&store_root)
             .unwrap()
             .delete_requirement(&ghost.id)
             .unwrap();
@@ -4233,7 +4236,7 @@ mod tests {
         task_1515_write_foreign_sidecar(&cache_path);
 
         let reader = CachedGitBackend::with_inner_cache_snapshot(
-            GitBackend::new(&store_root).unwrap(),
+            crate::allocation_authority::home_fixture_backend(&store_root).unwrap(),
             &cache_path,
         )
         .unwrap();
@@ -4781,7 +4784,7 @@ mod tests {
                     // thread owns its own scope, so this configures only itself.
                     scope.configure(false, Some(ReadBudget(std::time::Duration::from_secs(60))));
                     let backend = CachedGitBackend::with_inner_cache_snapshot(
-                        GitBackend::new(&store).unwrap(),
+                        crate::allocation_authority::home_fixture_backend(&store).unwrap(),
                         &path,
                     )
                     .unwrap();
@@ -5031,9 +5034,11 @@ mod tests {
         let dir = tempdir().unwrap();
         let (backend, store, path) = task_1515_backend(dir.path());
         task_1515_external_retitle(&store, "gen1");
-        let writer =
-            CachedGitBackend::with_inner_cache_snapshot(GitBackend::new(&store).unwrap(), &path)
-                .unwrap();
+        let writer = CachedGitBackend::with_inner_cache_snapshot(
+            crate::allocation_authority::home_fixture_backend(&store).unwrap(),
+            &path,
+        )
+        .unwrap();
         BEFORE_ACQUIRE.with(|h| {
             *h.borrow_mut() = Some(Box::new(move || {
                 writer.ensure_cache_fresh().unwrap();
@@ -5126,7 +5131,7 @@ mod tests {
             .tolerant_read(|snapshot| {
                 // Commit after the reader pinned metadata, before it reads rows.
                 let writer = CachedGitBackend::with_inner_cache_snapshot(
-                    GitBackend::new(&store).unwrap(),
+                    crate::allocation_authority::home_fixture_backend(&store).unwrap(),
                     &path,
                 )
                 .unwrap();
@@ -5156,9 +5161,11 @@ mod tests {
         let (backend, store, path) = task_1515_backend(dir.path());
         drop(backend);
         task_1515_mark_schema_older(&path);
-        let backend =
-            CachedGitBackend::with_inner_cache_snapshot(GitBackend::new(&store).unwrap(), &path)
-                .unwrap();
+        let backend = CachedGitBackend::with_inner_cache_snapshot(
+            crate::allocation_authority::home_fixture_backend(&store).unwrap(),
+            &path,
+        )
+        .unwrap();
         // Even without a holder, an advisory invocation cannot do a migration.
         test_counts();
         assert!(backend
@@ -5228,9 +5235,11 @@ mod tests {
         backend.list_summaries(&ListFilter::default()).unwrap();
         assert!(start.elapsed() < std::time::Duration::from_millis(500));
         drop(_guard);
-        let other =
-            CachedGitBackend::with_inner_cache_snapshot(GitBackend::new(&store).unwrap(), &path)
-                .unwrap();
+        let other = CachedGitBackend::with_inner_cache_snapshot(
+            crate::allocation_authority::home_fixture_backend(&store).unwrap(),
+            &path,
+        )
+        .unwrap();
         let head = backend.current_head_sha();
         backend
             .cache
@@ -5283,7 +5292,7 @@ mod tests {
         let (backend, _, child) = force_closed_epic_with_open_child(&store, &path);
         let mut req = backend.get_requirement(&child).unwrap().unwrap();
         req.title = "changed".into();
-        GitBackend::new(&store)
+        crate::allocation_authority::home_fixture_backend(&store)
             .unwrap()
             .update_requirement(&req)
             .unwrap();
@@ -5394,7 +5403,7 @@ mod tests {
             .is_err());
         assert!(backend.delete_requirement(&edited.id).is_err());
 
-        let fresh = GitBackend::new(&store_root).unwrap();
+        let fresh = crate::allocation_authority::home_fixture_backend(&store_root).unwrap();
         assert_eq!(
             fresh
                 .get_requirement_by_spec_id("FR-1-001")

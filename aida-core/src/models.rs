@@ -5859,9 +5859,8 @@ impl RequirementsStore {
     /// Generates the next meta-type ID for a given prefix (e.g., "$USER" -> "$USER-001")
     pub fn next_meta_id(&mut self, prefix: &str) -> String {
         if let Some(ref dispenser) = self.dispenser {
-            if let Ok(id) = dispenser.next_id(prefix) {
-                return id;
-            }
+            // trace:BUG-2017 | ai:codex
+            return dispenser.next_id(prefix).unwrap_or_default();
         }
         let counter = self.meta_counters.entry(prefix.to_string()).or_insert(1);
         let num = *counter;
@@ -6229,6 +6228,16 @@ impl RequirementsStore {
 
     /// Assigns SPEC-IDs to requirements that don't have them
     pub fn assign_spec_ids(&mut self) {
+        // trace:BUG-2017 | ai:codex — legacy repair uses the attached allocator too.
+        if self.dispenser.is_some() {
+            for index in 0..self.requirements.len() {
+                if self.requirements[index].spec_id.is_none() {
+                    self.requirements[index].spec_id =
+                        Some(self.generate_requirement_id_with_override("SPEC"));
+                }
+            }
+            return;
+        }
         for req in &mut self.requirements {
             if req.spec_id.is_none() {
                 req.spec_id = Some(format!("SPEC-{:03}", self.next_spec_number));
@@ -6239,6 +6248,18 @@ impl RequirementsStore {
 
     /// Gets the next SPEC-ID that would be assigned
     pub fn peek_next_spec_id(&self) -> String {
+        // trace:BUG-2017 | ai:codex
+        if let Some(d) = &self.dispenser {
+            let key = if self.id_config.numbering == NumberingStrategy::Global {
+                "GLOBAL"
+            } else {
+                "SPEC"
+            };
+            return d
+                .peek(key)
+                .and_then(|n| d.format_id("SPEC", n))
+                .unwrap_or_default();
+        }
         format!("SPEC-{:03}", self.next_spec_number)
     }
 
@@ -6331,6 +6352,11 @@ impl RequirementsStore {
 
     /// Adds a requirement and assigns it a SPEC-ID (legacy method for backward compatibility)
     pub fn add_requirement_with_spec_id(&mut self, mut req: Requirement) {
+        // trace:BUG-2017 | ai:codex
+        if self.dispenser.is_some() {
+            self.add_requirement_with_id(req, None, Some("SPEC"));
+            return;
+        }
         if req.spec_id.is_none() {
             req.spec_id = Some(format!("SPEC-{:03}", self.next_spec_number));
             self.next_spec_number += 1;
@@ -6436,14 +6462,8 @@ impl RequirementsStore {
     /// If a dispenser is set, delegates to it. Otherwise uses internal counters.
     fn get_next_counter_for_prefix(&mut self, prefix: &str) -> u32 {
         if let Some(ref dispenser) = self.dispenser {
-            return dispenser.next(prefix).unwrap_or_else(|_| {
-                // Fallback to internal counter if dispenser fails
-                let upper = prefix.to_uppercase();
-                let counter = self.prefix_counters.entry(upper).or_insert(1);
-                let current = *counter;
-                *counter += 1;
-                current
-            });
+            // trace:BUG-2017 | ai:codex — zero is a refused allocation, never a global fallback.
+            return dispenser.next(prefix).unwrap_or(0);
         }
         let upper = prefix.to_uppercase();
         let counter = self.prefix_counters.entry(upper).or_insert(1);
@@ -6457,11 +6477,8 @@ impl RequirementsStore {
     /// Otherwise uses internal next_spec_number counter.
     fn get_next_global_number(&mut self) -> u32 {
         if let Some(ref dispenser) = self.dispenser {
-            return dispenser.next("GLOBAL").unwrap_or_else(|_| {
-                let n = self.next_spec_number;
-                self.next_spec_number += 1;
-                n
-            });
+            // trace:BUG-2017 | ai:codex
+            return dispenser.next("GLOBAL").unwrap_or(0);
         }
         let n = self.next_spec_number;
         self.next_spec_number += 1;
@@ -6486,6 +6503,14 @@ impl RequirementsStore {
                     .map(|s| s.to_uppercase())
                     .unwrap_or_else(|| "REQ".to_string());
 
+                // trace:BUG-2017 | ai:codex — validate formatting/binding before sequence advancement.
+                if self
+                    .dispenser
+                    .as_ref()
+                    .is_some_and(|d| d.format_id(&prefix, 1).is_err())
+                {
+                    return String::new();
+                }
                 let number = match self.id_config.numbering {
                     NumberingStrategy::Global => self.get_next_global_number(),
                     NumberingStrategy::PerPrefix | NumberingStrategy::PerFeatureType => {
@@ -6495,14 +6520,21 @@ impl RequirementsStore {
 
                 // If we have a dispenser in distributed mode, use its formatting
                 if let Some(ref dispenser) = self.dispenser {
-                    if let Ok(id) = dispenser.format_id(&prefix, number) {
-                        return id;
-                    }
+                    // trace:BUG-2017 | ai:codex — failed allocation/formatting never falls back.
+                    return if number == 0 {
+                        String::new()
+                    } else {
+                        dispenser.format_id(&prefix, number).unwrap_or_default()
+                    };
                 }
 
                 format!("{}-{:0>width$}", prefix, number, width = digits as usize)
             }
             IdFormat::TwoLevel => {
+                // trace:BUG-2017 | ai:codex
+                if self.dispenser.is_some() {
+                    return String::new();
+                }
                 let feat = feature_prefix
                     .map(|s| s.to_uppercase())
                     .unwrap_or_else(|| "GEN".to_string()); // GEN = General
@@ -6543,6 +6575,17 @@ impl RequirementsStore {
         feature_prefix: Option<&str>,
         type_prefix: Option<&str>,
     ) {
+        // trace:BUG-2017 | ai:codex — preserve infallible legacy API, but poison
+        // a refused row instead of advancing counters; persistence rejects it.
+        if self
+            .dispenser
+            .as_ref()
+            .is_some_and(|d| d.admit_requirement(&req).is_err())
+        {
+            req.spec_id = Some(String::new());
+            self.requirements.push(req);
+            return;
+        }
         if req.spec_id.is_none() {
             // Check if requirement has a prefix override
             if let Some(ref override_prefix) = req.prefix_override {
@@ -6559,6 +6602,14 @@ impl RequirementsStore {
     fn generate_requirement_id_with_override(&mut self, prefix: &str) -> String {
         let prefix_upper = prefix.to_uppercase();
         let digits = self.id_config.digits;
+        // trace:BUG-2017 | ai:codex
+        if self
+            .dispenser
+            .as_ref()
+            .is_some_and(|d| d.format_id(&prefix_upper, 1).is_err())
+        {
+            return String::new();
+        }
 
         let number = match self.id_config.numbering {
             NumberingStrategy::Global => self.get_next_global_number(),
@@ -6570,9 +6621,14 @@ impl RequirementsStore {
 
         // If we have a dispenser in distributed mode, use its formatting
         if let Some(ref dispenser) = self.dispenser {
-            if let Ok(id) = dispenser.format_id(&prefix_upper, number) {
-                return id;
-            }
+            // trace:BUG-2017 | ai:codex
+            return if number == 0 {
+                String::new()
+            } else {
+                dispenser
+                    .format_id(&prefix_upper, number)
+                    .unwrap_or_default()
+            };
         }
 
         format!(

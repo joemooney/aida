@@ -53,23 +53,22 @@ pub(crate) fn load_dispenser(
     use aida_core::dispenser::{FileDispenser, IdMode};
     use aida_core::node::NodeConfig;
 
+    // trace:BUG-2017 | ai:codex — no default node or global fallback on WORK.
+    if !aida_core::allocation_authority::resolve(store_path)?.authoritative {
+        return aida_core::allocation_authority::dispenser(store_path, None)
+            .ok_or_else(|| anyhow::anyhow!("node-local allocator unavailable"));
+    }
     let aida_dir = store_path.join(".aida");
-    std::fs::create_dir_all(&aida_dir)?;
-
     let node_config_path = aida_dir.join("node.toml");
-    let dispenser_path = aida_dir.join("dispenser.toml");
-
-    // Load node_id from config, or default to "1" for local-only.
-    // trace:STORY-41 | ai:claude
-    let node_id: String = if node_config_path.exists() {
+    let node_id = if node_config_path.exists() {
         NodeConfig::load(&node_config_path)?.node_id
     } else {
-        "1".to_string() // default for unregistered local node
+        "1".to_string()
     };
-
-    let mode = IdMode::Distributed { node_id };
-    let dispenser = FileDispenser::open(dispenser_path, mode)?;
-
+    let dispenser = FileDispenser::open(
+        aida_dir.join("dispenser.toml"),
+        IdMode::Distributed { node_id },
+    )?;
     Ok(aida_core::models::DispenserHandle(std::sync::Arc::new(
         dispenser,
     )))

@@ -304,7 +304,7 @@ fn bug_2162_cross_clone_first_result_materializes_lock() {
 
         // The canonical mutation path now refuses a description rewrite.
         use crate::db::DatabaseBackend;
-        let backend = crate::db::GitBackend::new(&c.b)
+        let backend = crate::allocation_authority::home_fixture_backend(&c.b)
             .unwrap()
             .with_auto_commit(false)
             .with_oplog(false);

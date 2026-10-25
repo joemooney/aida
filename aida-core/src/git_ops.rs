@@ -5128,6 +5128,9 @@ pub fn register_node_full_identity(
     email: Option<String>,
     identity: NodeIdentity,
 ) -> Result<String> {
+    // trace:BUG-2017 | ai:codex — unsupported global bootstrap refuses before CAS/network.
+    crate::allocation_authority::require_global(aida_repo)?;
+
     use crate::node::{default_node_name, BlockRegistry, NodeConfig, NodeRegistry};
 
     // BUG-715: redact the machine identity BEFORE it is written to nodes.toml /
@@ -5334,6 +5337,9 @@ pub fn register_node_remote_only(
     hostname: &str,
     email: String,
 ) -> Result<String> {
+    // trace:BUG-2017 | ai:codex — unsupported global bootstrap refuses before CAS/network.
+    crate::allocation_authority::require_global(aida_repo)?;
+
     use crate::node::NodeRegistry;
 
     let registry_dir = aida_repo.join("registry");
@@ -5446,6 +5452,9 @@ pub fn set_node_identity_field(
     field: NodeIdentityField,
     value: &str,
 ) -> Result<()> {
+    // trace:BUG-2017 | ai:codex — refuse global registry mutation before CAS/network.
+    crate::allocation_authority::require_global(aida_repo)?;
+
     use crate::node::{NodeConfig, NodeRegistry};
 
     let registry_path = aida_repo.join("registry").join("nodes.toml");
@@ -5593,6 +5602,9 @@ pub fn hijack_node(
     hostname: &str,
     email: Option<String>,
 ) -> Result<HijackOutcome> {
+    // trace:BUG-2017 | ai:codex — refuse global registry mutation before CAS/network.
+    crate::allocation_authority::require_global(aida_repo)?;
+
     use crate::node::{HijackMarker, NodeConfig, NodeRegistry};
 
     let registry_path = aida_repo.join("registry").join("nodes.toml");
@@ -5765,6 +5777,9 @@ pub fn hijack_node(
 /// they live in the object store, not in the registry.
 /// trace:EPIC-1-052 | ai:claude
 pub fn unregister_node(aida_repo: &Path, node_id: &str) -> Result<bool> {
+    // trace:BUG-2017 | ai:codex — refuse global registry mutation before CAS/network.
+    crate::allocation_authority::require_global(aida_repo)?;
+
     use crate::node::NodeRegistry;
 
     let registry_path = aida_repo.join("registry").join("nodes.toml");
@@ -6619,6 +6634,8 @@ pub fn load_requirements_strict(store: &Path) -> Result<Vec<crate::models::Requi
 /// it nests on the same lock.
 // trace:TASK-1717 | ai:claude
 pub fn merge_gate(store_path: &Path) -> Result<Vec<(String, String)>> {
+    // trace:BUG-2017 | ai:codex — protect the core entry, not only CLI callers.
+    crate::allocation_authority::require_global(store_path)?;
     crate::db::with_store_write_lock(store_path, || merge_gate_locked(store_path))
 }
 
@@ -6867,6 +6884,25 @@ pub fn sync_objects(aida_repo: &Path, message: &str) -> Result<bool> {
 
 #[cfg(test)]
 mod tests {
+    // trace:BUG-2017 | ai:codex — old git-operation fixtures model HOME.
+    fn home_fixture_init(path: &std::path::Path) -> anyhow::Result<()> {
+        super::init(path)?;
+        let common = crate::allocation_authority::common_dir(path)?;
+        std::fs::write(
+            common.join(crate::allocation_authority::CONFIG_FILE),
+            "version=1\nauthoritative=true\n",
+        )?;
+        Ok(())
+    }
+    // trace:BUG-2017 | ai:codex — existing promotion fixtures model authoritative HOME.
+    fn home_fixture_merge_gate(store: &std::path::Path) -> anyhow::Result<Vec<(String, String)>> {
+        let common = crate::allocation_authority::common_dir(store)?;
+        std::fs::write(
+            common.join(crate::allocation_authority::CONFIG_FILE),
+            "version=1\nauthoritative=true\n",
+        )?;
+        super::merge_gate(store)
+    }
     use super::*;
     use std::path::PathBuf;
     use std::process::Command;
@@ -7261,7 +7297,7 @@ mod tests {
         let repo = dir.path().join("test-repo");
 
         assert!(!is_git_repo(&repo));
-        init(&repo).unwrap();
+        home_fixture_init(&repo).unwrap();
         assert!(is_git_repo(&repo));
     }
 
@@ -7269,7 +7305,7 @@ mod tests {
     fn test_add_commit() {
         let dir = tempfile::tempdir().unwrap();
         let repo = dir.path().join("test-repo");
-        init(&repo).unwrap();
+        home_fixture_init(&repo).unwrap();
         configure_user(&repo, "Test User", "test@example.com").unwrap();
 
         // Create a file and commit
@@ -7288,7 +7324,7 @@ mod tests {
     fn list_remotes_reports_configured_remotes() {
         let dir = tempfile::tempdir().unwrap();
         let repo = dir.path().join("r");
-        init(&repo).unwrap();
+        home_fixture_init(&repo).unwrap();
         assert!(list_remotes(&repo).is_empty(), "fresh repo has no remotes");
 
         git(
@@ -7312,7 +7348,7 @@ mod tests {
     fn ahead_behind_counts_divergence() {
         let dir = tempfile::tempdir().unwrap();
         let repo = dir.path().join("r");
-        init(&repo).unwrap();
+        home_fixture_init(&repo).unwrap();
         configure_user(&repo, "T", "t@example.com").unwrap();
         std::fs::write(repo.join("f"), "0").unwrap();
         add(&repo, &["f"]).unwrap();
@@ -7345,7 +7381,7 @@ mod tests {
     fn test_has_changes() {
         let dir = tempfile::tempdir().unwrap();
         let repo = dir.path().join("test-repo");
-        init(&repo).unwrap();
+        home_fixture_init(&repo).unwrap();
         configure_user(&repo, "Test User", "test@example.com").unwrap();
 
         // Initially no changes (empty repo)
@@ -7367,7 +7403,7 @@ mod tests {
     fn test_index_lock_present_and_wait() {
         let dir = tempfile::tempdir().unwrap();
         let repo = dir.path().join("test-repo");
-        init(&repo).unwrap();
+        home_fixture_init(&repo).unwrap();
         configure_user(&repo, "Test User", "test@example.com").unwrap();
         std::fs::write(repo.join("test.txt"), "hello").unwrap();
         add(&repo, &["test.txt"]).unwrap();
@@ -7400,7 +7436,7 @@ mod tests {
     fn test_stale_index_lock_is_removed_before_store_write() {
         let dir = tempfile::tempdir().unwrap();
         let repo = dir.path().join("test-repo");
-        init(&repo).unwrap();
+        home_fixture_init(&repo).unwrap();
         configure_user(&repo, "Test User", "test@example.com").unwrap();
         std::fs::write(repo.join("f.txt"), "initial").unwrap();
         add(&repo, &["f.txt"]).unwrap();
@@ -7421,7 +7457,7 @@ mod tests {
     fn test_add_recovers_abandoned_index_lock() {
         let dir = tempfile::tempdir().unwrap();
         let repo = dir.path().join("test-repo");
-        init(&repo).unwrap();
+        home_fixture_init(&repo).unwrap();
         configure_user(&repo, "Test User", "test@example.com").unwrap();
         std::fs::write(repo.join("f.txt"), "initial").unwrap();
         add(&repo, &["f.txt"]).unwrap();
@@ -7446,7 +7482,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let repo = dir.path().join("main");
         let linked = dir.path().join("linked-store");
-        init(&repo).unwrap();
+        home_fixture_init(&repo).unwrap();
         configure_user(&repo, "Test User", "test@example.com").unwrap();
         std::fs::write(repo.join("f.txt"), "initial").unwrap();
         add(&repo, &["f.txt"]).unwrap();
@@ -7484,7 +7520,7 @@ mod tests {
     fn test_restore_stranded_autostash_returns_worktree_to_pre_pull_state() {
         let dir = tempfile::tempdir().unwrap();
         let repo = dir.path().join("test-repo");
-        init(&repo).unwrap();
+        home_fixture_init(&repo).unwrap();
         configure_user(&repo, "Test User", "test@example.com").unwrap();
         // The stash pop below re-checks-out f.txt; on a runner with
         // core.autocrlf=true (GitHub's Windows image) that rewrites LF → CRLF
@@ -7544,7 +7580,7 @@ mod tests {
     fn test_restore_stranded_autostash_leaves_unrelated_stash_alone() {
         let dir = tempfile::tempdir().unwrap();
         let repo = dir.path().join("test-repo");
-        init(&repo).unwrap();
+        home_fixture_init(&repo).unwrap();
         configure_user(&repo, "Test User", "test@example.com").unwrap();
         std::fs::write(repo.join("f.txt"), "one\n").unwrap();
         add(&repo, &["f.txt"]).unwrap();
@@ -7572,7 +7608,7 @@ mod tests {
     fn test_head_sha_and_branch() {
         let dir = tempfile::tempdir().unwrap();
         let repo = dir.path().join("test-repo");
-        init(&repo).unwrap();
+        home_fixture_init(&repo).unwrap();
         configure_user(&repo, "Test User", "test@example.com").unwrap();
 
         std::fs::write(repo.join("test.txt"), "hello").unwrap();
@@ -7596,7 +7632,7 @@ mod tests {
     fn first_parent_sha_names_the_previous_commit_and_none_for_a_root() {
         let dir = tempfile::tempdir().unwrap();
         let repo = dir.path().join("test-repo");
-        init(&repo).unwrap();
+        home_fixture_init(&repo).unwrap();
         configure_user(&repo, "Test User", "test@example.com").unwrap();
 
         std::fs::write(repo.join("a.txt"), "a").unwrap();
@@ -7621,7 +7657,7 @@ mod tests {
         git(&bare, &["init", "--bare"]).unwrap();
 
         let work = dir.join(name);
-        init(&work).unwrap();
+        home_fixture_init(&work).unwrap();
         configure_user(&work, "Test User", "test@example.com").unwrap();
         git(&work, &["remote", "add", "origin", bare.to_str().unwrap()]).unwrap();
 
@@ -7840,10 +7876,10 @@ mod tests {
         // Init the store as a git repo so merge_gate's commit path
         // doesn't fail — merge_gate operates on store_path as a
         // workdir.
-        init(&store).unwrap();
+        home_fixture_init(&store).unwrap();
         configure_user(&store, "Test", "test@example.com").unwrap();
 
-        let assignments = merge_gate(&store).unwrap();
+        let assignments = home_fixture_merge_gate(&store).unwrap();
 
         // Exactly one assignment: TASK-2-001 → TASK-2 (NOT TASK-1).
         assert_eq!(assignments.len(), 1, "exactly one gating expected");
@@ -7858,7 +7894,7 @@ mod tests {
         // req has been assigned (the legacy short-form TASK-1 is
         // skipped because is_global_id_format catches it before the
         // collision walk fires).
-        let second = merge_gate(&store).unwrap();
+        let second = home_fixture_merge_gate(&store).unwrap();
         assert!(second.is_empty(), "second run should be a no-op");
     }
 
@@ -7890,10 +7926,10 @@ mod tests {
             object_store::write_object(&objects, &r).unwrap();
         }
 
-        init(&store).unwrap();
+        home_fixture_init(&store).unwrap();
         configure_user(&store, "Test", "test@example.com").unwrap();
 
-        let mut assignments = merge_gate(&store).unwrap();
+        let mut assignments = home_fixture_merge_gate(&store).unwrap();
         assignments.sort_by(|a, b| a.0.cmp(&b.0));
         assert_eq!(assignments.len(), 2);
         let agreed: Vec<&str> = assignments.iter().map(|(_, a)| a.as_str()).collect();
@@ -7939,10 +7975,10 @@ mod tests {
         pending.req_type = RequirementType::Bug;
         object_store::write_object(&objects, &pending).unwrap();
 
-        init(&store).unwrap();
+        home_fixture_init(&store).unwrap();
         configure_user(&store, "Test", "test@example.com").unwrap();
 
-        let assignments = merge_gate(&store).unwrap();
+        let assignments = home_fixture_merge_gate(&store).unwrap();
         assert_eq!(
             assignments,
             vec![("BUG-2-081".to_string(), "BUG-36".to_string())],
@@ -7981,9 +8017,9 @@ mod tests {
         pending.req_type = RequirementType::Spike;
         object_store::write_object(&objects, &pending).unwrap();
 
-        init(&store).unwrap();
+        home_fixture_init(&store).unwrap();
         configure_user(&store, "Test", "test@example.com").unwrap();
-        let assignments = merge_gate(&store).unwrap();
+        let assignments = home_fixture_merge_gate(&store).unwrap();
         assert_eq!(
             assignments,
             vec![("SPIKE-2-001".to_string(), "SPIKE-1101".to_string())]
@@ -8019,9 +8055,9 @@ mod tests {
         );
         assert!(taken.contains("TASK-2-001"));
 
-        init(&store).unwrap();
+        home_fixture_init(&store).unwrap();
         configure_user(&store, "Test", "test@example.com").unwrap();
-        let assignments = merge_gate(&store).unwrap();
+        let assignments = home_fixture_merge_gate(&store).unwrap();
         assert_eq!(
             assignments,
             vec![("TASK-2-001".to_string(), "TASK-2".to_string())]
@@ -8060,13 +8096,13 @@ mod tests {
             object_store::write_object(&objects, &r).unwrap();
         }
 
-        init(&store).unwrap();
+        home_fixture_init(&store).unwrap();
         configure_user(&store, "Test", "test@example.com").unwrap();
 
         // First run: assigns agreed ids, writes the counters file, and
         // MUST leave the store clean — the counter write is committed
         // through, not left as uncommitted churn.
-        let assignments = merge_gate(&store).unwrap();
+        let assignments = home_fixture_merge_gate(&store).unwrap();
         assert_eq!(assignments.len(), 4);
         let counters_path = store.join("registry").join("agreed_counters.toml");
         assert!(
@@ -8093,7 +8129,7 @@ mod tests {
         // probabilistic via HashMap iteration order.)
         let head_before = head_sha(&store).unwrap();
         for _ in 0..5 {
-            let second = merge_gate(&store).unwrap();
+            let second = home_fixture_merge_gate(&store).unwrap();
             assert!(second.is_empty(), "no-op run assigns nothing");
             assert!(
                 !has_changes(&store).unwrap(),
@@ -8273,7 +8309,7 @@ mod tests {
         // Seed the store branch with an empty blocks.yaml so every clone
         // starts from the same committed baseline.
         let seed = dpath.join("seed");
-        init(&seed).unwrap();
+        home_fixture_init(&seed).unwrap();
         configure_user(&seed, "Seed", "seed@example.com").unwrap();
         git(&seed, &["remote", "add", "origin", bare.to_str().unwrap()]).unwrap();
         std::fs::create_dir_all(seed.join("registry")).unwrap();
@@ -8398,7 +8434,7 @@ mod tests {
 
         // Seed.
         let seed = dpath.join("seed");
-        init(&seed).unwrap();
+        home_fixture_init(&seed).unwrap();
         configure_user(&seed, "Seed", "seed@example.com").unwrap();
         git(&seed, &["remote", "add", "origin", bare.to_str().unwrap()]).unwrap();
         std::fs::create_dir_all(seed.join("registry")).unwrap();
@@ -8480,10 +8516,10 @@ mod tests {
             expected_per_type.insert(prefix, 3 * 13);
         }
 
-        init(&store).unwrap();
+        home_fixture_init(&store).unwrap();
         configure_user(&store, "Test", "test@example.com").unwrap();
 
-        let mut assignments = merge_gate(&store).unwrap();
+        let mut assignments = home_fixture_merge_gate(&store).unwrap();
         assignments.sort_by(|a, b| a.0.cmp(&b.0));
 
         // Group assigned agreed-ids by type prefix.
@@ -8521,7 +8557,7 @@ mod tests {
         }
 
         // Idempotent: re-running gate over the now-assigned store is a no-op.
-        let second = merge_gate(&store).unwrap();
+        let second = home_fixture_merge_gate(&store).unwrap();
         assert!(second.is_empty(), "second merge-gate run must be a no-op");
     }
 
@@ -8544,7 +8580,7 @@ mod tests {
         git(&bare, &["init", "--bare"]).unwrap();
 
         let seed = dpath.join("seed");
-        init(&seed).unwrap();
+        home_fixture_init(&seed).unwrap();
         configure_user(&seed, "Seed", "seed@example.com").unwrap();
         git(&seed, &["remote", "add", "origin", bare.to_str().unwrap()]).unwrap();
         std::fs::create_dir_all(seed.join("registry")).unwrap();
@@ -8626,7 +8662,7 @@ mod tests {
     fn create_store_worktree_sets_lowered_gc_auto() {
         let dir = tempfile::tempdir().unwrap();
         let repo = dir.path().join("repo");
-        init(&repo).unwrap();
+        home_fixture_init(&repo).unwrap();
         configure_user(&repo, "Test", "test@example.com").unwrap();
         // Need at least one commit before adding a worktree.
         std::fs::write(repo.join("README.md"), "hi").unwrap();
@@ -8696,7 +8732,7 @@ mod tests {
     fn configure_store_gc_auto_sets_threshold_and_detach() {
         let dir = tempfile::tempdir().unwrap();
         let repo = dir.path().join("repo");
-        init(&repo).unwrap();
+        home_fixture_init(&repo).unwrap();
 
         assert!(configure_store_gc_auto(&repo, STORE_GC_AUTO_DEFAULT));
 
@@ -8784,7 +8820,7 @@ mod tests {
     /// reproducible. Returns the object counts after seeding.
     // trace:BUG-667 | ai:claude
     fn seed_multi_pack_store(repo: &Path, commits: usize) -> StoreObjectCounts {
-        init(repo).unwrap();
+        home_fixture_init(repo).unwrap();
         configure_user(repo, "Test", "test@example.com").unwrap();
         pin_gc_environment(repo);
         for i in 0..commits {
@@ -8864,7 +8900,7 @@ mod tests {
     fn count_objects_tracks_loose_and_packed() {
         let dir = tempfile::tempdir().unwrap();
         let repo = dir.path().join("store");
-        init(&repo).unwrap();
+        home_fixture_init(&repo).unwrap();
         configure_user(&repo, "Test", "test@example.com").unwrap();
 
         std::fs::write(repo.join("a.txt"), "hello").unwrap();
@@ -8889,7 +8925,7 @@ mod tests {
     fn squash_creates_backup_then_collapses_to_root_snapshot() {
         let dir = tempfile::tempdir().unwrap();
         let repo = dir.path().join("store");
-        init(&repo).unwrap();
+        home_fixture_init(&repo).unwrap();
         configure_user(&repo, "Test", "test@example.com").unwrap();
 
         // A few commits — the history we are about to compact.
@@ -8949,7 +8985,7 @@ mod tests {
     fn squash_bails_without_rewrite_when_backup_ref_exists() {
         let dir = tempfile::tempdir().unwrap();
         let repo = dir.path().join("store");
-        init(&repo).unwrap();
+        home_fixture_init(&repo).unwrap();
         configure_user(&repo, "Test", "test@example.com").unwrap();
         std::fs::write(repo.join("a.txt"), "hi").unwrap();
         add(&repo, &["a.txt"]).unwrap();
@@ -8989,7 +9025,7 @@ mod tests {
 
         let dir = tempfile::tempdir().unwrap();
         let repo = dir.path().join("store");
-        init(&repo).unwrap();
+        home_fixture_init(&repo).unwrap();
         configure_user(&repo, "Test", "test@example.com").unwrap();
 
         let write_blocks = |reg: &BlockRegistry| {
@@ -9131,7 +9167,7 @@ mod tests {
     fn merge_union_auto_resolves_schedule_ledger_last_writer_wins() {
         let dir = tempfile::tempdir().unwrap();
         let repo = dir.path().join("store");
-        init(&repo).unwrap();
+        home_fixture_init(&repo).unwrap();
         configure_user(&repo, "Test", "test@example.com").unwrap();
         let write = |text: &str| {
             std::fs::create_dir_all(repo.join("schedule")).unwrap();
@@ -9178,7 +9214,7 @@ mod tests {
 
         let dir = tempfile::tempdir().unwrap();
         let repo = dir.path().join("store");
-        init(&repo).unwrap();
+        home_fixture_init(&repo).unwrap();
         configure_user(&repo, "Test", "test@example.com").unwrap();
 
         let mk_block = |node: &str, start: u32, end: u32| AgreedIdBlock {
@@ -9283,7 +9319,7 @@ mod tests {
 
         // Machine 1: seed the store with one queued entry and publish.
         let m1 = dir.path().join("machine1");
-        init(&m1).unwrap();
+        home_fixture_init(&m1).unwrap();
         configure_user(&m1, "Joe", "joe@example.com").unwrap();
         git(&m1, &["checkout", "-b", "aida-store"]).unwrap();
         let seed = queue_entry_for_test(1000, 0);
@@ -9351,7 +9387,7 @@ mod tests {
         git(&hub, &["init", "--bare"]).unwrap();
 
         let first = dir.path().join("first");
-        init(&first).unwrap();
+        home_fixture_init(&first).unwrap();
         configure_user(&first, "Test", "test@example.com").unwrap();
         git(&first, &["checkout", "-b", "aida-store"]).unwrap();
         std::fs::write(first.join("shared.yaml"), "value: seed\n").unwrap();
@@ -9400,7 +9436,7 @@ mod tests {
         std::fs::create_dir_all(&hub).unwrap();
         assert!(git(&hub, &["init", "--bare"]).unwrap().success);
         let first = dir.path().join("first");
-        init(&first).unwrap();
+        home_fixture_init(&first).unwrap();
         configure_user(&first, "Test", "test@example.com").unwrap();
         assert!(
             git(&first, &["checkout", "-b", "aida-store"])
@@ -9532,7 +9568,7 @@ mod tests {
     fn pull_helpers_refuse_option_like_remote_or_branch() {
         let dir = tempfile::tempdir().unwrap();
         let repo = dir.path().join("repo");
-        init(&repo).unwrap();
+        home_fixture_init(&repo).unwrap();
         configure_user(&repo, "Test", "test@example.com").unwrap();
         git(&repo, &["checkout", "-b", "aida-store"]).unwrap();
         std::fs::write(repo.join("a.yaml"), "a: 1\n").unwrap();
@@ -9586,7 +9622,7 @@ mod tests {
         pending.spec_id = Some("TASK-2-001".into());
         pending.req_type = RequirementType::Task;
         crate::object_store::write_object(&objects, &pending).unwrap();
-        init(&store).unwrap();
+        home_fixture_init(&store).unwrap();
         configure_user(&store, "Test", "test@example.com").unwrap();
 
         let (tx, rx) = mpsc::channel();
@@ -9603,7 +9639,7 @@ mod tests {
         });
         held_rx.recv().unwrap();
         let s3 = store.clone();
-        let gate = std::thread::spawn(move || tx.send(merge_gate(&s3)).unwrap());
+        let gate = std::thread::spawn(move || tx.send(home_fixture_merge_gate(&s3)).unwrap());
         std::thread::sleep(Duration::from_millis(300));
         assert!(rx.try_recv().is_err(), "the gate waits for the lock");
         assert!(
@@ -9730,7 +9766,7 @@ mod tests {
         use std::os::unix::fs::PermissionsExt;
         let dir = tempfile::tempdir().unwrap();
         let repo = dir.path().join("store");
-        init(&repo).unwrap();
+        home_fixture_init(&repo).unwrap();
         let hooks = repo.join(".git/hooks");
         std::fs::create_dir_all(&hooks).unwrap();
         let executable = |path: &Path, body: &str| {
@@ -9802,7 +9838,7 @@ mod tests {
         use std::os::unix::fs::PermissionsExt;
         let dir = tempfile::tempdir().unwrap();
         let repo = dir.path().join("store");
-        init(&repo).unwrap();
+        home_fixture_init(&repo).unwrap();
         let hooks = repo.join(".git/hooks");
         std::fs::create_dir_all(&hooks).unwrap();
         let executable = |path: &Path, body: &str| {
@@ -9970,7 +10006,7 @@ mod tests {
         use std::os::unix::fs::PermissionsExt;
         let dir = tempfile::tempdir().unwrap();
         let repo = dir.path().join("store");
-        init(&repo).unwrap();
+        home_fixture_init(&repo).unwrap();
         let hooks = repo.join(".git/hooks");
         std::fs::create_dir_all(&hooks).unwrap();
         let with_mode = |path: &Path, body: &str, mode: u32| {
@@ -10083,7 +10119,7 @@ mod tests {
         use std::os::unix::fs::PermissionsExt;
         let dir = tempfile::tempdir().unwrap();
         let repo = dir.path().join("store");
-        init(&repo).unwrap();
+        home_fixture_init(&repo).unwrap();
         let hooks = repo.join(".git/hooks");
         std::fs::create_dir_all(&hooks).unwrap();
         let executable = |path: &Path, body: &str| {
@@ -10143,7 +10179,7 @@ mod tests {
     fn bug_2003_hooks_path_outside_git_dir_is_reported() {
         let dir = tempfile::tempdir().unwrap();
         let repo = dir.path().join("store");
-        init(&repo).unwrap();
+        home_fixture_init(&repo).unwrap();
         configure_user(&repo, "Test User", "test@example.com").unwrap();
         std::fs::write(repo.join("a.txt"), "a").unwrap();
         add(&repo, &["a.txt"]).unwrap();
@@ -10271,7 +10307,7 @@ mod tests {
         use std::os::unix::fs::PermissionsExt;
         let dir = tempfile::tempdir().unwrap();
         let main = dir.path().join("main");
-        init(&main).unwrap();
+        home_fixture_init(&main).unwrap();
         configure_user(&main, "Test", "test@example.com").unwrap();
         std::fs::write(main.join("README.md"), "hi").unwrap();
         add(&main, &["README.md"]).unwrap();
@@ -10305,7 +10341,7 @@ mod tests {
         std::fs::write(&config, format!("touch '{}'\n", marker.display())).unwrap();
         // (ii) A planted nested store with its own history.
         let planted = store.join(".aida-store");
-        init(&planted).unwrap();
+        home_fixture_init(&planted).unwrap();
         configure_user(&planted, "Evil", "evil@example.com").unwrap();
         std::fs::write(planted.join("x"), "x").unwrap();
         add(&planted, &["x"]).unwrap();
@@ -10434,7 +10470,7 @@ mod tests {
         use std::os::unix::fs::PermissionsExt;
         let dir = tempfile::tempdir().unwrap();
         let main = dir.path().join("main");
-        init(&main).unwrap();
+        home_fixture_init(&main).unwrap();
         configure_user(&main, "Test", "test@example.com").unwrap();
         std::fs::write(main.join("README.md"), "hi").unwrap();
         add(&main, &["README.md"]).unwrap();
@@ -10553,7 +10589,7 @@ mod tests {
     // trace:BUG-1929 | ai:claude
     fn bug_1929_main_with_store(dir: &Path) -> (PathBuf, PathBuf) {
         let main = dir.join("main");
-        init(&main).unwrap();
+        home_fixture_init(&main).unwrap();
         configure_user(&main, "Test", "test@example.com").unwrap();
         std::fs::write(main.join("README.md"), "hi").unwrap();
         add(&main, &["README.md"]).unwrap();
@@ -10619,7 +10655,7 @@ mod tests {
     fn task_1717_has_changes_checked_fails_closed() {
         let dir = tempfile::tempdir().unwrap();
         let repo = dir.path().join("store");
-        init(&repo).unwrap();
+        home_fixture_init(&repo).unwrap();
         configure_user(&repo, "Test User", "test@example.com").unwrap();
         std::fs::write(repo.join("a.txt"), "a").unwrap();
         add(&repo, &["a.txt"]).unwrap();
@@ -10766,7 +10802,7 @@ mod tests {
     fn bug_1929_planted_store(dir: &Path) -> (PathBuf, PathBuf) {
         use std::os::unix::fs::PermissionsExt;
         let store = dir.join(".aida-store");
-        init(&store).unwrap();
+        home_fixture_init(&store).unwrap();
         configure_user(&store, "Test User", "test@example.com").unwrap();
         std::fs::create_dir_all(store.join("objects")).unwrap();
         std::fs::write(store.join("objects/a.yaml"), "id: A\n").unwrap();
@@ -10914,7 +10950,7 @@ mod tests {
     fn bug_1985_planted_worktree(dir: &Path) -> (PathBuf, PathBuf, PathBuf) {
         use std::os::unix::fs::PermissionsExt;
         let main = dir.join("main");
-        init(&main).unwrap();
+        home_fixture_init(&main).unwrap();
         configure_user(&main, "Test User", "test@example.com").unwrap();
         std::fs::write(main.join("a.txt"), "a\n").unwrap();
         run_git(&main, &["add", "a.txt"]);
@@ -10934,7 +10970,7 @@ mod tests {
         .unwrap();
         std::fs::set_permissions(&driver, std::fs::Permissions::from_mode(0o755)).unwrap();
         let sub = wt.join("sub");
-        init(&sub).unwrap();
+        home_fixture_init(&sub).unwrap();
         configure_user(&sub, "Test User", "test@example.com").unwrap();
         std::fs::write(sub.join(".gitattributes"), "* filter=evil\n").unwrap();
         std::fs::write(sub.join("x.txt"), "x\n").unwrap();
@@ -11306,7 +11342,7 @@ mod tests {
         // A gitlink in the main checkout is not refused: no contained
         // session ever ran against this repository.
         let nested = main.join("vendor");
-        init(&nested).unwrap();
+        home_fixture_init(&nested).unwrap();
         configure_user(&nested, "Test User", "test@example.com").unwrap();
         std::fs::write(nested.join("v.txt"), "v").unwrap();
         run_git(&nested, &["add", "v.txt"]);
@@ -11562,7 +11598,7 @@ mod tests {
     fn task_1981_rollback_reports_non_conflict_replay_failure_and_aborts() {
         let dir = tempfile::tempdir().unwrap();
         let repo = dir.path().join("store");
-        init(&repo).unwrap();
+        home_fixture_init(&repo).unwrap();
         configure_user(&repo, "Test", "test@example.com").unwrap();
         for name in ["seed", "writer", "peer"] {
             std::fs::write(repo.join(name), name).unwrap();
@@ -11846,7 +11882,7 @@ mod tests {
             .status()
             .unwrap();
 
-        init(&clone_a).unwrap();
+        home_fixture_init(&clone_a).unwrap();
         configure_user(&clone_a, "Test", "test@example.com").unwrap();
         std::fs::write(clone_a.join("README.md"), "seed\n").unwrap();
         add(&clone_a, &["README.md"]).unwrap();
