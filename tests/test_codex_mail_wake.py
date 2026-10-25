@@ -823,6 +823,11 @@ class WatcherTests(unittest.TestCase):
             prefix = "schedule." if wrapped else ""
             body = ('[[' + prefix + 'jobs]]\nname="other"\ncommand="cache verify"\nevery="1h"\n').encode()
             def inspect(argv, **kwargs):
+                if argv[0] == "git":
+                    self.assertEqual(argv[1:5], ["-c", "init.templateDir=", "init", "--quiet"])
+                    self.assertTrue(Path(argv[-1]).is_dir())
+                    self.assertNotEqual(kwargs["env"]["HOME"], str(Path.home()))
+                    return b""
                 root = kwargs["cwd"]
                 self.assertNotEqual(root, self.root)
                 snapshot = root / "home/.aida/schedule.toml"

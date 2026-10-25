@@ -472,6 +472,9 @@ def validate_global_scheduler_snapshot(data, aida):
         # Resolve explicit relative executables before changing the child cwd.
         executable = str(Path(aida).resolve()) if os.sep in aida else aida
         try:
+            # A git-canonical scratch project needs its own real clone identity
+            # under BUG-2017. No authority flag, binding or live store is used.
+            command(["git", "-c", "init.templateDir=", "init", "--quiet", str(root)], env=env)
             result = json.loads(command([executable, "schedule", "list", "--json"],
                                         cwd=root, env=env))
             if not isinstance(result, list):
