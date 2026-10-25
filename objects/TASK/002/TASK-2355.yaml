@@ -1,0 +1,30 @@
+id: 01a174b1-ae10-70d1-9fe9-b4022c7eec36
+spec_id: TASK-2355
+agreed_id: TASK-2355
+title: aida ship commits sandbox-masked placeholder files in a seat clone, then the rebase aborts
+description: |
+  In the TASK-2350 seat clone (Claude Code sandbox), `aida ship TASK-2350 --no-merge` step 1 ("commit uncommitted work") ran `git add` on untracked sandbox deny-mask placeholders: empty read-only `.gitmodules`, `.idea`, `.vscode`, `.claude/agents`, `.claude/launch.json`, `.claude/loop.md`, `.claude/output-styles`, `.claude/routines`, `.claude/scheduled_tasks.json`. It committed them as `feat: implement TASK-2350 (TASK-2350)` (9 files, 0 lines). Step 2's rebase then failed: git could not unlink the bind-mounted placeholders ("Device or resource busy"), so it reported "untracked working tree files would be overwritten", and the abort itself failed ("could not move back to <sha>"). The worktree was left mid-rebase, even though ship printed "aborted, worktree left clean."
+
+  Recovery: drop the junk pick from .git/rebase-merge/git-rebase-todo, then `git rebase --continue`.
+
+  Suggested fix: ship's auto-commit should leave untracked sandbox mask entries alone (zero-byte read-only bind mounts; the seat's denyWithinAllow paths) or stage only tracked changes. Its abort path should also check that the rebase really ended before printing "worktree left clean".
+
+  Raised by the implementer while working TASK-2350.
+  Branch: task-2350  ·  Commit: 4f04aa6794
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-25T20:12:43.920654607Z
+modified_at: 2026-10-25T20:12:43.920654607Z
+req_type: Task
+tags:
+- from-implementer:TASK-2350
+- kind:bug-spotted
+- severity:major
+filed_at:
+  aida_version: 0.16.0
+  aida_build_sha: a01a698998
+  vendor: claude
+  session: 01a1749073b5
+  harness_version: 2.1.310 (Claude Code)

@@ -13,12 +13,12 @@ description: |-
   - aida init installs the job with the rest of the schedule (enabled only when a mandate allows it). Nothing new to start by hand.
 
   Acceptance: a sandboxed advisor can take a PR from READY to shipped, and launch a takeover fixer and a new lane, with no operator command, while a mandate is active; with no mandate every request is refused with the reason; a request with a non-enumerated verb or a malformed argument is refused at both ends; each request leaves a ledger row.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T17:15:51.947160848Z
-modified_at: 2026-10-25T20:07:17.486873060Z
+modified_at: 2026-10-25T20:15:05.408280285Z
 req_type: Story
 relationships:
 - rel_type:
@@ -647,6 +647,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a174b3-d6c0-71a2-bcf4-63b23f3e90bf
+  author: aida-orchestrator
+  timestamp: 2026-10-25T20:15:05.408305567Z
+  session_id: 01a174ad8f11
+  harness_version: 2.1.310 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: a9e78d34914e43b30fc9d2b590d83ab96feb48b2
   branch: main
@@ -655,3 +664,11 @@ filed_at:
   aida_build_sha: c6bb0dc4f1
   vendor: claude
   session: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Round 1: TASK-2338/2339/2340/2341/2342/2343 regressions verified; STORY-1917/TASK-2344 not met — Q1 lock activation unreachable and not fail-closed, Q2 native ship/train checkpoints untested, R5 integration and bounded-subprocess gaps. CI still pending at review time.'
+  recovery_hint: address the review findings, move STORY-1917 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-10-25T20:15:05.408280285Z
