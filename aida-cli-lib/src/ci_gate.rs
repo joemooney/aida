@@ -663,6 +663,84 @@ mod tests {
         );
     }
 
+    // TASK-2348: the ship's CI handoff forwards only what is left of one
+    // two-second `--wait`, whatever ownership and preflight already used.
+    // trace:TASK-2348 | ai:claude
+    #[test]
+    fn ship_ci_handoff_forwards_only_the_remainder() {
+        let forwarded = |wait, since: u64, scan: u64| {
+            crate::pr_cmd::ship_ci_handoff(
+                wait,
+                Duration::from_millis(since),
+                Duration::from_millis(scan),
+                |budget| budget,
+            )
+        };
+        // Ownership used the whole allowance (alone, or with preflight).
+        assert_eq!(forwarded(Some(2), 2_000, 0), Some(Duration::ZERO));
+        assert_eq!(forwarded(Some(2), 2_600, 0), Some(Duration::ZERO));
+        // Partly used: exactly the remainder, not a renewed two seconds.
+        assert_eq!(
+            forwarded(Some(2), 1_250, 0),
+            Some(Duration::from_millis(750))
+        );
+        assert_eq!(
+            forwarded(Some(2), 4_250, 3_000),
+            Some(Duration::from_millis(750))
+        );
+        // The excluded scan never gives back what ownership consumed.
+        assert_eq!(forwarded(Some(2), 2_000 + 900, 900), Some(Duration::ZERO));
+        assert_eq!(
+            forwarded(Some(2), 2_100 + 5_000, 5_000),
+            Some(Duration::ZERO)
+        );
+        // No `--wait`: the CI wait stays unbounded.
+        assert_eq!(forwarded(None, 9_000, 0), None);
+    }
+
+    // TASK-2348: an exhausted handoff reaches the real CI wait as ZERO: one
+    // observation of a pending Build, a timeout naming it, no second poll.
+    // trace:TASK-2348 | ai:claude
+    #[test]
+    fn exhausted_ship_handoff_polls_pending_ci_once_then_times_out() {
+        use crate::forge::CheckRegistration;
+        let root = tempfile::tempdir().unwrap();
+        let forge = FakeForge {
+            registrations: std::cell::RefCell::new(vec![CheckRegistration::Registered]),
+            rows: Some(vec![row("Build", "CI", "pending")]),
+            required: vec![],
+            row_reads: std::cell::Cell::new(0),
+            registration_polls: std::cell::Cell::new(0),
+        };
+        let mut forwarded = None;
+        let result = crate::pr_cmd::ship_ci_handoff(
+            Some(2),
+            Duration::from_millis(2_300),
+            Duration::from_millis(200),
+            |budget| {
+                forwarded = budget;
+                wait_for_ship_ci(
+                    root.path(),
+                    &forge,
+                    &change(),
+                    false,
+                    false,
+                    budget,
+                    Duration::from_secs(15),
+                )
+            },
+        );
+        assert_eq!(forwarded, Some(Duration::ZERO));
+        let error = result.unwrap_err();
+        assert_eq!(crate::exit_code_for_error(&error), 21);
+        let message = format!("{error:#}");
+        assert!(message.contains("still pending: Build"), "{message}");
+        assert_eq!(
+            (forge.row_reads.get(), forge.registration_polls.get()),
+            (1, 1)
+        );
+    }
+
     #[test]
     fn hold_gate_red_with_marker_is_the_hold_not_a_failure() {
         // The BUG-1180 shape: PR CI green, the hold gate red because the
