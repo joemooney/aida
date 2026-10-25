@@ -165,9 +165,17 @@ fn common_dir(root: &Path) -> Result<Option<PathBuf>> {
 }
 
 fn load(common: &Path) -> Result<Option<Profile>> {
-    let Some(bytes) = private::Private::open(common)?.read(PROFILE_FILE)? else {
-        return Ok(None);
-    };
+    // Ordinary shared/group-writable clones retain their existing behavior
+    // until explicit enrollment. Presence requires the full private trust
+    // checks; disappearance after this probe must never disable enforcement.
+    match fs::symlink_metadata(common.join(PROFILE_FILE)) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(_) => bail!("Cannot determine clone-local transport policy; refused"),
+        Ok(_) => {}
+    }
+    let bytes = private::Private::open(common)?
+        .read(PROFILE_FILE)?
+        .context("Transport profile changed during discovery; refused")?;
     // serde errors can quote values; do not echo a corrupt profile's content.
     let profile: Profile = serde_json::from_slice(&bytes).map_err(|_| {
         anyhow::anyhow!("Invalid clone-local transport profile; push/pull refused.")

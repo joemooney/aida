@@ -1374,3 +1374,25 @@ fn incomplete_replaced_grafted_and_alternate_graphs_refuse_before_receive() {
         fixture.assert_scan_refusal(&remote);
     }
 }
+
+#[test]
+#[cfg(unix)]
+fn ordinary_shared_clones_remain_ordinary_but_enrolled_shared_metadata_refuses() {
+    use std::os::unix::fs::PermissionsExt;
+    let ordinary = Fixture::new();
+    fs::set_permissions(&ordinary.common, fs::Permissions::from_mode(0o775)).unwrap();
+    assert_eq!(
+        ordinary.json(&["config", "transport", "show", "--json"])["enabled"],
+        false
+    );
+    let output = ordinary.aida(&["push", "--dry-run"]);
+    assert!(
+        !diagnostics(&output).contains("Transport private directory"),
+        "{}",
+        diagnostics(&output)
+    );
+    let enrolled = Fixture::new();
+    let (_store, remote) = enrolled.attach_with_remote();
+    fs::set_permissions(&enrolled.common, fs::Permissions::from_mode(0o775)).unwrap();
+    enrolled.assert_scan_refusal(&remote);
+}
