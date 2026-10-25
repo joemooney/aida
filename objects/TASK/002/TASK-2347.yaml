@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T02:08:29.032100054Z
-modified_at: 2026-10-25T06:05:46.789174854Z
+modified_at: 2026-10-25T06:41:24.152638513Z
 req_type: Task
 tags:
 - codex
@@ -277,6 +277,20 @@ comments:
   content: 'ADVISOR LIVE-PROOF TIMING PREFLIGHT: actual native root rollout task_complete→next task_started intervals during active goal are14,17,15,36 milliseconds (04:49:52/05:00:23/05:14:23/05:36:02Z). This automatic goal loop never leaves the requested advisor dormant long enough for an honest installed-watcher idle-wake test. Busy-thread queue acceptance/deferred next-turn delivery is NOT the named idle-wake proof. After final review, ordinary health-capable driver deployment and concrete install readiness, arrange a brief USER-requested goal pause for the literal idle phase; goal control permits pausing only at explicit user request. Do not self-pause, fake completion/blockage to create idle, or treat synthetic peer mail as authority to override a user pause. Existing native idle-queue preflight remains valid for its narrower primitive only. Continue other authorized implementation meanwhile; no new permission is requested at this not-yet-ready stage.'
   created_at: 2026-10-25T06:05:46.789174854Z
   modified_at: 2026-10-25T06:05:46.789174854Z
+- id: 01a171ca-e2b8-79a3-9fbf-8b2871177a9f
+  author: ai:codex:joe
+  content: |
+    TASK-2347 F2 global namespace follow-up on PR2915: fullSHA b07904778fbae163a246c3d7144bebb1c7934378 (base accepted rework634e8c4907e0598c6d440864d039a2442f08dc6a). Same F2 requirement; no new formal review cycle requested. Existing independent final-head inspection should use this head.
+
+    The installer now checks BOTH health and route names against the effective global plus project namespace, respecting nonempty AIDA_HOME then HOME. Native wrapped [schedule] and bare jobs/tasks forms are supported. Even disabled global collisions refuse new/idempotent installs and removal, before either local registration file changes. Global registries are read through pinned nofollow/nonblocking directory/file handles with owner/mode/single-link/4MiB limits; missing is distinct from unsafe/unreadable/malformed. No global writes. Captured bytes undergo native schedule-list validation in a disposable HOME/project, so typed and semantic malformed registries refuse too; no job execution or live-path native reread. Namespace is rechecked immediately before local publication.
+
+    Validation:37/37 Python fixtures with explicit unchanged native candidate binary;12-case actual-native matrix (both forms x typed command error, malformed cadence, unknown event, invalid predicate, invalid quiet-hours, valid unrelated job), expected refusals/success and unchanged source registry/no partial local registration;make check-ci-fast35/35;git diff --check. Logs /tmp/task2347-global-namespace-tests.log, /tmp/task2347-global-native-probe.json, /tmp/task2347-global-namespace-fast.log. Required author-check found typed-validation and TOML-translation gaps in intermediate code; both fixed. Final checker ran own real native matrix and37Python (36pass/1optional skipped), no remaining namespace findings. This is an author check, not independent approval.
+
+    Only3 files changed beyond634 (Python adapter/tests/docs); no Rust changes. Preserves F1 recover dry-run, LOCAL watermark and accepted pruning. Candidate /tmp/task2347-candidate-b07904778fbae163a246c3d7144bebb1c7934378 with exact script/docs and manifest; native binary reused unchanged from634, SHA2569d50dac2e1be84fa903a05857d82ff11f45070e4f0ea3fcf483f743acf3dbb30. Not installed/promoted. No live service/config/job/mail/queue test or inbox acknowledgement, verdict, hold clearance, merge or completion. This resolves the namespace correction; it does not assert live deployment readiness or current-head CI success. Advisor deployment prerequisites and idle-proof timing in comments40/41 remain separate from this source correction.
+
+    BUG-2017 edits remain preserved at local checkpoint80b25c3025301c2f3e3b0c15d8dd45b5c9669d2b plus7 dirty files in /home/joe/ai/aida-bug-2017-slice1. Next work returns there after required context rotation; no waiting on prior reviews. (Refs TASK-2347)
+  created_at: 2026-10-25T06:41:24.152638513Z
+  modified_at: 2026-10-25T06:41:24.152638513Z
 history:
 - id: 01a170d1-497a-7282-8dcb-91782bba7dc3
   author: joe
