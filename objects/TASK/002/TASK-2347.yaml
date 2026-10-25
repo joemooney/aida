@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T02:08:29.032100054Z
-modified_at: 2026-10-25T05:46:58.400505314Z
+modified_at: 2026-10-25T05:50:51.368842376Z
 req_type: Task
 tags:
 - codex
@@ -246,6 +246,22 @@ comments:
   content: 'ADVISOR HOST DEPLOYMENT PREFLIGHT22:48: actual aida-tick-2b20e8a3.service ExecStart is /home/joe/.local/bin/aida schedule tick; current live resolves merged94124569c9, which predates the new doctor health category. --aida only pins watcher subprocess, not this scheduler (new docs correctly say so). Therefore final enabling of the owned health job requires reviewed health-capable scheduler deployment first; do not globally promote unmerged code or redirect unrelated scheduled jobs as a workaround. Normal reviewed merge+ordinary promotion is the straightforward path. Also .aida/config.toml is TRACKED in this repository, despite default .aida ignore in ordinary projects: inspect the exact owned job delta and preserve unrelated content/restore on failure as part of the authorized installation plan. No live job/service/config change has occurred in this preflight; source rework/tests continue.'
   created_at: 2026-10-25T05:46:58.400505314Z
   modified_at: 2026-10-25T05:46:58.400505314Z
+- id: 01a1719c-9be8-7412-ad70-561e17208c5e
+  author: ai:codex:joe
+  content: |
+    F1/F2 rework pushed for codex2 INDEPENDENT DELTA REVIEW at 634e8c4907e0598c6d440864d039a2442f08dc6a. No approval recorded by the author.
+
+    F1: recover --accepted/--retry --dry-run rejects before directory/lock creation or persistence. Status is now genuinely read-only for absent state/lock too. Normal accepted/retry recovery remains supported. LOCAL watermark blob a1b9f780b9a3fe0f7a7e7536f96b321766f1ea6c and accepted pruning/retention remain unchanged.
+
+    F2 integration choice: existing AIDA substrate job `doctor check codex-mail-wake --fail-on-findings`, paired with the existing job-scoped CronJobFailed-to-advisor due route. The watcher maintains a private counts/timestamps-only health snapshot. Native doctor fails on stale accepted unread, unknown legacy age, recovery required, or stale/unavailable snapshot; actual JSON child errors carry safe counts/ages on stderr into routed failure evidence. No model timer/daemon, stored executable dispatch or automatic accepted-mail requeue. Install/remove owns the exact project/thread job+route block and private registration, refuses edited/duplicate/user-owned names, and requires main checkout installation. Existing scheduler driver must use a reviewed binary supporting this category; --aida does not repoint a driver.
+
+    Validation:31/31 hermetic Python fixtures;8 targeted Rust tests (including original5 mailbox cases);1 additional existing guard/route regression;1 real candidate-binary doctor JSON -> scheduled child failure -> advisor due route/recovery integration;make check-ci-fast35/35. Logs /tmp/task2347-f1f2-{python,rust,route-regression,integration,fast}.log. Fresh author checker2 rounds: corrected routed diagnostics and duplicate owned names; final checker ran own31Python,8Rust and real fake-HOME route/recovery probes, no remaining blocking findings. Author checks are not independent approval. Current-head CI not claimed green.
+
+    Exact candidate snapshot /tmp/task2347-candidate-634e8c4907e0598c6d440864d039a2442f08dc6a/ with manifest.json, final script/docs and native binary. Binary SHA2569d50dac2e1be84fa903a05857d82ff11f45070e4f0ea3fcf483f743acf3dbb30. Built/tested from final native source before commit; embedded label predates final commit, native source hashes pinned in manifest. Not installed or promoted.
+
+    No live installation, scheduled-job registration/execution, mail/queue test, inbox acknowledgement, self-verdict, hold clearance, merge or parent completion. Receipt-root limitation remains assigned to STORY-1843. Advisor owns full-path idle wake after independent final-head approval. Returning now to BUG-2017 checkpoint80b25c3025301c2f3e3b0c15d8dd45b5c9669d2b, without waiting for prior reviews. (Refs TASK-2347)
+  created_at: 2026-10-25T05:50:51.368842376Z
+  modified_at: 2026-10-25T05:50:51.368842376Z
 history:
 - id: 01a170d1-497a-7282-8dcb-91782bba7dc3
   author: joe
