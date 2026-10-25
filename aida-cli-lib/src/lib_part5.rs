@@ -3762,7 +3762,7 @@ mod bug_1452_refusal_aftermath_tests {
         )
         .unwrap();
 
-        let backend = aida_core::CachedGitBackend::open(
+        let backend = crate::test_env::home_fixture_cached_backend(
             &store,
             &aida_core::CachedGitBackend::default_cache_path(&store),
         )
@@ -3835,7 +3835,7 @@ mod bug_1452_refusal_aftermath_tests {
         );
 
         // 3. the spec is PARKED, not Done, and visible to `aida awaiting`
-        let backend = aida_core::CachedGitBackend::open(
+        let backend = crate::test_env::home_fixture_cached_backend(
             &store,
             &aida_core::CachedGitBackend::default_cache_path(&store),
         )
@@ -3907,7 +3907,7 @@ mod bug_1452_refusal_aftermath_tests {
             "mode = \"distributed\"\nstore_path = \".aida-store\"\n",
         )
         .unwrap();
-        let backend = aida_core::CachedGitBackend::open(
+        let backend = crate::test_env::home_fixture_cached_backend(
             &store,
             &aida_core::CachedGitBackend::default_cache_path(&store),
         )

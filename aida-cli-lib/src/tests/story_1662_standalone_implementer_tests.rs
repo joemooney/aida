@@ -3,6 +3,7 @@
 //! concurrency cap, and authorship record.
 // trace:STORY-1662 | ai:claude
 
+// trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
 use super::*;
 use crate::punt::{HoldSignal, PuntSignal};
 use std::collections::BTreeMap;
@@ -920,7 +921,7 @@ fn stub_vendor_that_punts_exits_32_as_a_live_implementer_lane_with_no_grant_leak
     // What the pickup set up before the launch: the Approved, unowned spec
     // and the implementer lease `queue work` minted for it.
     let store_path = crate::detect_distributed_store_from(&project).unwrap();
-    let storage = Storage::new(&store_path);
+    let storage = crate::test_env::home_fixture_storage(&store_path);
     let mut store = storage.load().unwrap_or_default();
     let mut req = aida_core::Requirement::new("Widget".into(), "".into());
     req.spec_id = Some("STORY-9".into());
@@ -989,7 +990,9 @@ fn stub_vendor_that_punts_exits_32_as_a_live_implementer_lane_with_no_grant_leak
             assert_eq!(row.role.as_deref(), Some("implementer"));
             assert!(matches!(row.state, LeaseState::Live), "{:?}", row.state);
             assert_eq!(row.spec.as_deref(), Some("STORY-9"));
-            let store = Storage::new(&store_path).load().unwrap();
+            let store = crate::test_env::home_fixture_storage(&store_path)
+                .load()
+                .unwrap();
             let spec = store
                 .requirements
                 .iter()

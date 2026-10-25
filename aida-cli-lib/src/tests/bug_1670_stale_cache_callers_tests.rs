@@ -13,6 +13,7 @@
 // trace:BUG-1670 | ai:claude
 #![cfg(unix)]
 
+// trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
@@ -69,7 +70,7 @@ impl Fixture {
     }
 
     fn backend(&self) -> aida_core::CachedGitBackend {
-        aida_core::CachedGitBackend::open(&self.store_root, &self.cache_path).unwrap()
+        crate::test_env::home_fixture_cached_backend(&self.store_root, &self.cache_path).unwrap()
     }
 
     fn new_req(spec_id: &str, status: RequirementStatus) -> Requirement {
@@ -94,7 +95,7 @@ impl Fixture {
     }
 
     fn external(&self) -> aida_core::GitBackend {
-        aida_core::GitBackend::new(&self.store_root).unwrap()
+        crate::test_env::home_fixture_backend(&self.store_root).unwrap()
     }
 
     /// Another writer commits an edit straight to the store, bypassing this

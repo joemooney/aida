@@ -9,6 +9,7 @@
 //!    empty queue (`resolve_queue_rework_needed`).
 //!
 //! trace:TASK-1456 | ai:claude
+// trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
 use super::*;
 use aida_core::{QueueEntry, Requirement, RequirementStatus};
 use uuid::Uuid;
@@ -219,7 +220,7 @@ fn resolve_queue_rework_needed_finds_done_specs_with_outstanding_refusal() {
     let project_root = dir.path();
 
     let store_root = project_root.join("aida-store");
-    let backend = aida_core::GitBackend::new(&store_root).unwrap();
+    let backend = crate::test_env::home_fixture_backend(&store_root).unwrap();
     let storage = Storage::new(&store_root);
     let mut store = aida_core::RequirementsStore::default();
 
@@ -296,7 +297,7 @@ fn resolve_queue_rework_needed_is_empty_for_an_ordinary_queue() {
     let dir = tempfile::tempdir().unwrap();
     let project_root = dir.path();
     let store_root = project_root.join("aida-store");
-    let backend = aida_core::GitBackend::new(&store_root).unwrap();
+    let backend = crate::test_env::home_fixture_backend(&store_root).unwrap();
     let storage = Storage::new(&store_root);
     let mut store = aida_core::RequirementsStore::default();
 

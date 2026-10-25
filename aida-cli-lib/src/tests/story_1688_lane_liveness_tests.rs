@@ -8,6 +8,7 @@
 // trace:STORY-1688 | ai:claude
 #![cfg(unix)]
 
+// trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
 use super::*;
 use crate::leases::{lease_path, leases_dir, SessionLease};
 use aida_core::driver_registry::{self, DriverKind, Registration};
@@ -663,7 +664,7 @@ fn store_with(root: &Path, specs: &[(&str, aida_core::RequirementStatus)]) {
     )
     .unwrap();
     let cache = aida_core::CachedGitBackend::default_cache_path(&store);
-    let backend = aida_core::CachedGitBackend::open(&store, &cache).unwrap();
+    let backend = crate::test_env::home_fixture_cached_backend(&store, &cache).unwrap();
     for (spec, status) in specs {
         let mut req = aida_core::Requirement::new(format!("spec {spec}"), "body".into());
         req.spec_id = Some(spec.to_string());

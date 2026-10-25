@@ -2410,7 +2410,13 @@ fn pull_store_leg_locked(
     // Skipped by `--no-gate` or `AIDA_AUTO_MERGE_GATE=false`.
     // Idempotent (no-op when there's nothing pending) and
     // cheap. trace:TASK-78 | ai:claude
-    if !no_gate && auto_merge_gate_enabled() {
+    // trace:BUG-2017 | ai:codex — WORK/HUB sync transports refs without canonical promotion.
+    if !no_gate
+        && auto_merge_gate_enabled()
+        && aida_core::allocation_authority::resolve(store_path)
+            .map_err(|e| e.to_string())?
+            .authoritative
+    {
         match git_ops::merge_gate(store_path) {
             Ok(assignments) if assignments.is_empty() => {
                 // Stay silent when nothing was promoted — pull

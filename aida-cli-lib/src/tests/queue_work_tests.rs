@@ -4,6 +4,7 @@
 //! prompt routing, scope derivation, and spec-id matching so future
 //! refactors don't silently break the resolver.
 //! trace:STORY-42 | ai:claude
+// trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
 use super::*;
 use aida_core::{QueueEntry, Relationship, Requirement, RequirementType};
 use uuid::Uuid;
@@ -666,7 +667,7 @@ fn effective_auto_complete_role_maps_dispatch_seats_to_implementer() {
 fn queued_status_fixture(statuses: &[(&str, RequirementStatus)]) -> (tempfile::TempDir, Storage) {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().join("aida-store");
-    let backend = aida_core::GitBackend::new(&root).unwrap();
+    let backend = crate::test_env::home_fixture_backend(&root).unwrap();
     let storage = Storage::new(&root);
     let mut store = aida_core::RequirementsStore::default();
 
@@ -703,7 +704,7 @@ fn queued_status_fixture_for_user(
 ) -> (tempfile::TempDir, Storage) {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().join("aida-store");
-    let backend = aida_core::GitBackend::new(&root).unwrap();
+    let backend = crate::test_env::home_fixture_backend(&root).unwrap();
     let storage = Storage::new(&root);
     let mut store = aida_core::RequirementsStore::default();
 
@@ -741,7 +742,7 @@ fn queued_status_fixture_for_user(
 fn batch_members_resolve_agreed_id_alias_to_origin_object() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().join("aida-store");
-    let backend = aida_core::GitBackend::new(&root).unwrap();
+    let backend = crate::test_env::home_fixture_backend(&root).unwrap();
     let storage = Storage::new(&root);
 
     let mut req = Requirement::new("aliased member".into(), String::new());
@@ -776,7 +777,7 @@ fn batch_members_resolve_agreed_id_alias_to_origin_object() {
 fn batch_members_report_and_emit_unresolvable_member() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().join("aida-store");
-    aida_core::GitBackend::new(&root).unwrap();
+    crate::test_env::home_fixture_backend(&root).unwrap();
     let storage = Storage::new(&root);
     let missing_id = Uuid::now_v7();
     storage
@@ -2740,7 +2741,7 @@ fn auto_complete_head_names_sibling_role_queue_and_honors_role_override() {
     let _env = quiet_queue_env();
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().join("aida-store");
-    let backend = aida_core::GitBackend::new(&root).unwrap();
+    let backend = crate::test_env::home_fixture_backend(&root).unwrap();
     let storage = Storage::new(&root);
 
     let mut req = aida_core::Requirement::new("route me".to_string(), String::new());
@@ -2796,7 +2797,7 @@ fn resolve_queue_work_plan_auto_queues_when_not_strict() {
     let _env = crate::test_env::EnvVarGuard::unset("AIDA_SESSION_ROLE");
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().join("aida-store");
-    let backend = aida_core::GitBackend::new(&root).unwrap();
+    let backend = crate::test_env::home_fixture_backend(&root).unwrap();
     let storage = Storage::new(&root);
     let mut req = aida_core::Requirement::new("backlog item".to_string(), String::new());
     req.spec_id = Some("BUG-376".to_string());
@@ -2867,7 +2868,7 @@ fn resolve_queue_work_plan_auto_queues_when_not_strict() {
 }
 
 fn queue_review_story(storage: &Storage, root: &std::path::Path) {
-    let backend = aida_core::GitBackend::new(root).unwrap();
+    let backend = crate::test_env::home_fixture_backend(root).unwrap();
     let mut review =
         aida_core::Requirement::new("Review PR-457: throwaway".to_string(), String::new());
     review.spec_id = Some("STORY-901".to_string());
@@ -3017,7 +3018,7 @@ fn review_pickup_cross_user_duplicates_choose_canonical_story() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().join("aida-store");
     let storage = Storage::new(&root);
-    let backend = aida_core::GitBackend::new(&root).unwrap();
+    let backend = crate::test_env::home_fixture_backend(&root).unwrap();
     let mut newer =
         aida_core::Requirement::new("Review PR-457: duplicate".to_string(), String::new());
     newer.spec_id = Some("STORY-902".to_string());
@@ -3706,7 +3707,7 @@ fn bug_1608_fixture(
 ) -> (tempfile::TempDir, Storage) {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().join("aida-store");
-    let backend = aida_core::GitBackend::new(&root).unwrap();
+    let backend = crate::test_env::home_fixture_backend(&root).unwrap();
     let storage = Storage::new(&root);
 
     let mut prereq = Requirement::new("prerequisite".to_string(), String::new());

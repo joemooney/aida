@@ -1044,6 +1044,8 @@ mod tests {
         git(dir, &["config", "user.name", "Test"]).unwrap();
         git(dir, &["config", "user.email", "test@example.com"]).unwrap();
         git(dir, &["commit", "--allow-empty", "-m", "fixture"]).unwrap();
+        // trace:BUG-2017 | ai:codex — explicit positive consensus fixture.
+        crate::test_env::enroll_synthetic_home(dir).unwrap();
     }
     /// The real layout: a project whose `main` is the trusted default branch,
     /// with the store in `<project>/.aida-store` on its own `aida-store` branch.

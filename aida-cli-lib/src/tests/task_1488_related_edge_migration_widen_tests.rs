@@ -52,6 +52,7 @@ fn open_git_backend() -> (tempfile::TempDir, std::path::PathBuf, CachedGitBacken
     std::fs::create_dir_all(&store_root).unwrap();
     aida_core::git_ops::init(&store_root).unwrap();
     aida_core::git_ops::configure_user(&store_root, "fixture", "fixture@localhost").unwrap();
+    crate::test_env::enroll_synthetic_home(&store_root).unwrap();
     let backend = CachedGitBackend::open(&store_root, &cache_path).unwrap();
     (dir, store_root, backend)
 }

@@ -13,6 +13,7 @@
 //!   of treating the hint itself as the project root.
 // trace:TASK-1487 | ai:claude
 
+// trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
 use super::*;
 use std::fs;
 use std::process::Command as StdCommand;
@@ -168,6 +169,15 @@ fn bulk_import_via_writer_uses_the_storages_dispenser_node_id() {
     std::fs::create_dir_all(&store_dir).unwrap();
     seed_oplog_at_node_zero(&store_dir);
 
+    // trace:BUG-2017 | ai:codex — keep the node-local positive fixture in
+    // WORK with an explicit existing binding; no HOME enrollment is needed.
+    aida_core::git_ops::init(&store_dir).unwrap();
+    std::fs::create_dir_all(store_dir.join(".aida")).unwrap();
+    std::fs::write(
+        store_dir.join(".aida/node.toml"),
+        "node_id='7'\nuser_id=0\nhostname=''\nregistered_at='2026-01-01T00:00:00Z'\n",
+    )
+    .unwrap();
     let dispenser = Arc::new(MemoryDispenser::new(IdMode::Distributed {
         node_id: "7".to_string(),
     }));
@@ -213,7 +223,8 @@ fn bulk_import_via_writer_leaves_node_zero_unchanged_without_a_dispenser() {
     let store_dir = tmp.path().join("aida-store");
     std::fs::create_dir_all(&store_dir).unwrap();
     seed_oplog_at_node_zero(&store_dir);
-    let storage = Storage::new(&store_dir);
+    // trace:BUG-2017 | ai:codex — this separate legacy global-ID fixture models HOME.
+    let storage = crate::test_env::home_fixture_storage(&store_dir);
 
     let req = Requirement::new("Imported issue".to_string(), "from a tracker".to_string());
     bulk_import_via_writer(&storage, "feat(jira)", std::iter::once(req)).unwrap();

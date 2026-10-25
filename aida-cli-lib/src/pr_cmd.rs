@@ -7604,7 +7604,7 @@ mod story_1663_rebase_ship_tests {
         let (tmp, git) = task_1951_repo();
         let root = tmp.path();
         let store_dir = root.join(".aida-store");
-        let backend = aida_core::db::GitBackend::new(&store_dir).unwrap();
+        let backend = crate::test_env::home_fixture_backend(&store_dir).unwrap();
         use aida_core::db::DatabaseBackend;
         let mut req = aida_core::Requirement::new("Slice parent".into(), String::new());
         req.spec_id = Some("STORY-78".to_string());
@@ -7666,7 +7666,7 @@ mod story_1663_rebase_ship_tests {
         let (tmp, git) = task_1951_repo();
         let root = tmp.path();
         let store_dir = root.join(".aida-store");
-        let backend = aida_core::db::GitBackend::new(&store_dir).unwrap();
+        let backend = crate::test_env::home_fixture_backend(&store_dir).unwrap();
         use aida_core::db::DatabaseBackend;
         let mut req = aida_core::Requirement::new("Slice parent".into(), String::new());
         req.spec_id = Some("STORY-77".to_string());
@@ -7766,7 +7766,7 @@ mod story_1663_rebase_ship_tests {
         let (tmp, git) = task_1951_repo();
         let root = tmp.path();
         let store_dir = root.join(".aida-store");
-        let backend = aida_core::db::GitBackend::new(&store_dir).unwrap();
+        let backend = crate::test_env::home_fixture_backend(&store_dir).unwrap();
         use aida_core::db::DatabaseBackend;
         for (id, status) in [
             ("STORY-77", aida_core::RequirementStatus::InProgress),
@@ -7888,7 +7888,7 @@ mod story_1663_rebase_ship_tests {
     fn task_1951_already_merged_rerun_confirms_the_rebase_merge() {
         let (tmp, git) = task_1951_repo();
         let root = tmp.path();
-        let backend = aida_core::db::GitBackend::new(&root.join(".aida-store")).unwrap();
+        let backend = crate::test_env::home_fixture_backend(&root.join(".aida-store")).unwrap();
         use aida_core::db::DatabaseBackend;
         for id in ["STORY-91", "STORY-92"] {
             let mut req = aida_core::Requirement::new(format!("{id} spec"), String::new());
@@ -8117,7 +8117,7 @@ mod story_1663_rebase_ship_tests {
     fn task_1951_pure_git_already_merged_rerun_uses_the_slice_branch() {
         let (tmp, git) = task_1951_repo();
         let root = tmp.path();
-        let backend = aida_core::db::GitBackend::new(&root.join(".aida-store")).unwrap();
+        let backend = crate::test_env::home_fixture_backend(&root.join(".aida-store")).unwrap();
         use aida_core::db::DatabaseBackend;
         let mut req = aida_core::Requirement::new("STORY-93 spec".to_string(), String::new());
         req.spec_id = Some("STORY-93".to_string());
@@ -8730,7 +8730,7 @@ mod story_1663_rebase_ship_tests {
         run_git(&["commit", "-m", "chore: initial"]);
 
         let store_dir = root.join(".aida-store");
-        let backend = aida_core::db::GitBackend::new(&store_dir).unwrap();
+        let backend = crate::test_env::home_fixture_backend(&store_dir).unwrap();
         use aida_core::db::DatabaseBackend;
         backend.add_requirement(req).unwrap();
         let mut other_req = aida_core::Requirement::new(

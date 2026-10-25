@@ -990,6 +990,7 @@ impl GitBackend {
 
     /// Save metadata to the metadata.yaml file.
     fn save_metadata(&self, meta: &StoreMetadata) -> Result<()> {
+        self.admit_metadata(meta)?;
         let content = serde_yaml::to_string(meta)?;
         std::fs::write(&self.metadata_path, content)
             .with_context(|| format!("Failed to write {}", self.metadata_path.display()))?;
@@ -1024,7 +1025,8 @@ impl GitBackend {
             baselines: meta.baselines,
             store_version: 0,
             migrated_to: None,
-            dispenser: self.dispenser.clone(),
+            // trace:BUG-2017 | ai:codex
+            dispenser: crate::allocation_authority::dispenser(&self.root, self.dispenser.clone()),
             loaded_objects: None,
             id_counters_reset: crate::models::CounterResetFlag::default(),
         }
@@ -1135,6 +1137,7 @@ impl GitBackend {
         deleted: &[String],
     ) -> Result<()> {
         use std::collections::{HashMap, HashSet};
+        self.admit_allocations(updates)?;
         if updates.is_empty() && deleted.is_empty() {
             return Ok(());
         }
@@ -1250,6 +1253,70 @@ impl GitBackend {
             }
         }
         Ok(())
+    }
+
+    // trace:BUG-2017 | ai:codex — repair/import cannot advance internal global counters.
+    fn admit_metadata(&self, incoming: &StoreMetadata) -> Result<()> {
+        let mode = crate::allocation_authority::resolve(&self.root)?;
+        let incoming_ids: Vec<_> = incoming
+            .users
+            .iter()
+            .map(|u| (u.id, u.spec_id.clone()))
+            .chain(incoming.teams.iter().map(|t| (t.id, t.spec_id.clone())))
+            .collect();
+        if mode.authoritative && !incoming_ids.iter().any(|(_, id)| id.as_deref() == Some("")) {
+            return Ok(());
+        }
+        let prior = self.load_metadata()?;
+        let prior_ids: Vec<_> = prior
+            .users
+            .iter()
+            .map(|u| (u.id, u.spec_id.clone()))
+            .chain(prior.teams.iter().map(|t| (t.id, t.spec_id.clone())))
+            .collect();
+        // Failed infallible metadata allocation must not publish an empty ID,
+        // including on HOME. Preserve an unchanged pre-existing legacy value.
+        // trace:BUG-2017 | ai:codex
+        if incoming_ids.iter().any(|(uuid, id)| {
+            id.as_deref() == Some("")
+                && !prior_ids
+                    .iter()
+                    .any(|(old_uuid, old_id)| old_uuid == uuid && old_id == id)
+        }) {
+            anyhow::bail!("metadata ID allocation failed; nothing was written")
+        }
+        if mode.authoritative {
+            return Ok(());
+        }
+        crate::allocation_authority::admit_meta_ids(&self.root, &incoming_ids, &prior_ids)?;
+        if incoming.next_spec_number != prior.next_spec_number
+            || incoming.next_feature_number != prior.next_feature_number
+            || incoming.prefix_counters != prior.prefix_counters
+            || incoming.meta_counters != prior.meta_counters
+        {
+            anyhow::bail!(
+                "global counter changes refuse on a non-authoritative clone; nothing was written"
+            )
+        }
+        Ok(())
+    }
+
+    // trace:BUG-2017 | ai:codex
+    fn admit_allocations(&self, incoming: &[Requirement]) -> Result<()> {
+        // The legacy infallible model API signals allocation failure with an
+        // empty ID. Refuse before metadata/oplog even on explicit HOME.
+        // trace:BUG-2017 | ai:codex
+        if incoming.iter().any(|r| r.spec_id.as_deref() == Some("")) {
+            anyhow::bail!("requirement ID allocation failed; no metadata or object was written")
+        }
+        if crate::allocation_authority::resolve(&self.root)?.authoritative {
+            return Ok(());
+        }
+        let existing = object_store::list_objects(&self.objects_root)?
+            .into_iter()
+            .map(|(sid, _)| object_store::read_object(&self.objects_root, &sid))
+            .collect::<Result<Vec<_>>>()?;
+        crate::allocation_authority::admit(&self.root, incoming, &existing)
     }
 
     /// Record the granular field ops for one requirement update and write its
@@ -1610,6 +1677,8 @@ impl GitBackend {
         crate::git_ops::ensure_store_write_safe(&self.root)?;
         let _lock = self.lock_store()?;
 
+        self.admit_allocations(&store.requirements)?;
+        self.admit_metadata(&Self::extract_metadata(store))?;
         let existing = object_store::list_objects(&self.objects_root)?;
         let existing_specs: std::collections::HashSet<String> =
             existing.iter().map(|(s, _)| s.clone()).collect();
@@ -1634,10 +1703,12 @@ impl GitBackend {
         // Only an on-disk spec missing from the incoming store can be a
         // rename's old path, so the map reads just those (none: no reads).
         // trace:STORY-1674 | ai:claude
-        let incoming_specs: std::collections::HashSet<&str> = store
+        // trace:BUG-2017 | ai:codex — compare the on-disk canonical namespace.
+        let incoming_specs: std::collections::HashSet<String> = store
             .requirements
             .iter()
             .filter_map(|r| r.spec_id.as_deref())
+            .map(object_store::canonical_spec_id)
             .collect();
         let mut previous_by_uuid: Option<std::collections::HashMap<uuid::Uuid, Requirement>> = None;
 
@@ -1645,7 +1716,7 @@ impl GitBackend {
             let Some(ref spec_id) = req.spec_id else {
                 continue;
             };
-            current_specs.insert(spec_id.clone());
+            current_specs.insert(object_store::canonical_spec_id(spec_id));
             let disk_text = object_store::read_object_text(&self.objects_root, spec_id)?;
             if let Some(snapshot) = snapshot {
                 let loaded_fp = snapshot.disk(spec_id);
@@ -2074,6 +2145,8 @@ impl GitBackend {
 
         let hypotheses_before = store.requirements.clone();
         update_fn(&mut store);
+        self.admit_allocations(&store.requirements)?;
+        self.admit_metadata(&Self::extract_metadata(&store))?;
         crate::hypothesis::enforce(&hypotheses_before, &mut store.requirements)?;
 
         let meta_after = Self::extract_metadata(&store);
@@ -2434,6 +2507,9 @@ impl DatabaseBackend for GitBackend {
         // trace:BUG-1612 | ai:claude — serialize with every other store writer.
         let _lock = self.lock_store()?;
         let mut req = requirement;
+        if req.spec_id.is_some() || req.agreed_id.is_some() {
+            self.admit_allocations(std::slice::from_ref(&req))?;
+        }
         // CR-8: stamp filing provenance at creation (write-once; a caller that
         // already stamped keeps its stamp). trace:CR-8 | ai:claude
         crate::provenance::stamp_if_absent(&mut req);
@@ -2861,9 +2937,15 @@ pub struct BulkWriter<'a> {
 
 impl<'a> BulkWriter<'a> {
     /// Add a requirement to the batch, assigning a spec_id from the live
-    /// metadata counters when missing. The requirement is buffered in memory;
-    /// nothing is written to disk until `finish()` is called.
+    /// metadata counters when missing. Objects and oplog entries are buffered
+    /// until `finish()`. An attached persistent dispenser may reserve a local
+    /// sequence during `add()`; candidate construction is not a pure preview.
+    // trace:BUG-2017 | ai:codex
     pub fn add(&mut self, mut req: Requirement) -> Result<&Requirement> {
+        // trace:BUG-2017 | ai:codex
+        if req.spec_id.is_some() || req.agreed_id.is_some() {
+            self.backend.admit_allocations(std::slice::from_ref(&req))?;
+        }
         if req.spec_id.is_none() {
             // Reuse RequirementsStore::add_requirement_with_id by building a
             // throwaway store carrying the live metadata; the `staged` Vec
@@ -2888,6 +2970,7 @@ impl<'a> BulkWriter<'a> {
             self.metadata.prefix_counters = tmp.prefix_counters.clone();
             self.metadata.meta_counters = tmp.meta_counters.clone();
         }
+        self.backend.admit_allocations(std::slice::from_ref(&req))?;
         self.staged.push(req);
         Ok(self.staged.last().unwrap())
     }
@@ -3016,6 +3099,7 @@ impl<'a> BulkWriter<'a> {
         let imported: std::collections::HashSet<_> = self.staged.iter().map(|r| r.id).collect();
         self.backend
             .prepare_hypothesis_updates(&mut self.staged, &[])?;
+        self.backend.admit_metadata(&self.metadata)?;
 
         // Persist all object YAMLs first (skipping unchanged just in case the
         // caller is re-running an idempotent import).
@@ -3091,6 +3175,11 @@ impl<'a> BulkWriter<'a> {
 
 #[cfg(test)]
 mod tests {
+    // trace:BUG-2017 | ai:codex — legacy CRUD fixtures explicitly model HOME.
+    // WORK/default/refusal coverage lives in allocation_authority::tests.
+    fn home_fixture_backend(root: &std::path::Path) -> anyhow::Result<super::GitBackend> {
+        crate::allocation_authority::home_fixture_backend(root)
+    }
     use super::*;
 
     #[test]
@@ -3098,7 +3187,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().join("aida-store");
 
-        let backend = GitBackend::new(&root).unwrap();
+        let backend = home_fixture_backend(&root).unwrap();
         let store = backend.load().unwrap();
         assert_eq!(store.requirements.len(), 0);
         assert!(store.name.is_empty());
@@ -3111,7 +3200,7 @@ mod tests {
     fn malformed_spec_id_is_not_found_not_parse_error() {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().join("aida-store");
-        let backend = GitBackend::new(&root).unwrap();
+        let backend = home_fixture_backend(&root).unwrap();
 
         for bad in [
             "not-a-real-id",
@@ -3130,7 +3219,7 @@ mod tests {
     fn test_git_backend_save_and_load() {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().join("aida-store");
-        let backend = GitBackend::new(&root).unwrap();
+        let backend = home_fixture_backend(&root).unwrap();
 
         // Create a store with some data
         let mut store = RequirementsStore::new();
@@ -3169,7 +3258,7 @@ mod tests {
     fn stale_full_save_cannot_revert_newer_concurrent_edit() {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().join("aida-store");
-        let backend = GitBackend::new(&root).unwrap();
+        let backend = home_fixture_backend(&root).unwrap();
 
         let base = chrono::Utc::now();
 
@@ -3293,7 +3382,7 @@ mod tests {
     fn test_queue_add_does_not_truncate_corrupt_file() {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().join("aida-store");
-        let backend = GitBackend::new(&root).unwrap();
+        let backend = home_fixture_backend(&root).unwrap();
 
         let queues_dir = root.join("registry/queues");
         std::fs::create_dir_all(&queues_dir).unwrap();
@@ -3324,7 +3413,7 @@ mod tests {
     fn test_queue_add_preserves_existing_entries() {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().join("aida-store");
-        let backend = GitBackend::new(&root).unwrap();
+        let backend = home_fixture_backend(&root).unwrap();
 
         let e1 = sample_queue_entry("bob", 1000);
         let e2 = sample_queue_entry("bob", 2000);
@@ -3346,7 +3435,7 @@ mod tests {
     fn test_queue_remove_many_drops_named_keeps_rest() {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().join("aida-store");
-        let backend = GitBackend::new(&root).unwrap();
+        let backend = home_fixture_backend(&root).unwrap();
 
         let keep1 = sample_queue_entry("carol", 1000);
         let drop1 = sample_queue_entry("carol", 2000);
@@ -3388,7 +3477,7 @@ mod tests {
     fn test_queue_matches_across_user_case() {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().join("aida-store");
-        let backend = GitBackend::new(&root).unwrap();
+        let backend = home_fixture_backend(&root).unwrap();
 
         // Filed under lowercase `joe`.
         let entry = sample_queue_entry("joe", 1000);
@@ -3437,7 +3526,7 @@ mod tests {
     fn test_queue_matches_across_person_aliases() {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().join("aida-store");
-        let backend = GitBackend::new(&root).unwrap();
+        let backend = home_fixture_backend(&root).unwrap();
 
         // Filed under `joe` on one host.
         let entry = sample_queue_entry("joe", 1000);
@@ -3489,7 +3578,7 @@ mod tests {
     fn test_role_queue_user_uses_portable_filename() {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().join("aida-store");
-        let backend = GitBackend::new(&root).unwrap();
+        let backend = home_fixture_backend(&root).unwrap();
 
         let entry = sample_queue_entry("role:implementer", 1000);
         backend.queue_add(entry.clone()).unwrap();
@@ -3511,7 +3600,7 @@ mod tests {
     fn test_queue_remove_for_role_filters_by_role() {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().join("aida-store");
-        let backend = GitBackend::new(&root).unwrap();
+        let backend = home_fixture_backend(&root).unwrap();
 
         // Same spec queued twice for the same user, once per role. (queue_add
         // upserts by requirement_id, so write the two-entry state directly —
@@ -3554,7 +3643,7 @@ mod tests {
     fn test_queue_remove_for_role_none_is_role_blind() {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().join("aida-store");
-        let backend = GitBackend::new(&root).unwrap();
+        let backend = home_fixture_backend(&root).unwrap();
 
         let spec_id = uuid::Uuid::new_v4();
         let mut a = sample_queue_entry("erin", 1000);
@@ -3586,7 +3675,7 @@ mod tests {
     fn test_queue_read_empty_file_is_empty_queue() {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().join("aida-store");
-        let backend = GitBackend::new(&root).unwrap();
+        let backend = home_fixture_backend(&root).unwrap();
         let queues_dir = root.join("registry/queues");
         std::fs::create_dir_all(&queues_dir).unwrap();
         std::fs::write(queues_dir.join("carol.yaml"), "   \n").unwrap();
@@ -3600,7 +3689,7 @@ mod tests {
         // trace:FR-1-002 | ai:claude
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().join("aida-store");
-        let backend = GitBackend::new(&root).unwrap();
+        let backend = home_fixture_backend(&root).unwrap();
 
         // Seed the metadata so add_requirement_with_id has a starting counter.
         let mut seed_store = RequirementsStore::new();
@@ -3645,7 +3734,7 @@ mod tests {
     fn test_git_backend_crud() {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().join("aida-store");
-        let backend = GitBackend::new(&root).unwrap();
+        let backend = home_fixture_backend(&root).unwrap();
 
         // Add
         let mut req = Requirement::new("CRUD Test".into(), "testing".into());
@@ -3686,7 +3775,7 @@ mod tests {
     fn bulk_update_writes_all_changed_in_a_single_commit() {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().join("aida-store");
-        let backend = GitBackend::new(&root).unwrap();
+        let backend = home_fixture_backend(&root).unwrap();
         backend.save(&RequirementsStore::new()).unwrap();
 
         // GitBackend::new doesn't git-init, and auto_commit_paths no-ops
@@ -3762,7 +3851,7 @@ mod tests {
     fn bulk_update_atomically_decides_on_the_stored_object_in_one_commit() {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().join("aida-store");
-        let backend = GitBackend::new(&root).unwrap();
+        let backend = home_fixture_backend(&root).unwrap();
         backend.save(&RequirementsStore::new()).unwrap();
         let git = |args: &[&str]| {
             crate::test_git::git_command()
@@ -3860,7 +3949,7 @@ mod tests {
     fn bulk_update_atomically_counts_missing_and_unreadable_candidates() {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().join("aida-store");
-        let backend = GitBackend::new(&root).unwrap();
+        let backend = home_fixture_backend(&root).unwrap();
         backend.save(&RequirementsStore::new()).unwrap();
 
         let mut reqs = Vec::new();
@@ -3903,7 +3992,7 @@ mod tests {
     fn full_store_save_preserves_git_canonical_fields_from_disk() {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().join("aida-store");
-        let backend = GitBackend::new(&root).unwrap();
+        let backend = home_fixture_backend(&root).unwrap();
         backend.save(&RequirementsStore::new()).unwrap();
 
         let mut req = Requirement::new("Deferred work".into(), "wait for trigger".into());
@@ -3965,7 +4054,7 @@ mod tests {
     fn test_git_backend_auto_assign_id() {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().join("aida-store");
-        let backend = GitBackend::new(&root).unwrap();
+        let backend = home_fixture_backend(&root).unwrap();
 
         // Save initial metadata
         backend.save(&RequirementsStore::new()).unwrap();
@@ -3985,7 +4074,7 @@ mod tests {
     fn test_git_backend_delete_removes_orphan_files() {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().join("aida-store");
-        let backend = GitBackend::new(&root).unwrap();
+        let backend = home_fixture_backend(&root).unwrap();
 
         // Save with 2 requirements
         let mut store = RequirementsStore::new();
@@ -4028,7 +4117,7 @@ mod tests {
     fn test_save_preserves_unparseable_object_files() {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().join("aida-store");
-        let backend = GitBackend::new(&root).unwrap();
+        let backend = home_fixture_backend(&root).unwrap();
 
         // Seed: one parseable spec written via the normal path.
         let mut keeper = Requirement::new("Keeper".into(), "kept".into());
@@ -4075,7 +4164,7 @@ mod tests {
     fn queue_clear_completed_only_filters_by_backing_spec_status() {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().join("aida-store");
-        let backend = GitBackend::new(&root).unwrap();
+        let backend = home_fixture_backend(&root).unwrap();
 
         // Set up two requirements: one Completed, one Approved.
         let mut store = RequirementsStore::new();
@@ -4148,7 +4237,7 @@ mod tests {
     fn queue_clear_without_completed_flag_wipes_everything() {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().join("aida-store");
-        let backend = GitBackend::new(&root).unwrap();
+        let backend = home_fixture_backend(&root).unwrap();
 
         let mut store = RequirementsStore::new();
         let mut r = Requirement::new("any work".into(), "queued".into());
@@ -4193,7 +4282,7 @@ mod tests {
     fn test_save_preserves_unparseable_alongside_new_add() {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().join("aida-store");
-        let backend = GitBackend::new(&root).unwrap();
+        let backend = home_fixture_backend(&root).unwrap();
 
         // Initial state: empty store, persist metadata.
         backend.save(&RequirementsStore::new()).unwrap();
@@ -4238,7 +4327,7 @@ mod tests {
             node_id: "7".to_string(),
         }));
         let handle = DispenserHandle(dispenser);
-        let backend = GitBackend::new(&root).unwrap().with_dispenser(handle);
+        let backend = home_fixture_backend(&root).unwrap().with_dispenser(handle);
 
         // Save initial metadata
         backend.save(&RequirementsStore::new()).unwrap();
@@ -4261,7 +4350,7 @@ mod tests {
         let root = dir.path().join("aida-store");
         // Disable auto_commit so the test doesn't need a git repo; oplog is
         // independent of the commit step.
-        let backend = GitBackend::new(&root).unwrap().with_auto_commit(false);
+        let backend = home_fixture_backend(&root).unwrap().with_auto_commit(false);
 
         // Seed an on-disk object (the diff branch only fires when the old
         // object exists). Use update_requirement so the same edit path runs.
@@ -4310,7 +4399,7 @@ mod tests {
 
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().join("aida-store");
-        let backend = GitBackend::new(&root).unwrap().with_auto_commit(false);
+        let backend = home_fixture_backend(&root).unwrap().with_auto_commit(false);
 
         let mut req = Requirement::new("Title".into(), "desc".into());
         req.spec_id = Some("TASK-2".into());
@@ -4354,7 +4443,7 @@ mod tests {
             .unwrap();
         assert!(detached.success());
 
-        let backend = GitBackend::new(&root).unwrap();
+        let backend = home_fixture_backend(&root).unwrap();
         let mut req = Requirement::new("Must not land".into(), "guard test".into());
         req.spec_id = Some("BUG-1229".into());
         let err = backend.add_requirement(req).unwrap_err().to_string();
@@ -4372,7 +4461,7 @@ mod tests {
     fn cr8_add_stamps_filing_provenance() {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().join("aida-store");
-        let backend = GitBackend::new(&root).unwrap().with_auto_commit(false);
+        let backend = home_fixture_backend(&root).unwrap().with_auto_commit(false);
         let added = backend
             .add_requirement(Requirement::new("new".into(), "d".into()))
             .unwrap();
@@ -4388,7 +4477,7 @@ mod tests {
     fn cr8_edits_never_change_filing_provenance() {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().join("aida-store");
-        let backend = GitBackend::new(&root).unwrap().with_auto_commit(false);
+        let backend = home_fixture_backend(&root).unwrap().with_auto_commit(false);
         let mut req = Requirement::new("t".into(), "d".into());
         req.filed_at = Some(crate::models::FilingProvenance {
             code_sha: Some("aaa".into()),
@@ -4429,7 +4518,7 @@ mod tests {
     fn cr8_legacy_spec_without_provenance_loads_and_stays_unstamped() {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().join("aida-store");
-        let backend = GitBackend::new(&root).unwrap().with_auto_commit(false);
+        let backend = home_fixture_backend(&root).unwrap().with_auto_commit(false);
         let mut legacy = Requirement::new("legacy".into(), "d".into());
         legacy.spec_id = Some("TASK-9".into());
         object_store::write_object_if_changed(&backend.objects_root, &legacy).unwrap();
@@ -4453,7 +4542,7 @@ mod tests {
     fn cr8_full_store_save_stamps_only_new_specs() {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().join("aida-store");
-        let backend = GitBackend::new(&root).unwrap().with_auto_commit(false);
+        let backend = home_fixture_backend(&root).unwrap().with_auto_commit(false);
         let mut legacy = Requirement::new("legacy".into(), "d".into());
         legacy.spec_id = Some("TASK-1".into());
         object_store::write_object_if_changed(&backend.objects_root, &legacy).unwrap();
@@ -4483,7 +4572,7 @@ mod tests {
         ]);
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().join("store");
-        let backend = GitBackend::new(&root).unwrap().with_auto_commit(false);
+        let backend = home_fixture_backend(&root).unwrap().with_auto_commit(false);
         let mut req = Requirement::new("new".into(), "body".into());
         req.comments
             .push(Comment::new("writer".into(), "new comment".into()));
@@ -4589,7 +4678,7 @@ mod tests {
         ]);
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().join("store");
-        let backend = GitBackend::new(&root).unwrap().with_auto_commit(false);
+        let backend = home_fixture_backend(&root).unwrap().with_auto_commit(false);
         let mut legacy = Requirement::new("legacy".into(), "body".into());
         legacy.spec_id = Some("TASK-1".into());
         legacy
@@ -4630,7 +4719,7 @@ mod tests {
         ]);
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().join("store");
-        let backend = GitBackend::new(&root).unwrap().with_auto_commit(false);
+        let backend = home_fixture_backend(&root).unwrap().with_auto_commit(false);
         let mut legacy = Requirement::new("legacy".into(), "body".into());
         legacy.spec_id = Some("TASK-1".into());
         legacy.history.push(crate::models::HistoryEntry::new(
@@ -4669,7 +4758,7 @@ mod tests {
     fn bug1612_git_store(n: usize) -> (tempfile::TempDir, PathBuf, GitBackend, Vec<Requirement>) {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().join("aida-store");
-        let backend = GitBackend::new(&root).unwrap();
+        let backend = home_fixture_backend(&root).unwrap();
         backend.save(&RequirementsStore::new()).unwrap();
         for args in [
             &["init", "-q"][..],
@@ -4774,7 +4863,7 @@ mod tests {
         let root_b = root.clone();
         let writer_b = std::thread::spawn(move || {
             rx.recv().unwrap();
-            let b = GitBackend::new(&root_b).unwrap();
+            let b = home_fixture_backend(&root_b).unwrap();
             let mut r = Requirement::new("added by B".into(), "d".into());
             r.spec_id = Some("TASK-2".into());
             b.add_requirement(r).unwrap();
@@ -4848,7 +4937,7 @@ mod tests {
                 let root = root.clone();
                 let target = target.clone();
                 std::thread::spawn(move || {
-                    let b = GitBackend::new(&root).unwrap().with_auto_commit(false);
+                    let b = home_fixture_backend(&root).unwrap().with_auto_commit(false);
                     for i in 0..per_thread {
                         b.update_spec_atomically(&target, |r| {
                             r.tags.insert(format!("t{t}-{i}"));
@@ -5278,7 +5367,7 @@ mod tests {
     /// A second writer on the same store (its own backend instance).
     // trace:BUG-1613 | ai:claude
     fn bug1613_other(root: &Path) -> GitBackend {
-        GitBackend::new(root).unwrap()
+        home_fixture_backend(root).unwrap()
     }
 
     /// A seeded store with per-prefix numbering, so each type has a counter.
@@ -5844,7 +5933,7 @@ mod tests {
     // processes do under flock(2).
 
     fn bug1677_backend(root: &Path) -> GitBackend {
-        GitBackend::new(root).unwrap()
+        home_fixture_backend(root).unwrap()
     }
 
     fn bug1677_seed(backend: &GitBackend, user: &str, n: usize, base: i64) -> Vec<uuid::Uuid> {
@@ -6279,7 +6368,7 @@ mod tests {
                 .unwrap()
                 .success());
         }
-        let backend = GitBackend::new(&root)
+        let backend = home_fixture_backend(&root)
             .unwrap()
             .with_auto_commit(true)
             .with_oplog(true);

@@ -363,7 +363,10 @@ fn story1673_absent_null_valid_invalid_survive_yaml_json_and_canonical_store() {
         let storage = Storage::new(dir.path().join(format!("{index}.yaml")));
         storage.save(&store).unwrap();
         assert_eq!(storage.load().unwrap().requirements[0].verify, raw);
-        let backend = GitBackend::new(&dir.path().join(format!("git-{index}"))).unwrap();
+        let backend = crate::allocation_authority::home_fixture_backend(
+            &dir.path().join(format!("git-{index}")),
+        )
+        .unwrap();
         backend.save(&store).unwrap();
         assert_eq!(backend.load().unwrap().requirements[0].verify, raw);
         let before = serde_yaml::to_string(&backend.load().unwrap().requirements[0]).unwrap();

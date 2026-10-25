@@ -1,3 +1,4 @@
+// trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
 use super::{
     agent_gate_matches_req, branch_commits_ahead_main, build_auto_punt_args,
     build_integrate_rebase_args, build_phase3_auto_rebase_args, decide_shelve_attribution,
@@ -307,7 +308,7 @@ fn reconcile_failure_does_not_credit_stale_merged_pr_after_reopen() {
     ];
     let mut store = RequirementsStore::default();
     store.requirements.push(req);
-    aida_core::GitBackend::new(&root.join(".aida-store"))
+    crate::test_env::home_fixture_backend(&root.join(".aida-store"))
         .unwrap()
         .save(&store)
         .unwrap();
@@ -1702,7 +1703,7 @@ fn shelve_on_failure_always_shelves_the_lease_spec_with_an_attribution_note() {
     req.status = RequirementStatus::InProgress;
     let mut store = RequirementsStore::default();
     store.requirements.push(req);
-    aida_core::GitBackend::new(&work.join(".aida-store"))
+    crate::test_env::home_fixture_backend(&work.join(".aida-store"))
         .unwrap()
         .save(&store)
         .unwrap();
@@ -1730,7 +1731,7 @@ fn shelve_on_failure_always_shelves_the_lease_spec_with_an_attribution_note() {
         fr.detail
     );
 
-    let reloaded = aida_core::GitBackend::new(&work.join(".aida-store"))
+    let reloaded = crate::test_env::home_fixture_backend(&work.join(".aida-store"))
         .unwrap()
         .load()
         .unwrap();
@@ -2596,7 +2597,7 @@ fn ensure_spec_done_after_pr_skips_the_write_when_the_pr_credits_another_spec() 
 
     super::ensure_spec_done_after_pr(&work, &work, "swap-branch", "STORY-9001", 42, true);
 
-    let reloaded = aida_core::GitBackend::new(&store_dir)
+    let reloaded = crate::test_env::home_fixture_backend(&store_dir)
         .unwrap()
         .load()
         .unwrap();
@@ -2630,7 +2631,7 @@ fn ensure_spec_done_after_pr_skips_the_write_when_the_pr_has_no_trailer_at_all()
 
     super::ensure_spec_done_after_pr(&work, &work, "untrailered-branch", "STORY-9001", 42, true);
 
-    let reloaded = aida_core::GitBackend::new(&store_dir)
+    let reloaded = crate::test_env::home_fixture_backend(&store_dir)
         .unwrap()
         .load()
         .unwrap();
@@ -2684,7 +2685,7 @@ fn fixture_repo_and_store_with_inprogress_spec(
     let mut store = RequirementsStore::default();
     store.requirements.push(req);
     let store_dir = work.join(".aida-store");
-    aida_core::GitBackend::new(&store_dir)
+    crate::test_env::home_fixture_backend(&store_dir)
         .unwrap()
         .save(&store)
         .unwrap();
@@ -2938,7 +2939,7 @@ fn bug_2180_reviewer_request_changes_leaves_store_worktree_clean() {
     req.status = RequirementStatus::InProgress;
     let mut store = RequirementsStore::default();
     store.requirements.push(req);
-    aida_core::GitBackend::new(&store_root)
+    crate::test_env::home_fixture_backend(&store_root)
         .unwrap()
         .save(&store)
         .unwrap();
@@ -2996,7 +2997,7 @@ fn bug_2180_reviewer_request_changes_leaves_store_worktree_clean() {
         "reviewer request-changes left the store dirty"
     );
     assert!(crate::gate::mandate_traces::store_snapshot(&store_root).is_ok());
-    let reloaded = aida_core::GitBackend::new(&store_root)
+    let reloaded = crate::test_env::home_fixture_backend(&store_root)
         .unwrap()
         .load()
         .unwrap();

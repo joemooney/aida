@@ -1,5 +1,6 @@
 //! Regression coverage for locked heals and confirmed repair sets.
 //! trace:TASK-1981 | ai:codex
+// trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
 use super::*;
 use aida_core::{AgreedIdBlock, BlockRegistry, Relationship, RelationshipType, Requirement};
 use std::collections::HashSet;
@@ -44,6 +45,8 @@ fn task_1981_relationship_repair_intersects_confirmed_edges_and_rechecks_targets
     let dir = tempfile::tempdir().unwrap();
     let store = dir.path().join("store");
     aida_core::git_ops::init(&store).unwrap();
+    // trace:BUG-2017 | ai:codex — explicit positive global-ID repair fixture.
+    crate::test_env::enroll_synthetic_home(&store).unwrap();
     aida_core::git_ops::configure_user(&store, "Test", "test@example.com").unwrap();
     let mut req = Requirement::new("source".into(), "".into());
     req.spec_id = Some("TASK-1".into());
@@ -112,6 +115,8 @@ fn task_1981_stale_block_repair_leaves_unconfirmed_blocks() {
     let dir = tempfile::tempdir().unwrap();
     let store = dir.path().join("store");
     aida_core::git_ops::init(&store).unwrap();
+    // trace:BUG-2017 | ai:codex — explicit positive global-ID repair fixture.
+    crate::test_env::enroll_synthetic_home(&store).unwrap();
     aida_core::git_ops::configure_user(&store, "Test", "test@example.com").unwrap();
     let path = store.join("registry/blocks.yaml");
     let mut registry = BlockRegistry::default();
@@ -140,6 +145,8 @@ fn task_1981_counter_migration_refuses_unconfirmed_active_blocks_before_writing(
     let config = project.join(".aida/config.toml");
     std::fs::write(&config, "[id_format]\ncounter_scope = \"per_type\"\n").unwrap();
     aida_core::git_ops::init(&store).unwrap();
+    // trace:BUG-2017 | ai:codex — explicit positive global-ID repair fixture.
+    crate::test_env::enroll_synthetic_home(&store).unwrap();
     let path = store.join("registry/blocks.yaml");
     let mut registry = BlockRegistry::default();
     registry.blocks = vec![block("n1", "TASK", 1), block("n1", "BUG", 11)];
@@ -167,7 +174,7 @@ fn task_1981_parent_tag_heal_waits_and_reloads_peer_changes() {
     let root = dir.path().to_path_buf();
     let store_path = root.join(".aida-store");
     std::fs::create_dir_all(&store_path).unwrap();
-    let storage = Storage::new(&store_path);
+    let storage = crate::test_env::home_fixture_storage(&store_path);
     let mut store = aida_core::RequirementsStore::default();
     let mut req = Requirement::new("original".into(), "".into());
     req.spec_id = Some("TASK-1".into());
@@ -239,7 +246,7 @@ fn task_1981_orphan_queue_heal_waits_and_rechecks_removal() {
     let root = dir.path().to_path_buf();
     let store_path = root.join(".aida-store");
     std::fs::create_dir_all(&store_path).unwrap();
-    let storage = Storage::new(&store_path);
+    let storage = crate::test_env::home_fixture_storage(&store_path);
     storage
         .save(&aida_core::RequirementsStore::default())
         .unwrap();

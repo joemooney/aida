@@ -7055,6 +7055,7 @@ fn text_envelope_output_schema(payload_description: &str) -> Value {
 /// Every tool the MCP server exposes, in `tools/list` JSON shape. Static so
 /// `aida mcp register-agent --print-tools` can render it without spinning up
 /// the JSON-RPC loop.
+// trace:BUG-2017 | ai:codex — published ID inputs accept opaque node namespaces.
 pub fn tool_descriptors() -> Value {
     let mut descriptors = json!([
         // ---- Spec graph ----
@@ -7112,7 +7113,7 @@ pub fn tool_descriptors() -> Value {
                     "parent": {
                         "type": "string",
                         "description": "Restrict to direct children of this parent SPEC-ID (mirrors `aida list --parent`).",
-                        "pattern": "^[A-Z]+-\\d+(-\\d+)*$",
+                        "pattern": "^[A-Z]+-(?:[A-Za-z0-9][A-Za-z0-9_-]*-)?[0-9]+$",
                         "example": "EPIC-27"
                     },
                     "role": {
@@ -7177,7 +7178,7 @@ pub fn tool_descriptors() -> Value {
                     "id": {
                         "type": "string",
                         "description": "The unique SPEC-ID of the requirement (e.g., FR-0042). Must follow the canonical spec format.",
-                        "pattern": "^[A-Z]+-\\d+(-\\d+)*$",
+                        "pattern": "^[A-Z]+-(?:[A-Za-z0-9][A-Za-z0-9_-]*-)?[0-9]+$",
                         "example": "FR-0042"
                     },
                     "include_git": {
@@ -7245,7 +7246,7 @@ pub fn tool_descriptors() -> Value {
                     "parent": {
                         "type": "string",
                         "description": "SPEC-ID of a parent to link this requirement under (adds a Parent/Child edge, mirroring `aida add --parent`). The parent must exist and not be terminal-status.",
-                        "pattern": "^[A-Z]+-\\d+(-\\d+)*$",
+                        "pattern": "^[A-Z]+-(?:[A-Za-z0-9][A-Za-z0-9_-]*-)?[0-9]+$",
                         "example": "EPIC-27"
                     },
                     "tags": {
@@ -7276,7 +7277,7 @@ pub fn tool_descriptors() -> Value {
                     "id": {
                         "type": "string",
                         "description": "The unique SPEC-ID of the requirement to update.",
-                        "pattern": "^[A-Z]+-\\d+(-\\d+)*$",
+                        "pattern": "^[A-Z]+-(?:[A-Za-z0-9][A-Za-z0-9_-]*-)?[0-9]+$",
                         "example": "FR-0042"
                     },
                     "title": {
@@ -7327,7 +7328,7 @@ pub fn tool_descriptors() -> Value {
                     "parent": {
                         "type": "string",
                         "description": "Re-parent the requirement under this SPEC-ID (adds a Parent/Child edge to the new parent; existing parent edges are left in place). The parent must exist and not be terminal-status.",
-                        "pattern": "^[A-Z]+-\\d+(-\\d+)*$",
+                        "pattern": "^[A-Z]+-(?:[A-Za-z0-9][A-Za-z0-9_-]*-)?[0-9]+$",
                         "example": "EPIC-27"
                     },
                     "assignee": {
@@ -7414,7 +7415,7 @@ pub fn tool_descriptors() -> Value {
                     "id": {
                         "type": "string",
                         "description": "The unique SPEC-ID of the requirement to comment on.",
-                        "pattern": "^[A-Z]+-\\d+(-\\d+)*$",
+                        "pattern": "^[A-Z]+-(?:[A-Za-z0-9][A-Za-z0-9_-]*-)?[0-9]+$",
                         "example": "FR-0042"
                     },
                     "text": {
@@ -7443,7 +7444,7 @@ pub fn tool_descriptors() -> Value {
                     "spec_id": {
                         "type": "string",
                         "description": "Source requirement SPEC-ID.",
-                        "pattern": "^[A-Z]+-\\d+(-\\d+)*$",
+                        "pattern": "^[A-Z]+-(?:[A-Za-z0-9][A-Za-z0-9_-]*-)?[0-9]+$",
                         "example": "TASK-551"
                     },
                     "relationship_type": {
@@ -7455,7 +7456,7 @@ pub fn tool_descriptors() -> Value {
                     "target_spec_id": {
                         "type": "string",
                         "description": "Target requirement SPEC-ID.",
-                        "pattern": "^[A-Z]+-\\d+(-\\d+)*$",
+                        "pattern": "^[A-Z]+-(?:[A-Za-z0-9][A-Za-z0-9_-]*-)?[0-9]+$",
                         "example": "STORY-398"
                     },
                     "bidirectional": {
@@ -7484,7 +7485,7 @@ pub fn tool_descriptors() -> Value {
                     "spec_id": {
                         "type": "string",
                         "description": "Root requirement SPEC-ID to query from.",
-                        "pattern": "^[A-Z]+-\\d+(-\\d+)*$",
+                        "pattern": "^[A-Z]+-(?:[A-Za-z0-9][A-Za-z0-9_-]*-)?[0-9]+$",
                         "example": "STORY-489"
                     },
                     "mode": {
@@ -7689,7 +7690,7 @@ pub fn tool_descriptors() -> Value {
                     "spec_id": {
                         "type": "string",
                         "description": "The SPEC-ID of the punted requirement.",
-                        "pattern": "^[A-Z]+-\\d+(-\\d+)*$",
+                        "pattern": "^[A-Z]+-(?:[A-Za-z0-9][A-Za-z0-9_-]*-)?[0-9]+$",
                         "example": "FR-0042"
                     }
                 },
@@ -7708,7 +7709,7 @@ pub fn tool_descriptors() -> Value {
                     "spec_id": {
                         "type": "string",
                         "description": "The unique SPEC-ID of the requirement facing the obstacle.",
-                        "pattern": "^[A-Z]+-\\d+(-\\d+)*$",
+                        "pattern": "^[A-Z]+-(?:[A-Za-z0-9][A-Za-z0-9_-]*-)?[0-9]+$",
                         "example": "FR-0042"
                     },
                     "detail": {
@@ -7753,7 +7754,7 @@ pub fn tool_descriptors() -> Value {
                     "spec_id": {
                         "type": "string",
                         "description": "The unique SPEC-ID of the requirement to resolve.",
-                        "pattern": "^[A-Z]+-\\d+(-\\d+)*$",
+                        "pattern": "^[A-Z]+-(?:[A-Za-z0-9][A-Za-z0-9_-]*-)?[0-9]+$",
                         "example": "FR-0042"
                     },
                     "answer": {
@@ -7788,7 +7789,7 @@ pub fn tool_descriptors() -> Value {
                     "spec_id": {
                         "type": "string",
                         "description": "The unique SPEC-ID of the requirement being escalated.",
-                        "pattern": "^[A-Z]+-\\d+(-\\d+)*$",
+                        "pattern": "^[A-Z]+-(?:[A-Za-z0-9][A-Za-z0-9_-]*-)?[0-9]+$",
                         "example": "FR-0042"
                     },
                     "reasoning": {
@@ -7872,7 +7873,7 @@ pub fn tool_descriptors() -> Value {
                     "spec_id": {
                         "type": "string",
                         "description": "Associated requirement SPEC-ID (required when source is 'implementer').",
-                        "pattern": "^[A-Z]+-\\d+(-\\d+)*$",
+                        "pattern": "^[A-Z]+-(?:[A-Za-z0-9][A-Za-z0-9_-]*-)?[0-9]+$",
                         "example": "FR-0042"
                     },
                     "pr": {
@@ -7909,7 +7910,7 @@ pub fn tool_descriptors() -> Value {
                     "id": {
                         "type": "string",
                         "description": "The SPEC-ID of the finding to triage (typically a draft TASK-N).",
-                        "pattern": "^[A-Z]+-\\d+(-\\d+)*$",
+                        "pattern": "^[A-Z]+-(?:[A-Za-z0-9][A-Za-z0-9_-]*-)?[0-9]+$",
                         "example": "TASK-123"
                     },
                     "action": {
@@ -7941,7 +7942,7 @@ pub fn tool_descriptors() -> Value {
                     "spec_id": {
                         "type": "string",
                         "description": "The unique SPEC-ID of the requirement to claim.",
-                        "pattern": "^[A-Z]+-\\d+(-\\d+)*$",
+                        "pattern": "^[A-Z]+-(?:[A-Za-z0-9][A-Za-z0-9_-]*-)?[0-9]+$",
                         "example": "FR-0042"
                     },
                     "role": {
@@ -10443,7 +10444,7 @@ mod tests {
         use aida_core::db::DatabaseBackend;
         let dir = tempdir().unwrap();
         let root = dir.path().join("store");
-        let backend = aida_core::GitBackend::new(&root)
+        let backend = crate::test_env::home_fixture_backend(&root)
             .unwrap()
             .with_auto_commit(false);
         let mut h = Requirement::new("hypothesis".into(), "pre-result".into());
@@ -10570,6 +10571,8 @@ mod tests {
                 .unwrap()
                 .success());
         }
+        // trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
+        crate::test_env::enroll_synthetic_home(&store_root).unwrap();
         let storage = Box::leak(Box::new(Storage::new(&store_root)));
         let server = McpServer::new(storage, dir.path().to_path_buf());
         let mut store = aida_core::RequirementsStore::default();
@@ -12712,7 +12715,7 @@ mod tests {
         std::fs::create_dir_all(&store_dir).unwrap();
 
         // Seed an empty git-canonical store so subsequent loads succeed.
-        let seed = GitBackend::new(&store_dir).unwrap();
+        let seed = crate::test_env::home_fixture_backend(&store_dir).unwrap();
         seed.save(&aida_core::RequirementsStore::new()).unwrap();
 
         // Point the MCP server at the store directory — the same shape the
@@ -12734,7 +12737,7 @@ mod tests {
         // A fresh GitBackend simulates the next `aida` CLI invocation. It
         // must see the requirement the MCP server just wrote — that is the
         // contract BUG-310 broke.
-        let cli_view = GitBackend::new(&store_dir).unwrap();
+        let cli_view = crate::test_env::home_fixture_backend(&store_dir).unwrap();
         let loaded = cli_view.load().unwrap();
         assert!(
             loaded
@@ -13309,7 +13312,7 @@ mod tests {
         use aida_core::db::{DatabaseBackend, GitBackend};
         let store_dir = dir.join(".aida-store");
         std::fs::create_dir_all(&store_dir).unwrap();
-        let seed = GitBackend::new(&store_dir).unwrap();
+        let seed = crate::test_env::home_fixture_backend(&store_dir).unwrap();
         seed.save(&aida_core::RequirementsStore::new()).unwrap();
         let storage = Box::leak(Box::new(Storage::new(&store_dir)));
         McpServer::new(storage, dir.to_path_buf())
@@ -14488,7 +14491,14 @@ fn run_mcp_serve(
             // uses. The previous YAML-snapshot approach wrote to
             // `.aida/mcp-cache.yaml` only — invisible to the CLI and overwritten on
             // every MCP restart. trace:BUG-310 | ai:claude
-            let storage = Storage::new(store_path);
+            // trace:BUG-2017 | ai:codex — attach lifecycle allocation only in a
+            // clone. Raw directories retain read-only MCP startup; backend
+            // admission still refuses any allocation without a Git identity.
+            let storage = if aida_core::allocation_authority::in_git_clone(store_path)? {
+                Storage::new(store_path).with_dispenser(crate::load_dispenser(store_path)?)
+            } else {
+                Storage::new(store_path)
+            };
             let project_root = crate::store_sync::mcp_serve_project_root(
                 store_path,
                 project_root_hint,
@@ -14537,3 +14547,42 @@ pub(crate) static MCP_SERVE: crate::command_registry::CommandReg =
         },
         run: crate::command_registry::Handler::Store(run_mcp_serve),
     };
+
+// trace:BUG-2017 | ai:codex
+#[cfg(test)]
+mod bug_2017_schema_tests {
+    use super::*;
+    #[test]
+    fn published_spec_id_inputs_accept_opaque_nodes_and_reject_cross_store_text() {
+        let descriptors = tool_descriptors();
+        let tools = descriptors.as_array().expect("tool descriptor array");
+        let mut checked = 0;
+        for tool in tools {
+            if let Some(properties) = tool["inputSchema"]["properties"].as_object() {
+                for field in properties.values() {
+                    if field["pattern"].as_str()
+                        == Some("^[A-Z]+-(?:[A-Za-z0-9][A-Za-z0-9_-]*-)?[0-9]+$")
+                    {
+                        let regex = regex::Regex::new(field["pattern"].as_str().unwrap()).unwrap();
+                        for valid in [
+                            "BUG-001",
+                            "BUG-7-001",
+                            "BUG-0123456789abcdef0123456789abcdef-001",
+                            "TASK-JM-201",
+                            "BUG-1-2-003",
+                            "BUG-team_a--west-003",
+                        ] {
+                            assert!(regex.is_match(valid), "{valid}");
+                        }
+                        assert!(!regex.is_match("other#BUG-001"));
+                        checked += 1;
+                    }
+                }
+            }
+        }
+        assert!(
+            checked >= 10,
+            "published ID inputs were not exercised: {checked}"
+        );
+    }
+}

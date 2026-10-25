@@ -3,6 +3,7 @@
 //! verdict accepts exactly the grants `current_grant` always accepted.
 // trace:BUG-1983 | ai:claude
 
+// trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
 use crate::gate::seat_authority::{
     current_grant, grant_check, test_support::mint_grant_for, GrantCheck, GrantRejection,
     SeatGrant, GRANT_ENV,
@@ -433,7 +434,7 @@ fn draft_project() -> (tempfile::TempDir, std::path::PathBuf) {
     let store = crate::detect_distributed_store_from(root).unwrap();
     aida_core::git_ops::init(&store).unwrap();
     aida_core::git_ops::configure_user(&store, "fixture", "fixture@localhost").unwrap();
-    let backend = aida_core::CachedGitBackend::open(
+    let backend = crate::test_env::home_fixture_cached_backend(
         &store,
         &aida_core::CachedGitBackend::default_cache_path(&store),
     )
@@ -447,7 +448,7 @@ fn draft_project() -> (tempfile::TempDir, std::path::PathBuf) {
 
 fn spec_status(store: &Path) -> aida_core::models::RequirementStatus {
     use aida_core::db::DatabaseBackend;
-    aida_core::CachedGitBackend::open(
+    crate::test_env::home_fixture_cached_backend(
         store,
         &aida_core::CachedGitBackend::default_cache_path(store),
     )

@@ -519,7 +519,8 @@ mod tests {
         aida_core::git_ops::init(&store_root).unwrap();
         aida_core::git_ops::configure_user(&store_root, "Test", "test@example.com").unwrap();
         let cache_path = tmp.path().join(".aida").join("cache.db");
-        let backend = aida_core::CachedGitBackend::open(&store_root, &cache_path).unwrap();
+        let backend =
+            crate::test_env::home_fixture_cached_backend(&store_root, &cache_path).unwrap();
         Fixture {
             _tmp: tmp,
             store_root,
@@ -528,7 +529,7 @@ mod tests {
     }
 
     fn on_disk(f: &Fixture, spec_id: &str) -> Requirement {
-        aida_core::GitBackend::new(&f.store_root)
+        crate::test_env::home_fixture_backend(&f.store_root)
             .unwrap()
             .get_requirement_by_spec_id(spec_id)
             .unwrap()
@@ -546,7 +547,7 @@ mod tests {
         planned.modified_at = chrono::Utc::now();
 
         {
-            let other = aida_core::GitBackend::new(&f.store_root).unwrap();
+            let other = crate::test_env::home_fixture_backend(&f.store_root).unwrap();
             let mut theirs = other.get_requirement(&read.id).unwrap().unwrap();
             theirs.owner = "someone-else".into();
             theirs.tags.insert("theirs".into());
@@ -584,7 +585,7 @@ mod tests {
         planned.status = RequirementStatus::Completed;
         planned.title = "edited".into();
 
-        let other = aida_core::GitBackend::new(&f.store_root).unwrap();
+        let other = crate::test_env::home_fixture_backend(&f.store_root).unwrap();
         let mut theirs = other.get_requirement(&read.id).unwrap().unwrap();
         theirs.status = RequirementStatus::InProgress;
         other.update_requirement(&theirs).unwrap();
@@ -619,7 +620,7 @@ mod tests {
         let mut planned = read.clone();
         planned.status = RequirementStatus::Approved;
 
-        let other = aida_core::GitBackend::new(&f.store_root).unwrap();
+        let other = crate::test_env::home_fixture_backend(&f.store_root).unwrap();
         let mut theirs = other.get_requirement(&read.id).unwrap().unwrap();
         theirs.status = RequirementStatus::InProgress;
         other.update_requirement(&theirs).unwrap();
@@ -677,7 +678,7 @@ mod tests {
         let mut planned = read.clone();
         planned.status = RequirementStatus::Approved;
 
-        let other = aida_core::GitBackend::new(&f.store_root).unwrap();
+        let other = crate::test_env::home_fixture_backend(&f.store_root).unwrap();
         let mut theirs = other.get_requirement(&read.id).unwrap().unwrap();
         theirs.priority = Priority::High;
         other.update_requirement(&theirs).unwrap();
@@ -718,7 +719,7 @@ mod tests {
         planned.tags = ["keep", "x"].iter().map(|t| t.to_string()).collect();
         planned.modified_at = chrono::Utc::now();
 
-        let other = aida_core::GitBackend::new(&f.store_root).unwrap();
+        let other = crate::test_env::home_fixture_backend(&f.store_root).unwrap();
         let mut theirs = other.get_requirement(&read.id).unwrap().unwrap();
         theirs.tags.remove("keep");
         theirs.tags.insert("c".into());
@@ -762,7 +763,7 @@ mod tests {
         planned.add_comment(Comment::new("me".into(), "returned to the queue".into()));
         planned.modified_at = chrono::Utc::now();
 
-        let other = aida_core::GitBackend::new(&f.store_root).unwrap();
+        let other = crate::test_env::home_fixture_backend(&f.store_root).unwrap();
         let mut theirs = other.get_requirement(&read.id).unwrap().unwrap();
         theirs.tags.insert("needs-human".into());
         theirs.add_comment(Comment::new("other".into(), "needs a human".into()));
@@ -799,7 +800,7 @@ mod tests {
         planned.status = RequirementStatus::Approved;
         planned.modified_at = chrono::Utc::now();
 
-        let other = aida_core::GitBackend::new(&f.store_root).unwrap();
+        let other = crate::test_env::home_fixture_backend(&f.store_root).unwrap();
         let mut theirs = other.get_requirement(&read.id).unwrap().unwrap();
         theirs.status = RequirementStatus::InProgress;
         other.update_requirement(&theirs).unwrap();
@@ -865,7 +866,7 @@ mod tests {
         planned.title = "unauthorized title".into();
         planned.modified_at = chrono::Utc::now();
 
-        let other = aida_core::GitBackend::new(&f.store_root).unwrap();
+        let other = crate::test_env::home_fixture_backend(&f.store_root).unwrap();
         let mut theirs = other.get_requirement(&read.id).unwrap().unwrap();
         theirs.tags.insert("protected".into());
         other.update_requirement(&theirs).unwrap();

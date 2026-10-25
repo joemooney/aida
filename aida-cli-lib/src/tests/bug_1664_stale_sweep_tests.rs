@@ -12,6 +12,7 @@
 // trace:BUG-1664 | ai:claude
 #![cfg(unix)]
 
+// trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
 use std::path::{Path, PathBuf};
 
 use aida_core::{DatabaseBackend, QueueEntry, Requirement, RequirementStatus};
@@ -51,7 +52,7 @@ impl Fixture {
     }
 
     fn backend(&self) -> aida_core::CachedGitBackend {
-        aida_core::CachedGitBackend::open(&self.store_root, &self.cache_path).unwrap()
+        crate::test_env::home_fixture_cached_backend(&self.store_root, &self.cache_path).unwrap()
     }
 
     fn add(&self, spec_id: &str, status: RequirementStatus, modified_days_ago: i64) -> Requirement {
@@ -98,7 +99,7 @@ impl Fixture {
 
     /// Another writer commits straight to the store, bypassing this cache.
     fn external_edit(&self, spec_id: &str, edit: impl FnOnce(&mut Requirement)) {
-        let external = aida_core::GitBackend::new(&self.store_root).unwrap();
+        let external = crate::test_env::home_fixture_backend(&self.store_root).unwrap();
         let mut req = external
             .get_requirement_by_spec_id(spec_id)
             .unwrap()
@@ -144,7 +145,7 @@ impl Fixture {
     }
 
     fn authoritative(&self, spec_id: &str) -> Requirement {
-        aida_core::GitBackend::new(&self.store_root)
+        crate::test_env::home_fixture_backend(&self.store_root)
             .unwrap()
             .get_requirement_by_spec_id(spec_id)
             .unwrap()

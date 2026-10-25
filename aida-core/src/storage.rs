@@ -2231,7 +2231,7 @@ mod tests {
         std::fs::create_dir_all(&store_dir).unwrap();
 
         // Seed the directory as a real GitBackend (sets up `objects/`).
-        let backend = crate::db::GitBackend::new(&store_dir).unwrap();
+        let backend = crate::allocation_authority::home_fixture_backend(&store_dir).unwrap();
         backend.save(&create_test_store()).unwrap();
 
         // Use the Storage façade — the same surface the MCP server uses.
@@ -2244,7 +2244,7 @@ mod tests {
 
         // A fresh GitBackend (mirroring an independent CLI invocation) must
         // see the requirement that Storage wrote.
-        let cli_view = crate::db::GitBackend::new(&store_dir).unwrap();
+        let cli_view = crate::allocation_authority::home_fixture_backend(&store_dir).unwrap();
         let loaded = cli_view.load().unwrap();
         assert!(
             loaded
@@ -2285,7 +2285,7 @@ mod tests {
         req.spec_id = Some("SPEC-001".to_string());
         let mut seed_store = create_test_store();
         seed_store.requirements.push(req.clone());
-        crate::db::GitBackend::new(&store_dir)
+        crate::allocation_authority::home_fixture_backend(&store_dir)
             .unwrap()
             .save(&seed_store)
             .unwrap();

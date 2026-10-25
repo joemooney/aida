@@ -3,6 +3,7 @@
 //! HOME mutation, production CLI test flag, or operator queue access is needed.
 // trace:BUG-1682 | ai:codex
 
+// trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
 use super::*;
 use crate::process_retry::RetryEtxtbsy;
 use aida_core::DatabaseBackend;
@@ -442,7 +443,7 @@ fn callers() {
     let project = home().join("project");
     std::fs::create_dir_all(project.join(".git")).unwrap();
     let store_path = project.join(".aida-store");
-    let backend = aida_core::GitBackend::new(&store_path)
+    let backend = crate::test_env::home_fixture_backend(&store_path)
         .unwrap()
         .with_auto_commit(false);
     let mut req = aida_core::Requirement::new("fixture".into(), String::new());

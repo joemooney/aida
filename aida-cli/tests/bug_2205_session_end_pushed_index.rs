@@ -108,6 +108,8 @@ fn project(base: &Path) -> (PathBuf, PathBuf) {
         git_out(&repo, &home, args);
     }
 
+    // trace:BUG-2017 | ai:codex — explicit positive HOME fixture.
+    test_git::enroll_synthetic_home(&repo);
     let init = aida(&repo, &home)
         .args([
             "init",

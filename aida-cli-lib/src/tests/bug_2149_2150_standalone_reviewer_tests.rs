@@ -10,6 +10,7 @@
 //! - BUG-2150: a reviewer pickup is PR-scoped: it needs no queue entry and
 //!   coexists with the implementer's live spec lease, while a second reviewer
 //!   on the same PR is still refused.
+// trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
 use super::*;
 
 const HEAD: &str = "0123456789abcdef0123456789abcdef01234567";
@@ -487,7 +488,7 @@ fn reviewer_pickup_coexists_with_live_implementer_lease_but_not_second_reviewer(
     ]);
     let root = tmp.path().join("aida-store");
     let storage = Storage::new(&root);
-    let backend = aida_core::GitBackend::new(&root).unwrap();
+    let backend = crate::test_env::home_fixture_backend(&root).unwrap();
     let mut spec = aida_core::Requirement::new("Fix the widget".to_string(), String::new());
     spec.spec_id = Some("STORY-77".to_string());
     spec.status = RequirementStatus::InProgress;
@@ -595,7 +596,7 @@ fn implementer_pickup_still_conflicts_with_live_implementer_lease() {
     ]);
     let root = tmp.path().join("aida-store");
     let storage = Storage::new(&root);
-    let backend = aida_core::GitBackend::new(&root).unwrap();
+    let backend = crate::test_env::home_fixture_backend(&root).unwrap();
     let mut spec = aida_core::Requirement::new("Fix the widget".to_string(), String::new());
     spec.spec_id = Some("STORY-77".to_string());
     spec.status = RequirementStatus::InProgress;

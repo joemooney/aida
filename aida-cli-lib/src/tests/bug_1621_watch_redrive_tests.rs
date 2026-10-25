@@ -9,6 +9,7 @@
 //! config, so none reads `~/.aida`, the live store, crontab or systemd.
 // trace:BUG-1621 | ai:claude
 
+// trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::time::Duration as StdDuration;
@@ -602,7 +603,8 @@ fn temp_store(tmp: &Path) -> aida_core::CachedGitBackend {
     let store = tmp.join(".aida-store");
     std::fs::create_dir_all(&store).unwrap();
     std::fs::create_dir_all(tmp.join(".aida")).unwrap();
-    aida_core::CachedGitBackend::open(&store, &tmp.join(".aida").join("cache.db")).unwrap()
+    crate::test_env::home_fixture_cached_backend(&store, &tmp.join(".aida").join("cache.db"))
+        .unwrap()
 }
 
 fn add_park(backend: &aida_core::CachedGitBackend, spec: &str, mins_ago: i64) -> uuid::Uuid {

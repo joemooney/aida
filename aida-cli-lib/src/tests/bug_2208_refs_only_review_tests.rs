@@ -6,6 +6,7 @@
 //! resolve says why.
 // trace:TASK-1955 | ai:claude (BUG-2208)
 
+// trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
 use super::*;
 use aida_core::{Relationship, RelationshipType, Requirement, RequirementsStore};
 
@@ -141,7 +142,7 @@ fn reviewer_fallback_that_cannot_resolve_says_why() {
     );
     let root = dir.path().join("aida-store");
     let storage = Storage::new(&root);
-    aida_core::GitBackend::new(&root)
+    crate::test_env::home_fixture_backend(&root)
         .unwrap()
         .save(&RequirementsStore::default())
         .unwrap();
@@ -217,7 +218,7 @@ fn a_refs_only_range_files_a_story_that_covers_and_never_implements() {
         "store_path = \".aida-store\"\n",
     )
     .unwrap();
-    aida_core::GitBackend::new(&store)
+    crate::test_env::home_fixture_backend(&store)
         .unwrap()
         .save(&RequirementsStore::default())
         .unwrap();

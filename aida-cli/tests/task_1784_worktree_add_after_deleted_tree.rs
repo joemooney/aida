@@ -74,6 +74,8 @@ fn project(base_dir: &Path) -> (PathBuf, PathBuf, String) {
     std::fs::create_dir_all(&home).unwrap();
 
     git(&repo, &["init", "-q", "-b", "main"]);
+    // trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
+    test_git::enroll_synthetic_home(&repo);
     git(&repo, &["config", "user.email", "t@t.t"]);
     git(&repo, &["config", "user.name", "t"]);
     git(&repo, &["commit", "-q", "--allow-empty", "-m", "init"]);

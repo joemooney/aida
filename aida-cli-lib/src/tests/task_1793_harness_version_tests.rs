@@ -1,5 +1,6 @@
 // trace:TASK-1793 | ai:codex
 #![cfg(unix)]
+// trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
 use super::*;
 use aida_core::db::{DatabaseBackend, GitBackend};
 use aida_core::models::Requirement;
@@ -21,7 +22,7 @@ fn task1793_launched_write_child() {
     let Some(root) = std::env::var_os("AIDA_TEST_1793_STORE") else {
         return;
     };
-    let backend = GitBackend::new(Path::new(&root))
+    let backend = crate::test_env::home_fixture_backend(Path::new(&root))
         .unwrap()
         .with_auto_commit(false);
     let mut req = Requirement::new("Launched session write".into(), "body".into());
@@ -97,7 +98,9 @@ fn task1793_foreground_and_background_versions_reach_canonical_writes() {
             } else {
                 run_tracked_agent(&binary, &config, &plan, None, &[], None, false, false).unwrap();
             }
-            let backend = GitBackend::new(&store).unwrap().with_auto_commit(false);
+            let backend = crate::test_env::home_fixture_backend(&store)
+                .unwrap()
+                .with_auto_commit(false);
             let saved = backend.load().unwrap();
             assert_eq!(saved.requirements.len(), 1);
             let req = &saved.requirements[0];

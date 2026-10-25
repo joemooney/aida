@@ -1,3 +1,4 @@
+// trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
 use super::*;
 use crate::gate::review_verdict::{RecordedVerdict, VerdictKind};
 use std::collections::HashSet;
@@ -120,6 +121,8 @@ fn init_git_canonical_test_store() -> (tempfile::TempDir, std::path::PathBuf, st
     );
     run_git(&store_dir, &["config", "user.email", "test@example.com"]);
     run_git(&store_dir, &["config", "user.name", "Test"]);
+    // trace:BUG-2017 | ai:codex — enroll before constructing the live dispenser.
+    crate::test_env::enroll_synthetic_home(&store_dir).unwrap();
 
     (tmp, project_root, store_dir)
 }
@@ -145,7 +148,7 @@ fn emit_writes_targeted_commits_and_preserves_concurrent_spec() {
     // brand-new spec in the store that this call never loads a full
     // in-memory snapshot of.
     let dispenser = load_dispenser(&store_dir).unwrap();
-    let concurrent_backend = aida_core::GitBackend::new(&store_dir)
+    let concurrent_backend = crate::test_env::home_fixture_backend(&store_dir)
         .unwrap()
         .with_dispenser(dispenser);
     let mut concurrent_req =
@@ -183,7 +186,7 @@ fn emit_writes_targeted_commits_and_preserves_concurrent_spec() {
     // The concurrently-added spec must survive — the whole point of the
     // targeted write.
     let check_dispenser = load_dispenser(&store_dir).unwrap();
-    let check_backend = aida_core::GitBackend::new(&store_dir)
+    let check_backend = crate::test_env::home_fixture_backend(&store_dir)
         .unwrap()
         .with_dispenser(check_dispenser);
     let survived = check_backend

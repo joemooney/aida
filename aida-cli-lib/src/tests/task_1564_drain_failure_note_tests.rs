@@ -2,6 +2,7 @@
 //! spec, not as its own draft spec.
 // trace:TASK-1564 | ai:claude
 
+// trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
 use super::{auto_complete, auto_complete_telemetry, drain_failure_note};
 use aida_core::DatabaseBackend;
 use aida_core::Storage;
@@ -44,7 +45,7 @@ fn project_with_parent_spec(spec_id: &str) -> (tempfile::TempDir, std::path::Pat
     .unwrap();
 
     let store_root = root.join(".aida-store");
-    let backend = aida_core::GitBackend::new(&store_root).unwrap();
+    let backend = crate::test_env::home_fixture_backend(&store_root).unwrap();
     let mut req = aida_core::Requirement::new(format!("parent of {spec_id}"), String::new());
     req.spec_id = Some(spec_id.to_string());
     let mut store = aida_core::RequirementsStore::default();
@@ -96,7 +97,9 @@ fn record(
         "re-run CI after fixing the red checks",
         &event,
     );
-    let store = Storage::new(root.join(".aida-store")).load().unwrap();
+    let store = crate::test_env::home_fixture_storage(root.join(".aida-store"))
+        .load()
+        .unwrap();
     (id, store)
 }
 
@@ -124,7 +127,7 @@ fn note_body(store: &aida_core::RequirementsStore, spec: &str) -> String {
 #[test]
 fn phase_failure_comments_on_the_parent_and_files_no_spec() {
     let (_tmp, root) = project_with_parent_spec("TASK-9001");
-    let before = Storage::new(root.join(".aida-store"))
+    let before = crate::test_env::home_fixture_storage(root.join(".aida-store"))
         .load()
         .unwrap()
         .requirements
@@ -261,7 +264,9 @@ fn a_different_phase_gets_its_own_note() {
         &event,
     );
 
-    let store = Storage::new(root.join(".aida-store")).load().unwrap();
+    let store = crate::test_env::home_fixture_storage(root.join(".aida-store"))
+        .load()
+        .unwrap();
     let req = store.get_requirement_by_spec_id("TASK-9005").unwrap();
     assert_eq!(
         req.comments.len(),
