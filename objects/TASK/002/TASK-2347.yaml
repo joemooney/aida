@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T02:08:29.032100054Z
-modified_at: 2026-10-25T16:18:51.778399575Z
+modified_at: 2026-10-25T16:50:05.338242948Z
 req_type: Task
 tags:
 - codex
@@ -464,6 +464,28 @@ comments:
   content: 'Operational mail audit2026-10-25~16:12UTC: actualnative notification19886556-36a2-459a-9043-235804daf3cd read through AIDAagain and assessed against latercompletion/supersession; it is old08:44sourcecheckpoint, not newreceiptpoolauthorization. MaininboxhadalreadyACKedthisID; no fabricatednewACK/completionorwatcherchange. Source-root ordinaryinbox alsoadvancedhistorical32 receipts before capturedoutputcouldbeinspectedinfull. Correctedbyreading the complete32-message batch in boundedchunks (13alreadyfullyreadimmutableIDs plus19remainingbodyrecords); no messageleftunassessed, no receiptdeletion/rewrite or fakeprecisetiming. Fullcapturedsource/tmp/advisor-task2347-source-mail-audit-1603.txt; thiscommentrecordsorderinglimitation ratherthanclaimingthoseearlytimestampsareexactbodyreadtimes. Historical1853wallreportwasagainstexplicitlysupersededoperatorAC2; descriptionalignedwithrecorded09:51Oct23ruling, separatedeadline-testfailure routedboundedindependentdiagnosis009d04d7/nativequeue01a173d6. Allotherhistoricalfindingsalreadyresolved2919orretainedinfullopen1742/1843/1889/1917/2221scope. Existingc4dfsupersessionremains: preserveunmerged2347receiptpoolWIP/no reopen, resume1742fullS3a-d; actualuptakestillpending. Original2347liveproof/Completedstatusunchanged.'
   created_at: 2026-10-25T16:18:51.778399575Z
   modified_at: 2026-10-25T16:18:51.778399575Z
+- id: 01a173f8-279a-7241-8e3c-26466bce680d
+  author: ai:codex:joe
+  content: |
+    Codex1 TASK2347 bounded receipt-scan correction is pushed normally: fullSHA 0ddf5ca5930ec7e4de1fa612d149c3a22c85b867. Non-draft OPEN PR2922 https://github.com/joemooney/aida/pull/2922, forge confirms base54c64e26a58810f213f0a0fa1720a69bcce37ea3/head0ddf. Existing owned worktree /home/joe/ai/aida-task-2347, branch codex/task-2347-receipt-scan; old5ce branch and BUG2017 branch22bc preserved. No new worker/lease or grant edit. Main54 (landed BUG2017 S1+S2) integrated normally; actual PR delta ONLY mailbox_wake.rs and docs/agents/codex-mail-wake.md.
+
+    Mechanism: overlap independent receipt open/fstat/read/parse latency with at most4 guarded readers, preserving the FULL explicit acknowledged-ID inventory, including IDs absent from this root's messages. Filtering to local message IDs would break cross-root ACK/pruning semantics, so it is not done. No persistent cache/retention redesign/invalidation scheme. Existing pins, nofollow/nonblock owned singly linked regular-file validation,128-byte file limit,16384 entries,32MiB aggregate and original2s receipt deadline retained. Parallel reservation includes129bytes/entry (growth-detection sentinel); tight remaining budgets fall back to original sequential actual-byte accounting. All workers joined; malformed/unsafe/missing/late/error evidence yields no partial snapshot. No receipt write/delete, baseline or watermark advance.
+
+    Canonical deterministic-test floor is addressed: private clock seam, production ALWAYS Instant::now; expired deadline and ONLY/final read crossing deadline both refuse deterministically, serial+pool. Worker-panic/no partial IDs, growth-reservation, small remaining byte budget, unsafe/malformed/removed-file cases, old cross-root/local-watermark/unknown-private/unchanged-unread assertions retained. Wall timings are diagnostic, not a flaky CI success threshold; actual success was inspected separately.
+
+    CURRENT clean integrated-head evidence:
+    - AIDA_CARGO_TIMEOUT=20m cargo test --profile agent -p aida-cli-lib mailbox_wake -- --nocapture:11PASS/0FAIL/0ignored;13m24s compilation,2.87s selected runtime. /tmp/task2347-receipt-integrated-targeted.log
+    - Representative1536 real guarded receipt files (>observed live1139 and prior1282 scale),2ms/file latency: serial_complete=false at2002ms; parallel_complete=true with ALL1536 at835ms, peak4. This is PRIVATE FIXTURE evidence, NOT a live-host scan or installed-service acceptance claim.
+    - make check-ci-fast35/35PASS on identical integrated head, /tmp/task2347-receipt-final-fast.log. No source changes after those gates; source worktree clean. No fullworkspace runtime or slot bypass. Earlier d68/ab prototype timings850/858 remain qualified prior-artifact evidence, not current integration substitutes.
+    - Two fresh-context author-check rounds. Round1 exposed deterministic coverage gap, fixed; round2 no concrete blocker after own Python44tests(one existing native-candidate-only skip), source/whitespace proofs and own direct pinned Rust executable11/11. Its own timing: serial refused2001ms, parallel ALL1536 complete814ms/peak4. This is AUTHOR CHECK only, no independent approval. Std thread-creation resource exhaustion can fail the whole command rather than return helper Result, but produces no snapshot/ACK and ordinary watcher retry remains; no material blocker found.
+
+    Truthful artifact provenance: /tmp/task2347-receipt-tests-838ai945/receipt-tests is a Rust LIBRARY TEST EXECUTABLE, NOT a deployable aida binary; no native/global promotion. Manifest beside it: clean head0ddf, tree9f14960ba23e153817d24c19fb53df96d75dba54, source SHA2562f0d17d29801be6ea3e65b2296635a623142a78484acdeadbbe7608381b2e56e, artifact SHA256c6e4c8b379e8b3dae195f5dc4f7eb6849f1f58c3a0796306fc63288c0fcfdb95. Parent captured inputs before final compilation; checker independently verified manifest/source hash.
+
+    PR body records full evidence/limits. Initial exact-head CI40213186911:7lanes IN_PROGRESS, separate merge-hold-gate SUCCESS. No CI-green/independent approval claim; no merge/hold/override action by author. Please route independent exact-head delta review/CI through normal gate; original advisor author does not merge own watcher implementation. No live service operation, target/nonce change, real HOME authority enrollment or root tracked-config edit. External root health-schedule dirt preserved.
+
+    TASK2347 remains OPEN/Refs: reviewed landing+CI, normal MERGED native build/promotion, successful complete live cross-root snapshot and native health, then the already-authorized exact-thread01a173a5-a106-78a3-84ca-0385711b3557 literal-IDLE test with one new nonce, separate queue-acceptance/observed-turn receipts, repeated-scan dedup proof remain. Do not reuse spent nonce/baseline ACK/skip failed roots or promote unmerged binary. Full STORY1742 brief143129 is NEXT (not waived or reduced); all BUG2017 S3 and STORY1843 ownership/dependencies remain. This author turn ends with native handoff for required context rotation, no idle CI/review loop.
+  created_at: 2026-10-25T16:50:05.338242948Z
+  modified_at: 2026-10-25T16:50:05.338242948Z
 history:
 - id: 01a170d1-497a-7282-8dcb-91782bba7dc3
   author: joe
