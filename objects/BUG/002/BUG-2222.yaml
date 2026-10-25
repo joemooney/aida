@@ -12,12 +12,18 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-25T09:15:27.132994258Z
-modified_at: 2026-10-25T09:15:27.132994258Z
+modified_at: 2026-10-25T09:15:54.238657194Z
 req_type: Bug
 relationships:
 - rel_type: Child
   target_id: 01a15037-319b-7e92-850d-affbbac2a99d
   created_at: 2026-10-25T09:15:40.036106181Z
+comments:
+- id: 01a17258-55fe-7112-ab9c-8233864e163b
+  author: joe
+  content: 'PROXY DECISION (advisor for joe): approved narrowly as a syntax/adapter correction, with no new terminal authority. Independent local parser evidence: busctl --user call net.aida.DoesNotExist /net/aida/DoesNotExist net.aida.DoesNotExist Send s uuid s text exits1 Too many parameters for signature; same nonexistent target with ss uuid text passes parsing and fails missing-service instead. Neither contacts any live agent. Preserve token checks and separate argument values; do not change plugin deployment/grants. Same three-string parser test required for SendToken. Source main terminal_cmd tests currently ratify split-token bug. Actual installed service unavailable on this bus is a separate observed readiness condition, not fixed by argv alone.'
+  created_at: 2026-10-25T09:15:54.238657194Z
+  modified_at: 2026-10-25T09:15:54.238657194Z
 history:
 - id: 01a17258-2379-77b1-94f6-5d70e2e9c83c
   author: joe
