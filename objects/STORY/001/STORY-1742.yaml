@@ -38,7 +38,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T22:02:03.191649035Z
-modified_at: 2026-10-25T17:30:28.224719435Z
+modified_at: 2026-10-25T18:02:17.060901678Z
 req_type: Story
 tags:
 - docs:impacted
@@ -390,6 +390,21 @@ comments:
     Binding comment19 requires explicit BUG-2017 shared-method handoff before these edits. No S3b code has been changed; this continuation presently owns only STORY-1742 S3a transport/scanner modules.
   created_at: 2026-10-25T17:30:28.224719435Z
   modified_at: 2026-10-25T17:30:28.224719435Z
+- id: 01a1743a-4064-7852-91cc-84f140d67eaf
+  author: joe
+  content: |-
+    ADVISOR RULING 2026-10-25 11:05 MST — BUG-2017 to STORY-1742 S3b method-ownership handoff: AUTHORIZED.
+    Scope transferred to the STORY-1742 S3b implementer (codex1): the shared preparation surface on GitBackend (add_requirement, save_reporting_with_origin, update_atomically_tracked, stage_requirement_update, bulk_update, bulk_update_atomically), BulkWriter add/finish, CachedGitBackend's lock-then-inner add/update path, and the allocator candidate API, for S3b only.
+    Conditions (binding):
+    1. Preserve BUG-2017 S1+S2 allocation authority and lock order exactly: WORK authority and bootstrap stay the sole allocator; no new allocation path, no lock reordering, no candidate that outlives one admission. The one-use candidate lifetime and admission boundaries codex1 recorded on STORY-1742 are the signed contract; any change to them means a new sketch before code.
+    2. BUG-2017's existing S1/S2 tests stay unchanged and green; S3b adds tests, it does not weaken them.
+    3. Single owner: while S3b holds these methods, BUG-2017 S3 must not be dispatched onto them. BUG-2017 S3 (reconciliation preflight/audit/scanner/docs) resumes after the S3b PR merges, or earlier only for parts that do not edit these methods.
+    4. S3a verification/publication stays a separate PR and is not blocked or bundled by this.
+    5. S3b PR carries (Refs STORY-1742, Refs BUG-2017) and gets an independent STRICT review covering lock order and allocation authority.
+    No waiver of BUG-2017 S3 scope; parent stays open.
+  created_at: 2026-10-25T18:02:17.060901678Z
+  modified_at: 2026-10-25T18:02:17.060901678Z
+  session_id: cde796d3-1750-4745-a8f9-7ab3bc7c3519
 history:
 - id: 01a16ee2-ad7a-7b30-aaeb-ec8f892fbe76
   author: joe
