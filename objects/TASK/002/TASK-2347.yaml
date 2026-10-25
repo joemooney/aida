@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T02:08:29.032100054Z
-modified_at: 2026-10-25T07:43:35.041312257Z
+modified_at: 2026-10-25T07:46:32.994454884Z
 req_type: Task
 tags:
 - codex
@@ -350,6 +350,16 @@ comments:
     Advisor decision: bounded F2 install correction is sufficient by source/focused evidence. Required Build remains red and read-budget readiness remains intermittent/unresolved. A bounded source-budget adjustment/test can remain within existing20s child/120s overall scan constraints; no shared-resolver rewrite is needed. Do not skip main, delete/ignore receipts, baseline/acknowledge unread mail or interpret failures as empty. Existing canonical b079 RequestChanges remains historical/current on-disk until a legitimately approved green final head is attested; I did not clear a hold or create a third broad RequestChanges round. Request advisor sufficiency/routing for CI/readiness, then final focused head/Build check for own canonical approval.
   created_at: 2026-10-25T07:43:35.041312257Z
   modified_at: 2026-10-25T07:43:35.041312257Z
+- id: 01a17206-87a2-7421-84f4-57aa2f58c6c7
+  author: ai:codex:joe
+  content: |
+    Final bounded F2 source head superseding0df: a74aafe83e8c22df9e6d0306e63b0a725f066953, PR2915 (normal forward push). Retains the ownership/capability preflight, original private recovery evidence, tracked-config conditional procedure, global namespace/F1/LOCAL fixes and confirmed-stop sequencing from0df. Adds one final immediate unit snapshot recheck AFTER health monitoring removal and BEFORE unlink: a unit edited during potentially slow health/global checks is retained and reported as a stopped partial uninstall, rather than deleting the user's intervening edit.
+
+    44/44 focused Python tests passed WITH unchanged native candidate, including deterministic post-monitoring unit edit;make check-ci-fast35/35. /tmp/task2347-install-boundary-python.log and /tmp/task2347-install-boundary-fast.log. Author checker independently passed the new fixture1/1 and inspected the2line correction, no concrete finding; its earlier43-case suite and separate status helper fixture cover cumulative bounded delta. No formal author verdict or new review cycle. Required current-head Build/advisor final sufficiency with independent delta evidence remain pending; no live deployment readiness claim.
+
+    Exact current artifact /tmp/task2347-candidate-a74aafe83e8c22df9e6d0306e63b0a725f066953/manifest.json. Native source/binary unchanged, SHA2569d50dac2e1be84fa903a05857d82ff11f45070e4f0ea3fcf483f743acf3dbb30. Not installed/promoted; no actual systemctl/service install/config/job/mail/queue test, inbox acknowledgement, hold clear, merge or completion. Full preceding F2 evidence /tmp/task2347-install-boundary-handoff.md and PR comment6394839231 remain applicable. Source work on TASK2347 stops here absent a concrete priority correction; returning to BUG2017 in-place. (Refs TASK-2347)
+  created_at: 2026-10-25T07:46:32.994454884Z
+  modified_at: 2026-10-25T07:46:32.994454884Z
 history:
 - id: 01a170d1-497a-7282-8dcb-91782bba7dc3
   author: joe
