@@ -29,11 +29,11 @@ pub(crate) fn review_recorder_authors(
     project_root: &std::path::Path,
     subject_ids: &[String],
     branch: Option<&str>,
-) -> Vec<pr_ship::AuthorSession> {
+) -> Vec<crate::gate::ship::AuthorSession> {
     if subject_ids.is_empty() {
-        return review_authority::all_author_sessions(project_root, branch);
+        return crate::gate::review_authority::all_author_sessions(project_root, branch);
     }
-    review_authority::author_sessions_at(project_root, subject_ids, branch)
+    crate::gate::review_authority::author_sessions_at(project_root, subject_ids, branch)
 }
 
 /// BUG-1918: refuse an approval whose recorder shares an identity with one of
@@ -42,13 +42,13 @@ pub(crate) fn review_recorder_authors(
 /// the free-text `recorded_by` label, decides.
 // trace:BUG-1918 | ai:claude
 pub(crate) fn review_author_refusal(
-    authors: &[pr_ship::AuthorSession],
-    recorder: &review_authority::RecorderIdentity,
+    authors: &[crate::gate::ship::AuthorSession],
+    recorder: &crate::gate::review_authority::RecorderIdentity,
     subject_resolved: bool,
 ) -> Option<String> {
     let author = authors
         .iter()
-        .find(|a| review_authority::identities_overlap(&a.tokens, &recorder.tokens))?;
+        .find(|a| crate::gate::review_authority::identities_overlap(&a.tokens, &recorder.tokens))?;
     Some(if subject_resolved {
         format!(
             "refused: this session is the one that claimed or implemented the work ({}) — a session cannot approve its own work; record the approval from an independent reviewer session",
@@ -81,8 +81,8 @@ pub(crate) enum ReviewAuthorGate {
 /// agent; `solo_mode` is consulted only when the BUG-1918 check refuses.
 // trace:STORY-1655 | ai:claude
 pub(crate) fn review_author_gate(
-    authors: &[pr_ship::AuthorSession],
-    recorder: &review_authority::RecorderIdentity,
+    authors: &[crate::gate::ship::AuthorSession],
+    recorder: &crate::gate::review_authority::RecorderIdentity,
     subject_resolved: bool,
     human_at_tty: bool,
     solo_mode: impl FnOnce() -> bool,

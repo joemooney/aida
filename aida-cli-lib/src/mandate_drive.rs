@@ -23,9 +23,9 @@
 // trace:STORY-1706 | ai:claude
 // mandate-gate
 
-use crate::fleet_lanes::{Lane, LaneClass, SeatKind};
-use crate::mandate::{Mandate, MandateRefusal, MandateState, Scope};
-use crate::mandate_gates::{GateOp, HumanGates};
+use crate::gate::fleet_lanes::{Lane, LaneClass, SeatKind};
+use crate::gate::mandate::{Mandate, MandateRefusal, MandateState, Scope};
+use crate::gate::mandate_gates::{GateOp, HumanGates};
 use anyhow::{Context, Result};
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
@@ -62,7 +62,7 @@ const MAX_STALE_REROUTES: u32 = 3;
 const QUEUE_ENTRY_FRESH: Duration = Duration::days(7);
 /// The session variables a tick never acts on and scrubs from its children.
 pub(crate) const SESSION_ENV: [&str; 3] = [
-    crate::seat_authority::GRANT_ENV,
+    crate::gate::seat_authority::GRANT_ENV,
     "AIDA_SESSION_ROLE",
     "AIDA_SESSION_PURPOSE",
 ];
@@ -276,9 +276,10 @@ pub(crate) fn resolving_action(
     if let Some(p) = profiles {
         resume.push_str(&format!("; profiles: {}", p.display()));
     }
-    let ack = crate::fleet_lanes::acknowledgement_marker(&lane.run_dir, &lane.evidence.status)
-        .map(|m| format!("touch {}", m.display()))
-        .unwrap_or_else(|| "retire the run directory".into());
+    let ack =
+        crate::gate::fleet_lanes::acknowledgement_marker(&lane.run_dir, &lane.evidence.status)
+            .map(|m| format!("touch {}", m.display()))
+            .unwrap_or_else(|| "retire the run directory".into());
     let command = format!("1. {resolve}\n2. {resume}\n3. acknowledge: {ack}");
     let detail = format!(
         "relay run {} is blocked; question: {} ({})",
@@ -611,7 +612,7 @@ pub(crate) fn restart_verdict(
     if !mandate.covers(Scope::RelayRestart) {
         return no("the mandate does not cover relay-restart (start a new drive mandate)".into());
     }
-    if let Some(why) = crate::mandate_gates::gate_reason(gates, GateOp::RelayRestart) {
+    if let Some(why) = crate::gate::mandate_gates::gate_reason(gates, GateOp::RelayRestart) {
         return no(format!("gated: {why}"));
     }
     if lane
@@ -768,14 +769,14 @@ pub(crate) struct HeldPr {
 // trace:STORY-1888 | ai:claude
 pub(crate) fn plan_held_pr(
     pr: &HeldPr,
-    protected: &crate::mandate_gates::ProtectedPaths,
+    protected: &crate::gate::mandate_gates::ProtectedPaths,
 ) -> LaneDecision {
     let (true, true, Some(head)) = (pr.releasable, pr.approved_at_head, pr.head.as_ref()) else {
         return LaneDecision::None;
     };
     let forced_gate = match &pr.changed_paths {
         None => Some("the files it changes could not be resolved".to_string()),
-        Some(paths) => crate::mandate_gates::touches_gates(paths, protected).map(|hit| {
+        Some(paths) => crate::gate::mandate_gates::touches_gates(paths, protected).map(|hit| {
             format!(
                 "it changes {}, part of the mandate and its gates",
                 hit.describe()
@@ -792,7 +793,7 @@ pub(crate) fn plan_held_pr(
         detail: format!(
             "PR #{} is held with an attested approval at {}{}",
             pr.pr,
-            crate::review_verdict::short_sha(head),
+            crate::gate::review_verdict::short_sha(head),
             pr.spec
                 .as_deref()
                 .map(|s| format!(" ({s})"))
@@ -1200,7 +1201,7 @@ fn try_drive_lock(project_root: &Path) -> Result<Option<DriveLock>> {
 /// authority itself.
 // trace:STORY-1700 | ai:claude
 pub(crate) fn drive_record_active(now: DateTime<Utc>) -> bool {
-    crate::mandate::mandate_dir()
+    crate::gate::mandate::mandate_dir()
         .map(|dir| !active_drive_records(&dir, now).is_empty())
         .unwrap_or(false)
 }
@@ -1338,7 +1339,7 @@ impl Tick<'_, '_> {
         }
         self.side_effects += 1;
         let now = (self.inp.clock)();
-        match crate::mandate::recheck(
+        match crate::gate::mandate::recheck(
             self.inp.mandate_dir,
             &self.mandate_id,
             self.inp.principal,
@@ -1523,7 +1524,7 @@ fn restart_crashed(
         }
         // Judge the lane again from fresh reads: the lock, the owner, the
         // status, the record, the lineage, the profile and the clock.
-        let fresh = crate::fleet_lanes::probe_lane(lane.run_dir.clone());
+        let fresh = crate::gate::fleet_lanes::probe_lane(lane.run_dir.clone());
         let again = fresh.as_ref().and_then(|l| verdict(l));
         match again {
             Some(RestartVerdict::Restart(p))
@@ -1588,8 +1589,8 @@ pub(crate) fn run_tick(
     fx: &mut dyn DriveEffects,
 ) -> TickReport {
     let now = (inp.clock)();
-    let (valid, _) = crate::mandate::load_valid(inp.mandate_dir, inp.principal, now);
-    let mandate = match crate::mandate::state_at(&valid, now) {
+    let (valid, _) = crate::gate::mandate::load_valid(inp.mandate_dir, inp.principal, now);
+    let mandate = match crate::gate::mandate::state_at(&valid, now) {
         MandateState::Active(m) if m.is_drive() => Some(m),
         _ => None,
     };
@@ -1856,7 +1857,7 @@ pub(crate) fn run_tick(
             d => Some(d),
         })
         .collect();
-    let protected = crate::mandate_gates::ProtectedPaths::of(&inp.gates);
+    let protected = crate::gate::mandate_gates::ProtectedPaths::of(&inp.gates);
     decisions.extend(inp.held_prs.iter().map(|pr| plan_held_pr(pr, &protected)));
     // Each unowned spec carries its dispatch epoch, so a dead fixer's spec
     // is routed again. trace:TASK-1915 | ai:claude
@@ -2093,19 +2094,19 @@ fn restart_preview(
     signoff: &dyn Fn(&str) -> Option<bool>,
     now: DateTime<Utc>,
 ) -> Vec<String> {
-    let mandate = crate::mandate::mandate_dir().ok().and_then(|dir| {
+    let mandate = crate::gate::mandate::mandate_dir().ok().and_then(|dir| {
         let principal = crate::current_user_id(None);
-        let (valid, _) = crate::mandate::load_valid(&dir, &principal, now);
-        match crate::mandate::state_at(&valid, now) {
+        let (valid, _) = crate::gate::mandate::load_valid(&dir, &principal, now);
+        match crate::gate::mandate::state_at(&valid, now) {
             MandateState::Active(m) if m.is_drive() => Some(m),
             _ => None,
         }
     });
-    let ledger = crate::mandate::mandate_dir()
+    let ledger = crate::gate::mandate::mandate_dir()
         .ok()
-        .and_then(|d| crate::mandate::read_exclusions(&d).ok());
+        .and_then(|d| crate::gate::mandate::read_exclusions(&d).ok());
     let always_human = spec_always_human_from(reqs, ledger.as_ref());
-    let gates = crate::mandate_gates::load_human_gates(root).map_err(|e| format!("{e:#}"));
+    let gates = crate::gate::mandate_gates::load_human_gates(root).map_err(|e| format!("{e:#}"));
     let known = |id: &str| signoff(id).is_some();
     lanes
         .iter()
@@ -2261,7 +2262,7 @@ pub(crate) fn emit_due_with(
         id: id.clone(),
         thread_id: id,
         from: "aida-drive-tick".into(),
-        to: Recipient::Agent(crate::mandate::MANDATE_SEAT.into()),
+        to: Recipient::Agent(crate::gate::mandate::MANDATE_SEAT.into()),
         timestamp: Utc::now().timestamp_millis(),
         in_reply_to: None,
         body: format!(
@@ -2330,7 +2331,7 @@ pub(crate) fn emit_session_ship(
 /// (a refusal names no mandate id of its own).
 // trace:STORY-1700 | ai:claude
 pub(crate) fn ship_refused(root: &Path, pr: u64, message: &str) {
-    let id = match crate::mandate::current_state() {
+    let id = match crate::gate::mandate::current_state() {
         MandateState::Active(m) | MandateState::Expired(m) | MandateState::Stopped(m) => m.id,
         MandateState::None => return,
     };
@@ -2339,17 +2340,17 @@ pub(crate) fn ship_refused(root: &Path, pr: u64, message: &str) {
 
 /// Held PRs from the main checkout's merge-hold markers.
 fn collect_held_prs(main_root: &Path) -> Vec<HeldPr> {
-    use crate::merge_hold::HoldReasonKind as K;
+    use crate::gate::merge_hold_core::HoldReasonKind as K;
     let hold_root = crate::pr_cmd::pr_ship_hold_root(main_root);
-    crate::merge_hold::list_holds(&hold_root)
+    crate::gate::merge_hold_core::list_holds(&hold_root)
         .into_iter()
         .filter_map(|(pr, _)| {
-            let record = crate::merge_hold::read_hold_record(&hold_root, pr)?;
+            let record = crate::gate::merge_hold_core::read_hold_record(&hold_root, pr)?;
             let releasable = !record.legacy
                 && matches!(record.reason_kind, K::Supervision | K::Decision | K::Rework);
             let head = record.target_head_sha.clone();
             let approved_at_head = head.as_deref().is_some_and(|sha| {
-                crate::review_verdict::verdicts_for_sha(main_root, sha)
+                crate::gate::review_verdict::verdicts_for_sha(main_root, sha)
                     .iter()
                     .any(|v| v.kind.approves() && !v.is_closed())
             });
@@ -2399,7 +2400,7 @@ fn changed_paths(main_root: &Path, head: &str) -> Option<Vec<String>> {
 // trace:BUG-1934 | ai:claude
 pub(crate) fn advisor_live(project_root: &Path, now: DateTime<Utc>) -> bool {
     let (Ok(grants), Some(clock)) = (
-        crate::seat_authority::grant_dir(),
+        crate::gate::seat_authority::grant_dir(),
         crate::presence::turn_clock_dir(),
     ) else {
         return false;
@@ -2417,10 +2418,10 @@ pub(crate) fn advisor_live(project_root: &Path, now: DateTime<Utc>) -> bool {
             return false;
         };
         let key = grant_turn_key(id);
-        crate::seat_authority::grant_authorized_at(
+        crate::gate::seat_authority::grant_authorized_at(
             project_root,
             id,
-            crate::mandate::MANDATE_SEAT,
+            crate::gate::mandate::MANDATE_SEAT,
             now,
             &crate::presence::turn_clock_binding_in(&clock, &key),
         ) && crate::presence::turn_clock_last_seen_in(&clock, &key)
@@ -2442,11 +2443,11 @@ pub(crate) fn stamp_grant_turn(grant: Option<&str>, now: DateTime<Utc>) {
         .map(str::trim)
         .filter(|g| uuid::Uuid::parse_str(g).is_ok())
     {
-        let binding = crate::seat_authority::read_grant(g)
+        let binding = crate::gate::seat_authority::read_grant(g)
             .map(|record| {
-                crate::seat_authority::matched_binding(
+                crate::gate::seat_authority::matched_binding(
                     &record,
-                    &crate::seat_authority::presenter_tokens_for(&record),
+                    &crate::gate::seat_authority::presenter_tokens_for(&record),
                 )
             })
             .unwrap_or_default();
@@ -2488,7 +2489,7 @@ fn find_spec<'a>(
 // trace:STORY-1700 | ai:claude
 pub(crate) fn spec_always_human_from<'a>(
     reqs: &'a [aida_core::Requirement],
-    ledger: Option<&'a BTreeMap<String, crate::mandate::Exclusion>>,
+    ledger: Option<&'a BTreeMap<String, crate::gate::mandate::Exclusion>>,
 ) -> impl Fn(&str) -> Option<String> + 'a {
     move |id: &str| {
         let Some(ledger) = ledger else {
@@ -2500,7 +2501,7 @@ pub(crate) fn spec_always_human_from<'a>(
         {
             return Some(e.class.clone());
         }
-        find_spec(reqs, id).and_then(crate::mandate::always_human_class)
+        find_spec(reqs, id).and_then(crate::gate::mandate::always_human_class)
     }
 }
 
@@ -2701,7 +2702,7 @@ fn collect_unowned_specs(root: &Path, reqs: &[aida_core::Requirement]) -> Vec<Un
 /// One live tick for the main checkout.
 // trace:STORY-1700 | ai:claude
 pub(crate) fn run_tick_live(main_root: &Path, inherited_session_env: bool) -> Result<TickReport> {
-    let dir = crate::mandate::mandate_dir()?;
+    let dir = crate::gate::mandate::mandate_dir()?;
     let now = Utc::now();
     // The 15m job runs whether or not a mandate exists; with no drive
     // record it is a no-op that reads nothing else.
@@ -2717,7 +2718,7 @@ pub(crate) fn run_tick_live(main_root: &Path, inherited_session_env: bool) -> Re
     let store = crate::load_store_for_lookup(main_root);
     let store_readable = store.is_some();
     let reqs: Vec<aida_core::Requirement> = store.map(|s| s.requirements).unwrap_or_default();
-    let ledger = crate::mandate::read_exclusions(&dir).ok();
+    let ledger = crate::gate::mandate::read_exclusions(&dir).ok();
     let always_human = spec_always_human_from(&reqs, ledger.as_ref());
     let signoff = spec_signoff_from(&reqs);
     let inputs = TickInputs {
@@ -2725,8 +2726,9 @@ pub(crate) fn run_tick_live(main_root: &Path, inherited_session_env: bool) -> Re
         mandate_dir: &dir,
         principal: &principal,
         clock: &Utc::now,
-        gates: crate::mandate_gates::load_human_gates(main_root).map_err(|e| format!("{e:#}")),
-        lanes: crate::fleet_lanes::classify_lanes(main_root, now),
+        gates: crate::gate::mandate_gates::load_human_gates(main_root)
+            .map_err(|e| format!("{e:#}")),
+        lanes: crate::gate::fleet_lanes::classify_lanes(main_root, now),
         held_prs: collect_held_prs(main_root),
         advisor_live: advisor_live(main_root, now),
         inherited_session_env,
@@ -2869,7 +2871,7 @@ pub(crate) fn start_warnings(project_root: &Path, principal: &str) -> Vec<String
 pub(crate) const DOCTOR_CATEGORY: &str = "mandate-drive";
 
 pub(crate) fn doctor_scan(project_root: &Path) -> Vec<crate::DoctorFinding> {
-    let MandateState::Active(m) = crate::mandate::current_state() else {
+    let MandateState::Active(m) = crate::gate::mandate::current_state() else {
         return Vec::new();
     };
     if !m.is_drive() {
@@ -3069,7 +3071,7 @@ fn planned_gate(
             planned
                 .action
                 .gate_op()
-                .and_then(|op| crate::mandate_gates::gate_reason(gates, op))
+                .and_then(|op| crate::gate::mandate_gates::gate_reason(gates, op))
         })
         .or_else(|| {
             // Every spec the action touches takes the floor, not just
@@ -3187,22 +3189,23 @@ pub(crate) fn handle_fleet(action: &crate::cli::FleetAction) -> Result<()> {
             let signoff = spec_signoff_from(&reqs);
             // The tick's own gate inputs, so the preview holds what it holds.
             // trace:TASK-1955 | ai:claude (TASK-1933)
-            let ledger = crate::mandate::mandate_dir()
+            let ledger = crate::gate::mandate::mandate_dir()
                 .ok()
-                .and_then(|dir| crate::mandate::read_exclusions(&dir).ok());
+                .and_then(|dir| crate::gate::mandate::read_exclusions(&dir).ok());
             let always_human = spec_always_human_from(&reqs, ledger.as_ref());
             let ctx = PreviewGates {
                 store_readable,
-                gates: crate::mandate_gates::load_human_gates(&root).map_err(|e| format!("{e:#}")),
+                gates: crate::gate::mandate_gates::load_human_gates(&root)
+                    .map_err(|e| format!("{e:#}")),
                 spec_always_human: &always_human,
             };
             // Keep restart eligibility alongside the preview's current gate inputs.
             // trace:STORY-1706 | ai:codex
-            let lanes = crate::fleet_lanes::classify_lanes(&root, now);
+            let lanes = crate::gate::fleet_lanes::classify_lanes(&root, now);
             let restart_lines = restart_preview(&root, &lanes, &reqs, &signoff, now);
             let mut decisions: Vec<LaneDecision> =
                 lanes.iter().map(|l| plan_relay_lane(l, &signoff)).collect();
-            let protected = crate::mandate_gates::ProtectedPaths::of(&ctx.gates);
+            let protected = crate::gate::mandate_gates::ProtectedPaths::of(&ctx.gates);
             decisions.extend(
                 collect_held_prs(&root)
                     .iter()

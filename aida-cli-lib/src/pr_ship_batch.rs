@@ -621,8 +621,8 @@ fn confirm_and_ship(
 /// gate would pin to (no carry-over) and an authorized recorder count.
 pub(crate) fn review_state(
     pr: u64,
-    candidates: &[crate::review_verdict::RecordedVerdict],
-    policy: &crate::pr_ship::ShipApprovalPolicy,
+    candidates: &[crate::gate::review_verdict::RecordedVerdict],
+    policy: &crate::gate::ship::ShipApprovalPolicy,
     head: &str,
 ) -> ReviewAtHead {
     let newest_at_head = candidates
@@ -645,13 +645,13 @@ pub(crate) fn review_state(
     if !newest.kind.approves() {
         return ReviewAtHead::Negative(format!("the reviewer recorded {}", newest.kind.label()));
     }
-    if crate::pr_ship::approved_match_head(candidates, Some(head)).is_none() {
+    if crate::gate::ship::approved_match_head(candidates, Some(head)).is_none() {
         return ReviewAtHead::Awaiting(None);
     }
-    if let Some(refusal) = crate::pr_ship::approval_authority_refusal(candidates, policy) {
-        return ReviewAtHead::Awaiting(Some(crate::pr_ship::approval_authority_refusal_message(
-            pr, &refusal,
-        )));
+    if let Some(refusal) = crate::gate::ship::approval_authority_refusal(candidates, policy) {
+        return ReviewAtHead::Awaiting(Some(
+            crate::gate::ship::approval_authority_refusal_message(pr, &refusal),
+        ));
     }
     let who = newest
         .recorded_by
@@ -796,7 +796,7 @@ pub(crate) fn ci_from_rollup(
 
 impl BatchPorts for GitHubPorts {
     fn human_at_terminal(&self) -> bool {
-        crate::role::has_integrity_floor_authority()
+        crate::gate::role_authority::has_integrity_floor_authority()
     }
 
     fn view(&mut self, pr: u64) -> Result<PrView> {
@@ -820,8 +820,11 @@ impl BatchPorts for GitHubPorts {
                 String::from_utf8_lossy(&out.stderr).trim()
             );
         }
-        let (_, warning) =
-            crate::pr_cmd::ship_stale_definition_warning(&self.project_root, &view.head_ref, pr);
+        let (_, warning) = crate::gate::ci_freshness::ship_stale_definition_warning(
+            &self.project_root,
+            &view.head_ref,
+            pr,
+        );
         Ok(warning
             .map(|w| Staleness {
                 behind: true,
@@ -859,7 +862,7 @@ impl BatchPorts for GitHubPorts {
             &view.head_ref,
             Some(&view.title),
         );
-        let (candidates, policy) = crate::pr_cmd::merge_approval_inputs(
+        let (candidates, policy) = crate::gate::approval::merge_approval_inputs(
             &roots,
             &self.main_worktree,
             pr,
@@ -871,13 +874,15 @@ impl BatchPorts for GitHubPorts {
     }
 
     fn hold(&mut self, pr: u64) -> Result<Option<String>> {
-        if let Some(record) = crate::merge_hold::read_hold_record(&self.main_worktree, pr) {
+        if let Some(record) =
+            crate::gate::merge_hold_core::read_hold_record(&self.main_worktree, pr)
+        {
             return Ok(Some(match record.release_condition {
                 Some(cond) => format!("{} (release when: {cond})", record.detail),
                 None => record.detail,
             }));
         }
-        if let Some(detail) = crate::merge_hold::read_hold(&self.main_worktree, pr) {
+        if let Some(detail) = crate::gate::merge_hold_core::read_hold(&self.main_worktree, pr) {
             return Ok(Some(detail));
         }
         match crate::merge_hold::label_present(&self.main_worktree, pr) {
@@ -1553,9 +1558,9 @@ mod tests {
     #[test]
     fn t8_ship_batch_is_gate_protected() {
         // trace:STORY-1888 | ai:claude
-        let hit = crate::mandate_gates::touches_gates(
+        let hit = crate::gate::mandate_gates::touches_gates(
             &["aida-cli-lib/src/pr_ship_batch.rs".to_string()],
-            crate::mandate_gates::ProtectedPaths::floor_ref(),
+            crate::gate::mandate_gates::ProtectedPaths::floor_ref(),
         )
         .map(|m| m.path);
         assert_eq!(hit, Some("aida-cli-lib/src/pr_ship_batch.rs".to_string()));

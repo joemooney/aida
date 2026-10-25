@@ -131,8 +131,8 @@ fn mail(
 }
 
 fn record_verdict(root: &Path, key: &str, sha: &str) {
-    let path = crate::review_verdict::verdict_path(root, key);
-    let obj = crate::review_verdict::build_verdict_object(
+    let path = crate::gate::review_verdict::verdict_path(root, key);
+    let obj = crate::gate::review_verdict::build_verdict_object(
         root,
         &path,
         Some("approved"),
@@ -143,7 +143,7 @@ fn record_verdict(root: &Path, key: &str, sha: &str) {
         "reviewer seat",
     )
     .unwrap();
-    crate::review_verdict::write_verdict_object(&path, &obj).unwrap();
+    crate::gate::review_verdict::write_verdict_object(&path, &obj).unwrap();
 }
 
 fn rfc(ts: DateTime<Utc>) -> String {
@@ -476,21 +476,21 @@ fn stale_human_merge_hold_routes_to_the_operator_only() {
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path();
     let now = Utc::now();
-    crate::merge_hold::write_typed_hold(
+    crate::gate::merge_hold_core::write_typed_hold(
         root,
-        &crate::merge_hold::typed_hold(
+        &crate::gate::merge_hold_core::typed_hold(
             2710,
-            crate::merge_hold::HoldReasonKind::Supervision,
+            crate::gate::merge_hold_core::HoldReasonKind::Supervision,
             "supervised spec needs a human",
             Some(HEAD_A.into()),
         ),
     )
     .unwrap();
-    crate::merge_hold::write_typed_hold(
+    crate::gate::merge_hold_core::write_typed_hold(
         root,
-        &crate::merge_hold::typed_hold(
+        &crate::gate::merge_hold_core::typed_hold(
             2711,
-            crate::merge_hold::HoldReasonKind::Rework,
+            crate::gate::merge_hold_core::HoldReasonKind::Rework,
             "CHANGES REQUESTED",
             Some(HEAD_B.into()),
         ),
@@ -780,11 +780,11 @@ fn routing_is_one_wake_per_finding_on_registered_seats() {
         root,
         &lease("or2", "TASK-80", &dead_pid(), now - Duration::hours(1)),
     );
-    crate::merge_hold::write_typed_hold(
+    crate::gate::merge_hold_core::write_typed_hold(
         root,
-        &crate::merge_hold::typed_hold(
+        &crate::gate::merge_hold_core::typed_hold(
             2731,
-            crate::merge_hold::HoldReasonKind::Decision,
+            crate::gate::merge_hold_core::HoldReasonKind::Decision,
             "needs a human decision",
             Some(HEAD_B.into()),
         ),
@@ -825,11 +825,11 @@ fn rework_push_past_a_refusal_is_ready_for_re_review() {
     let now = Utc::now();
     let head_c = "c3d4e5f60718293a4b5c6d7e8f901234567890ab";
     for (pr, refused_at) in [(2740, HEAD_A), (2741, head_c)] {
-        crate::merge_hold::write_typed_hold(
+        crate::gate::merge_hold_core::write_typed_hold(
             root,
-            &crate::merge_hold::typed_hold(
+            &crate::gate::merge_hold_core::typed_hold(
                 pr,
-                crate::merge_hold::HoldReasonKind::Rework,
+                crate::gate::merge_hold_core::HoldReasonKind::Rework,
                 "CHANGES REQUESTED",
                 Some(refused_at.into()),
             ),
@@ -1114,11 +1114,11 @@ fn reviewer_session_lease_counts_as_review_started() {
 #[test]
 fn operator_gate_is_routed_only_when_a_notice_is_sent() {
     let hold = |root: &Path| {
-        crate::merge_hold::write_typed_hold(
+        crate::gate::merge_hold_core::write_typed_hold(
             root,
-            &crate::merge_hold::typed_hold(
+            &crate::gate::merge_hold_core::typed_hold(
                 2780,
-                crate::merge_hold::HoldReasonKind::Supervision,
+                crate::gate::merge_hold_core::HoldReasonKind::Supervision,
                 "supervised spec needs a human",
                 Some(HEAD_A.into()),
             ),
@@ -1339,8 +1339,8 @@ fn linked_verdict_does_not_count_as_review_started() {
     let green = Some(now - Duration::minutes(40));
     let outside = tempfile::tempdir().unwrap();
     record_verdict(outside.path(), "TASK-2801", HEAD_A);
-    let real = crate::review_verdict::verdict_path(outside.path(), "TASK-2801");
-    let linked = crate::review_verdict::verdict_path(root, "TASK-2801");
+    let real = crate::gate::review_verdict::verdict_path(outside.path(), "TASK-2801");
+    let linked = crate::gate::review_verdict::verdict_path(root, "TASK-2801");
     std::fs::create_dir_all(linked.parent().unwrap()).unwrap();
     std::os::unix::fs::symlink(&real, &linked).unwrap();
 
@@ -1569,11 +1569,11 @@ fn linked_worktree_hold_waits_from_the_primary_placement_event() {
     );
     early.ts = placed_at;
     crate::events::emit(&primary, &early);
-    crate::merge_hold::write_typed_hold(
+    crate::gate::merge_hold_core::write_typed_hold(
         &linked,
-        &crate::merge_hold::typed_hold(
+        &crate::gate::merge_hold_core::typed_hold(
             2712,
-            crate::merge_hold::HoldReasonKind::Supervision,
+            crate::gate::merge_hold_core::HoldReasonKind::Supervision,
             "supervised spec needs a human",
             Some(HEAD_A.into()),
         ),

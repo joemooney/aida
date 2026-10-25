@@ -455,13 +455,13 @@ fn callers() {
     // validated grant, so seat this child as a granted advisor before
     // exercising the load-error propagation under test.
     // trace:STORY-1473 | ai:claude
-    let grant_id = crate::seat_authority::test_support::mint_grant_for(
+    let grant_id = crate::gate::seat_authority::test_support::mint_grant_for(
         &project,
         &crate::current_user_id(None),
         "advisor",
         &[],
     );
-    let _env = crate::test_env::EnvVarGuard::set(crate::seat_authority::GRANT_ENV, &grant_id);
+    let _env = crate::test_env::EnvVarGuard::set(crate::gate::seat_authority::GRANT_ENV, &grant_id);
     let _outer = crate::test_ambient::replace(Some(crate::test_ambient::Ambient {
         project_root: project.clone(),
         stdin_is_terminal: false,

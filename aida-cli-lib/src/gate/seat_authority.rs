@@ -832,13 +832,13 @@ pub(crate) fn presenter_tokens() -> Vec<String> {
 /// really is the presenter, and the grant fixtures are bound to it. An
 /// injected source is used as is.
 // trace:BUG-1934 | ai:claude
-fn presenter_source() -> crate::review_authority::IdentitySource {
+fn presenter_source() -> crate::gate::review_authority::IdentitySource {
     #[allow(unused_mut)]
-    let mut source = crate::review_authority::IdentitySource::live();
+    let mut source = crate::gate::review_authority::IdentitySource::live();
     #[cfg(test)]
     if source.chain.is_empty() {
-        source.chain = crate::review_authority::live_ancestry();
-        source.session_leader = crate::review_authority::live_session_leader();
+        source.chain = crate::gate::review_authority::live_ancestry();
+        source.session_leader = crate::gate::review_authority::live_session_leader();
     }
     source
 }
@@ -854,7 +854,7 @@ fn own_process_token() -> Option<String> {
 // trace:BUG-1934 | ai:claude
 fn pid_binding_token(pid: u32) -> Option<String> {
     let start = crate::process_probe::process_start_identity(pid)?;
-    Some(crate::review_authority::process_token(
+    Some(crate::gate::review_authority::process_token(
         "proc",
         pid,
         Some(&start),
@@ -870,7 +870,7 @@ pub(crate) fn presenter_rejection(
     if grant.binding.is_empty() {
         return Some(GrantRejection::Unbound);
     }
-    if crate::review_authority::binding_overlaps(&grant.binding, presenter) {
+    if crate::gate::review_authority::binding_overlaps(&grant.binding, presenter) {
         return None;
     }
     Some(GrantRejection::PresenterNotBound {
@@ -888,7 +888,7 @@ pub(crate) fn matched_binding(grant: &SeatGrant, presenter: &[String]) -> Vec<St
             grant
                 .binding
                 .iter()
-                .any(|b| crate::review_authority::binding_tokens_match(b, p))
+                .any(|b| crate::gate::review_authority::binding_tokens_match(b, p))
         })
         .cloned()
         .collect()
@@ -1724,13 +1724,13 @@ pub(crate) fn adopt_key(id: &str, secret: &str) -> Result<()> {
 /// identity must read; a leader without one is left out.
 // trace:BUG-1934 | ai:claude
 pub(crate) fn direct_issue_binding(
-    caller: &crate::review_authority::IdentitySource,
+    caller: &crate::gate::review_authority::IdentitySource,
 ) -> Result<Vec<String>> {
-    let token = |kind: &str, p: &crate::review_authority::ProcEntry| {
+    let token = |kind: &str, p: &crate::gate::review_authority::ProcEntry| {
         p.start
             .as_deref()
             .filter(|s| !s.trim().is_empty() && p.pid > 1)
-            .map(|start| crate::review_authority::process_token(kind, p.pid, Some(start)))
+            .map(|start| crate::gate::review_authority::process_token(kind, p.pid, Some(start)))
     };
     let shell = caller
         .chain
@@ -1743,7 +1743,7 @@ pub(crate) fn direct_issue_binding(
     if let Some(leader) = caller.session_leader.as_ref().and_then(|p| token("sid", p)) {
         if !binding
             .iter()
-            .any(|b| crate::review_authority::binding_tokens_match(b, &leader))
+            .any(|b| crate::gate::review_authority::binding_tokens_match(b, &leader))
         {
             binding.push(leader);
         }
@@ -1755,7 +1755,7 @@ pub(crate) fn direct_issue_binding(
 // trace:BUG-1934 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct BindTarget {
-    pub entry: crate::review_authority::ProcEntry,
+    pub entry: crate::gate::review_authority::ProcEntry,
     /// Owning uid, when the platform reports one.
     pub uid: Option<u32>,
 }
@@ -1775,7 +1775,7 @@ const BIND_SHELLS: &[&str] = &[
 pub(crate) fn check_bind_target(
     pid: u32,
     target: Option<&BindTarget>,
-    caller: &crate::review_authority::IdentitySource,
+    caller: &crate::gate::review_authority::IdentitySource,
     caller_uid: Option<u32>,
 ) -> Result<String> {
     if pid <= 1 {
@@ -1790,7 +1790,7 @@ pub(crate) fn check_bind_target(
     let name = target.entry.name.trim_start_matches('-');
     let is_shell = BIND_SHELLS.contains(&name);
     if !is_shell
-        && !crate::review_authority::is_agent_harness(&target.entry.name, &target.entry.cmd)
+        && !crate::gate::review_authority::is_agent_harness(&target.entry.name, &target.entry.cmd)
     {
         bail!(
             "--bind-pid {pid}: `{}` is neither an agent harness (claude, codex, agy, ...) nor a shell",
@@ -1813,7 +1813,7 @@ pub(crate) fn check_bind_target(
         .start
         .as_deref()
         .filter(|s| !s.trim().is_empty())
-        .map(|start| crate::review_authority::process_token("proc", pid, Some(start)))
+        .map(|start| crate::gate::review_authority::process_token("proc", pid, Some(start)))
         .with_context(|| format!("--bind-pid {pid}: the process start identity could not be read"))
 }
 
@@ -1835,7 +1835,7 @@ fn probe_bind_target(pid: u32) -> Option<BindTarget> {
     #[cfg(not(unix))]
     let uid = None;
     Some(BindTarget {
-        entry: crate::review_authority::ProcEntry {
+        entry: crate::gate::review_authority::ProcEntry {
             pid,
             name: proc.name().to_string(),
             cmd: proc.cmd().to_vec(),
@@ -2226,7 +2226,7 @@ pub(crate) fn grant_authorized_at(
         return false;
     };
     if aida_core::team::canonical_role(&grant.seat) != seat
-        || !crate::review_authority::binding_overlaps(&grant.binding, presented_by)
+        || !crate::gate::review_authority::binding_overlaps(&grant.binding, presented_by)
         || !valid_at(&grant)
         || !roster_allows(project_root, &grant.principal, &seat)
     {
@@ -2277,7 +2277,7 @@ pub(crate) struct GrantStatus {
 
 // trace:BUG-1934 | ai:claude
 pub(crate) fn grant_status(project_root: &Path) -> GrantStatus {
-    let source = crate::review_authority::IdentitySource::live();
+    let source = crate::gate::review_authority::IdentitySource::live();
     let harness_pid = source.agent_root().map(|p| p.pid).filter(|p| *p > 1);
     let check = grant_check(project_root);
     let grant = current_grant_id().map(|id| {
@@ -2298,8 +2298,10 @@ pub(crate) fn grant_status(project_root: &Path) -> GrantStatus {
             via: record.as_ref().map(|g| {
                 if possession_token(g).is_some() {
                     "key"
-                } else if crate::review_authority::binding_overlaps(&g.binding, &presenter_tokens())
-                {
+                } else if crate::gate::review_authority::binding_overlaps(
+                    &g.binding,
+                    &presenter_tokens(),
+                ) {
                     "proc"
                 } else {
                     "none"

@@ -3,7 +3,7 @@
 //! verdict accepts exactly the grants `current_grant` always accepted.
 // trace:BUG-1983 | ai:claude
 
-use crate::seat_authority::{
+use crate::gate::seat_authority::{
     current_grant, grant_check, test_support::mint_grant_for, GrantCheck, GrantRejection,
     SeatGrant, GRANT_ENV,
 };
@@ -13,7 +13,7 @@ use std::path::Path;
 /// `current_grant` exactly as it was before BUG-1983, kept verbatim as the
 /// reference the new verdict must agree with (C1).
 fn legacy_current_grant(project_root: &Path) -> Option<SeatGrant> {
-    use crate::seat_authority::roster_allows;
+    use crate::gate::seat_authority::roster_allows;
     let id = std::env::var(GRANT_ENV).ok()?;
     let grant = read(&id)?;
     let now = Utc::now();
@@ -164,7 +164,7 @@ fn env_only_advisor_label_has_no_authority() {
     let tmp = tempfile::tempdir().unwrap();
     let _ambient = crate::test_env::AmbientGuard::hermetic(tmp.path(), Some("advisor"));
     assert!(std::env::var_os(GRANT_ENV).is_none());
-    assert!(!crate::role::has_advisor_authority());
+    assert!(!crate::gate::role_authority::has_advisor_authority());
 }
 
 /// Every rejection variant, each reached on its own, plus fixtures where two
@@ -506,11 +506,11 @@ fn review_record(root: &Path) -> anyhow::Result<()> {
     // BUG-1918: an approval must name its recorder (here, an independent
     // session id) or the anchor rule refuses it; a rejected grant still
     // refuses first. trace:BUG-1918 | ai:claude
-    let reviewer = crate::review_authority::IdentitySource {
+    let reviewer = crate::gate::review_authority::IdentitySource {
         session_ids: vec!["independent-reviewer".into()],
         ..Default::default()
     };
-    crate::review_authority::with_identity_source(reviewer, || {
+    crate::gate::review_authority::with_identity_source(reviewer, || {
         crate::handle_review_record_at(
             root.to_path_buf(),
             SPEC,
@@ -693,9 +693,12 @@ fn one_rejection_table_drives_the_edit_gate_and_review_record() {
             );
             review_record(root)
                 .unwrap_or_else(|e| panic!("{case}: advisor must record its verdict: {e:#}"));
-            let recorded = crate::review_verdict::read_recorded_verdict(root, SPEC)
+            let recorded = crate::gate::review_verdict::read_recorded_verdict(root, SPEC)
                 .expect("the real review handler must persist a verdict");
-            assert_eq!(recorded.kind, crate::review_verdict::VerdictKind::Approved);
+            assert_eq!(
+                recorded.kind,
+                crate::gate::review_verdict::VerdictKind::Approved
+            );
             assert_eq!(recorded.reviewed_sha.as_deref(), Some(SHA));
             assert_eq!(
                 recorded.recorded_by.as_deref(),

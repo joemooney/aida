@@ -1300,7 +1300,7 @@ pub(crate) fn collect_doctor_findings_at(
 /// operator's call.
 // trace:STORY-1662 | ai:claude
 pub(crate) fn claude_daemon_grant_finding(pid: u32) -> DoctorFinding {
-    let grant_env = crate::seat_authority::GRANT_ENV;
+    let grant_env = crate::gate::seat_authority::GRANT_ENV;
     DoctorFinding {
         category: "claude-daemon-grant".to_string(),
         id: format!("pid {pid}"),

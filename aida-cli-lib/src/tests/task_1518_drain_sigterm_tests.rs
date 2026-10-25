@@ -444,12 +444,16 @@ fn task_1798_stop_now_against_a_dead_launcher_revokes_its_child_grant() {
     let tmp = fake_drain(dead_pid);
     let root = tmp.path();
     let subject = "task-1798-stop-now";
-    let grant =
-        crate::seat_authority::test_support::mint_grant_for(root, subject, "implementer", &[]);
+    let grant = crate::gate::seat_authority::test_support::mint_grant_for(
+        root,
+        subject,
+        "implementer",
+        &[],
+    );
     let valid = || {
         matches!(
-            crate::seat_authority::grant_check_for(root, &grant, subject),
-            crate::seat_authority::GrantCheck::Valid(_)
+            crate::gate::seat_authority::grant_check_for(root, &grant, subject),
+            crate::gate::seat_authority::GrantCheck::Valid(_)
         )
     };
     let mut lock = lock_of(root);
@@ -481,12 +485,16 @@ fn task_1798_burndown_sigterm_cleanup_revokes_the_child_grant() {
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path();
     let subject = "task-1798-burndown-sigterm";
-    let grant =
-        crate::seat_authority::test_support::mint_grant_for(root, subject, "implementer", &[]);
+    let grant = crate::gate::seat_authority::test_support::mint_grant_for(
+        root,
+        subject,
+        "implementer",
+        &[],
+    );
     let valid = || {
         matches!(
-            crate::seat_authority::grant_check_for(root, &grant, subject),
-            crate::seat_authority::GrantCheck::Valid(_)
+            crate::gate::seat_authority::grant_check_for(root, &grant, subject),
+            crate::gate::seat_authority::GrantCheck::Valid(_)
         )
     };
     let guard = crate::drain_lock::acquire_drain_lock(root, "burndown run").unwrap();

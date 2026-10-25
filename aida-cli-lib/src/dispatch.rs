@@ -30,10 +30,11 @@ use uuid::Uuid;
 pub(crate) mod dispatch_args;
 pub(crate) use dispatch_args::*;
 
+use crate::gate::mandate::{Mandate, MandateState, Scope};
+use crate::gate::mandate_gates::{GateOp, HumanGates};
 use crate::gate::seat_authority::{self, GrantCheck, GrantRejection};
-use crate::mandate::{self, Mandate, MandateState, Scope};
+use crate::mandate::{self};
 use crate::mandate_drive::{ActionRow, Outcome};
-use crate::mandate_gates::{GateOp, HumanGates};
 
 pub(crate) const DISPATCH_SCHEMA_VERSION: u32 = 1;
 pub(crate) const MAX_BRIEF_BYTES: usize = 64 * 1024;
@@ -580,7 +581,7 @@ pub(crate) fn validate_spec_in_store(
         bail!("invalid spec ID `{raw_spec}`: expected `<PREFIX>-<NUMBER>`");
     }
 
-    let ledger = mandate::read_exclusions(mandate_dir)
+    let ledger = crate::gate::mandate::read_exclusions(mandate_dir)
         .map_err(|why| anyhow::anyhow!("mandate exclusion ledger is unreadable: {why}"))?;
     if let Some(entry) = ledger.get(&spec) {
         if entry.always_human {
@@ -611,9 +612,9 @@ pub(crate) fn validate_spec_in_store(
     };
 
     // Record any exclusions seen on this requirement into the sticky ledger.
-    mandate::note_exclusions(mandate_dir, &spec, std::iter::once(req));
+    crate::gate::mandate::note_exclusions(mandate_dir, &spec, std::iter::once(req));
 
-    if let Some(class) = mandate::always_human_class(req) {
+    if let Some(class) = crate::gate::mandate::always_human_class(req) {
         bail!("spec `{spec}` is `{class}` and always requires a human");
     }
     for alias in [req.spec_id.as_deref(), req.agreed_id.as_deref()]
@@ -637,7 +638,7 @@ pub(crate) fn validate_spec_in_store(
         }
     }
     if !include_supervised {
-        if let Some(why) = mandate::excluded_class(req) {
+        if let Some(why) = crate::gate::mandate::excluded_class(req) {
             bail!(
                 "spec `{spec}` is in a supervised class ({why}); start the mandate with `--include-supervised` to cover it"
             );
@@ -732,12 +733,12 @@ pub(crate) fn revalidate_request(
     if Uuid::parse_str(&req.id).is_err() {
         bail!("invalid dispatch request id `{}`", req.id);
     }
-    if req.requester_seat != mandate::MANDATE_SEAT {
+    if req.requester_seat != crate::gate::mandate::MANDATE_SEAT {
         bail!(
             "dispatch request `{}` has requester_seat `{}`, expected `{}`",
             req.id,
             req.requester_seat,
-            mandate::MANDATE_SEAT
+            crate::gate::mandate::MANDATE_SEAT
         );
     }
     if req.matched_binding.is_empty() {
@@ -876,8 +877,8 @@ pub(crate) fn check_request_authority(
     verb: &DispatchRequestVerb,
     now: DateTime<Utc>,
 ) -> Result<AuthorizedDispatchCaller> {
-    let (valid, _) = mandate::load_valid(mandate_dir, principal, now);
-    let mandate = match mandate::state_at(&valid, now) {
+    let (valid, _) = crate::gate::mandate::load_valid(mandate_dir, principal, now);
+    let mandate = match crate::gate::mandate::state_at(&valid, now) {
         MandateState::None => {
             bail!(
                 "no active mandate; start one at a human terminal with `aida mandate start --ship-held --scope dispatch` (or `--drive`)"
@@ -921,8 +922,9 @@ pub(crate) fn check_request_authority(
         );
     }
 
-    let gates = crate::mandate_gates::load_human_gates(main_worktree).map_err(|e| format!("{e:#}"));
-    if let Some(why) = crate::mandate_gates::gate_reason(&gates, GateOp::Dispatch) {
+    let gates =
+        crate::gate::mandate_gates::load_human_gates(main_worktree).map_err(|e| format!("{e:#}"));
+    if let Some(why) = crate::gate::mandate_gates::gate_reason(&gates, GateOp::Dispatch) {
         let msg = format!("dispatch is gated by human gates ({why})");
         emit_dispatch_event(
             main_worktree,
@@ -935,7 +937,7 @@ pub(crate) fn check_request_authority(
         bail!("{msg}");
     }
     if ships_pr {
-        if let Some(why) = crate::mandate_gates::gate_reason(&gates, GateOp::Ship) {
+        if let Some(why) = crate::gate::mandate_gates::gate_reason(&gates, GateOp::Ship) {
             let msg = format!("shipping is gated by human gates ({why})");
             emit_dispatch_event(
                 main_worktree,
@@ -949,7 +951,7 @@ pub(crate) fn check_request_authority(
         }
     }
 
-    let grant = match seat_authority::grant_check_at(main_worktree, now) {
+    let grant = match crate::gate::seat_authority::grant_check_at(main_worktree, now) {
         GrantCheck::Valid(grant) => grant,
         GrantCheck::Absent => {
             let msg = "dispatch requests require a bound `advisor` seat grant (no session grant is set); enter the role before starting the advisor session with `eval \"$(aida role enter advisor --delegate-seat reviewer --delegate-seat implementer)\"`".to_string();
@@ -987,7 +989,7 @@ pub(crate) fn check_request_authority(
         }
     };
 
-    if crate::canonical_role_name(&grant.seat) != mandate::MANDATE_SEAT {
+    if crate::canonical_role_name(&grant.seat) != crate::gate::mandate::MANDATE_SEAT {
         let msg = format!(
             "dispatch requests require the `advisor` seat grant, but current grant {} holds seat `{}`",
             grant.id, grant.seat
@@ -1045,8 +1047,8 @@ pub(crate) fn check_request_authority(
         bail!("{msg}");
     }
 
-    let presenter = seat_authority::presenter_tokens_for(&grant);
-    let matched_binding = seat_authority::matched_binding(&grant, &presenter);
+    let presenter = crate::gate::seat_authority::presenter_tokens_for(&grant);
+    let matched_binding = crate::gate::seat_authority::matched_binding(&grant, &presenter);
     if matched_binding.is_empty() {
         let msg = format!(
             "advisor grant {} has no presenter binding matching this process; start the advisor session after `eval \"$(aida role enter advisor --delegate-seat reviewer --delegate-seat implementer)\"`",
@@ -1270,7 +1272,7 @@ pub(crate) fn submit_request(
         id: request_id.clone(),
         requested_at: now,
         principal: principal.trim().to_string(),
-        requester_seat: mandate::MANDATE_SEAT.to_string(),
+        requester_seat: crate::gate::mandate::MANDATE_SEAT.to_string(),
         requester_grant_id: caller.grant_id.clone(),
         matched_binding: caller.matched_binding,
         mandate_id: caller.mandate.id.clone(),
@@ -1542,7 +1544,7 @@ pub(crate) fn handle_dispatch(action: &DispatchAction) -> Result<()> {
     let main_worktree = crate::find_main_worktree_root()
         .or_else(|_| std::env::current_dir())
         .context("cannot locate main worktree root")?;
-    let mandate_dir = mandate::mandate_dir()?;
+    let mandate_dir = crate::gate::mandate::mandate_dir()?;
     let now = Utc::now();
 
     match action {

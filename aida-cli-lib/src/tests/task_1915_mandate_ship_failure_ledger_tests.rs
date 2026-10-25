@@ -10,7 +10,7 @@ use crate::mandate_drive::{ledger_rows, Outcome};
 fn a_failed_mandate_ship_is_ledgered_as_refused() {
     let root = tempfile::tempdir().unwrap();
     std::fs::create_dir_all(root.path().join(".aida")).unwrap();
-    let cover = MandateCover {
+    let cover = crate::gate::mandate_ship::MandateCover {
         id: "m-1".into(),
         principal: "joe".into(),
     };

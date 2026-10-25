@@ -1981,7 +1981,7 @@ impl Forge for GitHubForge {
         // cleared only by an explicit human/advisor review (`aida merge-hold
         // clear <pr>`). A drain-mode PR is never marked, so its auto-merge is
         // untouched. trace:BUG-1167 | ai:claude
-        if let Some(reason) = crate::merge_hold::read_hold(&self.project_root, c.id) {
+        if let Some(reason) = crate::gate::merge_hold_core::read_hold(&self.project_root, c.id) {
             return Err(MergeHoldRefusal::new(c.id, &reason).into());
         }
         // BUG-1774: the corpus half of the chokepoint — a blocking verdict
@@ -1990,7 +1990,7 @@ impl Forge for GitHubForge {
         // pays no forge read): a pinned merge can only land `match_head`, so
         // that IS the head the corpus is judged at; otherwise the live head.
         // trace:BUG-1774 | ai:claude
-        crate::merge_hold::enforce_corpus_gate_before_merge(
+        crate::gate::merge_hold_core::enforce_corpus_gate_before_merge(
             &self.project_root,
             c.id,
             &corpus_gate_spec_hints(c),
@@ -2586,7 +2586,7 @@ impl Forge for GitLabForge {
     ) -> Result<MergeResult> {
         // BUG-1774: the corpus half of the merge chokepoint, same contract as
         // the GitHub provider. trace:BUG-1774 | ai:claude
-        crate::merge_hold::enforce_corpus_gate_before_merge(
+        crate::gate::merge_hold_core::enforce_corpus_gate_before_merge(
             &self.project_root,
             c.id,
             &corpus_gate_spec_hints(c),
@@ -2649,8 +2649,8 @@ impl Forge for GitLabForge {
                             anyhow::bail!(
                                 "GitLab MR !{} head changed after review ({} is not the approved {}); re-review the new head before merging",
                                 c.id,
-                                crate::review_verdict::short_sha(&snapshot.head_sha),
-                                crate::review_verdict::short_sha(pin)
+                                crate::gate::review_verdict::short_sha(&snapshot.head_sha),
+                                crate::gate::review_verdict::short_sha(pin)
                             );
                         }
                     }
@@ -2969,7 +2969,7 @@ impl Forge for PureGitForge {
         // id is 0 ("the branch IS the change"), so the gate reads the
         // spec-keyed artifacts its branch names; the head is the local branch
         // tip. trace:BUG-1774 | ai:claude
-        crate::merge_hold::enforce_corpus_gate_before_merge(
+        crate::gate::merge_hold_core::enforce_corpus_gate_before_merge(
             &self.project_root,
             c.id,
             &corpus_gate_spec_hints(c),
@@ -3002,8 +3002,8 @@ impl Forge for PureGitForge {
                 head_matches_pin(pin, &head),
                 "pure-git merge: branch {} head {} is not the approved {}; re-review the new head before merging",
                 c.branch,
-                if head.is_empty() { "unreadable" } else { crate::review_verdict::short_sha(&head) },
-                crate::review_verdict::short_sha(pin)
+                if head.is_empty() { "unreadable" } else { crate::gate::review_verdict::short_sha(&head) },
+                crate::gate::review_verdict::short_sha(pin)
             );
         }
         // Checkout base, then land the branch onto it.

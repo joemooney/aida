@@ -116,7 +116,7 @@ fn select_done_rework_rows_includes_outstanding_refusal_at_tip() {
     );
     git(root, &["commit", "--allow-empty", "-m", "root", "--quiet"]);
     let head = git_head(root);
-    crate::review_verdict::record_verdict(
+    crate::gate::review_verdict::record_verdict(
         root,
         "TASK-1",
         Some("request-changes"),
@@ -155,7 +155,7 @@ fn select_done_rework_rows_excludes_refusal_at_a_stale_tip() {
     );
     git(root, &["commit", "--allow-empty", "-m", "root", "--quiet"]);
     let old_head = git_head(root);
-    crate::review_verdict::record_verdict(
+    crate::gate::review_verdict::record_verdict(
         root,
         "TASK-1",
         Some("request-changes"),
@@ -257,7 +257,7 @@ fn resolve_queue_rework_needed_finds_done_specs_with_outstanding_refusal() {
     );
     let head = git_head(project_root);
 
-    crate::review_verdict::record_verdict(
+    crate::gate::review_verdict::record_verdict(
         project_root,
         "TASK-9001",
         Some("request-changes"),

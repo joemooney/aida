@@ -1008,7 +1008,7 @@ pub(crate) fn scan_reapable_with(
         // PR head the review recorded (an unpushed fix-forward would be lost
         // with the branch), so the skipped merge gate loses no commit.
         // trace:TASK-1955 | ai:claude (TASK-2095)
-        let review_pr_terminal = review_pr_terminal_gate(
+        let review_pr_terminal = crate::gate::review_authority::review_pr_terminal_gate(
             process_exited,
             lease,
             || review_branch_within_pr_head(project_root, branch_tip.as_deref(), lease),
@@ -1071,30 +1071,6 @@ pub(crate) fn scan_reapable_with(
     report.skipped.sort_by(|a, b| a.scope.cmp(&b.scope));
     report.notifiable.sort_by(|a, b| a.scope.cmp(&b.scope));
     report
-}
-
-/// BUG-2206: the PR an attested-reviewer lease reviews — a `PR-N`/`MR-N`
-/// scope on a review-verb or reviewer-role lease.
-// trace:TASK-1955 | ai:claude (BUG-2206)
-fn review_lease_pr(lease: &SessionLease) -> Option<u64> {
-    (lease.review_verb || lease.role.as_deref() == Some("reviewer"))
-        .then(|| crate::status_prs::parse_pr_scope(&lease.scope))
-        .flatten()
-}
-
-/// The dead-reviewer reap gate, cheapest check first: the lease's PR scope
-/// (no I/O), then the review branch's git checks, then the forge.
-// trace:TASK-1955 | ai:claude (TASK-2119)
-fn review_pr_terminal_gate(
-    process_exited: bool,
-    lease: &SessionLease,
-    branch_within_pr_head: impl FnOnce() -> bool,
-    pr_terminal: impl FnOnce(u32) -> Option<bool>,
-) -> bool {
-    let Some(pr) = review_lease_pr(lease).and_then(|pr| u32::try_from(pr).ok()) else {
-        return false;
-    };
-    process_exited && branch_within_pr_head() && pr_terminal(pr) == Some(true)
 }
 
 /// Does the review branch hold nothing the reap would lose? True when its
@@ -1198,7 +1174,7 @@ fn reap_one_with_clear_hooks(
         // BUG-2176: a reviewer's merge-hold marker lives in its review
         // worktree; move it to the primary before the tree goes, or keep the
         // tree. trace:TASK-1955 | ai:claude (BUG-2206)
-        if let Some(pr) = review_lease_pr(lease) {
+        if let Some(pr) = crate::gate::review_authority::review_lease_pr(lease) {
             if let Err(e) = crate::merge_hold::adopt_worktree_hold(
                 project_root,
                 &lease.worktree_path,

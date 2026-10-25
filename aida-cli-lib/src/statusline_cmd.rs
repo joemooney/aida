@@ -63,7 +63,8 @@ pub(crate) fn handle_statusline_command(
     // shell that only carries the label can see it lacks the authority. With
     // no label but a valid grant, the granted seat routes too.
     // trace:BUG-1924 | ai:claude
-    let role_display = crate::seat_authority::role_display(&project_root, raw_role.as_deref());
+    let role_display =
+        crate::gate::seat_authority::role_display(&project_root, raw_role.as_deref());
     let (effective_role_name, role_is_default) = routing_role(
         &role_display,
         raw_role.as_deref(),
@@ -235,20 +236,22 @@ pub(crate) fn handle_statusline_command(
         // TASK-1736: a held seat close to expiry says so, in the warning
         // colour, before gated commands start refusing.
         // trace:TASK-1736 | ai:claude
-        let (role_text, role_warning) =
-            match (&role_display, crate::seat_authority::session_grant_expiry()) {
-                (crate::seat_authority::RoleDisplay::Held(_), Some(expiry)) => {
-                    match crate::seat_authority::expiry_suffix(
-                        &expiry,
-                        chrono::Utc::now(),
-                        crate::seat_authority::EXPIRY_WARN_WITHIN,
-                    ) {
-                        Some(suffix) => (format!("{role_text} ({suffix})"), true),
-                        None => (role_text, role_warning),
-                    }
+        let (role_text, role_warning) = match (
+            &role_display,
+            crate::gate::seat_authority::session_grant_expiry(),
+        ) {
+            (crate::gate::seat_authority::RoleDisplay::Held(_), Some(expiry)) => {
+                match crate::gate::seat_authority::expiry_suffix(
+                    &expiry,
+                    chrono::Utc::now(),
+                    crate::gate::seat_authority::EXPIRY_WARN_WITHIN,
+                ) {
+                    Some(suffix) => (format!("{role_text} ({suffix})"), true),
+                    None => (role_text, role_warning),
                 }
-                _ => (role_text, role_warning),
-            };
+            }
+            _ => (role_text, role_warning),
+        };
         let role_segment = if role_warning {
             role_text.red().bold().to_string()
         } else {
@@ -335,9 +338,10 @@ pub(crate) fn handle_statusline_command(
     // STORY-1698: an active fire-fighting mandate is loud on every seat's
     // statusline — the advisor is shipping held PRs until it lapses.
     // trace:STORY-1698 | ai:claude
-    if let Some(segment) =
-        crate::mandate::statusline_segment(&crate::mandate::current_state(), chrono::Utc::now())
-    {
+    if let Some(segment) = crate::mandate::statusline_segment(
+        &crate::gate::mandate::current_state(),
+        chrono::Utc::now(),
+    ) {
         parts.push(segment.red().bold().to_string());
     }
     // STORY-539: surface URGENT unread mailbox messages so an out-of-band
@@ -511,12 +515,12 @@ pub(crate) fn handle_statusline_command(
 /// set; with no label, a validated grant's seat routes instead.
 // trace:BUG-1924 | ai:claude
 pub(crate) fn routing_role(
-    display: &crate::seat_authority::RoleDisplay,
+    display: &crate::gate::seat_authority::RoleDisplay,
     raw_label: Option<&str>,
     label_role: (String, bool),
 ) -> (String, bool) {
     match (display, raw_label) {
-        (crate::seat_authority::RoleDisplay::Held(seat), None) => (seat.clone(), false),
+        (crate::gate::seat_authority::RoleDisplay::Held(seat), None) => (seat.clone(), false),
         _ => label_role,
     }
 }
@@ -528,12 +532,12 @@ pub(crate) fn routing_role(
 /// grant renders `role:<label> (no grant)` in the warning colour.
 // trace:BUG-1924 | ai:claude
 pub(crate) fn role_display_segment_text(
-    display: &crate::seat_authority::RoleDisplay,
+    display: &crate::gate::seat_authority::RoleDisplay,
     routing_role: &str,
     session_role: Option<&str>,
     warn_enabled: bool,
 ) -> (String, bool) {
-    use crate::seat_authority::RoleDisplay;
+    use crate::gate::seat_authority::RoleDisplay;
     match display {
         RoleDisplay::Held(seat) => role_segment_text(seat, session_role, warn_enabled),
         RoleDisplay::Ungranted(label) => {

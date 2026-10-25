@@ -204,7 +204,7 @@ pub(crate) fn handle_team_set_role(
     user: &str,
     role: &str,
 ) -> Result<()> {
-    crate::seat_authority::require_direct_tty()?;
+    crate::gate::seat_authority::require_direct_tty()?;
     let canonical = canonical_role_name(role.trim());
     if canonical.is_empty() {
         anyhow::bail!("a role name is required (e.g. --role advisor)");
@@ -243,7 +243,7 @@ pub(crate) fn handle_team_set_role(
 /// user isn't present.
 // trace:STORY-654 | ai:claude
 pub(crate) fn handle_team_unset_role(store_path: &std::path::Path, user: &str) -> Result<()> {
-    crate::seat_authority::require_direct_tty()?;
+    crate::gate::seat_authority::require_direct_tty()?;
     let removed = team::unset_role_cas(store_path, user)?;
     if removed {
         println!(
@@ -262,7 +262,7 @@ pub(crate) fn handle_team_allow_seat(
     user: &str,
     seat: &str,
 ) -> Result<()> {
-    crate::seat_authority::require_direct_tty()?;
+    crate::gate::seat_authority::require_direct_tty()?;
     let canonical = canonical_role_name(seat.trim());
     let known = known_role_names();
     if canonical.is_empty() || !known.contains(&canonical) {
@@ -287,7 +287,7 @@ pub(crate) fn handle_team_disallow_seat(
     user: &str,
     seat: &str,
 ) -> Result<()> {
-    crate::seat_authority::require_direct_tty()?;
+    crate::gate::seat_authority::require_direct_tty()?;
     let canonical = canonical_role_name(seat.trim());
     let removed = team::disallow_seat_cas(store_path, user, &canonical)?;
     if removed {

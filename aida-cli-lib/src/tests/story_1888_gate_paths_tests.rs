@@ -118,7 +118,7 @@ fn a_directory_entry_without_a_trailing_slash_matches_files_under_it() {
 #[test]
 fn no_layer_can_shrink_the_floor() {
     let committed = layer(
-        "[mandate.human_gates]\nops = []\nprotected_paths = [\"aida-cli-lib/src/mandate.rs\", \"a.rs\"]\n",
+        "[mandate.human_gates]\nops = []\nprotected_paths = [\"aida-cli-lib/src/gate/\", \"a.rs\"]\n",
     );
     let operator = layer("[mandate.human_gates]\nprotected_paths = [\"a.rs\", \"b/\"]\n");
     for g in [
@@ -156,7 +156,7 @@ fn no_layer_can_shrink_the_floor() {
 fn an_unreadable_load_still_checks_the_floor() {
     let gates: std::result::Result<HumanGates, String> = Err("no origin/main".into());
     let set = ProtectedPaths::of(&gates);
-    assert!(touches_gates(&paths(&["aida-cli-lib/src/pr_ship.rs"]), &set).is_some());
+    assert!(touches_gates(&paths(&["aida-cli-lib/src/gate/ship.rs"]), &set).is_some());
     assert!(gate_reason(&gates, GateOp::Ship).is_some());
 }
 
@@ -224,7 +224,7 @@ fn refusal_text_names_the_entry_and_its_source() {
         hit.describe(),
         "`gate/x.rs`, protected by `gate/` (~/.aida/config.toml)"
     );
-    let refusal = crate::mandate::MandateRefusal::TouchesGates(hit);
+    let refusal = crate::gate::mandate::MandateRefusal::TouchesGates(hit);
     let msg = refusal.message(7);
     assert!(
         msg.contains("`gate/`") && msg.contains("~/.aida/config.toml"),
@@ -267,7 +267,7 @@ fn mandate_status_lists_every_protected_entry_with_its_source() {
     let repo = repo_with_committed_config(
         "[mandate.human_gates]\nprotected_paths = [\"gate/\", \"kept.rs\"]\n",
     );
-    let state = crate::mandate::MandateState::None;
+    let state = crate::gate::mandate::MandateState::None;
     let now = chrono::Utc::now();
     let text = crate::mandate::status_report(&state, now, Some(repo.path()), false);
     assert!(text.contains("  protected paths:\n"), "{text}");
@@ -302,7 +302,7 @@ fn mandate_status_lists_every_protected_entry_with_its_source() {
 #[test]
 fn mandate_status_with_an_unreadable_committed_layer_shows_the_floor_only() {
     let repo = repo_with_committed_config("[mandate.human_gates]\nprotected_paths = [\"a//\"]\n");
-    let state = crate::mandate::MandateState::None;
+    let state = crate::gate::mandate::MandateState::None;
     let now = chrono::Utc::now();
     let text = crate::mandate::status_report(&state, now, Some(repo.path()), false);
     assert!(
@@ -549,20 +549,19 @@ fn ratchet_sees_qualified_fns() {
     }
 }
 
-// trace:STORY-1888.aca70d99 | ai:claude
+// trace:STORY-1888.aca70d99 trace:STORY-1889 | ai:claude
 #[test]
 fn gate_authority_code_is_on_the_floor() {
     let missing: Vec<String> = scan()
         .into_iter()
-        .filter(|(path, _)| !on_floor(path) && !KNOWN_UNPROTECTED.contains(&path.as_str()))
+        .filter(|(path, _)| !on_floor(path))
         .map(|(path, why)| format!("  {path} ({why})"))
         .collect();
     assert!(
         missing.is_empty(),
         "gate-authority code outside the mandate's protected floor:\n{}\n\
          Move it into aida-cli-lib/src/gate/ (the change then needs a human merge). \
-         Do not remove the marker, rename the function, or widen \
-         KNOWN_UNPROTECTED to get past this check.",
+         Do not remove the marker or rename the function to get past this check.",
         missing.join("\n")
     );
 }
@@ -603,23 +602,6 @@ fn every_floor_source_file_carries_the_marker() {
     );
 }
 
-// trace:STORY-1888.aca70d99 | ai:claude
-#[test]
-fn known_unprotected_only_shrinks() {
-    let found = scan();
-    let stale: Vec<&str> = KNOWN_UNPROTECTED
-        .iter()
-        .copied()
-        .filter(|p| !found.contains_key(*p) || on_floor(p))
-        .collect();
-    assert!(
-        stale.is_empty(),
-        "KNOWN_UNPROTECTED entries that no longer hold gate authority outside the \
-         floor: {stale:?}. Delete them from KNOWN_UNPROTECTED in mandate_gates.rs; \
-         the list only shrinks."
-    );
-}
-
 #[test]
 fn not_gate_authority_only_shrinks() {
     let root = workspace_root();
@@ -643,9 +625,10 @@ fn not_gate_authority_only_shrinks() {
 }
 
 /// The non-test lines of `text` that re-export a `crate::gate` item.
+// trace:TASK-2319 | ai:agy
 fn gate_reexports(text: &str) -> Vec<String> {
     let reexport = regex::Regex::new(
-        r"^\s*pub(\([^)]*\))?\s+use\s+(crate::|self::|super::)*(\{[^}]*\b)?gate(::|\s*;|\s*\})",
+        r"^\s*pub(\([^)]*\))?\s+use\s+(crate::|self::|super::)*(\{[^}]*\b)?gate(::|\s*;|\s*\}|\s*,|\s+as\b)",
     )
     .unwrap();
     non_test_lines(text)
@@ -670,20 +653,107 @@ fn reexport_detection() {
     assert!(gate_reexports("pub(crate) use crate::gateway::x;\n").is_empty());
 }
 
+// trace:TASK-2319 | ai:agy
+#[test]
+fn reexport_detection_sees_aliases() {
+    for line in [
+        "pub(crate) use crate::gate as g;\n",
+        "pub use self::gate as _;\n",
+        "pub use crate::{gate, other};\n",
+        "pub use crate::{other, gate as g};\n",
+    ] {
+        assert_eq!(gate_reexports(line).len(), 1, "{line}");
+    }
+    assert!(gate_reexports("pub(crate) use crate::gateway as g;\n").is_empty());
+}
+
+/// The `#[path = "..."]` targets in `text` that point into `gate/`.
+// trace:TASK-2335 | ai:agy
+fn gate_path_mounts(text: &str) -> Vec<String> {
+    let path_attr = regex::Regex::new(r#"^\s*#\s*\[\s*path\s*=\s*"([^"]+)"\s*\]"#).unwrap();
+    text.lines()
+        .filter_map(|l| {
+            let p = path_attr.captures(l)?.get(1)?.as_str();
+            (p.starts_with("gate/") || p.contains("/gate/")).then(|| p.to_string())
+        })
+        .collect()
+}
+
+// trace:TASK-2335 | ai:agy
+#[test]
+fn gate_path_mount_detection() {
+    assert_eq!(
+        gate_path_mounts(
+            "#[cfg(test)]\n#[path = \"gate/tests/story_1405_review_marker_tests.rs\"]\nmod t;\n"
+        ),
+        vec!["gate/tests/story_1405_review_marker_tests.rs".to_string()]
+    );
+    assert_eq!(
+        gate_path_mounts("#[path = \"../gate/tests/x.rs\"]\nmod x;\n"),
+        vec!["../gate/tests/x.rs".to_string()]
+    );
+    assert!(gate_path_mounts("#[path = \"tests/review_marker_tests.rs\"]\nmod t;\n").is_empty());
+}
+
+// trace:TASK-2335 | ai:agy
+#[test]
+fn no_unprotected_file_mounts_a_gate_module() {
+    let bad: Vec<String> = sources()
+        .into_iter()
+        .filter(|(path, _)| !on_floor(path))
+        .filter_map(|(path, text)| {
+            let mounts = gate_path_mounts(&text);
+            (!mounts.is_empty()).then(|| format!("  {path}: {}", mounts.join(", ")))
+        })
+        .collect();
+    assert!(
+        bad.is_empty(),
+        "unprotected files mount `gate/` modules via `#[path = ...]`:\n{}\n\
+         A `#[path]` declaration in an unprotected file can be repointed or \
+         removed without a human merge. Mount `gate/tests/*` inside a protected \
+         `aida-cli-lib/src/gate/` module instead.",
+        bad.join("\n")
+    );
+
+    let root = workspace_root();
+    let gate_dir = root.join("aida-cli-lib/src/gate");
+    let mut gate_sources = Vec::new();
+    for entry in std::fs::read_dir(&gate_dir).unwrap() {
+        let entry = entry.unwrap();
+        let path = entry.path();
+        if path.extension().and_then(|s| s.to_str()) == Some("rs") {
+            if let Ok(text) = std::fs::read_to_string(&path) {
+                gate_sources.push(text);
+            }
+        }
+    }
+    let mut unmounted = Vec::new();
+    for entry in std::fs::read_dir(gate_dir.join("tests")).unwrap() {
+        let entry = entry.unwrap();
+        let path = entry.path();
+        if path.extension().and_then(|s| s.to_str()) == Some("rs") {
+            let rel = format!("tests/{}", path.file_name().unwrap().to_string_lossy());
+            let needle = format!("\"{rel}\"");
+            if !gate_sources.iter().any(|t| t.contains(&needle)) {
+                unmounted.push(rel);
+            }
+        }
+    }
+    assert!(
+        unmounted.is_empty(),
+        "`aida-cli-lib/src/gate/tests/` files not mounted by any `gate/*.rs` module: {unmounted:?}"
+    );
+}
+
 #[test]
 fn no_unprotected_file_reexports_gate_items() {
-    let found: std::collections::BTreeMap<String, Vec<String>> = sources()
+    let unlisted: Vec<String> = sources()
         .into_iter()
         .filter(|(path, _)| !on_floor(path))
         .filter_map(|(path, text)| {
             let lines = gate_reexports(&text);
-            (!lines.is_empty()).then_some((path, lines))
+            (!lines.is_empty()).then(|| format!("  {path}: {}", lines.join(" | ")))
         })
-        .collect();
-    let unlisted: Vec<String> = found
-        .iter()
-        .filter(|(path, _)| !TRANSITIONAL_GATE_REEXPORTS.contains(&path.as_str()))
-        .map(|(path, lines)| format!("  {path}: {}", lines.join(" | ")))
         .collect();
     assert!(
         unlisted.is_empty(),
@@ -691,15 +761,5 @@ fn no_unprotected_file_reexports_gate_items() {
          A re-export outside the floor can be repointed at a non-gate function \
          without a human merge. Call `crate::gate::...` directly instead.",
         unlisted.join("\n")
-    );
-    let stale: Vec<&str> = TRANSITIONAL_GATE_REEXPORTS
-        .iter()
-        .copied()
-        .filter(|p| !found.contains_key(*p))
-        .collect();
-    assert!(
-        stale.is_empty(),
-        "TRANSITIONAL_GATE_REEXPORTS entries that no longer re-export: {stale:?}. \
-         Delete them from mandate_gates.rs; the list only shrinks."
     );
 }

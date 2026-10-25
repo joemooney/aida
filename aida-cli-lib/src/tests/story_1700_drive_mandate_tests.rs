@@ -5,7 +5,7 @@
 // trace:STORY-1700 | ai:claude
 
 use super::*;
-use crate::fleet_lanes::{LaneEvidence, SeatKind};
+use crate::gate::fleet_lanes::{LaneEvidence, SeatKind};
 use std::cell::Cell;
 
 fn ok_human() -> Result<()> {
@@ -22,7 +22,7 @@ fn t0() -> DateTime<Utc> {
 
 /// A drive mandate for `principal` minted at `t0`, 8h.
 fn drive_mandate(dir: &Path, principal: &str) -> Mandate {
-    crate::mandate::start_with(
+    crate::gate::mandate::start_with(
         dir,
         &ok_human,
         principal,
@@ -438,7 +438,7 @@ fn mandate_stopped_mid_tick_refuses_remaining() {
     // Side effects: 0 = lease expiry, 1 = lane a, 2 = lane b.
     let hook = move |n: usize| {
         if n == 2 {
-            crate::mandate::stop(&dir, &ok_human, "joe", now_clock()).unwrap();
+            crate::gate::mandate::stop(&dir, &ok_human, "joe", now_clock()).unwrap();
         }
     };
     let mut fake = Fake::default();
@@ -594,10 +594,10 @@ fn gate_removed_in_working_tree_still_enforced_from_origin_main() {
         "[mandate.human_gates]\nops = []\n",
     )
     .unwrap();
-    let committed = crate::mandate_gates::committed_layer(repo.path()).unwrap();
+    let committed = crate::gate::mandate_gates::committed_layer(repo.path()).unwrap();
     assert!(committed.ops.contains(&GateOp::Dispatch));
     git(repo.path(), &["commit", "-qam", "loosen"]);
-    let committed = crate::mandate_gates::committed_layer(repo.path()).unwrap();
+    let committed = crate::gate::mandate_gates::committed_layer(repo.path()).unwrap();
     assert!(committed.ops.contains(&GateOp::Dispatch));
 
     let fx = Fixture::new();
@@ -613,7 +613,10 @@ fn gate_removed_in_working_tree_still_enforced_from_origin_main() {
         )],
         "joe",
     );
-    inputs.gates = Ok(crate::mandate_gates::union(committed, Default::default()));
+    inputs.gates = Ok(crate::gate::mandate_gates::union(
+        committed,
+        Default::default(),
+    ));
     let mut fake = Fake::default();
     let report = run_tick(&inputs, &TickHooks::default(), &mut fake);
     assert!(
@@ -637,7 +640,7 @@ fn a_tree_without_config_is_an_empty_committed_layer() {
         &["update-ref", "refs/remotes/origin/main", "HEAD"],
     );
     assert_eq!(
-        crate::mandate_gates::committed_layer(repo.path()).unwrap(),
+        crate::gate::mandate_gates::committed_layer(repo.path()).unwrap(),
         Default::default()
     );
 }
@@ -646,11 +649,11 @@ fn a_tree_without_config_is_an_empty_committed_layer() {
 #[test]
 fn unreadable_gate_blob_gates_everything() {
     let not_a_repo = tempfile::tempdir().unwrap();
-    let gates = crate::mandate_gates::committed_layer(not_a_repo.path());
+    let gates = crate::gate::mandate_gates::committed_layer(not_a_repo.path());
     assert!(gates.is_err());
     let gates: std::result::Result<HumanGates, String> = Err("no origin/main".into());
     for op in [GateOp::Ship, GateOp::SketchSignoff, GateOp::Dispatch] {
-        assert!(crate::mandate_gates::gate_reason(&gates, op)
+        assert!(crate::gate::mandate_gates::gate_reason(&gates, op)
             .unwrap()
             .contains("gate config unreadable"));
     }
@@ -673,15 +676,15 @@ fn unreadable_gate_blob_gates_everything() {
 
 fn ship_check<'a>(
     state: &'a MandateState,
-    policy: &'a crate::pr_ship::ShipApprovalPolicy,
+    policy: &'a crate::gate::ship::ShipApprovalPolicy,
     ledger: &'a std::result::Result<
-        std::collections::BTreeMap<String, crate::mandate::Exclusion>,
+        std::collections::BTreeMap<String, crate::gate::mandate::Exclusion>,
         String,
     >,
-    hold: &'a crate::mandate::HoldFacts,
+    hold: &'a crate::gate::mandate::HoldFacts,
     changed_paths: Option<&'a [String]>,
-) -> crate::mandate::ShipCheck<'a> {
-    crate::mandate::ShipCheck {
+) -> crate::gate::mandate::ShipCheck<'a> {
+    crate::gate::mandate::ShipCheck {
         state,
         now: now_clock(),
         grant: Some(("advisor", "joe")),
@@ -695,7 +698,7 @@ fn ship_check<'a>(
         hold,
         carry_over: None,
         changed_paths,
-        protected: crate::mandate_gates::ProtectedPaths::floor_ref(),
+        protected: crate::gate::mandate_gates::ProtectedPaths::floor_ref(),
         ship_gate: None,
         hold_clear_gate: None,
     }
@@ -708,28 +711,25 @@ fn pr_touching_gate_paths_is_gated() {
     let state = MandateState::Active(drive_mandate(tmp.path(), "joe"));
     let policy = Default::default();
     let ledger = Ok(Default::default());
-    let hold = crate::mandate::HoldFacts::None;
-    for path in [
-        ".aida/config.toml",
-        "aida-cli-lib/src/mandate.rs",
-        "aida-cli-lib/src/mandate_ship.rs",
-        "aida-cli-lib/src/mandate_traces.rs",
-        "aida-cli-lib/src/rework_hold_release.rs",
-    ] {
+    let hold = crate::gate::mandate::HoldFacts::None;
+    for path in [".aida/config.toml", "aida-cli-lib/src/mandate_traces.rs"] {
         let paths = vec!["README.md".to_string(), path.to_string()];
         let c = ship_check(&state, &policy, &ledger, &hold, Some(&paths));
         assert_eq!(
-            crate::mandate::ship_decision(&c),
+            crate::gate::mandate::ship_decision(&c),
             Err(MandateRefusal::TouchesGates(
-                crate::mandate_gates::GateMatch {
+                crate::gate::mandate_gates::GateMatch {
                     path: path.into(),
                     entry: path.into(),
-                    source: crate::mandate_gates::PathSource::BuiltIn,
+                    source: crate::gate::mandate_gates::PathSource::BuiltIn,
                 }
             ))
         );
     }
     for path in [
+        "aida-cli-lib/src/gate/mandate.rs",
+        "aida-cli-lib/src/gate/mandate_ship.rs",
+        "aida-cli-lib/src/gate/rework_hold_release.rs",
         "aida-cli-lib/src/gate/merge_hold_core.rs",
         "aida-cli-lib/src/gate/review_authority.rs",
         "aida-cli-lib/src/gate/solo_review.rs",
@@ -738,21 +738,21 @@ fn pr_touching_gate_paths_is_gated() {
         let paths = vec!["README.md".to_string(), path.to_string()];
         let c = ship_check(&state, &policy, &ledger, &hold, Some(&paths));
         assert_eq!(
-            crate::mandate::ship_decision(&c),
+            crate::gate::mandate::ship_decision(&c),
             Err(MandateRefusal::TouchesGates(
-                crate::mandate_gates::GateMatch {
+                crate::gate::mandate_gates::GateMatch {
                     path: path.into(),
                     entry: "aida-cli-lib/src/gate/".into(),
-                    source: crate::mandate_gates::PathSource::BuiltIn,
+                    source: crate::gate::mandate_gates::PathSource::BuiltIn,
                 }
             ))
         );
     }
     // pr_cmd.rs is NOT protected as a whole (condition C1).
     assert_eq!(
-        crate::mandate_gates::touches_gates(
+        crate::gate::mandate_gates::touches_gates(
             &["aida-cli-lib/src/pr_cmd.rs".into()],
-            crate::mandate_gates::ProtectedPaths::floor_ref()
+            crate::gate::mandate_gates::ProtectedPaths::floor_ref()
         ),
         None
     );
@@ -761,7 +761,7 @@ fn pr_touching_gate_paths_is_gated() {
     let mut c = ship_check(&state, &policy, &ledger, &hold, Some(&paths));
     c.ship_gate = Some("`ship` is listed in [mandate.human_gates]".into());
     assert!(matches!(
-        crate::mandate::ship_decision(&c),
+        crate::gate::mandate::ship_decision(&c),
         Err(MandateRefusal::HumanGated { .. })
     ));
     // The tick classifies such a PR as gated, never a ship for the advisor.
@@ -773,7 +773,8 @@ fn pr_touching_gate_paths_is_gated() {
         approved_at_head: true,
         changed_paths: Some(vec![".aida/config.toml".into()]),
     };
-    let LaneDecision::Act(p) = plan_held_pr(&pr, crate::mandate_gates::ProtectedPaths::floor_ref())
+    let LaneDecision::Act(p) =
+        plan_held_pr(&pr, crate::gate::mandate_gates::ProtectedPaths::floor_ref())
     else {
         panic!("an approved held PR is a lane")
     };
@@ -787,10 +788,10 @@ fn unresolved_changed_paths_refuses() {
     let state = MandateState::Active(drive_mandate(tmp.path(), "joe"));
     let policy = Default::default();
     let ledger = Ok(Default::default());
-    let hold = crate::mandate::HoldFacts::None;
+    let hold = crate::gate::mandate::HoldFacts::None;
     let c = ship_check(&state, &policy, &ledger, &hold, None);
     assert_eq!(
-        crate::mandate::ship_decision(&c),
+        crate::gate::mandate::ship_decision(&c),
         Err(MandateRefusal::ChangedPathsUnresolved)
     );
     let pr = HeldPr {
@@ -801,7 +802,8 @@ fn unresolved_changed_paths_refuses() {
         approved_at_head: true,
         changed_paths: None,
     };
-    let LaneDecision::Act(p) = plan_held_pr(&pr, crate::mandate_gates::ProtectedPaths::floor_ref())
+    let LaneDecision::Act(p) =
+        plan_held_pr(&pr, crate::gate::mandate_gates::ProtectedPaths::floor_ref())
     else {
         panic!("an approved held PR is a lane")
     };
@@ -810,13 +812,19 @@ fn unresolved_changed_paths_refuses() {
     let mut quiet = pr.clone();
     quiet.approved_at_head = false;
     assert_eq!(
-        plan_held_pr(&quiet, crate::mandate_gates::ProtectedPaths::floor_ref()),
+        plan_held_pr(
+            &quiet,
+            crate::gate::mandate_gates::ProtectedPaths::floor_ref()
+        ),
         LaneDecision::None
     );
     quiet.approved_at_head = true;
     quiet.releasable = false;
     assert_eq!(
-        plan_held_pr(&quiet, crate::mandate_gates::ProtectedPaths::floor_ref()),
+        plan_held_pr(
+            &quiet,
+            crate::gate::mandate_gates::ProtectedPaths::floor_ref()
+        ),
         LaneDecision::None
     );
 }
@@ -866,10 +874,10 @@ fn an_approved_held_pr_routes_a_ship_to_the_advisor() {
 }
 
 /// The floor plus an operator-layer `x/` prefix (STORY-1888).
-fn operator_protected() -> crate::mandate_gates::ProtectedPaths {
-    crate::mandate_gates::union(
+fn operator_protected() -> crate::gate::mandate_gates::ProtectedPaths {
+    crate::gate::mandate_gates::union(
         Default::default(),
-        crate::mandate_gates::parse_layer(
+        crate::gate::mandate_gates::parse_layer(
             "[mandate.human_gates]\nprotected_paths = [\"x/\"]\n",
             "~/.aida/config.toml",
         )
@@ -885,18 +893,18 @@ fn operator_layer_path_refuses_mandate_ship() {
     let state = MandateState::Active(drive_mandate(tmp.path(), "joe"));
     let policy = Default::default();
     let ledger = Ok(Default::default());
-    let hold = crate::mandate::HoldFacts::None;
+    let hold = crate::gate::mandate::HoldFacts::None;
     let protected = operator_protected();
     let paths = vec!["README.md".to_string(), "x/y.rs".to_string()];
     let mut c = ship_check(&state, &policy, &ledger, &hold, Some(&paths));
     c.protected = &protected;
-    let hit = crate::mandate_gates::GateMatch {
+    let hit = crate::gate::mandate_gates::GateMatch {
         path: "x/y.rs".into(),
         entry: "x/".into(),
-        source: crate::mandate_gates::PathSource::Operator,
+        source: crate::gate::mandate_gates::PathSource::Operator,
     };
     assert_eq!(
-        crate::mandate::ship_decision(&c),
+        crate::gate::mandate::ship_decision(&c),
         Err(MandateRefusal::TouchesGates(hit.clone()))
     );
     let msg = MandateRefusal::TouchesGates(hit).message(7);
@@ -905,9 +913,9 @@ fn operator_layer_path_refuses_mandate_ship() {
         "{msg}"
     );
     // The floor alone lets the same PR through to hold cover.
-    c.protected = crate::mandate_gates::ProtectedPaths::floor_ref();
+    c.protected = crate::gate::mandate_gates::ProtectedPaths::floor_ref();
     assert!(!matches!(
-        crate::mandate::ship_decision(&c),
+        crate::gate::mandate::ship_decision(&c),
         Err(MandateRefusal::TouchesGates(_))
     ));
 }
@@ -1038,7 +1046,7 @@ fn unknown_scope_string_fails_closed() {
         body["scopes"] = serde_json::json!([bogus]);
         body["issued_at"] = (t0() + Duration::minutes(1)).to_rfc3339().into();
         write_record(dir.path(), &body);
-        let (valid, warnings) = crate::mandate::load_valid(dir.path(), "joe", now_clock());
+        let (valid, warnings) = crate::gate::mandate::load_valid(dir.path(), "joe", now_clock());
         assert!(
             valid.iter().all(|m| m.id != id),
             "{bogus} record must be ignored"
@@ -1055,7 +1063,7 @@ fn unknown_scope_string_fails_closed() {
 // trace:STORY-1700.ac2ed84c | ai:claude
 #[test]
 fn unknown_human_gate_op_is_config_error() {
-    use crate::mandate_gates::parse_layer;
+    use crate::gate::mandate_gates::parse_layer;
     assert!(
         parse_layer("[mandate.human_gates]\nops = [\"bogus\"]\n", "t")
             .unwrap_err()
@@ -1086,7 +1094,7 @@ fn unknown_human_gate_op_is_config_error() {
     )
     .unwrap();
     let operator = parse_layer("[mandate.human_gates]\nops = [\"ship\"]\n", "t").unwrap();
-    let g = crate::mandate_gates::union(committed, operator);
+    let g = crate::gate::mandate_gates::union(committed, operator);
     assert_eq!(g.max_actions_per_tick, None);
     assert_eq!(g.describe(), "ship, dispatch");
 }
@@ -1135,9 +1143,9 @@ fn a_drive_record_loads_in_the_story_1698_loader_as_ship_held() {
     let m = drive_mandate(dir.path(), "joe");
     let text = std::fs::read_to_string(dir.path().join(format!("{}.json", m.id))).unwrap();
     let old: Story1698Mandate = serde_json::from_str(&text).unwrap();
-    assert_eq!(old.scope, crate::mandate::SCOPE_SHIP_HELD);
+    assert_eq!(old.scope, crate::gate::mandate::SCOPE_SHIP_HELD);
     assert!(old.include_supervised);
-    let (valid, warnings) = crate::mandate::load_valid(dir.path(), "joe", now_clock());
+    let (valid, warnings) = crate::gate::mandate::load_valid(dir.path(), "joe", now_clock());
     assert!(warnings.is_empty(), "{warnings:?}");
     assert!(valid[0].is_drive());
     assert_eq!(
@@ -1180,7 +1188,7 @@ fn include_supervised_defaults_on_with_drive() {
 #[test]
 fn drive_start_and_stop_refuse_non_tty() {
     let dir = tempfile::tempdir().unwrap();
-    let err = crate::mandate::start_with(
+    let err = crate::gate::mandate::start_with(
         dir.path(),
         &no_tty,
         "joe",
@@ -1193,7 +1201,7 @@ fn drive_start_and_stop_refuse_non_tty() {
     .unwrap_err();
     assert!(err.to_string().contains("human at an interactive terminal"));
     drive_mandate(dir.path(), "joe");
-    assert!(crate::mandate::stop(dir.path(), &no_tty, "joe", now_clock()).is_err());
+    assert!(crate::gate::mandate::stop(dir.path(), &no_tty, "joe", now_clock()).is_err());
 }
 
 // trace:STORY-1700.Durability | ai:claude
@@ -1211,9 +1219,9 @@ fn line_and_notice_lines() {
         crate::mandate::status_line(&state, now_clock(), "ship")
     );
     // Stopped: one line per seat, then silence.
-    crate::mandate::stop(dir.path(), &ok_human, "joe", now_clock()).unwrap();
-    let (valid, _) = crate::mandate::load_valid(dir.path(), "joe", now_clock());
-    let stopped = crate::mandate::state_at(&valid, now_clock());
+    crate::gate::mandate::stop(dir.path(), &ok_human, "joe", now_clock()).unwrap();
+    let (valid, _) = crate::gate::mandate::load_valid(dir.path(), "joe", now_clock());
+    let stopped = crate::gate::mandate::state_at(&valid, now_clock());
     assert!(matches!(stopped, MandateState::Stopped(_)));
     let first = crate::mandate::notice_line(dir.path(), &stopped, now_clock(), "advisor", "");
     assert!(first
@@ -1227,7 +1235,7 @@ fn line_and_notice_lines() {
         crate::mandate::notice_line(dir.path(), &stopped, now_clock(), "implementer", "").is_some()
     );
     // The seen markers never confuse the loader.
-    let (valid, warnings) = crate::mandate::load_valid(dir.path(), "joe", now_clock());
+    let (valid, warnings) = crate::gate::mandate::load_valid(dir.path(), "joe", now_clock());
     assert_eq!(valid.len(), 1);
     assert!(warnings.is_empty(), "{warnings:?}");
 }
@@ -1458,7 +1466,7 @@ fn advisor_seat_and_credit_lanes_route_to_the_operator() {
 fn no_drive_mandate_means_an_idle_tick() {
     let fx = Fixture::new();
     // A ship-held (not drive) mandate does not drive.
-    crate::mandate::start(
+    crate::gate::mandate::start(
         fx.mandates.path(),
         &ok_human,
         "joe",
@@ -1598,27 +1606,27 @@ fn a_mandate_cannot_release_a_rework_hold_on_a_pr_touching_the_gates() {
     let state = MandateState::Active(drive_mandate(tmp.path(), "joe"));
     let policy = Default::default();
     let ledger = Ok(Default::default());
-    let hold = crate::mandate::HoldFacts::Marker {
-        kind: crate::merge_hold::HoldReasonKind::Rework,
+    let hold = crate::gate::mandate::HoldFacts::Marker {
+        kind: crate::gate::merge_hold_core::HoldReasonKind::Rework,
         legacy: false,
     };
     for path in [".aida/config.toml", "aida-cli-lib/src/mandate_traces.rs"] {
         let paths = vec![path.to_string()];
         let c = ship_check(&state, &policy, &ledger, &hold, Some(&paths));
         assert_eq!(
-            crate::mandate::rework_release_decision(&c),
+            crate::gate::mandate::rework_release_decision(&c),
             Err(MandateRefusal::TouchesGates(
-                crate::mandate_gates::GateMatch {
+                crate::gate::mandate_gates::GateMatch {
                     path: path.into(),
                     entry: path.into(),
-                    source: crate::mandate_gates::PathSource::BuiltIn,
+                    source: crate::gate::mandate_gates::PathSource::BuiltIn,
                 }
             ))
         );
     }
     let c = ship_check(&state, &policy, &ledger, &hold, None);
     assert_eq!(
-        crate::mandate::rework_release_decision(&c),
+        crate::gate::mandate::rework_release_decision(&c),
         Err(MandateRefusal::ChangedPathsUnresolved)
     );
     let paths = vec!["README.md".to_string()];
@@ -1627,7 +1635,7 @@ fn a_mandate_cannot_release_a_rework_hold_on_a_pr_touching_the_gates() {
         c.ship_gate = ship.then(|| "`ship` is listed".to_string());
         c.hold_clear_gate = clear.then(|| "`hold-clear` is listed".to_string());
         assert!(matches!(
-            crate::mandate::rework_release_decision(&c),
+            crate::gate::mandate::rework_release_decision(&c),
             Err(MandateRefusal::HumanGated { .. })
         ));
     }
@@ -1648,13 +1656,13 @@ fn spec_always_human_reads_the_store_and_the_sticky_ledger() {
     let reqs = vec![plain, decide, tagged];
     let dir = tempfile::tempdir().unwrap();
     // TASK-1 was once operator-only; the tag is gone but the ledger is sticky.
-    crate::mandate::record_exclusions(
+    crate::gate::mandate::record_exclusions(
         dir.path(),
         &[("TASK-1".into(), "operator-only".into(), true)],
         t0(),
     )
     .unwrap();
-    let ledger = crate::mandate::read_exclusions(dir.path()).unwrap();
+    let ledger = crate::gate::mandate::read_exclusions(dir.path()).unwrap();
     let f = spec_always_human_from(&reqs, Some(&ledger));
     assert_eq!(f("TASK-1").as_deref(), Some("operator-only"));
     assert_eq!(f("task-2").as_deref(), Some("decide-mode"));
@@ -1668,7 +1676,7 @@ fn spec_always_human_reads_the_store_and_the_sticky_ledger() {
 // trace:STORY-1700.ac2ed84c | ai:claude
 #[test]
 fn human_gates_are_empty_by_default() {
-    use crate::mandate_gates::{gate_reason, parse_layer, union};
+    use crate::gate::mandate_gates::{gate_reason, parse_layer, union};
     let none = parse_layer("[schedule]\nmin_gap = \"60s\"\n", "t").unwrap();
     let g = union(none, Default::default());
     assert!(g.ops.is_empty());
@@ -1741,12 +1749,12 @@ fn the_notice_stamp_makes_an_advisor_live_for_thirty_minutes() {
     let home_s = home.path().display().to_string();
     let mut env = crate::test_env::EnvVarsGuard::apply(&[
         ("AIDA_HOME", Some(&home_s)),
-        (crate::seat_authority::GRANT_ENV, None),
+        (crate::gate::seat_authority::GRANT_ENV, None),
     ]);
     let me = crate::current_user_id(None);
     let grant =
-        crate::seat_authority::test_support::mint_grant_for(root.path(), &me, "advisor", &[]);
-    env.set_key(crate::seat_authority::GRANT_ENV, &grant);
+        crate::gate::seat_authority::test_support::mint_grant_for(root.path(), &me, "advisor", &[]);
+    env.set_key(crate::gate::seat_authority::GRANT_ENV, &grant);
     let now = Utc::now();
     assert!(!advisor_live(root.path(), now), "no turn stamped yet");
     stamp_grant_turn(Some(&grant), now);
@@ -1767,12 +1775,12 @@ fn the_per_turn_notice_reads_the_live_mandate_and_marks_each_session_once() {
     let home_s = home.path().display().to_string();
     let _env = crate::test_env::EnvVarsGuard::apply(&[
         ("AIDA_HOME", Some(&home_s)),
-        (crate::seat_authority::GRANT_ENV, None),
+        (crate::gate::seat_authority::GRANT_ENV, None),
         ("AIDA_SESSION_ROLE", None),
     ]);
-    let dir = crate::mandate::mandate_dir().unwrap();
+    let dir = crate::gate::mandate::mandate_dir().unwrap();
     let now = Utc::now();
-    let m = crate::mandate::start_with(
+    let m = crate::gate::mandate::start_with(
         &dir,
         &ok_human,
         &crate::current_user_id(None),
@@ -1786,7 +1794,7 @@ fn the_per_turn_notice_reads_the_live_mandate_and_marks_each_session_once() {
     let line = crate::status_awaiting::mandate_notice_line(now, Some("s1")).unwrap();
     assert!(line.starts_with("MANDATE drive · "), "{line}");
     assert!(line.contains(" · fire · gates: "), "{line}");
-    crate::mandate::stop(&dir, &ok_human, &crate::current_user_id(None), now).unwrap();
+    crate::gate::mandate::stop(&dir, &ok_human, &crate::current_user_id(None), now).unwrap();
     // Two role-less sessions each see the stopped line once.
     for session in ["s1", "s2"] {
         let first = crate::status_awaiting::mandate_notice_line(now, Some(session)).unwrap();
@@ -2121,12 +2129,12 @@ fn a_future_dated_turn_stamp_is_not_a_live_advisor() {
     let home_s = home.path().display().to_string();
     let mut env = crate::test_env::EnvVarsGuard::apply(&[
         ("AIDA_HOME", Some(&home_s)),
-        (crate::seat_authority::GRANT_ENV, None),
+        (crate::gate::seat_authority::GRANT_ENV, None),
     ]);
     let me = crate::current_user_id(None);
     let grant =
-        crate::seat_authority::test_support::mint_grant_for(root.path(), &me, "advisor", &[]);
-    env.set_key(crate::seat_authority::GRANT_ENV, &grant);
+        crate::gate::seat_authority::test_support::mint_grant_for(root.path(), &me, "advisor", &[]);
+    env.set_key(crate::gate::seat_authority::GRANT_ENV, &grant);
     let now = Utc::now();
     stamp_grant_turn(Some(&grant), now + Duration::minutes(10));
     assert!(
@@ -2357,7 +2365,7 @@ fn stop_before(fx: &Fixture, at: usize, advisor_live: bool) -> (TickReport, Fake
     let dir = fx.mandates.path().to_path_buf();
     let hook = move |n: usize| {
         if n == at {
-            crate::mandate::stop(&dir, &ok_human, "joe", now_clock()).unwrap();
+            crate::gate::mandate::stop(&dir, &ok_human, "joe", now_clock()).unwrap();
         }
     };
     let mut inputs = fx.inputs(&now_clock, Vec::new(), "joe");
@@ -2746,7 +2754,7 @@ fn a_recheck_failure_before_the_store_check_is_ledgered() {
     // Side effects: 0 = the reap, 1 = the store check.
     let hook = move |n: usize| {
         if n == 1 {
-            crate::mandate::stop(&dir, &ok_human, "joe", now_clock()).unwrap();
+            crate::gate::mandate::stop(&dir, &ok_human, "joe", now_clock()).unwrap();
         }
     };
     let mut inputs = fx.inputs(&now_clock, Vec::new(), "joe");
@@ -2833,7 +2841,7 @@ fn tick_specs(
 fn an_untaken_dispatch_backs_off_and_stops_rerouting() {
     let fx = Fixture::new();
     // The longest mandate (24h): the backoff spans most of it.
-    let m = crate::mandate::start_with(
+    let m = crate::gate::mandate::start_with(
         fx.mandates.path(),
         &ok_human,
         "joe",

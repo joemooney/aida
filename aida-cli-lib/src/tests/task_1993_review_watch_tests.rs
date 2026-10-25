@@ -650,13 +650,13 @@ fn task1993_live_discovery_probes_both_forges_and_refuses_moving_or_unknown_head
         );
         // HOME is pinned by the same held environment guard. Reissue this
         // fixture's parent in that final home before testing the real runner.
-        let parent = crate::seat_authority::test_support::mint_grant_for(
+        let parent = crate::gate::seat_authority::test_support::mint_grant_for(
             &root,
             crate::test_env::HERMETIC_TEST_USER,
             "advisor",
             &["reviewer"],
         );
-        env.set_key(crate::seat_authority::GRANT_ENV, parent); // trace:TASK-1993 | ai:claude
+        env.set_key(crate::gate::seat_authority::GRANT_ENV, parent); // trace:TASK-1993 | ai:claude
         let repo = forge::Repository::load(&root).unwrap();
         let mut changes = repo.discover(&root).unwrap();
         assert_eq!(changes.len(), 1);
@@ -1014,7 +1014,7 @@ fn task1993_canonical_history_permissions_and_reset_preserve_consumed_rounds() {
         .to_string()
     };
     for mode in [0o644, 0o664] {
-        crate::review_verdict::write_verdict_atomic(&path, &body(1)).unwrap();
+        crate::gate::review_verdict::write_verdict_atomic(&path, &body(1)).unwrap();
         std::fs::set_permissions(&path, std::fs::Permissions::from_mode(mode)).unwrap();
         assert_eq!(store.history("PR-1").unwrap().keys.len(), 1);
     }
@@ -1034,7 +1034,7 @@ fn task1993_canonical_history_permissions_and_reset_preserve_consumed_rounds() {
             Ok(())
         },
         |_| {
-            crate::review_verdict::write_verdict_atomic(&path, &body(2))?;
+            crate::gate::review_verdict::write_verdict_atomic(&path, &body(2))?;
             Ok(())
         },
     )

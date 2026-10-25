@@ -199,7 +199,7 @@ fn a_lease_role_with_metacharacters_is_an_error() {
     assert!(lease_role(&lease).is_err());
     let _env = crate::test_env::EnvVarsGuard::apply(&[
         ("AIDA_SESSION_ROLE", Some("advisor")),
-        (crate::seat_authority::GRANT_ENV, None),
+        (crate::gate::seat_authority::GRANT_ENV, None),
     ]);
     assert!(fix_at(&root, &lane).is_err());
 }
@@ -213,7 +213,7 @@ fn claim_in_a_lane_keeps_the_lease_role() {
     write_lease(&root, LANE, &lane, Some("implementer"), false);
     let _env = crate::test_env::EnvVarsGuard::apply(&[
         ("AIDA_SESSION_ROLE", Some("advisor")),
-        (crate::seat_authority::GRANT_ENV, Some("g-unknown")),
+        (crate::gate::seat_authority::GRANT_ENV, Some("g-unknown")),
     ]);
     assert_eq!(
         crate::claim::claim_role(&root, Some(&lane)).as_deref(),
@@ -233,7 +233,10 @@ fn fix_at_reads_the_lane_and_the_inherited_env() {
     let _env = crate::test_env::EnvVarsGuard::apply(&[
         ("AIDA_SESSION_ROLE", Some("advisor")),
         ("AIDA_SESSION_PURPOSE", Some("advise")),
-        (crate::seat_authority::GRANT_ENV, Some("g-not-a-real-grant")),
+        (
+            crate::gate::seat_authority::GRANT_ENV,
+            Some("g-not-a-real-grant"),
+        ),
     ]);
     let fix = fix_at(&root, &lane).unwrap().expect("a correction");
     assert_eq!(
@@ -254,11 +257,14 @@ fn the_mcp_server_takes_the_lane_identity_at_start() {
     let _env = crate::test_env::EnvVarsGuard::apply(&[
         ("AIDA_SESSION_ROLE", Some("advisor")),
         ("AIDA_SESSION_PURPOSE", Some("advise")),
-        (crate::seat_authority::GRANT_ENV, Some("g-daemon-advisor")),
+        (
+            crate::gate::seat_authority::GRANT_ENV,
+            Some("g-daemon-advisor"),
+        ),
     ]);
     apply_in_process(&root, &lane);
     assert_eq!(std::env::var("AIDA_SESSION_ROLE").unwrap(), "implementer");
-    assert!(std::env::var(crate::seat_authority::GRANT_ENV).is_err());
+    assert!(std::env::var(crate::gate::seat_authority::GRANT_ENV).is_err());
     assert!(std::env::var("AIDA_SESSION_PURPOSE").is_err());
 }
 
@@ -269,12 +275,12 @@ fn the_mcp_server_outside_a_lane_keeps_its_env() {
     let (_tmp, root, _lane) = lane_fixture();
     let _env = crate::test_env::EnvVarsGuard::apply(&[
         ("AIDA_SESSION_ROLE", Some("advisor")),
-        (crate::seat_authority::GRANT_ENV, Some("g-advisor")),
+        (crate::gate::seat_authority::GRANT_ENV, Some("g-advisor")),
     ]);
     apply_in_process(&root, &root);
     assert_eq!(std::env::var("AIDA_SESSION_ROLE").unwrap(), "advisor");
     assert_eq!(
-        std::env::var(crate::seat_authority::GRANT_ENV).unwrap(),
+        std::env::var(crate::gate::seat_authority::GRANT_ENV).unwrap(),
         "g-advisor"
     );
 }
@@ -342,7 +348,7 @@ fn a_guest_or_requester_in_a_lane_keeps_its_role() {
     let _env = crate::test_env::EnvVarsGuard::apply(&[
         ("AIDA_SESSION_ROLE", Some("requester")),
         ("AIDA_SESSION_PURPOSE", Some("file")),
-        (crate::seat_authority::GRANT_ENV, None),
+        (crate::gate::seat_authority::GRANT_ENV, None),
     ]);
     apply_in_process(&root, &lane);
     assert_eq!(std::env::var("AIDA_SESSION_ROLE").unwrap(), "requester");
@@ -372,7 +378,7 @@ fn a_reviewer_in_a_reviewer_lane_keeps_its_grant() {
 fn claim_in_a_lane_with_a_malformed_role_records_no_role() {
     let (_tmp, root, lane) = lane_fixture();
     write_lease(&root, LANE, &lane, Some("implementer;touch x"), false);
-    let grant = crate::seat_authority::test_support::mint_grant_for(
+    let grant = crate::gate::seat_authority::test_support::mint_grant_for(
         &root,
         &crate::current_user_id(None),
         "advisor",
@@ -380,10 +386,10 @@ fn claim_in_a_lane_with_a_malformed_role_records_no_role() {
     );
     let _env = crate::test_env::EnvVarsGuard::apply(&[
         ("AIDA_SESSION_ROLE", Some("advisor")),
-        (crate::seat_authority::GRANT_ENV, Some(grant.as_str())),
+        (crate::gate::seat_authority::GRANT_ENV, Some(grant.as_str())),
     ]);
     assert_eq!(
-        crate::seat_authority::current_seat(&root).as_deref(),
+        crate::gate::seat_authority::current_seat(&root).as_deref(),
         Some("advisor"),
         "the inherited seat is valid, so a fallback would record it"
     );

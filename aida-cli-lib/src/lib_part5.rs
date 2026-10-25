@@ -726,7 +726,9 @@ pub(crate) fn acquire_review_lease_with_mode(
                     }
                 }
                 ReviewLeaseConflictMode::RefuseStaleNonInteractive => {
-                    anyhow::bail!(review_stale_lease_refusal(spec_id, &conflict));
+                    anyhow::bail!(crate::gate::review_author::review_stale_lease_refusal(
+                        spec_id, &conflict
+                    ));
                 }
                 ReviewLeaseConflictMode::AutoReleaseStale => unreachable!(),
             }
@@ -763,7 +765,9 @@ pub(crate) fn acquire_review_lease_with_mode(
                         }
                     }
                     ReviewLeaseConflictMode::RefuseStaleNonInteractive => {
-                        anyhow::bail!(review_stale_lease_refusal(spec_id, &conflict));
+                        anyhow::bail!(crate::gate::review_author::review_stale_lease_refusal(
+                            spec_id, &conflict
+                        ));
                     }
                 }
                 eprintln!(
@@ -1243,9 +1247,9 @@ pub(crate) fn handle_review_spec(
     // every merge surface. Released with the lease when this verb exits.
     // trace:STORY-1405 | ai:claude
     let _review_marker = match pr_number.filter(|_| !no_agent) {
-        Some(n) => review_marker::hold(
+        Some(n) => crate::gate::review_marker::hold(
             &main_worktree_root_from(project_root),
-            review_marker::Marker::for_this_process(
+            crate::gate::review_marker::Marker::for_this_process(
                 n,
                 review_marker_head_best_effort(project_root, n, &surface_branch).as_deref(),
                 Some(&spec_id),
@@ -1353,7 +1357,7 @@ pub(crate) fn handle_review_spec(
     // TASK-1460: the SAME path `review_verdict::record_verdict` writes, so
     // the skill's direct write and the record below are one file, one round.
     // trace:TASK-1460 | ai:claude
-    let verdict_path = review_verdict::verdict_path(project_root, &spec_id);
+    let verdict_path = crate::gate::review_verdict::verdict_path(project_root, &spec_id);
     if let Some(dir) = verdict_path.parent() {
         let _ = std::fs::create_dir_all(dir);
     }
@@ -1405,8 +1409,8 @@ pub(crate) fn handle_review_spec(
     // TASK-1460: the skill wrote this file directly; archive its round
     // (when it names a commit) before the record below stamps provenance.
     // trace:TASK-1460 | ai:claude
-    let _ = review_verdict::adopt_direct_write(&verdict_path);
-    let verdict = review_verdict::read_verdict_body(&verdict_path)
+    let _ = crate::gate::review_verdict::adopt_direct_write(&verdict_path);
+    let verdict = crate::gate::review_verdict::read_verdict_body(&verdict_path)
         .ok()
         .and_then(|body| reviewer_summary::parse_verdict_file(&body));
 
@@ -1421,7 +1425,7 @@ pub(crate) fn handle_review_spec(
         let reviewed_sha =
             resolve_commit_sha(project_root, reviewed_branch.as_deref().unwrap_or("HEAD"))
                 .or_else(|| resolve_commit_sha(project_root, "HEAD"));
-        let _ = review_verdict::record_verdict(
+        let _ = crate::gate::review_verdict::record_verdict(
             project_root,
             &spec_id,
             Some(&v.verdict),
@@ -1437,14 +1441,18 @@ pub(crate) fn handle_review_spec(
     let recommended = match &verdict {
         Some(v) => {
             // trace:BUG-1505 | ai:claude — the one canonical parser.
-            let kind = review_verdict::VerdictKind::parse(&v.verdict);
+            let kind = crate::gate::review_verdict::VerdictKind::parse(&v.verdict);
             let label = match kind {
-                review_verdict::VerdictKind::Approved => "APPROVE".green().bold().to_string(),
-                review_verdict::VerdictKind::RequestChanges => {
+                crate::gate::review_verdict::VerdictKind::Approved => {
+                    "APPROVE".green().bold().to_string()
+                }
+                crate::gate::review_verdict::VerdictKind::RequestChanges => {
                     "REQUEST CHANGES".yellow().bold().to_string()
                 }
-                review_verdict::VerdictKind::Rejected => "REJECT".red().bold().to_string(),
-                review_verdict::VerdictKind::Unknown => v.verdict.clone(),
+                crate::gate::review_verdict::VerdictKind::Rejected => {
+                    "REJECT".red().bold().to_string()
+                }
+                crate::gate::review_verdict::VerdictKind::Unknown => v.verdict.clone(),
             };
             println!("  {} {}", "Reviewer verdict:".bold(), label);
             if let Some(s) = v.summary.as_deref().filter(|s| !s.trim().is_empty()) {
@@ -1453,7 +1461,7 @@ pub(crate) fn handle_review_spec(
             if let Some(url) = v.comment_url.as_deref().filter(|s| !s.is_empty()) {
                 println!("  {} {}", "Review comment:".bold(), url.dimmed());
             }
-            review_verdict::canonical_verdict_word(&v.verdict)
+            crate::gate::review_verdict::canonical_verdict_word(&v.verdict)
         }
         None => {
             println!(
@@ -1572,7 +1580,7 @@ pub(crate) fn handle_review_spec(
 // trace:BUG-1516 | ai:claude
 pub(crate) fn handle_review_normalize_shas(dry_run: bool) -> Result<()> {
     let project_root = find_project_root()?;
-    let report = review_verdict::backfill_abbreviated_shas(&project_root, dry_run)
+    let report = crate::gate::review_verdict::backfill_abbreviated_shas(&project_root, dry_run)
         .with_context(|| "could not sweep .aida/review-verdicts for abbreviated shas")?;
     let verb = if dry_run { "would resolve" } else { "resolved" };
     println!(
@@ -1654,7 +1662,9 @@ pub(crate) fn run_stranded_sweep(
 
     let mut rows = Vec::new();
     for spec_id in spec_ids {
-        let Some(verdict) = review_verdict::read_recorded_verdict(project_root, &spec_id) else {
+        let Some(verdict) =
+            crate::gate::review_verdict::read_recorded_verdict(project_root, &spec_id)
+        else {
             continue;
         };
         if !verdict.kind.blocks_done() {
@@ -1691,12 +1701,12 @@ pub(crate) fn run_stranded_sweep(
         // `classify_stranded` treats identically to a confirmed rewrite —
         // never flagged) — acceptance criterion 2, with no need to fetch
         // the branch locally.
-        let relation = review_verdict::classify_tip_relation(
+        let relation = crate::gate::review_verdict::classify_tip_relation(
             verdict.reviewed_sha.as_deref(),
             Some(meta.head_sha.as_str()),
             None,
         );
-        let hold_present = merge_hold::read_hold(project_root, pr).is_some();
+        let hold_present = crate::gate::merge_hold_core::read_hold(project_root, pr).is_some();
         let queue_entry_present = queued_ids.contains(&req.id);
 
         let conditions = stranded_sweep::classify_stranded(
@@ -1802,7 +1812,9 @@ pub(crate) fn run_stalled_sweep(
     let now = chrono::Utc::now();
     let mut rows = Vec::new();
     for spec_id in spec_ids {
-        let Some(verdict) = review_verdict::read_recorded_verdict(project_root, &spec_id) else {
+        let Some(verdict) =
+            crate::gate::review_verdict::read_recorded_verdict(project_root, &spec_id)
+        else {
             continue;
         };
         if !verdict.kind.blocks_done() {
@@ -1812,7 +1824,7 @@ pub(crate) fn run_stalled_sweep(
             continue;
         };
         let spec_completed = matches!(req.status, aida_core::RequirementStatus::Completed);
-        if !review_verdict::is_outstanding_refusal(&verdict, spec_completed) {
+        if !crate::gate::review_verdict::is_outstanding_refusal(&verdict, spec_completed) {
             continue;
         }
 
@@ -1824,7 +1836,7 @@ pub(crate) fn run_stalled_sweep(
             .reviewed_branch
             .as_deref()
             .and_then(|b| local_branch_tip(project_root, b));
-        let relation = review_verdict::classify_tip_relation(
+        let relation = crate::gate::review_verdict::classify_tip_relation(
             verdict.reviewed_sha.as_deref(),
             tip.as_deref(),
             None,
@@ -1914,7 +1926,7 @@ pub(crate) fn handle_review_stalled(project_root: &std::path::Path, json: bool) 
             row.verdict_kind.label(),
             row.reviewed_sha
                 .as_deref()
-                .map(review_verdict::short_sha)
+                .map(crate::gate::review_verdict::short_sha)
                 .unwrap_or("?"),
         );
         if let Some(s) = &row.summary {
@@ -1952,27 +1964,28 @@ pub(crate) fn handle_review_stranded(json: bool, fix: bool, age: bool) -> Result
                 row.spec_id,
                 row.reviewed_sha
                     .as_deref()
-                    .map(review_verdict::short_sha)
+                    .map(crate::gate::review_verdict::short_sha)
                     .unwrap_or("unknown"),
             );
             // trace:STORY-1397 | ai:claude — a stranded refusal is rework.
             // BUG-1532 criterion 10: reference the verdict record, not a quote.
             // trace:BUG-1532 | ai:claude
-            let mut hold = merge_hold::typed_hold(
+            let mut hold = crate::gate::merge_hold_core::typed_hold(
                 row.pr,
-                merge_hold::HoldReasonKind::Rework,
+                crate::gate::merge_hold_core::HoldReasonKind::Rework,
                 &reason,
                 row.reviewed_sha.clone(),
             );
-            let current = review_verdict::read_recorded_verdict(&project_root, &row.spec_id);
-            hold.verdict_ref = Some(merge_hold::VerdictRef::new(
+            let current =
+                crate::gate::review_verdict::read_recorded_verdict(&project_root, &row.spec_id);
+            hold.verdict_ref = Some(crate::gate::merge_hold_core::VerdictRef::new(
                 &row.spec_id,
                 Some(row.pr),
                 row.reviewed_sha.clone(),
                 current.and_then(|v| v.recorded_by),
             ));
             hold.spec = Some(row.spec_id.to_ascii_uppercase());
-            merge_hold::write_typed_hold(&project_root, &hold)
+            crate::gate::merge_hold_core::write_typed_hold(&project_root, &hold)
                 .with_context(|| format!("could not protect PR-{} with a merge hold", row.pr))?;
             let detail = row
                 .verdict_summary
@@ -2079,7 +2092,7 @@ pub(crate) fn handle_review_stranded(json: bool, fix: bool, age: bool) -> Result
             row.pr,
             row.reviewed_sha
                 .as_deref()
-                .map(review_verdict::short_sha)
+                .map(crate::gate::review_verdict::short_sha)
                 .unwrap_or("?"),
         );
         if let Some(s) = &row.verdict_summary {
@@ -2350,20 +2363,20 @@ pub(crate) fn review_pr_handshake_path(
         .map(std::path::PathBuf::from)
         .filter(|p| p.is_dir())
     {
-        return review_verdict::verdict_path(&root, &format!("PR-{pr_number}"));
+        return crate::gate::review_verdict::verdict_path(&root, &format!("PR-{pr_number}"));
     }
     if let Ok(cwd) = std::env::current_dir() {
         if let Some(root) = parent_project_root_for_session(&cwd).filter(|p| p.is_dir()) {
-            return review_verdict::verdict_path(&root, &format!("PR-{pr_number}"));
+            return crate::gate::review_verdict::verdict_path(&root, &format!("PR-{pr_number}"));
         }
     }
     if let Some(root) = std::env::var_os("AIDA_DRIVE_ROOT")
         .map(std::path::PathBuf::from)
         .filter(|p| p.is_dir())
     {
-        return review_verdict::verdict_path(&root, &format!("PR-{pr_number}"));
+        return crate::gate::review_verdict::verdict_path(&root, &format!("PR-{pr_number}"));
     }
-    review_verdict::verdict_path(project_root, &format!("PR-{pr_number}"))
+    crate::gate::review_verdict::verdict_path(project_root, &format!("PR-{pr_number}"))
 }
 
 /// BUG-2201 / TASK-2040: where a contained reviewer writes the phase-3
@@ -2694,7 +2707,7 @@ pub(crate) fn clear_review_markers_for_verdict(
     for root in &roots {
         let targets: Vec<u64> = match pr {
             Some(n) => vec![n],
-            None => review_marker::list(root)
+            None => crate::gate::review_marker::list(root)
                 .into_iter()
                 .filter(|m| {
                     m.spec
@@ -2705,7 +2718,7 @@ pub(crate) fn clear_review_markers_for_verdict(
                 .collect(),
         };
         for n in targets {
-            if review_marker::clear(root, n) {
+            if crate::gate::review_marker::clear(root, n) {
                 cleared.push(n);
             }
         }
@@ -2727,7 +2740,7 @@ pub(crate) fn handle_review_claim(
     let project_root = drive_root_or_project_root()?;
     let root = main_worktree_root_from(&project_root);
     if release {
-        if review_marker::clear(&root, pr) {
+        if crate::gate::review_marker::clear(&root, pr) {
             println!(
                 "{} released the review claim on PR-{pr}",
                 crate::glyph(crate::glyphs::Glyph::Check).green()
@@ -2742,12 +2755,12 @@ pub(crate) fn handle_review_claim(
     // unbounded/mistyped TTL could otherwise hold a PR "under review" for
     // days. Clamp with a note rather than refuse, so a generous-but-honest
     // value (or a scripted default) never hard-fails the claim.
-    let (ttl_mins, clamped) = review_marker::clamp_claim_ttl_mins(ttl_mins);
+    let (ttl_mins, clamped) = crate::gate::review_marker::clamp_claim_ttl_mins(ttl_mins);
     if clamped {
         eprintln!(
             "  {} `--ttl-mins` is capped at {}m (24h) for an explicit claim — clamped",
             crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
-            review_marker::MAX_CLAIM_TTL_MINS,
+            crate::gate::review_marker::MAX_CLAIM_TTL_MINS,
         );
     }
     let head = sha
@@ -2763,8 +2776,8 @@ pub(crate) fn handle_review_claim(
             .ok()
             .map(|info| info.head_oid)
         });
-    if let Some(prev) = review_marker::read(&root, pr) {
-        if review_marker::is_live(&prev) {
+    if let Some(prev) = crate::gate::review_marker::read(&root, pr) {
+        if crate::gate::review_marker::is_live(&prev) {
             eprintln!(
                 "  {} replacing a live review claim on PR-{pr}: {}",
                 crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
@@ -2772,7 +2785,7 @@ pub(crate) fn handle_review_claim(
             );
         }
     }
-    let mut marker = review_marker::Marker::for_this_process(
+    let mut marker = crate::gate::review_marker::Marker::for_this_process(
         pr,
         head.as_deref(),
         spec.map(|s| s.to_ascii_uppercase()).as_deref(),
@@ -2780,13 +2793,13 @@ pub(crate) fn handle_review_claim(
     );
     marker.pid = 0;
     marker.ttl_secs = ttl_mins.saturating_mul(60);
-    review_marker::write(&root, &marker)
+    crate::gate::review_marker::write(&root, &marker)
         .with_context(|| format!("could not mark PR-{pr} as under review"))?;
     println!(
         "{} PR-{pr} is marked under review{} for {ttl_mins}m — merges wait for your verdict",
         crate::glyph(crate::glyphs::Glyph::Check).green(),
         head.as_deref()
-            .map(|h| format!(" at {}", review_verdict::short_sha(h)))
+            .map(|h| format!(" at {}", crate::gate::review_verdict::short_sha(h)))
             .unwrap_or_else(|| " (head unknown — every head is covered)".to_string()),
     );
     println!(
@@ -2922,8 +2935,8 @@ pub(crate) fn handle_review_record_at(
             crate::glyph(crate::glyphs::Glyph::Warning).yellow()
         );
     }
-    let kind = review_verdict::VerdictKind::parse(verdict);
-    if kind == review_verdict::VerdictKind::Unknown {
+    let kind = crate::gate::review_verdict::VerdictKind::parse(verdict);
+    if kind == crate::gate::review_verdict::VerdictKind::Unknown {
         anyhow::bail!(
             "unrecognised verdict `{verdict}` — use one of: approved, request-changes, rejected"
         );
@@ -2985,7 +2998,8 @@ pub(crate) fn handle_review_record_at(
     // it, with the same sentence the advisor-gated edit gives. No exported
     // grant stays permissive (agent identity, or the operator fallback below).
     // trace:BUG-1983 | ai:claude
-    if let Some(rejection) = crate::seat_authority::grant_check(&project_root).rejection_sentence()
+    if let Some(rejection) =
+        crate::gate::seat_authority::grant_check(&project_root).rejection_sentence()
     {
         anyhow::bail!("refused: review record. {rejection}.");
     }
@@ -2999,8 +3013,8 @@ pub(crate) fn handle_review_record_at(
     // trace:BUG-1918 | ai:claude
     let human_at_tty =
         recorded_by == REVIEW_OPERATOR_RECORDED_BY && review_operator_tty_floor(&project_root)?;
-    if !crate::rework_hold_release::record_seat_allowed(
-        crate::seat_authority::current_seat(&project_root).as_deref(),
+    if !crate::gate::rework_hold_release::record_seat_allowed(
+        crate::gate::seat_authority::current_seat(&project_root).as_deref(),
     ) {
         anyhow::bail!("refused: implementer seat cannot record a review verdict (self-review)");
     }
@@ -3009,49 +3023,55 @@ pub(crate) fn handle_review_record_at(
     // agent session id, or its agent process — identity that persists across
     // shell calls and lease release, never free-text labels.
     // trace:BUG-1918 | ai:claude
-    let recorder_grant = crate::seat_authority::current_grant(&project_root);
-    let recorder = review_authority::RecorderIdentity::current(&review_authority::visible_leases(
-        &project_root,
-    ));
-    let approving = kind == review_verdict::VerdictKind::Approved;
+    let recorder_grant = crate::gate::seat_authority::current_grant(&project_root);
+    let recorder = crate::gate::review_authority::RecorderIdentity::current(
+        &crate::gate::review_authority::visible_leases(&project_root),
+    );
+    let approving = kind == crate::gate::review_verdict::VerdictKind::Approved;
     let mut solo_human = false;
     if approving {
         // BUG-1918: an approval must name WHO recorded it — a session id or a
         // process — or the ship gate can never tell it from the author's.
         anyhow::ensure!(
-            review_authority::has_identity_anchor(&recorder.tokens),
+            crate::gate::review_authority::has_identity_anchor(&recorder.tokens),
             "refused: this session has no identity AIDA can bind an approval to (no agent \
              session id and no process ancestry) — record the approval from a reviewer seat \
              or a terminal session"
         );
-        review_authority::warn_on_ledger_read(&project_root);
+        crate::gate::review_authority::warn_on_ledger_read(&project_root);
         // BUG-1918: a PR-keyed review (recorded from anywhere, e.g. main) is
         // about the PR's head branch and the specs it ships — resolved from
         // the forge as the ship gate does, never from the recorder's cwd.
         let (subjects, author_branch) = review_subject(spec, pr, branch.as_deref(), |n| {
             review_pr_subject_from_forge(&project_root, n)
         })?;
-        let authors = review_recorder_authors(&project_root, &subjects, author_branch.as_deref());
+        let authors = crate::gate::review_author::review_recorder_authors(
+            &project_root,
+            &subjects,
+            author_branch.as_deref(),
+        );
         // STORY-1655: the solo mode is consulted only when the author gate
         // would refuse, so its warnings never touch an independent approval.
         // trace:STORY-1655 | ai:claude
-        match review_author_gate(
+        match crate::gate::review_author::review_author_gate(
             &authors,
             &recorder,
             !subjects.is_empty(),
             human_at_tty,
-            || crate::solo_review::effective(&project_root),
+            || crate::gate::solo_review::effective(&project_root),
         ) {
-            ReviewAuthorGate::Independent => {}
-            ReviewAuthorGate::Refused(refusal) => anyhow::bail!(refusal),
-            ReviewAuthorGate::SoloSelfApproval => {
+            crate::gate::review_author::ReviewAuthorGate::Independent => {}
+            crate::gate::review_author::ReviewAuthorGate::Refused(refusal) => {
+                anyhow::bail!(refusal)
+            }
+            crate::gate::review_author::ReviewAuthorGate::SoloSelfApproval => {
                 let n = pr.ok_or_else(|| {
                     anyhow::anyhow!(
                         "refused: a solo-human self-approval must name `--pr <N>` so it can be \
                          confirmed against the pull request"
                     )
                 })?;
-                crate::solo_review::run_challenge(spec, n)?;
+                crate::gate::solo_review::run_challenge(spec, n)?;
                 solo_human = true;
             }
         }
@@ -3062,7 +3082,7 @@ pub(crate) fn handle_review_record_at(
     // trace:BUG-1918 | ai:claude
     let receipt_id = if human_at_tty && approving {
         Some(
-            review_authority::write_human_receipt(
+            crate::gate::review_authority::write_human_receipt(
                 resolved_sha.as_deref().unwrap_or_default(),
                 spec,
                 &recorder.tokens,
@@ -3073,7 +3093,7 @@ pub(crate) fn handle_review_record_at(
     } else {
         None
     };
-    let attestation = serde_json::to_value(review_verdict::RecorderAttestation {
+    let attestation = serde_json::to_value(crate::gate::review_verdict::RecorderAttestation {
         sha: resolved_sha.clone().unwrap_or_default(),
         seat: recorder_grant.as_ref().map(|g| g.seat.clone()),
         grant_id: recorder_grant.as_ref().map(|g| g.id.clone()),
@@ -3085,9 +3105,9 @@ pub(crate) fn handle_review_record_at(
         grant_binding: recorder_grant
             .as_ref()
             .map(|g| {
-                crate::seat_authority::matched_binding(
+                crate::gate::seat_authority::matched_binding(
                     g,
-                    &crate::seat_authority::presenter_tokens_for(g),
+                    &crate::gate::seat_authority::presenter_tokens_for(g),
                 )
             })
             .unwrap_or_default(),
@@ -3132,7 +3152,7 @@ pub(crate) fn handle_review_record_at(
             spec.to_ascii_uppercase(),
             resolved_sha
                 .as_deref()
-                .map(review_verdict::short_sha)
+                .map(crate::gate::review_verdict::short_sha)
                 .unwrap_or("unknown")
         );
         // BUG-1536: this used to re-resolve a SEPARATE "protection root" here
@@ -3150,13 +3170,13 @@ pub(crate) fn handle_review_record_at(
         // condition, so a later round of the same verdict is followed rather
         // than a frozen quote of this one. trace:BUG-1532 trace:BUG-1562 | ai:claude
         let spec_key = spec.trim().to_ascii_uppercase();
-        let mut hold = merge_hold::typed_hold(
+        let mut hold = crate::gate::merge_hold_core::typed_hold(
             n,
-            merge_hold::HoldReasonKind::Rework,
+            crate::gate::merge_hold_core::HoldReasonKind::Rework,
             &reason,
             resolved_sha.clone(),
         );
-        hold.verdict_ref = Some(merge_hold::VerdictRef::new(
+        hold.verdict_ref = Some(crate::gate::merge_hold_core::VerdictRef::new(
             &spec_key,
             Some(n),
             resolved_sha.clone(),
@@ -3167,7 +3187,7 @@ pub(crate) fn handle_review_record_at(
         hold.release_condition = Some(format!(
             "a fresh APPROVED verdict for {spec_key} recorded at PR #{n}'s current head by an independent reviewer releases it (a sensitive spec also needs a human clear or an --include-supervised mandate)"
         ));
-        merge_hold::write_typed_hold(&project_root, &hold)
+        crate::gate::merge_hold_core::write_typed_hold(&project_root, &hold)
             .with_context(|| format!("could not protect PR-{n} with a merge hold"))?;
         if let Err(err) = merge_hold::sync_label(&project_root, n, true) {
             eprintln!(
@@ -3179,15 +3199,15 @@ pub(crate) fn handle_review_record_at(
     // STORY-1417: build + classify + one verified write — the same boundary
     // `record_verdict` uses, with the typed classes layered on before the
     // single durable write (BUG-1571). trace:STORY-1417 | ai:claude
-    let path = review_verdict::verdict_path(&project_root, spec);
+    let path = crate::gate::review_verdict::verdict_path(&project_root, spec);
     // BUG-2136: snapshot the record as it stands so the outcome line can say
     // whether this call added a round or re-recorded an identical one.
     // trace:BUG-2136 | ai:claude
-    let record_before = review_verdict::read_verdict_body(&path)
+    let record_before = crate::gate::review_verdict::read_verdict_body(&path)
         .ok()
         .and_then(|b| serde_json::from_str::<serde_json::Value>(&b).ok())
         .and_then(|v| v.as_object().cloned());
-    let mut verdict_obj = review_verdict::build_verdict_object(
+    let mut verdict_obj = crate::gate::review_verdict::build_verdict_object(
         &project_root,
         &path,
         Some(verdict),
@@ -3199,20 +3219,20 @@ pub(crate) fn handle_review_record_at(
     )
     .with_context(|| "could not write the review verdict")?;
     // trace:STORY-1687 | ai:codex
-    crate::rework_hold_release::stamp_record_grant(&project_root, &mut verdict_obj);
+    crate::gate::rework_hold_release::stamp_record_grant(&project_root, &mut verdict_obj);
     review_classes::apply_finding_classes(&mut verdict_obj, findings, &classes);
     // trace:BUG-1918 | ai:claude
     verdict_obj.insert(
-        review_verdict::ATTESTATION_KEY.to_string(),
+        crate::gate::review_verdict::ATTESTATION_KEY.to_string(),
         attestation.clone(),
     );
-    let outcome = review_verdict::record_outcome(record_before.as_ref(), &verdict_obj);
+    let outcome = crate::gate::review_verdict::record_outcome(record_before.as_ref(), &verdict_obj);
     let recorded_sha = verdict_obj
         .get("reviewed_sha")
         .and_then(|v| v.as_str())
         .map(str::to_string)
         .or_else(|| resolved_sha.clone());
-    review_verdict::write_verdict_object(&path, &verdict_obj)
+    crate::gate::review_verdict::write_verdict_object(&path, &verdict_obj)
         .with_context(|| "could not write the review verdict")?;
     // PRIN-5 / BUG-1571: `record_verdict` already writes atomically and
     // verifies the bytes landed, but never print a path this process has
@@ -3259,12 +3279,12 @@ pub(crate) fn handle_review_record_at(
     // The record-time stamp binds grant, subject, session and recorder; it does
     // not bind the SHA, verdict or timestamp (the same-user trust limit remains).
     // trace:STORY-1687 | ai:codex
-    if kind == review_verdict::VerdictKind::Approved {
+    if kind == crate::gate::review_verdict::VerdictKind::Approved {
         if let Some(pr) = pr {
             // STORY-1697: say what the approval released, or why the hold
             // stays armed. No hold at all is not news. trace:STORY-1697 | ai:claude
-            match crate::rework_hold_release::auto_release(&project_root, pr) {
-                Ok(crate::rework_hold_release::Outcome::NoHold) => {}
+            match crate::gate::rework_hold_release::auto_release(&project_root, pr) {
+                Ok(crate::gate::rework_hold_release::Outcome::NoHold) => {}
                 Ok(outcome) => println!("  {}", outcome.line(pr)),
                 Err(error) => eprintln!("  PR #{pr}: merge-hold remains armed: {error:#}"),
             }
@@ -3284,8 +3304,10 @@ pub(crate) fn handle_review_record_at(
             "reviewer",
             3,
             match kind {
-                review_verdict::VerdictKind::RequestChanges => "verdict:request-changes",
-                review_verdict::VerdictKind::Rejected => "verdict:rejected",
+                crate::gate::review_verdict::VerdictKind::RequestChanges => {
+                    "verdict:request-changes"
+                }
+                crate::gate::review_verdict::VerdictKind::Rejected => "verdict:rejected",
                 _ => unreachable!("blocks_done only covers refusing verdicts"),
             },
             detail,
@@ -3327,7 +3349,7 @@ pub(crate) fn handle_review_record_at(
         // when the caller supplied an abbreviation.
         // trace:BUG-1466 | ai:codex
         // trace:BUG-1516 | ai:codex
-        let recorded = review_verdict::read_recorded_verdict(&project_root, spec)
+        let recorded = crate::gate::review_verdict::read_recorded_verdict(&project_root, spec)
             .ok_or_else(|| anyhow::anyhow!("the verdict was written but could not be read back"))?;
         // BUG-1571: build the full handshake object (base fields + the
         // orchestrator's `mode`/`recorded_at` overlay) in memory and commit
@@ -3340,7 +3362,7 @@ pub(crate) fn handle_review_record_at(
         // to claim the handshake exists.
         // trace:BUG-1581 | ai:codex
         // trace:BUG-1571 | ai:claude
-        let mut handshake_obj = review_verdict::build_verdict_object(
+        let mut handshake_obj = crate::gate::review_verdict::build_verdict_object(
             &project_root,
             &handshake,
             Some(kind.label()),
@@ -3358,7 +3380,7 @@ pub(crate) fn handle_review_record_at(
         // PR-keyed round through the shared writer above.
         // trace:BUG-1918 | ai:claude
         handshake_obj.insert(
-            review_verdict::ATTESTATION_KEY.to_string(),
+            crate::gate::review_verdict::ATTESTATION_KEY.to_string(),
             attestation.clone(),
         );
         handshake_obj.insert(
@@ -3375,7 +3397,10 @@ pub(crate) fn handle_review_record_at(
         // launcher's anchor in the primary checkout. Its launcher collects
         // the handshake from the reviewer's worktree (BUG-2149), so land it
         // there instead of failing the record. trace:BUG-2201 | ai:claude
-        let handshake = match review_verdict::write_verdict_object(&handshake, &handshake_obj) {
+        let handshake = match crate::gate::review_verdict::write_verdict_object(
+            &handshake,
+            &handshake_obj,
+        ) {
             Ok(()) => handshake,
             Err(err) => {
                 // Only a boundary refusal falls back; ENOSPC or a read-back
@@ -3393,7 +3418,7 @@ pub(crate) fn handle_review_record_at(
                         handshake.display()
                     )));
                 };
-                review_verdict::write_verdict_object(&fallback, &handshake_obj).with_context(
+                crate::gate::review_verdict::write_verdict_object(&fallback, &handshake_obj).with_context(
                     || {
                         format!(
                             "the phase-3 handshake was NOT written to {} ({err}) nor to {} — the orchestrator will not see this verdict; re-run `aida review record`",
@@ -3432,10 +3457,6 @@ pub(crate) fn handle_review_record_at(
     Ok(())
 }
 
-#[cfg(test)]
-#[path = "gate/tests/story_1405_review_marker_tests.rs"]
-mod story_1405_review_marker_tests;
-
 /// Audit identity for a supported seat-written verdict. The launched seat's
 /// name is stable and distinguishable from the drain's own metadata writer.
 // trace:BUG-1467 | ai:codex
@@ -3443,7 +3464,7 @@ pub(crate) fn review_recorded_by(project_root: &std::path::Path) -> String {
     review_recorded_by_from(
         std::env::var("AIDA_AGENT_NAME").ok().as_deref(),
         std::env::var("AIDA_AGENT_TYPE").ok().as_deref(),
-        crate::seat_authority::current_seat(project_root).as_deref(),
+        crate::gate::seat_authority::current_seat(project_root).as_deref(),
     )
 }
 
@@ -3479,13 +3500,15 @@ fn review_operator_tty_floor(project_root: &std::path::Path) -> Result<bool> {
         // BUG-1978: the refusal decision is unchanged; only its wording now
         // distinguishes a granted agent seat that never identified itself.
         // trace:BUG-1978 | ai:claude
-        if let Err(err) = crate::seat_authority::require_direct_human() {
+        if let Err(err) = crate::gate::seat_authority::require_direct_human() {
             let grant_seat =
-                crate::seat_authority::current_grant(project_root).map(|grant| grant.seat);
-            return Err(review_record_attribution_refusal(
-                err,
-                grant_seat.as_deref(),
-            ));
+                crate::gate::seat_authority::current_grant(project_root).map(|grant| grant.seat);
+            return Err(
+                crate::gate::review_author::review_record_attribution_refusal(
+                    err,
+                    grant_seat.as_deref(),
+                ),
+            );
         }
         Ok(true)
     }
@@ -3494,7 +3517,7 @@ fn review_operator_tty_floor(project_root: &std::path::Path) -> Result<bool> {
         // TASK-1808: a test can seat a human at the terminal.
         // trace:TASK-1955 | ai:claude (TASK-1808)
         let _ = project_root;
-        Ok(crate::solo_review::test_human_at_terminal())
+        Ok(crate::gate::solo_review::test_human_at_terminal())
     }
 }
 
@@ -3775,14 +3798,17 @@ mod bug_1452_refusal_aftermath_tests {
 
         // 1. the PR is HELD — written by the recording path, not by this test
         assert!(
-            merge_hold::read_hold(root.path(), 1452).is_some(),
+            crate::gate::merge_hold_core::read_hold(root.path(), 1452).is_some(),
             "a refusing verdict must leave a merge-hold on the PR"
         );
         // BUG-1532 criterion 10: the hold REFERENCES the verdict record
         // (key, PR, sha, recording seat) and states its release condition.
         // trace:BUG-1532 | ai:claude
-        let hold = merge_hold::read_hold_record(root.path(), 1452).unwrap();
-        assert_eq!(hold.reason_kind, merge_hold::HoldReasonKind::Rework);
+        let hold = crate::gate::merge_hold_core::read_hold_record(root.path(), 1452).unwrap();
+        assert_eq!(
+            hold.reason_kind,
+            crate::gate::merge_hold_core::HoldReasonKind::Rework
+        );
         let vref = hold
             .verdict_ref
             .as_ref()
@@ -3798,8 +3824,10 @@ mod bug_1452_refusal_aftermath_tests {
             .is_some_and(|c| c.contains("fresh APPROVED verdict for BUG-14520")));
 
         // 2. the verdict is recorded and blocks done
-        let recorded = review_verdict::read_recorded_verdict(root.path(), "PR-1452")
-            .or_else(|| review_verdict::read_recorded_verdict(root.path(), "BUG-14520"))
+        let recorded = crate::gate::review_verdict::read_recorded_verdict(root.path(), "PR-1452")
+            .or_else(|| {
+                crate::gate::review_verdict::read_recorded_verdict(root.path(), "BUG-14520")
+            })
             .expect("the verdict must be readable after recording");
         assert!(
             recorded.kind.blocks_done(),
@@ -3918,16 +3946,17 @@ mod bug_1452_refusal_aftermath_tests {
         .expect("recording against the explicit root must succeed regardless of ambient env");
 
         assert!(
-            merge_hold::read_hold(explicit_root.path(), 9_999_999).is_some(),
+            crate::gate::merge_hold_core::read_hold(explicit_root.path(), 9_999_999).is_some(),
             "the hold must land in the explicit root"
         );
         assert!(
-            review_verdict::read_recorded_verdict(explicit_root.path(), "BUG-99999").is_some(),
+            crate::gate::review_verdict::read_recorded_verdict(explicit_root.path(), "BUG-99999")
+                .is_some(),
             "the spec-keyed verdict must land in the explicit root"
         );
 
         assert!(
-            merge_hold::read_hold(real_root.path(), 9_999_999).is_none(),
+            crate::gate::merge_hold_core::read_hold(real_root.path(), 9_999_999).is_none(),
             "no hold may be written to the ambient-pointed root — this is the exact \
              artifact BUG-1536's `protection_root` used to leak there"
         );
@@ -3950,16 +3979,17 @@ mod bug_1452_refusal_aftermath_tests {
 // without the head comparison. trace:BUG-1508 | ai:claude
 pub(crate) fn handle_review_verdict_show(spec: &str, json: bool) -> Result<()> {
     let project_root = find_project_root()?;
-    let path = review_verdict::verdict_path(&project_root, spec);
-    match review_verdict::read_recorded_verdict(&project_root, spec) {
+    let path = crate::gate::review_verdict::verdict_path(&project_root, spec);
+    match crate::gate::review_verdict::read_recorded_verdict(&project_root, spec) {
         Some(v) => {
             let branch = current_branch_at(&project_root);
             let relation =
                 verdict_tip_relation(&project_root, branch.as_deref(), v.reviewed_sha.as_deref());
-            let actionability = review_verdict::review_actionability(Some(&v), relation);
+            let actionability =
+                crate::gate::review_verdict::review_actionability(Some(&v), relation);
             if json {
-                let body =
-                    review_verdict::read_verdict_body(&path).unwrap_or_else(|_| "{}".to_string());
+                let body = crate::gate::review_verdict::read_verdict_body(&path)
+                    .unwrap_or_else(|_| "{}".to_string());
                 let mut value: serde_json::Value =
                     serde_json::from_str(body.trim()).unwrap_or(serde_json::Value::Null);
                 if let Some(obj) = value.as_object_mut() {
@@ -3985,7 +4015,7 @@ pub(crate) fn handle_review_verdict_show(spec: &str, json: bool) -> Result<()> {
             Ok(())
         }
         None => {
-            let actionability = review_verdict::ReviewActionability::NeedsReview;
+            let actionability = crate::gate::review_verdict::ReviewActionability::NeedsReview;
             if json {
                 println!(
                     "{}",
@@ -4010,7 +4040,7 @@ pub(crate) fn handle_review_verdict_show(spec: &str, json: bool) -> Result<()> {
 // trace:TASK-1590 | ai:antigravity
 pub(crate) fn handle_review_list(json: bool) -> Result<()> {
     let project_root = find_project_root()?;
-    let verdicts = review_verdict::list_active_verdicts(&project_root);
+    let verdicts = crate::gate::review_verdict::list_active_verdicts(&project_root);
 
     if verdicts.is_empty() {
         if json {
@@ -4036,12 +4066,13 @@ pub(crate) fn handle_review_list(json: bool) -> Result<()> {
     for (spec, v) in verdicts {
         let relation =
             verdict_tip_relation(&project_root, branch.as_deref(), v.reviewed_sha.as_deref());
-        let actionability = review_verdict::review_actionability(Some(&v), relation);
+        let actionability = crate::gate::review_verdict::review_actionability(Some(&v), relation);
         let spec_upper = spec.to_ascii_uppercase();
         let verdict_str = format!("{:?}", v.kind);
         let action_str = actionability.as_str().to_string();
         let sha_str =
-            review_verdict::short_sha(v.reviewed_sha.as_deref().unwrap_or("")).to_string();
+            crate::gate::review_verdict::short_sha(v.reviewed_sha.as_deref().unwrap_or(""))
+                .to_string();
 
         max_spec = max_spec.max(spec_upper.len());
         max_verdict = max_verdict.max(verdict_str.len());
@@ -4049,9 +4080,9 @@ pub(crate) fn handle_review_list(json: bool) -> Result<()> {
         max_sha = max_sha.max(sha_str.len());
 
         let color = match actionability {
-            review_verdict::ReviewActionability::Resolved => colored::Color::Green,
-            review_verdict::ReviewActionability::AwaitingRework => colored::Color::Red,
-            review_verdict::ReviewActionability::NeedsReview => colored::Color::Yellow,
+            crate::gate::review_verdict::ReviewActionability::Resolved => colored::Color::Green,
+            crate::gate::review_verdict::ReviewActionability::AwaitingRework => colored::Color::Red,
+            crate::gate::review_verdict::ReviewActionability::NeedsReview => colored::Color::Yellow,
         };
 
         if json {

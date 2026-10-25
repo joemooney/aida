@@ -2849,15 +2849,15 @@ pub(crate) fn collect_unshipped_work_items_bounded(
             // it — regardless of which ref happens to reach that commit.
             // trace:BUG-1531 | ai:claude
             let outstanding_verdict = c.tip_sha.as_deref().and_then(|sha| {
-                let verdict = review_verdict::read_recorded_verdict(project_root, &c.spec_id)?;
+                let verdict = crate::gate::review_verdict::read_recorded_verdict(project_root, &c.spec_id)?;
                 let sha_matches = verdict
                     .reviewed_sha
                     .as_deref()
-                    .is_some_and(|reviewed| review_verdict::same_reviewed_sha(reviewed, sha));
+                    .is_some_and(|reviewed| crate::gate::review_verdict::same_reviewed_sha(reviewed, sha));
                 let spec_completed = status_by_spec
                     .get(&c.spec_id.to_ascii_uppercase())
                     .is_some_and(|status| status.as_str() == "completed");
-                (sha_matches && review_verdict::is_outstanding_refusal(&verdict, spec_completed))
+                (sha_matches && crate::gate::review_verdict::is_outstanding_refusal(&verdict, spec_completed))
                     .then_some(verdict)
             });
             let recovery = if let Some(verdict) = &outstanding_verdict {

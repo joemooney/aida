@@ -51,7 +51,7 @@ pub(crate) struct Member {
     /// pre-land re-gate refreshes it under the merge lease). `None` = no hold
     /// to release.
     // trace:BUG-2214 | ai:claude
-    pub release: Option<crate::pr_cmd::MandateCover>,
+    pub release: Option<crate::gate::mandate_ship::MandateCover>,
 }
 
 /// A member left off main, and why.
@@ -766,7 +766,7 @@ pub(crate) trait MemberChecks {
         ids: &[String],
         head_ref: &str,
         head: &str,
-    ) -> std::result::Result<crate::pr_cmd::MandateCover, Option<String>>;
+    ) -> std::result::Result<crate::gate::mandate_ship::MandateCover, Option<String>>;
     /// BUG-2214: is a fire-fighting mandate active at this instant? Gates
     /// only whether a held member's judgment defers to the cover; the cover
     /// itself re-reads the mandate.
@@ -808,7 +808,7 @@ pub(crate) fn member_spec_policy_refusal(
         return Some(format!(
             "{} tagged `{}`: a human reviews and merges it; the train does not",
             draft_only.join(", "),
-            crate::pr_ship::DRAFT_ONLY_TAG
+            crate::gate::ship::DRAFT_ONLY_TAG
         ));
     }
     // A human at a terminal needs no mandate; read one only when it matters.
@@ -889,10 +889,10 @@ pub(crate) fn gate_member_with(
     }
     // STORY-1405: a reviewer's claim on this head blocks the train exactly
     // as it blocks ship; the head is known, so the marker cannot be skipped.
-    if let crate::review_marker::MergeGate::UnderReview(m) =
-        crate::review_marker::merge_gate(checks.marker_root(), pr, || Some(head.clone()))
+    if let crate::gate::review_marker::MergeGate::UnderReview(m) =
+        crate::gate::review_marker::merge_gate(checks.marker_root(), pr, || Some(head.clone()))
     {
-        return Err(crate::review_marker::refusal_message(&m));
+        return Err(crate::gate::review_marker::refusal_message(&m));
     }
     checks
         .fetch_head(&head_ref)
@@ -919,8 +919,9 @@ pub(crate) fn gate_member_with(
     let tty = checks.interactive_tty();
     // BUG-2214: the cover is read at most once per gate run — the supervised
     // gate and the hold release share it. trace:BUG-2214 | ai:claude
-    let mut cover_slot: Option<std::result::Result<crate::pr_cmd::MandateCover, Option<String>>> =
-        None;
+    let mut cover_slot: Option<
+        std::result::Result<crate::gate::mandate_ship::MandateCover, Option<String>>,
+    > = None;
     if let Some(why) = member_spec_policy_refusal(records, tty, || {
         let cover = checks.mandate_cover(pr, &ids, &head_ref, &head);
         let outcome = cover.as_ref().map(|_| ()).map_err(Clone::clone);
@@ -979,7 +980,7 @@ impl MemberChecks for LiveChecks<'_> {
             .map_err(|e| format!("its metadata could not be read ({e:#})"))
     }
     fn hold_marker(&mut self, pr: u64) -> Option<String> {
-        crate::merge_hold::read_hold(self.main_worktree, pr)
+        crate::gate::merge_hold_core::read_hold(self.main_worktree, pr)
     }
     fn labels(
         &mut self,
@@ -1008,7 +1009,7 @@ impl MemberChecks for LiveChecks<'_> {
         head_ref: &str,
         head: &str,
     ) -> std::result::Result<Option<String>, String> {
-        crate::pr_cmd::merge_path_approval_gate(
+        crate::gate::approval::merge_path_approval_gate(
             self.project_root,
             pr,
             &[],
@@ -1020,7 +1021,7 @@ impl MemberChecks for LiveChecks<'_> {
         self.main_worktree
     }
     fn corpus(&mut self, pr: u64, hints: &[String], head: &str) -> std::result::Result<(), String> {
-        crate::merge_hold::enforce_corpus_gate_before_merge(
+        crate::gate::merge_hold_core::enforce_corpus_gate_before_merge(
             self.project_root,
             pr,
             hints,
@@ -1069,9 +1070,9 @@ impl MemberChecks for LiveChecks<'_> {
         ids: &[String],
         head_ref: &str,
         head: &str,
-    ) -> std::result::Result<crate::pr_cmd::MandateCover, Option<String>> {
+    ) -> std::result::Result<crate::gate::mandate_ship::MandateCover, Option<String>> {
         let hold_root = crate::pr_cmd::pr_ship_hold_root(self.project_root);
-        crate::pr_cmd::mandate_ship_cover(
+        crate::gate::mandate_ship::mandate_ship_cover(
             self.project_root,
             self.main_worktree,
             &hold_root,
@@ -1080,11 +1081,11 @@ impl MemberChecks for LiveChecks<'_> {
             Some(head_ref),
             || Some(head.to_string()),
             false,
-            crate::mandate::ship_decision,
+            crate::gate::mandate::ship_decision,
             true,
         )
         .map_err(|r| match r {
-            crate::mandate::MandateRefusal::NoMandate => None,
+            crate::gate::mandate::MandateRefusal::NoMandate => None,
             r => {
                 // BUG-2214: parity with ship's mandate_refusal_note — a
                 // refusing cover is recorded, whichever surface asked.
@@ -1104,8 +1105,8 @@ impl MemberChecks for LiveChecks<'_> {
     }
     fn mandate_active(&self) -> bool {
         matches!(
-            crate::mandate::current_state(),
-            crate::mandate::MandateState::Active(_)
+            crate::gate::mandate::current_state(),
+            crate::gate::mandate::MandateState::Active(_)
         )
     }
 }
@@ -1384,7 +1385,7 @@ pub(crate) trait TrainForge {
     fn release_hold(
         &mut self,
         member: &Member,
-    ) -> std::result::Result<crate::merge_hold::MergeHoldRecord, String> {
+    ) -> std::result::Result<crate::gate::merge_hold_core::MergeHoldRecord, String> {
         Err(format!(
             "PR-{}: this train runner cannot release a merge-hold",
             member.pr
@@ -1394,7 +1395,7 @@ pub(crate) trait TrainForge {
     /// and the merge; the returned text describes the outcome for the
     /// ejection reason.
     // trace:BUG-2214 | ai:claude
-    fn rearm_hold(&mut self, record: &crate::merge_hold::MergeHoldRecord) -> String {
+    fn rearm_hold(&mut self, record: &crate::gate::merge_hold_core::MergeHoldRecord) -> String {
         format!(
             " PR-{}'s released hold was NOT re-armed (this runner cannot); a human must re-place it.",
             record.pr
@@ -1595,19 +1596,19 @@ impl TrainForge for LiveTrainForge<'_> {
     fn release_hold(
         &mut self,
         member: &Member,
-    ) -> std::result::Result<crate::merge_hold::MergeHoldRecord, String> {
+    ) -> std::result::Result<crate::gate::merge_hold_core::MergeHoldRecord, String> {
         let Some(cover) = member.release.as_ref() else {
             return Err("no mandate cover was recorded for its hold".into());
         };
         let hold_root = crate::pr_cmd::pr_ship_hold_root(&self.project_root);
-        let record =
-            crate::merge_hold::read_hold_record(&hold_root, member.pr).ok_or_else(|| {
+        let record = crate::gate::merge_hold_core::read_hold_record(&hold_root, member.pr)
+            .ok_or_else(|| {
                 "its merge-hold marker vanished between the gate and the release; failing closed"
                     .to_string()
             })?;
         // STORY-1698 parity: the mandate is re-read from disk immediately
         // before the release that precedes the merge.
-        if !crate::pr_cmd::mandate_still_active(&cover.id) {
+        if !crate::gate::mandate_ship::mandate_still_active(&cover.id) {
             return Err(format!("mandate {} is no longer active", cover.id));
         }
         let change = crate::forge::ChangeRef {
@@ -1617,7 +1618,7 @@ impl TrainForge for LiveTrainForge<'_> {
             base: self.base.clone(),
             title: None,
         };
-        crate::pr_cmd::release_hold_under_mandate(
+        crate::gate::mandate_ship::release_hold_under_mandate(
             &hold_root,
             &change,
             cover,
@@ -1630,8 +1631,8 @@ impl TrainForge for LiveTrainForge<'_> {
     }
 
     // trace:BUG-2214 | ai:claude
-    fn rearm_hold(&mut self, record: &crate::merge_hold::MergeHoldRecord) -> String {
-        crate::pr_cmd::rearm_after_mandate_failure(
+    fn rearm_hold(&mut self, record: &crate::gate::merge_hold_core::MergeHoldRecord) -> String {
+        crate::gate::mandate_ship::rearm_after_mandate_failure(
             &crate::pr_cmd::pr_ship_hold_root(&self.project_root),
             Some(record),
             record.pr,
@@ -1681,7 +1682,7 @@ impl TrainForge for LiveTrainForge<'_> {
         Ok(green
             && covers
                 .iter()
-                .all(|id| crate::pr_cmd::mandate_still_active(id)))
+                .all(|id| crate::gate::mandate_ship::mandate_still_active(id)))
     }
 
     fn member_landed(
@@ -1781,7 +1782,10 @@ impl<'a> ForgeRails<'a> {
     /// failed; the returned text (empty when nothing was released) appends to
     /// the ejection reason or warning that caused it.
     // trace:BUG-2214 | ai:claude
-    fn rearm_released(&mut self, released: &[crate::merge_hold::MergeHoldRecord]) -> String {
+    fn rearm_released(
+        &mut self,
+        released: &[crate::gate::merge_hold_core::MergeHoldRecord],
+    ) -> String {
         released
             .iter()
             .map(|record| self.ports.rearm_hold(record))
@@ -1894,7 +1898,7 @@ impl Rails for ForgeRails<'_> {
         // under the lease, after the fresh cover — then the train PR's
         // merge-hold-gate must re-run green before the merge. Any failure
         // after a release re-arms every released hold. trace:BUG-2214 | ai:claude
-        let mut released: Vec<crate::merge_hold::MergeHoldRecord> = Vec::new();
+        let mut released: Vec<crate::gate::merge_hold_core::MergeHoldRecord> = Vec::new();
         for member in fresh.iter().filter(|m| m.release.is_some()) {
             match self.ports.release_hold(member) {
                 Ok(record) => released.push(record),

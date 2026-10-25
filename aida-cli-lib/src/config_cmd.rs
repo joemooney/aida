@@ -288,7 +288,7 @@ fn solo_human_policy_row(project_root: &std::path::Path) -> PolicyRow {
 /// The rendered value and source of [`solo_human_policy_row`].
 // trace:STORY-1655 | ai:claude
 pub(crate) fn solo_human_policy_value(project_root: &std::path::Path) -> (String, PolicySource) {
-    let (mut value, source) = match crate::solo_review::global_value_quiet() {
+    let (mut value, source) = match crate::gate::solo_review::global_value_quiet() {
         Ok(true) if crate::is_aida_repo(project_root) => (
             "true (never applies in the AIDA repository)".to_string(),
             PolicySource::GlobalConfig,
@@ -297,7 +297,7 @@ pub(crate) fn solo_human_policy_value(project_root: &std::path::Path) -> (String
         Ok(false) => ("false".to_string(), PolicySource::Default),
         Err(reason) => (format!("false ({reason})"), PolicySource::GlobalConfig),
     };
-    if crate::solo_review::project_value_present(project_root) {
+    if crate::gate::solo_review::project_value_present(project_root) {
         value.push_str(" — project .aida/config.toml value ignored");
     }
     (value, source)
@@ -3040,9 +3040,9 @@ fn policy_registry(project_root: &std::path::Path) -> Vec<PolicySection> {
     sections.push({
         let global_hours = aida_home_dir()
             .map(|h| h.join(".aida/config.toml"))
-            .and_then(|p| crate::seat_authority::read_max_grant_hours_file(&p));
+            .and_then(|p| crate::gate::seat_authority::read_max_grant_hours_file(&p));
         let project_path = project_root.join(".aida").join("config.toml");
-        let project_hours = crate::seat_authority::read_max_grant_hours_file(&project_path);
+        let project_hours = crate::gate::seat_authority::read_max_grant_hours_file(&project_path);
         let (effective, source) = match (global_hours, project_hours) {
             (Some(g), Some(p)) => {
                 if g <= p {
@@ -3053,15 +3053,18 @@ fn policy_registry(project_root: &std::path::Path) -> Vec<PolicySection> {
             }
             (Some(g), None) => (g, PolicySource::GlobalConfig),
             (None, Some(p)) => (
-                std::cmp::min(crate::seat_authority::DEFAULT_MAX_GRANT_HOURS, p),
+                std::cmp::min(crate::gate::seat_authority::DEFAULT_MAX_GRANT_HOURS, p),
                 PolicySource::ProjectConfig,
             ),
             (None, None) => (
-                crate::seat_authority::DEFAULT_MAX_GRANT_HOURS,
+                crate::gate::seat_authority::DEFAULT_MAX_GRANT_HOURS,
                 PolicySource::Default,
             ),
         };
-        let effective = std::cmp::min(effective, crate::seat_authority::HARD_CEILING_GRANT_HOURS);
+        let effective = std::cmp::min(
+            effective,
+            crate::gate::seat_authority::HARD_CEILING_GRANT_HOURS,
+        );
         PolicySection {
             section: "seat",
             header: "[seat] — seat authority grant policy".to_string(),

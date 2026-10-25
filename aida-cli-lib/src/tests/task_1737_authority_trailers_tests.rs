@@ -5,13 +5,13 @@
 //! `aida history events` surfaces the authority on `status_change` rows.
 // trace:TASK-1737 | ai:antigravity
 
+use crate::gate::seat_authority::test_support::mint_grant_for;
 use crate::history::{
     collect_filtered_events_git, collect_filtered_events_sourced, events_json,
     parse_authority_trailers, render_events_toon, EventAuthority, EventKind, HistoryOpts,
     HistorySource,
 };
 use crate::history_cache;
-use crate::seat_authority::test_support::mint_grant_for;
 use crate::test_env::{AmbientGuard, HERMETIC_TEST_USER};
 use aida_core::db::DatabaseBackend;
 use aida_core::models::{Requirement, RequirementStatus};
@@ -19,7 +19,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command as ProcessCommand;
 
 fn setup_store() -> (tempfile::TempDir, PathBuf, aida_core::CachedGitBackend) {
-    crate::seat_authority::ensure_commit_authority_resolver_registered();
+    crate::gate::seat_authority::ensure_commit_authority_resolver_registered();
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path();
     mint_grant_for(root, HERMETIC_TEST_USER, "advisor", &[]);
@@ -220,7 +220,7 @@ fn task_1737_store_commit_path_emits_authority_trailers_for_every_advisor_gated_
     {
         let _ambient = AmbientGuard::hermetic(root, None);
         assert_eq!(
-            crate::seat_authority::resolve_commit_authority(&store),
+            crate::gate::seat_authority::resolve_commit_authority(&store),
             None
         );
         let cli = crate::command_registry::try_parse_from([
@@ -254,7 +254,7 @@ fn task_1737_store_commit_path_emits_authority_trailers_for_every_advisor_gated_
     {
         let _ambient = AmbientGuard::hermetic_with_grant(root, Some("reviewer"), &reviewer_grant);
         assert_eq!(
-            crate::seat_authority::resolve_commit_authority(&store),
+            crate::gate::seat_authority::resolve_commit_authority(&store),
             None
         );
         let cli = crate::command_registry::try_parse_from([
@@ -291,7 +291,7 @@ fn task_1737_store_commit_path_emits_authority_trailers_for_every_advisor_gated_
             &[("AIDA_ROLE_INSTANCE", Some("companion"))],
         );
         assert_eq!(
-            crate::seat_authority::resolve_commit_authority(&store),
+            crate::gate::seat_authority::resolve_commit_authority(&store),
             None
         );
         let cli = crate::command_registry::try_parse_from([

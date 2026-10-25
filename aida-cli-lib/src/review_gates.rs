@@ -238,14 +238,14 @@ pub(crate) fn blocking_rework_verdict(
     project_root: &std::path::Path,
     spec: &str,
     pr: u32,
-) -> Option<review_verdict::RecordedVerdict> {
-    if let Some(verdict) = review_verdict::read_recorded_verdict(project_root, spec)
+) -> Option<crate::gate::review_verdict::RecordedVerdict> {
+    if let Some(verdict) = crate::gate::review_verdict::read_recorded_verdict(project_root, spec)
         .filter(|verdict| verdict.kind.blocks_done())
     {
         return Some(verdict);
     }
     let pr_id = format!("PR-{pr}");
-    review_verdict::read_recorded_verdict(project_root, &pr_id)
+    crate::gate::review_verdict::read_recorded_verdict(project_root, &pr_id)
         .filter(|verdict| verdict.kind.blocks_done())
 }
 
@@ -413,9 +413,9 @@ pub(crate) fn verdict_tip_relation(
     repo: &std::path::Path,
     branch: Option<&str>,
     reviewed_sha: Option<&str>,
-) -> review_verdict::TipRelation {
+) -> crate::gate::review_verdict::TipRelation {
     let Some(reviewed_raw) = reviewed_sha else {
-        return review_verdict::TipRelation::Unknown;
+        return crate::gate::review_verdict::TipRelation::Unknown;
     };
     let reviewed = resolve_commit_sha(repo, reviewed_raw);
     let tip = resolve_commit_sha(repo, branch.unwrap_or("HEAD"))
@@ -424,7 +424,11 @@ pub(crate) fn verdict_tip_relation(
         (Some(a), Some(b)) => is_ancestor_commit(repo, a, b),
         _ => None,
     };
-    review_verdict::classify_tip_relation(reviewed.as_deref(), tip.as_deref(), ancestry)
+    crate::gate::review_verdict::classify_tip_relation(
+        reviewed.as_deref(),
+        tip.as_deref(),
+        ancestry,
+    )
 }
 
 /// Resolve a branch's head LOCALLY, no forge call. `refs/remotes/origin/`
@@ -509,7 +513,7 @@ pub(crate) fn reviewer_row_actionability(
     req: &aida_core::Requirement,
     leases: &[SessionLease],
     resolve: impl FnMut(uuid::Uuid) -> Option<String>,
-) -> review_verdict::ReviewActionability {
+) -> crate::gate::review_verdict::ReviewActionability {
     let story_id = req
         .agreed_id
         .as_deref()
@@ -517,11 +521,14 @@ pub(crate) fn reviewer_row_actionability(
         .unwrap_or("");
     let covered = covered_spec_ids_for_reviewer_row(req, resolve);
     if covered.is_empty() {
-        return review_verdict::ReviewActionability::NeedsReview;
+        return crate::gate::review_verdict::ReviewActionability::NeedsReview;
     }
     let mut saw_rework = false;
     for spec_id in &covered {
-        let verdict = review_verdict::read_recorded_verdict_any(project_root, &[spec_id.as_str()]);
+        let verdict = crate::gate::review_verdict::read_recorded_verdict_any(
+            project_root,
+            &[spec_id.as_str()],
+        );
         let branch = verdict
             .as_ref()
             .and_then(|v| v.reviewed_branch.clone())
@@ -543,20 +550,23 @@ pub(crate) fn reviewer_row_actionability(
             (Some(a), Some(b)) => is_ancestor_commit(project_root, a, b),
             _ => None,
         };
-        let relation =
-            review_verdict::classify_tip_relation(reviewed_sha, head.as_deref(), ancestry);
-        match review_verdict::review_actionability(verdict.as_ref(), relation) {
-            review_verdict::ReviewActionability::NeedsReview => {
-                return review_verdict::ReviewActionability::NeedsReview;
+        let relation = crate::gate::review_verdict::classify_tip_relation(
+            reviewed_sha,
+            head.as_deref(),
+            ancestry,
+        );
+        match crate::gate::review_verdict::review_actionability(verdict.as_ref(), relation) {
+            crate::gate::review_verdict::ReviewActionability::NeedsReview => {
+                return crate::gate::review_verdict::ReviewActionability::NeedsReview;
             }
-            review_verdict::ReviewActionability::AwaitingRework => saw_rework = true,
-            review_verdict::ReviewActionability::Resolved => {}
+            crate::gate::review_verdict::ReviewActionability::AwaitingRework => saw_rework = true,
+            crate::gate::review_verdict::ReviewActionability::Resolved => {}
         }
     }
     if saw_rework {
-        review_verdict::ReviewActionability::AwaitingRework
+        crate::gate::review_verdict::ReviewActionability::AwaitingRework
     } else {
-        review_verdict::ReviewActionability::Resolved
+        crate::gate::review_verdict::ReviewActionability::Resolved
     }
 }
 

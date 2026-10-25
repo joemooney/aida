@@ -286,7 +286,7 @@ fn advisor_env() -> BTreeMap<String, String> {
         .collect();
     env.insert("AIDA_SESSION_ROLE".into(), "advisor".into());
     env.insert(
-        crate::seat_authority::GRANT_ENV.into(),
+        crate::gate::seat_authority::GRANT_ENV.into(),
         "advisor-grant".into(),
     );
     env.insert("KEEP_ME".into(), "1".into());
@@ -313,7 +313,7 @@ fn child_env_from_an_advisor_env_has_the_implementer_seat_and_no_launcher_variab
     for grant in ["child-grant-id", ""] {
         let env = effective_env(&child_command(grant), &advisor_env());
         assert_eq!(env["AIDA_SESSION_ROLE"], "implementer");
-        assert_eq!(env[crate::seat_authority::GRANT_ENV], grant);
+        assert_eq!(env[crate::gate::seat_authority::GRANT_ENV], grant);
         assert_eq!(env["KEEP_ME"], "1");
         for key in LAUNCHER_ONLY_ENV {
             let launcher = format!("launcher-{key}");
@@ -465,7 +465,7 @@ fn commit_gate_passes_the_child_env_and_refuses_the_parent_env() {
         (crate::advisor_code_gate::ALLOW_ENV, None),
         (crate::orchestrator::AUTO_COMPLETE_ENV, None),
         ("AIDA_SESSION_ROLE", None),
-        (crate::seat_authority::GRANT_ENV, None),
+        (crate::gate::seat_authority::GRANT_ENV, None),
     ]);
     struct RestoreAmbient(Option<crate::test_ambient::Ambient>);
     impl Drop for RestoreAmbient {
@@ -481,7 +481,7 @@ fn commit_gate_passes_the_child_env_and_refuses_the_parent_env() {
             stderr_is_terminal: false,
         },
     )));
-    let advisor_grant = crate::seat_authority::test_support::mint_grant_for(
+    let advisor_grant = crate::gate::seat_authority::test_support::mint_grant_for(
         &repo,
         &crate::current_user_id(None),
         "advisor",
@@ -489,10 +489,10 @@ fn commit_gate_passes_the_child_env_and_refuses_the_parent_env() {
     );
     let mut parent = advisor_env();
     parent.remove(crate::orchestrator::AUTO_COMPLETE_ENV);
-    parent.insert(crate::seat_authority::GRANT_ENV.into(), advisor_grant);
+    parent.insert(crate::gate::seat_authority::GRANT_ENV.into(), advisor_grant);
     let child = effective_env(&child_command(""), &parent);
     let mut gate = |vars: &BTreeMap<String, String>| {
-        for key in ["AIDA_SESSION_ROLE", crate::seat_authority::GRANT_ENV]
+        for key in ["AIDA_SESSION_ROLE", crate::gate::seat_authority::GRANT_ENV]
             .into_iter()
             .chain(LAUNCHER_ONLY_ENV.iter().copied())
         {
@@ -742,8 +742,8 @@ role = "implementer"
     lease
 }
 
-fn proc_entry(pid: u32, name: &str, start: &str) -> crate::review_authority::ProcEntry {
-    crate::review_authority::ProcEntry {
+fn proc_entry(pid: u32, name: &str, start: &str) -> crate::gate::review_authority::ProcEntry {
+    crate::gate::review_authority::ProcEntry {
         pid,
         name: name.into(),
         cmd: vec![name.into()],
@@ -762,7 +762,7 @@ fn the_launch_record_never_names_the_orchestrator_that_ran_it() {
 
     // `aida queue work` (300) run by the orchestrator's shell (200) under
     // its claude harness (90).
-    let orchestrator = crate::review_authority::IdentitySource {
+    let orchestrator = crate::gate::review_authority::IdentitySource {
         session_ids: vec!["orchestrator-session".into()],
         chain: vec![
             proc_entry(300, "aida", "a"),
@@ -771,13 +771,13 @@ fn the_launch_record_never_names_the_orchestrator_that_ran_it() {
         ],
         session_leader: None,
     };
-    crate::review_authority::with_identity_source(orchestrator.clone(), || {
-        crate::review_authority::as_launcher(|| {
-            crate::review_authority::record_authoring_lease(root.path(), &lease);
+    crate::gate::review_authority::with_identity_source(orchestrator.clone(), || {
+        crate::gate::review_authority::as_launcher(|| {
+            crate::gate::review_authority::record_authoring_lease(root.path(), &lease);
             record_child_authority(
                 root.path(),
                 &lease.id,
-                &crate::seat_authority::HeadlessChildGrant::Baseline {
+                &crate::gate::seat_authority::HeadlessChildGrant::Baseline {
                     cause: "the launcher's grant does not delegate `implementer`".into(),
                 },
                 Some("g-advisor"),
@@ -785,9 +785,9 @@ fn the_launch_record_never_names_the_orchestrator_that_ran_it() {
         })
     });
     // The spawned claude child (400) is recorded as the worker.
-    crate::review_authority::record_launched_worker(root.path(), &lease.id, 400);
+    crate::gate::review_authority::record_launched_worker(root.path(), &lease.id, 400);
 
-    let ledger = crate::review_authority::load_ledger(root.path());
+    let ledger = crate::gate::review_authority::load_ledger(root.path());
     let tokens: Vec<String> = ledger
         .iter()
         .filter(|r| r.lease_id == lease.id)
@@ -796,7 +796,7 @@ fn the_launch_record_never_names_the_orchestrator_that_ran_it() {
     assert!(!tokens.is_empty());
     let recorder = orchestrator.recorder_tokens();
     assert!(
-        !crate::review_authority::identities_overlap(&tokens, &recorder),
+        !crate::gate::review_authority::identities_overlap(&tokens, &recorder),
         "the orchestrator stays independent of the worker it launched: \
          ledger {tokens:?} vs recorder {recorder:?}"
     );
@@ -831,12 +831,12 @@ fn baseline_reason_distinguishes_no_grant_from_not_delegated() {
     record_child_authority(
         root.path(),
         LEASE,
-        &crate::seat_authority::HeadlessChildGrant::Baseline {
+        &crate::gate::seat_authority::HeadlessChildGrant::Baseline {
             cause: "no valid parent seat grant is active".into(),
         },
         None,
     );
-    let note = crate::review_authority::load_ledger(root.path())
+    let note = crate::gate::review_authority::load_ledger(root.path())
         .into_iter()
         .find_map(|r| r.launch)
         .expect("a launch-authority record");
@@ -895,18 +895,18 @@ fn stub_vendor_that_punts_exits_32_as_a_live_implementer_lane_with_no_grant_leak
         ("AIDA_SESSION_PURPOSE", Some("advise")),
         ("AIDA_REVIEW_VERDICT_FILE", Some("/launcher/verdict.json")),
         (crate::orchestrator::NO_HUMAN_MODE_ENV, Some("both")),
-        (crate::seat_authority::GRANT_ENV, None),
+        (crate::gate::seat_authority::GRANT_ENV, None),
     ]);
     // A granted advisor that does not delegate `implementer`: the child
     // falls back to baseline (the Q1 ruling).
-    let launcher_grant = crate::seat_authority::test_support::mint_grant_for(
+    let launcher_grant = crate::gate::seat_authority::test_support::mint_grant_for(
         &project,
         &crate::current_user_id(None),
         "advisor",
         &["reviewer"],
     );
-    env.set_key(crate::seat_authority::GRANT_ENV, &launcher_grant);
-    let child_grant = crate::seat_authority::issue_headless_child(
+    env.set_key(crate::gate::seat_authority::GRANT_ENV, &launcher_grant);
+    let child_grant = crate::gate::seat_authority::issue_headless_child(
         &project,
         "implementer",
         &crate::current_user_id(None),
@@ -914,7 +914,7 @@ fn stub_vendor_that_punts_exits_32_as_a_live_implementer_lane_with_no_grant_leak
     .unwrap();
     assert!(matches!(
         child_grant,
-        crate::seat_authority::HeadlessChildGrant::Baseline { .. }
+        crate::gate::seat_authority::HeadlessChildGrant::Baseline { .. }
     ));
 
     // What the pickup set up before the launch: the Approved, unowned spec
@@ -1022,7 +1022,7 @@ fn stub_vendor_that_punts_exits_32_as_a_live_implementer_lane_with_no_grant_leak
     // The cargo-slot wrapper's WHO column reads this variable.
     assert_eq!(child["AIDA_SESSION_ROLE"], "implementer");
     assert_eq!(
-        child[crate::seat_authority::GRANT_ENV],
+        child[crate::gate::seat_authority::GRANT_ENV],
         "",
         "baseline child"
     );

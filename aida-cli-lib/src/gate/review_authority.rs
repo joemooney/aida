@@ -941,8 +941,8 @@ pub(crate) fn author_sessions(
     spec_ids: &[String],
     head_branch: Option<&str>,
     manifest_session: impl Fn(&SessionLease) -> Option<String>,
-) -> Vec<crate::pr_ship::AuthorSession> {
-    let mut out: Vec<crate::pr_ship::AuthorSession> = Vec::new();
+) -> Vec<crate::gate::ship::AuthorSession> {
+    let mut out: Vec<crate::gate::ship::AuthorSession> = Vec::new();
     for lease in leases {
         if is_authoring_lease_for(lease, spec_ids)
             || (is_work_lease(lease) && branch_is(&lease.branch, head_branch))
@@ -955,7 +955,7 @@ pub(crate) fn author_sessions(
             if ledger.iter().any(|r| r.lease_id == lease.id) {
                 tokens.retain(|t| !t.starts_with("shell:"));
             }
-            out.push(crate::pr_ship::AuthorSession {
+            out.push(crate::gate::ship::AuthorSession {
                 label: format!("lease {} on {}", lease.id, lease.scope),
                 tokens,
             });
@@ -963,7 +963,7 @@ pub(crate) fn author_sessions(
     }
     for rec in ledger {
         if scope_in(&rec.scope, spec_ids) || branch_is(&rec.branch, head_branch) {
-            out.push(crate::pr_ship::AuthorSession {
+            out.push(crate::gate::ship::AuthorSession {
                 label: format!("lease {} on {} (claim record)", rec.lease_id, rec.scope),
                 tokens: rec.tokens.clone(),
             });
@@ -978,7 +978,7 @@ pub(crate) fn author_sessions_at(
     project_root: &Path,
     spec_ids: &[String],
     head_branch: Option<&str>,
-) -> Vec<crate::pr_ship::AuthorSession> {
+) -> Vec<crate::gate::ship::AuthorSession> {
     author_sessions(
         &visible_leases(project_root),
         &load_ledger(project_root),
@@ -997,7 +997,7 @@ pub(crate) fn author_sessions_at(
 pub(crate) fn all_author_sessions(
     project_root: &Path,
     head_branch: Option<&str>,
-) -> Vec<crate::pr_ship::AuthorSession> {
+) -> Vec<crate::gate::ship::AuthorSession> {
     let leases: Vec<SessionLease> = visible_leases(project_root)
         .into_iter()
         .filter(is_work_lease)
@@ -1117,7 +1117,7 @@ pub(crate) fn human_receipt_in(dir: &Path, id: &str, sha: &str) -> Option<HumanR
         .filter(|r| {
             r.id == id
                 && !sha.trim().is_empty()
-                && crate::review_verdict::same_reviewed_sha(&r.sha, sha)
+                && crate::gate::review_verdict::same_reviewed_sha(&r.sha, sha)
         })
 }
 
@@ -1138,7 +1138,7 @@ pub(crate) fn human_receipt_valid_in(dir: &Path, id: &str, sha: &str) -> bool {
 /// human approval, the attestation's for a seat grant.
 pub(crate) fn verified_authority_keys(
     project_root: &Path,
-    candidates: &[crate::review_verdict::RecordedVerdict],
+    candidates: &[crate::gate::review_verdict::RecordedVerdict],
 ) -> std::collections::BTreeMap<String, Vec<String>> {
     let mut out = std::collections::BTreeMap::new();
     for v in candidates {
@@ -1155,7 +1155,7 @@ pub(crate) fn verified_authority_keys(
                 .and_then(|t| chrono::DateTime::parse_from_rfc3339(t.trim()).ok())
                 .is_some_and(|at| {
                     // trace:BUG-1934 | ai:claude
-                    crate::seat_authority::grant_authorized_at(
+                    crate::gate::seat_authority::grant_authorized_at(
                         project_root,
                         grant,
                         seat,
@@ -1183,7 +1183,7 @@ pub(crate) fn verified_authority_keys(
 /// and flipping `solo_human` in the verdict JSON alone verifies nothing.
 // trace:STORY-1655 | ai:claude
 pub(crate) fn verified_solo_keys(
-    candidates: &[crate::review_verdict::RecordedVerdict],
+    candidates: &[crate::gate::review_verdict::RecordedVerdict],
 ) -> std::collections::BTreeSet<String> {
     candidates
         .iter()
@@ -1199,6 +1199,30 @@ pub(crate) fn verified_solo_keys(
                 .flatten()
         })
         .collect()
+}
+
+/// BUG-2206: the PR an attested-reviewer lease reviews — a `PR-N`/`MR-N`
+/// scope on a review-verb or reviewer-role lease.
+// trace:TASK-1955 | ai:claude (BUG-2206)
+pub(crate) fn review_lease_pr(lease: &SessionLease) -> Option<u64> {
+    (lease.review_verb || lease.role.as_deref() == Some("reviewer"))
+        .then(|| crate::status_prs::parse_pr_scope(&lease.scope))
+        .flatten()
+}
+
+/// The dead-reviewer reap gate, cheapest check first: the lease's PR scope
+/// (no I/O), then the review branch's git checks, then the forge.
+// trace:TASK-1955 | ai:claude (TASK-2119)
+pub(crate) fn review_pr_terminal_gate(
+    process_exited: bool,
+    lease: &SessionLease,
+    branch_within_pr_head: impl FnOnce() -> bool,
+    pr_terminal: impl FnOnce(u32) -> Option<bool>,
+) -> bool {
+    let Some(pr) = review_lease_pr(lease).and_then(|pr| u32::try_from(pr).ok()) else {
+        return false;
+    };
+    process_exited && branch_within_pr_head() && pr_terminal(pr) == Some(true)
 }
 
 #[cfg(test)]

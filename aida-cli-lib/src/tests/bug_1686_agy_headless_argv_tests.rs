@@ -341,7 +341,7 @@ fn spawned_agy_process_receives_the_ordered_argv() {
         // dependent on whatever the ambient config resolves to.
         ("AIDA_AGENT_MODEL", None),
         ("AIDA_AGENT_EFFORT", Some("high")),
-        (crate::seat_authority::GRANT_ENV, None),
+        (crate::gate::seat_authority::GRANT_ENV, None),
     ]);
     // ADR-66: the headless spawn issues the child a scoped implementer
     // grant, so the launcher needs an active grant delegating that seat,
@@ -350,13 +350,13 @@ fn spawned_agy_process_receives_the_ordered_argv() {
     // trace:STORY-1473 | ai:claude
     let project = tmp.path().join("project");
     std::fs::create_dir_all(&project).unwrap();
-    let grant_id = crate::seat_authority::test_support::mint_grant_for(
+    let grant_id = crate::gate::seat_authority::test_support::mint_grant_for(
         &project,
         &crate::current_user_id(None),
         "advisor",
         &["implementer"],
     );
-    env.set_key(crate::seat_authority::GRANT_ENV, &grant_id);
+    env.set_key(crate::gate::seat_authority::GRANT_ENV, &grant_id);
     let outer = crate::test_ambient::replace(Some(crate::test_ambient::Ambient {
         project_root: project.clone(),
         stdin_is_terminal: false,

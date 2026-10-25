@@ -46,7 +46,7 @@ pub(crate) const LAUNCHER_ONLY_ENV: &[&str] = &[
     crate::punt::HOLD_SIGNAL_FILE_ENV,
     crate::punt::REQUEST_FILE_ENV,
     crate::punt::RESPONSE_FILE_ENV,
-    crate::seat_authority::GRANT_FILE_ENV,
+    crate::gate::seat_authority::GRANT_FILE_ENV,
     MARKER_ENV,
 ];
 
@@ -359,7 +359,7 @@ pub(crate) struct Launch<'a> {
     pub(crate) lease_id: &'a str,
     pub(crate) branch: &'a str,
     pub(crate) contained: bool,
-    pub(crate) child_grant: &'a crate::seat_authority::HeadlessChildGrant,
+    pub(crate) child_grant: &'a crate::gate::seat_authority::HeadlessChildGrant,
 }
 
 /// The audit reason for a baseline child whose launcher presented no grant at
@@ -388,25 +388,25 @@ pub(crate) fn baseline_reason(launcher_grant: Option<&str>) -> &'static str {
 pub(crate) fn record_child_authority(
     project_root: &Path,
     lease_id: &str,
-    grant: &crate::seat_authority::HeadlessChildGrant,
+    grant: &crate::gate::seat_authority::HeadlessChildGrant,
     launcher_grant: Option<&str>,
 ) {
-    use crate::seat_authority::HeadlessChildGrant;
+    use crate::gate::seat_authority::HeadlessChildGrant;
     let launch = match grant {
-        HeadlessChildGrant::Issued(issued) => crate::review_authority::LaunchAuthority {
+        HeadlessChildGrant::Issued(issued) => crate::gate::review_authority::LaunchAuthority {
             seat: "implementer".to_string(),
             grant: issued.id.clone(),
             reason: "delegated".to_string(),
             detail: None,
         },
-        HeadlessChildGrant::Baseline { cause } => crate::review_authority::LaunchAuthority {
+        HeadlessChildGrant::Baseline { cause } => crate::gate::review_authority::LaunchAuthority {
             seat: "implementer".to_string(),
             grant: "baseline".to_string(),
             reason: baseline_reason(launcher_grant).to_string(),
             detail: Some(cause.clone()),
         },
     };
-    crate::review_authority::record_launch_authority(project_root, lease_id, launch);
+    crate::gate::review_authority::record_launch_authority(project_root, lease_id, launch);
 }
 
 /// Run the child, wait, classify, print the result line, and return the
@@ -466,7 +466,7 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
                 "Warning:".yellow().bold(),
                 launch.lease_id
             );
-            crate::review_authority::record_launched_worker(
+            crate::gate::review_authority::record_launched_worker(
                 launch.project_root,
                 launch.lease_id,
                 pid,

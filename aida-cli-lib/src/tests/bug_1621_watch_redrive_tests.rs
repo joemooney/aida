@@ -851,14 +851,14 @@ fn watch_redrive_real_floors_merge_hold_breaker_drain_lock_and_shift_lock() {
     std::fs::remove_file(&claim_path).unwrap();
 
     // 4. A real merge hold on TASK-1: only TASK-2 is re-driven.
-    let mut hold = crate::merge_hold::typed_hold(
+    let mut hold = crate::gate::merge_hold_core::typed_hold(
         41,
-        crate::merge_hold::HoldReasonKind::Supervision,
+        crate::gate::merge_hold_core::HoldReasonKind::Supervision,
         "operator hold",
         None,
     );
     hold.spec = Some("TASK-1".to_string());
-    crate::merge_hold::write_typed_hold(root, &hold).unwrap();
+    crate::gate::merge_hold_core::write_typed_hold(root, &hold).unwrap();
     let r = run_redrive_pass_with(root, &backend, &cfg_redrive_on(), false).unwrap();
     assert_eq!(action(&r, "TASK-1"), "leave-merge-held");
     assert_eq!(r.redriven, vec!["TASK-2"]);

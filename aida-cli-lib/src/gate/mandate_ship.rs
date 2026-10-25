@@ -7,10 +7,8 @@
 // trace:STORY-1700 | ai:claude
 // mandate-gate
 
-use crate::pr_cmd::{
-    fetch_change_info_via_resolved_forge, normalized_spec_ids, pr_gate_subject,
-    ship_approval_policy,
-};
+use crate::gate::approval::ship_approval_policy;
+use crate::pr_cmd::{fetch_change_info_via_resolved_forge, normalized_spec_ids, pr_gate_subject};
 use crate::{load_store_for_lookup, pr_ship};
 
 /// STORY-1698: who a fire-fighting mandate lets ship — the mandate id and the
@@ -28,8 +26,8 @@ pub(crate) struct MandateCover {
 pub(crate) fn mandate_exclusion_specs(
     named: &[String],
     traced: std::collections::BTreeSet<String>,
-    mut resolve: impl FnMut(&str, bool) -> crate::mandate::ShipSpec,
-) -> Vec<crate::mandate::ShipSpec> {
+    mut resolve: impl FnMut(&str, bool) -> crate::gate::mandate::ShipSpec,
+) -> Vec<crate::gate::mandate::ShipSpec> {
     let named_set: std::collections::BTreeSet<String> =
         normalized_spec_ids(named).into_iter().collect();
     let mut ids = named.to_vec();
@@ -52,7 +50,7 @@ pub(crate) fn resolve_exclusion_specs(
     store_root: &std::path::Path,
     named: &[String],
     traced: std::collections::BTreeSet<String>,
-) -> Vec<crate::mandate::ShipSpec> {
+) -> Vec<crate::gate::mandate::ShipSpec> {
     let mut history_keys_of: Vec<Vec<String>> = Vec::new();
     let mut specs = mandate_exclusion_specs(named, traced, |id, is_named| {
         let req = store.and_then(|store| {
@@ -99,7 +97,7 @@ pub(crate) fn resolve_exclusion_specs(
         // History is read in one batch below, once every spec is resolved.
         // trace:BUG-2179 | ai:claude
         history_keys_of.push(history_keys);
-        crate::mandate::ShipSpec {
+        crate::gate::mandate::ShipSpec {
             id: id.to_owned(),
             aliases,
             named: is_named,
@@ -195,10 +193,10 @@ pub(crate) fn cleared_by_human_facts(
     hold_root: &std::path::Path,
     pr: u64,
     labels: impl FnOnce() -> std::result::Result<Option<crate::merge_hold::PinnedChange>, String>,
-) -> crate::mandate::HoldFacts {
-    use crate::mandate::HoldFacts;
-    if crate::merge_hold::human_recorded_clearance(hold_root, pr).is_none()
-        || !crate::merge_hold::human_attested_release(hold_root, pr)
+) -> crate::gate::mandate::HoldFacts {
+    use crate::gate::mandate::HoldFacts;
+    if crate::gate::merge_hold_core::human_recorded_clearance(hold_root, pr).is_none()
+        || !crate::gate::merge_hold_core::human_attested_release(hold_root, pr)
     {
         return HoldFacts::None;
     }
@@ -233,11 +231,11 @@ const MANDATE_COLLECT_BACKOFF: std::time::Duration = std::time::Duration::from_m
 // trace:BUG-2179 | ai:claude
 // trace:TASK-2067 | ai:antigravity
 fn collect_on_stable_store<S, T>(
-    mut snapshot: impl FnMut() -> std::result::Result<Option<S>, crate::mandate::MandateRefusal>,
+    mut snapshot: impl FnMut() -> std::result::Result<Option<S>, crate::gate::mandate::MandateRefusal>,
     mut stable: impl FnMut(&S, &S) -> bool,
     mut collect: impl FnMut() -> T,
     backoff: std::time::Duration,
-) -> std::result::Result<T, crate::mandate::MandateRefusal> {
+) -> std::result::Result<T, crate::gate::mandate::MandateRefusal> {
     let mut attempt = 0;
     loop {
         attempt += 1;
@@ -253,15 +251,15 @@ fn collect_on_stable_store<S, T>(
             }
         };
         if attempt >= MANDATE_COLLECT_ATTEMPTS {
-            return Err(crate::mandate::MandateRefusal::TraceEvidenceUnreadable(
-                if dirty {
+            return Err(
+                crate::gate::mandate::MandateRefusal::TraceEvidenceUnreadable(if dirty {
                     format!("{} ({attempt} attempts)", crate::mandate_traces::StoreDirty)
                 } else {
                     format!(
                         "the store changed while collecting exclusions ({attempt} attempts); retry"
                     )
-                },
-            ));
+                }),
+            );
         }
         std::thread::sleep(backoff);
     }
@@ -286,20 +284,20 @@ pub(crate) fn mandate_ship_cover(
     // STORY-1697: `ship_decision` for a ship; `rework_release_decision` for
     // an approval releasing its rework hold. trace:STORY-1697 | ai:claude
     decide: fn(
-        &crate::mandate::ShipCheck<'_>,
-    ) -> std::result::Result<String, crate::mandate::MandateRefusal>,
+        &crate::gate::mandate::ShipCheck<'_>,
+    ) -> std::result::Result<String, crate::gate::mandate::MandateRefusal>,
     // TASK-1968: whether `decide` reads `ShipCheck::carry_over`. Only a ship
     // does; the proof (an `ls-remote` plus fetches) is skipped otherwise and
     // `carry_over` is `None` (not attempted). trace:TASK-1968 | ai:claude
     prove_carry_over: bool,
-) -> std::result::Result<MandateCover, crate::mandate::MandateRefusal> {
-    use crate::mandate::{HoldFacts, MandateRefusal, MandateState, ShipCheck};
-    let state = crate::mandate::current_state_reporting(true);
+) -> std::result::Result<MandateCover, crate::gate::mandate::MandateRefusal> {
+    use crate::gate::mandate::{HoldFacts, MandateRefusal, MandateState, ShipCheck};
+    let state = crate::gate::mandate::current_state_reporting(true);
     match &state {
-        MandateState::Active(m) if !m.covers(crate::mandate::Scope::ShipHeld) => {
+        MandateState::Active(m) if !m.covers(crate::gate::mandate::Scope::ShipHeld) => {
             return Err(MandateRefusal::ScopeNotCovered {
                 id: m.id.clone(),
-                scope: crate::mandate::SCOPE_SHIP_HELD,
+                scope: crate::gate::mandate::SCOPE_SHIP_HELD,
             });
         }
         MandateState::Active(_) => {}
@@ -307,7 +305,7 @@ pub(crate) fn mandate_ship_cover(
         MandateState::Stopped(m) => return Err(MandateRefusal::Stopped { id: m.id.clone() }),
         MandateState::None => return Err(MandateRefusal::NoMandate),
     }
-    let grant = crate::seat_authority::current_grant(project_root).map(|g| {
+    let grant = crate::gate::seat_authority::current_grant(project_root).map(|g| {
         (
             aida_core::team::canonical_role(&g.seat),
             g.principal.trim().to_string(),
@@ -316,7 +314,7 @@ pub(crate) fn mandate_ship_cover(
     let head = head();
     let (ids, branch, forge_resolved, authorship_ids) =
         pr_gate_subject(main_worktree, pr, known_ids, head_branch);
-    let candidates = pr_ship::merge_gate_verdict_candidates(
+    let candidates = crate::gate::ship::merge_gate_verdict_candidates(
         &[project_root, main_worktree],
         pr,
         &ids,
@@ -324,7 +322,12 @@ pub(crate) fn mandate_ship_cover(
     );
     // trace:BUG-2199 | ai:claude
     let author_ids: &[String] = if forge_resolved { &authorship_ids } else { &[] };
-    let policy = ship_approval_policy(main_worktree, author_ids, branch.as_deref(), &candidates);
+    let policy = crate::gate::approval::ship_approval_policy(
+        main_worktree,
+        author_ids,
+        branch.as_deref(),
+        &candidates,
+    );
     // trace:TASK-1790 | ai:codex
     // Trace-derived IDs can only ADD exclusions. Build verdict/author inputs
     // above from named IDs first; never pass the union to those authority paths.
@@ -340,27 +343,7 @@ pub(crate) fn mandate_ship_cover(
     // commit. Fetch the base and head first; a fetch that still fails falls
     // through to `collect_pr`, which fails closed. trace:BUG-2214 | ai:claude
     if let Some(branch) = head_branch {
-        let have_head = !info.head_oid.is_empty()
-            && std::process::Command::new("git")
-                .arg("-C")
-                .arg(main_worktree)
-                .args(["cat-file", "-e", &format!("{}^{{commit}}", info.head_oid)])
-                .status()
-                .map(|s| s.success())
-                .unwrap_or(false);
-        let have_base = std::process::Command::new("git")
-            .arg("-C")
-            .arg(main_worktree)
-            .args([
-                "rev-parse",
-                "--verify",
-                "--quiet",
-                &format!("refs/remotes/origin/{}^{{commit}}", info.base_ref),
-            ])
-            .output()
-            .map(|o| o.status.success())
-            .unwrap_or(false);
-        if !(have_head && have_base) {
+        if !have_ship_refs_locally(main_worktree, &info.head_oid, &info.base_ref) {
             let _ = crate::pr_cmd::fetch_ship_refs(main_worktree, &info.base_ref, branch);
         }
     }
@@ -374,7 +357,8 @@ pub(crate) fn mandate_ship_cover(
     // STORY-1700 (R1): the files the pinned diff changes, for the gate check.
     // trace:STORY-1700 | ai:claude
     let changed_paths: Vec<String> = trace_evidence.paths.iter().cloned().collect();
-    let gates = crate::mandate_gates::load_human_gates(main_worktree).map_err(|e| format!("{e:#}"));
+    let gates =
+        crate::gate::mandate_gates::load_human_gates(main_worktree).map_err(|e| format!("{e:#}"));
     let store_root = crate::store_sync::detect_distributed_store_from(project_root)
         .ok_or_else(|| MandateRefusal::TraceEvidenceUnreadable("no git-canonical store".into()))?;
     // BUG-2179: a live multi-agent store is written to while the evidence is
@@ -407,17 +391,17 @@ pub(crate) fn mandate_ship_cover(
             // STORY-1698: every excluded class seen in any version goes into the
             // append-only ledger first, then the ledger is read back as the first
             // source of exclusion. trace:STORY-1698 | ai:claude
-            let mandate_dir = crate::mandate::mandate_dir();
+            let mandate_dir = crate::gate::mandate::mandate_dir();
             if let Ok(dir) = &mandate_dir {
                 for spec in &specs {
                     let changes = spec
                         .current
                         .as_ref()
-                        .map(crate::mandate::field_change_versions)
+                        .map(crate::gate::mandate::field_change_versions)
                         .unwrap_or_default();
                     let history: &[aida_core::Requirement] = spec.history.as_deref().unwrap_or(&[]);
                     for key in std::iter::once(&spec.id).chain(spec.aliases.iter()) {
-                        crate::mandate::note_exclusions(
+                        crate::gate::mandate::note_exclusions(
                             dir,
                             key,
                             spec.current
@@ -429,15 +413,15 @@ pub(crate) fn mandate_ship_cover(
                 }
             }
             let ledger = match &mandate_dir {
-                Ok(dir) => crate::mandate::read_exclusions(dir),
+                Ok(dir) => crate::gate::mandate::read_exclusions(dir),
                 Err(e) => Err(format!("{e:#}")),
             };
             (specs, ledger)
         },
         MANDATE_COLLECT_BACKOFF,
     )?;
-    let hold_record = crate::merge_hold::read_hold_record(hold_root, pr);
-    let hold_reason = crate::merge_hold::read_hold(hold_root, pr);
+    let hold_record = crate::gate::merge_hold_core::read_hold_record(hold_root, pr);
+    let hold_reason = crate::gate::merge_hold_core::read_hold(hold_root, pr);
     // BUG-2214: "no marker" may be a hold a human already cleared — accepted
     // only when the clearance record, the attested release event and the forge
     // labels all agree (see [`cleared_by_human_facts`]). trace:BUG-2214 | ai:claude
@@ -478,11 +462,14 @@ pub(crate) fn mandate_ship_cover(
             .flatten(),
         changed_paths: Some(&changed_paths),
         // trace:STORY-1888 | ai:claude
-        protected: &crate::mandate_gates::ProtectedPaths::of(&gates),
-        ship_gate: crate::mandate_gates::gate_reason(&gates, crate::mandate_gates::GateOp::Ship),
-        hold_clear_gate: crate::mandate_gates::gate_reason(
+        protected: &crate::gate::mandate_gates::ProtectedPaths::of(&gates),
+        ship_gate: crate::gate::mandate_gates::gate_reason(
             &gates,
-            crate::mandate_gates::GateOp::HoldClear,
+            crate::gate::mandate_gates::GateOp::Ship,
+        ),
+        hold_clear_gate: crate::gate::mandate_gates::gate_reason(
+            &gates,
+            crate::gate::mandate_gates::GateOp::HoldClear,
         ),
     })?;
     Ok(MandateCover {
@@ -504,8 +491,8 @@ pub(crate) fn release_hold_under_mandate(
     hold_root: &std::path::Path,
     change: &crate::forge::ChangeRef,
     cover: &MandateCover,
-    hold_record: &crate::merge_hold::MergeHoldRecord,
-    released_by_verdict: Option<crate::merge_hold::VerdictRef>,
+    hold_record: &crate::gate::merge_hold_core::MergeHoldRecord,
+    released_by_verdict: Option<crate::gate::merge_hold_core::VerdictRef>,
     head_sha: Option<&str>,
     reason: &str,
 ) {
@@ -514,10 +501,10 @@ pub(crate) fn release_hold_under_mandate(
     eprintln!(
         "  {} PR-{pr}: merge-hold {}",
         crate::glyph(crate::glyphs::Glyph::Info).cyan(),
-        crate::mandate::release_note(&cover.id)
+        crate::gate::mandate::release_note(&cover.id)
     );
-    let _ = crate::merge_hold::clear_hold(hold_root, pr);
-    if let Err(err) = crate::merge_hold::record_mandate_clearance(
+    let _ = crate::gate::merge_hold_core::clear_hold(hold_root, pr);
+    if let Err(err) = crate::gate::merge_hold_core::record_mandate_clearance(
         hold_root,
         hold_record,
         &cover.principal,
@@ -533,7 +520,7 @@ pub(crate) fn release_hold_under_mandate(
         change,
         &format!(
             "Merge-hold {} (`{}`). Approval at `{}`; CI green.",
-            crate::mandate::release_note(&cover.id),
+            crate::gate::mandate::release_note(&cover.id),
             cover.principal,
             head_sha.unwrap_or("?"),
         ),
@@ -549,7 +536,7 @@ pub(crate) fn release_hold_under_mandate(
             // STORY-1698: a mandate release names the mandate.
             reason: Some(format!(
                 "{} — {reason}",
-                crate::mandate::release_note(&cover.id)
+                crate::gate::mandate::release_note(&cover.id)
             )),
             // BUG-2214: a mandate release is an advisor action and never
             // attests as human.
@@ -576,11 +563,11 @@ pub(crate) fn release_hold_under_mandate(
 pub(crate) fn mandate_carry_over(
     repo: &std::path::Path,
     pr: u64,
-    candidates: &[crate::review_verdict::RecordedVerdict],
+    candidates: &[crate::gate::review_verdict::RecordedVerdict],
     head: Option<&str>,
     base_branch: Option<&str>,
 ) -> Option<std::result::Result<String, String>> {
-    let refusal = pr_ship::approval_head_refusal(candidates, head)?;
+    let refusal = crate::gate::ship::approval_head_refusal(candidates, head)?;
     let site = crate::review_carryover::CarryOverSite::quiet(repo, base_branch);
     crate::review_carryover::prove_for_refusal(&site, pr, &refusal)
         .map(|proved| proved.map(|p| p.new_head).map_err(|why| why.reason()))
@@ -592,11 +579,11 @@ pub(crate) fn mandate_carry_over(
 // trace:STORY-1698 | ai:claude
 pub(crate) fn rearm_mandate_hold_with(
     hold_root: &std::path::Path,
-    record: &crate::merge_hold::MergeHoldRecord,
+    record: &crate::gate::merge_hold_core::MergeHoldRecord,
     sync_label: impl FnOnce() -> std::result::Result<(), String>,
 ) -> std::result::Result<(), String> {
     let mut failed = Vec::new();
-    if let Err(e) = crate::merge_hold::rearm_typed_hold(hold_root, record) {
+    if let Err(e) = crate::gate::merge_hold_core::rearm_typed_hold(hold_root, record) {
         failed.push(format!("the hold marker could not be rewritten ({e})"));
     }
     if let Err(e) = sync_label() {
@@ -614,7 +601,7 @@ pub(crate) fn rearm_mandate_hold_with(
 // trace:STORY-1698 | ai:claude
 pub(crate) fn rearm_after_mandate_failure(
     hold_root: &std::path::Path,
-    record: Option<&crate::merge_hold::MergeHoldRecord>,
+    record: Option<&crate::gate::merge_hold_core::MergeHoldRecord>,
     pr: u64,
 ) -> String {
     let Some(record) = record else {
@@ -634,7 +621,39 @@ pub(crate) fn rearm_after_mandate_failure(
 /// disk immediately before the merge call.
 // trace:STORY-1698 | ai:claude
 pub(crate) fn mandate_still_active(id: &str) -> bool {
-    matches!(crate::mandate::current_state(), crate::mandate::MandateState::Active(m) if m.id == id)
+    matches!(crate::gate::mandate::current_state(), crate::gate::mandate::MandateState::Active(m) if m.id == id)
+}
+
+/// Whether both `head_oid^{commit}` and `refs/remotes/origin/<base_ref>^{commit}`
+/// already exist locally in `main_worktree`, so `mandate_ship_cover` can skip
+/// the pre-evidence fetch.
+// trace:BUG-2214 trace:TASK-1864 | ai:agy
+pub(crate) fn have_ship_refs_locally(
+    main_worktree: &std::path::Path,
+    head_oid: &str,
+    base_ref: &str,
+) -> bool {
+    let have_head = !head_oid.is_empty()
+        && std::process::Command::new("git")
+            .arg("-C")
+            .arg(main_worktree)
+            .args(["cat-file", "-e", &format!("{}^{{commit}}", head_oid)])
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
+    let have_base = std::process::Command::new("git")
+        .arg("-C")
+        .arg(main_worktree)
+        .args([
+            "rev-parse",
+            "--verify",
+            "--quiet",
+            &format!("refs/remotes/origin/{}^{{commit}}", base_ref),
+        ])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+    have_head && have_base
 }
 
 #[cfg(test)]

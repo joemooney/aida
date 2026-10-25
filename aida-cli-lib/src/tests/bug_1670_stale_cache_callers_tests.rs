@@ -246,7 +246,7 @@ fn completion_findings_not_duplicated_on_stale_snapshot() {
         "fixture: the stale cache must not yet see the filed successor"
     );
 
-    let verdict = crate::review_verdict::verdict_path(fx.root(), "BUG-1");
+    let verdict = crate::gate::review_verdict::verdict_path(fx.root(), "BUG-1");
     std::fs::create_dir_all(verdict.parent().unwrap()).unwrap();
     std::fs::write(
         &verdict,

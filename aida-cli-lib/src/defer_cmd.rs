@@ -15,12 +15,6 @@ use aida_core::{DatabaseBackend, Storage};
 use crate::not_found;
 use crate::record_role_activity;
 
-// STORY-1889: operator-hold authority lives in the protected gate module.
-// Transitional re-export; the final STORY-1889 PR repoints the callers.
-// trace:STORY-1889 | ai:claude
-pub(crate) use crate::gate::operator_hold::{
-    enforce_reasoned_operator_hold, hold_refusal, OperatorHoldRefusal,
-};
 use crate::gate::operator_hold::{lift_hold_refusal, set_hold_refusal};
 
 /// `aida defer <SPEC> [--until "<condition>"]` — park a spec as primed /

@@ -404,7 +404,7 @@ pub(crate) fn wait_for_ship_ci(
     poll_interval: Duration,
 ) -> anyhow::Result<crate::forge::CiState> {
     use crate::forge::{CheckRegistration, CiState, CiTarget, ForgeKind};
-    use crate::pr_ship::ShipRefusal;
+    use crate::gate::ship::ShipRefusal;
     let started = Instant::now();
     let cfg = read_ci_gate_config(project_root);
     // BUG-2184: poll at least once whatever the budget, so an exhausted or

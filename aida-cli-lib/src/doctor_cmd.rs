@@ -140,10 +140,10 @@ pub(crate) fn handle_doctor_command(
             if !all
                 && !*sub_all
                 && normalize_doctor_category(category).ok().as_deref()
-                    == Some(crate::seat_authority::DOCTOR_CATEGORY)
+                    == Some(crate::gate::seat_authority::DOCTOR_CATEGORY)
             {
                 return doctor_check_store_free_light(
-                    crate::seat_authority::DOCTOR_CATEGORY,
+                    crate::gate::seat_authority::DOCTOR_CATEGORY,
                     *json,
                     *fail_on_findings,
                 );
@@ -549,7 +549,7 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
     // trace:BUG-1693 | ai:codex
     if doctor_category_selected(opts.category.as_deref(), "merge-hold-integrity")? {
         findings.extend(
-            crate::merge_hold::unrecorded_marker_removals(&project_root)
+            crate::gate::merge_hold_core::unrecorded_marker_removals(&project_root)
                 .into_iter()
                 .map(|pr| DoctorFinding {
                     category: "merge-hold-integrity".to_string(),
@@ -817,9 +817,9 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
     // trace:BUG-1934 | ai:claude
     if doctor_category_selected(
         opts.category.as_deref(),
-        crate::seat_authority::DOCTOR_CATEGORY,
+        crate::gate::seat_authority::DOCTOR_CATEGORY,
     )? {
-        findings.extend(crate::seat_authority::doctor_scan(&project_root));
+        findings.extend(crate::gate::seat_authority::doctor_scan(&project_root));
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     }
 
@@ -966,8 +966,8 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
                     print_doctor_status_diagnostics(&project_root, &store);
                     // STORY-1655: surface that the project runs solo review.
                     // trace:STORY-1655 | ai:claude
-                    if crate::solo_review::effective(&project_root) {
-                        println!("{}", crate::solo_review::MODE_ON_LINE);
+                    if crate::gate::solo_review::effective(&project_root) {
+                        println!("{}", crate::gate::solo_review::MODE_ON_LINE);
                     }
                 }
             },
@@ -1009,11 +1009,11 @@ fn merge_hold_label_definition_findings(
 }
 
 fn unsynced_merge_hold_findings(root: &std::path::Path) -> Vec<DoctorFinding> {
-    crate::merge_hold::list_holds(root)
+    crate::gate::merge_hold_core::list_holds(root)
         .into_iter()
         .filter_map(|(pr, _)| {
-            let crate::merge_hold::LabelState::Unsynced(err) =
-                crate::merge_hold::read_label_state(root, pr)
+            let crate::gate::merge_hold_core::LabelState::Unsynced(err) =
+                crate::gate::merge_hold_core::read_label_state(root, pr)
             else {
                 return None;
             };
@@ -1062,7 +1062,8 @@ fn contained_store_boundary_findings(project_root: &std::path::Path) -> Vec<Doct
 #[cfg(test)]
 mod bug_1747_tests {
     use super::*;
-    use crate::merge_hold::{LabelDefinitions, LabelState};
+    use crate::gate::merge_hold_core::LabelState;
+    use crate::merge_hold::LabelDefinitions;
 
     #[test]
     fn bug_1747_label_definition_results_map_to_findings() {
@@ -1100,15 +1101,16 @@ mod bug_1747_tests {
     fn bug_1747_only_unsynced_live_holds_are_findings() {
         let dir = tempfile::tempdir().unwrap();
         for pr in [101, 102, 103] {
-            crate::merge_hold::write_hold(dir.path(), pr, "fixture").unwrap();
+            crate::gate::merge_hold_core::write_hold(dir.path(), pr, "fixture").unwrap();
         }
-        crate::merge_hold::record_label_state(
+        crate::gate::merge_hold_core::record_label_state(
             dir.path(),
             101,
             &LabelState::Unsynced("missing label definition(s): aida:merge-hold".into()),
         )
         .unwrap();
-        crate::merge_hold::record_label_state(dir.path(), 102, &LabelState::Synced).unwrap();
+        crate::gate::merge_hold_core::record_label_state(dir.path(), 102, &LabelState::Synced)
+            .unwrap();
         let findings = unsynced_merge_hold_findings(dir.path());
         assert_eq!(findings.len(), 1);
         assert_eq!(findings[0].id, "PR-101-hold-label-unsynced");
@@ -1123,14 +1125,18 @@ mod bug_1747_tests {
     #[test]
     fn bug_1747_definition_missing_display_recommends_provisioning() {
         let dir = tempfile::tempdir().unwrap();
-        crate::merge_hold::write_hold(dir.path(), 104, "fixture").unwrap();
+        crate::gate::merge_hold_core::write_hold(dir.path(), 104, "fixture").unwrap();
         let error = crate::merge_hold::LabelSyncError::DefinitionMissing {
             names: vec!["aida:merge-hold".into()],
             detail: "'aida:merge-hold' not found".into(),
         }
         .to_string();
-        crate::merge_hold::record_label_state(dir.path(), 104, &LabelState::Unsynced(error))
-            .unwrap();
+        crate::gate::merge_hold_core::record_label_state(
+            dir.path(),
+            104,
+            &LabelState::Unsynced(error),
+        )
+        .unwrap();
         let findings = unsynced_merge_hold_findings(dir.path());
         assert_eq!(findings.len(), 1);
         assert!(findings[0]
@@ -1240,8 +1246,8 @@ fn doctor_check_store_free_light(category: &str, json: bool, fail_on_findings: b
             DoctorReport::from_findings(crate::mandate_drive::doctor_scan(&project_root))
         }
         // trace:BUG-1934 | ai:claude
-        crate::seat_authority::DOCTOR_CATEGORY => {
-            DoctorReport::from_findings(crate::seat_authority::doctor_scan(&project_root))
+        crate::gate::seat_authority::DOCTOR_CATEGORY => {
+            DoctorReport::from_findings(crate::gate::seat_authority::doctor_scan(&project_root))
         }
         _ => unreachable!("only store-free categories dispatch here"),
     };
@@ -4600,7 +4606,7 @@ fn scan_review_verdicts(project_root: &std::path::Path) -> Vec<DoctorFinding> {
     let mut out = Vec::new();
     let mut drifted = Vec::new();
     for row in &rows {
-        if row.kind == crate::review_verdict::VerdictKind::Unknown && !row.raw.is_empty() {
+        if row.kind == crate::gate::review_verdict::VerdictKind::Unknown && !row.raw.is_empty() {
             out.push(DoctorFinding {
                 category: "review-verdicts".to_string(),
                 id: format!("unknown-verdict:{}", row.file),

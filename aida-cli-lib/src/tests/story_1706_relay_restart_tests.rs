@@ -201,11 +201,11 @@ impl Fixture {
     }
 
     fn lane(&self) -> Lane {
-        crate::fleet_lanes::probe_lane(self.run_dir.clone()).unwrap()
+        crate::gate::fleet_lanes::probe_lane(self.run_dir.clone()).unwrap()
     }
 
     fn mandate(&self) -> Mandate {
-        crate::mandate::start_with(
+        crate::gate::mandate::start_with(
             self.mandates.path(),
             &ok_human,
             "joe",
@@ -321,8 +321,8 @@ fn only_the_trap_never_ran_ending_is_a_restart_candidate() {
 impl Fixture {
     /// The active mandate, minting it on first use.
     fn mandate_once(&self) -> Mandate {
-        let (valid, _) = crate::mandate::load_valid(self.mandates.path(), "joe", now());
-        match crate::mandate::state_at(&valid, now()) {
+        let (valid, _) = crate::gate::mandate::load_valid(self.mandates.path(), "joe", now());
+        match crate::gate::mandate::state_at(&valid, now()) {
             MandateState::Active(m) => m,
             _ => self.mandate(),
         }
@@ -661,7 +661,7 @@ fn a_relay_restart_human_gate_or_unreadable_gates_refuse() {
         );
         expect_no(v, "gated");
     }
-    let layer = crate::mandate_gates::parse_layer(
+    let layer = crate::gate::mandate_gates::parse_layer(
         "[mandate.human_gates]\nops = [\"relay-restart\"]\n",
         "test",
     );
@@ -814,7 +814,7 @@ fn a_mandate_stopped_before_the_exec_refuses_without_a_spawn() {
     // Side effect 0 is the lease reap, 1 the restart.
     let hook = |n: usize| {
         if n == 1 {
-            crate::mandate::stop(&dir, &ok_human, "joe", now()).unwrap();
+            crate::gate::mandate::stop(&dir, &ok_human, "joe", now()).unwrap();
         }
     };
     let hooks = TickHooks {
