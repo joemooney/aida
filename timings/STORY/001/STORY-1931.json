@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-1931",
+  "publishes": [
+    {
+      "at": "2026-10-25T15:49:09.621317674Z",
+      "closed_by": "edit"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-25T15:48:59.217523690Z",
+      "spec": "STORY-1931",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Completed"
+      }
+    },
+    {
+      "ts": "2026-10-25T15:48:59.494656046Z",
+      "spec": "STORY-1931",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "",
+        "closed_by": "edit"
+      }
+    }
+  ]
+}
