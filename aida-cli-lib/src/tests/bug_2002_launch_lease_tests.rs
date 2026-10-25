@@ -1,3 +1,4 @@
+// trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
 use super::*;
 
 // trace:BUG-2002 | ai:codex
@@ -276,7 +277,7 @@ fn agent_new_reentry_respects_reasoned_operator_hold() {
     req.deferred = true;
     req.deferred_reason = Some("waiting for operator".into());
     store.requirements.push(req);
-    Storage::new(tmp.path().join(".aida-store"))
+    crate::test_env::home_fixture_storage(tmp.path().join(".aida-store"))
         .save(&store)
         .unwrap();
     let error = preflight_agent_launch_lease(
@@ -1379,7 +1380,7 @@ fn bug2188_refused_launch_restores_approved_status_and_retry_succeeds() {
         req.status = RequirementStatus::Approved;
         store.requirements.push(req);
         std::fs::create_dir_all(root.join(".aida-store")).unwrap();
-        let storage = Storage::new(root.join(".aida-store"));
+        let storage = crate::test_env::home_fixture_storage(root.join(".aida-store"));
         storage.save(&store).unwrap();
         let status = || {
             storage

@@ -1,4 +1,5 @@
 //! trace:TASK-1981 | ai:codex
+// trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
 use super::*;
 use aida_core::DatabaseBackend;
 use std::time::{Duration, Instant};
@@ -8,7 +9,7 @@ fn task_1981_retirement_waits_and_preserves_concurrent_edit() {
     let dir = tempfile::tempdir().unwrap();
     let store = dir.path().join("store");
     aida_core::git_ops::init(&store).unwrap();
-    let backend = aida_core::GitBackend::new(&store).unwrap();
+    let backend = crate::test_env::home_fixture_backend(&store).unwrap();
     aida_core::git_ops::configure_user(&store, "Test", "test@example.com").unwrap();
     let mut req = aida_core::Requirement::new("before".into(), "desc".into());
     req.spec_id = Some("TASK-1-001".into());
@@ -20,7 +21,7 @@ fn task_1981_retirement_waits_and_preserves_concurrent_edit() {
     let (done_tx, done_rx) = std::sync::mpsc::channel();
     let contender = store.clone();
     let child = std::thread::spawn(move || {
-        let cached = aida_core::CachedGitBackend::open(&contender, &cache).unwrap();
+        let cached = crate::test_env::home_fixture_cached_backend(&contender, &cache).unwrap();
         ready_tx.send(()).unwrap();
         go_rx.recv_timeout(Duration::from_secs(10)).unwrap();
         done_tx

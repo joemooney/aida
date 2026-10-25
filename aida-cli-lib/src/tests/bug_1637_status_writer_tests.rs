@@ -7,6 +7,7 @@
 //! on one side of a three-way merge, in both merge orientations. All tests are
 //! in memory or use a temporary store.
 //! trace:BUG-1637 | ai:claude
+// trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
 use aida_core::conflict::{self, merge_spec_three_way};
 use aida_core::db::DatabaseBackend;
 use aida_core::{Requirement, RequirementStatus};
@@ -337,7 +338,7 @@ fn git_store_with(
 
 fn open_backend(store_root: &std::path::Path) -> aida_core::CachedGitBackend {
     let cache = aida_core::CachedGitBackend::default_cache_path(store_root);
-    aida_core::CachedGitBackend::open(store_root, &cache).unwrap()
+    crate::test_env::home_fixture_cached_backend(store_root, &cache).unwrap()
 }
 
 fn on_disk(store_root: &std::path::Path) -> Requirement {

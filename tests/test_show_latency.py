@@ -78,6 +78,12 @@ def check_in(binary, temp):
                GIT_COMMITTER_NAME="Test", GIT_COMMITTER_EMAIL="test@example.invalid",
                AIDA_TELEMETRY="0", AIDA_CACHE_READ_WAIT_MS="1500")
     require(run(["git", "init", "-q"], root, env))
+    # trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
+    git_dir = root / ".git"
+    assert git_dir.is_dir() and not git_dir.is_symlink()
+    assert not (git_dir / "commondir").exists()
+    with (git_dir / "aida-allocation.toml").open("x", encoding="utf-8") as setting:
+        setting.write("version=1\nauthoritative=true\n")
     require(run([binary, "init", "--no-skills", "--no-hooks"], root, env))
     require(run([binary, "add", "--title", "original title", "--type", "task"], root, env))
     require(run([binary, "cache", "rebuild"], root, env))

@@ -117,6 +117,8 @@ fn fixture() -> Fixture {
         &["init", "-q", "--bare", origin.to_str().unwrap()],
     );
     git_out(&primary, &home, &["init", "-q", "-b", "main"]);
+    // trace:BUG-2017 | ai:codex — explicit positive HOME fixture.
+    test_git::enroll_synthetic_home(&primary);
     commit_file(&primary, &home, "shared.txt", "base\n", "init");
 
     let init = aida(&primary, &home)

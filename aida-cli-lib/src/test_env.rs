@@ -1431,3 +1431,29 @@ pub(crate) fn enroll_synthetic_home(root: &Path) -> anyhow::Result<()> {
     }
     Ok(())
 }
+
+/// Positive global-ID fixture opt-in; unlike production constructors this
+/// explicitly initializes and enrolls only a temporary synthetic HOME clone.
+// trace:BUG-2017 | ai:codex
+pub(crate) fn home_fixture_backend(root: &Path) -> anyhow::Result<aida_core::GitBackend> {
+    let backend = aida_core::GitBackend::new(root)?;
+    enroll_synthetic_home(root)?;
+    Ok(backend)
+}
+
+// trace:BUG-2017 | ai:codex
+pub(crate) fn home_fixture_cached_backend(
+    root: &Path,
+    cache: &Path,
+) -> anyhow::Result<aida_core::CachedGitBackend> {
+    let backend = home_fixture_backend(root)?;
+    aida_core::CachedGitBackend::with_inner(backend, cache)
+}
+
+/// Positive Storage adapter fixture with directory-backed global IDs.
+// trace:BUG-2017 | ai:codex
+pub(crate) fn home_fixture_storage(root: impl AsRef<Path>) -> aida_core::Storage {
+    let root = root.as_ref();
+    home_fixture_backend(root).expect("temporary synthetic HOME store");
+    aida_core::Storage::new(root)
+}

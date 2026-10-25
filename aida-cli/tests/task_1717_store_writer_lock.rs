@@ -534,6 +534,8 @@ fn fixture_with(scaffolded: bool) -> Fx {
     }
     git(&base, &["init", "-q", "--bare", "-b", "main", "origin.git"]);
     git(&repo, &["init", "-q", "-b", "main"]);
+    // trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
+    test_git::enroll_synthetic_home(&repo);
     git(&repo, &["commit", "-q", "--allow-empty", "-m", "init"]);
     let mut fx = Fx {
         _tmp: tmp,
@@ -1954,6 +1956,9 @@ fn remote_reconcile_evidence_refusal_skips_the_rollback() {
                 peer.to_str().unwrap(),
             ],
         );
+        // trace:BUG-2017 | ai:codex — the new peer clone stays WORK by
+        // default; this positive global-ID evidence fixture enrolls it explicitly.
+        test_git::enroll_synthetic_home(&peer);
         let mut h = aida_core::models::Requirement::new("prediction".into(), "rewritten".into());
         h.spec_id = Some("SPIKE-901".into());
         h.req_type = aida_core::models::RequirementType::Spike;

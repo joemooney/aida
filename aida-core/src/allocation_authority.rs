@@ -185,6 +185,37 @@ pub fn admit(
     if resolve(root)?.authoritative {
         return Ok(());
     }
+    // trace:BUG-2017 | ai:codex — reserve the complete candidate namespace
+    // before any row can be persisted. Spec and agreed IDs share ownership;
+    // aliases of the same UUID are valid, including canonical case variants.
+    let mut owners = std::collections::HashMap::new();
+    for req in incoming {
+        for id in [req.spec_id.as_deref(), req.agreed_id.as_deref()]
+            .into_iter()
+            .flatten()
+        {
+            let canonical = crate::object_store::canonical_spec_id(id);
+            if owners
+                .insert(canonical, req.id)
+                .is_some_and(|owner| owner != req.id)
+            {
+                bail!("display ID already belongs to another UUID; nothing was written")
+            }
+        }
+    }
+    for req in existing {
+        for id in [req.spec_id.as_deref(), req.agreed_id.as_deref()]
+            .into_iter()
+            .flatten()
+        {
+            if owners
+                .get(&crate::object_store::canonical_spec_id(id))
+                .is_some_and(|owner| *owner != req.id)
+            {
+                bail!("display ID already belongs to another UUID; nothing was written")
+            }
+        }
+    }
     let old: std::collections::HashMap<_, _> = existing.iter().map(|r| (r.id, r)).collect();
     let mut binding = None;
     for req in incoming {
@@ -203,18 +234,6 @@ pub fn admit(
                 continue;
             }
             if let Some(id) = id {
-                // trace:BUG-2017 | ai:codex — local admission must not replace
-                // another UUID's object when imported IDs outrun the dispenser.
-                let canonical = crate::object_store::canonical_spec_id(id);
-                if existing.iter().any(|other| {
-                    other.id != req.id
-                        && [other.spec_id.as_deref(), other.agreed_id.as_deref()]
-                            .into_iter()
-                            .flatten()
-                            .any(|old| crate::object_store::canonical_spec_id(old) == canonical)
-                }) {
-                    bail!("display ID already belongs to another UUID; no object was written")
-                }
                 let binding = match &binding {
                     Some(b) => b,
                     None => binding.insert(node(root)?),
@@ -605,6 +624,158 @@ mod tests {
             .is_err());
         assert!(backend.load().unwrap().requirements.is_empty());
     }
+    // trace:BUG-2017 | ai:codex — a rejected batch leaves every persistence
+    // surface byte-for-byte intact, including a nonempty baseline and refs.
+    fn persistence_snapshot(root: &Path) -> std::collections::BTreeMap<String, Vec<u8>> {
+        fn collect(
+            root: &Path,
+            path: &Path,
+            out: &mut std::collections::BTreeMap<String, Vec<u8>>,
+        ) {
+            if !path.exists() {
+                return;
+            }
+            if path.is_dir() {
+                for entry in std::fs::read_dir(path).unwrap() {
+                    collect(root, &entry.unwrap().path(), out);
+                }
+            } else {
+                out.insert(
+                    path.strip_prefix(root)
+                        .unwrap()
+                        .to_string_lossy()
+                        .into_owned(),
+                    std::fs::read(path).unwrap(),
+                );
+            }
+        }
+        let mut out = std::collections::BTreeMap::new();
+        for name in [
+            "metadata.yaml",
+            "oplog.yaml",
+            "objects",
+            ".aida/dispenser.toml",
+        ] {
+            collect(root, &root.join(name), &mut out);
+        }
+        let refs = crate::git_ops::host_git_command(root)
+            .args(["show-ref", "--head"])
+            .output()
+            .unwrap();
+        assert!(refs.status.success());
+        out.insert("git-refs".into(), refs.stdout);
+        out
+    }
+
+    #[test]
+    fn bug_2017_batch_alias_conflicts_refuse_before_any_persistence() {
+        for operation in ["save", "import", "atomic", "bulk"] {
+            for cross_field in [false, true] {
+                let (dir, backend) = fixture(false);
+                let mut seed = Requirement::new("baseline".into(), "fixture".into());
+                seed.spec_id = Some("BUG-7-100".into());
+                backend.add_requirement(seed).unwrap();
+                let mut baseline = backend.load().unwrap();
+                baseline.title = "baseline".into();
+                backend.save(&baseline).unwrap();
+                let commit = crate::test_git::git_command()
+                    .current_dir(dir.path())
+                    .args([
+                        "-c",
+                        "user.name=Fixture",
+                        "-c",
+                        "user.email=fixture@example.invalid",
+                        "add",
+                        "metadata.yaml",
+                        "oplog.yaml",
+                        "objects",
+                    ])
+                    .status()
+                    .unwrap();
+                assert!(commit.success());
+                let commit = crate::test_git::git_command()
+                    .current_dir(dir.path())
+                    .args([
+                        "-c",
+                        "user.name=Fixture",
+                        "-c",
+                        "user.email=fixture@example.invalid",
+                        "commit",
+                        "-qm",
+                        "baseline",
+                    ])
+                    .status()
+                    .unwrap();
+                assert!(commit.success());
+                let mut first = Requirement::new("first".into(), "fixture".into());
+                first.spec_id = Some("BUG-7-001".into());
+                first.agreed_id = Some("bug-7-009".into());
+                let mut second = Requirement::new("second".into(), "fixture".into());
+                second.spec_id = Some(
+                    if cross_field {
+                        "BUG-7-009"
+                    } else {
+                        "BUG-7-002"
+                    }
+                    .into(),
+                );
+                if !cross_field {
+                    second.agreed_id = Some("BUG-7-009".into());
+                }
+                let before = persistence_snapshot(dir.path());
+                let result = match operation {
+                    "save" | "import" => {
+                        let mut store = backend.load().unwrap();
+                        store.title = "must not persist".into();
+                        store.requirements.extend([first, second]);
+                        if operation == "import" {
+                            backend.save_imported(&store)
+                        } else {
+                            backend.save(&store)
+                        }
+                    }
+                    "atomic" => backend
+                        .update_atomically(|store| {
+                            store.title = "must not persist".into();
+                            store.requirements.extend([first, second]);
+                        })
+                        .map(|_| ()),
+                    "bulk" => {
+                        let mut writer = backend.bulk_writer().unwrap();
+                        writer.add(first).unwrap();
+                        writer.add(second).unwrap();
+                        writer.finish("must not persist").map(|_| ())
+                    }
+                    _ => unreachable!(),
+                };
+                assert!(
+                    result.unwrap_err().to_string().contains("another UUID"),
+                    "{operation}/{cross_field}"
+                );
+                assert_eq!(
+                    persistence_snapshot(dir.path()),
+                    before,
+                    "{operation}/{cross_field}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn bug_2017_same_uuid_aliases_and_existing_ownership_are_preserved() {
+        let (dir, backend) = fixture(false);
+        let mut req = Requirement::new("same owner".into(), "fixture".into());
+        req.spec_id = Some("BUG-7-001".into());
+        req.agreed_id = Some("bug-7-001".into());
+        let mut req = backend.add_requirement(req).unwrap();
+        req.title = "allowed edit".into();
+        backend.update_requirement(&req).unwrap();
+        let mut other = Requirement::new("different owner".into(), "fixture".into());
+        other.spec_id = Some("BUG-7-002".into());
+        other.agreed_id = Some("bug-7-001".into());
+        assert!(admit(dir.path(), &[other], &[req]).is_err());
+    }
+
     #[test]
     fn bug_2017_existing_global_uuid_edit_allowed_new_global_alias_refused() {
         let (dir, backend) = fixture(true);

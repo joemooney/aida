@@ -889,7 +889,8 @@ mod tests {
     fn supervisor_redrive_routes_through_return_to_flight_and_clears_attention_reason() {
         let _env = crate::test_env::EnvVarsGuard::apply(&[(events::EVENTS_DISABLE_ENV, None)]);
         let tmp = tempfile::tempdir().unwrap();
-        let backend = aida_core::GitBackend::new(&tmp.path().join(".aida-store")).unwrap();
+        let backend =
+            crate::test_env::home_fixture_backend(&tmp.path().join(".aida-store")).unwrap();
         let mut req = req_with_failure("watchdog");
         req.attention_reason = Some(aida_core::AttentionReason {
             category: PuntCategory::DesignFork,
@@ -993,13 +994,13 @@ mod tests {
         let tmp = tempfile::TempDir::new().unwrap();
         let root = tmp.path().join(".aida-store");
         std::fs::create_dir_all(&root).unwrap();
-        let backend = aida_core::GitBackend::new(&root).unwrap();
+        let backend = crate::test_env::home_fixture_backend(&root).unwrap();
         let parked = backend
             .add_requirement(req_with_failure("watchdog"))
             .unwrap();
 
         // Moved out of NeedsAttention after the supervisor listed it.
-        let other = aida_core::GitBackend::new(&root).unwrap();
+        let other = crate::test_env::home_fixture_backend(&root).unwrap();
         let mut moved = other.get_requirement(&parked.id).unwrap().unwrap();
         moved.status = RequirementStatus::InProgress;
         other.update_requirement(&moved).unwrap();
@@ -1036,7 +1037,8 @@ mod tests {
     #[test]
     fn supervisor_requeue_never_regresses_a_terminal_status_on_merge() {
         let tmp = tempfile::tempdir().unwrap();
-        let backend = aida_core::GitBackend::new(&tmp.path().join(".aida-store")).unwrap();
+        let backend =
+            crate::test_env::home_fixture_backend(&tmp.path().join(".aida-store")).unwrap();
         let base = stored_park(&backend, "STORY-1", 60);
         let applied = supervisor_requeue_with(
             &backend,
@@ -1079,7 +1081,8 @@ mod tests {
     #[test]
     fn supervisor_requeue_unrecordable_attempt_leaves_spec_parked() {
         let tmp = tempfile::tempdir().unwrap();
-        let backend = aida_core::GitBackend::new(&tmp.path().join(".aida-store")).unwrap();
+        let backend =
+            crate::test_env::home_fixture_backend(&tmp.path().join(".aida-store")).unwrap();
         let parked = stored_park(&backend, "STORY-1", 60);
         let still_parked = |backend: &aida_core::GitBackend| {
             let r = backend.get_requirement(&parked.id).unwrap().unwrap();
@@ -1166,7 +1169,8 @@ mod tests {
     fn unrecorded_attempt_holds_the_rest_of_the_pass() {
         let _env = crate::test_env::EnvVarsGuard::apply(&[(events::EVENTS_DISABLE_ENV, None)]);
         let tmp = tempfile::tempdir().unwrap();
-        let backend = aida_core::GitBackend::new(&tmp.path().join(".aida-store")).unwrap();
+        let backend =
+            crate::test_env::home_fixture_backend(&tmp.path().join(".aida-store")).unwrap();
         stored_park(&backend, "STORY-1", 90);
         stored_park(&backend, "STORY-2", 60);
         std::fs::create_dir_all(tmp.path().join(".aida").join("events.jsonl")).unwrap();
@@ -1204,7 +1208,8 @@ mod tests {
     fn manual_max_counts_applied_redrives_not_planned_ones() {
         let _env = crate::test_env::EnvVarsGuard::apply(&[(events::EVENTS_DISABLE_ENV, None)]);
         let tmp = tempfile::tempdir().unwrap();
-        let backend = aida_core::GitBackend::new(&tmp.path().join(".aida-store")).unwrap();
+        let backend =
+            crate::test_env::home_fixture_backend(&tmp.path().join(".aida-store")).unwrap();
         let moved = stored_park(&backend, "STORY-1", 120);
         stored_park(&backend, "STORY-2", 90);
         stored_park(&backend, "STORY-3", 60);
@@ -1252,7 +1257,8 @@ mod tests {
     fn a_failed_record_holds_the_pass_even_when_the_next_write_would_succeed() {
         for fail_at in [0usize, 1] {
             let tmp = tempfile::tempdir().unwrap();
-            let backend = aida_core::GitBackend::new(&tmp.path().join(".aida-store")).unwrap();
+            let backend =
+                crate::test_env::home_fixture_backend(&tmp.path().join(".aida-store")).unwrap();
             stored_park(&backend, "STORY-1", 120);
             stored_park(&backend, "STORY-2", 90);
             stored_park(&backend, "STORY-3", 60);
@@ -1316,7 +1322,7 @@ mod tests {
     fn a_store_error_mid_pass_still_queues_the_already_approved_specs() {
         let tmp = tempfile::tempdir().unwrap();
         let store_root = tmp.path().join(".aida-store");
-        let backend = aida_core::GitBackend::new(&store_root).unwrap();
+        let backend = crate::test_env::home_fixture_backend(&store_root).unwrap();
         stored_park(&backend, "STORY-1", 120);
         stored_park(&backend, "STORY-2", 90);
         stored_park(&backend, "STORY-3", 60);

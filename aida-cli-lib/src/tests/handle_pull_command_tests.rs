@@ -1,3 +1,4 @@
+// trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
 use super::*;
 
 #[test]
@@ -453,7 +454,7 @@ fn make_store_hub_with_draft_spec(
     run_git_in(&other, &["config", "user.email", "test@example.com"]);
     run_git_in(&other, &["config", "user.name", "Test"]);
     run_git_in(&other, &["remote", "add", "origin", hub.to_str().unwrap()]);
-    let backend = aida_core::db::GitBackend::new(&other).unwrap();
+    let backend = crate::test_env::home_fixture_backend(&other).unwrap();
     let mut store = aida_core::RequirementsStore::default();
     let mut req = aida_core::Requirement::new(format!("test-{spec_id}"), String::new());
     req.spec_id = Some(spec_id.to_string());
@@ -500,7 +501,7 @@ fn bug1625_pull_syncs_store_before_code_reconcile_and_keeps_completed() {
     clone_store_into(&hub, &store_path);
 
     // The other machine completes the spec and publishes it.
-    let other_backend = aida_core::db::GitBackend::new(&other).unwrap();
+    let other_backend = crate::test_env::home_fixture_backend(&other).unwrap();
     let mut r = other_backend
         .get_requirement_by_spec_id(spec_id)
         .unwrap()
@@ -572,7 +573,7 @@ fn bug1625_store_pull_failure_leaves_code_reconcile_unapplied() {
         &store_path,
         &["remote", "add", "origin", missing.to_str().unwrap()],
     );
-    let backend = aida_core::db::GitBackend::new(&store_path).unwrap();
+    let backend = crate::test_env::home_fixture_backend(&store_path).unwrap();
     let mut store = aida_core::RequirementsStore::default();
     let mut req = aida_core::Requirement::new(format!("test-{spec_id}"), String::new());
     req.spec_id = Some(spec_id.to_string());

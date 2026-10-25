@@ -6265,6 +6265,8 @@ mod init_roster_tests {
             .status()
             .unwrap();
 
+        // trace:BUG-2017 | ai:codex — positive initializer fixture models HOME.
+        crate::test_env::enroll_synthetic_home(root).unwrap();
         super::handle_init_distributed_worktree(
             false, false, None, false, false, false, None, false, false, None, None,
         )

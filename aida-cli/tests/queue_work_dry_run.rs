@@ -66,6 +66,8 @@ fn init_codex_only_project(base_dir: &Path) -> (std::path::PathBuf, std::path::P
     std::fs::create_dir_all(&home).unwrap();
 
     git(&repo, &["init", "-q", "-b", "main"]);
+    // trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
+    test_git::enroll_synthetic_home(&repo);
     git(&repo, &["config", "user.email", "t@t.t"]);
     git(&repo, &["config", "user.name", "t"]);
     git(&repo, &["commit", "-q", "--allow-empty", "-m", "init"]);
@@ -316,6 +318,8 @@ fn single_spec_dry_run_previews_plan_with_no_side_effects() {
 
     // Throwaway git repo with one commit so HEAD exists.
     git(&repo, &["init", "-q", "-b", "main"]);
+    // trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
+    test_git::enroll_synthetic_home(&repo);
     git(&repo, &["config", "user.email", "t@t.t"]);
     git(&repo, &["config", "user.name", "t"]);
     git(&repo, &["commit", "-q", "--allow-empty", "-m", "init"]);
@@ -529,6 +533,8 @@ fn no_launch_with_custom_base_populates_submodules() {
     git(&submodule_src, &["commit", "-q", "-m", "submodule payload"]);
 
     git(&repo, &["init", "-q", "-b", "main"]);
+    // trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
+    test_git::enroll_synthetic_home(&repo);
     git(&repo, &["config", "user.email", "t@t.t"]);
     git(&repo, &["config", "user.name", "t"]);
     git(&repo, &["config", "protocol.file.allow", "always"]);
@@ -653,6 +659,8 @@ fn drain_dry_run_previews_plan_with_no_side_effects() {
     std::fs::create_dir_all(&home).unwrap();
 
     git(&repo, &["init", "-q", "-b", "main"]);
+    // trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
+    test_git::enroll_synthetic_home(&repo);
     git(&repo, &["config", "user.email", "t@t.t"]);
     git(&repo, &["config", "user.name", "t"]);
     git(&repo, &["commit", "-q", "--allow-empty", "-m", "init"]);
@@ -808,6 +816,8 @@ fn drain_dry_run_skips_reviewer_routed_head() {
     std::fs::create_dir_all(&home).unwrap();
 
     git(&repo, &["init", "-q", "-b", "main"]);
+    // trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
+    test_git::enroll_synthetic_home(&repo);
     git(&repo, &["config", "user.email", "t@t.t"]);
     git(&repo, &["config", "user.name", "t"]);
     git(&repo, &["commit", "-q", "--allow-empty", "-m", "init"]);
@@ -952,6 +962,8 @@ fn interactive_dry_run_autopicks_codex_only_enabled_profile() {
     std::fs::create_dir_all(&home).unwrap();
 
     git(&repo, &["init", "-q", "-b", "main"]);
+    // trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
+    test_git::enroll_synthetic_home(&repo);
     git(&repo, &["config", "user.email", "t@t.t"]);
     git(&repo, &["config", "user.name", "t"]);
     git(&repo, &["commit", "-q", "--allow-empty", "-m", "init"]);
@@ -1109,6 +1121,8 @@ fn interactive_work_refuses_all_disabled_profile_before_state() {
     std::fs::create_dir_all(&home).unwrap();
 
     git(&repo, &["init", "-q", "-b", "main"]);
+    // trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
+    test_git::enroll_synthetic_home(&repo);
     git(&repo, &["config", "user.email", "t@t.t"]);
     git(&repo, &["config", "user.name", "t"]);
     git(&repo, &["commit", "-q", "--allow-empty", "-m", "init"]);
@@ -1214,6 +1228,8 @@ fn product_role_add_queue_for_advisor_files_draft_request() {
     std::fs::create_dir_all(&home).unwrap();
 
     git(&repo, &["init", "-q", "-b", "main"]);
+    // trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
+    test_git::enroll_synthetic_home(&repo);
     git(&repo, &["config", "user.email", "t@t.t"]);
     git(&repo, &["config", "user.name", "t"]);
     git(&repo, &["commit", "-q", "--allow-empty", "-m", "init"]);

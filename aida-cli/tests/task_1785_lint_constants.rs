@@ -70,6 +70,8 @@ fn fixture() -> Fixture {
     std::fs::create_dir_all(&repo).unwrap();
     std::fs::create_dir_all(&home).unwrap();
     git(&repo, &["init", "-q", "-b", "main"]);
+    // trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
+    test_git::enroll_synthetic_home(&repo);
     git(&repo, &["config", "user.email", "task1785@example.test"]);
     git(&repo, &["config", "user.name", "TASK-1785 Test"]);
     git(&repo, &["commit", "-q", "--allow-empty", "-m", "init"]);

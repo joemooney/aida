@@ -357,7 +357,7 @@ mod read_tests {
     fn story1673_canonical_invalid_verify_reports_but_invalid_object_refuses() {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().join("store");
-        let backend = GitBackend::new(&root).unwrap();
+        let backend = crate::test_env::home_fixture_backend(&root).unwrap();
         let mut req = Requirement::new("fixture".into(), "fixture".into());
         req.spec_id = Some("CNST-1".into());
         req.req_type = RequirementType::Constraint;

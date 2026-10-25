@@ -10443,7 +10443,7 @@ mod tests {
         use aida_core::db::DatabaseBackend;
         let dir = tempdir().unwrap();
         let root = dir.path().join("store");
-        let backend = aida_core::GitBackend::new(&root)
+        let backend = crate::test_env::home_fixture_backend(&root)
             .unwrap()
             .with_auto_commit(false);
         let mut h = Requirement::new("hypothesis".into(), "pre-result".into());
@@ -10570,6 +10570,8 @@ mod tests {
                 .unwrap()
                 .success());
         }
+        // trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
+        crate::test_env::enroll_synthetic_home(&store_root).unwrap();
         let storage = Box::leak(Box::new(Storage::new(&store_root)));
         let server = McpServer::new(storage, dir.path().to_path_buf());
         let mut store = aida_core::RequirementsStore::default();
@@ -12712,7 +12714,7 @@ mod tests {
         std::fs::create_dir_all(&store_dir).unwrap();
 
         // Seed an empty git-canonical store so subsequent loads succeed.
-        let seed = GitBackend::new(&store_dir).unwrap();
+        let seed = crate::test_env::home_fixture_backend(&store_dir).unwrap();
         seed.save(&aida_core::RequirementsStore::new()).unwrap();
 
         // Point the MCP server at the store directory — the same shape the
@@ -12734,7 +12736,7 @@ mod tests {
         // A fresh GitBackend simulates the next `aida` CLI invocation. It
         // must see the requirement the MCP server just wrote — that is the
         // contract BUG-310 broke.
-        let cli_view = GitBackend::new(&store_dir).unwrap();
+        let cli_view = crate::test_env::home_fixture_backend(&store_dir).unwrap();
         let loaded = cli_view.load().unwrap();
         assert!(
             loaded
@@ -13309,7 +13311,7 @@ mod tests {
         use aida_core::db::{DatabaseBackend, GitBackend};
         let store_dir = dir.join(".aida-store");
         std::fs::create_dir_all(&store_dir).unwrap();
-        let seed = GitBackend::new(&store_dir).unwrap();
+        let seed = crate::test_env::home_fixture_backend(&store_dir).unwrap();
         seed.save(&aida_core::RequirementsStore::new()).unwrap();
         let storage = Box::leak(Box::new(Storage::new(&store_dir)));
         McpServer::new(storage, dir.to_path_buf())

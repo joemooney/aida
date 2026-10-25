@@ -103,6 +103,8 @@ fn distributed_project_with_unreachable_store_branch(f: &Fixture) -> PathBuf {
     let proj = f.root.join("proj");
     std::fs::create_dir_all(proj.join(".aida")).unwrap();
     git(&proj, &["init", "-q"]);
+    // trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
+    test_git::enroll_synthetic_home(&proj);
     std::fs::write(proj.join(".aida/config.toml"), "mode = \"distributed\"\n").unwrap();
     std::fs::write(proj.join("README.md"), "hi\n").unwrap();
     git(&proj, &["add", "."]);
@@ -157,6 +159,10 @@ fn store_dir(f: &Fixture, name: &str) -> PathBuf {
 #[test]
 fn explicit_file_dir_routes_tracker_commands_past_not_yet_supported() {
     let f = fixture();
+    // trace:BUG-2017 | ai:codex — explicit HOME parent clone for this
+    // positive dispatch fixture; each requested store path stays nonexistent.
+    git(&f.root, &["init", "-q"]);
+    test_git::enroll_synthetic_home(&f.root);
     let cases: &[(&str, &[&str], &str)] = &[
         ("jira", &["list"], "aida jira config"),
         ("github", &["list"], "aida github config"),

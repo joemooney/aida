@@ -420,6 +420,9 @@ mod tests {
         // Fresh dir is not yet a populated sandbox.
         assert!(!sandbox_is_populated(&store));
 
+        // trace:BUG-2017 | ai:codex — positive seed fixture models HOME.
+        std::fs::create_dir_all(&store).unwrap();
+        crate::test_env::enroll_synthetic_home(&store).unwrap();
         sandbox_create(store.clone(), true, false).expect("create+seed");
 
         // Now it is a populated, override-acceptable store.

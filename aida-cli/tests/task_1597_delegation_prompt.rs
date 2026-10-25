@@ -87,6 +87,8 @@ fn setup_repo(home: &Path, repo: &Path) {
         .status()
         .unwrap();
 
+    // trace:BUG-2017 | ai:codex — explicit positive HOME fixture.
+    test_git::enroll_synthetic_home(repo);
     let bin = env!("CARGO_BIN_EXE_aida");
     let init = command(bin, home, repo)
         .args(["init", "--no-skills", "--no-hooks", "--no-agent-config"])
