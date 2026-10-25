@@ -106,3 +106,11 @@
   added_at: 2026-10-25T13:50:54.938319618Z
   for_role: implementer
   added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a169c3-090b-7350-9b07-de2fa0c4ad61
+  position: 486000
+  added_by: role:implementer
+  note: Existing agy2 owner/worktree only. Apply bounded e3db source-preview recovery/legacy-activation/test corrections plus full R6/Q2; do not start a duplicate worker or stale dispatch extraction. See current antigravity brief145136 and canonical advisor decision.
+  added_at: 2026-10-25T14:52:25.461918334Z
+  for_role: implementer
+  added_by_machine: imac
