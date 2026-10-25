@@ -6503,6 +6503,12 @@ impl RequirementsStore {
                     .map(|s| s.to_uppercase())
                     .unwrap_or_else(|| "REQ".to_string());
 
+                // trace:BUG-2017 | ai:codex
+                if self.dispenser.as_ref().is_some_and(|d| d.node_local_only())
+                    && Requirement::validate_prefix(&prefix).is_none()
+                {
+                    return String::new();
+                }
                 // trace:BUG-2017 | ai:codex — validate formatting/binding before sequence advancement.
                 if self
                     .dispenser
@@ -6532,7 +6538,7 @@ impl RequirementsStore {
             }
             IdFormat::TwoLevel => {
                 // trace:BUG-2017 | ai:codex
-                if self.dispenser.is_some() {
+                if self.dispenser.as_ref().is_some_and(|d| d.node_local_only()) {
                     return String::new();
                 }
                 let feat = feature_prefix
@@ -6603,6 +6609,11 @@ impl RequirementsStore {
         let prefix_upper = prefix.to_uppercase();
         let digits = self.id_config.digits;
         // trace:BUG-2017 | ai:codex
+        if self.dispenser.as_ref().is_some_and(|d| d.node_local_only())
+            && Requirement::validate_prefix(&prefix_upper).is_none()
+        {
+            return String::new();
+        }
         if self
             .dispenser
             .as_ref()

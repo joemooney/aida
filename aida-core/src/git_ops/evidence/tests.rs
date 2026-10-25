@@ -80,6 +80,8 @@ fn clones(seed: &[Requirement]) -> Clones {
     for (k, v) in [("user.email", "t@example.invalid"), ("user.name", "T")] {
         run(&a, &["config", k, v]);
     }
+    // trace:BUG-2017 | ai:codex — evidence union fixtures model established HOME registries.
+    crate::allocation_authority::home_fixture_backend(&a).unwrap();
     std::fs::write(a.join("metadata.yaml"), "name: test\n").unwrap();
     for row in seed {
         write(&a, row);
@@ -95,6 +97,7 @@ fn clones(seed: &[Requirement]) -> Clones {
     for (k, v) in [("user.email", "t@example.invalid"), ("user.name", "T")] {
         run(&b, &["config", k, v]);
     }
+    crate::allocation_authority::home_fixture_backend(&b).unwrap();
     Clones {
         _tmp: tmp,
         tmp: root,

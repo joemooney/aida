@@ -1931,6 +1931,16 @@ impl DatabaseBackend for CachedGitBackend {
 
 #[cfg(test)]
 mod tests {
+    // trace:BUG-2017 | ai:codex — old cache-writer fixtures explicitly model HOME.
+    fn home_fixture_cached(
+        root: &std::path::Path,
+        cache: &std::path::Path,
+    ) -> anyhow::Result<super::CachedGitBackend> {
+        super::CachedGitBackend::with_inner(
+            crate::allocation_authority::home_fixture_backend(root)?,
+            cache,
+        )
+    }
     use super::super::cache::is_cache_lock_error;
     use super::*;
     use tempfile::tempdir;
@@ -1986,7 +1996,7 @@ mod tests {
         let dir = tempdir().unwrap();
         let store_root = dir.path().join("store");
         std::fs::create_dir_all(&store_root).unwrap();
-        let backend = CachedGitBackend::open(&store_root, &dir.path().join("cache.db")).unwrap();
+        let backend = home_fixture_cached(&store_root, &dir.path().join("cache.db")).unwrap();
         let objects = store_root.join("objects");
         let targets: Vec<_> = (1..=8)
             .map(|n| sample_req(&format!("TASK-{n}"), &format!("Target {n}")))
@@ -2049,7 +2059,7 @@ mod tests {
         let store_root = dir.path().join("store");
         std::fs::create_dir_all(&store_root).unwrap();
         let cache_path = dir.path().join("cache.db");
-        let backend = CachedGitBackend::open(&store_root, &cache_path).unwrap();
+        let backend = home_fixture_cached(&store_root, &cache_path).unwrap();
         let targets = [sample_req("TASK-1", "One"), sample_req("TASK-2", "Two")];
         for target in &targets {
             object_store::write_object(&store_root.join("objects"), target).unwrap();
@@ -2079,7 +2089,7 @@ mod tests {
         let dir = tempdir().unwrap();
         let store_root = dir.path().join("store");
         std::fs::create_dir_all(&store_root).unwrap();
-        let backend = CachedGitBackend::open(&store_root, &dir.path().join("cache.db")).unwrap();
+        let backend = home_fixture_cached(&store_root, &dir.path().join("cache.db")).unwrap();
         let added = backend
             .add_requirement(sample_req("TASK-1", "Before"))
             .unwrap();
@@ -2115,7 +2125,7 @@ mod tests {
         let cache_path = dir.path().join(".aida").join("cache.db");
 
         std::fs::create_dir_all(&store_root).unwrap();
-        let backend = CachedGitBackend::open(&store_root, &cache_path).unwrap();
+        let backend = home_fixture_cached(&store_root, &cache_path).unwrap();
 
         // Cache starts empty.
         assert_eq!(backend.cache().requirement_count().unwrap(), 0);
@@ -2146,7 +2156,7 @@ mod tests {
         let store_root = dir.path().join("store");
         let cache_path = dir.path().join(".aida").join("cache.db");
         std::fs::create_dir_all(&store_root).unwrap();
-        let backend = CachedGitBackend::open(&store_root, &cache_path).unwrap();
+        let backend = home_fixture_cached(&store_root, &cache_path).unwrap();
 
         let mut epic = sample_req("EPIC-1097", "epic");
         epic.req_type = RequirementType::Epic;
@@ -2212,7 +2222,7 @@ mod tests {
         let store_root = dir.path().join("store");
         let cache_path = dir.path().join(".aida").join("cache.db");
         std::fs::create_dir_all(&store_root).unwrap();
-        let backend = CachedGitBackend::open(&store_root, &cache_path).unwrap();
+        let backend = home_fixture_cached(&store_root, &cache_path).unwrap();
 
         let mut reqs = Vec::new();
         for i in 1..=3 {
@@ -2272,7 +2282,7 @@ mod tests {
         crate::git_ops::configure_user(&store_root, "Test", "test@example.com").unwrap();
 
         // Long-lived backend: add one row, cache fresh at HEAD-A.
-        let backend = CachedGitBackend::open(&store_root, &cache_path).unwrap();
+        let backend = home_fixture_cached(&store_root, &cache_path).unwrap();
         backend
             .add_requirement(sample_req("FR-1-001", "a"))
             .unwrap();
@@ -2315,7 +2325,7 @@ mod tests {
         std::fs::create_dir_all(&store_root).unwrap();
         crate::git_ops::init(&store_root).unwrap();
         crate::git_ops::configure_user(&store_root, "Test", "test@example.com").unwrap();
-        let backend = CachedGitBackend::open(&store_root, &cache_path).unwrap();
+        let backend = home_fixture_cached(&store_root, &cache_path).unwrap();
         backend
             .add_requirement(sample_req("FR-1-001", "a"))
             .unwrap();
@@ -2436,7 +2446,7 @@ mod tests {
         std::fs::create_dir_all(store_root).unwrap();
         crate::git_ops::init(store_root).unwrap();
         crate::git_ops::configure_user(store_root, "Test", "test@example.com").unwrap();
-        let backend = CachedGitBackend::open(store_root, cache_path).unwrap();
+        let backend = home_fixture_cached(store_root, cache_path).unwrap();
 
         let mut epic = sample_req("EPIC-1", "epic");
         epic.req_type = RequirementType::Epic;
@@ -2645,7 +2655,7 @@ mod tests {
         std::fs::create_dir_all(store_root).unwrap();
         crate::git_ops::init(store_root).unwrap();
         crate::git_ops::configure_user(store_root, "Test", "test@example.com").unwrap();
-        let backend = CachedGitBackend::open(store_root, cache_path).unwrap();
+        let backend = home_fixture_cached(store_root, cache_path).unwrap();
 
         let mut epic = sample_req("EPIC-1", "force-closed epic");
         epic.req_type = RequirementType::Epic;
@@ -2736,7 +2746,7 @@ mod tests {
         std::fs::create_dir_all(&store_root).unwrap();
         crate::git_ops::init(&store_root).unwrap();
         crate::git_ops::configure_user(&store_root, "Test", "test@example.com").unwrap();
-        let backend = CachedGitBackend::open(&store_root, &cache_path).unwrap();
+        let backend = home_fixture_cached(&store_root, &cache_path).unwrap();
 
         // A NON-force-closed epic (stored InProgress) so the terminal status
         // under test is genuinely DERIVED from the archived children.
@@ -2826,7 +2836,7 @@ mod tests {
         crate::git_ops::configure_user(&store_root, "Test", "test@example.com").unwrap();
 
         // Long-lived backend A: three rows, cache fresh at HEAD-A.
-        let backend = CachedGitBackend::open(&store_root, &cache_a).unwrap();
+        let backend = home_fixture_cached(&store_root, &cache_a).unwrap();
         backend
             .add_requirement(sample_req("FR-1-001", "a"))
             .unwrap();
@@ -2877,7 +2887,7 @@ mod tests {
         );
 
         // Ground truth: a brand-new cache full-rebuilt at the same HEAD.
-        let fresh = CachedGitBackend::open(&store_root, &cache_fresh).unwrap();
+        let fresh = home_fixture_cached(&store_root, &cache_fresh).unwrap();
         let rebuild_rows = row_snapshot(&fresh);
 
         assert_eq!(
@@ -2903,7 +2913,7 @@ mod tests {
         crate::git_ops::init(&store_root).unwrap();
         crate::git_ops::configure_user(&store_root, "Test", "test@example.com").unwrap();
 
-        let backend = CachedGitBackend::open(&store_root, &cache_path).unwrap();
+        let backend = home_fixture_cached(&store_root, &cache_path).unwrap();
         backend
             .add_requirement(sample_req("FR-1-001", "keep"))
             .unwrap();
@@ -2959,7 +2969,7 @@ mod tests {
         crate::git_ops::init(&store_root).unwrap();
         crate::git_ops::configure_user(&store_root, "Test", "test@example.com").unwrap();
 
-        let backend = CachedGitBackend::open(&store_root, &cache_path).unwrap();
+        let backend = home_fixture_cached(&store_root, &cache_path).unwrap();
         backend
             .add_requirement(sample_req("FR-1-001", "a"))
             .unwrap();
@@ -3014,7 +3024,7 @@ mod tests {
         crate::git_ops::init(&store_root).unwrap();
         crate::git_ops::configure_user(&store_root, "Test", "test@example.com").unwrap();
 
-        let backend = CachedGitBackend::open(&store_root, &dir.path().join("a.db")).unwrap();
+        let backend = home_fixture_cached(&store_root, &dir.path().join("a.db")).unwrap();
         for i in 1..=N {
             backend
                 .add_requirement(sample_req(&format!("FR-1-{i:04}"), &format!("r{i}")))
@@ -3023,7 +3033,7 @@ mod tests {
 
         // Full rebuild: fresh cache opened at the current HEAD.
         let t0 = Instant::now();
-        let fresh = CachedGitBackend::open(&store_root, &dir.path().join("b.db")).unwrap();
+        let fresh = home_fixture_cached(&store_root, &dir.path().join("b.db")).unwrap();
         let _ = fresh.list_summaries(&ListFilter::default()).unwrap();
         let full = t0.elapsed();
 
@@ -3056,7 +3066,7 @@ mod tests {
         crate::git_ops::init(&store_root).unwrap();
         crate::git_ops::configure_user(&store_root, "Test", "test@example.com").unwrap();
 
-        let backend = CachedGitBackend::open(&store_root, &cache_path).unwrap();
+        let backend = home_fixture_cached(&store_root, &cache_path).unwrap();
         backend
             .add_requirement(sample_req("FR-1-001", "a"))
             .unwrap();
@@ -3096,7 +3106,7 @@ mod tests {
         let cache_path = dir.path().join(".aida").join("cache.db");
         std::fs::create_dir_all(&store_root).unwrap();
 
-        let backend = CachedGitBackend::open(&store_root, &cache_path).unwrap();
+        let backend = home_fixture_cached(&store_root, &cache_path).unwrap();
         backend
             .add_requirement(sample_req("FR-1-001", "a"))
             .unwrap();
@@ -3109,7 +3119,7 @@ mod tests {
         drop(backend);
         std::fs::remove_file(&cache_path).unwrap();
 
-        let backend = CachedGitBackend::open(&store_root, &cache_path).unwrap();
+        let backend = home_fixture_cached(&store_root, &cache_path).unwrap();
         // Open triggered ensure_cache_fresh, which detected stale and rebuilt.
         assert_eq!(backend.cache().requirement_count().unwrap(), 2);
     }
@@ -3124,7 +3134,7 @@ mod tests {
         let store_root = dir.path().join("store");
         let cache_path = dir.path().join(".aida").join("cache.db");
         std::fs::create_dir_all(&store_root).unwrap();
-        let backend = CachedGitBackend::open(&store_root, &cache_path).unwrap();
+        let backend = home_fixture_cached(&store_root, &cache_path).unwrap();
 
         let fixture = backend
             .add_requirement(sample_req("BUG-34", "fixture"))
@@ -3173,7 +3183,7 @@ mod tests {
         let store_root = dir.path().join("store");
         let cache_path = dir.path().join(".aida").join("cache.db");
         std::fs::create_dir_all(&store_root).unwrap();
-        let backend = CachedGitBackend::open(&store_root, &cache_path).unwrap();
+        let backend = home_fixture_cached(&store_root, &cache_path).unwrap();
         let mut added = Vec::new();
         for i in 1..=4 {
             added.push(
@@ -3221,7 +3231,7 @@ mod tests {
         let store_root = dir.path().join("store");
         let cache_path = dir.path().join(".aida").join("cache.db");
         std::fs::create_dir_all(&store_root).unwrap();
-        let backend = CachedGitBackend::open(&store_root, &cache_path).unwrap();
+        let backend = home_fixture_cached(&store_root, &cache_path).unwrap();
         let first = backend
             .add_requirement(sample_req("TASK-1", "one"))
             .unwrap();
@@ -3258,7 +3268,7 @@ mod tests {
         let cache_path = dir.path().join(".aida").join("cache.db");
         std::fs::create_dir_all(&store_root).unwrap();
         let backend: Box<dyn DatabaseBackend> =
-            Box::new(CachedGitBackend::open(&store_root, &cache_path).unwrap());
+            Box::new(home_fixture_cached(&store_root, &cache_path).unwrap());
         backend
             .add_requirement(sample_req("TASK-1", "one"))
             .unwrap();
@@ -3292,7 +3302,7 @@ mod tests {
     }
 
     fn backend_as_cached(b: &dyn DatabaseBackend) -> CachedGitBackend {
-        CachedGitBackend::open(
+        home_fixture_cached(
             b.path(),
             &b.path().parent().unwrap().join(".aida").join("cache.db"),
         )
@@ -3310,7 +3320,7 @@ mod tests {
         crate::git_ops::init(&store_root).unwrap();
         crate::git_ops::configure_user(&store_root, "Test", "test@example.com").unwrap();
         {
-            let backend = CachedGitBackend::open(&store_root, &cache_path).unwrap();
+            let backend = home_fixture_cached(&store_root, &cache_path).unwrap();
             backend
                 .add_requirement(sample_req("BUG-1", "first"))
                 .unwrap();
@@ -3391,7 +3401,7 @@ mod tests {
         let scope = CacheReadScope::new();
         scope.configure(false, None);
         let started = std::time::Instant::now();
-        let backend = CachedGitBackend::open(&store_root, &cache_path)
+        let backend = home_fixture_cached(&store_root, &cache_path)
             .expect("an unbudgeted open must wait out the writer");
         let elapsed = started.elapsed();
         release.join().unwrap();
@@ -3425,7 +3435,7 @@ mod tests {
 
         // Main checkout: build the cache with one committed row.
         {
-            let main = CachedGitBackend::open(&store_root, &main_cache).unwrap();
+            let main = home_fixture_cached(&store_root, &main_cache).unwrap();
             main.add_requirement(sample_req("BUG-1", "first")).unwrap();
         }
         let wt_cache = wt_aida.join("cache.db");
@@ -3471,7 +3481,7 @@ mod tests {
         );
 
         let started = std::time::Instant::now();
-        let reader = CachedGitBackend::open(&store_root, &wt_cache)
+        let reader = home_fixture_cached(&store_root, &wt_cache)
             .expect("worktree reader must open behind the live writer");
         let rows = reader.list_summaries(&ListFilter::default()).unwrap();
         let elapsed = started.elapsed();
@@ -3545,7 +3555,7 @@ mod tests {
         std::fs::create_dir_all(&store_root).unwrap();
         crate::git_ops::init(&store_root).unwrap();
         crate::git_ops::configure_user(&store_root, "Test", "test@example.com").unwrap();
-        let backend = CachedGitBackend::open(&store_root, &cache_path).unwrap();
+        let backend = home_fixture_cached(&store_root, &cache_path).unwrap();
         for (id, title) in [
             ("FR-1-001", "gen0"),
             ("FR-1-002", "gen0"),
@@ -3599,7 +3609,7 @@ mod tests {
         let (tx, rx) = std::sync::mpsc::channel();
         let thread_cache_path = project_cache_path.clone();
         std::thread::spawn(move || {
-            let result = CachedGitBackend::open(&store_root, &thread_cache_path)
+            let result = home_fixture_cached(&store_root, &thread_cache_path)
                 .unwrap()
                 .list_summaries(&ListFilter::default())
                 .unwrap()
@@ -3666,7 +3676,7 @@ mod tests {
         let (tx, rx) = std::sync::mpsc::channel();
         let thread_cache_path = project_cache_path.clone();
         std::thread::spawn(move || {
-            let result = CachedGitBackend::open(&store_root, &thread_cache_path)
+            let result = home_fixture_cached(&store_root, &thread_cache_path)
                 .and_then(|backend| backend.list_summaries(&ListFilter::default()).map(|_| ()))
                 .map_err(|err| format!("{err:#}"));
             let _ = tx.send(result);
@@ -4322,7 +4332,7 @@ mod tests {
                             .then_some(counts)
                     };
                     if constructor {
-                        let opened = CachedGitBackend::open(&store_root, &cache_path).unwrap();
+                        let opened = home_fixture_cached(&store_root, &cache_path).unwrap();
                         let counts = test_counts();
                         if let Some(c) = skipped(counts.clone()) {
                             skipped_runs.push(c);
@@ -5338,7 +5348,7 @@ mod tests {
             Some(ReadBudget(std::time::Duration::from_millis(300))),
         );
         backend.list_summaries(&ListFilter::default()).unwrap();
-        let second = CachedGitBackend::open(&store, &path).unwrap();
+        let second = home_fixture_cached(&store, &path).unwrap();
         let start = std::time::Instant::now();
         second.list_summaries(&ListFilter::default()).unwrap();
         assert!(start.elapsed() < std::time::Duration::from_millis(250));

@@ -7,7 +7,14 @@ proposal. This slice introduces the common-Git-directory authority setting and
 shared allocation/persistence admission. It does not enroll the operator's clone.
 Pseudonymous bootstrap and home canonical promotion belong to slice 2; full
 reconciliation conflict preflight/audit and scanner integration belong to slice 3.
-No transport profile or scanner files are changed.
+No transport profile or scanner files are changed. Exact shared-method ownership
+was recorded in canonical BUG-2017 and STORY-1742 comments before resumed edits.
+BUG-2017 owns model/dispenser/node/block and backend candidate-ID/allocation
+admission methods; STORY-1742 consumes the admitted candidate plan later. A live
+attached dispenser persists a sequence reservation during candidate assembly,
+including `BulkWriter::add`; it is not a pure serialization preview. The later
+content gate must reject unsafe candidates before counters/oplog/objects/refs,
+without taking an outer transport-policy lock inside an existing store lock.
 
 The local file `aida-allocation.toml` in the common Git directory contains exactly
 `version = 1` and `authoritative = true|false`. Missing means node-local only;

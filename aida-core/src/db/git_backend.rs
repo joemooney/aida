@@ -2914,8 +2914,10 @@ pub struct BulkWriter<'a> {
 
 impl<'a> BulkWriter<'a> {
     /// Add a requirement to the batch, assigning a spec_id from the live
-    /// metadata counters when missing. The requirement is buffered in memory;
-    /// nothing is written to disk until `finish()` is called.
+    /// metadata counters when missing. Objects and oplog entries are buffered
+    /// until `finish()`. An attached persistent dispenser may reserve a local
+    /// sequence during `add()`; candidate construction is not a pure preview.
+    // trace:BUG-2017 | ai:codex
     pub fn add(&mut self, mut req: Requirement) -> Result<&Requirement> {
         // trace:BUG-2017 | ai:codex
         if req.spec_id.is_some() || req.agreed_id.is_some() {

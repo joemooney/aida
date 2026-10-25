@@ -162,13 +162,14 @@ fn node(root: &Path) -> Result<String> {
 }
 
 fn local_id(id: &str, node: &str) -> bool {
-    let Some((prefix, sequence)) = id.rsplit_once(&format!("-{node}-")) else {
+    let id = id.to_ascii_uppercase();
+    let marker = format!("-{}-", node.to_ascii_uppercase());
+    let Some((prefix, sequence)) = id.rsplit_once(marker.as_str()) else {
         return false;
     };
+    let prefix = prefix.strip_prefix('$').unwrap_or(prefix);
     !prefix.is_empty()
-        && prefix
-            .chars()
-            .all(|c| c.is_ascii_uppercase() || c == '$' || c == '_')
+        && prefix.chars().all(|c| c.is_ascii_uppercase())
         && !sequence.is_empty()
         && sequence.chars().all(|c| c.is_ascii_digit())
         && sequence.parse::<u32>().is_ok_and(|n| n > 0)
@@ -206,7 +207,7 @@ pub fn admit(
                     Some(b) => b,
                     None => binding.insert(node(root)?),
                 };
-                if !local_id(id, binding) {
+                if !crate::object_store::valid_spec_id_format(id) || !local_id(id, binding) {
                     bail!("new or changed global display IDs refuse on a non-authoritative clone; nothing was written")
                 }
             } else if previous.is_none() && req.spec_id.is_none() {
@@ -327,9 +328,19 @@ impl CloneDispenser {
     }
 }
 impl crate::dispenser::Dispenser for CloneDispenser {
+    fn node_local_only(&self) -> bool {
+        true
+    }
     fn admit_requirement(&self, req: &crate::Requirement) -> Result<()> {
         if resolve(&self.root)?.authoritative {
             return Ok(());
+        }
+        if req
+            .prefix_override
+            .as_ref()
+            .is_some_and(|p| crate::Requirement::validate_prefix(p).is_none())
+        {
+            bail!("invalid node-local requirement prefix")
         }
         if req.spec_id.is_none() && req.agreed_id.is_none() {
             return Ok(());
@@ -341,10 +352,6 @@ impl crate::dispenser::Dispenser for CloneDispenser {
             .collect::<Result<Vec<_>>>()?;
         // An absent spec_id will be generated after admission; check only
         // caller-supplied identities here, then validate the final row at save.
-        if req.spec_id.is_none() && req.agreed_id.is_none() {
-            resolve(&self.root)?;
-            return Ok(());
-        }
         let mut probe = req.clone();
         if probe.spec_id.is_none() {
             probe.spec_id = Some(format!("REQ-{}-1", node(&self.root)?));
@@ -352,16 +359,25 @@ impl crate::dispenser::Dispenser for CloneDispenser {
         admit(&self.root, &[probe], &existing)
     }
     fn format_id(&self, prefix: &str, seq: u32) -> Result<String> {
-        if prefix.is_empty()
+        if prefix.strip_prefix('$').unwrap_or(prefix).is_empty()
             || prefix.len() > 128
             || !prefix
+                .strip_prefix('$')
+                .unwrap_or(prefix)
                 .chars()
-                .all(|c| c.is_ascii_uppercase() || c == '$' || c == '_')
+                .all(|c| c.is_ascii_uppercase())
         {
             bail!("invalid node-local allocation prefix")
         }
         let inner = self.inner()?;
-        inner.format_id(prefix, seq)
+        inner.state()?;
+        let binding = node(&self.root)?;
+        if seq == 0 {
+            bail!("node-local sequence is exhausted or invalid")
+        }
+        // The clone decides the namespace; a custom provider cannot turn an
+        // admitted local sequence into a bare global display ID.
+        Ok(format!("{prefix}-{binding}-{seq:03}"))
     }
     fn next_id(&self, prefix: &str) -> Result<String> {
         self.format_id(prefix, 1)?;
@@ -406,7 +422,12 @@ pub(crate) fn home_fixture_backend(root: &Path) -> Result<crate::GitBackend> {
         crate::git_ops::init(root)?;
     }
     let common = common_dir(root)?;
-    std::fs::write(common.join(CONFIG_FILE), "version=1\nauthoritative=true\n")?;
+    let setting = common.join(CONFIG_FILE);
+    if setting.exists() {
+        require_global(root)?;
+    } else {
+        crate::write_atomic(&setting, "version=1\nauthoritative=true\n")?;
+    }
     crate::GitBackend::new(root)
 }
 
@@ -579,9 +600,17 @@ mod tests {
     fn bug_2017_invalid_prefix_and_wrong_dispenser_mode_refuse_before_counters() {
         use crate::dispenser::{IdMode, MemoryDispenser};
         let (dir, backend) = fixture(false);
-        let mut req = Requirement::new("bad prefix".into(), "fixture".into());
-        req.prefix_override = Some("BUG-42".into());
-        assert!(backend.add_requirement(req).is_err());
+        for prefix in ["BUG-42", "BAD_PREFIX", "$USER", ""] {
+            let mut req = Requirement::new("bad prefix".into(), "fixture".into());
+            req.prefix_override = Some(prefix.into());
+            assert!(backend.add_requirement(req).is_err());
+            assert!(!dir.path().join(".aida/dispenser.toml").exists());
+        }
+        let mut store = backend.load().unwrap();
+        assert!(store
+            .generate_requirement_id(None, Some("$USER"))
+            .is_empty());
+        assert!(store.next_meta_id("$").is_empty());
         assert!(!dir.path().join(".aida/dispenser.toml").exists());
         let memory = std::sync::Arc::new(MemoryDispenser::new(IdMode::Centralized));
         let backend = backend.with_dispenser(crate::models::DispenserHandle(memory.clone()));
@@ -650,6 +679,91 @@ mod tests {
         assert!(!path.with_extension("db-wal").exists());
     }
     #[test]
+    fn bug_2017_sqlite_stale_mode_refuses_before_writable_setup() {
+        let (dir, _) = fixture(false);
+        let path = dir.path().join(".aida/stale.db");
+        let conn = rusqlite::Connection::open(&path).unwrap();
+        conn.execute_batch("CREATE TABLE dispenser_meta (key TEXT PRIMARY KEY, value TEXT);")
+            .unwrap();
+        conn.execute(
+            "INSERT INTO dispenser_meta VALUES ('mode', ?1)",
+            [serde_json::to_string(&crate::dispenser::IdMode::Centralized).unwrap()],
+        )
+        .unwrap();
+        drop(conn);
+        let before = std::fs::read(&path).unwrap();
+        assert!(crate::dispenser::SqliteDispenser::open(
+            path.clone(),
+            crate::dispenser::IdMode::Distributed {
+                node_id: "7".into()
+            }
+        )
+        .is_err());
+        assert_eq!(std::fs::read(&path).unwrap(), before);
+        assert!(!path.with_extension("db-wal").exists());
+        assert!(!path.with_extension("db-shm").exists());
+    }
+    #[test]
+    fn bug_2017_concurrent_work_writers_reserve_distinct_local_sequences() {
+        let (dir, backend) = fixture(false);
+        let before = backend.load().unwrap().next_spec_number;
+        let threads: Vec<_> = (0..8)
+            .map(|i| {
+                let root = dir.path().to_path_buf();
+                std::thread::spawn(move || {
+                    GitBackend::new(&root)
+                        .unwrap()
+                        .with_auto_commit(false)
+                        .add_requirement(Requirement::new(format!("local {i}"), "fixture".into()))
+                        .unwrap()
+                        .spec_id
+                        .unwrap()
+                })
+            })
+            .collect();
+        let ids: std::collections::HashSet<_> =
+            threads.into_iter().map(|t| t.join().unwrap()).collect();
+        assert_eq!(ids.len(), 8);
+        assert!(ids.iter().all(|id| id.starts_with("FR-7-")));
+        let after = backend.load().unwrap();
+        assert_eq!(after.requirements.len(), 8);
+        assert_eq!(after.next_spec_number, before);
+        assert!(after.requirements.iter().all(|req| req.agreed_id.is_none()));
+        assert!(!dir.path().join("registry/blocks.yaml").exists());
+    }
+    #[test]
+    fn bug_2017_first_model_allocation_initializes_under_permanent_dispense_lock() {
+        let (dir, _) = fixture(false);
+        let path = dir.path().join(".aida/dispenser.toml");
+        let handles = crate::BlockRegistry::with_dispense_lock(&path, || {
+            let barrier = std::sync::Arc::new(std::sync::Barrier::new(33));
+            let handles: Vec<_> = (0..32)
+                .map(|_| {
+                    let root = dir.path().to_path_buf();
+                    let barrier = barrier.clone();
+                    std::thread::spawn(move || {
+                        let mut store = GitBackend::new(&root).unwrap().load().unwrap();
+                        barrier.wait();
+                        store.generate_requirement_id(None, Some("BUG"))
+                    })
+                })
+                .collect();
+            barrier.wait();
+            std::thread::sleep(std::time::Duration::from_millis(100));
+            // This held lock must also protect first-time initialization.
+            assert!(!path.exists());
+            Ok(handles)
+        })
+        .unwrap();
+        let ids: std::collections::HashSet<_> =
+            handles.into_iter().map(|h| h.join().unwrap()).collect();
+        assert_eq!(ids.len(), 32);
+        assert!(ids.iter().all(|id| id.starts_with("BUG-7-")));
+        let state: crate::dispenser::DispenserState =
+            toml::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+        assert_eq!(state.sequences.values().sum::<u32>(), 32);
+    }
+    #[test]
     fn bug_2017_legacy_assignment_and_preview_use_bound_local_ids() {
         let (_dir, backend) = fixture(false);
         let mut store = backend.load().unwrap();
@@ -662,6 +776,111 @@ mod tests {
         assert_eq!(store.requirements[0].spec_id.as_deref(), Some("SPEC-7-001"));
         assert_eq!(store.next_spec_number, before);
         backend.save(&store).unwrap();
+    }
+    #[test]
+    fn bug_2017_two_level_work_refuses_before_counters_home_retains_format() {
+        let (dir, backend) = fixture(false);
+        let mut store = backend.load().unwrap();
+        store.id_config.format = crate::models::IdFormat::TwoLevel;
+        assert!(store
+            .generate_requirement_id(Some("APP"), Some("BUG"))
+            .is_empty());
+        assert!(!dir.path().join(".aida/dispenser.toml").exists());
+        let (_home, backend) = fixture(true);
+        let memory = crate::models::DispenserHandle(std::sync::Arc::new(
+            crate::dispenser::MemoryDispenser::new(crate::dispenser::IdMode::Centralized),
+        ));
+        let mut store = backend.with_dispenser(memory).load().unwrap();
+        store.id_config.format = crate::models::IdFormat::TwoLevel;
+        assert_eq!(
+            store.generate_requirement_id(Some("APP"), Some("BUG")),
+            "APP-BUG-001"
+        );
+    }
+    #[test]
+    fn bug_2017_stale_stored_mode_refuses_without_rewriting_counter_state() {
+        for mode in [
+            crate::dispenser::IdMode::Centralized,
+            crate::dispenser::IdMode::Distributed {
+                node_id: "other".into(),
+            },
+        ] {
+            let (dir, backend) = fixture(false);
+            let state = toml::to_string(&crate::dispenser::DispenserState::new(mode)).unwrap();
+            let path = dir.path().join(".aida/dispenser.toml");
+            std::fs::write(&path, &state).unwrap();
+            assert!(backend
+                .add_requirement(Requirement::new("stale state".into(), "fixture".into()))
+                .is_err());
+            assert_eq!(std::fs::read_to_string(path).unwrap(), state);
+            assert!(!dir.path().join("metadata.yaml").exists());
+        }
+    }
+    #[test]
+    fn bug_2017_opaque_binding_survives_case_insensitive_display_lookup_and_update() {
+        let (dir, backend) = fixture(false);
+        let path = dir.path().join(".aida/node.toml");
+        let mut node = crate::NodeConfig::load(&path).unwrap();
+        node.node_id = "0123456789abcdef0123456789abcdef".into();
+        node.save(&path).unwrap();
+        let mut req = backend
+            .add_requirement(Requirement::new("opaque local".into(), "fixture".into()))
+            .unwrap();
+        req.spec_id = req.spec_id.map(|id| id.to_ascii_uppercase());
+        backend.update_requirement(&req).unwrap();
+        assert_eq!(
+            backend.get_requirement(&req.id).unwrap().unwrap().id,
+            req.id
+        );
+    }
+    #[test]
+    fn bug_2017_provider_cannot_format_a_local_sequence_as_global() {
+        use crate::dispenser::{Dispenser, DispenserState, IdMode, MemoryDispenser};
+        struct BareFormatting(MemoryDispenser);
+        impl Dispenser for BareFormatting {
+            fn next(&self, prefix: &str) -> Result<u32> {
+                self.0.next(prefix)
+            }
+            fn peek(&self, prefix: &str) -> Result<u32> {
+                self.0.peek(prefix)
+            }
+            fn state(&self) -> Result<DispenserState> {
+                self.0.state()
+            }
+            fn format_id(&self, _prefix: &str, seq: u32) -> Result<String> {
+                Ok(format!("BUG-{seq}"))
+            }
+        }
+        let (_dir, backend) = fixture(false);
+        let provider = crate::models::DispenserHandle(std::sync::Arc::new(BareFormatting(
+            MemoryDispenser::new(IdMode::Distributed {
+                node_id: "7".into(),
+            }),
+        )));
+        let mut req = Requirement::new("bound format".into(), "fixture".into());
+        req.req_type = crate::RequirementType::Bug;
+        let req = backend
+            .with_dispenser(provider)
+            .add_requirement(req)
+            .unwrap();
+        assert_eq!(req.spec_id.as_deref(), Some("BUG-7-001"));
+    }
+    #[test]
+    fn bug_2017_exhausted_sequence_refuses_without_reset_or_global_fallback() {
+        let (dir, backend) = fixture(false);
+        let mut state =
+            crate::dispenser::DispenserState::new(crate::dispenser::IdMode::Distributed {
+                node_id: "7".into(),
+            });
+        state.sequences.insert("GLOBAL".into(), u32::MAX);
+        let bytes = toml::to_string(&state).unwrap();
+        let path = dir.path().join(".aida/dispenser.toml");
+        std::fs::write(&path, &bytes).unwrap();
+        assert!(backend
+            .add_requirement(Requirement::new("exhausted".into(), "fixture".into()))
+            .is_err());
+        assert_eq!(std::fs::read_to_string(path).unwrap(), bytes);
+        assert!(!dir.path().join("metadata.yaml").exists());
     }
     #[test]
     fn bug_2017_core_canonical_promotion_refuses_before_registry_creation() {

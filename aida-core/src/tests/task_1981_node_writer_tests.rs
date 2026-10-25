@@ -25,6 +25,8 @@ fn fixture() -> (tempfile::TempDir, PathBuf, PathBuf, PathBuf) {
         .unwrap()
         .success());
     init(&repo).unwrap();
+    // trace:BUG-2017 | ai:codex — this writer-lock fixture explicitly models HOME.
+    crate::allocation_authority::home_fixture_backend(&repo).unwrap();
     configure_user(&repo, "Test", "test@example.com").unwrap();
     for target in [&repo, &bare] {
         for (key, value) in [

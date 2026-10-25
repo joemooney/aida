@@ -7751,6 +7751,7 @@ mod tests {
         let aida2 = dir.path().join("aida2");
         git(dir.path(), &["clone", bare.to_str().unwrap(), "aida2"]).unwrap();
         configure_user(&aida2, "Alice", "alice@example.com").unwrap();
+        crate::allocation_authority::home_fixture_backend(&aida2).unwrap();
 
         let node_id2 = register_node(&aida2, 2, "alice-dev").unwrap();
         assert_eq!(node_id2, "2");
@@ -8250,6 +8251,9 @@ mod tests {
         type_prefix: &str,
         size: u32,
     ) -> Result<(u32, u32)> {
+        // trace:BUG-2017 | ai:codex — established coordinated allocation fixture.
+        crate::allocation_authority::home_fixture_backend(clone)?;
+
         use crate::node::BlockRegistry;
         let blocks_path = clone.join("registry").join("blocks.yaml");
         for attempt in 0..MAX_CAS_RETRIES {
@@ -11793,6 +11797,8 @@ mod tests {
         std::fs::create_dir_all(&repo).unwrap();
         run_git(&bare, &["init", "--bare", "-q", "-b", "aida-store"]);
         run_git(&repo, &["init", "-q", "-b", "aida-store"]);
+        // trace:BUG-2017 | ai:codex
+        crate::allocation_authority::home_fixture_backend(&repo).unwrap();
         run_git(&repo, &["config", "user.email", "t@example.com"]);
         run_git(&repo, &["config", "user.name", "t"]);
         run_git(&repo, &["remote", "add", "origin", bare.to_str().unwrap()]);
