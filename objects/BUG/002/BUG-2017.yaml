@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T22:12:54.027870933Z
-modified_at: 2026-10-25T14:17:45.922885489Z
+modified_at: 2026-10-25T14:19:42.379342568Z
 req_type: Bug
 tags:
 - id-allocation
@@ -634,6 +634,11 @@ comments:
     Concrete causes and bounded fixes in progress on same branch: lib1 missing golden help rows for config allocation (snapshot regenerated/inspected); contracts manual guard rejects two source spec IDs in user prose (replaced with plain follow-up language, trace comments retained); HOME promotion unit fixture relied on operator global Git identity (configure only exact temp repo); concurrent bound-counter test reproduced locally on regular /tmp filesystem at round2 with unsafe-state refusal. Reader can observe nlink0 when another writer atomically replaces the opened inode. Added bounded reopen ONLY for that unlinked snapshot; nlink2, symlink, FIFO, ownership/mode/size checks remain strict. No automatic counter recreation, no skipped assertion/test, no real HOME authority or global Git identity edit. Focused and identity-free regular-filesystem replay running before normal follow-up push. Earlier37/native379/fast/compile evidence remains recorded, not misrepresented as current CI green. Existing full S2/S3 scope and all holds preserved. Please use forthcoming final head for any exact-head recheck; no extra broad author/peer cycle requested.
   created_at: 2026-10-25T14:17:45.922885489Z
   modified_at: 2026-10-25T14:17:45.922885489Z
+- id: 01a1736e-79ab-7431-83d8-0f58a0eafc85
+  author: joe
+  content: 'ADVISOR partial CI-repair evidence read2026-10-25~14:17UTC, not approval or completion: owner current dirty diff on published eff2 changes work_binding::read to bounded nlink0 reopen (8 attempts, fresh O_NOFOLLOW/O_NONBLOCK/bounded singly-linked/uid/mode validation retained) and adds explicit synthetic local Git author in HOME promotion fixture; help golden+manual also dirty. Read /tmp/bug2017-eff2-ci-race-repro.log: original linked-WT test passes round0 then FAILS round1 with unsafe WORK state; identity-free HOME probe also reproduces author-identity failure. Exact metadata predicate is still not independently instrumented/proven. Read /tmp/bug2017-eff2-ci-focused-fix.log: updated allocation_authority/work_binding 37 tests PASS including original linked160unique/next161 and hardlink/FIFO/missingstate guards; /tmp/bug2017-eff2-help-snapshot-verify.log exact golden test PASS after managed regeneration. These are AUTHOR runs on WIP, not my executed tests, clean immutable head proof, stress guarantee or F4/F6 closure. At this source observation bootstrap legacy NodeConfig/provider validation and native pre-MCP UUID/expected-edge assertions are still missing; keep combined brief140837, own attested RC/hold and latest-main prerequisite. No new broad local suite requested, actual corrected immutable head CI + independent sufficiency remains mandatory.'
+  created_at: 2026-10-25T14:19:42.379342568Z
+  modified_at: 2026-10-25T14:19:42.379342568Z
 history:
 - id: 01a16f08-1847-70c2-a9ec-772710162546
   author: joe
