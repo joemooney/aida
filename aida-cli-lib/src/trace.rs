@@ -169,49 +169,218 @@ pub(crate) fn scan_trace_graph(
 /// and regex-matched when its raw text contains `trace:` and one of the
 /// wanted ids — the common case (a file that never mentions the spec) now
 /// costs one substring search instead of a regex pass over every line.
+///
+/// BUG-2221: the walk is STREAMING — the budget covers directory enumeration
+/// (opening a directory, iterating its entries, descending) as well as file
+/// reads and parsing. The previous shape collected the entire file list
+/// first (`collect_source_files`, unbounded, symlink-cycle-unsafe) and only
+/// then started checking the budget, so the advertised trace deadline never
+/// covered enumeration at all. trace:BUG-2221 | ai:claude
 // trace:BUG-1594 | ai:claude
 pub(crate) fn scan_trace_graph_bounded(
     project_root: &std::path::Path,
     wanted: &HashSet<String>,
     budget: Option<std::time::Duration>,
 ) -> (std::collections::HashMap<String, Vec<TraceHit>>, bool) {
-    use regex::Regex;
     let started = std::time::Instant::now();
+    scan_trace_graph_streaming(project_root, wanted, &mut || {
+        budget.is_some_and(|b| started.elapsed() >= b)
+    })
+}
+
+/// BUG-2221: total directory-entry cap for one trace walk. A pathological
+/// tree (or symlink alias fan-out) stops the walk with `complete = false`
+/// rather than letting the walk's own bookkeeping grow without bound.
+// trace:BUG-2221 | ai:claude
+pub(crate) const TRACE_SCAN_MAX_ENTRIES: usize = 200_000;
+
+/// BUG-2221: how many parsed lines go between deadline checks inside one
+/// file's content pass — bounds how far past the deadline a single huge
+/// file can carry the walk.
+// trace:BUG-2221 | ai:claude
+const TRACE_SCAN_LINE_CHUNK: usize = 256;
+
+/// [`scan_trace_graph_bounded`] with an injected expiry probe — the test
+/// seam the BUG-2221 fixtures use to spend the budget at an exact point in
+/// the traversal (e.g. before the first content file is yielded) without a
+/// wall-clock race. Production callers go through the budget wrapper above.
+///
+/// Semantics (BUG-2221, advisor-approved):
+/// - One deadline covers opening directories, iterating entries, descending,
+///   opening/reading files, and per-chunk parsing. Expiry returns the hits
+///   found so far with `complete = false` — partial truth, never a claimed
+///   complete empty set.
+/// - Directory symlinks: an IN-ROOT alias is followed and its hits keep the
+///   alias's displayed relative path (dedup stays the caller's `sort`/`dedup`
+///   on final pairs, as before). A symlink whose canonical target is an
+///   ANCESTOR of the walk position is a cycle: skipped, `complete = false`.
+///   A symlink pointing OUTSIDE the project root is not descended (the scan
+///   must not silently widen into another repo): `complete = false`.
+/// - A directory or entry the walk cannot read (refusal, unresolved link)
+///   marks `complete = false` instead of silently claiming full coverage.
+/// - Regexes compile once per process.
+/// - Records `linkage.enum` / `linkage.content` sub-phases when the BUG-1993
+///   phase recorder is armed (no-ops otherwise). They are sub-spans of the
+///   aggregate `linkage` phase and overlap `linkage.log` (parallel thread).
+///
+/// [`collect_source_files`] keeps its old unbounded recursive semantics for
+/// its unrelated callers (`trace_tree_coverage`, `lint_constants`).
+// trace:BUG-2221 | ai:claude
+pub(crate) fn scan_trace_graph_streaming(
+    project_root: &std::path::Path,
+    wanted: &HashSet<String>,
+    expired: &mut dyn FnMut() -> bool,
+) -> (std::collections::HashMap<String, Vec<TraceHit>>, bool) {
+    use regex::Regex;
+    use std::sync::OnceLock;
     // Capture the full spec id — including the optional third segment of a
     // node-aware id (`FR-1-042`), or `trace:FR-1-042` would bucket under a
     // bogus `FR-1`.
-    let trace_re =
-        Regex::new(r"\btrace:([A-Z]+-[A-Z0-9]+(?:-[A-Z0-9]+)*-[0-9]+|[A-Z]+-[0-9]+)").unwrap();
-    let sym_re = Regex::new(
-        r"\b(?:fn|struct|enum|trait|type|mod|const|static|function|class|interface)\s+([A-Za-z_][A-Za-z0-9_]*)",
-    )
-    .unwrap();
+    static TRACE_RE: OnceLock<Regex> = OnceLock::new();
+    static SYM_RE: OnceLock<Regex> = OnceLock::new();
+    let trace_re = TRACE_RE.get_or_init(|| {
+        Regex::new(r"\btrace:([A-Z]+-[A-Z0-9]+(?:-[A-Z0-9]+)*-[0-9]+|[A-Z]+-[0-9]+)").unwrap()
+    });
+    let sym_re = SYM_RE.get_or_init(|| {
+        Regex::new(
+            r"\b(?:fn|struct|enum|trait|type|mod|const|static|function|class|interface)\s+([A-Za-z_][A-Za-z0-9_]*)",
+        )
+        .unwrap()
+    });
     // BUG-568: trace comments are indexed only from the LOCAL source tree, so
     // trace markers in sibling repos of a shared-store workspace are never
     // found. Warn loudly (deduped per-process). trace:BUG-568 | ai:claude
     warn_multi_repo_scan_limited(project_root, "trace-comment scan");
 
     let exts = ["rs", "ts", "tsx", "js", "jsx", "py", "sh"];
-    let mut files = Vec::new();
-    collect_source_files(project_root, &exts, &mut files);
-
     let mut out: std::collections::HashMap<String, Vec<TraceHit>> =
         std::collections::HashMap::new();
     let mut complete = true;
-    for path in &files {
-        if budget.is_some_and(|b| started.elapsed() >= b) {
+    let mut entries_seen = 0usize;
+    let walk_started = std::time::Instant::now();
+    let mut content_spent = std::time::Duration::ZERO;
+    let finish = |out: std::collections::HashMap<String, Vec<TraceHit>>,
+                  complete: bool,
+                  content_spent: std::time::Duration| {
+        // BUG-2221: attribution only; no-ops unless `show` armed phases.
+        crate::usage::record_phase("linkage.content", content_spent);
+        crate::usage::record_phase(
+            "linkage.enum",
+            walk_started.elapsed().saturating_sub(content_spent),
+        );
+        (out, complete)
+    };
+
+    // The project root that does not canonicalize (absent/unreadable) keeps
+    // the historical silent-empty result: there is no tree to be incomplete
+    // ABOUT, and non-project fixtures rely on the quiet empty answer.
+    let Ok(root_canon) = std::fs::canonicalize(project_root) else {
+        return finish(out, true, content_spent);
+    };
+    if expired() {
+        return finish(out, false, content_spent);
+    }
+    // Walk frames: the open directory iterator plus its CANONICAL path (the
+    // cycle fence — a descent whose canonical target equals any open frame's
+    // canonical path would loop forever).
+    let mut stack: Vec<(std::fs::ReadDir, std::path::PathBuf)> =
+        match std::fs::read_dir(project_root) {
+            Ok(rd) => vec![(rd, root_canon.clone())],
+            Err(_) => return finish(out, false, content_spent),
+        };
+
+    'walk: while !stack.is_empty() {
+        if expired() || entries_seen >= TRACE_SCAN_MAX_ENTRIES {
             complete = false;
-            break;
+            break 'walk;
         }
-        let Ok(content) = std::fs::read_to_string(path) else {
+        let next = stack.last_mut().map(|(rd, _)| rd.next());
+        let Some(next) = next else { break 'walk };
+        let Some(entry) = next else {
+            stack.pop();
+            continue;
+        };
+        entries_seen += 1;
+        let Ok(entry) = entry else {
+            complete = false;
+            continue;
+        };
+        let path = entry.path();
+        if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+            if name.starts_with('.')
+                || name == "target"
+                || name == "node_modules"
+                || name == "vendor"
+            {
+                continue;
+            }
+        }
+        let Ok(file_type) = entry.file_type() else {
+            complete = false;
+            continue;
+        };
+        let is_symlink = file_type.is_symlink();
+        // Same target-kind probe the old `path.is_dir()` made (follows links),
+        // but an unresolvable link is now a recorded gap, not a silent skip.
+        let is_dir = if is_symlink {
+            match std::fs::metadata(&path) {
+                Ok(md) => md.is_dir(),
+                Err(_) => {
+                    complete = false;
+                    continue;
+                }
+            }
+        } else {
+            file_type.is_dir()
+        };
+        if is_dir {
+            let Ok(canon) = std::fs::canonicalize(&path) else {
+                complete = false;
+                continue;
+            };
+            if is_symlink && !canon.starts_with(&root_canon) {
+                // External target: never widen the scan into another tree.
+                complete = false;
+                continue;
+            }
+            if stack.iter().any(|(_, ancestor)| *ancestor == canon) {
+                // Symlink cycle: the branch is skipped, truthfully partial.
+                complete = false;
+                continue;
+            }
+            match std::fs::read_dir(&path) {
+                Ok(rd) => stack.push((rd, canon)),
+                Err(_) => complete = false,
+            }
+            continue;
+        }
+        let Some(ext) = path.extension().and_then(|e| e.to_str()) else {
+            continue;
+        };
+        if !exts.contains(&ext) {
+            continue;
+        }
+        if expired() {
+            complete = false;
+            break 'walk;
+        }
+        let content_started = std::time::Instant::now();
+        let Ok(content) = std::fs::read_to_string(&path) else {
+            content_spent += content_started.elapsed();
             continue;
         };
         // BUG-1594: cheap prefilter before the per-line regex pass.
         if !content.contains("trace:") || !wanted.iter().any(|id| content.contains(id.as_str())) {
+            content_spent += content_started.elapsed();
             continue;
         }
         let lines: Vec<&str> = content.lines().collect();
+        let mut expired_mid_file = false;
         for (i, line) in lines.iter().enumerate() {
+            if i % TRACE_SCAN_LINE_CHUNK == TRACE_SCAN_LINE_CHUNK - 1 && expired() {
+                expired_mid_file = true;
+                break;
+            }
             for cap in trace_re.captures_iter(line) {
                 let id = cap[1].to_string();
                 if !wanted.contains(&id) {
@@ -232,7 +401,7 @@ pub(crate) fn scan_trace_graph_bounded(
                 }
                 let rel = path
                     .strip_prefix(project_root)
-                    .unwrap_or(path)
+                    .unwrap_or(&path)
                     .display()
                     .to_string();
                 out.entry(id)
@@ -240,8 +409,13 @@ pub(crate) fn scan_trace_graph_bounded(
                     .push(TraceHit { file: rel, symbol });
             }
         }
+        content_spent += content_started.elapsed();
+        if expired_mid_file {
+            complete = false;
+            break 'walk;
+        }
     }
-    (out, complete)
+    finish(out, complete, content_spent)
 }
 
 /// STORY-511: the resolved state of the change-request (PR/MR) line in
@@ -882,9 +1056,42 @@ fn collect_git_linkage_inner(
     // commits and marks the scan incomplete; a spawn failure or git error
     // stays the old silent empty result. trace:BUG-1993 | ai:claude
     let wanted_lc: HashSet<String> = ids.iter().map(|s| s.to_ascii_uppercase()).collect();
-    let ((log, commits_scan_incomplete), (files, files_scan_incomplete)) =
+    let ((log, commits_scan_incomplete, oracle_seed), (files, files_scan_incomplete)) =
         std::thread::scope(|s| {
             let log_handle = s.spawn(|| {
+                // BUG-2221: sub-span of the aggregate `linkage` phase. It runs
+                // on a parallel thread, so it OVERLAPS `linkage.enum` /
+                // `linkage.content` (the trace walk) — the sub-phases attribute
+                // where time went, they do not sum to the aggregate.
+                // trace:BUG-2221 | ai:claude
+                let _log_phase = crate::usage::phase("linkage.log");
+                // BUG-2221: show-only (deadline) path — try the exact-query
+                // CLOSED-negative ancestry proof before paying the full
+                // `--all` history walk. A warm complete proof answers the
+                // common no-linkage shape with no ancestry log at all; a
+                // cold/partial proof reports the scan truthfully incomplete
+                // and resumes on later shows; a parsed hit or any
+                // unsupported/degraded condition falls through to the
+                // ORIGINAL query below, unchanged. A fully cold key also runs
+                // the original query and hands back a seed so a complete
+                // zero-reference answer warms the key (published below).
+                // trace:BUG-2221 | ai:claude
+                let mut seed = None;
+                if let Some(d) = deadline {
+                    let (probe, probe_seed) =
+                        crate::show_negative::probe_negative_linkage(project_root, ids, d);
+                    match probe {
+                        crate::show_negative::NegativeProbe::ProvedEmpty => {
+                            return (String::new(), false, None);
+                        }
+                        crate::show_negative::NegativeProbe::Incomplete => {
+                            return (String::new(), true, None);
+                        }
+                        crate::show_negative::NegativeProbe::PositiveHit
+                        | crate::show_negative::NegativeProbe::RunOriginal => {}
+                    }
+                    seed = probe_seed;
+                }
                 let mut args: Vec<&str> = vec![
                     "log",
                     "--all",
@@ -902,9 +1109,12 @@ fn collect_git_linkage_inner(
                     BoundedCommandOutput::Completed(o) if o.status.success() => (
                         String::from_utf8_lossy(&o.stdout).trim_end().to_string(),
                         false,
+                        seed,
                     ),
-                    BoundedCommandOutput::TimedOut => (String::new(), true),
-                    _ => (String::new(), false),
+                    BoundedCommandOutput::TimedOut => (String::new(), true, None),
+                    // A git error keeps the old silent empty result — and is
+                    // never evidence for a seed.
+                    _ => (String::new(), false, None),
                 }
             });
             let trace_res = if scan_trace {
@@ -925,7 +1135,9 @@ fn collect_git_linkage_inner(
             } else {
                 (Vec::new(), false)
             };
-            let log_res = log_handle.join().unwrap_or_else(|_| (String::new(), true));
+            let log_res = log_handle
+                .join()
+                .unwrap_or_else(|_| (String::new(), true, None));
             (log_res, trace_res)
         });
 
@@ -957,6 +1169,16 @@ fn collect_git_linkage_inner(
             }
         })
         .collect();
+
+    // BUG-2221: the original complete collector just proved "no commit
+    // reachable from any current root references these ids" for a cold key;
+    // pin that to the probe's before-snapshot (re-checked inside) and warm the
+    // key. Only a successful, complete, zero-reference answer seeds.
+    // trace:BUG-2221 | ai:claude
+    if let (Some(seed), Some(d), true) = (oracle_seed, deadline, commits.is_empty()) {
+        let _seed_phase = crate::usage::phase("linkage.seed");
+        crate::show_negative::publish_oracle_negative(project_root, seed, d);
+    }
 
     // ---- Branch / worktree / shipped state (anchored on newest commit) ----
     let mut shipped = false;
@@ -3591,3 +3813,7 @@ mod show_forge_budget_tests {
 #[cfg(test)]
 #[path = "tests/bug_1993_show_deadline_tests.rs"]
 mod bug_1993_show_deadline_tests;
+
+#[cfg(test)]
+#[path = "tests/bug_2221_trace_traversal_tests.rs"]
+mod bug_2221_trace_traversal_tests;
