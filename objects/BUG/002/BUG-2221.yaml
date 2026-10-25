@@ -28,7 +28,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T06:38:42.269077518Z
-modified_at: 2026-10-25T16:54:30.005015942Z
+modified_at: 2026-10-25T19:33:01.588985682Z
 req_type: Bug
 comments:
 - id: 01a17250-10a0-76e1-b802-890d5a4ca31b
@@ -173,6 +173,39 @@ comments:
   modified_at: 2026-10-25T16:54:30.005015942Z
   session_id: 01a173f641ad
   harness_version: 2.1.310 (Claude Code)
+- id: 01a1748d-5414-7920-b58e-0c6bc41a4c2b
+  author: joe
+  content: |
+    BUG-2221 PR #2928 is open, head 24698590f70a84b7cbbee630d24adc4ab575c68b (branch bug-2221, base 54c64e26a5). The salvaged wip commit was reworded into three [AI:claude] fix(show) commits (BUG-2221). I pushed without force.
+
+    What's in it: all three signed slices.
+    - One pristine clap tree, plus finer phase accounting.
+    - The CLOSED-negative proof with a bounded local cache.
+    - The streaming, deadline-aware trace walk with a cycle fence.
+    Budgets are unchanged (1000ms/10%/5000ms, 4s SHOW_LINKAGE_DEADLINE).
+
+    Gate (LIGHT):
+    - cargo test -p aida-cli-lib bug_2221: 21 passed.
+    - make check-ci-fast: 35/35.
+    - The extended aida-cli bug_1993_show_phase_timings e2e test was not run locally; CI runs it.
+
+    NEEDS YOUR RULING. These go beyond SKETCH v1; the reasoning is in the PR body:
+    (a) A fully cold key runs the ORIGINAL --all collector (4s opportunity, complete answer). When that run finds zero parsed refs and S/R are unchanged before and after, I seed every current root as CLOSED. Reason: the live repo has 83k commits, so batch-only cold would mean dozens of incomplete shows per key.
+    (b) Batches frame pending OIDs exactly with --no-walk. The discovery walk is fenced with ^closed-parent, and ancestors of CLOSED commits close by inclusion.
+    (c) The warm read uses the outer deadline; only batching yields at the objective. A show with no batch progress runs the original query rather than answering incomplete.
+    (d) branch.* and remote.* config records are left out of the S digest.
+    (e) The S/R snapshot git reads run concurrently.
+
+    Measured, interleaved on the live repo at load 17-33:
+    - Negative TASK-2347 warm: 653-835ms vs live 1648-2224ms. BUG-2221 warm: 755-1050ms vs 1501-1775ms. Answers are identical and complete.
+    - Positive BUG-2222: NOT improved (1456-2166ms vs 1554-1820ms). Same 3 commits; the original walk still runs.
+    - At load ~33, both binaries had BUG-2221 shows of ~3s with linkage.log at only ~113ms and complete=false. That cost is in another linkage stage (branch/worktree probe). It is not diagnosed yet.
+    - Cold seeds can fail while the store is moving.
+
+    No fresh lineage-scoped guard telemetry has been collected and no promotion was done. BUG-2221 is NOT complete. It needs independent review, CI, a ruling on the positive-path remainder, and post-merge telemetry.
+  created_at: 2026-10-25T19:33:01.588985682Z
+  modified_at: 2026-10-25T19:33:01.588985682Z
+  session_id: 4241a6f6-5e91-4400-a83b-2634a13238a7
 history:
 - id: 01a173f1-1a2e-7c12-a2a1-e6bdafd814de
   author: joe
