@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T22:12:54.027870933Z
-modified_at: 2026-10-25T11:21:06.443732704Z
+modified_at: 2026-10-25T11:35:06.656880896Z
 req_type: Bug
 tags:
 - id-allocation
@@ -367,6 +367,11 @@ comments:
     Priority BUG2222 complete on separate sibling branch: non-draft PR2920, ab591048e10caf8d366c6c34cee83842320c7838, reviewer STORY1932 queued. Focused7/7+fast34, no live send/plugin/auth changes or merge. Advisor notified7253aa65-f870-4b4b-b4ed-c5f9a1cf5861. This is ordering, not abandonment of BUG2017 or its signed remaining2/3 slices. Required context rotation handoff records exact next work.
   created_at: 2026-10-25T11:21:06.443732704Z
   modified_at: 2026-10-25T11:21:06.443732704Z
+- id: 01a172d7-c8a0-7c91-b071-d4f22c7ef0c9
+  author: ai:codex:joe
+  content: 'Codex1 resumed existing 01a1716225fa / codex/bug-2017-slice1 at766 under verified process-bound implementer grant. Current111616 and signed round2 read; PR2920 unchanged. S2 implementation boundary: additive opaque WORK binding/counter in clone common Git directory; keep legacy NodeConfig/registry field meanings, migrate consumed counters once under store -> dispense locks, attach effective node-local allocator before init metadata seed. Default/post-clone/separate-store init and local repair/auto-claim callers belong here; shared transport/scanner serialization remains STORY1742, lifecycle/mailbox locks STORY1843. Core HOME-only merge_gate already refuses WORK; caller skip and synthetic promotion/idempotency proof remain. No actual HOME flag, no merge/readiness assertion. F2 distributed legacy positives get exact owned temporary Git/common authority only; no blanket fixture migration. Separate reviewable S2 commits will retain F1 regressions and mark parent incomplete.'
+  created_at: 2026-10-25T11:35:06.656880896Z
+  modified_at: 2026-10-25T11:35:06.656880896Z
 history:
 - id: 01a16f08-1847-70c2-a9ec-772710162546
   author: joe
