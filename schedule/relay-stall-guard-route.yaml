@@ -1,14 +1,6 @@
 job: relay-stall-guard-route
-last_run: 2026-10-16T10:33:29.691043271Z
+last_run: 2026-10-25T04:56:47.963469054Z
 last_by:
   seat: advisor
-  session: b0657c59-d482-4ef7-a931-e3c7b919e148
-  vendor: claude
+  vendor: codex
 result: done
-note: 'The 09:25Z trip came from the pre-#2690 binary. The binary rebuilt at 02:30 runs the check clean (total: 0).'
-due_since: 2026-10-17T00:18:49.512927374Z
-due_reason: on CronJobFailed:relay-stall-guard
-due_failure:
-  trip_id: relay-stall-guard@2026-10-25T04:46:26.016455848Z
-  job: relay-stall-guard
-  error: 'exit 1: '
