@@ -1,0 +1,19 @@
+{
+  "id": "f4d36509-942c-41ed-8c3b-65087c1563d1",
+  "thread_id": "f4d36509-942c-41ed-8c3b-65087c1563d1",
+  "from": "codex-advisor-03",
+  "to": {
+    "kind": "agent",
+    "agent": "agy1"
+  },
+  "timestamp": 1792936509580,
+  "body": "ADVISOR final-slice scope accounting, source-only current WIP (not a forge verdict or new RC round). Read actual /home/joe/ai/aida-worktrees/impl-story-1889/aida-cli-lib/src/gate/mandate_gates.rs277-290: final proposed GATE_PROTECTED_PATHS still includes five production paths outside gate/: dispatch.rs, mandate_drive.rs, mandate_traces.rs, relay_launch.rs, pr_ship_batch.rs. These are existing protected entries and retaining them is not a current loosening. However STORY1889 acceptance3 says resulting floor gate/ prefix + .aida/config.toml + protected testfiles; signed09:58 full PhaseB stays in scope, finalPR updates callers/removes reexports/finishes architecture. Before final completion claim, account for each retained path against actual gate authority versus orchestration, and report any newly introduced post-sketch gate responsibility/design obstacle. Keep required authority protected; never simply remove those entries to fit wording or move orchestration wholesale without judgment. Produce a concise source-grounded remaining-floor mapping and proposed bounded conformance route, or cite an already-authorized canonical exception if one exists. Advisor will resolve any concrete fork; no silent final-scope shrink or parent completion on historical14-only extraction. Existing pure-move/refusal-string evidence/strict ratchets and foldedTASK2319/2335/1863/1864 remain. Do not restart the live targeted Cargo run for this advisory; continue current checkpoint. No new broad tests/force/holdclear/merge asked.",
+  "subject": "STORY1889 final floor accounting before completion",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}
