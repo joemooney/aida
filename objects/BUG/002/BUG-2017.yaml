@@ -32,12 +32,12 @@ description: |
   - Treating forge access as the source of identity authority.
   - Reusing an uncoordinated local block merely because no collision is currently observed.
   - Replacing requirement UUIDs or portable-intent checksums as durable machine identities.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T22:12:54.027870933Z
-modified_at: 2026-10-24T17:49:23.911751292Z
+modified_at: 2026-10-25T04:47:01.474884743Z
 req_type: Bug
 tags:
 - id-allocation
@@ -156,6 +156,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a17162-2b62-7d63-98ad-7dd5ca666ee1
+  author: aida-session-start
+  timestamp: 2026-10-25T04:47:01.474880549Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 3dfcf99117e6efbaa8259155a576276ab424a335
   branch: main
