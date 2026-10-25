@@ -23,7 +23,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-25T09:28:20.953070208Z
+modified_at: 2026-10-25T09:35:05.215768234Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -601,6 +601,23 @@ comments:
   content: 'CURRENT CONFORMANCE EVIDENCE 2026-10-25T09:30Z: main advisor inbox --peek --unread reported empty, while pure reviewed5ce watcher scan (no State/queue/ack/install) completed8877ms and found three pending exact IDs: f441e319 and6753f132 in /home/joe/ai/aida-bug-2017-slice1;3c0a6bd8 in /home/joe/ai/aida-task-2347 (1259 logical acknowledged IDs). Advisor read all3 via ordinary exact-ID mailbox read in their source checkout. Current useful6753f132 reports normal-pushed259f57eb19 history fixture, isolated history contract+34fast pass, F1explicitlyunresolved. Other2 are historicalauthorcheckpoints already covered by newerverifiedreview, no replay. This pins remaining B shared logical inbox resolver: every reader must discover sibling-local mail, not only the watcher consumer; unknown sibling-private receipt semantics remain required. Parent not complete. Source manifest /tmp/advisor-crossroot-current.json, no mail bodies sent through wake text. No live watcher installed/tested.'
   created_at: 2026-10-25T09:28:20.953070208Z
   modified_at: 2026-10-25T09:28:20.953070208Z
+- id: 01a17269-e5ff-7882-87a0-911b8928493b
+  author: joe
+  content: |-
+    STORY-1843 B implementation reader inventory, source main3cbb90b0c94e (advisor read-only, not implementation/completion).
+    Actual duplicated per-root local+canonical reader compositions:
+    - mailbox_cmd.rs command branches at88/205/235/331/494/516/617/629/655/685/754 and notice/summary977: inbox/read/thread/list/latency/notice and decision helpers need common logical source/receipt snapshot with current privacy selection.
+    - mcp.rs tool_read_inbox2889, plus reply/thread resolution2799/2831; current code merges only self.project_root local with project/.aida-store canonical and reads one timestamp watermark. MCP default peek/explicit mark_seen semantics must remain.
+    - mailbox_root.rs mailbox_latency_warning61-80 and lib_part3.rs1159 notice/status composition.
+    - status_awaiting.rs803; agent_launch.rs4174 and4672 launch context/summary; lane_liveness.rs1449; maintenance_schedule.rs2848.
+    - aida-tui/src/redesign/mail.rs195/197 calls CORE read_local_messages/read_local_watermark directly, bypassing CLI glue entirely; a CLI-only resolver does not complete all-reader parity.
+    - core mailbox.rs1173/1203 and CLI mailbox_store.rs115/120/187/241 are current low-level local/canonical/watermark/receipt I/O. Preserve a clear source-local primitive for digest/lifecycle decisions while adding ONE shared logical resolver/snapshot callable from core consumers and CLI/MCP/TUI. Keep canonical-store root and actual requested checkout root as independent typed facts; missing .aida-store alias must not redirect local mailbox discovery (pool0 reproduction already pinned).
+    Important writer boundary: store_push_pull.rs637/710 and mailbox_store digest/archive/retract/delete/migration source reads are not automatically ordinary global views. Do NOT mechanically replace every read_local_messages with a sibling union and thereby silently digest/migrate/delete another source. Map each call's purpose, snapshot ownership and write intent. Required lifecycle flush/retention remains signed C, with its own barriers; no premature live migration.
+    Resolver requirements remain original signed B: same Git-common repository coverage, bounded safe source inventory, local+canonical ID/tombstone precedence, current recipient/private/cohort authority, receipt union only for SAME logical recipient and IDs actually known in each source. Unknown sibling-private messages cannot become acknowledged due a later watermark elsewhere. Partial/unreadable-root behavior must be explicit, never empty means caught up. Pure inspect reads do not mark or create state; explicit ack only covers actually delivered snapshot IDs. Watcher consumes common API rather than keeping its second permanent resolver; existing per-source TASK2347 seam/approvedPR is not silently rewritten here.
+    Conformance fixture matrix must run SAME new sibling-only message through CLI inbox/read/thread/notice, MCP peek+ack, status/awaiting/launch/maintenance/liveness and TUI/core; verify missing store alias, cross-root ack, unknown older private mail, inherited AIDA_USER/child privacy and shared-audience behavior, tombstones and failed root with truthful incomplete/error. Add concurrent arrival after snapshot so an ack does not swallow unseen IDs. Existing live witnesses: mainempty vs6753f132 inBUG2017worktree and3c0a6bd8 inTASK2347worktree; pure reviewed scan discovered them without reading bodies/acks/queue. Do not claim B completed from that watcher success.
+    Exact lexical callsite map is a starting inventory, not an AST-complete proof; implementer/reviewer must account for aliases/indirect callers. This refines mechanics inside already-signed scope, grants no broader mailbox access and introduces no second mail architecture.
+  created_at: 2026-10-25T09:35:05.215768234Z
+  modified_at: 2026-10-25T09:35:05.215768234Z
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
   author: joe
