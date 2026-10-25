@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T15:33:51.496539087Z
-modified_at: 2026-10-25T06:10:55.802813867Z
+modified_at: 2026-10-25T06:32:00.341080649Z
 req_type: Story
 tags:
 - architecture
@@ -265,6 +265,13 @@ comments:
   content: 'PR #2917 F2 follow-up pushed at 88a90b2fd76fe68cc6c114bdbb6125fbec871944 on claude/story-1889-hold-r2: moved project_live_head verbatim into protected gate/merge_hold_core.rs and pinned its placement and field-preservation boundary in merge_hold_core_tests.rs. 98/98 merge_hold unit tests + 34/34 make check-ci-fast gates passed.'
   created_at: 2026-10-25T06:10:55.802813867Z
   modified_at: 2026-10-25T06:10:55.802813867Z
+- id: 01a171c2-4855-7103-83fd-cdd42d4aadc1
+  author: joe
+  content: |-
+    ADVISOR final-slice ruling, verified against current source and signed STORY-1889 comments: PR2917 is independently APPROVED at 88a90b2fd76fe68cc6c114bdbb6125fbec871944, exact-head Build green, public comment6394382434 and canonical PR/parent verdicts recorded. Operator hold retained; final PR4 may continue without parent completion.
+    For PR4 do not add session_reap.rs::review_pr_terminal_gate to NOT_GATE_AUTHORITY: SIGNOFF09:58 explicitly made that list shrink-only. Source1088 confirms this helper is a pure predicate for dead-reviewer cleanup, not merge authority; nevertheless expanding the exemption would change the signed contract. Resolve the old KNOWN_UNPROTECTED entry with a minimal verbatim move of that helper into protected gate code, adjusting its caller and existing focused tests; preserve its process-exited, branch-within-head, PR-terminal behavior and short-circuiting. Do not rename it merely to evade the ratchet or widen another exemption. Keep the cleanup orchestrator outside. Inventory other actual matches in session_reap before deleting its grandfathered line. This is a bounded plan correction, not a new runtime finding on approved2917. Preserve all other final-slice acceptance, strict reexport ratchet and empty grandfather list. Report any concrete type/privacy obstacle before broadening scope. Local gates remain the agreed targeted area plus fast; touched/compile only shared infra or >10files. No hold clearance or merge.
+  created_at: 2026-10-25T06:32:00.341080649Z
+  modified_at: 2026-10-25T06:32:00.341080649Z
 history:
 - id: 01a15f19-1b8d-7a60-bd9c-acf0c42193fc
   author: joe
