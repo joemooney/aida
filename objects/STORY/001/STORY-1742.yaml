@@ -38,7 +38,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T22:02:03.191649035Z
-modified_at: 2026-10-25T01:13:31.116872227Z
+modified_at: 2026-10-25T05:20:42.836272964Z
 req_type: Story
 tags:
 - docs:impacted
@@ -176,6 +176,110 @@ comments:
     Ready for codex1's focused F1 recheck at this head. No hold cleared, no merge, no Slice 3 work; this remains a non-completing (Refs STORY-1742) slice.
   created_at: 2026-10-25T01:13:31.116872227Z
   modified_at: 2026-10-25T01:13:31.116872227Z
+- id: 01a17181-0354-7443-81cd-3d4079fa31f7
+  author: codex2
+  content: |
+    SKETCH v2 (STORY-1742 final slice 3) — codex2 implementation inventory and remaining acceptance
+
+    Design only, codex2 author; advisor ruling requested. No code, approval, grant/containment changes, actual transport, migration or history rewriting. Checked codex2 unread mail and pending briefs before starting: no competing assignment; shared TASK-2347 briefs are codex1 implementation rework, not a transfer of my reviewer lane. PR2915 delta evidence retained; its head remains 91071afddc41add0e43d29a9cfb463a36cd97f50 at this checkpoint. Review/rework takes priority when it arrives.
+
+    Read STORY-1742 full specification and all ten comments, especially OPERATOR DECISION 09:53 and ADVISOR SIGNOFF 10:15. Source baseline: current main 94124569c9b14617a4049909ddbefad5b82a846d. Explicit pending dependency: approved but OPEN PR2910 at 47a41444bbc2b8a07c0949e432350d6efe0b680e, not present on main. Implementation must start from fresh main after that dependency lands, reconcile any changed source, and preserve its endpoint-normalization/credential-routing regressions. This sketch does not approve that PR.
+
+    Scope ledger
+
+    The signed reduction governs: refusal-only scanner, local deny policy, generic intake/template, end-to-end fixtures; receiving-side ingress enforcement and clean-history export tooling are OUT of v1. Original pull acceptance remains IN: neither main nor pending slice2 executes profile pulls. No later comment waives that acceptance. Calling slice3 final while leaving pull plan-only would be false completion. Proposal includes the bounded store-only fast-forward pull below, subject to explicit advisor confirmation of execution/scan ordering. No broker or general sync language.
+
+    Actual remaining-acceptance matrix (source inventory, not a fresh test/approval claim)
+
+    | Requirement | Main today | Pending PR2910 | Required before parent completion |
+    | --- | --- | --- | --- |
+    | Enable/show/disable named profile; no tracked/store configuration | Slice1 present | Retained plus recovery of corrupt disable/show errors | Preserve; harden new private policy/checkpoint IO |
+    | Common-Git-directory sharing across linked worktrees | Present | Retained | Same trust/lock root for policy, receipts and intake |
+    | Bare push only existing aida-store to pinned origin | Execution disabled | One explicit SHA push to refs/heads/aida-store | Scanner must dominate that one attempt |
+    | Clean attached store; no Git operation | No execution | Preflight present | Preserve under lock, revalidate scanned source |
+    | No commit/mail/ID/reconcile/mirror lifecycle push side effects | Plan-only | Isolated executor present | Preserve exactly, including on refusals |
+    | --store-only redundant, --code-only forbidden | Plans present | Executed-path reporting present | Retain in human/JSON and fixture assertions |
+    | Pull configured refs only, no lifecycle, named ref movements | Plan-only | STILL plan-only | Implement safe store-only fetch/FF; no code/rebase/union/auto-ID |
+    | Human/machine effective policy and exact refspecs | Present, prerequisites pending | Push executed=false in plans; pending sanitization notice | Truthful scanner/baseline/policy readiness and pull execution status |
+    | Ordinary clones unchanged until enabled | Present | Retained | Intake enforcement only explicit sanitized mode or enabled WORK profile |
+    | Verified host-owned store hooks including identity gate | No execution | Preserved; project hooks excluded | Retain; scanner cannot exempt or disable identity gate |
+    | No forced/non-FF push or silently broadened endpoint/refspec | Planning pin | Filesystem semantics, credentials and one push present | Preserve; negative tests prove wrong repo receives nothing |
+    | No credentials/identifying content in config diagnostics | Endpoint hashed | Remote output suppressed | Policy values, scan errors, intake and pull errors also never echoed |
+    | Outgoing objects/history AND Git metadata sanitized | Absent | Explicitly absent; push warns | Mandatory full reachability scanner, no tip-only shortcut |
+    | Local deny list and trusted safe baseline/checkpoint | Baseline SHA only | No checkpoint advancement/scanner | Implement local trust/policy rules below |
+    | Generic sanitized intake before object writes | Absent | Absent | Same scanner on final persisted mutation and generated metadata |
+    | WORK→hub→PUBLIC proof and boundary disclosure | No execution | Push fixtures only | Positive chain plus decisive historical/metadata/refusal cases |
+    | Receiving ingress enforcement/history repair | Explicit signed exclusions | Not provided | Document raw-Git/foreign-writer/public-forward limits; do not claim enforcement |
+
+    Current code seams and important mismatches
+
+    transport_profile.rs owns clone-local aida-transport.json, baseline, origin fingerprint, early dispatch, configuration lock and read-only plans. Pending transport_executor.rs freezes endpoint/source, checks attached store and cleanliness under store-writer lock, releases that lock before verified hooks/network, routes credentials through configure_git_remote_credentials and pushes once. It neither scans nor updates baseline/tracking. store_push_pull.rs dispatches profile operations before ordinary storage/lifecycle paths; preserve that boundary.
+
+    Existing identity_gate.rs checks allowlisted author/committer/coauthor emails. It is not a content/history sanitization scanner: its remote-ref exclusion fallback and raw log diagnostics are inappropriate here. Retain it as an additional mandatory hook, not a substitute. git_ops::commit/commit_paths currently override only user.email when public_email is configured; they do not establish safe author names or defeat all inherited GIT_AUTHOR_*/GIT_COMMITTER_* values. redacted_identity defaults an email to redacted@node.invalid and hostname to the raw hostname without an explicit alias. These do not satisfy the signed blanket email/hostname refusal. provenance::capture_in also records filing branch/code SHA/session; a clean title alone is not sanitized intake.
+
+    1. Closed policy and trust/storage
+
+    Add a versioned, data-only policy in <common-git-dir>/aida-transport-policy.json, owner-only, outside tracked files and aida-store. Fixed built-in categories cannot be disabled: email; IPv4; IPv6 including mapped/compressed forms; hostname/FQDN; URL with host. Local deny entries cover private work names, usernames, tenant/project/customer identifiers, internal domains/short hosts, work directory fragments, ticket/branch prefixes and other operator-known tokens. Entry matching is literal/case-normalized, not executable regex/shell. Operator enrollment must explicitly confirm the deny list was reviewed, even if empty; missing/unreadable policy is not an empty list. No automatic harvesting or printing of this machine's real work data.
+
+    Private files and permanent sidecar locks require bounded no-follow/nonblocking regular-file opens, current owner, safe modes, single link and trusted directory handles; reject symlink/FIFO/hardlink/path swaps. Pin exact policy bytes/hash while operating. Unknown versions, invalid encoding/entries/size, lock failure or changed policy refuse. Do not read executable policy or weakening allowlists from project config, incoming store, requirements or environment. Endpoint pin stays credential-free; policy contents never enter status JSON, history or logs. Status shows category/version/readiness only. No result cache in v1, avoiding stale-policy cache claims.
+
+    Baseline: first use requires explicit operator enrollment of a full reviewed PUBLIC-safe commit SHA, locally available, with complete graph and ancestry to the outgoing tip. This trusts that commit's entire reachable closure; it does not prove that closure safe. Enrollment must say so. Never derive trust from arbitrary existing origin/* refs, remote advertisements, the tip itself or slice2 pushes that were never scanned.
+
+    Thereafter persist a private successful-profile-push verification receipt binding pinned origin fingerprint/ref, exact accepted tip, initial trust root, policy version/hash and scanner version. Only a definitive successful push of the inspected tip can advance it. An unrelated fetch/manual remote-tracking change cannot. This records the signed 'last remote-tracking aida-store SHA verified at a previous successful profile push' provenance without trusting a bare ref name; advise whether a physical tracking-ref update is wanted. Prefer no extra push-side tracking-ref mutation. On failure, timeout, ambiguous success, receipt-write failure or policy change, retain the prior trusted boundary and rescan conservatively. Updating policy cannot grandfather newly forbidden old history; require scanning since the original enrolled boundary or explicit operator re-enrollment. No automatic rewriting/clean export.
+
+    2. Outgoing graph scan, before publication/ref mutation
+
+    Under configuration lock, pin policy/baseline/source and validate store under its existing writer lock. Scan actual object-database bytes using bounded read-only Git plumbing with replacements/grafts disabled, no textconv/filter/checkout, no lazy/promisor fetch, no maintenance, no remote access and no hooks. Refuse shallow/incomplete/replace/graft/unsupported alternate arrangements rather than infer omitted history is safe. Validate object types, sizes, graph completion and ancestry; pin full object IDs and close subprocesses on size/count/time limits. Uncertain means refusal.
+
+    For tip T and trusted boundary B, enumerate ALL commits and tree/blob content in Reach(T) minus Reach(B), through every merge parent. Inspect raw commit headers (both names and emails, extra identity-bearing headers), complete messages/trailers/signature payloads, tree entry names/modes, every newly reachable blob and decoded structured string field. Traverse tree paths in every new commit, including reused baseline blobs at new paths; no path/blob dedup may hide an unsafe filename. A secret added and deleted before T still refuses. Do not use diff B..T or --not --remotes as coverage.
+
+    Cover requirement titles/descriptions/comments/history, authors/owners/users, node records, registry/config/metadata, provenance, oplog and attachments: every reachable path is in scope, not just objects/*.yaml. Reject binary/invalid UTF-8, symlink/gitlink payloads and unsupported encodings/formats rather than silently skip. Parse supported YAML/JSON/TOML boundedly and scan decoded scalar values as well as bytes so escapes cannot hide known identifiers. Unknown containers/compression/signature encodings refuse until supported. Do not fetch attachment URLs. Fixed structural filename/schema grammar must be explicit; do not treat all '.yaml' paths as arbitrary DNS names or exempt arbitrary filenames because of their suffix.
+
+    Result diagnostics contain safe fixed schema field/category and ordinal references only; no matched value, snippet, caller-controlled field/path, raw Git stderr or secret-derived preview. Stop at a bounded diagnostic count. Never strip. On any refusal: no push process, no receiver objects, no refs/tracking/baseline movement, no store/provenance repair commit or lifecycle work. Lock-file setup alone is not a Git-ref mutation.
+
+    After successful scan, release store lock as slice2 requires; recheck config/policy/source and run the existing one pinned-SHA push with unchanged credential routing/refspec/hooks. A later local commit cannot ride along. Maintain configuration/policy serialization through result recording. Refs/objects are immutable inputs, not a changing working-tree scan.
+
+    3. Intake: generic template and final write-boundary validation
+
+    Propose aida add --sanitized with read-only --preview/--template behavior, CLI bug type/Draft defaults and a generic AIDA problem/reproduction/expected/actual template using synthetic names. No work logs/attachments/autodetected identity insertion. Preview is local operator review, not a safety attestation or permission token; recheck the actual mutation before writing. Never echo a rejected candidate in validation errors. Preview must not allocate IDs, persist counters, stamp objects/oplog/history, create commits or advance refs.
+
+    In enabled WORK profile, all supported filing surfaces must use the same prepared-write scanner, including ordinary CLI/interactive/batch/queue add, MCP add_requirement/file_finding, REST/gRPC create/batch, comments/edits/imports that amend a filed defect, and backend-generated provenance/history/oplog/metadata. Flags cannot bypass it. Inventory reaches requirements_cli.rs (AddArgs/run_add plus legacy/distributed routes), mcp.rs, findings.rs, comment_cmd.rs, object_store.rs and db/git_backend.rs (single add, save/bulk and batch finish), aida-server/src/rest.rs/service.rs. Build a complete planned serialization/mutation set under the existing writer boundary; check effective commit metadata before writing any object, counter or oplog. Current GitBackend writes metadata/provenance before auto_commit and some commit failures only warn: validating only in auto_commit is too late. Unsupported WORK intake paths must refuse explicitly before mutation until routed through that boundary; do not label them covered because outbound push will catch them later.
+
+    Generated metadata must be public-safe at creation, not stripped after commit. Pseudonymous node binding follows BUG-2017's local-ID design; no new grant authority. No raw hostname/user/email/work branch or private source location is needed for a generic defect. Preserve honest missing/omitted provenance rather than fabricate public source facts; changing write-once provenance behavior needs an explicit ruling. Shared public metadata present only in the trusted baseline is not newly filed content. Ordinary non-profile clones keep existing behavior.
+
+    4. Pull and receiver/PUBLIC-forward boundary
+
+    Keep pull store-only, configured pinned origin/ref, clean attached store, fast-forward only, no code/rebase/union, ID assignment, mailbox publish, reconciliation or fan-out. Plan lists origin tracking/local store refs and exact execution effects before running. Retain credential routing, endpoint/path semantics and verified hook constraints from slice2.
+
+    To satisfy refusal before ref mutation, fetch ONLY the exact store source into a bounded private staging object database without a destination ref, FETCH_HEAD write, tags/submodules or maintenance. Incoming bytes may arrive locally, but no accepted refs move. Validate the offered tip, graph/scan policy and FF ancestry before importing verified objects and advancing refs with old-value checks. Recheck local store/config/cleanliness under the writer boundary. Updating an attached store needs a guarded index/worktree transition with crash recovery; update-ref alone would leave it inconsistent. Report any actual partial local work/ref transition exactly and retain recovery evidence. No promise of atomic network+worktree transactions. Unknown recovery state refuses subsequent operations. Do not reuse ordinary pull_rebase_auto_merge. If this is too large for one final PR, split under Refs; it is still remaining acceptance, not silently deferred.
+
+    Incoming history is not automatically a new trusted baseline. Scan untrusted deltas before accepted ref changes; already trusted closure can be reused. Incoming PUBLIC commits containing normally allowed public emails/URLs may consequently refuse under strict WORK policy. That usability consequence needs advisor ruling, not an implicit exemption or auto-baseline reset.
+
+    v1 deliberately has NO mandatory receiving ingress gate. A controlled GitLab hub may accept raw Git or another unguarded client and may forward it publicly; this scanner cannot prevent that. Show and docs must state this alongside the unsafe-history refusal and operator enrollment duties. Do not install/change hub hooks or automatic public-forwarding/mirror policy in this slice. E2e 'safe chain' uses scanned work history and explicit fixture forwarding. It proves exact inspected bytes survive WORK→hub→PUBLIC, not safety of arbitrary hub content. A protected home-clone forwarding path needs its own explicitly enrolled guard; never infer a work clone's private receipt exists on the receiver. No new receiver broker.
+
+    5. Decisive fixtures and exact file plan
+
+    Proposed new aida-core/src/transport_sanitization.rs with pure category/decoded-value scanner and prepared-serialization validation; private policy loader and graph reader in aida-cli-lib/src/transport_sanitization.rs; extend transport_profile.rs/transport_executor.rs, add transport_pull.rs. Intake/backend/source modules named above, core git_ops.rs/provenance.rs only for bounded safe creation semantics after ruling. Keep identity_gate.rs/store_hooks.rs and aida-core/templates/hooks/aida-store-pre-push.sh intact unless compatibility wiring is necessary; never weaken their checks. Update docs/cli/04-git-lifecycle.md, 07-project-setup.md and developer intake help, command/help/JSON inventories generated through existing workflow.
+
+    Extend aida-cli/tests/story_1742_transport_profile.rs; add story_1742_sanitized_intake.rs and core scanner tests; register shared backend/MCP/server conformance fixtures rather than uncompiled test files. All fake HOME/common Git dirs/remotes; synthetic private markers only, no real work data, actual services or vendor models.
+
+    Required decisive tests:
+    - One positive generic defect with no identifying metadata reaches fixture GitLab hub then fixture PUBLIC, exact inspected SHA; only aida-store moves. Product/code/mirror refs, mailbox, counters, reconciliation and source working tree remain untouched during transport. Preserve all23 pending slice2 regressions, including credentials, mandatory identity refusal, both symlink-parent two-remote cases and wrong repository receiving nothing.
+    - Separate negative per category and private deny token in every title/comment/provenance/node/metadata/oplog/path/attachment and author NAME/email, committer NAME/email, subject/body/coauthor/signature field. Both private IPv4 and IPv6 variants; short host deny entries; escaped structured strings. A clean final tip after historical add/delete, secret on merge side-parent, reused blob/new unsafe path, unsafe ancestor metadata all refuse before any push invocation. Assert receiver object inventory as well as refs is unchanged, local refs/policy checkpoint unchanged, and marker absent from stdout/stderr/JSON/logs.
+    - Policy missing/corrupt/unknown/over-limit/FIFO/symlink/hardlink/wrong-owner and racing replacement; baseline missing/unrelated/unavailable/incomplete; forged tracking ref; replace/graft/shallow/promisor/graph read failures; binary/compression/invalid encoding; traversal/subprocess budget exhaustion. All fail closed, with no lazy network lookup.
+    - Safe scan then tip/config/policy moves, NFF rejection and ambiguous remote acceptance: no later local commit is published, no retry/force, no false baseline advance. Successful push receipt survives restart; local receipt failure does not imply remote refusal. New stricter policy invalidates prior scan eligibility.
+    - Intake tests exercise actual CLI and alternate adapters with inherited private git/env/provenance, proving failure BEFORE object/counter/oplog/ref mutation, and no unsafe error echo. Preview byte-identical state; write rechecks after preview. Safe operator-reviewed generic input persists once. Native ID behavior remains BUG-2017-owned.
+    - Pull safe FF/unchanged cases, dirty/divergent/unsafe/missing-policy and moved-origin cases; staging writes no accepted refs before validation, unsafe incoming data never advances tracking/local refs or trusted push baseline, no code/lifecycle hooks. Injection at each worktree/ref transition proves recoverable partial-state reporting. Raw-Git bypass is documented, not a passing enforcement claim.
+
+    PR structure and requested rulings
+
+    After PR2910 lands: one final slice3 PR if bounded review remains practical, with independently reviewable commits for (i) local policy + graph scanner + push gate/checkpoint, (ii) generic intake plus write-boundary coverage, (iii) pull execution + complete e2e/docs. Otherwise advisor can authorize smaller non-completing PRs; none may close the parent while any acceptance row remains open. Final completing trailer (STORY-1742) only after all agreed rows pass independent review; interim (Refs STORY-1742).
+
+    R1 — Literal email/hostname policy vs valid Git/store identities: do NOT silently allow public/noreply/redacted@node.invalid emails. Signed v1 refuses any email, including synthetic addresses. A pseudonymous non-email author/committer name and empty email might satisfy the scanner, but must demonstrably work with existing mandatory identity policy; no identity-hook exemption. Please rule on the creation representation or explicitly amend the blanket email rule. Likewise define conservative FQDN/short-host recognition vs fixed schema filenames; arbitrary prose words cannot all be classified as hostnames. Local deny list + operator review is a bounded known-identifier policy, not proof that every private fact is detected.
+    R2 — Confirm pull remains required in final slice and staged scan-before-ref-admission design; incoming public email/URL content cannot silently bypass strict policy. Confirm original trust-root rescan/explicit re-enrollment when policy tightens.
+    R3 — Confirm safe-at-creation omissions for work-specific provenance and the private successful-push receipt interpretation; no rewriting of old unsafe commits or migration. Without these rulings, report exact unfulfilled matrix rows rather than declare the WORK export path universally safe.
+  created_at: 2026-10-25T05:20:42.836272964Z
+  modified_at: 2026-10-25T05:20:42.836272964Z
 history:
 - id: 01a16ee2-ad7a-7b30-aaeb-ec8f892fbe76
   author: joe
