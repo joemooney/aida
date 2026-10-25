@@ -308,7 +308,7 @@ pub(crate) fn classify_drain_merge_failure(
     // `MergeHoldRefusal`, so promote its distinctive policy detail to the same
     // non-transient kind before generic tool-exit handling.
     if forge == crate::forge::ForgeKind::GitHub
-        && auto_complete::is_branch_policy_merge_refusal(&detail)
+        && crate::gate::branch_policy::is_branch_policy_merge_refusal(&detail)
     {
         return auto_complete::PhaseFailure::of(
             auto_complete::FailureKind::MergeHold,

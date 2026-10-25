@@ -190,9 +190,9 @@ fn many_hold_path_calls_resolve_the_primary_checkout_at_most_once() {
 
 #[test]
 fn the_store_resolver_never_spawns_git() {
-    let src = include_str!("../merge_hold.rs");
+    let src = include_str!("../merge_hold_core.rs");
     let start = src.find("pub(crate) fn hold_store_root(").unwrap();
-    let end = start + src[start..].find("\nfn holds_dir(").unwrap();
+    let end = start + src[start..].find("\npub(crate) fn holds_dir(").unwrap();
     let body = &src[start..end];
     assert!(
         !body.contains("Command::new"),
@@ -225,7 +225,7 @@ fn list_json_reports_stray_markers_with_their_label_only_state() {
         ])
     );
     // The list command emits exactly these rows, in text and JSON alike.
-    let cmd = include_str!("../merge_hold_cmd.rs");
+    let cmd = include_str!("../../merge_hold_cmd.rs");
     assert!(cmd.contains("let strays = merge_hold::stray_worktree_markers(&root);"));
     assert!(cmd.contains(
         "\"stray_worktree_markers\": merge_hold::stray_markers_json(&strays, &label_only)"
@@ -237,7 +237,7 @@ fn list_json_reports_stray_markers_with_their_label_only_state() {
 
 #[test]
 fn the_standalone_reviewer_adopts_its_marker_after_collecting_the_verdict() {
-    let src = include_str!("../queue_cmd.rs");
+    let src = include_str!("../../queue_cmd.rs");
     let collect = src
         .find("crate::review_verdict::collect_standalone_verdict(")
         .expect("verdict collection");
