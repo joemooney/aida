@@ -32,7 +32,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-25T16:23:29.497775220Z
-modified_at: 2026-10-25T16:25:00.692519004Z
+modified_at: 2026-10-25T16:25:04.321046898Z
 req_type: Task
 tags:
 - ship-deadline
@@ -42,6 +42,10 @@ relationships:
 - rel_type: References
   target_id: 01a113ff-b37a-7e43-9a25-2611b8c00bf2
   created_at: 2026-10-25T16:25:00.692514801Z
+  created_by: joe
+- rel_type: References
+  target_id: 01a15172-987d-76b3-9c11-7c8d581c0f93
+  created_at: 2026-10-25T16:25:04.321040935Z
   created_by: joe
 comments:
 - id: 01a173e1-1c27-7be2-b965-f5c30a7e3c41
@@ -64,6 +68,10 @@ history:
 - id: 01a173e1-3809-7db0-b50e-24116f7d18e7
   author: joe
   timestamp: 2026-10-25T16:25:02.217910937Z
+  changes: []
+- id: 01a173e1-4653-7cc3-b069-1a988600d9c9
+  author: joe
+  timestamp: 2026-10-25T16:25:05.875174668Z
   changes: []
 filed_at:
   code_sha: 54c64e26a58810f213f0a0fa1720a69bcce37ea3
