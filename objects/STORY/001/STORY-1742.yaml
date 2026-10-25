@@ -38,7 +38,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T22:02:03.191649035Z
-modified_at: 2026-10-25T06:35:34.628318238Z
+modified_at: 2026-10-25T06:40:25.456652991Z
 req_type: Story
 tags:
 - docs:impacted
@@ -328,6 +328,31 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Prior blockers resolved and Build green; filesystem origin normalization can push the store to a different repository.. No triage reason was given.'
   created_at: 2026-10-25T06:35:34.628310821Z
   modified_at: 2026-10-25T06:35:34.628310821Z
+- id: 01a171c9-fd70-7293-9d48-8d7616e63232
+  author: codex2
+  content: |
+    WRITER/LOCK INVENTORY (STORY-1742 signed v2) — codex2, reviewer/design only
+
+    Pinned local AND forge main: 94124569c9b14617a4049909ddbefad5b82a846d. Read current canonical comments including binding R1-R3 and S3a-d signoff. PR2910 remains explicitly pending at47a41444bbc2b8a07c0949e432350d6efe0b680e; no implementation admission by this report.
+
+    Concrete report: /tmp/codex2-story1742-writer-lock-inventory-94124569.md
+    SHA256: f2150f805c86882a1f0d8a98d1ebbdec737e83c4f933d8f722f348a40e313103
+    Searchable callsite annex: /tmp/codex2-story1742-writer-callsite-audit-94124569.json
+    SHA256: f7ee0c1990b35d7d91ce9e455b1617197f0f5c0e1ad6f57929d1b2404545a14c
+    The annex includes1,522 lexical callsites (including inline test/comment/non-store receiver candidates), with exact file/line, nearest function and reproducible patterns; it is not misrepresented as an AST production-completeness proof. Report maps adapter families and write owners to actual mutation cut points, existing helpers/tests and decisive missing conformance cases, using the prior335-function TASK1930 writer catalog as a wider audit baseline.
+
+    Actionable execution findings:
+    1. No shared complete prepared mutation exists. Single add currently stamps provenance/allocates, saves metadata2477, appends oplog2490 then writes object2500 in db/git_backend.rs. stage_requirement_update records ops before object write; batch/full save has metadata-before-object effects too. Validate complete exact serialization/commit identities BEFORE these effects, not in warning-only auto_commit.
+    2. ID candidate construction can persist through attached DispenserHandle/FileDispenser; Storage::load can persist Unstamped migration repairs atstorage.rs571. Both require pre-mutation admission. Preview cannot reuse an implicitly repairing load or live allocator.
+    3. Explicit adapter map covers CLI fast/legacy/interactive/batch/queue/comments/edits/import/tracker/generated filing; MCP; REST project/legacy/v2/meta; both gRPC implementations/batches/comments; frontend delegations; legacy/non-Git/override refusal. Backend-root policy binding must use actual owned store/project, not server cwd. Unsupported WORK writers explicitly refuse before persistence; outbound scanning alone is insufficient.
+    4. Alternate db sync, allocation sync, autosync, mailbox publication and mirror/core-ref paths must not bypass primary run_push/run_pull interception. MCP db_sync/fetch/pull are command suggestions, not direct network execution. Raw Git remains the signed client-only bypass.
+    5. Existing A1 is store writer OUTER -> block registry INNER; cached backend takes store lock before delegating, so acquiring a new outer policy lock inside inner backend would invert order. Report gives admission/lifecycle/mailbox/store/block order and the network-outside-store/block boundary; shared helpers remain the owners.
+    6. BUG2017 owns allocator/authority/local-ID admission and overlaps models/dispenser/node/db_block/backend-add/MCP/CLI. STORY1843 owns mailbox/retirement/lifecycle locks. S3b needs a named shared-method handoff with these doers; S3a new scanner modules can avoid allocator changes after dependency lands.
+    7. Per-acceptance worklist retains full history+metadata grammar/deny scan, exact successful-push receipts/stricter-policy rescan, final optional-only provenance handling, all-adapter refusal, ACTUAL staged recoverable FF pull, complete chain/negative fixtures and existing23transport regressions. No narrowing or completion claim.
+
+    Used /tmp rather than changing tracked docs under reviewer authority. No source fixes, grants, Cargo, live transport/config/service/mail test or merge. PR2915 corrected-head review remains interrupt priority; forge is still634e8c4907e0598c6d440864d039a2442f08dc6a, pending known GLOBAL-namespace F2 correction. No formal review at that stale intermediate head.
+  created_at: 2026-10-25T06:40:25.456652991Z
+  modified_at: 2026-10-25T06:40:25.456652991Z
 history:
 - id: 01a16ee2-ad7a-7b30-aaeb-ec8f892fbe76
   author: joe
