@@ -10,12 +10,12 @@ description: |
   This is the same doc-claims-coverage-it-lacks shape as round 1 finding 4 (HumanGates), which was fixed.
 
   Raised in review of PR-2905: https://github.com/joemooney/aida/pull/2905#issuecomment-6390394038
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-24T22:35:30.036362668Z
-modified_at: 2026-10-25T20:06:25.961354298Z
+modified_at: 2026-10-25T20:07:19.694585598Z
 req_type: Task
 tags:
 - authority
@@ -47,6 +47,14 @@ history:
   timestamp: 2026-10-25T20:06:27.568285940Z
   session_id: cde796d3-1750-4745-a8f9-7ab3bc7c3519
   changes: []
+- id: 01a174ac-bb8e-7b83-8c20-fca2690cd928
+  author: aida-pr-open
+  timestamp: 2026-10-25T20:07:19.694581628Z
+  session_id: cde796d3-1750-4745-a8f9-7ab3bc7c3519
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 9457e495247a3c9de111d15507fabd2cd0923079
   branch: pr-2905
