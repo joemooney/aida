@@ -27,12 +27,12 @@ description: |
   ## Source pointers
 
   Current54c: pr_cmd.rs wait_started/scan_spent/ship_ci_budget and its actual CI handoff; ci_gate.rs::wait_for_ship_ci; existing `ship_ci_budget_excludes_the_mandate_scan`, `exhausted_ship_budget_still_polls_ci_once`, and the named CLI ownership test. Line numbers in the diagnostic are navigation hints, not acceptance evidence. The complete independent report is preserved in AIDA message de601800; historical measurement is on STORY-1853, not a new acceptance floor.
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T16:23:29.497775220Z
-modified_at: 2026-10-25T19:32:31.301628405Z
+modified_at: 2026-10-25T20:26:41.308912151Z
 req_type: Task
 tags:
 - ship-deadline
@@ -122,6 +122,21 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a174be-74ff-7653-8404-1eefe8d466c6
+  author: aida-auto-bump
+  timestamp: 2026-10-25T20:26:41.279381139Z
+  session_id: cde796d3-1750-4745-a8f9-7ab3bc7c3519
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a174be-751c-76d1-851c-1d1884c04ca6
+  timestamp: 2026-10-25T20:26:41.308902713Z
+  agent: aida
+  commit_sha: 78765dde1e777bcbb11079d580864afaea9f70ea
+  summary: 'All 6 ACs met: ship_ci_handoff seam is pure forwarding of the same ship_ci_budget expression; unit tests prove exhausted/partial/scan-excluded/None remainders and ZERO->one poll/exit21/no re-poll via counting FakeForge; black-box test drops the <3500ms inference for ownership-released + still-pending Build + one row read + no pending line, with a bounded 120s kill watchdog; CI green at exact head.'
+  review_verdict: approved
 filed_at:
   code_sha: 54c64e26a58810f213f0a0fa1720a69bcce37ea3
   branch: main
@@ -133,3 +148,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-25T19:32:31.301628405Z
   implemented_by: joe
+  completed_at: 2026-10-25T20:26:41.279376072Z
+  completion_sha: 78765dde1e777bcbb11079d580864afaea9f70ea
