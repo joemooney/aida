@@ -1,0 +1,41 @@
+id: 01a174ab-6ba8-7560-9a7a-4c3847d6ecf5
+spec_id: STORY-1934
+agreed_id: STORY-1934
+title: 'Review PR-2924: [AI:agy] feat(dispatch): slice 3 flow/train runners, schedule job, and TASK-2338–2344 hardening (Refs STORY-1917, TASK-2338, TASK-2339, TASK-2340, TASK-2341, TASK-2342, TASK-2343, TASK'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `claude/story-1917-slice3`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2924>
+  - Branch: `claude/story-1917-slice3` → `main`
+
+  ## Covers
+
+  - STORY-1917
+  - TASK-2338
+  - TASK-2339
+  - TASK-2340
+  - TASK-2341
+  - TASK-2342
+  - TASK-2343
+  - TASK-2344
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2924` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-25T20:05:53.704885977Z
+modified_at: 2026-10-25T20:05:53.704885977Z
+req_type: Story
+filed_at:
+  code_sha: 011e33b65ee2ee1ecd96518e3cab472108cc18c5
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: a01a698998
+  vendor: claude
+  session: cde796d3-1750-4745-a8f9-7ab3bc7c3519
