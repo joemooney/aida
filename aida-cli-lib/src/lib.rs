@@ -650,6 +650,8 @@ mod worktree;
 mod worktree_lease;
 // trace:TASK-1562 | ai:claude — `aida worktree reclaim`: stale target/ cache reclaim.
 mod worktree_reclaim;
+// trace:TASK-2325 | ai:claude — agent scratch outside target/ (job tmp, session scratch, build caches).
+mod scratch_reclaim;
 // trace:STORY-711 | ai:claude — advisor-directed worktree lock (`aida lock`), slice 1.
 mod worktree_lock;
 // trace:TASK-1178 | ai:claude — warn-only commit-boundary worktree-scope guard.

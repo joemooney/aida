@@ -261,7 +261,15 @@ const LOCATION_WORDS: &[&str] = &["path", "dir", "file", "root"];
 /// `store_path` is the load-bearing bootstrap case: the committed file is how
 /// a fresh clone finds its requirement store at all. (`_top` names keys that
 /// sit at the TOML root, outside any section.)
-const LOCATION_EXCEPTIONS: &[&str] = &["deployment.store_path", "_top.store_path"];
+const LOCATION_EXCEPTIONS: &[&str] = &[
+    "deployment.store_path",
+    "_top.store_path",
+    // TASK-2325 / TASK-2334 (ADVISOR 12:50): configured scratch roots so the
+    // scheduled disk guard discovers session/job scratch without a claude-*
+    // TMPDIR ancestor in the guard process environment.
+    "doctor.disk_headroom.scratch_jobs_root",
+    "doctor.disk_headroom.scratch_tmp_root",
+];
 
 /// Keys whose NAME trips [`AUTHORITY_WORDS`] but whose value was reviewed and
 /// carries no authority. Each entry keeps the word-net strong instead of
