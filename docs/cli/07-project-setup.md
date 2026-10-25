@@ -383,3 +383,83 @@ You've set the project up and can keep its machinery healthy. From here:
 - **[Chapter 4 — Git & lifecycle](04-git-lifecycle.md)**: `remote` and the two-leg sync that the setup enables.
 - **[Chapter 10 — Storage & data](10-storage.md)**: `db` / `cache` — the store internals `doctor` repairs, plus `export`/`import`.
 - **[Chapter 11 — Working on AIDA itself](11-dev.md)**: if you're *developing* AIDA rather than using it.
+
+### `aida config transport policy`
+
+<!-- trace:STORY-1742 | ai:codex -->
+
+A WORK push now requires an explicit public-safe baseline and a private,
+operator-reviewed policy. Enrollment trusts the baseline's entire reachable
+closure; it does not scan or certify that closure. Use synthetic inputs and
+review them before enrollment. Never enroll an unsafe tip to silence a refusal.
+The original baseline remains the scan boundary after every successful push.
+
+Create an owner-only JSON file in an owner-controlled directory (neither the
+file nor directory may be writable by another user):
+
+```json
+{
+  "version": 1,
+  "reviewed": true,
+  "deny_tokens": ["synthetic-private-token"],
+  "git_name": "AIDA Generic",
+  "git_identity": "aida"
+}
+```
+
+The deny list must include known private organization, customer, project,
+short-host, username, path and ticket tokens. An empty list still requires
+explicit review. Matching is literal, ASCII case-insensitive substring matching;
+tokens contain 2–256 printable ASCII bytes, at most 256 entries. Policy values
+are never printed by status or refusal diagnostics.
+
+```bash
+aida config transport enable work --baseline <reviewed-full-store-sha>
+aida config transport policy --file <owner-only-policy-file> --reviewed
+aida config transport show --json
+aida push --store-only
+```
+
+Private profile, policy, receipt and lock files in the common Git directory
+require mode `0600`, current ownership and one link. Symlinks, FIFOs and unsafe
+permissions refuse. Older profiles/lock files with wider permissions require
+operator inspection and correction before use; never delete the permanent lock
+sidecar. Policy changes require the same review and enrollment command. Disable
+removes the profile and successful-push receipt; it retains the private deny
+policy. Re-enabling requires an explicit reviewed baseline for export.
+
+The scanner inspects every new commit through every parent, including deleted
+historical content, commit names/identities/messages, tree paths and new blobs.
+It checks raw and decoded YAML, JSON, JSONL and TOML keys/scalars, and plain
+Markdown/text. Fixed root storage filenames, canonical UUID object filenames and exact
+sharded object paths have structural recognition. Sharded paths must match the
+store path builder exactly, and the entire ID (including node aliases) is still
+scanned. Arbitrary filenames have no suffix exemption. Emails (including redaction placeholders), IP addresses,
+FQDNs, host-bearing URLs, explicit hostname fields and deny tokens refuse.
+The enrolled non-email Git identity must also pass the owning project's existing
+identity allowlist and mandatory verified store hook; enrollment does not
+change that allowlist or configure Git identities.
+
+This version conservatively refuses non-ASCII text, YAML aliases/tags,
+percent-encoded payloads, unsupported/binary containers, signature/extension
+commit headers, ambiguous escapes and incomplete/alternate/replaced graphs.
+Documents/objects are capped at 1 MiB, nesting at 64, graph/tree inventories at
+10,000 entries, graph inspection at 60 seconds and each Git reader at 10 seconds.
+Limit exhaustion refuses without publication. These conservative restrictions
+can reject harmless content; they do not prove arbitrary prose free of private
+facts. Operator review remains necessary.
+
+After scanning, exactly the inspected SHA is pushed once, with no force or
+tracking-ref update. The writer lock is released before hooks/network I/O.
+A private receipt binds successful porcelain acceptance to the endpoint,
+store ref, tip, original baseline, policy hash and scanner version. Policy
+changes rescan from the original root; receipts never cache scan results or
+turn tracking refs into trusted evidence. An uncertain push leaves the receipt
+unchanged. If publication succeeds but receipt persistence or policy
+revalidation fails, the command reports that partial result and does not retry.
+
+**Remaining acceptance:** canonical intake enforcement and actual recoverable
+FF pull are not available in this slice. The client guard does not enforce hub
+receiving hooks or PUBLIC forwarding, and raw Git/foreign writers can bypass it.
+No history rewrite, clean export, live hub hook or automatic forwarding is
+provided.

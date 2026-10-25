@@ -83,8 +83,8 @@ impl Fixture {
             .env("GIT_CONFIG_GLOBAL", self.home.join(".gitconfig"))
             .env("GIT_AUTHOR_NAME", "Fixture")
             .env("GIT_COMMITTER_NAME", "Fixture")
-            .env("GIT_AUTHOR_EMAIL", "fixture@example.invalid")
-            .env("GIT_COMMITTER_EMAIL", "fixture@example.invalid")
+            .env("GIT_AUTHOR_EMAIL", "aida")
+            .env("GIT_COMMITTER_EMAIL", "aida")
             .env("AIDA_TELEMETRY", "0");
         command
     }
@@ -120,7 +120,33 @@ impl Fixture {
     }
 
     fn enable(&self) -> Value {
-        self.json(&["config", "transport", "enable", "work", "--json"])
+        let result = self.json(&[
+            "config",
+            "transport",
+            "enable",
+            "work",
+            "--baseline",
+            &self.store_sha,
+            "--json",
+        ]);
+        self.enroll_policy();
+        result
+    }
+
+    fn enroll_policy(&self) {
+        use std::os::unix::fs::PermissionsExt;
+        let path = self.common.join("reviewed-policy-input");
+        fs::write(&path, br#"{"version":1,"reviewed":true,"deny_tokens":["private-marker"],"git_name":"Fixture","git_identity":"aida"}"#).unwrap();
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
+        let output = self.aida(&[
+            "config",
+            "transport",
+            "policy",
+            "--file",
+            path.to_str().unwrap(),
+            "--reviewed",
+        ]);
+        assert!(output.status.success(), "{}", diagnostics(&output));
     }
 
     fn attach_with_remote(&self) -> (PathBuf, PathBuf) {
@@ -202,7 +228,7 @@ fn profile_is_clone_local_shared_by_worktrees_and_disable_restores_default() {
     assert_eq!(enabled["origin_matches"], true);
     assert_eq!(enabled["execution_available"], true);
     assert_eq!(enabled["pull_execution_available"], false);
-    assert_eq!(enabled["sanitization_available"], false);
+    assert_eq!(enabled["sanitization_available"], true);
     assert!(enabled["limitations"]
         .as_array()
         .unwrap()
@@ -469,6 +495,10 @@ fn malformed_or_future_profiles_and_mirror_origins_fail_closed() {
         r#"{"version":99,"name":"work","origin_sha256":"sensitive-marker"}"#,
     ] {
         fs::write(&profile, text).unwrap();
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&profile, fs::Permissions::from_mode(0o600)).unwrap();
+        }
         let output = fixture.aida(&["pull", "--json"]);
         assert!(!output.status.success());
         assert!(
@@ -533,7 +563,7 @@ fn hook(path: &Path, body: &str) {
 fn executor_pushes_one_exact_store_ref_with_identity_hook_and_no_code_hooks() {
     let fixture = Fixture::new();
     let (store, remote) = fixture.attach_with_remote();
-    fixture.identity_policy("fixture@example.invalid");
+    fixture.identity_policy("aida");
     let bait = fixture.common.join("project-hooks");
     hook(&bait.join("pre-push"), "#!/bin/sh\nexit 93\n");
     fixture.git(&["config", "core.hooksPath", bait.to_str().unwrap()]);
@@ -600,9 +630,9 @@ fn identity_refusal_and_remote_rejection_never_retry_or_echo_private_diagnostics
     let output = fixture.aida(&["push"]);
     assert!(!output.status.success(), "{}", diagnostics(&output));
     assert!(diagnostics(&output).contains("no retry"));
-    assert!(!diagnostics(&output).contains("fixture@example.invalid"));
+    assert!(!diagnostics(&output).contains("aida"));
     assert!(!remote.join("attempts").exists()); // identity refused before receive
-    fixture.identity_policy("fixture@example.invalid");
+    fixture.identity_policy("aida");
     let output = fixture.aida(&["push"]);
     assert!(!output.status.success(), "{}", diagnostics(&output));
     assert!(!diagnostics(&output).contains("secret-host"));
@@ -1052,4 +1082,295 @@ fn unresolved_filesystem_components_refuse_without_lexical_parent_collapse() {
     }
     assert_eq!(fixture.git_at(&intended, &["for-each-ref"]), "");
     assert_eq!(fixture.git_at(&wrong, &["for-each-ref"]), "");
+}
+
+// trace:STORY-1742 | ai:codex
+impl Fixture {
+    fn store_commit(&self, store: &Path, path: &str, bytes: &[u8]) -> String {
+        let target = store.join(path);
+        fs::create_dir_all(target.parent().unwrap()).unwrap();
+        fs::write(target, bytes).unwrap();
+        self.git_at(store, &["add", "--all"]);
+        self.git_at(store, &["commit", "-qm", "Generic change"]);
+        self.git_at(store, &["rev-parse", "HEAD"])
+    }
+    fn assert_scan_refusal(&self, remote: &Path) {
+        let before = self.snapshot();
+        let objects = self.git_at(remote, &["count-objects", "-v"]);
+        let mut child = self
+            .command(env!("CARGO_BIN_EXE_aida"), &self.root, &["push"])
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .unwrap();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+        loop {
+            if child.try_wait().unwrap().is_some() {
+                break;
+            }
+            if std::time::Instant::now() >= deadline {
+                child.kill().unwrap();
+                let _ = child.wait();
+                panic!("scan refusal exceeded watchdog");
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        let output = child.wait_with_output().unwrap();
+        assert!(!output.status.success(), "{}", diagnostics(&output));
+        assert!(!diagnostics(&output).contains("private-marker"));
+        assert!(!diagnostics(&output).contains("host.invalid"));
+        assert_eq!(objects, self.git_at(remote, &["count-objects", "-v"]));
+        assert_eq!(self.git_at(remote, &["for-each-ref"]), "");
+        assert_eq!(before, self.snapshot());
+        assert!(!self.common.join("aida-transport-receipt.json").exists());
+    }
+}
+
+#[test]
+fn scanner_refuses_historical_deleted_content_and_merge_side_metadata_before_receive() {
+    for merge in [false, true] {
+        let fixture = Fixture::new();
+        let (store, remote) = fixture.attach_with_remote();
+        if merge {
+            let side = fixture.git(&[
+                "commit-tree",
+                "aida-store^{tree}",
+                "-p",
+                &fixture.store_sha,
+                "-m",
+                "private-marker",
+            ]);
+            let tip = fixture.git(&[
+                "commit-tree",
+                "aida-store^{tree}",
+                "-p",
+                &fixture.store_sha,
+                "-p",
+                &side,
+                "-m",
+                "Generic merge",
+            ]);
+            fixture.git(&["update-ref", "refs/heads/aida-store", &tip]);
+        } else {
+            fixture.store_commit(&store, "README.md", b"private-marker\n");
+            fixture.git_at(&store, &["rm", "README.md"]);
+            fixture.git_at(&store, &["commit", "-qm", "Generic cleanup"]);
+        }
+        fixture.assert_scan_refusal(&remote);
+    }
+}
+
+#[test]
+fn scanner_checks_decoded_scalars_commit_names_paths_binary_and_signature_encodings() {
+    for case in 0..7 {
+        let fixture = Fixture::new();
+        let (store, remote) = fixture.attach_with_remote();
+        match case {
+            0 => {
+                fixture.store_commit(
+                    &store,
+                    "objects/BUG/000/BUG-1.yaml",
+                    br#"title: "private\x2dmarker""#,
+                );
+            }
+            1 => {
+                fixture.store_commit(&store, "README.md", b"host.invalid\n");
+            }
+            2 => {
+                fixture.store_commit(&store, "private-marker", b"Generic\n");
+            }
+            3 => {
+                fixture.store_commit(&store, "README.md", b"\x00\xff");
+            }
+            4 => {
+                fixture.store_commit(&store, "README.md", b"name@host.invalid\n");
+            }
+            5 => {
+                let output = fixture
+                    .command(
+                        "git",
+                        &store,
+                        &["commit", "--allow-empty", "-qm", "Generic"],
+                    )
+                    .env("GIT_AUTHOR_NAME", "private-marker")
+                    .output()
+                    .unwrap();
+                assert!(output.status.success());
+            }
+            _ => {
+                fixture.store_commit(
+                    &store,
+                    "objects/BUG/000/BUG-1.yaml",
+                    b"title: !!binary cHJpdmF0ZS1tYXJrZXI=\n",
+                );
+            }
+        }
+        fixture.assert_scan_refusal(&remote);
+    }
+}
+
+#[test]
+fn reviewed_non_email_identity_passes_real_store_hook_and_receipt_pins_exact_safe_history() {
+    let fixture = Fixture::new();
+    let (store, remote) = fixture.attach_with_remote();
+    fixture.identity_policy("aida");
+    let tip = fixture.store_commit(
+        &store,
+        "objects/BUG/000/BUG-1.yaml",
+        b"title: Generic failure\ndescription: Synthetic reproduction\n",
+    );
+    let output = fixture.aida(&["push"]);
+    assert!(output.status.success(), "{}", diagnostics(&output));
+    assert_eq!(fixture.git_at(&remote, &["rev-parse", "aida-store"]), tip);
+    let receipt: Value = serde_json::from_slice(
+        &fs::read(fixture.common.join("aida-transport-receipt.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(receipt["accepted_tip"], tip);
+    assert_eq!(receipt["trust_root"], fixture.store_sha);
+    assert_eq!(receipt["reference"], "refs/heads/aida-store");
+    assert!(!fixture
+        .common
+        .join("refs/remotes/origin/aida-store")
+        .exists());
+    assert!(!fixture.common.join("FETCH_HEAD").exists());
+    // A stricter policy must scan old exported deltas from the original root.
+    let policy_path = fixture.common.join("aida-transport-policy.json");
+    let mut policy: Value = serde_json::from_slice(&fs::read(&policy_path).unwrap()).unwrap();
+    policy["deny_tokens"] = serde_json::json!(["Synthetic"]);
+    fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    let before = fs::read(fixture.common.join("aida-transport-receipt.json")).unwrap();
+    let output = fixture.aida(&["push"]);
+    assert!(!output.status.success(), "{}", diagnostics(&output));
+    assert_eq!(
+        before,
+        fs::read(fixture.common.join("aida-transport-receipt.json")).unwrap()
+    );
+    assert_eq!(fixture.git_at(&remote, &["rev-parse", "aida-store"]), tip);
+}
+
+#[test]
+fn missing_policy_forged_tracking_and_unsafe_private_files_never_create_remote_objects() {
+    use std::os::unix::fs::PermissionsExt;
+    for case in 0..6 {
+        let fixture = Fixture::new();
+        let (_store, remote) = fixture.attach_with_remote();
+        let path = fixture.common.join("aida-transport-policy.json");
+        match case {
+            0 => {
+                fs::remove_file(&path).unwrap();
+            }
+            1 => {
+                fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).unwrap();
+            }
+            2 => {
+                let other = fixture.common.join("private-target");
+                fs::rename(&path, &other).unwrap();
+                std::os::unix::fs::symlink(other, &path).unwrap();
+            }
+            3 => {
+                fs::hard_link(&path, fixture.common.join("second-link")).unwrap();
+            }
+            4 => {
+                fs::remove_file(&path).unwrap();
+                assert!(Command::new("mkfifo")
+                    .arg("-m")
+                    .arg("600")
+                    .arg(&path)
+                    .status()
+                    .unwrap()
+                    .success());
+            }
+            _ => {
+                let mut profile: Value = serde_json::from_slice(
+                    &fs::read(fixture.common.join("aida-transport.json")).unwrap(),
+                )
+                .unwrap();
+                profile["baseline"] = Value::Null;
+                fs::write(
+                    fixture.common.join("aida-transport.json"),
+                    serde_json::to_vec(&profile).unwrap(),
+                )
+                .unwrap();
+                fixture.git(&[
+                    "update-ref",
+                    "refs/remotes/origin/aida-store",
+                    &fixture.store_sha,
+                ]);
+            }
+        }
+        fixture.assert_scan_refusal(&remote);
+    }
+}
+
+#[test]
+fn policy_change_after_remote_acceptance_reports_partial_success_without_receipt() {
+    let fixture = Fixture::new();
+    let (store, remote) = fixture.attach_with_remote();
+    let tip = fixture.store_commit(&store, "README.md", b"Generic reproduction\n");
+    let policy = fixture.common.join("aida-transport-policy.json");
+    hook(&remote.join("hooks/post-receive"),&format!(
+        "#!/bin/sh\npython3 - '{}' <<'PY'\nimport json,sys\np=sys.argv[1]\nd=json.load(open(p))\nd['deny_tokens'].append('new-private-token')\nopen(p,'w').write(json.dumps(d))\nPY\n",policy.display()));
+    let output = fixture.aida(&["push"]);
+    assert!(!output.status.success(), "{}", diagnostics(&output));
+    assert!(diagnostics(&output).contains("publication succeeded"));
+    assert_eq!(fixture.git_at(&remote, &["rev-parse", "aida-store"]), tip);
+    assert!(!fixture.common.join("aida-transport-receipt.json").exists());
+}
+
+#[test]
+fn reused_baseline_blob_under_unsafe_path_is_refused() {
+    let fixture = Fixture::new();
+    let (store, remote) = fixture.attach_with_remote();
+    fixture.store_commit(&store, "README.md", b"Generic baseline\n");
+    let root = fixture.git_at(&store, &["rev-parse", "HEAD"]);
+    fixture.json(&["config", "transport", "disable", "--json"]);
+    fixture.json(&[
+        "config",
+        "transport",
+        "enable",
+        "work",
+        "--baseline",
+        &root,
+        "--json",
+    ]);
+    fixture.enroll_policy();
+    fixture.git_at(&store, &["mv", "README.md", "private-marker"]);
+    fixture.git_at(&store, &["commit", "-qm", "Generic rename"]);
+    fixture.assert_scan_refusal(&remote);
+}
+
+#[test]
+fn incomplete_replaced_grafted_and_alternate_graphs_refuse_before_receive() {
+    for case in 0..4 {
+        let fixture = Fixture::new();
+        let (_store, remote) = fixture.attach_with_remote();
+        match case {
+            0 => {
+                fs::write(
+                    fixture.common.join("shallow"),
+                    format!("{}\n", fixture.store_sha),
+                )
+                .unwrap();
+            }
+            1 => {
+                fixture.git(&[
+                    "update-ref",
+                    &format!("refs/replace/{}", fixture.store_sha),
+                    &fixture.store_sha,
+                ]);
+            }
+            2 => {
+                fs::write(
+                    fixture.common.join("info/grafts"),
+                    format!("{}\n", fixture.store_sha),
+                )
+                .unwrap();
+            }
+            _ => {
+                fs::write(fixture.common.join("objects/info/alternates"), b"\n").unwrap();
+            }
+        }
+        fixture.assert_scan_refusal(&remote);
+    }
 }
