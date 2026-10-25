@@ -37,6 +37,13 @@ def main():
         subprocess.run(["git", "init", "-q"], cwd=root, check=True)
         subprocess.run(["git", "config", "user.email", "layout@example.com"], cwd=root, check=True)
         subprocess.run(["git", "config", "user.name", "Layout Test"], cwd=root, check=True)
+        # trace:BUG-2017 | ai:codex — this positive global-ID history fixture
+        # explicitly models HOME; cold WORK bootstrap belongs to slice 2.
+        git_dir = root / ".git"
+        assert git_dir.is_dir() and not git_dir.is_symlink()
+        assert not (git_dir / "commondir").exists()
+        with (git_dir / "aida-allocation.toml").open("x", encoding="utf-8") as setting:
+            setting.write("version=1\nauthoritative=true\n")
         run("init", "--no-skills", "--no-hooks")
         created = run("add", "--title", "Before", "--type", "task", "--status", "draft")
         spec = parse_spec_id(created.stdout, "seed")
