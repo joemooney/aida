@@ -449,7 +449,7 @@ mod tests {
         ]);
         let dir = tempfile::tempdir().unwrap();
         let store_path = dir.path().join("store");
-        let backend = aida_core::GitBackend::new(&store_path).unwrap();
+        let backend = crate::test_env::home_fixture_backend(&store_path).unwrap();
         let mut req = Requirement::new("CLI provenance".into(), "body".into());
         req.spec_id = Some("TASK-1".into());
         backend.add_requirement(req).unwrap();

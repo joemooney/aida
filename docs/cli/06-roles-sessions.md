@@ -255,6 +255,40 @@ Contained launches create and grant the shared `.aida/mailbox/` directory before
 
 Explicit sends and comment mentions resolve against live named agents, role/vendor readers, and known people. Unknown or dead agent recipients refuse before creating mail. Role/vendor sends report the current live readers and warn when several can read the shared inbox; confirmed zero-reader sends refuse. If PID namespaces differ or liveness cannot be observed, an entry counts as an unverified reader only while its `last_active_at` is within the past 24 hours. Stale entries and entries without that heartbeat do not count. Delivery to fresh unverified readers continues to the durable inbox with a notice separating live and unverified readers. Notices list at most five names, live readers first, then report how many more remain. Sending never deletes or rewrites registry records. Instead, `aida agent gc`, `aida agent ls` and each session's start hook mark a retained resumable record ended once its process is observably gone, so a finished session stops counting as an unverified reader. Only the start hook always runs outside the command sandbox. `gc` and `ls` run wherever they are invoked, and from a sandboxed shell they skip rows whose processes they cannot observe, so ending host rows needs a host-side `aida agent gc`. <!-- trace:TASK-2238 | ai:claude --> Garbage collection never prunes or ends a record whose PID namespace it cannot observe. Human inboxes remain addressable without a running agent. A role wins over a same-named person; use `person:<name>` to address that person explicitly. Refused sends can instead reach a known person with `--to person:<name>` or leave a spec comment with `aida comment add <SPEC>`. The hint names the operator only when `AIDA_USER` resolves to a known person, or exactly one person holds an explicit `operator` seat in the team roster (`registry/team.toml`). Otherwise it names no recipient. It never falls back to an arbitrary catalog person. Mention-drop warnings suggest contacting the operator, without suggesting another comment command. Historical inbox inspection remains available after an agent ends.
 
+Antigravity installs the mailbox relay on both `SessionStart` and `PreInvocation`.
+The latter consumes the native `conversationId` payload and wraps the
+non-marking `mailbox notice` output in an `injectSteps` system message, so
+handle-addressed mail appears on the next model invocation. SessionStart
+keeps the `awaiting --notice` path that registers the raw client. Notices leave mail unread; `aida mailbox inbox` acknowledges
+it. Raw clients resolve their startup-registered handle from their nearest
+vendor process, ahead of potentially inherited vendor/session variables.
+Native session evidence remains the fallback inside a PID namespace where
+the host client process is invisible.
+Once registered, a raw child's default inbox and notices use its own handle
+for private mail. Inherited `AIDA_USER`, `AIDA_HANDLE` and `AIDA_AGENT_NAME`
+cannot add a parent's private inbox or acknowledge its messages. A cataloged
+human `AIDA_USER` remains an additional inbox; session role and vendor inboxes
+remain shared audiences. This mail filtering does not change the principal
+used for grants or queue ownership. <!-- trace:STORY-1843 | ai:codex -->
+Refresh existing wiring with `aida init --force` to install the turn handler.
+<!-- trace:STORY-1843.ac0eef56 | ai:codex -->
+
+Headless children scrub parent session identity before receiving their own
+handle and launch token. Failed spawns release their unbound reservation;
+successful spawns retain it while the child starts. Generated handles use
+persisted monotonic counters and at most 64 candidate probes. Allocation
+scans cap each directory at 4,096 entries, 64 KiB per record and 250 ms;
+namespace-lock acquisition also caps its wait at 250 ms. Exhaustion refuses
+allocation rather than ignoring possible owners. Run `aida agent gc` on the
+host to collect expired reservations with no live or recently unverified
+holder. GC archives them under `handles/retired/` and retains a native-session
+index for resume. Archived spellings and their mail remain intact and are
+never issued to a new generated recipient. `--dry-run` reports the count
+without moving records. GC also archives ended registry rows under `agents/retired/`, preserving
+history and resume views while removing them from allocation scans.
+SessionStart does not perform either archive sweep.
+<!-- trace:STORY-1843 | ai:codex -->
+
 An invalid or unreadable individual agent record produces a warning while other inboxes remain available. Role, vendor, and person catalog names retain their meaning when an older agent uses the same name; addressing that agent by ID does not grant it the reserved inbox.
 <!-- trace:STORY-1843 | ai:codex -->
 
@@ -295,6 +329,14 @@ A manifest that claims the layout this build already uses is reported as damaged
 **Chains with** — agents launched via `aida agent new` coordinate over the mailbox; the advisor's `watch` loop runs a mailbox-triage pass; briefs route *assignments*, the mailbox carries the *conversation* around them.
 
 ---
+
+For host notification adapters, `aida mailbox wake-snapshot --recipient advisor
+--local-root <checkout> --json` emits a version-1 envelope containing unread
+message IDs and existing acknowledged IDs. It uses bounded no-follow reads, merges the canonical mailbox, and
+never acknowledges mail. Invoke from the main project directory while selecting
+a sibling's local mailbox with `--local-root`. See the [Codex mail wake adapter](../agents/codex-mail-wake.md)
+for opt-in setup, deduplication, and uncertain-delivery recovery.
+<!-- trace:TASK-2347 | ai:codex -->
 
 ### `aida driver`
 

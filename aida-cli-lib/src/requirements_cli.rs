@@ -3077,8 +3077,14 @@ fn run_add(
                     // refresh the git-canonical store and refuse known duplicate
                     // spec_ids. TASK-281 protects block refill commits, but the
                     // creation path also has to start from fresh store state.
-                    pull_store_before_id_allocation(store_path, &project_dir)?;
-                    let id_policy = read_id_format_policy(&project_dir);
+                    // trace:BUG-2017 | ai:codex — refuse before network or counters.
+                    let id_policy = aida_core::allocation_authority::effective_policy(
+                        store_path,
+                        read_id_format_policy(&project_dir),
+                    )?;
+                    if aida_core::allocation_authority::resolve(store_path)?.authoritative {
+                        pull_store_before_id_allocation(store_path, &project_dir)?;
+                    }
                     if id_policy.uses_blocks() {
                         let node_id = load_node_id(store_path);
                         let blocks_path = store_path.join("registry").join("blocks.yaml");

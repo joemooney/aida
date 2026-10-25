@@ -31,6 +31,7 @@ fn task_1981_run_add_waits_for_sync_before_taking_blocks_lock_and_reloads_pointe
             .unwrap()
             .success());
     }
+    crate::test_env::enroll_synthetic_home(&store).unwrap();
     let backend = aida_core::GitBackend::new(&store).unwrap();
     backend.save(&aida_core::RequirementsStore::new()).unwrap();
     let blocks_path = store.join("registry/blocks.yaml");

@@ -93,6 +93,8 @@ fn scrubbed_headless_reviewer_records_but_implementer_shell_refuses() {
         std::fs::create_dir_all(path).unwrap();
     }
     git(&fixture.repo, &["init", "-q", "-b", "main"]);
+    // trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
+    test_git::enroll_synthetic_home(&fixture.repo);
     git(&fixture.repo, &["config", "user.name", "Reviewer fixture"]);
     git(
         &fixture.repo,

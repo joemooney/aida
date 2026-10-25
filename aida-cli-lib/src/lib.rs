@@ -114,6 +114,7 @@ mod dev_autopromote;
 mod dev_cmd;
 mod digest;
 mod digest_cmd;
+mod dispatch;
 // trace:TASK-1564 | ai:claude — render/re-read a drain phase-failure note.
 mod doctor_root;
 mod drain_batch;
@@ -201,6 +202,8 @@ mod loose_objects;
 mod rel_cards;
 mod relay_launch; // trace:STORY-1706 | ai:claude
 mod relay_stall;
+// trace:TASK-2347 | ai:codex
+mod codex_mail_health;
 mod remote_cmd;
 mod requirements_cli;
 mod review_cmd;
@@ -435,6 +438,8 @@ mod intent;
 mod internal_cmd;
 mod mailbox_cmd;
 mod mailbox_store;
+// trace:TASK-2347 | ai:codex
+mod mailbox_wake;
 // trace:STORY-1648 | ai:claude — read-only primary-checkout drift probe.
 mod main_checkout_drift;
 mod maintenance_schedule;
@@ -649,6 +654,8 @@ mod worktree;
 mod worktree_lease;
 // trace:TASK-1562 | ai:claude — `aida worktree reclaim`: stale target/ cache reclaim.
 mod worktree_reclaim;
+// trace:TASK-2325 | ai:claude — agent scratch outside target/ (job tmp, session scratch, build caches).
+mod scratch_reclaim;
 // trace:STORY-711 | ai:claude — advisor-directed worktree lock (`aida lock`), slice 1.
 mod worktree_lock;
 // trace:TASK-1178 | ai:claude — warn-only commit-boundary worktree-scope guard.

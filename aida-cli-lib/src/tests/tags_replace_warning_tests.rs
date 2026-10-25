@@ -114,6 +114,7 @@ fn doctor_detects_and_heals_all_thirteen_incident_specs() {
     let tmp = tempfile::tempdir().unwrap();
     let store_root = tmp.path().join(".aida-store");
     std::fs::create_dir_all(&store_root).unwrap();
+    crate::test_env::enroll_synthetic_home(&store_root).unwrap();
     let storage = Storage::new(&store_root);
     let mut store = RequirementsStore::default();
     let mut parent = Requirement::new("Incident parent".into(), String::new());

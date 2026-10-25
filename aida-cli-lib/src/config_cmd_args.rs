@@ -6,6 +6,10 @@ use std::path::PathBuf;
 
 #[derive(Subcommand, Debug)]
 pub enum ConfigCommand {
+    /// Inspect or explicitly enroll this clone as the HOME allocation authority.
+    // trace:BUG-2017 | ai:codex
+    #[clap(subcommand)]
+    Allocation(AllocationCommand),
     /// Configure this clone's store-only transport profile (never shared).
     // trace:STORY-1742 | ai:codex
     #[clap(subcommand)]
@@ -187,4 +191,13 @@ pub enum GlyphCommand {
         #[clap(long)]
         user: bool,
     },
+}
+
+// trace:BUG-2017 | ai:codex
+#[derive(Subcommand, Debug)]
+pub enum AllocationCommand {
+    /// Read clone-local allocation mode. Missing means WORK.
+    Show,
+    /// Enroll this exact clone common Git directory (direct human terminal only).
+    EnrollHome,
 }

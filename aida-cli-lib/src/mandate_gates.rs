@@ -381,6 +381,7 @@ pub(crate) fn describe(main_worktree: Option<&Path>) -> String {
 // trace:STORY-1700 | ai:claude
 pub(crate) const GATE_PROTECTED_PATHS: &[&str] = &[
     ".aida/config.toml",
+    "aida-cli-lib/src/dispatch.rs",
     "aida-cli-lib/src/mandate.rs",
     "aida-cli-lib/src/mandate_gates.rs",
     "aida-cli-lib/src/mandate_drive.rs",
@@ -390,7 +391,6 @@ pub(crate) const GATE_PROTECTED_PATHS: &[&str] = &[
     "aida-cli-lib/src/rework_hold_release.rs",
     "aida-cli-lib/src/fleet_lanes.rs",
     "aida-cli-lib/src/pr_ship.rs",
-    "aida-cli-lib/src/merge_hold.rs",
     // STORY-1887: the batch that drives human-gated merges. trace:STORY-1887 | ai:claude
     "aida-cli-lib/src/pr_ship_batch.rs",
     // Gate authority, code and its tests together (STORY-1889).
@@ -406,8 +406,6 @@ pub(crate) const GATE_PROTECTED_PATHS: &[&str] = &[
 // trace:STORY-1888 | ai:claude
 pub(crate) const KNOWN_UNPROTECTED: &[&str] = &[
     // Gate authority today (approval, merge and hold refusals).
-    "aida-cli-lib/src/auto_complete.rs",
-    "aida-cli-lib/src/defer_cmd.rs",
     "aida-cli-lib/src/pr_cmd.rs",
     "aida-cli-lib/src/pr_merge_gate.rs",
     // A name match that reads lease state rather than decides; STORY-1889
@@ -460,8 +458,12 @@ pub(crate) const NOT_GATE_AUTHORITY: &[(&str, &str, &str)] = &[
 /// repointed at a non-gate function, so the ratchet refuses any other, and
 /// this list only shrinks; the final STORY-1889 PR empties it.
 // trace:STORY-1889 | ai:claude
-pub(crate) const TRANSITIONAL_GATE_REEXPORTS: &[&str] =
-    &["aida-cli-lib/src/lib.rs", "aida-cli-lib/src/role.rs"];
+pub(crate) const TRANSITIONAL_GATE_REEXPORTS: &[&str] = &[
+    "aida-cli-lib/src/defer_cmd.rs",
+    "aida-cli-lib/src/lib.rs",
+    "aida-cli-lib/src/merge_hold.rs",
+    "aida-cli-lib/src/role.rs",
+];
 
 /// Where a protected path comes from, strongest first.
 // trace:STORY-1888 | ai:claude

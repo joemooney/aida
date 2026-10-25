@@ -815,7 +815,8 @@ mod tests {
         aida_core::git_ops::init(&store_root).unwrap();
         aida_core::git_ops::configure_user(&store_root, "Test", "test@example.com").unwrap();
         let cache_path = tmp.path().join(".aida").join("cache.db");
-        let backend = aida_core::CachedGitBackend::open(&store_root, &cache_path).unwrap();
+        let backend =
+            crate::test_env::home_fixture_cached_backend(&store_root, &cache_path).unwrap();
 
         let report = |spec: &str, title: &str, version: &str| {
             let mut r = Requirement::new(title.into(), "body".into());
@@ -875,7 +876,8 @@ mod tests {
         aida_core::git_ops::init(&store_root).unwrap();
         aida_core::git_ops::configure_user(&store_root, "Test", "test@example.com").unwrap();
         let cache_path = tmp.path().join(".aida").join("cache.db");
-        let backend = aida_core::CachedGitBackend::open(&store_root, &cache_path).unwrap();
+        let backend =
+            crate::test_env::home_fixture_cached_backend(&store_root, &cache_path).unwrap();
         let mut shipped = Requirement::new("AIDA: shipped".into(), "body".into());
         shipped.spec_id = Some("BUG-1".to_string());
         shipped.status = RequirementStatus::Completed;
@@ -928,14 +930,15 @@ mod tests {
         aida_core::git_ops::init(&store_root).unwrap();
         aida_core::git_ops::configure_user(&store_root, "Test", "test@example.com").unwrap();
         let cache_path = tmp.path().join(".aida").join("cache.db");
-        let backend = aida_core::CachedGitBackend::open(&store_root, &cache_path).unwrap();
+        let backend =
+            crate::test_env::home_fixture_cached_backend(&store_root, &cache_path).unwrap();
         let mut first = Requirement::new("AIDA: first".into(), "body".into());
         first.spec_id = Some("BUG-1".to_string());
         backend.add_requirement(first).unwrap();
 
         // Another agent commits to the store: the cache is now behind HEAD.
         {
-            let external = aida_core::GitBackend::new(&store_root).unwrap();
+            let external = crate::test_env::home_fixture_backend(&store_root).unwrap();
             let mut second = Requirement::new("AIDA: second".into(), "body".into());
             second.spec_id = Some("BUG-2".to_string());
             second.tags.insert(UPSTREAM_AIDA_TAG.to_string());

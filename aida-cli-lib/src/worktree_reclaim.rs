@@ -1066,6 +1066,10 @@ pub struct ReclaimOptions {
     pub include_live: bool,
     pub include_open_prs: bool,
     pub json: bool,
+    /// Agent scratch younger than this many days is kept (TASK-2325).
+    pub scratch_age_days: u64,
+    /// Skip the agent-scratch scan entirely.
+    pub no_scratch: bool,
 }
 
 /// Build the survey from the environment rooted at `cwd`.
@@ -1130,9 +1134,24 @@ pub fn run(opts: &ReclaimOptions) -> Result<()> {
     let cwd = std::env::current_dir()?;
     let survey = survey_from_env(&cwd, opts)?;
     let plan = plan(&survey);
+    // TASK-2325: agent scratch outside target/ — terminal jobs' tmp dirs,
+    // old session scratch, idle build caches. trace:TASK-2325 | ai:claude
+    let scratch_survey = if opts.no_scratch {
+        crate::scratch_reclaim::ScratchSurvey::empty(SystemTime::now())
+    } else {
+        let cfg = crate::read_project_config_value(&survey.main_root);
+        let ecfg = crate::disk_emergency::emergency_config(cfg.as_ref());
+        crate::scratch_reclaim::survey_from_env_with_roots(
+            opts.scratch_age_days,
+            SystemTime::now(),
+            ecfg.scratch_jobs_root.as_deref(),
+            ecfg.scratch_tmp_root.as_deref(),
+        )
+    };
+    let (scratch_rows, scratch_held) = crate::scratch_reclaim::plan(&scratch_survey);
 
     if renders_json(opts.json, crate::output_format_override()) {
-        return render_json(&plan, opts);
+        return render_json(&plan, opts, &scratch_survey, &scratch_rows, &scratch_held);
     }
 
     println!(
@@ -1155,28 +1174,43 @@ pub fn run(opts: &ReclaimOptions) -> Result<()> {
         }
         println!("  skip  {}  — {}", path.display(), skip.reason());
     }
+    // trace:TASK-2325 | ai:claude
+    for (path, why) in &scratch_held {
+        println!("  skip  {}  — {}", path.display(), why);
+    }
 
-    if plan.reclaim.is_empty() {
+    if plan.reclaim.is_empty() && scratch_rows.is_empty() {
         println!();
         println!("nothing to reclaim.");
         return Ok(());
     }
 
     println!();
-    println!("{:>10}  {:<14}  TARGET", "SIZE", "WHY");
+    println!("{:>10}  {:<15}  TARGET", "SIZE", "WHY");
     for r in &plan.reclaim {
         println!(
-            "{:>10}  {:<14}  {}",
+            "{:>10}  {:<15}  {}",
             human_bytes(r.bytes),
             r.why.code(),
             r.target.display()
         );
     }
+    // trace:TASK-2325 | ai:claude
+    for r in &scratch_rows {
+        println!(
+            "{:>10}  {:<15}  {}  ({})",
+            human_bytes(r.bytes),
+            r.kind.code(),
+            r.path.display(),
+            r.reason
+        );
+    }
+    let scratch_bytes: u64 = scratch_rows.iter().map(|r| r.bytes).sum();
     println!();
     println!(
-        "reclaimable: {} across {} target dir(s)",
-        human_bytes(plan.reclaimable_bytes()),
-        plan.reclaim.len()
+        "reclaimable: {} across {} dir(s)",
+        human_bytes(plan.reclaimable_bytes() + scratch_bytes),
+        plan.reclaim.len() + scratch_rows.len()
     );
 
     if !opts.apply {
@@ -1187,24 +1221,45 @@ pub fn run(opts: &ReclaimOptions) -> Result<()> {
     let done = apply(&plan, opts.target_pct, disk_used_pct, |p| {
         std::fs::remove_dir_all(p)
     })?;
+    // --apply deletes only the listed scratch rows, each re-checked against
+    // the survey's roots at the delete site and gated by --target-pct.
+    // trace:TASK-2325 | ai:claude
+    let scratch_done = crate::scratch_reclaim::apply(
+        &scratch_survey,
+        &scratch_rows,
+        opts.target_pct,
+        disk_used_pct,
+        |p| {
+            if p.is_dir() {
+                std::fs::remove_dir_all(p)
+            } else {
+                std::fs::remove_file(p)
+            }
+        },
+    )?;
     println!();
-    for (path, bytes) in &done.deleted {
+    for (path, why) in &scratch_done.held {
+        println!("  skip  {}  — {why}", path.display());
+    }
+    for (path, bytes) in done.deleted.iter().chain(&scratch_done.deleted) {
         println!("deleted {:>10}  {}", human_bytes(*bytes), path.display());
     }
-    for (path, err) in &done.failed {
+    for (path, err) in done.failed.iter().chain(&scratch_done.failed) {
         println!("FAILED  {}  — {err}", path.display());
     }
-    if !done.stopped_early.is_empty() {
+    let stopped_early_len = done.stopped_early.len() + scratch_done.stopped_early.len();
+    if stopped_early_len > 0 {
         println!(
             "stopped at --target-pct {}: {} cache(s) left warm",
             opts.target_pct.unwrap_or(0),
-            done.stopped_early.len()
+            stopped_early_len
         );
     }
+    let scratch_freed: u64 = scratch_done.deleted.iter().map(|(_, b)| b).sum();
     println!(
-        "freed {} across {} target dir(s)",
-        human_bytes(done.freed_bytes),
-        done.deleted.len()
+        "freed {} across {} dir(s)",
+        human_bytes(done.freed_bytes + scratch_freed),
+        done.deleted.len() + scratch_done.deleted.len()
     );
     Ok(())
 }
@@ -1212,7 +1267,14 @@ pub fn run(opts: &ReclaimOptions) -> Result<()> {
 /// `--json` projection. Reports reclaimable bytes whether or not `--apply`
 /// was passed, so a caller can decide before acting.
 // trace:TASK-1562 | ai:claude
-fn render_json(plan: &Plan, opts: &ReclaimOptions) -> Result<()> {
+// trace:TASK-2325 | ai:claude
+fn render_json(
+    plan: &Plan,
+    opts: &ReclaimOptions,
+    scratch_survey: &crate::scratch_reclaim::ScratchSurvey,
+    scratch_rows: &[crate::scratch_reclaim::ScratchRow],
+    scratch_held: &[(PathBuf, String)],
+) -> Result<()> {
     let candidates: Vec<serde_json::Value> = plan
         .reclaim
         .iter()
@@ -1238,28 +1300,72 @@ fn render_json(plan: &Plan, opts: &ReclaimOptions) -> Result<()> {
         })
         .collect();
 
+    // trace:TASK-2325 | ai:claude
+    let scratch: Vec<serde_json::Value> = scratch_rows
+        .iter()
+        .map(|r| {
+            serde_json::json!({
+                "path": r.path.display().to_string(),
+                "bytes": r.bytes,
+                "kind": r.kind.code(),
+                "reason": r.reason,
+            })
+        })
+        .collect();
+    let scratch_skipped: Vec<serde_json::Value> = scratch_held
+        .iter()
+        .map(|(p, why)| serde_json::json!({"path": p.display().to_string(), "reason": why}))
+        .collect();
+    let scratch_bytes: u64 = scratch_rows.iter().map(|r| r.bytes).sum();
+
     let mut body = serde_json::json!({
         "main_root": plan.main_root.display().to_string(),
         "protected": protected_target(&plan.main_root).display().to_string(),
         "applied": opts.apply,
-        "reclaimable_bytes": plan.reclaimable_bytes(),
+        "reclaimable_bytes": plan.reclaimable_bytes() + scratch_bytes,
         "candidates": candidates,
         "skipped": skipped,
+        "scratch": scratch,
+        "scratch_skipped": scratch_skipped,
     });
 
     if opts.apply {
         let done = apply(plan, opts.target_pct, disk_used_pct, |p| {
             std::fs::remove_dir_all(p)
         })?;
-        body["freed_bytes"] = serde_json::json!(done.freed_bytes);
+        // trace:TASK-2325 | ai:claude
+        let scratch_done = crate::scratch_reclaim::apply(
+            scratch_survey,
+            scratch_rows,
+            opts.target_pct,
+            disk_used_pct,
+            |p| {
+                if p.is_dir() {
+                    std::fs::remove_dir_all(p)
+                } else {
+                    std::fs::remove_file(p)
+                }
+            },
+        )?;
+        let scratch_freed: u64 = scratch_done.deleted.iter().map(|(_, b)| b).sum();
+        if !scratch_done.held.is_empty() {
+            let mut all_skipped = scratch_skipped;
+            all_skipped.extend(scratch_done.held.iter().map(
+                |(p, why)| serde_json::json!({"path": p.display().to_string(), "reason": why}),
+            ));
+            body["scratch_skipped"] = serde_json::Value::Array(all_skipped);
+        }
+        body["freed_bytes"] = serde_json::json!(done.freed_bytes + scratch_freed);
         body["deleted"] = serde_json::json!(done
             .deleted
             .iter()
+            .chain(&scratch_done.deleted)
             .map(|(p, _)| p.display().to_string())
             .collect::<Vec<_>>());
         body["failed"] = serde_json::json!(done
             .failed
             .iter()
+            .chain(&scratch_done.failed)
             .map(|(p, e)| serde_json::json!({"path": p.display().to_string(), "error": e}))
             .collect::<Vec<_>>());
     }

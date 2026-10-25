@@ -6,6 +6,7 @@
 //! `~/.aida` or a live store.
 // trace:BUG-1624 | ai:claude
 
+// trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
 use super::*;
 
 fn git(root: &std::path::Path, args: &[&str]) -> String {
@@ -157,7 +158,7 @@ fn bug_1624_prepare_graded_review_refuses_option_like_inputs() {
         "store_path = \".aida-store\"\n",
     )
     .unwrap();
-    let backend = aida_core::GitBackend::new(&store_dir)
+    let backend = crate::test_env::home_fixture_backend(&store_dir)
         .unwrap()
         .with_dispenser(load_dispenser(&store_dir).unwrap());
     let mut req = aida_core::Requirement::new(

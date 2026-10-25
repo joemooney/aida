@@ -644,6 +644,9 @@ min_free_gib = "policy"
 emergency_used_pct = "policy"
 emergency_margin_pct = "policy"
 emergency_idle_hours = "policy"
+# TASK-2325 / TASK-2334: configured scratch roots for the scheduled guard.
+scratch_jobs_root = "location"
+scratch_tmp_root = "location"
 
 [keys.worktree.watchdog]
 "*" = "policy"

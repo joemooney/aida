@@ -536,7 +536,8 @@ pub(crate) fn terminator_focus_command(uuid: &str) -> (String, Vec<String>) {
 }
 
 pub(crate) fn terminator_send_command(uuid: &str, text: &str) -> (String, Vec<String>) {
-    terminator_call_command("Send", &["s", uuid, "s", text])
+    // trace:BUG-2222 | ai:codex — one D-Bus signature precedes all values.
+    terminator_call_command("Send", &["ss", uuid, text])
 }
 
 pub(crate) fn terminator_send_token_command(
@@ -544,12 +545,15 @@ pub(crate) fn terminator_send_token_command(
     text: &str,
     token: &str,
 ) -> (String, Vec<String>) {
-    terminator_call_command("SendToken", &["s", uuid, "s", text, "s", token])
+    // trace:BUG-2222 | ai:codex
+    terminator_call_command("SendToken", &["sss", uuid, text, token])
 }
 
 fn terminator_call_command(method: &str, typed_args: &[&str]) -> (String, Vec<String>) {
     let mut args = vec![
         "--user".to_string(),
+        // trace:BUG-2222 | ai:codex — payload values must never become options.
+        "--".to_string(),
         "call".to_string(),
         TERMINATOR_BUS.to_string(),
         TERMINATOR_PATH.to_string(),
@@ -747,16 +751,73 @@ mod tests {
         let args = terminator_send_command("uuid-1", "hi").1;
         assert!(args.starts_with(&[
             "--user".to_string(),
+            "--".to_string(),
             "call".to_string(),
             TERMINATOR_BUS.to_string(),
             TERMINATOR_PATH.to_string(),
             TERMINATOR_IFACE.to_string(),
             "Send".to_string(),
         ]));
-        assert_eq!(args[6..], ["s", "uuid-1", "s", "hi"]);
+        assert_eq!(args[7..], ["ss", "uuid-1", "hi"]);
         let token_args = terminator_send_token_command("uuid-1", "hi", "secret").1;
-        assert_eq!(token_args[5], "SendToken");
-        assert_eq!(token_args[6..], ["s", "uuid-1", "s", "hi", "s", "secret"]);
+        assert_eq!(token_args[6], "SendToken");
+        assert_eq!(token_args[7..], ["sss", "uuid-1", "hi", "secret"]);
+        assert_eq!(terminator_focus_command("uuid-1").1[7..], ["s", "uuid-1"]);
+    }
+
+    // trace:BUG-2222 | ai:codex — exercise the real parser on a private bus;
+    // a missing destination and disabled activation cannot deliver agent text.
+    #[test]
+    fn terminator_send_signatures_pass_busctl_parser_on_private_bus() {
+        let home = tempfile::tempdir().unwrap();
+        let uuid = "uuid with spaces";
+        let text = "--literal option\nsecond line with spaces";
+        let token = "fixture token\n--literal";
+        for (_, mut args) in [
+            terminator_send_command(uuid, text),
+            terminator_send_token_command(uuid, text, token),
+        ] {
+            args[3] = format!("net.aida.ParserProbe{}", uuid::Uuid::new_v4().simple());
+            let probe = |arguments: &[String]| {
+                std::process::Command::new("/usr/bin/dbus-run-session")
+                    .env_clear()
+                    .env("PATH", "/usr/bin:/bin")
+                    .env("HOME", home.path())
+                    .env("XDG_CONFIG_HOME", home.path())
+                    .env("LC_ALL", "C")
+                    .args(["--", "/usr/bin/busctl", "--auto-start=no"])
+                    .args(arguments)
+                    .output()
+                    .expect("private D-Bus parser probe requires dbus-run-session and busctl")
+            };
+            let mut split = args[..7].to_vec();
+            for value in &args[8..] {
+                split.extend(["s".to_string(), value.clone()]);
+            }
+            let rejected = probe(&split);
+            assert!(!rejected.status.success());
+            assert!(String::from_utf8_lossy(&rejected.stderr)
+                .contains("Too many parameters for signature"));
+            let accepted = probe(&args);
+            assert!(!accepted.status.success(), "missing service cannot deliver");
+            let error = String::from_utf8_lossy(&accepted.stderr);
+            assert!(
+                !error.contains("Too many parameters for signature"),
+                "{error}"
+            );
+            assert!(
+                error.contains("not provided by any .service files")
+                    || error.contains("not activatable")
+                    || error.contains("does not exist")
+                    || error.contains("not owned"),
+                "expected missing-service refusal: {error}"
+            );
+            assert_eq!(args[8], uuid);
+            assert_eq!(args[9], text);
+            if args[6] == "SendToken" {
+                assert_eq!(args[10], token);
+            }
+        }
     }
 
     #[test]

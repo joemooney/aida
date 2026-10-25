@@ -1,3 +1,4 @@
+// trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
 use super::*;
 use aida_core::{DecisionChoice, DecisionRequest, Requirement, RequirementStatus, RequirementType};
 
@@ -5,7 +6,7 @@ fn backend_in(dir: &std::path::Path) -> aida_core::CachedGitBackend {
     let store_root = dir.join("store");
     let cache_path = dir.join(".aida").join("cache.db");
     std::fs::create_dir_all(&store_root).unwrap();
-    aida_core::CachedGitBackend::open(&store_root, &cache_path).unwrap()
+    crate::test_env::home_fixture_cached_backend(&store_root, &cache_path).unwrap()
 }
 
 fn pending_dr() -> DecisionRequest {

@@ -52,11 +52,13 @@
 # trace:BUG-681 | ai:claude
 # trace:BUG-1239 | ai:codex
 
-# Antigravity (`--client agy`) wires this on its SessionStart event, whose
-# payload is camelCase (`conversationId`) with no event-name field and whose
+# Antigravity (`--client agy`) wires this on SessionStart and PreInvocation.
+# Its payload is camelCase (`conversationId`) with no event-name field and its
 # stdout must be one JSON object (`{}` is a no-op). So the agy relay names the
 # event (`--event`, exported as AIDA_HOOK_EVENT for the verb) and wraps the
-# notice text as an injected system message. Claude/Codex pass no arguments.
+# notice text as an injected system message. PreInvocation uses mailbox notice
+# for handle-addressed mail; SessionStart retains awaiting for registration.
+# Claude/Codex pass no arguments.
 # trace:TASK-2253 | ai:claude
 client=""
 event=""
@@ -68,7 +70,13 @@ while [ $# -gt 0 ]; do
     esac
 done
 case "$client" in
-    agy|antigravity|antigravity-cli) agy=1 ;;
+    agy|antigravity|antigravity-cli)
+        agy=1
+        # The named client overrides stale parent vendor markers.
+        # trace:STORY-1843 | ai:codex
+        AIDA_AGENT_TYPE=antigravity
+        export AIDA_AGENT_TYPE
+        ;;
     *) agy="" ;;
 esac
 if [ -n "$event" ]; then
@@ -111,12 +119,21 @@ fi
 # `gtimeout`; if neither exists, run bare (the verb's internal fast-fail already
 # guarantees it returns promptly). 4s stays inside the hook's own timeout.
 notice() {
-    if command -v timeout >/dev/null 2>&1; then
-        timeout 4 aida awaiting --notice 2>/dev/null || true
-    elif command -v gtimeout >/dev/null 2>&1; then
-        gtimeout 4 aida awaiting --notice 2>/dev/null || true
+    # The unified awaiting report deliberately counts user/role inboxes.
+    # Handle delivery needs the mailbox reader's full session identity set.
+    # SessionStart still uses awaiting to register the raw client first.
+    # trace:STORY-1843.ac0eef56 | ai:codex
+    if [ -n "$agy" ] && [ "$event" = PreInvocation ]; then
+        set -- mailbox notice
     else
-        aida awaiting --notice 2>/dev/null || true
+        set -- awaiting --notice
+    fi
+    if command -v timeout >/dev/null 2>&1; then
+        timeout 4 aida "$@" 2>/dev/null || true
+    elif command -v gtimeout >/dev/null 2>&1; then
+        gtimeout 4 aida "$@" 2>/dev/null || true
+    else
+        aida "$@" 2>/dev/null || true
     fi
 }
 if [ -z "$agy" ]; then

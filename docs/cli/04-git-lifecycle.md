@@ -483,8 +483,12 @@ mandate.
 
 **Options.** `--ttl` sets the duration (`8h` by default, `90m` style also
 accepted, at most `24h`). A mandate cannot be extended: stop it and start
-another. `--reason` records why. `--include-supervised` also covers sensitive
-specs (security, containment, review or merge authority, guided, keystone).
+another. `--reason` records why. `--scope <scope>` adds explicit scopes such
+as `dispatch` (`aida mandate start --ship-held --scope dispatch`), and
+`--drive` starts a drive mandate covering all scopes. `--include-supervised`
+also covers sensitive specs (security, containment, review or merge authority,
+guided, keystone); with `--drive`, `--exclude-supervised` keeps sensitive
+specs human-only.
 Specs tagged `operator-only` or with execution mode `operator` or `decide`
 always stay human-only. Exclusion is sticky: a spec that was ever in an
 excluded class, in any stored version or in the local exclusion ledger
@@ -611,9 +615,9 @@ ops = ["ship"]   # any of: ship, sketch-signoff, dispatch, hold-clear, relay-res
 - A PR that changes `.aida/config.toml` or the mandate code
   (`mandate.rs`, `mandate_gates.rs`, `mandate_drive.rs`, `mandate_ship.rs`,
   `mandate_traces.rs`, `relay_launch.rs`, `rework_hold_release.rs`,
-  `fleet_lanes.rs`, `pr_ship.rs`, `merge_hold.rs`, `pr_ship_batch.rs`, and
-  everything under `aida-cli-lib/src/gate/`) never ships under a mandate, and a
-  mandate never releases its rework hold either.
+  `fleet_lanes.rs`, `pr_ship.rs`, `pr_ship_batch.rs`, and everything under
+  `aida-cli-lib/src/gate/`) never ships under a mandate, and a mandate never
+  releases its rework hold either.
   Listing `ship` or `hold-clear` stops mandate rework releases too.
 - You can protect more paths. Entries are exact paths, or directory prefixes
   that end in `/` (`gate/` matches `gate/x.rs`, never `gateway/x.rs`):

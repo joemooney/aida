@@ -969,9 +969,9 @@ pub(crate) fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<
             // Clearing a supervised hold is a non-grantable human integrity
             // floor, independent of dispatch/disposition roles.
             // trace:STORY-1353 | ai:codex
-            if !has_integrity_floor_authority() {
-                let refusal = "clearing a merge-hold requires a human at an interactive terminal; \
-                     dispatch or advisor authority cannot override this integrity floor";
+            if let Some(refusal) = crate::gate::merge_hold_core::hold_clear_floor_refusal(
+                has_integrity_floor_authority(),
+            ) {
                 // STORY-1436: the floor HELD — record it (PR, refused seat,
                 // reason, ts) so floor refusals can be counted against
                 // releases. Best-effort; never changes the refusal.

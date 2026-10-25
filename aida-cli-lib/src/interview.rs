@@ -830,7 +830,7 @@ mod tests {
 
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().join("aida-store");
-        let backend = GitBackend::new(&root).unwrap();
+        let backend = crate::test_env::home_fixture_backend(&root).unwrap();
 
         // Seed a gappy story spec: thin body, no acceptance, no parent. It maps
         // to acceptance/description/not_vague/parent/priority questions.

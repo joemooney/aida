@@ -481,7 +481,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let targets: Vec<Box<dyn DatabaseBackend>> = vec![
             Box::new(
-                GitBackend::new(&dir.path().join("git"))
+                crate::allocation_authority::home_fixture_backend(&dir.path().join("git"))
                     .unwrap()
                     .with_auto_commit(false),
             ),
@@ -525,7 +525,7 @@ mod tests {
     fn story1674_import_retains_destination_replace_baseline_and_exports_detach_source() {
         use crate::db::{DatabaseBackend, GitBackend};
         let dir = tempfile::tempdir().unwrap();
-        let backend = GitBackend::new(&dir.path().join("source"))
+        let backend = crate::allocation_authority::home_fixture_backend(&dir.path().join("source"))
             .unwrap()
             .with_auto_commit(false);
         let mut old = Requirement::new("replace me".into(), "body".into());
@@ -549,7 +549,7 @@ mod tests {
         assert!(foreign.loaded_objects.is_some());
         // Same transfer boundary as both db export-git dispatchers.
         foreign.loaded_objects = None;
-        let target = GitBackend::new(&dir.path().join("target"))
+        let target = crate::allocation_authority::home_fixture_backend(&dir.path().join("target"))
             .unwrap()
             .with_auto_commit(false);
         target.save_imported(&foreign).unwrap();

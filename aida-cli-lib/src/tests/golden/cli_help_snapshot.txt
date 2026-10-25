@@ -422,6 +422,8 @@ Commands:
   skill         Stock and local skill tooling
   alias         Discoverable registry of AIDA's built-in shortcuts
   fleet         Fleet operations over relay runs and lanes
+  dispatch      Queue and inspect typed dispatch requests (`flow`, `review`, `take`, `impl`,
+                `train`) from a sandboxed advisor seat for unsandboxed execution
   help          Print this message or the help of the given subcommand(s)
 
 Options:
@@ -4428,29 +4430,61 @@ Inter-agent mailbox: peer↔peer messaging (send / inbox / thread)
 Usage: aida mailbox [OPTIONS] <COMMAND>
 
 Commands:
-  migrate  Preview legacy mailbox reconciliation before recipient migration
-  latency  Show mailbox read latency for the active identity (or an explicit recipient)
-  send     Send a message to another agent, or `--broadcast` to all
-  inbox    Show an agent's inbox: messages addressed to it + broadcasts, oldest-first. Reading marks
-           the inbox seen (clears unread); `--all` is the operator-wide read-only view across every
-           agent
-  notice   Ambient unread-mail notice for an agent's context: a capped, plain, role+user-scoped
-           summary of unread messages, or nothing when the inbox is caught up. Never marks anything
-           seen. The SessionStart / per-turn hook calls this; reading/acking stays the explicit
-           `aida mailbox inbox`
-  list     Operator overview: agents with mail waiting + unread / urgent-unread counts,
-           most-recent-activity first
-  read     Read one message by id or unique id prefix without changing unread state
-  retract  Retract a sent message, leaving a withdrawn tombstone in mailbox views
-  delete   Delete a sent message from mailbox views; records a marker so sync does not resurrect it
-  archive  Archive read mailbox messages from the default inbox while preserving them for audit
-  gc       Maintenance alias for `archive --older-than ... --read-only`
-  thread   Show a full conversation thread, oldest-first
-  sync     Digest the local layer into the git-canonical store (durable, replayable, shareable
-           across clones) and commit it on the orphan branch. Idempotent
-  help     Print this message or the help of the given subcommand(s)
+  wake-snapshot  Read bounded unread message IDs without bodies or acknowledgement
+  migrate        Preview legacy mailbox reconciliation before recipient migration
+  latency        Show mailbox read latency for the active identity (or an explicit recipient)
+  send           Send a message to another agent, or `--broadcast` to all
+  inbox          Show an agent's inbox: messages addressed to it + broadcasts, oldest-first. Reading
+                 marks the inbox seen (clears unread); `--all` is the operator-wide read-only view
+                 across every agent
+  notice         Ambient unread-mail notice for an agent's context: a capped, plain,
+                 role+user-scoped summary of unread messages, or nothing when the inbox is caught
+                 up. Never marks anything seen. The SessionStart / per-turn hook calls this;
+                 reading/acking stays the explicit `aida mailbox inbox`
+  list           Operator overview: agents with mail waiting + unread / urgent-unread counts,
+                 most-recent-activity first
+  read           Read one message by id or unique id prefix without changing unread state
+  retract        Retract a sent message, leaving a withdrawn tombstone in mailbox views
+  delete         Delete a sent message from mailbox views; records a marker so sync does not
+                 resurrect it
+  archive        Archive read mailbox messages from the default inbox while preserving them for
+                 audit
+  gc             Maintenance alias for `archive --older-than ... --read-only`
+  thread         Show a full conversation thread, oldest-first
+  sync           Digest the local layer into the git-canonical store (durable, replayable, shareable
+                 across clones) and commit it on the orphan branch. Idempotent
+  help           Print this message or the help of the given subcommand(s)
 
 Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida mailbox wake-snapshot
+Read bounded unread message IDs without bodies or acknowledgement
+
+Usage: aida mailbox wake-snapshot [OPTIONS]
+
+Options:
+      --local-root <LOCAL_ROOT>
+          Local checkout whose mailbox is inspected (defaults to the main checkout)
+
+      --recipient <RECIPIENT>
+          Exact inbox identity; does not inherit the caller's identity union
+          
+          [default: advisor]
+
+      --json
+          Print the versioned read-only envelope as JSON
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -5748,6 +5782,9 @@ Usage: aida mandate start [OPTIONS]
 Options:
       --ship-held
           Cover shipping held PRs (required unless --drive)
+
+      --scope <SCOPE>
+          Additional scopes to cover (e.g. `--scope dispatch`)
 
       --drive
           A DRIVE mandate: also covers advisor signoff of sketches and dispatching fixers, and turns
@@ -8947,16 +8984,20 @@ Commands:
   dismiss  Disposition a worktree whose content is undecidable (e.g. batched integration). Archives
            the branch tip under refs/archive/, removes the worktree and branch, and ledgers the
            operator decision
-  reclaim  Reclaim disk by deleting stale `target/` build caches inside this repository's worktrees.
-           A `target/` is a cache, never a source of truth — nothing but rebuild time is lost. DRY
-           RUN BY DEFAULT: it reports reclaimable bytes and every worktree it held back, and deletes
-           only with `--apply`. Where `gc` removes worktrees that are FINISHED, `reclaim` removes
-           the regenerable cache inside worktrees that are KEPT, which is the space `aida session
-           reap` cannot reach and `cargo clean` targets wrongly (inside a worktree it clears the
-           SHARED CARGO_TARGET_DIR, i.e. the main checkout's live cache, not the stale one). The
-           main checkout's `target/` is never a candidate; nor is `.aida-store`, a worktree held by
-           a live session, a worktree whose branch has an open PR, or a cache touched in the last
-           `--min-age-mins` minutes
+  reclaim  Reclaim disk by deleting stale `target/` build caches inside this repository's worktrees,
+           plus aged agent scratch outside the repository (`~/.claude/jobs/<id>/tmp` of terminal
+           jobs, old entries under the agent `$TMPDIR` root, and idle `~/.cache/aida-impl-target`
+           build caches; pass `--no-scratch` to restrict to worktree `target/` caches). DRY RUN BY
+           DEFAULT: it reports reclaimable bytes and every worktree or scratch entry held back, and
+           deletes only with `--apply`. Where `gc` removes worktrees that are FINISHED, `reclaim`
+           removes stale worktree caches inside worktrees that are KEPT (which `aida session reap`
+           cannot reach and `cargo clean` targets wrongly by clearing the shared `CARGO_TARGET_DIR`)
+           alongside aged agent scratch older than `--scratch-age-days`. Note that while `target/`
+           and build caches are regenerable, deleted job `tmp/` and session scratch are not (job
+           `state.json`, `timeline.jsonl`, and `~/.claude/projects` transcripts are never touched).
+           The main checkout's `target/` is never a candidate; nor is `.aida-store`, a worktree or
+           scratch dir held by a live session or live job, a worktree whose branch has an open PR,
+           or a worktree cache touched in the last `--min-age-mins` minutes
   pool     Manage the warm-pool of recycled worktrees — kept warm (reset-not-delete on hand-back) so
            build caches survive across fan-outs. Dissolves the cargo-cache poison and
            branch-stacking hazards of destroy-and-recreate
@@ -9149,15 +9190,19 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 ===== aida worktree reclaim
-Reclaim disk by deleting stale `target/` build caches inside this repository's worktrees. A
-`target/` is a cache, never a source of truth — nothing but rebuild time is lost. DRY RUN BY
-DEFAULT: it reports reclaimable bytes and every worktree it held back, and deletes only with
-`--apply`. Where `gc` removes worktrees that are FINISHED, `reclaim` removes the regenerable cache
-inside worktrees that are KEPT, which is the space `aida session reap` cannot reach and `cargo
-clean` targets wrongly (inside a worktree it clears the SHARED CARGO_TARGET_DIR, i.e. the main
-checkout's live cache, not the stale one). The main checkout's `target/` is never a candidate; nor
-is `.aida-store`, a worktree held by a live session, a worktree whose branch has an open PR, or a
-cache touched in the last `--min-age-mins` minutes
+Reclaim disk by deleting stale `target/` build caches inside this repository's worktrees, plus aged
+agent scratch outside the repository (`~/.claude/jobs/<id>/tmp` of terminal jobs, old entries under
+the agent `$TMPDIR` root, and idle `~/.cache/aida-impl-target` build caches; pass `--no-scratch` to
+restrict to worktree `target/` caches). DRY RUN BY DEFAULT: it reports reclaimable bytes and every
+worktree or scratch entry held back, and deletes only with `--apply`. Where `gc` removes worktrees
+that are FINISHED, `reclaim` removes stale worktree caches inside worktrees that are KEPT (which
+`aida session reap` cannot reach and `cargo clean` targets wrongly by clearing the shared
+`CARGO_TARGET_DIR`) alongside aged agent scratch older than `--scratch-age-days`. Note that while
+`target/` and build caches are regenerable, deleted job `tmp/` and session scratch are not (job
+`state.json`, `timeline.jsonl`, and `~/.claude/projects` transcripts are never touched). The main
+checkout's `target/` is never a candidate; nor is `.aida-store`, a worktree or scratch dir held by a
+live session or live job, a worktree whose branch has an open PR, or a worktree cache touched in the
+last `--min-age-mins` minutes
 
 Usage: aida worktree reclaim [OPTIONS]
 
@@ -9185,6 +9230,12 @@ Options:
       --json
           Emit machine-readable JSON
 
+      --scratch-age-days <DAYS>
+          Treat agent scratch (terminal jobs' tmp dirs, session scratch, idle build caches) younger
+          than this many days as live and keep it
+          
+          [default: 3]
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -9194,6 +9245,10 @@ Options:
           - human: Human-readable tables / emoji (the interactive default at a TTY)
           - toon:  Token-efficient TOON — the compact agent default when piped/captured
           - json:  Machine JSON, for commands that support a JSON projection
+
+      --no-scratch
+          Skip the agent-scratch scan (jobs tmp, TMPDIR scratch, build caches) and consider only
+          this repository's worktree caches
 
   -h, --help
           Print help (see a summary with '-h')
@@ -15787,6 +15842,7 @@ ID configuration commands
 Usage: aida config [OPTIONS] <COMMAND>
 
 Commands:
+  allocation   Inspect or explicitly enroll this clone as the HOME allocation authority
   transport    Configure this clone's store-only transport profile (never shared)
   show         Show current ID configuration
   format       Set the ID format (single-level or two-level)
@@ -15811,6 +15867,65 @@ Commands:
                navigation. Safe knobs can be edited in place; integrity-floor knobs stay read-only
                or subcommand-only. Needs a TTY; without one it points you at `config show`
   help         Print this message or the help of the given subcommand(s)
+
+Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida config allocation
+Inspect or explicitly enroll this clone as the HOME allocation authority
+
+Usage: aida config allocation [OPTIONS] <COMMAND>
+
+Commands:
+  show         Read clone-local allocation mode. Missing means WORK
+  enroll-home  Enroll this exact clone common Git directory (direct human terminal only)
+  help         Print this message or the help of the given subcommand(s)
+
+Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida config allocation show
+Read clone-local allocation mode. Missing means WORK
+
+Usage: aida config allocation show [OPTIONS]
+
+Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida config allocation enroll-home
+Enroll this exact clone common Git directory (direct human terminal only)
+
+Usage: aida config allocation enroll-home [OPTIONS]
 
 Options:
       --format <FORMAT>
@@ -24529,6 +24644,380 @@ Options:
 
   -h, --help
           Print help (see a summary with '-h')
+===== aida dispatch
+Queue and inspect typed dispatch requests (`flow`, `review`, `take`, `impl`, `train`) from a
+sandboxed advisor seat for unsandboxed execution
+
+Usage: aida dispatch [OPTIONS] <COMMAND>
+
+Commands:
+  request  Queue a validated, mandate-authorized dispatch request
+  list     List queued, running, and completed dispatch requests
+  show     Show one dispatch request and its current result record
+  cancel   Cancel a pending dispatch request
+  tick     Execute one substrate scheduler pass over pending `take` and `impl` requests (leaves
+           `review`, `flow`, and `train` waiting for `serve`)
+  serve    Long-running executor started from a human advisor terminal after `eval "$(aida role
+           enter advisor ...)"` to run grant-requiring verbs (`review`, `flow`, `train`) as well as
+           `take` and `impl`
+  help     Print this message or the help of the given subcommand(s)
+
+Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida dispatch request
+Queue a validated, mandate-authorized dispatch request
+
+Usage: aida dispatch request [OPTIONS] <COMMAND>
+
+Commands:
+  flow    Drive a PR from its current state through update-branch, CI wait, headless review, and
+          ship/train
+  review  Run a standalone headless reviewer on `PR-<N>`
+  take    Create/reuse a takeover worktree on a PR's branch and launch a background implementer with
+          a frozen brief
+  impl    Create/reuse a fresh worktree off `origin/main` and launch a background implementer lane
+          with a frozen brief
+  train   Ship a serialized queue of PRs (`aida pr ship` -> `update-branch` -> `train`)
+  help    Print this message or the help of the given subcommand(s)
+
+Options:
+      --json
+          Print the queued (or deduplicated) request as JSON
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida dispatch request flow
+Drive a PR from its current state through update-branch, CI wait, headless review, and ship/train
+
+Usage: aida dispatch request flow [OPTIONS] <PR>
+
+Arguments:
+  <PR>
+          Pull request number (1..=999999)
+
+Options:
+      --no-ship
+          Stop after review without shipping
+
+      --vendor <VENDOR>
+          Vendor harness for the reviewer (`claude`, `codex`, `agy`)
+          
+          [possible values: claude, codex, agy]
+
+      --json
+          Print the queued (or deduplicated) request as JSON
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida dispatch request review
+Run a standalone headless reviewer on `PR-<N>`
+
+Usage: aida dispatch request review [OPTIONS] <PR>
+
+Arguments:
+  <PR>
+          Pull request number (1..=999999)
+
+Options:
+      --vendor <VENDOR>
+          Vendor harness for the reviewer (`claude`, `codex`, `agy`)
+          
+          [possible values: claude, codex, agy]
+
+      --json
+          Print the queued (or deduplicated) request as JSON
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida dispatch request take
+Create/reuse a takeover worktree on a PR's branch and launch a background implementer with a frozen
+brief
+
+Usage: aida dispatch request take [OPTIONS] --branch <BRANCH> --spec <SPEC> --brief <BRIEF> <PR>
+
+Arguments:
+  <PR>
+          Pull request number (1..=999999)
+
+Options:
+      --branch <BRANCH>
+          Head branch name on origin
+
+      --spec <SPEC>
+          Target spec ID (e.g. `<SPEC-ID>`)
+
+      --brief <BRIEF>
+          Path to the markdown brief file to freeze (`<= 64 KiB`)
+
+      --vendor <VENDOR>
+          Vendor harness for the implementer (`claude`, `codex`, `agy`)
+          
+          [possible values: claude, codex, agy]
+
+      --json
+          Print the queued (or deduplicated) request as JSON
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida dispatch request impl
+Create/reuse a fresh worktree off `origin/main` and launch a background implementer lane with a
+frozen brief
+
+Usage: aida dispatch request impl [OPTIONS] --name <NAME> --branch <BRANCH> --spec <SPEC> --brief <BRIEF>
+
+Options:
+      --name <NAME>
+          Short worktree/session name (`^[A-Za-z0-9._-]{1,60}$`)
+
+      --branch <BRANCH>
+          Branch name to create or reuse
+
+      --spec <SPEC>
+          Target spec ID (e.g. `<SPEC-ID>`)
+
+      --brief <BRIEF>
+          Path to the markdown brief file to freeze (`<= 64 KiB`)
+
+      --vendor <VENDOR>
+          Vendor harness for the implementer (`claude`, `codex`, `agy`)
+          
+          [possible values: claude, codex, agy]
+
+      --json
+          Print the queued (or deduplicated) request as JSON
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida dispatch request train
+Ship a serialized queue of PRs (`aida pr ship` -> `update-branch` -> `train`)
+
+Usage: aida dispatch request train [OPTIONS] <PRS>...
+
+Arguments:
+  <PRS>...
+          Pull request numbers (1..=16 items)
+
+Options:
+      --json
+          Print the queued (or deduplicated) request as JSON
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida dispatch list
+List queued, running, and completed dispatch requests
+
+Usage: aida dispatch list [OPTIONS]
+
+Options:
+      --status <STATUS>
+          Filter by status (`pending`, `running`, `done`, `refused`, `failed`, `cancelled`)
+          
+          [possible values: pending, running, done, refused, failed, cancelled]
+
+      --json
+          Print JSON
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida dispatch show
+Show one dispatch request and its current result record
+
+Usage: aida dispatch show [OPTIONS] <ID>
+
+Arguments:
+  <ID>
+          Request ID (UUID or unique prefix)
+
+Options:
+      --json
+          Print JSON
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida dispatch cancel
+Cancel a pending dispatch request
+
+Usage: aida dispatch cancel [OPTIONS] <ID>
+
+Arguments:
+  <ID>
+          Request ID (UUID or unique prefix)
+
+Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida dispatch tick
+Execute one substrate scheduler pass over pending `take` and `impl` requests (leaves `review`,
+`flow`, and `train` waiting for `serve`)
+
+Usage: aida dispatch tick [OPTIONS]
+
+Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida dispatch serve
+Long-running executor started from a human advisor terminal after `eval "$(aida role enter advisor
+...)"` to run grant-requiring verbs (`review`, `flow`, `train`) as well as `take` and `impl`
+
+Usage: aida dispatch serve [OPTIONS]
+
+Options:
+      --once
+          Run a single pass and exit instead of polling
+
+      --poll-ms <POLL_MS>
+          Poll interval in milliseconds when running continuously
+          
+          [default: 2000]
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida dispatch run
+Internal per-request worker spawned by `dispatch tick` or `dispatch serve`
+
+Usage: aida dispatch run [OPTIONS] <ID>
+
+Arguments:
+  <ID>
+          Exact request UUID
+
+Options:
+      --via-serve
+          Set when spawned by `aida dispatch serve` from a bound advisor terminal
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+  -h, --help
+          Print help (see a summary with '-h')
 ===== help all (command groups)
 Getting started
   why            Ask your code why it exists — the decision behind any line
@@ -24563,6 +25052,7 @@ Work & autonomy
   questions      The async decision inbox
   brief          Route work to an agent via a pickup brief
   agent          Supervised agent launcher
+  dispatch       Typed dispatch queue for sandboxed advisor seats
   triage         Triage incoming work
 Git & lifecycle
   fetch          Refresh remote refs (read-only)
@@ -28561,6 +29051,42 @@ Working on aida itself
     "path": [
       "aida",
       "mailbox",
+      "wake-snapshot"
+    ],
+    "about": "Read bounded unread message IDs without bodies or acknowledgement",
+    "flags": [
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Print the versioned read-only envelope as JSON"
+      },
+      {
+        "name": "local-root",
+        "takes_value": true,
+        "help": "Local checkout whose mailbox is inspected (defaults to the main checkout)"
+      },
+      {
+        "name": "recipient",
+        "takes_value": true,
+        "help": "Exact inbox identity; does not inherit the caller's identity union"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "mailbox",
       "migrate"
     ],
     "about": "Preview legacy mailbox reconciliation before recipient migration",
@@ -29790,6 +30316,11 @@ Working on aida itself
         "name": "reason",
         "takes_value": true,
         "help": "Why the mandate exists, recorded with it"
+      },
+      {
+        "name": "scope",
+        "takes_value": true,
+        "help": "Additional scopes to cover (e.g. `--scope dispatch`)"
       },
       {
         "name": "ship-held",
@@ -33080,7 +33611,7 @@ Working on aida itself
       "worktree",
       "reclaim"
     ],
-    "about": "Reclaim disk by deleting stale `target/` build caches inside this repository's worktrees. A `target/` is a cache, never a source of truth — nothing but rebuild time is lost. DRY RUN BY DEFAULT: it reports reclaimable bytes and every worktree it held back, and deletes only with `--apply`. Where `gc` removes worktrees that are FINISHED, `reclaim` removes the regenerable cache inside worktrees that are KEPT, which is the space `aida session reap` cannot reach and `cargo clean` targets wrongly (inside a worktree it clears the SHARED CARGO_TARGET_DIR, i.e. the main checkout's live cache, not the stale one). The main checkout's `target/` is never a candidate; nor is `.aida-store`, a worktree held by a live session, a worktree whose branch has an open PR, or a cache touched in the last `--min-age-mins` minutes",
+    "about": "Reclaim disk by deleting stale `target/` build caches inside this repository's worktrees, plus aged agent scratch outside the repository (`~/.claude/jobs/<id>/tmp` of terminal jobs, old entries under the agent `$TMPDIR` root, and idle `~/.cache/aida-impl-target` build caches; pass `--no-scratch` to restrict to worktree `target/` caches). DRY RUN BY DEFAULT: it reports reclaimable bytes and every worktree or scratch entry held back, and deletes only with `--apply`. Where `gc` removes worktrees that are FINISHED, `reclaim` removes stale worktree caches inside worktrees that are KEPT (which `aida session reap` cannot reach and `cargo clean` targets wrongly by clearing the shared `CARGO_TARGET_DIR`) alongside aged agent scratch older than `--scratch-age-days`. Note that while `target/` and build caches are regenerable, deleted job `tmp/` and session scratch are not (job `state.json`, `timeline.jsonl`, and `~/.claude/projects` transcripts are never touched). The main checkout's `target/` is never a candidate; nor is `.aida-store`, a worktree or scratch dir held by a live session or live job, a worktree whose branch has an open PR, or a worktree cache touched in the last `--min-age-mins` minutes",
     "flags": [
       {
         "name": "apply",
@@ -33116,6 +33647,16 @@ Working on aida itself
         "name": "min-age-mins",
         "takes_value": true,
         "help": "Treat a `target/` touched within this many minutes as a possible in-flight build and skip it"
+      },
+      {
+        "name": "no-scratch",
+        "takes_value": false,
+        "help": "Skip the agent-scratch scan (jobs tmp, TMPDIR scratch, build caches) and consider only this repository's worktree caches"
+      },
+      {
+        "name": "scratch-age-days",
+        "takes_value": true,
+        "help": "Treat agent scratch (terminal jobs' tmp dirs, session scratch, idle build caches) younger than this many days as live and keep it"
       },
       {
         "name": "target-pct",
@@ -39640,6 +40181,71 @@ Working on aida itself
       "config"
     ],
     "about": "ID configuration commands",
+    "flags": [
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": true
+  },
+  {
+    "path": [
+      "aida",
+      "config",
+      "allocation"
+    ],
+    "about": "Inspect or explicitly enroll this clone as the HOME allocation authority",
+    "flags": [
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": true
+  },
+  {
+    "path": [
+      "aida",
+      "config",
+      "allocation",
+      "show"
+    ],
+    "about": "Read clone-local allocation mode. Missing means WORK",
+    "flags": [
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": true
+  },
+  {
+    "path": [
+      "aida",
+      "config",
+      "allocation",
+      "enroll-home"
+    ],
+    "about": "Enroll this exact clone common Git directory (direct human terminal only)",
     "flags": [
       {
         "name": "format",
@@ -48172,5 +48778,402 @@ Working on aida itself
       }
     ],
     "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "dispatch"
+    ],
+    "about": "Queue and inspect typed dispatch requests (`flow`, `review`, `take`, `impl`, `train`) from a sandboxed advisor seat for unsandboxed execution",
+    "flags": [
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "dispatch",
+      "request"
+    ],
+    "about": "Queue a validated, mandate-authorized dispatch request",
+    "flags": [
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Print the queued (or deduplicated) request as JSON"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "dispatch",
+      "request",
+      "flow"
+    ],
+    "about": "Drive a PR from its current state through update-branch, CI wait, headless review, and ship/train",
+    "flags": [
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Print the queued (or deduplicated) request as JSON"
+      },
+      {
+        "name": "no-ship",
+        "takes_value": false,
+        "help": "Stop after review without shipping"
+      },
+      {
+        "name": "vendor",
+        "takes_value": true,
+        "help": "Vendor harness for the reviewer (`claude`, `codex`, `agy`)"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "dispatch",
+      "request",
+      "review"
+    ],
+    "about": "Run a standalone headless reviewer on `PR-<N>`",
+    "flags": [
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Print the queued (or deduplicated) request as JSON"
+      },
+      {
+        "name": "vendor",
+        "takes_value": true,
+        "help": "Vendor harness for the reviewer (`claude`, `codex`, `agy`)"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "dispatch",
+      "request",
+      "take"
+    ],
+    "about": "Create/reuse a takeover worktree on a PR's branch and launch a background implementer with a frozen brief",
+    "flags": [
+      {
+        "name": "branch",
+        "takes_value": true,
+        "help": "Head branch name on origin"
+      },
+      {
+        "name": "brief",
+        "takes_value": true,
+        "help": "Path to the markdown brief file to freeze (`<= 64 KiB`)"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Print the queued (or deduplicated) request as JSON"
+      },
+      {
+        "name": "spec",
+        "takes_value": true,
+        "help": "Target spec ID (e.g. `<SPEC-ID>`)"
+      },
+      {
+        "name": "vendor",
+        "takes_value": true,
+        "help": "Vendor harness for the implementer (`claude`, `codex`, `agy`)"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "dispatch",
+      "request",
+      "impl"
+    ],
+    "about": "Create/reuse a fresh worktree off `origin/main` and launch a background implementer lane with a frozen brief",
+    "flags": [
+      {
+        "name": "branch",
+        "takes_value": true,
+        "help": "Branch name to create or reuse"
+      },
+      {
+        "name": "brief",
+        "takes_value": true,
+        "help": "Path to the markdown brief file to freeze (`<= 64 KiB`)"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Print the queued (or deduplicated) request as JSON"
+      },
+      {
+        "name": "name",
+        "takes_value": true,
+        "help": "Short worktree/session name (`^[A-Za-z0-9._-]{1,60}$`)"
+      },
+      {
+        "name": "spec",
+        "takes_value": true,
+        "help": "Target spec ID (e.g. `<SPEC-ID>`)"
+      },
+      {
+        "name": "vendor",
+        "takes_value": true,
+        "help": "Vendor harness for the implementer (`claude`, `codex`, `agy`)"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "dispatch",
+      "request",
+      "train"
+    ],
+    "about": "Ship a serialized queue of PRs (`aida pr ship` -> `update-branch` -> `train`)",
+    "flags": [
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Print the queued (or deduplicated) request as JSON"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "dispatch",
+      "list"
+    ],
+    "about": "List queued, running, and completed dispatch requests",
+    "flags": [
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Print JSON"
+      },
+      {
+        "name": "status",
+        "takes_value": true,
+        "help": "Filter by status (`pending`, `running`, `done`, `refused`, `failed`, `cancelled`)"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "dispatch",
+      "show"
+    ],
+    "about": "Show one dispatch request and its current result record",
+    "flags": [
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Print JSON"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "dispatch",
+      "cancel"
+    ],
+    "about": "Cancel a pending dispatch request",
+    "flags": [
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "dispatch",
+      "tick"
+    ],
+    "about": "Execute one substrate scheduler pass over pending `take` and `impl` requests (leaves `review`, `flow`, and `train` waiting for `serve`)",
+    "flags": [
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "dispatch",
+      "serve"
+    ],
+    "about": "Long-running executor started from a human advisor terminal after `eval \"$(aida role enter advisor ...)\"` to run grant-requiring verbs (`review`, `flow`, `train`) as well as `take` and `impl`",
+    "flags": [
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "once",
+        "takes_value": false,
+        "help": "Run a single pass and exit instead of polling"
+      },
+      {
+        "name": "poll-ms",
+        "takes_value": true,
+        "help": "Poll interval in milliseconds when running continuously"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "dispatch",
+      "run"
+    ],
+    "about": "Internal per-request worker spawned by `dispatch tick` or `dispatch serve`",
+    "flags": [
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "via-serve",
+        "takes_value": false,
+        "help": "Set when spawned by `aida dispatch serve` from a bound advisor terminal"
+      }
+    ],
+    "hidden": true
   }
 ]

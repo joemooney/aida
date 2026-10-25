@@ -3,6 +3,7 @@
 //! one process test spawns `/bin/sh` through the wave builder, never `aida`.
 // trace:STORY-1218 | ai:claude
 
+// trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
 use super::*;
 use chrono::TimeZone;
 
@@ -1052,9 +1053,11 @@ fn shift_dry_run_on_fixture_queue_prints_argv_specs_guards_mail_and_writes_nothi
     let tmp = tempfile::tempdir().unwrap();
     let store = tmp.path().join(".aida-store");
     std::fs::create_dir_all(&store).unwrap();
-    let backend =
-        aida_core::CachedGitBackend::open(&store, &tmp.path().join(".aida").join("cache.db"))
-            .unwrap();
+    let backend = crate::test_env::home_fixture_cached_backend(
+        &store,
+        &tmp.path().join(".aida").join("cache.db"),
+    )
+    .unwrap();
     let add = |spec: &str, mode: Option<ExecutionMode>, role: Option<&str>| {
         let mut r = aida_core::Requirement::new(spec.to_string(), "d".to_string());
         r.spec_id = Some(spec.to_string());
@@ -1148,7 +1151,8 @@ fn shift_auto_tag_replaces_prior_shift_tag() {
     let tmp = tempfile::tempdir().unwrap();
     let store = tmp.path().join("store");
     std::fs::create_dir_all(&store).unwrap();
-    let backend = aida_core::CachedGitBackend::open(&store, &tmp.path().join("cache.db")).unwrap();
+    let backend =
+        crate::test_env::home_fixture_cached_backend(&store, &tmp.path().join("cache.db")).unwrap();
     let mut r = aida_core::Requirement::new("TASK-1".into(), "d".into());
     r.spec_id = Some("TASK-1".into());
     r.tags.insert("batch:shift-20260101-0000".into());
@@ -2017,9 +2021,11 @@ fn shift_redrive_requeue_puts_parks_at_the_queue_head_and_the_next_wave_selects_
     let tmp = tempfile::tempdir().unwrap();
     let store = tmp.path().join(".aida-store");
     std::fs::create_dir_all(&store).unwrap();
-    let backend =
-        aida_core::CachedGitBackend::open(&store, &tmp.path().join(".aida").join("cache.db"))
-            .unwrap();
+    let backend = crate::test_env::home_fixture_cached_backend(
+        &store,
+        &tmp.path().join(".aida").join("cache.db"),
+    )
+    .unwrap();
     let queued = |spec: &str, position: i64| {
         let mut r = aida_core::Requirement::new(spec.to_string(), "d".to_string());
         r.spec_id = Some(spec.to_string());
@@ -2448,9 +2454,11 @@ fn shift_redrive_unwritable_events_file_requeues_nothing() {
     let tmp = tempfile::tempdir().unwrap();
     let store = tmp.path().join(".aida-store");
     std::fs::create_dir_all(&store).unwrap();
-    let backend =
-        aida_core::CachedGitBackend::open(&store, &tmp.path().join(".aida").join("cache.db"))
-            .unwrap();
+    let backend = crate::test_env::home_fixture_cached_backend(
+        &store,
+        &tmp.path().join(".aida").join("cache.db"),
+    )
+    .unwrap();
     for (spec, mins) in [("TASK-8", 90), ("TASK-9", 30)] {
         let mut r = drain_park(spec, mins);
         r.modified_at = Utc::now() - Duration::minutes(mins);
@@ -2534,7 +2542,7 @@ fn shift_redrive_evidence_unreadable_present_file_fails_closed() {
 fn shift_redrive_probes_wire_the_strict_history_only_when_on() {
     use aida_core::DatabaseBackend;
     let tmp = tempfile::tempdir().unwrap();
-    let backend = aida_core::GitBackend::new(&tmp.path().join(".aida-store")).unwrap();
+    let backend = crate::test_env::home_fixture_backend(&tmp.path().join(".aida-store")).unwrap();
     backend.add_requirement(drain_park("TASK-9", 60)).unwrap();
     let mut approved = drain_park("TASK-1", 60);
     approved.status = RequirementStatus::Approved;
@@ -2585,9 +2593,11 @@ fn shift_redrive_real_cap_branch_from_the_tick() {
     let tmp = tempfile::tempdir().unwrap();
     let store = tmp.path().join(".aida-store");
     std::fs::create_dir_all(&store).unwrap();
-    let backend =
-        aida_core::CachedGitBackend::open(&store, &tmp.path().join(".aida").join("cache.db"))
-            .unwrap();
+    let backend = crate::test_env::home_fixture_cached_backend(
+        &store,
+        &tmp.path().join(".aida").join("cache.db"),
+    )
+    .unwrap();
     let park = backend.add_requirement(drain_park("TASK-9", 30)).unwrap();
     let aida = tmp.path().join(".aida");
     std::fs::create_dir_all(&aida).unwrap();

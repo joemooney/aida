@@ -63,6 +63,8 @@ fn codex_launch_command_runs_without_the_shared_daemon() {
     );
 
     git(&repo, &["init", "-q", "-b", "main"]);
+    // trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
+    test_git::enroll_synthetic_home(&repo);
     git(&repo, &["config", "user.email", "test@example.com"]);
     git(&repo, &["config", "user.name", "Codex Launch Test"]);
     git(&repo, &["commit", "-q", "--allow-empty", "-m", "init"]);

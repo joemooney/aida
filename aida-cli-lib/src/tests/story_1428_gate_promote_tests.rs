@@ -1,5 +1,6 @@
 // STORY-1428: handler tests for `aida findings promote --to gate`.
 // trace:STORY-1428 | ai:claude
+// trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
 use super::*;
 use aida_core::db::DatabaseBackend;
 use aida_core::CachedGitBackend;
@@ -23,8 +24,11 @@ fn fixture(recurrence: u32) -> Fixture {
     let dir = tempfile::tempdir().unwrap();
     let store = dir.path().join("store");
     std::fs::create_dir_all(&store).unwrap();
-    let backend =
-        CachedGitBackend::open(&store, &dir.path().join(".aida").join("cache.db")).unwrap();
+    let backend = crate::test_env::home_fixture_cached_backend(
+        &store,
+        &dir.path().join(".aida").join("cache.db"),
+    )
+    .unwrap();
     let mut f = Requirement::new("ETXTBSY on fixture".into(), "seen again".into());
     f.spec_id = Some("TASK-900".into());
     f.tags.insert("from-advisor:general".into());

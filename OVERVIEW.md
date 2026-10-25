@@ -494,13 +494,35 @@ wrapper; a guard test enforces it.
 
 ### Distributed identity (EPIC-1-052)
 
-Each clone of an AIDA-using project gets a unique **node id** and writes its identity to a per-clone, gitignored `.aida-store/.aida/node.toml`. The shared `.aida-store/registry/nodes.toml` is the source of truth.
+New WORK clones get a random opaque UUID node through `aida init`. The versioned
+binding and persistent per-type dispenser live in the clone's common Git directory,
+shared by linked worktrees. Missing allocation settings mean WORK; only a bounded,
+owned local `aida-allocation.toml` with explicit HOME authority permits global
+allocation. Shared objects, preferences, environment variables and remote URLs
+confer no allocation authority. Legacy node/registry schemas retain their meanings;
+legacy counter high-water marks migrate once on admitted local allocation.
+<!-- trace:BUG-2017 | ai:codex -->
 
-- **Node-aware ids** look like `FR-1-052` (`<TYPE>-<NODE>-<SEQ>`) — issued offline, never collide across clones.
-- **Agreed ids** look like `FR-052` — promoted from node-aware ids by `aida db merge-gate` once the work merges into trunk.
-- **Pre-allocated blocks** (`FR-2-005`) let a clone reserve a contiguous range of agreed ids up front so trace comments can use the short form immediately, even offline. `aida node acquire` auto-allocates the first FR block.
-- **`[id_format]` policy** in `.aida/config.toml`: `node-aware-only` | `blocks-then-fallback` (default) | `blocks-only`.
-- **`aida init` post-clone bootstrap**: when origin already has the `aida-store` branch, `aida init` fetches it, sets up the worktree, and prompts for node-id acquisition.
+- **Node-aware IDs** have `<TYPE>-<opaque-node>-<SEQ>` form. WORK uses per-type
+  counters, including through CLI/MCP and metadata seeding, without global fallback.
+- **Agreed IDs** such as `FR-052` are assigned only on HOME by `db merge-gate`.
+  Native old-node IDs, UUIDs, relationships, comments and traces remain available;
+  repeated promotion is a no-op. Destructive node-alias retirement refuses.
+- **Global blocks** and legacy shared-node registration require HOME authority.
+  WORK skips implicit global first/refill claims; `node acquire` repairs its local
+  opaque binding instead of registering host/user/email identity.
+- **Enrollment** uses `config allocation enroll-home` at a direct human terminal.
+  It is never part of init or migration. Long-running MCP sessions restart after
+  enrollment. Implementation never enrolls real HOME.
+- **Bootstrap** binds the actual allocator before seeding in default, post-clone
+  and separate-store init. A lost/malformed/linked counter refuses allocation;
+  it is never silently reset. Non-Git directory MCP reads remain supported while
+  unbound allocation refuses.
+
+See [allocation setup](docs/cli/07-project-setup.md#clone-local-allocation-authority)
+and the [writer/slice ledger](docs/plans/2026-10-24-bug-2017-allocation-writer-inventory.md).
+All-conflict reconciliation/audit, STORY-1742 scanner integration and final slice-3
+acceptance remain pending; slices 1+2 do not complete BUG-2017.
 
 ### Completion intent and deliberate reopen
 
@@ -1206,3 +1228,13 @@ perform optimistic conflict detection; the inventory distinguishes that
 protection from in-lock reloads. See
 [store writer inventory](docs/plans/2026-10-19-store-writer-inventory.md).
 <!-- trace:TASK-1981 | ai:codex -->
+
+## Codex mail wake adapter
+
+The opt-in host adapter in `scripts/codex-mail-wake.py` reads bounded AIDA
+`mailbox wake-snapshot` envelopes across sibling checkouts, deduplicates message
+IDs in a private durable ledger, and uses native `codex queue` to notify an
+explicit existing advisor thread. Quiet scans use no model inference. Uncertain
+queue results require explicit recovery; a queue receipt is not mail read/ack
+evidence. See [installation and recovery](docs/agents/codex-mail-wake.md).
+<!-- trace:TASK-2347 | ai:codex -->

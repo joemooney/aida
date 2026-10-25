@@ -154,6 +154,10 @@ fn parse_spec_id(spec_id: &str) -> Result<(String, u32)> {
 /// Creates parent directories as needed. Overwrites if the file already exists.
 #[cfg(feature = "native")]
 pub fn write_object(objects_root: &Path, req: &Requirement) -> Result<PathBuf> {
+    // trace:BUG-2017 | ai:codex
+    #[cfg(all(unix, feature = "native"))]
+    crate::allocation_authority::admit_object_file(objects_root, req)?;
+
     let spec_id = req
         .spec_id
         .as_ref()
@@ -190,6 +194,10 @@ pub fn write_object(objects_root: &Path, req: &Requirement) -> Result<PathBuf> {
 /// trace:BUG-1-040 | ai:claude
 #[cfg(feature = "native")]
 pub fn write_object_if_changed(objects_root: &Path, req: &Requirement) -> Result<bool> {
+    // trace:BUG-2017 | ai:codex
+    #[cfg(all(unix, feature = "native"))]
+    crate::allocation_authority::admit_object_file(objects_root, req)?;
+
     let spec_id = req
         .spec_id
         .as_ref()

@@ -413,6 +413,15 @@ Verbs: `aida schedule list [--seat advisor] [--json]` (the merged registry, with
 
 <!-- doc-intent: shaped by STORY-1226 -->
 
+### `aida dispatch`
+
+**One line** — queue validated, mandate-authorized `flow`, `review`, `take`, `impl`, and `train` requests from a sandboxed advisor seat for unsandboxed execution.
+
+**Mental model.** Under an OS or harness sandbox, an advisor seat cannot write sibling worktrees or `.git/config` directly. `aida dispatch request <verb>` lets a bound advisor seat write a typed request into `.aida/dispatch/` after verifying an active mandate covering `dispatch` (`aida mandate start --scope dispatch`, `aida mandate start --ship-held --scope dispatch`, or `aida mandate start --drive`), the human gates, the `operator-only` / `decide` floor, and the caller's bound `advisor` seat grant (`aida role enter advisor --delegate-seat reviewer --delegate-seat implementer`). Markdown briefs passed via `--brief` are validated and frozen by SHA-256 under `.aida/dispatch/briefs/`.
+
+**Subcommands.** `aida dispatch request <flow|review|take|impl|train> [--json]` queues a request (idempotent on duplicate `dedupe_key`; refuses conflicting in-flight requests on the same `target_key`), `aida dispatch list [--status <status>] [--json]` inspects the queue (marking pending `review`, `flow`, and `train` items as `waiting for serve`), `aida dispatch show <id> [--json]` prints one request and result record, `aida dispatch cancel <id>` cancels a pending request, `aida dispatch tick` runs one substrate pass that claims and executes pending `take` and `impl` requests (leaving grant-requiring `review`, `flow`, and `train` requests pending for `serve`), and `aida dispatch serve [--once] [--poll-ms <ms>]` runs the human-started executor from a bound advisor terminal to execute all pending requests (`review`, `flow`, `train`, `take`, and `impl`).
+<!-- trace:STORY-1917 | ai:agy -->
+
 ### `aida shift`
 
 The **night shift**: a scheduler-run check that keeps drain waves going while no seat is awake. It runs as the `night-shift` substrate job of `aida schedule tick` (so it rides whichever driver is installed: a systemd user timer or a crontab entry) and is **off unless enabled for this clone**.

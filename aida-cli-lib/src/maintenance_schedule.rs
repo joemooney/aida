@@ -3141,6 +3141,21 @@ fn command_table() -> &'static [(&'static [&'static str], ScheduledCommand)] {
                 hook_allowed: false,
             },
         ),
+        // trace:TASK-2347 | ai:codex — host snapshot reader, never a model timer.
+        (
+            &["doctor check codex-mail-wake --fail-on-findings"],
+            ScheduledCommand {
+                display: "doctor check codex-mail-wake --fail-on-findings",
+                args: &[
+                    "doctor",
+                    "check",
+                    "codex-mail-wake",
+                    "--json",
+                    "--fail-on-findings",
+                ],
+                hook_allowed: false,
+            },
+        ),
         // Read-only monthly guard; forced cleanup stays with the operator.
         // trace:TASK-1596 | ai:codex
         (
@@ -4879,6 +4894,74 @@ enabled = true
         );
     }
 
+    // trace:TASK-2347 | ai:codex — unchanged failures remain one due seat job;
+    // successful health recovery is visible in the existing substrate ledger.
+    #[test]
+    fn task_2347_health_due_route_deduplicates_and_recovery_is_visible() {
+        let tmp = tempfile::tempdir().unwrap();
+        let guard = task(
+            "mail-health",
+            "15m",
+            "doctor check codex-mail-wake --fail-on-findings",
+        );
+        let mut state = ScheduleState::default();
+        run_with_executor(tmp.path(), config(vec![guard.clone()]), &mut state, at(13), Some("mail-health"),
+            |_, command| {
+                assert_eq!(command.args, ["doctor", "check", "codex-mail-wake", "--json", "--fail-on-findings"]);
+                Ok(TaskOutcome { status: 1, stdout: String::new(), stderr: "accepted_unacknowledged_count=1 oldest_known_notification_age_seconds=86400 recovery_required=false".into() })
+            }).unwrap();
+        let events = events::read_all(tmp.path());
+        let route = seat_task(
+            "mail-health-route",
+            &["advisor"],
+            None,
+            &["CronJobFailed:mail-health"],
+        );
+        let mut route_state = ScheduleState::default();
+        route_state.tasks.insert(
+            route.name.clone(),
+            TaskState {
+                last_seen_event_ts: Some(at(12)),
+                ..Default::default()
+            },
+        );
+        for hour in [14, 15] {
+            tick_core(
+                tmp.path(),
+                config(vec![route.clone()]),
+                &mut route_state,
+                at(hour),
+                false,
+                |_, _| unreachable!(),
+                |_| Snapshot::default(),
+                &events,
+            )
+            .unwrap();
+        }
+        let routed = schedule_ledger::load(&store_root(tmp.path()), "mail-health-route").unwrap();
+        assert!(routed.due_since.is_some());
+        assert!(routed.due_failure.is_some());
+        let fired = events::read_all(tmp.path()).iter().filter(|e| matches!(&e.kind, EventKind::CronJobFired { job, .. } if job == "mail-health-route")).count();
+        assert_eq!(fired, 1);
+        run_with_executor(
+            tmp.path(),
+            config(vec![guard]),
+            &mut state,
+            at(16),
+            Some("mail-health"),
+            |_, _| {
+                Ok(TaskOutcome {
+                    status: 0,
+                    stdout: String::new(),
+                    stderr: String::new(),
+                })
+            },
+        )
+        .unwrap();
+        let recovered = schedule_ledger::load(&store_root(tmp.path()), "mail-health").unwrap();
+        assert_eq!(recovered.result.as_deref(), Some("ok"));
+    }
+
     // STORY-1367: the three first substrate jobs the story registers
     // (hub-drift, stranded-branches, disk-headroom) all ride the same
     // GATING `doctor check <category> --fail-on-findings` shape as
@@ -4900,6 +4983,8 @@ enabled = true
             "doctor check merged-agent-worktrees --fail-on-findings",
             // trace:STORY-1699 | ai:claude
             "doctor check relay-stall --fail-on-findings",
+            // trace:TASK-2347 | ai:codex
+            "doctor check codex-mail-wake --fail-on-findings",
         ] {
             let tmp = tempfile::tempdir().unwrap();
             let job_name = "guard";

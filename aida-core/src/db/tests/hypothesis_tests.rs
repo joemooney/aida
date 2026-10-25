@@ -24,7 +24,7 @@ fn rows() -> (Requirement, Requirement) {
 }
 fn fixture() -> (tempfile::TempDir, GitBackend, Requirement, Requirement) {
     let tmp = tempfile::tempdir().unwrap();
-    let b = GitBackend::new(&tmp.path().join("store"))
+    let b = crate::allocation_authority::home_fixture_backend(&tmp.path().join("store"))
         .unwrap()
         .with_auto_commit(false)
         .with_oplog(false);
@@ -498,7 +498,7 @@ fn hypothesis_tree_and_validated_yaml_import_preserve_frozen_evidence() {
         locked.hypothesis_lock
     );
     let tmp = tempfile::tempdir().unwrap();
-    let new_backend = GitBackend::new(&tmp.path().join("tree"))
+    let new_backend = crate::allocation_authority::home_fixture_backend(&tmp.path().join("tree"))
         .unwrap()
         .with_auto_commit(false);
     new_backend.save(&destination).unwrap();
@@ -509,7 +509,9 @@ fn hypothesis_tree_and_validated_yaml_import_preserve_frozen_evidence() {
     let yaml = serde_yaml::to_string(&source).unwrap();
     let validated = crate::import::validate_import_content(&yaml).unwrap();
     let root = tmp.path().join("validated-yaml");
-    let yaml_backend = GitBackend::new(&root).unwrap().with_auto_commit(false);
+    let yaml_backend = crate::allocation_authority::home_fixture_backend(&root)
+        .unwrap()
+        .with_auto_commit(false);
     let config = crate::import::ImportConfig {
         create_backup: false,
         ..Default::default()
@@ -662,7 +664,7 @@ fn hypothesis_corrupted_row_is_repairable_by_restoring_frozen_text() {
 #[test]
 fn hypothesis_tag_match_is_case_insensitive() {
     let tmp = tempfile::tempdir().unwrap();
-    let b = GitBackend::new(&tmp.path().join("store"))
+    let b = crate::allocation_authority::home_fixture_backend(&tmp.path().join("store"))
         .unwrap()
         .with_auto_commit(false)
         .with_oplog(false);

@@ -26,6 +26,7 @@
 //!
 //! trace:BUG-1929 | ai:claude
 
+// trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
 use super::*;
 use std::path::{Path, PathBuf};
 
@@ -475,7 +476,7 @@ fn real_claude_contained_session_claims_and_comments() {
     let store = main.join(".aida-store");
     let cache = main.join(".aida/cache.db");
     {
-        let backend = aida_core::CachedGitBackend::open(&store, &cache).unwrap();
+        let backend = crate::test_env::home_fixture_cached_backend(&store, &cache).unwrap();
         let mut queued = None;
         for spec in ["BUG-1", "BUG-2"] {
             let mut req =
@@ -1637,7 +1638,7 @@ fn bug_2140_id_allocation_deferral_and_doctor_check_and_host_commit() {
     // 1. `pull_store_before_id_allocation` + `add_requirement` +
     //    `push_store_after_id_allocation` succeed without touching `.git`.
     let pull_res = crate::pull_store_before_id_allocation(&store, &main);
-    let backend = aida_core::db::GitBackend::new(&store).unwrap();
+    let backend = crate::test_env::home_fixture_backend(&store).unwrap();
     let added = backend.add_requirement(aida_core::models::Requirement::new(
         "Sandbox filed spec".to_string(),
         "filed while .git/objects is 0555".to_string(),

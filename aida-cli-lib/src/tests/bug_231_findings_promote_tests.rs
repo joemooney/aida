@@ -1,9 +1,10 @@
+// trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
 use super::*;
 
 /// Seed a git-canonical store at `root` with one finding requirement;
 /// returns the requirement's UUID.
 fn seed_finding(root: &std::path::Path, spec_id: &str) -> Uuid {
-    let backend = aida_core::GitBackend::new(root).unwrap();
+    let backend = crate::test_env::home_fixture_backend(root).unwrap();
     let mut store = RequirementsStore::new();
     let mut finding = Requirement::new("Review finding".into(), "A finding from review".into());
     finding.spec_id = Some(spec_id.to_string());
@@ -776,7 +777,7 @@ fn test_cached_backend(root: &std::path::Path) -> aida_core::CachedGitBackend {
     if let Some(parent) = root.parent() {
         let _ = std::fs::create_dir_all(parent.join(".aida"));
     }
-    let inner = aida_core::GitBackend::new(root).unwrap();
+    let inner = crate::test_env::home_fixture_backend(root).unwrap();
     let cache_path = aida_core::CachedGitBackend::default_cache_path(root);
     aida_core::CachedGitBackend::with_inner(inner, &cache_path).unwrap()
 }
@@ -785,7 +786,7 @@ fn test_cached_backend(root: &std::path::Path) -> aida_core::CachedGitBackend {
 // Used by the BUG-615 combined-flag regression test. trace:BUG-615 | ai:claude
 #[cfg(test)]
 fn seed_plain_spec(root: &std::path::Path, spec_id: &str) -> Uuid {
-    let backend = aida_core::GitBackend::new(root).unwrap();
+    let backend = crate::test_env::home_fixture_backend(root).unwrap();
     let mut store = backend.load().unwrap_or_default();
     let mut req = Requirement::new(format!("Spec {spec_id}"), "desc".into());
     req.spec_id = Some(spec_id.to_string());
@@ -963,7 +964,7 @@ fn add_parent_and_blocked_by_combined_keeps_both_edges() {
 // trace:BUG-573 | ai:claude
 #[cfg(test)]
 fn seed_spec_with_dangling_rel(root: &std::path::Path, spec_id: &str) {
-    let backend = aida_core::GitBackend::new(root).unwrap();
+    let backend = crate::test_env::home_fixture_backend(root).unwrap();
     let mut store = RequirementsStore::new();
     let mut req = Requirement::new("Has a dangling edge".into(), "desc".into());
     req.spec_id = Some(spec_id.to_string());
