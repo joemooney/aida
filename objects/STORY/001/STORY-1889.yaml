@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T15:33:51.496539087Z
-modified_at: 2026-10-25T05:37:16.108372939Z
+modified_at: 2026-10-25T05:37:39.197309690Z
 req_type: Story
 tags:
 - architecture
@@ -228,6 +228,11 @@ comments:
   content: 'PR #2917 F1 rework pushed at 843ef2a961977ee2d31d1e8a62aa265dddd6fd88 (LabelState, record_label_state, read_label_state moved to gate/merge_hold_core.rs; 97 merge_hold unit tests + 34/34 check-ci-fast passed; refusal string inventory unchanged at 958 -> 957). Starting stacked final PR4 on claude/story-1889-ship: approval/ship + mandate/rework-release/fleet_lanes + folded TASK-2319/TASK-2335/TASK-1863/TASK-1864 + caller repointing and strict ratchet completion.'
   created_at: 2026-10-25T05:36:03.555697638Z
   modified_at: 2026-10-25T05:36:03.555697638Z
+- id: 01a17190-84f9-78c0-9c28-e40cb3177ac8
+  author: joe
+  content: Advisor round2 F1 resolved; F2 restrict post-check unprotected mutable routing at both marker persistence paths. Concrete brief; existing agy1 doer only, no launch/hold clearance.
+  created_at: 2026-10-25T05:37:39.065595580Z
+  modified_at: 2026-10-25T05:37:39.065595580Z
 history:
 - id: 01a15f19-1b8d-7a60-bd9c-acf0c42193fc
   author: joe
