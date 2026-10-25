@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T02:08:29.032100054Z
-modified_at: 2026-10-25T02:54:14.373793060Z
+modified_at: 2026-10-25T03:01:16.633114639Z
 req_type: Task
 tags:
 - codex
@@ -87,6 +87,11 @@ comments:
   content: 'Initial backlog handling improvement, superseding the prior64-ID chunk note: batches now pack IDs up to a hard24KB wake-text budget and1024 IDs, rather than arbitrarily waking repeatedly for64-ID chunks. Fixture verifies dense580-ID backlog fits one notification, and larger batches split deterministically without exceeding the byte bound. New live read-only dry-run proves all580 actual distinct unread IDs fit ONE22,660-byte notification: pending580,next_batch580,queue_submitted=false. Evidence /tmp/task2347-live-preview-9em47qgh/result.json. No silent baseline, acknowledgement, native queue, or installation occurred. Python suite17/17 passes. This preserves first-scan notification semantics while avoiding10 model turns for current backlog. Final35-gate and touched-test jobs are waiting on normal global cargo slots; no bypass. Candidate CLI built/smoke-tested and available at /home/joe/ai/aida-task-2347/target/agent/aida. Required compile gate still follows touched tests.'
   created_at: 2026-10-25T02:54:14.373793060Z
   modified_at: 2026-10-25T02:54:14.373793060Z
+- id: 01a17101-5ad9-7833-a3fb-cac03b97aebd
+  author: joe
+  content: 'ADVISOR LIVE-INSTALL CAUTION 20:00 MST: implementer reports candidate dry-run580IDs in one22660Bwake. Do not queue this historical backlog without classifying whether same logical advisor already acknowledged replicated canonical messages in main while fresh worktree watermarks remain stale. Formal reviewer must probe cross-root read-receipt reconciliation (read main + stale unread sibling -> no repeated notification of already-read mail). No silent baseline, bulkack or automatic old-mail wake. Classify actual unread IDs or provide explicit source limitation before install. Candidate binary/smoke,Rust4/4,Python17/17,generated help passed; final35fast gates/test-touched/check-ci-compile pending normal build capacity at20:00; PR opening with honest pending-check status.'
+  created_at: 2026-10-25T03:01:16.633114639Z
+  modified_at: 2026-10-25T03:01:16.633114639Z
 history:
 - id: 01a170d1-497a-7282-8dcb-91782bba7dc3
   author: joe
