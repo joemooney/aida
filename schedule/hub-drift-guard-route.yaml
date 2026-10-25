@@ -1,12 +1,7 @@
 job: hub-drift-guard-route
-last_run: 2026-10-25T04:56:28.265876401Z
+last_run: 2026-10-25T09:08:44.560450952Z
 last_by:
   seat: advisor
   vendor: codex
 result: done
-due_since: 2026-10-25T08:30:36.765554002Z
-due_reason: on CronJobFailed:hub-drift-guard
-due_failure:
-  trip_id: hub-drift-guard@2026-10-25T08:18:51.773747223Z
-  job: hub-drift-guard
-  error: 'exit 1: '
+note: Verified remote-status store drift, native reconcile dry-run showed local+origin e76b9ef92faf ahead of gitlab d42fb4183bb4; executed ordinary aida remote reconcile --execute, pushed gitlab, no force. Independent remote-status confirms main3cbb90b0c94e and aida-store e76b9ef92faf equal across both hubs. Separate preexisting GitLab v0.16.0 missing tag/release remains publication work, not shared-branch divergence; no release mutation performed.
