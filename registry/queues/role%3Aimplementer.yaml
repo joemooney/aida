@@ -1,4 +1,12 @@
 - user_id: role:implementer
+  requirement_id: 01a16ad2-fa8b-7961-ae04-837e24cec35d
+  position: 292000
+  added_by: role:implementer
+  note: 'Goal dispatch: codex1 slice1 under signed sketch v2; no duplicate pickup'
+  added_at: 2026-10-25T04:46:19.377553308Z
+  for_role: implementer
+  added_by_machine: imac
+- user_id: role:implementer
   requirement_id: 01a16ac9-0c37-7d72-a140-fa29d8b4b141
   position: 293000
   added_by: role:implementer
