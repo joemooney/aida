@@ -23,7 +23,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-25T03:12:08.862923814Z
+modified_at: 2026-10-25T04:07:30.765616187Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -444,6 +444,11 @@ comments:
   created_at: 2026-10-25T03:12:08.862923814Z
   modified_at: 2026-10-25T03:12:08.862923814Z
   session_id: 93cd3489-b290-4bf3-8bf6-7b5d837716cb
+- id: 01a1713d-fecd-7e53-a527-827963588bd8
+  author: joe
+  content: 'UCAMI follow-up adoption: keep the eventual central same-logical-recipient cross-root inbox/read resolver in mailbox store API for CLI/MCP/hooks/watcher, not permanently only Python. Preserve sibling-local mail before worktree removal, or refuse removal until safely retained; do not silently discard its private/durable mail or bypass transport policy. Add a removed-worktree/late-private-mail conformance case. Reuse existing ownership/receipt semantics and avoid another transport. Future second-adapter/lifecycle-engine watcher growth belongs in scoped Rust design here; currentTASK2347 stays one adapter.'
+  created_at: 2026-10-25T04:07:30.765616187Z
+  modified_at: 2026-10-25T04:07:30.765616187Z
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
   author: joe
