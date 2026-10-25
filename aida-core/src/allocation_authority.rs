@@ -1241,6 +1241,9 @@ mod tests {
                 node_id: "7".into(),
             });
         state.sequences.insert("GLOBAL".into(), u32::MAX);
+        // trace:BUG-2017 | ai:codex — S2 WORK allocates per type; exhaust
+        // that actual provider key as well, retaining the global no-fallback guard.
+        state.sequences.insert("FR".into(), u32::MAX);
         let bytes = toml::to_string(&state).unwrap();
         let path = dir.path().join(".aida/dispenser.toml");
         std::fs::write(&path, &bytes).unwrap();

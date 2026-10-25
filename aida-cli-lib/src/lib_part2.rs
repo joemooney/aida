@@ -79,7 +79,9 @@ pub(crate) fn handle_retire_legacy_ids(
     backend.update_atomically(|mutable| {
         for req in mutable.requirements.iter_mut() {
             let needs = match (req.spec_id.as_deref(), req.agreed_id.as_deref()) {
-                (Some(s), Some(a)) if s != a && aida_core::git_ops::is_global_id_format(s) => Some(a.to_string()),
+                (Some(s), Some(a)) if s != a && aida_core::git_ops::is_global_id_format(s) => {
+                    Some(a.to_string())
+                }
                 _ => None,
             };
             if let Some(new_spec) = needs {

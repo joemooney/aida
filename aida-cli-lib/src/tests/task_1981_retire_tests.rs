@@ -74,11 +74,29 @@ fn node_alias_retirement_refuses_before_objects_or_refs_change() {
     backend.add_requirement(req).unwrap();
     let original = std::fs::read(root.join("objects/BUG/000/BUG-7-001.yaml")).unwrap();
     let before = aida_core::git_ops::head_sha(&root).unwrap();
-    let cached = crate::test_env::home_fixture_cached_backend(&root, &dir.path().join("cache.db")).unwrap();
+    let cached =
+        crate::test_env::home_fixture_cached_backend(&root, &dir.path().join("cache.db")).unwrap();
     let error = handle_retire_legacy_ids(&cached, &root, false).unwrap_err();
     assert!(error.to_string().contains("permanent aliases"));
-    assert_eq!(std::fs::read(root.join("objects/BUG/000/BUG-7-001.yaml")).unwrap(), original);
+    assert_eq!(
+        std::fs::read(root.join("objects/BUG/000/BUG-7-001.yaml")).unwrap(),
+        original
+    );
     assert_eq!(aida_core::git_ops::head_sha(&root).unwrap(), before);
-    assert_eq!(backend.get_requirement_by_spec_id("BUG-7-001").unwrap().unwrap().id, uuid);
-    assert_eq!(backend.get_requirement_by_spec_id("BUG-101").unwrap().unwrap().id, uuid);
+    assert_eq!(
+        backend
+            .get_requirement_by_spec_id("BUG-7-001")
+            .unwrap()
+            .unwrap()
+            .id,
+        uuid
+    );
+    assert_eq!(
+        backend
+            .get_requirement_by_spec_id("BUG-101")
+            .unwrap()
+            .unwrap()
+            .id,
+        uuid
+    );
 }

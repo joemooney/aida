@@ -64,6 +64,8 @@ def main():
                 client.request("initialize", {"protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "bootstrap-contract", "version": "1"}})
                 response = client.tool("add_requirement", {"title": "MCP defect", "description": "native WORK MCP allocation", "type": "bug", "status": "draft"})
                 assert added(content_text(response), "BUG").endswith("002")
+                generic = client.tool("add_requirement", {"title": "MCP generic", "description": "native WORK generic allocation", "type": "functional", "status": "draft"})
+                assert added(content_text(generic), "FR").endswith("002")
                 client.tool("add_relationship", {"spec_id": bug, "relationship_type": "references", "target_spec_id": first})
             finally:
                 client.close()

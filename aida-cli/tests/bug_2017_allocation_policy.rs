@@ -160,16 +160,20 @@ fn bug_2017_cli_local_and_global_refusals() {
     );
     let reqs = f.objects();
     assert_eq!(reqs.len(), 1);
-    assert_eq!(reqs[0].spec_id.as_deref(), Some("BUG-7-001"));
+    // trace:BUG-2017 | ai:codex — registered legacy CLI state migrates once.
+    let binding = aida_core::work_binding::load(&f.store).unwrap().unwrap();
+    assert_eq!(binding.node_id.len(), 32);
+    assert_eq!(
+        reqs[0].spec_id.as_deref(),
+        Some(format!("BUG-{}-001", binding.node_id).as_str())
+    );
     assert!(reqs[0].agreed_id.is_none());
-    let counter = fs::read(f.store.join(".aida/dispenser.toml")).unwrap();
+    let counter_path = aida_core::work_binding::counter_path(&f.store).unwrap();
+    let counter = fs::read(&counter_path).unwrap();
     let head = f.git(&["rev-parse", "aida-store"]);
     let block = f.aida(&["db", "block", "claim", "--type", "BUG", "--size", "10"]);
     assert!(!block.status.success());
-    assert_eq!(
-        fs::read(f.store.join(".aida/dispenser.toml")).unwrap(),
-        counter
-    );
+    assert_eq!(fs::read(&counter_path).unwrap(), counter);
     assert_eq!(f.git(&["rev-parse", "aida-store"]), head);
     assert_eq!(fs::read_to_string(blocks_path).unwrap(), cached);
 }
@@ -181,6 +185,10 @@ fn bug_2017_cli_blocks_only_refuses_before_counter_or_object_write() {
     assert!(!out.status.success());
     assert!(f.objects().is_empty());
     assert!(!f.store.join(".aida/dispenser.toml").exists());
+    assert!(aida_core::work_binding::load(&f.store).unwrap().is_none());
+    assert!(!aida_core::work_binding::counter_path(&f.store)
+        .unwrap()
+        .exists());
 }
 #[test]
 fn bug_2017_mcp_uses_same_node_local_writer() {
@@ -196,6 +204,7 @@ fn bug_2017_mcp_uses_same_node_local_writer() {
     for request in [
         serde_json::json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"fixture","version":"0"}}}),
         serde_json::json!({"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"add_requirement","arguments":{"title":"generic MCP fixture defect","description":"fixture","type":"bug","status":"draft"}}}),
+        serde_json::json!({"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"add_requirement","arguments":{"title":"MCP generic requirement","description":"fixture","type":"functional","status":"draft"}}}),
     ] {
         writeln!(stdin, "{request}").unwrap();
     }
@@ -222,9 +231,19 @@ fn bug_2017_mcp_uses_same_node_local_writer() {
         String::from_utf8_lossy(&out.stderr)
     );
     let reqs = f.objects();
-    assert_eq!(reqs.len(), 1, "{}", String::from_utf8_lossy(&out.stdout));
-    assert!(reqs[0].spec_id.as_deref().unwrap().starts_with("BUG-7-"));
-    assert!(reqs[0].agreed_id.is_none());
+    assert_eq!(reqs.len(), 2, "{}", String::from_utf8_lossy(&out.stdout));
+    let binding = aida_core::work_binding::load(&f.store).unwrap().unwrap();
+    assert_eq!(binding.node_id.len(), 32);
+    let ids: std::collections::HashSet<_> =
+        reqs.iter().map(|r| r.spec_id.clone().unwrap()).collect();
+    assert_eq!(
+        ids,
+        std::collections::HashSet::from([
+            format!("BUG-{}-001", binding.node_id),
+            format!("FR-{}-001", binding.node_id),
+        ])
+    );
+    assert!(reqs.iter().all(|r| r.agreed_id.is_none()));
 }
 
 #[test]
