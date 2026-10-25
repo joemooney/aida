@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T22:12:54.027870933Z
-modified_at: 2026-10-25T09:12:16.009137737Z
+modified_at: 2026-10-25T09:13:41.891102833Z
 req_type: Bug
 tags:
 - id-allocation
@@ -237,6 +237,14 @@ comments:
     Advisor source verified allocation_authority common_dir/resolve/node against these setup shapes; absence of Git identity is a deliberate refusal, but investigate whether checks moved ahead of necessary safe init/node/bootstrap setup. Do not describe all failures as flakes or mechanically enroll every fixture HOME. Preserve signed WORK fail-closed allocation and untouched real HOME. Use smallest actual production ordering fix and explicitly bounded positive fixture migration as appropriate. If correct ordinary init depends on signed slice2 bootstrap, surface the integration dependency and deliver that already-approved necessary slice, without claiming slice1 independently deployable or dropping the rest. No blanket test-only bypass, global fallback, removed assertions or live authority flag. Existing local verification policy and no-force rule unchanged. Full failure log available locally avoids repeated forge downloads.
   created_at: 2026-10-25T09:12:16.009137737Z
   modified_at: 2026-10-25T09:12:16.009137737Z
+- id: 01a17256-5103-7950-9490-ce8bad6a26c8
+  author: joe
+  content: |-
+    ADVISOR SOURCE DIAGNOSIS / binding F2 direction at c25b9bd385 (not implementation):
+    Fresh init handle_init_distributed_worktree in aida-cli-lib/src/init_cmd.rs creates store worktree then constructs RequirementsStore::new, seed_meta_requirements at4576 and backend.save4577. Node registration register_node_full_identity occurs later4783; initial block auto-allocation follows. seed_meta_requirements aida-core/src/meta.rs386 adds new META IDs through add_requirement_with_id. GitBackend save_reporting_with_origin db/git_backend.rs1680 calls admit_allocations before write phase. allocation_authority::admit at~216 calls node(root), whose NodeConfig::load(root/.aida/node.toml) uses fs::read_to_string with no bootstrap. Thus fresh init reaches required node read BEFORE node setup; consistent with reviewer exact-candidate init ENOENT and both contracts/gates CI.
+    This is an actual production init/bootstrap dependency, not evidence that all positive fixtures should become authoritative. Merely moving legacy registration earlier is NOT sufficient: admit_registry_write requires explicit global authority in clones and the legacy init continues global block allocation. Preserve already-signed slice2 pseudonymous UUID bootstrap/explicit operator enrollment and counters/aliases/migration requirements. Implement a coherent non-authoritative init path under those signed requirements, with explicit WORK noflag cold-init/first-add/restart tests and a separate intentional synthetic HOME compatibility case. No temporary global bypass, hidden authoritative default, real HOME enrollment or skipped init assertions. If slice1 cannot be independently deployable before this, keep it unmerged and deliver the required approved bootstrap dependency as reviewable work; parent remains all3slices incomplete. Root changed no implementation source and ran no broad tests.
+  created_at: 2026-10-25T09:13:41.891102833Z
+  modified_at: 2026-10-25T09:13:41.891102833Z
 history:
 - id: 01a16f08-1847-70c2-a9ec-772710162546
   author: joe
