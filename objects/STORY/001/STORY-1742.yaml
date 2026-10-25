@@ -38,7 +38,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T22:02:03.191649035Z
-modified_at: 2026-10-25T05:20:42.836272964Z
+modified_at: 2026-10-25T05:21:25.113648731Z
 req_type: Story
 tags:
 - docs:impacted
@@ -280,6 +280,17 @@ comments:
     R3 — Confirm safe-at-creation omissions for work-specific provenance and the private successful-push receipt interpretation; no rewriting of old unsafe commits or migration. Without these rulings, report exact unfulfilled matrix rows rather than declare the WORK export path universally safe.
   created_at: 2026-10-25T05:20:42.836272964Z
   modified_at: 2026-10-25T05:20:42.836272964Z
+- id: 01a17181-a879-7482-84f1-c467cb00efad
+  author: joe
+  content: |-
+    ADVISOR RULING on STORY-1742 completion gaps raised by codex2 (22:20):
+    1. Parent acceptance still explicitly includes executing configured store-only pull legs. Do not claim STORY-1742 complete with pull plan-only. The signed 10:15 reduced v1 permits the push/scanner export path to land incrementally, but did not remove the persisted pull acceptance. Implement actual clean/idle fast-forward-only store pull as a separate bounded slice if needed: exact pinned origin/ref/destination plan; no code, commits, rebase/union, mailbox publication, allocation, reconciliation or fan-out. Name all remote-tracking/local ref movements, refuse dirty/divergent/unknown state, and report any successful fetch before a later refusal accurately. Preserve mandatory verified host-owned store Git hooks and identity policy. Completing trailer only after pull plus scanner/intake/e2e criteria are proven; no deferral.
+    2. The signed refusal-only scanner remains conservative for email/IP/host/URL patterns and local deny-list values across all newly public-reachable history and commit metadata relative to the trusted enrolled/verified baseline. An email-shaped redaction placeholder is not an implicit exception. Existing redaction output must pass the same scanner; otherwise refuse. No name/provenance bypass because an email is synthetic. Public-safe pseudonymous metadata must be established at new canonical creation through explicit local reviewed policy and existing identity-hook rules; prove any non-email Git identity representation with real Git fixtures before choosing it. Do not weaken scanner patterns or identity-hook validation, silently strip/rewrite committed objects, launder a baseline, or auto-enroll unsafe history. If a valid identity representation cannot satisfy both policies, report that concrete fork instead of inventing an exemption.
+    3. Receiving-side ingress enforcement is explicitly OUT of reduced v1 per 10:15 ruling. Preserve that documented raw-Git bypass boundary; do not quietly claim universal DLP or add a new service. Full client scanner/intake and safe work-to-hub-to-public fixtures remain required. This distinction does not excuse the unchanged pull acceptance.
+    4. Baseline advances only from exact successful/verified profile-push evidence bound to endpoint, policy and source. A failed/uncertain push or changed advertised state cannot silently advance it. If publication succeeded but post-verification/baseline persistence did not, report that partial outcome without pretending no ref moved or blindly retrying.
+    Produce the actual per-acceptance matrix and bounded plan under these rulings. These are implementation directions within retained acceptance, not approval of an unreviewed diff or permission to bypass credentials, grants, hooks or human merge floors.
+  created_at: 2026-10-25T05:21:25.113648731Z
+  modified_at: 2026-10-25T05:21:25.113648731Z
 history:
 - id: 01a16ee2-ad7a-7b30-aaeb-ec8f892fbe76
   author: joe
