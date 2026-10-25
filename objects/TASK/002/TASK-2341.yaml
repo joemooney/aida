@@ -17,12 +17,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-24T22:36:06.984229716Z
-modified_at: 2026-10-24T22:36:06.984229716Z
+modified_at: 2026-10-25T04:52:06.667250346Z
 req_type: Task
 tags:
 - from-review:PR-2905
 - severity:minor
 - validation
+comments:
+- id: 01a17166-d38b-7ac2-8083-bfab448f238e
+  author: joe
+  content: 'PROXY DECISION for joe: Approve enforcement of the signed default-branch restriction at submission and execution, using established read-only local/default resolution and fail-closed unknown evidence. Fixtures cover nonstandard default branch and stale/missing evidence; no forge/config mutations.'
+  created_at: 2026-10-25T04:52:06.667250346Z
+  modified_at: 2026-10-25T04:52:06.667250346Z
 filed_at:
   code_sha: 9457e495247a3c9de111d15507fabd2cd0923079
   branch: pr-2905
