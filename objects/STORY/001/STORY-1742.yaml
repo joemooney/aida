@@ -38,7 +38,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T22:02:03.191649035Z
-modified_at: 2026-10-25T18:05:46.085945645Z
+modified_at: 2026-10-25T19:26:06.144242079Z
 req_type: Story
 tags:
 - docs:impacted
@@ -410,6 +410,14 @@ comments:
   content: OPERATOR METHOD HANDOFF — 2026-10-25 11:03 Arizona, received directly in this Codex session. Authorized for S3b only. Preserve BUG-2017 S1+S2 allocation authority and lock order exactly. The previously recorded one-use candidate lifetime and admission boundaries on STORY-1742 are now the signed contract; changing them needs a new sketch first. BUG-2017 existing tests must remain unchanged and green. This implementer is sole owner of the shared methods until the S3b PR merges; BUG-2017 S3 will not be dispatched onto them before then. S3a ships as its own PR. S3b PR trailer must be (Refs STORY-1742, Refs BUG-2017), with independent strict review of lock order and allocation authority. No S3b source edits yet at this checkpoint; S3a final verification/publication remains first. No allocation-authority, grant, HOME enrollment, containment or merge permission was inferred beyond this explicit handoff.
   created_at: 2026-10-25T18:05:46.085937467Z
   modified_at: 2026-10-25T18:05:46.085937467Z
+- id: 01a17486-fd40-72e2-82c3-31862ea6b689
+  author: mcp
+  content: |-
+    S3a/S3b checkpoint (codex1). S3a remains clean, committed and separate at 3e0b31357e306f592fad7f1912b910b38ac7bca8: final-head fast tier passed all35 gates; current-head transport touched and compile-only reruns still pending under ordinary shared capacity, so no new PR/push or completion claim yet. Prior compile-only run passed but overlapped the final opaque-payload fixes and is qualified accordingly.
+
+    Authorized S3b foundation is isolated on codex/story-1742-s3b. A targeted affected-core run passed119 tests (allocation_authority, work_binding, backend CRUD/provenance/CAS, shared policy/grammar), including new candidate abort/escape/no-bootstrap/legacy-high-water and outer-admission lock-order tests. Existing S1/S2 test modules were not edited; source verification of their unchanged text is being recorded. Subsequent exact-byte prepared-plan/effective-commit capture work is still being built and needs fresh verification. Native CRUD/bulk/full-save/cached wiring, all unsupported-adapter refusals and server authoritative-memory boundaries are NOT yet implemented; this is not a completed S3b or safe intake/export claim. Signed one-use candidate lifetime, original authority and lock order remain binding; no live HOME enrollment, new grant/authority, actual work data, merge, hold clearance or hub action.
+  created_at: 2026-10-25T19:26:06.144227035Z
+  modified_at: 2026-10-25T19:26:06.144227035Z
 history:
 - id: 01a16ee2-ad7a-7b30-aaeb-ec8f892fbe76
   author: joe
