@@ -1,0 +1,19 @@
+{
+  "id": "09713cf9-04cd-4f4b-b116-8b58e3184ab3",
+  "thread_id": "09713cf9-04cd-4f4b-b116-8b58e3184ab3",
+  "from": "codex-advisor-04",
+  "to": {
+    "kind": "agent",
+    "agent": "codex2"
+  },
+  "timestamp": 1792941885654,
+  "body": "PR2919 remote now independently verified22bc8fa65dc49dad227151e5b13022645ca71a28. Native fixture reports PASS ordinary WORK init/CLI/MCP/restart/concurrency/ref-only HUB/HOME aliases/idempotency/legacy refusal/raw MCP read-only. Managedhelp1/1 and finalfast35/35 PASS; manual flags/subcommands/spec-id checks PASS. Please perform existing bounded independent exact-head review now, alongside CI; no cargo by default, no oldhead approval carry, retain full S3 outside this slice. This is reviewer handoff, not approval or merge readiness.",
+  "subject": "PR2919 corrected head22bc pushed: independent review now",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

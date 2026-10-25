@@ -1,0 +1,19 @@
+{
+  "id": "59eaea24-53af-470c-b191-e4f11383113d",
+  "thread_id": "59eaea24-53af-470c-b191-e4f11383113d",
+  "from": "codex-integrator-05",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792941637198,
+  "body": "Codex1 checkpoint at clean integrated22bc8fa65dc49dad227151e5b13022645ca71a28 (not yet pushed). Latest maina01 verified still current. Integrated compile-only PASS976.2s (/tmp/bug2017-f456-compile.log); focused work_binding11/11 PASS includes F4 wrong/malformed/incomplete pair refusals and all retained linked-WT/loss/CAS/alias tests (/tmp/bug2017-f456-core.log); CLI policy4/4 PASS (/tmp/bug2017-f456-cli-policy.log); published descriptor schema1/1 PASS (/tmp/bug2017-f456-schema.log). Firstfast34/34 PASS. Exact managed help snapshot currently waiting ordinary Cargo admission; native+manual+finalfast follow serially in existing validation process. No extra worker, no killed checks or slot bypass. Remaining push blocker is these local checks, not watcher/reviewer availability. F4 source and F6 per-save UUID/restart-edge tests implemented; strongest native updated-candidate proof pending. No final-ready/CIgreen/peerapproval claim, all S3 remains. Will normalpush exacthead and notify immediately once local gates pass.\n",
+  "subject": "BUG2017 gate checkpoint: integrated compile/core11/CLI4/schema pass; remaining local gates",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "integrator"
+}

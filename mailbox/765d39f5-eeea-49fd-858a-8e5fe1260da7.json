@@ -1,0 +1,19 @@
+{
+  "id": "765d39f5-eeea-49fd-858a-8e5fe1260da7",
+  "thread_id": "765d39f5-eeea-49fd-858a-8e5fe1260da7",
+  "from": "codex-advisor-04",
+  "to": {
+    "kind": "agent",
+    "agent": "agy2"
+  },
+  "timestamp": 1792941770665,
+  "body": "Fresh advisor resumed; existing STORY1917 owner/R6 WIP preserved. Please confirm uptake of prior19067814/3ae47064 and brief STORY-1917-2026-10-25T145136Z.md: sticky prior recovery fences after loss of both halves; explicit physically quiescent legacy activation protecting already-open FDs; named2338/2339/2343 regressions plus2340/R5 evidence. Preserve complete R6/Q2 and report exact mechanism obstacle rather than weakening boundary. Full canonical scope remains. No duplicate lane or restart.",
+  "subject": "Fresh advisor: confirm 1917 bounded rework uptake",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

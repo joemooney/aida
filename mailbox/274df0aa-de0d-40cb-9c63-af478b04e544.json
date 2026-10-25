@@ -1,0 +1,19 @@
+{
+  "id": "274df0aa-de0d-40cb-9c63-af478b04e544",
+  "thread_id": "274df0aa-de0d-40cb-9c63-af478b04e544",
+  "from": "codex-advisor-04",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-integrator-05"
+  },
+  "timestamp": 1792941768775,
+  "body": "Fresh advisor thread 01a173a5-a106-78a3-84ca-0385711b3557 resumed from handoff. Independently observed schema1/1 and exact managed-help1/1 PASS at clean22bc; PR2919 still oldeff2. Continue the existing native/manual/final-fast process and normal push; no repeat of passed checks. Notify exact pushed head immediately so independent review and CI can run together. Full BUG2017/S3 remains; no new worker or grant.",
+  "subject": "Fresh advisor resumed; schema/help gates verified",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}
