@@ -265,7 +265,7 @@ impl Policy {
         self.yaml(&value, 0, nodes)
     }
 
-    fn explicit_host(&self, key: &str, value: Option<&str>) -> ScanResult {
+    fn explicit_field(&self, key: &str, value: Option<&str>) -> ScanResult {
         let field = key.to_ascii_lowercase();
         let normalized = value.unwrap_or("").to_ascii_lowercase();
         match field.as_str() {
@@ -275,15 +275,23 @@ impl Policy {
             | "transfer_encoding"
             | "content_transfer_encoding"
             | "content-transfer-encoding" => {
-                if !matches!(
-                    normalized.as_str(),
-                    "" | "utf8" | "utf-8" | "ascii" | "us-ascii" | "identity" | "plain" | "text"
-                ) {
+                if value.is_none()
+                    || !matches!(
+                        normalized.as_str(),
+                        "" | "utf8"
+                            | "utf-8"
+                            | "ascii"
+                            | "us-ascii"
+                            | "identity"
+                            | "plain"
+                            | "text"
+                    )
+                {
                     return Err(Refusal::Unsupported);
                 }
             }
             "compression" | "compression_format" | "compressed" => {
-                if !matches!(normalized.as_str(), "" | "none" | "identity") {
+                if value.is_none() || !matches!(normalized.as_str(), "" | "none" | "identity") {
                     return Err(Refusal::Unsupported);
                 }
             }
@@ -318,7 +326,7 @@ impl Policy {
                 for (k, v) in o {
                     let key = k.as_str().ok_or(Refusal::Unsupported)?;
                     self.text(key)?;
-                    self.explicit_host(key, v.as_str())?;
+                    self.explicit_field(key, v.as_str())?;
                     self.yaml(v, depth + 1, nodes)?;
                 }
                 Ok(())
@@ -341,7 +349,7 @@ impl Policy {
             toml::Value::Table(o) => {
                 for (k, v) in o {
                     self.text(k)?;
-                    self.explicit_host(k, v.as_str())?;
+                    self.explicit_field(k, v.as_str())?;
                     self.toml(v, depth + 1, nodes)?;
                 }
                 Ok(())
@@ -429,6 +437,7 @@ mod tests {
             ),
             ("toml", "compression = \"gzip\"\ndata = \"opaque\"\n"),
             ("yaml", "signature: opaque\n"),
+            ("json", r#"{"encoding":["base64"],"data":"opaque"}"#),
         ] {
             assert!(p.document(extension, document.as_bytes()).is_err());
         }
