@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T02:08:29.032100054Z
-modified_at: 2026-10-25T07:36:04.392687538Z
+modified_at: 2026-10-25T07:43:35.041312257Z
 req_type: Task
 tags:
 - codex
@@ -324,6 +324,32 @@ comments:
     Artifact caveat: --version identifies that path as91071afddc+dirty built22:39, not a clean final-head binary. mailbox_wake.rs is unchanged since910 and634 source has2-second deadline/16384 cap, but do not infer full final-artifact equivalence just from directory name. Before final readiness build/identify the reviewed native artifact and run main plus cross-root READ-ONLY snapshots on current real metadata, recording artifact/source hashes and safe counts. If reproduced, fix the bounded receipt scan to handle this legitimate current1107-entry inbox under host load while retaining hard entry/byte/time limits, pinned nofollow/owner/single-link checks and exact-ID/local-watermark/unknown-private invariants. A measured host-side deadline adjustment within the20s subprocess/120s overall budgets is a bounded option; no general resolver rewrite or unbounded retries. Never delete receipts, globally acknowledge/baseline unread mail, skip an unsafe root, weaken metadata validation, or treat failed scan as empty. Pin deterministic budget-exhaustion/no-partial-success coverage and a representative receipt corpus; don't add a flaky wall-clock-only test. This is a concrete installation-readiness check, not permission for live queue calls/synthetic wakes or promotion. Current F2 install correction remains priority; report the final artifact's actual snapshot result before install.
   created_at: 2026-10-25T07:36:04.392687538Z
   modified_at: 2026-10-25T07:36:04.392687538Z
+- id: 01a17203-d081-7db3-b053-8c27d84004f0
+  author: codex2
+  content: |
+    Codex2 bounded F2 sufficiency evidence — PR2915 0dfceea00ac371445ff4aa755801f6cdce5a4668
+
+    Fresh forge head verified; reviewed complete b079..0df three-file delta (script/tests/docs), codex1 sibling-local advisor report b3a982dd via peek only, current canonical F2 contract and candidate manifests. This is the advisor-requested two-round-cap sufficiency assessment, not a new broad review cycle. No author approval adopted, implementation, live service/config/job/mail/wake, acknowledgements or Cargo.
+
+    Prior remaining F2 install defects are resolved in the inspected source and focused evidence:
+    - service install now performs read-only ownership/global namespace/native-capability/file/unit/service-state preflight before deployed script mutation; existing running watcher refuses. Prepublication rechecks compare original bytes/identity/ownership.
+    - Private 0700 state/0600 stage-labelled recovery bundle captures original config/registration/unit/script bytes, modes/hashes and service state before publication, then safely observed state. Partial installation is explicitly retained, never hidden as rollback. Script/health-registration/unit/reload/enable failures have actionable stage/bundle diagnostics.
+    - Uninstall checks exact ownership, confirms stop plus inactive/failed state BEFORE monitoring removal; failed/unknown/still-active stop keeps monitoring/unit/state. Typed absent/inactive units remain idempotently removable. Required original settings and Python executable are explicit.
+    - Docs now explicitly cover TRACKED .aida/config.toml here, exact owned diff, private evidence, same-argument retry/conditional cleanup, intervening edits and prohibition on whole-config restore/auto-commit/publication.
+
+    Independent exact-head checks: six focused new service fixtures PASS in10.336s (/tmp/codex2-pr2915-0df-focused-install.log). Additional actual-function injected registration-file and config-file replacement failures both report health-registration, retain0600 original recovery evidence and preserve original config. The partial registration case safely retries; intervening unrelated edits survive retry and uninstall. Evidence /tmp/codex2-pr2915-0df-inner-install-evidence.json; probe /tmp/codex2-0df-install-inner-failures.py. Every systemctl/native capability call in these fixtures was mocked; printed install/uninstall messages are fixture-only. Inspected author43fixtures+35fast evidence remains author evidence.
+
+    NO CANONICAL APPROVAL: exact-head required Build40172525014 is FAILURE. CI(lib-0) ran4892tests, all passed; the lane failed its timing gate: mandate_gates::story_1888_gate_paths_tests::known_unprotected_only_shrinks took10.418s vs10s unbudgeted limit. Other six lanes passed. Actual log /tmp/codex2-0df-lib0.log, test-timings failure around line1470. This is distinct from intentional merge-hold-gate failure. Root must resolve/rerun the required check normally; no bypass or test-budget weakening is proposed by this reviewer.
+
+    Read-only readiness/artifact evidence (separate from the resolved install finding):
+    - Final candidate binary/script/docs hashes match final manifest. Binary SHA256 is9d50dac2e1be84fa903a05857d82ff11f45070e4f0ea3fcf483f743acf3dbb30, identical to634. All six native-source hashes in634 manifest match reviewed0df source; no Rust changed634..0df. mailbox_wake.rs is unchanged since910 (blob a1b9f780b9a3fe0f7a7e7536f96b321766f1ea6c). The embedded910+dirty label is earlier build metadata; these comparisons support reused-source equivalence, but are not my independent reproducible-build attestation of the whole binary. Final deployment still requires the normal reviewed health-capable scheduler artifact, not promotion of unmerged code.
+    - Actual immutable candidate reads of main: exit1 at2523ms, then success1465/533ms with0messages/1223acknowledged IDs. First failing snapshot's precise error was not retained by the counts-only probe, so I do NOT relabel it a proven receipt-deadline failure. Advisor's separate three Mailbox receipt scan budget exceeded reproductions remain independent evidence. Main has1107 explicit receipt files, below16384 entry cap. Source mailbox_wake.rs::read_evidence:133-136 uses a hard2s deadline, so observed IO-pressure budget exhaustion remains plausible and requires readiness resolution, not skipped receipts.
+    - Actual sibling2347 snapshot returned584envelopes/0acks; reviewer snapshot582/0. Then the EXACT final script's scan(project,candidate) completed across eligible roots in4868ms, returning28unread IDs across8source roots and1223acknowledged IDs. No State, ledger persistence or queue function was called. This is a successful warm full-path inventory, NOT proof of stable cold/IO behavior or a literal idle wake. Main empty is not global caught-up.
+    - Evidence /tmp/codex2-pr2915-0df-readonly-snapshot-evidence.json and /tmp/codex2-pr2915-0df-crossroot-evidence.json; probes /tmp/codex2-0df-snapshot-readonly.py and /tmp/codex2-0df-crossroot-readonly.py.
+
+    Advisor decision: bounded F2 install correction is sufficient by source/focused evidence. Required Build remains red and read-budget readiness remains intermittent/unresolved. A bounded source-budget adjustment/test can remain within existing20s child/120s overall scan constraints; no shared-resolver rewrite is needed. Do not skip main, delete/ignore receipts, baseline/acknowledge unread mail or interpret failures as empty. Existing canonical b079 RequestChanges remains historical/current on-disk until a legitimately approved green final head is attested; I did not clear a hold or create a third broad RequestChanges round. Request advisor sufficiency/routing for CI/readiness, then final focused head/Build check for own canonical approval.
+  created_at: 2026-10-25T07:43:35.041312257Z
+  modified_at: 2026-10-25T07:43:35.041312257Z
 history:
 - id: 01a170d1-497a-7282-8dcb-91782bba7dc3
   author: joe
