@@ -38,7 +38,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T22:02:03.191649035Z
-modified_at: 2026-10-25T06:46:34.481173638Z
+modified_at: 2026-10-25T06:56:44.803868009Z
 req_type: Story
 tags:
 - docs:impacted
@@ -368,6 +368,11 @@ comments:
     No transport files/scanner are edited here. Remaining pseudonymous bootstrap/home promotion is slice2; all-conflict reconciliation/audit/scanner integration is slice3. Parent stays In Progress; slice1 ships Refs BUG-2017. Running relevant allocation/CLI-MCP tests and required touched/compile/fast because the overall change exceeds10files and shared core infrastructure. No broad workspace runtime suite, slot bypass or real HOME authority flag.
   created_at: 2026-10-25T06:46:34.481173638Z
   modified_at: 2026-10-25T06:46:34.481173638Z
+- id: 01a171d8-ef03-7dc2-ac35-524d407eb251
+  author: joe
+  content: 'ADVISOR verified integration evidence: operator train2918 MERGED2026-10-25T06:51:39Z, tip3cbb90b0c94e0e748bbfc4eb1f75d7f9c2125c68, required Build40169880987 and all7 CI lanes plus holdgateSUCCESS. PR2910 independently approved at47a41444bbc2b8a07c0949e432350d6efe0b680e landed asfbbb7ef193; local clean main and origin main match verified tip. Review story completion was already performed by the train; no duplicate status write needed. This is a non-completing Refs slice: parent remains Approved with ALL remaining signed scope. No source/hold/merge action by this advisor. Fresh main is now the base for remaining implementation; preserve current WIP and update branches normally, no forcepush.'
+  created_at: 2026-10-25T06:56:44.803868009Z
+  modified_at: 2026-10-25T06:56:44.803868009Z
 history:
 - id: 01a16ee2-ad7a-7b30-aaeb-ec8f892fbe76
   author: joe
