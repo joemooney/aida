@@ -76,6 +76,17 @@ pub(crate) fn handle_mailbox_command(
         .ok_or_else(|| anyhow::anyhow!("cannot derive project root from store path"))?;
 
     match cmd {
+        // trace:TASK-2347 | ai:codex
+        MailboxCommand::WakeSnapshot {
+            local_root,
+            recipient,
+            json: _,
+        } => {
+            let root = local_root.as_deref().unwrap_or(project_root);
+            let snapshot = crate::mailbox_wake::snapshot(root, store_root, recipient)?;
+            println!("{}", serde_json::to_string(&snapshot)?);
+            Ok(())
+        }
         MailboxCommand::Migrate { dry_run, json } => {
             // trace:STORY-1843 | ai:codex
             if !dry_run {
@@ -2479,6 +2490,7 @@ fn mailbox_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::Cm
             inner,
             Some(
                 MailboxCommand::Inbox { .. }
+                    | MailboxCommand::WakeSnapshot { .. }
                     | MailboxCommand::Thread { .. }
                     | MailboxCommand::Migrate { .. }
             )

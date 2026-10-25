@@ -57,6 +57,8 @@
 "GitLab live-smoke workflow guard" = "fast"
 "External-prose classifier inventory" = "fast"
 "test-touched planner tests" = "fast"
+# trace:TASK-2347 | ai:codex
+"Codex mail wake fixtures" = "fast"
 "Run MCP stdio compatibility tests" = "full"
 "Run history template CLI/config/MCP contract tests" = "full"
 # trace:BUG-1801 | ai:codex

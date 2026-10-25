@@ -138,6 +138,7 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida sandbox destroy` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida sandbox path` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida mailbox` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida mailbox wake-snapshot` | JSON honoured | mailbox wake-snapshot --recipient advisor |
 | `aida mailbox migrate` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida mailbox latency` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida mailbox send` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
