@@ -2972,7 +2972,7 @@ fn task_2344_q1_physical_tick_lock_directory_migration_and_legacy_mutator_refusa
     std::fs::create_dir_all(&race_dir).unwrap();
     let opened_marker = race_dir.join("child-opened");
     let release_marker = race_dir.join("child-release");
-    let mut open_waiter_child = std::process::Command::new(std::env::current_exe().unwrap())
+    let mut open_waiter_child = std::process::Command::new(crate::resolve_aida_exe())
         .arg("--exact")
         .arg("dispatch::story_1917_dispatch_exec_tests::story_1917_detached_worker_child_entry")
         .arg("--nocapture")
@@ -3025,7 +3025,7 @@ fn task_2344_q1_physical_tick_lock_directory_migration_and_legacy_mutator_refusa
     //     and fails closed instead of silently skipping the process.
     let nd_opened_marker = race_dir.join("nd-child-opened");
     let nd_release_marker = race_dir.join("nd-child-release");
-    let mut nd_child = std::process::Command::new(std::env::current_exe().unwrap())
+    let mut nd_child = std::process::Command::new(crate::resolve_aida_exe())
         .arg("--exact")
         .arg("dispatch::story_1917_dispatch_exec_tests::story_1917_detached_worker_child_entry")
         .arg("--nocapture")

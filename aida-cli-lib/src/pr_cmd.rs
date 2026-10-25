@@ -3676,6 +3676,9 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
         // `aida merge-hold clear <PR>` run by a human. A reviewer's "clear on
         // my re-review" hold therefore moves to a human once approved.
         // trace:BUG-1167 trace:BUG-1566 | ai:claude
+        if let Some(ctx) = dispatch_ctx {
+            ctx.reverify_now(true)?;
+        }
         let marker_reason = crate::merge_hold::read_hold(&hold_root, pr_number);
         // BUG-1499: a LABEL-ONLY hold (no marker) is never released here —
         // not even for a human — because a ship leaves no clearance record.
@@ -3819,9 +3822,6 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
             return Err(pr_ship::ShipRefusal::Review.error(refusal));
         }
         if let Some(reason) = marker_reason.as_deref() {
-            if let Some(ctx) = dispatch_ctx {
-                ctx.reverify_now(true)?;
-            }
             match &released_by_verdict {
                 Some(verdict) => eprintln!(
                     "  {} releasing reviewer-refusal merge-hold on PR-{} — its condition is met: \
@@ -3958,49 +3958,45 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
         // STORY-1698: re-read the mandate immediately before the merge call.
         // If it lapsed after the hold was released (the hold-gate wait above
         // can take minutes), re-arm the hold and refuse.
-        // trace:STORY-1698 | ai:claude
-        if let Some(ctx) = dispatch_ctx {
-            if let Err(err) = ctx.reverify_now(true) {
-                let refusal = refusal_with_mandate_rearm(
-                    format!("PR-{pr_number} left OPEN — {err:#}"),
-                    mandate_release.is_some(),
-                    marker_reason.is_some(),
-                    || rearm_after_mandate_failure(&hold_root, hold_record.as_ref(), pr_number),
-                );
-                crate::events::record_gate_held(
+        // trace:STORY-1698 trace:STORY-1917 trace:TASK-2344 | ai:claude
+        let dispatch_ctx_err = dispatch_ctx.and_then(|ctx| ctx.reverify_now(true).err());
+        if dispatch_ctx_err.is_some()
+            || mandate_release
+                .as_ref()
+                .is_some_and(|cover| !mandate_still_active(&cover.id))
+        {
+            let cover_id = mandate_release
+                .as_ref()
+                .map(|c| c.id.as_str())
+                .or_else(|| dispatch_ctx.map(|c| c.mandate_id()))
+                .unwrap_or("unknown");
+            let detail = match dispatch_ctx_err {
+                Some(err) => format!("{cover_id} ({err:#})"),
+                None => cover_id.to_string(),
+            };
+            let refusal = format!(
+                "PR-{pr_number} left OPEN — mandate {detail} ended before the merge.{}",
+                rearm_after_mandate_failure(
                     &hold_root,
-                    crate::events::GATE_MANDATE_SHIP,
-                    None,
-                    Some(pr_number),
-                    &refusal,
-                );
-                ledger_mandate_ship_failure(
-                    &main_worktree,
-                    mandate_release.as_ref(),
+                    hold_record.as_ref().filter(|_| mandate_release.is_some()),
                     pr_number,
-                    &refusal,
-                );
-                return Err(pr_ship::ShipRefusal::MergeHold.error(refusal));
-            }
-        }
-        if let Some(cover) = &mandate_release {
-            if !mandate_still_active(&cover.id) {
-                let refusal = format!(
-                    "PR-{pr_number} left OPEN — mandate {} ended before the merge.{}",
-                    cover.id,
-                    rearm_after_mandate_failure(&hold_root, hold_record.as_ref(), pr_number)
-                );
-                crate::events::record_gate_held(
-                    &hold_root,
-                    crate::events::GATE_MANDATE_SHIP,
-                    None,
-                    Some(pr_number),
-                    &refusal,
-                );
-                // trace:TASK-1915 | ai:claude
-                ledger_mandate_ship_failure(&main_worktree, Some(cover), pr_number, &refusal);
-                return Err(pr_ship::ShipRefusal::MergeHold.error(refusal));
-            }
+                )
+            );
+            crate::events::record_gate_held(
+                &hold_root,
+                crate::events::GATE_MANDATE_SHIP,
+                None,
+                Some(pr_number),
+                &refusal,
+            );
+            // trace:TASK-1915 | ai:claude
+            ledger_mandate_ship_failure(
+                &main_worktree,
+                mandate_release.as_ref(),
+                pr_number,
+                &refusal,
+            );
+            return Err(pr_ship::ShipRefusal::MergeHold.error(refusal));
         }
         // TASK-1960: a carried-over approval is bound to the base it was
         // proven against; re-read the PR's base immediately before merging.
@@ -4044,30 +4040,6 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
                     &refusal,
                 );
                 return Err(pr_ship::ShipRefusal::Review.error(refusal));
-            }
-        }
-        if let Some(ctx) = dispatch_ctx {
-            if let Err(err) = ctx.reverify_now(true) {
-                let refusal = refusal_with_mandate_rearm(
-                    format!("PR-{pr_number} left OPEN — {err:#}"),
-                    mandate_release.is_some(),
-                    marker_reason.is_some(),
-                    || rearm_after_mandate_failure(&hold_root, hold_record.as_ref(), pr_number),
-                );
-                crate::events::record_gate_held(
-                    &hold_root,
-                    crate::events::GATE_MANDATE_SHIP,
-                    None,
-                    Some(pr_number),
-                    &refusal,
-                );
-                ledger_mandate_ship_failure(
-                    &main_worktree,
-                    mandate_release.as_ref(),
-                    pr_number,
-                    &refusal,
-                );
-                return Err(pr_ship::ShipRefusal::MergeHold.error(refusal));
             }
         }
         let mut merge_sink = crate::network_retry::StderrSink;
