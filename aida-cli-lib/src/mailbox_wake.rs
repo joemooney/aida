@@ -102,6 +102,119 @@ fn safe_id(id: &str) -> bool {
             .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
 }
 
+// Keep the complete cross-root receipt inventory. Independent guarded reads
+// overlap disk latency, without a cache, a wider deadline, or partial evidence.
+// trace:TASK-2347 | ai:codex
+const RECEIPT_READERS: usize = 4;
+
+fn read_receipts<F>(
+    directory: &File,
+    budget: &mut u64,
+    deadline: Instant,
+    readers: usize,
+    read: &F,
+) -> Result<std::collections::BTreeSet<String>>
+where
+    F: Fn(&Path, u64) -> Result<Vec<u8>> + Sync,
+{
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+    let mut entries = Vec::new();
+    for (count, entry) in std::fs::read_dir(pinned(directory))?.enumerate() {
+        if count >= MAX_ENTRIES || Instant::now() >= deadline {
+            bail!("Mailbox receipt scan budget exceeded");
+        }
+        let entry = entry?;
+        let path = entry.path();
+        if path.extension().and_then(|s| s.to_str()) != Some("txt") {
+            continue;
+        }
+        let id = path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .context("Invalid receipt identity")?;
+        if !safe_id(id) {
+            bail!("Invalid receipt identity");
+        }
+        entries.push((id.to_owned(), path));
+    }
+    let read_one = |path: &Path, limit: u64| -> Result<usize> {
+        if Instant::now() >= deadline {
+            bail!("Mailbox receipt scan budget exceeded");
+        }
+        let bytes = read(path, limit).context("Cannot safely read mailbox receipt")?;
+        // Like the existing reader, the time bound is cooperative around IO.
+        // Never accept a last read that completed after the shared deadline.
+        if Instant::now() >= deadline {
+            bail!("Mailbox receipt scan budget exceeded");
+        }
+        std::str::from_utf8(&bytes)?
+            .trim()
+            .parse::<i64>()
+            .context("Invalid mailbox receipt")?;
+        Ok(bytes.len())
+    };
+    let mut seen = std::collections::BTreeSet::new();
+    // A parallel batch may read at most 128 bytes per entry in total. When the
+    // remaining aggregate budget cannot cover that reservation, preserve the
+    // original sequential actual-byte accounting rather than overspending.
+    if readers <= 1 || (entries.len() as u64) * 128 > *budget {
+        for (id, path) in entries {
+            let used = read_one(&path, 128.min(*budget))?;
+            *budget = budget
+                .checked_sub(used as u64)
+                .context("Mailbox byte budget exceeded")?;
+            seen.insert(id);
+        }
+    } else {
+        let next = AtomicUsize::new(0);
+        let stopped = AtomicBool::new(false);
+        let results: Vec<Result<Vec<(String, usize)>>> = std::thread::scope(|scope| {
+            let handles: Vec<_> = (0..readers.min(RECEIPT_READERS).min(entries.len()))
+                .map(|_| {
+                    scope.spawn(|| -> Result<Vec<(String, usize)>> {
+                        let mut completed = Vec::new();
+                        while !stopped.load(Ordering::Relaxed) {
+                            let index = next.fetch_add(1, Ordering::Relaxed);
+                            let Some((id, path)) = entries.get(index) else {
+                                break;
+                            };
+                            match read_one(path, 128) {
+                                Ok(used) => completed.push((id.clone(), used)),
+                                Err(error) => {
+                                    stopped.store(true, Ordering::Relaxed);
+                                    return Err(error);
+                                }
+                            }
+                        }
+                        Ok(completed)
+                    })
+                })
+                .collect();
+            // Join every worker even after an error; no reader outlives its pin
+            // and no partial inventory can escape on failure or panic.
+            handles
+                .into_iter()
+                .map(|h| {
+                    h.join()
+                        .unwrap_or_else(|_| Err(anyhow::anyhow!("Mailbox receipt reader failed")))
+                })
+                .collect()
+        });
+        for result in results {
+            for (id, used) in result? {
+                *budget = budget
+                    .checked_sub(used as u64)
+                    .context("Mailbox byte budget exceeded")?;
+                seen.insert(id);
+            }
+        }
+    }
+    if Instant::now() >= deadline {
+        bail!("Mailbox receipt scan budget exceeded");
+    }
+    Ok(seen)
+}
+
 // Reuse the existing acknowledgement contract without moving any watermark or
 // inventing a baseline. Explicit ID receipts also survive a stale watermark.
 fn read_evidence(
@@ -130,34 +243,13 @@ fn read_evidence(
     let mut seen = std::collections::BTreeSet::new();
     if let Some(receipts) = open_directory(&pinned(&anchor).join(".read-receipts"))? {
         if let Some(recipient_dir) = open_directory(&pinned(&receipts).join(recipient))? {
-            let deadline = Instant::now() + Duration::from_secs(2);
-            for (count, entry) in std::fs::read_dir(pinned(&recipient_dir))?.enumerate() {
-                if count >= MAX_ENTRIES || Instant::now() >= deadline {
-                    bail!("Mailbox receipt scan budget exceeded");
-                }
-                let entry = entry?;
-                let path = entry.path();
-                if path.extension().and_then(|s| s.to_str()) != Some("txt") {
-                    continue;
-                }
-                let id = path
-                    .file_stem()
-                    .and_then(|s| s.to_str())
-                    .context("Invalid receipt identity")?;
-                if !safe_id(id) {
-                    bail!("Invalid receipt identity");
-                }
-                let bytes = read_regular(&path, 128.min(*budget))
-                    .context("Cannot safely read mailbox receipt")?;
-                *budget = budget
-                    .checked_sub(bytes.len() as u64)
-                    .context("Mailbox byte budget exceeded")?;
-                std::str::from_utf8(&bytes)?
-                    .trim()
-                    .parse::<i64>()
-                    .context("Invalid mailbox receipt")?;
-                seen.insert(id.to_owned());
-            }
+            seen = read_receipts(
+                &recipient_dir,
+                budget,
+                Instant::now() + Duration::from_secs(2),
+                RECEIPT_READERS,
+                &read_regular,
+            )?;
         }
     }
     Ok((watermark, seen))
@@ -336,5 +428,148 @@ mod tests {
             .contains(&"private-unseen".to_string()));
         assert_eq!(acknowledged.messages.len(), 1);
         assert!(!sibling.path().join(".aida/mailbox/.read").exists());
+    }
+    // trace:TASK-2347 | ai:codex
+    #[test]
+    fn task_2347_live_scale_receipts_overlap_latency_without_losing_evidence() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let root = tempfile::tempdir().unwrap();
+        const COUNT: usize = 1536; // above observed live 1139 and prior 1282 scale
+        for n in 0..COUNT {
+            std::fs::write(root.path().join(format!("receipt-{n}.txt")), "123\n").unwrap();
+        }
+        let anchor = open_directory(root.path()).unwrap().unwrap();
+        let active = AtomicUsize::new(0);
+        let peak = AtomicUsize::new(0);
+        let delayed = |path: &Path, limit| {
+            let running = active.fetch_add(1, Ordering::SeqCst) + 1;
+            peak.fetch_max(running, Ordering::SeqCst);
+            std::thread::sleep(Duration::from_millis(2));
+            let result = read_regular(path, limit);
+            active.fetch_sub(1, Ordering::SeqCst);
+            result
+        };
+        let started = Instant::now();
+        let mut serial_budget = TOTAL_BYTES;
+        let serial = read_receipts(
+            &anchor,
+            &mut serial_budget,
+            started + Duration::from_secs(2),
+            1,
+            &delayed,
+        );
+        assert!(serial
+            .unwrap_err()
+            .to_string()
+            .contains("scan budget exceeded"));
+        let serial_elapsed = started.elapsed();
+        let started = Instant::now();
+        let mut budget = TOTAL_BYTES;
+        let ids = read_receipts(
+            &anchor,
+            &mut budget,
+            started + Duration::from_secs(2),
+            RECEIPT_READERS,
+            &delayed,
+        )
+        .unwrap();
+        assert_eq!(ids.len(), COUNT);
+        assert!(ids.contains("receipt-0") && ids.contains("receipt-1535"));
+        assert_eq!(budget, TOTAL_BYTES - 4 * COUNT as u64);
+        assert!(peak.load(Ordering::SeqCst) > 1);
+        assert!(peak.load(Ordering::SeqCst) <= RECEIPT_READERS);
+        eprintln!("receipt proof: count={COUNT} serial_refusal_ms={} parallel_complete_ms={} peak_readers={}", serial_elapsed.as_millis(), started.elapsed().as_millis(), peak.load(Ordering::SeqCst));
+    }
+
+    #[test]
+    fn task_2347_receipt_pool_keeps_unsafe_and_incomplete_evidence_fail_closed() {
+        use std::os::unix::fs::PermissionsExt;
+        for kind in [
+            "malformed",
+            "symlink",
+            "hardlink",
+            "fifo",
+            "directory",
+            "writable",
+            "oversized",
+            "removed",
+        ] {
+            let root = tempfile::tempdir().unwrap();
+            let store = root.path().join("store");
+            fixture(root.path(), "must-stay-unread", "advisor", 20);
+            let directory = root.path().join(".aida/mailbox/.read-receipts/advisor");
+            std::fs::create_dir_all(&directory).unwrap();
+            std::fs::write(directory.join("unrelated-read.txt"), "30").unwrap();
+            let bad = directory.join("bad-evidence.txt");
+            let outside = root.path().join("outside");
+            std::fs::write(&outside, "30").unwrap();
+            match kind {
+                "symlink" => symlink(&outside, &bad).unwrap(),
+                "hardlink" => std::fs::hard_link(&outside, &bad).unwrap(),
+                "fifo" => {
+                    let path = std::ffi::CString::new(bad.as_os_str().as_encoded_bytes()).unwrap();
+                    assert_eq!(unsafe { libc::mkfifo(path.as_ptr(), 0o600) }, 0);
+                }
+                "directory" => std::fs::create_dir(&bad).unwrap(),
+                "malformed" => std::fs::write(&bad, "not a timestamp").unwrap(),
+                "oversized" => std::fs::write(&bad, "1".repeat(129)).unwrap(),
+                _ => std::fs::write(&bad, "30").unwrap(),
+            }
+            if kind == "writable" {
+                std::fs::set_permissions(&bad, std::fs::Permissions::from_mode(0o666)).unwrap();
+            }
+            if kind == "removed" {
+                let anchor = open_directory(&directory).unwrap().unwrap();
+                let mut budget = TOTAL_BYTES;
+                assert!(read_receipts(
+                    &anchor,
+                    &mut budget,
+                    Instant::now() + Duration::from_secs(2),
+                    RECEIPT_READERS,
+                    &|path, limit| {
+                        if path.file_name().unwrap() == "bad-evidence.txt" {
+                            std::fs::remove_file(path)?;
+                        }
+                        read_regular(path, limit)
+                    }
+                )
+                .is_err());
+            } else {
+                assert!(snapshot(root.path(), &store, "advisor").is_err(), "{kind}");
+            }
+            assert!(!root.path().join(".aida/mailbox/.read").exists());
+            assert_eq!(
+                std::fs::read_to_string(directory.join("unrelated-read.txt")).unwrap(),
+                "30"
+            );
+        }
+    }
+
+    #[test]
+    fn task_2347_small_receipt_budget_retains_actual_byte_accounting() {
+        let root = tempfile::tempdir().unwrap();
+        std::fs::write(root.path().join("one.txt"), "1").unwrap();
+        std::fs::write(root.path().join("two.txt"), "2").unwrap();
+        let anchor = open_directory(root.path()).unwrap().unwrap();
+        let mut budget = 2;
+        let ids = read_receipts(
+            &anchor,
+            &mut budget,
+            Instant::now() + Duration::from_secs(2),
+            RECEIPT_READERS,
+            &read_regular,
+        )
+        .unwrap();
+        assert_eq!(ids.len(), 2);
+        assert_eq!(budget, 0);
+        let mut budget = 1;
+        assert!(read_receipts(
+            &anchor,
+            &mut budget,
+            Instant::now() + Duration::from_secs(2),
+            RECEIPT_READERS,
+            &read_regular
+        )
+        .is_err());
     }
 }

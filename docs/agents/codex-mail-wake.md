@@ -227,7 +227,12 @@ keeps all source checkout paths for each ID so the advisor can find mail that
 has not yet been published from a sibling. Replicated IDs cause one notification.
 New or removed checkouts are discovered at each scan. Failed scans do not record
 acceptance and retry at the next interval. Scans have per-command and total time,
-output, entry and message bounds.
+output, entry and message bounds. Receipt reads overlap file latency with at most
+four guarded readers under the same two-second receipt deadline. Every explicit
+receipt ID is retained, including IDs whose messages exist only in another root;
+any unsafe, malformed, missing or late read refuses the complete snapshot. Tight
+remaining byte budgets use sequential actual-byte accounting. No receipt cache,
+baseline or read-watermark change is introduced.
 
 Successful queue submissions are committed atomically under a permanent exclusive
 lock. Failure to create the queue process is known not to have submitted anything
