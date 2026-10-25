@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T22:12:54.027870933Z
-modified_at: 2026-10-25T14:19:42.379342568Z
+modified_at: 2026-10-25T14:37:21.247256656Z
 req_type: Bug
 tags:
 - id-allocation
@@ -639,6 +639,11 @@ comments:
   content: 'ADVISOR partial CI-repair evidence read2026-10-25~14:17UTC, not approval or completion: owner current dirty diff on published eff2 changes work_binding::read to bounded nlink0 reopen (8 attempts, fresh O_NOFOLLOW/O_NONBLOCK/bounded singly-linked/uid/mode validation retained) and adds explicit synthetic local Git author in HOME promotion fixture; help golden+manual also dirty. Read /tmp/bug2017-eff2-ci-race-repro.log: original linked-WT test passes round0 then FAILS round1 with unsafe WORK state; identity-free HOME probe also reproduces author-identity failure. Exact metadata predicate is still not independently instrumented/proven. Read /tmp/bug2017-eff2-ci-focused-fix.log: updated allocation_authority/work_binding 37 tests PASS including original linked160unique/next161 and hardlink/FIFO/missingstate guards; /tmp/bug2017-eff2-help-snapshot-verify.log exact golden test PASS after managed regeneration. These are AUTHOR runs on WIP, not my executed tests, clean immutable head proof, stress guarantee or F4/F6 closure. At this source observation bootstrap legacy NodeConfig/provider validation and native pre-MCP UUID/expected-edge assertions are still missing; keep combined brief140837, own attested RC/hold and latest-main prerequisite. No new broad local suite requested, actual corrected immutable head CI + independent sufficiency remains mandatory.'
   created_at: 2026-10-25T14:19:42.379342568Z
   modified_at: 2026-10-25T14:19:42.379342568Z
+- id: 01a1737e-a1df-7150-90d2-6cbbceecbd9a
+  author: joe
+  content: 'ADVISOR source-root evidence update2026-10-25T14:36UTC: whole read-only cross-root batch refused safely in3877ms (/tmp/advisor-crossroot-20261025-1435.json), no watcher state/acceptance/queue/ACK was touched by that scan and no global caught-up claim. Direct source-root inbox read yielded six full headers; prior-known1741/1889/reviewer messages plus code1 eff2 publish4eb94f39, CI repair45d46eaa and NEW a20a4f14. Read all, then ordinary source inbox ACK saved /tmp/advisor-bug2017-source-mail-read-1436.txt. In a20 code1 explicitly confirms currentea280 local clean/remoteeff2; F4 trulyopen, F6preMCPUUID+persistededge stilltodo; nextcheckpoint strictlegacy-pair negatives/nativeproof/maina01integration/focusednativefast/push, valid existing implementer grant and no duplicate worker. This is actual owner uptake, not just nativequeue acceptance. Existing compile3366344 remained live under a pidfd-based50s observation; no kill/retry. CI-only ea280 source/touched37pass/goldenpass does not close F4/F6; no new verdict/hold release or completion.'
+  created_at: 2026-10-25T14:37:21.247256656Z
+  modified_at: 2026-10-25T14:37:21.247256656Z
 history:
 - id: 01a16f08-1847-70c2-a9ec-772710162546
   author: joe
