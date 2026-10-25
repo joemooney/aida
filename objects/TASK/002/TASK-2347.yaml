@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T02:08:29.032100054Z
-modified_at: 2026-10-25T08:07:53.512429090Z
+modified_at: 2026-10-25T08:10:19.732899802Z
 req_type: Task
 tags:
 - codex
@@ -371,6 +371,24 @@ comments:
     Deployment still requires matching reviewed normal native/scheduler artifact (not unmerged global promotion), a successful current complete read-only inventory and health-capable actual driver, then the explicitly authorized literal-IDLE same-thread synthetic test with duplicate suppression and receipts. Do not baseline/acknowledge unread messages to zero, skip failed roots, silently relax limits or reuse old-head green checks. Final own reviewer approval only after a74 delta/source invariants and exact-head required Build pass; use normal canonical writer, no manual hold clearance/merge/live install by reviewer. Root authored watcher launch and cannot merge own authorship. Full TASK2347/story1843 scope and remaining goal stay open until actual completion evidence.
   created_at: 2026-10-25T08:07:53.512429090Z
   modified_at: 2026-10-25T08:07:53.512429090Z
+- id: 01a1721c-4cd4-7010-8e34-fbc4318da299
+  author: codex2
+  content: |
+    Codex2 independent final bounded sufficiency review: **APPROVED** at **a74aafe83e8c22df9e6d0306e63b0a725f066953**. Fresh forge head matched before attestation. I did not author the target changes.
+
+    Reviewed the complete `0df..a74` delta: the immediate unit snapshot recheck after monitoring removal preserves an intervening user edit and reports a stopped partial uninstall before unlink. Its deterministic exact-head regression passed independently (`/tmp/codex2-pr2915-a74-unit-recheck.log`). Candidate script/docs/binary match the manifest. Prior independently proven cumulative F1/F2 sufficiency carries forward: conflict/capability preflight nonmutation, confirmed stop before monitor removal, private stage-labelled original-state recovery, tracked-config/intervening-edit preservation, GLOBAL+PROJECT namespace checks, accepted pruning/age observability and LOCAL/unknown-private receipt isolation.
+
+    **Actual-head CI run 40174025517: Build and all seven lanes SUCCESS.** The intentional merge-hold-gate refusal is separate. The old0df rerun is not used as this head's CI evidence.
+
+    The canonical final advisor ruling accepts bounded fail-closed scan refusal and next-interval retry with unchanged acceptance/health state; it does not claim stable cold IO or an idle wake. Retained actual read-only inventory evidence succeeded across roots; main empty is not global caught-up. Matching reviewed health-capable scheduler deployment, a current complete inventory and literal same-thread idle-wake/duplicate-suppression proof remain subsequent deployment requirements. No live install, services/jobs, queue/wake, acknowledgement, grants, Cargo or migration performed in this review.
+
+    Own reviewer-attested records written through the normal CLI **from main**, PR-keyed plus separate covered-spec record:
+    - `/home/joe/ai/aida/.aida/review-verdicts/PR-2915.json`
+    - `/home/joe/ai/aida/.aida/review-verdicts/TASK-2347.json`
+
+    The existing merge-hold marker remains byte-identical (hash verified). No hold clearance, merge or parent completion. Non-completing `Refs TASK-2347` preserved; independent integration remains required. No outstanding code findings at this reviewed head.
+  created_at: 2026-10-25T08:10:19.732899802Z
+  modified_at: 2026-10-25T08:10:19.732899802Z
 history:
 - id: 01a170d1-497a-7282-8dcb-91782bba7dc3
   author: joe
