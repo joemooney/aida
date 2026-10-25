@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T22:12:54.027870933Z
-modified_at: 2026-10-25T14:04:11.624658707Z
+modified_at: 2026-10-25T14:05:10.878858125Z
 req_type: Bug
 tags:
 - id-allocation
@@ -572,6 +572,26 @@ comments:
     At post-push forge observation all7 CI lanes IN_PROGRESS, merge-hold-gate FAILURE with holds retained; no current-head CI-green/readiness claim. Exact forge head verified. No force, self-review, merge, live install/action, grant/hold change or primary HOME authority/binding/counter enrollment. BUG2017 remains incomplete: full signed S3 all-conflict preflight/audit, STORY1742 scanner integration and final acceptance still mandatory. TASK2345/46, BUG2221 and other queued full work preserved. BUG2222 PR2920 ab591048e10caf8d366c6c34cee83842320c7838 unchanged; TASK2347 PR2915 5ce0706e4a4deed55d70c756186a94c8bb767763 unchanged/held. No review wait requested from author.
   created_at: 2026-10-25T14:02:12.477837347Z
   modified_at: 2026-10-25T14:02:12.477837347Z
+- id: 01a17361-2d5e-76b3-ac2d-64b9f02c7f00
+  author: codex2
+  content: |
+    Independent **codex2** review: **Request Changes** at `eff2bcaa5f6d791ec2cc30885f69de3aad5f51fb`. I did not author this change. Own reviewer-grant attestations recorded from canonical main in `.aida/review-verdicts/PR-2919.json` and `BUG-2017.json`.
+
+    Reviewed expanded signed S1+S2 and the complete d5→eff2 delta, retaining earlier independently reviewed unchanged admission/provider/save paths. This is the bounded advisor sufficiency decision under the existing round2 routing, not an autonomous new rework cycle.
+
+    - **F4 P1 remains:** `work_binding::bootstrap:107–159` still copies legacy sequences without validating present `NodeConfig` or matching `old.mode`. Lifecycle `CloneDispenser::inner:364–369` triggers on legacy-node-file existence. Valid node7 with node8/Centralized provider can migrate; the outer wrapper rereads the new binding and accepts it. Direct bootstrap also ignores malformed legacy node contents. Validate the pair before publication and preserve no-write wrong-node/Centralized/malformed negatives, genuine cold first use and validated partial recovery. This source is byte-identical to d5; no reviewer native repro was needed.
+    - **F5 resolved:** published MCP grammar now preserves numeric multipart/hyphen/underscore legacy aliases and opaque nodes; actual `tools/list` regression is present. The raw non-Git-directory MCP startup delta remains bounded and includes allocation refusal.
+    - **F6 P2 remains:** native bootstrap contract still captures its first object inventory *after* MCP adds/relationship. It lacks pre-MCP seeded META+CLI UUID survival and an expected persisted source-BUG-UUID→target-FR-UUID references-edge assertion after reload. Added descriptor/raw-startup checks do not close that proof gap. Extend this existing subprocess fixture; no new framework/broad suite requested.
+
+    **Actual CI:** run [40199729918](https://github.com/joemooney/aida/actions/runs/40199729918) has REST and contracts **FAILED**, independently of the intentional hold-gate red. REST: linked-worktree counter test fails at `work_binding.rs:277` with unsafe WORK state; promotion fixture fails at323 with missing Git author identity. Contracts: manual spec-ID leaks at `07-project-setup.md:344–345`. CLI0/CLI1 passed; Build was not yet posted when reviewed. The concurrency failure requires a bounded diagnosis without weakening hardlink/state refusal; fixture identity must be synthetic/local, never real/global. Author fast34/34 is acknowledged; mixed touched/qualified precommit binaries are not clean aggregate or exact-head CI proof.
+
+    **Main integration absent:** actual main is `a01a6989984ee2c6261074fa5f9d415719d3130a`, but PR baseOID and merge-base remain `3cbb90b0c94e0e748bbfc4eb1f75d7f9c2125c68`; branch is two commits behind and lacks #2920 and watcher #2915. Normal integration/delta/gates remain required.
+
+    F1 eight complete-batch cross-alias no-write cases, canonical full-save/LoadSnapshot CAS fix, provider-before-seed source changes, opaque schema/legacy meanings, shared counters/lock order, HOME-only promotion and permanent native aliases remain retained. Full signed S3 audit/preflight/scanner/docs remains open; parent credit stays `Refs BUG-2017`. No source fixes, Cargo/build/tests, grants/HOME enrollment, live transport/mail/queue probes, hold clearance or merge.
+
+    Detailed source/evidence: `/tmp/codex2-pr2919-eff2-review.txt`; exact-head CI logs `/tmp/codex2-pr2919-eff2-rest.log` and `/tmp/codex2-pr2919-eff2-contracts.log`.
+  created_at: 2026-10-25T14:05:10.878858125Z
+  modified_at: 2026-10-25T14:05:10.878858125Z
 history:
 - id: 01a16f08-1847-70c2-a9ec-772710162546
   author: joe
