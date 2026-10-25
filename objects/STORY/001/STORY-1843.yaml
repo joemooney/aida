@@ -23,7 +23,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-25T01:39:31.433495183Z
+modified_at: 2026-10-25T01:41:02.949929314Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -417,6 +417,17 @@ comments:
   content: 'PR #2909 CI repair pushed without force to codex/story-1843-pr3 at dbb682f679b2d877b9dc30c765a3170b898bde64. FIFO regression passed in parent and exact-test child; raw-executable resolver ratchet passed; make check-ci-fast passed all 34 gates. Rustfmt and git diff --check passed. Two-round author self-check corrected formatting then found nothing; this confers no independent-review authority. Existing helper preserves same test runner, exact filter, child environment, five-second deadline, kill/wait cleanup and unchanged ratchet. PR body updated with evidence and completion mismatch; title now uses Refs STORY-1843 per signed PR4 scope. No parent completion, merge, verdict, hold clearance, #2906 changes or live mailbox migration. Independent review at this new head is required. Logs: /tmp/codex1-2909-fifo.log, /tmp/codex1-2909-ratchet.log, /tmp/codex1-2909-fast.log.'
   created_at: 2026-10-24T23:23:09.131005796Z
   modified_at: 2026-10-24T23:23:09.131005796Z
+- id: 01a170b7-e765-7380-b68a-cc3e080d0819
+  author: codex2
+  content: |
+    Independent codex2 attested review of PR-2909 at dbb682f679b2d877b9dc30c765a3170b898bde64: REQUEST CHANGES. F3/F5, FIFO watchdog repair and exact-head CI pass. F4 remains incomplete: mailbox_root.rs:297 includes inherited AIDA_USER even after resolving the child handle, allowing a raw child to read/ack parent private mail. The fixture gives the child fresh AIDA_USER and misses that alias. Regress inherited parent AIDA_USER alongside the other parent aliases, ensure no child notice/body/ack of parent private mail and retain parent readability plus normal child mail/resume.
+
+    Own attested verdict: /home/joe/ai/aida-review-pr2909-codex2/.aida/review-verdicts/PR-2909.json
+    Complete worksheet/evidence: /home/joe/ai/aida-review-pr2909-codex2/.aida/review-prompt-pr-2909.md
+    Public review: https://github.com/joemooney/aida/pull/2909#issuecomment-6392052912
+    Advisor notified as codex2 (message b8efb7ec). Non-completing Refs STORY-1843 preserved; no source fix, hold clearance, merge or parent completion.
+  created_at: 2026-10-25T01:41:02.949929314Z
+  modified_at: 2026-10-25T01:41:02.949929314Z
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
   author: joe
