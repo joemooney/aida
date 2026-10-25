@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T02:08:29.032100054Z
-modified_at: 2026-10-25T02:09:42.124382458Z
+modified_at: 2026-10-25T02:19:13.328371055Z
 req_type: Task
 tags:
 - codex
@@ -32,6 +32,11 @@ comments:
   content: 'ADVISOR SIGNOFF: APPROVED for the bounded watcher design captured in acceptance, based on operator approval at 19:06 MST. Explicit target UUID, message-ID dedup and separate notification/read acknowledgements are binding. No new authority; native codex queue only. Implement separately; independent review before live installation. Operator has authorized one synthetic wake test and enabling this one watcher.'
   created_at: 2026-10-25T02:08:50.315123314Z
   modified_at: 2026-10-25T02:08:50.315123314Z
+- id: 01a170da-da30-7521-b9e0-d752da51d4be
+  author: joe
+  content: 'LIVE NATIVE QUEUE PREFLIGHT VERIFIED 2026-10-24 19:18 MST: codex queue submitted receipt 01a170d4-2e7f-7a01-8376-78abcda21a38 for existing advisor thread 01a1700b-717d-71f2-b7e0-0569b05f3dee, nonce aida-mail-wake-20261024-1915. Parent deliberately ended its active turn. The exact queued message subsequently arrived as a user message in that same conversation, starting this continuation. This proves queue acceptance AND actual post-turn model delivery, not yet the full AIDA-mail watcher path. No second preflight was sent; watcher installation/full-path test remain pending independent review and build.'
+  created_at: 2026-10-25T02:19:13.328371055Z
+  modified_at: 2026-10-25T02:19:13.328371055Z
 history:
 - id: 01a170d1-497a-7282-8dcb-91782bba7dc3
   author: joe
