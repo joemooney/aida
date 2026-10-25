@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T02:08:29.032100054Z
-modified_at: 2026-10-25T06:41:24.152638513Z
+modified_at: 2026-10-25T06:45:37.567221146Z
 req_type: Task
 tags:
 - codex
@@ -291,6 +291,15 @@ comments:
     BUG-2017 edits remain preserved at local checkpoint80b25c3025301c2f3e3b0c15d8dd45b5c9669d2b plus7 dirty files in /home/joe/ai/aida-bug-2017-slice1. Next work returns there after required context rotation; no waiting on prior reviews. (Refs TASK-2347)
   created_at: 2026-10-25T06:41:24.152638513Z
   modified_at: 2026-10-25T06:41:24.152638513Z
+- id: 01a171ce-c09f-7520-9863-d2fb2452edf3
+  author: joe
+  content: |-
+    ADVISOR bounded F2 sufficiency ruling after the two-round cap, pinned PR2915 b07904778fbae163a246c3d7144bebb1c7934378. Read codex2 current evidence/source and canonical06:00 retained acceptance; independently executed the inspected fake-HOME/project probe against verified reviewtreeb079, with ALL systemctl calls mocked. Own evidence /tmp/advisor-pr2915-b079-install-evidence.json matches reviewer evidence. No live services/config/mail touched. F1 and global-name correction do not close the retained install reliability boundary.
+    Concrete unresolved SAME F2: service(install) replaces deployed watcher.py before own_health_job ownership refusal; injected unit-write, daemon-reload or enable failures leave owned project config+registration; service(uninstall) removes config+registration before disable--now success, so failure loses monitoring of a possibly running watcher. Here .aida/config.toml is tracked. Existing docs do not supply the conditional recovery procedure requested06:00.
+    Minimal completion contract, no rewrite: (1) read-only ownership/capability preflight BEFORE deployed script or other persistent install changes, preserving all original bytes on refusal; repeat necessary identity checks at publication. (2) uninstall must confirm service stopped before removing monitoring; stop failure retains job/registration/unit/state and reports recovery. (3) later install failures must explicitly identify stage and preserve recoverable original config bytes/mode/hash plus registration/unit/service state. Either safely restore ONLY exact owned unchanged additions/previous bytes, or retain partial state with concrete conditional recovery commands/evidence; never overwrite intervening unrelated edits, never auto-commit tracked config. Docs must explicitly cover tracked repo config and unit-write/reload/enable failure stages. It is acceptable to disclose a recoverable partial install; do not claim transactionality. (4) hermetic fake-systemctl fixtures pin conflict-preflight nonmutation, every failure stage, stop failure retention, successful owned install/uninstall/idempotence and unrelated/intervening state preservation. Preserve all prior privacy/recovery/globalnamespace cases.
+    Reviewer should record exact outstanding evidence, not run another broad open-ended review round. Doer implements this bounded same-F2 correction, commits/pushes nonforce and reports finalhead plus one focused Python suite + fast gates. Advisor will assess final sufficiency with independent reviewer delta evidence at that head and required Build. No new adapter, general rollback framework, live install, unsafe promotion, hold clear, merge or grant changes. Prioritize concrete watcher rework before BUG2017 continuation, preserving BUG2017 files in place.
+  created_at: 2026-10-25T06:45:37.567221146Z
+  modified_at: 2026-10-25T06:45:37.567221146Z
 history:
 - id: 01a170d1-497a-7282-8dcb-91782bba7dc3
   author: joe
