@@ -2615,10 +2615,51 @@ pub(crate) fn pr_ship_with_method(
     merge_method: crate::forge::MergeMethod,
     final_slice: bool,
 ) -> Result<()> {
+    pr_ship_with_method_and_dispatch_ctx(
+        n,
+        no_pull,
+        no_cleanup,
+        dry_run,
+        force_delete_branch,
+        complexity,
+        effort,
+        no_trailer_check,
+        override_stale_check,
+        override_stale_approval,
+        wait,
+        no_complete,
+        merge_method,
+        final_slice,
+        None,
+    )
+}
+
+// trace:STORY-1917 trace:TASK-2338 trace:TASK-2339 | ai:agy
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
+    n: Option<u64>,
+    no_pull: bool,
+    no_cleanup: bool,
+    dry_run: bool,
+    force_delete_branch: bool,
+    complexity: Option<complexity_calibration::ComplexityLevel>,
+    effort: Option<effort_calibration::EffortBucket>,
+    no_trailer_check: bool,
+    override_stale_check: bool,
+    override_stale_approval: bool,
+    wait: Option<u64>,
+    no_complete: bool,
+    merge_method: crate::forge::MergeMethod,
+    final_slice: bool,
+    dispatch_ctx: Option<&crate::gate::dispatch_auth::DispatchExecutionContext>,
+) -> Result<()> {
     use pr_ship::{
         branch_pr_resolution_from_lookup, format_activity_event, format_dry_run_plan_with_method,
         recovery_hint, BranchPrResolution, PrShipOptions, ShipStep, StepOutcome,
     };
+    if let Some(ctx) = dispatch_ctx {
+        ctx.reverify_now(true)?;
+    }
     // The one merge path behind `aida pr ship` and `aida ship`: a standalone
     // implementer stops at an open PR. trace:STORY-1662 | ai:claude
     crate::standalone_implementer::refuse_under_marker("pr ship")?;
@@ -3004,6 +3045,9 @@ pub(crate) fn pr_ship_with_method(
         already_merged =
             pr_is_merged_with_sink(&project_root, pr_number as u32, &mut probe_sink) == Some(true);
     }
+    if let Some(ctx) = dispatch_ctx {
+        ctx.reverify_now(true)?;
+    }
 
     // ---- STORY-1698: the fire-fighting mandate. A human at a terminal
     // needs none; any other caller may release a hold only when an active
@@ -3334,6 +3378,9 @@ pub(crate) fn pr_ship_with_method(
             &StepOutcome::Ok,
         );
     }
+    if let Some(ctx) = dispatch_ctx {
+        ctx.reverify_now(true)?;
+    }
 
     // ---- Step 3: merge. Use retry-wrapper so a transient gh
     // network blip doesn't abort. ----
@@ -3347,6 +3394,9 @@ pub(crate) fn pr_ship_with_method(
     // released when this handler returns. Bounded-wait-then-refuse on contention.
     // trace:STORY-1171 | ai:claude
     let _merge_lease = acquire_merge_lease(&main_worktree, pr_number)?;
+    if let Some(ctx) = dispatch_ctx {
+        ctx.reverify_now(true)?;
+    }
     // STORY-1698: re-read the mandate under the merge lease. A mandate that
     // covered the early gate but lapsed (or whose approval moved) since
     // refuses here, before any hold is touched. trace:STORY-1698 | ai:claude
@@ -3769,6 +3819,9 @@ pub(crate) fn pr_ship_with_method(
             return Err(pr_ship::ShipRefusal::Review.error(refusal));
         }
         if let Some(reason) = marker_reason.as_deref() {
+            if let Some(ctx) = dispatch_ctx {
+                ctx.reverify_now(true)?;
+            }
             match &released_by_verdict {
                 Some(verdict) => eprintln!(
                     "  {} releasing reviewer-refusal merge-hold on PR-{} — its condition is met: \
@@ -3906,6 +3959,30 @@ pub(crate) fn pr_ship_with_method(
         // If it lapsed after the hold was released (the hold-gate wait above
         // can take minutes), re-arm the hold and refuse.
         // trace:STORY-1698 | ai:claude
+        if let Some(ctx) = dispatch_ctx {
+            if let Err(err) = ctx.reverify_now(true) {
+                let refusal = refusal_with_mandate_rearm(
+                    format!("PR-{pr_number} left OPEN — {err:#}"),
+                    mandate_release.is_some(),
+                    marker_reason.is_some(),
+                    || rearm_after_mandate_failure(&hold_root, hold_record.as_ref(), pr_number),
+                );
+                crate::events::record_gate_held(
+                    &hold_root,
+                    crate::events::GATE_MANDATE_SHIP,
+                    None,
+                    Some(pr_number),
+                    &refusal,
+                );
+                ledger_mandate_ship_failure(
+                    &main_worktree,
+                    mandate_release.as_ref(),
+                    pr_number,
+                    &refusal,
+                );
+                return Err(pr_ship::ShipRefusal::MergeHold.error(refusal));
+            }
+        }
         if let Some(cover) = &mandate_release {
             if !mandate_still_active(&cover.id) {
                 let refusal = format!(
@@ -3967,6 +4044,30 @@ pub(crate) fn pr_ship_with_method(
                     &refusal,
                 );
                 return Err(pr_ship::ShipRefusal::Review.error(refusal));
+            }
+        }
+        if let Some(ctx) = dispatch_ctx {
+            if let Err(err) = ctx.reverify_now(true) {
+                let refusal = refusal_with_mandate_rearm(
+                    format!("PR-{pr_number} left OPEN — {err:#}"),
+                    mandate_release.is_some(),
+                    marker_reason.is_some(),
+                    || rearm_after_mandate_failure(&hold_root, hold_record.as_ref(), pr_number),
+                );
+                crate::events::record_gate_held(
+                    &hold_root,
+                    crate::events::GATE_MANDATE_SHIP,
+                    None,
+                    Some(pr_number),
+                    &refusal,
+                );
+                ledger_mandate_ship_failure(
+                    &main_worktree,
+                    mandate_release.as_ref(),
+                    pr_number,
+                    &refusal,
+                );
+                return Err(pr_ship::ShipRefusal::MergeHold.error(refusal));
             }
         }
         let mut merge_sink = crate::network_retry::StderrSink;

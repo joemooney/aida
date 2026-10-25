@@ -7,6 +7,7 @@
 // trace:STORY-1889 | ai:claude
 
 pub(crate) mod branch_policy;
+pub(crate) mod dispatch_auth;
 pub(crate) mod merge_hold_core;
 pub(crate) mod operator_hold;
 pub(crate) mod review_author;

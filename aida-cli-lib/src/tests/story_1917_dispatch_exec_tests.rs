@@ -1178,6 +1178,26 @@ fn f1_log_symlink_and_directory_symlink_refused_without_disclosing_or_modifying_
 // trace:STORY-1917 | ai:agy
 #[test]
 fn story_1917_detached_worker_child_entry() {
+    if let Ok(lock_path) = std::env::var("AIDA_TEST_1917_OPEN_LOCK_PATH") {
+        let opened_marker =
+            PathBuf::from(std::env::var("AIDA_TEST_1917_OPENED_MARKER").expect("OPENED_MARKER"));
+        let release_marker =
+            PathBuf::from(std::env::var("AIDA_TEST_1917_RELEASE_MARKER").expect("RELEASE_MARKER"));
+        let _open_fd = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(&lock_path)
+            .expect("open legacy lock RW before flock");
+        std::fs::write(&opened_marker, std::process::id().to_string()).unwrap();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        while std::time::Instant::now() < deadline {
+            if release_marker.exists() {
+                return;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        panic!("open-before-flock child timed out waiting for release marker");
+    }
     let Some(req_id) = std::env::var("AIDA_TEST_1917_CHILD_ID").ok() else {
         return;
     };
@@ -2608,6 +2628,113 @@ fn task_2344_real_detached_worker_missing_result_and_no_duplicate_replay() {
         pr810_runs, 1,
         "missing-result record 810 must never be replayed after child exit; log:\n{invocations}"
     );
+
+    // 6. Sticky recovery evidence when BOTH halves are absent (`(Missing, Missing)`):
+    //    Delete the remaining `requests/<id_810>.json` after `recovery.json` has been
+    //    persisted. Loss of the remaining half is NOT positive recovery: subsequent
+    //    inspection and reconciliation must retain the unresolved fence for 810 in
+    //    `recovery.json` with its known verb/target/dedupe/mandate metadata, still
+    //    refuse duplicate submissions on `pr:810`, still reserve 1 review cap slot,
+    //    and never replay 810.
+    std::fs::remove_file(request_path(&f.root, &rev_810.request.id)).unwrap();
+    assert!(!request_path(&f.root, &rev_810.request.id).exists());
+    assert!(!result_path(&f.root, &rev_810.request.id).exists());
+
+    let inv_both_missing = inspect_dispatch_inventory_readonly(&f.root).unwrap();
+    let fence_810 = inv_both_missing.find_fence(&rev_810.request.id).expect(
+        "sticky fence for 810 must survive even when both request and result halves are missing",
+    );
+    assert_eq!(fence_810.known_verb.as_deref(), Some("review"));
+    assert_eq!(fence_810.known_target_key.as_deref(), Some("pr:810"));
+    assert_eq!(fence_810.known_dedupe_key.as_deref(), Some("review:pr:810"));
+    assert_eq!(
+        fence_810.known_mandate_id.as_deref(),
+        Some(rev_810.request.mandate_id.as_str())
+    );
+
+    // Reconcile under tick.lock and verify `recovery.json` is retained (NOT deleted).
+    {
+        let _lock = acquire_dispatch_lock(&f.root).unwrap();
+        let rec_inv = reconcile_inventory_locked(&f.root, now + Duration::seconds(10)).unwrap();
+        assert!(rec_inv.find_fence(&rev_810.request.id).is_some());
+    }
+    assert!(
+        recovery_path(&f.root).exists(),
+        "reconcile_inventory_locked must retain recovery.json when both halves of a fenced record disappear"
+    );
+
+    // Duplicate submission on `pr:810` must still be refused naming `rev_810.request.id`.
+    let dup_after_both_missing = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Review {
+            pr: 810,
+            vendor: None,
+        },
+        now + Duration::seconds(11),
+    )
+    .unwrap_err();
+    assert!(
+        dup_after_both_missing
+            .to_string()
+            .contains(&rev_810.request.id)
+            && dup_after_both_missing
+                .to_string()
+                .contains("needs-recovery"),
+        "sticky fence must still refuse duplicate pr:810 after both halves disappear, got: {dup_after_both_missing:#}"
+    );
+
+    // Concurrency cap reservation must also survive: with 810 holding 1 review cap slot,
+    // submitting two new review requests (813 and 814) and running a dispatch pass may
+    // spawn at most ONE of them (`spawned == 1`, `MAX_CONCURRENT_REVIEWS == 2`).
+    let rev_813 = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Review {
+            pr: 813,
+            vendor: None,
+        },
+        now + Duration::seconds(12),
+    )
+    .unwrap();
+    let rev_814 = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Review {
+            pr: 814,
+            vendor: None,
+        },
+        now + Duration::seconds(13),
+    )
+    .unwrap();
+    let pass4 = claim_and_dispatch_pass(&f.root, true, true, now + Duration::seconds(14)).unwrap();
+    assert_eq!(
+        pass4.spawned, 1,
+        "sticky fence for 810 must continue occupying 1 review slot so only 813 spawns"
+    );
+    assert_eq!(pass4.claimed_ids, vec![rev_813.request.id.clone()]);
+    wait_for_barrier_file(&barrier_dir.join("entered-PR-813"), watchdog_timeout);
+    let (_, res_813_live) = load_pair(&f.root, &rev_813.request.id).unwrap();
+    watchdog.track(
+        res_813_live.worker_pid.unwrap(),
+        res_813_live.worker_start.clone(),
+    );
+    assert_eq!(
+        load_pair(&f.root, &rev_814.request.id).unwrap().1.status,
+        DispatchStatus::Pending,
+        "814 must remain Pending while sticky fence 810 + live 813 occupy the 2 review slots"
+    );
+    std::fs::write(barrier_dir.join("release-PR-813"), b"1").unwrap();
+    wait_for_request_status(
+        &f.root,
+        &rev_813.request.id,
+        DispatchStatus::Done,
+        watchdog_timeout,
+    );
+    std::fs::write(barrier_dir.join("release-all"), b"1").unwrap();
 }
 
 // trace:STORY-1917 trace:TASK-2344 | ai:agy
@@ -2736,13 +2863,14 @@ fn task_2344_tri_state_probe_retains_unknown_missing_pid_missing_start_and_corru
 fn task_2344_q1_physical_tick_lock_directory_migration_and_legacy_mutator_refusal() {
     use fs2::FileExt;
     let f = ExecFixture::new(&["reviewer", "implementer"]);
+    f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
+    let now = Utc::now();
 
     let disp_dir = dispatch_root(&f.root);
-    std::fs::create_dir_all(&disp_dir).unwrap();
+    let _ = open_pinned_dispatch_subdir(&f.root, None).unwrap();
     let legacy_lock_path = disp_dir.join("tick.lock");
 
-    // 1. Create a legacy Slice 1/2 regular-file `.aida/dispatch/tick.lock` and hold
-    //    an exclusive flock on it (simulating an active legacy mutator).
+    // 1. Create a legacy Slice 1/2 regular-file `.aida/dispatch/tick.lock` (mode 0600).
     let legacy_holder = std::fs::OpenOptions::new()
         .create(true)
         .truncate(false)
@@ -2751,11 +2879,117 @@ fn task_2344_q1_physical_tick_lock_directory_migration_and_legacy_mutator_refusa
         .open(&legacy_lock_path)
         .unwrap();
     std::fs::set_permissions(&legacy_lock_path, std::fs::Permissions::from_mode(0o600)).unwrap();
-    legacy_holder.lock_exclusive().unwrap();
+    drop(legacy_holder);
 
-    // New binary must refuse concurrent migration fail-closed while the legacy lock is held.
-    let held_err = match acquire_dispatch_lock(&f.root) {
-        Ok(_) => panic!("expected migration refusal while legacy tick.lock is actively held"),
+    // 2. Ordinary mutation entrypoints (`submit_request`, `cancel_request`,
+    //    `run_dispatch_tick_sync`, `run_dispatch_serve_once_sync`, `execute_one_request`)
+    //    MUST NOT silently replace the legacy regular-file `tick.lock`; even when
+    //    unlocked, they refuse fail-closed with concrete recovery guidance and leave
+    //    `tick.lock` untouched as a regular file.
+    let sub_refused = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Review {
+            pr: 880,
+            vendor: None,
+        },
+        now,
+    )
+    .unwrap_err();
+    assert!(
+        sub_refused
+            .to_string()
+            .contains("legacy regular-file dispatch lock")
+            && sub_refused
+                .to_string()
+                .contains("automatic live lock replacement is refused"),
+        "ordinary submit_request must refuse legacy tick.lock without silent migration, got: {sub_refused:#}"
+    );
+    assert!(cancel_request(&f.root, "00000000", now)
+        .unwrap_err()
+        .to_string()
+        .contains("legacy regular-file dispatch lock"));
+    assert!(run_dispatch_tick_sync(&f.root, &f.mandate_dir, now)
+        .unwrap_err()
+        .to_string()
+        .contains("legacy regular-file dispatch lock"));
+    assert!(run_dispatch_serve_once_sync(&f.root, &f.mandate_dir, now)
+        .unwrap_err()
+        .to_string()
+        .contains("legacy regular-file dispatch lock"));
+    assert!(execute_one_request(
+        &f.root,
+        &f.mandate_dir,
+        "00000000-0000-0000-0000-000000000000",
+        false,
+        now
+    )
+    .unwrap_err()
+    .to_string()
+    .contains("legacy regular-file dispatch lock"));
+    assert!(
+        legacy_lock_path.is_file(),
+        "ordinary mutation entrypoints must leave legacy tick.lock regular file untouched"
+    );
+
+    // 3. Open-before-flock / waiter race: spawn a real child process that opens
+    //    `.aida/dispatch/tick.lock` RW on FD 3 BEFORE calling `flock` and waits
+    //    on a barrier. Even though `flock` is NOT yet held on the inode,
+    //    `activate_dispatch_v2_lock_quiescent` must detect the open descriptor in
+    //     the child process via `/proc` and refuse fail-closed without unlinking!
+    let race_dir = f._tmp.path().join("q1-open-race");
+    std::fs::create_dir_all(&race_dir).unwrap();
+    let opened_marker = race_dir.join("child-opened");
+    let release_marker = race_dir.join("child-release");
+    let mut open_waiter_child = std::process::Command::new(std::env::current_exe().unwrap())
+        .arg("--exact")
+        .arg("dispatch::story_1917_dispatch_exec_tests::story_1917_detached_worker_child_entry")
+        .arg("--nocapture")
+        .env("AIDA_TEST_1917_OPEN_LOCK_PATH", &legacy_lock_path)
+        .env("AIDA_TEST_1917_OPENED_MARKER", &opened_marker)
+        .env("AIDA_TEST_1917_RELEASE_MARKER", &release_marker)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .expect("spawn open-before-flock child");
+
+    wait_for_barrier_file(&opened_marker, std::time::Duration::from_secs(5));
+
+    let open_race_err = match activate_dispatch_v2_lock_quiescent(&f.root) {
+        Ok(_) => {
+            let _ = std::fs::write(&release_marker, b"1");
+            let _ = open_waiter_child.wait();
+            panic!("expected quiescent activation refusal while child holds open-before-flock FD on legacy tick.lock");
+        }
+        Err(e) => e,
+    };
+    assert!(
+        open_race_err
+            .to_string()
+            .contains("open-before-flock or waiter race detected"),
+        "expected open-before-flock refusal naming child FD, got: {open_race_err:#}"
+    );
+    assert!(
+        legacy_lock_path.is_file(),
+        "legacy tick.lock must remain an unreplaced regular file when open-before-flock race is detected"
+    );
+
+    // Release the open-before-flock child and wait for it to close FD 3 and exit.
+    std::fs::write(&release_marker, b"1").unwrap();
+    let _ = open_waiter_child.wait();
+
+    // 4. Held-flock check: when a legacy mutator holds an exclusive `flock` on
+    //    `tick.lock`, `activate_dispatch_v2_lock_quiescent` refuses fail-closed.
+    let active_holder = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(&legacy_lock_path)
+        .unwrap();
+    active_holder.lock_exclusive().unwrap();
+    let held_err = match activate_dispatch_v2_lock_quiescent(&f.root) {
+        Ok(_) => panic!("expected migration refusal while legacy tick.lock is actively flocked"),
         Err(e) => e,
     };
     assert!(
@@ -2764,35 +2998,51 @@ fn task_2344_q1_physical_tick_lock_directory_migration_and_legacy_mutator_refusa
             .contains("actively held by another process"),
         "expected active legacy lock refusal, got: {held_err:#}"
     );
+    let _ = fs2::FileExt::unlock(&active_holder);
+    drop(active_holder);
 
-    // 2. Release the legacy lock; quiescent `acquire_dispatch_lock` migrates
-    //    `.aida/dispatch/tick.lock` into a 0700 directory containing `v2.lock`.
-    let _ = fs2::FileExt::unlock(&legacy_holder);
-    drop(legacy_holder);
-
-    let new_lock = acquire_dispatch_lock(&f.root).unwrap();
-    drop(new_lock);
+    // 5. Explicit quiescent activation: with zero open FDs and verified pathname-to-handle
+    //    identity, `activate_dispatch_v2_lock_quiescent` replaces `.aida/dispatch/tick.lock`
+    //    with the 0700 directory containing `v2.lock`.
+    let v2_guard = activate_dispatch_v2_lock_quiescent(&f.root).unwrap();
+    drop(v2_guard);
     assert!(
         legacy_lock_path.is_dir(),
-        ".aida/dispatch/tick.lock must now be a directory"
+        ".aida/dispatch/tick.lock must now be a 0700 directory"
     );
     assert!(
         legacy_lock_path.join("v2.lock").is_file(),
         ".aida/dispatch/tick.lock/v2.lock must exist as the v2 lock file"
     );
 
-    // 3. Any pre-Slice-3 binary calling the legacy `OpenOptions::new().create(true).read(true).write(true).open(dir.join("tick.lock"))`
-    //    across any of the 5 legacy mutation entrypoints fails at the OS boundary with `EISDIR`.
-    let legacy_open_err = std::fs::OpenOptions::new()
-        .create(true)
-        .truncate(false)
-        .read(true)
-        .write(true)
-        .open(&legacy_lock_path)
-        .unwrap_err();
-    assert_eq!(
-        legacy_open_err.raw_os_error(),
-        Some(libc::EISDIR),
-        "legacy mutator lock open must fail with EISDIR on migrated tick.lock directory"
-    );
+    // 6. All 5 pre-Slice-3 mutation entrypoints (`submit`, `tick`, `serve`, `run`,
+    //    `cancel`/`finalizer`) that call the legacy `OpenOptions::new().create(true).truncate(false).read(true).write(true).open(dir.join("tick.lock"))`
+    //    now fail at the OS boundary with `EISDIR`, while v2 mutators succeed.
+    for entrypoint in ["submit", "tick", "serve", "run", "cancel"] {
+        let legacy_open_err = std::fs::OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .read(true)
+            .write(true)
+            .open(&legacy_lock_path)
+            .unwrap_err();
+        assert_eq!(
+            legacy_open_err.raw_os_error(),
+            Some(libc::EISDIR),
+            "legacy `{entrypoint}` mutator lock open must fail with EISDIR on migrated tick.lock directory"
+        );
+    }
+
+    let sub_v2 = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Review {
+            pr: 881,
+            vendor: None,
+        },
+        now,
+    )
+    .expect("v2 submit_request succeeds after explicit quiescent activation");
+    assert_eq!(sub_v2.result.status, DispatchStatus::Pending);
 }

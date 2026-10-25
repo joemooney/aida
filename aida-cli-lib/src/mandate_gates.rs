@@ -382,6 +382,7 @@ pub(crate) fn describe(main_worktree: Option<&Path>) -> String {
 pub(crate) const GATE_PROTECTED_PATHS: &[&str] = &[
     ".aida/config.toml",
     "aida-cli-lib/src/dispatch.rs",
+    "aida-cli-lib/src/dispatch_flow.rs",
     "aida-cli-lib/src/mandate.rs",
     "aida-cli-lib/src/mandate_gates.rs",
     "aida-cli-lib/src/mandate_drive.rs",

@@ -30,6 +30,9 @@ use uuid::Uuid;
 pub(crate) mod dispatch_args;
 pub(crate) use dispatch_args::*;
 
+#[path = "dispatch_flow.rs"]
+pub(crate) mod dispatch_flow;
+
 use crate::gate::seat_authority::{self, GrantCheck, GrantRejection};
 use crate::mandate::{self, Mandate, MandateState, Scope};
 use crate::mandate_drive::{ActionRow, Outcome};
@@ -341,12 +344,273 @@ pub(crate) fn recovery_path(main_worktree: &Path) -> PathBuf {
 /// any of the 5 mutation entrypoints fails immediately at the OS boundary with
 /// `EISDIR` (`Is a directory`) before mutating request/result state.
 // trace:STORY-1917 trace:TASK-2344 | ai:agy
-struct DispatchLock(std::fs::File);
+pub(crate) struct DispatchLock(std::fs::File);
 
 impl Drop for DispatchLock {
     fn drop(&mut self) {
         let _ = fs2::FileExt::unlock(&self.0);
     }
+}
+
+pub(crate) fn acquire_dispatch_lock_for_gate(main_worktree: &Path) -> Result<DispatchLock> {
+    acquire_dispatch_lock(main_worktree)
+}
+
+/// Verify via `/proc` that `(dev, ino)` is not open on any file descriptor in
+/// the current process or any other inspectable process owned by the current
+/// UID other than `(std::process::id(), own_fd)`. This detects pre-Slice-3
+/// mutators that have already called `open(".aida/dispatch/tick.lock")` but
+/// have not yet acquired `flock` (the open-before-flock / waiter race).
+// trace:STORY-1917 trace:TASK-2344 | ai:agy
+fn verify_sole_open_fd_for_inode(
+    dev: u64,
+    ino: u64,
+    own_fd: std::os::fd::RawFd,
+    display_path: &Path,
+) -> Result<()> {
+    use std::os::unix::fs::MetadataExt;
+    let self_pid = std::process::id();
+    let uid = unsafe { libc::geteuid() };
+    let proc_entries = std::fs::read_dir("/proc")
+        .context("cannot read /proc to verify legacy dispatch lock quiescence")?;
+    let mut saw_own_fd = false;
+
+    for entry in proc_entries.flatten() {
+        let name = entry.file_name();
+        let Some(name_str) = name.to_str() else {
+            continue;
+        };
+        let Ok(pid) = name_str.parse::<u32>() else {
+            continue;
+        };
+        let proc_path = entry.path();
+        if pid != self_pid {
+            let Ok(proc_meta) = std::fs::symlink_metadata(&proc_path) else {
+                continue;
+            };
+            if proc_meta.uid() != uid {
+                continue;
+            }
+        }
+        let fd_dir = proc_path.join("fd");
+        let Ok(fd_entries) = std::fs::read_dir(&fd_dir) else {
+            continue;
+        };
+        for fd_entry in fd_entries.flatten() {
+            let fd_name = fd_entry.file_name();
+            let Some(fd_str) = fd_name.to_str() else {
+                continue;
+            };
+            let Ok(fd_num) = fd_str.parse::<i32>() else {
+                continue;
+            };
+            let Ok(target_meta) = std::fs::metadata(fd_entry.path()) else {
+                continue;
+            };
+            if target_meta.dev() == dev && target_meta.ino() == ino {
+                if pid == self_pid && fd_num == own_fd {
+                    saw_own_fd = true;
+                } else {
+                    bail!(
+                        "legacy {} (dev={dev}, ino={ino}) is still open in pid {pid} fd {fd_num} (open-before-flock or waiter race detected); stop all pre-Slice-3 dispatch processes before activating v2 lock",
+                        display_path.display()
+                    );
+                }
+            }
+        }
+    }
+
+    if !saw_own_fd {
+        bail!(
+            "cannot confirm own descriptor (pid={self_pid}, fd={own_fd}) in /proc for legacy {} (fail-closed)",
+            display_path.display()
+        );
+    }
+    Ok(())
+}
+
+/// Stat a child entry relative to `parent_fd` with `AT_SYMLINK_NOFOLLOW`.
+fn fstatat_nofollow(
+    parent_fd: &std::fs::File,
+    child_cstr: &std::ffi::CStr,
+    display_path: &Path,
+) -> Result<libc::stat> {
+    use std::os::fd::AsRawFd;
+    let mut st: libc::stat = unsafe { std::mem::zeroed() };
+    let rc = unsafe {
+        libc::fstatat(
+            parent_fd.as_raw_fd(),
+            child_cstr.as_ptr(),
+            &mut st,
+            libc::AT_SYMLINK_NOFOLLOW,
+        )
+    };
+    if rc != 0 {
+        return Err(std::io::Error::last_os_error())
+            .with_context(|| format!("cannot lstat {}", display_path.display()));
+    }
+    Ok(st)
+}
+
+/// Explicit quiescent migration from a legacy Slice 1/2 regular-file
+/// `.aida/dispatch/tick.lock` to the Slice 3 directory `.aida/dispatch/tick.lock/`
+/// containing `v2.lock`.
+///
+/// Ordinary mutation entrypoints (`acquire_dispatch_lock`) NEVER perform this
+/// replacement automatically. This helper:
+/// 1. Verifies `lstat` (`fstatat(..., AT_SYMLINK_NOFOLLOW)`) is a singly-linked
+///    regular file owned by the current UID with mode `0600`.
+/// 2. Opens the file with `O_NOFOLLOW | O_NONBLOCK` and verifies exact
+///    pathname-to-handle `(st_dev, st_ino)` identity.
+/// 3. Acquires a non-blocking exclusive `flock` (`LOCK_EX | LOCK_NB`), refusing
+///    if any legacy mutator holds the lock, and re-verifies pathname-to-handle
+///    identity after locking.
+/// 4. Scans `/proc` via [`verify_sole_open_fd_for_inode`] to refuse if any
+///    process (or second descriptor) has opened the legacy inode before calling
+///    `flock` (defeating the open-before-flock / waiter race).
+/// 5. Unlinks the legacy regular file while still holding `flock`, verifies
+///    `st_nlink == 0`, and re-runs [`verify_sole_open_fd_for_inode`] so no
+///    process could have opened the inode immediately before `unlinkat`.
+/// 6. Creates the `0700` `tick.lock` directory and acquires `tick.lock/v2.lock`
+///    before releasing the legacy handle.
+// trace:STORY-1917 trace:TASK-2344 | ai:agy
+pub(crate) fn activate_dispatch_v2_lock_quiescent(main_worktree: &Path) -> Result<DispatchLock> {
+    use std::os::fd::{AsRawFd, FromRawFd};
+    use std::os::unix::fs::MetadataExt;
+
+    let disp_fd = open_pinned_dispatch_subdir(main_worktree, None)?;
+    let lock_dir_display = dispatch_root(main_worktree).join(TICK_LOCK_FILE);
+    let c_lock_dir = std::ffi::CString::new(TICK_LOCK_FILE)?;
+
+    let pre_st = fstatat_nofollow(&disp_fd, &c_lock_dir, &lock_dir_display)?;
+    if (pre_st.st_mode & libc::S_IFMT) == libc::S_IFDIR {
+        return acquire_dispatch_lock(main_worktree);
+    }
+    if (pre_st.st_mode & libc::S_IFMT) != libc::S_IFREG || pre_st.st_nlink != 1 {
+        bail!(
+            "legacy {} is not a singly-linked regular file (refused)",
+            lock_dir_display.display()
+        );
+    }
+    let uid = unsafe { libc::geteuid() };
+    if pre_st.st_uid != uid {
+        bail!(
+            "legacy {} is owned by uid {}, not current uid {uid}",
+            lock_dir_display.display(),
+            pre_st.st_uid
+        );
+    }
+    if (pre_st.st_mode & 0o7777) != 0o600 {
+        bail!(
+            "legacy {} has mode {:04o}, expected 0600 (refused)",
+            lock_dir_display.display(),
+            pre_st.st_mode & 0o7777
+        );
+    }
+
+    let leg_raw = unsafe {
+        libc::openat(
+            disp_fd.as_raw_fd(),
+            c_lock_dir.as_ptr(),
+            libc::O_RDWR | libc::O_NOFOLLOW | libc::O_NONBLOCK | libc::O_CLOEXEC,
+            0,
+        )
+    };
+    if leg_raw < 0 {
+        let open_err = std::io::Error::last_os_error();
+        bail!(
+            "cannot open legacy {} for quiescent migration: {open_err}",
+            lock_dir_display.display()
+        );
+    }
+    let leg_file = unsafe { std::fs::File::from_raw_fd(leg_raw) };
+    let leg_meta = leg_file
+        .metadata()
+        .with_context(|| format!("cannot fstat legacy {}", lock_dir_display.display()))?;
+    if !leg_meta.is_file()
+        || leg_meta.nlink() != 1
+        || leg_meta.dev() != pre_st.st_dev
+        || leg_meta.ino() != pre_st.st_ino
+    {
+        bail!(
+            "legacy {} changed identity during open (pathname-to-handle mismatch; refused)",
+            lock_dir_display.display()
+        );
+    }
+
+    let flock_rc = unsafe { libc::flock(leg_file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) };
+    if flock_rc != 0 {
+        bail!(
+            "legacy {} is actively held by another process; refusing concurrent dispatch lock migration (fail-closed)",
+            lock_dir_display.display()
+        );
+    }
+
+    let post_lock_st = fstatat_nofollow(&disp_fd, &c_lock_dir, &lock_dir_display)?;
+    if post_lock_st.st_dev != leg_meta.dev()
+        || post_lock_st.st_ino != leg_meta.ino()
+        || post_lock_st.st_nlink != 1
+    {
+        bail!(
+            "legacy {} pathname-to-handle identity changed before unlink (refused)",
+            lock_dir_display.display()
+        );
+    }
+
+    verify_sole_open_fd_for_inode(
+        leg_meta.dev(),
+        leg_meta.ino(),
+        leg_file.as_raw_fd(),
+        &lock_dir_display,
+    )?;
+
+    let un_rc = unsafe { libc::unlinkat(disp_fd.as_raw_fd(), c_lock_dir.as_ptr(), 0) };
+    if un_rc != 0 {
+        let un_err = std::io::Error::last_os_error();
+        bail!(
+            "cannot unlink legacy {} during quiescent migration: {un_err}",
+            lock_dir_display.display()
+        );
+    }
+
+    let unlinked_meta = leg_file
+        .metadata()
+        .with_context(|| format!("cannot fstat unlinked {}", lock_dir_display.display()))?;
+    if unlinked_meta.nlink() != 0 {
+        bail!(
+            "legacy {} still has nlink={} after unlink (refused)",
+            lock_dir_display.display(),
+            unlinked_meta.nlink()
+        );
+    }
+
+    // Re-check after unlink (when nlink == 0 so no new pathname open can ever
+    // reach this inode). If a racing process opened the inode in the narrow
+    // window before unlinkat, restore a regular 0600 lock file and fail closed.
+    if let Err(race_err) = verify_sole_open_fd_for_inode(
+        leg_meta.dev(),
+        leg_meta.ino(),
+        leg_file.as_raw_fd(),
+        &lock_dir_display,
+    ) {
+        let restore_fd = unsafe {
+            libc::openat(
+                disp_fd.as_raw_fd(),
+                c_lock_dir.as_ptr(),
+                libc::O_RDWR | libc::O_CREAT | libc::O_EXCL | libc::O_NOFOLLOW | libc::O_CLOEXEC,
+                0o600,
+            )
+        };
+        if restore_fd >= 0 {
+            unsafe { libc::close(restore_fd) };
+        }
+        return Err(race_err);
+    }
+
+    let _ = open_or_create_pinned_child_dir(&disp_fd, TICK_LOCK_FILE, &lock_dir_display)?;
+    let v2_lock = acquire_dispatch_lock(main_worktree)?;
+    drop(leg_file);
+    Ok(v2_lock)
 }
 
 fn acquire_dispatch_lock(main_worktree: &Path) -> Result<DispatchLock> {
@@ -358,7 +622,10 @@ fn acquire_dispatch_lock(main_worktree: &Path) -> Result<DispatchLock> {
     let lock_dir_display = dispatch_root(main_worktree).join(TICK_LOCK_FILE);
     let c_lock_dir = std::ffi::CString::new(TICK_LOCK_FILE)?;
 
-    // Fast path: create or open `tick.lock` as a pinned 0700 directory.
+    // Create `tick.lock` as a pinned 0700 directory when initializing a fresh
+    // `.aida/dispatch/` root. If an entry already exists at `tick.lock`, we
+    // require it to be the v2 directory; a legacy regular-file `tick.lock` is
+    // NEVER silently unlinked/replaced by ordinary mutations.
     let mk_rc = unsafe { libc::mkdirat(disp_fd.as_raw_fd(), c_lock_dir.as_ptr(), 0o700) };
     if mk_rc != 0 {
         let err = std::io::Error::last_os_error();
@@ -368,7 +635,6 @@ fn acquire_dispatch_lock(main_worktree: &Path) -> Result<DispatchLock> {
         }
     }
 
-    let mut legacy_guard: Option<std::fs::File> = None;
     let dir_fd_raw = unsafe {
         libc::openat(
             disp_fd.as_raw_fd(),
@@ -404,62 +670,10 @@ fn acquire_dispatch_lock(main_worktree: &Path) -> Result<DispatchLock> {
                 bail!("{} is a symlink (refused)", lock_dir_display.display());
             }
             Some(libc::ENOTDIR) => {
-                // Quiescent migration from a legacy regular-file `tick.lock`:
-                // open the regular file with O_NOFOLLOW, require a non-blocking
-                // exclusive flock (refusing if an older binary actively holds
-                // the lock), verify inode identity, unlink the legacy file, and
-                // replace it with the 0700 directory `tick.lock/`.
-                let leg_raw = unsafe {
-                    libc::openat(
-                        disp_fd.as_raw_fd(),
-                        c_lock_dir.as_ptr(),
-                        libc::O_RDWR | libc::O_NOFOLLOW | libc::O_NONBLOCK | libc::O_CLOEXEC,
-                        0,
-                    )
-                };
-                if leg_raw < 0 {
-                    let open_err = std::io::Error::last_os_error();
-                    bail!(
-                        "cannot open legacy {} for migration: {open_err}",
-                        lock_dir_display.display()
-                    );
-                }
-                let leg_file = unsafe { std::fs::File::from_raw_fd(leg_raw) };
-                let leg_meta = leg_file.metadata().with_context(|| {
-                    format!("cannot stat legacy {}", lock_dir_display.display())
-                })?;
-                if !leg_meta.is_file() || leg_meta.nlink() != 1 {
-                    bail!(
-                        "legacy {} is not a singly-linked regular file (refused)",
-                        lock_dir_display.display()
-                    );
-                }
-                let uid = unsafe { libc::geteuid() };
-                if leg_meta.uid() != uid {
-                    bail!(
-                        "legacy {} is owned by uid {}, not current uid {uid}",
-                        lock_dir_display.display(),
-                        leg_meta.uid()
-                    );
-                }
-                let flock_rc =
-                    unsafe { libc::flock(leg_file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) };
-                if flock_rc != 0 {
-                    bail!(
-                        "legacy {} is actively held by another process; refusing concurrent dispatch lock migration (fail-closed)",
-                        lock_dir_display.display()
-                    );
-                }
-                let un_rc = unsafe { libc::unlinkat(disp_fd.as_raw_fd(), c_lock_dir.as_ptr(), 0) };
-                if un_rc != 0 {
-                    let un_err = std::io::Error::last_os_error();
-                    bail!(
-                        "cannot unlink legacy {} during migration: {un_err}",
-                        lock_dir_display.display()
-                    );
-                }
-                legacy_guard = Some(leg_file);
-                open_or_create_pinned_child_dir(&disp_fd, TICK_LOCK_FILE, &lock_dir_display)?
+                bail!(
+                    "legacy regular-file dispatch lock {} detected; automatic live lock replacement is refused to prevent split-brain with pre-Slice-3 mutators. Stop/quiesce all dispatch processes and run explicit quiescent lock activation before resuming dispatch mutations",
+                    lock_dir_display.display()
+                );
             }
             _ => {
                 return Err(err)
@@ -512,7 +726,6 @@ fn acquire_dispatch_lock(main_worktree: &Path) -> Result<DispatchLock> {
     }
     file.lock_exclusive()
         .context("failed to acquire .aida/dispatch/tick.lock/v2.lock")?;
-    drop(legacy_guard);
     Ok(DispatchLock(file))
 }
 
@@ -627,7 +840,7 @@ fn open_or_create_pinned_child_dir(
 /// `openat(O_DIRECTORY | O_NOFOLLOW)` traversal so no symlink at `.aida`,
 /// `.aida/dispatch`, or `.aida/dispatch/<subdir>` is ever followed.
 // trace:STORY-1917 | ai:agy
-fn open_pinned_dispatch_subdir(
+pub(crate) fn open_pinned_dispatch_subdir(
     main_worktree: &Path,
     subdir: Option<&str>,
 ) -> Result<std::fs::File> {
@@ -1929,6 +2142,11 @@ pub(crate) fn inspect_dispatch_inventory_readonly(
     }
 
     let mut stems = BTreeSet::new();
+    for prior_id in prior_by_id.keys() {
+        if Uuid::parse_str(prior_id).is_ok() {
+            stems.insert(prior_id.clone());
+        }
+    }
     let mut dir_anomalies = Vec::new();
     if let Err(err) = scan_uuid_dir_entries(
         &requests_dir(main_worktree),
@@ -2156,7 +2374,7 @@ pub(crate) fn inspect_dispatch_inventory_readonly(
                     blocks_all_admission: true,
                 })
             }
-            (HalfRead::Missing, HalfRead::Missing) => None,
+            (HalfRead::Missing, HalfRead::Missing) => prior_by_id.get(&id).cloned(),
         };
 
         if let Some(mut fence) = fence_opt {
@@ -2164,6 +2382,22 @@ pub(crate) fn inspect_dispatch_inventory_readonly(
                 if prev.evidence_fingerprint == fence.evidence_fingerprint {
                     fence.detected_at = prev.detected_at;
                 }
+                if fence.known_verb.is_none() {
+                    fence.known_verb = prev.known_verb.clone();
+                }
+                if fence.known_target_key.is_none() {
+                    fence.known_target_key = prev.known_target_key.clone();
+                }
+                if fence.known_dedupe_key.is_none() {
+                    fence.known_dedupe_key = prev.known_dedupe_key.clone();
+                }
+                if fence.known_mandate_id.is_none() {
+                    fence.known_mandate_id = prev.known_mandate_id.clone();
+                }
+                if fence.known_requested_at.is_none() {
+                    fence.known_requested_at = prev.known_requested_at;
+                }
+                fence.blocks_all_admission |= prev.blocks_all_admission;
             }
             inv.fences.push(fence);
         }
@@ -4119,12 +4353,23 @@ pub(crate) fn execute_one_request_with_token(
             *vendor,
             now,
         ),
-        DispatchVerb::Flow { .. } | DispatchVerb::Train { .. } => RunnerOutcome::Refused {
-            reason: format!(
-                "verb `{}` runner is not enabled in this build (scheduled for Slice 3)",
-                req.action.verb_str()
-            ),
-        },
+        DispatchVerb::Flow {
+            pr,
+            no_ship,
+            vendor,
+        } => dispatch_flow::run_flow_verb(
+            main_worktree,
+            mandate_dir,
+            &req,
+            &claim,
+            *pr,
+            *no_ship,
+            *vendor,
+            now,
+        ),
+        DispatchVerb::Train { prs } => {
+            dispatch_flow::run_train_verb(main_worktree, mandate_dir, &req, &claim, prs, now)
+        }
     };
 
     match runner_outcome {
@@ -4175,7 +4420,7 @@ pub(crate) fn execute_one_request_with_token(
 }
 
 #[derive(Debug)]
-enum RunnerOutcome {
+pub(crate) enum RunnerOutcome {
     Done {
         summary: String,
         spawned_session: Option<String>,
@@ -4885,7 +5130,7 @@ fn resolve_vendor_bin(vendor: DispatchVendor) -> PathBuf {
 /// Runs only under `aida dispatch serve` so it inherits the human advisor's
 /// bound seat grant directly.
 // trace:STORY-1917 | ai:agy
-fn run_review_verb(
+pub(crate) fn run_review_verb(
     main_worktree: &Path,
     req: &DispatchRequest,
     pr: u64,
@@ -5367,6 +5612,10 @@ mod story_1917_dispatch_request_tests;
 #[cfg(test)]
 #[path = "tests/story_1917_dispatch_exec_tests.rs"]
 mod story_1917_dispatch_exec_tests;
+
+#[cfg(test)]
+#[path = "tests/story_1917_dispatch_flow_schedule_tests.rs"]
+mod story_1917_dispatch_flow_schedule_tests;
 
 /// Queue and inspect typed dispatch requests (`flow`, `review`, `take`,
 /// `impl`, `train`) from a sandboxed advisor seat for unsandboxed execution.

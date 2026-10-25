@@ -1439,6 +1439,7 @@ pub(crate) struct LiveTrainForge<'a> {
     pub forge: &'a dyn crate::forge::Forge,
     /// Members were named on the command line (not `--all-ready`).
     pub named: bool,
+    pub dispatch_ctx: Option<&'a crate::gate::dispatch_auth::DispatchExecutionContext>,
 }
 
 impl LiveTrainForge<'_> {
@@ -1455,6 +1456,9 @@ impl LiveTrainForge<'_> {
 
 impl TrainForge for LiveTrainForge<'_> {
     fn fetch_main(&mut self) -> Result<String> {
+        if let Some(ctx) = self.dispatch_ctx {
+            ctx.reverify_now(true)?;
+        }
         fetch_base(&self.main_worktree, &self.base)
     }
 
@@ -1471,10 +1475,16 @@ impl TrainForge for LiveTrainForge<'_> {
     }
 
     fn build(&mut self, base: &str, members: &[Member]) -> Result<Built> {
+        if let Some(ctx) = self.dispatch_ctx {
+            ctx.reverify_now(true)?;
+        }
         build(&self.main_worktree, base, members)
     }
 
     fn gate(&mut self, pr: u64) -> std::result::Result<Member, String> {
+        if let Some(ctx) = self.dispatch_ctx {
+            ctx.reverify_now(true).map_err(|e| format!("{e:#}"))?;
+        }
         gate_member(
             &self.project_root,
             &self.main_worktree,
@@ -1486,6 +1496,9 @@ impl TrainForge for LiveTrainForge<'_> {
     }
 
     fn open(&mut self, train: &Built, branch: &str) -> Result<crate::forge::ChangeRef> {
+        if let Some(ctx) = self.dispatch_ctx {
+            ctx.reverify_now(true)?;
+        }
         origin_git(
             &self.main_worktree,
             &[
@@ -1511,6 +1524,9 @@ impl TrainForge for LiveTrainForge<'_> {
 
     fn wait_ci(&mut self, change: &crate::forge::ChangeRef, train: &Built) -> Result<CiVerdict> {
         use crate::forge::{CheckRegistration, CiState};
+        if let Some(ctx) = self.dispatch_ctx {
+            ctx.reverify_now(true)?;
+        }
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(600);
         loop {
             match self.forge.checks_registered(change)? {
@@ -1525,7 +1541,11 @@ impl TrainForge for LiveTrainForge<'_> {
                 CheckRegistration::NotYet => std::thread::sleep(std::time::Duration::from_secs(10)),
             }
         }
-        Ok(match self.forge.watch_ci(change)? {
+        let ci_state = self.forge.watch_ci(change)?;
+        if let Some(ctx) = self.dispatch_ctx {
+            ctx.reverify_now(true)?;
+        }
+        Ok(match ci_state {
             CiState::Success => CiVerdict::Green,
             other => {
                 // BUG-2214: ship tolerates a merge-hold-gate red while the
@@ -1571,6 +1591,9 @@ impl TrainForge for LiveTrainForge<'_> {
     }
 
     fn merge(&mut self, change: &crate::forge::ChangeRef, tip: &str) -> Result<()> {
+        if let Some(ctx) = self.dispatch_ctx {
+            ctx.reverify_now(true)?;
+        }
         let opts = crate::forge::MergeOptions {
             method: crate::forge::MergeMethod::Rebase,
             squash_subject: None,
@@ -1596,6 +1619,9 @@ impl TrainForge for LiveTrainForge<'_> {
         &mut self,
         member: &Member,
     ) -> std::result::Result<crate::merge_hold::MergeHoldRecord, String> {
+        if let Some(ctx) = self.dispatch_ctx {
+            ctx.reverify_now(true).map_err(|e| format!("{e:#}"))?;
+        }
         let Some(cover) = member.release.as_ref() else {
             return Err("no mandate cover was recorded for its hold".into());
         };
@@ -1678,6 +1704,9 @@ impl TrainForge for LiveTrainForge<'_> {
             std::time::Duration::from_secs(180),
             std::time::Duration::from_secs(10),
         )?;
+        if let Some(ctx) = self.dispatch_ctx {
+            ctx.reverify_now(true)?;
+        }
         Ok(green
             && covers
                 .iter()
@@ -1880,7 +1909,16 @@ impl Rails for ForgeRails<'_> {
                         short(&m.head)
                     ),
                 }),
-                Err(reason) => refused.push(Ejected { pr, reason }),
+                Err(why) => {
+                    if why.contains("dispatch request") {
+                        self.retire(
+                            &change,
+                            "Dispatch authority was revoked before landing; the train aborts.",
+                        );
+                        anyhow::bail!(why);
+                    }
+                    refused.push(Ejected { pr, reason: why });
+                }
             }
         }
         if !refused.is_empty() {
@@ -1900,6 +1938,16 @@ impl Rails for ForgeRails<'_> {
                 Ok(record) => released.push(record),
                 Err(why) => {
                     let rearm = self.rearm_released(&released);
+                    if why.contains("dispatch request") {
+                        self.retire(
+                            &change,
+                            "Dispatch authority was revoked during hold release; the train aborts.",
+                        );
+                        if !rearm.is_empty() {
+                            self.warn(format!("{why}.{rearm}"));
+                        }
+                        anyhow::bail!("{why}{rearm}");
+                    }
                     self.retire(
                         &change,
                         "A member's merge-hold was not released; the train rebuilds.",
@@ -1918,6 +1966,17 @@ impl Rails for ForgeRails<'_> {
                 .collect();
             match self.ports.hold_gate_green_after_release(&change, &covers) {
                 Ok(true) => {}
+                Err(e) if format!("{e:#}").contains("dispatch request") => {
+                    let rearm = self.rearm_released(&released);
+                    self.retire(
+                        &change,
+                        "Dispatch authority was revoked during the hold-gate wait; the train aborts.",
+                    );
+                    if !rearm.is_empty() {
+                        self.warn(format!("{e:#}.{rearm}"));
+                    }
+                    return Err(e);
+                }
                 outcome => {
                     let why = match outcome {
                         Ok(_) => "the train PR's merge-hold-gate did not re-run green in time, \
@@ -2118,6 +2177,17 @@ pub(crate) fn explicit_over_max_refusal(
 /// `aida pr train`.
 // trace:STORY-1690 | ai:claude
 pub(crate) fn pr_train_handler(opts: &TrainOptions<'_>) -> Result<()> {
+    pr_train_handler_with_dispatch_ctx(opts, None)
+}
+
+// trace:STORY-1917 trace:TASK-2339 | ai:agy
+pub(crate) fn pr_train_handler_with_dispatch_ctx(
+    opts: &TrainOptions<'_>,
+    dispatch_ctx: Option<&crate::gate::dispatch_auth::DispatchExecutionContext>,
+) -> Result<()> {
+    if let Some(ctx) = dispatch_ctx {
+        ctx.reverify_now(true)?;
+    }
     // STORY-1662: a standalone implementer stops at an open PR; the train is
     // a merge path like any other. trace:STORY-1690 | ai:claude
     crate::standalone_implementer::refuse_under_marker("pr train")?;
@@ -2168,6 +2238,9 @@ pub(crate) fn pr_train_handler(opts: &TrainOptions<'_>) -> Result<()> {
     let mut refused = Vec::new();
     let mut waiting = Vec::new();
     for pr in candidates {
+        if let Some(ctx) = dispatch_ctx {
+            ctx.reverify_now(true)?;
+        }
         if members.len() >= opts.max.max(1) {
             waiting.push(pr);
             continue;
@@ -2245,6 +2318,7 @@ pub(crate) fn pr_train_handler(opts: &TrainOptions<'_>) -> Result<()> {
             base: base.clone(),
             forge: forge.as_ref(),
             named: prs_named_on_command_line(opts),
+            dispatch_ctx,
         };
         let mut rails = ForgeRails::new(
             &mut ports,
@@ -2281,10 +2355,21 @@ pub(crate) fn pr_train_handler(opts: &TrainOptions<'_>) -> Result<()> {
     }
     if let Some(error) = &outcome.error {
         println!("  the train stopped early: {error}");
+        if dispatch_ctx.is_some() && error.contains("dispatch request") {
+            anyhow::bail!("{error}");
+        }
     }
     let not_landed = refused.len() + outcome.ejected.len();
     if not_landed > 0 && !opts.all_ready {
-        anyhow::bail!("{not_landed} PR(s) were not landed (reasons above)");
+        let reasons: Vec<String> = refused
+            .iter()
+            .chain(outcome.ejected.iter())
+            .map(|e| format!("#{}: {}", e.pr, e.reason))
+            .collect();
+        anyhow::bail!(
+            "{not_landed} PR(s) were not landed ({})",
+            reasons.join("; ")
+        );
     }
     Ok(())
 }
