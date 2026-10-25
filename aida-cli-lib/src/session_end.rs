@@ -1458,9 +1458,12 @@ pub(crate) fn session_end(
         let mut entries = facts.dirty.clone();
         if facts.unpushed > 0 {
             entries.push(format!(
-                "{} commit(s) on `{}` that origin does not have",
-                facts.unpushed, target.branch
+                "{} commit(s) that origin does not have, on:",
+                facts.unpushed
             ));
+            // BUG-2224: name every ref that holds them, so a refusal is never
+            // an empty list. trace:BUG-2224 | ai:claude
+            entries.extend(facts.unpushed_refs.iter().map(|line| format!("  {line}")));
         }
         entries
     } else if has_worktree {

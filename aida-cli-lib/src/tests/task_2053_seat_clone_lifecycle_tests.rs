@@ -197,6 +197,7 @@ fn clone_reap_verdicts_keep_anything_unreadable_unshipped_or_unmerged() {
         branch: Some("feat".into()),
         dirty: vec![],
         unpushed: 0,
+        unpushed_refs: vec![],
     };
     let verdict = |probe: &Probe, exited, finished, merged: bool| {
         classify_clone_reap(|| probe.clone(), "feat", exited, finished, || merged)
@@ -1607,4 +1608,115 @@ fn task_2053_bwrap_reap_one_clone_releases_the_lease_only_on_removal() {
     let row = reap(Some(&tip));
     assert!(row.starts_with("reaped"), "{row}");
     assert!(!clone.exists() && lease().is_none());
+}
+
+/// BUG-2224: the count parser names each ref, escapes seat-written names and
+/// reads anything malformed as no answer.
+#[test]
+fn bug_2224_unpushed_count_output_names_every_ref() {
+    let (total, refs) = parse_unpushed_count("3\n2 refs/heads/side\n1 refs/stash\n").unwrap();
+    assert_eq!(total, 3);
+    assert_eq!(
+        refs,
+        vec![
+            "2 commit(s) on refs/heads/side",
+            "1 commit(s) on refs/stash"
+        ]
+    );
+    assert_eq!(parse_unpushed_count("0\n").unwrap(), (0, vec![]));
+    let (_, refs) = parse_unpushed_count("1\n1 refs/tags/a\u{1b}b\n").unwrap();
+    assert!(!refs[0].contains('\u{1b}'), "{refs:?}");
+    assert!(parse_unpushed_count("").is_none());
+    assert!(parse_unpushed_count("x\n").is_none());
+    assert!(parse_unpushed_count("1\nrefs/heads/side\n").is_none());
+}
+
+/// BUG-2224: refs a seat clone inherited from the main checkout (local tags,
+/// annotated or not, and `wip/*` branches origin never had) are not work
+/// origin lacks, so a clean seat ends without `--force`. A seat-only commit
+/// on a side branch off an inherited tag, and a stash entry, still refuse,
+/// and the refusal names the ref.
+#[cfg(target_os = "linux")]
+#[test]
+fn bug_2224_bwrap_inherited_refs_end_cleanly_but_seat_only_work_refuses() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    if !bwrap_live() {
+        return;
+    }
+    let fx = fixture();
+    git_ok(&fx.main, &["checkout", "-q", "-b", "wip/local"]);
+    std::fs::write(fx.main.join("local.txt"), "main only\n").unwrap();
+    git_ok(&fx.main, &["add", "local.txt"]);
+    git_ok(
+        &fx.main,
+        &[
+            "-c",
+            "maintenance.auto=false",
+            "-c",
+            "gc.auto=0",
+            "commit",
+            "-qm",
+            "main only",
+        ],
+    );
+    git_ok(&fx.main, &["tag", "gl-v-check-1"]);
+    git_ok(&fx.main, &["tag", "-a", "slice-1-r1", "-m", "slice"]);
+    git_ok(&fx.main, &["checkout", "-q", "main"]);
+
+    let id = "b2224c0ffee1";
+    let clone = seat(&fx, "inherit", id);
+    let main_url = fx.main.to_str().unwrap();
+    git_ok(
+        &clone,
+        &[
+            "-c",
+            "maintenance.auto=false",
+            "-c",
+            "gc.auto=0",
+            "fetch",
+            "-q",
+            main_url,
+            "refs/tags/*:refs/tags/*",
+            "refs/heads/wip/*:refs/heads/wip/*",
+        ],
+    );
+    let facts = known(probe(&fx.main, &clone));
+    assert_eq!(facts.unpushed, 0, "{facts:?}");
+    assert!(facts.unpushed_refs.is_empty(), "{facts:?}");
+    let _ambient = crate::test_env::AmbientGuard::hermetic(&fx.main, None);
+
+    git_ok(&clone, &["checkout", "-q", "-b", "side", "slice-1-r1"]);
+    seat_commit(&clone, "side.txt");
+    git_ok(&clone, &["checkout", "-q", "feat"]);
+    let facts = known(probe(&fx.main, &clone));
+    assert_eq!(facts.unpushed, 1, "{facts:?}");
+    assert_eq!(facts.unpushed_refs, vec!["1 commit(s) on refs/heads/side"]);
+    let refused = format!("{:#}", end_session(id, false).unwrap_err());
+    assert!(refused.contains("refs/heads/side"), "{refused}");
+    git_ok(&clone, &["branch", "-q", "-D", "side"]);
+
+    std::fs::write(clone.join("README.md"), "stashed\n").unwrap();
+    git_ok(
+        &clone,
+        &[
+            "-c",
+            "user.email=seat@example.com",
+            "-c",
+            "user.name=Seat",
+            "stash",
+            "-q",
+        ],
+    );
+    let facts = known(probe(&fx.main, &clone));
+    assert!(facts.unpushed >= 1, "{facts:?}");
+    let refused = format!("{:#}", end_session(id, false).unwrap_err());
+    assert!(refused.contains("refs/stash"), "{refused}");
+    assert!(clone.exists() && crate::lease_path(&fx.main, id).exists());
+
+    git_ok(&clone, &["stash", "clear"]);
+    end_session(id, false).unwrap();
+    assert!(!clone.exists());
+    assert!(!crate::lease_path(&fx.main, id).exists());
 }
