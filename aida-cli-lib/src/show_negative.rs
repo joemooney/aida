@@ -226,7 +226,8 @@ fn probe_inner(
 ) -> (NegativeProbe, Option<OracleSeed>) {
     let outcome = |o: NegativeProbe| (o, None);
     // ---- S: bounded context snapshot (or an unsupported-mode refusal) ----
-    let Some(ctx) = capture_context(project_root, tuning.deadline) else {
+    let (ctx, roots) = capture_snapshot(project_root, tuning.deadline);
+    let Some(ctx) = ctx else {
         return outcome(NegativeProbe::RunOriginal);
     };
     let ContextSnapshot::Supported(ctx) = ctx else {
@@ -236,7 +237,7 @@ fn probe_inner(
         return outcome(NegativeProbe::RunOriginal);
     };
     // ---- R: the roots Git itself admits for `--all` ----
-    let Some(mut roots) = capture_roots(project_root, tuning.deadline) else {
+    let Some(mut roots) = roots else {
         return outcome(NegativeProbe::RunOriginal);
     };
     if roots.replace_refs {
@@ -288,7 +289,8 @@ fn probe_inner(
             if batches_ran == 0 {
                 return outcome(NegativeProbe::ProvedEmpty);
             }
-            let Some(ctx_after) = capture_context(project_root, tuning.deadline) else {
+            let (ctx_after, roots_after) = capture_snapshot(project_root, tuning.deadline);
+            let Some(ctx_after) = ctx_after else {
                 return outcome(NegativeProbe::Incomplete);
             };
             let s_unchanged = matches!(ctx_after, ContextSnapshot::Supported(ref c) if c.s_digest == ctx.s_digest);
@@ -296,7 +298,7 @@ fn probe_inner(
                 // Mixed-semantics evidence: do not persist, do not certify.
                 return outcome(NegativeProbe::Incomplete);
             }
-            let Some(roots_after) = capture_roots(project_root, tuning.deadline) else {
+            let Some(roots_after) = roots_after else {
                 if dirty {
                     let _ = publish_state(&ctx, &state);
                 }
@@ -393,14 +395,14 @@ pub(crate) fn publish_oracle_negative(
     seed: OracleSeed,
     deadline: Instant,
 ) -> bool {
-    let Some(ContextSnapshot::Supported(ctx_after)) = capture_context(project_root, deadline)
-    else {
+    let (ctx_after, roots_after) = capture_snapshot(project_root, deadline);
+    let Some(ContextSnapshot::Supported(ctx_after)) = ctx_after else {
         return false;
     };
     if ctx_after.s_digest != seed.ctx.s_digest {
         return false;
     }
-    let Some(roots_after) = capture_roots(project_root, deadline) else {
+    let Some(roots_after) = roots_after else {
         return false;
     };
     if roots_after.digest != seed.roots.digest || roots_after.replace_refs {
@@ -533,17 +535,26 @@ fn capture_context(project_root: &Path, deadline: Instant) -> Option<ContextSnap
     {
         return Some(ContextSnapshot::Unsupported);
     }
-    let version = git_version()?;
-    let ids = git_capture(
-        project_root,
-        &[
-            "rev-parse",
-            "--git-common-dir",
-            "--absolute-git-dir",
-            "--show-object-format",
-        ],
-        deadline,
-    )?;
+    let (version, config, ids) = std::thread::scope(|s| {
+        let version = s.spawn(git_version);
+        let config = s.spawn(|| git_capture(project_root, &["config", "--list", "-z"], deadline));
+        let ids = git_capture(
+            project_root,
+            &[
+                "rev-parse",
+                "--git-common-dir",
+                "--absolute-git-dir",
+                "--show-object-format",
+            ],
+            deadline,
+        );
+        (
+            version.join().ok().flatten(),
+            config.join().ok().flatten(),
+            ids,
+        )
+    });
+    let (version, config, ids) = (version?, config?, ids?);
     let mut lines = ids.lines();
     let common_raw = lines.next()?.trim().to_string();
     let git_dir = lines.next()?.trim().to_string();
@@ -564,7 +575,6 @@ fn capture_context(project_root: &Path, deadline: Instant) -> Option<ContextSnap
         return Some(ContextSnapshot::Unsupported);
     }
 
-    let config = git_capture(project_root, &["config", "--list", "-z"], deadline)?;
     let config_digest = sha256_hex(&[semantic_config(&config).as_bytes()]);
     let alternates =
         std::fs::read_to_string(common_dir.join("objects/info/alternates")).unwrap_or_default();
@@ -602,12 +612,47 @@ struct RootsSnapshot {
     replace_refs: bool,
 }
 
+/// S and R captured concurrently (each is a handful of independent, bounded
+/// git reads; serially they were most of a warm read's cost on a loaded
+/// host). Both are point-in-time reads either way; callers compare a BEFORE
+/// pair with an AFTER pair exactly as before. trace:BUG-2221 | ai:claude
+fn capture_snapshot(
+    project_root: &Path,
+    deadline: Instant,
+) -> (Option<ContextSnapshot>, Option<RootsSnapshot>) {
+    std::thread::scope(|s| {
+        let roots = s.spawn(|| capture_roots(project_root, deadline));
+        let ctx = capture_context(project_root, deadline);
+        (ctx, roots.join().ok().flatten())
+    })
+}
+
 fn capture_roots(project_root: &Path, deadline: Instant) -> Option<RootsSnapshot> {
-    let roots_raw = git_capture(
-        project_root,
-        &["log", "--all", "--no-walk=unsorted", "--pretty=format:%H"],
-        deadline,
-    )?;
+    let (roots_raw, refs, worktrees) = std::thread::scope(|s| {
+        let refs = s.spawn(|| {
+            git_capture(
+                project_root,
+                &[
+                    "for-each-ref",
+                    "--format=%(refname)%00%(objectname)%00%(symref)",
+                ],
+                deadline,
+            )
+        });
+        let worktrees =
+            s.spawn(|| git_capture(project_root, &["worktree", "list", "--porcelain"], deadline));
+        let roots_raw = git_capture(
+            project_root,
+            &["log", "--all", "--no-walk=unsorted", "--pretty=format:%H"],
+            deadline,
+        );
+        (
+            roots_raw,
+            refs.join().ok().flatten(),
+            worktrees.join().ok().flatten(),
+        )
+    });
+    let (roots_raw, refs, worktrees) = (roots_raw?, refs?, worktrees?);
     let mut roots: Vec<String> = Vec::new();
     let mut seen: HashSet<&str> = HashSet::new();
     for line in roots_raw.lines() {
@@ -622,16 +667,7 @@ fn capture_roots(project_root: &Path, deadline: Instant) -> Option<RootsSnapshot
             roots.push(oid.to_string());
         }
     }
-    let refs = git_capture(
-        project_root,
-        &[
-            "for-each-ref",
-            "--format=%(refname)%00%(objectname)%00%(symref)",
-        ],
-        deadline,
-    )?;
     let replace_refs = refs.lines().any(|l| l.starts_with("refs/replace/"));
-    let worktrees = git_capture(project_root, &["worktree", "list", "--porcelain"], deadline)?;
     let digest = sha256_hex(&[roots_raw.as_bytes(), refs.as_bytes(), worktrees.as_bytes()]);
     Some(RootsSnapshot {
         roots,
