@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T02:08:29.032100054Z
-modified_at: 2026-10-25T03:16:33.971171634Z
+modified_at: 2026-10-25T03:18:17.680134973Z
 req_type: Task
 tags:
 - codex
@@ -148,6 +148,11 @@ comments:
   content: Committed3883 source snapshot suite finished5/5 green. New late-canonical fixture/staged LOCAL-ID fix still needs legitimate implementer commit and final fixture run. Existing TASK2347 session lease no longer appears in aida session leases (previous01a170d21d3e). Effective inherited grant is advisor. No role override, new grant, bypass flag, or commit-hook bypass used. Scoped candidate rebuild now active, final compile gate will follow sequentially. Work remains blocked for source push until separate doer authority restored.
   created_at: 2026-10-25T03:16:33.971171634Z
   modified_at: 2026-10-25T03:16:33.971171634Z
+- id: 01a17110-ef50-7840-8602-55742b0513a5
+  author: joe
+  content: 'Native advisor successor log /tmp/task2347-advisor-successor.jsonl ended blocked: Codex review refused containment; Claude fallback immutable Git metadata failed and deleted implementer lease before interruption. Source/worktree intact. This explains authority/lease failure. Checker cleared staged LOCAL-watermark correction blob a1b9f780b9a3fe0f7a7e7536f96b321766f1ea6c; portable patch /tmp/task2347-final-fix.patch. Ready marker updated. Parent must recover authorized host doer and formal independent reviewer; no authority/containment bypass attempted. Scoped final candidate rebuild active, no global promotion/service/livequeue.'
+  created_at: 2026-10-25T03:18:17.680134973Z
+  modified_at: 2026-10-25T03:18:17.680134973Z
 history:
 - id: 01a170d1-497a-7282-8dcb-91782bba7dc3
   author: joe
