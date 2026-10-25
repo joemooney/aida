@@ -14,12 +14,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-25T18:24:39.974331190Z
-modified_at: 2026-10-25T19:35:06.751129230Z
+modified_at: 2026-10-25T19:39:56.150517747Z
 req_type: Task
 tags:
 - from-implementer:TASK-1865
 - kind:bug-spotted
 - severity:minor
+comments:
+- id: 01a17493-a776-7163-8196-fef237c5088c
+  author: joe
+  content: 'Second reproduction (from finding TASK-2352, dismissed as duplicate): aida ship TASK-2348 --no-merge in a sandboxed Claude seat worktree failed at step 1 the same way (.claude/agents placeholder device picked up by git add -A).'
+  created_at: 2026-10-25T19:39:56.150517747Z
+  modified_at: 2026-10-25T19:39:56.150517747Z
+  session_id: cde796d3-1750-4745-a8f9-7ab3bc7c3519
 history:
 - id: 01a1748f-3cff-7911-9e5f-3f3a96628f26
   author: joe
