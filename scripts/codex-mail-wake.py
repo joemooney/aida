@@ -306,6 +306,39 @@ def systemd_escape(value):
     return '"' + str(value).replace("\\", "\\\\").replace('"', '\\"').replace("%", "%%").replace("$", "$$").replace("\n", "\\n") + '"'
 
 
+def write_unit(unit, text):
+    """Replace the service leaf atomically without following links or truncating aliases."""
+    unit.parent.mkdir(parents=True, exist_ok=True)
+    directory = os.open(unit.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    temporary = ".unit-" + str(uuid.uuid4())
+    fd = None
+    try:
+        metadata = os.fstat(directory)
+        if metadata.st_uid != os.getuid() or metadata.st_mode & 0o002:
+            raise Refusal("service directory identity refused")
+        try:
+            prior = os.stat(unit.name, dir_fd=directory, follow_symlinks=False)
+        except FileNotFoundError:
+            prior = None
+        if prior and (not stat.S_ISREG(prior.st_mode) or prior.st_nlink != 1 or prior.st_uid != os.getuid()):
+            raise Refusal("service unit identity refused")
+        fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=directory)
+        with os.fdopen(fd, "w", closefd=False) as output:
+            output.write(text)
+            output.flush()
+            os.fsync(fd)
+        os.replace(temporary, unit.name, src_dir_fd=directory, dst_dir_fd=directory)
+        os.fsync(directory)
+    finally:
+        if fd is not None:
+            os.close(fd)
+        try:
+            os.unlink(temporary, dir_fd=directory)
+        except FileNotFoundError:
+            pass
+        os.close(directory)
+
+
 def service(args, project):
     name = service_name(project, args.thread)
     config = Path(os.environ.get("XDG_CONFIG_HOME", str(Path.home() / ".config")))
@@ -341,10 +374,7 @@ def service(args, project):
                 "[Service]\nType=simple\nUMask=0077\nExecStart="
                 + " ".join(map(systemd_escape, argv))
                 + "\nRestart=on-failure\nRestartSec=30\n[Install]\nWantedBy=default.target\n")
-        unit.parent.mkdir(parents=True, exist_ok=True)
-        if unit.is_symlink():
-            raise Refusal("service unit symlink refused")
-        unit.write_text(text)
+        write_unit(unit, text)
         command(["systemctl", "--user", "daemon-reload"])
         command(["systemctl", "--user", "enable", "--now", name])
     elif args.action == "stop":

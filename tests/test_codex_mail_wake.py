@@ -124,6 +124,25 @@ class WatcherTests(unittest.TestCase):
             with self.assertRaises(wake.Refusal):
                 wake.scan(Path("/one"), "fixture-aida")
 
+    def test_service_unit_refuses_links_without_overwriting_private_target(self):
+        directory = self.root / "units"
+        directory.mkdir()
+        outside = self.root / "private-unit-target"
+        outside.write_text("PRIVATE")
+        unit = directory / "watch.service"
+        unit.symlink_to(outside)
+        with self.assertRaises(wake.Refusal):
+            wake.write_unit(unit, "PUBLIC")
+        unit.unlink()
+        os.link(outside, unit)
+        with self.assertRaises(wake.Refusal):
+            wake.write_unit(unit, "PUBLIC")
+        self.assertEqual(outside.read_text(), "PRIVATE")
+        unit.unlink()
+        wake.write_unit(unit, "PUBLIC")
+        self.assertEqual(unit.read_text(), "PUBLIC")
+        self.assertEqual(unit.stat().st_mode & 0o777, 0o600)
+
     def test_service_dry_run_cannot_install_or_start_anything(self):
         state = self.root / "not-created"
         result = subprocess.run(["python3", str(MODULE), "install", "--dry-run", "--project", str(self.root),
