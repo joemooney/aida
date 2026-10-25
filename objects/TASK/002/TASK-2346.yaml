@@ -1,22 +1,29 @@
 id: 01a1703f-25ca-71d1-bd64-1f4e8a146737
 spec_id: TASK-2346
 agreed_id: TASK-2346
-title: Dead native-session lookup branch in decide() (STORY-1843 PR-2909)
+title: Remove redundant native-session lookup in decide() (STORY-1843 PR-2909)
 description: |
-  In aida-cli-lib/src/agent_handle.rs decide(), the second native_session_id lookup (the `if let Some(sid) = req.native_session_id.filter(...)` block that appears after the `if let Some(name) = req.explicit` branch) is unreachable:
+  ## Problem
 
-  - When req.explicit.is_none(), the block added at the TOP of decide() already resolves reservation_of_session and returns early for the same native_session_id case.
-  - When req.explicit.is_some(), the explicit branch always returns (bail or Ok) before reaching the second block.
+  In `aida-cli-lib/src/agent_handle.rs::decide`, a second native-session lookup after the explicit-name branch duplicates the early native-resume lookup. The later block is reachable when the first lookup finds no reservation; describing it as literally unreachable is incorrect. Its successful result is redundant for cooperating reservation writers under the namespace lock held by `reserve_handle`. `preview_handle` is intentionally unlocked and best effort; the actual reservation redecides under the lock. Raw same-UID writes are outside this cooperating-writer proof.
 
-  So the later block never executes. Harmless but dead; removing it makes the control flow honest. Cosmetic.
+  This records the already-approved advisor source ruling of 2026-10-25T10:46:02Z in the description so a card-only reader receives the corrected proof. It does not change the signed cleanup scope.
 
-  Raised in review of PR-2909: https://github.com/joemooney/aida/pull/2909#issuecomment-6390882870
+  ## Acceptance
+
+  - Remove only the redundant later native-session lookup. Preserve the early native resume fast path, explicit-name collision/refusal behavior, reservation ownership/recipient behavior, bounded generation probes and counters.
+  - Explain the locked cooperating-writer snapshot and best-effort preview rationale accurately in the nearby comment and PR description. Do not claim literal unreachability or freshness for preview.
+  - Do not change TTL, lock scope/order, identity, grant, counter format or liveness policy, and do not add locking to preview.
+  - Retain the existing allocation-skips-live/session-recipient, explicit-collision, resumed-child, named-resume, retired-resume and bounded-probe coverage named in the signed source ruling. Use one meaningful `agent_handle` filtered run plus `make check-ci-fast`; no source-text mirror test or unexplained wall-clock test is needed for this deletion.
+  - Complete only after an independently reviewed current-head PR, green required CI and integration. This task supplies no full STORY-1843 completion credit.
+
+  Raised in review of PR-2909: https://github.com/joemooney/aida/pull/2909#issuecomment-6390882870. The original finding and the corrected source proof remain in the comment history.
 status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-24T23:29:09.066068020Z
-modified_at: 2026-10-25T15:46:38.817297173Z
+modified_at: 2026-10-25T15:54:00.338934112Z
 req_type: Task
 tags:
 - from-review:PR-2909
@@ -53,6 +60,10 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a173c4-cfdf-70a0-81ba-12bbbf8b37d8
+  author: joe
+  timestamp: 2026-10-25T15:54:00.543439607Z
+  changes: []
 filed_at:
   code_sha: de9c0ffb7f27102fbf477a2c7aa5155724fe20bc
   branch: pr-2909
