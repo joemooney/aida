@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T15:33:51.496539087Z
-modified_at: 2026-10-25T21:12:08.710727816Z
+modified_at: 2026-10-25T23:28:03.413265465Z
 req_type: Story
 tags:
 - architecture
@@ -336,6 +336,12 @@ comments:
   content: 'Freshadvisor08:33MST read and ACKed actualagy1uptake dce34755: four non-dispatch remainingfloor clusters proceeding at7cd0d96213 with prior781bb8 extraction. Dispatch remainsuntouched/protected until current1917 independentlyreviewed ANDLANDED normallyintegrated. Non-completing RefsPR intended; no final1889completion/mergeapproval. Explicitoperatormerges gate remains. Localgate reports touched+compile appropriate only actual>10files/sharedinfra; no broad runtime authorized. Actualuptake nowproven, no stale unreadclaim or duplicatelane.'
   created_at: 2026-10-25T15:40:35.185831709Z
   modified_at: 2026-10-25T15:40:35.185831709Z
+- id: 01a17564-8155-7552-baef-37c4d9afa461
+  author: joe
+  content: 'PR #2926 review round (request-changes at 48565fcb05) addressed at b44203212e: F1 mandate start/stop human floor bound in gate (start_as_human/stop_as_human; closure seams cfg(test)); F2 TickInputs + live constructor + changed_paths + restart record order in gate/mandate_drive.rs with private authority fields; F3 mandate_ship_cover gate-private behind mandate_ship_cover_for_ship; story_1888 ratchets pin all three; F4 inventory posted on PR (0 removed); F5/F6 noted in PR body. dispatch.rs untouched. Non-completing Refs; operator merges.'
+  created_at: 2026-10-25T23:28:03.413265465Z
+  modified_at: 2026-10-25T23:28:03.413265465Z
+  session_id: 80d52344-5c57-4be4-9a3a-d862cbcc1920
 history:
 - id: 01a15f19-1b8d-7a60-bd9c-acf0c42193fc
   author: joe
