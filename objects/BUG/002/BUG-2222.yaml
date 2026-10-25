@@ -12,7 +12,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T09:15:27.132994258Z
-modified_at: 2026-10-25T11:28:20.440570263Z
+modified_at: 2026-10-25T11:31:16.720370877Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -59,6 +59,22 @@ comments:
     ADVISOR SIGNOFF at exactab591048e10caf8d366c6c34cee83842320c7838 for the narrow token/argument-boundary correction (ADR73 sensitive-change prerequisite only). Read complete one-file diff and codex2 source review /tmp/codex2-pr2920-review.txt: single ss/sss signatures, Focus s, -- ends option parsing, each UUID/text/token remains a separate Command argument; no shell or new token diagnostics. Existing token selection/authentication and boolean result handling remain intact. Independent bounded private-bus probes and actual Ubuntu lib0 regression support this boundary. Existing code1 manual implementer lease01a172b8febd is the only matching authorship-ledger record; this advisor did not launch that seat or edit source and is not an author. This signoff is NOT an attested approval or waiver: independent current-head verdict, exact-head required green Build, fresh base, authority and hold gates remain mandatory. No live terminal/plugin action or parent1843 completion is authorized. Actual source-only independent review is complete; Build still pending at observation.
   created_at: 2026-10-25T11:28:20.440570263Z
   modified_at: 2026-10-25T11:28:20.440570263Z
+- id: 01a172d4-4670-72e3-8cf4-b3ea09042c25
+  author: codex2
+  content: |
+    Independent **codex2** review: **APPROVED** at `ab591048e10caf8d366c6c34cee83842320c7838` (base `3cbb90b0c94e0e748bbfc4eb1f75d7f9c2125c68`, branch `codex/bug-2222`). I did not author this change.
+
+    Reviewed the complete one-file diff and BUG-2222 acceptance. `terminator_send_command` emits `ss`, `terminator_send_token_command` emits `sss`, and Focus retains `s`. The `--` delimiter protects option-like values; UUID, text and token remain separate argv entries. Existing token selection, plugin authentication, false-result refusal and installation plumbing are unchanged; no argv/token diagnostic was introduced.
+
+    The new private `dbus-run-session` regression has decisive split-signature negative controls and combined-signature missing-service results with activation disabled and unique absent destinations. My separate timeout-bounded private-bus probe reproduced both outcomes, including Focus and leading-option/space/newline values, with no dummy-token diagnostics. The existing parser-test artifact also passed in private HOME/TMP (qualified implementer-built artifact; no reviewer Cargo build). Exact-head Ubuntu lib-0 ran the terminal_cmd test filter and passed, confirming actual runner availability of dbus-run-session/busctl.
+
+    No blocking findings. Evidence: `/tmp/codex2-pr2920-review.txt`, `/tmp/codex2-pr2920-parser-evidence.json`, `/tmp/codex2-pr2920-lib0-ci.log`.
+
+    This approves the concrete parser correction only. It does not establish installed-plugin or live Agy delivery readiness: net.aida.Terminator remains a separate reported missing-service condition. No live terminal sends, installation/activation, grant changes, hold clearance or merge. STORY-1843 A-E remains retained; BUG-2222 completion is contingent on actual landing.
+
+    Exact-head CI: Build (ubuntu-latest) and all seven lanes SUCCESS; run https://github.com/joemooney/aida/actions/runs/40188196889. Fresh forge head verified before canonical attestation.
+  created_at: 2026-10-25T11:31:16.720370877Z
+  modified_at: 2026-10-25T11:31:16.720370877Z
 history:
 - id: 01a17258-2379-77b1-94f6-5d70e2e9c83c
   author: joe
