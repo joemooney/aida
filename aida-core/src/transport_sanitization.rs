@@ -64,6 +64,7 @@ static URL: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?i)[a-z][a-z0-9+.-]*://[^\s/<>\x22]+|//[a-z0-9\[]").unwrap());
 static IPV4: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?:[0-9]+\.){3}[0-9]+").unwrap());
 static PERCENT_ESCAPE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"%[0-9a-fA-F]{2}").unwrap());
+static OPAQUE_URI: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)\bdata:[^\s]").unwrap());
 
 impl Policy {
     pub fn validate(&self) -> ScanResult {
@@ -119,6 +120,13 @@ impl Policy {
             .any(|token| lower.contains(&token.to_ascii_lowercase()))
         {
             return Err(Refusal::DenyToken);
+        }
+        if lower.contains("-----begin pgp")
+            || lower.contains("-----begin ssh signature")
+            || lower.contains("-----begin certificate")
+            || OPAQUE_URI.is_match(value)
+        {
+            return Err(Refusal::Unsupported);
         }
         if EMAIL.is_match(value) {
             return Err(Refusal::Email);
@@ -258,6 +266,34 @@ impl Policy {
     }
 
     fn explicit_host(&self, key: &str, value: Option<&str>) -> ScanResult {
+        let field = key.to_ascii_lowercase();
+        let normalized = value.unwrap_or("").to_ascii_lowercase();
+        match field.as_str() {
+            "encoding"
+            | "content_encoding"
+            | "content-encoding"
+            | "transfer_encoding"
+            | "content_transfer_encoding"
+            | "content-transfer-encoding" => {
+                if !matches!(
+                    normalized.as_str(),
+                    "" | "utf8" | "utf-8" | "ascii" | "us-ascii" | "identity" | "plain" | "text"
+                ) {
+                    return Err(Refusal::Unsupported);
+                }
+            }
+            "compression" | "compression_format" | "compressed" => {
+                if !matches!(normalized.as_str(), "" | "none" | "identity") {
+                    return Err(Refusal::Unsupported);
+                }
+            }
+            "signature" | "gpgsig" | "gpg_signature" | "ssh_signature" | "signed_payload"
+                if value != Some("") =>
+            {
+                return Err(Refusal::Unsupported)
+            }
+            _ => {}
+        }
         if matches!(
             key.to_ascii_lowercase().as_str(),
             "hostname" | "host" | "fqdn"
@@ -380,5 +416,27 @@ mod tests {
         }
         assert_eq!(p.text("caf\u{e9}"), Err(Refusal::Encoding));
         assert!(p.text(&"a".repeat(MAX_BYTES + 1)).is_err());
+    }
+
+    #[test]
+    fn story_1742_declared_opaque_payloads_are_not_plain_decoded_text() {
+        let p = policy();
+        for (extension, document) in [
+            ("yaml", "encoding: base64\ndata: cHJpdmF0ZS1tYXJrZXI=\n"),
+            (
+                "json",
+                r#"{"en\u0063oding":"base64","data":"cHJpdmF0ZS1tYXJrZXI="}"#,
+            ),
+            ("toml", "compression = \"gzip\"\ndata = \"opaque\"\n"),
+            ("yaml", "signature: opaque\n"),
+        ] {
+            assert!(p.document(extension, document.as_bytes()).is_err());
+        }
+        assert!(p
+            .text("data:text/plain;base64,cHJpdmF0ZS1tYXJrZXI=")
+            .is_err());
+        assert!(p.text("-----BEGIN PGP SIGNATURE-----").is_err());
+        p.document("yaml", b"encoding: utf-8\ndata: Generic reproduction\n")
+            .unwrap();
     }
 }

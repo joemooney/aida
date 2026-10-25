@@ -1162,7 +1162,7 @@ fn scanner_refuses_historical_deleted_content_and_merge_side_metadata_before_rec
 
 #[test]
 fn scanner_checks_decoded_scalars_commit_names_paths_binary_and_signature_encodings() {
-    for case in 0..7 {
+    for case in 0..8 {
         let fixture = Fixture::new();
         let (store, remote) = fixture.attach_with_remote();
         match case {
@@ -1197,11 +1197,18 @@ fn scanner_checks_decoded_scalars_commit_names_paths_binary_and_signature_encodi
                     .unwrap();
                 assert!(output.status.success());
             }
-            _ => {
+            6 => {
                 fixture.store_commit(
                     &store,
                     "objects/BUG/000/BUG-1.yaml",
                     b"title: !!binary cHJpdmF0ZS1tYXJrZXI=\n",
+                );
+            }
+            _ => {
+                fixture.store_commit(
+                    &store,
+                    "objects/BUG/000/BUG-1.yaml",
+                    b"encoding: base64\ndata: cHJpdmF0ZS1tYXJrZXI=\n",
                 );
             }
         }

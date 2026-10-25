@@ -441,7 +441,8 @@ identity allowlist and mandatory verified store hook; enrollment does not
 change that allowlist or configure Git identities.
 
 This version conservatively refuses non-ASCII text, YAML aliases/tags,
-percent-encoded payloads, unsupported/binary containers, signature/extension
+percent-encoded payloads, declared opaque encoding/compression/signature data,
+data URIs, unsupported/binary containers, signature/extension
 commit headers, ambiguous escapes and incomplete/alternate/replaced graphs.
 Documents/objects are capped at 1 MiB, nesting at 64, graph/tree inventories at
 10,000 entries, graph inspection at 60 seconds and each Git reader at 10 seconds.
