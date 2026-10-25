@@ -10,12 +10,12 @@ description: |
   Not a merge blocker (green in CI), but a latent test-fragility: a function on the per-turn mailbox-notice path now depends on the real process tree. Consider a fixture seam (inject the ancestry/registry lookup) so the test asserts behaviour without reaching outside its hermetic root.
 
   Raised in review of PR-2909: https://github.com/joemooney/aida/pull/2909#issuecomment-6390882870
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-24T23:29:02.942675586Z
-modified_at: 2026-10-25T04:52:32.874006947Z
+modified_at: 2026-10-25T04:52:35.512865003Z
 req_type: Task
 tags:
 - from-review:PR-2909
@@ -26,6 +26,14 @@ comments:
   content: 'PROXY DECISION for joe: Approve hermetic ancestry/registry seam for inbox identity test while retaining production handle resolution and parent-private mail isolation.'
   created_at: 2026-10-25T04:52:32.874006947Z
   modified_at: 2026-10-25T04:52:32.874006947Z
+history:
+- id: 01a17167-4438-7c81-b6ce-974f9bde8cc8
+  author: joe
+  timestamp: 2026-10-25T04:52:35.512858100Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: de9c0ffb7f27102fbf477a2c7aa5155724fe20bc
   branch: pr-2909
