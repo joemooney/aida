@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T22:12:54.027870933Z
-modified_at: 2026-10-25T14:05:10.878858125Z
+modified_at: 2026-10-25T14:06:01.207391823Z
 req_type: Bug
 tags:
 - id-allocation
@@ -592,6 +592,12 @@ comments:
     Detailed source/evidence: `/tmp/codex2-pr2919-eff2-review.txt`; exact-head CI logs `/tmp/codex2-pr2919-eff2-rest.log` and `/tmp/codex2-pr2919-eff2-contracts.log`.
   created_at: 2026-10-25T14:05:10.878858125Z
   modified_at: 2026-10-25T14:05:10.878858125Z
+- id: 01a17361-f1f7-7a52-8055-38414d3d34f9
+  author: codex2
+  content: |
+    CI addendum for codex2 current-head review at eff2bcaa5f6d791ec2cc30885f69de3aad5f51fb: lib-1 job121188143489 is also FAILURE (5875 passed/1 failed), command_registry::story_1728_command_registry_tests::help_surface_matches_golden_snapshot at test line99; golden cli_help_snapshot.txt differs at15845 in config subcommand help after allocation CLI addition. Log /tmp/codex2-pr2919-eff2-lib1.log. lib-0/cli-0/cli-1 SUCCESS; rest/contracts FAILURE; gates still running and Build not yet posted at final check. Intentional merge-hold-gate failure remains separate. F4/F6 and missing normal main integration unchanged; no approval/hold clearance. This is supplemental exact-head CI evidence, not another rework cycle or new source review.
+  created_at: 2026-10-25T14:06:01.207391823Z
+  modified_at: 2026-10-25T14:06:01.207391823Z
 history:
 - id: 01a16f08-1847-70c2-a9ec-772710162546
   author: joe
