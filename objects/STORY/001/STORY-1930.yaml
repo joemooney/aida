@@ -1,0 +1,35 @@
+id: 01a1716a-d250-7050-bd08-f936171f8dbb
+spec_id: STORY-1930
+agreed_id: STORY-1930
+title: 'Review PR-2917: [AI:agy] refactor(gate): move hold and defer authority into gate/ (Refs STORY-1889)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `claude/story-1889-hold-r2`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2917>
+  - Branch: `claude/story-1889-hold-r2` → `main`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - STORY-1889
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2917` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-25T04:56:28.496460627Z
+modified_at: 2026-10-25T04:56:28.496460627Z
+req_type: Story
+filed_at:
+  code_sha: 791af3b22f0a68d8e5588d337946141b08e69f52
+  branch: claude/story-1889-hold-r2
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: a10d44f312
+  vendor: antigravity
