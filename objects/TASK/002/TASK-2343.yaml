@@ -15,12 +15,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-24T22:36:25.133277125Z
-modified_at: 2026-10-24T22:36:25.133277125Z
+modified_at: 2026-10-25T04:52:17.674882013Z
 req_type: Task
 tags:
 - from-review:PR-2905
 - severity:cosmetic
 - test-coverage
+comments:
+- id: 01a17166-fe8a-7f73-9f82-f65e8b40dc2b
+  author: joe
+  content: 'PROXY DECISION for joe: Approve adversarial persisted-JSON tests for top-level and tagged-action unknown fields; any parser repair must retain strict rejection.'
+  created_at: 2026-10-25T04:52:17.674882013Z
+  modified_at: 2026-10-25T04:52:17.674882013Z
 filed_at:
   code_sha: 9457e495247a3c9de111d15507fabd2cd0923079
   branch: pr-2905
