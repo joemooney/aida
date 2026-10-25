@@ -38,7 +38,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T22:02:03.191649035Z
-modified_at: 2026-10-25T19:26:06.144242079Z
+modified_at: 2026-10-25T19:34:05.791819004Z
 req_type: Story
 tags:
 - docs:impacted
@@ -418,6 +418,14 @@ comments:
     Authorized S3b foundation is isolated on codex/story-1742-s3b. A targeted affected-core run passed119 tests (allocation_authority, work_binding, backend CRUD/provenance/CAS, shared policy/grammar), including new candidate abort/escape/no-bootstrap/legacy-high-water and outer-admission lock-order tests. Existing S1/S2 test modules were not edited; source verification of their unchanged text is being recorded. Subsequent exact-byte prepared-plan/effective-commit capture work is still being built and needs fresh verification. Native CRUD/bulk/full-save/cached wiring, all unsupported-adapter refusals and server authoritative-memory boundaries are NOT yet implemented; this is not a completed S3b or safe intake/export claim. Signed one-use candidate lifetime, original authority and lock order remain binding; no live HOME enrollment, new grant/authority, actual work data, merge, hold clearance or hub action.
   created_at: 2026-10-25T19:26:06.144227035Z
   modified_at: 2026-10-25T19:26:06.144227035Z
+- id: 01a1748e-4edf-7e71-a69c-f7f8f64007eb
+  author: mcp
+  content: |-
+    S3a published separately: https://github.com/joemooney/aida/pull/2929 . Verified forge OPEN, non-draft, exact head3e0b31357e306f592fad7f1912b910b38ac7bca8, title (Refs STORY-1742), body aida: no-complete. Parent remains In Progress. All final local checks passed: transport touched CLIintegration31/sharedscanner3/CLIlib3; fast35/35; compile-only every workspace test target (no broad runtime) passed1261.4s. Earlier help golden1/fullmanual83 checks passed; final edits were scanner-only. Ordinary aida push published code+store through existing configured mirrors; no real WORK profile/data or hub-hook/service configuration was changed. Auto-queue-review succeeded: STORY-1933 queued for PR-2929. Exact-head CI40226535248 is running; merge-hold gate green is not review approval or clearance. Independent STRICT privacy/identity/security review remains required. No verdict/clearance/merge/completion action.
+
+    S3b foundation target run subsequently passed120 affected-core tests, including whole-batch unsafe-final-artifact refusal before any counter/object/metadata effect. B remains isolated and unwired (full native/server/adapter boundaries still required); no B PR or completion claim. Existing work_binding/allocation_authority/git_backend test modules verified byte-for-byte unchanged against starting HEAD. S3b PR must retain joint Refs and strict independent lock-order/allocation review per handoff.
+  created_at: 2026-10-25T19:34:05.791811397Z
+  modified_at: 2026-10-25T19:34:05.791811397Z
 history:
 - id: 01a16ee2-ad7a-7b30-aaeb-ec8f892fbe76
   author: joe
