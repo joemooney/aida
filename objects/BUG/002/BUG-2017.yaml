@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T22:12:54.027870933Z
-modified_at: 2026-10-25T11:57:17.863225474Z
+modified_at: 2026-10-25T12:07:31.445583784Z
 req_type: Bug
 tags:
 - id-allocation
@@ -447,6 +447,14 @@ comments:
     Concrete bounded choice implemented for advisor sufficiency: HOME merge-gate continues canonical agreed display and permanently retains the native node alias/UUID/content. Destructive db retire-legacy-ids now explicitly refuses any node-ID collapse before writes, including when called on HOME; under the locked closure it never collapses a newly introduced node alias either. WORK mutation also refuses. Existing legacy global-to-global collapse concurrency fixture remains as positive writer-lock proof, with exact private HOME and a global native fixture; new node-alias test asserts both lookups/UUID/object bytes/refs unchanged. Documentation explains the refusal; no claim that unsupported destructive retirement succeeded. Native WORK/HUB/HOME contract also invokes retirement expecting refusal and checks old lookup survives. This preserves all signed new WORK old-node identities without repurposing legacy fields or adding an unowned alias engine. Please rule if you require a distinct additive historical-alias implementation beyond this safe refusal; remaining eligible tests/bootstrap work continues now.
   created_at: 2026-10-25T11:57:17.863225474Z
   modified_at: 2026-10-25T11:57:17.863225474Z
+- id: 01a172f5-7575-70d2-82cb-fd0bdc2b3f65
+  author: joe
+  content: |
+    ADVISOR accepted source-only diagnosis /tmp/codex2-bug2017-s2-relationship-advisory.txt (pins companion JSON), not a runtime pass or formal verdict. Retained private Git commits show MCP full-save added BUG002 while deleting earlier CLI BUG001/FR001 and16META because lowercase serialized opaque IDs were compared to uppercase filename IDs. Code1's existing WIP canonicalizes save membership and LoadSnapshot new/disk/baseline/record/remove; do NOT issue a competing patch or treat the11:47 stale log as a new defect of a current rebuilt artifact.
+    This correction belongs in the current BUG2017 S2 rework: freshly introduced opaque WORK IDs must survive the normal CLI/MCP/full-save path. Preserve actual UUID/spec/agreed values and relationships; normalize identity comparison/snapshot keys to existing storage grammar, not rewrite user object identities to hide the bug. Keep stale-CAS/concurrent-edit protection and all pre-write F1 admission intact. The decisive native regression must prove original CLI and seeded META UUIDs survive MCP add, then actual source/target UUID relationship persists after restart; successful response text/direct lookup tests alone are not that proof. Retain complementary whole-save/repeated-save/stale-CAS coverage. Verified test_distributed.sh invokes the new native bootstrap contract, so that chain is wired into the existing contracts lane.
+    Actual fresh cargo ps showed a live CPU-consuming same-worktree test compile plus a second native build waiting on its build-directory lock; root changed/killed neither. Code1 was informed to serialize owned jobs if budget requires, inspect terminal handles before rerun, and preserve source/artifact provenance as files change. No broad suite, slot bypass, second architecture or enrollment authorized. Original RC F2/F3 remains; all S2/S3/full1742/1843 obligations retained.
+  created_at: 2026-10-25T12:07:31.445583784Z
+  modified_at: 2026-10-25T12:07:31.445583784Z
 history:
 - id: 01a16f08-1847-70c2-a9ec-772710162546
   author: joe
