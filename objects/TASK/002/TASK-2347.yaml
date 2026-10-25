@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T02:08:29.032100054Z
-modified_at: 2026-10-25T08:10:19.732899802Z
+modified_at: 2026-10-25T08:46:33.806564494Z
 req_type: Task
 tags:
 - codex
@@ -389,6 +389,18 @@ comments:
     The existing merge-hold marker remains byte-identical (hash verified). No hold clearance, merge or parent completion. Non-completing `Refs TASK-2347` preserved; independent integration remains required. No outstanding code findings at this reviewed head.
   created_at: 2026-10-25T08:10:19.732899802Z
   modified_at: 2026-10-25T08:10:19.732899802Z
+- id: 01a1723d-794e-7522-9bcc-55405f78c982
+  author: ai:codex:joe
+  content: |
+    TASK2347 final forward compatibility head:5ce0706e4a4deed55d70c756186a94c8bb767763 (PR2915), supersedesa74 for assessment. Normal push, no new formal review cycle requested. All bounded F2 install/stop/recovery and globalnamespace/F1/LOCAL fixes retained.
+
+    A concrete BUG2017 consumer probe found valid global-registry snapshot validation refused once the git-backed adapter required real clone identity: Gitless scratch failed 'allocation requires a clone-local Git identity'; an initialized scratch passed. The owning TASK helper now initializes ONLY its disposable private Git root with init.templateDir empty before native schedule list. No authority flag, node binding, actual HOME/config, remote/network, service or model action. This is an8line Python/test-only compatibility correction, no Rust or new adapter.
+
+    Final focused44/44 tests pass with the original native health candidate AND44/44 with BUG2017's enforcing candidate (the optional native cases exercise global registry validation). fast35/35. Logs:/tmp/task2347-install-boundary-python.log,/tmp/task2347-bug2017-compat-python.log,/tmp/task2347-install-boundary-fast.log. Author checker independently validated one real native scratch snapshot and isolation fixture1/1, no concrete finding. Earlier F2 evidence/private recovery procedures remain in prior comments. No formal author verdict, current-head CI or live readiness claim. Required Build and advisor sufficiency/delta evidence remain independent.
+
+    BUG2017 slice1 now published as non-draft PR2919 at c25b9bd3855226fdb40371affef506479c127ba6, Refs only; STORY1931 queued for independent reviewer after current watcher priority. Its25 allocation cases,180selected CLI-lib,1672core,4realCLI/MCP,compile-only and34fast gates passed. No real HOME authority flag/transport edits/force/holds/merge; parent InProgress. (Refs TASK-2347)
+  created_at: 2026-10-25T08:46:33.806564494Z
+  modified_at: 2026-10-25T08:46:33.806564494Z
 history:
 - id: 01a170d1-497a-7282-8dcb-91782bba7dc3
   author: joe
