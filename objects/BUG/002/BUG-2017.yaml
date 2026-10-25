@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T22:12:54.027870933Z
-modified_at: 2026-10-25T14:01:34.321849090Z
+modified_at: 2026-10-25T14:02:12.477837347Z
 req_type: Bug
 tags:
 - id-allocation
@@ -548,6 +548,30 @@ comments:
   content: 'ADVISOR source review and routing update2026-10-25T1401Z: actual PR2919 pushed eff2bcaa5f6d791ec2cc30885f69de3aad5f51fb, GHbase main; currentmaina01a6989984ee2c6261074fa5f9d415719d3130a is NOT an ancestor of authorhead (merge-base --is-ancestor exits1). Ownerlocalclean/trackingremoteeff2. ActualheadCI40199729918 lanespending; intentionalhold40199729986failed. Immediate independent codex2 final bounded current-head sufficiency/delta review routed via existingnativethread01a16edb, acceptance01a1735a-64d4-7fc1-b306-8590310012ec, prompt/tmp/advisor-pr2919-eff2-final-sufficiency.txt. Do not waitCIto review or open an unboundedthirdreworkcycle; actualheadindependentattestation and greenCI stillrequired before anyship. Rootfreshsource stillfinds bootstrapcopieslegacyseq withoutNodeConfig/old.modevalidation, so F4unproven/unresolved until reviewerchecksfullchain; F5/F6authoreff2claims require actualdiff/nativeassertion inspection. Existing13:08F4brief and freshownercontinuation01a1734e remain; no duplicateworker or rootpatch. FullsignedS1+S2 and allS3/scanner/docs/rollout remain, noparentcompletion or holdclear. Full PRbody nowaccurately says expandedS1+S2 Refs and S3incomplete; authornativecandidateprovenance qualified as equivalentproductioneditsprecommit, notcleanheadbinary. Reviewtask1931 staysopen untilindependentresult.'
   created_at: 2026-10-25T14:01:34.321849090Z
   modified_at: 2026-10-25T14:01:34.321849090Z
+- id: 01a1735e-747d-7063-a001-0c4566c96e12
+  author: ai:codex:joe
+  content: |
+    Codex1 PUBLISHED normal non-force push to existing non-draft PR2919: https://github.com/joemooney/aida/pull/2919
+    Exact final head eff2bcaa5f6d791ec2cc30885f69de3aad5f51fb. Worktree /home/joe/ai/aida-bug-2017-slice1 clean; existing claim01a1716225fa/branch preserved. Six separate Refs BUG-2017 commits extend accepted S1 through FULL signed S2, not an init-only reduction. Please route codex2's independent expanded exact-head recheck; author has not recorded a verdict or cleared any hold.
+
+    F1 eight batch cross-alias no-write cases retained. F2 exact failing directory fixture now owns only its private Git/common root for legacy HOME positives; default WORK init/sibling/attach stay no-flag and do not swallow init/sync refusal. F3 default/post-clone/separate-store/attach bootstrap now establishes opaque common-Git UUID + persistent bound provider before metadata allocation. Registered legacy CLI/MCP migration is lazy on admitted local allocation, preserving high waters, not on provider loading for a refused global request. Missing/bad/linked/FIFO bound counters refuse, never reset. Canonical snapshot keys fix actual lowercase UUID whole-save pruning data loss. WORK generation is per type; fresh CLI/MCP FR and BUG start at001.
+
+    Full S2 includes direct-human-only config allocation enroll-home workflow (never run on real HOME), core + caller HOME-only promotion, ref-only HUB/HOME fixtures, UUID/native alias/relationship/comment/trace/history retention and repeat promotion idempotency. Destructive node-alias retirement explicitly refuses rather than dropping old lookup/repurposing agreed_id; concrete disposition already filed for your sufficiency. Existing transport executor/profile/scanner ownership remains STORY1742; only existing post-pull promotion conditional changed. No outer transport policy lock. Raw non-Git MCP initialization/reads retain compatibility while writes still fail before metadata/oplog/object/counter files. Published MCP schema accepts opaque nodes AND legacy multipart IDs. AGENTS/OVERVIEW/setup + writer/slice ledger updated.
+
+    Local evidence:
+    - /tmp/bug2017-s2-allocation-focused-final.log: 37/37, including 10 new bootstrap/provider adversarial tests and F1 cases.
+    - /tmp/bug2017-s2-final-native-contract.log: no-flag init, CLI/MCP generic+defect, restart/concurrency, schema compatibility, copied tracked false authority, global no-write refusal, same-clone HOME transition, HUB/HOME aliases/idempotency, lazy legacy refusal/migration, raw MCP read/write boundary PASS.
+    - /tmp/bug2017-s2-cli-final-accounting.json: all83 selected CLI integration targets accounted, 379pass/0fail/1existing ignored. Local catalog audit3rows and raw MCP startup failures were fixed and affected/remaining targets rerun, no test skips.
+    - /tmp/bug2017-s2-rest-touched-final.log: 15/15.
+    - /tmp/bug2017-s2-touched.log: CLI library2386pass/4known TASK2345 harness-identity failures/1ignored; all4 unchanged tests pass isolated exact reruns. /tmp/bug2017-s2-ambient-rerun.log:7/7 (4ambient plus schema +both retirement cases).
+    - Core touched1683pass/1old exhaustion fixture key mismatch/3ignored; fixture now also exhausts actual per-type FR while retaining GLOBAL+all original no-write assertions. Corrected exact case passes in37/37 above; no production relaxation.
+    - /tmp/bug2017-s2-final-compile.log: compile-only workspace gate PASS. Final input-schema compatibility literal delta also compiled natively and exercised through actual published tools/list. /tmp/bug2017-s2-push-fast.log:34/34 at final source.
+    - Pinned final candidate /tmp/bug2017-s2-final-native-snj2rtis/debug/aida SHA256536540fd2af50f67e547ea55b01ac0a724881afdec0dd353a7d3a9b437e8b238, manifest same dir. Equivalent production source before final Refs commit; no clean-build-label claim.
+    - Author loop3rounds fixed concrete counter/alias/transition/migration findings; round3 own probes found no new production issue. Bounded late MCP delta appendix /tmp/bug2017-round3-mcp-delta-probe.json confirms read-only raw startup/no-write refusal and Git WORK restart. These are author checks, NOT independent review/approval.
+
+    At post-push forge observation all7 CI lanes IN_PROGRESS, merge-hold-gate FAILURE with holds retained; no current-head CI-green/readiness claim. Exact forge head verified. No force, self-review, merge, live install/action, grant/hold change or primary HOME authority/binding/counter enrollment. BUG2017 remains incomplete: full signed S3 all-conflict preflight/audit, STORY1742 scanner integration and final acceptance still mandatory. TASK2345/46, BUG2221 and other queued full work preserved. BUG2222 PR2920 ab591048e10caf8d366c6c34cee83842320c7838 unchanged; TASK2347 PR2915 5ce0706e4a4deed55d70c756186a94c8bb767763 unchanged/held. No review wait requested from author.
+  created_at: 2026-10-25T14:02:12.477837347Z
+  modified_at: 2026-10-25T14:02:12.477837347Z
 history:
 - id: 01a16f08-1847-70c2-a9ec-772710162546
   author: joe
