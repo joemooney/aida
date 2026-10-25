@@ -1,3 +1,4 @@
+// trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
 use super::*;
 use aida_core::db::{DatabaseBackend, GitBackend};
 use aida_core::{Requirement, RequirementsStore};
@@ -17,7 +18,7 @@ use aida_core::{Requirement, RequirementsStore};
 fn resolve_history_id_filter_maps_uuid_to_spec_id() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().join("aida-store");
-    let backend = GitBackend::new(&root).unwrap();
+    let backend = crate::test_env::home_fixture_backend(&root).unwrap();
 
     let mut req = Requirement::new("Spec under test".into(), "desc".into());
     req.spec_id = Some("TASK-42".into());

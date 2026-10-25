@@ -1,3 +1,8 @@
+A host-side Codex mail adapter can queue notifications to one existing thread
+without model polling. Read [setup and recovery](docs/agents/codex-mail-wake.md);
+queue acceptance and inbox acknowledgement remain distinct.
+<!-- trace:TASK-2347 | ai:codex -->
+
 Mailbox explicit sends and mentions share live-recipient resolution. Unknown or
 dead agent recipients and role/vendor addresses with zero live readers refuse
 before writing; group sends list current readers. Known human inboxes and
@@ -454,6 +459,17 @@ refresh flock holder (including an inline refresher). `aida cache rebuild` and
 mutation/gate paths remain strict. See OVERVIEW.md for the read-label contract.
 
 ## Storage Model
+
+Allocation defaults to WORK: init establishes an opaque UUID binding and persistent
+per-type node-local counters in the clone common Git directory, shared by linked
+worktrees. Legacy state migrates on admitted local allocation; refused global
+requests cannot trigger migration. Only an explicitly enrolled HOME clone can
+claim global blocks or promote agreed IDs. `config allocation enroll-home` is a
+direct-human workflow; implementation never enrolls real HOME. Native aliases
+survive promotion, and destructive node-alias retirement refuses. See
+[allocation setup](docs/cli/07-project-setup.md#clone-local-allocation-authority).
+All-conflict audit/scanner integration remains BUG-2017 slice 3.
+<!-- trace:BUG-2017 | ai:codex -->
 
 Clone-local transport policy lives in the common Git directory, outside the
 shared store. `aida config transport` manages the `work` profile before store

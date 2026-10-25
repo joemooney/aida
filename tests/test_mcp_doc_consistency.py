@@ -199,6 +199,12 @@ def fetch_advertised_tools(client: McpClient) -> dict[str, set[str]]:
 def setup_project(aida: Path, root: Path) -> None:
     """Initialize a minimal AIDA project so mcp-serve can start."""
     subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+    # trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
+    git_dir = root / ".git"
+    assert git_dir.is_dir() and not git_dir.is_symlink()
+    assert not (git_dir / "commondir").exists()
+    with (git_dir / "aida-allocation.toml").open("x", encoding="utf-8") as setting:
+        setting.write("version=1\nauthoritative=true\n")
     init = subprocess.run(
         [str(aida), "init", "--no-skills", "--no-hooks"],
         cwd=root,

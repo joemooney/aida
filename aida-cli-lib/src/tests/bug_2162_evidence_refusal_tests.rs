@@ -28,6 +28,8 @@ fn commit(store: &Path, msg: &str) {
 }
 
 fn identify(store: &Path) {
+    // trace:BUG-2017 | ai:codex — explicit positive evidence-fixture clone.
+    crate::test_env::enroll_synthetic_home(store).unwrap();
     for (k, v) in [("user.email", "t@example.invalid"), ("user.name", "T")] {
         git(store, &["config", k, v]);
     }

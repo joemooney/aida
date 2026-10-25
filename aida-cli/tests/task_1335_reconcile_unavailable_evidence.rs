@@ -168,6 +168,8 @@ impl Fx {
             &["commit", "-q", "--allow-empty", "-m", "chore: base"],
             Some("2026-09-01T00:00:00Z"),
         );
+        // trace:BUG-2017 | ai:codex — explicit positive HOME fixture.
+        test_git::enroll_synthetic_home(&repo);
         let fx = Self {
             _tmp: tmp,
             root,

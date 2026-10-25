@@ -108,6 +108,18 @@ pub(crate) fn handle_doctor_command(
                     *fail_on_findings,
                 );
             }
+            // trace:TASK-2347 | ai:codex — data-only host health, no store/model load.
+            if !all
+                && !*sub_all
+                && normalize_doctor_category(category).ok().as_deref()
+                    == Some(crate::codex_mail_health::CATEGORY)
+            {
+                return doctor_check_store_free_light(
+                    crate::codex_mail_health::CATEGORY,
+                    *json,
+                    *fail_on_findings,
+                );
+            }
             // STORY-1688: lane liveness substrate check reads `.aida/` state
             // without loading the spec store.
             // trace:STORY-1688 | ai:antigravity
@@ -1222,6 +1234,9 @@ fn doctor_check_store_free_light(category: &str, json: bool, fail_on_findings: b
         crate::loose_objects::CATEGORY => {
             DoctorReport::from_findings(crate::loose_objects::scan(&project_root))
         }
+        crate::codex_mail_health::CATEGORY => {
+            DoctorReport::from_findings(crate::codex_mail_health::scan(&project_root))
+        }
         "performance" => performance_light_report(&project_root),
         "remote-drift" => remote_drift_light_report(&project_root),
         // trace:STORY-1699 | ai:claude
@@ -1246,6 +1261,12 @@ fn doctor_check_store_free_light(category: &str, json: bool, fail_on_findings: b
         _ => unreachable!("only store-free categories dispatch here"),
     };
     let failing = fail_on_findings && !report.findings.is_empty();
+    // trace:TASK-2347 | ai:codex — scheduled JSON errors otherwise suppress
+    // stderr, but CronJobFailed routes only its final line. This summary is
+    // built solely from the bounded counts/ages reader, never mailbox text.
+    if failing && category == crate::codex_mail_health::CATEGORY {
+        eprintln!("Codex mail health: {}", report.findings[0].summary);
+    }
     let reason = failing.then(|| {
         format!(
             "{} finding(s) in {category} — failing because --fail-on-findings was requested",
@@ -10392,7 +10413,7 @@ mod story_462_doctor_tests {
         std::fs::create_dir_all(project.join(".aida").join("sessions")).unwrap();
         std::fs::create_dir_all(project.join(".aida-store")).unwrap();
 
-        let storage = Storage::new(project.join(".aida-store"));
+        let storage = crate::test_env::home_fixture_storage(project.join(".aida-store"));
         let mut req = Requirement::new("lease/status drift".into(), String::new());
         req.spec_id = Some("TASK-1207".into());
         req.status = RequirementStatus::Approved;
@@ -11396,7 +11417,7 @@ User content.
         g(root, &["config", "user.email", "t@t.t"]);
         g(root, &["config", "user.name", "t"]);
         std::fs::create_dir_all(root.join(".aida-store")).unwrap();
-        let storage = Storage::new(root.join(".aida-store"));
+        let storage = crate::test_env::home_fixture_storage(root.join(".aida-store"));
         (tmp, storage)
     }
 
@@ -11945,7 +11966,7 @@ User content.
         let project_root = dir.path();
         std::fs::create_dir_all(project_root.join(".aida")).unwrap();
         std::fs::create_dir_all(project_root.join(".aida-store")).unwrap();
-        let storage = Storage::new(project_root.join(".aida-store"));
+        let storage = crate::test_env::home_fixture_storage(project_root.join(".aida-store"));
         let mut req = Requirement::new("orphaned in-progress".into(), String::new());
         req.spec_id = Some("TASK-667".into());
         req.status = RequirementStatus::InProgress;
@@ -12343,7 +12364,7 @@ User content.
         let project_root = dir.path();
         std::fs::create_dir_all(project_root.join(".aida")).unwrap();
         std::fs::create_dir_all(project_root.join(".aida-store")).unwrap();
-        let storage = Storage::new(project_root.join(".aida-store"));
+        let storage = crate::test_env::home_fixture_storage(project_root.join(".aida-store"));
         let mut req = Requirement::new("orphaned in-progress".into(), String::new());
         req.spec_id = Some("TASK-561".into());
         req.status = RequirementStatus::InProgress;
@@ -12390,7 +12411,7 @@ User content.
         let project_root = dir.path();
         std::fs::create_dir_all(project_root.join(".aida")).unwrap();
         std::fs::create_dir_all(project_root.join(".aida-store")).unwrap();
-        let storage = Storage::new(project_root.join(".aida-store"));
+        let storage = crate::test_env::home_fixture_storage(project_root.join(".aida-store"));
         let mut req = Requirement::new("already fixed".into(), String::new());
         req.spec_id = Some("TASK-561".into());
         req.status = RequirementStatus::Approved;
@@ -12441,7 +12462,7 @@ User content.
         std::fs::create_dir_all(project_root.join(".aida")).unwrap();
         std::fs::create_dir_all(project_root.join(".aida-store")).unwrap();
 
-        let storage = Storage::new(project_root.join(".aida-store"));
+        let storage = crate::test_env::home_fixture_storage(project_root.join(".aida-store"));
         let store = aida_core::models::RequirementsStore::new();
         storage.save(&store).unwrap();
 
@@ -12484,7 +12505,7 @@ User content.
         std::fs::create_dir_all(project_root.join(".aida")).unwrap();
         std::fs::create_dir_all(project_root.join(".aida-store")).unwrap();
 
-        let storage = Storage::new(project_root.join(".aida-store"));
+        let storage = crate::test_env::home_fixture_storage(project_root.join(".aida-store"));
         let store = aida_core::models::RequirementsStore::new();
         storage.save(&store).unwrap();
 

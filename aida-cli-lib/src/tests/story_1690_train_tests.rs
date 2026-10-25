@@ -4,6 +4,7 @@
 //! through the dry-run rails and shows main never goes red.
 // trace:STORY-1690 | ai:claude
 
+// trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
 use super::*;
 use std::path::Path;
 
@@ -1579,7 +1580,7 @@ fn repo_with_specs(ids: &[&str]) -> tempfile::TempDir {
             req
         })
         .collect();
-    let backend = aida_core::GitBackend::new(&tmp.path().join(".aida-store")).unwrap();
+    let backend = crate::test_env::home_fixture_backend(&tmp.path().join(".aida-store")).unwrap();
     aida_core::DatabaseBackend::save(
         &backend,
         &aida_core::RequirementsStore {

@@ -137,6 +137,18 @@ impl Fixture {
             std::fs::create_dir_all(p).unwrap();
         }
         git(&f.repo, &["init", "-q", "-b", "main"]);
+        // trace:BUG-2017 | ai:codex — this fixture owns a TempDir inside
+        // the workspace. Confine authority to that guard, never the real clone.
+        let common = aida_core::allocation_authority::common_dir(&f.repo).unwrap();
+        assert!(common.starts_with(&root));
+        use std::io::Write;
+        std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(common.join(aida_core::allocation_authority::CONFIG_FILE))
+            .unwrap()
+            .write_all(b"version=1\nauthoritative=true\n")
+            .unwrap();
         git(&f.repo, &["config", "user.email", "fixture@example.com"]);
         git(&f.repo, &["config", "user.name", "Lock fixture"]);
         git(&f.repo, &["commit", "-q", "--allow-empty", "-m", "fixture"]);

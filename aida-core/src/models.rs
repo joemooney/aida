@@ -5379,13 +5379,19 @@ pub struct SnapshotEntry {
     pub caller: Option<u64>,
 }
 
+// trace:BUG-2017 | ai:codex — filenames and snapshot keys share one namespace.
 impl LoadSnapshot {
     /// A snapshot fresh from a load: object id -> disk fingerprint.
     pub fn new(map: std::collections::BTreeMap<String, u64>) -> Self {
         Self {
             objects: std::sync::Mutex::new(
                 map.into_iter()
-                    .map(|(k, disk)| (k, SnapshotEntry { disk, caller: None }))
+                    .map(|(k, disk)| {
+                        (
+                            crate::object_store::canonical_spec_id(&k),
+                            SnapshotEntry { disk, caller: None },
+                        )
+                    })
                     .collect(),
             ),
             metadata: std::sync::Mutex::new(None),
@@ -5406,26 +5412,33 @@ impl LoadSnapshot {
 
     /// Disk fingerprint recorded for `id`, if the store saw that object.
     pub fn disk(&self, id: &str) -> Option<u64> {
-        self.map().get(id).map(|e| e.disk)
+        self.map()
+            .get(&crate::object_store::canonical_spec_id(id))
+            .map(|e| e.disk)
     }
 
     /// Caller baseline for `id`: the in-memory copy's fingerprint as of the
     /// last load or save.
     pub fn baseline(&self, id: &str) -> Option<u64> {
-        self.map().get(id).map(|e| e.caller.unwrap_or(e.disk))
+        self.map()
+            .get(&crate::object_store::canonical_spec_id(id))
+            .map(|e| e.caller.unwrap_or(e.disk))
     }
 
     /// Record that `id` now holds content with disk fingerprint `disk`, and
     /// the in-memory copy has fingerprint `caller`.
     pub fn record(&self, id: &str, disk: u64, caller: u64) {
         let caller = (caller != disk).then_some(caller);
-        self.map()
-            .insert(id.to_string(), SnapshotEntry { disk, caller });
+        self.map().insert(
+            crate::object_store::canonical_spec_id(id),
+            SnapshotEntry { disk, caller },
+        );
     }
 
     /// Record that `id` no longer exists.
     pub fn remove(&self, id: &str) {
-        self.map().remove(id);
+        self.map()
+            .remove(&crate::object_store::canonical_spec_id(id));
     }
 
     /// The caller's store-level metadata baseline (as of the load or last
@@ -5859,9 +5872,8 @@ impl RequirementsStore {
     /// Generates the next meta-type ID for a given prefix (e.g., "$USER" -> "$USER-001")
     pub fn next_meta_id(&mut self, prefix: &str) -> String {
         if let Some(ref dispenser) = self.dispenser {
-            if let Ok(id) = dispenser.next_id(prefix) {
-                return id;
-            }
+            // trace:BUG-2017 | ai:codex
+            return dispenser.next_id(prefix).unwrap_or_default();
         }
         let counter = self.meta_counters.entry(prefix.to_string()).or_insert(1);
         let num = *counter;
@@ -6229,6 +6241,16 @@ impl RequirementsStore {
 
     /// Assigns SPEC-IDs to requirements that don't have them
     pub fn assign_spec_ids(&mut self) {
+        // trace:BUG-2017 | ai:codex — legacy repair uses the attached allocator too.
+        if self.dispenser.is_some() {
+            for index in 0..self.requirements.len() {
+                if self.requirements[index].spec_id.is_none() {
+                    self.requirements[index].spec_id =
+                        Some(self.generate_requirement_id_with_override("SPEC"));
+                }
+            }
+            return;
+        }
         for req in &mut self.requirements {
             if req.spec_id.is_none() {
                 req.spec_id = Some(format!("SPEC-{:03}", self.next_spec_number));
@@ -6239,6 +6261,18 @@ impl RequirementsStore {
 
     /// Gets the next SPEC-ID that would be assigned
     pub fn peek_next_spec_id(&self) -> String {
+        // trace:BUG-2017 | ai:codex
+        if let Some(d) = &self.dispenser {
+            let key = if self.id_config.numbering == NumberingStrategy::Global {
+                "GLOBAL"
+            } else {
+                "SPEC"
+            };
+            return d
+                .peek(key)
+                .and_then(|n| d.format_id("SPEC", n))
+                .unwrap_or_default();
+        }
         format!("SPEC-{:03}", self.next_spec_number)
     }
 
@@ -6331,6 +6365,11 @@ impl RequirementsStore {
 
     /// Adds a requirement and assigns it a SPEC-ID (legacy method for backward compatibility)
     pub fn add_requirement_with_spec_id(&mut self, mut req: Requirement) {
+        // trace:BUG-2017 | ai:codex
+        if self.dispenser.is_some() {
+            self.add_requirement_with_id(req, None, Some("SPEC"));
+            return;
+        }
         if req.spec_id.is_none() {
             req.spec_id = Some(format!("SPEC-{:03}", self.next_spec_number));
             self.next_spec_number += 1;
@@ -6436,14 +6475,8 @@ impl RequirementsStore {
     /// If a dispenser is set, delegates to it. Otherwise uses internal counters.
     fn get_next_counter_for_prefix(&mut self, prefix: &str) -> u32 {
         if let Some(ref dispenser) = self.dispenser {
-            return dispenser.next(prefix).unwrap_or_else(|_| {
-                // Fallback to internal counter if dispenser fails
-                let upper = prefix.to_uppercase();
-                let counter = self.prefix_counters.entry(upper).or_insert(1);
-                let current = *counter;
-                *counter += 1;
-                current
-            });
+            // trace:BUG-2017 | ai:codex — zero is a refused allocation, never a global fallback.
+            return dispenser.next(prefix).unwrap_or(0);
         }
         let upper = prefix.to_uppercase();
         let counter = self.prefix_counters.entry(upper).or_insert(1);
@@ -6457,11 +6490,8 @@ impl RequirementsStore {
     /// Otherwise uses internal next_spec_number counter.
     fn get_next_global_number(&mut self) -> u32 {
         if let Some(ref dispenser) = self.dispenser {
-            return dispenser.next("GLOBAL").unwrap_or_else(|_| {
-                let n = self.next_spec_number;
-                self.next_spec_number += 1;
-                n
-            });
+            // trace:BUG-2017 | ai:codex
+            return dispenser.next("GLOBAL").unwrap_or(0);
         }
         let n = self.next_spec_number;
         self.next_spec_number += 1;
@@ -6486,23 +6516,49 @@ impl RequirementsStore {
                     .map(|s| s.to_uppercase())
                     .unwrap_or_else(|| "REQ".to_string());
 
-                let number = match self.id_config.numbering {
-                    NumberingStrategy::Global => self.get_next_global_number(),
-                    NumberingStrategy::PerPrefix | NumberingStrategy::PerFeatureType => {
-                        self.get_next_counter_for_prefix(&prefix)
+                // trace:BUG-2017 | ai:codex
+                if self.dispenser.as_ref().is_some_and(|d| d.node_local_only())
+                    && Requirement::validate_prefix(&prefix).is_none()
+                {
+                    return String::new();
+                }
+                // trace:BUG-2017 | ai:codex — validate formatting/binding before sequence advancement.
+                if self
+                    .dispenser
+                    .as_ref()
+                    .is_some_and(|d| d.format_id(&prefix, 1).is_err())
+                {
+                    return String::new();
+                }
+                let number = if self.dispenser.as_ref().is_some_and(|d| d.node_local_only()) {
+                    // trace:BUG-2017 | ai:codex — WORK sequences are per type.
+                    self.get_next_counter_for_prefix(&prefix)
+                } else {
+                    match self.id_config.numbering {
+                        NumberingStrategy::Global => self.get_next_global_number(),
+                        NumberingStrategy::PerPrefix | NumberingStrategy::PerFeatureType => {
+                            self.get_next_counter_for_prefix(&prefix)
+                        }
                     }
                 };
 
                 // If we have a dispenser in distributed mode, use its formatting
                 if let Some(ref dispenser) = self.dispenser {
-                    if let Ok(id) = dispenser.format_id(&prefix, number) {
-                        return id;
-                    }
+                    // trace:BUG-2017 | ai:codex — failed allocation/formatting never falls back.
+                    return if number == 0 {
+                        String::new()
+                    } else {
+                        dispenser.format_id(&prefix, number).unwrap_or_default()
+                    };
                 }
 
                 format!("{}-{:0>width$}", prefix, number, width = digits as usize)
             }
             IdFormat::TwoLevel => {
+                // trace:BUG-2017 | ai:codex
+                if self.dispenser.as_ref().is_some_and(|d| d.node_local_only()) {
+                    return String::new();
+                }
                 let feat = feature_prefix
                     .map(|s| s.to_uppercase())
                     .unwrap_or_else(|| "GEN".to_string()); // GEN = General
@@ -6523,6 +6579,11 @@ impl RequirementsStore {
                     }
                 };
 
+                // trace:BUG-2017 | ai:codex — a failed attached allocator is
+                // not a legitimate zero-valued ID in the HOME legacy format.
+                if number == 0 {
+                    return String::new();
+                }
                 format!(
                     "{}-{}-{:0>width$}",
                     feat,
@@ -6543,6 +6604,17 @@ impl RequirementsStore {
         feature_prefix: Option<&str>,
         type_prefix: Option<&str>,
     ) {
+        // trace:BUG-2017 | ai:codex — preserve infallible legacy API, but poison
+        // a refused row instead of advancing counters; persistence rejects it.
+        if self
+            .dispenser
+            .as_ref()
+            .is_some_and(|d| d.admit_requirement(&req).is_err())
+        {
+            req.spec_id = Some(String::new());
+            self.requirements.push(req);
+            return;
+        }
         if req.spec_id.is_none() {
             // Check if requirement has a prefix override
             if let Some(ref override_prefix) = req.prefix_override {
@@ -6559,20 +6631,43 @@ impl RequirementsStore {
     fn generate_requirement_id_with_override(&mut self, prefix: &str) -> String {
         let prefix_upper = prefix.to_uppercase();
         let digits = self.id_config.digits;
+        // trace:BUG-2017 | ai:codex
+        if self.dispenser.as_ref().is_some_and(|d| d.node_local_only())
+            && Requirement::validate_prefix(&prefix_upper).is_none()
+        {
+            return String::new();
+        }
+        if self
+            .dispenser
+            .as_ref()
+            .is_some_and(|d| d.format_id(&prefix_upper, 1).is_err())
+        {
+            return String::new();
+        }
 
-        let number = match self.id_config.numbering {
-            NumberingStrategy::Global => self.get_next_global_number(),
-            NumberingStrategy::PerPrefix | NumberingStrategy::PerFeatureType => {
-                // Treat the override prefix as its own counter
-                self.get_next_counter_for_prefix(&prefix_upper)
+        let number = if self.dispenser.as_ref().is_some_and(|d| d.node_local_only()) {
+            // trace:BUG-2017 | ai:codex — WORK overrides share per-type counters.
+            self.get_next_counter_for_prefix(&prefix_upper)
+        } else {
+            match self.id_config.numbering {
+                NumberingStrategy::Global => self.get_next_global_number(),
+                NumberingStrategy::PerPrefix | NumberingStrategy::PerFeatureType => {
+                    // Treat the override prefix as its own counter
+                    self.get_next_counter_for_prefix(&prefix_upper)
+                }
             }
         };
 
         // If we have a dispenser in distributed mode, use its formatting
         if let Some(ref dispenser) = self.dispenser {
-            if let Ok(id) = dispenser.format_id(&prefix_upper, number) {
-                return id;
-            }
+            // trace:BUG-2017 | ai:codex
+            return if number == 0 {
+                String::new()
+            } else {
+                dispenser
+                    .format_id(&prefix_upper, number)
+                    .unwrap_or_default()
+            };
         }
 
         format!(

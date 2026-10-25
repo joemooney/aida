@@ -12,6 +12,9 @@
 //! own block there.
 // trace:BUG-1960 | ai:claude
 
+#[path = "support/test_git.rs"]
+mod test_git;
+
 use std::os::unix::fs::PermissionsExt;
 use std::process::Command;
 
@@ -98,6 +101,16 @@ fn aida_init_writes_the_cd_block_to_the_wrappers_side_channel_file() {
     for d in [&home, &work] {
         std::fs::create_dir_all(d).unwrap();
     }
+    // trace:BUG-2017 | ai:codex — this positive init/CD fixture models HOME.
+    let project = work.join("proj");
+    std::fs::create_dir(&project).unwrap();
+    assert!(test_git::git_command()
+        .args(["init", "-q"])
+        .current_dir(&project)
+        .status()
+        .unwrap()
+        .success());
+    test_git::enroll_synthetic_home(&project);
     let cd_file = base.join("aida-init-cd.e2e");
     std::fs::write(&cd_file, "").unwrap();
 

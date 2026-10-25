@@ -166,6 +166,7 @@ fn git_store_with_draft() -> (tempfile::TempDir, std::path::PathBuf, Requirement
     std::fs::create_dir_all(&store_root).unwrap();
     aida_core::git_ops::init(&store_root).unwrap();
     aida_core::git_ops::configure_user(&store_root, "fixture", "fixture@localhost").unwrap();
+    crate::test_env::enroll_synthetic_home(&store_root).unwrap();
     let backend = CachedGitBackend::open(&store_root, &cache_path).unwrap();
     let mut r = Requirement::new("Zen draft".into(), "desc".into());
     r.spec_id = Some("TASK-9001".into());

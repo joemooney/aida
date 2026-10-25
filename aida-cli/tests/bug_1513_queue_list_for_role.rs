@@ -83,6 +83,8 @@ fn queue_list_for_role_excludes_callers_own_mismatched_role_row() {
     std::fs::create_dir_all(&repo).unwrap();
     std::fs::create_dir_all(&home).unwrap();
     git(&repo, &["init", "-q", "-b", "main"]);
+    // trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
+    test_git::enroll_synthetic_home(&repo);
     git(&repo, &["config", "user.email", "test@example.com"]);
     git(&repo, &["config", "user.name", "BUG-1513 Test"]);
     git(&repo, &["commit", "-q", "--allow-empty", "-m", "init"]);

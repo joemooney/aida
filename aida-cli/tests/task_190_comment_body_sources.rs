@@ -43,6 +43,8 @@ fn comment_body_sources_conflict_and_empty_explicit_sources_fail() {
         .status()
         .unwrap()
         .success());
+    // trace:BUG-2017 | ai:codex — explicit positive HOME fixture.
+    test_git::enroll_synthetic_home(&repo);
     assert!(run(
         &repo,
         &home,

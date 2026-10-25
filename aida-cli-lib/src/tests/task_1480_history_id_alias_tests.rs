@@ -6,6 +6,7 @@
 //! in `cli.rs`'s `history_positional_spec_id_parses`).
 // trace:TASK-1480 | ai:claude
 
+// trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
 use super::*;
 use aida_core::db::DatabaseBackend;
 use aida_core::id_collisions::AmbiguousIdError;
@@ -25,7 +26,7 @@ fn open_backend() -> (tempfile::TempDir, CachedGitBackend) {
     let store_root = dir.path().join("store");
     let cache_path = dir.path().join(".aida").join("cache.db");
     std::fs::create_dir_all(&store_root).unwrap();
-    let backend = CachedGitBackend::open(&store_root, &cache_path).unwrap();
+    let backend = crate::test_env::home_fixture_cached_backend(&store_root, &cache_path).unwrap();
     (dir, backend)
 }
 

@@ -10,13 +10,14 @@
 //! lease.
 // trace:BUG-774 | ai:claude
 
+// trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
 use crate::queue_role_fallback;
 use aida_core::{QueueEntry, Storage};
 
 /// Build a store with one plain spec and return its uuid.
 fn seed_spec(root: &std::path::Path, spec_id: &str) -> uuid::Uuid {
     use aida_core::db::{DatabaseBackend, GitBackend};
-    let backend = GitBackend::new(root).unwrap();
+    let backend = crate::test_env::home_fixture_backend(root).unwrap();
     let mut store = aida_core::RequirementsStore::default();
     let mut req = aida_core::Requirement::new(format!("{spec_id} title"), String::new());
     req.req_type = aida_core::RequirementType::Task;

@@ -17,6 +17,9 @@ AIDA="${CARGO_TARGET_DIR:-$PROJECT_ROOT/target}/debug/aida"
 # shellcheck source=lib/isolated_home.sh
 source "$SCRIPT_DIR/lib/isolated_home.sh"
 aida_isolate_home
+# trace:BUG-2017 | ai:codex — fixture grants remain inside the private HOME.
+source "$SCRIPT_DIR/lib/seat_grant.sh"
+unset AIDA_HANDLE AIDA_SESSION_GRANT AIDA_SESSION_ID
 
 TEST_DIR=$(mktemp -d)
 
@@ -74,6 +77,19 @@ info "Test 1: GitBackend auto-detection with directory path"
 
 STORE="$TEST_DIR/store1"
 mkdir -p "$STORE"
+# This legacy global-ID serializer fixture owns this exact private Git root.
+# Cold ordinary WORK init below deliberately receives no authority setting.
+# trace:BUG-2017 | ai:codex
+[ "$STORE" = "$TEST_DIR/store1" ] && [ ! -L "$STORE" ] || fail "unsafe fixture root"
+git -C "$STORE" init -q
+git -C "$STORE" config user.name Test
+git -C "$STORE" config user.email test@example.invalid
+[ -d "$STORE/.git" ] && [ ! -L "$STORE/.git" ] || fail "unexpected common Git directory"
+( set -o noclobber; printf 'version=1\nauthoritative=true\n' > "$STORE/.git/aida-allocation.toml" )
+mkdir -p "$STORE/.aida"
+printf 'store_path = "."\n' > "$STORE/.aida/config.toml"
+export AIDA_SESSION_GRANT
+AIDA_SESSION_GRANT=$(aida_seat_grant "$STORE" "$HOME" "${AIDA_USER:-${USER:-default}}" advisor)
 
 # Initialize the store by adding a requirement
 $AIDA --file "$STORE" add --title "First requirement" --description "Testing git backend" --type functional --status draft 2>/dev/null
@@ -188,7 +204,9 @@ git config user.name "Test" && git config user.email "test@test.com"
 echo "# Test" > README.md && git add README.md && git commit -m "initial" 2>/dev/null
 
 # Initialize distributed mode (default = worktree)
-$AIDA init --distributed 2>/dev/null || true
+$AIDA init --distributed --no-skills --no-hooks || fail "ordinary WORK init failed"
+[ ! -e "$PROJ_DIR/.git/aida-allocation.toml" ] || fail "WORK init enrolled authority"
+AIDA_SESSION_GRANT=$(aida_seat_grant "$PROJ_DIR" "$HOME" "${AIDA_USER:-${USER:-default}}" advisor)
 
 [ -d "$PROJ_DIR/.aida-store" ] || fail ".aida-store/ worktree not created"
 [ -f "$PROJ_DIR/.aida-store/metadata.yaml" ] || fail "metadata.yaml not created by init"
@@ -211,9 +229,11 @@ pass ".aida-store/ is a git worktree on orphan branch"
 rm -f "$PROJ_DIR/.aida-store/.gitignore"
 AIDA_SESSION_ROLE=advisor $AIDA add --title "lock staging probe" --type task --status approved >/dev/null 2>&1 || fail "BUG-1612: add failed"
 [ -f "$PROJ_DIR/.aida-store/.aida/store-write.lock" ] || fail "BUG-1612: store write lock was not taken"
-$AIDA db sync >/dev/null 2>&1 || true
+$AIDA db sync || fail "store sync failed"
 git -C "$PROJ_DIR/.aida-store" add -A . >/dev/null 2>&1
-git -C "$PROJ_DIR/.aida-store" commit -q -m "sync probe" >/dev/null 2>&1 || true
+if ! git -C "$PROJ_DIR/.aida-store" diff --cached --quiet; then
+  git -C "$PROJ_DIR/.aida-store" commit -q -m "sync probe" || fail "store probe commit failed"
+fi
 if git -C "$PROJ_DIR/.aida-store" ls-files | grep -q "store-write.lock"; then
   fail "BUG-1612: store-write.lock was committed to the store"
 fi
@@ -239,6 +259,9 @@ git_init "$WS/repo-b"
 [ ! -e "$WS/repo-a/aida-store" ] || fail "BUG-608: store nested inside repo-a"
 grep -q 'store_path = "../aida-store"' "$WS/repo-a/.aida/config.toml" || fail "BUG-608: store_path != ../aida-store"
 pass "BUG-608: --sibling creates a true sibling store (../aida-store)"
+
+# trace:BUG-2017 | ai:codex — scoped advisor grant, without HOME enrollment.
+AIDA_SESSION_GRANT=$(aida_seat_grant "$WS/repo-a" "$HOME" "${AIDA_USER:-${USER:-default}}" advisor)
 
 # file a spec from repo-a
 ( cd "$WS/repo-a" && AIDA_SESSION_ROLE=advisor "$AIDA" add --title "from repo-a" --type task --status approved >/dev/null 2>&1 ) || fail "repo-a add failed"
@@ -272,6 +295,9 @@ if [ "$CHECKOUT_HAD_STORE" = 0 ] && { [ -e .aida-store ] || [ -L .aida-store ]; 
     fail "a test wrote .aida-store into the checkout at $PROJECT_ROOT"
 fi
 pass "the checkout was left without a stray .aida-store"
+
+# trace:BUG-2017 | ai:codex — production no-flag CLI/MCP bootstrap proof.
+python3 "$SCRIPT_DIR/test_bug2017_bootstrap.py" "$AIDA"
 
 # ============================================================================
 # Summary
