@@ -5,17 +5,26 @@ title: 'CI: bug_2205 session-end staged-index test has no time-budget entry and 
 description: |-
   scripts/test-time-budget.toml has no entry for aida-cli::bug_2205_session_end_pushed_index session_end_treats_a_staged_index_equal_to_a_pushed_commit_as_clean. Measured on CI: 7.40s, 10.1s (PR #2929 run 40226535248 cli-0), 10.2s (PR #2923 run 40213257117). The Test time budget step fails any PR whose shard happens to run it slow (seen on #2923, #2925, #2929), unrelated to the PR's change.
   Acceptance: add a budget entry (20s, measured max 10.2s x2 rounded) with the measured figures and a trace comment. No test or gate logic change.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-25T19:45:44.175970941Z
-modified_at: 2026-10-25T19:45:44.175970941Z
+modified_at: 2026-10-25T19:46:16.892074051Z
 req_type: Task
 tags:
 - from-advisor
 - kind:ci-flake
 - severity:minor
+history:
+- id: 01a17499-76bc-7c01-aa60-768c0e854904
+  author: joe
+  timestamp: 2026-10-25T19:46:16.892062010Z
+  session_id: cde796d3-1750-4745-a8f9-7ab3bc7c3519
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 011e33b65ee2ee1ecd96518e3cab472108cc18c5
   branch: main
