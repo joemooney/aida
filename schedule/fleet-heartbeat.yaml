@@ -1,7 +1,7 @@
 job: fleet-heartbeat
-last_run: 2026-10-25T14:54:54.367480862Z
+last_run: 2026-10-25T15:58:41.475839543Z
 last_by:
   seat: advisor
   vendor: codex
 result: done
-note: Three fixers verified by actual cargo PIDs3436865/3468831/3475330 despite dormant aggregate lease labels; reviewer source preview done and1917rework routed. OnlyopenPR2919 still oldeff2held/red; local22bc includes F4/F6+mainmerge pendinggates/push. Old1742worktree16h preserved and fullremainingbriefready; no duplicate worker. All4blockedrelays acknowledged, relay doctor0. Next usual hourly job.
+note: 15:58UTC fleet pass:17open/0openPRs; actualcode1,agy1,agy2,Claude2346PIDs verified, three actualCargo tests live (2347,1917,2346), Claudeheadless63451moving. All8relaystatusesread:4historicalblockedwithactualhandoff.md.done receipts,4exited; relaydoctor0findings, norestart. Old1742~17hstalledview has fullbrief143129 and existingownerc4dfsupersession/nativequeue01a173b6; uptakepending, preservedWIP/noduplicate. BUG2017S1S2PR2919actuallymerged54c/greenBuild40206777816/independent22bcapproval, fullS3open; review1931Completed.2347actualidleproofComplete/nativehealth0.2346delegatedlegitcontainedClaude; parentadvisorAUTHORcannotapprove/merge; warningkeyringnotyetactualrefusal.1917physicalmigrationquestionsde431/9c6pending,1889fourclustersowneruptakeconfirmed. No immediatehumanact;1889explicitoperatormerges remainswhenready. Nextnormalhourlycheck.
