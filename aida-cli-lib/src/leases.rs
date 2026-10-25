@@ -4227,6 +4227,46 @@ fn stale_lease_recovery_with_owner(
     }
 }
 
+/// BUG-2223: why a resumed pickup may not adopt this lease's tree in place,
+/// or `None` when it may: the owning process is verifiably gone and the tree
+/// is still on disk. Judged on the base verdict, like the BUG-908 retry:
+/// adoption keeps the tree, its commits and its uncommitted work untouched,
+/// so a stray process still in the tree does not block it. A live claude in
+/// the tree still reads as `Live`.
+// trace:BUG-2223 | ai:claude
+pub(crate) fn orphan_adoption_refusal(report: &StaleLeaseRecoveryReport) -> Option<&'static str> {
+    match report.base_verdict {
+        StaleLeaseRecovery::StaleDirty { .. }
+        | StaleLeaseRecovery::ReclaimableClean {
+            worktree_missing: false,
+        } => None,
+        StaleLeaseRecovery::ReclaimableClean {
+            worktree_missing: true,
+        } => Some("its tree no longer exists"),
+        StaleLeaseRecovery::Live => Some("a live process still backs it"),
+        StaleLeaseRecovery::UnknownLiveness => {
+            Some("it records no owning process, so it cannot be proven dead")
+        }
+    }
+}
+
+/// BUG-2223: the orphaned lease on `scope` whose tree `aida queue work
+/// --resume` re-enters in place, if there is one: the freshest lease on the
+/// scope, with a recorded tree that [`orphan_adoption_refusal`] accepts.
+// trace:BUG-2223 | ai:claude
+pub(crate) fn adoptable_orphan_lease(
+    project_root: &std::path::Path,
+    scope: &str,
+) -> Option<SessionLease> {
+    let lease = find_scope_lease_conflict(&list_leases(project_root), scope)?;
+    if lease.worktree_path.as_os_str().is_empty() {
+        return None;
+    }
+    orphan_adoption_refusal(&stale_lease_recovery_for_lease(&lease))
+        .is_none()
+        .then_some(lease)
+}
+
 /// BUG-906: before a transient phase retry relaunches a child session, reap any
 /// predecessor lease on the same scope whose owner process is verifiably gone.
 /// Clean/missing worktrees are safe to release; dirty worktrees become a typed,

@@ -815,6 +815,77 @@ pub(crate) fn creator_shell_pid() -> Option<u32> {
     sys.process(me)?.parent().map(|p| p.as_u32())
 }
 
+/// BUG-2223: the orphaned lease an explicit `--path` + `--force-claim` start
+/// adopts in place: the one lease that records exactly this tree, for this
+/// scope and branch, whose owner is verifiably gone. A seat clone can be
+/// re-entered ONLY this way, so for a clone every mismatch refuses: no lease
+/// records it, the lease is not a clone lease or is for another scope or
+/// branch, the clone has another branch checked out, or the lease is not
+/// provably orphaned. For a linked worktree a lease that does not match is
+/// left to the existing re-entry paths (`Ok(None)`).
+// trace:BUG-2223 | ai:claude
+pub(crate) fn orphan_lease_to_adopt(
+    project_root: &std::path::Path,
+    path: &std::path::Path,
+    owns: &str,
+    branch: &str,
+    is_clone: bool,
+) -> Result<Option<SessionLease>> {
+    let canonical = |p: &std::path::Path| p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
+    let tree = canonical(path);
+    let recorded = list_leases(project_root)
+        .into_iter()
+        .find(|l| !l.worktree_path.as_os_str().is_empty() && canonical(&l.worktree_path) == tree);
+    let refuse = |why: String| -> Result<Option<SessionLease>> {
+        if is_clone {
+            anyhow::bail!(
+                "refusing to re-enter the contained seat's private clone {}: {why}. Nothing was \
+                 changed in it.",
+                path.display()
+            );
+        }
+        Ok(None)
+    };
+    let Some(lease) = recorded else {
+        return refuse(
+            "no session lease records it, and only an orphaned session's clone can be \
+             re-entered"
+                .into(),
+        );
+    };
+    let id = &lease.id[..lease.id.len().min(8)];
+    if is_clone && lease.tree_kind != crate::seat_clone::TreeKind::Clone {
+        return refuse(format!(
+            "lease {id} records it as a worktree, not a seat clone"
+        ));
+    }
+    if !lease.scope.eq_ignore_ascii_case(owns) {
+        return refuse(format!(
+            "it belongs to lease {id} for `{}`, not `{owns}`",
+            lease.scope
+        ));
+    }
+    if lease.branch != branch {
+        return refuse(format!(
+            "lease {id} records branch `{}`, not `{branch}`",
+            lease.branch
+        ));
+    }
+    if is_clone {
+        let head = crate::seat_clone::checked_out_branch(path);
+        if head.as_deref() != Some(branch) {
+            return refuse(format!(
+                "it has `{}` checked out, but lease {id} records `{branch}`",
+                head.as_deref().unwrap_or("<detached or unreadable HEAD>")
+            ));
+        }
+    }
+    if let Some(why) = orphan_adoption_refusal(&stale_lease_recovery_for_lease(&lease)) {
+        return refuse(format!("lease {id} is not orphaned: {why}"));
+    }
+    Ok(Some(lease))
+}
+
 /// BUG-379: decision returned by the `aida session start` pre-flight
 /// spec-status gate. Pure-data so the gate is unit-testable without
 /// spinning up a worktree / store fixture. trace:BUG-379 | ai:claude
@@ -1834,6 +1905,34 @@ pub(crate) fn session_start_with_receipt(
                 crate::worktree::is_registered(&String::from_utf8_lossy(&o.stdout), &worktree_path)
             })
             .unwrap_or(false);
+    // BUG-2223: an explicit --path + --force-claim naming the tree of an
+    // orphaned lease adopts it in place (`aida queue work --resume`). A seat
+    // clone is re-entered only this way: `orphan_lease_to_adopt` refuses a
+    // clone no orphaned lease of this scope and branch records.
+    // trace:BUG-2223 | ai:claude
+    let clone_reentry = explicit_path.is_some()
+        && force_claim
+        && worktree_path.exists()
+        && crate::seat_clone::seat_clone_root(&worktree_path)
+            .is_some_and(|root| worktree_path.canonicalize().ok() == Some(root));
+    let adopted_orphan = if clone_reentry || reuse_existing_worktree_path {
+        orphan_lease_to_adopt(
+            &project_root,
+            &worktree_path,
+            owns,
+            &branch_name,
+            clone_reentry,
+        )?
+    } else {
+        None
+    };
+    if clone_reentry && !contained_seat {
+        anyhow::bail!(
+            "{} is a contained seat's private clone, so only a contained launch may re-enter it: \
+             re-run contained (--sandbox, AIDA_CONTAINED=1, or [agents] contained)",
+            worktree_path.display()
+        );
+    }
     // TASK-2053 S4c: the default flipped to `clone`, but a clone cannot yet
     // host a review session, re-enter an existing --path, live at an
     // explicit --path that is not an `aida-seat-*` directory in the worktree
@@ -1843,7 +1942,10 @@ pub(crate) fn session_start_with_receipt(
     // The launch facts (a git call, a config read, a canonicalize) are read
     // only for a clone; a worktree launch has nothing to fall back from.
     // trace:TASK-2053 | ai:claude
-    let mut tree_kind = if tree_kind != crate::seat_clone::TreeKind::Clone {
+    let mut tree_kind = if clone_reentry {
+        // The tree already is a clone, whatever the knob says now.
+        crate::seat_clone::TreeKind::Clone
+    } else if tree_kind != crate::seat_clone::TreeKind::Clone {
         tree_kind
     } else {
         match crate::seat_clone::default_clone_fallback(
@@ -1864,7 +1966,7 @@ pub(crate) fn session_start_with_receipt(
             (kind, None) => kind,
         }
     };
-    if worktree_path.exists() && !reuse_existing_worktree_path {
+    if worktree_path.exists() && !reuse_existing_worktree_path && !clone_reentry {
         anyhow::bail!(
             "{} already exists — pick a different --path or remove it first",
             worktree_path.display()
@@ -1917,7 +2019,10 @@ pub(crate) fn session_start_with_receipt(
     // trace:BUG-574 | ai:claude
     // BUG-2143: only a lease holding a live linked worktree is re-entered.
     let existing_leases = crate::worktree_gc::reenterable_leases(&project_root);
-    if let Some(existing) = existing_lease_for_scope(&existing_leases, owns) {
+    // BUG-2223: the orphan being adopted is replaced below, not re-entered.
+    let existing = existing_lease_for_scope(&existing_leases, owns)
+        .filter(|e| !adopted_orphan.as_ref().is_some_and(|o| o.id == e.id));
+    if let Some(existing) = existing {
         {
             eprintln!(
                 "{} scope `{}` is already owned by session {} ({}) — re-entering it.",
@@ -2131,7 +2236,7 @@ pub(crate) fn session_start_with_receipt(
     // origin. No lease exists yet; create cleans its clone and pin first.
     // trace:TASK-2300 | ai:codex
     let fallback_worktree_path = worktree_path.clone();
-    let created_clone = if tree_kind == crate::seat_clone::TreeKind::Clone {
+    let created_clone = if tree_kind == crate::seat_clone::TreeKind::Clone && !clone_reentry {
         if reuse_existing_worktree_path || review_target.is_some() {
             anyhow::bail!(
                 "a contained seat with `[contained] seat_tree = \"clone\"` cannot {} yet; \
@@ -2222,6 +2327,17 @@ pub(crate) fn session_start_with_receipt(
                 guard.disarm();
             }
         }
+    } else if clone_reentry {
+        // BUG-2223: adopt in place. The clone, its pin, its commits and its
+        // uncommitted work are kept exactly as the orphaned session left them;
+        // `orphan_lease_to_adopt` already checked its branch from plain files.
+        // trace:BUG-2223 | ai:claude
+        eprintln!(
+            "{} re-entering the orphaned seat's private clone {} [{}] in place",
+            crate::glyph(crate::glyphs::Glyph::Check).green(),
+            worktree_path.display(),
+            branch_name,
+        );
     } else if reuse_existing_worktree_path {
         let current = current_branch_at(&worktree_path);
         if current.as_deref() != Some(branch_name.as_str()) {
@@ -2953,6 +3069,22 @@ pub(crate) fn session_start_with_receipt(
     }
     if let Some(guard) = clone_cleanup.as_mut() {
         guard.disarm();
+    }
+    // BUG-2223: the adopted orphan's lease record goes only once its successor
+    // is written, so the tree is never unleased; the tree itself stays.
+    // trace:BUG-2223 | ai:claude
+    if let Some(orphan) = &adopted_orphan {
+        aggregate_session_activity_into_roles(&project_root, &orphan.id);
+        if !remove_session_lease_record_only(&project_root, &orphan.id) {
+            // Not `aida session end`: that would tear down the adopted tree.
+            eprintln!(
+                "{} could not remove the adopted orphaned lease {}; delete {} by hand (its \
+                 tree is now leased by this session)",
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                &orphan.id[..orphan.id.len().min(8)],
+                lease_path(&project_root, &orphan.id).display(),
+            );
+        }
     }
     // BUG-1918: durable record of who claimed this spec, surviving release.
     // trace:BUG-1918 | ai:claude

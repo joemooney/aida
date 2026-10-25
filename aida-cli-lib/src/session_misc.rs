@@ -1749,7 +1749,9 @@ pub(crate) fn resolve_resume_id(recorded: &[String], requested: &str) -> Result<
 ///     (STORY-132 — the TUI tracks the conversation deterministically)
 ///   * `--fresh`           → cold launch, new minted id
 ///   * `--resume <id>`     → resume that id (prefix-matched)
-///   * bare `--resume`     → resume the most recent recorded session
+///   * bare `--resume`     → resume the most recent recorded session, or,
+///     with none recorded and an orphaned lease's tree to re-enter
+///     (`orphan_tree`), cold launch in that tree (BUG-2223)
 ///   * neither, prior exists, interactive → prompt
 ///   * neither, otherwise  → cold launch
 ///     trace:TASK-112, STORY-132 | ai:claude
@@ -1758,6 +1760,7 @@ pub(crate) fn resolve_queue_work_launch(
     resume: Option<&str>,
     fresh: bool,
     session_id_override: Option<&str>,
+    orphan_tree: Option<&std::path::Path>,
 ) -> Result<QueueWorkLaunch> {
     use std::io::IsTerminal;
 
@@ -1786,16 +1789,30 @@ pub(crate) fn resolve_queue_work_launch(
             Ok(QueueWorkLaunch::Resume(resolve_resume_id(&recorded, id)?))
         }
         // Bare `--resume` — most recent recorded session for the scope.
-        Some(_) => {
-            let m = prior.first().ok_or_else(|| {
-                anyhow::anyhow!(
-                    "no recorded claude session for scope `{}` to resume — \
-                     drop --resume (or pass --fresh) to cold-launch",
-                    scope
-                )
-            })?;
-            Ok(QueueWorkLaunch::Resume(m.id.clone()))
-        }
+        Some(_) => match (prior.first(), orphan_tree) {
+            (Some(m), _) => Ok(QueueWorkLaunch::Resume(m.id.clone())),
+            // BUG-2223: the dead worker left no conversation to resume, but
+            // its tree is still there — start a new one in it rather than
+            // refuse, which used to point back at the orphaned-lease error.
+            // trace:BUG-2223 | ai:claude
+            (None, Some(tree)) => {
+                eprintln!(
+                    "  {} no recorded claude session for scope `{}` — starting a new one in \
+                     the orphaned session's tree {}",
+                    crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                    scope,
+                    tree.display()
+                );
+                Ok(mint_fresh())
+            }
+            // No orphaned tree holds the scope, so a plain pickup is free to
+            // start one: dropping --resume is a command that works.
+            (None, None) => anyhow::bail!(
+                "no recorded claude session for scope `{}` to resume, and no orphaned session \
+                 tree to re-enter — drop --resume (or pass --fresh) to cold-launch",
+                scope
+            ),
+        },
         // Default: prompt when prior sessions exist and we're
         // interactive; cold-launch otherwise (non-interactive /
         // autonomous runs default to fresh — no blocking prompt).
