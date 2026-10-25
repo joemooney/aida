@@ -4,40 +4,32 @@ agreed_id: BUG-2017
 title: Prevent uncoordinated ID-block allocation in partitioned stores
 description: |
   ## Problem
+  Partitioned clones can independently acquire numeric blocks and issue bare global display IDs without a common allocation authority. Local reservations must not be mistaken for globally coordinated identities.
 
-  A git-canonical AIDA store can be intentionally partitioned from another store while still retaining commands that acquire nodes and allocate apparently global display-ID blocks. Without a shared allocation authority or eventual registry convergence, those reservations are only local claims. Two trust domains can therefore allocate overlapping nodes or numeric blocks while each reports globally unique IDs, making a later reconciliation ambiguous or unsafe.
+  ## Acceptance (signed SKETCH v2, advisor signoff 2026-10-24)
+  1. Allocation authority is a local, versioned setting in the clone common Git directory. Missing means non-authoritative; malformed refuses allocation. Store objects, forge URLs, user preferences and environment variables never confer authority.
+  2. A non-authoritative clone allocates only existing node-local <TYPE>-<node>-<n> IDs through every writer (CLI, MCP, backend, bulk, import and repair). Global-ID or block requests refuse before counter, object or ref changes; no internal-global-counter fallback remains.
+  3. Node binding is a pseudonymous UUID without host/user/email/path fields. STORY-1742 scans node and registry serialization without exemptions. Preserve the existing node and alias schema; add fields rather than repurposing them.
+  4. Only the authoritative clone may claim or dispense global blocks and run canonical promotion. The operator explicitly enrolls the primary HOME clone in slice 2; implementation never enrolls real HOME. UUIDs and old-ID aliases survive renumbering and repeated sync is idempotent.
+  5. Shared reconciliation preflight reports every conflict in global ranges, node bindings and display-ID-to-UUID assignments using opaque identities, before union or ref advancement. Audit is read-only and emits a manual repair plan.
 
-  ## Acceptance
-
-  - AIDA distinguishes globally coordinated allocation from trust-domain-local allocation in configuration, status, and machine-readable output.
-  - A clone cannot acquire a globally scoped node or numeric block unless it can prove that the configured allocation authority reserved that identity.
-  - A partitioned clone can import a one-way, authority-issued allocation grant without importing the authority's full requirement store.
-  - Allocation grants identify their authority, trust domain, node identity, type ranges, issuance revision, and integrity proof.
-  - When no authority grant is available, AIDA either refuses bare global display-ID allocation or emits an explicitly namespaced local handle that cannot be mistaken for a global ID.
-  - Store reconciliation detects overlapping node identities and block ranges before attempting a union and reports every conflict without choosing a winner.
-  - An audit command identifies nodes and blocks that exist only locally, distinguishes valid authority grants from uncoordinated claims, and emits a repair plan.
-  - Existing converged multi-hub stores retain their current allocation behavior when their common registry ancestry and authority are verifiable.
-  - Documentation explains that direct connectivity to every forge is unnecessary when one trusted hub serves as allocation authority and distributes grants inward.
+  ## Slices
+  1. Common-Git allocation-mode setting, complete writer checklist in PR, shared allocation/persistence guards, CLI/MCP/backend refusal fixtures. Default WORK cannot dispense global IDs; unsupported writers refuse.
+  2. Pseudonymous UUID bootstrap, auto-claim/repair integration, home-only promotion and WORK-to-HOME alias-preservation fixtures.
+  3. Shared all-conflict reconciliation preflight/audit, STORY-1742 scanner integration and final documentation.
+  Slices 1 and 2 use (Refs BUG-2017); only final acceptance-complete work uses (BUG-2017).
 
   ## Constraints
-
-  - Allocation authority metadata must not require copying requirement objects, comments, queues, coordination records, credentials, or machine-local paths across trust boundaries.
-  - Grants are append-only or superseded explicitly; a previously issued block cannot silently move to another node.
-  - Offline operation remains possible within the ranges of a previously verified grant.
-  - The design must tolerate non-fast-forward and replay attempts without issuing duplicate authority grants.
+  No transport/scanner-file overlap before STORY-1742 scanner is in review. No global authority enrollment on real HOME during implementation. Preserve store-writer then dispense-lock ordering. Outbound work identifiers are sanitized by STORY-1742, not by a duplicate policy engine.
 
   ## Non-goals
-
-  - Automatically merging complete stores across trust boundaries.
-  - Treating forge access as the source of identity authority.
-  - Reusing an uncoordinated local block merely because no collision is currently observed.
-  - Replacing requirement UUIDs or portable-intent checksums as durable machine identities.
+  Signatures, key enrollment, offline grant envelopes, a second authority service, automatic full-store trust-boundary merge, malicious raw Git, or copied/rolled-back entire-clone state. This signed single-HOME/node-local contract supersedes the original description signed-grant/offline-import clauses; full SKETCH v2 and signoff remain in comments.
 status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T22:12:54.027870933Z
-modified_at: 2026-10-25T04:47:01.474884743Z
+modified_at: 2026-10-25T04:59:09.816793562Z
 req_type: Bug
 tags:
 - id-allocation
@@ -163,6 +155,10 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1716d-48f7-7e93-8d0b-32b004bfc2d8
+  author: ai:codex:joe
+  timestamp: 2026-10-25T04:59:09.943714216Z
+  changes: []
 filed_at:
   code_sha: 3dfcf99117e6efbaa8259155a576276ab424a335
   branch: main
