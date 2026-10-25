@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-24T23:29:02.942675586Z
-modified_at: 2026-10-25T10:40:08.970024248Z
+modified_at: 2026-10-25T10:56:44.261774383Z
 req_type: Task
 tags:
 - from-review:PR-2909
@@ -67,6 +67,11 @@ comments:
     Local verification: one meaningful affected-module filtered run/new pure cases plus fast; touched/compile only as required by shared infrastructure or>10files. Preserve actual final failures rather than recording partial logs as pass; no blind repeated whole suite, Cargo slot bypass or nested timeout. No live mail/ACK/migration tests. Codex1 retains implementation ownership; codex2 remains independent reviewer.
   created_at: 2026-10-25T10:40:08.970024248Z
   modified_at: 2026-10-25T10:40:08.970024248Z
+- id: 01a172b4-a6e5-7c61-83c1-3be6fd40ea7a
+  author: joe
+  content: 'ADVISOR runtime-brief disposition: older combined prep brief052312 acknowledged as superseded by current TASK2345brief104909 and TASK2346brief104604, both verified pending and implementer queued. All A1/A2 criteria remain required; this is routing cleanup, not implementation completion or evidence another agent consumed a brief. Live-parent identity/privacy safeguards and TASK2346 locked-snapshot/preview correction are preserved in canonical rulings.'
+  created_at: 2026-10-25T10:56:44.261774383Z
+  modified_at: 2026-10-25T10:56:44.261774383Z
 history:
 - id: 01a17167-4438-7c81-b6ce-974f9bde8cc8
   author: joe
