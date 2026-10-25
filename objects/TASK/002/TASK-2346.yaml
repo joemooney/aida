@@ -16,11 +16,17 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-24T23:29:09.066068020Z
-modified_at: 2026-10-24T23:29:09.066068020Z
+modified_at: 2026-10-25T04:52:37.551092463Z
 req_type: Task
 tags:
 - from-review:PR-2909
 - severity:cosmetic
+comments:
+- id: 01a17167-4c2f-7b41-9191-65355f4927cb
+  author: joe
+  content: 'PROXY DECISION for joe: Approve removal of proven-unreachable duplicate native-session lookup; retain explicit-name conflicts and native resume behavior.'
+  created_at: 2026-10-25T04:52:37.551092463Z
+  modified_at: 2026-10-25T04:52:37.551092463Z
 filed_at:
   code_sha: de9c0ffb7f27102fbf477a2c7aa5155724fe20bc
   branch: pr-2909
