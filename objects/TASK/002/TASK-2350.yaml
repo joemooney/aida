@@ -1,0 +1,32 @@
+id: 01a173f5-1621-70d3-ae19-5ff56630d948
+spec_id: TASK-2350
+agreed_id: TASK-2350
+title: aida pr auto-queue-review falsely reports 'no origin remote' in a sandboxed worktree
+description: |
+  In the TASK-2346 implementer seat (worktree aida-seat-aida-task-2346, Claude Code sandbox), `aida pr auto-queue-review` — both bare and with `--branch task-2346` — skipped with:
+
+    auto-queue: no `origin` remote (local-only project) — no PR can exist, so no reviewer story was filed
+
+  But the worktree has a working origin (`git remote -v` → https://github.com/joemooney/aida.git) and PR #2923 had just been pushed/opened from the same shell. The remote-detection path presumably trips on the sandbox environment (e.g. the deny-masked `.gitmodules` device node emits "Permission denied" warnings on some git invocations, or detection runs against a different checkout).
+
+  Impact: reviewer auto-queue silently no-ops for sandboxed implementer seats, so review routing falls back to whoever launched the seat. Worth hardening the detection (distinguish "no remote configured" from "remote lookup failed").
+
+  Raised by the implementer while working TASK-2346.
+  Branch: task-2346  ·  Commit: 7a71a9c (PR #2923)
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-25T16:46:44.257241034Z
+modified_at: 2026-10-25T16:46:44.257241034Z
+req_type: Task
+tags:
+- from-implementer:TASK-2346
+- kind:bug-spotted
+- severity:minor
+filed_at:
+  aida_version: 0.16.0
+  aida_build_sha: a01a698998
+  vendor: claude
+  session: 01a173be0ac4
+  harness_version: 2.1.310 (Claude Code)

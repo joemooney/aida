@@ -1,0 +1,35 @@
+id: 01a173f2-8dcc-7752-a87b-03b7ef311900
+spec_id: TASK-2349
+agreed_id: TASK-2349
+title: agent_handle tests fail when run inside a live agent session (env leaks past test guards)
+description: |
+  Four aida-cli-lib agent_handle unit tests fail when `cargo test` runs from inside a live Claude Code session shell, on an UNMODIFIED tree (verified via git stash on task-2346 @ a01a698998):
+
+  - agent_handle::tests::agent_ls_views_list_every_vendor_with_handle_role_spec_and_liveness
+  - agent_handle::tests::concurrent_children_of_one_seat_get_distinct_handles_and_replies_reach_each
+  - agent_handle::tests::session_start_registers_a_generated_handle_or_keeps_the_launch_name
+  - agent_handle::tests::statusline_session_evidence_covers_all_three_clients
+
+  Example: statusline_session_evidence_covers_all_three_clients sets CODEX_THREAD_ID and clears AIDA_HOOK_PAYLOAD / CLAUDE_CODE_SESSION_ID, but current_native_session_id() still returns None (expected Some("codex-t")) — the host session's client-detection env (e.g. CLAUDECODE / Claude session vars) wins vendor detection because the EnvVarsGuard lists don't cover it. The other three tests fail the same way via touch_session_start_agent.
+
+  CI is unaffected (no agent env there), but every agent seat running the LIGHT-tier targeted test command for this module sees 4 spurious failures and has to burn a stash/baseline run to prove its change innocent. Fix shape: have EnvVarsGuard (or a test prelude) clear the full client-detection var set in these tests.
+
+  Raised by the implementer while working TASK-2346.
+  Branch: task-2346  ·  Commit: c5736d8d40  (PR link added on merge)
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-25T16:43:58.284814607Z
+modified_at: 2026-10-25T16:43:58.284814607Z
+req_type: Task
+tags:
+- from-implementer:TASK-2346
+- kind:bug-spotted
+- severity:minor
+filed_at:
+  aida_version: 0.16.0
+  aida_build_sha: a01a698998
+  vendor: claude
+  session: 01a173be0ac4
+  harness_version: 2.1.310 (Claude Code)
