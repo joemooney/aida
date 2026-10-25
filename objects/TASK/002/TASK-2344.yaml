@@ -13,12 +13,12 @@ description: |
   Options: write the result record first, or reap orphans older than a TTL during the lock held by submit_request/cancel_request.
 
   Raised in review of PR-2905: https://github.com/joemooney/aida/pull/2905#issuecomment-6390394038
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-24T22:36:27.858473051Z
-modified_at: 2026-10-25T04:52:25.101403879Z
+modified_at: 2026-10-25T04:52:29.090791282Z
 req_type: Task
 tags:
 - from-review:PR-2905
@@ -30,6 +30,14 @@ comments:
   content: 'PROXY DECISION for joe: Approve crash-safe request/result publication and bounded orphan recovery under the existing lock. Preserve active records and collision protection; no arbitrary age-based deletion of live/unknown-owned work. Implementer proposes exact recovery state transitions before coding.'
   created_at: 2026-10-25T04:52:25.101403879Z
   modified_at: 2026-10-25T04:52:25.101403879Z
+history:
+- id: 01a17167-2b22-7d80-81ad-f5c3980acf4c
+  author: joe
+  timestamp: 2026-10-25T04:52:29.090780425Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 9457e495247a3c9de111d15507fabd2cd0923079
   branch: pr-2905
