@@ -19,13 +19,19 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-25T02:08:29.032100054Z
-modified_at: 2026-10-25T02:08:46.458944084Z
+modified_at: 2026-10-25T02:08:50.315123314Z
 req_type: Task
 tags:
 - codex
 - mailbox
 - operator-request
 - wake
+comments:
+- id: 01a170d1-588b-7731-b0db-a5b904295708
+  author: joe
+  content: 'ADVISOR SIGNOFF: APPROVED for the bounded watcher design captured in acceptance, based on operator approval at 19:06 MST. Explicit target UUID, message-ID dedup and separate notification/read acknowledgements are binding. No new authority; native codex queue only. Implement separately; independent review before live installation. Operator has authorized one synthetic wake test and enabling this one watcher.'
+  created_at: 2026-10-25T02:08:50.315123314Z
+  modified_at: 2026-10-25T02:08:50.315123314Z
 history:
 - id: 01a170d1-497a-7282-8dcb-91782bba7dc3
   author: joe
