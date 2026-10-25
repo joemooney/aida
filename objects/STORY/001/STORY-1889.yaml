@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T15:33:51.496539087Z
-modified_at: 2026-10-25T05:37:39.197309690Z
+modified_at: 2026-10-25T05:37:40.383457540Z
 req_type: Story
 tags:
 - architecture
@@ -233,6 +233,18 @@ comments:
   content: Advisor round2 F1 resolved; F2 restrict post-check unprotected mutable routing at both marker persistence paths. Concrete brief; existing agy1 doer only, no launch/hold clearance.
   created_at: 2026-10-25T05:37:39.065595580Z
   modified_at: 2026-10-25T05:37:39.065595580Z
+- id: 01a17190-891c-70e2-ae94-cffd204c4006
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-1889):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 843ef2a96197
+    Recorded: 2026-10-25T05:37:15.805084921+00:00
+    Findings:
+    1. P1 F2 (contract-drift): gate/merge_hold_core.rs write_marker (~1525-1545) validates/normalizes a hold then hands full &mut normalized to unprotected merge_hold::reconcile_recusal_route (~200-277) before serializing. reconcile_recusal_hold (~1681-1692) similarly hands full refreshed record outside then persists it. Current helper only edits routed_to/routing_state; no current runtime exploit is alleged. Removing merge_hold.rs from the protected floor nevertheless lets future unprotected edits change reason_kind, legacy, absorbed, recused_principals or other authority-bearing fields after protected checks. Those affect principal_is_recused and rework_hold_release eligibility. Signed13:52 requires marker/decision boundary protected. Keep filesystem/liveness/brief routing plumbing outside, but use a temporary proposal/narrow routing result and protected code that copies back ONLY routed_to/routing_state, or equivalently protect all admitted-record mutation. Apply to BOTH write_marker and reconcile_recusal_hold; preserve selection/errors/refusal strings/normal serialized output. A protected adversarial regression must prove routing cannot change any non-routing field at persistence, not merely marker presence or helper location. Independent codex2 source consultation agrees; root independently verified both current call sites.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-10-25T05:37:40.124278370Z
+  modified_at: 2026-10-25T05:37:40.124278370Z
 history:
 - id: 01a15f19-1b8d-7a60-bd9c-acf0c42193fc
   author: joe
