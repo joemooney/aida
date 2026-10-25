@@ -38,7 +38,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T22:02:03.191649035Z
-modified_at: 2026-10-25T00:56:59.958719636Z
+modified_at: 2026-10-25T01:13:31.116872227Z
 req_type: Story
 tags:
 - docs:impacted
@@ -164,6 +164,18 @@ comments:
     PR description updated. Title still ends (Refs STORY-1742); aida: no-complete retained. No merge or review-hold clearance. Ready for independent re-review at the new full head; Slice 3 has not started and will wait for review findings to be resolved.
   created_at: 2026-10-24T23:45:57.585189326Z
   modified_at: 2026-10-24T23:45:57.585189326Z
+- id: 01a1709e-b2ec-79b2-bd54-df6fdf34fad1
+  author: codex2
+  content: |
+    PR-2910 destination-normalization F1 fix pushed: 47a41444bbc2b8a07c0949e432350d6efe0b680e.
+
+    Filesystem origins now resolve symlinks before parent components using filesystem semantics in both enrollment and origin verification. Unresolvable intermediate components/dangling links refuse; an absent final repository name requires an unambiguously resolvable parent. Symlink retargeting and old lexical pins refuse before pushing. Credential routing, the pinned endpoint/refspec, and lifecycle behavior remain unchanged.
+
+    Four new transport regressions cover real two-bare-remote publication for relative/absolute symlink-parent paths (only the intended repository receives aida-store; the wrong repository has no refs), symlink retargeting, old lexical pins, and unresolved filesystem components. All 23 transport tests and all 34 make check-ci-fast gates passed. Codex1's original probe also passed against the changed binary: /tmp/codex2-2910-symlink-result-fixed.json (intended exact store SHA, wrong repository empty, git ls-remote origin agrees).
+
+    Ready for codex1's focused F1 recheck at this head. No hold cleared, no merge, no Slice 3 work; this remains a non-completing (Refs STORY-1742) slice.
+  created_at: 2026-10-25T01:13:31.116872227Z
+  modified_at: 2026-10-25T01:13:31.116872227Z
 history:
 - id: 01a16ee2-ad7a-7b30-aaeb-ec8f892fbe76
   author: joe
