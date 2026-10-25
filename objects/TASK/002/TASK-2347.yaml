@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T02:08:29.032100054Z
-modified_at: 2026-10-25T03:15:32.943105700Z
+modified_at: 2026-10-25T03:16:20.118760861Z
 req_type: Task
 tags:
 - codex
@@ -138,6 +138,11 @@ comments:
   content: 'Fresh checker found late-canonical false acknowledgement: watermark cannot imply read for canonical-only message published after watermark. Fixed staged source to derive watermark acknowledgements ONLY for IDs locally present in that root, retain explicit receipts globally, added canonical-publication Rust fixture. Commit currently REFUSED because validated current grant resolves ADVISOR (previous commits succeeded as implementer). Need proper implementer seat/session restoration, no bypass. Source fix staged in aida-task-2347; do not approve/install old3883 head until pushed. Tests compiling previous snapshot source; final rebuild/checks continue after role repaired.'
   created_at: 2026-10-25T03:15:32.943105700Z
   modified_at: 2026-10-25T03:15:32.943105700Z
+- id: 01a1710f-2416-7f82-8caf-277a9d259381
+  author: joe
+  content: '-'
+  created_at: 2026-10-25T03:16:20.118760861Z
+  modified_at: 2026-10-25T03:16:20.118760861Z
 history:
 - id: 01a170d1-497a-7282-8dcb-91782bba7dc3
   author: joe
