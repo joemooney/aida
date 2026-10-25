@@ -4,6 +4,7 @@ trace:BUG-2017 | ai:codex
 """
 import concurrent.futures
 import hashlib
+import json
 import os
 from pathlib import Path
 import re
@@ -169,7 +170,26 @@ def main():
         migrated = run("add", "--title", "legacy local admission", "--type", "bug", "--status", "draft", cwd=legacy)
         migrated_node = tomllib.loads((legacy / ".git/aida-work-node.toml").read_text())["node_id"]
         assert f"BUG-{migrated_node}-042" in migrated.stdout
-        print("PASS ordinary WORK init/CLI/MCP/restart/concurrency/ref-only HUB/HOME aliases/idempotency/legacy refusal")
+        # Explicit non-Git directories support read-only protocol startup, but
+        # never acquire a global/internal fallback allocator.
+        raw_store = base / "raw-read-only-store"
+        raw_store.mkdir()
+        requests = [
+            {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "raw-contract", "version": "1"}}},
+            {"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": "add_requirement", "arguments": {"title": "must refuse", "description": "no Git identity", "type": "bug", "status": "draft"}}},
+        ]
+        raw_env = {k: v for k, v in env.items() if k != "AIDA_SESSION_GRANT"}
+        raw = subprocess.run([str(binary), "--file", str(raw_store), "mcp-serve"], cwd=base, env=raw_env,
+                             input="".join(json.dumps(r) + "\n" for r in requests), text=True, capture_output=True, timeout=30)
+        assert raw.returncode == 0, (raw.stdout, raw.stderr)
+        responses = [json.loads(line) for line in raw.stdout.splitlines() if line.strip()]
+        assert responses[0]["result"]["serverInfo"]
+        assert responses[1]["result"]["isError"]
+        assert "requirement ID allocation failed" in content_text(responses[1]["result"])
+        assert responses[1]["result"]["structuredError"]["code"] == "internal"
+        assert not list(raw_store.rglob("*.yaml"))
+        assert not list(raw_store.rglob("*dispenser*"))
+        print("PASS ordinary WORK init/CLI/MCP/restart/concurrency/ref-only HUB/HOME aliases/idempotency/legacy refusal/raw MCP read-only")
 
 
 if __name__ == "__main__":

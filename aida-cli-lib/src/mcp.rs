@@ -14491,9 +14491,14 @@ fn run_mcp_serve(
             // uses. The previous YAML-snapshot approach wrote to
             // `.aida/mcp-cache.yaml` only — invisible to the CLI and overwritten on
             // every MCP restart. trace:BUG-310 | ai:claude
-            // trace:BUG-2017 | ai:codex — MCP shares registered-legacy migration/provider loading.
-            let storage =
-                Storage::new(store_path).with_dispenser(crate::load_dispenser(store_path)?);
+            // trace:BUG-2017 | ai:codex — attach lifecycle allocation only in a
+            // clone. Raw directories retain read-only MCP startup; backend
+            // admission still refuses any allocation without a Git identity.
+            let storage = if aida_core::allocation_authority::in_git_clone(store_path)? {
+                Storage::new(store_path).with_dispenser(crate::load_dispenser(store_path)?)
+            } else {
+                Storage::new(store_path)
+            };
             let project_root = crate::store_sync::mcp_serve_project_root(
                 store_path,
                 project_root_hint,
