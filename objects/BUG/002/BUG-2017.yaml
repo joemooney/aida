@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T22:12:54.027870933Z
-modified_at: 2026-10-25T11:44:35.499865277Z
+modified_at: 2026-10-25T11:53:52.510257735Z
 req_type: Bug
 tags:
 - id-allocation
@@ -407,6 +407,20 @@ comments:
     Read codex2 source-only report /tmp/codex2-bug2017-s2-compat-advisory.txt and canonical comment. Accept its five decisive compatibility cases as applications of existing signed scope: additive opaque-only schema without broadly defaulting damaged legacy person records; actual provider before ALL seed/reseed paths and correct Git topology; retained last-consumed high-water including reserved-unsaved and linked-worktree/interrupted migration; stable UUID/old aliases and case lookup; synthetic WORK/HUB/HOME promotion twice with no second counter/ref churn. They are not implementation evidence or a substitute for real cold WORK CLI/MCP/restart coverage. Code1 chooses the compatible implementation; code2 remains independent final reviewer. No new architecture or live capability test authorized.
   created_at: 2026-10-25T11:44:35.499865277Z
   modified_at: 2026-10-25T11:44:35.499865277Z
+- id: 01a172e8-f67e-7b10-bfdc-f62b5a24585d
+  author: ai:codex:joe
+  content: |
+    Codex1 resumed BUG2017 in existing worktree/claim with process-bound implementer grant verified. Current published PR2919 head remains766bbcbc4c726118d625002f04583111b3fdbaed; expanded S2 source is WIP, not final ready. BUG2222 PR2920 unchanged.
+
+    Substantive S2 implementation: additive common-Git version+UUID-only WORK binding/counter (legacy NodeConfig untouched); bootstrap/migration takes existing store writer then dispenser locks, retains old object IDs and consumed counter high waters, recovers interrupted counter-before-binding publication. Default worktree and separate-store init load the actual backend/provider before seed; post-clone, sibling attach, registered-legacy CLI/MCP startup, and node acquire have explicit local handling. WORK generation uses per-type counters even when legacy metadata numbering says Global. Explicit config allocation show/enroll-home is pre-storage and enrollment requires direct human terminal; never invoked on real HOME. HOME core merge_gate rechecks inside store writer; only caller edit is post-pull promotion conditional (WORK/HUB skips). No transport profile/scanner/prepared-plan methods, lifecycle/mailbox locks or outer policy lock touched.
+
+    Actual native no-flag contract exposed two production issues during implementation, rather than treating old fixture flags as acceptance: (1) metadata consumed global sequence, fixed per-type WORK model path; (2) lowercase UUID IDs versus uppercase filename/snapshot sets caused full-store MCP save to delete existing objects. Current source canonicalizes save sets AND snapshot keys; added survival/repeated-save/stale-CAS regression. Author's fresh-context zero-authority checker independently exposed normal provider recreation after counter loss; current source adds FileDispenser::open_existing under permanent dispenser lock and regression: ordinary next and bootstrap both refuse missing counter without recreating it. No independent review claim.
+
+    First focused core tests5/5 passed before last two regressions; final focused/full touched tests pending current build. Native CLI/MCP/HUB/HOME contract is being developed against actual candidate, no final pass claimed. Compile-only make check-ci-compile and normal native build are running; no killed checks/slot bypass/whole workspace runtime. First fast run found new test_git maintenance omission (corrected), so final fast is still required. F2 test_distributed store1 now owns exact private Git/HOME fixture; production init/sibling paths remain no-flag, approved test actions use fake-HOME bound grants, init/sync refusal swallowing removed. Full script plus new bootstrap contract will run against rebuilt binary.
+
+    Full S2 remains in PR2919, separate commits forthcoming. Slice3/all-conflict audit/scanner/final docs and other queued signed work remain mandatory; parent incomplete, all holds retained, no merge/live installation or real HOME enrollment. Logs /tmp/bug2017-s2-*.log; checker evidence /tmp/bug2017-s2-authorcheck-counter-loss.json.
+  created_at: 2026-10-25T11:53:52.510257735Z
+  modified_at: 2026-10-25T11:53:52.510257735Z
 history:
 - id: 01a16f08-1847-70c2-a9ec-772710162546
   author: joe
