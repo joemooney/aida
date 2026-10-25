@@ -1977,10 +1977,10 @@ pub(crate) const DISPATCH_CLAIM_TOKEN_ENV: &str = "AIDA_DISPATCH_CLAIM_TOKEN";
 
 /// Fenced worker claim owning an in-flight `Running` dispatch record.
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct WorkerClaim {
-    worker_pid: u32,
-    worker_start: Option<String>,
-    claim_token: String,
+pub(crate) struct WorkerClaim {
+    pub(crate) worker_pid: u32,
+    pub(crate) worker_start: Option<String>,
+    pub(crate) claim_token: String,
 }
 
 /// Append bounded log text to `.aida/dispatch/logs/<id>.log` (mode 0600, capped
@@ -2110,12 +2110,12 @@ fn reap_dead_workers_locked(main_worktree: &Path, now: DateTime<Utc>) -> Result<
 /// (mode 0600, `O_NOFOLLOW`) and passing `claim_token` via
 /// [`DISPATCH_CLAIM_TOKEN_ENV`].
 // trace:STORY-1917 | ai:agy
-fn spawn_detached_worker(
+pub(crate) fn spawn_detached_worker(
     main_worktree: &Path,
     id: &str,
     via_serve: bool,
     claim_token: &str,
-) -> Result<(u32, Option<String>)> {
+) -> Result<(std::process::Child, u32, Option<String>)> {
     let aida_bin = resolve_aida_bin()?;
     let log_out = open_pinned_log_file(main_worktree, id, true)?;
     let log_err = log_out.try_clone()?;
@@ -2141,7 +2141,22 @@ fn spawn_detached_worker(
         .with_context(|| format!("failed to spawn `aida dispatch run {id}`"))?;
     let pid = child.id();
     let start = crate::process_probe::process_start_identity(pid);
-    Ok((pid, start))
+    Ok((child, pid, start))
+}
+
+fn publish_spawned_worker_claim(
+    main_worktree: &Path,
+    id: &str,
+    res: &DispatchResult,
+) -> Result<()> {
+    #[cfg(test)]
+    if TEST_FAIL_POST_SPAWN_PUBLICATION.with(|c| c.get()) {
+        bail!("simulated post-spawn worker PID publication failure");
+    }
+    write_private_atomic(
+        &result_path(main_worktree, id),
+        &serde_json::to_vec_pretty(res)?,
+    )
 }
 
 /// Claim eligible `Pending` requests under `tick.lock` (moving `Pending ->
@@ -2213,11 +2228,19 @@ pub(crate) fn claim_and_dispatch_pass(
         }
 
         // Persist the Running claim and fresh claim_token BEFORE spawning (F2).
+        // When `spawn_detached` is true, `worker_pid` starts as `None` until the
+        // spawned child's `(pid, start)` is durably published under `tick.lock`;
+        // if post-spawn publication fails, the child is immediately killed and
+        // reaped under `tick.lock` and the claim is rolled back to `Failed`.
         let claim_token = Uuid::new_v4().to_string();
         res.status = DispatchStatus::Running;
         res.started_at = Some(now);
-        res.worker_pid = Some(self_pid);
-        res.worker_start = self_start.clone();
+        res.worker_pid = if spawn_detached { None } else { Some(self_pid) };
+        res.worker_start = if spawn_detached {
+            None
+        } else {
+            self_start.clone()
+        };
         res.claim_token = Some(claim_token.clone());
         res.summary = format!(
             "running {} {}",
@@ -2231,7 +2254,7 @@ pub(crate) fn claim_and_dispatch_pass(
 
         if spawn_detached {
             match spawn_detached_worker(main_worktree, &req.id, via_serve, &claim_token) {
-                Ok((pid, start)) => {
+                Ok((mut child, pid, start)) => {
                     res.worker_pid = Some(pid);
                     res.worker_start = start;
                     res.summary = format!(
@@ -2239,10 +2262,42 @@ pub(crate) fn claim_and_dispatch_pass(
                         req.action.verb_str(),
                         req.action.subject_label()
                     );
-                    write_private_atomic(
-                        &result_path(main_worktree, &req.id),
-                        &serde_json::to_vec_pretty(&res)?,
-                    )?;
+                    if let Err(pub_err) = publish_spawned_worker_claim(main_worktree, &req.id, &res)
+                    {
+                        // Parent publication failed: kill and reap the spawned
+                        // child while still holding `tick.lock` so no unowned
+                        // child can ever execute work, then fail the claim.
+                        let _ = child.kill();
+                        let _ = child.wait();
+                        match req.action {
+                            DispatchVerb::Review { .. } => {
+                                running_reviews = running_reviews.saturating_sub(1);
+                            }
+                            DispatchVerb::Flow { .. } => {
+                                running_flows = running_flows.saturating_sub(1);
+                            }
+                            DispatchVerb::Train { .. } => {
+                                running_trains = running_trains.saturating_sub(1);
+                            }
+                            DispatchVerb::Take { .. } | DispatchVerb::Impl { .. } => {}
+                        }
+                        let reason = format!(
+                            "failed to publish dispatch worker claim for pid {pid}: {pub_err:#}"
+                        );
+                        res.status = DispatchStatus::Failed;
+                        res.finished_at = Some(now);
+                        res.worker_pid = None;
+                        res.worker_start = None;
+                        res.claim_token = None;
+                        res.summary = reason.clone();
+                        res.refusal_reason = Some(reason);
+                        res.notified_at = notify_advisor_outcome(main_worktree, &req, &res, now);
+                        let _ = write_private_atomic(
+                            &result_path(main_worktree, &req.id),
+                            &serde_json::to_vec_pretty(&res)?,
+                        );
+                        continue;
+                    }
                 }
                 Err(err) => {
                     match req.action {
@@ -2445,7 +2500,7 @@ pub(crate) fn execute_one_request(
     )
 }
 
-fn execute_one_request_with_token(
+pub(crate) fn execute_one_request_with_token(
     main_worktree: &Path,
     mandate_dir: &Path,
     id: &str,
@@ -2466,7 +2521,6 @@ fn execute_one_request_with_token(
     // BEFORE reading/validating the request or recording any refusal.
     let (mut res, claim, raw_req_res) = {
         let _lock = acquire_dispatch_lock(main_worktree)?;
-        let _ = reap_dead_workers_locked(main_worktree, now);
 
         let res_bytes =
             read_bounded_regular_file(&result_path(main_worktree, id), MAX_BRIEF_BYTES, true)?;
@@ -2482,7 +2536,10 @@ fn execute_one_request_with_token(
                 | DispatchStatus::Failed
                 | DispatchStatus::Cancelled
         ) {
-            return Ok(res);
+            bail!(
+                "dispatch request {id} is already in terminal state `{}` (refusing execution)",
+                res.status.as_str()
+            );
         }
 
         let raw_req_res =
@@ -2505,29 +2562,40 @@ fn execute_one_request_with_token(
                         res.worker_pid
                     );
                 }
-                let pid_matches =
-                    res.worker_pid == Some(self_pid) && res.worker_start == self_start;
-                if !pid_matches {
-                    let recorded_alive = res.worker_pid.is_some_and(|pid| {
-                        crate::process_probe::process_identity_is_alive(
-                            pid,
-                            res.worker_start.as_deref(),
-                        )
-                    });
-                    if recorded_alive {
-                        bail!(
-                            "dispatch request {id} is already running under live worker pid {:?} (refusing duplicate execution)",
-                            res.worker_pid
-                        );
-                    }
-                    // Spawner crashed after `spawn()` before updating child PID;
-                    // the spawned child holds the exact `claim_token` and binds its PID.
-                    res.worker_pid = Some(self_pid);
-                    res.worker_start = self_start.clone();
-                    write_private_atomic(
+                let Some(recorded_pid) = res.worker_pid else {
+                    // Parent crashed or failed after pre-spawn claim write before
+                    // publishing the child PID: fail closed so an unowned child can
+                    // never perform work or leave a replaceable live claim.
+                    let reason =
+                        "worker claim publication did not complete (worker_pid is None); refusing unowned execution"
+                            .to_string();
+                    res.status = DispatchStatus::Failed;
+                    res.finished_at = Some(now);
+                    res.worker_pid = None;
+                    res.worker_start = None;
+                    res.claim_token = None;
+                    res.summary = reason.clone();
+                    res.refusal_reason = Some(reason.clone());
+                    let _ = write_private_atomic(
                         &result_path(main_worktree, id),
                         &serde_json::to_vec_pretty(&res)?,
-                    )?;
+                    );
+                    bail!("dispatch request {id} has an incomplete Running claim without worker_pid: {reason}");
+                };
+                let pid_matches = recorded_pid == self_pid && res.worker_start == self_start;
+                if !pid_matches {
+                    let recorded_alive = crate::process_probe::process_identity_is_alive(
+                        recorded_pid,
+                        res.worker_start.as_deref(),
+                    );
+                    if !recorded_alive {
+                        let _ = reap_dead_workers_locked(main_worktree, now);
+                    }
+                    bail!(
+                        "dispatch request {id} is already running under worker pid {recorded_pid} (start {:?}), not this process {self_pid} (start {:?}); refusing duplicate or replacement execution",
+                        res.worker_start,
+                        self_start
+                    );
                 }
                 WorkerClaim {
                     worker_pid: self_pid,
@@ -2536,6 +2604,7 @@ fn execute_one_request_with_token(
                 }
             }
             DispatchStatus::Pending => {
+                let _ = reap_dead_workers_locked(main_worktree, now);
                 // Enforce concurrency caps on direct `aida dispatch run <id>` as well.
                 if let Ok(ref req) = raw_req_res {
                     let pairs = load_all_pairs(main_worktree)?;
@@ -2982,7 +3051,11 @@ enum RunnerOutcome {
 
 /// Verify under `tick.lock` that the on-disk result for `id` is still `Running`
 /// and owned by `claim` before allowing a terminal state write (F2).
-fn verify_claim_locked(main_worktree: &Path, id: &str, claim: &WorkerClaim) -> Result<()> {
+pub(crate) fn verify_claim_locked(
+    main_worktree: &Path,
+    id: &str,
+    claim: &WorkerClaim,
+) -> Result<()> {
     let on_disk_bytes =
         read_bounded_regular_file(&result_path(main_worktree, id), MAX_BRIEF_BYTES, true)?;
     let on_disk: DispatchResult = serde_json::from_slice(&on_disk_bytes)
@@ -3004,7 +3077,7 @@ fn verify_claim_locked(main_worktree: &Path, id: &str, claim: &WorkerClaim) -> R
     Ok(())
 }
 
-fn record_tampered_refusal(
+pub(crate) fn record_tampered_refusal(
     main_worktree: &Path,
     id: &str,
     claim: &WorkerClaim,
@@ -3035,7 +3108,7 @@ fn record_tampered_refusal(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn finalize_request(
+pub(crate) fn finalize_request(
     main_worktree: &Path,
     req: &DispatchRequest,
     claim: &WorkerClaim,
@@ -3630,6 +3703,7 @@ pub(crate) fn cleanup_dead_reviewer_worktree(main_worktree: &Path, pr: u64) -> R
 std::thread_local! {
     pub(crate) static TEST_AIDA_BIN: std::cell::RefCell<Option<PathBuf>> = const { std::cell::RefCell::new(None) };
     pub(crate) static TEST_AGENT_BIN: std::cell::RefCell<Option<PathBuf>> = const { std::cell::RefCell::new(None) };
+    pub(crate) static TEST_FAIL_POST_SPAWN_PUBLICATION: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
 fn resolve_aida_bin() -> Result<PathBuf> {

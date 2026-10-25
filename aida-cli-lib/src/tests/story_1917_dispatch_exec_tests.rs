@@ -1163,126 +1163,515 @@ fn f1_log_symlink_and_directory_symlink_refused_without_disclosing_or_modifying_
     );
 }
 
+// Invoked by the synthetic `aida` wrapper inside an actual detached child
+// process spawned by `claim_and_dispatch_pass(..., spawn_detached = true)` or
+// `spawn_detached_worker`. When run directly by the test harness without
+// `AIDA_TEST_1917_CHILD_ID`, returns immediately.
+// trace:STORY-1917 | ai:agy
+#[test]
+fn story_1917_detached_worker_child_entry() {
+    let Some(req_id) = std::env::var("AIDA_TEST_1917_CHILD_ID").ok() else {
+        return;
+    };
+    let via_serve = std::env::var("AIDA_TEST_1917_CHILD_VIA_SERVE")
+        .ok()
+        .as_deref()
+        == Some("1");
+    let root = PathBuf::from(
+        std::env::var("AIDA_TEST_1917_MAIN_WORKTREE").expect("AIDA_TEST_1917_MAIN_WORKTREE"),
+    );
+    let mandate_dir = PathBuf::from(
+        std::env::var("AIDA_TEST_1917_MANDATE_DIR").expect("AIDA_TEST_1917_MANDATE_DIR"),
+    );
+    let barrier_dir = PathBuf::from(
+        std::env::var("AIDA_TEST_1917_BARRIER_DIR").expect("AIDA_TEST_1917_BARRIER_DIR"),
+    );
+    let synth_aida = PathBuf::from(
+        std::env::var("AIDA_TEST_1917_SYNTHETIC_AIDA").expect("AIDA_TEST_1917_SYNTHETIC_AIDA"),
+    );
+
+    let _prev_ambient = crate::test_ambient::replace(Some(crate::test_ambient::Ambient {
+        project_root: root.clone(),
+        stdin_is_terminal: false,
+        stdout_is_terminal: false,
+        stderr_is_terminal: false,
+    }));
+    TEST_AIDA_BIN.with(|c| *c.borrow_mut() = Some(synth_aida));
+
+    // Requirement 1 proof: before `execute_one_request` runs, inspect the
+    // on-disk result record to prove `Running` + `claim_token` are already
+    // durable before child execution begins.
+    let child_pid = std::process::id();
+    let child_start = crate::process_probe::process_start_identity(child_pid);
+    let env_token = std::env::var(DISPATCH_CLAIM_TOKEN_ENV).ok();
+    if let Ok((_, on_disk_res)) = load_pair(&root, &req_id) {
+        let obs = serde_json::json!({
+            "child_pid": child_pid,
+            "child_start": child_start,
+            "env_token": env_token,
+            "on_disk_status": on_disk_res.status.as_str(),
+            "on_disk_claim_token": on_disk_res.claim_token,
+        });
+        let _ = std::fs::write(
+            barrier_dir.join(format!("pre-exec-{req_id}.json")),
+            serde_json::to_vec_pretty(&obs).unwrap(),
+        );
+    }
+
+    if let Err(err) = execute_one_request(&root, &mandate_dir, &req_id, via_serve, Utc::now()) {
+        let _ = std::fs::write(
+            barrier_dir.join(format!("child-err-{req_id}.txt")),
+            format!("{err:#}"),
+        );
+    }
+}
+
+struct DetachedWorkerWatchdog {
+    barrier_dir: PathBuf,
+    pids: Vec<(u32, Option<String>)>,
+}
+
+impl DetachedWorkerWatchdog {
+    fn new(barrier_dir: PathBuf) -> Self {
+        Self {
+            barrier_dir,
+            pids: Vec::new(),
+        }
+    }
+
+    fn track(&mut self, pid: u32, start: Option<String>) {
+        self.pids.push((pid, start));
+    }
+}
+
+impl Drop for DetachedWorkerWatchdog {
+    fn drop(&mut self) {
+        let _ = std::fs::write(self.barrier_dir.join("release-all"), b"1");
+        for (pid, start) in &self.pids {
+            if *pid > 1 && crate::process_probe::process_identity_is_alive(*pid, start.as_deref()) {
+                unsafe {
+                    libc::kill(*pid as i32, libc::SIGKILL);
+                }
+            }
+        }
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+        for (pid, start) in &self.pids {
+            while *pid > 1
+                && crate::process_probe::process_identity_is_alive(*pid, start.as_deref())
+                && std::time::Instant::now() < deadline
+            {
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+        }
+    }
+}
+
+fn wait_for_barrier_file(path: &Path, timeout: std::time::Duration) -> String {
+    let deadline = std::time::Instant::now() + timeout;
+    while std::time::Instant::now() < deadline {
+        if let Ok(text) = std::fs::read_to_string(path) {
+            if !text.trim().is_empty() {
+                return text.trim().to_string();
+            }
+        }
+        std::thread::sleep(std::time::Duration::from_millis(15));
+    }
+    panic!(
+        "watchdog timeout waiting for barrier file {}",
+        path.display()
+    );
+}
+
+fn wait_for_request_status(
+    root: &Path,
+    id: &str,
+    expected: DispatchStatus,
+    timeout: std::time::Duration,
+) -> DispatchResult {
+    let deadline = std::time::Instant::now() + timeout;
+    while std::time::Instant::now() < deadline {
+        if let Ok((_, res)) = load_pair(root, id) {
+            if res.status == expected {
+                return res;
+            }
+        }
+        std::thread::sleep(std::time::Duration::from_millis(15));
+    }
+    let last = load_pair(root, id).ok().map(|(_, r)| r);
+    panic!(
+        "watchdog timeout waiting for request {id} to reach status {}, last={last:?}",
+        expected.as_str()
+    );
+}
+
 // trace:STORY-1917 | ai:agy
 #[test]
 fn f2_worker_claim_persisted_before_spawn_and_fenced_against_unowned_or_concurrent_run() {
     let f = ExecFixture::new(&["reviewer", "implementer"]);
     f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
     let now = Utc::now();
-    let brief = f.write_brief("f2.md", "F2 brief.\n");
 
-    let sub = submit_request(
+    let barrier_dir = f._tmp.path().join("f2-barriers");
+    std::fs::create_dir_all(&barrier_dir).unwrap();
+    let mut watchdog = DetachedWorkerWatchdog::new(barrier_dir.clone());
+
+    let parent_home = crate::aida_home_dir().expect("hermetic test home");
+    let test_bin = crate::aida_bin::current_executable_path().expect("current test binary");
+    let fake_aida_path = f._tmp.path().join("fake-aida-f2.sh");
+    let fake_aida = f.write_executable_script(
+        "fake-aida-f2.sh",
+        &format!(
+            "#!/bin/sh\nset -eu\n\
+             if [ \"${{1:-}}\" = \"dispatch\" ] && [ \"${{2:-}}\" = \"run\" ]; then\n\
+               req_id=\"$3\"\n\
+               via_serve=\"0\"\n\
+               if [ \"${{4:-}}\" = \"--via-serve\" ]; then\n\
+                 via_serve=\"1\"\n\
+               fi\n\
+               export AIDA_HOME='{}'\n\
+               export AIDA_TEST_1917_CHILD_ID=\"$req_id\"\n\
+               export AIDA_TEST_1917_CHILD_VIA_SERVE=\"$via_serve\"\n\
+               export AIDA_TEST_1917_MAIN_WORKTREE='{}'\n\
+               export AIDA_TEST_1917_MANDATE_DIR='{}'\n\
+               export AIDA_TEST_1917_BARRIER_DIR='{}'\n\
+               export AIDA_TEST_1917_SYNTHETIC_AIDA='{}'\n\
+               exec '{}' --exact dispatch::story_1917_dispatch_exec_tests::story_1917_detached_worker_child_entry --nocapture --test-threads=1\n\
+             fi\n\
+             if [ \"${{1:-}}\" = \"queue\" ] && [ \"${{2:-}}\" = \"work\" ]; then\n\
+               pr_tag=\"${{3:-PR-0}}\"\n\
+               echo \"$$:$pr_tag\" >> '{}'\n\
+               echo \"$$\" > '{}/entered-'\"$pr_tag\"\n\
+               i=0\n\
+               while [ \"$i\" -lt 500 ]; do\n\
+                 if [ -f '{}/release-'\"$pr_tag\" ] || [ -f '{}/release-all' ]; then\n\
+                   echo \"done\" > '{}/completed-'\"$pr_tag\"\n\
+                   exit 0\n\
+                 fi\n\
+                 sleep 0.02\n\
+                 i=$((i + 1))\n\
+               done\n\
+               echo \"watchdog timeout waiting for release-$pr_tag\" >&2\n\
+               exit 124\n\
+             fi\n\
+             exit 1\n",
+            parent_home.display(),
+            f.root.display(),
+            f.mandate_dir.display(),
+            barrier_dir.display(),
+            fake_aida_path.display(),
+            test_bin.display(),
+            barrier_dir.join("runner-invocations.log").display(),
+            barrier_dir.display(),
+            barrier_dir.display(),
+            barrier_dir.display(),
+            barrier_dir.display(),
+        ),
+    );
+    let _bins = install_test_bins(Some(fake_aida), None);
+    let watchdog_timeout = std::time::Duration::from_secs(10);
+
+    // ── 1. Real detached worker handoff: Running claim/token is durable before
+    //       the child can execute, and parent publishes (child_pid, child_start).
+    let sub1 = submit_request(
         &f.root,
         &f.mandate_dir,
         &f.principal,
-        &DispatchRequestVerb::Impl {
-            name: "lane-f2".into(),
-            branch: "claude/lane-f2".into(),
-            spec: "TASK-100".into(),
-            brief: brief.clone(),
+        &DispatchRequestVerb::Review {
+            pr: 601,
             vendor: None,
         },
         now,
     )
     .unwrap();
 
-    // 1. `claim_and_dispatch_pass` persists `Running` + `claim_token` on disk under `tick.lock`.
-    let pass = claim_and_dispatch_pass(&f.root, false, false, now).unwrap();
-    assert_eq!(pass.claimed_ids, vec![sub.request.id.clone()]);
-    let (_, claimed_res) = load_pair(&f.root, &sub.request.id).unwrap();
-    assert_eq!(claimed_res.status, DispatchStatus::Running);
-    let owner_token = claimed_res
+    let pass1 = claim_and_dispatch_pass(&f.root, true, true, now).unwrap();
+    assert_eq!(pass1.spawned, 1);
+    assert_eq!(pass1.claimed_ids, vec![sub1.request.id.clone()]);
+
+    // Wait for the real detached child to enter the synthetic review runner.
+    let _runner_pid_str =
+        wait_for_barrier_file(&barrier_dir.join("entered-PR-601"), watchdog_timeout);
+
+    // Inspect the child's pre-execution observation written before `execute_one_request`.
+    let pre_exec_bytes =
+        std::fs::read(barrier_dir.join(format!("pre-exec-{}.json", sub1.request.id))).unwrap();
+    let pre_exec: serde_json::Value = serde_json::from_slice(&pre_exec_bytes).unwrap();
+    assert_eq!(
+        pre_exec["on_disk_status"].as_str(),
+        Some("running"),
+        "Running status must be durable on disk before the detached child can execute"
+    );
+    let pre_tok = pre_exec["on_disk_claim_token"]
+        .as_str()
+        .expect("claim_token must be durable on disk before child execution");
+    assert_eq!(
+        Some(pre_tok),
+        pre_exec["env_token"].as_str(),
+        "detached child's inherited claim_token must match durable on-disk claim_token"
+    );
+
+    let (req1_live, res1_live) = load_pair(&f.root, &sub1.request.id).unwrap();
+    assert_eq!(res1_live.status, DispatchStatus::Running);
+    let child_pid = res1_live
+        .worker_pid
+        .expect("real detached worker_pid must be published on disk");
+    let child_start = res1_live.worker_start.clone();
+    let owner_token = res1_live
         .claim_token
         .clone()
-        .expect("claim_token must be persisted on Running record");
+        .expect("claim_token must be present on Running record");
+    watchdog.track(child_pid, child_start.clone());
+    assert_ne!(
+        child_pid,
+        std::process::id(),
+        "detached worker must be a separate OS child process, not the current test PID"
+    );
+    assert!(
+        crate::process_probe::process_identity_is_alive(child_pid, child_start.as_deref()),
+        "detached worker child (pid {child_pid}) must be alive while paused at runner barrier"
+    );
 
-    // Stamp live worker ownership `(my_pid, my_start, owner_token)` on disk.
-    let my_pid = std::process::id();
-    let my_start = crate::process_probe::process_start_identity(my_pid);
-    let mut running_res = claimed_res;
-    running_res.worker_pid = Some(my_pid);
-    running_res.worker_start = my_start.clone();
+    // ── 2. Competing `run` while the real detached owner is alive cannot
+    //       duplicate execution or overwrite its result (even with tampered JSON).
+    let req1_file = request_path(&f.root, &sub1.request.id);
+    let orig_req1_bytes = std::fs::read(&req1_file).unwrap();
+    let mut tampered_val: serde_json::Value = serde_json::from_slice(&orig_req1_bytes).unwrap();
+    tampered_val["action"]["pr"] = serde_json::json!(0);
     write_private_atomic(
-        &result_path(&f.root, &sub.request.id),
-        &serde_json::to_vec_pretty(&running_res).unwrap(),
-    )
-    .unwrap();
-
-    // 2. An unowned or wrong-token `execute_one_request_with_token` call must fail
-    //    BEFORE touching `results/<id>.json` — even if request JSON is tampered so
-    //    `revalidate_request` would otherwise record a tampered refusal!
-    let req_file = request_path(&f.root, &sub.request.id);
-    let orig_req_bytes = std::fs::read(&req_file).unwrap();
-    let mut tampered_val: serde_json::Value = serde_json::from_slice(&orig_req_bytes).unwrap();
-    tampered_val["action"]["branch"] = serde_json::Value::String("--upload-pack=evil".into());
-    write_private_atomic(
-        &req_file,
+        &req1_file,
         &serde_json::to_vec_pretty(&tampered_val).unwrap(),
     )
     .unwrap();
 
-    let unowned_err =
-        execute_one_request_with_token(&f.root, &f.mandate_dir, &sub.request.id, false, None, now)
+    // 2a. Competing run with no token -> refused before touching result.
+    let no_tok_err =
+        execute_one_request_with_token(&f.root, &f.mandate_dir, &sub1.request.id, true, None, now)
             .unwrap_err();
     assert!(
-        unowned_err.to_string().contains("claim token mismatch"),
-        "expected claim token mismatch refusal for unowned caller, got: {unowned_err:#}"
+        no_tok_err.to_string().contains("claim token mismatch"),
+        "expected claim token mismatch for competing run without token, got: {no_tok_err:#}"
     );
+    // 2b. Competing run with wrong token -> refused before touching result.
     let wrong_tok_err = execute_one_request_with_token(
         &f.root,
         &f.mandate_dir,
-        &sub.request.id,
-        false,
+        &sub1.request.id,
+        true,
         Some("wrong-token"),
         now,
     )
     .unwrap_err();
     assert!(
         wrong_tok_err.to_string().contains("claim token mismatch"),
-        "expected claim token mismatch refusal for wrong token, got: {wrong_tok_err:#}"
+        "expected claim token mismatch for wrong token, got: {wrong_tok_err:#}"
+    );
+    // 2c. Competing run from a different process presenting the REAL `owner_token` ->
+    //     refused because `(self_pid, self_start) != (child_pid, child_start)`!
+    let stolen_tok_err = execute_one_request_with_token(
+        &f.root,
+        &f.mandate_dir,
+        &sub1.request.id,
+        true,
+        Some(&owner_token),
+        now,
+    )
+    .unwrap_err();
+    assert!(
+        stolen_tok_err
+            .to_string()
+            .contains(&format!("already running under worker pid {child_pid}")),
+        "expected PID ownership refusal for competing run with stolen token, got: {stolen_tok_err:#}"
     );
 
-    // Verify on-disk result is STILL `Running` with `owner_token` (not clobbered to `Refused`).
-    let (_, after_unowned) = load_pair(&f.root, &sub.request.id).unwrap();
+    write_private_atomic(&req1_file, &orig_req1_bytes).unwrap();
+
+    let (_, after_competing) = load_pair(&f.root, &sub1.request.id).unwrap();
     assert_eq!(
-        after_unowned.status,
+        after_competing.status,
         DispatchStatus::Running,
-        "unowned caller must never overwrite Running result"
+        "competing runs must never overwrite live owner's Running status"
     );
+    assert_eq!(after_competing.worker_pid, Some(child_pid));
     assert_eq!(
-        after_unowned.claim_token.as_deref(),
+        after_competing.claim_token.as_deref(),
         Some(owner_token.as_str())
     );
+    let invocations_while_live =
+        std::fs::read_to_string(barrier_dir.join("runner-invocations.log")).unwrap();
+    assert_eq!(
+        invocations_while_live
+            .lines()
+            .filter(|l| l.ends_with(":PR-601"))
+            .count(),
+        1,
+        "competing runs must not duplicate runner execution"
+    );
 
-    // Restore valid request JSON and verify the legitimate owner with `owner_token`
-    // can still execute or finalize only while its claim matches.
-    write_private_atomic(&req_file, &orig_req_bytes).unwrap();
-
-    // 3. Direct `execute_one_request` on a Pending request enforces concurrency caps:
-    //    with 2 live Running reviews, a 3rd Pending review called via direct `execute_one_request`
-    //    must bail on the concurrency cap and leave its status `Pending`.
-    for pr in [610, 611] {
-        let rsub = submit_request(
+    // ── 3. PID/start/token mismatches and stale terminal writers cannot mutate
+    //       the live owner's result or the finished result.
+    let wrong_pid_claim = WorkerClaim {
+        worker_pid: std::process::id(),
+        worker_start: child_start.clone(),
+        claim_token: owner_token.clone(),
+    };
+    assert!(
+        finalize_request(
             &f.root,
-            &f.mandate_dir,
-            &f.principal,
-            &DispatchRequestVerb::Review { pr, vendor: None },
+            &req1_live,
+            &wrong_pid_claim,
+            res1_live.clone(),
+            DispatchStatus::Failed,
+            Outcome::Skipped,
+            None,
+            Some(99),
+            "wrong pid finalize".into(),
+            Some("wrong pid".into()),
             now,
         )
-        .unwrap();
-        let mut r = rsub.result;
-        r.status = DispatchStatus::Running;
-        r.started_at = Some(now);
-        r.worker_pid = Some(my_pid);
-        r.worker_start = my_start.clone();
-        r.claim_token = Some(format!("tok-{pr}"));
-        write_private_atomic(
-            &result_path(&f.root, &rsub.request.id),
-            &serde_json::to_vec_pretty(&r).unwrap(),
+        .is_err(),
+        "mismatched worker_pid must be refused by terminal fence"
+    );
+
+    let wrong_start_claim = WorkerClaim {
+        worker_pid: child_pid,
+        worker_start: Some("mismatched-start-time".into()),
+        claim_token: owner_token.clone(),
+    };
+    assert!(
+        finalize_request(
+            &f.root,
+            &req1_live,
+            &wrong_start_claim,
+            res1_live.clone(),
+            DispatchStatus::Failed,
+            Outcome::Skipped,
+            None,
+            Some(99),
+            "wrong start finalize".into(),
+            Some("wrong start".into()),
+            now,
         )
-        .unwrap();
-    }
-    let third_rev = submit_request(
+        .is_err(),
+        "mismatched worker_start must be refused by terminal fence"
+    );
+
+    let wrong_token_claim = WorkerClaim {
+        worker_pid: child_pid,
+        worker_start: child_start.clone(),
+        claim_token: "wrong-claim-token".into(),
+    };
+    let mut scratch_res = res1_live.clone();
+    assert!(
+        record_tampered_refusal(
+            &f.root,
+            &sub1.request.id,
+            &wrong_token_claim,
+            &mut scratch_res,
+            "wrong token tampered",
+            now,
+        )
+        .is_err(),
+        "mismatched claim_token must be refused by terminal fence"
+    );
+
+    // Release the real detached child so it finishes and records `Done`.
+    std::fs::write(barrier_dir.join("release-PR-601"), b"1").unwrap();
+    let done_res1 = wait_for_request_status(
+        &f.root,
+        &sub1.request.id,
+        DispatchStatus::Done,
+        watchdog_timeout,
+    );
+    assert_eq!(done_res1.worker_pid, Some(child_pid));
+    assert_eq!(done_res1.exit_code, Some(0));
+
+    // Once finished (`Done`), even a stale terminal writer presenting the exact
+    // `(child_pid, child_start, owner_token)` from the completed run is refused!
+    let stale_owner_claim = WorkerClaim {
+        worker_pid: child_pid,
+        worker_start: child_start.clone(),
+        claim_token: owner_token.clone(),
+    };
+    let stale_fin_err = finalize_request(
+        &f.root,
+        &req1_live,
+        &stale_owner_claim,
+        done_res1.clone(),
+        DispatchStatus::Failed,
+        Outcome::Skipped,
+        None,
+        Some(1),
+        "stale overwrite".into(),
+        Some("stale overwrite".into()),
+        now,
+    )
+    .unwrap_err();
+    assert!(
+        stale_fin_err
+            .to_string()
+            .contains("fenced result transition refused"),
+        "stale terminal writer must be refused after completion, got: {stale_fin_err:#}"
+    );
+    let mut stale_tampered_res = done_res1.clone();
+    assert!(
+        record_tampered_refusal(
+            &f.root,
+            &sub1.request.id,
+            &stale_owner_claim,
+            &mut stale_tampered_res,
+            "stale tampered overwrite",
+            now,
+        )
+        .is_err(),
+        "stale record_tampered_refusal must be refused after completion"
+    );
+    let late_run_err = execute_one_request_with_token(
+        &f.root,
+        &f.mandate_dir,
+        &sub1.request.id,
+        true,
+        Some(&owner_token),
+        now,
+    )
+    .unwrap_err();
+    assert!(
+        late_run_err
+            .to_string()
+            .contains("already in terminal state"),
+        "late execute_one_request on finished request must fail, got: {late_run_err:#}"
+    );
+    let (_, after_stale) = load_pair(&f.root, &sub1.request.id).unwrap();
+    assert_eq!(
+        after_stale.status,
+        DispatchStatus::Done,
+        "finished Done result must remain immutable against stale writers"
+    );
+    assert_eq!(after_stale.exit_code, Some(0));
+
+    // ── 4. Concurrent detached execution preserves concurrency caps (`MAX_CONCURRENT_REVIEWS == 2`).
+    let rev_610 = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Review {
+            pr: 610,
+            vendor: None,
+        },
+        now + Duration::seconds(1),
+    )
+    .unwrap();
+    let rev_611 = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Review {
+            pr: 611,
+            vendor: None,
+        },
+        now + Duration::seconds(2),
+    )
+    .unwrap();
+    let rev_612 = submit_request(
         &f.root,
         &f.mandate_dir,
         &f.principal,
@@ -1290,17 +1679,196 @@ fn f2_worker_claim_persisted_before_spawn_and_fenced_against_unowned_or_concurre
             pr: 612,
             vendor: None,
         },
+        now + Duration::seconds(3),
+    )
+    .unwrap();
+
+    let cap_pass1 = claim_and_dispatch_pass(&f.root, true, true, now).unwrap();
+    assert_eq!(
+        cap_pass1.spawned, 2,
+        "only 2 detached review workers may spawn concurrently"
+    );
+    assert_eq!(
+        cap_pass1.claimed_ids,
+        vec![rev_610.request.id.clone(), rev_611.request.id.clone()]
+    );
+
+    wait_for_barrier_file(&barrier_dir.join("entered-PR-610"), watchdog_timeout);
+    wait_for_barrier_file(&barrier_dir.join("entered-PR-611"), watchdog_timeout);
+
+    let (_, res_610_live) = load_pair(&f.root, &rev_610.request.id).unwrap();
+    let (_, res_611_live) = load_pair(&f.root, &rev_611.request.id).unwrap();
+    let pid_610 = res_610_live.worker_pid.unwrap();
+    let pid_611 = res_611_live.worker_pid.unwrap();
+    watchdog.track(pid_610, res_610_live.worker_start.clone());
+    watchdog.track(pid_611, res_611_live.worker_start.clone());
+    assert_ne!(
+        pid_610, pid_611,
+        "concurrent detached workers must be distinct child processes"
+    );
+
+    // While both real detached review children are alive at the barrier, a new
+    // pass AND a direct `execute_one_request` on the 3rd review must both hold it Pending.
+    let cap_pass_blocked = claim_and_dispatch_pass(&f.root, true, true, now).unwrap();
+    assert_eq!(cap_pass_blocked.spawned, 0);
+    let direct_cap_err =
+        execute_one_request(&f.root, &f.mandate_dir, &rev_612.request.id, true, now).unwrap_err();
+    assert!(
+        direct_cap_err.to_string().contains("concurrency cap"),
+        "direct run must enforce concurrency cap while 2 detached workers are live, got: {direct_cap_err:#}"
+    );
+    let (_, res_612_pending) = load_pair(&f.root, &rev_612.request.id).unwrap();
+    assert_eq!(res_612_pending.status, DispatchStatus::Pending);
+
+    // Release the 2 running detached workers, wait for both to finish `Done`,
+    // then verify the 3rd review spawns and completes `Done`.
+    std::fs::write(barrier_dir.join("release-PR-610"), b"1").unwrap();
+    std::fs::write(barrier_dir.join("release-PR-611"), b"1").unwrap();
+    wait_for_request_status(
+        &f.root,
+        &rev_610.request.id,
+        DispatchStatus::Done,
+        watchdog_timeout,
+    );
+    wait_for_request_status(
+        &f.root,
+        &rev_611.request.id,
+        DispatchStatus::Done,
+        watchdog_timeout,
+    );
+
+    let cap_pass2 = claim_and_dispatch_pass(&f.root, true, true, now).unwrap();
+    assert_eq!(cap_pass2.spawned, 1);
+    assert_eq!(cap_pass2.claimed_ids, vec![rev_612.request.id.clone()]);
+    wait_for_barrier_file(&barrier_dir.join("entered-PR-612"), watchdog_timeout);
+    let (_, res_612_live) = load_pair(&f.root, &rev_612.request.id).unwrap();
+    watchdog.track(
+        res_612_live.worker_pid.unwrap(),
+        res_612_live.worker_start.clone(),
+    );
+    std::fs::write(barrier_dir.join("release-PR-612"), b"1").unwrap();
+    wait_for_request_status(
+        &f.root,
+        &rev_612.request.id,
+        DispatchStatus::Done,
+        watchdog_timeout,
+    );
+
+    // ── 5. Parent publication failure cannot leave an unowned child that
+    //       performs work or a replaceable live claim.
+    // 5a. Post-spawn child-PID publication fails inside `claim_and_dispatch_pass`:
+    //     parent kills + waits the spawned child under `tick.lock` and rolls back
+    //     the record to `Failed` with `worker_pid = None, claim_token = None`.
+    let sub_pub_fail = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Review {
+            pr: 620,
+            vendor: None,
+        },
         now,
     )
     .unwrap();
-    let cap_err =
-        execute_one_request(&f.root, &f.mandate_dir, &third_rev.request.id, true, now).unwrap_err();
-    assert!(
-        cap_err.to_string().contains("concurrency cap"),
-        "direct run must enforce concurrency cap, got: {cap_err:#}"
+    TEST_FAIL_POST_SPAWN_PUBLICATION.with(|c| c.set(true));
+    let fail_pass = claim_and_dispatch_pass(&f.root, true, true, now);
+    TEST_FAIL_POST_SPAWN_PUBLICATION.with(|c| c.set(false));
+    let fail_pass = fail_pass.unwrap();
+    assert_eq!(fail_pass.spawned, 0);
+    assert!(fail_pass.claimed_ids.is_empty());
+
+    let (_, pub_fail_res) = load_pair(&f.root, &sub_pub_fail.request.id).unwrap();
+    assert_eq!(
+        pub_fail_res.status,
+        DispatchStatus::Failed,
+        "post-spawn publication failure must transition claim to Failed, got: {pub_fail_res:?}"
     );
-    let (_, third_after) = load_pair(&f.root, &third_rev.request.id).unwrap();
-    assert_eq!(third_after.status, DispatchStatus::Pending);
+    assert!(
+        pub_fail_res.worker_pid.is_none() && pub_fail_res.claim_token.is_none(),
+        "failed publication must clear worker_pid and claim_token so no replaceable claim remains"
+    );
+    assert!(
+        pub_fail_res
+            .summary
+            .contains("failed to publish dispatch worker claim"),
+        "expected publication failure summary, got: {}",
+        pub_fail_res.summary
+    );
+    assert!(
+        !barrier_dir.join("entered-PR-620").exists(),
+        "child killed on parent publication failure must never enter the runner"
+    );
+
+    // 5b. Simulated parent crash between pre-spawn claim write (`worker_pid = None`)
+    //     and post-spawn child-PID publication: a real spawned child presenting
+    //     `claim_token` must be refused as unowned (`worker_pid is None`), transition
+    //     the incomplete claim to `Failed`, and never perform work or allow replacement.
+    let sub_unowned = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Review {
+            pr: 621,
+            vendor: None,
+        },
+        now,
+    )
+    .unwrap();
+    let unowned_token = "unowned-pre-spawn-token-621";
+    let mut pre_spawn_only = sub_unowned.result.clone();
+    pre_spawn_only.status = DispatchStatus::Running;
+    pre_spawn_only.started_at = Some(now);
+    pre_spawn_only.worker_pid = None;
+    pre_spawn_only.worker_start = None;
+    pre_spawn_only.claim_token = Some(unowned_token.into());
+    write_private_atomic(
+        &result_path(&f.root, &sub_unowned.request.id),
+        &serde_json::to_vec_pretty(&pre_spawn_only).unwrap(),
+    )
+    .unwrap();
+
+    let (mut unowned_child, unowned_pid, unowned_start) =
+        spawn_detached_worker(&f.root, &sub_unowned.request.id, true, unowned_token).unwrap();
+    watchdog.track(unowned_pid, unowned_start);
+    let _ = unowned_child.wait().unwrap();
+
+    assert!(
+        !barrier_dir.join("entered-PR-621").exists(),
+        "unowned child whose worker_pid was never published by parent must never perform work"
+    );
+    let (_, after_unowned_child) = load_pair(&f.root, &sub_unowned.request.id).unwrap();
+    assert_eq!(
+        after_unowned_child.status,
+        DispatchStatus::Failed,
+        "incomplete Running claim without worker_pid must fail closed to Failed"
+    );
+    assert!(
+        after_unowned_child.worker_pid.is_none() && after_unowned_child.claim_token.is_none(),
+        "incomplete claim must clear worker_pid and claim_token so it cannot be replaced"
+    );
+    assert!(
+        after_unowned_child
+            .refusal_reason
+            .as_deref()
+            .unwrap_or("")
+            .contains("worker_pid is None"),
+        "expected incomplete worker_pid refusal reason, got: {after_unowned_child:?}"
+    );
+    let replace_attempt = execute_one_request_with_token(
+        &f.root,
+        &f.mandate_dir,
+        &sub_unowned.request.id,
+        true,
+        Some(unowned_token),
+        now,
+    )
+    .unwrap_err();
+    assert!(
+        replace_attempt
+            .to_string()
+            .contains("already in terminal state"),
+        "failed unowned claim must not be replaceable by a later caller, got: {replace_attempt:#}"
+    );
 }
 
 // trace:STORY-1917 | ai:agy
