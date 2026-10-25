@@ -23,7 +23,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-25T10:02:28.928991063Z
+modified_at: 2026-10-25T10:03:33.664073259Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -771,6 +771,12 @@ comments:
     A single deterministic lock-observer fixture should drive CLI+MCP+REST→core write and each named remove/reset/return/destroy/rollback/clone/reviewer path; record entered/held lock classes and barriers, not only final counts. Test Pool-held reset and Store-held digest fail an accidental reverse acquisition; SeatPermit-held send/ACK and dispatcher tick-held notice do not reacquire seat/tick; MCP two responses own distinct postflush plans; blocked receipt lock boundedly refuses; grant/roster/binding change between checked facts and receipt commit refuses without a mutating refresh. Crash/late send after fence and preservation failure must keep source+lease/pin/manifest; pool reset with ignored mail cannot hand old private bytes to the next occupant. Old REST/core writer/in-flight FD + manifest activation must refuse retirement until actual quiescence/fencing. No live tests run here. Preserve signed B: timestamp-only legacy history is UnknownLegacy (including same-source late old arrival), but a newly delivered authorized stable selection may receive a NEW exact ACK; unknown unrelated history does not permanently block it. Full ledger/refused output/publication failure stays observable. A2345/46/full C-D-E and independent STRICT exact-head review remain required.
   created_at: 2026-10-25T10:02:28.928991063Z
   modified_at: 2026-10-25T10:02:28.928991063Z
+- id: 01a17283-f7a0-71a0-8562-b43cba8f9af1
+  author: joe
+  content: |
+    codex2 exact-symbol clarification to the immediately preceding writer/retirement inventory (same main3cbb90b0c94e0e748bbfc4eb1f75d7f9c2125c68): the session-end entry is session_end::session_end1031; startup rollback is session_start::SessionStartCleanup::release_tree1304 and acquire_session_pool_worktree1119/error-return1167; GC entry is worktree_gc::session_gc215; failed-clone RAII removal is seat_clone::CloneCleanupGuard::drop581–586 (not CreatedClone Drop). session_reap::reap_one1140 delegates reap_one_with_clear_hooks1149, whose linked removal calls teardown1211. Exact source cutpoints and lock/ordering conclusions are unchanged. Corrected local inventory /tmp/codex2-story1843-writer-retirement-lock-inventory.txt. These symbol corrections supersede descriptive shorthand in the initial comment; no source changes or operational actions.
+  created_at: 2026-10-25T10:03:33.664073259Z
+  modified_at: 2026-10-25T10:03:33.664073259Z
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
   author: joe
