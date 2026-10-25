@@ -255,6 +255,12 @@ jobs:
         if: matrix.shard == 'gates'
         run: python3 -m unittest tests/test_test_touched.py
 
+      # Host adapter fixtures use fake AIDA/Codex executables and temporary repos.
+      # trace:TASK-2347 | ai:codex
+      - name: Codex mail wake fixtures
+        if: matrix.shard == 'gates'
+        run: python3 -m unittest tests/test_codex_mail_wake.py
+
       # Test-timing parser, budget gate and local test-profile reshape: pure
       # Python, no cargo. trace:STORY-1853 | ai:claude
       - name: STORY-1853 test-speed tooling tests

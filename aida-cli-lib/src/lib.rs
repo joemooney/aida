@@ -202,6 +202,8 @@ mod loose_objects;
 mod rel_cards;
 mod relay_launch; // trace:STORY-1706 | ai:claude
 mod relay_stall;
+// trace:TASK-2347 | ai:codex
+mod codex_mail_health;
 mod remote_cmd;
 mod requirements_cli;
 mod review_cmd;
@@ -436,6 +438,8 @@ mod intent;
 mod internal_cmd;
 mod mailbox_cmd;
 mod mailbox_store;
+// trace:TASK-2347 | ai:codex
+mod mailbox_wake;
 // trace:STORY-1648 | ai:claude — read-only primary-checkout drift probe.
 mod main_checkout_drift;
 mod maintenance_schedule;

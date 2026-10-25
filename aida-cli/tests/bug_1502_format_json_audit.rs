@@ -489,6 +489,11 @@ fn checked_in_audit_is_exhaustive_and_every_honoured_probe_parses() {
         .collect();
 
     let probes: &[(&str, &[&str])] = &[
+        // trace:TASK-2347 | ai:codex
+        (
+            "aida mailbox wake-snapshot",
+            &["mailbox", "wake-snapshot", "--recipient", "advisor"],
+        ),
         ("aida fasttrack status", &["fasttrack", "status"]),
         ("aida show", &["show", &spec, "--no-git"]),
         ("aida list", &["list", "--limit", "1"]),
