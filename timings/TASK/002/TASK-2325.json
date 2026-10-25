@@ -1,0 +1,114 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-2325",
+  "publishes": [
+    {
+      "at": "2026-10-25T03:16:21.967851432Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-24T13:18:07.661447089Z",
+      "spec": "TASK-2325",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-24T13:20:03.562107675Z",
+      "spec": "TASK-2325",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-24T16:58:58.147318482Z",
+      "spec": "TASK-2325",
+      "seat": "implementer",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-25T00:58:10.545997354Z",
+      "spec": "TASK-2325",
+      "seat": "reviewer",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2906,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "3707b285ae2ab45fd87b47fdab37aaab3a575041"
+      }
+    },
+    {
+      "ts": "2026-10-25T00:58:12.122395576Z",
+      "spec": "TASK-2325",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Seven prior rework items corrected; emergency wrong-device deletion, stale activity checks, and unfulfilled production root discovery still require changes. Build green at the reviewed head.",
+        "recovery_hint": "address the review findings, move TASK-2325 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-10-25T01:02:39.816701648Z",
+      "spec": "TASK-2325",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-2325",
+        "branch": "codex/review-pr2906-3707",
+        "first_seen": "2026-10-25T01:02:39.816635949+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-25T01:02:39.827054376Z",
+      "spec": "TASK-2325",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-2325",
+        "branch": "pr-2906",
+        "first_seen": "2026-10-25T01:02:39.827006596+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-25T02:40:44.198032746Z",
+      "spec": "TASK-2325",
+      "seat": "reviewer",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2906,
+        "verdict": "APPROVED",
+        "reviewed_sha": "6cfa4d340e8dc72f939ff4cabb8ed2f46298d39f"
+      }
+    },
+    {
+      "ts": "2026-10-25T03:15:54.772852653Z",
+      "spec": "TASK-2325",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2906
+      }
+    },
+    {
+      "ts": "2026-10-25T03:16:21.523699220Z",
+      "spec": "TASK-2325",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "a10d44f3124500deb9abbe8436fb59571ced68ed",
+        "pr": 2906,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
