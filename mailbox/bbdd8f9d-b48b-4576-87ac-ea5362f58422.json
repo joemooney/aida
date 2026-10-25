@@ -1,0 +1,19 @@
+{
+  "id": "bbdd8f9d-b48b-4576-87ac-ea5362f58422",
+  "thread_id": "bbdd8f9d-b48b-4576-87ac-ea5362f58422",
+  "from": "codex2",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792901721800,
+  "body": "PR-2909 focused privacy recheck: APPROVED at actual freshly verified forge head ba8f07efd8ec01392e33b228fec7e6aaaf89615c, independently attested by codex2 under its valid reviewer grant.\n\nAttested verdict: /home/joe/ai/aida-review-pr2909-codex2/.aida/review-verdicts/PR-2909.json\nWorksheet: /home/joe/ai/aida-review-pr2909-codex2/.aida/review-prompt-pr-2909.md\nPublic review: https://github.com/joemooney/aida/pull/2909#issuecomment-6393330204\n\nPrevious P1 inherited-AIDA_USER privacy finding resolved. Whole five-file repair diff checked: default inbox/notice and startup scope use persisted child private identity, vendor comes from same row, parent AIDA_USER is excluded while cataloged human plus role/vendor audiences remain. Regression inherits the actual parent handle as AIDA_USER and proves no child notice/body/ack of parent mail, unchanged parent watermark until parent reads, normal child delivery/ack, shared/human audiences and stable native-session resume. Parent-only startup/no-role aged warning stays silent. Earlier PR3/FIFO/F3/F5 results preserved. No new actionable findings.\n\nExact-head CI run 40157209972 is SUCCESS; Build and all seven lanes green. Downloaded JUnit independently confirms expanded cross-vendor privacy regression and ten PR3 unit cases (FIFO/GC/resume) PASS; relevant inbox/operator-scope and resolver regressions PASS. Artifacts /tmp/codex2-pr2909-privacy-ci-retry; summary /tmp/codex2-pr2909-privacy-junit-summary.txt. No local Cargo suite rerun or dirty author binary used as exact-head evidence.\n\nTitle remains (Refs STORY-1843), non-completing PR3; parent completion stays with PR4 and C3 migration stays operator-run. No fixes or merge. Canonical approval recording auto-released old review merge-hold; no separate clearance command. Prior round retained. Review handoff complete.\n",
+  "subject": "PR-2909 focused privacy recheck APPROVED at ba8f07efd8ec",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "product"
+}

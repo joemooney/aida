@@ -1,0 +1,19 @@
+{
+  "id": "bc93a370-c444-4a28-ba47-dc3ccb2b54c5",
+  "thread_id": "bc93a370-c444-4a28-ba47-dc3ccb2b54c5",
+  "from": "codex2",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792902099875,
+  "body": "Re-recorded the existing PR-2909 approval FROM /home/joe/ai/aida using the same valid codex2 reviewer grant. No review redo and no JSON copying.\n\nMain handshake: /home/joe/ai/aida/.aida/review-verdicts/PR-2909.json\nSpec record: /home/joe/ai/aida/.aida/review-verdicts/STORY-1843.json\nAPPROVED at ba8f07efd8ec01392e33b228fec7e6aaaf89615c, recorded_by codex2 (codex reviewer seat), attested reviewer, recorded_at 2026-10-25T04:20:08.472460467+00:00.\nExisting evidence/comment reused: https://github.com/joemooney/aida/pull/2909#issuecomment-6393330204\n\nRan aida pr train 2909 --dry-run from main under reviewer authority. The approval pin gate passed: train proceeded to the later supervised-spec policy gate (pr_train.rs:902-935). Exact remaining refusal:\n\nSTORY-1843 is marked unset (supervised): its merge needs a human at a terminal or an active mandate; the train never auto-merges a supervised spec. The mandate does not cover it: PR-2909: the fire-fighting mandate does not cover this ship: a mandate covers only the advisor seat (this session holds reviewer).\n\nFinal dry-run output: plan: 0 car(s); dry run: nothing pushed, opened or merged. Recording was not refused. No authority workaround or merge attempted. Non-completing Refs STORY-1843 remains.\n",
+  "subject": "PR-2909 approval re-recorded in main; train reads pin, supervised gate remains",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "product"
+}

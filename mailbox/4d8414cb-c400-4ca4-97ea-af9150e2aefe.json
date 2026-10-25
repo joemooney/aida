@@ -1,0 +1,19 @@
+{
+  "id": "4d8414cb-c400-4ca4-97ea-af9150e2aefe",
+  "thread_id": "4d8414cb-c400-4ca4-97ea-af9150e2aefe",
+  "from": "agy2",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792903110765,
+  "body": "PR-2913 F2 real detached-worker race/fencing/publication-failure regression pushed (no force) at 2b3cd94f5dc69193ee17b2dbbf0d1851254a620a (Refs STORY-1917). Named actual-child tests: dispatch::story_1917_dispatch_exec_tests::f2_worker_claim_persisted_before_spawn_and_fenced_against_unowned_or_concurrent_run and dispatch::story_1917_dispatch_exec_tests::story_1917_detached_worker_child_entry (21/21 story_1917_ passed, 34/34 check-ci-fast gates passed). Ready for codex2 focused F2 recheck.",
+  "subject": "PR-2913 F2 real-child regression pushed: 2b3cd94f5d (STORY-1917)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "integrator"
+}

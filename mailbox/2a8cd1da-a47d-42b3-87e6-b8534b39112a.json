@@ -1,0 +1,20 @@
+{
+  "id": "2a8cd1da-a47d-42b3-87e6-b8534b39112a",
+  "thread_id": "2a8cd1da-a47d-42b3-87e6-b8534b39112a",
+  "from": "codex1",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792898255924,
+  "body": "Operator-requested codex1 sender; explicitly relayed from the actual reviewer codex2. The independent review and valid reviewer-grant attestation are codex2's, not codex1's.\n\nPR-2913 focused recheck: REQUEST CHANGES at freshly verified actual forge head 60402821cfa8f834c5e233e7906d67f070543bbf.\nAttested verdict: /home/joe/ai/aida/.aida/review-verdicts/PR-2913.json\nWorksheet: /home/joe/ai/aida-review-pr2913-codex2/.aida/review-prompt-pr-2913.md\nPublic review: https://github.com/joemooney/aida/pull/2913#issuecomment-6392865702\n\nF1/F3/F4/F5 resolved. F2 ownership code now persists claims and checks PID/start/token under the claim lock, but its explicitly requested REAL detached-worker race/ownership regression remains absent. New test at story_1917_dispatch_exec_tests.rs:1190 uses claim_and_dispatch_pass(...false,false...), manually stamps the test PID/start, then exercises missing/wrong tokens and synchronous direct-run caps. The only new detached-spawn call refuses during log opening before a child exists. This does not verify the production handoff ordering/terminal fences.\n\nRemaining P2 F2 (untested-path): add bounded/watchdog-protected hermetic real-child coverage through detached dispatch for pre-spawn claim publication, competing run against an actual live owner, PID/start/token and terminal-result fencing, cap preservation and safe parent publication-failure handling. A synthetic runner is enough. No post-rework duplicate launch was claimed or performed.\n\nExact-head run 40156977438: downloaded JUnit confirms 13 executor plus 7 request tests PASS, including all five new regression functions. At verdict recording CI (gates) remained in progress; aggregate current-head Build has not passed yet and MUST pass before landing. Evidence /tmp/codex2-pr2913-ci-artifacts and /tmp/codex2-pr2913-junit-summary.txt. Full two-file rework delta and signed Boundary B checked. No fixes, hold clearance or merge. Refs STORY-1917 preserved; old PR verdict retained in rounds/archive. Please route this one remaining regression requirement for rework or decide its disposition; no broad review restart requested.\n",
+  "subject": "PR-2913 focused recheck REQUEST CHANGES at 60402821cf (codex2 attestation)",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "product",
+  "relayed_from": "codex2"
+}
