@@ -38,7 +38,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T22:02:03.191649035Z
-modified_at: 2026-10-25T17:21:58.290783995Z
+modified_at: 2026-10-25T17:30:28.224719435Z
 req_type: Story
 tags:
 - docs:impacted
@@ -378,6 +378,18 @@ comments:
   content: 'S3a continuation by fresh codex-integrator-06 harness: human-issued process-bound implementer authority validated; ordinary claim recorded; preserved clean codex/story-1742-slice2-credentials worktree reused and current main integrated by normal merge 615bb73d27 without conflicts or force. Full 22 canonical comments, binding R1-R3/S3a-d and accepted writer/lock inventory read; TASK-2347 supersession respected. WIP introduces shared refusal grammar, anchored private policy/receipt storage, full-history scanner and exact pinned push gate. First transport run passed all29 fixtures including prior23 regressions; initial core filter2 passed. Author self-check identified duplicate-key decoded-scalar and lexical IPv6/network-path URL misses; fixes and regressions now present, final-head verification pending. No approval/completion/merge or real policy enrollment. S3b all-adapter preparation and explicit shared-method ownership handoff, S3c actual recoverable FF pull, S3d full conformance/docs remain required. S3a does not edit allocator/model/backend methods.'
   created_at: 2026-10-25T17:21:58.290783995Z
   modified_at: 2026-10-25T17:21:58.290783995Z
+- id: 01a1741d-2000-75b1-8970-7098ab2af56b
+  author: ai:codex:joe
+  content: |-
+    S3b PRE-CODE boundary proposal, NOT implementation or ownership transfer. Reconciled current main54 methods: GitBackend add_requirement2505/save_reporting_with_origin1672/update_atomically_tracked2125/stage_requirement_update1328/bulk_update1440/bulk_update_atomically1494/BulkWriter add+finish; CachedGitBackend still locks store before inner add/update. Existing BUG-2017 S1+S2 landed; its remaining S3 and prior named method ownership are not waived.
+
+    Proposed one-use prepared mutation contract: resolve actual owned project/common-Git root and acquire shared transport admission BEFORE CachedGitBackend or ordinary store writer lock; then store writer, then existing allocation/counter lock order. Move the private policy reader to shared core rather than duplicate it. Candidate IDs come from a detached in-memory counter snapshot held under the allocator-owned lock; no FileDispenser open/next, bootstrap/migration or live DispenserHandle call during candidate computation. Candidate token is scoped to one synchronous locked mutation, cannot survive lock release or an async await, and binds original store HEAD/config/policy hash, counter snapshot, complete final paths/bytes/deletions, generated metadata/oplog/history and effective commit identities/trailers. Recompute collision/hypothesis-dependent rows before serialization. Serialize once; run the real shared scanner over the COMPLETE artifact set and required identity/audit evidence, revalidate before the FIRST counter/object/oplog/ref effect, then consume the exact admitted plan once. No new outer policy lock from cached-inner/backend callbacks. No network while store/counter locks are held. Post-admission persistence failures must report honest partial state; no claim of cross-directory transactional rollback.
+
+    Ordinary and cached entrypoints share this core contract. Server requests/batches prepare on a clone and run the synchronous admission/persist path before replacing authoritative in-memory state or broadcasting success; no partially validated request/batch rows may persist. Storage load-time migration and unsupported CLI/MCP/REST/gRPC/direct canonical writer families must refuse enabled WORK before any side effect until wired, bound to actual owned root rather than cwd. Optional non-authoritative provenance may be omitted only at new creation with honest reason; all required principal/recusal/grant/mandate/ownership/audit evidence remains mandatory and scanner refusal wins. Ordinary non-profile behavior stays unchanged.
+
+    Binding comment19 requires explicit BUG-2017 shared-method handoff before these edits. No S3b code has been changed; this continuation presently owns only STORY-1742 S3a transport/scanner modules.
+  created_at: 2026-10-25T17:30:28.224719435Z
+  modified_at: 2026-10-25T17:30:28.224719435Z
 history:
 - id: 01a16ee2-ad7a-7b30-aaeb-ec8f892fbe76
   author: joe
