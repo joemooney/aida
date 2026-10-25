@@ -786,6 +786,8 @@ def service(args, project):
             raise Refusal("service unit changed during stop; monitoring retained")
         # Publication repeats exact ownership/global namespace checks.
         own_health_job(args, project, remove=True)
+        if install_file_snapshot(unit) != before_unit:
+            raise Refusal("service stopped and monitoring removed, but unit changed; unit and recovery evidence retained; inspect before retry")
         unit.unlink(missing_ok=True)
         command(["systemctl", "--user", "daemon-reload"])
     print(json.dumps({"service": name, "action": args.action}))

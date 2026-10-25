@@ -473,6 +473,27 @@ class WatcherTests(unittest.TestCase):
         self.assertEqual(config.read_text(), "# user config\n")
         self.assertTrue(args.state_dir.exists())
 
+    def test_uninstall_retains_unit_edited_during_monitoring_removal(self):
+        args = self.service_args()
+        (self.root / ".aida/config.toml").write_text("# user config\n")
+        with patch.object(wake, "worktrees", return_value=[self.root]), patch.object(
+                wake, "command", side_effect=self.fake_service([])):
+            wake.service(args, self.root)
+        unit = Path(os.environ["XDG_CONFIG_HOME"]) / "systemd/user" / wake.service_name(self.root, args.thread)
+        args.action = "uninstall"
+        real_health = wake.own_health_job
+        def health(*params, **kwargs):
+            result = real_health(*params, **kwargs)
+            if kwargs.get("remove") and not kwargs.get("check_only"):
+                unit.write_text("intervening user unit")
+            return result
+        with patch.object(wake, "command", side_effect=self.fake_service([])), patch.object(
+                wake, "own_health_job", side_effect=health):
+            with self.assertRaisesRegex(wake.Refusal, "unit changed"):
+                wake.service(args, self.root)
+        self.assertEqual(unit.read_text(), "intervening user unit")
+        self.assertEqual((self.root / ".aida/config.toml").read_text(), "# user config\n")
+
     def test_inherited_repo_override_cannot_redirect_explicit_project(self):
         with patch.dict(os.environ, {"AIDA_STORE": "/private/other", "GIT_DIR": "/other/git", "AIDA_SESSION_GRANT": "preserved"}):
             env = wake.repo_environment()
