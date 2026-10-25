@@ -23,7 +23,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-25T04:19:22.345919602Z
+modified_at: 2026-10-25T04:58:27.345778587Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -468,6 +468,11 @@ comments:
   content: '-'
   created_at: 2026-10-25T04:19:22.345919602Z
   modified_at: 2026-10-25T04:19:22.345919602Z
+- id: 01a1716c-a291-7bc1-928f-dde3c1a9bed2
+  author: joe
+  content: 'ADVISOR FLEET HEARTBEAT 21:59 MST: 4 open PRs: 2 approved (#2910/#2913) awaiting explicit human-terminal/protected landing; #2915 has verified F1/F2 rework brief queued to codex1; #2917 strict review queued to codex2. Codex1 BUG-2017 worktree contains allocator/core edits and a targeted test was observed queued; new watcher rework gets priority after safe checkpoint. Agy1 recovered/registered from live PID837172, published #2917 and reports final STORY-1889 slice underway. Agy2 plan assignment delivered by mailbox; terminal wake failed, so actual uptake is unverified. Retired two obsolete relay alerts only after verifying all referenced PRs merged and TASK1981/TASK2053 Completed; doctor relay-stall now zero. Store hubs reconciled safely to retained local history. Next trigger: reviewer/implementer mail or CI completion, no model polling loop. Mail watcher install remains gated on independent final-head review and live acceptance proof.'
+  created_at: 2026-10-25T04:58:27.345778587Z
+  modified_at: 2026-10-25T04:58:27.345778587Z
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
   author: joe
