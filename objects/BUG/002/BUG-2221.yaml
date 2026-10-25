@@ -20,7 +20,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-25T06:38:42.269077518Z
-modified_at: 2026-10-25T09:06:52.192334168Z
+modified_at: 2026-10-25T09:12:48.994680068Z
 req_type: Bug
 comments:
 - id: 01a17250-10a0-76e1-b802-890d5a4ca31b
@@ -28,6 +28,44 @@ comments:
   content: 'ADVISOR ROUTING 2026-10-25T09:08Z: codex2 existing independent reviewer assigned bounded read-only source/runtime diagnosis while BUG2017 rework is with codex1. No implementation or claim/grant change. Deliverable: actual evidenced expensive show calls vs remaining uncertainty, exact affected symbols, and decisive hermetic regression/repair brief. Preserve 1000ms/10%/5000ms and telemetry lineage; a few bounded default/no-git read probes only, no broad Cargo or fragile unexplained timing assertion. New explicit PR2919 re-review takes precedence. Native session queue acceptance is delivery evidence, not proof investigation has begun.'
   created_at: 2026-10-25T09:06:52.192334168Z
   modified_at: 2026-10-25T09:06:52.192334168Z
+- id: 01a17255-8262-7182-b91d-ac79ac7a2393
+  author: joe
+  content: |
+    BUG-2221 — codex2 read-only diagnosis / bounded implementation brief (2026-10-25)
+
+    Pinned evidence
+    Source main 3cbb90b0c94e0e748bbfc4eb1f75d7f9c2125c68; live /home/joe/.local/share/aida/live/aida reports 3cbb90b0c9, built00:20:57-07:00, SHA2563909e1af2883952fbdef53f11be8a874548bd0794a443f4243e65fa335529f04. This supersedes the filed941 artifact for these fresh observations, without relabeling/deleting older telemetry. Read full acceptance and routing comment. No claim, implementation, authority/grant/config/service change, transport or Cargo.
+
+    Measured calls, not syscall-count attribution
+    Four uninstrumented live `show TASK-2347 --format json` calls, default/no-git/no-git/default, all exit0:
+    - default: wall2079ms, telemetry2065; open384/lookup37/context138/linkage992; childCPU1426ms.
+    - no-git: wall611ms, telemetry598; open54/lookup32/context111; childCPU363ms.
+    - no-git: wall800ms, telemetry785; open94/lookup76/context161; childCPU376ms.
+    - default: wall1541ms, telemetry1528; open72/lookup33/context106/linkage904; childCPU1139ms.
+    The unassigned telemetry remainder is514/401/454/413ms respectively. It includes code before/after named phases and rendering/relationship resolution; it is NOT a measured startup-only stage. Open is variable; there is no evidence here proving a cache lock or full rebuild. Load was~34 on6 available CPUs, so scheduling contention is real, not a complete explanation.
+
+    One lower-overhead5ms /proc child-observation run: wall1606/telemetry1593, open65/lookup62/context127/linkage905ms. The actual `git -C /home/joe/ai/aida log --all -F --date-order --pretty=... --grep TASK-2347` child was observed from410..1295ms (~885ms lower-bound lifetime) inside linkage. It dominates that observed linkage phase. Multiple preceding `rev-parse HEAD` children were also observed, not attributed arbitrary durations. Source owners: trace.rs::collect_git_linkage_inner (log thread~887), requirements_cli.rs::run_show (linkage phase~6307); CachedGitBackend::current_head_sha/with_inner/tolerant_read and report_cmd::maybe_print_upstream_recheck_notice explain repeated freshness/notice probes to investigate, not permission to remove checks. store_sync.rs::run_on_distributed_store itself only dispatches; its multi-repo warning uses ancestor manifest discovery, not a proven full-fleet scan.
+
+    Bounded exact-query diagnostic on5523refs: normal --all764ms/64raw matches; subtracting four store-root ancestries539ms/10raw matches. This demonstrates relevant history cost, NOT semantic equivalence or a complete fix. Blind `--not aida-store` can omit a code commit also reachable from store; it is NOT a shipping recommendation. JSON linkage for observed TASK2347 remained complete:true/empty, so expensive negative history lookup is a concrete important shape.
+
+    Instrumentation limit: one process-only strace default probe exceeded its15s cap and was stopped; no repeated strace attempt. No traced wall time is used as live benchmark. Prior advisor syscall totals are pointers only. My normal phase records remain in append-only telemetry. No telemetry deletion, guard/budget/lineage changes, or claim of guard green.
+
+    Second source-evidenced issue, not yet a measured dominant cost
+    trace.rs::scan_trace_graph_bounded (~173–207) starts its clock, compiles regexes, then calls collect_source_files (~124) to recursively enumerate the entire tree BEFORE checking the existing budget in the file-content loop. Enumeration follows path.is_dir symlinks and has no deadline/cycle fence. Thus the advertised trace deadline does not cover directory enumeration. This is a definite coverage gap; the present observations do not establish how much of the~905ms parallel linkage it consumed. Preserve truthful incomplete/files/unknown-shipped reporting when bounding it.
+
+    Smallest next implementation/measurement boundary
+    1. Own this in show/trace, with the cache backend owner consulted for freshness probes. First add narrow stage visibility for argv/dispatch/discovery, backend open, notice/identity, relationship/render, and parallel linkage log vs enumeration/content. Existing open/lookup/context/linkage phases are too coarse to assign the~400ms remainder safely. Preserve BUG1801 zero refresh wait and canonical object reads; do not skip security/authority/freshness checks based on this report.
+    2. Reduce repeated all-ref negative-history work while preserving the exact admitted commit set and ref movement semantics. A code-root query must prove disjointness/equivalence or retain the existing bounded truthful fallback; a derived result must be keyed/invalidate on the full relevant ref/object snapshot. The225ms store-subtraction gain alone does NOT demonstrate total<1000ms. Do not declare an unproven cache or root-filter design sufficient.
+    3. Thread the existing deadline/cancellation through directory enumeration (including recursion/entry steps), with cycle-safe traversal, rather than only content processing. No timeout/budget increase or guard weakening.
+
+    Decisive hermetic regression proposal
+    Extend existing aida-cli-lib/src/tests/bug_1993_show_deadline_tests.rs child/PATH-isolated Git shim and aida-cli/tests/bug_1993_show_phase_timings.rs; retain aida-cli/tests/bug_1674_show_bounded_under_writer.rs BUG1801 writer behavior. Fixture: small code DAG plus many orphan bookkeeping commits/refs and a missing-code-linkage spec; shim records queries and delays only the costly store-history traversal. Assert structurally that the optimized path avoids/reuses that work, returns the same canonical object/normalized linkage and formats, and observes a newly moved local/remote/tag ref. Include a code commit reachable from both code/store roots so naive negative ancestry fails. If using derived caching, exercise cold first read, hit, ref movement and malformed/missing state with truthful bounded fallback. For enumeration, use an injected iterator/clock that spends the budget BEFORE yielding a content file, plus a symlink cycle; assert bounded visited entries and incomplete labeling, under a child watchdog, not an unexplained tight wall assertion.
+
+    Implementer acceptance still requires controlled-fixture before/after and the same live artifact/shape comparison below unchanged1000ms, then fresh lineage-scoped telemetry against10%tolerance/5000msceiling. These few loaded-host observations do not establish cold/idle performance, a guard verdict, or a complete repair. One targeted regression +check-ci-fast; touched/compile only per original acceptance. New explicitly routed PR2919 head review preempts this advisory work.
+
+    Evidence: /tmp/codex2-bug2221-uninstrumented-telemetry.json; /tmp/codex2-bug2221-child-observer.json; /tmp/codex2-bug2221-log-root-trial.json; /tmp/codex2-bug2221-probes.py (normal wall/CPU output in session; traced attempt stopped at cap). Numeric evidence is copied above so this comment survives /tmp expiry.
+  created_at: 2026-10-25T09:12:48.994680068Z
+  modified_at: 2026-10-25T09:12:48.994680068Z
 filed_at:
   code_sha: 94124569c9b14617a4049909ddbefad5b82a846d
   branch: main
