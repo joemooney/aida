@@ -212,7 +212,7 @@ def initial(project, thread):
 
 def validate(value, project, thread, allow_inflight=False):
     expected = set(initial(project, thread))
-    if not isinstance(value, dict) or set(value) != expected or type(value.get("version")) is not int or value.get("version") != 1 or value.get("project") != str(project) or value.get("thread") != thread:
+    if not isinstance(value, dict) or set(value) - {"accepted_at"} != expected or type(value.get("version")) is not int or value.get("version") != 1 or value.get("project") != str(project) or value.get("thread") != thread:
         raise Refusal("ledger belongs to a different project/thread or has invalid schema")
     def identity(ident):
         return isinstance(ident, str) and 0 < len(ident) <= 200 and all(
@@ -229,6 +229,10 @@ def validate(value, project, thread, allow_inflight=False):
             raise Refusal("invalid pending notification sources")
     if set(value["accepted"]).intersection(value["pending"]):
         raise Refusal("accepted notifications cannot remain pending")
+    stamps = value.get("accepted_at", {})
+    if (not isinstance(stamps, dict) or not set(stamps).issubset(value["accepted"])
+            or not all(number(stamp) for stamp in stamps.values())):
+        raise Refusal("invalid accepted notification timestamps")
     if bool(value["pending"]) != (value["first_pending"] is not None):
         raise Refusal("inconsistent batching state")
     if type(value["failures"]) is not int or not 0 <= value["failures"] <= 1_000_000 or not number(value["retry_after"]):
@@ -268,17 +272,33 @@ def notification(pending):
     return batch, message
 
 
+# trace:TASK-2347 | ai:codex
+def health(ledger, now=None):
+    """Report persisted queue evidence, without claiming current inbox reads."""
+    now = time.time() if now is None else now
+    stamps = ledger.get("accepted_at", {})
+    return {"accepted_unacknowledged_count": len(ledger["accepted"]),
+            "accepted_unknown_age_count": len(ledger["accepted"]) - len(stamps),
+            "oldest_known_notification_age_seconds": max(0, now - min(stamps.values())) if stamps else None,
+            "recovery_required": ledger["inflight"] is not None}
+
+
 def tick(state, ledger, project, thread, aida, codex, batch_seconds, dry_run=False,
          now=None, inventory=None, acknowledged=None):
     now = time.time() if now is None else now
     if inventory is None:
         inventory, acknowledged = scan(project, aida)
     acknowledged = set() if acknowledged is None else acknowledged
+    # Only a complete successful scan supplies same-recipient read evidence.
+    # Absence from an inventory (including removed worktrees) proves no read.
+    accepted = set(ledger["accepted"]) - acknowledged
+    ledger["accepted"] = sorted(accepted)
+    ledger["accepted_at"] = {ident: stamp for ident, stamp in ledger.get("accepted_at", {}).items()
+                             if ident in accepted}
     for ident in acknowledged:
         ledger["pending"].pop(ident, None)
     if not ledger["pending"]:
         ledger["first_pending"] = None
-    accepted = set(ledger["accepted"])
     for ident, roots in inventory.items():
         if ident not in accepted and ident not in acknowledged:
             ledger["pending"][ident] = sorted(roots)
@@ -316,6 +336,7 @@ def tick(state, ledger, project, thread, aida, codex, batch_seconds, dry_run=Fal
         state.write(ledger)
         raise Refusal("queue result uncertain; inspect target then recover --accepted or --retry")
     ledger["accepted"] = sorted(accepted.union(batch))
+    ledger["accepted_at"].update(dict.fromkeys(batch, now))
     for ident in batch:
         ledger["pending"].pop(ident, None)
     ledger["first_pending"] = now if ledger["pending"] else None
@@ -454,7 +475,7 @@ def main():
         if args.action == "status":
             print(json.dumps({"thread": args.thread, "service": service_name(project, args.thread),
                               "state_dir": str(args.state_dir), "running": state.running,
-                              "notification_ledger": ledger}))
+                              "notification_ledger": ledger, "health": health(ledger)}))
             return
         if args.action == "recover":
             if ledger.get("thread") != args.thread or ledger.get("project") != str(project):
@@ -465,6 +486,10 @@ def main():
             if inflight:
                 if args.accepted:
                     ledger["accepted"] = sorted(set(ledger["accepted"]).union(inflight["ids"]))
+                    # The operator confirms acceptance, but its exact time is
+                    # unknown. Age starts at the recorded submission attempt.
+                    ledger.setdefault("accepted_at", {}).update(
+                        dict.fromkeys(inflight["ids"], inflight["submitted_at"]))
                     for ident in inflight["ids"]:
                         ledger["pending"].pop(ident, None)
                 ledger["inflight"] = None

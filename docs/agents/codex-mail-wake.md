@@ -57,6 +57,29 @@ python3 /path/to/reviewed/codex-mail-wake.py status \
 Status reports the ledger and whether another process holds the watcher lock;
 `last_acceptance` means **Codex accepted a queue command**, not that the model
 ran or mail was acknowledged. The advisor must explicitly read/ack messages.
+The `health` object reports `accepted_unacknowledged_count`,
+`accepted_unknown_age_count`, `oldest_known_notification_age_seconds` (null when
+no age is known), and `recovery_required`. These describe persisted evidence as
+of the last successful scan; status itself does not scan or acknowledge inboxes.
+Notification age starts at the recorded queue submission attempt, including an
+attempt later confirmed with `recover --accepted`. Legacy accepted IDs without
+per-ID timestamps retain unknown ages; the last batch's time is never assigned
+to unrelated IDs. Use these fields in existing operator health reporting to
+notice an unavailable or abandoned target. They do not automatically requeue mail.
+
+After a complete successful scan, accepted IDs and their timestamps are pruned
+only when AIDA supplies acknowledgement evidence for the same logical advisor.
+Accepted unread IDs remain suppressed across restarts, missing inventories and
+removed worktrees. Failed scans retain them. Read-and-accept cycles therefore
+do not accumulate notification history indefinitely; genuinely unread accepted
+mail remains visible until acknowledgement evidence arrives.
+
+Acknowledgement reconciliation uses evidence available from current mailbox
+roots. If the only root holding a read receipt disappears after pruning, a stale
+unread replica in another root can become eligible again. The adapter does not
+retain permanent read tombstones or write shared acknowledgement state; durable
+logical-inbox reconciliation belongs to AIDA's mailbox store. Preserve receipt
+roots when retiring worktrees until that shared reconciliation is available.
 
 ## Delivery and recovery
 
@@ -87,7 +110,10 @@ Successful queue submissions are committed atomically under a permanent exclusiv
 lock. Failure to create the queue process is known not to have submitted anything
 and is retried with a delay capped at five minutes. A failed or timed-out process,
 or a crash between queue acceptance and ledger commit, has an **uncertain result**:
-the adapter stops rather than silently duplicating an expensive model turn. Inspect
+the adapter stops rather than silently duplicating an expensive model turn.
+It remains paused until explicit recovery: systemd restarts and manual `run` or
+`once` attempts refuse the persisted inflight submission without queueing it.
+`status` remains available and reports `recovery_required: true`. Inspect
 the target conversation, stop the service if necessary, then choose explicitly:
 
 ```bash

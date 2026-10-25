@@ -181,6 +181,7 @@ pub(crate) fn snapshot(root: &Path, store: &Path, recipient: &str) -> Result<Sna
         Some(p) => messages(p, &mut budget)?,
         None => Vec::new(),
     };
+    let local_ids: std::collections::BTreeSet<_> = local.iter().map(|m| m.id.as_str()).collect();
     let canonical = messages(&store.join("mailbox"), &mut budget)?;
     let merged = merge_dedup(&local, &canonical);
     let (watermark, mut acknowledged) = match &local_dir {
@@ -192,10 +193,10 @@ pub(crate) fn snapshot(root: &Path, store: &Path, recipient: &str) -> Result<Sna
         if !safe_id(&m.id) {
             bail!("Mailbox message ID is not a bounded safe identity");
         }
-        if m.timestamp <= watermark {
+        if m.timestamp <= watermark && local_ids.contains(m.id.as_str()) {
             acknowledged.insert(m.id.clone());
         }
-        if !m.archived && m.timestamp > watermark && !acknowledged.contains(&m.id) {
+        if !m.archived && !acknowledged.contains(&m.id) {
             unread.push(Envelope { id: m.id.clone() });
         }
     }
@@ -304,12 +305,17 @@ mod tests {
         fixture(main.path(), "replicated", "advisor", 10);
         fixture(sibling.path(), "replicated", "advisor", 10);
         fixture(sibling.path(), "private-unseen", "advisor", 5);
+        // Late publication to canonical is not proof that main previously read it.
+        fixture(&store, "private-unseen", "advisor", 5);
+        std::fs::rename(store.join(".aida/mailbox"), store.join("mailbox")).unwrap();
         let read = main.path().join(".aida/mailbox/.read");
         std::fs::create_dir(&read).unwrap();
         std::fs::write(read.join("advisor.txt"), "100").unwrap();
         let known = snapshot(main.path(), &store, "advisor").unwrap();
         let private = snapshot(sibling.path(), &store, "advisor").unwrap();
         assert_eq!(known.acknowledged_ids, vec!["replicated"]);
+        assert_eq!(known.messages.len(), 1);
+        assert_eq!(known.messages[0].id, "private-unseen");
         assert!(!known
             .acknowledged_ids
             .contains(&"private-unseen".to_string()));

@@ -77,6 +77,76 @@ class WatcherTests(unittest.TestCase):
             with self.assertRaises(wake.Refusal):
                 wake.scan(self.root, "fixture-aida")
 
+    def test_read_accept_cycles_prune_history_and_timestamp_metadata(self):
+        with patch.object(wake, "command", return_value=b"accepted") as cmd, patch.object(wake.os, "fsync"):
+            for n in range(150):
+                ident = f"mail-{n}"
+                self.tick({ident: {"/sibling"}}, now=100 + n, batch_seconds=0)
+                self.assertEqual(self.ledger["accepted"], [ident])
+                self.assertEqual(self.ledger["accepted_at"], {ident: 100 + n})
+                self.tick({}, now=100 + n, acknowledged={ident})
+                self.assertEqual(self.ledger["accepted"], [])
+                self.assertEqual(self.ledger["accepted_at"], {})
+                wake.validate(self.state.read(), self.root, THREAD)
+            self.assertEqual(cmd.call_count, 150)
+        self.assertLess(len(json.dumps(self.state.read())), 1024)
+
+    def test_accepted_unread_survives_missing_inventory_and_failed_full_scan(self):
+        with patch.object(wake, "command", return_value=b"accepted"):
+            self.tick({"unread": {"/removed-sibling"}}, batch_seconds=0)
+        before = self.state.read()
+        with patch.object(wake, "command") as cmd:
+            self.tick({}, now=150)
+            self.tick({"unread": {"/main"}}, now=200)
+            cmd.assert_not_called()
+        self.assertEqual(self.state.read(), before)
+        with patch.object(wake, "scan", side_effect=wake.Refusal("later root failed")):
+            with self.assertRaises(wake.Refusal):
+                wake.tick(self.state, self.ledger, self.root, THREAD, "fixture-aida", "fixture-codex", 0)
+        self.assertEqual(self.state.read(), before)
+
+    def test_health_keeps_legacy_ages_unknown_and_oldest_known_across_batches(self):
+        self.ledger["accepted"] = ["legacy"]
+        self.ledger["last_acceptance"] = {"ids": ["legacy"], "time": 1}
+        wake.validate(self.ledger, self.root, THREAD)
+        self.assertEqual(wake.health(self.ledger, now=100), {
+            "accepted_unacknowledged_count": 1, "accepted_unknown_age_count": 1,
+            "oldest_known_notification_age_seconds": None, "recovery_required": False})
+        with patch.object(wake, "command", return_value=b"accepted"):
+            self.tick({"first": {"/main"}}, now=100, batch_seconds=0)
+            self.tick({"second": {"/main"}}, now=150, batch_seconds=0)
+        self.assertEqual(wake.health(self.ledger, now=200)["oldest_known_notification_age_seconds"], 100)
+        self.tick({}, now=200, acknowledged={"first", "legacy"})
+        self.assertEqual(wake.health(self.ledger, now=200), {
+            "accepted_unacknowledged_count": 1, "accepted_unknown_age_count": 0,
+            "oldest_known_notification_age_seconds": 50, "recovery_required": False})
+
+    def test_timestamp_schema_refuses_orphans_invalid_values_and_unknown_fields(self):
+        self.ledger["accepted"] = ["known"]
+        for stamps in ({"orphan": 100}, {"known": True}, {"known": -1}, {"known": float("nan")}, []):
+            self.ledger["accepted_at"] = stamps
+            with self.assertRaises(wake.Refusal):
+                wake.validate(self.ledger, self.root, THREAD)
+        self.ledger["accepted_at"] = {"known": 100}
+        wake.validate(self.ledger, self.root, THREAD)
+        self.ledger["extra"] = None
+        with self.assertRaises(wake.Refusal):
+            wake.validate(self.ledger, self.root, THREAD)
+
+    def test_status_reports_persisted_health_without_scanning_or_queueing(self):
+        self.ledger["accepted"] = ["legacy", "known"]
+        self.ledger["accepted_at"] = {"known": 100}
+        self.state.write(self.ledger)
+        before = (self.root / "state/ledger.json").read_bytes()
+        result = json.loads(subprocess.check_output([
+            "python3", str(MODULE), "status", "--project", str(self.root), "--thread", THREAD,
+            "--state-dir", str(self.root / "state"), "--aida", "/nonexistent", "--codex", "/nonexistent"]))
+        self.assertTrue(result["running"])
+        self.assertEqual(result["health"]["accepted_unacknowledged_count"], 2)
+        self.assertEqual(result["health"]["accepted_unknown_age_count"], 1)
+        self.assertGreater(result["health"]["oldest_known_notification_age_seconds"], 0)
+        self.assertEqual((self.root / "state/ledger.json").read_bytes(), before)
+
     def test_dense_backlog_batches_once_with_a_hard_byte_bound(self):
         pending = {str(uuid.uuid4()): ["/source"] for _ in range(580)}
         batch, message = wake.notification(pending)
@@ -233,6 +303,8 @@ class WatcherTests(unittest.TestCase):
         recovered = state.read()
         wake.validate(recovered, self.root, THREAD)
         self.assertEqual(recovered["accepted"], ["new-id"])
+        self.assertEqual(recovered["accepted_at"], {"new-id": 100})
+        self.assertEqual(wake.health(recovered, now=150)["oldest_known_notification_age_seconds"], 50)
         self.assertIsNone(recovered["inflight"])
         self.assertFalse((self.root / ".aida").exists())
 
