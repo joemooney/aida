@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T15:33:51.496539087Z
-modified_at: 2026-10-25T05:36:03.555697638Z
+modified_at: 2026-10-25T05:37:16.108372939Z
 req_type: Story
 tags:
 - architecture
@@ -277,6 +277,10 @@ history:
   author: joe
   timestamp: 2026-10-25T05:07:35.266881477Z
   changes: []
+- id: 01a17190-2bd3-7893-9a7c-ce557ea28848
+  author: joe
+  timestamp: 2026-10-25T05:37:16.243125062Z
+  changes: []
 filed_at:
   code_sha: 7be4321436b8f93b2daba2bd71b649046818e35f
   branch: main
@@ -289,7 +293,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'Independent advisor review: relocation mostly preserves behavior, but record_label_state still writes legacy hold markers from merge_hold.rs after that file leaves the protected floor, violating signed marker-writer boundary. Refs STORY-1889.'
+  detail: 'Focused advisor round2: F1 label-state marker writer resolved with protected typed/legacy tests; F2 admitted hold record still crosses to unprotected routing by mutable reference after protected checks, at both persistence paths. Preserve routing behavior but restrict returned mutations to routing fields.'
   recovery_hint: address the review findings, move STORY-1889 back to In Progress, and clear the PR hold only after approval
   shelved_by: advisor
-  shelved_at: 2026-10-25T05:07:35.116067193Z
+  shelved_at: 2026-10-25T05:37:16.108372939Z
