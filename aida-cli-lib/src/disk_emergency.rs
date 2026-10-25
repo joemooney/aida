@@ -65,12 +65,23 @@ const GUARD_JOB: &str = "disk-headroom-guard";
 
 /// `[doctor.disk_headroom]` emergency keys.
 // trace:STORY-1916 | ai:claude
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+// trace:TASK-2325 | ai:agy
+// trace:TASK-2334 | ai:agy
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub(crate) struct EmergencyConfig {
     /// 0 disables the emergency tier.
     pub used_pct: u8,
     pub margin_pct: u8,
     pub idle_hours: u64,
+    /// Optional configured `~/.claude/jobs` root for the emergency scratch
+    /// tier (TASK-2325 / TASK-2334).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scratch_jobs_root: Option<PathBuf>,
+    /// Optional configured session-scratch root (e.g. `/tmp/claude-1000`) for
+    /// the emergency scratch tier, independent of the guard process's own
+    /// `$TMPDIR` ancestry (TASK-2325 / TASK-2334).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scratch_tmp_root: Option<PathBuf>,
 }
 
 impl EmergencyConfig {
@@ -91,11 +102,21 @@ impl EmergencyConfig {
 /// Read the emergency keys, falling back to the defaults for an absent or
 /// out-of-range value. `emergency_used_pct = 0` disables the tier.
 // trace:STORY-1916 | ai:claude
+// trace:TASK-2325 | ai:agy
+// trace:TASK-2334 | ai:agy
 pub(crate) fn emergency_config(cfg: Option<&toml::Value>) -> EmergencyConfig {
     let table = cfg
         .and_then(|c| c.get("doctor"))
         .and_then(|d| d.get("disk_headroom"));
     let int = |key: &str| table.and_then(|t| t.get(key)).and_then(|v| v.as_integer());
+    let path_key = |key: &str| {
+        table
+            .and_then(|t| t.get(key))
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(PathBuf::from)
+    };
     EmergencyConfig {
         used_pct: int("emergency_used_pct")
             .filter(|v| (0..=100).contains(v))
@@ -106,6 +127,8 @@ pub(crate) fn emergency_config(cfg: Option<&toml::Value>) -> EmergencyConfig {
         idle_hours: int("emergency_idle_hours")
             .filter(|v| *v >= 1)
             .map_or(DEFAULT_EMERGENCY_IDLE_HOURS, |v| v as u64),
+        scratch_jobs_root: path_key("scratch_jobs_root"),
+        scratch_tmp_root: path_key("scratch_tmp_root"),
     }
 }
 
@@ -186,7 +209,16 @@ pub(crate) fn walk_cache(dir: &Path) -> CacheWalk {
             continue;
         };
         for entry in entries.flatten() {
-            let Ok(md) = entry.metadata() else { continue };
+            // Follow no symlinks (TASK-2325): over TMPDIR or ~/.claude/jobs a
+            // nested link to an external tree must neither traverse that tree,
+            // inflate bytes with target files, nor pin scratch age via the
+            // target's mtime.
+            let Ok(md) = std::fs::symlink_metadata(entry.path()) else {
+                continue;
+            };
+            if md.file_type().is_symlink() {
+                continue;
+            }
             if let Ok(m) = md.modified() {
                 walk.newest = Some(walk.newest.map_or(m, |n| n.max(m)));
             }
@@ -377,6 +409,9 @@ pub(crate) enum Reason {
     Closed,
     Idle,
     IdleLiveLease,
+    /// TASK-2325: a terminal job's tmp dir or old session scratch, reclaimed
+    /// only at the hard ceiling after the cache tiers.
+    AgentScratch,
 }
 
 impl Reason {
@@ -385,6 +420,8 @@ impl Reason {
             Reason::WorktreeGone | Reason::Merged | Reason::Closed => 0,
             Reason::Idle => 1,
             Reason::IdleLiveLease => 2,
+            // trace:TASK-2325 | ai:claude
+            Reason::AgentScratch => 3,
         }
     }
 
@@ -395,6 +432,8 @@ impl Reason {
             Reason::Closed => "closed",
             Reason::Idle => "idle",
             Reason::IdleLiveLease => "idle-live-lease",
+            // trace:TASK-2325 | ai:claude
+            Reason::AgentScratch => "agent-scratch",
         }
     }
 }
@@ -1288,27 +1327,107 @@ fn mail_holder(main_root: &Path, c: &Candidate) {
     let _ = crate::mailbox_store::write_message(main_root, &msg);
 }
 
+/// Construct the emergency scratch survey from `cfg` (`scratch_jobs_root`,
+/// `scratch_tmp_root`) with fallback to `home` and `tmpdir`. The age floor is
+/// the longer of the emergency idle window and the scratch default, and build
+/// caches are never part of the emergency tier (TASK-2325 / TASK-2334).
+// trace:TASK-2325 | ai:agy
+// trace:TASK-2334 | ai:agy
+pub(crate) fn emergency_scratch_survey(
+    cfg: &EmergencyConfig,
+    tmpdir: Option<&Path>,
+    home: Option<&Path>,
+    now: SystemTime,
+) -> crate::scratch_reclaim::ScratchSurvey {
+    let mut scratch = crate::scratch_reclaim::survey_with_roots(
+        crate::scratch_reclaim::DEFAULT_MIN_AGE_DAYS,
+        now,
+        cfg.scratch_jobs_root.as_deref(),
+        cfg.scratch_tmp_root.as_deref(),
+        tmpdir,
+        home,
+    );
+    scratch.min_age = scratch.min_age.max(cfg.idle());
+    scratch.build_caches.clear();
+    scratch
+}
+
 /// The scheduled emergency run. `None` when the tier is off, the cache
 /// filesystem is under the ceiling, or another run holds the lock.
 // trace:STORY-1916 | ai:claude
+// trace:TASK-2325 | ai:claude
+// trace:TASK-2334 | ai:agy
 pub(crate) fn run_emergency(main_root: &Path, cfg: &EmergencyConfig) -> Option<RunOutcome> {
     let cache_root = crate::worktree_reclaim::cache_root_of(main_root)?;
     let probe_root = cache_root.clone();
-    run_emergency_probed(main_root, &cache_root, cfg, move || {
-        fs_stats(&probe_root).map(|s| s.used_pct())
-    })
+    // TASK-2325 / TASK-2334: the hard-ceiling scratch pass resolves configured
+    // roots from `[doctor.disk_headroom]` first, reading the REAL environment
+    // only here in the production glue — never below the injection seam, so a
+    // test can never reach this host's jobs or session scratch.
+    let tmpdir = std::env::var_os("TMPDIR").map(PathBuf::from);
+    let home = crate::home_dir();
+    run_emergency_configured_with(
+        main_root,
+        &cache_root,
+        cfg,
+        tmpdir.as_deref(),
+        home.as_deref(),
+        move || fs_stats(&probe_root).map(|s| s.used_pct()),
+    )
 }
 
-/// [`run_emergency`] with the cache root and usage probe injected, so the
-/// production glue (lock, gh / offline fallback, incremental ledger appends,
-/// notice dedupe state) is testable on a real tempdir whatever its
-/// filesystem's actual usage.
+/// [`run_emergency`] with the cache root, `TMPDIR`/`HOME` fallback inputs, and
+/// usage probe injected, exercising the production [`emergency_scratch_survey`]
+/// root-resolution and age-floor path without touching host env (TASK-2334).
+// trace:TASK-2325 | ai:agy
+// trace:TASK-2334 | ai:agy
+pub(crate) fn run_emergency_configured_with(
+    main_root: &Path,
+    cache_root: &Path,
+    cfg: &EmergencyConfig,
+    tmpdir: Option<&Path>,
+    home: Option<&Path>,
+    used_pct: impl Fn() -> Option<u8>,
+) -> Option<RunOutcome> {
+    let scratch = emergency_scratch_survey(cfg, tmpdir, home, SystemTime::now());
+    run_emergency_probed(main_root, cache_root, cfg, scratch, used_pct)
+}
+
+/// [`run_emergency`] with the cache root, usage probe and hard-ceiling
+/// scratch survey injected, so the production glue (lock, gh / offline
+/// fallback, incremental ledger appends, notice dedupe state) is testable on
+/// a real tempdir whatever its filesystem's actual usage — and so no test
+/// can reach the real TMPDIR or HOME (TASK-2325).
 // trace:TASK-2272 | ai:claude (TASK-1-482)
+// trace:TASK-2325 | ai:claude
 pub(crate) fn run_emergency_probed(
     main_root: &Path,
     cache_root: &Path,
     cfg: &EmergencyConfig,
+    scratch: crate::scratch_reclaim::ScratchSurvey,
     used_pct: impl Fn() -> Option<u8>,
+) -> Option<RunOutcome> {
+    run_emergency_probed_with_dev(
+        main_root,
+        cache_root,
+        cfg,
+        scratch,
+        used_pct,
+        crate::scratch_reclaim::device_of_path,
+    )
+}
+
+/// [`run_emergency_probed`] with the filesystem-device lookup injected so
+/// mixed-device and unknown-device scratch isolation can be verified on a
+/// single-filesystem tempdir (TASK-2325, PR-2906 round 3).
+// trace:TASK-2325 | ai:agy
+pub(crate) fn run_emergency_probed_with_dev(
+    main_root: &Path,
+    cache_root: &Path,
+    cfg: &EmergencyConfig,
+    scratch: crate::scratch_reclaim::ScratchSurvey,
+    used_pct: impl Fn() -> Option<u8>,
+    dev_of: impl Fn(&Path) -> Option<u64>,
 ) -> Option<RunOutcome> {
     use fs2::FileExt;
     if !cfg.enabled() {
@@ -1358,12 +1477,33 @@ pub(crate) fn run_emergency_probed(
         &candidates,
         cfg,
         now,
-        used_pct,
+        &used_pct,
         |p| std::fs::remove_dir_all(p),
         |c| mail_holder(main_root, c),
         |row| {
-            let _ = append_ledger(main_root, std::slice::from_ref(row));
+            // The final `LedgerRow::Run` summary is emitted after the
+            // hard-ceiling scratch pass so it includes scratch deletions and
+            // post-scratch usage (TASK-2325).
+            if !matches!(row, LedgerRow::Run { .. }) {
+                let _ = append_ledger(main_root, std::slice::from_ref(row));
+            }
         },
+    );
+    // TASK-2325: at the hard ceiling the repo's caches alone may not be
+    // enough — terminal jobs' tmp dirs and old session scratch on the
+    // pressured build-cache filesystem (never build caches, never a live job
+    // or session, never a foreign filesystem) are then reclaimed too, until
+    // usage drops below the ceiling. trace:TASK-2325 | ai:claude
+    let pressured_dev = dev_of(cache_root);
+    let outcome = scratch_at_hard_ceiling_with_dev(
+        main_root,
+        cfg,
+        now,
+        &scratch,
+        &used_pct,
+        pressured_dev,
+        &dev_of,
+        outcome,
     );
     let mut state = load_guard_state(main_root);
     let now_utc = Utc::now();
@@ -1379,6 +1519,177 @@ pub(crate) fn run_emergency_probed(
     Some(outcome)
 }
 
+/// TASK-2325: the emergency tier's last resort. Runs only while usage is
+/// still AT OR ABOVE the hard ceiling after the cache candidates (and only
+/// when the cache tier did not stop with an allowlist refusal): terminal
+/// jobs' tmp dirs and old session scratch on the pressured filesystem — never
+/// build caches, never a live job or session, never a foreign or unknown
+/// device — each re-checked and re-validated for freshness/terminal state at
+/// the delete site and ledgered like every other emergency delete.
+// trace:TASK-2325 | ai:claude
+fn scratch_at_hard_ceiling(
+    main_root: &Path,
+    cfg: &EmergencyConfig,
+    now: SystemTime,
+    survey: &crate::scratch_reclaim::ScratchSurvey,
+    used_pct: &impl Fn() -> Option<u8>,
+    outcome: RunOutcome,
+) -> RunOutcome {
+    let pressured_dev = crate::scratch_reclaim::device_of_path(main_root);
+    scratch_at_hard_ceiling_with_dev(
+        main_root,
+        cfg,
+        now,
+        survey,
+        used_pct,
+        pressured_dev,
+        crate::scratch_reclaim::device_of_path,
+        outcome,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn scratch_at_hard_ceiling_with_dev(
+    main_root: &Path,
+    cfg: &EmergencyConfig,
+    now: SystemTime,
+    survey: &crate::scratch_reclaim::ScratchSurvey,
+    used_pct: &impl Fn() -> Option<u8>,
+    pressured_dev: Option<u64>,
+    dev_of: impl Fn(&Path) -> Option<u64>,
+    mut outcome: RunOutcome,
+) -> RunOutcome {
+    let ts = DateTime::<Utc>::from(now);
+    outcome.rows.retain(|r| !matches!(r, LedgerRow::Run { .. }));
+    let emit_run = |outcome: &mut RunOutcome| {
+        let run_row = LedgerRow::Run {
+            ts,
+            freed_bytes: outcome.freed_bytes,
+            deleted: outcome.deleted.len(),
+            used_pct_before: outcome.used_pct_before,
+            used_pct_after: outcome.used_pct_after,
+            stopped: outcome.stopped.code().to_string(),
+        };
+        let _ = append_ledger(main_root, std::slice::from_ref(&run_row));
+        outcome.rows.push(run_row);
+    };
+    if outcome.stopped == Stop::Refused || !matches!(used_pct(), Some(pct) if pct >= cfg.used_pct) {
+        emit_run(&mut outcome);
+        return outcome;
+    }
+    let (rows, _held) =
+        crate::scratch_reclaim::plan_on_device(survey, Some(pressured_dev), &dev_of);
+    let mut push = |outcome: &mut RunOutcome, row: LedgerRow| {
+        let _ = append_ledger(main_root, std::slice::from_ref(&row));
+        outcome.rows.push(row);
+    };
+    for row in rows {
+        let Some(pct) = used_pct() else {
+            outcome.stopped = Stop::ProbeLost;
+            break;
+        };
+        if pct < cfg.used_pct {
+            outcome.stopped = if pct < cfg.stop_below() {
+                Stop::BelowMargin
+            } else {
+                Stop::Tier2BelowCeiling
+            };
+            break;
+        }
+        let path = row.path.display().to_string();
+        if let Err(e) = crate::scratch_reclaim::check(survey, &row) {
+            push(
+                &mut outcome,
+                LedgerRow::Fail {
+                    ts,
+                    path,
+                    error: e.to_string(),
+                },
+            );
+            outcome.refusal = Some(e.to_string());
+            outcome.stopped = Stop::Refused;
+            break;
+        }
+        if let Err(e) =
+            crate::scratch_reclaim::check_on_device(survey, &row, pressured_dev, &dev_of)
+        {
+            push(
+                &mut outcome,
+                LedgerRow::Skip {
+                    ts,
+                    path,
+                    reason: Reason::AgentScratch,
+                    why: e.to_string(),
+                },
+            );
+            continue;
+        }
+        let fresh_now = SystemTime::now().max(now);
+        if let Some(why) = crate::scratch_reclaim::revalidate_before_delete(survey, &row, fresh_now)
+        {
+            push(
+                &mut outcome,
+                LedgerRow::Skip {
+                    ts,
+                    path,
+                    reason: Reason::AgentScratch,
+                    why,
+                },
+            );
+            continue;
+        }
+        let removed = if row.path.is_dir() {
+            std::fs::remove_dir_all(&row.path)
+        } else {
+            std::fs::remove_file(&row.path)
+        };
+        match removed {
+            Ok(()) => {
+                outcome.freed_bytes = outcome.freed_bytes.saturating_add(row.bytes);
+                outcome.deleted.push(Candidate {
+                    path: row.path.clone(),
+                    bytes: row.bytes,
+                    idle: row.idle,
+                    reason: Reason::AgentScratch,
+                    holder: None,
+                });
+                push(
+                    &mut outcome,
+                    LedgerRow::Delete {
+                        ts,
+                        path,
+                        bytes: row.bytes,
+                        reason: Reason::AgentScratch,
+                        idle_secs: row.idle.as_secs(),
+                        used_pct_before: Some(pct),
+                    },
+                );
+            }
+            Err(e) => push(
+                &mut outcome,
+                LedgerRow::Fail {
+                    ts,
+                    path,
+                    error: e.to_string(),
+                },
+            ),
+        }
+    }
+    let after = used_pct();
+    outcome.used_pct_after = after;
+    if !matches!(outcome.stopped, Stop::Refused | Stop::ProbeLost) {
+        if let Some(pct) = after {
+            if pct < cfg.stop_below() {
+                outcome.stopped = Stop::BelowMargin;
+            } else if pct < cfg.used_pct {
+                outcome.stopped = Stop::Tier2BelowCeiling;
+            }
+        }
+    }
+    emit_run(&mut outcome);
+    outcome
+}
+
 /// Bytes a `worktree reclaim` dry run could free on the filesystem `dev`.
 // trace:STORY-1916 | ai:claude
 pub(crate) fn reclaimable_on(main_root: &Path, dev: u64) -> u64 {
@@ -1390,6 +1701,10 @@ pub(crate) fn reclaimable_on(main_root: &Path, dev: u64) -> u64 {
         include_live: false,
         include_open_prs: false,
         json: false,
+        // This measure is per-device over the repo's caches; scratch has its
+        // own survey. trace:TASK-2325 | ai:claude
+        scratch_age_days: crate::scratch_reclaim::DEFAULT_MIN_AGE_DAYS,
+        no_scratch: true,
     };
     let Ok(survey) = crate::worktree_reclaim::survey_from_env(main_root, &opts) else {
         return 0;

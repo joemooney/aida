@@ -122,18 +122,25 @@ pub enum WorktreeCommand {
     },
 
     /// Reclaim disk by deleting stale `target/` build caches inside this
-    /// repository's worktrees. A `target/` is a cache, never a source of truth
-    /// — nothing but rebuild time is lost. DRY RUN BY DEFAULT: it reports
-    /// reclaimable bytes and every worktree it held back, and deletes only with
-    /// `--apply`. Where `gc` removes worktrees that are FINISHED, `reclaim`
-    /// removes the regenerable cache inside worktrees that are KEPT, which is
-    /// the space `aida session reap` cannot reach and `cargo clean` targets
-    /// wrongly (inside a worktree it clears the SHARED CARGO_TARGET_DIR, i.e.
-    /// the main checkout's live cache, not the stale one). The main checkout's
-    /// `target/` is never a candidate; nor is `.aida-store`, a worktree held by
-    /// a live session, a worktree whose branch has an open PR, or a cache
-    /// touched in the last `--min-age-mins` minutes.
+    /// repository's worktrees, plus aged agent scratch outside the repository
+    /// (`~/.claude/jobs/<id>/tmp` of terminal jobs, old entries under the
+    /// agent `$TMPDIR` root, and idle `~/.cache/aida-impl-target` build
+    /// caches; pass `--no-scratch` to restrict to worktree `target/` caches).
+    /// DRY RUN BY DEFAULT: it reports reclaimable bytes and every worktree or
+    /// scratch entry held back, and deletes only with `--apply`. Where `gc`
+    /// removes worktrees that are FINISHED, `reclaim` removes stale worktree
+    /// caches inside worktrees that are KEPT (which `aida session reap`
+    /// cannot reach and `cargo clean` targets wrongly by clearing the shared
+    /// `CARGO_TARGET_DIR`) alongside aged agent scratch older than
+    /// `--scratch-age-days`. Note that while `target/` and build caches are
+    /// regenerable, deleted job `tmp/` and session scratch are not (job
+    /// `state.json`, `timeline.jsonl`, and `~/.claude/projects` transcripts
+    /// are never touched). The main checkout's `target/` is never a
+    /// candidate; nor is `.aida-store`, a worktree or scratch dir held by a
+    /// live session or live job, a worktree whose branch has an open PR, or a
+    /// worktree cache touched in the last `--min-age-mins` minutes.
     // trace:TASK-1562 | ai:claude
+    // trace:TASK-2325 | ai:agy
     Reclaim {
         /// Actually delete. Without this the command only reports.
         #[clap(long)]
@@ -161,6 +168,19 @@ pub enum WorktreeCommand {
         /// Emit machine-readable JSON.
         #[clap(long)]
         json: bool,
+
+        /// Treat agent scratch (terminal jobs' tmp dirs, session scratch,
+        /// idle build caches) younger than this many days as live and keep
+        /// it.
+        // trace:TASK-2325 | ai:claude
+        #[clap(long, value_name = "DAYS", default_value_t = 3)]
+        scratch_age_days: u64,
+
+        /// Skip the agent-scratch scan (jobs tmp, TMPDIR scratch, build
+        /// caches) and consider only this repository's worktree caches.
+        // trace:TASK-2325 | ai:claude
+        #[clap(long)]
+        no_scratch: bool,
     },
 
     /// Manage the warm-pool of recycled worktrees — kept warm (reset-not-delete
