@@ -24,8 +24,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-25T00:21:13.625128852Z
-modified_at: 2026-10-25T00:21:13.625128852Z
+modified_at: 2026-10-25T00:21:21.668138001Z
 req_type: Story
+relationships:
+- rel_type:
+    custom: covers
+  target_id: 01a169c3-090b-7350-9b07-de2fa0c4ad61
+  created_at: 2026-10-25T00:21:21.668134885Z
+  created_by: joe
+history:
+- id: 01a1706e-f5b3-7791-b3fb-0a12231356fc
+  author: joe
+  timestamp: 2026-10-25T00:21:22.483693081Z
+  changes: []
 filed_at:
   code_sha: 6eb378ea21f52f60887b7558a9db29d85f3b5dbf
   branch: claude/story-1917-slice2
