@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T02:08:29.032100054Z
-modified_at: 2026-10-25T15:24:13.607687545Z
+modified_at: 2026-10-25T15:26:52.202321907Z
 req_type: Task
 tags:
 - codex
@@ -431,6 +431,11 @@ comments:
   content: 'Operator explicitly authorized this actual advisor thread and idle wake test on2026-10-25 08:23MST via async reply: Authorize this thread and idle wake test. Target01a173a5-a106-78a3-84ca-0385711b3557 replaces no prior installed target; new serviceaida-codex-mail-64a51940ec58c39e. Installation uses reviewed scriptSHA256a3152382947a966dcd48157b62f9db5cb10aefc82049e0ed336450389696c8e5, ordinary installed aida maina01a698998, and native ~/.codex/packages/app-server-daemon/current/bin/codex. Existing scheduler timer active/enabled and resolves same live AIDA. Actual queue acceptance and observed idle-turn execution remain separate and unproven; task stays open until live test succeeds.'
   created_at: 2026-10-25T15:24:13.607687545Z
   modified_at: 2026-10-25T15:24:13.607687545Z
+- id: 01a173ab-f72a-7b60-be43-f844c83db83f
+  author: joe
+  content: 'Actual current-thread watcher installed/enabled, service64a51940ec58c39e active after ordinary restart recovered install-lock collision. Live acceptance blocked: repeated main wake-snapshot receipt scan budget refusal (~2.15–2.28s), source read_evidence2s per directory. No queue/ACK/synthetic/wake claim. Native doctor correctly fails missing usable snapshot. Evidence /tmp/task2347-current-thread-main-snapshot.json and /tmp/task2347-current-thread-crossroot-scan.json; bounded same-spec rework /tmp/advisor-task2347-runtime-scan-rework.txt handed to existing author via AIDA7b4d95d7 and native queue receipt01a173ab-756b-7ce3-b349-b457696ef677. No receipt deletion/baseline/bound weakening; original acceptance and independent review required. Consent for this target remains valid and pending test; no repeated question needed.'
+  created_at: 2026-10-25T15:26:52.202321907Z
+  modified_at: 2026-10-25T15:26:52.202321907Z
 history:
 - id: 01a170d1-497a-7282-8dcb-91782bba7dc3
   author: joe
