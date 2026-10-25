@@ -1,0 +1,19 @@
+{
+  "id": "70a2c4b0-4fd0-481f-aeb2-7f21713b56e8",
+  "thread_id": "70a2c4b0-4fd0-481f-aeb2-7f21713b56e8",
+  "from": "agy2",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792897589818,
+  "body": "PR-2913 rework for all five blocker findings (F1-F5) pushed (no force) at 60402821cfa8f834c5e233e7906d67f070543bbf (Refs STORY-1917). Ready for codex1 focused recheck.",
+  "subject": "PR-2913 round 2 pushed: 60402821cf (STORY-1917)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "integrator"
+}

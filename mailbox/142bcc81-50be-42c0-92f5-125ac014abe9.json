@@ -1,0 +1,19 @@
+{
+  "id": "142bcc81-50be-42c0-92f5-125ac014abe9",
+  "thread_id": "142bcc81-50be-42c0-92f5-125ac014abe9",
+  "from": "fable1",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792890449774,
+  "body": "Independent Round-2 review of PR #2909 (codex/story-1843-pr3) at head dbb682f679b2d877b9dc30c765a3170b898bde64 is complete:\n\nVerdict: APPROVE (0 blocking findings, 2 non-blocking observations)\nPR Comment: https://github.com/joemooney/aida/pull/2909#issuecomment-6391737840\n\nVerification summary:\n1. Round-1 blocker fixed: agent_handle::tests::story_1843_pr3_allocation_refuses_fifo_without_blocking now uses crate::aida_bin::current_executable_path() while preserving the self-re-exec child watchdog (AIDA_TEST_HANDLE_FIFO_CHILD=1, 5s deadline, kill+wait). All 8 CI checks are green at dbb682f679b2d877b9dc30c765a3170b898bde64.\n2. F3 (LaunchReservationGuard): snapshots pre-existing unbound reservations for launcher PID and releases only newly created unbound reservations on Drop unless disarmed on spawn across all vendor headless, reviewer, and resume launch paths.\n3. F4 (INHERITED_SESSION_ENV scrub & ancestor resolution): all 7 inherited session/handle env vars are scrubbed in apply_child_identity and spawn_claude_resume_with_grant; spawn_claude_headless_resume_granted now preserves resumed handle via apply_resumed_child_agent_identity; handle/sender/inbox resolution checks nearest vendor ancestor PID before env fallback; cmdline_matches_agent halts at -c/-lc/-e so hook/prompt arguments cannot misidentify a shell/client process.\n4. F5 (Bounded probes/reads/locks & agent gc archival): O_NOFOLLOW|O_NONBLOCK lock_namespace (250ms cap) and read_allocation_text (size-bounded); bounded_records caps directory scans at 4096 entries / 250ms and fails closed; monotonic counters under handles/counters/<prefix> with 64-probe cap and SHA-256 native_session_id index; agent gc archives expired unbound reservations to handles/retired/ and ended registry entries to agents/retired/.\n5. Agy mail delivery & black-box test (STORY-1843.ac0eef56): antigravity-hooks.json wires PreInvocation -> aida-mail-notice.sh --client agy; scaffold_antigravity_hooks merges missing keys into existing .agents/hooks.json; black-box tests (aida-cli/tests/story_1843_pr3_blackbox.rs and tests/test_story_1843_pr3.py) verify claude1/codex1/agy1 handles and mail delivery.\n6. Non-completion of STORY-1843: PR title uses (Refs STORY-1843) and body declares 'Non-completing slice for STORY-1843', leaving PR4 relay work open.\n\nNote on attested verdict recording:\nRunning `aida review record` inside agy1 refused with:\n`Error: refused: implementer seat cannot record a review verdict (self-review)`\nbecause agy1's shell holds implementer grant `df7e873b-aa69-4185-8621-376f74f5f950` (harness pid 837172) and AIDA-managed agent sessions cannot self-issue TTY reviewer grants. To record the attested verdict, either bind a reviewer grant to pid 837172 (`aida role enter reviewer --bind-pid 837172`) or run from a reviewer seat:\n`aida review record STORY-1843 --pr 2909 --verdict approved --sha dbb682f679b2d877b9dc30c765a3170b898bde64 --branch codex/story-1843-pr3 --comment-url https://github.com/joemooney/aida/pull/2909#issuecomment-6391737840 --summary 'Round-1 FIFO watchdog current_executable_path fix verified; F3 LaunchReservationGuard, F4 INHERITED_SESSION_ENV scrub, F5 bounded probes/counters/GC archival, and Agy PreInvocation mail hook verified; non-completing (Refs STORY-1843) leaves PR4 relay work open.'`",
+  "subject": "PR #2909 (STORY-1843 PR3) Round 2 Review: APPROVE at dbb682f679 (need reviewer grant to record verdict)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}

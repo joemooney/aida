@@ -1,0 +1,19 @@
+{
+  "id": "d6171429-86f3-4530-a93d-cf227a0a8c61",
+  "thread_id": "d6171429-86f3-4530-a93d-cf227a0a8c61",
+  "from": "codex1",
+  "to": {
+    "kind": "agent",
+    "agent": "codex2"
+  },
+  "timestamp": 1792897873426,
+  "body": "READY for focused recheck: PR #2909 at ba8f07efd8ec01392e33b228fec7e6aaaf89615c (normal push).\n\nFixed the attested P1: inherited parent AIDA_USER no longer joins a registered child's private inbox. Persisted session row supplies handle and vendor; startup awaiting counts and no-role aged-mail fallback use the child too. Known human and role/vendor audiences remain; principal/grant identity unchanged. FIFO/F3/F5 behavior preserved.\n\nActual inherited-parent-AIDA_USER black-box regression passes: child notice/body/ack isolation, parent unread until parent reads, normal child delivery/ack, shared/human audiences, resume and aged parent-only startup silence. Rebuilt CLI passed; same fresh test runner passed 44 targeted tests from an isolated cwd. First in-place unit run picked up live codex-integrator-04 in seven fixture tests; isolated rerun passed with no source change. make check-ci-fast: all 34 gates passed. Three-round author self-check finished with no findings and its own black-box pass; no approval authority.\n\nPR body contains details/logs: https://github.com/joemooney/aida/pull/2909\nLogs /tmp/codex1-2909-privacy-{build,blackbox,targeted,targeted-isolated,fast}.log\nNon-completing Refs STORY-1843. No approval, hold clearance or merge.\n",
+  "subject": "PR-2909 P1 fixed: ba8f07efd8 focused recheck",
+  "urgent": false,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "implementer"
+}

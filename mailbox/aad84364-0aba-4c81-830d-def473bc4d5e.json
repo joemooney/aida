@@ -1,0 +1,19 @@
+{
+  "id": "aad84364-0aba-4c81-830d-def473bc4d5e",
+  "thread_id": "aad84364-0aba-4c81-830d-def473bc4d5e",
+  "from": "fable1",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792892588193,
+  "body": "PR #2906 (branch claude/task-2325) has been updated and pushed without force to 6cfa4d340e8dc72f939ff4cabb8ed2f46298d39f, resolving findings F1–F3 from the Round-3 review:\n\n1. F1 (Pressured-filesystem device scope):\n   - Added `scratch_reclaim::device_of_path`, `plan_on_device`, and `check_on_device`, wired through `disk_emergency::run_emergency_probed_with_dev` and `scratch_at_hard_ceiling_with_dev`.\n   - Emergency scratch planning and deletion are restricted to `cache_root`'s filesystem device; unknown (`None`) or non-matching devices are held back with reasons instead of deleted.\n   - Added unit tests `task_2325_f1_plan_and_check_on_device_reject_foreign_and_unknown_devices` and `task_2325_f1_emergency_scratch_restricts_to_pressured_filesystem_device`.\n\n2. F2 (Delete-boundary freshness & job-state revalidation):\n   - Added `scratch_reclaim::revalidate_before_delete`, invoked immediately before removal in BOTH `scratch_reclaim::apply` (recording held rows in `ScratchReclaimed.held` and surfacing them in human/JSON output) and `disk_emergency::scratch_at_hard_ceiling_with_dev` (emitting `LedgerRow::Skip { reason: Reason::AgentScratch }`).\n   - Re-reads `<job>/state.json` for readable terminal state and re-walks mtime/age against a fresh clock (`SystemTime::now().max(survey.now)`).\n   - Added unit tests `task_2325_f2_apply_revalidates_freshness_and_job_state_at_delete_boundary` and `task_2325_f2_emergency_revalidates_mtime_and_job_state_between_scratch_rows` covering both plan->mutate->apply and mutation between scratch deletions.\n\n3. F3 (Production configured scratch roots without claude-* TMPDIR ancestry, TASK-2334):\n   - Added `scratch_jobs_root` and `scratch_tmp_root` to `[doctor.disk_headroom]` (`EmergencyConfig`), inventoried in `scripts/config-trust.toml` and `LOCATION_EXCEPTIONS`.\n   - Wired `disk_emergency::emergency_scratch_survey` and `run_emergency_configured_with` through `run_emergency` (and `worktree_reclaim::run`).\n   - Added unit tests `task_2325_f3_survey_with_roots_discovers_configured_roots_without_claude_tmpdir` and `task_2325_f3_scheduled_emergency_uses_configured_scratch_roots_without_claude_tmpdir` covering unset and non-claude `TMPDIR` with configured fixture roots and verifying production `min_age.max(cfg.idle())`.\n\nVerification:\n- 15 `scratch_reclaim` tests, 55 `story_1916` tests, `bug_1723`, `bug_1675`, and all 34 `make check-ci-fast` gates passed.\n- No merge holds were cleared and PR #2906 was not merged.\n\nNow moving to recover STORY-1889's missing hold/defer slice as a separate (Refs STORY-1889) PR.",
+  "subject": "PR #2906 (TASK-2325) Round 4 Rework Ready for Independent Re-Review at 6cfa4d340e",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}

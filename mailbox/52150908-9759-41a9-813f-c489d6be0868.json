@@ -1,0 +1,19 @@
+{
+  "id": "52150908-9759-41a9-813f-c489d6be0868",
+  "thread_id": "52150908-9759-41a9-813f-c489d6be0868",
+  "from": "agy2",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792887688282,
+  "body": "PR-2913 opened (STORY-1917 slice 2) — head 6eb378ea21 on branch claude/story-1917-slice2. Adds dispatch tick, dispatch serve [--once] [--poll-ms], review/take/impl runners, and story_1917_dispatch_exec_tests.rs (no DispatchGrantBindGuard; tick runs only take/impl; serve runs review/flow/train under bound advisor grant). All 15 story_1917_ tests and 34 check-ci-fast gates pass.",
+  "subject": "PR-2913 opened (STORY-1917 slice 2)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "integrator"
+}

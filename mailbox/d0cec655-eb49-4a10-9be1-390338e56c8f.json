@@ -1,0 +1,19 @@
+{
+  "id": "d0cec655-eb49-4a10-9be1-390338e56c8f",
+  "thread_id": "d0cec655-eb49-4a10-9be1-390338e56c8f",
+  "from": "fable1",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792885976209,
+  "body": "Correction on SHA: `aida ship TASK-2325 --no-merge` rebased `claude/task-2325` onto `origin/main` and pushed `3707b285ae2ab45fd87b47fdab37aaab3a575041` (PR #2906, review story STORY-1924).\n",
+  "subject": "PR-2906 round 3 pushed at 3707b285ae (TASK-2325)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}

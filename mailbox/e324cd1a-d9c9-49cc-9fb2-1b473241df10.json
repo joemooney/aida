@@ -1,0 +1,19 @@
+{
+  "id": "e324cd1a-d9c9-49cc-9fb2-1b473241df10",
+  "thread_id": "e324cd1a-d9c9-49cc-9fb2-1b473241df10",
+  "from": "fable1",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792885968621,
+  "body": "PR-2906 round 3 pushed at 28a2d5a0bd1e04493dc21d4635998aa0c20172b5 (branch claude/task-2325, rebased cleanly onto origin/main via `aida ship TASK-2325 --no-merge`, review story STORY-1924 re-queued).\n\nAll seven items from the TASK-2325 rework brief addressed and verified:\n1. `disk_emergency.rs::scratch_at_hard_ceiling` / `run_emergency_probed`: scratch deletes now push `Candidate { reason: Reason::AgentScratch }` into `outcome.deleted` and the single terminal `LedgerRow::Run` summary is emitted AFTER the scratch tier completes (with post-scratch `deleted`, `freed_bytes`, `used_pct_after`, and `stopped`). Scratch-only recovery now triggers `emergency_notice` and updates `last_reclaim()`.\n2. `scratch_reclaim.rs::plan_tmp` & `plan_build_caches`: filter symlinks (`file_type().is_symlink()`) at top level, inside project-slug dirs, and for build-cache paths before aging/pricing; `aged()` also rejects symlinks via `symlink_metadata`. Static/dangling links no longer abort `--apply` mid-run; delete-site `check()` remains as race defense.\n3. `scratch_reclaim.rs::apply` & `worktree_reclaim.rs`: honor `--target-pct` across scratch rows, probing before each deletion and recording `stopped_early`.\n4. `worktree_gc_args.rs`: updated `Reclaim` help text to describe all scratch/cache roots and deletion scope accurately; regenerated `cli_help_snapshot.txt`.\n5. `story_1916_disk_emergency_tests.rs`: added positive injected-survey test `task_2325_emergency_hard_ceiling_scratch_deletes_ledgers_stops_and_notifies` (verifies scratch deletion, `AgentScratch` ledger row, early stop below ceiling, 4-day `min_age.max(cfg.idle())` floor, `last_reclaim()`, and `emergency_notice()`), while keeping `task_2325_emergency_without_injected_roots_touches_no_scratch`.\n6. `disk_emergency.rs`: `scratch_at_hard_ceiling` skips the scratch pass when `outcome.stopped == Stop::Refused`; covered by `task_2325_emergency_cache_refusal_skips_scratch_tier`.\n7. `disk_emergency.rs::walk_cache` / `scratch_reclaim.rs::aged`: uses `symlink_metadata` (lstat) and skips nested symlinks so external trees neither inflate byte counts nor pin scratch age; covered by `task_2325_nested_symlink_to_external_tree_does_not_inflate_bytes_or_pin_age`.\n\nValidation:\n- `AIDA_CARGO_TIMEOUT=20m cargo test --profile agent -p aida-cli-lib task_2325` (6/6 passed)\n- `scratch_reclaim` (12/12) and `disk_emergency` (32/32) unit suites passed\n- `make check-ci-fast` (34/34 gates passed)\n",
+  "subject": "PR-2906 round 3 pushed (TASK-2325)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "0a68db31-c717-456f-a54f-c00d8147b4a4",
+  "thread_id": "0a68db31-c717-456f-a54f-c00d8147b4a4",
+  "from": "agy2",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792890137327,
+  "body": "PR-2913 pushed (head 16f4cbbaf8 / 16f4cbbaf802072ec7890d40f9fcb6a880c2089a, Refs STORY-1917) — fixed executable-resolver ratchet, host remote credential routing, and test-environment guard; all 18 targeted tests and check-ci-fast (34 gates) pass. Requesting independent review for 16f4cbbaf8.",
+  "subject": "PR-2913 CI fixes pushed (STORY-1917 slice 2)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "integrator"
+}
