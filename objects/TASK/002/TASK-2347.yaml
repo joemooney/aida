@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T02:08:29.032100054Z
-modified_at: 2026-10-25T16:50:05.338242948Z
+modified_at: 2026-10-25T17:07:39.032869855Z
 req_type: Task
 tags:
 - codex
@@ -486,6 +486,11 @@ comments:
     TASK2347 remains OPEN/Refs: reviewed landing+CI, normal MERGED native build/promotion, successful complete live cross-root snapshot and native health, then the already-authorized exact-thread01a173a5-a106-78a3-84ca-0385711b3557 literal-IDLE test with one new nonce, separate queue-acceptance/observed-turn receipts, repeated-scan dedup proof remain. Do not reuse spent nonce/baseline ACK/skip failed roots or promote unmerged binary. Full STORY1742 brief143129 is NEXT (not waived or reduced); all BUG2017 S3 and STORY1843 ownership/dependencies remain. This author turn ends with native handoff for required context rotation, no idle CI/review loop.
   created_at: 2026-10-25T16:50:05.338242948Z
   modified_at: 2026-10-25T16:50:05.338242948Z
+- id: 01a17408-3b98-7840-9958-74af4ae8b81a
+  author: joe
+  content: 'Advisor rotation lifecycle2026-10-25~17:05UTC: watchdogrequiresactualnewsession; handoffcheckSTARTFRESH/no currentleaseordrainpins. Retired ONLYexactowned watcher64a51940/thread01a173a5 with reviewedscriptnormaluninstall/exactoriginalarguments. Uninstallterminal0; systemdLoadStatenot-found/ActiveStateinactive, ownedhealthjob/registrationremoved, privateledger/recoveryevidenceretained. MainworkingtreeCLEANafterremovingownedruntimeconfigblock. Originaldeployedliveproof/Completedstatusremainsvalidhistory, no newnonce/ACK/baseline. No silentretarget: actualfreshconversationmustbeexplicitlyselectedbyoperatorbeforeinstallingitswatcher. Priorc4/f127supersessionuptakeCONFIRMEDc739a506+19dfd4ee: PR2922draft/withdrawn/preserved0ddf, no additional2347work; full1742S3a-d next.'
+  created_at: 2026-10-25T17:07:39.032869855Z
+  modified_at: 2026-10-25T17:07:39.032869855Z
 history:
 - id: 01a170d1-497a-7282-8dcb-91782bba7dc3
   author: joe
