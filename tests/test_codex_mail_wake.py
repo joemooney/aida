@@ -7,6 +7,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+import uuid
 from unittest.mock import patch
 
 MODULE = Path(__file__).resolve().parents[1] / "scripts/codex-mail-wake.py"
@@ -50,6 +51,18 @@ class WatcherTests(unittest.TestCase):
             self.assertFalse(self.tick(ids, now=200)["queue_submitted"])
             self.assertEqual(cmd.call_count, 1)
             self.assertEqual(self.ledger["accepted"], ["mail-a", "mail-b"])
+
+    def test_dense_backlog_batches_once_with_a_hard_byte_bound(self):
+        pending = {str(uuid.uuid4()): ["/source"] for _ in range(580)}
+        batch, message = wake.notification(pending)
+        self.assertEqual(len(batch), 580)
+        self.assertLessEqual(len(message.encode()), 24_000)
+        larger = {str(uuid.uuid4()): ["/source"] for _ in range(2000)}
+        batch, message = wake.notification(larger)
+        self.assertGreater(len(batch), 500)
+        self.assertLess(len(batch), 1024)
+        self.assertLessEqual(len(message.encode()), 24_000)
+        self.assertEqual(batch, sorted(larger)[:len(batch)])
 
     def test_no_mail_and_dry_run_do_not_queue_or_write_delivery(self):
         with patch.object(wake, "command") as cmd:

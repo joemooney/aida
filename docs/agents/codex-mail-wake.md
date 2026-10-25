@@ -62,7 +62,9 @@ ran or mail was acknowledged. The advisor must explicitly read/ack messages.
 
 The first scan includes existing unread mail. It is never silently baselined as
 already delivered. Mail discovered within the batch window (default five
-seconds) is combined, up to 64 IDs per notification. The service checks every 30
+seconds) is combined into a notification bounded to 24 KB and at most 1,024 IDs.
+The byte budget packs an ordinary historical backlog into one wake where possible,
+rather than waking the model for many arbitrary small chunks. The service checks every 30
 seconds; `--interval` and `--batch-seconds` change these bounds. Empty or unchanged
 unread inventories produce no new Codex turn. A first `once` can persist a
 pending batch without submitting until a later scan; use `--batch-seconds 0` for
