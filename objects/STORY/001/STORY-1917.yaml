@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T17:15:51.947160848Z
-modified_at: 2026-10-25T06:49:06.503527763Z
+modified_at: 2026-10-25T06:55:00.642591361Z
 req_type: Story
 relationships:
 - rel_type:
@@ -421,6 +421,26 @@ comments:
     5. **`dispatch.pending` predicate count scope**: Confirm whether `dispatch.pending` should count **tick-runnable** pending requests (`take` and `impl`, since `dispatch tick` only runs `take`/`impl` and leaves `review`/`flow`/`train` for `dispatch serve`) or **all** `Pending` requests (with `dispatch tick` remaining a fast no-op when only `serve`-only requests are pending).
   created_at: 2026-10-25T06:49:06.503527763Z
   modified_at: 2026-10-25T06:49:06.503527763Z
+- id: 01a171d7-5822-7602-8bea-0cec700f50c9
+  author: joe
+  content: |-
+    ADVISOR SIGNOFF on agy2 Slice3/TASK2338-2344 plan posted23:49: APPROVED WITH BINDING AMENDMENTS; implementation may proceed in a separate final-slice branch preserving approved PR2913 head2b3cd94f5d in running train2918. Do not push new commits to that member branch. Reconcile fresh main after train lands before final PR/review. All retained scope remains required; this is not completion.
+
+    R1 TASK2340: approve exact active-mandate-ID Outcome::Refused rows for missing Dispatch or required ShipHeld coverage, once per refusal. None/Expired/Stopped must not borrow a mandate ID. Retain explicit diagnostic and pin cardinality/principal/ID/reason. No scope escalation.
+
+    R2 TASK2341: approve read-only LOCAL origin/HEAD resolution at submission AND execution; reject main/master/HEAD and actual default. Missing/dangling/unreadable/malformed/non-origin/non-commit evidence refuses with local remediation; no network/config writes or conventional fallback. Test default change between submission and execution.
+
+    R3 TASK2342: approve all effective non-drive scopes in canonical order separated comma+space, drive shorthand unchanged, display only. Coordinate agy1 mandate refactor: status_line remains presentation, no authority duplication.
+
+    R4 TASK2344: approve result-first Pending publication under tick.lock, exact owned cleanup on pre-request failure and bounded same-lock reconciliation. AMEND automatic recovery: a valid request plus missing result alone DOES NOT prove it never executed. Do not blindly synthesize Pending: result loss during a live/completed run could replay work and evade target/cap fences. Requeue only with positive durable pre-execution evidence and no live/unknown ownership. Otherwise retain/quarantine exact bounded private evidence once, visibly require recovery and KEEP target/cap safety fenced; do not turn unknown ownership into executable Pending or silently release it. Corrupt request with Running/live/unknown claim stays preserved/fenced; only positively unpublished Pending artifacts (no PID/start/token/worker evidence) may be removed by exact identity. Do not persist Failed for live/unknown owner merely to suppress warnings. Define minimal quarantine/recovery fence and pin real-child missing-result/unknown-PID/duplicate-submission/crash-stage regressions before claiming2344 complete. Reads/list do not silently heal state. If mechanics need new status/format compatibility boundary, return that precise choice while implementing other approved fixes, without idle full-plan wait.
+
+    R5 dispatch.pending counts ALL validated Pending requests, matching name/list; review/flow/train stay visible waiting for serve. Predicate confers no authority. Scheduled tick remains cheap no-op for serve-only requests, never launches model/reviewer from cron. Malformed/unknown records cannot become false-zero authorization shortcut. Document/test mixed and serve-only queues. No extra timer/model wake; one native dispatch-tick job as signed.
+
+    R6 Preserve ORIGINAL signed flow/train contract: flow keeps approved-at-head fast path and max4 bounded non-force update -> actual exact-head CI wait -> attested current-head review -> ship/train sequence. RequestChanges/missing/stale verdict stops, no hold clear. --no-ship reports reviewed+green ONLY after actual exact-head required CI success; review alone is not green. New head needs current-head review, no approval fabrication/copy. Train is signed ship-first sequence (wait3600), specific held/behind non-force update+fetch+ship and native-train fallback, not arbitrary batch-only replacement. Native fresh head/hold/integrity gates stay authoritative. Reverify ORIGINAL req.mandate_id/principal, requester grant/delegation, serving grant and human gates at EACH step/PR, after waits and before retry/ship. Replacement mandate B never revives request A. Do not merely precheck all PRs then launch long opaque child able to switch authority mid-run. For child spanning multiple authority-changing steps identify actual fresh gate/checkpoint coverage; return concrete missing seam for advisor ruling, never assume it. Bound subprocesses, safe logs, no secret diagnostics. No self-binding grant/hold clear/raw gh merge.
+
+    TASK2338/2339/2343 submission/schema regressions approved as proposed. Preserve execute-time and actual-child fencing cases. Final flow/train/schedule tests prove mid-step stop/replacement/revocation, supervised/operator-floor refusal preserving holds, actual CI/head drift and claim caps. One targeted area run+fast; touched/compile only shared infra or overall>10files; background long Cargo with AIDA_CARGO_TIMEOUT, no broad suite/slot bypass. Completing trailer only after ALL parent criteria and folded tasks proven. Report progress as agy2, independent final-head review required. No live dispatcher activation, grant changes, merge or production config install.
+  created_at: 2026-10-25T06:55:00.642591361Z
+  modified_at: 2026-10-25T06:55:00.642591361Z
 history:
 - id: 01a16c5e-51c4-73b2-b8a3-3b764dc7e5cd
   author: joe
