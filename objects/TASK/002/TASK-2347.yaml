@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T02:08:29.032100054Z
-modified_at: 2026-10-25T05:52:37.044490290Z
+modified_at: 2026-10-25T06:00:30.513382987Z
 req_type: Task
 tags:
 - codex
@@ -267,6 +267,11 @@ comments:
   content: 'ADVISOR IN-PROGRESS F2 FEEDBACK (not a new formal verdict): fake-HOME helper probe /tmp/goal-health-global-collision-probe.json confirms own_health_job accepts an existing ~/.aida/schedule.toml user job with the exact derived health name, then creates the project job. maintenance_schedule::load_global_config supports [schedule] and bare jobs/tasks forms; merge_registries project-wins means this shadows the existing user job for this project despite preserving its bytes. Existing acceptance says preserve user-owned jobs/refuse ownership conflicts. Before final readiness, check the effective GLOBAL+PROJECT name namespace (health and route), without modifying global jobs; refuse unsafe/unreadable/malformed relevant global registry rather than treating unknown as empty. Test both supported global config shapes, both owned names, unchanged bytes/no partial local registration on conflict, healthy/no-global case. No real HOME, systemd, mail or queues were touched by the probe. This is the same required F2 ownership boundary; keep the one-adapter scope.'
   created_at: 2026-10-25T05:52:37.044490290Z
   modified_at: 2026-10-25T05:52:37.044490290Z
+- id: 01a171a5-7231-7591-82f2-c58bc6843b43
+  author: joe
+  content: 'ADVISOR ROUTING OF INDEPENDENT SOURCE ADVICE: /tmp/codex2-pr2915-health-advisory-634e8c4907.txt is preparation, not an attested verdict. Sent to doer before final readiness: effective AIDA_HOME/HOME global+project ownership, actual health-capable driver prerequisite, tracked config exact-delta/backup/conditional recovery and fake-systemctl failure boundaries. Keep health/recovery observable if uninstall cannot confirm service stop; preflight ownership before replacing a deployed script. These complete existing F2 ownership/reliability acceptance; no new broker, scheduler service, global unmerged promotion or live actions. Formal final-head independent verdict still required.'
+  created_at: 2026-10-25T06:00:30.513382987Z
+  modified_at: 2026-10-25T06:00:30.513382987Z
 history:
 - id: 01a170d1-497a-7282-8dcb-91782bba7dc3
   author: joe
