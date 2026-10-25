@@ -98,3 +98,11 @@
   added_at: 2026-10-25T10:47:13.567901212Z
   for_role: implementer
   added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a16a96-f6ce-75e3-bdd7-ab32db7ae9c5
+  position: 485000
+  added_by: role:implementer
+  note: Full signed three-slice scope after STORY-1742 v1; non-executable adoption plane, projection/adapters, inventory-only migration/uninstall/CI/docs. Readiness map in progress; no premature implementation or narrower completion.
+  added_at: 2026-10-25T13:50:54.938319618Z
+  for_role: implementer
+  added_by_machine: imac
