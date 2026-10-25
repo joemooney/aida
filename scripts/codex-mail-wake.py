@@ -2,6 +2,7 @@
 """Wake one existing Codex thread for newly discovered AIDA advisor mail."""
 # trace:TASK-2347 | ai:codex
 import argparse
+import base64
 import fcntl
 import hashlib
 import json
@@ -29,7 +30,7 @@ class CreationFailure(Exception):
     """The child was never created, so it cannot have accepted a notification."""
 
 
-def command(argv, timeout=30, cwd=None, env=None):
+def command(argv, timeout=30, cwd=None, env=None, with_status=False):
     """Trusted programs, bounded output/time; never retain child diagnostics."""
     try:
         proc = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
@@ -55,6 +56,8 @@ def command(argv, timeout=30, cwd=None, env=None):
                     if sum(map(len, data.values())) > LIMIT:
                         raise Refusal("command output exceeded its bound")
         proc.wait(timeout=max(0.01, deadline - time.monotonic()))
+        if with_status:
+            return proc.returncode, bytes(data[proc.stdout])
         if proc.returncode:
             raise Refusal("command refused or failed")
         return bytes(data[proc.stdout])
@@ -523,21 +526,23 @@ def global_health_namespace(owned, aida):
             os.close(fd)
 
 
-def own_health_job(args, project, remove=False):
+def own_health_job(args, project, remove=False, check_only=False):
     """Edit only the exact owned block under a permanent project install lock."""
     import tomllib
     directory = project / ".aida"
-    directory.mkdir(exist_ok=True)
+    if not check_only:
+        directory.mkdir(exist_ok=True)
     anchor = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     lock = None
     try:
         meta = os.fstat(anchor)
         if meta.st_uid != os.getuid() or meta.st_mode & 0o022:
             raise Refusal("health project directory must be owned without shared writes")
-        lock = os.open("codex-mail-health.lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK,
-                       0o600, dir_fd=anchor)
-        State._check(lock)
-        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        if not check_only:
+            lock = os.open("codex-mail-health.lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK,
+                           0o600, dir_fd=anchor)
+            State._check(lock)
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         def read(name, private=False):
             try:
                 fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=anchor)
@@ -580,6 +585,8 @@ def own_health_job(args, project, remove=False):
         if remove and (prior is None or not exists):
             raise Refusal("incomplete health ownership; inspect registration and job block")
         updated = text.replace(block, "", 1) if remove else text if exists else text + block
+        if check_only:
+            return
         def replace(name, data, mode=0o600):
             temporary = ".health-" + str(uuid.uuid4())
             fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, mode, dir_fd=anchor)
@@ -607,7 +614,10 @@ def own_health_job(args, project, remove=False):
             replace("codex-mail-health.json", expected)
         if (read("config.toml") or "") != text:
             raise Refusal("scheduler config changed; registration retained for safe install retry")
-        mode = stat.S_IMODE(os.stat("config.toml", dir_fd=anchor, follow_symlinks=False).st_mode) if text else 0o600
+        try:
+            mode = stat.S_IMODE(os.stat("config.toml", dir_fd=anchor, follow_symlinks=False).st_mode)
+        except FileNotFoundError:
+            mode = 0o600
         replace("config.toml", updated, mode)
         if remove:
             os.unlink("codex-mail-health.json", dir_fd=anchor)
@@ -616,6 +626,43 @@ def own_health_job(args, project, remove=False):
         if lock is not None:
             os.close(lock)
         os.close(anchor)
+
+
+# trace:TASK-2347 | ai:codex
+def install_file_snapshot(path):
+    """Bounded original bytes for private recovery evidence, never diagnostics."""
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except FileNotFoundError:
+        return None
+    try:
+        meta = os.fstat(fd)
+        if (not stat.S_ISREG(meta.st_mode) or meta.st_nlink != 1
+                or meta.st_uid != os.getuid() or meta.st_mode & 0o022):
+            raise Refusal("installation file identity refused")
+        with os.fdopen(fd, "rb", closefd=False) as source:
+            data = source.read(LIMIT + 1)
+        if len(data) > LIMIT:
+            raise Refusal("installation file exceeded bound")
+        return {"mode": stat.S_IMODE(meta.st_mode), "sha256": hashlib.sha256(data).hexdigest(),
+                "bytes_base64": base64.b64encode(data).decode()}
+    finally:
+        os.close(fd)
+
+
+def service_state(name):
+    status, raw = command(["systemctl", "--user", "show", name, "--no-pager", "--all",
+                           "--property=ActiveState", "--property=UnitFileState", "--property=LoadState"],
+                          with_status=True)
+    values = dict(line.split("=", 1) for line in raw.decode().splitlines() if "=" in line)
+    if (not all(key in values for key in ("ActiveState", "UnitFileState", "LoadState"))
+            or values["ActiveState"] not in ("active", "inactive", "failed", "activating",
+                                             "deactivating", "reloading", "maintenance", "refreshing")):
+        raise Refusal("service state could not be established")
+    if status != 0 and not (status in (1, 4) and values["LoadState"] == "not-found"
+                            and values["ActiveState"] == "inactive"):
+        raise Refusal("service state query failed")
+    return {key: values[key] for key in ("ActiveState", "UnitFileState", "LoadState")}
 
 
 def service(args, project):
@@ -628,52 +675,117 @@ def service(args, project):
                           "health_job": health_registration(args, project)["job"],
                           "health_max_age_seconds": args.health_max_age, "queue_submitted": False}))
         return
+    deployed = args.state_dir / "watcher.py"
+    argv = [sys.executable, str(deployed), "run", "--project", str(project),
+            "--thread", args.thread, "--state-dir", str(args.state_dir),
+            "--aida", args.aida, "--codex", args.codex,
+            "--interval", str(args.interval), "--batch-seconds", str(args.batch_seconds)]
+    text = ("[Unit]\nDescription=AIDA mail notification for one Codex advisor\n"
+            "[Service]\nType=simple\nUMask=0077\nExecStart=" + " ".join(map(systemd_escape, argv))
+            + "\nRestart=on-failure\nRestartSec=30\n[Install]\nWantedBy=default.target\n")
+    paths = {"config": project / ".aida/config.toml",
+             "registration": project / ".aida/codex-mail-health.json", "unit": unit, "script": deployed}
     if args.action == "install":
-        # Native scheduled health resolves the main project, as do AIDA's
-        # other scheduled checks. Refuse a linked-root install, never move
-        # an existing notification ledger silently to another project key.
+        # All ownership/capability checks are read-only and precede deployment.
         if worktrees(project)[0].resolve() != project:
             raise Refusal("install requires the main checkout as --project for scheduled health")
-        # Pin the deployed adapter independently of an implementation worktree.
-        args.state_dir.mkdir(parents=True, mode=0o700, exist_ok=True)
-        with_state = State(args.state_dir)
-        try:
-            deployed = args.state_dir / "watcher.py"
-            existing = None
+        own_health_job(args, project, check_only=True)
+        capability = json.loads(command([args.aida, "doctor", "check", "codex-mail-wake", "--json"],
+                                        cwd=project, env=repo_environment()))
+        if (not isinstance(capability, dict) or not isinstance(capability.get("findings"), list)
+                or type(capability.get("total")) is not int or capability.get("error")):
+            raise Refusal("selected AIDA binary cannot establish the native health capability")
+        before = {key: install_file_snapshot(path) for key, path in paths.items()}
+        if before["unit"] is not None and base64.b64decode(before["unit"]["bytes_base64"]) != text.encode():
+            raise Refusal("service unit belongs to a user or was edited")
+        if args.state_dir.exists():
+            state = State(args.state_dir, exclusive=False)
             try:
-                existing = os.stat(deployed, follow_symlinks=False)
-            except FileNotFoundError:
-                pass
-            if existing and (not stat.S_ISREG(existing.st_mode) or existing.st_uid != os.getuid() or existing.st_nlink != 1):
-                raise Refusal("deployed watcher identity refused")
-            temp = args.state_dir / (".watcher-" + str(uuid.uuid4()))
-            temp.write_bytes(Path(__file__).read_bytes())
-            temp.chmod(0o600)
-            os.replace(temp, deployed)
+                if state.running:
+                    raise Refusal("stop the watcher before reinstalling; monitoring is retained")
+            finally:
+                state.close()
+        prior_service = service_state(name)
+        if prior_service["ActiveState"] not in ("inactive", "failed"):
+            raise Refusal("stop the service before reinstalling; monitoring retained")
+        # Retain a recoverable partial install, never guess a rollback over
+        # unrelated/intervening edits. Recovery bundles themselves are private.
+        with_state = State(args.state_dir)
+        recovery = args.state_dir / ("install-recovery-" + str(uuid.uuid4()) + ".json")
+        record = {"version": 1, "service": name, "before": before,
+                  "service_before": prior_service, "stage": "prepared"}
+        stage = "recovery-evidence"
+        failed = False
+        try:
+            write_unit(recovery, json.dumps(record, sort_keys=True) + "\n")
+            for key, path in paths.items():
+                if install_file_snapshot(path) != before[key]:
+                    raise Refusal("installation files changed after preflight")
+            own_health_job(args, project, check_only=True)
+            stage = "script-deploy"
+            if install_file_snapshot(deployed) != before["script"]:
+                raise Refusal("deployed script changed after preflight")
+            write_unit(deployed, Path(__file__).read_text())
+            stage = "health-registration"
+            own_health_job(args, project)
+            stage = "unit-write"
+            if install_file_snapshot(unit) != before["unit"]:
+                raise Refusal("service unit changed after preflight")
+            write_unit(unit, text)
+            stage = "daemon-reload"
+            command(["systemctl", "--user", "daemon-reload"])
+            stage = "enable"
+            command(["systemctl", "--user", "enable", "--now", name])
+            stage = "complete"
+        except (OSError, Refusal, CreationFailure, ValueError) as error:
+            failed = True
+            raise Refusal(f"install failed at {stage}; partial state retained; private recovery evidence: {recovery}. "
+                          "Repair the cause and retry the same install, or use uninstall after confirmed stop; "
+                          "never restore the whole tracked config over unrelated edits") from error
         finally:
-            with_state.close()
-        argv = [sys.executable, str(deployed), "run", "--project", str(project),
-                "--thread", args.thread, "--state-dir", str(args.state_dir),
-                "--aida", args.aida, "--codex", args.codex,
-                "--interval", str(args.interval), "--batch-seconds", str(args.batch_seconds)]
-        text = ("[Unit]\nDescription=AIDA mail notification for one Codex advisor\n"
-                "[Service]\nType=simple\nUMask=0077\nExecStart="
-                + " ".join(map(systemd_escape, argv))
-                + "\nRestart=on-failure\nRestartSec=30\n[Install]\nWantedBy=default.target\n")
-        own_health_job(args, project)
-        write_unit(unit, text)
-        command(["systemctl", "--user", "daemon-reload"])
-        command(["systemctl", "--user", "enable", "--now", name])
+            record["stage"] = stage
+            record["observed"] = {}
+            try:
+                record["service_observed"] = service_state(name)
+            except (OSError, Refusal, CreationFailure, ValueError):
+                record["service_observed"] = {"unknown": True}
+            for key, path in paths.items():
+                try:
+                    record["observed"][key] = install_file_snapshot(path)
+                except (OSError, Refusal):
+                    record["observed"][key] = {"unknown": True}
+            try:
+                write_unit(recovery, json.dumps(record, sort_keys=True) + "\n")
+            except (OSError, Refusal) as error:
+                if not failed:
+                    raise Refusal(f"install reached {stage} but recovery evidence refresh failed; "
+                                  f"original evidence retained at {recovery}; inspect before retry") from error
+            finally:
+                with_state.close()
     elif args.action == "stop":
         command(["systemctl", "--user", "disable", "--now", name])
     elif args.action == "start":
         command(["systemctl", "--user", "enable", "--now", name])
     elif args.action == "uninstall":
-        # Verify/remove only this target's owned check; other jobs are retained.
+        own_health_job(args, project, remove=True, check_only=True)
+        before_unit = install_file_snapshot(unit)
+        if before_unit is not None and base64.b64decode(before_unit["bytes_base64"]) != text.encode():
+            raise Refusal("service unit belongs to a user or was edited; monitoring retained")
+        try:
+            prior = service_state(name)
+            # An absent, inactive unit is already stopped; do not require a
+            # successful disable of a nonexistent unit for idempotent removal.
+            if before_unit is not None or prior["LoadState"] != "not-found" or prior["ActiveState"] != "inactive":
+                command(["systemctl", "--user", "disable", "--now", name])
+            if service_state(name)["ActiveState"] not in ("inactive", "failed"):
+                raise Refusal("service still active")
+        except (OSError, Refusal, CreationFailure, ValueError) as error:
+            raise Refusal("uninstall could not confirm service stop; health job, registration, unit and state retained; "
+                          "repair systemctl/service state then retry the same uninstall") from error
+        if install_file_snapshot(unit) != before_unit:
+            raise Refusal("service unit changed during stop; monitoring retained")
+        # Publication repeats exact ownership/global namespace checks.
         own_health_job(args, project, remove=True)
-        command(["systemctl", "--user", "disable", "--now", name])
-        if unit.is_symlink():
-            raise Refusal("service unit symlink refused")
         unit.unlink(missing_ok=True)
         command(["systemctl", "--user", "daemon-reload"])
     print(json.dumps({"service": name, "action": args.action}))

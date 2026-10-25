@@ -1,6 +1,8 @@
 """Hermetic notification adapter tests: no real mail, Codex, or user services."""
 # trace:TASK-2347 | ai:codex
 import importlib.util
+import base64
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -262,6 +264,214 @@ class WatcherTests(unittest.TestCase):
         self.assertTrue(json.loads(result.stdout)["dry_run"])
         self.assertFalse(state.exists())
         self.assertFalse((Path(os.environ["XDG_CONFIG_HOME"]) / "systemd").exists())
+
+    def service_args(self, action="install"):
+        args = self.health_args()
+        args.action, args.dry_run = action, False
+        args.state_dir = self.root / "service-state"
+        args.codex, args.batch_seconds = "fixture-codex", 5
+        (self.root / ".aida").mkdir(exist_ok=True)
+        return args
+
+    def fake_service(self, calls, fail=None, active="inactive", edit_config=False):
+        def run(argv, **kwargs):
+            calls.append(argv)
+            if argv[0] == "fixture-aida":
+                return b'{"total":0,"findings":[]}'
+            self.assertEqual(argv[:2], ["systemctl", "--user"])
+            if argv[2] == "show":
+                data = (f"ActiveState={active}\nUnitFileState=disabled\nLoadState=loaded\n").encode()
+                return (0, data) if kwargs.get("with_status") else data
+            if argv[2] == fail:
+                if edit_config:
+                    with (self.root / ".aida/config.toml").open("a") as out:
+                        out.write('\n[[schedule.jobs]]\nname="intervening-user"\ncommand="cache verify"\nevery="1h"\n')
+                raise wake.CreationFailure("fixture failure")
+            return b""
+        return run
+
+    def test_service_ownership_and_capability_preflight_leave_original_files_unchanged(self):
+        args = self.service_args()
+        args.state_dir.mkdir(mode=0o700)
+        script = args.state_dir / "watcher.py"
+        script.write_text("original script")
+        config = self.root / ".aida/config.toml"
+        name = wake.health_registration(args, self.root)["job"]
+        config.write_text('[[schedule.jobs]]\nname=' + json.dumps(name) + '\nprompt="user"\nevery="1h"\n')
+        before = {str(p): p.read_bytes() for p in self.root.rglob("*") if p.is_file()}
+        with patch.object(wake, "worktrees", return_value=[self.root]), patch.object(wake, "command") as command:
+            with self.assertRaises(wake.Refusal):
+                wake.service(args, self.root)
+            command.assert_not_called()
+        self.assertEqual({str(p): p.read_bytes() for p in self.root.rglob("*") if p.is_file()}, before)
+        config.write_text("# original config\n")
+        before = {str(p): p.read_bytes() for p in self.root.rglob("*") if p.is_file()}
+        with patch.object(wake, "worktrees", return_value=[self.root]), patch.object(
+                wake, "command", return_value=b'{"error":"unknown category"}'):
+            with self.assertRaises(wake.Refusal):
+                wake.service(args, self.root)
+        self.assertEqual({str(p): p.read_bytes() for p in self.root.rglob("*") if p.is_file()}, before)
+        self.assertFalse((self.root / ".aida/codex-mail-health.lock").exists())
+
+    def test_service_later_install_failures_retain_private_original_evidence_and_user_edits(self):
+        for failure in ("unit-write", "daemon-reload", "enable"):
+            with self.subTest(failure=failure), tempfile.TemporaryDirectory(dir=self.root) as project_dir:
+                project = Path(project_dir)
+                (project / ".aida").mkdir()
+                config = project / ".aida/config.toml"
+                original = b'# tracked project config\n[schedule]\nmin_gap="30s"\n'
+                config.write_bytes(original)
+                config.chmod(0o640)
+                args = self.service_args()
+                args.state_dir = project / "state"
+                args.state_dir.mkdir(mode=0o700)
+                (args.state_dir / "watcher.py").write_text("original script")
+                calls = []
+                unit = Path(os.environ["XDG_CONFIG_HOME"]) / "systemd/user" / wake.service_name(project, args.thread)
+                real_write = wake.write_unit
+                def write(path, text):
+                    if failure == "unit-write" and path == unit:
+                        raise wake.Refusal("fixture unit failure")
+                    return real_write(path, text)
+                run = self.fake_service(calls, fail=failure)
+                # Preserve an unrelated edit introduced at the failing stage.
+                def command(argv, **kwargs):
+                    if failure == "enable" and argv[:3] == ["systemctl", "--user", "enable"]:
+                        with config.open("a") as out:
+                            out.write('\n[[schedule.jobs]]\nname="intervening"\ncommand="cache verify"\nevery="1h"\n')
+                    return run(argv, **kwargs)
+                with patch.object(wake, "worktrees", return_value=[project]), patch.object(
+                        wake, "write_unit", side_effect=write), patch.object(wake, "command", side_effect=command):
+                    with self.assertRaisesRegex(wake.Refusal, failure):
+                        wake.service(args, project)
+                evidence, = args.state_dir.glob("install-recovery-*.json")
+                record = json.loads(evidence.read_bytes())
+                self.assertEqual(evidence.stat().st_mode & 0o777, 0o600)
+                self.assertEqual(record["stage"], failure)
+                saved = record["before"]["config"]
+                self.assertEqual(base64.b64decode(saved["bytes_base64"]), original)
+                self.assertEqual(saved["mode"], 0o640)
+                self.assertEqual(saved["sha256"], hashlib.sha256(original).hexdigest())
+                self.assertIsNone(record["before"]["registration"])
+                self.assertIsNone(record["before"]["unit"])
+                self.assertEqual(base64.b64decode(record["before"]["script"]["bytes_base64"]), b"original script")
+                self.assertEqual(record["service_before"]["ActiveState"], "inactive")
+                self.assertIn("observed", record)
+                self.assertTrue((project / ".aida/codex-mail-health.json").exists())
+                self.assertIn("codex-mail-wake --fail-on-findings", config.read_text())
+                if failure == "enable":
+                    self.assertIn('name="intervening"', config.read_text())
+                # Repair/retry is exact-owned and preserves intervening jobs.
+                with patch.object(wake, "worktrees", return_value=[project]), patch.object(
+                        wake, "command", side_effect=self.fake_service(calls)):
+                    wake.service(args, project)
+                    after_retry = config.read_bytes()
+                    wake.service(args, project)
+                    self.assertEqual(config.read_bytes(), after_retry)
+                    args.action = "uninstall"
+                    wake.service(args, project)
+                    wake.service(args, project)
+                self.assertEqual(config.stat().st_mode & 0o777, 0o640)
+                self.assertEqual(config.read_bytes(), original if failure != "enable" else original +
+                    b'\n[[schedule.jobs]]\nname="intervening"\ncommand="cache verify"\nevery="1h"\n')
+
+    def test_service_script_and_registration_failures_preserve_original_recovery(self):
+        for failure in ("script-deploy", "health-registration"):
+            with self.subTest(failure=failure), tempfile.TemporaryDirectory(dir=self.root) as directory:
+                project = Path(directory)
+                (project / ".aida").mkdir()
+                config = project / ".aida/config.toml"
+                config.write_text("# user config\n")
+                args = self.service_args()
+                args.state_dir = project / "state"
+                args.state_dir.mkdir(mode=0o700)
+                deployed = args.state_dir / "watcher.py"
+                deployed.write_text("prior script")
+                real_write, real_health = wake.write_unit, wake.own_health_job
+                def write(path, text):
+                    if failure == "script-deploy" and path == deployed:
+                        raise wake.Refusal("fixture script failure")
+                    return real_write(path, text)
+                def health(*params, **kwargs):
+                    if failure == "health-registration" and not kwargs.get("check_only"):
+                        raise wake.Refusal("fixture registration failure")
+                    return real_health(*params, **kwargs)
+                with patch.object(wake, "worktrees", return_value=[project]), patch.object(
+                        wake, "command", side_effect=self.fake_service([])), patch.object(
+                        wake, "write_unit", side_effect=write), patch.object(wake, "own_health_job", side_effect=health):
+                    with self.assertRaisesRegex(wake.Refusal, failure):
+                        wake.service(args, project)
+                bundle, = args.state_dir.glob("install-recovery-*.json")
+                record = json.loads(bundle.read_bytes())
+                self.assertEqual(record["stage"], failure)
+                self.assertEqual(base64.b64decode(record["before"]["script"]["bytes_base64"]), b"prior script")
+                self.assertEqual(config.read_text(), "# user config\n")
+                self.assertFalse((project / ".aida/codex-mail-health.json").exists())
+
+    def test_service_rechecks_intervening_unit_before_publication(self):
+        args = self.service_args()
+        (self.root / ".aida/config.toml").write_text("# user config\n")
+        unit = Path(os.environ["XDG_CONFIG_HOME"]) / "systemd/user" / wake.service_name(self.root, args.thread)
+        real_health = wake.own_health_job
+        def health(*params, **kwargs):
+            result = real_health(*params, **kwargs)
+            if not kwargs.get("check_only"):
+                unit.parent.mkdir(parents=True, exist_ok=True)
+                unit.write_text("intervening user unit")
+            return result
+        with patch.object(wake, "worktrees", return_value=[self.root]), patch.object(
+                wake, "command", side_effect=self.fake_service([])), patch.object(wake, "own_health_job", side_effect=health):
+            with self.assertRaisesRegex(wake.Refusal, "unit-write"):
+                wake.service(args, self.root)
+        self.assertEqual(unit.read_text(), "intervening user unit")
+        self.assertTrue((self.root / ".aida/codex-mail-health.json").exists())
+        bundle, = args.state_dir.glob("install-recovery-*.json")
+        self.assertIsNone(json.loads(bundle.read_bytes())["before"]["unit"])
+
+    def test_service_absent_unit_and_nonzero_queries_use_typed_state_only(self):
+        inactive = b"ActiveState=inactive\nUnitFileState=\nLoadState=not-found\n"
+        for status in (0, 1, 4):
+            with patch.object(wake, "command", return_value=(status, inactive)):
+                self.assertEqual(wake.service_state("fixture.service")["ActiveState"], "inactive")
+        for result in ((1, b""), (1, b"ActiveState=inactive\nUnitFileState=disabled\nLoadState=loaded\n"),
+                       (1, b"ActiveState=active\nUnitFileState=\nLoadState=not-found\n")):
+            with patch.object(wake, "command", return_value=result):
+                with self.assertRaises(wake.Refusal):
+                    wake.service_state("fixture.service")
+        args = self.service_args("uninstall")
+        (self.root / ".aida/config.toml").write_text("# unrelated config\n")
+        calls = []
+        def absent(argv, **kwargs):
+            calls.append(argv)
+            if argv[2] == "show":
+                return (1, inactive)
+            if argv[2] == "disable":
+                self.fail("already absent/inactive unit must not require disable")
+            return b""
+        with patch.object(wake, "command", side_effect=absent):
+            wake.service(args, self.root)
+            wake.service(args, self.root)
+        self.assertEqual((self.root / ".aida/config.toml").read_text(), "# unrelated config\n")
+
+    def test_service_uninstall_requires_confirmed_stop_before_removing_monitoring(self):
+        args = self.service_args()
+        config = self.root / ".aida/config.toml"
+        config.write_text("# user config\n")
+        calls = []
+        with patch.object(wake, "worktrees", return_value=[self.root]), patch.object(
+                wake, "command", side_effect=self.fake_service(calls)):
+            wake.service(args, self.root)
+        before = {str(p): p.read_bytes() for p in self.root.rglob("*") if p.is_file()}
+        args.action = "uninstall"
+        for fail, active in (("disable", "inactive"), (None, "active")):
+            with patch.object(wake, "command", side_effect=self.fake_service(calls, fail=fail, active=active)):
+                with self.assertRaisesRegex(wake.Refusal, "monitor|retained"):
+                    wake.service(args, self.root)
+            self.assertEqual({str(p): p.read_bytes() for p in self.root.rglob("*") if p.is_file()}, before)
+        with patch.object(wake, "command", side_effect=self.fake_service(calls)):
+            wake.service(args, self.root)
+        self.assertEqual(config.read_text(), "# user config\n")
+        self.assertTrue(args.state_dir.exists())
 
     def test_inherited_repo_override_cannot_redirect_explicit_project(self):
         with patch.dict(os.environ, {"AIDA_STORE": "/private/other", "GIT_DIR": "/other/git", "AIDA_SESSION_GRANT": "preserved"}):

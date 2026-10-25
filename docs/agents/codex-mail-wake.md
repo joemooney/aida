@@ -132,7 +132,8 @@ Installation is idempotent only for the exact owned registration and unchanged
 job block. A user job with either owned name, another target registration, or an
 edited owned block refuses before replacement. To change the configured age,
 uninstall the owned setup first, then reinstall with the desired threshold.
-Repeat the original `--state-dir`, `--interval` and `--health-max-age` settings
+Repeat the original `--state-dir`, `--interval`, `--batch-seconds`, `--aida`,
+`--codex` and `--health-max-age` settings, using the same Python executable,
 when uninstalling; edited or mismatched registrations refuse rather than guessing.
 `uninstall` removes only that exact block and registration, retaining other jobs,
 notification state and historical scheduler evidence. The permanent health
@@ -140,6 +141,67 @@ install lock is retained. `stop` leaves the health check armed, so a stopped
 watcher eventually reports unavailable; use `uninstall` to retire its monitoring.
 Runtime registration and snapshots belong in ignored per-clone state, as in
 AIDA's default `.aida/*` ignore policy. No live check is installed by fixture tests.
+
+
+### Install failures and tracked configuration
+
+Here `.aida/config.toml` is tracked. Installation adds only the exact owned job
+and route block; it never stages, commits or publishes that diff. Before rollout,
+review `git diff -- .aida/config.toml` and the exact planned block. Deployment still
+requires the ordinary reviewed health-capable scheduler driver; selecting watcher
+`--aida` does not upgrade that driver.
+
+Install first performs read-only main-checkout, project/global ownership, selected
+AIDA health-category, existing file identity and systemd state checks. A running
+watcher/service must be stopped before reinstalling; its monitoring remains armed.
+A conflict or capability refusal leaves original files unchanged. Publication
+rechecks file identity/bytes and exact ownership, including the global namespace.
+
+Before replacing the script or registering jobs, install saves a private
+`install-recovery-<uuid>.json` under the mode-0700 state directory. Each mode-0600
+bundle contains the original config, registration, unit and script bytes (base64),
+their modes and SHA-256 hashes, original service state, the attempted stage, and
+last safely observed file snapshots. **Treat the bundle as private**: config may
+contain credentials. Do not paste it into mail, PRs or logs. Notification ledgers
+are never rolled back or reset by this process.
+
+Installation is not transactional. Failure at `script-deploy`,
+`health-registration`, `unit-write`, `daemon-reload` or `enable` reports the exact
+stage and recovery bundle path. Partial owned jobs/registration/unit may remain;
+enable failure can leave service state uncertain. Original bytes stay in the
+bundle, and unrelated/intervening changes are not automatically overwritten.
+If saving the final observations fails, the original pre-change bundle remains
+and the command reports the evidence failure.
+
+After fixing the reported cause, retry the **same** install arguments and Python executable (including
+state directory, interval, batch seconds, pinned AIDA/Codex paths and health max age). It accepts only the unchanged exact
+owned registration/job block and exact service unit. If those were edited or a
+name was reused, it refuses: inspect the diff and private evidence rather than
+forcing replacement. The retry preserves unrelated jobs added after the failure.
+To retire a partial installation instead, use the same target settings:
+
+```bash
+systemctl --user show "$SERVICE" --property=ActiveState --property=UnitFileState --property=LoadState
+python3 /path/to/reviewed/codex-mail-wake.py uninstall \
+  --project "$PROJECT" --thread "$THREAD" --state-dir "$STATE" \
+  --interval 30 --batch-seconds 5 --health-max-age 3600 \
+  --aida /path/to/reviewed/aida --codex /path/to/original/codex
+git diff -- .aida/config.toml
+```
+
+`uninstall` validates ownership, runs `disable --now`, then independently checks
+for inactive/failed service state **before** removing monitoring. Stop failure or
+unknown/still-active state retains the health job, registration, unit and state;
+repair service control, inspect `show`, and retry that same uninstall. A unit-write
+failure can require repairing/retrying install first to create a controllable unit.
+After confirmed stop, removal repeats exact ownership checks and removes only the
+owned block, retaining intervening unrelated config and the recovery bundles.
+A failure after removal (for example daemon-reload) is a stopped partial uninstall;
+retry it after repairing the cause. Never use `git restore`, overwrite the whole
+config from a backup, or auto-commit a tracked config to resolve partial install.
+Any manual restoration requires comparing current hashes against the recorded
+attempt and preserving unrelated edits; an unknown observation is not permission
+to overwrite. Keep the private evidence until the operator accepts recovery.
 
 
 ## Delivery and recovery
