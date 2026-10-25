@@ -14,7 +14,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-24T20:55:59.905618324Z
-modified_at: 2026-10-25T04:50:22.589482898Z
+modified_at: 2026-10-25T05:17:25.712496788Z
 req_type: Task
 tags:
 - carried-from:BUG-2220
@@ -32,6 +32,11 @@ comments:
   content: 'PROXY DECISION for joe: approve the bounded carried-forward finding. Preserve the existing rider/ship authority contract; replace silent train-body probe failure with a diagnostic naming the unreadable train and pin the error case with a focused fixture. Do not weaken or redesign gates. Any proposal to change allow/refuse behavior needs a separate advisor ruling. Independent review remains required.'
   created_at: 2026-10-25T04:50:20.724616507Z
   modified_at: 2026-10-25T04:50:20.724616507Z
+- id: 01a1717e-0150-7000-bd56-d022beac01fa
+  author: joe
+  content: 'ADVISOR SOURCE CLARIFICATION at main94124569c9: live_trains gh body lookup failure becomes parse_members_line(empty)=None; train_rider_refusal currently treats None as no declared member, so this is a rider-detection observability gap under an otherwise live merge lease. Preserve the already approved bounded diagnostic scope for this carried-forward finding: explicitly warn with the leased train PR and failed probe context; do not imply a successful inventory. Pin actual lookup failure through a fake gh fixture. Any change to serialization/refusal behavior is a separate design decision, not an undocumented addition to this diagnostic task.'
+  created_at: 2026-10-25T05:17:25.712496788Z
+  modified_at: 2026-10-25T05:17:25.712496788Z
 history:
 - id: 01a16fcb-a89f-7731-8174-59e41495febe
   author: joe
