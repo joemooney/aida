@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T02:08:29.032100054Z
-modified_at: 2026-10-25T07:46:32.994454884Z
+modified_at: 2026-10-25T08:07:53.512429090Z
 req_type: Task
 tags:
 - codex
@@ -360,6 +360,17 @@ comments:
     Exact current artifact /tmp/task2347-candidate-a74aafe83e8c22df9e6d0306e63b0a725f066953/manifest.json. Native source/binary unchanged, SHA2569d50dac2e1be84fa903a05857d82ff11f45070e4f0ea3fcf483f743acf3dbb30. Not installed/promoted; no actual systemctl/service install/config/job/mail/queue test, inbox acknowledgement, hold clear, merge or completion. Full preceding F2 evidence /tmp/task2347-install-boundary-handoff.md and PR comment6394839231 remain applicable. Source work on TASK2347 stops here absent a concrete priority correction; returning to BUG2017 in-place. (Refs TASK-2347)
   created_at: 2026-10-25T07:46:32.994454884Z
   modified_at: 2026-10-25T07:46:32.994454884Z
+- id: 01a1721a-11a8-7070-91ef-93361c1492c5
+  author: joe
+  content: |-
+    ADVISOR final bounded runtime/F2 sufficiency disposition, latest source a74aafe83e8c22df9e6d0306e63b0a725f066953:
+    Independent codex2 0df evidence /tmp/codex2-pr2915-0df-sufficiency.txt finds original F2 install correction SUFFICIENT:6 focused cases plus2 actual inner registration/config failure probes, original recovery/conditional tracked-config handling and confirmed-stop sequencing. Latest a74 is a2-line immediate unit-snapshot recheck after monitoring removal with one deterministic fixture (author44/44+35fast); request independent exact delta and current-head CI, not broad third cycle. Old0df run40172525014 attempt2 is nowSUCCESS, unchanged time budget; it does NOT approve newer a74.
+
+    Cold read-budget finding disposition: retain hard bounds and fail-closed behavior. Actual frozen0df full READ-ONLY scan now completed5122ms,31pending IDs/9roots,1223acks; peer independently completed4868ms/28IDs/8roots earlier. Earlier3 main receipt-deadline refusals at1107entries are real observed overload/deadline outcomes, not evidence of permission to ignore main or receipts. I inspected a74 main run loop and independently executed a deterministic disposable-state recovery probe: first Refusal leaves ledger+health BYTES unchanged and makes0queue calls; next normal30s interval succeeds, preserves prior accepted ID without requeue and submits ONLY a new FAKE ID through a MOCKED command once. No real queue/mail/service/config action. Existing docs228-230 already specify failed scans retain acceptance state and retry at next interval; persistent staleness is handled by reviewed health routing. Therefore no source/budget widening or generic retry framework is required solely for this transient refusal. This accepts the implemented bounded failure/retry contract, not a claim of stable cold IO or successful idle wake.
+
+    Deployment still requires matching reviewed normal native/scheduler artifact (not unmerged global promotion), a successful current complete read-only inventory and health-capable actual driver, then the explicitly authorized literal-IDLE same-thread synthetic test with duplicate suppression and receipts. Do not baseline/acknowledge unread messages to zero, skip failed roots, silently relax limits or reuse old-head green checks. Final own reviewer approval only after a74 delta/source invariants and exact-head required Build pass; use normal canonical writer, no manual hold clearance/merge/live install by reviewer. Root authored watcher launch and cannot merge own authorship. Full TASK2347/story1843 scope and remaining goal stay open until actual completion evidence.
+  created_at: 2026-10-25T08:07:53.512429090Z
+  modified_at: 2026-10-25T08:07:53.512429090Z
 history:
 - id: 01a170d1-497a-7282-8dcb-91782bba7dc3
   author: joe
