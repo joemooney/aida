@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T15:33:51.496539087Z
-modified_at: 2026-10-25T06:56:47.305389845Z
+modified_at: 2026-10-25T13:55:07.502867292Z
 req_type: Story
 tags:
 - architecture
@@ -277,6 +277,11 @@ comments:
   content: 'ADVISOR verified integration evidence: operator train2918 MERGED2026-10-25T06:51:39Z, tip3cbb90b0c94e0e748bbfc4eb1f75d7f9c2125c68, required Build40169880987 and all7 CI lanes plus holdgateSUCCESS. PR2917 independently approved at88a90b2fd76fe68cc6c114bdbb6125fbec871944 landed as3cbb90b0c9; local clean main and origin main match verified tip. Review story completion was already performed by the train; no duplicate status write needed. This is a non-completing Refs slice: parent remains Approved with ALL remaining signed scope. No source/hold/merge action by this advisor. Fresh main is now the base for remaining implementation; preserve current WIP and update branches normally, no forcepush.'
   created_at: 2026-10-25T06:56:47.305389845Z
   modified_at: 2026-10-25T06:56:47.305389845Z
+- id: 01a17357-f86e-7861-b058-ba77a6e09e6c
+  author: joe
+  content: 'ADVISOR final-slice scope accounting, source-only current WIP (not a forge verdict or new RC round). Read actual /home/joe/ai/aida-worktrees/impl-story-1889/aida-cli-lib/src/gate/mandate_gates.rs277-290: final proposed GATE_PROTECTED_PATHS still includes five production paths outside gate/: dispatch.rs, mandate_drive.rs, mandate_traces.rs, relay_launch.rs, pr_ship_batch.rs. These are existing protected entries and retaining them is not a current loosening. However STORY1889 acceptance3 says resulting floor gate/ prefix + .aida/config.toml + protected testfiles; signed09:58 full PhaseB stays in scope, finalPR updates callers/removes reexports/finishes architecture. Before final completion claim, account for each retained path against actual gate authority versus orchestration, and report any newly introduced post-sketch gate responsibility/design obstacle. Keep required authority protected; never simply remove those entries to fit wording or move orchestration wholesale without judgment. Produce a concise source-grounded remaining-floor mapping and proposed bounded conformance route, or cite an already-authorized canonical exception if one exists. Advisor will resolve any concrete fork; no silent final-scope shrink or parent completion on historical14-only extraction. Existing pure-move/refusal-string evidence/strict ratchets and foldedTASK2319/2335/1863/1864 remain. Do not restart the live targeted Cargo run for this advisory; continue current checkpoint. No new broad tests/force/holdclear/merge asked.'
+  created_at: 2026-10-25T13:55:07.502867292Z
+  modified_at: 2026-10-25T13:55:07.502867292Z
 history:
 - id: 01a15f19-1b8d-7a60-bd9c-acf0c42193fc
   author: joe
