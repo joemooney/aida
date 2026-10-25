@@ -624,11 +624,6 @@ fn decide(
         }
         return Ok((name.to_string(), existing));
     }
-    if let Some(sid) = req.native_session_id.filter(|s| !s.is_empty()) {
-        if let Some(r) = reservation_of_session(project_root, sid)? {
-            return Ok((r.handle.clone(), Some(r)));
-        }
-    }
     let prefix = generated_handle(req.agent_type, req.role, 0);
     let counter = handles_dir(project_root).join("counters").join(&prefix);
     let start = match read_allocation_text(&counter, 64)? {
