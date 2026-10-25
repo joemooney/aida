@@ -33,12 +33,12 @@ description: |
   - Defining a general-purpose synchronization language or plugin system.
   - Disabling the verified store security hooks, including the identity gate.
   - Automatically resolving diverged code or store history.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T22:02:03.191649035Z
-modified_at: 2026-10-25T06:56:44.803868009Z
+modified_at: 2026-10-25T17:08:30.113531948Z
 req_type: Story
 tags:
 - docs:impacted
@@ -427,6 +427,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a17409-0321-7ec1-b5a3-e29264ab2bf7
+  author: aida-lease-take
+  timestamp: 2026-10-25T17:08:30.113526267Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 3dfcf99117e6efbaa8259155a576276ab424a335
   branch: main
