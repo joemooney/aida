@@ -6,17 +6,26 @@ description: |-
   2026-10-25: aida review watch could not launch reviewers for PR-2927 (TASK-2348) and PR-2928 (BUG-2221): queue work tried to end the finished implementer's dead lease and got 'seat clone ... holds work origin does not have:' followed by an EMPTY list. Investigation: the seat clone carried 55 local tags (slice-*-r*, gl-v-check-*, wip/*) copied from the primary checkout; none are on origin, all are present in the primary, the worktree was clean and the branch fully pushed. session end --force then 'salvaged' a patch.
   Impact: every finished lane blocks its own automatic review until someone force-ends it by hand.
   Acceptance: the unpushed-work probe ignores refs that are also present in the primary repository (or that were inherited at clone time), and the refusal message lists the refs it counts. A clean, fully pushed seat ends without --force.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-25T19:59:04.310057151Z
-modified_at: 2026-10-25T19:59:04.310057151Z
+modified_at: 2026-10-25T19:59:19.465461525Z
 req_type: Bug
 tags:
 - from-advisor
 - kind:bug-spotted
 - severity:major
+history:
+- id: 01a174a5-67a9-7153-9ff2-46058223a31c
+  author: joe
+  timestamp: 2026-10-25T19:59:19.465451283Z
+  session_id: cde796d3-1750-4745-a8f9-7ab3bc7c3519
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 011e33b65ee2ee1ecd96518e3cab472108cc18c5
   branch: main
