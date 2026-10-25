@@ -171,15 +171,25 @@ pub(crate) fn load_table(path: &Path) -> Result<Vec<(String, String)>> {
 /// is a real subcommand". A user alias may not shadow any of these.
 /// trace:TASK-877 | ai:claude
 pub(crate) fn real_subcommand_names() -> std::collections::HashSet<String> {
-    let cmd = crate::command_registry::built_command();
-    let mut names = std::collections::HashSet::new();
-    for sub in cmd.get_subcommands() {
-        names.insert(sub.get_name().to_string());
-        for a in sub.get_all_aliases() {
-            names.insert(a.to_string());
-        }
-    }
-    names
+    // BUG-2221: derived once per process — the tree is static, and this set
+    // is read on EVERY invocation (alias expansion + extension shadowing)
+    // before dispatch, so re-walking a fresh tree clone each time was part of
+    // the unattributed pre-dispatch latency. trace:BUG-2221 | ai:claude
+    static NAMES: std::sync::OnceLock<std::collections::HashSet<String>> =
+        std::sync::OnceLock::new();
+    NAMES
+        .get_or_init(|| {
+            let cmd = crate::command_registry::built_command();
+            let mut names = std::collections::HashSet::new();
+            for sub in cmd.get_subcommands() {
+                names.insert(sub.get_name().to_string());
+                for a in sub.get_all_aliases() {
+                    names.insert(a.to_string());
+                }
+            }
+            names
+        })
+        .clone()
 }
 
 /// A user-alias name must be a single non-flag token that does not collide with
