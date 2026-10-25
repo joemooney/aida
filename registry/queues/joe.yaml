@@ -1,11 +1,4 @@
 - user_id: joe
-  requirement_id: 01a1703f-25ca-71d1-bd64-1f4e8a146737
-  position: 3000
-  added_by: joe
-  note: Independent PR2923 F1 at0e9 requires nearby accurate locked-reservation/best-effort-preview comment+trace and PR metadata correction only; preserve behavior. Rework brief Claude170530 /tmp/pr2923-f1-rationale-rework.txt. Existing owner/session normal resumption after live/PID/stash inspection, no competing worker. Comment-only FASTTRACK fast gate/noCargo; newhead independentreview+greenCI required, no timing-budget waiver.
-  added_at: 2026-10-25T17:07:43.682157924Z
-  for_role: implementer
-- user_id: joe
   requirement_id: 01a108d6-fab7-725c-a949-8b075faed74a
   position: 4000
   added_by: joe
