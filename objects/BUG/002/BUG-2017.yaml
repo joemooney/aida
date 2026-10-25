@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T22:12:54.027870933Z
-modified_at: 2026-10-25T11:53:52.510257735Z
+modified_at: 2026-10-25T11:57:17.571020578Z
 req_type: Bug
 tags:
 - id-allocation
@@ -421,6 +421,24 @@ comments:
     Full S2 remains in PR2919, separate commits forthcoming. Slice3/all-conflict audit/scanner/final docs and other queued signed work remain mandatory; parent incomplete, all holds retained, no merge/live installation or real HOME enrollment. Logs /tmp/bug2017-s2-*.log; checker evidence /tmp/bug2017-s2-authorcheck-counter-loss.json.
   created_at: 2026-10-25T11:53:52.510257735Z
   modified_at: 2026-10-25T11:53:52.510257735Z
+- id: 01a172ec-1783-7442-a9d5-242033af1c55
+  author: codex2
+  content: |
+    codex2 SOURCE-ONLY advisory: S2 MCP relationship failure; no implementation evidence/formal verdict.
+
+    Status at 2026-10-25 ~11:58 UTC: named /tmp/bug2017-s2-bootstrap-contract.log remains the 11:47:02 failure at line67. The 11:48:47 debug log repeats it and retains /tmp/bug2017-bootstrap-p7vkjjq8. Code1's 11:53:51 progress explicitly identifies/fixes this cause in WIP. Current GitBackend source has the fix (mtime11:50:50); LoadSnapshot fix mtime11:50:59. Available native target/worktrees/aida-bug-2017-slice1/agent/aida is older (11:45:34, SHA256 5dd6f6b0e0bc23e6ad938fa28ecfb4496ca1ab481818c44ec8c6840674b807a1); build log last says waiting for build-directory lock. No newer successful native contract evidence was found in the named evidence. Therefore this is an old demonstrated defect with a source correction already present, NOT a demonstrated remaining defect of a newly qualified artifact, and NOT a claimed native resolution. The old log itself does not embed an artifact hash, so exact log-to-binary provenance remains qualified. No rerun/build or competing patch needed for diagnosis.
+
+    Demonstrated cause, beyond not_found: retained private store Git history proves CLI objects existed then were deleted by MCP's add save. Commit99317a9b6efd008a249cf7f6b2ba1a58b32b93f7 adds BUG001, parent7bf1b95cb38d93fd70e7f1c4aa939ad0af0fd687 adds FR001. Next commit c50b91fc97a9e1df3663cd2ca091faf3cb3afd6e is “update1 requirements, delete18”: adds BUG002 and deletes BUG001, FR001 and all16 META objects. BUG001 YAML spec_id is BUG-72b891cab8fb44aea90f55da1304596b-001 while its filename uses uppercase UUID. On-disk retained state contains only BUG002. This is true full-save persistence loss, not just a lookup case or missing relationship parameter.
+
+    Exact path: mcp.rs::tool_add_requirement (1800; load1860/save1965) -> Storage::load/save_with_origin directory branches (storage.rs452/598) -> GitBackend::load/save_reporting_with_origin. object_store::canonical_spec_id/relative_object_path/list_objects use uppercase filename identity. Before the WIP fix, save_reporting_with_origin incoming_specs/current_specs compared raw lowercase serialized spec_ids against uppercase existing_specs. Its deletion plan (db/git_backend.rs1837-1859) treats each existing ID as absent; the load snapshot fingerprint matches it, making deletion eligible. That removes the just-loaded CLI objects while the new MCP object's write survives. tool_add_relationship (mcp.rs3029, load3056/source lookup3058) then correctly gets None from RequirementsStore::get_requirement_unambiguous because the source object is gone. Both tools use the same Storage and root; subprocess fixture starts the same binary at cwd WORK, no --file independent-root override. No evidence of cache-only loss, schema/type mismatch, alternate store topology or provider failure explains the observed deletion commit. The already-fixed GLOBAL sequence issue is separate.
+
+    Existing correction, not a new instruction: current GitBackend canonicalizes incoming_specs/current_specs; models::LoadSnapshot::{new,disk,baseline,record,remove} canonicalize the same namespace, preserving stale-write detection on repeated saves. Pin manifest /tmp/codex2-bug2017-s2-relationship-pins.json records source/fixture/log/binary SHA256 and UTC mtimes (WIP moved during observation). GitBackend hash6bbda752c5f3db9b1f948ac43e8e50f01179ec58203c73142995877a6211025c; models hash ece6d3c61304757bd11c93dcc371631e2a8802a515f310d2ce5568b47023c9ec. Parent branch remains766bbcbc4c726118d625002f04583111b3fdbaed plus WIP, not a reviewed commit.
+
+    Decisive regression: retain native cold WORK init -> CLI FR001/BUG001 -> same real MCP subprocess add BUG002 -> add_relationship(BUG001,references,FR001). At the add boundary assert CLI UUIDs and all META objects remain present; after relationship/restart assert actual source/target UUID edge persisted. Existing tests/test_bug2017_bootstrap.py already contains the failing real subprocess sequence; use code1's rebuilt qualified candidate for its normal rerun, rather than replacing it with a direct-model lookup assertion. WIP work_binding::tests::opaque_lowercase_ids_survive_full_save_and_keep_snapshot_cas adds complementary whole-save/repeated-save/concurrent-edit protection, not native MCP proof. Source inspection only here; no new test result is implied.
+
+    No author edits, Cargo/build/native rerun, lease/grant/authority changes, real HOME enrollment, transport/live queue/mail probes, hold clearance or formal verdict. Full signed S2/S3 and1742/1843 boundaries remain retained. Only requested advisory notifications follow.
+  created_at: 2026-10-25T11:57:17.571020578Z
+  modified_at: 2026-10-25T11:57:17.571020578Z
 history:
 - id: 01a16f08-1847-70c2-a9ec-772710162546
   author: joe
