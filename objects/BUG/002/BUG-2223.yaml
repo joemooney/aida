@@ -15,12 +15,27 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T17:38:11.351372157Z
-modified_at: 2026-10-25T19:47:05.213837193Z
+modified_at: 2026-10-25T21:06:20.472836966Z
 req_type: Bug
 tags:
 - from-advisor
 - kind:bug-spotted
 - severity:minor
+comments:
+- id: 01a174e2-c2b8-75a1-9a9c-a2bf26bb418e
+  author: joe
+  content: |-
+    ADVISOR RULING 2026-10-25 14:10 MST — design fork: OPTION B SIGNED (sketch signoff).
+    session start gains the ability to re-enter an EXISTING seat clone at an orphaned lease's recorded path (the case session_start.rs:2135 refuses today), and queue work --resume with no recorded claude session cold-starts a new session in that clone on its existing branch. Bindings:
+    1. Only for a lease that is genuinely orphaned (dead process, same scope); a live lease still refuses. The clone must be the one the lease records (path + branch match), else refuse.
+    2. Never reset, re-clone over, or discard the clone's commits/uncommitted work; re-entry is adopt-in-place. Reuse the existing status/claim/registration steps so the re-entered session is indistinguishable from a fresh one in aida ps.
+    3. The no-recorded-session check must know about the orphaned lease, so the two errors never point at each other; every hint names a command that works.
+    4. Include the codex containment message fix in the same PR: when the default headless vendor cannot run contained, name AIDA_HEADLESS_VENDOR/--vendor claude in the first line (message only, no default change).
+    5. Tests: orphaned clone with uncommitted work -> --resume relaunches in place, work intact; live lease -> refused; mismatched path -> refused.
+    Gate LIGHT (targeted cargo + check-ci-fast; check-ci-compile if >10 files). trace:BUG-2223.
+  created_at: 2026-10-25T21:06:20.472836966Z
+  modified_at: 2026-10-25T21:06:20.472836966Z
+  session_id: cde796d3-1750-4745-a8f9-7ab3bc7c3519
 history:
 - id: 01a1748f-4497-7a10-9411-9d32f09101ee
   author: joe
