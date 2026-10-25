@@ -1,0 +1,28 @@
+id: 01a174a8-0272-76c1-bb5a-76690f2b3b16
+spec_id: TASK-2354
+agreed_id: TASK-2354
+title: 'ownership_and_ci_share_one_wait_deadline: release assertion depends on a ~2s file-removal window'
+description: |
+  aida-cli/tests/task_1287_label_only_merge_hold.rs::ownership_and_ci_share_one_wait_deadline now asserts !text.contains("Drive ownership wait timed out"). It passes only if the test thread removes the drive-state file within the ~2s ownership sleep after reading the "waiting for drive release" line. wait_for_drive_release (pr_ship.rs:124) sleeps min(2s, remaining) and then times out if the probe still sees the block. If a scheduler stall longer than ~2s hits under heavy nextest load, the run takes the ownership-timeout path. That path also exits 21, so it fails only on the new assertion. This is low probability and not a production defect. Possible hardening: remove the file before the progress line is consumed, using a fixture hook. Do not raise a budget or add retries.
+
+  Raised in review of PR-2927: https://github.com/joemooney/aida/pull/2927#issuecomment-6402489355
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-25T20:02:10.162093230Z
+modified_at: 2026-10-25T20:02:10.162093230Z
+req_type: Task
+tags:
+- from-review:PR-2927
+- severity:minor
+- testing
+filed_at:
+  code_sha: 7152b220ea11b974dee118c0dabc73e5f5f71576
+  branch: pr-2927
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: a01a698998
+  vendor: claude
+  session: 01a174a66fc4
+  harness_version: 2.1.310 (Claude Code)
