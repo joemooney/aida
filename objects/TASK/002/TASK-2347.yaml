@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T02:08:29.032100054Z
-modified_at: 2026-10-25T13:46:07.972633787Z
+modified_at: 2026-10-25T13:50:52.704779996Z
 req_type: Task
 tags:
 - codex
@@ -421,6 +421,11 @@ comments:
   content: 'ADVISOR fresh-session verification 2026-10-25: operator reported PR2915 completed. Forge audit confirms source PR2915 CLOSED with train comment, train2921 MERGED2026-10-25T13:38:39Z to a01a6989984ee2c6261074fa5f9d415719d3130a. Train headf52cf4bfd4487ac7ff11436ca96ceca86f63dc5c had Build40197614025/job121184509198 SUCCESS, all seven CI lanes and merge-hold-gate SUCCESS. Primary main/origin nowa01a6989 clean at check. Source reviewed head5ce remains established separate evidence. Task remains open: live binary stillc7b and doctor lacks codex-mail-wake, so started ordinary merged-main aida dev build under AIDA_CARGO_TIMEOUT20m (live tool session12267), no unmerged promotion. Existing user timer aida-tick-2b20e8a3 ExecStart/home/joe/.local/bin/aida schedule tick must resolve qualified new live binary before install. New actual advisor thread01a17340-52b5-7e33-8d73-3809b3268f90 differs from original target01a1700b: no implicit retarget, live notification or repeated nonce1915 test. Operator target/idle-phase consent still required before retargeted installation/proof; preparing capability/inventory first. Root retains original watcher authorship and did not merge it.'
   created_at: 2026-10-25T13:46:07.972625641Z
   modified_at: 2026-10-25T13:46:07.972625641Z
+- id: 01a17354-1520-77e2-b246-03f09c65db97
+  author: joe
+  content: 'ADVISOR merged-main qualification complete2026-10-25: normal aida dev build tool session12267 terminalexit0, agent workspace build5m01s, smoke PASS and atomic promotion of maina01a6989984ee2c6261074fa5f9d415719d3130a. Live binarySHA256135f67d0311dbf6407ff6b83bfa68d918a5f6e3be77be2c5f81f072d09257cdd. Existing active/enabled aida-tick-2b20e8a3 scheduler uses /home/joe/.local/bin/aida, resolving this live binary; --version confirms a01a698998. Health category is now recognized, correctly reports missing registration/snapshot because not installed. Proposed new-thread serviceaida-codex-mail-033728f14fce02be absent/inactive, read-only ownership/globalnamespace check passed. Exact health+route block and evidence /tmp/task2347-fresh-advisor-install-preflight.json. Initial preflight refused own .aida directories0775; removed shared-write bits on project.aida and home.aida to0755, no file-content/config/authority edits, receipt /tmp/task2347-preflight-directory-modes.json. Script SHA256a3152382947a966dcd48157b62f9db5cb10aefc82049e0ed336450389696c8e5 matches reviewed5ce. Read-only crossroot scan13:47:40Z succeeded11755ms/1282ackIDs/0pending at that instant, /tmp/advisor-crossroot-20261025-fresh.json. Operator changed-target/idle-test question pending for actual newthread01a17340-52b5-7e33-8d73-3809b3268f90; original pinned target not silently replaced. No install/state/registration/unit/queue notification/synthetic test. Task remains open. Earlier MCP comment attempt failed with Transport closed after the standard build restarted stale MCP servers; this CLI fallback records the evidence.'
+  created_at: 2026-10-25T13:50:52.704779996Z
+  modified_at: 2026-10-25T13:50:52.704779996Z
 history:
 - id: 01a170d1-497a-7282-8dcb-91782bba7dc3
   author: joe
