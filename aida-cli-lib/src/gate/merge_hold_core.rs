@@ -1522,6 +1522,25 @@ pub(crate) fn write_marker(
     rearmed: bool,
     adopted: Option<&crate::events::Event>,
 ) -> std::io::Result<()> {
+    write_marker_with_route(
+        project_root,
+        record,
+        reconcile_route,
+        rearmed,
+        adopted,
+        |proposal| reconcile_recusal_route(project_root, proposal),
+    )
+}
+
+// trace:STORY-1889 | ai:agy
+pub(crate) fn write_marker_with_route(
+    project_root: &Path,
+    record: &MergeHoldRecord,
+    reconcile_route: bool,
+    rearmed: bool,
+    adopted: Option<&crate::events::Event>,
+    route_fn: impl FnOnce(&mut MergeHoldRecord) -> std::io::Result<()>,
+) -> std::io::Result<()> {
     if record.pr == 0
         || (record.reason_kind == HoldReasonKind::Recusal
             && (record.recused_principals.is_empty()
@@ -1539,7 +1558,7 @@ pub(crate) fn write_marker(
     normalized.schema_version = 2;
     normalized.legacy = false;
     if reconcile_route && normalized.reason_kind == HoldReasonKind::Recusal {
-        reconcile_recusal_route(project_root, &mut normalized)?;
+        apply_recusal_route_proposal(&mut normalized, route_fn)?;
     }
     let body = serde_json::to_vec_pretty(&normalized)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
@@ -1658,6 +1677,22 @@ pub(crate) fn place_hand_hold(
     write_typed_hold_replacing(project_root, record).map_err(|e| e.to_string())
 }
 
+/// Run `route_fn` on a cloned proposal and copy ONLY `routed_to` and
+/// `routing_state` back onto the admitted `record`, so unprotected routing
+/// plumbing outside `gate/` can never mutate `reason_kind`, `legacy`,
+/// `absorbed`, `recused_principals`, or any other authority-bearing field.
+// trace:STORY-1889 | ai:agy
+pub(crate) fn apply_recusal_route_proposal(
+    record: &mut MergeHoldRecord,
+    route_fn: impl FnOnce(&mut MergeHoldRecord) -> std::io::Result<()>,
+) -> std::io::Result<()> {
+    let mut proposal = record.clone();
+    route_fn(&mut proposal)?;
+    record.routed_to = proposal.routed_to;
+    record.routing_state = proposal.routing_state;
+    Ok(())
+}
+
 /// Refresh a recusal hold from live evidence: adopt a moved PR head (which
 /// invalidates the old route), re-select a live independent reader, and write
 /// or retire the routing briefs. Idempotent. A failed refresh leaves the
@@ -1674,12 +1709,24 @@ pub(crate) fn reconcile_recusal_hold(
     pr: u64,
     live_head: Option<&str>,
 ) -> Option<MergeHoldRecord> {
+    reconcile_recusal_hold_with(project_root, pr, live_head, |proposal| {
+        reconcile_recusal_route(project_root, proposal)
+    })
+}
+
+// trace:STORY-1889 | ai:agy
+pub(crate) fn reconcile_recusal_hold_with(
+    project_root: &Path,
+    pr: u64,
+    live_head: Option<&str>,
+    route_fn: impl FnOnce(&mut MergeHoldRecord) -> std::io::Result<()>,
+) -> Option<MergeHoldRecord> {
     let durable = read_hold_record(project_root, pr)?;
     if durable.reason_kind != HoldReasonKind::Recusal || durable.legacy {
         return Some(durable);
     }
     let mut refreshed = project_live_head(&durable, live_head);
-    if reconcile_recusal_route(project_root, &mut refreshed).is_err() {
+    if apply_recusal_route_proposal(&mut refreshed, route_fn).is_err() {
         return Some(durable);
     }
     if refreshed == durable {

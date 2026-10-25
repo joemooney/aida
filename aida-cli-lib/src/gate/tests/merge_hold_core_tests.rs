@@ -1284,3 +1284,102 @@ fn label_state_persistence_lives_in_protected_core_for_typed_and_legacy_markers(
     assert_eq!(reread.detail, "manual check");
     assert_eq!(reread.target_head_sha.as_deref(), Some("abc1234"));
 }
+
+// trace:STORY-1889 | ai:agy
+#[test]
+fn routing_proposal_boundary_cannot_mutate_non_routing_fields_at_persistence() {
+    let dir = tempfile::tempdir().unwrap();
+    let vref = VerdictRef::new(
+        "PR-2099",
+        Some(2099),
+        Some("abc1234567890".into()),
+        Some("reviewer".into()),
+    );
+    let absorbed_rework = AbsorbedHold {
+        reason_kind: HoldReasonKind::Rework,
+        detail: "needs rework".into(),
+        recused_principals: Vec::new(),
+        target_head_sha: Some("abc1234567890".into()),
+        verdict_ref: Some(vref.clone()),
+        spec: Some("STORY-1889".into()),
+        placed_by: Some("reviewer".into()),
+    };
+    let original = MergeHoldRecord {
+        schema_version: 2,
+        pr: 2099,
+        reason_kind: HoldReasonKind::Recusal,
+        detail: "author recused".into(),
+        recused_principals: vec![PrincipalIdentity::parse("agent:author")],
+        routed_to: Vec::new(),
+        routing_state: HoldRoutingState::Pending,
+        target_head_sha: Some("abc1234567890".into()),
+        label_state: Some("synced".into()),
+        legacy: false,
+        verdict_ref: Some(vref),
+        release_condition: Some("independent review".into()),
+        spec: Some("STORY-1889".into()),
+        placed_by: Some("advisor".into()),
+        absorbed: vec![absorbed_rework.clone()],
+    };
+
+    // Adversarial route callback tries to tamper with every authority-bearing field.
+    let tamper_route = |proposal: &mut MergeHoldRecord| -> std::io::Result<()> {
+        proposal.schema_version = 99;
+        proposal.pr = 9999;
+        proposal.reason_kind = HoldReasonKind::Rework;
+        proposal.detail = "tampered detail".into();
+        proposal.recused_principals.clear();
+        proposal.target_head_sha = Some("deadbeef".into());
+        proposal.label_state = Some("unsynced: tampered".into());
+        proposal.legacy = true;
+        proposal.verdict_ref = None;
+        proposal.release_condition = None;
+        proposal.spec = Some("TAMPERED-1".into());
+        proposal.placed_by = Some("attacker".into());
+        proposal.absorbed.clear();
+        proposal.routed_to = vec![PrincipalIdentity::parse("agent:reader-1")];
+        proposal.routing_state = HoldRoutingState::Routed;
+        Ok(())
+    };
+
+    // 1. write_marker_with_route persists ONLY routed_to and routing_state from the proposal.
+    write_marker_with_route(dir.path(), &original, true, false, None, tamper_route).unwrap();
+    let persisted = read_hold_record(dir.path(), 2099).unwrap();
+    assert_eq!(
+        persisted.routed_to,
+        vec![PrincipalIdentity::parse("agent:reader-1")]
+    );
+    assert_eq!(persisted.routing_state, HoldRoutingState::Routed);
+    let mut expected_after_write = original.clone();
+    expected_after_write.routed_to = vec![PrincipalIdentity::parse("agent:reader-1")];
+    expected_after_write.routing_state = HoldRoutingState::Routed;
+    assert_eq!(persisted, expected_after_write);
+
+    // 2. reconcile_recusal_hold_with persists ONLY routed_to and routing_state (plus live_head projection).
+    let refreshed =
+        reconcile_recusal_hold_with(dir.path(), 2099, Some("fedcba987654"), |proposal| {
+            proposal.reason_kind = HoldReasonKind::Supervision;
+            proposal.detail = "tampered on refresh".into();
+            proposal.recused_principals = vec![PrincipalIdentity::parse("agent:someone-else")];
+            proposal.target_head_sha = Some("000000000000".into());
+            proposal.label_state = None;
+            proposal.legacy = true;
+            proposal.verdict_ref = None;
+            proposal.release_condition = None;
+            proposal.spec = None;
+            proposal.placed_by = None;
+            proposal.absorbed.clear();
+            proposal.routed_to = vec![PrincipalIdentity::parse("agent:reader-2")];
+            proposal.routing_state = HoldRoutingState::Routed;
+            Ok(())
+        })
+        .unwrap();
+    let reread = read_hold_record(dir.path(), 2099).unwrap();
+    let mut expected_after_refresh = expected_after_write;
+    expected_after_refresh.target_head_sha = Some("fedcba987654".into());
+    expected_after_refresh.routed_to = vec![PrincipalIdentity::parse("agent:reader-2")];
+    expected_after_refresh.routing_state = HoldRoutingState::Routed;
+    assert_eq!(refreshed, expected_after_refresh);
+    assert_eq!(reread, expected_after_refresh);
+    assert_eq!(reread.absorbed, vec![absorbed_rework]);
+}
