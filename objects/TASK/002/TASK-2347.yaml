@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T02:08:29.032100054Z
-modified_at: 2026-10-25T05:50:51.368842376Z
+modified_at: 2026-10-25T05:52:37.044490290Z
 req_type: Task
 tags:
 - codex
@@ -262,6 +262,11 @@ comments:
     No live installation, scheduled-job registration/execution, mail/queue test, inbox acknowledgement, self-verdict, hold clearance, merge or parent completion. Receipt-root limitation remains assigned to STORY-1843. Advisor owns full-path idle wake after independent final-head approval. Returning now to BUG-2017 checkpoint80b25c3025301c2f3e3b0c15d8dd45b5c9669d2b, without waiting for prior reviews. (Refs TASK-2347)
   created_at: 2026-10-25T05:50:51.368842376Z
   modified_at: 2026-10-25T05:50:51.368842376Z
+- id: 01a1719e-38b4-7b00-adc3-b32ed7e97a16
+  author: joe
+  content: 'ADVISOR IN-PROGRESS F2 FEEDBACK (not a new formal verdict): fake-HOME helper probe /tmp/goal-health-global-collision-probe.json confirms own_health_job accepts an existing ~/.aida/schedule.toml user job with the exact derived health name, then creates the project job. maintenance_schedule::load_global_config supports [schedule] and bare jobs/tasks forms; merge_registries project-wins means this shadows the existing user job for this project despite preserving its bytes. Existing acceptance says preserve user-owned jobs/refuse ownership conflicts. Before final readiness, check the effective GLOBAL+PROJECT name namespace (health and route), without modifying global jobs; refuse unsafe/unreadable/malformed relevant global registry rather than treating unknown as empty. Test both supported global config shapes, both owned names, unchanged bytes/no partial local registration on conflict, healthy/no-global case. No real HOME, systemd, mail or queues were touched by the probe. This is the same required F2 ownership boundary; keep the one-adapter scope.'
+  created_at: 2026-10-25T05:52:37.044490290Z
+  modified_at: 2026-10-25T05:52:37.044490290Z
 history:
 - id: 01a170d1-497a-7282-8dcb-91782bba7dc3
   author: joe
