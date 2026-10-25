@@ -24,12 +24,12 @@ description: |
 
   ## Non-goals
   Signatures, key enrollment, offline grant envelopes, a second authority service, automatic full-store trust-boundary merge, malicious raw Git, or copied/rolled-back entire-clone state. This signed single-HOME/node-local contract supersedes the original description signed-grant/offline-import clauses; full SKETCH v2 and signoff remain in comments.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T22:12:54.027870933Z
-modified_at: 2026-10-25T08:53:01.730761936Z
+modified_at: 2026-10-25T08:55:57.203552788Z
 req_type: Bug
 tags:
 - id-allocation
@@ -219,6 +219,13 @@ history:
   author: ai:codex:joe
   timestamp: 2026-10-25T04:59:09.943714216Z
   changes: []
+- id: 01a17246-1213-7e33-8f21-3b242a2ea963
+  author: aida-orchestrator
+  timestamp: 2026-10-25T08:55:57.203573955Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 3dfcf99117e6efbaa8259155a576276ab424a335
   branch: main
@@ -226,3 +233,11 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 3dfcf99117
   vendor: codex
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'codex2 independent slice1 review: P1 batch alias admission can persist metadata/first object before refusing; exact-head Build failed. Parent remains non-completing across all3 signed slices.'
+  recovery_hint: address the review findings, move BUG-2017 back to In Progress, and clear the PR hold only after approval
+  shelved_by: product
+  shelved_at: 2026-10-25T08:55:57.203552788Z
