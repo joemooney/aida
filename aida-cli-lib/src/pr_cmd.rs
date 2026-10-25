@@ -1328,7 +1328,10 @@ pub(crate) fn run_human_finish_ceremony(opts: HumanFinishOptions) -> Result<()> 
         })?;
 
     let mode = ship::finish_mode(opts.no_pr, opts.no_merge);
-    let dirty = working_tree_is_dirty(&project_root);
+    // Tracked/staged changes only: untracked paths (sandbox device mounts,
+    // stray scratch files) never trigger or join the step-1 commit.
+    // trace:TASK-2351 | ai:claude
+    let dirty = ship::tracked_changes_pending(&project_root);
 
     // ---- Dry-run: print the resolved plan and exit. ----
     if opts.dry_run {
@@ -1349,11 +1352,11 @@ pub(crate) fn run_human_finish_ceremony(opts: HumanFinishOptions) -> Result<()> 
         eprintln!("  step 1: committing uncommitted work — {}", subject);
         let add = std::process::Command::new("git")
             .current_dir(&project_root)
-            .args(["add", "-A"])
+            .args(["add", "-u"])
             .status()
             .context("could not invoke `git add`")?;
         if !add.success() {
-            anyhow::bail!("`git add -A` failed — investigate before retrying");
+            anyhow::bail!("`git add -u` failed — investigate before retrying");
         }
         let commit = std::process::Command::new("git")
             .current_dir(&project_root)
@@ -1369,6 +1372,14 @@ pub(crate) fn run_human_finish_ceremony(opts: HumanFinishOptions) -> Result<()> 
         );
     } else {
         eprintln!("  step 1: no uncommitted work — nothing to commit");
+    }
+    if let Some(note) = ship::untracked_left_out_note(&ship::untracked_regular_files(&project_root))
+    {
+        eprintln!(
+            "  {} {}",
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
+            note
+        );
     }
 
     // ---- Step 2: rebase onto the branch's REAL base, not a hardcoded
