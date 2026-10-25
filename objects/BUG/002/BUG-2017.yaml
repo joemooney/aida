@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T22:12:54.027870933Z
-modified_at: 2026-10-25T08:52:19.469251689Z
+modified_at: 2026-10-25T08:53:01.730761936Z
 req_type: Bug
 tags:
 - id-allocation
@@ -184,6 +184,22 @@ comments:
     For a fixture-only repair reuse the validated candidate, run affected isolated Python contract and fast; no unnecessary Rust rebuild/broad suite. If production/shared Rust changes, run the relevant focused/touched/compile checks warranted by the existing24-file PR. Background longCargo AIDA_CARGO_TIMEOUT, no slot bypass or outertimeout. Commit/push normally; aida ship dryrun force-with-lease refusal is correctly handled by normal nonforce Git/PR flow, no completion bypass. Report the final SHA as codex1 and preserve independent reviewer handoff. Main3cbb; current watcher compatibility fix5ce queued for tiny independent recheck, no need mix it into BUG PR.
   created_at: 2026-10-25T08:52:19.469251689Z
   modified_at: 2026-10-25T08:52:19.469251689Z
+- id: 01a17243-64a2-7fb3-9264-bd0b21643e30
+  author: ai:codex:joe
+  content: |
+    codex1 published non-draft Refs PR2919: https://github.com/joemooney/aida/pull/2919 at exact head c25b9bd3855226fdb40371affef506479c127ba6, based on main3cbb90b0c94e0e748bbfc4eb1f75d7f9c2125c68. Normal push; installed aida ship --no-merge dry-run unconditionally uses force-with-lease, so used safe normal push + PR creation + native aida pr auto-queue-review instead. STORY1931 filed/queued for independent reviewer. No self-verdict, force push, hold change, merge, parent Done/Completed or real HOME authority setting. Parent verified InProgress; worktree clean.
+
+    Signedv2 slice1: common-Git version1 mode, WORK default node-local/no global fallback, shared model/dispenser/object/registry/GitBackend admission and explicit/implicit block guards. New local IDs cannot replace another UUID; bulk collision uses existing local dispenser. First-use initialization is locked with consumption; provider mode checks include lazy external aliases; SQLite existing state read-only preflight/overflow refusal. Failed requirement/meta IDs cannot write metadata/oplog/objects even in HOME compatibility cases. Inspection is human/JSON node/team. Complete writer checklist in PR body and docs/plans/2026-10-24-bug-2017-allocation-writer-inventory.md. Exact shared-method ownership recorded in BUG2017/STORY1742 comments; no transport/scanner files or outer policy locks.
+
+    Final local evidence after corrections:25/25 allocation tests (also independently rerun25/25 by author checker);make test-touched180 CLI-lib passed1ignored,1672core passed3ignored,4/4 candidate CLI/MCP including committed imported cached global blocks;make check-ci-compile all workspace test targets compiled/no execution (1/1 gate);make check-ci-fast34/34;diff check clean. Logs /tmp/bug2017-{core-tests,touched,compile,fast}-final.log. Legacy touched global-ID fixtures explicitly use synthetic HOME under bounded temporary roots/commonGitdirs; WORK fixtures leave flag absent. No broad workspace runtime suite or slot bypass. This is author evidence, not independent approval; current-head CI remains pending.
+
+    Parent remaining: slice2 pseudonymous UUID bootstrap, existing counter/alias-preserving migration and HOME promotion fixtures/operator enrollment; slice3 complete all-conflict reconciliation/audit and STORY1742 scanner integration. Attached live dispenser candidate assembly is not pure and can reserve local sequences: future content gate must run before persistent counters/oplog/objects/refs. Do not broaden this PR or mark parent Done. No new allocator/signature service.
+
+    Priority TASK2347 same-F2 corrections were pushed and advisor notified; final PR2915 head5ce0706e4a4deed55d70c756186a94c8bb767763, source helper private scratch Git identity now compatible with BUG2017.44Python pass against each native candidate plus35fast; native Rust unchanged. Actual driver promotion/idle proof and final sufficiency/Build remain advisor-owned; no live install/service/mail/queue test.
+
+    Required context rotation now: durable codex1 handoff will point to these exact heads. Next session resumes normal implementer ownership/dependencies; preserve both worktrees/leases, prioritize concrete fresh PR2915 findings, and do not wait idle on reviews. (Refs BUG-2017)
+  created_at: 2026-10-25T08:53:01.730761936Z
+  modified_at: 2026-10-25T08:53:01.730761936Z
 history:
 - id: 01a16f08-1847-70c2-a9ec-772710162546
   author: joe
