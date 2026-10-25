@@ -1188,6 +1188,11 @@ fn story_1917_detached_worker_child_entry() {
             .write(true)
             .open(&lock_path)
             .expect("open legacy lock RW before flock");
+        if std::env::var("AIDA_TEST_1917_NON_DUMPABLE").ok().as_deref() == Some("1") {
+            unsafe {
+                libc::prctl(libc::PR_SET_DUMPABLE, 0, 0, 0, 0);
+            }
+        }
         std::fs::write(&opened_marker, std::process::id().to_string()).unwrap();
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
         while std::time::Instant::now() < deadline {
@@ -2862,6 +2867,24 @@ fn task_2344_tri_state_probe_retains_unknown_missing_pid_missing_start_and_corru
 #[test]
 fn task_2344_q1_physical_tick_lock_directory_migration_and_legacy_mutator_refusal() {
     use fs2::FileExt;
+    use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
+
+    struct ResetQ1Hooks;
+    impl Drop for ResetQ1Hooks {
+        fn drop(&mut self) {
+            if let Ok(mut g) = TEST_PROC_PID_ALLOWLIST.lock() {
+                *g = None;
+            }
+            if let Ok(mut g) = TEST_POST_EXCHANGE_HOOK.lock() {
+                *g = None;
+            }
+            if let Ok(mut g) = TEST_PRE_FLOCK_V2_HOOK.lock() {
+                *g = None;
+            }
+        }
+    }
+    let _reset_hooks = ResetQ1Hooks;
+
     let f = ExecFixture::new(&["reviewer", "implementer"]);
     f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
     let now = Utc::now();
@@ -2870,22 +2893,25 @@ fn task_2344_q1_physical_tick_lock_directory_migration_and_legacy_mutator_refusa
     let _ = open_pinned_dispatch_subdir(&f.root, None).unwrap();
     let legacy_lock_path = disp_dir.join("tick.lock");
 
-    // 1. Create a legacy Slice 1/2 regular-file `.aida/dispatch/tick.lock` (mode 0600).
+    // 1. Create a legacy Slice 1/2 regular-file `.aida/dispatch/tick.lock` (mode 0600)
+    //    and record its exact `(st_dev, st_ino)` identity.
     let legacy_holder = std::fs::OpenOptions::new()
         .create(true)
         .truncate(false)
         .read(true)
         .write(true)
+        .mode(0o600)
         .open(&legacy_lock_path)
         .unwrap();
-    std::fs::set_permissions(&legacy_lock_path, std::fs::Permissions::from_mode(0o600)).unwrap();
+    let orig_meta = legacy_holder.metadata().unwrap();
+    let (orig_dev, orig_ino) = (orig_meta.dev(), orig_meta.ino());
     drop(legacy_holder);
 
     // 2. Ordinary mutation entrypoints (`submit_request`, `cancel_request`,
     //    `run_dispatch_tick_sync`, `run_dispatch_serve_once_sync`, `execute_one_request`)
     //    MUST NOT silently replace the legacy regular-file `tick.lock`; even when
     //    unlocked, they refuse fail-closed with concrete recovery guidance and leave
-    //    `tick.lock` untouched as a regular file.
+    //    `tick.lock` untouched as the original regular file inode.
     let sub_refused = submit_request(
         &f.root,
         &f.mandate_dir,
@@ -2928,16 +2954,20 @@ fn task_2344_q1_physical_tick_lock_directory_migration_and_legacy_mutator_refusa
     .unwrap_err()
     .to_string()
     .contains("legacy regular-file dispatch lock"));
+    let meta_after_ordinary = std::fs::symlink_metadata(&legacy_lock_path).unwrap();
     assert!(
-        legacy_lock_path.is_file(),
-        "ordinary mutation entrypoints must leave legacy tick.lock regular file untouched"
+        meta_after_ordinary.is_file()
+            && meta_after_ordinary.dev() == orig_dev
+            && meta_after_ordinary.ino() == orig_ino,
+        "ordinary mutation entrypoints must leave legacy tick.lock regular file inode untouched"
     );
 
-    // 3. Open-before-flock / waiter race: spawn a real child process that opens
-    //    `.aida/dispatch/tick.lock` RW on FD 3 BEFORE calling `flock` and waits
-    //    on a barrier. Even though `flock` is NOT yet held on the inode,
-    //    `activate_dispatch_v2_lock_quiescent` must detect the open descriptor in
+    // 3a. Open-before-flock / waiter race: spawn a real child process that opens
+    //     `.aida/dispatch/tick.lock` RW BEFORE calling `flock` and waits on a barrier.
+    //     Even though `flock` is NOT yet held on the inode,
+    //     `activate_dispatch_v2_lock_quiescent` must detect the open descriptor in
     //     the child process via `/proc` and refuse fail-closed without unlinking!
+    let self_pid = std::process::id();
     let race_dir = f._tmp.path().join("q1-open-race");
     std::fs::create_dir_all(&race_dir).unwrap();
     let opened_marker = race_dir.join("child-opened");
@@ -2956,6 +2986,12 @@ fn task_2344_q1_physical_tick_lock_directory_migration_and_legacy_mutator_refusa
         .expect("spawn open-before-flock child");
 
     wait_for_barrier_file(&opened_marker, std::time::Duration::from_secs(5));
+    let child_pid: u32 = std::fs::read_to_string(&opened_marker)
+        .unwrap()
+        .trim()
+        .parse()
+        .unwrap();
+    *TEST_PROC_PID_ALLOWLIST.lock().unwrap() = Some(vec![self_pid, child_pid]);
 
     let open_race_err = match activate_dispatch_v2_lock_quiescent(&f.root) {
         Ok(_) => {
@@ -2971,17 +3007,69 @@ fn task_2344_q1_physical_tick_lock_directory_migration_and_legacy_mutator_refusa
             .contains("open-before-flock or waiter race detected"),
         "expected open-before-flock refusal naming child FD, got: {open_race_err:#}"
     );
+    let meta_after_race = std::fs::symlink_metadata(&legacy_lock_path).unwrap();
     assert!(
-        legacy_lock_path.is_file(),
-        "legacy tick.lock must remain an unreplaced regular file when open-before-flock race is detected"
+        meta_after_race.is_file()
+            && meta_after_race.dev() == orig_dev
+            && meta_after_race.ino() == orig_ino,
+        "legacy tick.lock must remain the exact unreplaced regular file inode when open-before-flock race is detected"
     );
 
-    // Release the open-before-flock child and wait for it to close FD 3 and exit.
+    // Release the open-before-flock child and wait for it to close FD and exit.
     std::fs::write(&release_marker, b"1").unwrap();
     let _ = open_waiter_child.wait();
 
+    // 3b. Unreadable same-UID `/proc/<pid>/fd` (non-dumpable process via
+    //     `prctl(PR_SET_DUMPABLE, 0)`): `verify_sole_open_fd_for_inode` treats
+    //     unreadable same-UID `/proc/<pid>/fd` (`EACCES`) as unknown FD coverage
+    //     and fails closed instead of silently skipping the process.
+    let nd_opened_marker = race_dir.join("nd-child-opened");
+    let nd_release_marker = race_dir.join("nd-child-release");
+    let mut nd_child = std::process::Command::new(std::env::current_exe().unwrap())
+        .arg("--exact")
+        .arg("dispatch::story_1917_dispatch_exec_tests::story_1917_detached_worker_child_entry")
+        .arg("--nocapture")
+        .env("AIDA_TEST_1917_OPEN_LOCK_PATH", &legacy_lock_path)
+        .env("AIDA_TEST_1917_NON_DUMPABLE", "1")
+        .env("AIDA_TEST_1917_OPENED_MARKER", &nd_opened_marker)
+        .env("AIDA_TEST_1917_RELEASE_MARKER", &nd_release_marker)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .expect("spawn non-dumpable open-before-flock child");
+
+    wait_for_barrier_file(&nd_opened_marker, std::time::Duration::from_secs(5));
+    let nd_pid: u32 = std::fs::read_to_string(&nd_opened_marker)
+        .unwrap()
+        .trim()
+        .parse()
+        .unwrap();
+    *TEST_PROC_PID_ALLOWLIST.lock().unwrap() = Some(vec![self_pid, nd_pid]);
+
+    let nd_err = match activate_dispatch_v2_lock_quiescent(&f.root) {
+        Ok(_) => {
+            let _ = std::fs::write(&nd_release_marker, b"1");
+            let _ = nd_child.wait();
+            panic!(
+                "expected fail-closed refusal when same-UID process has unreadable proc fd directory"
+            );
+        }
+        Err(e) => e,
+    };
+    assert!(
+        nd_err.to_string().contains("unknown FD coverage; fail-closed")
+            || nd_err
+                .to_string()
+                .contains("open-before-flock or waiter race detected"),
+        "expected fail-closed unknown FD coverage refusal for non-dumpable same-UID process, got: {nd_err:#}"
+    );
+    std::fs::write(&nd_release_marker, b"1").unwrap();
+    let _ = nd_child.wait();
+
     // 4. Held-flock check: when a legacy mutator holds an exclusive `flock` on
     //    `tick.lock`, `activate_dispatch_v2_lock_quiescent` refuses fail-closed.
+    *TEST_PROC_PID_ALLOWLIST.lock().unwrap() = Some(vec![self_pid]);
     let active_holder = std::fs::OpenOptions::new()
         .read(true)
         .write(true)
@@ -3001,9 +3089,111 @@ fn task_2344_q1_physical_tick_lock_directory_migration_and_legacy_mutator_refusa
     let _ = fs2::FileExt::unlock(&active_holder);
     drop(active_holder);
 
-    // 5. Explicit quiescent activation: with zero open FDs and verified pathname-to-handle
-    //    identity, `activate_dispatch_v2_lock_quiescent` replaces `.aida/dispatch/tick.lock`
-    //    with the 0700 directory containing `v2.lock`.
+    // 5. Post-exchange second-scan refusal + concurrent `acquire_dispatch_lock` waiter rollback:
+    //    Pause immediately after `RENAME_EXCHANGE` (while `activate_dispatch_v2_lock_quiescent`
+    //    holds `flock` on BOTH `leg_file` and `v2.lock` and before `tick.lock/version` is written):
+    //    - Park a concurrent `acquire_dispatch_lock` waiter on `tick.lock/v2.lock`.
+    //    - Open a second descriptor to the swapped-out legacy regular file (`.tick.lock.v2-staging`,
+    //      which has `(orig_dev, orig_ino)`) so the second `verify_sole_open_fd_for_inode` scan
+    //      fails!
+    //    - Verify `activate_dispatch_v2_lock_quiescent` rolls back via `RENAME_EXCHANGE`,
+    //      restoring the EXACT original regular-file inode `(orig_dev, orig_ino)` to
+    //      `.aida/dispatch/tick.lock`, unlinking `v2.lock`, and causing the parked
+    //      `acquire_dispatch_lock` waiter to refuse fail-closed after waking from `flock`!
+    let extra_legacy_fd: std::sync::Arc<std::sync::Mutex<Option<std::fs::File>>> =
+        std::sync::Arc::new(std::sync::Mutex::new(None));
+    let extra_legacy_fd_hook = extra_legacy_fd.clone();
+    let waiter_handle_slot: std::sync::Arc<
+        std::sync::Mutex<Option<std::thread::JoinHandle<anyhow::Result<()>>>>,
+    > = std::sync::Arc::new(std::sync::Mutex::new(None));
+    let waiter_handle_slot_hook = waiter_handle_slot.clone();
+    let root_for_hook = f.root.clone();
+    let staged_legacy_path = disp_dir.join(".tick.lock.v2-staging");
+    let staged_legacy_path_hook = staged_legacy_path.clone();
+
+    *TEST_POST_EXCHANGE_HOOK.lock().unwrap() = Some(Box::new(move || {
+        let (tx_pre, rx_pre) = std::sync::mpsc::channel();
+        *TEST_PRE_FLOCK_V2_HOOK.lock().unwrap() = Some(Box::new(move || {
+            let _ = tx_pre.send(());
+        }));
+        let root_waiter = root_for_hook.clone();
+        let h = std::thread::spawn(move || {
+            let _guard = acquire_dispatch_lock(&root_waiter)?;
+            Ok(())
+        });
+        rx_pre
+            .recv_timeout(std::time::Duration::from_secs(5))
+            .expect("concurrent acquire_dispatch_lock waiter reached pre-flock hook");
+        // Give the waiter thread a brief moment to enter the blocking `lock_exclusive` syscall.
+        std::thread::sleep(std::time::Duration::from_millis(30));
+        *waiter_handle_slot_hook.lock().unwrap() = Some(h);
+
+        // Open a second descriptor to the original legacy inode (now at `.tick.lock.v2-staging`)
+        // so the second `verify_sole_open_fd_for_inode` scan detects an extra open FD.
+        let second_fd = std::fs::OpenOptions::new()
+            .read(true)
+            .open(&staged_legacy_path_hook)
+            .expect("open swapped-out legacy inode to trigger second-scan refusal");
+        *extra_legacy_fd_hook.lock().unwrap() = Some(second_fd);
+    }));
+
+    let second_scan_err = activate_dispatch_v2_lock_quiescent(&f.root)
+        .expect_err("second-scan open FD must cause activate_dispatch_v2_lock_quiescent to refuse and roll back");
+    assert!(
+        second_scan_err
+            .to_string()
+            .contains("open-before-flock or waiter race detected"),
+        "expected second-scan open-before-flock refusal, got: {second_scan_err:#}"
+    );
+    *TEST_POST_EXCHANGE_HOOK.lock().unwrap() = None;
+    *TEST_PRE_FLOCK_V2_HOOK.lock().unwrap() = None;
+    // Drop the extra FD we opened during the hook.
+    *extra_legacy_fd.lock().unwrap() = None;
+
+    // Join the concurrent `acquire_dispatch_lock` waiter and prove it failed closed on wakeup!
+    let waiter_res = waiter_handle_slot
+        .lock()
+        .unwrap()
+        .take()
+        .expect("waiter thread spawned")
+        .join()
+        .expect("waiter thread panicked");
+    let waiter_err =
+        waiter_res.expect_err("concurrent acquire_dispatch_lock waiter must refuse after rollback");
+    assert!(
+        waiter_err
+            .to_string()
+            .contains("was unlinked or rolled back while waiting for dispatch lock")
+            || waiter_err
+                .to_string()
+                .contains("directory identity changed or rolled back"),
+        "concurrent waiter must fail closed on post-flock rollback verification, got: {waiter_err:#}"
+    );
+
+    // Verify `.aida/dispatch/tick.lock` was restored to the EXACT original regular-file inode!
+    let restored_meta = std::fs::symlink_metadata(&legacy_lock_path).unwrap();
+    assert!(
+        restored_meta.is_file()
+            && restored_meta.dev() == orig_dev
+            && restored_meta.ino() == orig_ino
+            && restored_meta.nlink() == 1,
+        "rollback must restore the exact original regular-file inode (dev={}, ino={}), got is_file={}, dev={}, ino={}, nlink={}",
+        orig_dev,
+        orig_ino,
+        restored_meta.is_file(),
+        restored_meta.dev(),
+        restored_meta.ino(),
+        restored_meta.nlink()
+    );
+    assert!(
+        !staged_legacy_path.exists(),
+        ".tick.lock.v2-staging must be cleaned up after rollback"
+    );
+
+    // 6. Explicit quiescent activation: with zero extra open FDs and verified
+    //    pathname-to-handle identity, `activate_dispatch_v2_lock_quiescent` atomically
+    //    exchanges `.aida/dispatch/tick.lock` with the 0700 directory containing
+    //    `v2.lock` and `version` ("2\n") and unlinks the swapped-out legacy inode.
     let v2_guard = activate_dispatch_v2_lock_quiescent(&f.root).unwrap();
     drop(v2_guard);
     assert!(
@@ -3014,8 +3204,19 @@ fn task_2344_q1_physical_tick_lock_directory_migration_and_legacy_mutator_refusa
         legacy_lock_path.join("v2.lock").is_file(),
         ".aida/dispatch/tick.lock/v2.lock must exist as the v2 lock file"
     );
+    assert_eq!(
+        std::fs::read_to_string(legacy_lock_path.join("version"))
+            .unwrap()
+            .trim(),
+        "2",
+        ".aida/dispatch/tick.lock/version must record schema version 2"
+    );
+    assert!(
+        !staged_legacy_path.exists(),
+        ".tick.lock.v2-staging must be unlinked on committed v2 activation"
+    );
 
-    // 6. All 5 pre-Slice-3 mutation entrypoints (`submit`, `tick`, `serve`, `run`,
+    // 7. All 5 pre-Slice-3 mutation entrypoints (`submit`, `tick`, `serve`, `run`,
     //    `cancel`/`finalizer`) that call the legacy `OpenOptions::new().create(true).truncate(false).read(true).write(true).open(dir.join("tick.lock"))`
     //    now fail at the OS boundary with `EISDIR`, while v2 mutators succeed.
     for entrypoint in ["submit", "tick", "serve", "run", "cancel"] {

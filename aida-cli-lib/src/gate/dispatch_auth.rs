@@ -26,6 +26,25 @@ use crate::gate::seat_authority;
 use crate::mandate::{self, Scope};
 use crate::mandate_gates::GateOp;
 
+/// Typed error marker returned when [`DispatchExecutionContext::reverify`]
+/// aborts an in-flight dispatch operation due to revoked/expired authority,
+/// human-gate changes, or invalidated claim ownership.
+// trace:STORY-1917 trace:TASK-2338 trace:TASK-2339 trace:TASK-2344 | ai:agy
+#[derive(Debug)]
+pub(crate) struct DispatchAuthorityAbortedError(pub String);
+
+impl std::fmt::Display for DispatchAuthorityAbortedError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl std::error::Error for DispatchAuthorityAbortedError {}
+
+pub(crate) fn is_dispatch_authority_aborted(err: &anyhow::Error) -> bool {
+    err.chain().any(|e| e.is::<DispatchAuthorityAbortedError>())
+}
+
 /// Bound in-process dispatch execution authority token.
 ///
 /// Fields are private so callers outside `gate::dispatch_auth` can only
@@ -148,6 +167,11 @@ impl DispatchExecutionContext {
     ///    and still delegates `"reviewer"` when `self.delegates_reviewer` is true.
     // trace:STORY-1917 trace:TASK-2338 trace:TASK-2339 trace:TASK-2344 | ai:agy
     pub(crate) fn reverify(&self, now: DateTime<Utc>, requires_ship_held: bool) -> Result<()> {
+        self.reverify_inner(now, requires_ship_held)
+            .map_err(|e| anyhow::Error::new(DispatchAuthorityAbortedError(format!("{e:#}"))))
+    }
+
+    fn reverify_inner(&self, now: DateTime<Utc>, requires_ship_held: bool) -> Result<()> {
         let self_pid = std::process::id();
         if self.claim.worker_pid != self_pid {
             bail!(

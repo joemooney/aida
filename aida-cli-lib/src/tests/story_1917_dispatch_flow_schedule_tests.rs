@@ -725,10 +725,11 @@ fn task_2339_train_runner_lock_clean_store_ship_first_update_branch_and_train_fa
     let state_dir = f._tmp.path().join("train-gh-state");
     std::fs::create_dir_all(&state_dir).unwrap();
     for pr in [502u64, 503, 504, 505, 506] {
+        let merge_state = if pr <= 504 { "BEHIND" } else { "UNSTABLE" };
         std::fs::write(
             state_dir.join(format!("pr-{pr}.json")),
             format!(
-                r#"{{"headRefOid":"eeee{pr}","headRefName":"claude/pr-{pr}","baseRefName":"main","state":"OPEN","mergeStateStatus":"BEHIND","title":"PR {pr} (TASK-100)"}}"#
+                r#"{{"headRefOid":"eeee{pr}","headRefName":"claude/pr-{pr}","baseRefName":"main","state":"OPEN","mergeStateStatus":"{merge_state}","title":"PR {pr} (TASK-100)"}}"#
             ),
         )
         .unwrap();

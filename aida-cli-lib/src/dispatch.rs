@@ -50,7 +50,22 @@ const RESULTS_SUBDIR: &str = "results";
 const LOGS_SUBDIR: &str = "logs";
 const TICK_LOCK_FILE: &str = "tick.lock";
 const TICK_LOCK_V2_FILE: &str = "v2.lock";
+const TICK_LOCK_VERSION_FILE: &str = "version";
+const TICK_LOCK_VERSION_BODY: &[u8] = b"2\n";
+const TICK_LOCK_STAGING_DIR: &str = ".tick.lock.v2-staging";
 const RECOVERY_FILE: &str = "recovery.json";
+
+#[cfg(test)]
+pub(crate) static TEST_PROC_PID_ALLOWLIST: std::sync::Mutex<Option<Vec<u32>>> =
+    std::sync::Mutex::new(None);
+#[cfg(test)]
+pub(crate) static TEST_POST_EXCHANGE_HOOK: std::sync::Mutex<
+    Option<Box<dyn FnOnce() + Send + 'static>>,
+> = std::sync::Mutex::new(None);
+#[cfg(test)]
+pub(crate) static TEST_PRE_FLOCK_V2_HOOK: std::sync::Mutex<
+    Option<Box<dyn FnOnce() + Send + 'static>>,
+> = std::sync::Mutex::new(None);
 
 pub(crate) const RECOVERY_SCHEMA_VERSION: u32 = 1;
 pub(crate) const MAX_RECOVERY_FILE_BYTES: usize = 256 * 1024;
@@ -344,6 +359,7 @@ pub(crate) fn recovery_path(main_worktree: &Path) -> PathBuf {
 /// any of the 5 mutation entrypoints fails immediately at the OS boundary with
 /// `EISDIR` (`Is a directory`) before mutating request/result state.
 // trace:STORY-1917 trace:TASK-2344 | ai:agy
+#[derive(Debug)]
 pub(crate) struct DispatchLock(std::fs::File);
 
 impl Drop for DispatchLock {
@@ -356,11 +372,20 @@ pub(crate) fn acquire_dispatch_lock_for_gate(main_worktree: &Path) -> Result<Dis
     acquire_dispatch_lock(main_worktree)
 }
 
+fn is_vanished_proc_error(err: &std::io::Error) -> bool {
+    err.kind() == std::io::ErrorKind::NotFound
+        || matches!(err.raw_os_error(), Some(libc::ENOENT | libc::ESRCH))
+}
+
 /// Verify via `/proc` that `(dev, ino)` is not open on any file descriptor in
-/// the current process or any other inspectable process owned by the current
-/// UID other than `(std::process::id(), own_fd)`. This detects pre-Slice-3
-/// mutators that have already called `open(".aida/dispatch/tick.lock")` but
-/// have not yet acquired `flock` (the open-before-flock / waiter race).
+/// the current process or any other process owned by the current UID other than
+/// `(std::process::id(), own_fd)`.
+///
+/// Any `/proc` directory entry error, unreadable `/proc/<pid>` metadata,
+/// unreadable `/proc/<pid>/fd` directory for a live same-UID process (e.g.
+/// `EACCES` on a non-dumpable or foreign-user-namespace process), or unreadable
+/// descriptor metadata on a still-open FD is treated as **unknown coverage**
+/// and fails closed (`Err`).
 // trace:STORY-1917 trace:TASK-2344 | ai:agy
 fn verify_sole_open_fd_for_inode(
     dev: u64,
@@ -371,41 +396,99 @@ fn verify_sole_open_fd_for_inode(
     use std::os::unix::fs::MetadataExt;
     let self_pid = std::process::id();
     let uid = unsafe { libc::geteuid() };
+    #[cfg(test)]
+    let pid_allowlist = TEST_PROC_PID_ALLOWLIST.lock().ok().and_then(|g| g.clone());
+
     let proc_entries = std::fs::read_dir("/proc")
         .context("cannot read /proc to verify legacy dispatch lock quiescence")?;
     let mut saw_own_fd = false;
 
-    for entry in proc_entries.flatten() {
+    for entry_res in proc_entries {
+        let entry = entry_res.context(
+            "error reading /proc directory entry during legacy lock quiescence check (fail-closed)",
+        )?;
         let name = entry.file_name();
         let Some(name_str) = name.to_str() else {
-            continue;
+            bail!("non-UTF-8 entry in /proc during legacy lock quiescence check (fail-closed)");
         };
         let Ok(pid) = name_str.parse::<u32>() else {
+            // Non-PID entries in /proc (`self`, `thread-self`, `mounts`, `cpuinfo`, etc.).
             continue;
         };
+        #[cfg(test)]
+        if let Some(ref allowed) = pid_allowlist {
+            if !allowed.contains(&pid) {
+                continue;
+            }
+        }
         let proc_path = entry.path();
         if pid != self_pid {
-            let Ok(proc_meta) = std::fs::symlink_metadata(&proc_path) else {
-                continue;
+            let proc_meta = match std::fs::symlink_metadata(&proc_path) {
+                Ok(m) => m,
+                Err(e) if is_vanished_proc_error(&e) && !proc_path.exists() => continue,
+                Err(e) => {
+                    bail!(
+                        "cannot stat {} during legacy lock quiescence check: {e} (unknown process coverage; fail-closed)",
+                        proc_path.display()
+                    );
+                }
             };
             if proc_meta.uid() != uid {
                 continue;
             }
         }
         let fd_dir = proc_path.join("fd");
-        let Ok(fd_entries) = std::fs::read_dir(&fd_dir) else {
-            continue;
+        let fd_entries = match std::fs::read_dir(&fd_dir) {
+            Ok(rd) => rd,
+            Err(e) if is_vanished_proc_error(&e) && !proc_path.exists() => continue,
+            Err(e) => {
+                bail!(
+                    "cannot read {} for same-uid pid {pid} during legacy lock quiescence check: {e} (unknown FD coverage; fail-closed)",
+                    fd_dir.display()
+                );
+            }
         };
-        for fd_entry in fd_entries.flatten() {
+        for fd_entry_res in fd_entries {
+            let fd_entry = match fd_entry_res {
+                Ok(fe) => fe,
+                Err(e) if is_vanished_proc_error(&e) && !proc_path.exists() => break,
+                Err(e) => {
+                    bail!(
+                        "error reading entry in {} for same-uid pid {pid}: {e} (unknown FD coverage; fail-closed)",
+                        fd_dir.display()
+                    );
+                }
+            };
             let fd_name = fd_entry.file_name();
             let Some(fd_str) = fd_name.to_str() else {
-                continue;
+                bail!(
+                    "non-UTF-8 fd entry in {} for pid {pid} (fail-closed)",
+                    fd_dir.display()
+                );
             };
             let Ok(fd_num) = fd_str.parse::<i32>() else {
-                continue;
+                bail!(
+                    "unexpected non-numeric fd entry `{fd_str}` in {} for pid {pid} (fail-closed)",
+                    fd_dir.display()
+                );
             };
-            let Ok(target_meta) = std::fs::metadata(fd_entry.path()) else {
-                continue;
+            let fd_path = fd_entry.path();
+            let target_meta = match std::fs::metadata(&fd_path) {
+                Ok(m) => m,
+                Err(e) => {
+                    // Distinguish a descriptor that closed (or process that exited)
+                    // between `readdir` and `stat` from an open descriptor whose
+                    // target cannot be inspected.
+                    match std::fs::symlink_metadata(&fd_path) {
+                        Err(le) if is_vanished_proc_error(&le) => continue,
+                        _ => {
+                            bail!(
+                                "cannot stat open descriptor {} (pid {pid} fd {fd_num}) during legacy lock quiescence check: {e} (unknown FD coverage; fail-closed)",
+                                fd_path.display()
+                            );
+                        }
+                    }
+                }
             };
             if target_meta.dev() == dev && target_meta.ino() == ino {
                 if pid == self_pid && fd_num == own_fd {
@@ -452,9 +535,133 @@ fn fstatat_nofollow(
     Ok(st)
 }
 
+fn cleanup_staging_lock_dir(disp_fd: &std::fs::File) {
+    use std::os::fd::{AsRawFd, FromRawFd};
+    let Ok(c_staging) = std::ffi::CString::new(TICK_LOCK_STAGING_DIR) else {
+        return;
+    };
+    let st_fd = unsafe {
+        libc::openat(
+            disp_fd.as_raw_fd(),
+            c_staging.as_ptr(),
+            libc::O_RDONLY | libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC,
+            0,
+        )
+    };
+    if st_fd >= 0 {
+        let st_dir = unsafe { std::fs::File::from_raw_fd(st_fd) };
+        if let Ok(c_v2) = std::ffi::CString::new(TICK_LOCK_V2_FILE) {
+            unsafe { libc::unlinkat(st_dir.as_raw_fd(), c_v2.as_ptr(), 0) };
+        }
+        if let Ok(c_ver) = std::ffi::CString::new(TICK_LOCK_VERSION_FILE) {
+            unsafe { libc::unlinkat(st_dir.as_raw_fd(), c_ver.as_ptr(), 0) };
+        }
+        drop(st_dir);
+        unsafe { libc::unlinkat(disp_fd.as_raw_fd(), c_staging.as_ptr(), libc::AT_REMOVEDIR) };
+    } else {
+        unsafe { libc::unlinkat(disp_fd.as_raw_fd(), c_staging.as_ptr(), 0) };
+    }
+}
+
+fn write_lock_version_file(lock_dir: &std::fs::File, lock_dir_display: &Path) -> Result<()> {
+    use std::io::Write;
+    use std::os::fd::{AsRawFd, FromRawFd};
+    let c_ver = std::ffi::CString::new(TICK_LOCK_VERSION_FILE)?;
+    let ver_display = lock_dir_display.join(TICK_LOCK_VERSION_FILE);
+    let ver_fd = unsafe {
+        libc::openat(
+            lock_dir.as_raw_fd(),
+            c_ver.as_ptr(),
+            libc::O_WRONLY | libc::O_CREAT | libc::O_TRUNC | libc::O_NOFOLLOW | libc::O_CLOEXEC,
+            0o600,
+        )
+    };
+    if ver_fd < 0 {
+        return Err(std::io::Error::last_os_error())
+            .with_context(|| format!("cannot write {}", ver_display.display()));
+    }
+    let mut ver_file = unsafe { std::fs::File::from_raw_fd(ver_fd) };
+    ver_file
+        .write_all(TICK_LOCK_VERSION_BODY)
+        .with_context(|| format!("cannot write {}", ver_display.display()))?;
+    ver_file
+        .sync_all()
+        .with_context(|| format!("cannot sync {}", ver_display.display()))?;
+    Ok(())
+}
+
+fn verify_or_init_lock_version_file(
+    lock_dir: &std::fs::File,
+    lock_dir_display: &Path,
+    allow_init_if_missing: bool,
+) -> Result<()> {
+    use std::io::Read;
+    use std::os::fd::{AsRawFd, FromRawFd};
+    use std::os::unix::fs::MetadataExt;
+    let c_ver = std::ffi::CString::new(TICK_LOCK_VERSION_FILE)?;
+    let ver_display = lock_dir_display.join(TICK_LOCK_VERSION_FILE);
+    let ver_fd = unsafe {
+        libc::openat(
+            lock_dir.as_raw_fd(),
+            c_ver.as_ptr(),
+            libc::O_RDONLY | libc::O_NOFOLLOW | libc::O_NONBLOCK | libc::O_CLOEXEC,
+            0,
+        )
+    };
+    if ver_fd < 0 {
+        let err = std::io::Error::last_os_error();
+        if err.raw_os_error() == Some(libc::ENOENT) && allow_init_if_missing {
+            return write_lock_version_file(lock_dir, lock_dir_display);
+        }
+        return Err(err).with_context(|| {
+            format!(
+                "missing or unreadable dispatch lock version marker {}",
+                ver_display.display()
+            )
+        });
+    }
+    let mut ver_file = unsafe { std::fs::File::from_raw_fd(ver_fd) };
+    let meta = ver_file
+        .metadata()
+        .with_context(|| format!("cannot stat {}", ver_display.display()))?;
+    if !meta.is_file() || meta.nlink() != 1 {
+        bail!(
+            "{} is not a singly-linked regular file (refused)",
+            ver_display.display()
+        );
+    }
+    let uid = unsafe { libc::geteuid() };
+    if meta.uid() != uid {
+        bail!(
+            "{} is owned by uid {}, not current uid {uid}",
+            ver_display.display(),
+            meta.uid()
+        );
+    }
+    if (meta.mode() & 0o7777) != 0o600 {
+        bail!(
+            "{} has mode {:04o}, expected 0600 (refused)",
+            ver_display.display(),
+            meta.mode() & 0o7777
+        );
+    }
+    let mut body = String::new();
+    ver_file
+        .read_to_string(&mut body)
+        .with_context(|| format!("cannot read {}", ver_display.display()))?;
+    if body.trim() != "2" {
+        bail!(
+            "unsupported dispatch lock version {:?} in {} (expected \"2\")",
+            body.trim(),
+            ver_display.display()
+        );
+    }
+    Ok(())
+}
+
 /// Explicit quiescent migration from a legacy Slice 1/2 regular-file
 /// `.aida/dispatch/tick.lock` to the Slice 3 directory `.aida/dispatch/tick.lock/`
-/// containing `v2.lock`.
+/// containing `v2.lock` and `version`.
 ///
 /// Ordinary mutation entrypoints (`acquire_dispatch_lock`) NEVER perform this
 /// replacement automatically. This helper:
@@ -466,13 +673,24 @@ fn fstatat_nofollow(
 ///    if any legacy mutator holds the lock, and re-verifies pathname-to-handle
 ///    identity after locking.
 /// 4. Scans `/proc` via [`verify_sole_open_fd_for_inode`] to refuse if any
-///    process (or second descriptor) has opened the legacy inode before calling
-///    `flock` (defeating the open-before-flock / waiter race).
-/// 5. Unlinks the legacy regular file while still holding `flock`, verifies
-///    `st_nlink == 0`, and re-runs [`verify_sole_open_fd_for_inode`] so no
-///    process could have opened the inode immediately before `unlinkat`.
-/// 6. Creates the `0700` `tick.lock` directory and acquires `tick.lock/v2.lock`
-///    before releasing the legacy handle.
+///    other process (or descriptor) has opened the legacy inode before `flock`
+///    or if any same-UID process has unknown `/proc/<pid>/fd` coverage.
+/// 5. Creates a staging directory `.aida/dispatch/.tick.lock.v2-staging` (`0700`)
+///    containing `v2.lock` (`0600`) and acquires `flock(LOCK_EX | LOCK_NB)` on
+///    `v2.lock` BEFORE replacing `.aida/dispatch/tick.lock`.
+/// 6. Atomically exchanges `.tick.lock.v2-staging` and `tick.lock` via
+///    `renameat2(..., RENAME_EXCHANGE)`, eliminating any `ENOENT` window where
+///    an ordinary `acquire_dispatch_lock` could `mkdir` `tick.lock` or enter `v2`
+///    before the second `/proc` scan completes.
+/// 7. Re-runs [`verify_sole_open_fd_for_inode`] while holding BOTH `leg_file`
+///    and `v2.lock`. If the second scan fails, `RENAME_EXCHANGE` atomically
+///    swaps the **exact original regular-file inode `(st_dev, st_ino)`** back to
+///    `tick.lock` and unlinks the staging `v2.lock` (`nlink = 0`) before
+///    releasing `v2.lock`, so any concurrent `acquire_dispatch_lock` waiter sees
+///    `nlink == 0` / rolled-back `tick.lock` and aborts fail-closed.
+/// 8. On success, writes `tick.lock/version` (`"2\n"`), unlinks the swapped-out
+///    legacy regular file at `.tick.lock.v2-staging` (verifying `nlink == 0`),
+///    drops `leg_file`, and returns `DispatchLock(v2_file)`.
 // trace:STORY-1917 trace:TASK-2344 | ai:agy
 pub(crate) fn activate_dispatch_v2_lock_quiescent(main_worktree: &Path) -> Result<DispatchLock> {
     use std::os::fd::{AsRawFd, FromRawFd};
@@ -552,7 +770,7 @@ pub(crate) fn activate_dispatch_v2_lock_quiescent(main_worktree: &Path) -> Resul
         || post_lock_st.st_nlink != 1
     {
         bail!(
-            "legacy {} pathname-to-handle identity changed before unlink (refused)",
+            "legacy {} pathname-to-handle identity changed before migration (refused)",
             lock_dir_display.display()
         );
     }
@@ -564,15 +782,162 @@ pub(crate) fn activate_dispatch_v2_lock_quiescent(main_worktree: &Path) -> Resul
         &lock_dir_display,
     )?;
 
-    let un_rc = unsafe { libc::unlinkat(disp_fd.as_raw_fd(), c_lock_dir.as_ptr(), 0) };
+    // Prepare pre-locked staging directory `.aida/dispatch/.tick.lock.v2-staging`.
+    cleanup_staging_lock_dir(&disp_fd);
+    let staging_display = dispatch_root(main_worktree).join(TICK_LOCK_STAGING_DIR);
+    let c_staging = std::ffi::CString::new(TICK_LOCK_STAGING_DIR)?;
+    let mk_st = unsafe { libc::mkdirat(disp_fd.as_raw_fd(), c_staging.as_ptr(), 0o700) };
+    if mk_st != 0 {
+        return Err(std::io::Error::last_os_error())
+            .with_context(|| format!("cannot create staging dir {}", staging_display.display()));
+    }
+    let st_dir_raw = unsafe {
+        libc::openat(
+            disp_fd.as_raw_fd(),
+            c_staging.as_ptr(),
+            libc::O_RDONLY | libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC,
+            0,
+        )
+    };
+    if st_dir_raw < 0 {
+        let err = std::io::Error::last_os_error();
+        cleanup_staging_lock_dir(&disp_fd);
+        return Err(err)
+            .with_context(|| format!("cannot open staging dir {}", staging_display.display()));
+    }
+    let staging_dir = unsafe { std::fs::File::from_raw_fd(st_dir_raw) };
+
+    let c_v2 = std::ffi::CString::new(TICK_LOCK_V2_FILE)?;
+    let v2_raw = unsafe {
+        libc::openat(
+            staging_dir.as_raw_fd(),
+            c_v2.as_ptr(),
+            libc::O_RDWR
+                | libc::O_CREAT
+                | libc::O_EXCL
+                | libc::O_NOFOLLOW
+                | libc::O_NONBLOCK
+                | libc::O_CLOEXEC,
+            0o600,
+        )
+    };
+    if v2_raw < 0 {
+        let err = std::io::Error::last_os_error();
+        drop(staging_dir);
+        cleanup_staging_lock_dir(&disp_fd);
+        return Err(err).with_context(|| {
+            format!(
+                "cannot create staging lock {}",
+                staging_display.join(TICK_LOCK_V2_FILE).display()
+            )
+        });
+    }
+    let v2_file = unsafe { std::fs::File::from_raw_fd(v2_raw) };
+    let v2_flock_rc = unsafe { libc::flock(v2_file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) };
+    if v2_flock_rc != 0 {
+        let err = std::io::Error::last_os_error();
+        drop(v2_file);
+        drop(staging_dir);
+        cleanup_staging_lock_dir(&disp_fd);
+        return Err(err).context("cannot lock staging v2.lock before exchange");
+    }
+
+    // Atomically exchange `.tick.lock.v2-staging` (directory with `v2.lock`
+    // already locked by us) and `tick.lock` (legacy regular file). There is no
+    // `ENOENT` window where `tick.lock` is missing.
+    let ex_rc = unsafe {
+        libc::renameat2(
+            disp_fd.as_raw_fd(),
+            c_staging.as_ptr(),
+            disp_fd.as_raw_fd(),
+            c_lock_dir.as_ptr(),
+            libc::RENAME_EXCHANGE,
+        )
+    };
+    if ex_rc != 0 {
+        let err = std::io::Error::last_os_error();
+        let _ = fs2::FileExt::unlock(&v2_file);
+        drop(v2_file);
+        drop(staging_dir);
+        cleanup_staging_lock_dir(&disp_fd);
+        return Err(err).with_context(|| {
+            format!(
+                "cannot atomically exchange {} with staging v2 directory",
+                lock_dir_display.display()
+            )
+        });
+    }
+
+    #[cfg(test)]
+    if let Some(hook) = TEST_POST_EXCHANGE_HOOK
+        .lock()
+        .ok()
+        .and_then(|mut g| g.take())
+    {
+        hook();
+    }
+
+    // Re-check `/proc` after `RENAME_EXCHANGE` while holding BOTH `leg_file`
+    // and `v2_file`. Because `tick.lock` is now a directory, no new old-binary
+    // `open("tick.lock", O_RDWR)` can succeed after the exchange. If a process
+    // opened `leg_file` in the narrow window immediately before the exchange
+    // (or `/proc` coverage is unknown), atomically swap the exact original
+    // regular-file inode `(st_dev, st_ino)` back to `tick.lock` and unlink the
+    // staging `v2.lock` before releasing `v2_file`.
+    if let Err(race_err) = verify_sole_open_fd_for_inode(
+        leg_meta.dev(),
+        leg_meta.ino(),
+        leg_file.as_raw_fd(),
+        &lock_dir_display,
+    ) {
+        let _ = unsafe {
+            libc::renameat2(
+                disp_fd.as_raw_fd(),
+                c_staging.as_ptr(),
+                disp_fd.as_raw_fd(),
+                c_lock_dir.as_ptr(),
+                libc::RENAME_EXCHANGE,
+            )
+        };
+        unsafe { libc::unlinkat(staging_dir.as_raw_fd(), c_v2.as_ptr(), 0) };
+        drop(staging_dir);
+        unsafe { libc::unlinkat(disp_fd.as_raw_fd(), c_staging.as_ptr(), libc::AT_REMOVEDIR) };
+        let _ = fs2::FileExt::unlock(&v2_file);
+        drop(v2_file);
+        let _ = fs2::FileExt::unlock(&leg_file);
+        drop(leg_file);
+        return Err(race_err);
+    }
+
+    if let Err(ver_err) = write_lock_version_file(&staging_dir, &lock_dir_display) {
+        let _ = unsafe {
+            libc::renameat2(
+                disp_fd.as_raw_fd(),
+                c_staging.as_ptr(),
+                disp_fd.as_raw_fd(),
+                c_lock_dir.as_ptr(),
+                libc::RENAME_EXCHANGE,
+            )
+        };
+        unsafe { libc::unlinkat(staging_dir.as_raw_fd(), c_v2.as_ptr(), 0) };
+        drop(staging_dir);
+        unsafe { libc::unlinkat(disp_fd.as_raw_fd(), c_staging.as_ptr(), libc::AT_REMOVEDIR) };
+        let _ = fs2::FileExt::unlock(&v2_file);
+        drop(v2_file);
+        let _ = fs2::FileExt::unlock(&leg_file);
+        drop(leg_file);
+        return Err(ver_err);
+    }
+
+    // Unlink the swapped-out legacy regular file from `.tick.lock.v2-staging`.
+    let un_rc = unsafe { libc::unlinkat(disp_fd.as_raw_fd(), c_staging.as_ptr(), 0) };
     if un_rc != 0 {
         let un_err = std::io::Error::last_os_error();
         bail!(
-            "cannot unlink legacy {} during quiescent migration: {un_err}",
-            lock_dir_display.display()
+            "cannot unlink swapped legacy {} during quiescent migration: {un_err}",
+            staging_display.display()
         );
     }
-
     let unlinked_meta = leg_file
         .metadata()
         .with_context(|| format!("cannot fstat unlinked {}", lock_dir_display.display()))?;
@@ -584,33 +949,10 @@ pub(crate) fn activate_dispatch_v2_lock_quiescent(main_worktree: &Path) -> Resul
         );
     }
 
-    // Re-check after unlink (when nlink == 0 so no new pathname open can ever
-    // reach this inode). If a racing process opened the inode in the narrow
-    // window before unlinkat, restore a regular 0600 lock file and fail closed.
-    if let Err(race_err) = verify_sole_open_fd_for_inode(
-        leg_meta.dev(),
-        leg_meta.ino(),
-        leg_file.as_raw_fd(),
-        &lock_dir_display,
-    ) {
-        let restore_fd = unsafe {
-            libc::openat(
-                disp_fd.as_raw_fd(),
-                c_lock_dir.as_ptr(),
-                libc::O_RDWR | libc::O_CREAT | libc::O_EXCL | libc::O_NOFOLLOW | libc::O_CLOEXEC,
-                0o600,
-            )
-        };
-        if restore_fd >= 0 {
-            unsafe { libc::close(restore_fd) };
-        }
-        return Err(race_err);
-    }
-
-    let _ = open_or_create_pinned_child_dir(&disp_fd, TICK_LOCK_FILE, &lock_dir_display)?;
-    let v2_lock = acquire_dispatch_lock(main_worktree)?;
+    let _ = fs2::FileExt::unlock(&leg_file);
     drop(leg_file);
-    Ok(v2_lock)
+    drop(staging_dir);
+    Ok(DispatchLock(v2_file))
 }
 
 fn acquire_dispatch_lock(main_worktree: &Path) -> Result<DispatchLock> {
@@ -627,13 +969,16 @@ fn acquire_dispatch_lock(main_worktree: &Path) -> Result<DispatchLock> {
     // require it to be the v2 directory; a legacy regular-file `tick.lock` is
     // NEVER silently unlinked/replaced by ordinary mutations.
     let mk_rc = unsafe { libc::mkdirat(disp_fd.as_raw_fd(), c_lock_dir.as_ptr(), 0o700) };
-    if mk_rc != 0 {
+    let created_fresh_dir = if mk_rc == 0 {
+        true
+    } else {
         let err = std::io::Error::last_os_error();
         if err.raw_os_error() != Some(libc::EEXIST) {
             return Err(err)
                 .with_context(|| format!("cannot create {}", lock_dir_display.display()));
         }
-    }
+        false
+    };
 
     let dir_fd_raw = unsafe {
         libc::openat(
@@ -643,7 +988,7 @@ fn acquire_dispatch_lock(main_worktree: &Path) -> Result<DispatchLock> {
             0,
         )
     };
-    let lock_dir = if dir_fd_raw >= 0 {
+    let (lock_dir, lock_dir_meta) = if dir_fd_raw >= 0 {
         let dir = unsafe { std::fs::File::from_raw_fd(dir_fd_raw) };
         let meta = dir
             .metadata()
@@ -662,7 +1007,14 @@ fn acquire_dispatch_lock(main_worktree: &Path) -> Result<DispatchLock> {
                 meta.uid()
             );
         }
-        dir
+        if (meta.mode() & 0o7777) != 0o700 {
+            bail!(
+                "{} has mode {:04o}, expected 0700 (refused)",
+                lock_dir_display.display(),
+                meta.mode() & 0o7777
+            );
+        }
+        (dir, meta)
     } else {
         let err = std::io::Error::last_os_error();
         match err.raw_os_error() {
@@ -724,8 +1076,50 @@ fn acquire_dispatch_lock(main_worktree: &Path) -> Result<DispatchLock> {
             meta.mode() & 0o7777
         );
     }
+    #[cfg(test)]
+    if let Some(hook) = TEST_PRE_FLOCK_V2_HOOK
+        .lock()
+        .ok()
+        .and_then(|mut g| g.take())
+    {
+        hook();
+    }
     file.lock_exclusive()
         .context("failed to acquire .aida/dispatch/tick.lock/v2.lock")?;
+
+    // Post-flock verification: ensure `v2.lock` was not unlinked and `tick.lock`
+    // was not rolled back to the legacy regular file while we waited for `flock`.
+    let post_meta = file
+        .metadata()
+        .with_context(|| format!("cannot stat {} after lock", v2_display.display()))?;
+    if post_meta.nlink() != 1 {
+        let _ = fs2::FileExt::unlock(&file);
+        bail!(
+            "{} was unlinked or rolled back while waiting for dispatch lock (refused)",
+            v2_display.display()
+        );
+    }
+    let cur_dir_st = fstatat_nofollow(&disp_fd, &c_lock_dir, &lock_dir_display)?;
+    if (cur_dir_st.st_mode & libc::S_IFMT) != libc::S_IFDIR
+        || cur_dir_st.st_dev != lock_dir_meta.dev()
+        || cur_dir_st.st_ino != lock_dir_meta.ino()
+    {
+        let _ = fs2::FileExt::unlock(&file);
+        bail!(
+            "{} directory identity changed or rolled back while waiting for dispatch lock (refused)",
+            lock_dir_display.display()
+        );
+    }
+
+    if let Err(ver_err) = verify_or_init_lock_version_file(
+        &lock_dir,
+        &lock_dir_display,
+        created_fresh_dir || !lock_dir_display.join(TICK_LOCK_VERSION_FILE).exists(),
+    ) {
+        let _ = fs2::FileExt::unlock(&file);
+        return Err(ver_err);
+    }
+
     Ok(DispatchLock(file))
 }
 

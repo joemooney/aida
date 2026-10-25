@@ -21,7 +21,7 @@ use crate::dispatch::{
     append_dispatch_log, open_pinned_dispatch_subdir, run_review_verb, DispatchRequest,
     DispatchVendor, RunnerOutcome, WorkerClaim,
 };
-use crate::gate::dispatch_auth::DispatchExecutionContext;
+use crate::gate::dispatch_auth::{is_dispatch_authority_aborted, DispatchExecutionContext};
 use crate::gate::review_verdict::{self, VerdictKind};
 
 const MAX_FLOW_TRIES: usize = 4;
@@ -329,23 +329,6 @@ fn wait_for_pr_ci_with_ctx(
     Ok(())
 }
 
-/// True when an error from `pr ship` indicates the PR branch is behind base /
-/// out-of-date and eligible for `gh pr update-branch` or `pr train` fallback,
-/// rather than an authority, review, or merge-hold refusal.
-fn is_behind_base_ship_error(msg: &str) -> bool {
-    let lower = msg.to_ascii_lowercase();
-    (lower.contains("out-of-date")
-        || lower.contains("out of date")
-        || lower.contains("behind")
-        || lower.contains("not up to date")
-        || lower.contains("base branch was modified"))
-        && !lower.contains("merge-hold")
-        && !lower.contains("merge hold")
-        && !lower.contains("mandate")
-        && !lower.contains("human gates")
-        && !lower.contains("dispatch request")
-}
-
 /// Verify `.aida-store` has no uncommitted changes before starting a train pass.
 // trace:STORY-1917 trace:TASK-2339 | ai:agy
 pub(crate) fn ensure_clean_aida_store(main_worktree: &Path) -> Result<()> {
@@ -399,36 +382,45 @@ fn ship_or_train_single_pr(
                 req_id,
                 &format!("pr ship {pr} returned error: {msg}\n"),
             );
-            // If authority was revoked or a hold/review gate refused, surface immediately.
-            ctx.reverify_now(true)?;
-            if !is_behind_base_ship_error(&msg) {
+            if is_dispatch_authority_aborted(&err) {
                 return Err(err);
             }
-            let view = query_flow_pr_view(main_worktree, pr).ok();
-            if let Some(ref v) = view {
-                if update_pr_branch_non_force(
-                    main_worktree,
-                    req_id,
-                    pr,
-                    &v.base_ref_name,
-                    &v.head_ref_name,
-                )
-                .is_ok()
-                {
-                    ctx.reverify_now(true)?;
-                    match invoke_pr_ship_with_ctx(pr, ctx) {
-                        Ok(()) => return Ok(format!("updated branch and shipped PR #{pr}")),
-                        Err(retry_err) => {
-                            let retry_msg = format!("{retry_err:#}");
-                            let _ = append_dispatch_log(
-                                main_worktree,
-                                req_id,
-                                &format!("pr ship {pr} retry returned error: {retry_msg}\n"),
-                            );
-                            ctx.reverify_now(true)?;
-                            if !is_behind_base_ship_error(&retry_msg) {
-                                return Err(retry_err);
-                            }
+            // If authority was revoked or a hold/review gate refused, surface immediately.
+            ctx.reverify_now(true)?;
+            let Some(view) = query_flow_pr_view(main_worktree, pr).ok() else {
+                return Err(err);
+            };
+            if !view.merge_state_status.eq_ignore_ascii_case("BEHIND") {
+                return Err(err);
+            }
+            if update_pr_branch_non_force(
+                main_worktree,
+                req_id,
+                pr,
+                &view.base_ref_name,
+                &view.head_ref_name,
+            )
+            .is_ok()
+            {
+                ctx.reverify_now(true)?;
+                match invoke_pr_ship_with_ctx(pr, ctx) {
+                    Ok(()) => return Ok(format!("updated branch and shipped PR #{pr}")),
+                    Err(retry_err) => {
+                        let retry_msg = format!("{retry_err:#}");
+                        let _ = append_dispatch_log(
+                            main_worktree,
+                            req_id,
+                            &format!("pr ship {pr} retry returned error: {retry_msg}\n"),
+                        );
+                        if is_dispatch_authority_aborted(&retry_err) {
+                            return Err(retry_err);
+                        }
+                        ctx.reverify_now(true)?;
+                        let still_behind = query_flow_pr_view(main_worktree, pr)
+                            .map(|v| v.merge_state_status.eq_ignore_ascii_case("BEHIND"))
+                            .unwrap_or(false);
+                        if !still_behind {
+                            return Err(retry_err);
                         }
                     }
                 }
@@ -516,7 +508,7 @@ pub(crate) fn run_flow_verb(
             },
             Err(err) => {
                 let msg = format!("{err:#}");
-                if ctx.reverify_now(true).is_err() || msg.contains("dispatch request") {
+                if is_dispatch_authority_aborted(&err) || ctx.reverify_now(true).is_err() {
                     RunnerOutcome::Refused { reason: msg }
                 } else {
                     RunnerOutcome::Failed {
@@ -583,7 +575,7 @@ pub(crate) fn run_flow_verb(
         // Step 2: wait for exact-head required CI to settle green.
         if let Err(err) = wait_for_pr_ci_with_ctx(main_worktree, pr, &view, &ctx, !no_ship) {
             let msg = format!("{err:#}");
-            if ctx.reverify_now(!no_ship).is_err() || msg.contains("dispatch request") {
+            if is_dispatch_authority_aborted(&err) || ctx.reverify_now(!no_ship).is_err() {
                 return RunnerOutcome::Refused { reason: msg };
             }
             return RunnerOutcome::Failed {
@@ -681,7 +673,7 @@ pub(crate) fn run_flow_verb(
             },
             Err(err) => {
                 let msg = format!("{err:#}");
-                if ctx.reverify_now(true).is_err() || msg.contains("dispatch request") {
+                if is_dispatch_authority_aborted(&err) || ctx.reverify_now(true).is_err() {
                     RunnerOutcome::Refused { reason: msg }
                 } else {
                     RunnerOutcome::Failed {
@@ -757,7 +749,7 @@ pub(crate) fn run_train_verb(
             Ok(note) => landed_notes.push(note),
             Err(err) => {
                 let msg = format!("{err:#}");
-                if ctx.reverify_now(true).is_err() || msg.contains("dispatch request") {
+                if is_dispatch_authority_aborted(&err) || ctx.reverify_now(true).is_err() {
                     return RunnerOutcome::Refused { reason: msg };
                 }
                 return RunnerOutcome::Failed {
