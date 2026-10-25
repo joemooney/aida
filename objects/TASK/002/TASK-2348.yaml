@@ -27,12 +27,12 @@ description: |
   ## Source pointers
 
   Current54c: pr_cmd.rs wait_started/scan_spent/ship_ci_budget and its actual CI handoff; ci_gate.rs::wait_for_ship_ci; existing `ship_ci_budget_excludes_the_mandate_scan`, `exhausted_ship_budget_still_polls_ci_once`, and the named CLI ownership test. Line numbers in the diagnostic are navigation hints, not acceptance evidence. The complete independent report is preserved in AIDA message de601800; historical measurement is on STORY-1853, not a new acceptance floor.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T16:23:29.497775220Z
-modified_at: 2026-10-25T17:35:40.678456807Z
+modified_at: 2026-10-25T19:32:31.301628405Z
 req_type: Task
 tags:
 - ship-deadline
@@ -113,6 +113,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1748c-de35-73c3-8da9-ee2d2703d37f
+  author: joe
+  timestamp: 2026-10-25T19:32:31.413684177Z
+  session_id: 01a174200fd7
+  harness_version: 2.1.310 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 54c64e26a58810f213f0a0fa1720a69bcce37ea3
   branch: main
@@ -120,3 +129,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: a01a698998
   vendor: codex
+implementation_info:
+  implemented: true
+  implemented_at: 2026-10-25T19:32:31.301628405Z
+  implemented_by: joe

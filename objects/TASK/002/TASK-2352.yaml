@@ -1,0 +1,29 @@
+id: 01a1748d-2518-7331-ad02-6a69efbd5b47
+spec_id: TASK-2352
+agreed_id: TASK-2352
+title: aida ship step 1 and pr auto-queue-review fail inside the bubblewrap seat sandbox
+description: |
+  While shipping TASK-2348 from a sandboxed Claude seat worktree:
+
+  1. `aida ship TASK-2348 --no-merge` failed at step 1 with `.claude/agents: can only add regular files, symbolic links or git-directories` because `git add -A` picked up the sandbox's /dev/null character-device placeholders (`.claude/agents`, `.claude/launch.json`, `.gitmodules`, `.idea`, `.vscode`, ...). The branch was already fully committed, so the uncommitted-work step should not have run, or should skip non-regular files. Workaround used: manual `git push` + `gh pr create` (PR #2927).
+  2. `aida pr auto-queue-review` (with and without `--branch task-2348`) reported "no `origin` remote (local-only project)", even though `git ls-remote origin` works and the PR is open. That probably comes from the same sandbox read denials (`.gitmodules` permission warnings). No reviewer story was filed for PR #2927.
+
+  Raised by the implementer while working TASK-2348.
+  Branch: task-2348  ·  Commit: 7152b220ea  ·  PR: https://github.com/joemooney/aida/pull/2927
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-25T19:32:49.560731158Z
+modified_at: 2026-10-25T19:32:49.560731158Z
+req_type: Task
+tags:
+- from-implementer:TASK-2348
+- kind:bug-spotted
+- severity:minor
+filed_at:
+  aida_version: 0.16.0
+  aida_build_sha: a01a698998
+  vendor: claude
+  session: 01a174200fd7
+  harness_version: 2.1.310 (Claude Code)
