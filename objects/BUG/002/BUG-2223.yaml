@@ -10,12 +10,12 @@ description: |-
   No path re-launches a worker in the existing orphaned worktree. Workaround: trust the worktree and run `claude --bg` inside it.
   Also: with the advisor seat left at a codex default, every headless launch failed with the containment-vendor error ('codex vendor cannot run a contained session'); consider defaulting contained headless launches to a vendor that supports containment or naming AIDA_HEADLESS_VENDOR in the first line.
   Acceptance: when the lease is orphaned and no claude session is recorded, the hint offers a working in-place relaunch (e.g. --resume falls back to a cold launch in the orphaned worktree on its existing branch), and the two error messages never point at each other.
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T17:38:11.351372157Z
-modified_at: 2026-10-25T19:35:08.695033275Z
+modified_at: 2026-10-25T19:44:25.046645781Z
 req_type: Bug
 tags:
 - from-advisor
@@ -30,6 +30,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a17497-c1d6-7c32-9c72-ffce307ea16f
+  author: aida-session-start
+  timestamp: 2026-10-25T19:44:25.046644630Z
+  session_id: cde796d3-1750-4745-a8f9-7ab3bc7c3519
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 54c64e26a58810f213f0a0fa1720a69bcce37ea3
   branch: main
