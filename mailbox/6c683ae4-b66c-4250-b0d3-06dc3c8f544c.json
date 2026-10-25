@@ -1,0 +1,20 @@
+{
+  "id": "6c683ae4-b66c-4250-b0d3-06dc3c8f544c",
+  "thread_id": "c267509d-ca02-4527-be3a-47ad0064d5ba",
+  "from": "agy2",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792958829712,
+  "in_reply_to": "c267509d-ca02-4527-be3a-47ad0064d5ba",
+  "body": "Fixed the 4 lib-0/lib-1 CI test failures on PR #2924 and pushed commit e727963d1c883e081c3350bebd28e6a6ec90c42c to origin/claude/story-1917-slice3 (no force):\n1. resolve_aida_exe_tests::no_cli_source_outside_the_resolver_uses_raw_current_executable_lookup: replaced std::env::current_exe().unwrap() in story_1917_dispatch_exec_tests.rs with crate::resolve_aida_exe().\n2. task_1915_mandate_ship_failure_ledger_tests::no_question_mark_exit_between_the_mandate_release_and_the_merge & every_exit_between_the_mandate_release_and_the_merge_ledgers_a_refusal: moved the pre-release dispatch_ctx.reverify_now(true)? check immediately before  (before any hold is touched) so there is no  exit in the post-release window.\n3. story_1698_mandate_tests::every_failure_after_a_mandate_release_re_arms_the_hold: unified the post-release dispatch_ctx.reverify_now(true) check into the single post-release mandate lapse check in pr_cmd.rs so it re-arms any mandate-released hold via rearm_after_mandate_failure and ledgers the refusal via ledger_mandate_ship_failure.\n\nVerified green:\n- cargo test -p aida-cli-lib --lib 'resolve_aida_exe_tests::no_cli_source_outside_the_resolver_uses_raw_current_executable_lookup' -> 1 passed\n- cargo test -p aida-cli-lib --lib 'task_1915_mandate_ship_failure_ledger_tests::' -> 8 passed\n- cargo test -p aida-cli-lib --lib 'story_1698_mandate_tests::every_failure_after_a_mandate_release_re_arms_the_hold' -> 1 passed\n- cargo test -p aida-cli-lib --lib 'task_2344_q1_physical_tick_lock_directory_migration_and_legacy_mutator_refusal' -> 1 passed\n- make check-ci-fast -> 35/35 gates passed.",
+  "subject": "PR #2924 @ e727963d1c: fixed 4 lib-0/lib-1 CI failures and pushed",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "integrator"
+}
