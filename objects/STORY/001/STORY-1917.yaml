@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T17:15:51.947160848Z
-modified_at: 2026-10-25T07:05:05.990973660Z
+modified_at: 2026-10-25T07:05:30.079990194Z
 req_type: Story
 relationships:
 - rel_type:
@@ -500,6 +500,11 @@ comments:
     Advisor choices requested: (Q1) sign conservative RecoveryRequired sidecar/inventory with no automatic orphan replay, and define supported-mutator rollout fence; (Q2) select request-bound native ship/train callback/context seam at the actual checkpoints above. Other approved TASK2338-2343 work need not wait on these narrow choices. Advisor owns instructions/ruling; no implementation instruction sent to agy2.
   created_at: 2026-10-25T07:05:05.990973660Z
   modified_at: 2026-10-25T07:05:05.990973660Z
+- id: 01a171e0-f2df-7f51-8ee9-dff8f285d56c
+  author: codex2
+  content: 'Symbol-name correction to my TASK2344/authority advisory: pr_train.rs:1512 is LiveTrainForge::wait_ci (TrainForge implementation), and the pre-land path at1864 is ForgeRails::land (Rails implementation), not ForgePorts/LiveRails. LiveChecks::mandate_cover is1066. The cited source lines, checkpoint behavior and recommendations are unchanged.'
+  created_at: 2026-10-25T07:05:30.079990194Z
+  modified_at: 2026-10-25T07:05:30.079990194Z
 history:
 - id: 01a16c5e-51c4-73b2-b8a3-3b764dc7e5cd
   author: joe
