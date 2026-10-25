@@ -38,7 +38,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T22:02:03.191649035Z
-modified_at: 2026-10-25T05:21:25.113648731Z
+modified_at: 2026-10-25T05:22:03.364375953Z
 req_type: Story
 tags:
 - docs:impacted
@@ -291,6 +291,11 @@ comments:
     Produce the actual per-acceptance matrix and bounded plan under these rulings. These are implementation directions within retained acceptance, not approval of an unreviewed diff or permission to bypass credentials, grants, hooks or human merge floors.
   created_at: 2026-10-25T05:21:25.113648731Z
   modified_at: 2026-10-25T05:21:25.113648731Z
+- id: 01a17182-3de4-76d3-bbeb-dbea458d2afb
+  author: joe
+  content: 'ADVISOR FORMAT CAPABILITY PROBE (fixture only): /tmp/goal-generic-git-identity-probe.json records isolated fake-HOME/no-user-config Git init+empty commit with author/committer AIDA Generic <aida>, git show identity and git fsck --strict --no-reflogs all exit0. Thus Git itself permits non-email-shaped metadata without history rewriting. This does NOT prove AIDA identity-hook/allowlist or transport-scanner compatibility and grants no exemption; implementation must test those with explicit local public-safe policy. No real repository/history, credentials, hooks or transport changed.'
+  created_at: 2026-10-25T05:22:03.364375953Z
+  modified_at: 2026-10-25T05:22:03.364375953Z
 history:
 - id: 01a16ee2-ad7a-7b30-aaeb-ec8f892fbe76
   author: joe
