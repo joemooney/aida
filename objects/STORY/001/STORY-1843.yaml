@@ -23,7 +23,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-25T05:11:14.688581641Z
+modified_at: 2026-10-25T05:14:15.870659926Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -553,6 +553,11 @@ comments:
     No code, live mail migration, installed watcher, authority/grant expansion or merge has occurred in this signoff.
   created_at: 2026-10-25T05:11:14.688581641Z
   modified_at: 2026-10-25T05:11:14.688581641Z
+- id: 01a1717b-1bbe-7bb2-9195-ec66b48fa030
+  author: joe
+  content: 'CROSS-REPO IMPLEMENTATION LINK: aida-relay STORY-122 (Bind relay runs to AIDA logical mail recipients across rotation and terminal end) is Approved, guided, strict-review, captured from codex2 SKETCHv2 plus independent binding signoff. It owns only relay half D/E; AIDA B/C remain prerequisites and this parent cannot complete before verified relay integration/conformance. Capture is not implementation or deferral. Read with aida show STORY-122 from /home/joe/ai/aida-relay. No live migration, new service or authority expansion.'
+  created_at: 2026-10-25T05:14:15.870659926Z
+  modified_at: 2026-10-25T05:14:15.870659926Z
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
   author: joe
