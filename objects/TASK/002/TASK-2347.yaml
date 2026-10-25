@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T02:08:29.032100054Z
-modified_at: 2026-10-25T04:54:35.368708377Z
+modified_at: 2026-10-25T04:55:39.446966281Z
 req_type: Task
 tags:
 - codex
@@ -194,6 +194,11 @@ comments:
     No live queue, mailbox acknowledgement, service installation, preflight repeat, synthetic wake, spec completion, self-approval or merge. Keep (Refs TASK-2347) and PR open. Advisor owns formal reviewer handoff, 26-ID backlog inspection and post-approval installation/full-path idle wake targeting original UUID 01a1700b-717d-71f2-b7e0-0569b05f3dee.
   created_at: 2026-10-25T04:34:53.451010343Z
   modified_at: 2026-10-25T04:34:53.451010343Z
+- id: 01a1716a-12b6-7c23-b63a-cf1f51ee00e2
+  author: joe
+  content: 'ADVISOR REWORK DISPOSITION: codex2 attested RequestChanges at 91071afddc verified against recover persistence and unwired health consumer. Both F1/F2 are in-scope, required before live install; no scope amendment. Rework brief written for codex1; preserve LOCAL watermark and accepted pruning. Final independent delta review and exact-head CI still required. No live installation or synthetic mail action has occurred.'
+  created_at: 2026-10-25T04:55:39.446966281Z
+  modified_at: 2026-10-25T04:55:39.446966281Z
 history:
 - id: 01a170d1-497a-7282-8dcb-91782bba7dc3
   author: joe
