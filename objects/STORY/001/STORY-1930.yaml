@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-25T04:56:28.496460627Z
-modified_at: 2026-10-25T04:59:21.869045700Z
+modified_at: 2026-10-25T05:19:30.289642949Z
 req_type: Story
 relationships:
 - rel_type:
@@ -38,6 +38,11 @@ comments:
   content: 'ADVISOR ROUTING: STRICT independent review of PR2917 at791af3b22f0a68d8e5588d337946141b08e69f52 assigned to codex2. Native queue receipt uncertain after command timeout; no matching queue/transcript entry at inspection, so durable AIDA mail supplies assignment without repeated native enqueue. Verify actual reviewer uptake before claiming active review. No approval or completion claimed.'
   created_at: 2026-10-25T04:59:21.869045700Z
   modified_at: 2026-10-25T04:59:21.869045700Z
+- id: 01a1717f-e7f1-7f03-a3ba-db000a21587c
+  author: joe
+  content: 'ADVISOR REVIEW-QUEUE RECONCILIATION: PR2917 independent advisor review recorded RequestChanges at791af3b22f0a68d8e5588d337946141b08e69f52; F1 protected marker-writer relocation routed to agy1 and source rework is observable. This review is In Progress for focused current-head recheck after push; parent and review story stay open.'
+  created_at: 2026-10-25T05:19:30.289642949Z
+  modified_at: 2026-10-25T05:19:30.289642949Z
 history:
 - id: 01a1716b-1fc9-7a22-bffc-eddea1193730
   author: joe
