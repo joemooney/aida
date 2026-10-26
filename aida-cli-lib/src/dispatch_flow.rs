@@ -76,7 +76,7 @@ pub(crate) fn acquire_train_dispatch_lock(main_worktree: &Path) -> Result<TrainD
     use std::os::unix::fs::MetadataExt;
 
     let disp_fd = open_pinned_dispatch_subdir(main_worktree, None)?;
-    let display_path = crate::dispatch::dispatch_root(main_worktree).join(TRAIN_LOCK_FILE);
+    let display_path = crate::gate::dispatch_io::dispatch_root(main_worktree).join(TRAIN_LOCK_FILE);
     let c_name = std::ffi::CString::new(TRAIN_LOCK_FILE)?;
     let fd = unsafe {
         libc::openat(

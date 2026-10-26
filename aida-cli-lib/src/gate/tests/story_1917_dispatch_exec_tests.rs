@@ -31,6 +31,7 @@
 
 use super::*;
 use crate::dispatch::*;
+use crate::gate::dispatch_io::*;
 use crate::gate::dispatch_ledger::{
     check_recovery_index_bounds, inspect_dispatch_inventory_readonly,
     MAX_DISPATCH_INVENTORY_ENTRIES, MAX_RECOVERY_FILE_BYTES,

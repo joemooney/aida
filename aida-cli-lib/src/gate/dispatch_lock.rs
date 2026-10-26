@@ -2,7 +2,8 @@
 //! `dispatch.rs`). Every claim, result transition and recovery-ledger write
 //! happens under this lock, and only a direct human may activate its v2
 //! directory form ([`activate_lock_as_human`]), and only while dispatch is
-//! quiescent. The path helpers and pinned-directory I/O stay in `dispatch.rs`.
+//! quiescent. The path helpers and pinned-directory I/O are in
+//! [`crate::gate::dispatch_io`].
 // mandate-gate
 // trace:STORY-1889 trace:STORY-1917 trace:TASK-2344 | ai:claude
 
@@ -10,7 +11,7 @@ use anyhow::{bail, Context, Result};
 use std::path::Path;
 use uuid::Uuid;
 
-use crate::dispatch::{dispatch_root, open_pinned_dispatch_subdir};
+use crate::gate::dispatch_io::{dispatch_root, open_pinned_dispatch_subdir};
 
 pub(crate) const TICK_LOCK_FILE: &str = "tick.lock";
 const TICK_LOCK_V2_FILE: &str = "v2.lock";

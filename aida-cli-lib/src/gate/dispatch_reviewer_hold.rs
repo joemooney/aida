@@ -11,7 +11,7 @@ use anyhow::{bail, Context, Result};
 use std::path::Path;
 use uuid::Uuid;
 
-use crate::dispatch::{read_bounded_regular_file, MAX_BRIEF_BYTES};
+use crate::gate::dispatch_io::{read_bounded_regular_file, MAX_BRIEF_BYTES};
 
 /// Preserve `rev_wt`'s merge-hold marker for `pr_scope` into the main
 /// worktree, then remove `rev_wt` with `git worktree remove --force`

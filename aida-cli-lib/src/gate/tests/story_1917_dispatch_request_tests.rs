@@ -25,6 +25,7 @@
 
 use super::*;
 use crate::dispatch::*;
+use crate::gate::dispatch_io::*;
 use crate::gate::dispatch_ledger::inspect_dispatch_inventory_readonly;
 use crate::gate::mandate::{self};
 use crate::gate::mandate::{Mandate, Scope};

@@ -190,10 +190,10 @@ fn a_running_claim_belongs_only_to_its_token_and_worker() {
         other => panic!("expected Unpublished, got {other:?}"),
     }
 
-    crate::dispatch::TEST_FORCE_WORKER_PROBE
+    crate::gate::dispatch_authority::TEST_FORCE_WORKER_PROBE
         .with(|c| *c.borrow_mut() = Some(aida_core::process_probe::Probe::Dead("gone".into())));
     let foreign = verify_running_claim(ID, &res, Some("t"), 43, &start).unwrap();
-    crate::dispatch::TEST_FORCE_WORKER_PROBE.with(|c| *c.borrow_mut() = None);
+    crate::gate::dispatch_authority::TEST_FORCE_WORKER_PROBE.with(|c| *c.borrow_mut() = None);
     match foreign {
         RunningClaim::Foreign { dead, refusal } => {
             assert!(dead);

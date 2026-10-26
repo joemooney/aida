@@ -17,9 +17,9 @@ use std::collections::BTreeSet;
 use std::path::Path;
 use uuid::Uuid;
 
-use crate::dispatch::{
-    brief_path, read_bounded_regular_file, result_path, sha256_hex, DispatchRequestVerb,
-    DispatchStatusFilter, DispatchVendor, BRIEFS_SUBDIR, MAX_BRIEF_BYTES,
+use crate::dispatch::{DispatchRequestVerb, DispatchStatusFilter, DispatchVendor};
+use crate::gate::dispatch_io::{
+    brief_path, read_bounded_regular_file, result_path, sha256_hex, BRIEFS_SUBDIR, MAX_BRIEF_BYTES,
 };
 use crate::gate::dispatch_ledger::{
     reconcile_inventory_locked, DispatchInventory, RECOVERY_GUIDANCE,
@@ -31,6 +31,11 @@ use crate::gate::seat_authority::{GrantCheck, GrantRejection};
 use crate::mandate_drive::{ActionRow, Outcome};
 
 pub(crate) const DISPATCH_SCHEMA_VERSION: u32 = 1;
+
+#[cfg(test)]
+std::thread_local! {
+    pub(crate) static TEST_FORCE_WORKER_PROBE: std::cell::RefCell<Option<aida_core::process_probe::Probe>> = const { std::cell::RefCell::new(None) };
+}
 
 pub(crate) const MAX_TRAIN_PRS: usize = 16;
 pub(crate) const MAX_PR_NUMBER: u64 = 999_999;
@@ -1437,7 +1442,7 @@ pub(crate) fn probe_worker_identity(
     use aida_core::process_probe::Probe;
 
     #[cfg(test)]
-    if let Some(forced) = crate::dispatch::TEST_FORCE_WORKER_PROBE.with(|c| c.borrow().clone()) {
+    if let Some(forced) = TEST_FORCE_WORKER_PROBE.with(|c| c.borrow().clone()) {
         return forced;
     }
 

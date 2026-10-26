@@ -667,15 +667,27 @@ fn reexport_detection_sees_aliases() {
     assert!(gate_reexports("pub(crate) use crate::gateway as g;\n").is_empty());
 }
 
+/// Every `#[path = "..."]` target in `text`, wherever the attribute sits on
+/// its line (`#[cfg(test)] #[path = "..."] mod t;` is one valid line), in raw
+/// string form (`r"..."`, `r#"..."#`), split across lines, or as
+/// `#[cfg_attr(..., path = "...")]`.
+// trace:TASK-2335 trace:STORY-1889 | ai:claude
+fn path_attr_targets(text: &str) -> Vec<String> {
+    let path_attr =
+        regex::Regex::new(r#"#\s*\[\s*(?:cfg_attr\s*\([^\]]*?,\s*)?path\s*=\s*(?:r#*)?"([^"]*)""#)
+            .unwrap();
+    path_attr
+        .captures_iter(text)
+        .map(|c| c[1].to_string())
+        .collect()
+}
+
 /// The `#[path = "..."]` targets in `text` that point into `gate/`.
 // trace:TASK-2335 | ai:agy
 fn gate_path_mounts(text: &str) -> Vec<String> {
-    let path_attr = regex::Regex::new(r#"^\s*#\s*\[\s*path\s*=\s*"([^"]+)"\s*\]"#).unwrap();
-    text.lines()
-        .filter_map(|l| {
-            let p = path_attr.captures(l)?.get(1)?.as_str();
-            (p.starts_with("gate/") || p.contains("/gate/")).then(|| p.to_string())
-        })
+    path_attr_targets(text)
+        .into_iter()
+        .filter(|p| p.starts_with("gate/") || p.contains("/gate/"))
         .collect()
 }
 
@@ -693,6 +705,33 @@ fn gate_path_mount_detection() {
         vec!["../gate/tests/x.rs".to_string()]
     );
     assert!(gate_path_mounts("#[path = \"tests/review_marker_tests.rs\"]\nmod t;\n").is_empty());
+}
+
+/// The mount ratchets see a `#[path]` that does not start its line, raw
+/// strings, multi-line attributes and `cfg_attr` forms.
+// trace:STORY-1889 | ai:claude
+#[test]
+fn gate_path_mount_detection_sees_inline_and_raw_forms() {
+    let want = vec!["gate/tests/story_1917_dispatch_exec_tests.rs".to_string()];
+    for text in [
+        "#[cfg(test)] #[path = \"gate/tests/story_1917_dispatch_exec_tests.rs\"] mod t;\n",
+        "#[cfg(test)] #[path = r\"gate/tests/story_1917_dispatch_exec_tests.rs\"] mod t;\n",
+        "#[cfg(test)] #[path = r#\"gate/tests/story_1917_dispatch_exec_tests.rs\"#] mod t;\n",
+        "#[cfg(test)]\n#[path =\n    \"gate/tests/story_1917_dispatch_exec_tests.rs\"]\nmod t;\n",
+        "#[cfg_attr(test, path = \"gate/tests/story_1917_dispatch_exec_tests.rs\")] mod t;\n",
+    ] {
+        assert_eq!(gate_path_mounts(text), want, "{text}");
+        assert!(
+            mounts_dispatch_suite(text),
+            "the stray dispatch-suite check misses: {text}"
+        );
+    }
+    assert!(!mounts_dispatch_suite(
+        "#[cfg(test)] #[path = \"tests/other_tests.rs\"] mod t;\n"
+    ));
+    assert!(!mounts_dispatch_suite(
+        "let path = \"gate/tests/story_1917_dispatch_exec_tests.rs\";\n"
+    ));
 }
 
 // trace:TASK-2335 | ai:agy
@@ -1370,7 +1409,6 @@ const DISPATCH_POLICY_SUITES: &[&str] = &[
 fn dispatch_policy_suites_are_mounted_on_the_floor() {
     let root = workspace_root();
     let gate_dir = root.join("aida-cli-lib/src/gate");
-    let path_attr = regex::Regex::new(r#"^\s*#\s*\[\s*path\s*=\s*"([^"]+)"\s*\]"#).unwrap();
     let mut mounted: Vec<String> = Vec::new();
     for entry in std::fs::read_dir(&gate_dir).unwrap().flatten() {
         let name = entry.file_name().to_string_lossy().to_string();
@@ -1380,11 +1418,12 @@ fn dispatch_policy_suites_are_mounted_on_the_floor() {
         let text = std::fs::read_to_string(entry.path()).unwrap();
         let lines: Vec<&str> = text.lines().collect();
         for (i, line) in lines.iter().enumerate() {
-            if let Some(c) = path_attr.captures(line) {
+            for target in path_attr_targets(line) {
                 let next = lines.get(i + 1).map(|l| l.trim()).unwrap_or("");
                 let prev = i.checked_sub(1).map(|j| lines[j].trim()).unwrap_or("");
-                if prev == "#[cfg(test)]" && next.starts_with("mod ") {
-                    mounted.push(c[1].to_string());
+                let same_line = line.contains("#[cfg(test)]") && line.contains(" mod ");
+                if same_line || (prev == "#[cfg(test)]" && next.starts_with("mod ")) {
+                    mounted.push(target);
                 }
             }
         }
@@ -1418,24 +1457,139 @@ fn dispatch_policy_suites_are_mounted_on_the_floor() {
             stray.push(format!("  {rel} (a dispatch suite outside the floor)"));
         }
     }
-    let any_mount = regex::Regex::new(r"(?m)^\s*#\s*\[\s*path\s*=").unwrap();
     for (path, text) in sources() {
-        if on_floor(&path) || !any_mount.is_match(&text) {
+        if on_floor(&path) || !mounts_dispatch_suite(&text) {
             continue;
         }
-        for line in text.lines() {
-            if let Some(c) = path_attr.captures(line) {
-                if DISPATCH_POLICY_SUITES.iter().any(|s| c[1].contains(s)) {
-                    stray.push(format!("  {path} mounts {}", &c[1]));
-                }
-            }
-        }
+        stray.push(format!("  {path} mounts a dispatch suite via `#[path]`"));
     }
     assert!(
         stray.is_empty(),
         "dispatch gate tests outside the protected floor:\n{}",
         stray.join("\n")
     );
+}
+
+/// Items `gate/dispatch_*` may take from `crate::dispatch`: the clap value
+/// enums of `dispatch_args.rs`. They are argument shapes the gate maps itself;
+/// none of them reads, hashes, locates or writes a record the gate trusts.
+const GATE_DISPATCH_IMPORT_ALLOWLIST: &[&str] = &[
+    "DispatchRequestVerb",
+    "DispatchStatusFilter",
+    "DispatchVendor",
+];
+
+/// The `crate::dispatch` items `text` names, each as written after the
+/// module path (`{a, b}` groups are split; a glob is reported as `*`).
+// trace:STORY-1889 | ai:claude
+fn dispatch_items_named(text: &str) -> Vec<String> {
+    let flat: String = text.split_whitespace().collect();
+    let path = regex::Regex::new(
+        r"(?:crate|super::super|super)::(?:\{)?dispatch(?:::dispatch_args)?::(\{[^}]*\}|\*|\w+)",
+    )
+    .unwrap();
+    let mut out = Vec::new();
+    for c in path.captures_iter(&flat) {
+        let body = c[1].trim_start_matches('{').trim_end_matches('}');
+        for item in body.split(',').filter(|i| !i.is_empty()) {
+            let name = item.split("::").next().unwrap_or(item);
+            out.push(name.split("as").next().unwrap_or(name).to_string());
+        }
+    }
+    // `use crate::{dispatch, ...}` / `crate::dispatch as d` hand over the
+    // whole module.
+    let whole =
+        regex::Regex::new(r"(?:crate|super)::(?:\{[^}]*\bdispatch\b[,}]|dispatch(?:as\w+)?;)")
+            .unwrap();
+    if whole.is_match(&flat) {
+        out.push("dispatch".to_string());
+    }
+    out
+}
+
+// trace:STORY-1889 | ai:claude
+#[test]
+fn dispatch_item_detection() {
+    assert_eq!(
+        dispatch_items_named("use crate::dispatch::{sha256_hex, DispatchVendor as V};\n"),
+        vec!["sha256_hex", "DispatchVendor"]
+    );
+    assert_eq!(
+        dispatch_items_named("let x = crate::dispatch::result_path(a, b);\n"),
+        vec!["result_path"]
+    );
+    assert_eq!(dispatch_items_named("use crate::dispatch::*;\n"), vec!["*"]);
+    assert_eq!(
+        dispatch_items_named("use crate::dispatch::dispatch_args::DispatchVendor;\n"),
+        vec!["DispatchVendor"]
+    );
+    assert_eq!(
+        dispatch_items_named("use crate::dispatch;\n"),
+        vec!["dispatch"]
+    );
+    assert_eq!(
+        dispatch_items_named("use crate::{dispatch, gate};\n"),
+        vec!["dispatch"]
+    );
+    assert!(dispatch_items_named("use crate::gate::dispatch_io::sha256_hex;\n").is_empty());
+    assert!(dispatch_items_named("use crate::dispatch_flow::x;\n").is_empty());
+}
+
+/// `gate/dispatch_*` reads, hashes, locates and pins dispatch records only
+/// through primitives on the floor (`gate/dispatch_io.rs`). Importing them
+/// from the unprotected `crate::dispatch` would let a mandate-shipped edit
+/// there disable brief-tamper detection, claim verification or hold
+/// preservation without touching `gate/`.
+// trace:STORY-1889 | ai:claude
+#[test]
+fn gate_dispatch_imports_nothing_authority_bearing_from_dispatch() {
+    let gate_dir = workspace_root().join("aida-cli-lib/src/gate");
+    let mut bad = Vec::new();
+    for entry in std::fs::read_dir(&gate_dir).unwrap().flatten() {
+        let name = entry.file_name().to_string_lossy().to_string();
+        if !(name.starts_with("dispatch_") && name.ends_with(".rs")) {
+            continue;
+        }
+        let text = std::fs::read_to_string(entry.path()).unwrap();
+        for item in dispatch_items_named(&text) {
+            if !GATE_DISPATCH_IMPORT_ALLOWLIST.contains(&item.as_str()) {
+                bad.push(format!("  gate/{name}: crate::dispatch::{item}"));
+            }
+        }
+    }
+    assert!(
+        bad.is_empty(),
+        "gate/dispatch_* takes authority-bearing items from the unprotected \
+         `crate::dispatch`:\n{}\nMove the primitive into `gate/dispatch_io.rs` \
+         (or another gate module) and have `dispatch.rs` call it from there.",
+        bad.join("\n")
+    );
+    for primitive in [
+        "fn sha256_hex",
+        "fn read_bounded_regular_file",
+        "fn write_private_atomic",
+        "fn open_pinned_dispatch_subdir",
+        "fn dispatch_root",
+        "fn request_path",
+        "fn result_path",
+        "fn brief_path",
+        "fn recovery_path",
+    ] {
+        let io = std::fs::read_to_string(gate_dir.join("dispatch_io.rs")).unwrap();
+        assert!(
+            io.contains(primitive),
+            "gate/dispatch_io.rs lost `{primitive}`"
+        );
+    }
+}
+
+/// Whether `text` mounts one of the [`DISPATCH_POLICY_SUITES`] through any
+/// `#[path]` form [`path_attr_targets`] recognises.
+// trace:STORY-1889 | ai:claude
+fn mounts_dispatch_suite(text: &str) -> bool {
+    path_attr_targets(text)
+        .iter()
+        .any(|t| DISPATCH_POLICY_SUITES.iter().any(|s| t.contains(s)))
 }
 
 /// Every `.rs` file under `dir`, test files included.

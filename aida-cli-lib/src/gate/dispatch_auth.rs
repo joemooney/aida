@@ -19,11 +19,11 @@ use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 use uuid::Uuid;
 
-use crate::dispatch::{self, MAX_BRIEF_BYTES};
 use crate::gate::dispatch_authority::{
     check_serve_grant, verify_claim_locked, DispatchRequest, DispatchResult, DispatchStatus,
     WorkerClaim,
 };
+use crate::gate::dispatch_io::{self, MAX_BRIEF_BYTES};
 use crate::gate::dispatch_lock::acquire_dispatch_lock_for_gate;
 use crate::gate::mandate::{self, Scope};
 use crate::gate::mandate_gates::GateOp;
@@ -100,8 +100,8 @@ impl DispatchExecutionContext {
         let (req, req_sha256) = {
             let _lock = acquire_dispatch_lock_for_gate(main_worktree)?;
             verify_claim_locked(main_worktree, request_id, &claim)?;
-            let req_bytes = dispatch::read_bounded_regular_file(
-                &dispatch::request_path(main_worktree, request_id),
+            let req_bytes = dispatch_io::read_bounded_regular_file(
+                &dispatch_io::request_path(main_worktree, request_id),
                 MAX_BRIEF_BYTES,
                 true,
             )
@@ -193,8 +193,8 @@ impl DispatchExecutionContext {
         {
             let _lock = acquire_dispatch_lock_for_gate(&self.main_worktree)?;
             verify_claim_locked(&self.main_worktree, &self.request_id, &self.claim)?;
-            let req_bytes = dispatch::read_bounded_regular_file(
-                &dispatch::request_path(&self.main_worktree, &self.request_id),
+            let req_bytes = dispatch_io::read_bounded_regular_file(
+                &dispatch_io::request_path(&self.main_worktree, &self.request_id),
                 MAX_BRIEF_BYTES,
                 true,
             )
@@ -213,8 +213,8 @@ impl DispatchExecutionContext {
                     self.request_id
                 );
             }
-            let res_bytes = dispatch::read_bounded_regular_file(
-                &dispatch::result_path(&self.main_worktree, &self.request_id),
+            let res_bytes = dispatch_io::read_bounded_regular_file(
+                &dispatch_io::result_path(&self.main_worktree, &self.request_id),
                 MAX_BRIEF_BYTES,
                 true,
             )?;

@@ -11,6 +11,7 @@ pub(crate) mod branch_policy;
 pub(crate) mod ci_freshness;
 pub(crate) mod dispatch_auth;
 pub(crate) mod dispatch_authority;
+pub(crate) mod dispatch_io;
 pub(crate) mod dispatch_ledger;
 pub(crate) mod dispatch_lock;
 pub(crate) mod dispatch_reviewer_hold;
