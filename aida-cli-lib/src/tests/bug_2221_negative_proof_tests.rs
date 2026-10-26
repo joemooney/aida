@@ -1678,8 +1678,10 @@ fn positive_warm_walks_only_new_commits() {
     );
 }
 
-/// P1 + ruling 2026-10-25: the seeding show's BEFORE snapshot overlaps the
-/// original query instead of running in front of it. The shim holds every
+/// P1 + ruling 2026-10-25: the seeding show's BEFORE context capture (S)
+/// overlaps the original query instead of running in front of it (its roots,
+/// R, are pinned ahead of the original; see
+/// `positive_seed_roots_pinned_before_original_ref_read`). The shim holds every
 /// `config --list` until the original (`--date-order`) query has started. A
 /// serial snapshot would wait out the shim's generous liveness cap, which
 /// the shim records.
@@ -1895,4 +1897,185 @@ fn positive_seed_roots_pinned_before_original_ref_read() {
         state_on_disk(&repo, &["TASK-7"]).is_some_and(|st| st.positive && st.cone.is_none()),
         "a ref move between BEFORE and AFTER seeds nothing"
     );
+}
+
+/// A positive key shown twice: the first show marks it, the second seeds its
+/// cone against an unchanged snapshot.
+fn seed_cone(repo: &Path, key: &str) {
+    show_now(repo, key);
+    show_now(repo, key);
+    assert!(
+        state_on_disk(repo, &[key]).is_some_and(|st| st.cone.is_some()),
+        "the second show seeds the cone"
+    );
+}
+
+fn warm_probe(repo: &Path, key: &str) -> NegativeProbe {
+    probe_inner(repo, &ids(&[key]), &oracle_tuning()).0
+}
+
+/// After a guard refusal the show still answers exactly what the original
+/// collector answers, complete, and the reseeded cone holds Git's order.
+fn assert_matches_oracle(repo: &Path, key: &str, stage: &str) {
+    let oracle = collect_git_linkage_opts(repo, &ids(&[key]), false);
+    for round in 0..2 {
+        let shown = show_now(repo, key);
+        assert_eq!(shown.commits, oracle.commits, "{stage}: round {round}");
+        assert!(!shown.commits_scan_incomplete, "{stage}: round {round}");
+    }
+    assert_eq!(
+        state_on_disk(repo, &[key])
+            .and_then(|st| st.cone)
+            .map(|c| c.hits),
+        Some(oracle_records(repo, key)),
+        "{stage}: reseeded in Git's order"
+    );
+}
+
+/// P1' guard 3, readiness: two cone roots share a committer second, and one
+/// of them gains a child. Git's insertion-order tie break between them is
+/// then not replayable from the cone, so the warm read refuses and the
+/// original runs. Control: the same shape with distinct seconds answers warm.
+#[test]
+fn positive_tied_cone_roots_refuse_when_one_gains_a_child() {
+    for (b_ct, tied) in [(1_001, false), (1_000, true)] {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let repo = init_repo(tmp.path());
+        let base = git(&repo, &["rev-parse", "HEAD"]);
+        commit_at(&repo, "fix: main (TASK-1)", 1_000);
+        git(&repo, &["checkout", "-q", "-b", "b", &base]);
+        commit_at(&repo, "fix: side (TASK-1)", b_ct);
+        git(&repo, &["checkout", "-q", "main"]);
+        seed_cone(&repo, "TASK-1");
+
+        commit_at(&repo, "fix: above (TASK-1)", 2_000);
+        let probe = warm_probe(&repo, "TASK-1");
+        if tied {
+            assert_eq!(
+                probe,
+                NegativeProbe::RunOriginal,
+                "a tied cone root that gained a child fails guard 3"
+            );
+        } else {
+            assert!(
+                matches!(probe, NegativeProbe::ProvedPositive(_)),
+                "control: untied roots answer warm, got {probe:?}"
+            );
+        }
+        assert_matches_oracle(&repo, "TASK-1", &format!("b_ct={b_ct}"));
+    }
+}
+
+/// P1' guard 3, order: tied cone roots that keep their commits but change
+/// their relative `--all` order (a branch rename moves one past the other)
+/// would change Git's tie break, so the warm read refuses. No commit is new.
+#[test]
+fn positive_tied_cone_roots_refuse_when_reordered() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let repo = init_repo(tmp.path());
+    let base = git(&repo, &["rev-parse", "HEAD"]);
+    commit_at(&repo, "fix: main (TASK-1)", 500);
+    git(&repo, &["checkout", "-q", "-b", "a", &base]);
+    commit_at(&repo, "fix: x (TASK-1)", 1_000);
+    git(&repo, &["checkout", "-q", "-b", "m", &base]);
+    commit_at(&repo, "fix: y (TASK-1)", 1_000);
+    git(&repo, &["checkout", "-q", "main"]);
+    seed_cone(&repo, "TASK-1");
+    assert!(
+        matches!(warm_probe(&repo, "TASK-1"), NegativeProbe::ProvedPositive(_)),
+        "control: an unchanged snapshot answers warm"
+    );
+
+    git(&repo, &["branch", "-m", "a", "z"]);
+    assert_eq!(
+        warm_probe(&repo, "TASK-1"),
+        NegativeProbe::RunOriginal,
+        "reordered tied roots fail guard 3"
+    );
+    assert_matches_oracle(&repo, "TASK-1", "renamed");
+}
+
+/// P1' guard 4: two NEW tips share the newest committer second, so both are
+/// ready at the top of Kahn's queue and Git's order between them is its
+/// insertion tie break, which the warm walk cannot reproduce. The warm read
+/// refuses and the original runs. Control: distinct seconds answer warm.
+#[test]
+fn positive_new_tips_tied_at_top_refuse() {
+    for (q_ct, tied) in [(2_001, false), (2_000, true)] {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let repo = init_repo(tmp.path());
+        commit_at(&repo, "fix: main (TASK-1)", 1_000);
+        seed_cone(&repo, "TASK-1");
+
+        git(&repo, &["checkout", "-q", "-b", "p"]);
+        commit_at(&repo, "fix: p (TASK-1)", 2_000);
+        git(&repo, &["checkout", "-q", "-b", "q", "main"]);
+        commit_at(&repo, "fix: q (TASK-1)", q_ct);
+        git(&repo, &["checkout", "-q", "main"]);
+        let probe = warm_probe(&repo, "TASK-1");
+        if tied {
+            assert_eq!(
+                probe,
+                NegativeProbe::RunOriginal,
+                "two NEW tips tied at the top date fail guard 4"
+            );
+        } else {
+            assert!(
+                matches!(probe, NegativeProbe::ProvedPositive(_)),
+                "control: untied NEW tips answer warm, got {probe:?}"
+            );
+        }
+        assert_matches_oracle(&repo, "TASK-1", &format!("q_ct={q_ct}"));
+    }
+}
+
+/// Amendment 1 on the positive path: every cached answer re-checks S/R
+/// AFTER the walk. A ref that moves between the BEFORE capture and AFTER
+/// refuses the answer, for a pure warm read (BEFORE equals the cone's roots)
+/// and for an extending read (NEW commits walked above the cone), and the
+/// refused extension publishes nothing.
+#[test]
+fn positive_warm_rechecks_snapshot_after_walk() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let repo = init_repo(tmp.path());
+    commit_at(&repo, "fix: work (TASK-7)", 2_000);
+    seed_cone(&repo, "TASK-7");
+    let queries = query_key(&ids(&["TASK-7"]));
+    let before = || {
+        let (ctx, roots) = capture_snapshot(&repo, None, far_deadline());
+        let Some(ContextSnapshot::Supported(ctx)) = ctx else {
+            panic!("a plain repo has a supported context");
+        };
+        let cone = load_state(&ctx, &queries).cone.expect("a seeded cone");
+        (ctx, roots.expect("roots read"), cone)
+    };
+    let warm = |ctx: &GitContext, roots: &RootsSnapshot, cone: &PositiveCone| {
+        positive_warm(&repo, &queries, ctx, roots, cone, far_deadline())
+    };
+    let cone_hits = || {
+        state_on_disk(&repo, &["TASK-7"])
+            .and_then(|st| st.cone)
+            .map(|c| c.hits)
+    };
+
+    // Pure warm read.
+    let (ctx, roots, cone) = before();
+    assert!(warm(&ctx, &roots, &cone).is_some(), "control: unchanged");
+    git(&repo, &["branch", "moved"]);
+    assert!(
+        warm(&ctx, &roots, &cone).is_none(),
+        "a ref move before AFTER refuses the pure warm answer"
+    );
+
+    // Extending read.
+    commit_at(&repo, "fix: more (TASK-7)", 3_000);
+    let (ctx, roots, cone) = before();
+    let seeded = cone_hits();
+    commit_at(&repo, "fix: shipped meanwhile (TASK-7)", 4_000);
+    assert!(
+        warm(&ctx, &roots, &cone).is_none(),
+        "a ref move before AFTER refuses the extended answer"
+    );
+    assert_eq!(cone_hits(), seeded, "a refused extension publishes nothing");
+    assert_matches_oracle(&repo, "TASK-7", "after the move");
 }

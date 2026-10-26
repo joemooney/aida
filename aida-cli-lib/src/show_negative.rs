@@ -58,11 +58,13 @@
 //! P1 (SKETCH v2, signed 2026-10-25 23:55): POSITIVE keys are cached too. A
 //! complete positive answer leaves a positive marker; the next show seeds a
 //! [`PositiveCone`] (the roots Git started from plus its records in their
-//! exact `--date-order` order) under the same seed rule, with the BEFORE
-//! snapshot overlapping the original query rather than preceding it. A warm
-//! positive show walks only the commits above the cone, orders them by
-//! their own ancestry and dates (O1), and answers only when the guards in
-//! [`positive_warm`] prove that equals Git's whole-graph order; otherwise
+//! exact `--date-order` order) under the same seed rule. The BEFORE
+//! snapshot's roots (R) are read ahead of the original query, so they are
+//! pinned before the oracle reads any ref; only its context half (S)
+//! overlaps the original. A warm positive show walks only the commits above
+//! the cone, orders them by their own ancestry and dates, and answers only
+//! when the P1' guards in [`positive_warm`] (advisor ack 2026-10-26 04:15,
+//! superseding plain O1) prove that equals Git's whole-graph order; otherwise
 //! the original runs and re-seeds. Git renders the answer, so it is
 //! byte-for-byte what the original prints.
 //!
