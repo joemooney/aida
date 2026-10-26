@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a16ac9-0c37-7d72-a140-fa29d8b4b141
+  position: 283000
+  added_by: role:implementer
+  note: 'PR-2938 S3b round-1 RC: 2 majors + minors; rework lane'
+  added_at: 2026-10-26T07:14:05.765937694Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a171c8-6a5d-7073-80cf-9dfcd9667c53
   position: 284000
   added_by: role:implementer
@@ -39,14 +46,6 @@
   added_by: role:implementer
   note: 'Goal dispatch: codex1 slice1 under signed sketch v2; no duplicate pickup'
   added_at: 2026-10-25T04:46:19.377553308Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
-  requirement_id: 01a16ac9-0c37-7d72-a140-fa29d8b4b141
-  position: 293000
-  added_by: role:implementer
-  note: 'codex2: PR-2910 current-head P1 destination-normalization rework; codex1 verdict; brief written'
-  added_at: 2026-10-25T01:02:33.466359407Z
   for_role: implementer
   added_by_machine: imac
 - user_id: role:implementer
