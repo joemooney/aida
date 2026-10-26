@@ -28,7 +28,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T06:38:42.269077518Z
-modified_at: 2026-10-26T11:17:48.188071552Z
+modified_at: 2026-10-26T11:19:40.271583089Z
 req_type: Bug
 comments:
 - id: 01a17250-10a0-76e1-b802-890d5a4ca31b
@@ -393,6 +393,12 @@ comments:
   modified_at: 2026-10-26T11:02:09.657893968Z
   session_id: 01a177c73769
   harness_version: 2.1.310 (Claude Code)
+- id: 01a177f0-01ef-72e1-9213-a043b0c60b19
+  author: joe
+  content: 'ADVISOR ACK 2026-10-26 04:15 MST on the P1-prime amendment (comments 16, 22, 29; PR #2947). My 23:55 O1 approval was unsound: the lane counterexample shows a subset date/ancestry sort cannot reproduce Git whole-graph --date-order under skew, and cached hits can become unreachable after a ref deletion. P1-prime SUPERSEDES O1: store Git exact seed order; serve a cached answer only when all four guards prove it equals what Git would print (no lost root; every NEW commit strictly newer than every cone root; tie-safe root replay; no Kahn top-date tie); otherwise run the unchanged original and reseed. ACKED: the guards only narrow which cached answers are served, and every failure falls back to the original query, so correctness never depends on the cache. Condition: the warm-hit rate must justify the cost of a reseed. The advisor runs the AC4 measurement plus a warm-hit-rate probe on the primary now; if hits are rare, P1-prime is dropped in the completing PR. Remaining for the lane on #2947: tests for guards 3 and 4 (the reviewer lists the cases) and the stale docs and PR-body text (gh pr edit is denied in the seat, so post the body as a comment and the advisor applies it).'
+  created_at: 2026-10-26T11:19:40.271583089Z
+  modified_at: 2026-10-26T11:19:40.271583089Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
 history:
 - id: 01a173f1-1a2e-7c12-a2a1-e6bdafd814de
   author: joe
