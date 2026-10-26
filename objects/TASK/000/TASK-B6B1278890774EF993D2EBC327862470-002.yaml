@@ -2,12 +2,12 @@ id: 01a1783f-1990-7492-94cf-0d8e4ad59539
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-002
 title: 'STORY-1843 slice C1: mail retention core (anchor, safe IO, source generations, local permit admission, retire_source journal with replay)'
 description: 'Child of STORY-1843. Implements C SKETCH v1 (comment 75) slice C1 exactly as signed 2026-10-26 06:00 MST: core only, no production caller of retire_source yet (expect(dead_code) until C2), RetentionCoverage stays Unestablished in every production path, section 6 crash fixtures required, 2 s bounded try-lock refusing on timeout. STRICT review; PR title (Refs STORY-1843, TASK-<this>).'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-26T12:46:03.664293299Z
-modified_at: 2026-10-26T13:54:01.217468549Z
+modified_at: 2026-10-26T16:05:40.108647525Z
 req_type: Task
 comments:
 - id: 01a1787d-1396-7370-911a-6ce5f30a0ebf
@@ -58,6 +58,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a178f5-d88c-72d2-9902-835a0547f9e7
+  author: aida-orchestrator
+  timestamp: 2026-10-26T16:05:40.108664699Z
+  session_id: 01a178e249a6
+  harness_version: 2.1.310 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: e4c2dd0575990c64b7b14ee242b02012c22195dd
   branch: main
@@ -66,3 +75,11 @@ filed_at:
   aida_build_sha: e4c2dd0575
   vendor: claude
   session: 761a4fea-f388-41d1-93d9-f1386951253c
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Round-1 rework is solid (group-writable .git fixed, degraded delivery path, CI green at ee2f1fc, all section 6 fixtures present), but the barrier core still has a concurrency hole: two retire_source calls on one source drive the same op_id at once, and the loser''s abort can overwrite the winner''s Committed journal'
+  recovery_hint: address the review findings, move TASK-B6B1278890774EF993D2EBC327862470-002 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-10-26T16:05:40.108647525Z
