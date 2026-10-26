@@ -2,12 +2,12 @@ id: 01a176fc-67d2-7862-a865-e8becb8cb9e3
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-003
 title: Seat clones commit the Claude Code sandbox placeholder files (.gitmodules, .idea, .vscode, .claude/launch.json ...) because they lack the primary clone info/exclude
 description: 'PR #2943 (BUG-b6b1...-002 lane, seat clone aida-seat-aida-bug-b6b1...-002) committed nine empty read-only files: .claude/agents, .claude/launch.json, .claude/loop.md, .claude/output-styles, .claude/routines, .claude/scheduled_tasks.json, .gitmodules, .idea, .vscode. These are the stand-ins the Claude Code bash sandbox creates for denied paths. The primary clone ignores them through .git/info/exclude (entries at lines ~27-33); seat clones are separate clones with their own minimal info/exclude, so a lane commit picks them up. The committed .gitmodules then made aida session end / aida worktree dismiss refuse salvage ("the clone has submodules"). The advisor removed them from #2943 by hand (9fa1d8b24d). Related: an empty read-only .git/config.lock keeps reappearing in the primary (sandbox placeholder for a protected path), which makes git config writes fail (worktree add -B, upstream config) until removed. Fix: seat-clone creation must carry the primary info/exclude sandbox entries (or ship them in a tracked ignore file), and ship/commit staging must refuse zero-byte read-only placeholders; add a test. Consider a doctor check for a stale read-only config.lock.'
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-26T06:53:35.570888485Z
-modified_at: 2026-10-26T06:56:35.595601185Z
+modified_at: 2026-10-26T07:27:18.186807549Z
 req_type: Bug
 comments:
 - id: 01a176fd-1825-7843-905a-562d813d45c1
@@ -16,6 +16,17 @@ comments:
   created_at: 2026-10-26T06:54:20.709680663Z
   modified_at: 2026-10-26T06:54:20.709680663Z
   session_id: 761a4fea-f388-41d1-93d9-f1386951253c
+- id: 01a1771b-34cc-71f1-83bd-d41a737b5194
+  author: joe
+  content: |-
+    ## Implementer findings (PR #2946); could not file as draft TASKs: `aida add` ID allocation failed in this seat
+
+    1. **bug-spotted, major**: in a seat clone, `aida ship` step 1 always reads the tree as dirty, because `host_git_command` refuses there by design (BUG-2169) and `tracked_changes_pending` treats a failed status as pending work. `git commit` then fails with "nothing to commit", so `aida ship --no-merge` cannot publish from a seat clone. PR #2946 was pushed and opened by hand. The same refusal blinds `untracked_regular_files` and the new `staged_sandbox_placeholders` guard in seat clones; there, the new excludes are the defense. Fixing it needs a BUG-2169 condition-1 decision: route the probes through the seat_clone accessor, or use the raw git that step 1 add/commit already run.
+    2. **followup-suggestion, minor**: no doctor check yet for a stale empty read-only `.git/config.lock`. It reproduced on this push ("unable to write upstream branch configuration").
+  created_at: 2026-10-26T07:27:14.124446552Z
+  modified_at: 2026-10-26T07:27:14.124446552Z
+  session_id: 01a176ff2189
+  harness_version: 2.1.310 (Claude Code)
 history:
 - id: 01a176fc-8760-7d10-b3cb-bbc1ec863bed
   author: joe
@@ -33,6 +44,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1771b-4512-7881-b88f-a3964c6f6ea0
+  author: joe
+  timestamp: 2026-10-26T07:27:18.290490431Z
+  session_id: 01a176ff2189
+  harness_version: 2.1.310 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: e4c2dd0575990c64b7b14ee242b02012c22195dd
   branch: main
@@ -41,3 +61,7 @@ filed_at:
   aida_build_sha: 98e6823c07
   vendor: claude
   session: 761a4fea-f388-41d1-93d9-f1386951253c
+implementation_info:
+  implemented: true
+  implemented_at: 2026-10-26T07:27:18.186807549Z
+  implemented_by: joe
