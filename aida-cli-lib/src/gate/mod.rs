@@ -9,6 +9,7 @@
 pub(crate) mod approval;
 pub(crate) mod branch_policy;
 pub(crate) mod ci_freshness;
+pub(crate) mod dispatch_auth;
 pub(crate) mod fleet_lanes;
 pub(crate) mod mandate;
 pub(crate) mod mandate_drive;

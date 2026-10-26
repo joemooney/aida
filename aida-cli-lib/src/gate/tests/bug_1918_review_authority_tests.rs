@@ -588,6 +588,37 @@ fn agent_harness_detection_is_vendor_neutral_and_ignores_arguments() {
     assert!(!h("claudette", &["claudette"]));
 }
 
+/// BUG-b6b1278890774ef993d2ebc327862470-002: Claude Code's native install
+/// runs as `~/.local/share/claude/versions/<version>`, so its process name is
+/// the version string; the install path identifies it, the name alone never.
+#[test]
+fn versioned_claude_install_is_a_harness_by_path_not_by_name() {
+    let h = |name: &str, cmd: &[&str]| {
+        is_agent_harness(name, &cmd.iter().map(|s| s.to_string()).collect::<Vec<_>>())
+    };
+    assert!(h(
+        "2.1.310",
+        &[
+            "/home/u/.local/share/claude/versions/2.1.310",
+            "--session-id",
+            "abc"
+        ]
+    ));
+    assert!(
+        !h("2.1.310", &["2.1.310"]),
+        "a bare version is not a harness"
+    );
+    assert!(!h("2.1.310", &["/opt/app/versions/2.1.310"]));
+    assert!(!h("2.1.310", &["/home/u/claude/2.1.310"]));
+    assert!(
+        !h(
+            "bash",
+            &["/bin/bash", "/home/u/.local/share/claude/versions/2.1.310"]
+        ),
+        "an argument is not a harness"
+    );
+}
+
 /// Advisor blockers 2/3 for a non-Claude vendor: an antigravity agent claims
 /// in shell A, its lease is released, and it records an approval from the
 /// main checkout in shell B. The harness process is the common identity, so
