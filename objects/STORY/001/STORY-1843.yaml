@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-26T09:25:58.741075968Z
+modified_at: 2026-10-26T09:50:07.689220847Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -886,6 +886,63 @@ comments:
   created_at: 2026-10-26T09:24:52.627494728Z
   modified_at: 2026-10-26T09:24:52.627494728Z
   session_id: 761a4fea-f388-41d1-93d9-f1386951253c
+- id: 01a17789-5d77-73b3-bc91-ee169f923a45
+  author: joe
+  content: |-
+    ## Implementer approach — B2 lane, slice B2a (claude, 2026-10-26; builds on #2944 9ae539b5)
+
+    Scope check against signoffs 60/63: B2 = reader adapters + post-flush ACK + receipt anchor. 63 #8 forbids shipping ordinary ACK without a real C lifecycle provider (C is not implemented), and adapters need a non-empty audience, whose core-side constructor (comment-66 question, N1) is still unruled per the advisor 03:00 note. So this PR implements only what is already signed: the #2944 follow-ups N2–N4 inside the B1 snapshot (signoff 60 #1/#2). The adapter/audience/ACK plan goes up as a separate sketch for a ruling; no adapter or ACK code here.
+
+    ### Acceptance criteria as tests (unit, aida-core `mailbox_logical_tests.rs`)
+    - **N2:** `legacy_watermark_ids()` lists LegacyWatermark records; documented invariant `caught_up()==Some(false)` ⇔ unread_ids ∪ legacy_watermark_ids non-empty; extend the late-local test to assert it.
+    - **N3:** retraction is monotone across replicas: recipient archives in main + sender retracts in a sibling → record is retracted and redacted (no body/subject).
+    - **N4:** an explicitly recorded default (`intent: fyi`, `urgent: false`) vs a recorded `request`/`true` is a conflict; a replica that omits the key still merges (older-writer test unchanged).
+    - **N1:** `from_identity_policy` keeps no non-test caller until B2; mark it `#[cfg_attr(not(test), expect(dead_code))]` with a reason so the warning is gone and the first real caller must drop the attribute.
+
+    ### Expected files
+    - `aida-core/src/mailbox_logical.rs`, `aida-core/src/mailbox_logical_tests.rs`
+
+    ### Ambiguities / questions
+    - Core audience constructor (N1) and B2 ACK-with-C ordering: raised in a separate sketch for advisor ruling.
+  created_at: 2026-10-26T09:27:33.495691737Z
+  modified_at: 2026-10-26T09:27:33.495691737Z
+  session_id: 01a17787e4e7
+  harness_version: 2.1.310 (Claude Code)
+- id: 01a1778b-9fcf-72b3-af19-02badf160dfc
+  author: joe
+  content: |-
+    ## B2 SKETCH v1: reader adapters, audience authority, ACK ordering (claude, 2026-10-26). Awaiting an advisor ruling; NOT implemented
+
+    Basis: signoffs 60 and 63, B1 #2944 (9ae539b5), and the folded N1-N4. B2a (this lane's PR) ships only N2-N4 inside the B1 core plus a reasoned `expect(dead_code)` on N1. It adds no adapter, ACK or receipt-anchor code. The three choices below need a ruling before any B2 adapter code.
+
+    ### Q1 (N1). Core-side audience constructor. A genuine fork.
+    Today the policy is CLI-only: `aida-cli-lib/src/mailbox_root.rs::inbox_identities_from_facts(&MailIdentityFacts)`. Its facts are collected from the agent registry (`agent_handle`, CLI), the people catalog, env, and `role::resolve_effective_role` (CLI). Core cannot mint a non-empty `ResolvedAudience` (it is pub(crate)).
+    - **Option A (lean).** Move `MailIdentityFacts` and the pure policy into `aida-core::mailbox_identity`. The facts have private fields and one public constructor, `MailIdentityFacts::observed(binding: SessionBindingFacts, catalog: PeopleCatalogView, env: IdentityEnv)`. Each argument is an opaque core type whose only producer is a core reader of the same files the CLI reads today; role normalization moves to core with them. `ResolvedAudience::from_facts(&MailIdentityFacts)` then classifies private (own handle/aliases), human (catalog person) and shared (role/vendor). There is still no string-to-authority path; tests build facts through `#[cfg(test)]` constructors. Cost: the registry/catalog read paths move or gain a core twin, which is a larger diff touching agent_handle.
+    - **Option B.** Keep collection in the CLI and make `from_identity_policy` `pub` behind a sealed token: `pub struct PolicyWitness(())` that only `aida-cli-lib` can obtain via a `#[doc(hidden)]` core fn. The diff is small, but the "witness" is advisory, any crate can still call the hidden fn, and it arguably violates signoff 60 #1.
+    - Lean: A. B is cheaper but weakens the binding.
+
+    ### Q2. How do passive adapters render `LegacyWatermark`?
+    The passive readers (notice/summary, status_awaiting, latency warning, launch context, lane_liveness, maintenance, TUI mail) today treat watermark-covered mail as read. If they render `LegacyWatermark` as unread, all historic mail resurfaces in every notice. Lean: passive counts/notices treat LegacyWatermark as not-new (status quo). Explicit inbox views label it "read (legacy)", and `caught_up` stays false per signoff 60 #2. Confirm, or rule otherwise.
+
+    ### Q3. Ordering of B2 ACK against C.
+    63 #8 forbids an ordinary ACK without a real C lifecycle provider. Proposed order:
+    1. **B2b, read-only adapters.** Every inventoried ordinary reader consumes `logical_snapshot` for listing and counts: CLI inbox/read/thread/list/latency/notice, MCP read_inbox/thread/reply resolution, TUI mail, status_awaiting, agent_launch context, lane_liveness, maintenance. Explicit-read marking stays on the CURRENT BUG-1482 path, unchanged and source-local, so there is no new ACK and no success-shaped stub. A shared actual-Git conformance matrix covers the adapters, with partial/unknown rendered as typed partial and never an empty success.
+    2. **C**: retention barrier, publication permit and clone binding, per 63 #1-7. This needs its own concrete permit/recovery plan sketch first.
+    3. **B2c**: post-flush explicit ACK and the private common-Git receipt anchor, integrated with C's lifecycle provider. BUG-1482 successor docs and the regression rename land here.
+    - The open point in step 1: does moving reads to the logical union while marking stays source-local create a visible inconsistency? A sibling-only message shown by `inbox` would be marked in the requesting checkout's watermark/receipts only. Under the B1 read-evidence rules a per-ID receipt in ANY local source acknowledges, so it reads back as Acknowledged. That only holds if B2b writes per-ID receipts (`record_seen`) for the displayed IDs, not the timestamp watermark. That is an existing writer; is it acceptable before C? Lean: yes. It is the existing BUG-1482 writer scoped to displayed IDs, and no new anchor is written.
+
+    Expected B2b files, if ruled: `aida-core/src/{mailbox_logical.rs,mailbox_identity.rs (Q1-A)}`, `aida-cli-lib/src/{mailbox_cmd.rs,mailbox_root.rs,mcp.rs,status_awaiting.rs,agent_launch.rs,lane_liveness.rs,maintenance_schedule.rs,lib_part3.rs}`, `aida-tui/src/redesign/mail.rs`, plus the conformance tests. That is more than 10 files, so B2b runs check-ci-compile and test-touched.
+  created_at: 2026-10-26T09:30:01.551163555Z
+  modified_at: 2026-10-26T09:30:01.551163555Z
+  session_id: 01a17787e4e7
+  harness_version: 2.1.310 (Claude Code)
+- id: 01a1779e-0749-7822-b674-bf8c10b23a4e
+  author: joe
+  content: 'B2a PR opened: #2948 (61ebb15cbd, Refs, non-completing; stacked on B1 #2944). It folds N1–N4 in. The B2 adapter, ACK and receipt-anchor work is held for the advisor ruling on B2 sketch v1 (Q1–Q3).'
+  created_at: 2026-10-26T09:50:07.689220847Z
+  modified_at: 2026-10-26T09:50:07.689220847Z
+  session_id: 01a17787e4e7
+  harness_version: 2.1.310 (Claude Code)
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
   author: joe
