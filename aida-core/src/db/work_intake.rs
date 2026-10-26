@@ -6,6 +6,25 @@ use super::*;
 use crate::transport_policy::{read_artifact, Admission, FileEffect, PreparedMutation};
 use std::collections::{HashMap, HashSet};
 
+/// Serialize metadata for a WORK write. Built-in reaction and type
+/// definitions carry emoji and dotted prose that the closed policy refuses in
+/// every fresh blob, so they are omitted when unchanged; loading an absent key
+/// restores them.
+// trace:STORY-1742 | ai:claude
+fn work_metadata_bytes(metadata: &StoreMetadata) -> Result<Vec<u8>> {
+    let mut value = serde_yaml::to_value(metadata)?;
+    let map = value
+        .as_mapping_mut()
+        .context("WORK metadata is not a mapping")?;
+    if metadata.reaction_definitions == crate::models::default_reaction_definitions() {
+        map.remove("reaction_definitions");
+    }
+    if metadata.type_definitions == crate::models::default_type_definitions() {
+        map.remove("type_definitions");
+    }
+    Ok(serde_yaml::to_string(&value)?.into_bytes())
+}
+
 impl GitBackend {
     pub(super) fn work_update<F>(
         &self,
@@ -151,7 +170,7 @@ impl GitBackend {
                 effects.push(FileEffect {
                     path: "metadata.yaml".into(),
                     before: read_artifact(&self.root, "metadata.yaml")?,
-                    after: Some(serde_yaml::to_string(&metadata)?.into_bytes()),
+                    after: Some(work_metadata_bytes(&metadata)?),
                 });
                 summary.metadata_changed = true;
             }
@@ -915,6 +934,15 @@ mod tests {
         backend.save(&fresh).unwrap();
         let stored = backend.load().unwrap();
         assert_eq!(stored.title, "Generic project");
+        // Built-in reaction and type definitions survive the metadata rewrite.
+        assert_eq!(
+            stored.reaction_definitions,
+            crate::models::default_reaction_definitions()
+        );
+        assert_eq!(
+            stored.type_definitions,
+            crate::models::default_type_definitions()
+        );
         assert_eq!(stored.requirements.len(), 1);
         assert_eq!(stored.requirements[0].id, b.id);
         let mut fresh = backend.load().unwrap();

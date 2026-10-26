@@ -198,11 +198,14 @@ struct StoreMetadata {
     prefix_counters: std::collections::HashMap<String, u32>,
     #[serde(default)]
     relationship_definitions: Vec<crate::models::RelationshipDefinition>,
-    #[serde(default)]
+    // Absent built-in keys mean AIDA's defaults, matching `RequirementsStore`;
+    // WORK metadata writes omit unchanged built-ins (see work_intake).
+    // trace:STORY-1742 | ai:claude
+    #[serde(default = "crate::models::default_reaction_definitions")]
     reaction_definitions: Vec<crate::models::ReactionDefinition>,
     #[serde(default)]
     meta_counters: std::collections::HashMap<String, u32>,
-    #[serde(default)]
+    #[serde(default = "crate::models::default_type_definitions")]
     type_definitions: Vec<crate::models::CustomTypeDefinition>,
     #[serde(default)]
     allowed_prefixes: Vec<String>,
