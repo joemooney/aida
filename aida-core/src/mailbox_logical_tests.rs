@@ -305,12 +305,15 @@ fn story1843_read_evidence_is_id_scoped_and_watermarks_stay_legacy() {
     assert_eq!(evidence["canonical-late"], &ReadEvidence::Unread);
     // Existing inbox order: timestamp, then ID.
     assert_eq!(s.unread_ids(), vec!["canonical-late", "private-unseen"]);
+    assert_eq!(s.legacy_watermark_ids(), vec!["late-local", "replicated"]);
     assert_eq!(s.caught_up(), Some(false));
     // A legacy watermark alone is unread-compatible: the late, old-timestamp
     // arrival keeps the view from being caught up even with nothing Unread.
     let late = snap(&r.main, Some(&r.store), Query::Thread("late".into()));
     assert_eq!(ids(&late), vec!["late-local"]);
     assert!(late.unread_ids().is_empty());
+    // ...and says why: the record is legacy, neither unread nor acknowledged.
+    assert_eq!(late.legacy_watermark_ids(), vec!["late-local"]);
     assert!(late.complete());
     assert_eq!(late.caught_up(), Some(false));
     assert_eq!(
@@ -577,6 +580,40 @@ fn story1843_older_writer_replica_merges_optional_metadata() {
     assert_eq!(s.conflicts, vec!["two-subjects"]);
 }
 
+/// #2944 review N4: an explicitly written default is a recorded value, so it
+/// contradicts a different recorded value instead of being overwritten.
+#[test]
+fn story1843_explicit_default_metadata_conflicts_with_a_recorded_value() {
+    let r = repo();
+    let mut fyi = message("fyi-vs-request", "t", "advisor", 1);
+    fyi["intent"] = "fyi".into();
+    let mut request = fyi.clone();
+    request["intent"] = "request".into();
+    put(&r.main, &fyi);
+    put_canonical(&r.store, &request);
+    let mut calm = message("calm-vs-urgent", "t", "advisor", 2);
+    calm["urgent"] = false.into();
+    let mut urgent = calm.clone();
+    urgent["urgent"] = true.into();
+    put(&r.sib_a, &calm);
+    put_canonical(&r.store, &urgent);
+    // An omitted key (older writer) or an explicit null is still unrecorded.
+    let mut lean = message("lean", "t", "advisor", 3);
+    lean["subject"] = serde_json::Value::Null;
+    let mut rich = message("lean", "t", "advisor", 3);
+    rich["intent"] = "request".into();
+    rich["subject"] = "kept".into();
+    put(&r.main, &lean);
+    put_canonical(&r.store, &rich);
+
+    let s = snap(&r.main, Some(&r.store), Query::Inbox);
+    assert_eq!(s.conflicts, vec!["calm-vs-urgent", "fyi-vs-request"]);
+    assert_eq!(ids(&s), vec!["lean"]);
+    let m = &s.records[0].message;
+    assert_eq!(m.intent, crate::mailbox::Intent::Request);
+    assert_eq!(m.subject.as_deref(), Some("kept"));
+}
+
 #[test]
 fn story1843_conflicts_are_scoped_to_the_query() {
     let r = repo();
@@ -628,6 +665,30 @@ fn story1843_retracted_records_are_redacted_and_sources_carry_identity() {
         .unwrap();
     assert_eq!(main.status, SourceStatus::Absent);
     assert_eq!(main.identity, None);
+}
+
+/// #2944 review N3: the recipient archived its copy in main (the archive
+/// marker keeps the body, and outranks a retraction) while the sender
+/// retracted in a sibling. The union must not hand back the body.
+#[test]
+fn story1843_retraction_is_monotone_across_replicas() {
+    let r = repo();
+    let mut archived = message("archived-then-retracted", "t", "advisor", 1);
+    archived["archived"] = true.into();
+    archived["subject"] = "secret subject".into();
+    let mut retracted = message("archived-then-retracted", "t", "advisor", 1);
+    retracted["retracted"] = true.into();
+    put(&r.main, &archived);
+    put(&r.sib_a, &retracted);
+
+    let s = snap(&r.main, Some(&r.store), Query::Inbox);
+    assert!(s.conflicts.is_empty());
+    assert_eq!(ids(&s), vec!["archived-then-retracted"]);
+    let m = &s.records[0].message;
+    assert!(m.archived && m.retracted);
+    assert!(m.body.is_empty(), "retracted body never resurfaces");
+    assert_eq!(m.subject, None);
+    assert_eq!(s.records[0].provenance.len(), 2);
 }
 
 #[test]
