@@ -6,12 +6,12 @@ description: |
   PR-2931 tests `origin_remote_presence` directly (bug_2169_seat_clone_tests.rs). No test covers the wiring at review_gates.rs:1079-1086, where an Err must become `AutoQueueStatus::SkippedNeedsAttention` and not `SkippedByDesign`. Add one try_auto_queue_pr_review_unbumped test that passes a non-repo or unverified seat-clone project_root and asserts the needs-attention status. Side effect to note: a project_root that is not a git repo now gets a yellow needs-attention skip where it used to get the dim local-only skip.
 
   Raised in review of PR-2931: https://github.com/joemooney/aida/pull/2931
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T20:30:01.452748522Z
-modified_at: 2026-10-26T06:06:44.648175573Z
+modified_at: 2026-10-26T14:45:50.050805197Z
 req_type: Task
 tags:
 - from-review:PR-2931
@@ -43,6 +43,20 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a178ac-c15d-7a80-94d0-6febdadb8939
+  author: aida-auto-bump
+  timestamp: 2026-10-26T14:45:50.045733249Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a178ac-c162-7991-af6a-a0a9784f25b1
+  timestamp: 2026-10-26T14:45:50.050799678Z
+  agent: aida
+  commit_sha: f1225717f20aea8c9768c65e39e92bc50eb5b997
+  summary: 'Test-only: auto_queue_reports_a_failed_origin_lookup_as_needs_attention drives try_auto_queue_pr_review_unbumped with a non-repo root and an unverified seat clone, asserting SkippedNeedsAttention + summary text (review_gates.rs:1089-1096 wiring). All acceptance met; CI green, mergeStateStatus CLEAN.'
+  review_verdict: approved
 filed_at:
   code_sha: 78765dde1e777bcbb11079d580864afaea9f70ea
   branch: main
@@ -56,3 +70,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-26T06:06:44.648175573Z
   implemented_by: joe
+  completed_at: 2026-10-26T14:45:50.045728844Z
+  completion_sha: f1225717f20aea8c9768c65e39e92bc50eb5b997
