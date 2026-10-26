@@ -1659,3 +1659,45 @@ fn origin_presence_answers_for_a_seat_clone_and_never_guesses_absent() {
     assert!(origin_remote_presence(&clone).unwrap());
     assert!(origin_remote_presence(&clone.join(".aida")).unwrap());
 }
+
+/// TASK-2357: the auto-queue must turn a failed `origin` lookup into a
+/// needs-attention skip, never the dim local-only skip. Covers both failure
+/// shapes: a project root that is not a git repo (which used to read as
+/// local-only) and an unverified seat clone.
+// trace:TASK-2357 | ai:claude
+#[test]
+fn auto_queue_reports_a_failed_origin_lookup_as_needs_attention() {
+    use crate::review_gates::{
+        try_auto_queue_pr_review_unbumped, AutoQueueOrigin, AutoQueueStatus,
+    };
+    let fx = fixture();
+
+    let not_a_repo = fx.root.join("not-a-repo");
+    std::fs::create_dir_all(&not_a_repo).unwrap();
+    let clone = fx.root.join("seats").join("aida-seat-aida-t2357");
+    create(&fx.main, &clone, "feat", "origin/main").unwrap();
+    let clone = clone.canonicalize().unwrap();
+
+    for root in [&not_a_repo, &clone] {
+        let outcome = try_auto_queue_pr_review_unbumped(
+            root,
+            "feat",
+            "sess-2357",
+            AutoQueueOrigin::SessionEnd,
+        );
+        assert!(
+            matches!(outcome.status, AutoQueueStatus::SkippedNeedsAttention),
+            "{}: expected needs-attention, got: {}",
+            root.display(),
+            outcome.summary
+        );
+        assert!(
+            outcome
+                .summary
+                .contains("could not determine whether an `origin` remote exists"),
+            "{}: {}",
+            root.display(),
+            outcome.summary
+        );
+    }
+}
