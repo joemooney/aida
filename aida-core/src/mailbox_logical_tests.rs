@@ -742,3 +742,45 @@ fn story1843_local_only_context_is_partial_and_reads_no_store() {
         "a directory inside a checkout is not a local-only project"
     );
 }
+
+/// A lookup by ID or thread, and the addressable set the follow-up verbs
+/// resolve against, include the audience's own sent mail wherever it lives;
+/// the inbox never lists it. Shared keys never claim a send.
+#[test]
+fn lookups_include_own_sent_mail_and_the_inbox_does_not() {
+    let r = repo();
+    let me = ResolvedAudience::from_identity_policy(
+        vec!["seat-a".into()],
+        vec![],
+        vec!["advisor".into()],
+    )
+    .unwrap();
+    let mut sent = message("sent-by-me", "conv", "someone", 10);
+    sent["from"] = "seat-a".into();
+    put(&r.sib_b, &sent);
+    put(&r.sib_b, &message("reply", "conv", "seat-a", 20));
+    let mut role_sent = message("role-sent", "role", "someone", 30);
+    role_sent["from"] = "advisor".into();
+    put(&r.sib_b, &role_sent);
+    put(&r.sib_b, &message("stranger", "other", "someone", 40));
+    let ctx = MailboxContext::resolve(&r.main, Some(&r.store)).unwrap();
+    let take = |q: Query| {
+        let s = logical_snapshot(&ctx, &me, &q, &ReadLimits::explicit_read());
+        s.records
+            .iter()
+            .map(|r| r.message.id.clone())
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(take(Query::Inbox), vec!["reply"]);
+    assert_eq!(take(Query::Addressable), vec!["sent-by-me", "reply"]);
+    assert_eq!(
+        take(Query::Thread("conv".into())),
+        vec!["sent-by-me", "reply"]
+    );
+    assert_eq!(
+        take(Query::ExactId("sent-by-me".into())),
+        vec!["sent-by-me"]
+    );
+    assert!(take(Query::ExactId("role-sent".into())).is_empty());
+    assert!(take(Query::ExactId("stranger".into())).is_empty());
+}

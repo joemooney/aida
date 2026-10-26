@@ -150,7 +150,7 @@ impl IdentityEnv {
 
 /// A client payload's session id: Claude/Codex `session_id`, Agy
 /// `conversationId`.
-fn session_id_from_payload(raw: &str) -> Option<String> {
+pub fn session_id_from_payload(raw: &str) -> Option<String> {
     let v: serde_json::Value = serde_json::from_str(raw).ok()?;
     [
         "session_id",
@@ -311,14 +311,32 @@ impl SessionBindingFacts {
     }
 }
 
+/// Longest handle registry rows are allocated under.
+pub const HANDLE_MAX_LEN: usize = 63;
+
+/// Why `name` is not a valid handle spelling, or `None` when it is.
+pub fn handle_spelling_rejection(name: &str) -> Option<String> {
+    if name.is_empty() {
+        return Some("is empty".to_string());
+    }
+    if name.len() > HANDLE_MAX_LEN {
+        return Some(format!("is longer than {HANDLE_MAX_LEN} characters"));
+    }
+    if !name
+        .chars()
+        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+    {
+        return Some("may contain only lowercase letters, digits and '-'".to_string());
+    }
+    if !name.starts_with(|c: char| c.is_ascii_alphanumeric()) {
+        return Some("must start with a letter or digit".to_string());
+    }
+    None
+}
+
 /// The handle spelling registry rows are allocated under.
 fn valid_handle(name: &str) -> bool {
-    !name.is_empty()
-        && name.len() <= 63
-        && name
-            .chars()
-            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
-        && name.starts_with(|c: char| c.is_ascii_alphanumeric())
+    handle_spelling_rejection(name).is_none()
 }
 
 fn read_bounded_regular(path: &Path) -> Option<String> {
@@ -339,23 +357,30 @@ fn read_bounded_regular(path: &Path) -> Option<String> {
     Some(body)
 }
 
-/// Whether the row's process is this process or one of its ancestors. An
-/// exact recorded start identity must match, so a recycled pid never binds.
+/// Whether the row's process is this process or one of its ancestors. A
+/// recorded start identity must positively match the live process under its
+/// own scheme, so a recycled pid never binds; a record in an unknown scheme
+/// or one that cannot be compared refuses.
 fn is_self_or_ancestor(row: &RegistryRow) -> bool {
     let Ok(chain) = crate::process_probe::ProbeSource::system().ancestry(std::process::id()) else {
         return false;
     };
-    chain.iter().any(|p| {
-        p.identity.pid == row.pid
-            && match row
-                .pid_start
-                .as_deref()
-                .and_then(|s| s.strip_prefix("linux-starttime:"))
-            {
-                Some(ticks) => p.identity.start.rsplit(':').next() == Some(ticks),
-                None => true,
-            }
-    })
+    row_binds_chain(
+        row.pid,
+        row.pid_start.as_deref(),
+        chain.iter().map(|p| p.identity.pid),
+        crate::liveness::process_identity_matches_strict,
+    )
+}
+
+/// [`is_self_or_ancestor`] over an explicit ancestry and identity matcher.
+fn row_binds_chain(
+    pid: u32,
+    pid_start: Option<&str>,
+    mut chain: impl Iterator<Item = u32>,
+    matches: impl Fn(u32, &str) -> bool,
+) -> bool {
+    chain.any(|p| p == pid) && pid_start.is_none_or(|recorded| matches(pid, recorded))
 }
 
 /// What this process's session lookup found.
@@ -368,6 +393,89 @@ pub enum SessionBinding {
     /// A row was selected but could not be verified. Fails closed: no
     /// private inbox is granted, not even the inherited user's.
     Unverified(BindingRefusal),
+}
+
+/// The agent registry directory of the repository holding `project_root`:
+/// the main checkout's `.aida/agents` (the verified common Git directory's
+/// parent), else `project_root`'s own for a non-Git project.
+pub fn registry_dir_for(project_root: &Path) -> std::path::PathBuf {
+    let main = crate::mailbox_logical::MailboxContext::resolve(project_root, None)
+        .ok()
+        .and_then(|ctx| {
+            ctx.repository()
+                .and_then(|git| git.path().parent().map(Path::to_path_buf))
+        })
+        .unwrap_or_else(|| project_root.to_path_buf());
+    main.join(".aida").join("agents")
+}
+
+/// Upper bound on registry rows a session lookup reads.
+const REGISTRY_ROWS_MAX: usize = 1024;
+
+impl SessionBinding {
+    /// The verified session lookup for a process with no CLI session layer
+    /// (the TUI): among the live rows in the registry directory
+    /// `agents_dir`, the row of this process's nearest registered ancestor
+    /// (this process first), else a row whose native session id this process
+    /// owns, accepted only through [`SessionBindingFacts::verify`]. A row
+    /// with no handle is skipped; when every candidate fails verification
+    /// the binding is [`Self::Unverified`] and grants no private inbox. No
+    /// candidate is [`Self::Unbound`]. Mirrors the CLI's nearest-ancestor
+    /// lookup, so a surface started from an agent session's shell reads as
+    /// that session and never takes the inherited environment as its own.
+    pub fn lookup(agents_dir: &Path, env: &IdentityEnv) -> Self {
+        let chain: Vec<u32> = crate::process_probe::ProbeSource::system()
+            .ancestry(std::process::id())
+            .map(|c| c.iter().map(|p| p.identity.pid).collect())
+            .unwrap_or_default();
+        Self::lookup_in_chain(agents_dir, env, &chain)
+    }
+
+    fn lookup_in_chain(agents_dir: &Path, env: &IdentityEnv, chain: &[u32]) -> Self {
+        let Ok(dir) = std::fs::read_dir(agents_dir) else {
+            return Self::Unbound;
+        };
+        let mut candidates: Vec<(usize, std::path::PathBuf)> = Vec::new();
+        for entry in dir.flatten().take(REGISTRY_ROWS_MAX) {
+            let path = entry.path();
+            if path.extension().and_then(|e| e.to_str()) != Some("toml") {
+                continue;
+            }
+            let Some(row) = read_bounded_regular(&path)
+                .and_then(|body| toml::from_str::<RegistryRow>(&body).ok())
+            else {
+                continue;
+            };
+            if row.ended_at.is_some() {
+                continue;
+            }
+            let vendor = normalize_agent_type(&row.agent_type);
+            let rank = match chain.iter().position(|pid| *pid == row.pid) {
+                Some(depth) => depth,
+                None if [&row.claude_session_id, &row.native_session_id]
+                    .into_iter()
+                    .flatten()
+                    .any(|sid| !sid.trim().is_empty() && env.owns_session(&vendor, sid)) =>
+                {
+                    chain.len()
+                }
+                None => continue,
+            };
+            candidates.push((rank, path));
+        }
+        candidates.sort();
+        let mut refusal = None;
+        for (_, row) in candidates {
+            match SessionBindingFacts::verify(&row, env) {
+                Ok(facts) => return Self::Bound(facts),
+                Err(BindingRefusal::NoHandle) => {}
+                Err(why) => {
+                    refusal.get_or_insert(why);
+                }
+            }
+        }
+        refusal.map_or(Self::Unbound, Self::Unverified)
+    }
 }
 
 /// Everything the identity policy decides from, gathered once. Fields are

@@ -258,3 +258,122 @@ fn binding_refuses_a_symlinked_row() {
         Err(BindingRefusal::Unreadable)
     );
 }
+
+#[test]
+fn ancestry_binding_compares_the_recorded_identity_by_scheme() {
+    // A legacy RFC3339 row whose pid was recycled: the live legacy start
+    // differs, so the pid alone never binds.
+    let legacy = "2026-10-26T00:00:00+00:00";
+    let strict = |live_legacy: Option<&'static str>, live_exact: Option<&'static str>| {
+        move |pid: u32, recorded: &str| {
+            crate::liveness::process_identity_matches_strict_with(
+                pid,
+                recorded,
+                |_| true,
+                |_| live_legacy.map(str::to_string),
+                |_| live_exact.map(str::to_string),
+            )
+        }
+    };
+    let chain = || [10u32, 7, 1].into_iter();
+    assert!(!row_binds_chain(
+        7,
+        Some(legacy),
+        chain(),
+        strict(Some("2026-10-26T05:00:00+00:00"), None)
+    ));
+    // The same legacy row binds when the live process really is the one recorded.
+    assert!(row_binds_chain(
+        7,
+        Some(legacy),
+        chain(),
+        strict(Some(legacy), None)
+    ));
+    // A record in another or an unknown scheme cannot be compared: refused.
+    assert!(!row_binds_chain(
+        7,
+        Some("sysinfo-start:2026-10-26T00:00:00+00:00"),
+        chain(),
+        strict(None, Some("linux-starttime:42"))
+    ));
+    assert!(!row_binds_chain(
+        7,
+        Some("mystery:42"),
+        chain(),
+        strict(Some(legacy), Some("linux-starttime:42"))
+    ));
+    // Exact match binds; a pid outside the chain never does.
+    assert!(row_binds_chain(
+        7,
+        Some("linux-starttime:42"),
+        chain(),
+        strict(None, Some("linux-starttime:42"))
+    ));
+    assert!(!row_binds_chain(
+        8,
+        Some("linux-starttime:42"),
+        chain(),
+        strict(None, Some("linux-starttime:42"))
+    ));
+}
+
+#[test]
+fn binding_accepts_this_process_under_its_own_recorded_identity() {
+    let dir = tempfile::tempdir().unwrap();
+    let env = IdentityEnv::fixture("u", &[], None);
+    let me = std::process::id();
+    let Some(start) = crate::liveness::process_start_identity(me) else {
+        return;
+    };
+    let own = row(
+        dir.path(),
+        "exact",
+        &row_body("exact", me, &format!("pid_start = \"{start}\"\n")),
+    );
+    assert!(SessionBindingFacts::verify(&own, &env).is_ok());
+    let legacy = row(
+        dir.path(),
+        "legacy",
+        &row_body("legacy", me, "pid_start = \"2001-01-01T00:00:00+00:00\"\n"),
+    );
+    assert_eq!(
+        SessionBindingFacts::verify(&legacy, &env),
+        Err(BindingRefusal::NotThisProcess)
+    );
+}
+
+#[test]
+fn lookup_binds_the_nearest_registered_ancestor_and_fails_closed() {
+    let dir = tempfile::tempdir().unwrap();
+    let env = IdentityEnv::fixture("parent-user", &["parent-handle"], None);
+    let me = std::process::id();
+    // No registry: unbound.
+    assert_eq!(
+        SessionBinding::lookup_in_chain(&dir.path().join("none"), &env, &[me]),
+        SessionBinding::Unbound
+    );
+    // A row for this process wins over one for a more distant ancestor.
+    row(
+        dir.path(),
+        "near",
+        &row_body("near", me, "").replace("seat-a", "near-seat"),
+    );
+    row(dir.path(), "far", &row_body("far", u32::MAX - 3, ""));
+    assert_eq!(
+        SessionBinding::lookup_in_chain(dir.path(), &env, &[me, u32::MAX - 3]),
+        SessionBinding::Bound(SessionBindingFacts::fixture("near-seat", "claude"))
+    );
+    // Ended rows are not candidates; a candidate that fails verification
+    // (the far pid is not really an ancestor) binds nothing.
+    let only_far = tempfile::tempdir().unwrap();
+    row(only_far.path(), "far", &row_body("far", u32::MAX - 3, ""));
+    row(
+        only_far.path(),
+        "gone",
+        &row_body("gone", me, "ended_at = \"2026-10-26T01:00:00Z\"\n"),
+    );
+    assert_eq!(
+        SessionBinding::lookup_in_chain(only_far.path(), &env, &[me, u32::MAX - 3]),
+        SessionBinding::Unverified(BindingRefusal::NotThisProcess)
+    );
+}

@@ -283,3 +283,297 @@ fn story1843_collector_reads_env_and_projects_no_binding_when_isolated() {
         ]
     );
 }
+
+/// Hold the env lock with no ambient session and an unbound `operator`
+/// reader in the `advisor` role, as every own-audience command sees it.
+fn operator_env() -> crate::test_env::AgentSessionIsolation {
+    crate::test_env::AgentSessionIsolation::apply(&[
+        ("AIDA_USER", Some("operator")),
+        ("AIDA_SESSION_ROLE", Some("advisor")),
+        ("AIDA_AGENT_TYPE", None),
+    ])
+}
+
+fn run(store: &Path, cmd: crate::cli::MailboxCommand) -> Result<()> {
+    crate::mailbox_cmd::handle_mailbox_command(&cmd, store)
+}
+
+/// F1 (ruling on PR #2952): every ID an own-audience listing displays
+/// resolves in the follow-up verbs against the same logical snapshot. A
+/// sibling-only message is listed by the inbox, then read, threaded and
+/// replied to from main; a source-local write to it refuses and names the
+/// worktree that holds it. The reader's own sent mail resolves too.
+#[test]
+fn story1843_every_listed_id_resolves_in_the_follow_up_verbs() {
+    use crate::cli::MailboxCommand;
+    let _env = operator_env();
+    let r = mail_repo();
+    crate::mailbox_store::write_message(&r.sib, &mail("sib-only", "operator", 10, false)).unwrap();
+    let mut sent = mail("sent-from-sib", "someone", 15, false);
+    sent.from = "operator".into();
+    sent.thread_id = "sib-only".into();
+    crate::mailbox_store::write_message(&r.sib, &sent).unwrap();
+    crate::mailbox_store::write_message(&r.main, &mail("main-local", "operator", 20, false))
+        .unwrap();
+
+    // The inbox lists the sibling-only message...
+    let view = view_from(&r.main, &r.store, &own_audience());
+    assert!(view
+        .records()
+        .iter()
+        .any(|rec| rec.message.id == "sib-only"));
+    // ...and every follow-up verb resolves it, by ID and by prefix.
+    run(
+        &r.store,
+        MailboxCommand::Read {
+            message_id: "sib-only".into(),
+        },
+    )
+    .unwrap();
+    run(
+        &r.store,
+        MailboxCommand::Read {
+            message_id: "sib-o".into(),
+        },
+    )
+    .unwrap();
+    run(
+        &r.store,
+        MailboxCommand::Thread {
+            thread_id: "sib-only".into(),
+        },
+    )
+    .unwrap();
+    let book = crate::mailbox_view::addressable(&r.main, &r.store);
+    assert_eq!(
+        aida_core::mailbox::reply_target_thread("sib-only", book.messages()).as_deref(),
+        Some("sib-only"),
+        "a reply attaches to the listed message's thread"
+    );
+    let thread = aida_core::mailbox::thread("sib-only", book.messages());
+    let ids: Vec<&str> = thread.iter().map(|m| m.id.as_str()).collect();
+    assert_eq!(
+        ids,
+        vec!["sib-only", "sent-from-sib"],
+        "own sent mail joins"
+    );
+
+    // Writes stay source-local: archiving a sibling-only message (read
+    // first) and retracting one's own sibling-only send both refuse, naming
+    // the worktree that holds it.
+    let rows = crate::mailbox_cmd::select_inbox_rows(view.records(), false, true, 0);
+    mark_displayed(&r.main, view.audience(), &rows).unwrap();
+    let archive = |id: &str| MailboxCommand::Archive {
+        message_id: Some(id.into()),
+        older_than: None,
+        read_only: false,
+        agent: None,
+    };
+    let err = run(&r.store, archive("sib-only")).unwrap_err().to_string();
+    assert!(err.contains("another worktree"), "{err}");
+    assert!(err.contains(r.sib.to_str().unwrap()), "{err}");
+    let err = run(
+        &r.store,
+        MailboxCommand::Retract {
+            message_id: "sent-from-sib".into(),
+        },
+    )
+    .unwrap_err()
+    .to_string();
+    assert!(err.contains("another worktree"), "{err}");
+    // A message this checkout holds archives once read: the receipt the
+    // inbox wrote is the read evidence (no legacy watermark is advanced).
+    run(&r.store, archive("main-local")).unwrap();
+    assert_eq!(
+        crate::mailbox_store::read_watermark(&r.main, "operator"),
+        None
+    );
+    // An unknown ID is still a typed not-found.
+    let err = run(
+        &r.store,
+        MailboxCommand::Read {
+            message_id: "nope".into(),
+        },
+    )
+    .unwrap_err();
+    assert!(matches!(
+        err.downcast_ref::<crate::MailboxResolveFailure>(),
+        Some(crate::MailboxResolveFailure::NotFound { .. })
+    ));
+}
+
+/// F3 (ruling 76 Q3): an inbox read writes per-ID receipts only. A late,
+/// old-timestamp arrival in the same local source after a read that
+/// displayed newer sibling and canonical mail is still new to every passive
+/// surface.
+#[test]
+fn story1843_a_late_old_arrival_after_a_read_is_still_new() {
+    let r = mail_repo();
+    let audience = operator();
+    crate::mailbox_store::write_message(&r.sib, &mail("sib-new", "operator", 100, false)).unwrap();
+    put_canonical(&r.store, &mail("canon-new", "advisor", 200, false));
+    let view = view_from(&r.main, &r.store, &audience);
+    let rows = crate::mailbox_cmd::select_inbox_rows(view.records(), false, true, 0);
+    mark_displayed(&r.main, view.audience(), &rows).unwrap();
+    assert_eq!(
+        crate::mailbox_store::read_watermark(&r.main, "operator"),
+        None
+    );
+    assert_eq!(
+        crate::mailbox_store::read_watermark(&r.main, "advisor"),
+        None
+    );
+
+    crate::mailbox_store::write_message(&r.main, &mail("late-old", "operator", 50, true)).unwrap();
+    let after = view_from(&r.main, &r.store, &audience);
+    assert_eq!(ids(&after.unread()), vec!["late-old"]);
+    let keys: Vec<String> = audience.keys().map(str::to_string).collect();
+    let notice = crate::mailbox_cmd::notice_text(&after, &keys, 10);
+    assert!(notice.contains("1 unread"), "{notice}");
+    assert_eq!(
+        crate::read_urgent_unread_count_for(&r.main, &audience),
+        Some(1)
+    );
+}
+
+/// F5: `aida mailbox latency --json` rows read the same view: unread and
+/// oldest age before a read, the read latency from the receipt after, a
+/// partial view flagged on every row, and another inbox an inspection.
+#[test]
+fn story1843_latency_rows_share_the_view() {
+    let r = mail_repo();
+    let audience = operator();
+    crate::mailbox_store::write_message(&r.sib, &mail("sib-only", "operator", 1_000, false))
+        .unwrap();
+    let now = 5_000;
+    let (rows, note) =
+        crate::mailbox_cmd::latency_rows(&r.main, &r.store, &audience, None, now).unwrap();
+    assert!(note.is_none());
+    let op = rows
+        .iter()
+        .find(|row| row["recipient"] == "operator")
+        .unwrap();
+    assert_eq!(op["unread"], 1);
+    assert_eq!(op["oldest_unread_age_ms"], 4_000);
+    assert_eq!(op["partial"], false);
+    assert_eq!(op["inspection"], false);
+
+    let view = view_from(&r.main, &r.store, &audience);
+    let shown = crate::mailbox_cmd::select_inbox_rows(view.records(), false, true, 0);
+    mark_displayed(&r.main, view.audience(), &shown).unwrap();
+    let (rows, _) =
+        crate::mailbox_cmd::latency_rows(&r.main, &r.store, &audience, Some("operator"), now)
+            .unwrap();
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0]["unread"], 0);
+    assert!(
+        rows[0]["max_read_latency_ms"].as_i64().is_some(),
+        "{rows:?}"
+    );
+
+    let (rows, _) =
+        crate::mailbox_cmd::latency_rows(&r.main, &r.store, &audience, Some("stranger"), now)
+            .unwrap();
+    assert_eq!(rows[0]["inspection"], true);
+
+    std::fs::remove_dir_all(&r.sib).unwrap();
+    let (rows, note) =
+        crate::mailbox_cmd::latency_rows(&r.main, &r.store, &audience, None, now).unwrap();
+    assert!(note.is_some_and(|n| n.contains("partial")));
+    assert!(rows.iter().all(|row| row["partial"] == true));
+}
+
+fn awaiting_mail(
+    root: &Path,
+    facts: impl FnOnce() -> crate::MailIdentityFacts,
+) -> crate::awaiting_you::MailChannel {
+    let backend_store = root.join("backend-store");
+    std::fs::create_dir_all(&backend_store).unwrap();
+    let backend = crate::test_env::home_fixture_cached_backend(
+        &backend_store,
+        &root.join(".aida").join("cache.db"),
+    )
+    .unwrap();
+    let ctx = crate::UserStatusContext {
+        session: None,
+        role: None,
+        branch: None,
+        pr: None,
+        queue_head: Vec::new(),
+        queue_total: 0,
+        agents: Vec::new(),
+    };
+    crate::collect_awaiting_report_with_mail_facts(root, &backend, &ctx, true, false, facts).mail
+}
+
+/// F5: the awaiting mail channel counts the same view and says when it is
+/// partial instead of reading as caught up.
+#[test]
+fn story1843_awaiting_mail_channel_shares_the_view() {
+    let r = mail_repo();
+    crate::mailbox_store::write_message(&r.sib, &mail("sib-only", "operator", 10, false)).unwrap();
+    put_canonical(&r.store, &mail("canon-urgent", "operator", 20, true));
+    let facts = || unbound_facts("operator", None, None);
+    let mail = awaiting_mail(&r.main, facts);
+    assert_eq!(mail.unread, 2);
+    assert_eq!(mail.urgent, 1);
+    assert!(!mail.partial);
+
+    std::fs::remove_dir_all(&r.sib).unwrap();
+    let mail = awaiting_mail(&r.main, facts);
+    assert_eq!(mail.unread, 1);
+    assert!(mail.partial, "a missing worktree is never caught up");
+}
+
+/// F5: a bound child session that inherited its parent's `AIDA_USER` and
+/// `AIDA_HANDLE` gets no notice, body, count or receipt of the parent's
+/// private mail on any adapter; its own mail is read normally.
+#[test]
+fn story1843_bound_child_never_sees_inherited_parent_mail() {
+    let _env = crate::test_env::AgentSessionIsolation::apply(&[
+        ("AIDA_USER", Some("parent-user")),
+        (crate::agent_handle::HANDLE_ENV, Some("parent-handle")),
+        ("AIDA_SESSION_ROLE", None),
+        ("AIDA_AGENT_TYPE", None),
+    ]);
+    let r = mail_repo();
+    for (id, to) in [
+        ("to-parent-user", "parent-user"),
+        ("to-parent-handle", "parent-handle"),
+        ("to-child", "child-seat"),
+    ] {
+        crate::mailbox_store::write_message(&r.sib, &mail(id, to, 10, true)).unwrap();
+    }
+    let facts = bound_facts("child-seat", "claude");
+    let audience = ResolvedAudience::from_facts(&facts);
+    assert_eq!(audience.private_keys(), ["child-seat"]);
+
+    let view = view_from(&r.main, &r.store, &audience);
+    let shown: Vec<&str> = view
+        .records()
+        .iter()
+        .map(|rec| rec.message.id.as_str())
+        .collect();
+    assert_eq!(shown, vec!["to-child"], "no parent body is ever displayed");
+    let keys: Vec<String> = audience.keys().map(str::to_string).collect();
+    let notice = crate::mailbox_cmd::notice_text(&view, &keys, 10);
+    assert!(notice.contains("1 unread"), "{notice}");
+    assert!(!notice.contains("parent"), "{notice}");
+    assert_eq!(
+        crate::read_urgent_unread_count_for(&r.main, &audience),
+        Some(1)
+    );
+    let (rows, _) =
+        crate::mailbox_cmd::latency_rows(&r.main, &r.store, &audience, None, 1_000).unwrap();
+    assert!(rows
+        .iter()
+        .all(|row| !row["recipient"].as_str().unwrap().starts_with("parent")));
+    let mail = awaiting_mail(&r.main, || facts.clone());
+    assert_eq!(mail.unread + mail.shared_unread, 1);
+
+    let rows = crate::mailbox_cmd::select_inbox_rows(view.records(), false, false, 10);
+    mark_displayed(&r.main, view.audience(), &rows).unwrap();
+    assert!(crate::mailbox_store::read_receipts(&r.main, "parent-user").is_empty());
+    assert!(crate::mailbox_store::read_receipts(&r.main, "parent-handle").is_empty());
+    assert!(crate::mailbox_store::read_receipts(&r.main, "child-seat").contains_key("to-child"));
+}

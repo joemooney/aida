@@ -1142,18 +1142,13 @@ pub(crate) fn read_draft_backlog_depth(cache_path: &std::path::Path) -> usize {
 /// statusline nag. Returns `None` when there is no mailbox to count (stay
 /// silent), `Some(0)` when caught up.
 ///
-/// This MUST agree with `aida mailbox inbox` — the statusline count and the read
-/// command are two surfaces of one "unread" state, so reading the inbox has to
-/// drive the count to 0. The divergence that left a high count stuck forever was
-/// that this read only the LOCAL `.aida/mailbox/` layer while `aida mailbox
-/// inbox` reads the MERGED (local + canonical orphan-store) set and advances each
-/// identity's watermark to the MERGED per-identity newest. When the two message
-/// sets differed, the watermark the inbox-read advanced could not clear a count
-/// computed over a different set. The fix reads the SAME merged set and the same
-/// identity union, so the surfaces compute "unread" over identical inputs and a
-/// read clears the count. Reading the canonical layer is a plain directory read
-/// of the already-checked-out `.aida-store/mailbox/` — pure file I/O, no git
-/// spawn — so the statusline's no-git contract still holds.
+/// This MUST agree with `aida mailbox inbox`: the statusline count and the
+/// read command are two surfaces of one "unread" state, so reading the inbox
+/// has to drive the count to 0. Both read the same logical view and identity
+/// union (STORY-1843). Finding the repository's product worktrees runs one
+/// bounded `git worktree list`, so this is no longer pure file I/O; the
+/// passive read deadline caps it, and a source not read in time makes the
+/// view partial rather than blocking the statusline.
 // trace:STORY-539 trace:BUG-625 | ai:claude
 pub(crate) fn read_urgent_unread_count(project_root: &std::path::Path) -> Option<usize> {
     read_urgent_unread_count_for(project_root, &crate::mailbox_view::own_audience())

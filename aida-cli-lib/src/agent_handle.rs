@@ -38,7 +38,7 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 /// Longest handle accepted, so a handle fits a statusline and a DNS label.
-pub(crate) const HANDLE_MAX_LEN: usize = 63;
+pub(crate) const HANDLE_MAX_LEN: usize = aida_core::mailbox_identity::HANDLE_MAX_LEN;
 
 /// How long a launcher's reservation holds its name before the launched
 /// process registers under it.
@@ -124,22 +124,7 @@ pub(crate) struct HandleRequest<'a> {
 
 /// Why `name` is not a valid handle spelling, or `None` when it is.
 pub(crate) fn handle_spelling_rejection(name: &str) -> Option<String> {
-    if name.is_empty() {
-        return Some("is empty".to_string());
-    }
-    if name.len() > HANDLE_MAX_LEN {
-        return Some(format!("is longer than {HANDLE_MAX_LEN} characters"));
-    }
-    if !name
-        .chars()
-        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
-    {
-        return Some("may contain only lowercase letters, digits and '-'".to_string());
-    }
-    if !name.starts_with(|c: char| c.is_ascii_alphanumeric()) {
-        return Some("must start with a letter or digit".to_string());
-    }
-    None
+    aida_core::mailbox_identity::handle_spelling_rejection(name)
 }
 
 /// A valid spelling close to `name`, offered when `name` is refused; never
@@ -1072,16 +1057,7 @@ fn native_session_env_keys(vendor: &str) -> &'static [&'static str] {
 /// A client payload's session id: Claude/Codex `session_id`, Agy
 /// `conversationId`.
 pub(crate) fn session_id_from_payload(raw: &str) -> Option<String> {
-    let v: serde_json::Value = serde_json::from_str(raw).ok()?;
-    [
-        "session_id",
-        "sessionId",
-        "conversationId",
-        "conversation_id",
-    ]
-    .iter()
-    .find_map(|k| v.get(*k).and_then(|s| s.as_str()).map(str::to_string))
-    .filter(|s| !s.trim().is_empty())
+    aida_core::mailbox_identity::session_id_from_payload(raw)
 }
 
 /// Unended session rows whose process may still be live, so a stale row

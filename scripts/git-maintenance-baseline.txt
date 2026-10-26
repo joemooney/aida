@@ -19,4 +19,3 @@
 3 aida-cli-lib/src/tests/task_1737_authority_trailers_tests.rs
 3 aida-core/src/git_ops/tests/store_hook_tests.rs
 1 aida-tui/src/redesign/drain_panel.rs
-1 aida-tui/src/redesign/mail.rs

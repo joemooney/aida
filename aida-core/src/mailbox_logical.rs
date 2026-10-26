@@ -316,6 +316,11 @@ impl ResolvedAudience {
         any.then_some(narrowed)
     }
 
+    /// Whether a private key of this audience sent `m` (its own sent mail).
+    pub fn sent_by_own(&self, m: &Message) -> bool {
+        self.private.iter().any(|k| *k == m.from)
+    }
+
     /// Audience keys this message is addressed to: direct or broadcast,
     /// never the key's own sent mail, never a deleted message.
     pub fn matching_keys(&self, m: &Message) -> Vec<&str> {
@@ -332,6 +337,19 @@ pub enum Query {
     ExactId(String),
     /// The visible members of one thread.
     Thread(String),
+    /// Every message visible to the audience plus the audience's own sent
+    /// mail: the set a message ID, prefix or thread reference resolves
+    /// against, so every ID an inbox lists also resolves in the follow-up
+    /// verbs.
+    Addressable,
+}
+
+impl Query {
+    /// Whether the audience's own sent mail is part of the answer. An inbox
+    /// never lists the reader's own sends; a lookup by ID or thread does.
+    fn includes_own_sent(&self) -> bool {
+        !matches!(self, Self::Inbox)
+    }
 }
 
 /// One shared budget for a whole snapshot: the inventory, every source and
@@ -555,11 +573,12 @@ pub fn logical_snapshot(
     }
 
     let in_query = |id: &str, thread: &str| match query {
-        Query::Inbox => true,
+        Query::Inbox | Query::Addressable => true,
         Query::ExactId(want) => id == want,
         Query::Thread(want) => thread == want,
     };
-    let (mut records, conflicts) = reconcile(&observed, local_count, audience);
+    let (mut records, conflicts) =
+        reconcile(&observed, local_count, audience, query.includes_own_sent());
     records.retain(|(m, _)| in_query(&m.id, &m.thread_id));
     let conflicts = conflicts
         .into_iter()
@@ -1277,7 +1296,11 @@ fn reconcile(
     observed: &[Option<ObservedSource>],
     local_count: usize,
     audience: &ResolvedAudience,
+    include_own_sent: bool,
 ) -> (Vec<(Message, Vec<Provenance>)>, Conflicts) {
+    let reaches = |m: &Message| {
+        !audience.matching_keys(m).is_empty() || (include_own_sent && audience.sent_by_own(m))
+    };
     let mut by_id: BTreeMap<&str, Vec<(usize, &ObservedMessage)>> = BTreeMap::new();
     for (index, source) in observed.iter().enumerate() {
         for m in source.iter().flat_map(|s| &s.messages) {
@@ -1290,19 +1313,15 @@ fn reconcile(
     let mut records = Vec::new();
     let mut conflicts = Vec::new();
     for (id, replicas) in by_id {
-        let visible = replicas
-            .iter()
-            .any(|(_, m)| !audience.matching_keys(&m.message).is_empty())
+        let visible = replicas.iter().any(|(_, m)| reaches(&m.message))
             || replicas.iter().any(|(_, m)| {
                 // A delete marker hides the message, but its audience is the
                 // original one; check visibility on the undeleted shape.
                 m.message.deleted
-                    && !audience
-                        .matching_keys(&Message {
-                            deleted: false,
-                            ..m.message.clone()
-                        })
-                        .is_empty()
+                    && reaches(&Message {
+                        deleted: false,
+                        ..m.message.clone()
+                    })
             });
         if !visible {
             continue;
@@ -1340,7 +1359,7 @@ fn reconcile(
             conflicts.push((id.to_string(), threads));
             continue;
         }
-        if message.deleted || audience.matching_keys(&message).is_empty() {
+        if message.deleted || !reaches(&message) {
             continue;
         }
         // A retraction is monotone: a higher-rank replica elsewhere (say the

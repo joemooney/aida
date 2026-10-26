@@ -2787,8 +2787,9 @@ impl<'a> McpServer<'a> {
         // BUG-557: mirror the CLI fix — `in_reply_to` must attach the reply to
         // the target's thread, not open a new one. Precedence: explicit
         // `thread` > the reply target's thread > a fresh thread. Resolved
-        // against the local layer (the same set `read_inbox` reads); a dangling
-        // reference falls back to a fresh thread. trace:BUG-557 | ai:claude
+        // against the same logical snapshot `read_inbox` lists (STORY-1843),
+        // so every ID it returned resolves; a dangling reference falls back
+        // to a fresh thread. trace:BUG-557 trace:STORY-1843 | ai:claude
         let in_reply_to = args
             .get("in_reply_to")
             .and_then(|v| v.as_str())
@@ -2796,9 +2797,13 @@ impl<'a> McpServer<'a> {
         let thread_id = if let Some(t) = args.get("thread").and_then(|v| v.as_str()) {
             t.to_string()
         } else if let Some(target) = in_reply_to.as_deref() {
-            let local = crate::mailbox_store::read_local_messages(&self.project_root)
-                .map_err(|e| e.to_string())?;
-            aida_core::mailbox::reply_target_thread(target, &local).unwrap_or_else(|| id.clone())
+            let book = crate::mailbox_view::addressable_for(
+                &self.project_root,
+                &self.project_root.join(".aida-store"),
+                &crate::mailbox_view::own_audience_in(&self.project_root),
+            );
+            aida_core::mailbox::reply_target_thread(target, book.messages())
+                .unwrap_or_else(|| id.clone())
         } else {
             id.clone()
         };
@@ -7533,13 +7538,13 @@ pub fn tool_descriptors() -> Value {
         },
         {
             "name": "read_inbox",
-            "description": "Read an agent's mailbox inbox — messages addressed to it plus broadcasts (excluding its own sent), oldest-first — mirroring `aida mailbox inbox`. Reading does NOT mark the inbox seen unless `mark_seen` is true (the explicit ack); pass `unread` to return only messages past the read-watermark. Returns pretty-printed JSON.",
+            "description": "Read an agent's mailbox inbox — messages addressed to it plus broadcasts (excluding its own sent), oldest-first — mirroring `aida mailbox inbox`. Reading does NOT mark the inbox seen unless `mark_seen` is true (the explicit ack); pass `unread` to return only messages with no read receipt. Returns pretty-printed JSON.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "agent": { "type": "string", "description": "Whose inbox (default: this server's agent/user identity).", "example": "claude" },
                     "unread": { "type": "boolean", "description": "Return only unread messages (newer than this inbox's read-watermark). Default false (whole inbox).", "default": false, "example": true },
-                    "mark_seen": { "type": "boolean", "description": "Advance the read-watermark to the newest message after reading — the explicit ack that clears the unread/notice surface. Default false, so a plain read is a non-marking peek (STORY-585 acceptance #4).", "default": false, "example": true }
+                    "mark_seen": { "type": "boolean", "description": "Record a read receipt for each returned unread message — the explicit ack that clears the unread/notice surface. Default false, so a plain read is a non-marking peek (STORY-585 acceptance #4).", "default": false, "example": true }
                 }
             },
             "outputSchema": text_envelope_output_schema(
@@ -10952,6 +10957,77 @@ mod tests {
             messages[0]["subject"], "Review requested",
             "subject must round-trip through send_message -> read_inbox: {out}"
         );
+    }
+
+    /// STORY-1843 F5: MCP `read_inbox` on the shared actual-Git matrix. A
+    /// sibling-only message is in the peek, the unread slice and the
+    /// `mark_seen` ack (a receipt in this checkout); afterwards it reads as
+    /// read. Another inbox is an inspection that refuses `mark_seen`; a
+    /// missing worktree makes the view partial; a reply to the listed ID
+    /// attaches to its thread.
+    // trace:STORY-1843 | ai:claude
+    #[test]
+    fn mcp_read_inbox_shares_the_logical_view() {
+        use crate::mailbox_view::tests::{mail, mail_repo};
+        let _env = crate::test_env::AgentSessionIsolation::apply(&[
+            ("AIDA_USER", Some("operator")),
+            ("AIDA_SESSION_ROLE", Some("advisor")),
+            ("AIDA_AGENT_TYPE", None),
+        ]);
+        let r = mail_repo();
+        crate::mailbox_store::write_message(&r.sib, &mail("sib-only", "operator", 10, false))
+            .unwrap();
+        let server = mk_server(&r.main);
+        let read = |args: Value| -> Value {
+            serde_json::from_str(&server.tool_read_inbox(&args).unwrap()).unwrap()
+        };
+
+        let peek = read(json!({}));
+        assert_eq!(peek["count"], 1, "{peek}");
+        assert_eq!(peek["partial"], false);
+        assert_eq!(peek["messages"][0]["id"], "sib-only");
+        assert_eq!(peek["messages"][0]["read"], "unread");
+        assert_eq!(
+            read(json!({ "unread": true }))["count"],
+            1,
+            "peek did not consume"
+        );
+
+        crate::agent_registry::register_existing_agent(
+            &r.main,
+            "claude",
+            std::process::id(),
+            "implementer".into(),
+            None,
+            r.main.clone(),
+            Some("mail-reader".into()),
+            None,
+        )
+        .unwrap();
+        let reply = server
+            .tool_send_message(&json!({
+                "to": "claude", "body": "ack", "from": "operator", "in_reply_to": "sib-only"
+            }))
+            .unwrap();
+        assert!(reply.contains("(thread sib-only)"), "{reply}");
+
+        let acked = read(json!({ "agent": "operator", "mark_seen": true, "unread": true }));
+        assert_eq!(acked["count"], 1);
+        assert!(crate::mailbox_store::read_receipts(&r.main, "operator").contains_key("sib-only"));
+        let after = read(json!({ "unread": true }));
+        assert_eq!(after["count"], 0, "{after}");
+        assert_eq!(read(json!({}))["messages"][0]["read"], "read");
+
+        let err = server
+            .tool_read_inbox(&json!({ "agent": "stranger", "mark_seen": true }))
+            .unwrap_err();
+        assert!(err.contains("not one of them"), "{err}");
+        assert_eq!(read(json!({ "agent": "stranger" }))["inspection"], true);
+
+        std::fs::remove_dir_all(&r.sib).unwrap();
+        let partial = read(json!({}));
+        assert_eq!(partial["partial"], true, "{partial}");
+        assert!(partial["partial_note"].as_str().is_some());
     }
 
     // trace:STORY-585 trace:TASK-1271 | ai:claude+codex

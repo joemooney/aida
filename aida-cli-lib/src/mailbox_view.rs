@@ -12,8 +12,15 @@
 //! mail. Passive counts and notices treat a legacy watermark as not-new; the
 //! explicit inbox labels it "read (legacy)". Marking stays the existing
 //! BUG-1482 write-before-print path ([`mark_displayed`]); it writes per-ID
-//! receipts for the displayed unread IDs only. No new receipt anchor exists
-//! before the retention barrier (slice C), and the post-flush ACK is B2c.
+//! receipts for the displayed unread IDs only, never a legacy watermark. No
+//! new receipt anchor exists before the retention barrier (slice C), and the
+//! post-flush ACK is B2c.
+//!
+//! Every verb that takes a message ID (`read`, `thread`, `archive`,
+//! `retract`, `delete`, replies) resolves against [`Addressable`]: the same
+//! snapshot the listing used, plus the reader's own sent mail, so an ID a
+//! listing displayed always resolves. Writes stay source-local until slice
+//! C: a write to a message only another worktree holds refuses and names it.
 //!
 //! Readers that address someone else's inbox (`--all`, `--agent` naming an
 //! inbox this process does not hold, launch context for a child, the
@@ -23,11 +30,12 @@
 
 use aida_core::mailbox::Message;
 use aida_core::mailbox_logical::{
-    logical_snapshot, MailboxContext, Query, ReadEvidence, ReadLimits, ResolvedAudience,
-    SnapshotRecord, SourceErrorCode, SourceStatus,
+    logical_snapshot, LogicalSnapshot, MailboxContext, Query, ReadEvidence, ReadLimits,
+    ResolvedAudience, SnapshotRecord, SourceErrorCode, SourceKind, SourceStatus,
 };
-use anyhow::Result;
-use std::path::Path;
+use anyhow::{Context, Result};
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 /// Deadline for a passive read (statusline, per-turn notice, status).
@@ -177,23 +185,39 @@ pub(crate) fn read_own_mail(
     audience: &ResolvedAudience,
     limits: &ReadLimits,
 ) -> OwnMail {
+    let (_, view) = snapshot_view(project_root, store_root, audience, &Query::Inbox, limits);
+    view
+}
+
+/// One snapshot for `query`, with the context it was taken in (`None` when
+/// the checkout could not be resolved; the view is then typed partial).
+fn snapshot_view(
+    project_root: &Path,
+    store_root: &Path,
+    audience: &ResolvedAudience,
+    query: &Query,
+    limits: &ReadLimits,
+) -> (Option<(MailboxContext, LogicalSnapshot)>, OwnMail) {
     let store = std::fs::symlink_metadata(store_root)
         .is_ok()
         .then_some(store_root);
     let ctx = match MailboxContext::resolve_or_local(project_root, store) {
         Ok(ctx) => ctx,
         Err(code) => {
-            return OwnMail {
-                audience: audience.clone(),
-                records: Vec::new(),
-                coverage: Coverage::Partial {
-                    codes: vec![code],
-                    conflicts: 0,
+            return (
+                None,
+                OwnMail {
+                    audience: audience.clone(),
+                    records: Vec::new(),
+                    coverage: Coverage::Partial {
+                        codes: vec![code],
+                        conflicts: 0,
+                    },
                 },
-            }
+            )
         }
     };
-    let snapshot = logical_snapshot(&ctx, audience, &Query::Inbox, limits);
+    let snapshot = logical_snapshot(&ctx, audience, query, limits);
     let coverage = if snapshot.complete() {
         Coverage::Complete
     } else {
@@ -214,42 +238,181 @@ pub(crate) fn read_own_mail(
             conflicts: snapshot.conflicts.len(),
         }
     };
-    OwnMail {
+    let view = OwnMail {
         audience: audience.clone(),
-        records: snapshot.records,
+        records: snapshot.records.clone(),
         coverage,
+    };
+    (Some((ctx, snapshot)), view)
+}
+
+/// Where a resolvable message physically lives, for the source-local writes
+/// (archive, retract, delete) that slice C has not yet made cross-worktree.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum Holder {
+    /// The requesting checkout or the canonical store holds a copy.
+    Here,
+    /// Only other worktrees of this repository hold it.
+    Elsewhere(Vec<PathBuf>),
+}
+
+/// Every message an ID-accepting verb (`read`, `thread`, `archive`,
+/// `retract`, `delete`, `send --in-reply-to`/`--thread`, MCP `send_message`
+/// replies) resolves against: the SAME logical snapshot the own-audience
+/// inbox lists, widened only by the audience's own sent mail, so every ID
+/// an inbox or notice displays resolves here (ruling on F1, PR #2952). This
+/// checkout's and the canonical store's other mail stays resolvable as
+/// operator inspection, exactly as before B2b.
+pub(crate) struct Addressable {
+    messages: Vec<Message>,
+    records: Vec<SnapshotRecord>,
+    holders: HashMap<String, Holder>,
+    partial: Option<String>,
+}
+
+impl Addressable {
+    /// Every resolvable message: reconciled snapshot records first, then
+    /// this checkout's and the store's other mail.
+    pub(crate) fn messages(&self) -> &[Message] {
+        &self.messages
+    }
+
+    /// The own-audience record for `id`, when the snapshot holds one.
+    pub(crate) fn record(&self, id: &str) -> Option<&SnapshotRecord> {
+        self.records.iter().find(|r| r.message.id == id)
+    }
+
+    /// Resolve an exact ID or unique prefix. A miss on a partial view says
+    /// the view was partial, so "not found" is never read as "absent".
+    pub(crate) fn resolve(&self, query: &str) -> Result<&Message> {
+        let found = crate::resolve_mailbox_message(&self.messages, query);
+        match (&found, &self.partial) {
+            (Err(e), Some(note))
+                if matches!(
+                    e.downcast_ref::<crate::MailboxResolveFailure>(),
+                    Some(crate::MailboxResolveFailure::NotFound { .. })
+                ) =>
+            {
+                found.with_context(|| note.clone())
+            }
+            _ => found,
+        }
+    }
+
+    /// Refuse a source-local write to a message no copy of which lives in
+    /// this checkout or the canonical store, naming the worktree(s) that
+    /// hold it. Writes stay source-local until slice C.
+    pub(crate) fn ensure_writable_here(&self, message: &Message, verb: &str) -> Result<()> {
+        match self.holders.get(&message.id) {
+            Some(Holder::Elsewhere(paths)) => {
+                let named = paths
+                    .iter()
+                    .map(|p| p.display().to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                anyhow::bail!(
+                    "message {} lives only in another worktree ({named}); {verb} it from there \
+                     (cross-worktree mailbox writes are not supported yet)",
+                    message.id
+                )
+            }
+            _ => Ok(()),
+        }
+    }
+}
+
+/// [`Addressable`] for this process's own audience.
+pub(crate) fn addressable(project_root: &Path, store_root: &Path) -> Addressable {
+    addressable_for(project_root, store_root, &own_audience())
+}
+
+/// [`Addressable`] for `audience`, read from the checkout `project_root`.
+pub(crate) fn addressable_for(
+    project_root: &Path,
+    store_root: &Path,
+    audience: &ResolvedAudience,
+) -> Addressable {
+    let (taken, view) = snapshot_view(
+        project_root,
+        store_root,
+        audience,
+        &Query::Addressable,
+        &explicit_limits(),
+    );
+    let mut holders = HashMap::new();
+    if let Some((ctx, snapshot)) = &taken {
+        let here = std::fs::canonicalize(ctx.requested_checkout().path())
+            .unwrap_or_else(|_| ctx.requested_checkout().path().to_path_buf());
+        for record in &snapshot.records {
+            let mut elsewhere = Vec::new();
+            let mut local_here = false;
+            for p in &record.provenance {
+                match snapshot.sources.get(p.source).map(|s| &s.kind) {
+                    Some(SourceKind::Canonical(_)) => local_here = true,
+                    Some(SourceKind::Local(path)) => {
+                        let path = std::fs::canonicalize(path).unwrap_or_else(|_| path.clone());
+                        if path == here {
+                            local_here = true;
+                        } else {
+                            elsewhere.push(path);
+                        }
+                    }
+                    None => {}
+                }
+            }
+            let holder = if local_here || elsewhere.is_empty() {
+                Holder::Here
+            } else {
+                Holder::Elsewhere(elsewhere)
+            };
+            holders.insert(record.message.id.clone(), holder);
+        }
+    }
+    // This checkout's and the store's other mail: operator inspection, as
+    // before B2b. Its sources are also snapshot sources, so a read failure
+    // here already makes the view partial; it never aborts the lookup.
+    let local = crate::mailbox_store::read_local_messages(project_root).unwrap_or_default();
+    let canonical = crate::mailbox_store::read_canonical_messages(store_root).unwrap_or_default();
+    let mut messages: Vec<Message> = view.records.iter().map(|r| r.message.clone()).collect();
+    for m in aida_core::mailbox::merge_dedup(&local, &canonical) {
+        if !holders.contains_key(&m.id) {
+            messages.push(m);
+        }
+    }
+    Addressable {
+        messages,
+        partial: view.partial_note(),
+        records: view.records,
+        holders,
     }
 }
 
 /// Mark the displayed records read, before they are printed (BUG-1482: a
 /// reader that closes the pipe early still has what it was shown marked).
 /// Writes a per-ID receipt for each displayed UNREAD record under every key
-/// it is addressed to, in the requesting checkout, and keeps each key's
-/// legacy watermark advanced to its newest displayed record for older
-/// readers. A record covered only by a legacy watermark gets no receipt:
-/// its real read time is unknown (TASK-1271), and resolving it is the
-/// explicit ACK of slice B2c.
+/// it is addressed to, in the requesting checkout, and nothing else (ruling
+/// 76 Q3): the legacy timestamp watermark is never advanced, because a
+/// displayed record may come from a sibling or the canonical store, and a
+/// watermark at its timestamp would hide a later-arriving older local
+/// message from every passive surface. A record covered only by a legacy
+/// watermark gets no receipt: its real read time is unknown (TASK-1271),
+/// and resolving it is the explicit ACK of slice B2c.
 pub(crate) fn mark_displayed(
     project_root: &Path,
     audience: &ResolvedAudience,
     displayed: &[&SnapshotRecord],
 ) -> Result<()> {
     let mut receipts: std::collections::BTreeMap<&str, Vec<&str>> = Default::default();
-    let mut newest: std::collections::BTreeMap<&str, i64> = Default::default();
     for record in displayed {
+        if ReadState::of(record) != ReadState::Unread {
+            continue;
+        }
         for key in audience.matching_keys(&record.message) {
-            let slot = newest.entry(key).or_insert(record.message.timestamp);
-            *slot = (*slot).max(record.message.timestamp);
-            if ReadState::of(record) == ReadState::Unread {
-                receipts.entry(key).or_default().push(&record.message.id);
-            }
+            receipts.entry(key).or_default().push(&record.message.id);
         }
     }
     for (key, ids) in &receipts {
         crate::mailbox_store::record_seen(project_root, key, ids)?;
-    }
-    for (key, ts) in newest {
-        crate::mailbox_store::set_watermark(project_root, key, ts)?;
     }
     Ok(())
 }
