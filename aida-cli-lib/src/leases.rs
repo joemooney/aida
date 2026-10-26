@@ -4268,14 +4268,40 @@ pub(crate) fn orphan_adoption_refusal(report: &StaleLeaseRecoveryReport) -> Opti
 }
 
 /// BUG-2223: [`orphan_adoption_refusal`] for `lease` itself, also refusing a
-/// lease that records no tree. Every `--resume` hint a scope-conflict refusal
-/// gives is gated on this, so a hint never offers a re-entry that refuses.
+/// lease that records no tree, or a linked worktree git no longer lists
+/// (session start re-enters a worktree only when `git worktree list` does).
+/// Every `--resume` hint a scope-conflict refusal gives is gated on this, so
+/// a hint never offers a re-entry that refuses.
 // trace:BUG-2223 | ai:claude
-pub(crate) fn lease_adoption_refusal(lease: &SessionLease) -> Option<&'static str> {
+pub(crate) fn lease_adoption_refusal(
+    project_root: &std::path::Path,
+    lease: &SessionLease,
+) -> Option<&'static str> {
     if lease.worktree_path.as_os_str().is_empty() {
         return Some("it records no tree");
     }
-    orphan_adoption_refusal(&stale_lease_recovery_for_lease(lease))
+    if let Some(why) = orphan_adoption_refusal(&stale_lease_recovery_for_lease(lease)) {
+        return Some(why);
+    }
+    let registered = || {
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(project_root)
+            .args(["worktree", "list", "--porcelain"])
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .is_some_and(|o| {
+                crate::worktree::is_registered(
+                    &String::from_utf8_lossy(&o.stdout),
+                    &lease.worktree_path,
+                )
+            })
+    };
+    if lease.tree_kind != crate::seat_clone::TreeKind::Clone && !registered() {
+        return Some("git no longer lists its worktree (`git worktree list`)");
+    }
+    None
 }
 
 /// BUG-2223: the orphaned lease on `scope` whose tree `aida queue work
@@ -4288,7 +4314,9 @@ pub(crate) fn adoptable_orphan_lease(
     scope: &str,
 ) -> Option<SessionLease> {
     let lease = find_scope_lease_conflict(&list_leases(project_root), scope)?;
-    lease_adoption_refusal(&lease).is_none().then_some(lease)
+    lease_adoption_refusal(project_root, &lease)
+        .is_none()
+        .then_some(lease)
 }
 
 /// BUG-906: before a transient phase retry relaunches a child session, reap any

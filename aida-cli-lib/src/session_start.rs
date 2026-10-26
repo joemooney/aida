@@ -2050,6 +2050,25 @@ pub(crate) fn session_start_with_receipt(
             &orphan.id[..orphan.id.len().min(8)],
         );
     }
+    // ...and so does any other lease on the scope whose owner is still alive,
+    // with or without a live linked worktree: adoption bypasses the BUG-637
+    // live-claim gate's claude-process probe, so it checks owners itself.
+    // trace:BUG-2223 | ai:claude
+    if let Some(orphan) = &adopted_orphan {
+        if let Some(live) = list_leases(&project_root).into_iter().find(|l| {
+            l.id != orphan.id
+                && l.scope.eq_ignore_ascii_case(owns)
+                && stale_lease_recovery_for_lease(l).base_verdict == StaleLeaseRecovery::Live
+        }) {
+            anyhow::bail!(
+                "scope `{owns}` is also held by live session {} ({}), so the orphaned lease \
+                 {}'s tree is not re-entered. Nothing was changed in it.",
+                &live.id[..live.id.len().min(8)],
+                live.worktree_path.display(),
+                &orphan.id[..orphan.id.len().min(8)],
+            );
+        }
+    }
     if let Some(existing) = existing {
         {
             eprintln!(
@@ -2174,12 +2193,15 @@ pub(crate) fn session_start_with_receipt(
     let force_claim_effective =
         effective_force_claim_for_session_start(force_claim, orchestrator_corroborated);
     // BUG-2223: the orphan being adopted is what holds the spec In Progress,
-    // so adopting it passes the status gate; it bypasses nothing after this.
+    // so adopting it lets exactly that status through; NeedsAttention and
+    // every other refusal still stand, and it bypasses nothing after this.
     // trace:BUG-2223 | ai:claude
+    let adoption_lifts_status =
+        adopted_orphan.is_some() && matches!(preflight_status, Some(RequirementStatus::InProgress));
     match preflight_spec_status_review_aware(
         owns,
         preflight_status.as_ref(),
-        force_claim_effective || adopted_orphan.is_some(),
+        force_claim_effective || adoption_lifts_status,
         is_review_session,
     ) {
         PreflightDecision::Refuse(msg) => anyhow::bail!("{}", msg),

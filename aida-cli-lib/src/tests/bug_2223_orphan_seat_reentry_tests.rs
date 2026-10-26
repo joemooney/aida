@@ -56,6 +56,11 @@ fn start(
 /// `aida queue work --resume`'s session start: adopt the orphan at `path`,
 /// with no `--force-claim`.
 fn adopt(owns: &str, branch: &str, path: &Path) -> anyhow::Result<()> {
+    adopt_as(owns, branch, path, true)
+}
+
+/// [`adopt`], from a contained (`contained`) or uncontained launch.
+fn adopt_as(owns: &str, branch: &str, path: &Path, contained: bool) -> anyhow::Result<()> {
     crate::session_start::session_start_with_receipt(
         owns,
         Some(branch),
@@ -75,7 +80,7 @@ fn adopt(owns: &str, branch: &str, path: &Path) -> anyhow::Result<()> {
         Some(false),
         /* self_claim */ true,
         /* review_coexistence */ None,
-        /* contained_seat */ true,
+        /* contained_seat */ contained,
         /* rollback_failed_setup */ false,
         /* adopt_orphan */ true,
     )
@@ -340,9 +345,9 @@ fn the_conflict_hint_offers_resume_only_when_resume_adopts() {
     let resume_cmd = format!("aida queue work {scope} --resume");
     let orphan = orphaned_clone(&fx.main, scope);
 
-    let refusal = crate::leases::lease_adoption_refusal(&orphan);
+    let refusal = crate::leases::lease_adoption_refusal(&fx.main, &orphan);
     assert_eq!(refusal, None);
-    let hint = crate::queue_cmd::scope_conflict_resume_hint(scope, &orphan.id, refusal, None);
+    let hint = crate::queue_cmd::scope_conflict_resume_hint(scope, &orphan.id, refusal, None, true);
     assert!(hint.contains(&resume_cmd), "{hint}");
     let adopted = crate::leases::adoptable_orphan_lease(&fx.main, scope).expect("adopted");
     assert_eq!(adopted.id, orphan.id);
@@ -354,12 +359,12 @@ fn the_conflict_hint_offers_resume_only_when_resume_adopts() {
     no_pid.creator_pid = None;
     no_pid.creator_pid_start_time = None;
     write_lease(&fx.main, &no_pid);
-    let refusal = crate::leases::lease_adoption_refusal(&no_pid);
+    let refusal = crate::leases::lease_adoption_refusal(&fx.main, &no_pid);
     assert!(
         refusal.is_some_and(|why| why.contains("no owning process")),
         "{refusal:?}"
     );
-    let hint = crate::queue_cmd::scope_conflict_resume_hint(scope, &no_pid.id, refusal, None);
+    let hint = crate::queue_cmd::scope_conflict_resume_hint(scope, &no_pid.id, refusal, None, true);
     assert!(!hint.contains("queue work"), "{hint}");
     assert!(hint.contains("cannot re-enter"), "{hint}");
     assert!(hint.contains("session end"), "{hint}");
@@ -402,9 +407,8 @@ fn adopting_an_orphan_still_refuses_a_live_lease_on_the_scope() {
         crate::leases::next_scope_conflict(crate::list_leases(&fx.main), scope, Some(&orphan.id))
             .expect("the live lease is still swept");
     assert_eq!(next.id, live.id);
-    assert!(
-        crate::leases::lease_adoption_refusal(&next).is_some_and(|w| w.contains("live process"))
-    );
+    assert!(crate::leases::lease_adoption_refusal(&fx.main, &next)
+        .is_some_and(|w| w.contains("live process")));
 
     let err = format!("{:#}", adopt(scope, &orphan.branch, &clone).unwrap_err());
     assert!(err.contains(&live.id[..8]), "{err}");
@@ -431,4 +435,244 @@ fn adopting_a_path_that_is_not_an_orphans_tree_is_refused() {
     let err = format!("{:#}", adopt("TASK-922703", "x", &missing).unwrap_err());
     assert!(err.contains("no longer the tree of an orphaned"), "{err}");
     assert!(!missing.exists());
+}
+
+/// A linked worktree for `owns` (an uncontained seat) whose worker died,
+/// holding uncommitted work.
+fn orphaned_worktree(main: &Path, owns: &str) -> crate::SessionLease {
+    start(owns, None, None, false, false).unwrap();
+    let lease = lease_for(main, owns);
+    assert_eq!(lease.tree_kind, TreeKind::Worktree);
+    std::fs::write(lease.worktree_path.join("wip.txt"), "untracked work\n").unwrap();
+    set_owner(main, &lease, dead_pid());
+    lease_for(main, owns)
+}
+
+/// Finding 5: a linked-worktree (non-clone) orphan is adopted in place through
+/// `reuse_existing_worktree_path`, and one git no longer lists is neither
+/// offered nor adopted.
+// trace:BUG-2223 | ai:claude
+#[test]
+fn a_linked_worktree_orphan_is_adopted_in_place_unless_git_no_longer_lists_it() {
+    let fx = fixture();
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+    // The store is its own repository, as in a real checkout: re-entering a
+    // worktree excludes `.aida-store` from main's index.
+    git_ok(&fx.main, &["init", "-q", ".aida-store"]);
+    let scope = "TASK-922704";
+    let orphan = orphaned_worktree(&fx.main, scope);
+    let tree = orphan.worktree_path.clone();
+    assert_eq!(
+        crate::leases::lease_adoption_refusal(&fx.main, &orphan),
+        None
+    );
+    let hint = crate::queue_cmd::scope_conflict_resume_hint(scope, &orphan.id, None, None, false);
+    assert!(
+        hint.contains(&format!("aida queue work {scope} --resume`")),
+        "{hint}"
+    );
+
+    adopt_as(scope, &orphan.branch, &tree, false).unwrap();
+    let lease = lease_for(&fx.main, scope);
+    assert_ne!(lease.id, orphan.id);
+    assert_eq!(lease.tree_kind, TreeKind::Worktree);
+    assert_eq!(lease.worktree_path, tree);
+    assert!(!crate::lease_path(&fx.main, &orphan.id).exists());
+    assert_eq!(
+        std::fs::read_to_string(tree.join("wip.txt")).unwrap(),
+        "untracked work\n"
+    );
+
+    // Another orphan whose worktree git has forgotten.
+    let scope = "TASK-922705";
+    let gone = orphaned_worktree(&fx.main, scope);
+    let admin = git_ok(&gone.worktree_path, &["rev-parse", "--git-dir"]);
+    std::fs::remove_dir_all(gone.worktree_path.join(admin)).unwrap();
+    let refusal = crate::leases::lease_adoption_refusal(&fx.main, &gone);
+    assert!(
+        refusal.is_some_and(|why| why.contains("git worktree list")),
+        "{refusal:?}"
+    );
+    let hint = crate::queue_cmd::scope_conflict_resume_hint(scope, &gone.id, refusal, None, false);
+    assert!(!hint.contains("queue work"), "{hint}");
+    assert!(crate::leases::adoptable_orphan_lease(&fx.main, scope).is_none());
+}
+
+/// Finding 4a: a seat clone's hint names the contained launch that re-enters
+/// it, since an uncontained `--resume` refuses there.
+// trace:BUG-2223 | ai:claude
+#[test]
+fn a_seat_clone_hint_names_the_contained_resume() {
+    let hint =
+        crate::queue_cmd::scope_conflict_resume_hint("TASK-1", "0123456789", None, None, true);
+    assert!(
+        hint.contains("`aida queue work TASK-1 --resume --sandbox`"),
+        "{hint}"
+    );
+}
+
+/// `aida queue work <scope>` as the CLI runs it, with `--no-launch`.
+fn queue_work(
+    storage: &crate::Storage,
+    scope: &str,
+    branch: Option<&str>,
+    path: Option<&str>,
+    resume: Option<&str>,
+) -> anyhow::Result<()> {
+    crate::queue_cmd::handle_queue_work(
+        storage,
+        crate::test_env::HERMETIC_TEST_USER,
+        Some(scope),
+        None,
+        false,
+        /* no_launch */ true,
+        crate::queue_cmd::QueueWorkRoleInput::direct(Some("implementer")),
+        /* no_pull */ true,
+        None,
+        branch,
+        path,
+        false,
+        None,
+        false,
+        false,
+        false,
+        /* force_claim */ false,
+        resume,
+        false,
+        false,
+        None,
+        "claude",
+        false,
+        crate::phase_driver::AutonomyMode::Default,
+        None,
+        false,
+        false,
+        false,
+        None,
+        None,
+        None,
+        false,
+        false,
+        false,
+        false,
+        None,
+    )
+}
+
+/// Finding 5, end to end through `handle_queue_work --resume`: a `--path` or
+/// `--branch` naming another tree refuses, the conflict sweep skips the
+/// adopted orphan (without `--resume` it refuses the dirty orphan), and the
+/// pickup lands in the orphan's tree with its work intact. The status gate
+/// lets the orphan's In Progress through, but not NeedsAttention.
+// trace:BUG-2223 | ai:claude
+#[test]
+fn queue_work_resume_adopts_the_orphan_end_to_end() {
+    let fx = fixture();
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+        &fx.main,
+        "implementer",
+        &["implementer"],
+        &[],
+    );
+    let scope = "TASK-922706";
+    let store_root = fx.main.join(".aida-store");
+    let backend = crate::test_env::home_fixture_backend(&store_root).unwrap();
+    let storage = crate::Storage::new(&store_root);
+    std::fs::create_dir_all(store_root.join("registry")).unwrap();
+    std::fs::write(
+        store_root.join("registry/team.toml"),
+        format!(
+            "[members]\n\"{}\" = [\"implementer\"]\n",
+            crate::test_env::HERMETIC_TEST_USER
+        ),
+    )
+    .unwrap();
+    use aida_core::db::DatabaseBackend as _;
+    let mut req = aida_core::Requirement::new("Orphaned work".to_string(), String::new());
+    req.spec_id = Some(scope.to_string());
+    req.status = aida_core::RequirementStatus::Approved;
+    let req = backend.add_requirement(req).unwrap();
+    let set_status = |status: aida_core::RequirementStatus| {
+        let mut store = backend.load().unwrap();
+        let r = store
+            .requirements
+            .iter_mut()
+            .find(|r| r.id == req.id)
+            .unwrap();
+        r.status = status;
+        backend.save(&store).unwrap();
+    };
+    storage
+        .queue_add(aida_core::QueueEntry {
+            user_id: crate::test_env::HERMETIC_TEST_USER.to_string(),
+            requirement_id: req.id,
+            position: 0,
+            added_by: crate::test_env::HERMETIC_TEST_USER.to_string(),
+            note: None,
+            added_at: chrono::Utc::now(),
+            for_role: None,
+            for_scope: None,
+            for_session: None,
+            added_by_machine: None,
+        })
+        .unwrap();
+    let orphan = orphaned_worktree(&fx.main, scope);
+    set_status(aida_core::RequirementStatus::InProgress);
+    let tree = orphan.worktree_path.clone();
+    let elsewhere = fx.root.join("elsewhere");
+    std::fs::create_dir_all(&elsewhere).unwrap();
+
+    let results = [
+        queue_work(&storage, scope, None, None, None),
+        queue_work(&storage, scope, None, elsewhere.to_str(), Some("")),
+        queue_work(&storage, scope, Some("another-branch"), None, Some("")),
+    ];
+    let errs: Vec<String> = results
+        .into_iter()
+        .map(|r| format!("{:#}", r.unwrap_err()))
+        .collect();
+    // Without --resume the sweep refuses the orphan (its wording depends on
+    // whether this host can see other processes).
+    assert!(errs[0].contains(&orphan.id[..8]), "{}", errs[0]);
+    assert!(errs[1].contains("drop --path"), "{}", errs[1]);
+    assert!(errs[2].contains("drop --branch"), "{}", errs[2]);
+    assert_eq!(lease_for(&fx.main, scope).id, orphan.id, "nothing changed");
+
+    set_status(aida_core::RequirementStatus::NeedsAttention);
+    let err = format!(
+        "{:#}",
+        adopt_as(scope, &orphan.branch, &tree, false).unwrap_err()
+    );
+    assert!(err.contains("NeedsAttention"), "{err}");
+    assert_eq!(lease_for(&fx.main, scope).id, orphan.id, "nothing changed");
+    set_status(aida_core::RequirementStatus::InProgress);
+
+    queue_work(&storage, scope, None, None, Some("")).unwrap();
+    let lease = lease_for(&fx.main, scope);
+    assert_ne!(lease.id, orphan.id);
+    assert_eq!(lease.worktree_path, tree);
+    assert_eq!(lease.branch, orphan.branch);
+    assert_eq!(
+        std::fs::read_to_string(tree.join("wip.txt")).unwrap(),
+        "untracked work\n"
+    );
+}
+
+/// The pre-setup branch gate refuses a branch a seat clone holds, except for
+/// the orphan's clone `--resume` is re-entering.
+// trace:BUG-2223 | ai:claude
+#[test]
+fn the_branch_preflight_lets_the_adopted_clone_hold_its_branch() {
+    let fx = fixture();
+    clone_config(&fx.main, &fx.root);
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+    let orphan = orphaned_clone(&fx.main, "TASK-922707");
+    let branch = Some(orphan.branch.as_str());
+    assert!(crate::queue_cmd::preflight_queue_work_branch(&fx.main, branch).is_err());
+    crate::queue_cmd::preflight_queue_work_branch_adopting(
+        &fx.main,
+        branch,
+        Some(&orphan.worktree_path),
+    )
+    .unwrap();
 }
