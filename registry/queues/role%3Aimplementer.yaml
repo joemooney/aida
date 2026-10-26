@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a171c8-6a5d-7073-80cf-9dfcd9667c53
+  position: 286000
+  added_by: role:implementer
+  note: 'positive-path slice: diagnose and sketch first, then advisor signoff'
+  added_at: 2026-10-26T06:08:32.030563586Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a169c3-090b-7350-9b07-de2fa0c4ad61
   position: 287000
   added_by: role:implementer
@@ -73,13 +80,6 @@
   position: 450000
   added_by: role:implementer
   added_at: 2026-10-07T23:06:40.700968851Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
-  requirement_id: 01a171c8-6a5d-7073-80cf-9dfcd9667c53
-  position: 482000
-  added_by: role:implementer
-  added_at: 2026-10-25T09:32:15.146257005Z
   for_role: implementer
   added_by_machine: imac
 - user_id: role:implementer
