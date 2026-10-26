@@ -10,13 +10,13 @@
 #[cfg(unix)]
 use crate::evaluator::{EvaluatorError, MockEvaluator};
 #[cfg(unix)]
+use crate::gate::review_verdict::VerdictKind;
+#[cfg(unix)]
 use crate::graded_review::CriterionStatus;
 use crate::graded_review::{
     execute_graded_review, generate_graded_reviewer_prompt, parse_acceptance_criteria,
     AcceptanceCommandPolicy, CriterionKind,
 };
-#[cfg(unix)]
-use crate::review_verdict::VerdictKind;
 use std::path::Path;
 
 #[test]

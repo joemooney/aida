@@ -593,11 +593,11 @@ impl RealPhaseDriver {
         self.pr_number = Some(pr);
         if let Some(reason) = auto_complete::PhaseDriver::merge_supervision_hold(self) {
             let pr = u64::from(pr);
-            let _ = crate::merge_hold::write_typed_hold(
+            let _ = crate::gate::merge_hold_core::write_typed_hold(
                 &self.project_root,
-                &crate::merge_hold::typed_hold(
+                &crate::gate::merge_hold_core::typed_hold(
                     pr,
-                    crate::merge_hold::HoldReasonKind::Supervision,
+                    crate::gate::merge_hold_core::HoldReasonKind::Supervision,
                     &reason,
                     None,
                 )
@@ -857,9 +857,9 @@ impl RealPhaseDriver {
         detail: &str,
     ) {
         let number = change.id;
-        let hold = crate::merge_hold::typed_hold(
+        let hold = crate::gate::merge_hold_core::typed_hold(
             number,
-            crate::merge_hold::HoldReasonKind::Supervision,
+            crate::gate::merge_hold_core::HoldReasonKind::Supervision,
             format!(
                 "publication guards refused this change and it could not be closed; \
                  it must not merge unreviewed:\n{detail}"
@@ -867,7 +867,7 @@ impl RealPhaseDriver {
             None,
         )
         .with_spec(&self.spec);
-        match crate::merge_hold::write_typed_hold(&self.project_root, &hold) {
+        match crate::gate::merge_hold_core::write_typed_hold(&self.project_root, &hold) {
             Ok(()) => {
                 if !self.json {
                     eprintln!(
@@ -946,7 +946,7 @@ impl RealPhaseDriver {
                     crate::glyph(crate::glyphs::Glyph::Info).cyan(),
                     pr.number,
                     self.spec,
-                    pr_ship::DRAFT_ONLY_TAG,
+                    crate::gate::ship::DRAFT_ONLY_TAG,
                 );
             }
             return;
@@ -1013,7 +1013,7 @@ impl RealPhaseDriver {
                 // The ship gate's own predicate, so the two surfaces cannot
                 // drift on what counts as draft-only-tagged.
                 let tags: Vec<String> = r.tags.iter().cloned().collect();
-                pr_ship::is_draft_only_tagged(&tags)
+                crate::gate::ship::is_draft_only_tagged(&tags)
             }
         })
     }
@@ -1033,9 +1033,9 @@ impl RealPhaseDriver {
             return;
         };
         let number = pr.number;
-        let hold = crate::merge_hold::typed_hold(
+        let hold = crate::gate::merge_hold_core::typed_hold(
             number,
-            crate::merge_hold::HoldReasonKind::Supervision,
+            crate::gate::merge_hold_core::HoldReasonKind::Supervision,
             format!(
                 "publication guards could not complete (inconclusive); the change is \
                  unverified and must not merge unreviewed:\n{detail}"
@@ -1043,7 +1043,8 @@ impl RealPhaseDriver {
             None,
         )
         .with_spec(&self.spec);
-        let marker_result = crate::merge_hold::write_typed_hold(&self.project_root, &hold);
+        let marker_result =
+            crate::gate::merge_hold_core::write_typed_hold(&self.project_root, &hold);
         let label_result = crate::merge_hold::sync_label(&self.project_root, number, true);
         match &marker_result {
             Ok(()) => {

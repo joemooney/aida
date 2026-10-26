@@ -166,7 +166,7 @@ pub(crate) fn is_built_or_held(req: &Requirement, in_flight_scopes: &HashSet<Str
     );
     let draft_only = req.tags.iter().any(|t| {
         t.trim()
-            .eq_ignore_ascii_case(crate::pr_ship::DRAFT_ONLY_TAG)
+            .eq_ignore_ascii_case(crate::gate::ship::DRAFT_ONLY_TAG)
     });
     let leased = req
         .spec_id
@@ -882,7 +882,7 @@ pub(crate) fn finalize_answer(
     let mut promoted_to_approved = false;
     if matches!(req.status, RequirementStatus::Draft)
         && !applied.keeps_parked
-        && has_advisor_authority()
+        && crate::gate::role_authority::has_advisor_authority()
     {
         req.status = RequirementStatus::Approved;
         promoted_to_approved = true;
@@ -959,7 +959,7 @@ pub(crate) fn maybe_autoqueue(store_path: &std::path::Path, req: &Requirement) -
         );
         return Ok(());
     }
-    if !has_dispatch_authority() {
+    if !crate::gate::role_authority::has_dispatch_authority() {
         println!(
             "  {} unparked, but this session lacks dispatch authority — ask product, advisor, or integrator to queue",
             crate::glyph(crate::glyphs::Glyph::InFlight).dimmed()
@@ -1652,7 +1652,7 @@ pub(crate) fn questions_clarify(
         crate::session::prepare_contained_mailbox_for_launch(&project_root)?;
     }
     let child_grant =
-        seat_authority::issue_child(&project_root, "advisor", &current_user_id(None))?;
+        crate::gate::seat_authority::issue_child(&project_root, "advisor", &current_user_id(None))?;
     let status_code = build_questions_clarify_command(&prompt, &child_grant.id, contained)?
         .status()
         .map_err(|e| {
@@ -1688,7 +1688,7 @@ pub(crate) fn build_questions_clarify_command(
     }
     cmd.arg(prompt)
         .env("AIDA_SESSION_ROLE", "advisor")
-        .env(seat_authority::GRANT_ENV, child_grant_id);
+        .env(crate::gate::seat_authority::GRANT_ENV, child_grant_id);
     crate::session::scrub_launcher_session_env(&mut cmd);
     if contained {
         cmd.env("AIDA_CONTAINED", "1");

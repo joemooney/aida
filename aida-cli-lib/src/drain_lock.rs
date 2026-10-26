@@ -1032,12 +1032,16 @@ mod tests {
         let root = dir.path();
         let path = drain_lock_path(root);
         let subject = "task-1798-drain-user";
-        let grant =
-            crate::seat_authority::test_support::mint_grant_for(root, subject, "implementer", &[]);
+        let grant = crate::gate::seat_authority::test_support::mint_grant_for(
+            root,
+            subject,
+            "implementer",
+            &[],
+        );
         let valid = |g: &str| {
             matches!(
-                crate::seat_authority::grant_check_for(root, g, subject),
-                crate::seat_authority::GrantCheck::Valid(_)
+                crate::gate::seat_authority::grant_check_for(root, g, subject),
+                crate::gate::seat_authority::GrantCheck::Valid(_)
             )
         };
 
@@ -1087,12 +1091,17 @@ mod tests {
         let subject = "task-1798-drain-remove";
         let valid = |g: &str| {
             matches!(
-                crate::seat_authority::grant_check_for(root, g, subject),
-                crate::seat_authority::GrantCheck::Valid(_)
+                crate::gate::seat_authority::grant_check_for(root, g, subject),
+                crate::gate::seat_authority::GrantCheck::Valid(_)
             )
         };
         let mint = || {
-            crate::seat_authority::test_support::mint_grant_for(root, subject, "implementer", &[])
+            crate::gate::seat_authority::test_support::mint_grant_for(
+                root,
+                subject,
+                "implementer",
+                &[],
+            )
         };
 
         // DrainGuard::drop.

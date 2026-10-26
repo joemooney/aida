@@ -7,7 +7,7 @@
 // trace:BUG-1934 | ai:claude
 
 use super::*;
-use crate::review_authority::{with_identity_source, IdentitySource, ProcEntry};
+use crate::gate::review_authority::{with_identity_source, IdentitySource, ProcEntry};
 use crate::test_env::EnvVarsGuard;
 
 const SUBJECT: &str = "bug-1934-keyring-fixture-user";
@@ -442,7 +442,7 @@ fn foreign_namespace_signals() {
 
 #[test]
 fn key_tokens_match_exactly() {
-    use crate::review_authority::binding_tokens_match as m;
+    use crate::gate::review_authority::binding_tokens_match as m;
     let a = key_token(b"one");
     assert!(m(&a, &a));
     assert!(!m(&a, &key_token(b"two")));

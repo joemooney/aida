@@ -114,14 +114,14 @@ pub(super) fn send(
 fn findings_due<'a>(
     change: &forge::Change,
     history: &'a History,
-) -> Vec<&'a crate::review_verdict::RecordingKey> {
-    let on_head = |key: &crate::review_verdict::RecordingKey| {
+) -> Vec<&'a crate::gate::review_verdict::RecordingKey> {
+    let on_head = |key: &crate::gate::review_verdict::RecordingKey| {
         key.0
             .as_deref()
-            .is_some_and(|sha| crate::review_verdict::same_reviewed_sha(sha, &change.head))
+            .is_some_and(|sha| crate::gate::review_verdict::same_reviewed_sha(sha, &change.head))
     };
-    let kind = |key: &crate::review_verdict::RecordingKey| {
-        crate::review_verdict::VerdictKind::parse(&key.2)
+    let kind = |key: &crate::gate::review_verdict::RecordingKey| {
+        crate::gate::review_verdict::VerdictKind::parse(&key.2)
     };
     if history
         .keys
@@ -165,7 +165,7 @@ fn findings_message(
     repository: &str,
     change: &forge::Change,
     history: &History,
-    verdict: &crate::review_verdict::RecordingKey,
+    verdict: &crate::gate::review_verdict::RecordingKey,
     to: &str,
 ) -> aida_core::mailbox::Message {
     let key = change.key();

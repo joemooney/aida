@@ -8,7 +8,8 @@
 //! pure-git chokepoint are driven against real temp filesystems/repos.
 // trace:BUG-1774 | ai:claude
 
-use crate::merge_hold::{self, CorpusMergeGate};
+use crate::gate::merge_hold_core::CorpusMergeGate;
+use crate::merge_hold::{self};
 
 const HEAD: &str = "9cd65761d7aa4f3b2c1e0d9a8b7c6d5e4f3a2b1c";
 const OLD: &str = "1111111111111111111111111111111111111111";
@@ -31,7 +32,7 @@ fn keyed(key: &str, body: String) -> (String, String) {
     (key.to_string(), body)
 }
 
-fn refusal_of(gate: CorpusMergeGate) -> (String, Option<merge_hold::CorpusArm>) {
+fn refusal_of(gate: CorpusMergeGate) -> (String, Option<crate::gate::merge_hold_core::CorpusArm>) {
     match gate {
         CorpusMergeGate::Refuse { message, arm } => (message, arm),
         CorpusMergeGate::Clear => panic!("expected the gate to refuse"),
@@ -45,7 +46,7 @@ fn refusal_of(gate: CorpusMergeGate) -> (String, Option<merge_hold::CorpusArm>) 
 #[test]
 fn no_artifacts_is_clear() {
     assert_eq!(
-        merge_hold::corpus_merge_gate(7, &[], Some(HEAD)),
+        crate::gate::merge_hold_core::corpus_merge_gate(7, &[], Some(HEAD)),
         CorpusMergeGate::Clear
     );
 }
@@ -55,7 +56,7 @@ fn no_artifacts_is_clear() {
 // arm's sha IS the head the gate judged, not a second derivation).
 #[test]
 fn a_refusal_at_the_current_head_refuses_and_arms() {
-    let (message, arm) = refusal_of(merge_hold::corpus_merge_gate(
+    let (message, arm) = refusal_of(crate::gate::merge_hold_core::corpus_merge_gate(
         7,
         &[keyed("BUG-9", body("request-changes", HEAD, None))],
         Some(HEAD),
@@ -76,7 +77,7 @@ fn a_refusal_at_the_current_head_refuses_and_arms() {
 // arm — there is no definite blocker AT this head to mirror).
 #[test]
 fn a_head_move_alone_does_not_lift_the_hold() {
-    let (message, arm) = refusal_of(merge_hold::corpus_merge_gate(
+    let (message, arm) = refusal_of(crate::gate::merge_hold_core::corpus_merge_gate(
         7,
         &[keyed("BUG-9", body("request-changes", OLD, None))],
         Some(HEAD),
@@ -91,7 +92,7 @@ fn a_head_move_alone_does_not_lift_the_hold() {
 // AC3 — an `approved` recorded at the OLD rejected sha does not lift it either.
 #[test]
 fn an_approval_at_the_old_rejected_sha_does_not_lift_the_hold() {
-    let (_, arm) = refusal_of(merge_hold::corpus_merge_gate(
+    let (_, arm) = refusal_of(crate::gate::merge_hold_core::corpus_merge_gate(
         7,
         &[
             keyed("BUG-9", body("request-changes", OLD, None)),
@@ -107,7 +108,7 @@ fn an_approval_at_the_old_rejected_sha_does_not_lift_the_hold() {
 #[test]
 fn an_approval_at_the_new_head_after_a_move_releases() {
     assert_eq!(
-        merge_hold::corpus_merge_gate(
+        crate::gate::merge_hold_core::corpus_merge_gate(
             7,
             &[
                 keyed("BUG-9", body("request-changes", OLD, None)),
@@ -124,7 +125,7 @@ fn an_approval_at_the_new_head_after_a_move_releases() {
 #[test]
 fn a_closed_refusal_is_history_and_clears() {
     assert_eq!(
-        merge_hold::corpus_merge_gate(
+        crate::gate::merge_hold_core::corpus_merge_gate(
             7,
             &[keyed("BUG-9", body("request-changes", OLD, Some(OLD)))],
             Some(HEAD),
@@ -137,7 +138,7 @@ fn a_closed_refusal_is_history_and_clears() {
 // BUG-1773 view fails OPEN on the same input; the two must not collapse).
 #[test]
 fn an_unknown_head_fails_closed_with_an_artifact_on_file() {
-    let (message, arm) = refusal_of(merge_hold::corpus_merge_gate(
+    let (message, arm) = refusal_of(crate::gate::merge_hold_core::corpus_merge_gate(
         7,
         &[keyed("BUG-9", body("request-changes", HEAD, None))],
         None,
@@ -153,7 +154,7 @@ fn an_unknown_head_fails_closed_with_an_artifact_on_file() {
 // resolve — the gate refuses rather than picking a winner.
 #[test]
 fn a_conflicting_corpus_at_the_head_refuses() {
-    let (message, arm) = refusal_of(merge_hold::corpus_merge_gate(
+    let (message, arm) = refusal_of(crate::gate::merge_hold_core::corpus_merge_gate(
         7,
         &[
             keyed(
@@ -186,13 +187,21 @@ fn enforce_refuses_and_arms_the_marker_from_the_gates_own_predicate() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     write_artifact(root, "PR-7", &body("request-changes", HEAD, None));
-    let err = merge_hold::enforce_corpus_gate_before_merge(root, 7, &[], Some("main"), || {
-        Some(HEAD.to_string())
-    })
+    let err = crate::gate::merge_hold_core::enforce_corpus_gate_before_merge(
+        root,
+        7,
+        &[],
+        Some("main"),
+        || Some(HEAD.to_string()),
+    )
     .expect_err("a refusal at the head must refuse the merge");
     assert!(err.to_string().contains("request-changes"), "{err:#}");
-    let record = merge_hold::read_hold_record(root, 7).expect("the marker mirror must be armed");
-    assert_eq!(record.reason_kind, merge_hold::HoldReasonKind::Rework);
+    let record = crate::gate::merge_hold_core::read_hold_record(root, 7)
+        .expect("the marker mirror must be armed");
+    assert_eq!(
+        record.reason_kind,
+        crate::gate::merge_hold_core::HoldReasonKind::Rework
+    );
     assert_eq!(record.target_head_sha.as_deref(), Some(HEAD));
     let verdict_ref = record.verdict_ref.expect("the hold references the verdict");
     assert_eq!(verdict_ref.key, "PR-7");
@@ -205,27 +214,29 @@ fn enforce_refuses_and_arms_the_marker_from_the_gates_own_predicate() {
 fn the_arm_does_not_displace_a_recusal_hold() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
-    let mut recusal = merge_hold::typed_hold(
+    let mut recusal = crate::gate::merge_hold_core::typed_hold(
         7,
-        merge_hold::HoldReasonKind::Recusal,
+        crate::gate::merge_hold_core::HoldReasonKind::Recusal,
         "reviewer-a is recused from PR-7",
         Some(HEAD.to_string()),
     );
     recusal
         .recused_principals
-        .push(merge_hold::PrincipalIdentity::registered_agent(
-            "reviewer-a",
-        ));
-    merge_hold::write_typed_hold(root, &recusal).unwrap();
+        .push(crate::gate::merge_hold_core::PrincipalIdentity::registered_agent("reviewer-a"));
+    crate::gate::merge_hold_core::write_typed_hold(root, &recusal).unwrap();
     write_artifact(root, "PR-7", &body("request-changes", HEAD, None));
-    merge_hold::enforce_corpus_gate_before_merge(root, 7, &[], Some("main"), || {
-        Some(HEAD.to_string())
-    })
+    crate::gate::merge_hold_core::enforce_corpus_gate_before_merge(
+        root,
+        7,
+        &[],
+        Some("main"),
+        || Some(HEAD.to_string()),
+    )
     .expect_err("still refused");
-    let record = merge_hold::read_hold_record(root, 7).expect("marker present");
+    let record = crate::gate::merge_hold_core::read_hold_record(root, 7).expect("marker present");
     assert_eq!(
         record.reason_kind,
-        merge_hold::HoldReasonKind::Recusal,
+        crate::gate::merge_hold_core::HoldReasonKind::Recusal,
         "a programmatic Rework write must not displace a Recusal hold"
     );
     assert!(
@@ -241,9 +252,13 @@ fn an_unreadable_artifact_fails_the_merge_closed() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     std::fs::create_dir_all(root.join(".aida/review-verdicts/PR-7.json")).unwrap();
-    let err = merge_hold::enforce_corpus_gate_before_merge(root, 7, &[], Some("main"), || {
-        Some(HEAD.to_string())
-    })
+    let err = crate::gate::merge_hold_core::enforce_corpus_gate_before_merge(
+        root,
+        7,
+        &[],
+        Some("main"),
+        || Some(HEAD.to_string()),
+    )
     .expect_err("an unreadable artifact must fail closed");
     assert!(err.to_string().contains("could not be read"), "{err:#}");
 }
@@ -254,10 +269,16 @@ fn an_unreadable_artifact_fails_the_merge_closed() {
 fn no_artifacts_skips_head_resolution_entirely() {
     let dir = tempfile::tempdir().unwrap();
     let resolved = std::cell::Cell::new(false);
-    merge_hold::enforce_corpus_gate_before_merge(dir.path(), 7, &[], Some("main"), || {
-        resolved.set(true);
-        Some(HEAD.to_string())
-    })
+    crate::gate::merge_hold_core::enforce_corpus_gate_before_merge(
+        dir.path(),
+        7,
+        &[],
+        Some("main"),
+        || {
+            resolved.set(true);
+            Some(HEAD.to_string())
+        },
+    )
     .expect("nothing on file, nothing refused");
     assert!(!resolved.get(), "the head must be resolved lazily");
 }
@@ -269,7 +290,7 @@ fn a_refusal_for_an_unrelated_spec_does_not_gate_this_pr() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     write_artifact(root, "BUG-999", &body("request-changes", HEAD, None));
-    merge_hold::enforce_corpus_gate_before_merge(
+    crate::gate::merge_hold_core::enforce_corpus_gate_before_merge(
         root,
         7,
         &["BUG-9".to_string()],

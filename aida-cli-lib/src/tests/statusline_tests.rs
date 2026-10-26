@@ -1085,25 +1085,43 @@ fn role_picker_option_shows_live_driver_without_single_instance_for_doer_roles()
 /// (no TTY, not orchestrated) is still gated.
 #[test]
 fn advisor_authority_grants_orchestrated_ops_but_gates_bare_agents() {
-    use super::advisor_authority_from;
+    use crate::gate::role_authority::advisor_authority_from;
     // bare headless implementer/reviewer: no authority
-    assert!(!advisor_authority_from("implementer", false, false));
-    assert!(!advisor_authority_from("reviewer", false, false));
+    assert!(!crate::gate::role_authority::advisor_authority_from(
+        "implementer",
+        false,
+        false
+    ));
+    assert!(!crate::gate::role_authority::advisor_authority_from(
+        "reviewer", false, false
+    ));
     // the two remaining authority sources
-    assert!(advisor_authority_from("advisor", false, false)); // advisor seat
-    assert!(advisor_authority_from("implementer", false, true)); // under a live orchestrator
-    assert!(advisor_authority_from("reviewer", false, true)); // orchestrated reviewer phase
-                                                              // ADR-66 / STORY-1473: a TTY is where a seat grant is ISSUED, never an
-                                                              // authority source by itself — an interactive non-advisor seat stays
-                                                              // gated. trace:STORY-1473 | ai:claude
-    assert!(!advisor_authority_from("implementer", true, false));
+    assert!(crate::gate::role_authority::advisor_authority_from(
+        "advisor", false, false
+    )); // advisor seat
+    assert!(crate::gate::role_authority::advisor_authority_from(
+        "implementer",
+        false,
+        true
+    )); // under a live orchestrator
+    assert!(crate::gate::role_authority::advisor_authority_from(
+        "reviewer", false, true
+    )); // orchestrated reviewer phase
+        // ADR-66 / STORY-1473: a TTY is where a seat grant is ISSUED, never an
+        // authority source by itself — an interactive non-advisor seat stays
+        // gated. trace:STORY-1473 | ai:claude
+    assert!(!crate::gate::role_authority::advisor_authority_from(
+        "implementer",
+        true,
+        false
+    ));
 }
 
 /// Dispatch and disposition deliberately have different role matrices.
 // trace:STORY-1353 | ai:codex
 #[test]
 fn dispatch_authority_role_matrix_is_independent_of_advisor_authority() {
-    use super::dispatch_authority_from as dispatch;
+    use crate::gate::role_authority::dispatch_authority_from as dispatch;
     assert!(dispatch("product", false));
     assert!(dispatch("advisor", false));
     assert!(dispatch("integrator", false));
@@ -1115,7 +1133,9 @@ fn dispatch_authority_role_matrix_is_independent_of_advisor_authority() {
 // trace:STORY-1353 | ai:codex
 #[test]
 fn disposition_and_integrity_floor_role_matrices_stay_stricter_than_dispatch() {
-    use super::{advisor_authority_from as disposition, integrity_floor_authority_from as floor};
+    use crate::gate::role_authority::{
+        advisor_authority_from as disposition, integrity_floor_authority_from as floor,
+    };
     for role in [
         "product",
         "advisor",
@@ -1142,7 +1162,7 @@ fn companion_instance_does_not_hold_advisor_authority() {
         ("AIDA_ROLE_INSTANCE", "companion"),
     ]);
 
-    assert!(!super::has_advisor_authority());
+    assert!(!crate::gate::role_authority::has_advisor_authority());
 }
 
 /// BUG-498: the advisor-seat hint fires only when the resolved role is
@@ -6220,7 +6240,7 @@ fn skill_lint_counts_registry_glyphs() {
 // trace:BUG-1924 | ai:claude
 #[test]
 fn role_segment_reflects_the_seat_grant_not_the_label() {
-    use crate::seat_authority::RoleDisplay;
+    use crate::gate::seat_authority::RoleDisplay;
 
     let (text, warn) = role_display_segment_text(
         &RoleDisplay::Ungranted("advisor".into()),
@@ -6257,7 +6277,7 @@ fn role_segment_reflects_the_seat_grant_not_the_label() {
 // trace:BUG-1924 | ai:claude
 #[test]
 fn routing_role_prefers_the_grant_only_without_a_label() {
-    use crate::seat_authority::RoleDisplay;
+    use crate::gate::seat_authority::RoleDisplay;
 
     assert_eq!(
         routing_role(

@@ -181,8 +181,6 @@ mod freshness_gate;
 // trace:BUG-1622 | ai:claude — keeps user-supplied refs from reading as git options.
 mod git_arg_guard;
 mod git_backend_cmd;
-// trace:TASK-1522 | ai:antigravity
-mod fleet_lanes;
 pub(crate) mod intent_capture;
 mod machine_readiness;
 mod mcp_cmd;
@@ -200,7 +198,6 @@ mod lane_liveness;
 // trace:TASK-2053 | ai:claude
 mod loose_objects;
 mod rel_cards;
-mod relay_launch; // trace:STORY-1706 | ai:claude
 mod relay_stall;
 // trace:TASK-2347 | ai:codex
 mod codex_mail_health;
@@ -455,8 +452,6 @@ mod merge_hold;
 mod mandate;
 mod mandate_drive;
 mod mandate_gates;
-mod mandate_ship;
-mod mandate_traces;
 mod merge_lock;
 mod metrics;
 mod metrics_cmd;
@@ -468,7 +463,6 @@ mod not_found;
 mod pr_claim_surface;
 mod reconcile_evidence;
 mod reconstitute;
-mod rework_hold_release;
 // trace:STORY-1029 | ai:codex — rule-gated operator notifications.
 mod notify;
 // ADR-7/ADR-9 guardrail registry — consumed only by its own tests (the
@@ -529,17 +523,8 @@ mod report_cmd;
 // trace:STORY-568 | ai:claude — pure core of the research/spike dispatch lane.
 mod research;
 mod reviewer_summary;
-// trace:BUG-1918 | ai:claude — who may approve: recorder/author identity + authority re-validation.
-// trace:STORY-1889 | ai:claude — transitional re-export; the module lives in gate/.
-pub(crate) use gate::review_authority;
-// trace:STORY-1405 | ai:claude — review-in-progress marker consulted by merge surfaces.
-// trace:STORY-1889 | ai:claude — transitional re-export; the module lives in gate/.
-pub(crate) use gate::review_marker;
 // trace:STORY-1417 | ai:claude
 mod review_classes;
-// trace:BUG-775 | ai:claude — review verdicts as first-class gate-readable state.
-// trace:STORY-1889 | ai:claude — transitional re-export; the module lives in gate/.
-pub(crate) use gate::review_verdict;
 // trace:STORY-1889 | ai:claude — verdict rendering, outside the gate.
 mod review_verdict_display;
 // trace:TASK-1960 | ai:claude — attested-approval carry-over across clean base merges.
@@ -565,16 +550,6 @@ mod schedule_predicate;
 mod schema;
 // trace:BUG-1934 | ai:claude
 mod grant_keyring;
-// trace:STORY-1473 | ai:codex
-// STORY-1889: transitional re-export of the moved module; the final
-// STORY-1889 PR repoints callers to `crate::gate::seat_authority`.
-// trace:STORY-1889 | ai:claude
-pub(crate) use gate::seat_authority;
-// trace:STORY-1889 | ai:claude
-pub(crate) use gate::review_author::{
-    review_author_gate, review_author_refusal, review_record_attribution_refusal,
-    review_recorder_authors, review_stale_lease_refusal, ReviewAuthorGate,
-};
 // trace:BUG-2169 | ai:claude — a contained seat's private clone (the only host accessor).
 mod seat_clone;
 mod seat_occupancy;
@@ -596,9 +571,6 @@ mod session_reap;
 mod shell_eval;
 // trace:STORY-627 | ai:claude — per-repo solo-loop lock + liveness sentinel.
 mod solo_lock;
-// trace:STORY-1655 | ai:claude — audited solo-human self-approval mode (global key only).
-// trace:STORY-1889 | ai:claude — transitional re-export; the module lives in gate/.
-pub(crate) use gate::solo_review;
 mod stacks;
 mod state_snapshot;
 mod status_cleanup;

@@ -71,11 +71,11 @@ fn is_needs_attention(status: &str) -> bool {
 // trace:TASK-2251 | ai:claude
 fn rework_holds_by_spec(root: &Path, ready: &BTreeMap<u64, String>) -> HashMap<String, SpecHold> {
     let mut out = HashMap::new();
-    for (pr, _) in crate::merge_hold::list_holds(root) {
-        let Some(record) = crate::merge_hold::read_hold_record(root, pr) else {
+    for (pr, _) in crate::gate::merge_hold_core::list_holds(root) {
+        let Some(record) = crate::gate::merge_hold_core::read_hold_record(root, pr) else {
             continue;
         };
-        if record.reason_kind != crate::merge_hold::HoldReasonKind::Rework {
+        if record.reason_kind != crate::gate::merge_hold_core::HoldReasonKind::Rework {
             continue;
         }
         let Some(spec) = record.spec.as_deref().filter(|s| !s.starts_with("PR-")) else {
@@ -122,7 +122,7 @@ pub(crate) fn lens_map(
     if !reqs.iter().any(|r| is_needs_attention(&r.status)) {
         return out;
     }
-    let root = crate::merge_hold::hold_store_root(project_root);
+    let root = crate::gate::merge_hold_core::hold_store_root(project_root);
     let new_heads = crate::lane_liveness::unpicked_ready_heads(&root);
     let holds = rework_holds_by_spec(&root, &new_heads);
     let now = Utc::now();
@@ -131,15 +131,15 @@ pub(crate) fn lens_map(
             .into_iter()
             .flatten()
             .find_map(|id| holds.get(&id.to_ascii_uppercase()));
-        let rounds =
-            hold.filter(|h| new_heads.contains_key(&h.pr))
-                .and_then(|h| {
-                    crate::review_verdict::archived_recordings(
-                        &crate::review_verdict::verdict_path(&root, &h.verdict_key),
-                    )
-                    .ok()
-                })
-                .map_or(0, |recordings| recordings.len());
+        let rounds = hold
+            .filter(|h| new_heads.contains_key(&h.pr))
+            .and_then(|h| {
+                crate::gate::review_verdict::archived_recordings(
+                    &crate::gate::review_verdict::verdict_path(&root, &h.verdict_key),
+                )
+                .ok()
+            })
+            .map_or(0, |recordings| recordings.len());
         let modified = DateTime::parse_from_rfc3339(&r.modified_at)
             .ok()
             .map(|t| t.with_timezone(&Utc));
@@ -211,14 +211,14 @@ mod tests {
     fn lens_map_reads_the_hold_routed_head_and_rounds() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
-        let mut record = crate::merge_hold::typed_hold(
+        let mut record = crate::gate::merge_hold_core::typed_hold(
             2638,
-            crate::merge_hold::HoldReasonKind::Rework,
+            crate::gate::merge_hold_core::HoldReasonKind::Rework,
             "CHANGES REQUESTED for TASK-77",
             Some("85c6036d67aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".into()),
         );
         record.spec = Some("TASK-77".into());
-        crate::merge_hold::write_typed_hold(root, &record).unwrap();
+        crate::gate::merge_hold_core::write_typed_hold(root, &record).unwrap();
         let routed = root.join(".aida/lane-liveness/routed.json");
         std::fs::create_dir_all(routed.parent().unwrap()).unwrap();
         std::fs::write(
@@ -226,7 +226,7 @@ mod tests {
             r#"{"lane-liveness:unpicked-ready-pr:PR-2638@c0bad0b0":"2026-10-22T07:00:00Z"}"#,
         )
         .unwrap();
-        crate::review_verdict::record_verdict(
+        crate::gate::review_verdict::record_verdict(
             root,
             "TASK-77",
             Some("request-changes"),

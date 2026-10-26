@@ -14,7 +14,7 @@ use super::{Caller, ClaimNotice, Ctx, Gate, GrantRef, SeatOp, ORCHESTRATOR};
 
 /// The validated grant (STORY-1473 resolver) as the state machine sees it.
 pub(crate) fn grant_ref(project_root: &Path) -> Option<GrantRef> {
-    crate::seat_authority::current_grant(project_root).map(|g| GrantRef {
+    crate::gate::seat_authority::current_grant(project_root).map(|g| GrantRef {
         subject: g.subject.clone(),
         id: g.id.clone(),
         session_id: g.session_id.clone(),

@@ -1394,12 +1394,14 @@ pub(crate) fn preflight_headless_phase_seats(
     mode: auto_complete::NoHumanMode,
 ) -> anyhow::Result<()> {
     for seat in headless_phase_seats(mode) {
-        crate::seat_authority::preflight_headless_child(project_root, seat).map_err(|cause| {
-            anyhow::anyhow!(
-                "headless drain refused before any phase started: the headless `{seat}` phase \
+        crate::gate::seat_authority::preflight_headless_child(project_root, seat).map_err(
+            |cause| {
+                anyhow::anyhow!(
+                    "headless drain refused before any phase started: the headless `{seat}` phase \
                  needs a `{seat}` child grant, but {cause:#}"
-            )
-        })?;
+                )
+            },
+        )?;
     }
     Ok(())
 }
@@ -1936,29 +1938,29 @@ mod bug_2139_headless_phase_seat_tests {
         let root = tmp.path();
         let mut env = crate::test_env::EnvVarsGuard::snapshot(&[
             "AIDA_USER",
-            crate::seat_authority::GRANT_ENV,
+            crate::gate::seat_authority::GRANT_ENV,
         ]);
         env.set_key("AIDA_USER", "bug-2139-drain-user");
-        let narrow = crate::seat_authority::test_support::mint_grant_for(
+        let narrow = crate::gate::seat_authority::test_support::mint_grant_for(
             root,
             "bug-2139-drain-user",
             "advisor",
             &["implementer"],
         );
-        env.set_key(crate::seat_authority::GRANT_ENV, &narrow);
+        env.set_key(crate::gate::seat_authority::GRANT_ENV, &narrow);
         let err = preflight_headless_phase_seats(root, auto_complete::NoHumanMode::Both)
             .expect_err("the reviewer phase cannot be granted");
         assert!(
             format!("{err:#}").contains("headless `reviewer` phase"),
             "{err:#}"
         );
-        let full = crate::seat_authority::test_support::mint_grant_for(
+        let full = crate::gate::seat_authority::test_support::mint_grant_for(
             root,
             "bug-2139-drain-user",
             "advisor",
             &["implementer", "reviewer"],
         );
-        env.set_key(crate::seat_authority::GRANT_ENV, &full);
+        env.set_key(crate::gate::seat_authority::GRANT_ENV, &full);
         preflight_headless_phase_seats(root, auto_complete::NoHumanMode::Both).unwrap();
     }
 }

@@ -220,7 +220,10 @@ fn task1793_probe_does_not_inherit_parent_seat_authority() {
         "#!/bin/sh\nprintf 'grant=%s role=%s purpose=%s\\n' \"${AIDA_SESSION_GRANT-none}\" \"${AIDA_SESSION_ROLE-none}\" \"${AIDA_SESSION_PURPOSE-none}\"\n",
     );
     let _env = crate::test_env::EnvVarsGuard::apply(&[
-        (seat_authority::GRANT_ENV, Some("parent-seat-grant")),
+        (
+            crate::gate::seat_authority::GRANT_ENV,
+            Some("parent-seat-grant"),
+        ),
         ("AIDA_SESSION_ROLE", Some("advisor")),
         ("AIDA_SESSION_PURPOSE", Some("parent purpose")),
         ("AIDA_OS_WRAP", Some("0")),
