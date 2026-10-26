@@ -9,7 +9,10 @@
 //! re-verifies that context from disk so a stopped/replaced mandate, revoked or
 //! expired grant, tightened human gate, or invalidated worker claim aborts the
 //! in-flight operation before any hold release or merge.
-// mandate-gate
+//!
+//! Which review verdict and CI state let a flow ship is gate authority
+//! ([`crate::gate::dispatch_authority::verdict_at_head`],
+//! [`crate::gate::dispatch_authority::ci_state_is_green`], STORY-1889).
 // trace:STORY-1917 trace:TASK-2344 | ai:agy
 
 use anyhow::{bail, Context, Result};
@@ -18,11 +21,14 @@ use std::path::Path;
 use std::time::Duration;
 
 use crate::dispatch::{
-    append_dispatch_log, open_pinned_dispatch_subdir, run_review_verb, DispatchRequest,
-    DispatchVendor, RunnerOutcome, WorkerClaim,
+    append_dispatch_log, open_pinned_dispatch_subdir, run_review_verb, DispatchVendor,
+    RunnerOutcome,
 };
 use crate::gate::dispatch_auth::{is_dispatch_authority_aborted, DispatchExecutionContext};
-use crate::gate::review_verdict::{self, VerdictKind};
+use crate::gate::dispatch_authority::{
+    ci_state_is_green, verdict_at_head, DispatchRequest, WorkerClaim,
+};
+use crate::gate::review_verdict::VerdictKind;
 
 const MAX_FLOW_TRIES: usize = 4;
 const FLOW_SHIP_WAIT_SECS: u64 = 3600;
@@ -234,22 +240,6 @@ fn update_pr_branch_non_force(
     Ok(())
 }
 
-/// Inspect `.aida/review-verdicts/PR-<pr>.json` (through the pinned, no-follow
-/// verdict reader) against `head_oid`.
-// trace:STORY-1917 | ai:agy
-fn verdict_at_head(main_worktree: &Path, pr: u64, head_oid: &str) -> Option<VerdictKind> {
-    let key = format!("PR-{pr}");
-    let v = review_verdict::read_recorded_verdict(main_worktree, &key)?;
-    if v.is_closed() {
-        return None;
-    }
-    let rev_sha = v.reviewed_sha.as_deref()?;
-    if !review_verdict::same_reviewed_sha(rev_sha, head_oid) {
-        return None;
-    }
-    Some(v.kind)
-}
-
 #[cfg(test)]
 type TestFlowShipHook = Box<dyn FnMut(u64, &DispatchExecutionContext) -> Result<()>>;
 #[cfg(test)]
@@ -363,19 +353,6 @@ fn wait_for_pr_ci_with_ctx(
     // a pending run or a failure is never reported as green.
     // trace:STORY-1917 | ai:claude
     ci_state_is_green(pr, state)
-}
-
-/// Accept only [`crate::forge::CiState::Success`] as green CI.
-// trace:STORY-1917 | ai:claude
-pub(crate) fn ci_state_is_green(pr: u64, state: crate::forge::CiState) -> Result<()> {
-    match state {
-        crate::forge::CiState::Success => Ok(()),
-        crate::forge::CiState::Failed => bail!("CI failed for PR #{pr}"),
-        crate::forge::CiState::None => {
-            bail!("PR #{pr} has no CI checks; flow reports green only after CI passes")
-        }
-        other => bail!("CI for PR #{pr} did not pass (state {other:?})"),
-    }
 }
 
 /// Verify `.aida-store` has no uncommitted changes before starting a train pass.

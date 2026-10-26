@@ -19,9 +19,12 @@ use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 use uuid::Uuid;
 
-use crate::dispatch::{
-    self, DispatchRequest, DispatchResult, DispatchStatus, WorkerClaim, MAX_BRIEF_BYTES,
+use crate::dispatch::{self, MAX_BRIEF_BYTES};
+use crate::gate::dispatch_authority::{
+    check_serve_grant, verify_claim_locked, DispatchRequest, DispatchResult, DispatchStatus,
+    WorkerClaim,
 };
+use crate::gate::dispatch_lock::acquire_dispatch_lock_for_gate;
 use crate::gate::mandate::{self, Scope};
 use crate::gate::mandate_gates::GateOp;
 use crate::gate::seat_authority;
@@ -95,8 +98,8 @@ impl DispatchExecutionContext {
         };
 
         let (req, req_sha256) = {
-            let _lock = dispatch::acquire_dispatch_lock_for_gate(main_worktree)?;
-            dispatch::verify_claim_locked(main_worktree, request_id, &claim)?;
+            let _lock = acquire_dispatch_lock_for_gate(main_worktree)?;
+            verify_claim_locked(main_worktree, request_id, &claim)?;
             let req_bytes = dispatch::read_bounded_regular_file(
                 &dispatch::request_path(main_worktree, request_id),
                 MAX_BRIEF_BYTES,
@@ -160,7 +163,7 @@ impl DispatchExecutionContext {
     ///    `results/<id>.json` record (with no `needs-recovery` fence in
     ///    `.aida/dispatch/recovery.json`).
     /// 2. `requests/<id>.json` is untampered (SHA-256 matches `self.request_sha256`).
-    /// 3. Serving advisor grant passes [`dispatch::check_serve_grant`].
+    /// 3. Serving advisor grant passes [`check_serve_grant`].
     /// 4. Exact recorded `mandate_id` passes [`mandate::recheck`] (a replacement
     ///    mandate B never satisfies request A) and covers [`Scope::Dispatch`]
     ///    (plus [`Scope::ShipHeld`] when `requires_ship_held || self.ships_pr`).
@@ -188,8 +191,8 @@ impl DispatchExecutionContext {
         // 1 & 2. Re-verify `recovery.json`, `results/<id>.json` ownership, and
         // untampered `requests/<id>.json` under `tick.lock`.
         {
-            let _lock = dispatch::acquire_dispatch_lock_for_gate(&self.main_worktree)?;
-            dispatch::verify_claim_locked(&self.main_worktree, &self.request_id, &self.claim)?;
+            let _lock = acquire_dispatch_lock_for_gate(&self.main_worktree)?;
+            verify_claim_locked(&self.main_worktree, &self.request_id, &self.claim)?;
             let req_bytes = dispatch::read_bounded_regular_file(
                 &dispatch::request_path(&self.main_worktree, &self.request_id),
                 MAX_BRIEF_BYTES,
@@ -226,7 +229,7 @@ impl DispatchExecutionContext {
         }
 
         // 3. Re-verify serving advisor seat grant.
-        dispatch::check_serve_grant(&self.main_worktree, now).with_context(|| {
+        check_serve_grant(&self.main_worktree, now).with_context(|| {
             format!(
                 "dispatch request {} aborted: serve advisor grant is no longer valid",
                 self.request_id

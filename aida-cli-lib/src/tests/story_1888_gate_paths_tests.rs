@@ -798,6 +798,8 @@ const GATE_ONLY_NAMES: &[&str] = &[
     "collect_held_prs_with",
     "verify_fresh_restart_plan",
     "append_restart",
+    // trace:STORY-1889 | ai:claude
+    "activate_dispatch_v2_lock_quiescent",
 ];
 
 // trace:STORY-1889 | ai:claude
@@ -823,7 +825,7 @@ fn no_unprotected_file_names_a_gate_only_authority_input() {
         "unprotected files name gate-only authority inputs:\n{}\n\
          Call the gate entry that binds them instead (`start_as_human`, \
          `stop_as_human`, `mandate_ship_cover_for_ship`, `with_live_tick_inputs`, \
-         `record_fresh_restart`).",
+         `record_fresh_restart`, `activate_lock_as_human`).",
         bad.join("\n")
     );
 }
@@ -932,4 +934,204 @@ fn the_ship_cover_decision_is_bound_in_the_gate() {
     );
     let ship = fn_body(&src, "mandate_ship_cover_for_ship");
     assert!(ship.contains("crate::gate::mandate::ship_decision,\n        true,"));
+}
+
+// ── dispatch authority on the floor (STORY-1889 final slice) ───────────────
+
+/// The floor is the gate prefix plus `.aida/config.toml` and protected test
+/// files (STORY-1889 acceptance 3); no other production file is listed.
+// trace:STORY-1889 | ai:claude
+#[test]
+fn the_floor_is_the_gate_prefix_config_and_protected_tests() {
+    assert!(GATE_PROTECTED_PATHS.contains(&"aida-cli-lib/src/gate/"));
+    for entry in GATE_PROTECTED_PATHS {
+        assert!(
+            *entry == ".aida/config.toml"
+                || entry.starts_with("aida-cli-lib/src/gate/")
+                || entry.ends_with("_tests.rs"),
+            "{entry} is a production path outside aida-cli-lib/src/gate/; move its \
+             authority into the gate instead of listing the file"
+        );
+    }
+}
+
+/// Dispatch decisions (request records and admission, claims and caps, the
+/// `tick.lock`, the recovery ledger, the flow ship selectors) defined only
+/// under `gate/`.
+const DISPATCH_AUTHORITY_FNS: &[&str] = &[
+    "check_request_authority",
+    "revalidate_request",
+    "validate_spec_in_store",
+    "verify_frozen_brief",
+    "check_serve_grant",
+    "verify_claim_locked",
+    "probe_worker_identity",
+    "pass_admission",
+    "run_admission",
+    "verify_running_claim",
+    "execution_refusal",
+    "verdict_at_head",
+    "ci_state_is_green",
+    "activate_lock_as_human",
+    "activate_dispatch_v2_lock_quiescent",
+    "acquire_dispatch_lock",
+    "reconcile_inventory_locked",
+    "inspect_dispatch_inventory_readonly",
+    "check_recovery_index_bounds",
+];
+
+const DISPATCH_AUTHORITY_TYPES: &[&str] = &[
+    "DispatchRequest",
+    "DispatchVerb",
+    "DispatchStatus",
+    "DispatchResult",
+    "WorkerClaim",
+    "AuthorizedDispatchCaller",
+    "ClaimCaps",
+    "RecoveryFenceEntry",
+    "RecoveryIndex",
+    "DispatchInventory",
+    "DispatchLock",
+];
+
+fn defined_types(text: &str) -> Vec<String> {
+    let ty = regex::Regex::new(r"^\s*(pub(\([^)]*\))?\s+)?(struct|enum)\s+(?P<name>\w+)").unwrap();
+    non_test_lines(text)
+        .iter()
+        .filter_map(|l| Some(ty.captures(l)?.name("name")?.as_str().to_string()))
+        .collect()
+}
+
+// trace:STORY-1889 | ai:claude
+#[test]
+fn dispatch_authority_is_defined_only_in_the_gate() {
+    let mut in_gate: Vec<String> = Vec::new();
+    let mut outside: Vec<String> = Vec::new();
+    for (path, text) in sources() {
+        let fns = defined_fns(&text);
+        let types = defined_types(&text);
+        let names = fns.iter().chain(types.iter()).filter(|n| {
+            DISPATCH_AUTHORITY_FNS.contains(&n.as_str())
+                || DISPATCH_AUTHORITY_TYPES.contains(&n.as_str())
+        });
+        for name in names {
+            if path.starts_with("aida-cli-lib/src/gate/dispatch_") {
+                in_gate.push(name.clone());
+            } else {
+                outside.push(format!("  {path}: {name}"));
+            }
+        }
+    }
+    assert!(
+        outside.is_empty(),
+        "dispatch authority defined outside aida-cli-lib/src/gate/dispatch_*.rs:\n{}",
+        outside.join("\n")
+    );
+    for name in DISPATCH_AUTHORITY_FNS
+        .iter()
+        .chain(DISPATCH_AUTHORITY_TYPES)
+    {
+        assert!(
+            in_gate.iter().any(|n| n == name),
+            "{name} is not defined in aida-cli-lib/src/gate/dispatch_*.rs"
+        );
+    }
+}
+
+// The activate-lock human floor and the admitted record's authority fields
+// are bound in the gate.
+// trace:STORY-1889 | ai:claude
+#[test]
+fn dispatch_authority_inputs_are_bound_in_the_gate() {
+    let lock = gate_source("dispatch_lock.rs");
+    let activate = fn_body(&lock, "activate_lock_as_human");
+    let human = activate.find("require_direct_human(").expect("human check");
+    let quiescent = activate
+        .find("activate_dispatch_v2_lock_quiescent(")
+        .expect("activation");
+    assert!(human < quiescent, "the human check runs before activation");
+
+    let auth = gate_source("dispatch_authority.rs");
+    for ty in ["AuthorizedDispatchCaller", "ClaimCaps"] {
+        let body = auth
+            .split(&format!("pub(crate) struct {ty} {{"))
+            .nth(1)
+            .and_then(|s| s.split("\n}").next())
+            .unwrap_or_else(|| panic!("{ty} is defined in gate/dispatch_authority.rs"));
+        for field in body.lines().map(str::trim).filter(|l| l.contains(':')) {
+            assert!(
+                !field.starts_with("pub"),
+                "{ty} field must be private: {field}"
+            );
+        }
+        for (path, text) in sources() {
+            if !on_floor(&path) {
+                assert!(
+                    !non_test_lines(&text)
+                        .join("\n")
+                        .contains(&format!("{ty} {{")),
+                    "{path} constructs {ty} outside the gate"
+                );
+            }
+        }
+    }
+    let record = fn_body(&auth, "admitted_request");
+    for bound in [
+        "schema_version: DISPATCH_SCHEMA_VERSION,",
+        "requester_seat: crate::gate::mandate::MANDATE_SEAT.to_string(),",
+        "requester_grant_id: self.grant_id.clone(),",
+        "matched_binding: self.matched_binding.clone(),",
+        "mandate_id: self.mandate.id.clone(),",
+    ] {
+        assert!(
+            record.contains(bound),
+            "admitted_request must set `{bound}`"
+        );
+    }
+}
+
+// The dispatch orchestration reaches every admission point through the gate.
+// trace:STORY-1889 | ai:claude
+#[test]
+fn dispatch_orchestration_calls_the_gate_at_each_admission_point() {
+    let text =
+        std::fs::read_to_string(workspace_root().join("aida-cli-lib/src/dispatch.rs")).unwrap();
+    let src = non_test_lines(&text).join("\n");
+    for (f, calls) in [
+        (
+            "submit_request",
+            &[
+                "check_request_authority(",
+                "check_submission_fence(",
+                "caller.admitted_request(",
+                "revalidate_request(",
+            ][..],
+        ),
+        (
+            "claim_and_dispatch_pass",
+            &[
+                "acquire_dispatch_lock(",
+                "ClaimCaps::from_inventory(",
+                "pass_admission(",
+            ][..],
+        ),
+        (
+            "execute_one_request_with_token",
+            &[
+                "acquire_dispatch_lock(",
+                "verify_running_claim(",
+                "run_admission(",
+                "execution_refusal(",
+            ][..],
+        ),
+        ("finalize_request", &["verify_claim_locked("][..]),
+        ("record_tampered_refusal", &["verify_claim_locked("][..]),
+        ("run_dispatch_serve", &["check_serve_grant("][..]),
+        ("handle_dispatch", &["activate_lock_as_human("][..]),
+    ] {
+        let body = fn_body(&src, f);
+        for call in calls {
+            assert!(body.contains(call), "dispatch.rs `{f}` must call `{call}`");
+        }
+    }
 }

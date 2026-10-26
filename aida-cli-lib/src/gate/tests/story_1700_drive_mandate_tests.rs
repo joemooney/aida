@@ -715,7 +715,10 @@ fn pr_touching_gate_paths_is_gated() {
     let policy = Default::default();
     let ledger = Ok(Default::default());
     let hold = crate::gate::mandate::HoldFacts::None;
-    for path in [".aida/config.toml", "aida-cli-lib/src/dispatch.rs"] {
+    for path in [
+        ".aida/config.toml",
+        "aida-cli-lib/src/tests/story_1888_gate_paths_tests.rs",
+    ] {
         let paths = vec!["README.md".to_string(), path.to_string()];
         let c = ship_check(&state, &policy, &ledger, &hold, Some(&paths));
         assert_eq!(
@@ -1617,7 +1620,10 @@ fn a_mandate_cannot_release_a_rework_hold_on_a_pr_touching_the_gates() {
         kind: crate::gate::merge_hold_core::HoldReasonKind::Rework,
         legacy: false,
     };
-    for path in [".aida/config.toml", "aida-cli-lib/src/dispatch.rs"] {
+    for path in [
+        ".aida/config.toml",
+        "aida-cli-lib/src/tests/story_1888_gate_paths_tests.rs",
+    ] {
         let paths = vec![path.to_string()];
         let c = ship_check(&state, &policy, &ledger, &hold, Some(&paths));
         assert_eq!(
