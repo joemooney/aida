@@ -1789,3 +1789,110 @@ fn positive_incomplete_oracle_seeds_nothing() {
         Some(oracle_records(&repo, "TASK-7"))
     );
 }
+
+/// Advisor 2026-10-26 02:50 (seeding race): the BEFORE roots are pinned
+/// before the oracle reads any ref. Once the probe hands back a seeding
+/// deferral its R is final, so a ref move that lands before the oracle's
+/// ref read — a ship merge adding a referencing commit, or a deleted branch
+/// taking a hit with it — makes the oracle's roots differ from BEFORE's, and
+/// AFTER catches it: nothing seeds.
+#[test]
+fn positive_seed_ignores_ref_move_before_oracle_ref_read() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let repo = init_repo(tmp.path());
+    commit_at(&repo, "fix: work (TASK-7)", 2_000);
+    git(&repo, &["checkout", "-q", "-b", "gone"]);
+    commit_at(&repo, "fix: doomed (TASK-7)", 2_100);
+    git(&repo, &["checkout", "-q", "main"]);
+    show_now(&repo, "TASK-7"); // cold: marks the key positive
+    let positive_marker = |repo: &Path| {
+        state_on_disk(repo, &["TASK-7"]).is_some_and(|st| st.positive && st.cone.is_none())
+    };
+    assert!(positive_marker(&repo));
+    let settle_after = |mv: &dyn Fn()| {
+        let (_, seed) = probe_inner(&repo, &ids(&["TASK-7"]), &oracle_tuning());
+        assert!(matches!(seed, Some(OracleSeed::Concurrent { .. })));
+        mv(); // the fleet moves; only then does the oracle read refs
+        let records = oracle_records(&repo, "TASK-7");
+        settle_oracle(
+            &repo,
+            seed.unwrap(),
+            OracleAnswer {
+                complete: true,
+                references: records.len(),
+                records,
+            },
+            far_deadline(),
+        )
+    };
+
+    assert!(!settle_after(&|| {
+        commit_at(&repo, "fix: shipped (TASK-7)", 3_000);
+    }));
+    assert!(positive_marker(&repo), "a ref added after R seeds nothing");
+    assert!(!settle_after(&|| {
+        git(&repo, &["branch", "-D", "gone"]);
+    }));
+    assert!(
+        positive_marker(&repo),
+        "a ref deleted after R seeds nothing"
+    );
+}
+
+/// The same race end to end through the collector: the shim moves a ref
+/// right after the original (`--date-order`) query read refs, and holds the
+/// roots read (`--no-walk=unsorted`) until that move happened (bounded). A
+/// roots capture overlapping the original would read the moved refs, match
+/// AFTER, and seed a cone whose roots and hits disagree. Pinned in front of
+/// the original, it predates the move and nothing seeds.
+#[cfg(unix)]
+#[test]
+fn positive_seed_roots_pinned_before_original_ref_read() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let tmp = tempfile::TempDir::new().unwrap();
+    let repo = init_repo(tmp.path());
+    commit_at(&repo, "fix: work (TASK-7)", 2_000);
+    show_now(&repo, "TASK-7"); // cold: marks the key positive
+
+    let real = real_git();
+    let shim_dir = tmp.path().join("shim");
+    std::fs::create_dir_all(&shim_dir).unwrap();
+    let moved = tmp.path().join("moved");
+    let log_path = tmp.path().join("git-calls.log");
+    crate::test_exec::write_executable(
+        &shim_dir.join("git"),
+        format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$*\" >> '{log}'\ncase \" $* \" in\n  *' --date-order '*)\n    '{real}' \"$@\"; rc=$?\n    if [ ! -e '{moved}' ]; then\n      c=$('{real}' -C '{repo}' commit-tree -m 'fix: shipped (TASK-7)' -p HEAD 'HEAD^{{tree}}')\n      '{real}' -C '{repo}' update-ref refs/heads/shipped \"$c\"\n      : > '{moved}'\n    fi\n    exit $rc ;;\n  *' --no-walk=unsorted '*)\n    i=0\n    while [ ! -e '{moved}' ] && [ \"$i\" -lt 5 ]; do i=$((i+1)); sleep 0.1; done ;;\nesac\nexec '{real}' \"$@\"\n",
+            log = log_path.display(),
+            moved = moved.display(),
+            repo = repo.display(),
+            real = real.display(),
+        ),
+    );
+    let mut paths = vec![shim_dir];
+    paths.extend(std::env::split_paths(
+        &std::env::var_os("PATH").unwrap_or_default(),
+    ));
+    let _path = crate::test_env::EnvVarGuard::set("PATH", std::env::join_paths(paths).unwrap());
+
+    let shown = show_now(&repo, "TASK-7");
+    assert_eq!(shown.commits.len(), 1, "the original answered at its read");
+    assert!(moved.exists(), "the shim moved a ref after the original");
+    let calls = std::fs::read_to_string(&log_path).unwrap_or_default();
+    let first = |needle: &str| {
+        calls
+            .lines()
+            .position(|l| l.contains(needle))
+            .unwrap_or_else(|| panic!("no `{needle}` call:\n{calls}"))
+    };
+    assert!(
+        first("--no-walk=unsorted") < first("--date-order"),
+        "BEFORE's roots read precedes the original:\n{calls}"
+    );
+    assert!(
+        state_on_disk(&repo, &["TASK-7"]).is_some_and(|st| st.positive && st.cone.is_none()),
+        "a ref move between BEFORE and AFTER seeds nothing"
+    );
+}

@@ -228,49 +228,55 @@ pub(crate) enum OracleSeed {
         state: NegativeState,
     },
     /// P1: a seeding show for a key whose last complete answer was POSITIVE.
-    /// The BEFORE snapshot is captured on a thread started before the
-    /// original collector, so it overlaps that query instead of running in
-    /// front of it (ruling 2026-10-25: no serial snapshot on positive
-    /// shows). It is still pinned before the oracle's own ref read and
-    /// compared with an AFTER capture taken once the oracle finished.
+    /// The BEFORE R (roots) capture finishes BEFORE the probe returns, so it
+    /// is pinned ahead of the oracle's own ref read: a ref move after R
+    /// shows up in the AFTER capture and seeds nothing (advisor 2026-10-26
+    /// 02:50). Only the S (context) capture runs on a thread overlapping the
+    /// original query (ruling 2026-10-25: no needless serial snapshot).
     Concurrent {
         queries: QueryKey,
         pending: PendingSnapshot,
     },
 }
 
-/// A BEFORE snapshot being captured on its own thread. Dropping it joins the
-/// thread (its git children are bounded by the same deadline), so no child
-/// outlives the command.
+/// A BEFORE snapshot whose R half is already captured and whose S half is
+/// being captured on its own thread. Dropping it joins the thread (its git
+/// children are bounded by the same deadline), so no child outlives the
+/// command.
 // trace:BUG-2221 | ai:claude
 pub(crate) struct PendingSnapshot {
-    handle: Option<std::thread::JoinHandle<Snapshot>>,
-    done: Option<Snapshot>,
+    handle: Option<std::thread::JoinHandle<Option<ContextSnapshot>>>,
+    ctx: Option<ContextSnapshot>,
+    roots: Option<RootsSnapshot>,
 }
 
 type Snapshot = (Option<ContextSnapshot>, Option<RootsSnapshot>);
 
 impl PendingSnapshot {
+    /// Start S on a thread, then capture R on the caller's thread and return
+    /// only once R is complete — the caller starts the oracle after this, so
+    /// every ref R read precedes every ref the oracle reads.
     fn start(project_root: &Path, loc: Location, deadline: Instant) -> Self {
         let root = project_root.to_path_buf();
+        let handle = std::thread::spawn(move || capture_context(&root, Some(loc), deadline));
+        let roots = capture_roots(project_root, deadline);
         PendingSnapshot {
-            handle: Some(std::thread::spawn(move || {
-                capture_snapshot(&root, Some(loc), deadline)
-            })),
-            done: None,
+            handle: Some(handle),
+            ctx: None,
+            roots,
         }
     }
 
-    /// Wait for the capture to finish (idempotent).
+    /// Wait for the S capture to finish (idempotent).
     fn finish(&mut self) {
         if let Some(h) = self.handle.take() {
-            self.done = Some(h.join().unwrap_or((None, None)));
+            self.ctx = h.join().ok().flatten();
         }
     }
 
     fn join(mut self) -> Snapshot {
         self.finish();
-        self.done.take().unwrap_or((None, None))
+        (self.ctx.take(), self.roots.take())
     }
 }
 
@@ -348,7 +354,8 @@ fn probe_inner(
         if on_disk.positive && on_disk.cone.is_none() {
             // P1: the last complete answer was positive. Too many hits to
             // cache → the original query alone, as before P1. Otherwise a
-            // seeding show whose BEFORE snapshot overlaps the original.
+            // seeding show: BEFORE's R is read here, ahead of the original;
+            // its S overlaps the original.
             // trace:BUG-2221 | ai:claude
             if on_disk.oversize {
                 return outcome(NegativeProbe::RunOriginal);
