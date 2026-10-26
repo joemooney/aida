@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-24T22:36:27.858473051Z
-modified_at: 2026-10-25T20:07:36.063276659Z
+modified_at: 2026-10-26T14:48:33.424425918Z
 req_type: Task
 tags:
 - from-review:PR-2905
@@ -36,6 +36,12 @@ comments:
   content: 'PROXY DECISION for joe: Approve crash-safe request/result publication and bounded orphan recovery under the existing lock. Preserve active records and collision protection; no arbitrary age-based deletion of live/unknown-owned work. Implementer proposes exact recovery state transitions before coding.'
   created_at: 2026-10-25T04:52:25.101403879Z
   modified_at: 2026-10-25T04:52:25.101403879Z
+- id: 01a178af-3f90-7f93-b45a-ed33c66ced9c
+  author: joe
+  content: 'ADVISOR: landed in e27af75054 (PR #2924, Refs-titled train car); the round-4 reviewer verified this task item by item (verdict at 4b2b0b3983).'
+  created_at: 2026-10-26T14:48:33.424425918Z
+  modified_at: 2026-10-26T14:48:33.424425918Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
 history:
 - id: 01a17167-2b22-7d80-81ad-f5c3980acf4c
   author: joe
