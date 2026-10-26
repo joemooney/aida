@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-26T12:19:29.212998638Z
+modified_at: 2026-10-26T12:45:09.924593314Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -1019,6 +1019,16 @@ comments:
   created_at: 2026-10-26T12:19:29.212998638Z
   modified_at: 2026-10-26T12:19:29.212998638Z
   session_id: 2cd5df63-81dc-493f-9ae6-c60c1a86d375
+- id: 01a1783e-47a4-7850-9324-094598403674
+  author: joe
+  content: |-
+    ADVISOR SIGNOFF 2026-10-26 06:00 MST on B2 SKETCH v1 (comment 73) and C SKETCH v1 (comment 75).
+    B2: Q1 = Option A (MailIdentityFacts and the pure policy move to aida-core::mailbox_identity behind opaque core-produced inputs; test-only constructors under cfg(test); no string-to-authority path; Option B rejected as weakening signoff 60 #1). Q2 = the lean is confirmed: passive counts and notices treat LegacyWatermark as not-new; explicit inbox views label it "read (legacy)"; caught_up stays false. Q3 = the order B2b -> C -> B2c is approved; in B2b, explicit-read marking stays on the BUG-1482 path and writes per-ID receipts (record_seen) for the displayed IDs only; no new anchor before C. Partial or unknown results render as typed partial, never as an empty success.
+    C: QC1 = the lean is approved: a source holding no mail, receipt or watermark bytes may retire after the fence and the final check; a mail-bearing source refuses until an operator-run activation records that every writer host is admitting. Activation ships first as a dry-run report. The refusal message must name the activation command, and the refusal keeps lease, claim and manifest. QC2 = a 2 s bounded try-lock that refuses on timeout is approved (retirement is retryable; never block). QC3 = C1 as a core-only slice is approved (expect(dead_code) until C2; RetentionCoverage stays Unestablished in every production path; the section 6 crash fixtures are required in C1). QC4 = the section 3 rule is approved: remove_store_worktree refuses while canonical permits are live or the canonical mailbox holds untracked or uncommitted files.
+    Run B2b and C1 as parallel lanes. Every slice: STRICT review, Refs STORY-1843, and no zero-byte sandbox placeholder files staged.
+  created_at: 2026-10-26T12:45:09.924593314Z
+  modified_at: 2026-10-26T12:45:09.924593314Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
   author: joe
