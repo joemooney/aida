@@ -1,7 +1,7 @@
 # BUG-2221 positive-path slice: diagnosis and SKETCH v2 (awaiting advisor signoff)
 
-Status: diagnosis plus sketch only. No code. This slice is beyond SKETCH v1,
-so per the advisor's 2026-10-25 23:08 MST comment it stops for signoff.
+Status: signed 2026-10-25 23:55 MST (P1 with O1, P2 with a condition). P2 is
+implemented. P1 is held on two soundness gaps; see "Implementation status".
 
 Budgets are unchanged: 1000 ms / 10% / 5000 ms guard, 4 s
 `SHOW_LINKAGE_DEADLINE`. No relabeling or deletion of telemetry.
@@ -182,10 +182,97 @@ load average. Report cold and warm separately. Fresh lineage-scoped guard
 telemetry comes from the promoted build only, with the old 24 h window
 untouched.
 
+## Implementation status (2026-10-26, after the 23:55 MST signoff)
+
+**P2 is implemented** in `aida-cli-lib/src/linkage_branch.rs`. The original
+`--contains` loop was moved out of `trace.rs` without change, as
+`contains_branch_scan`. `name_matched_branch_scan` runs in front of it. It
+does one `git branch --all --format=%(refname:short)%00%(objectname)` listing
+(the same listing, order and short names the scan reads). It keeps the
+id-named refs, takes the first containing commit index per tip from
+`merge-base --is-ancestor` over the same newest-first `n = min(len, 20)`
+commits, and replays the scan's accumulation in that order. So a hit is the
+scan's own answer for those commits, and commit-cap truncation is reported
+the same way. A miss (no id-named ref, none containing a commit, any error or
+timeout) falls through to the unchanged scan. The fast path uses at most
+500 ms of the one unchanged 2 s branch deadline. Tests in
+`tests/bug_2221_branch_fast_path_tests.rs` check equality with the scan on
+branch-crossing, stacked-sibling, local+remote same-tip, orphan-store and
+commit-cap fixtures, plus the no-name, miss and expired-deadline
+fallthroughs.
+
+**P1 is not implemented. Two soundness gaps in the signed sketch need a
+ruling (SKETCH v2 amendment below).**
+
+### Gap 1: O1 does not reproduce Git's `--date-order`
+
+`--date-order` orders the WHOLE `--all` graph (Kahn's algorithm, newest
+ready commit first, ties by insertion order). `--grep` then filters that
+sequence. A non-hit commit with a skewed date reorders hits that have no
+ancestry relation to each other, so a sort of the hit subset by its own
+ancestry and dates is not the same order. Counterexample:
+
+```
+base(100) ── A(1000, hit) ── C(10, non-hit, tip of x)
+base(100) ── B(500, hit, tip of y)
+git log --all --date-order --grep : B, A   (C waits behind B; A waits for C)
+O1 subset sort                    : A, B   (A and B unrelated; 1000 > 500)
+```
+
+O1 is exact only when dates never decrease along an edge and no two commits
+are tied when both are ready. The fleet produces both: rebases stamp a whole
+chain with one committer second, and clock skew is possible.
+
+### Gap 2: cached hits can stop being reachable
+
+v1 never had to ask whether a CLOSED commit is still reachable, because a
+negative stays negative. A cached HIT must be answered only while some
+current ref still reaches it. Merged or abandoned branches are deleted, and
+`origin/*` gets pruned, all the time here. That is exactly when a spec's
+branch-only commits leave `--all`. The CLOSED set keeps no internal edges, so
+the warm walk cannot tell which stored hits are still reachable.
+
+### SKETCH v2 amendment for P1 (needs a ruling)
+
+P1' keeps P1's key, seed rules, snapshot pinning and mandatory after-S/R
+re-check. It replaces O1 and adds a reachability rule:
+
+1. **Store Git's own order.** Seeding stays as approved: a complete
+   original-collector run pinned to the before-snapshot. The seed now also
+   stores that run's hits in their exact output order, each with its
+   committer timestamp, plus `max_root_ct` (the newest committer timestamp
+   among the roots in that snapshot, from `%ct` on the existing `--no-walk`
+   root listing).
+2. **Reachability: answer only when no old root is lost.** Every root of the
+   stored state must be a current root, or a parent of a commit this warm
+   walk framed. Otherwise the original runs and reseeds. That proves the old
+   cone (and so every stored hit) is still in `--all`, with no extra Git
+   call.
+3. **Order: answer only when the new commits provably sort first.** The warm
+   walk also frames `%ct`. Answer only when every newly walked commit has
+   `ct > max_root_ct`. Under that condition Git outputs every new commit
+   before any old commit, and the old commits keep their stored relative
+   order, except where two old cone tips tie, which is checked from the
+   stored root timestamps. New hits are ordered by simulating Kahn's
+   algorithm over the walked new subgraph. If the simulation ever has two
+   ready commits tied on the top date, the answer is ambiguous, so the
+   original runs and reseeds.
+4. Every guard failure falls back to the unchanged original collector. That
+   collector's complete answer reseeds the key, so no guard can produce a
+   wrong order or a stale hit.
+
+**Open risk, to measure before committing to P1':** guard 2 fails on every
+show that follows a ref deletion. With this fleet's branch churn, the
+warm-hit rate for positive keys may be low. If it is, P1' is a net loss,
+because a reseed adds two snapshots to the original. The proposal is to
+measure the guard-2 pass rate first, with a read-only probe over live
+ref-churn between consecutive shows of the same specs, before any P1' code.
+
 ## Questions for the advisor
 
 1. Approve P1 with ordering O1, or rule that the order is non-normative so
-   that O2 is acceptable?
+   that O2 is acceptable? *(Answered 23:55: O1. Superseded by Gap 1 above:
+   O1 is not exact. Ruling needed on P1', or on measuring first.)*
 2. Approve P2 as a fast path that is exact for `id_matches`, with the
    unchanged scan as the fallback?
 3. Stale commit-graph: is an operator `git maintenance` run on the primary

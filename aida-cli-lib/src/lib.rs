@@ -136,6 +136,8 @@ mod knowledge_list;
 // trace:STORY-1662 | ai:claude
 mod lane_env;
 mod leases;
+// trace:BUG-2221 | ai:claude — in-flight branch search (name-matched fast path).
+mod linkage_branch;
 mod live_work;
 pub(crate) use live_work::try_auto_queue_pr_review;
 mod agent_handle;

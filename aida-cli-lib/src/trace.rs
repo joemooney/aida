@@ -1290,140 +1290,21 @@ fn collect_git_linkage_inner(
                 .iter()
                 .find_map(|(_, _, s)| parse_squash_pr_number(s));
         } else {
-            // In flight: find the feature branch that holds the work.
-            //
-            // BUG-1528: don't anchor solely on the SINGLE newest referencing
-            // commit. When a spec has multiple branches in flight (a
-            // branch-crossing — e.g. `bug-1420-work` plus a later
-            // `bug-1420-round2`), the newest commit across ALL of them can
-            // live on a branch that gets filtered out below (main/master/
-            // orphan-store) or simply isn't the spec's own branch, leaving
-            // the spec's actual local branch entirely unreachable via
-            // `--contains <newest-sha>` even though `git branch --list`
-            // plainly shows it. Union the `--contains` result over EVERY
-            // referencing commit (still newest-first, so ties still prefer
-            // recency) so a branch holding an older-but-still-relevant
-            // commit is found too. trace:BUG-1528 | ai:claude
-            let norm_id = |s: &str| s.to_ascii_lowercase().replace([' ', '_'], "-");
-            let mut candidates: Vec<String> = Vec::new();
-            let mut local_candidates: Vec<String> = Vec::new();
-            // BUG-1594: `git branch --contains` is one subprocess per
-            // referencing commit, and a spec with a long commit trail (or
-            // commits old enough that every agent branch contains them) made
-            // this loop dominate `aida show`. Walk newest-first under a
-            // commit cap AND a wall-clock budget; if either stops the walk,
-            // record it so the renderer says the branch search is partial.
-            // trace:BUG-1594 | ai:claude
+            // In flight: find the feature branch that holds the work
+            // (BUG-553/720/1528/1591/1594), name-matched refs first
+            // (BUG-2221 P2), the unchanged `--contains` scan on a miss.
+            // trace:BUG-2221 | ai:claude
             let branch_deadline = std::time::Instant::now() + cap(LINKAGE_BRANCH_SCAN_BUDGET);
-            let mut scanned = 0usize;
-            for (commit_full, _, _) in &commits {
-                if scanned >= LINKAGE_BRANCH_SCAN_MAX_COMMITS {
-                    break;
-                }
-                let remaining =
-                    branch_deadline.saturating_duration_since(std::time::Instant::now());
-                if remaining.is_zero() {
-                    break;
-                }
-                let mut cmd = PCmd::new("git");
-                cmd.arg("-C").arg(project_root).args([
-                    "branch",
-                    "--all",
-                    "--contains",
-                    commit_full,
-                    "--format=%(refname:short)",
-                ]);
-                // BUG-1993: only `aida show` bounds each call; other callers
-                // keep the unbounded call and the between-call budget check.
-                let result = if deadline.is_some() {
-                    command_output_with_timeout_detail(cmd, remaining)
-                } else {
-                    match cmd.output() {
-                        Ok(o) => BoundedCommandOutput::Completed(o),
-                        Err(_) => BoundedCommandOutput::SpawnFailed,
-                    }
-                };
-                let contains = match result {
-                    BoundedCommandOutput::Completed(o) if o.status.success() => {
-                        scanned += 1;
-                        String::from_utf8_lossy(&o.stdout).trim_end().to_string()
-                    }
-                    BoundedCommandOutput::TimedOut => break,
-                    _ => {
-                        scanned += 1;
-                        continue;
-                    }
-                };
-                // BUG-553: a commit can be reachable from MULTIPLE branches when a
-                // later spec's branch was stacked on this one's unmerged commit
-                // (the BUG-554 anti-pattern). Picking the first arbitrarily then
-                // mis-attributes the spec to a sibling's branch (e.g. TASK-806
-                // shown on `task-805`). Prefer the branch whose name matches one of
-                // the spec ids being resolved (the spec's OWN branch, `TASK-806` →
-                // `task-806`); fall back to the first only when none matches.
-                // trace:BUG-553 | ai:claude
-                //
-                // BUG-720: also exclude the orphan `aida-store` branch. A commit
-                // can be reachable ONLY from `aida-store` (its own bookkeeping
-                // commit, or a cross-node store-lineage merge that names the spec
-                // in parens) — never offer it as the spec's review branch, or
-                // `aida review`/`aida human review` prompts to PR the entire
-                // requirements store as a code change.
-                for raw in contains.lines() {
-                    let raw = raw.trim();
-                    // BUG-1591: remember which candidates exist as a LOCAL
-                    // branch — stripping `origin/` erased that, so selection
-                    // fell to commit recency and a newer remote-only branch
-                    // beat the spec's own local branch. trace:BUG-1591 | ai:claude
-                    let is_remote = raw.starts_with("origin/") || raw.starts_with("remotes/");
-                    let b = raw
-                        .trim_start_matches("remotes/")
-                        .trim_start_matches("origin/");
-                    if !is_remote && !b.is_empty() && !local_candidates.iter().any(|c| c == b) {
-                        local_candidates.push(b.to_string());
-                    }
-                    if !b.is_empty()
-                        && b != "HEAD"
-                        && b != "main"
-                        && b != "master"
-                        && !is_orphan_store_branch(b)
-                        && !candidates.iter().any(|c| c == b)
-                    {
-                        candidates.push(b.to_string());
-                    }
-                }
-            }
-            if scanned < commits.len() {
-                branch_scan_truncated = Some((scanned, commits.len()));
-            }
-            // BUG-1528: every candidate whose name matches the spec's own
-            // id, in first-seen (recency) order. The first becomes `branch`;
-            // any rest are a branch-crossing signal surfaced as
-            // `other_branches` rather than silently dropped. trace:BUG-1528
-            let mut id_matches: Vec<String> = candidates
-                .iter()
-                .filter(|b| {
-                    let bl = b.to_ascii_lowercase();
-                    ids.iter().any(|id| {
-                        let nid = norm_id(id);
-                        !nid.is_empty() && (bl == nid || bl.contains(&nid))
-                    })
-                })
-                .cloned()
-                .collect();
-            // BUG-1591: a spec's own LOCAL branch outranks a remote-only one;
-            // recency order is kept within each group (stable sort), so the
-            // choice no longer depends on which commit git lists first.
-            // trace:BUG-1591 | ai:claude
-            id_matches.sort_by_key(|b| !local_candidates.iter().any(|c| c == b));
-            if id_matches.is_empty() {
-                // No candidate matches the spec's own id by name — fall back
-                // to the first (newest) candidate found, as before.
-                branch = candidates.into_iter().next();
-            } else {
-                branch = Some(id_matches.remove(0));
-                other_branches = id_matches;
-            }
+            let scan = crate::linkage_branch::in_flight_branch_scan(
+                project_root,
+                ids,
+                &commits,
+                branch_deadline,
+                deadline.is_some(),
+            );
+            branch = scan.branch;
+            other_branches = scan.other_branches;
+            branch_scan_truncated = scan.truncated;
             // BUG-1993: under the show deadline, bound `git worktree list
             // --porcelain` so a stalled git cannot hang `aida show`, and record
             // `worktree_scan_incomplete` on timeout (PRIN-5). Other callers
