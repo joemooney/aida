@@ -1,0 +1,29 @@
+id: 01a178ad-41ba-7b52-b6fa-f743393a811e
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-003
+title: 'cosmetic (non-blocking): session_misc.rs resolve_queue_work_launch says ''no orp…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2223, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  cosmetic (non-blocking): session_misc.rs resolve_queue_work_launch says 'no orphaned session tree to re-enter' even when an orphan tree exists but is un-adoptable (e.g. lease records no pid); the command it names still works, wording is just imprecise
+
+  PR: #2934
+  Reviewed sha: 994a4c1e25d4b4d61eb9b13a45e37c19b05cce04
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-26T14:46:22.906526273Z
+modified_at: 2026-10-26T14:46:22.906526273Z
+req_type: Task
+tags:
+- carried-from:BUG-2223
+- finding-hash:7f26716e
+- from-review:PR-2934
+- kind:carried-forward
+filed_at:
+  code_sha: 06fa4fb01ee79b1502a096893ce99891b61b9cc6
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e4c2dd0575
+  vendor: claude
