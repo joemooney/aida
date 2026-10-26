@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T17:15:51.947160848Z
-modified_at: 2026-10-26T03:26:04.430800421Z
+modified_at: 2026-10-26T06:41:14.457586542Z
 req_type: Story
 relationships:
 - rel_type:
@@ -590,6 +590,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round 2 at d270b62fac: PR CI is red. Test shards lib-1 and cli-0 fail at the exact head, while main (fa8d8e041a, merged in) and the prior PR head e727963d1c were green, so the round-2 commit c01e4d78d5 is the likely cause. The PR''s local gate claim (206 targeted tests + check-ci-fast) did not cover these shards. Cannot approve on red CI.. Triage reason: PR-2924 round-3 final review at 92216690 = request-changes (record failed on a revoked reviewer grant; advisor ruling: F1 blocking per the signed Q2 ruling, F2+F3 folded in, F4 no action under a Refs squash). Rework lane relaunched by the advisor.'
   created_at: 2026-10-26T03:25:46.741856386Z
   modified_at: 2026-10-26T03:25:46.741856386Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
+- id: 01a176f1-18d9-7300-8a80-7200985e8ea5
+  author: joe
+  content: |-
+    ADVISOR 2026-10-25 23:50 MST: PR-2924 round 4 APPROVED at 4b2b0b3983. Non-blocking findings folded into the next STORY-1917 slice (no separate specs):
+    - [minor][test-coverage] aida dispatch activate-lock's direct-human/TTY refusal (aida-cli-lib/src/dispatch.rs:4044-4050) has no test; an authority refusal path in a gate-protected file is unproven.
+    - [minor][test-coverage] R6 --no-ship no-CI refusal is untested: ci_state_is_green (dispatch_flow.rs:370-379) never runs in tests because flow tests replace the whole CI wait via TEST_FLOW_WAIT_CI_HOOK (dispatch_flow.rs:329-340); add a case where CiState::None/Pending must not report green.
+    - [minor][robustness] flow's review step calls run_review_verb, which runs 'aida queue work PR-N --role reviewer' via unbounded cmd.output() (dispatch.rs:6111); R6 asks for bounded subprocesses, and a hung launch holds the flow claim and cap slot.
+    - [minor][audit] dispatch refusals at pr ship PostCiWait/UnderMergeLease/PreHoldRelease (pr_cmd.rs ~2834/2848/3128) exit via ? without ledger_mandate_ship_failure, so only a PreMerge refusal gets a pr:<N> row under the request mandate; earlier ones appear only as the dispatch request row from finalize_request.
+    - [minor][docs] Q2 asked to document that the dispatch context cannot be silently dropped by an unprotected path: the checkpoint call sites live in pr_cmd.rs and pr_train.rs (not in GATE_PROTECTED_PATHS), and so does the wiring test story_1917_pr_ship_checkpoints_are_wired_in_order_around_every_wait. No doc records this boundary.
+    - [minor][usability] activate-lock fails closed whenever any same-uid non-dumpable process (ssh-agent, gpg-agent, (sd-pam)) makes /proc/<pid>/fd unreadable; the refusal names the pid but not the cause or a way forward, so a typical desktop may never reach activation (affects only repos with a legacy file lock).
+    - [cosmetic] finalize_request stamps finished_at with the execution-start now passed down from handle_dispatch (dispatch.rs:5320-5358), so a multi-hour flow/train records finished_at equal to its start time.
+    - [cosmetic] LiveTrainForge::fetch_main now runs dispatch_check (pr_train.rs:1490); an authority loss right after a successful merge surfaces as the misleading warning 'main could not be read after it'.
+    - [process] commits 5678ccbde7, 45d54bcdcf and e727963d1c carry bare completing IDs; this is safe only under the PR's Refs squash title. Merge must squash with the PR title so STORY-1917/TASK-2338..2344 do not auto-complete.
+  created_at: 2026-10-26T06:41:14.457586542Z
+  modified_at: 2026-10-26T06:41:14.457586542Z
   session_id: 761a4fea-f388-41d1-93d9-f1386951253c
 history:
 - id: 01a16c5e-51c4-73b2-b8a3-3b764dc7e5cd
