@@ -762,7 +762,7 @@ fn change_state_parses_both_forges_and_fails_closed() {
 // trace:BUG-1562 | ai:claude
 #[test]
 fn premise_stale_fires_when_the_world_moves_and_never_clears() {
-    use crate::review_verdict::{RecordedVerdict, VerdictKind};
+    use crate::gate::review_verdict::{RecordedVerdict, VerdictKind};
     let dir = tempfile::tempdir().unwrap();
     write_hold(
         dir.path(),

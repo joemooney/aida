@@ -7,10 +7,11 @@
 // is a throwaway fixture under a tempdir; none touches a real AIDA store.
 // trace:BUG-1611 | ai:claude
 
+use crate::gate::role_authority::advisor_authority_from;
 use crate::{
-    advisor_authority_from, handle_queue_command, queue_done_lifecycle_refusal,
-    queue_done_lifecycle_refusal_message, status_advance_requires_advisor_authority,
-    zen_auto_approve, zen_auto_approve_authorized, QueueCommand, QueueDoneLifecycleRefusal,
+    handle_queue_command, queue_done_lifecycle_refusal, queue_done_lifecycle_refusal_message,
+    status_advance_requires_advisor_authority, zen_auto_approve, zen_auto_approve_authorized,
+    QueueCommand, QueueDoneLifecycleRefusal,
 };
 use aida_core::db::DatabaseBackend;
 use aida_core::models::{Requirement, RequirementStatus as S};
@@ -130,7 +131,8 @@ fn forced_reopen_runs_the_approval_authority_predicate() {
             "{from} -> Approved is a reopen into the pipeline"
         );
         // Refusal: a headless implementer (no role, no TTY, not orchestrated).
-        let authorized = advisor_authority_from("implementer", false, false);
+        let authorized =
+            crate::gate::role_authority::advisor_authority_from("implementer", false, false);
         assert!(
             !(authorized || !status_advance_requires_advisor_authority(&from, &S::Approved)),
             "{from} -> Approved must refuse without authority"
@@ -138,8 +140,14 @@ fn forced_reopen_runs_the_approval_authority_predicate() {
         // Legitimate path: the advisor seat (grant-resolved). ADR-66: a TTY
         // only issues grants and is no longer an authority source, so an
         // interactive implementer stays refused. trace:STORY-1473 | ai:claude
-        assert!(!advisor_authority_from("implementer", true, false));
-        assert!(advisor_authority_from("advisor", false, false));
+        assert!(!crate::gate::role_authority::advisor_authority_from(
+            "implementer",
+            true,
+            false
+        ));
+        assert!(crate::gate::role_authority::advisor_authority_from(
+            "advisor", false, false
+        ));
     }
     // Closing and idempotent re-flips stay free, so `--force` recovery that
     // does not reopen into the pipeline is unaffected.

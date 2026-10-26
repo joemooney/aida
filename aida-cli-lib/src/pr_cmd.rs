@@ -4,6 +4,9 @@
 //! Shared PR-detection/git helpers stay in `lib.rs`, reached via `crate::`.
 // trace:STORY-771 | ai:claude
 
+use crate::gate::approval::*;
+use crate::gate::ci_freshness::*;
+use crate::gate::mandate_ship::*;
 use crate::process_retry::RetryEtxtbsy;
 use crate::*;
 use aida_core::git_ops::RemoteCredentialsExt as _;
@@ -1211,7 +1214,7 @@ pub(crate) fn draft_only_specs_for_ship(project_root: &std::path::Path) -> Vec<S
 pub(crate) fn draft_only_specs_in(records: &[ShipGateSpecRecord]) -> Vec<String> {
     records
         .iter()
-        .filter(|(_, tags, _)| pr_ship::is_draft_only_tagged(tags))
+        .filter(|(_, tags, _)| crate::gate::ship::is_draft_only_tagged(tags))
         .map(|(id, _, _)| id.clone())
         .collect()
 }
@@ -1236,19 +1239,19 @@ pub(crate) fn supervised_specs_in(
 ) -> Vec<(String, String)> {
     // STORY-1698: every spec read during a ship feeds the mandate's
     // append-only exclusion ledger. trace:STORY-1698 | ai:claude
-    if let Ok(dir) = crate::mandate::mandate_dir() {
+    if let Ok(dir) = crate::gate::mandate::mandate_dir() {
         for (id, tags, mode) in &records {
             let mut req = aida_core::Requirement::new(String::new(), String::new());
             req.tags = tags.iter().cloned().collect();
             req.execution_mode = *mode;
-            crate::mandate::note_exclusions(&dir, id, [&req]);
+            crate::gate::mandate::note_exclusions(&dir, id, [&req]);
         }
     }
     let specs: Vec<(String, Option<aida_core::ExecutionMode>)> = records
         .into_iter()
         .map(|(id, _, mode)| (id, mode))
         .collect();
-    pr_ship::supervised_merge_holds(&specs, interactive_tty)
+    crate::gate::ship::supervised_merge_holds(&specs, interactive_tty)
 }
 
 /// STORY-720: options for the shared human-implementer finish ceremony.
@@ -1661,212 +1664,23 @@ pub(crate) fn ship_unlabel_failure(pr: u64, err: &crate::merge_hold::LabelSyncEr
 // trace:BUG-1532 | ai:claude
 pub(crate) fn ship_refusal_release(
     roots: &[&std::path::Path],
-    record: &crate::merge_hold::MergeHoldRecord,
+    record: &crate::gate::merge_hold_core::MergeHoldRecord,
     head: Option<&str>,
-) -> crate::merge_hold::RefusalRelease {
-    crate::merge_hold::refusal_release(
+) -> crate::gate::merge_hold_core::RefusalRelease {
+    crate::gate::merge_hold_core::refusal_release(
         record,
         head,
         |key| {
             roots
                 .iter()
-                .find_map(|root| crate::review_verdict::read_recorded_verdict(root, key))
+                .find_map(|root| crate::gate::review_verdict::read_recorded_verdict(root, key))
         },
         |key, sha| {
             roots
                 .iter()
-                .find_map(|root| crate::review_verdict::read_verdict_for_sha(root, key, sha))
+                .find_map(|root| crate::gate::review_verdict::read_verdict_for_sha(root, key, sha))
         },
     )
-}
-
-/// What the approval gate decides once approval AUTHORITY holds.
-// trace:TASK-1945 | ai:claude
-#[derive(Debug)]
-pub(crate) enum HeadDecision {
-    /// An approval covers the head: merge pinned to this (`None`: nothing to
-    /// pin to).
-    Covered(Option<String>),
-    /// TASK-1960: the head moved only by clean merges of the base branch,
-    /// with the PR's own diff unchanged, so the attested approval carries
-    /// over to `proof.new_head`. The outcome is `None` for a quiet site.
-    CarriedOver(
-        crate::review_carryover::CarryOver,
-        Option<crate::review_carryover::RecordOutcome>,
-    ),
-    /// No approval covers the head; `message` says why, including a refused
-    /// carry-over. Only `--override-stale-approval` can pass it.
-    Stale {
-        refusal: pr_ship::ApprovalHeadRefusal,
-        message: String,
-    },
-}
-
-/// The approval gate's decision with no output, log or event of its own:
-/// `Err(message)` when no authorized, non-author approval exists (BUG-1918,
-/// never overridable), else whether it covers `head_sha`. A carry-over is
-/// tried through `carry_over`; a quiet site records nothing, so through one
-/// this reads only. `aida pr ship` and the review watcher's readiness report
-/// both decide here, so the two cannot disagree.
-// trace:TASK-1945 | ai:claude
-pub(crate) fn approval_decision(
-    pr_number: u64,
-    candidates: &[crate::review_verdict::RecordedVerdict],
-    head_sha: Option<&str>,
-    policy: &pr_ship::ShipApprovalPolicy,
-    carry_over: Option<&crate::review_carryover::CarryOverSite<'_>>,
-) -> std::result::Result<HeadDecision, String> {
-    // BUG-1918: the approval must come from an authorized, non-author seat.
-    // Checked first: `--override-stale-approval` excuses a head that moved
-    // past a real approval, never a missing or self-recorded one.
-    // trace:BUG-1918 | ai:claude
-    if let Some(refusal) = pr_ship::approval_authority_refusal(candidates, policy) {
-        return Err(pr_ship::approval_authority_refusal_message(
-            pr_number, &refusal,
-        ));
-    }
-    let Some(refusal) = pr_ship::approval_head_refusal(candidates, head_sha) else {
-        return Ok(HeadDecision::Covered(pr_ship::approved_match_head(
-            candidates, head_sha,
-        )));
-    };
-    let mut message = pr_ship::approval_head_refusal_message(pr_number, &refusal);
-    // TASK-1960: a head that moved only by clean merges of the base branch,
-    // with the PR's own diff unchanged, keeps the attested approval. The
-    // merge is pinned to the proven head, so a later push still refuses.
-    // trace:TASK-1960 | ai:claude
-    match carry_over
-        .and_then(|site| crate::review_carryover::carry_over_for_refusal(site, pr_number, &refusal))
-    {
-        Some(Ok((proof, outcome))) => return Ok(HeadDecision::CarriedOver(proof, outcome)),
-        Some(Err(why)) => {
-            message = format!(
-                "{message} The approval did not carry over: {}.",
-                why.reason()
-            );
-        }
-        None => {}
-    }
-    Ok(HeadDecision::Stale { refusal, message })
-}
-
-/// TASK-1448 + TASK-1458: `aida pr ship`'s approval-covers-head gate.
-/// `Ok(pin)` = merge, pinned to `pin` (`MergeOptions.match_head`, i.e. gh
-/// `--match-head-commit`) so a push between this check and the merge is
-/// refused by the forge instead of landing unreviewed. The pin is the
-/// approved head when an open approval covers it, `None` when there is no
-/// approval, and — under `--override-stale-approval` — the head the override
-/// was granted for, after a durable `advisor-activity.jsonl` record naming
-/// both shas. `Err` = refused (logged as a failed merge step).
-// trace:TASK-1458 | ai:claude
-#[allow(clippy::too_many_arguments)]
-pub(crate) fn pr_ship_approval_gate(
-    main_worktree: &std::path::Path,
-    pr_number: u64,
-    candidates: &[crate::review_verdict::RecordedVerdict],
-    head_sha: Option<&str>,
-    policy: &pr_ship::ShipApprovalPolicy,
-    override_stale_approval: bool,
-    delete_branch: bool,
-    carry_over: Option<&crate::review_carryover::CarryOverSite<'_>>,
-) -> Result<Option<String>> {
-    let decision = match approval_decision(pr_number, candidates, head_sha, policy, carry_over) {
-        Ok(decision) => decision,
-        Err(message) => {
-            log_ship_activity(
-                main_worktree,
-                Some(pr_number),
-                &pr_ship::ShipStep::Merge { delete_branch },
-                &pr_ship::StepOutcome::Failed(message.clone()),
-            );
-            crate::events::record_gate_held(
-                main_worktree,
-                crate::events::GATE_APPROVAL_AUTHORITY,
-                None,
-                Some(pr_number),
-                &message,
-            );
-            return Err(pr_ship::ShipRefusal::Review.error(message));
-        }
-    };
-    // STORY-1655: name the mode when a solo-human approval is relied on.
-    // trace:STORY-1655 | ai:claude
-    // Same stream as merge_path_approval_gate. trace:TASK-1955 | ai:claude (TASK-1808)
-    if let Some(notice) = pr_ship::solo_approval_notice(candidates, policy) {
-        eprintln!("  {notice}");
-    }
-    let (refusal, message) = match decision {
-        HeadDecision::Covered(pin) => return Ok(pin),
-        HeadDecision::CarriedOver(proof, outcome) => {
-            // A quiet (preflight) site records nothing and stays silent; the
-            // gate that pins the merge announces it once.
-            if let Some(outcome) = outcome {
-                println!(
-                    "  {} {}",
-                    crate::glyph(crate::glyphs::Glyph::Info).cyan(),
-                    crate::review_carryover::carry_over_line(&proof, &outcome)
-                );
-                append_ship_activity_line(
-                    main_worktree,
-                    &crate::review_carryover::carry_over_event(
-                        &chrono::Utc::now().to_rfc3339(),
-                        "aida pr ship",
-                        &proof,
-                    ),
-                );
-            }
-            return Ok(Some(proof.new_head));
-        }
-        HeadDecision::Stale { refusal, message } => (refusal, message),
-    };
-    // BUG-1918: only a non-author session may ship commits no approval
-    // covered; the override is neither honoured nor advertised to an author.
-    // trace:BUG-1918 | ai:claude
-    let override_refusal = pr_ship::stale_override_refusal(policy);
-    if !override_stale_approval || override_refusal.is_some() {
-        let message = match (&override_refusal, override_stale_approval) {
-            (Some(why), true) => {
-                format!("{message} `--override-stale-approval` refused: {why}.")
-            }
-            _ => message,
-        };
-        log_ship_activity(
-            main_worktree,
-            Some(pr_number),
-            &pr_ship::ShipStep::Merge { delete_branch },
-            &pr_ship::StepOutcome::Failed(message.clone()),
-        );
-        // STORY-1436: the stale-approval gate HELD. trace:STORY-1436 | ai:claude
-        crate::events::record_gate_held(
-            main_worktree,
-            crate::events::GATE_STALE_APPROVAL,
-            None,
-            Some(pr_number),
-            &message,
-        );
-        return Err(pr_ship::ShipRefusal::Review.error(match override_refusal {
-            None => {
-                format!("{message} (To merge anyway, re-run with `--override-stale-approval`.)")
-            }
-            Some(_) => message,
-        }));
-    }
-    append_ship_activity_line(
-        main_worktree,
-        &pr_ship::format_stale_approval_override_event(
-            &chrono::Utc::now().to_rfc3339(),
-            pr_number,
-            &refusal,
-        ),
-    );
-    eprintln!(
-        "  {} {message} — shipping anyway (--override-stale-approval)",
-        crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
-    );
-    Ok(head_sha
-        .map(str::trim)
-        .filter(|sha| !sha.is_empty())
-        .map(str::to_string))
 }
 
 /// BUG-1918: what PR `pr` ships, for the approval gate — `known_ids` (from
@@ -1945,53 +1759,6 @@ pub(crate) fn ship_gate_known_ids(
     ids
 }
 
-/// BUG-1918: the approval candidates for merging PR `pr` (read from `roots`)
-/// and the [`ShipApprovalPolicy`] they are judged by — the one input every
-/// merge path (`aida pr ship`, the drain, `aida release --after-pr`,
-/// burndown) builds the same way.
-// trace:BUG-1918 | ai:claude
-pub(crate) fn merge_approval_inputs(
-    roots: &[&std::path::Path],
-    main_worktree: &std::path::Path,
-    pr: u64,
-    known_ids: &[String],
-    head_branch: Option<&str>,
-    head_sha: Option<&str>,
-) -> (
-    Vec<crate::review_verdict::RecordedVerdict>,
-    pr_ship::ShipApprovalPolicy,
-) {
-    let (candidates, policy, _) =
-        merge_approval_subject(roots, main_worktree, pr, known_ids, head_branch, head_sha);
-    (candidates, policy)
-}
-
-/// [`merge_approval_inputs`] plus the spec ids the PR ships, which the
-/// corpus gate takes as its hints.
-// trace:TASK-1945 | ai:claude
-pub(crate) fn merge_approval_subject(
-    roots: &[&std::path::Path],
-    main_worktree: &std::path::Path,
-    pr: u64,
-    known_ids: &[String],
-    head_branch: Option<&str>,
-    head_sha: Option<&str>,
-) -> (
-    Vec<crate::review_verdict::RecordedVerdict>,
-    pr_ship::ShipApprovalPolicy,
-    Vec<String>,
-) {
-    let (ids, branch, forge_resolved, authorship_ids) =
-        pr_gate_subject(main_worktree, pr, known_ids, head_branch);
-    let candidates = pr_ship::merge_gate_verdict_candidates(roots, pr, &ids, head_sha);
-    // An unconfirmed subject (forge unreachable) names no author set: every
-    // recorded author counts. trace:BUG-1918 | ai:claude
-    // trace:BUG-2199 | ai:claude
-    let author_ids: &[String] = if forge_resolved { &authorship_ids } else { &[] };
-    let policy = ship_approval_policy(main_worktree, author_ids, branch.as_deref(), &candidates);
-    (candidates, policy, ids)
-}
-
 /// BUG-2184: what is left of `--wait SECS` for the CI wait: the time since the
 /// wait started, less the mandate scan's own time.
 // trace:BUG-2184 | ai:claude
@@ -2015,218 +1782,6 @@ pub(crate) fn ship_ci_handoff<T>(
     watch: impl FnOnce(Option<std::time::Duration>) -> T,
 ) -> T {
     watch(wait.map(|secs| ship_ci_budget(secs, since_wait_started, scan_spent)))
-}
-
-// STORY-1700 (C1): the mandate ship cover lives in `mandate_ship.rs`.
-// trace:STORY-1700 | ai:claude
-pub(crate) use crate::mandate_ship::{
-    mandate_carry_over, mandate_exclusion_specs, mandate_ship_cover, mandate_still_active,
-    rearm_after_mandate_failure, rearm_mandate_hold_with, release_hold_under_mandate, MandateCover,
-};
-
-/// BUG-1918: the approval gate for merge paths other than `aida pr ship`
-/// (`aida release --after-pr`, burndown): approval AUTHORITY, then head
-/// coverage, with no override. `Ok(pin)` = merge pinned to `pin`
-/// (`MergeOptions.match_head`); `Err` = the refusal text, already recorded
-/// as a held gate.
-// trace:BUG-1918 | ai:claude
-pub(crate) fn merge_path_approval_gate(
-    project_root: &std::path::Path,
-    pr: u64,
-    known_ids: &[String],
-    head_branch: Option<&str>,
-    head_sha: Option<&str>,
-) -> std::result::Result<Option<String>, String> {
-    let main_worktree = crate::main_worktree_root_from(project_root);
-    let (candidates, policy) = merge_approval_inputs(
-        &[project_root, main_worktree.as_path()],
-        &main_worktree,
-        pr,
-        known_ids,
-        head_branch,
-        head_sha,
-    );
-    // TASK-1960: the base is read from the forge (prove time and again right
-    // before the caller merges). trace:TASK-1960 | ai:claude
-    let site = crate::review_carryover::CarryOverSite::new(&main_worktree, None);
-    merge_path_approval_decision(
-        &main_worktree,
-        pr,
-        &candidates,
-        &policy,
-        head_sha,
-        &site,
-        &|| {
-            crate::forge::forge_for(project_root)
-                .change_metadata(pr, &mut crate::network_retry::NoopSink)
-                .ok()
-                .map(|m| m.base_ref)
-        },
-    )
-}
-
-/// [`merge_path_approval_gate`] once its inputs are gathered: authority,
-/// then head coverage with the TASK-1960 carry-over through `site`, whose
-/// proven base must still match `base_now()` (the PR's base at merge time).
-// trace:BUG-1918 | ai:claude
-// trace:TASK-1960 | ai:claude
-pub(crate) fn merge_path_approval_decision(
-    main_worktree: &std::path::Path,
-    pr: u64,
-    candidates: &[crate::review_verdict::RecordedVerdict],
-    policy: &pr_ship::ShipApprovalPolicy,
-    head_sha: Option<&str>,
-    site: &crate::review_carryover::CarryOverSite<'_>,
-    base_now: &dyn Fn() -> Option<String>,
-) -> std::result::Result<Option<String>, String> {
-    if let Some(refusal) = pr_ship::approval_authority_refusal(candidates, policy) {
-        let message = pr_ship::approval_authority_refusal_message(pr, &refusal);
-        crate::events::record_gate_held(
-            main_worktree,
-            crate::events::GATE_APPROVAL_AUTHORITY,
-            None,
-            Some(pr),
-            &message,
-        );
-        return Err(message);
-    }
-    // STORY-1655: name the mode when a solo-human approval is relied on.
-    // trace:STORY-1655 | ai:claude
-    if let Some(notice) = pr_ship::solo_approval_notice(candidates, policy) {
-        eprintln!("  {notice}");
-    }
-    if let Some(refusal) = pr_ship::approval_head_refusal(candidates, head_sha) {
-        let mut message = pr_ship::approval_head_refusal_message(pr, &refusal);
-        // TASK-1960: the same carry-over `aida pr ship` applies.
-        // trace:TASK-1960 | ai:claude
-        match crate::review_carryover::carry_over_for_refusal(site, pr, &refusal) {
-            Some(Ok((proof, outcome))) => {
-                // Every caller merges right after this gate returns, so the
-                // PR's base is re-read here: a base retargeted since the
-                // proof refuses. trace:TASK-1960 | ai:claude
-                if let Some(why) = crate::review_carryover::proven_base_refusal(
-                    pr,
-                    &proof.base_branch(),
-                    base_now().as_deref(),
-                ) {
-                    crate::events::record_gate_held(
-                        main_worktree,
-                        crate::events::GATE_STALE_APPROVAL,
-                        None,
-                        Some(pr),
-                        &why,
-                    );
-                    return Err(why);
-                }
-                if let Some(outcome) = &outcome {
-                    eprintln!(
-                        "  {}",
-                        crate::review_carryover::carry_over_line(&proof, outcome)
-                    );
-                }
-                append_ship_activity_line(
-                    main_worktree,
-                    &crate::review_carryover::carry_over_event(
-                        &chrono::Utc::now().to_rfc3339(),
-                        "merge",
-                        &proof,
-                    ),
-                );
-                return Ok(Some(proof.new_head));
-            }
-            Some(Err(why)) => {
-                message = format!(
-                    "{message} The approval did not carry over: {}.",
-                    why.reason()
-                );
-            }
-            None => {}
-        }
-        crate::events::record_gate_held(
-            main_worktree,
-            crate::events::GATE_STALE_APPROVAL,
-            None,
-            Some(pr),
-            &message,
-        );
-        return Err(message);
-    }
-    Ok(pr_ship::approved_match_head(candidates, head_sha))
-}
-
-/// BUG-1918: the approval policy for the specs a PR ships — its author
-/// sessions (authoring leases on those specs or on the PR's head branch, live
-/// or recorded in the durable authorship ledger; with NO spec id, every live
-/// authoring lease and ledger record, failing closed), which recorded
-/// approvals' authority re-validates against its durable store, and the
-/// committer date of the commit the newest approval reviewed. There is no
-/// review opt-out. A missing or malformed ledger is warned about.
-// trace:BUG-1918 | ai:claude
-pub(crate) fn ship_approval_policy(
-    main_worktree: &std::path::Path,
-    spec_ids: &[String],
-    head_branch: Option<&str>,
-    candidates: &[crate::review_verdict::RecordedVerdict],
-) -> pr_ship::ShipApprovalPolicy {
-    let ids = normalized_spec_ids(spec_ids);
-    crate::review_authority::warn_on_ledger_read(main_worktree);
-    let author_sessions = if ids.is_empty() {
-        crate::review_authority::all_author_sessions(main_worktree, head_branch)
-    } else {
-        crate::review_authority::author_sessions_at(main_worktree, &ids, head_branch)
-    };
-    let approvals: Vec<crate::review_verdict::RecordedVerdict> = candidates
-        .iter()
-        .filter(|v| v.kind.approves() && !v.is_closed())
-        .cloned()
-        .collect();
-    let reviewed_committed_at = pr_ship::newest_approval(&approvals)
-        .and_then(|a| a.reviewed_sha.as_deref())
-        .and_then(|sha| commit_committed_at_fetching(main_worktree, sha));
-    pr_ship::ShipApprovalPolicy {
-        author_sessions,
-        verified_authority: crate::review_authority::verified_authority_keys(
-            main_worktree,
-            candidates,
-        ),
-        reviewed_committed_at,
-        // BUG-1918: who is merging — `--override-stale-approval` is refused
-        // to an author. trace:BUG-1918 | ai:claude
-        shipper: crate::review_authority::RecorderIdentity::current(
-            &crate::review_authority::visible_leases(main_worktree),
-        )
-        .tokens,
-        // STORY-1655: the solo mode is re-read at ship time, never trusted
-        // from the verdict. trace:STORY-1655 | ai:claude
-        solo_human: crate::solo_review::effective(main_worktree),
-        verified_solo: crate::review_authority::verified_solo_keys(candidates),
-    }
-}
-
-/// [`commit_committed_at`], fetching a full sha from `origin` once when it is
-/// not present locally (a reviewed commit since force-pushed away).
-// trace:BUG-1918 | ai:claude
-fn commit_committed_at_fetching(
-    repo: &std::path::Path,
-    sha: &str,
-) -> Option<chrono::DateTime<chrono::Utc>> {
-    commit_committed_at(repo, sha).or_else(|| {
-        let sha = sha.trim();
-        if sha.len() != 40 || !sha.bytes().all(|c| c.is_ascii_hexdigit()) {
-            return None;
-        }
-        let fetched = std::process::Command::new("git")
-            .arg("-C")
-            .arg(repo)
-            .args(["fetch", "--quiet", "--no-tags", "origin", sha])
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            // trace:BUG-2181 | ai:claude
-            .remote_credentials(repo, "origin")
-            .status()
-            .is_ok_and(|s| s.success());
-        fetched.then(|| commit_committed_at(repo, sha)).flatten()
-    })
 }
 
 /// BUG-1918: the committer date of `sha` in `repo`, when the commit is
@@ -2265,62 +1820,6 @@ pub(crate) fn normalized_spec_ids(spec_ids: &[String]) -> Vec<String> {
     ids
 }
 
-/// The stale-definition gate's own predicate: PR `pr_number`'s base branch
-/// and the staleness warning its ship branch carries against it. A warning
-/// with `definition_files` is exactly what [`ship_behind_base_gate`]
-/// refuses, so `aida pr ship-batch` reads this, never a re-implementation.
-// trace:STORY-1887 | ai:claude
-pub(crate) fn ship_stale_definition_warning(
-    project_root: &std::path::Path,
-    ship_branch: &str,
-    pr_number: u64,
-) -> (String, Option<StaleCheckWarning>) {
-    let base_branch = pr_ship_target_branch(pr_number);
-    let base_ref = format!("origin/{base_branch}");
-    let warning = pr_stale_check_warning(project_root, ship_branch, &base_ref);
-    (base_branch, warning)
-}
-
-/// What the stale gate does with PR `pr_number`'s staleness against
-/// `base_branch`: `Ok` ships, `Err` is the refusal. TASK-1606 refused only a
-/// green that predates a CI-definition change. STORY-1690: a head missing
-/// ANY commit on the base refuses, and no flag overrides it — two PRs each
-/// green on its own base can break main together (#2599/#2597), so a behind
-/// head lands through `aida pr train N`, which tests it on the current base.
-// trace:TASK-1606 | ai:codex
-// trace:STORY-1690 | ai:claude
-pub(crate) fn stale_gate_decision(
-    pr_number: u64,
-    base_branch: &str,
-    warning: Option<&StaleCheckWarning>,
-    override_stale_check: bool,
-) -> std::result::Result<(), String> {
-    let Some(warning) = warning else {
-        return Ok(());
-    };
-    let definition = if warning.definition_files.is_empty() {
-        String::new()
-    } else {
-        format!(
-            " Its CI also ran against an OLDER definition of the check ({} changed since).",
-            warning.definition_files.join(", ")
-        )
-    };
-    let flag = if override_stale_check {
-        " `--override-stale-check` does not ship a head that is behind its base."
-    } else {
-        ""
-    };
-    Err(format!(
-        "PR-{pr_number}'s head is {} commit(s) behind {base_branch}, so its green was never \
-         tested together with them; two PRs each green on its own base can still turn \
-         {base_branch} red together.{definition} Land it with `aida pr train {pr_number}` \
-         (it tests the PR on top of the current {base_branch} before merging), or merge \
-         {base_branch} into the branch, wait for green, and ship again.{flag}",
-        warning.behind_commits,
-    ))
-}
-
 /// STORY-1690: fetch `base_branch` and the PR head `ship_branch` from origin,
 /// so the behind-base gate measures against the base as the forge has it
 /// now, not a local ref another machine, a web merge or another seat has
@@ -2357,80 +1856,6 @@ pub(crate) fn fetch_ship_refs(
     Ok(())
 }
 
-/// The behind-base gate's outcome for PR `pr_number`: `staleness` is the
-/// fail-closed [`crate::pr_stale_check`] result (or the fetch error). A head
-/// behind its base refuses as `BehindBase`, or `StaleDefinition` when a CI
-/// definition also changed; staleness that cannot be computed refuses too.
-// trace:STORY-1690 | ai:claude
-pub(crate) fn behind_base_refusal(
-    pr_number: u64,
-    base_branch: &str,
-    staleness: std::result::Result<Option<StaleCheckWarning>, String>,
-    override_stale_check: bool,
-) -> std::result::Result<(), (pr_ship::ShipRefusal, String)> {
-    use pr_ship::ShipRefusal;
-    let warning = staleness.map_err(|e| {
-        (
-            ShipRefusal::BehindBase,
-            format!(
-                "PR-{pr_number}: whether its head is behind {base_branch} could not be \
-                 computed ({e}), so its green may be stale; refusing rather than shipping it. \
-                 Fix the fetch, or land it with `aida pr train {pr_number}`."
-            ),
-        )
-    })?;
-    let kind = if warning
-        .as_ref()
-        .is_some_and(|w| !w.definition_files.is_empty())
-    {
-        ShipRefusal::StaleDefinition
-    } else {
-        ShipRefusal::BehindBase
-    };
-    stale_gate_decision(
-        pr_number,
-        base_branch,
-        warning.as_ref(),
-        override_stale_check,
-    )
-    .map_err(|refusal| (kind, refusal))
-}
-
-/// The behind-base gate, live: fetch the base and the head, then refuse a
-/// head behind its base. `aida pr ship` (both preflight passes) and the
-/// drain's merge phase call it.
-// trace:TASK-1606 | ai:codex
-// trace:STORY-1690 | ai:claude
-pub(crate) fn ship_behind_base_gate(
-    project_root: &std::path::Path,
-    ship_branch: &str,
-    pr_number: u64,
-    override_stale_check: bool,
-) -> std::result::Result<(), (pr_ship::ShipRefusal, String)> {
-    behind_base_gate_on(
-        project_root,
-        ship_branch,
-        pr_number,
-        &pr_ship_target_branch(pr_number),
-        override_stale_check,
-    )
-}
-
-/// [`ship_behind_base_gate`] against a known base branch.
-// trace:STORY-1690 | ai:claude
-pub(crate) fn behind_base_gate_on(
-    project_root: &std::path::Path,
-    ship_branch: &str,
-    pr_number: u64,
-    base_branch: &str,
-    override_stale_check: bool,
-) -> std::result::Result<(), (pr_ship::ShipRefusal, String)> {
-    let staleness = fetch_ship_refs(project_root, base_branch, ship_branch).and_then(|()| {
-        crate::pr_stale_check(project_root, ship_branch, &format!("origin/{base_branch}"))
-    });
-    behind_base_refusal(pr_number, base_branch, staleness, override_stale_check)
-}
-
 // trace:TASK-1606 | ai:codex
 #[allow(clippy::too_many_arguments)]
 fn ship_preflight_gates(
@@ -2443,7 +1868,7 @@ fn ship_preflight_gates(
     delete_branch: bool,
     hold_authority: bool,
 ) -> Result<()> {
-    use pr_ship::ShipRefusal;
+    use crate::gate::ship::ShipRefusal;
     let forge = crate::forge::forge_for(project_root);
     let status = forge.change_status(change)?;
     if !status.mergeable {
@@ -2481,7 +1906,7 @@ fn ship_preflight_gates(
     )?;
     // TASK-1968: the corpus gate honours the same clean-merge carry-over.
     // trace:TASK-1968 | ai:claude
-    crate::merge_hold::enforce_corpus_gate_before_merge(
+    crate::gate::merge_hold_core::enforce_corpus_gate_before_merge(
         project_root,
         change.id,
         &ids,
@@ -2489,18 +1914,18 @@ fn ship_preflight_gates(
         || Some(status.head_sha.clone()),
     )
     .map_err(|e| ShipRefusal::Review.error(e))?;
-    let gate = crate::review_marker::merge_gate(main_worktree, change.id, || {
+    let gate = crate::gate::review_marker::merge_gate(main_worktree, change.id, || {
         Some(status.head_sha.clone())
     });
-    if let crate::review_marker::MergeGate::UnderReview(marker) = gate {
-        return Err(ShipRefusal::Review.error(crate::review_marker::refusal_message(&marker)));
+    if let crate::gate::review_marker::MergeGate::UnderReview(marker) = gate {
+        return Err(ShipRefusal::Review.error(crate::gate::review_marker::refusal_message(&marker)));
     }
-    let marker = crate::merge_hold::read_hold(hold_root, change.id);
+    let marker = crate::gate::merge_hold_core::read_hold(hold_root, change.id);
     let label_only =
         marker.is_none() && crate::merge_hold::label_present(hold_root, change.id).unwrap_or(false);
     // STORY-1698: a human at a terminal, or an advisor covered by an active
     // fire-fighting mandate. trace:STORY-1698 | ai:claude
-    if let Some(refusal) = pr_ship::ship_hold_release_refusal_for(
+    if let Some(refusal) = crate::gate::ship::ship_hold_release_refusal_for(
         marker.is_some(),
         label_only,
         hold_authority,
@@ -2532,13 +1957,13 @@ pub(crate) fn ship_caller_is_drive_seat() -> bool {
 pub(crate) fn probe_ship_drive_block(
     main_worktree: &std::path::Path,
     pr: u64,
-) -> Option<pr_ship::ShipDriveBlock> {
+) -> Option<crate::gate::ship::ShipDriveBlock> {
     let allow_in_drive = std::env::var("AIDA_PR_SHIP_ALLOW_IN_DRIVE").is_ok_and(|v| v == "1");
     let scope = std::env::current_dir()
         .ok()
         .and_then(|cwd| active_lease_for_cwd(main_worktree, &cwd))
         .map(|lease| lease.scope);
-    pr_ship::probe_ship_drive_guard(
+    crate::gate::ship::probe_ship_drive_guard(
         main_worktree,
         pr,
         scope.as_deref(),
@@ -2670,13 +2095,16 @@ pub(crate) fn pr_ship_with_method(
             ShipDefaultBranchDisposition::FeatureBranch => {}
             ShipDefaultBranchDisposition::OnDefaultBranch => {
                 let approved = find_open_approved_prs(&project_root);
-                anyhow::bail!("{}", pr_ship::format_default_branch_ship_refusal(&approved));
+                anyhow::bail!(
+                    "{}",
+                    crate::gate::ship::format_default_branch_ship_refusal(&approved)
+                );
             }
             ShipDefaultBranchDisposition::UnknownDefaultBranch => {
                 let approved = find_open_approved_prs(&project_root);
                 anyhow::bail!(
                     "{}",
-                    pr_ship::format_unknown_default_branch_ship_refusal(&approved)
+                    crate::gate::ship::format_unknown_default_branch_ship_refusal(&approved)
                 );
             }
         }
@@ -2958,11 +2386,11 @@ pub(crate) fn pr_ship_with_method(
     // authority to a drive seat or bypasses a merge hold.
     // trace:TASK-1602 | ai:codex
     let drive_seat = ship_caller_is_drive_seat();
-    let direct_human = crate::seat_authority::require_direct_human().is_ok() && !drive_seat;
+    let direct_human = crate::gate::seat_authority::require_direct_human().is_ok() && !drive_seat;
     // trace:TASK-1606 | ai:codex
     // One flag and deadline cover ownership plus CI registration/settlement.
     let wait_started = std::time::Instant::now();
-    let result = pr_ship::wait_for_drive_release(
+    let result = crate::gate::ship::wait_for_drive_release(
         wait.map(std::time::Duration::from_secs),
         std::time::Duration::from_secs(2),
         || probe_ship_drive_block(&main_worktree, pr_number),
@@ -2975,10 +2403,12 @@ pub(crate) fn pr_ship_with_method(
     );
     if let Err(block) = result {
         let reason_text = match block.reason {
-            pr_ship::ShipMergeBlockReason::DriveSeat => {
+            crate::gate::ship::ShipMergeBlockReason::DriveSeat => {
                 "caller is a drive implementer/reviewer seat"
             }
-            pr_ship::ShipMergeBlockReason::DriveOwnedPr => "target PR is owned by the live drive",
+            crate::gate::ship::ShipMergeBlockReason::DriveOwnedPr => {
+                "target PR is owned by the live drive"
+            }
         };
         if direct_human {
             eprintln!("  {}", block.detail);
@@ -2994,9 +2424,9 @@ pub(crate) fn pr_ship_with_method(
             &pr_ship::StepOutcome::Skipped(block.detail.clone()),
         );
         let refusal = if block.timed_out {
-            pr_ship::ShipRefusal::CiTimeout
+            crate::gate::ship::ShipRefusal::CiTimeout
         } else {
-            pr_ship::ShipRefusal::Review
+            crate::gate::ship::ShipRefusal::Review
         };
         return Err(refusal.error(format!(
             "PR-{pr_number} left OPEN — `aida pr ship` refused: {reason_text}. {} \
@@ -3020,7 +2450,7 @@ pub(crate) fn pr_ship_with_method(
     // these specs, and an attested independent approval at the head. Read
     // fresh here, again under the merge lease, and once more immediately
     // before the merge call. trace:STORY-1698 | ai:claude
-    let floor_authority = crate::has_integrity_floor_authority();
+    let floor_authority = crate::gate::role_authority::has_integrity_floor_authority();
     let mandate_ids = || {
         let mut ids: Vec<String> = ship_gate_spec_records(&project_root)
             .into_iter()
@@ -3034,9 +2464,9 @@ pub(crate) fn pr_ship_with_method(
     };
     let mandate_cover_now = || {
         if pr_number == 0 || already_merged || floor_authority {
-            return Err(crate::mandate::MandateRefusal::NoMandate);
+            return Err(crate::gate::mandate::MandateRefusal::NoMandate);
         }
-        mandate_ship_cover(
+        mandate_ship_cover_for_ship(
             &project_root,
             &main_worktree,
             &hold_root,
@@ -3045,8 +2475,6 @@ pub(crate) fn pr_ship_with_method(
             Some(&ship_branch),
             || pr_head_sha_for_merge_gate(&project_root, pr_number, &ship_branch),
             override_stale_approval,
-            crate::mandate::ship_decision,
-            true,
         )
     };
     // BUG-2184: the mandate scan has its own cost and must not eat the --wait
@@ -3055,23 +2483,25 @@ pub(crate) fn pr_ship_with_method(
     let scan_started = std::time::Instant::now();
     let mut mandate_cover = mandate_cover_now();
     let scan_spent = scan_started.elapsed();
-    let mandate_refusal_note =
-        |cover: &std::result::Result<MandateCover, crate::mandate::MandateRefusal>| match cover {
-            Err(r) if *r != crate::mandate::MandateRefusal::NoMandate => {
-                let message = r.message(pr_number);
-                crate::events::record_gate_held(
-                    &hold_root,
-                    crate::events::GATE_MANDATE_SHIP,
-                    None,
-                    Some(pr_number),
-                    &message,
-                );
-                // trace:STORY-1700 | ai:claude
-                crate::mandate_drive::ship_refused(&main_worktree, pr_number, &message);
-                format!(" {message}.")
-            }
-            _ => String::new(),
-        };
+    let mandate_refusal_note = |cover: &std::result::Result<
+        MandateCover,
+        crate::gate::mandate::MandateRefusal,
+    >| match cover {
+        Err(r) if *r != crate::gate::mandate::MandateRefusal::NoMandate => {
+            let message = r.message(pr_number);
+            crate::events::record_gate_held(
+                &hold_root,
+                crate::events::GATE_MANDATE_SHIP,
+                None,
+                Some(pr_number),
+                &message,
+            );
+            // trace:STORY-1700 | ai:claude
+            crate::mandate_drive::ship_refused(&main_worktree, pr_number, &message);
+            format!(" {message}.")
+        }
+        _ => String::new(),
+    };
 
     // ---- BUG-1532: ANY merge-hold marker binds `aida pr ship`, with or
     // without a live drive and whatever its reason text names. Checked HERE —
@@ -3084,8 +2514,8 @@ pub(crate) fn pr_ship_with_method(
     // AIDA_PR_SHIP_ALLOW_IN_DRIVE deliberately does not reach this gate.
     // trace:BUG-1532 | ai:claude
     if pr_number != 0 {
-        if let Some(refusal) = pr_ship::ship_hold_gate(
-            crate::merge_hold::read_hold_record(&main_worktree, pr_number).as_ref(),
+        if let Some(refusal) = crate::gate::ship::ship_hold_gate(
+            crate::gate::merge_hold_core::read_hold_record(&main_worktree, pr_number).as_ref(),
             floor_authority || mandate_cover.is_ok(),
             pr_number,
             |record| {
@@ -3114,7 +2544,7 @@ pub(crate) fn pr_ship_with_method(
                 Some(pr_number),
                 &refusal,
             );
-            return Err(pr_ship::ShipRefusal::MergeHold.error(refusal));
+            return Err(crate::gate::ship::ShipRefusal::MergeHold.error(refusal));
         }
     }
 
@@ -3138,7 +2568,7 @@ pub(crate) fn pr_ship_with_method(
             "⏸".yellow().bold(),
             pr_number,
             draft_only.join(", "),
-            pr_ship::DRAFT_ONLY_TAG
+            crate::gate::ship::DRAFT_ONLY_TAG
         );
         log_ship_activity(
             &main_worktree,
@@ -3149,9 +2579,8 @@ pub(crate) fn pr_ship_with_method(
                 draft_only.join(", ")
             )),
         );
-        return Err(
-            pr_ship::ShipRefusal::Review.error("PR left open — awaiting independent review")
-        );
+        return Err(crate::gate::ship::ShipRefusal::Review
+            .error("PR left open — awaiting independent review"));
     }
 
     // ---- BUG-727: supervised-merge gate (substrate-as-bouncer). The keystone
@@ -3202,9 +2631,8 @@ pub(crate) fn pr_ship_with_method(
                     .join(", ")
             )),
         );
-        return Err(
-            pr_ship::ShipRefusal::Review.error("PR left open — awaiting independent review")
-        );
+        return Err(crate::gate::ship::ShipRefusal::Review
+            .error("PR left open — awaiting independent review"));
     }
 
     let gate_change = crate::forge::ChangeRef {
@@ -3278,7 +2706,7 @@ pub(crate) fn pr_ship_with_method(
         let forge = crate::forge::forge_for(&project_root);
         // trace:TASK-1606 | ai:codex
         let mut red_detail: Option<String> = None;
-        let hold_present = crate::merge_hold::read_hold(&hold_root, pr_number).is_some();
+        let hold_present = crate::gate::merge_hold_core::read_hold(&hold_root, pr_number).is_some();
         label_only_hold = !hold_present
             && crate::merge_hold::label_present(&hold_root, pr_number).unwrap_or(false);
         // trace:TASK-2348 | ai:claude
@@ -3329,7 +2757,7 @@ pub(crate) fn pr_ship_with_method(
             eprintln!("  {}", hint);
             return Err(match ci_result {
                 Err(e) => e,
-                _ => pr_ship::ShipRefusal::CiRed.error(
+                _ => crate::gate::ship::ShipRefusal::CiRed.error(
                     red_detail.unwrap_or_else(|| format!("CI did not pass for PR-{pr_number}")),
                 ),
             });
@@ -3375,7 +2803,7 @@ pub(crate) fn pr_ship_with_method(
                 &pr_ship::ShipStep::Merge { delete_branch },
                 &pr_ship::StepOutcome::Skipped(refusal.clone()),
             );
-            return Err(pr_ship::ShipRefusal::MergeHold.error(refusal));
+            return Err(crate::gate::ship::ShipRefusal::MergeHold.error(refusal));
         }
     }
     if !already_merged {
@@ -3396,7 +2824,7 @@ pub(crate) fn pr_ship_with_method(
     // exists; a forge head lookup only when a live one does.
     // trace:STORY-1405 | ai:claude
     if !already_merged {
-        let gate = crate::review_marker::merge_gate(&main_worktree, pr_number, || {
+        let gate = crate::gate::review_marker::merge_gate(&main_worktree, pr_number, || {
             fetch_change_info_via_resolved_forge(
                 &project_root,
                 pr_number,
@@ -3405,8 +2833,8 @@ pub(crate) fn pr_ship_with_method(
             .ok()
             .map(|info| info.head_oid)
         });
-        if let crate::review_marker::MergeGate::UnderReview(m) = &gate {
-            let refusal = crate::review_marker::refusal_message(m);
+        if let crate::gate::review_marker::MergeGate::UnderReview(m) = &gate {
+            let refusal = crate::gate::review_marker::refusal_message(m);
             // STORY-1436: the review-in-progress gate HELD.
             // trace:STORY-1436 | ai:claude
             crate::events::record_gate_held(
@@ -3416,9 +2844,9 @@ pub(crate) fn pr_ship_with_method(
                 Some(pr_number),
                 &refusal,
             );
-            return Err(pr_ship::ShipRefusal::Review.error(refusal));
+            return Err(crate::gate::ship::ShipRefusal::Review.error(refusal));
         }
-        if let Some(note) = crate::review_marker::proceed_note(&gate) {
+        if let Some(note) = crate::gate::review_marker::proceed_note(&gate) {
             eprintln!(
                 "  {} {note}",
                 crate::glyph(crate::glyphs::Glyph::Info).cyan()
@@ -3444,7 +2872,7 @@ pub(crate) fn pr_ship_with_method(
         // STORY-1663: if the PR head moved after preflight/CI, refuse the stale head
         // before touching holds or merging.
         // trace:STORY-1663 | ai:antigravity
-        if let Some(refusal) = pr_ship::stale_head_after_ci_refusal(
+        if let Some(refusal) = crate::gate::ship::stale_head_after_ci_refusal(
             pr_number,
             preflight_head_sha.as_deref(),
             head_sha.as_deref(),
@@ -3462,7 +2890,7 @@ pub(crate) fn pr_ship_with_method(
                 Some(pr_number),
                 &refusal,
             );
-            return Err(pr_ship::ShipRefusal::Review.error(refusal));
+            return Err(crate::gate::ship::ShipRefusal::Review.error(refusal));
         }
         // BUG-1918: what the PR ships comes from the forge too (head ref and
         // commit trailers), so shipping from main still finds its authors.
@@ -3638,7 +3066,7 @@ pub(crate) fn pr_ship_with_method(
         // `aida merge-hold clear <PR>` run by a human. A reviewer's "clear on
         // my re-review" hold therefore moves to a human once approved.
         // trace:BUG-1167 trace:BUG-1566 | ai:claude
-        let marker_reason = crate::merge_hold::read_hold(&hold_root, pr_number);
+        let marker_reason = crate::gate::merge_hold_core::read_hold(&hold_root, pr_number);
         // BUG-1499: a LABEL-ONLY hold (no marker) is never released here —
         // not even for a human — because a ship leaves no clearance record.
         // It goes through `aida merge-hold clear <PR>`, which records it.
@@ -3648,7 +3076,7 @@ pub(crate) fn pr_ship_with_method(
         let mandate_release = (!floor_authority)
             .then(|| mandate_cover.as_ref().ok().cloned())
             .flatten();
-        if let Some(refusal) = pr_ship::ship_hold_release_refusal_for(
+        if let Some(refusal) = crate::gate::ship::ship_hold_release_refusal_for(
             marker_reason.is_some(),
             label_only_hold,
             floor_authority || mandate_release.is_some(),
@@ -3675,7 +3103,7 @@ pub(crate) fn pr_ship_with_method(
                 pr_number,
                 &refusal,
             );
-            return Err(pr_ship::ShipRefusal::MergeHold.error(refusal));
+            return Err(crate::gate::ship::ShipRefusal::MergeHold.error(refusal));
         }
         // BUG-1532 criterion 4, re-checked HERE under the merge lease against
         // the head about to land (`head_sha`, the TASK-1448 read): a refusal
@@ -3683,7 +3111,7 @@ pub(crate) fn pr_ship_with_method(
         // early gate saw the same answer unless the head or the verdict moved
         // since, and then this refuses rather than release on a stale answer.
         // trace:BUG-1532 | ai:claude
-        let hold_record = crate::merge_hold::read_hold_record(&hold_root, pr_number);
+        let hold_record = crate::gate::merge_hold_core::read_hold_record(&hold_root, pr_number);
         let released_by_verdict = match hold_record.as_ref().filter(|r| r.is_refusal()) {
             None => None,
             Some(record) => match ship_refusal_release(
@@ -3691,8 +3119,8 @@ pub(crate) fn pr_ship_with_method(
                 record,
                 head_sha.as_deref(),
             ) {
-                crate::merge_hold::RefusalRelease::Released(verdict) => Some(verdict),
-                crate::merge_hold::RefusalRelease::Held(why) => {
+                crate::gate::merge_hold_core::RefusalRelease::Released(verdict) => Some(verdict),
+                crate::gate::merge_hold_core::RefusalRelease::Held(why) => {
                     let refusal = format!(
                         "PR-{pr_number} is under a reviewer-refusal merge-hold and {why}; the hold stays."
                     );
@@ -3717,7 +3145,7 @@ pub(crate) fn pr_ship_with_method(
                         pr_number,
                         &refusal,
                     );
-                    return Err(pr_ship::ShipRefusal::MergeHold.error(refusal));
+                    return Err(crate::gate::ship::ShipRefusal::MergeHold.error(refusal));
                 }
             },
         };
@@ -3726,7 +3154,7 @@ pub(crate) fn pr_ship_with_method(
         // key is not among its candidates, and an unpinned merge after the
         // hold drops could land a commit nobody approved. Decided BEFORE the
         // hold is touched. trace:BUG-1532 | ai:claude
-        match pr_ship::refusal_release_pin(
+        match crate::gate::ship::refusal_release_pin(
             released_by_verdict.is_some(),
             merge_opts.match_head.take(),
             head_sha.as_deref(),
@@ -3755,12 +3183,12 @@ pub(crate) fn pr_ship_with_method(
                     pr_number,
                     &refusal,
                 );
-                return Err(pr_ship::ShipRefusal::MergeHold.error(refusal));
+                return Err(crate::gate::ship::ShipRefusal::MergeHold.error(refusal));
             }
         }
         // STORY-1663: rebase merges must always be pinned to a head SHA.
         // trace:STORY-1663 | ai:antigravity
-        if let Err(refusal) = pr_ship::require_rebase_head_pin(
+        if let Err(refusal) = crate::gate::ship::require_rebase_head_pin(
             pr_number,
             merge_opts.method,
             merge_opts.match_head.as_deref(),
@@ -3778,7 +3206,7 @@ pub(crate) fn pr_ship_with_method(
                 pr_number,
                 &refusal,
             );
-            return Err(pr_ship::ShipRefusal::Review.error(refusal));
+            return Err(crate::gate::ship::ShipRefusal::Review.error(refusal));
         }
         if let Some(reason) = marker_reason.as_deref() {
             match &released_by_verdict {
@@ -3791,7 +3219,7 @@ pub(crate) fn pr_ship_with_method(
                     verdict
                         .reviewed_sha
                         .as_deref()
-                        .map(crate::review_verdict::short_sha)
+                        .map(crate::gate::review_verdict::short_sha)
                         .unwrap_or("?"),
                     verdict.path(),
                 ),
@@ -3817,11 +3245,12 @@ pub(crate) fn pr_ship_with_method(
                     reason,
                 );
             } else {
-                let _ = crate::merge_hold::clear_hold(&hold_root, pr_number);
+                let _ = crate::gate::merge_hold_core::clear_hold(&hold_root, pr_number);
                 if let (Some(record), Some(verdict)) = (&hold_record, &released_by_verdict) {
-                    let actor =
-                        crate::merge_hold::PrincipalIdentity::human(crate::current_user_id(None));
-                    if let Err(err) = crate::merge_hold::record_clearance_with_verdict(
+                    let actor = crate::gate::merge_hold_core::PrincipalIdentity::human(
+                        crate::current_user_id(None),
+                    );
+                    if let Err(err) = crate::gate::merge_hold_core::record_clearance_with_verdict(
                         &hold_root,
                         record,
                         &actor,
@@ -3847,12 +3276,13 @@ pub(crate) fn pr_ship_with_method(
                         // BUG-2214: who released, and whether the human
                         // integrity floor held. trace:BUG-2214 | ai:claude
                         principal: Some(
-                            crate::merge_hold::PrincipalIdentity::human(crate::current_user_id(
-                                None,
-                            ))
+                            crate::gate::merge_hold_core::PrincipalIdentity::human(
+                                crate::current_user_id(None),
+                            )
                             .key(),
                         ),
-                        human_attested: crate::has_integrity_floor_authority(),
+                        human_attested: crate::gate::role_authority::has_integrity_floor_authority(
+                        ),
                     },
                 );
                 hold_event.seat = crate::events::active_seat();
@@ -3934,7 +3364,7 @@ pub(crate) fn pr_ship_with_method(
                 );
                 // trace:TASK-1915 | ai:claude
                 ledger_mandate_ship_failure(&main_worktree, Some(cover), pr_number, &refusal);
-                return Err(pr_ship::ShipRefusal::MergeHold.error(refusal));
+                return Err(crate::gate::ship::ShipRefusal::MergeHold.error(refusal));
             }
         }
         // TASK-1960: a carried-over approval is bound to the base it was
@@ -3978,7 +3408,7 @@ pub(crate) fn pr_ship_with_method(
                     pr_number,
                     &refusal,
                 );
-                return Err(pr_ship::ShipRefusal::Review.error(refusal));
+                return Err(crate::gate::ship::ShipRefusal::Review.error(refusal));
             }
         }
         let mut merge_sink = crate::network_retry::StderrSink;
@@ -5348,7 +4778,7 @@ pub(crate) fn run_optional_slice_stack_verifier(
             let refusal = format!(
                 "PR-{pr_number} rebase ship refused: could not inspect commit range `{range}` for slice-stack verification ({e})"
             );
-            return Err(pr_ship::ShipRefusal::Review.error(refusal));
+            return Err(crate::gate::ship::ShipRefusal::Review.error(refusal));
         }
     };
     if !log_out.status.success() {
@@ -5361,7 +4791,7 @@ pub(crate) fn run_optional_slice_stack_verifier(
         let refusal = format!(
             "PR-{pr_number} rebase ship refused: could not inspect commit range `{range}` for slice-stack verification ({detail})"
         );
-        return Err(pr_ship::ShipRefusal::Review.error(refusal));
+        return Err(crate::gate::ship::ShipRefusal::Review.error(refusal));
     }
     let subjects = String::from_utf8_lossy(&log_out.stdout);
     let has_slice_commits = subjects.lines().any(pr_ship::is_slice_stack_commit_subject);
@@ -5409,7 +4839,7 @@ pub(crate) fn run_optional_slice_stack_verifier(
         let refusal = format!(
             "PR-{pr_number} rebase ship refused: slice-stack verifier (`scripts/split-lib/verify_stack.py {base_ref} {head_ref}`) failed ({detail})"
         );
-        return Err(pr_ship::ShipRefusal::Review.error(refusal));
+        return Err(crate::gate::ship::ShipRefusal::Review.error(refusal));
     }
     Ok(())
 }
@@ -6315,7 +5745,7 @@ pub(crate) fn ship_is_default_branch(project_root: &std::path::Path, branch: &st
 // trace:BUG-2164 | ai:antigravity
 pub(crate) fn find_open_approved_prs(
     project_root: &std::path::Path,
-) -> Vec<pr_ship::OpenApprovedPr> {
+) -> Vec<crate::gate::ship::OpenApprovedPr> {
     if crate::forge::resolve_forge_kind(project_root) != crate::forge::ForgeKind::GitHub {
         return Vec::new();
     }
@@ -6341,7 +5771,7 @@ pub(crate) fn find_open_approved_prs(
     if !out.status.success() {
         return Vec::new();
     }
-    pr_ship::parse_open_approved_prs_json(&String::from_utf8_lossy(&out.stdout))
+    crate::gate::ship::parse_open_approved_prs_json(&String::from_utf8_lossy(&out.stdout))
 }
 
 #[cfg(test)]
@@ -7660,7 +7090,7 @@ mod pr_ship_environment_tests {
             ],
         );
 
-        crate::merge_hold::write_hold(
+        crate::gate::merge_hold_core::write_hold(
             tmp.path(),
             1188,
             "BUG-1188 is marked drive — merge requires review",
@@ -7674,7 +7104,7 @@ mod pr_ship_environment_tests {
             tmp.path().canonicalize().unwrap()
         );
         assert!(
-            crate::merge_hold::read_hold(&hold_root, 1188)
+            crate::gate::merge_hold_core::read_hold(&hold_root, 1188)
                 .unwrap()
                 .contains("BUG-1188"),
             "pr ship launched from a sibling worktree must see the main clone's hold marker"
@@ -7683,7 +7113,8 @@ mod pr_ship_environment_tests {
         // marker — there is no per-worktree hold store left to read empty.
         // trace:BUG-2176 | ai:claude
         assert!(
-            crate::merge_hold::read_hold(&sibling, 1188).is_some_and(|r| r.contains("BUG-1188")),
+            crate::gate::merge_hold_core::read_hold(&sibling, 1188)
+                .is_some_and(|r| r.contains("BUG-1188")),
             "a sibling-rooted read must see the main clone's hold marker"
         );
     }
@@ -7916,348 +7347,6 @@ mod task_1416_lookup_failure_tests {
         assert!(finish_base_lookup_failed(&ChangeLookup::Unreachable(
             "offline".into()
         )));
-    }
-}
-
-/// TASK-1458: the `aida pr ship` approval gate as `pr_ship_handler` runs it —
-/// the merge pin it returns and the durable activity records it writes.
-// trace:TASK-1458 | ai:claude
-#[cfg(test)]
-mod task_1458_pr_ship_approval_gate_tests {
-    use super::pr_ship_approval_gate;
-    use crate::pr_ship::ShipApprovalPolicy;
-    use crate::review_verdict::{RecordedVerdict, RecorderAttestation, VerdictKind};
-
-    const HEAD: &str = "1aca4e3e9251aaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-    const OLD: &str = "08834c6045a9bbbbbbbbbbbbbbbbbbbbbbbbbbbb";
-    /// When HEAD was pushed in the stale cases: AFTER the approval of OLD.
-    const HEAD_COMMITTED_AT: &str = "2026-09-24T00:00:00Z";
-
-    fn approval(sha: &str) -> RecordedVerdict {
-        RecordedVerdict {
-            kind: VerdictKind::Approved,
-            raw: "approved".into(),
-            reviewed_sha: Some(sha.into()),
-            recorded_at: Some("2026-09-23T00:00:00Z".into()),
-            // BUG-1918: an independent human-at-TTY recorder, so these tests
-            // exercise the head-coverage gate behind the authority gate.
-            // trace:BUG-1918 | ai:claude
-            attestation: Some(RecorderAttestation {
-                sha: sha.into(),
-                human_at_tty: true,
-                receipt_id: Some("rcpt".into()),
-                identity: vec!["session:independent-reviewer".into()],
-                ..Default::default()
-            }),
-            ..Default::default()
-        }
-    }
-
-    /// BUG-1918: a policy under which `verdicts`' attestations re-validated.
-    /// Realistic dates: the REVIEWED commit was committed (09-22) before the
-    /// approval (09-23); the head of a stale case was pushed after it
-    /// (09-24, see [`HEAD_COMMITTED_AT`]) — which is exactly why the
-    /// backdating check compares against the reviewed commit, not the head.
-    // trace:BUG-1918 | ai:claude
-    fn policy(verdicts: &[RecordedVerdict]) -> ShipApprovalPolicy {
-        let mut p = ShipApprovalPolicy {
-            reviewed_committed_at: Some("2026-09-22T00:00:00Z".parse().unwrap()),
-            // An independent operator runs the merge.
-            shipper: vec!["session:independent-shipper".into()],
-            ..Default::default()
-        };
-        for v in verdicts {
-            if let Some(a) = v.attestation.as_ref() {
-                if let Some(k) = a.authority_key(v.recorded_at.as_deref()) {
-                    p.verified_authority.insert(k, a.identity.clone());
-                }
-            }
-        }
-        p
-    }
-
-    fn activity(root: &std::path::Path) -> Vec<serde_json::Value> {
-        std::fs::read_to_string(root.join(".aida").join("advisor-activity.jsonl"))
-            .unwrap_or_default()
-            .lines()
-            .map(|l| serde_json::from_str(l).unwrap())
-            .collect()
-    }
-
-    #[test]
-    fn covering_approval_pins_the_merge_to_the_approved_head() {
-        let tmp = tempfile::tempdir().unwrap();
-        let pin = pr_ship_approval_gate(
-            tmp.path(),
-            5,
-            &[approval(HEAD)],
-            Some(HEAD),
-            &policy(&[approval(HEAD)]),
-            false,
-            true,
-            None,
-        )
-        .expect("an approval at the head merges");
-        assert_eq!(pin.as_deref(), Some(HEAD));
-        assert!(activity(tmp.path()).is_empty(), "nothing to audit");
-    }
-
-    /// BUG-1918: no approval always refuses — there is no review opt-out —
-    /// and `--override-stale-approval` never excuses it.
-    // trace:BUG-1918 | ai:claude
-    #[test]
-    fn no_approval_always_refuses() {
-        let tmp = tempfile::tempdir().unwrap();
-        let err = pr_ship_approval_gate(
-            tmp.path(),
-            5,
-            &[],
-            Some(HEAD),
-            &policy(&[]),
-            false,
-            true,
-            None,
-        )
-        .expect_err("no approval refuses");
-        assert!(err.to_string().contains("no approval recorded"), "{err}");
-        assert!(pr_ship_approval_gate(
-            tmp.path(),
-            5,
-            &[],
-            Some(HEAD),
-            &policy(&[]),
-            true,
-            true,
-            None
-        )
-        .is_err());
-    }
-
-    /// BUG-1918 (round-2 regression): an honest approval of an older commit,
-    /// recorded BEFORE the current head was pushed, passes the authority gate
-    /// and reaches the TASK-1458 head gate and its override — it is not
-    /// mistaken for a backdated approval.
-    // trace:BUG-1918 | ai:claude
-    #[test]
-    fn honest_stale_approval_older_than_the_head_reaches_the_override() {
-        let approved_at: chrono::DateTime<chrono::Utc> =
-            approval(OLD).recorded_at.unwrap().parse().unwrap();
-        let head_at: chrono::DateTime<chrono::Utc> = HEAD_COMMITTED_AT.parse().unwrap();
-        assert!(
-            head_at > approved_at,
-            "the head was pushed after the review"
-        );
-        let p = policy(&[approval(OLD)]);
-        assert_eq!(
-            crate::pr_ship::approval_authority_refusal(&[approval(OLD)], &p),
-            None,
-            "authority holds: the approval post-dates the commit it reviewed"
-        );
-        let tmp = tempfile::tempdir().unwrap();
-        let err = pr_ship_approval_gate(
-            tmp.path(),
-            5,
-            &[approval(OLD)],
-            Some(HEAD),
-            &p,
-            false,
-            true,
-            None,
-        )
-        .expect_err("stale without the override");
-        assert!(
-            err.to_string().contains("--override-stale-approval"),
-            "{err}"
-        );
-        assert!(
-            pr_ship_approval_gate(
-                tmp.path(),
-                5,
-                &[approval(OLD)],
-                Some(HEAD),
-                &p,
-                true,
-                true,
-                None
-            )
-            .is_ok(),
-            "the override applies"
-        );
-    }
-
-    /// BUG-1918 (round 3): the author cannot ship its own unreviewed commits
-    /// on top of an older independent approval via `--override-stale-approval`,
-    /// and the refusal does not advertise the override to it. An unanchored
-    /// shipper is refused the override too.
-    // trace:BUG-1918 | ai:claude
-    #[test]
-    fn stale_approval_override_is_refused_to_the_author() {
-        let tmp = tempfile::tempdir().unwrap();
-        let mut by_author = policy(&[approval(OLD)]);
-        by_author.author_sessions = vec![crate::pr_ship::AuthorSession {
-            label: "lease aaaabbbbcccc".into(),
-            tokens: vec!["session:the-author".into()],
-        }];
-        by_author.shipper = vec!["session:the-author".into(), "proc:42@t".into()];
-        assert_eq!(
-            crate::pr_ship::approval_authority_refusal(&[approval(OLD)], &by_author),
-            None,
-            "the older approval itself is independent"
-        );
-        for override_stale in [false, true] {
-            let err = pr_ship_approval_gate(
-                tmp.path(),
-                5,
-                &[approval(OLD)],
-                Some(HEAD),
-                &by_author,
-                override_stale,
-                true,
-                None,
-            )
-            .expect_err("the author never ships unreviewed commits");
-            let msg = err.to_string();
-            assert!(
-                !msg.contains("re-run with `--override-stale-approval`"),
-                "the override is not advertised to the author: {msg}"
-            );
-            if override_stale {
-                assert!(msg.contains("authored the work"), "{msg}");
-            }
-        }
-        let mut unanchored = policy(&[approval(OLD)]);
-        unanchored.shipper = vec!["lease:aaaabbbbcccc".into()];
-        let err = pr_ship_approval_gate(
-            tmp.path(),
-            5,
-            &[approval(OLD)],
-            Some(HEAD),
-            &unanchored,
-            true,
-            true,
-            None,
-        )
-        .expect_err("an unanchored shipper cannot override");
-        assert!(err.to_string().contains("no identity"), "{err}");
-        // Nothing was overridden: no override record.
-        assert!(activity(tmp.path())
-            .iter()
-            .all(|e| e["step"] != "pr-merge-override-stale-approval"));
-    }
-
-    #[test]
-    fn stale_approval_refuses_and_logs_a_failed_merge_step() {
-        let tmp = tempfile::tempdir().unwrap();
-        let err = pr_ship_approval_gate(
-            tmp.path(),
-            5,
-            &[approval(OLD)],
-            Some(HEAD),
-            &policy(&[approval(OLD)]),
-            false,
-            true,
-            None,
-        )
-        .expect_err("a stale approval refuses");
-        assert!(
-            err.to_string().contains("--override-stale-approval"),
-            "{err}"
-        );
-        let log = activity(tmp.path());
-        assert_eq!(log.len(), 1);
-        assert_eq!(log[0]["step"], "pr-merge");
-        assert_eq!(log[0]["status"], "failed");
-    }
-
-    // STORY-1436: the held gate leaves a counted record; an override does not.
-    // trace:STORY-1436 | ai:claude
-    #[test]
-    fn stale_approval_refusal_records_a_gate_held_event() {
-        let tmp = tempfile::tempdir().unwrap();
-        let _on = crate::test_env::EnvVarGuard::unset(crate::events::EVENTS_DISABLE_ENV);
-        let _ = pr_ship_approval_gate(
-            tmp.path(),
-            5,
-            &[approval(OLD)],
-            Some(HEAD),
-            &policy(&[approval(OLD)]),
-            false,
-            true,
-            None,
-        );
-        let evs = crate::events::read_all(tmp.path());
-        assert_eq!(evs.len(), 1, "{evs:?}");
-        assert!(matches!(
-            &evs[0].kind,
-            crate::events::EventKind::GateHeld { gate, pr: Some(5), .. }
-                if gate == crate::events::GATE_STALE_APPROVAL
-        ));
-        let other = tempfile::tempdir().unwrap();
-        let _ = pr_ship_approval_gate(
-            other.path(),
-            5,
-            &[approval(OLD)],
-            Some(HEAD),
-            &policy(&[approval(OLD)]),
-            true,
-            true,
-            None,
-        );
-        assert!(crate::events::read_all(other.path()).is_empty());
-    }
-
-    #[test]
-    fn override_is_recorded_durably_with_both_shas_and_pins_the_overridden_head() {
-        let tmp = tempfile::tempdir().unwrap();
-        let pin = pr_ship_approval_gate(
-            tmp.path(),
-            5,
-            &[approval(OLD)],
-            Some(HEAD),
-            &policy(&[approval(OLD)]),
-            true,
-            true,
-            None,
-        )
-        .expect("the override ships");
-        assert_eq!(
-            pin.as_deref(),
-            Some(HEAD),
-            "the override is granted for THIS head only"
-        );
-        let log = activity(tmp.path());
-        assert_eq!(log.len(), 1, "{log:?}");
-        assert_eq!(log[0]["step"], "pr-merge-override-stale-approval");
-        assert_eq!(log[0]["pr"], 5);
-        assert_eq!(log[0]["reviewed_sha"], OLD);
-        assert_eq!(log[0]["head_sha"], HEAD);
-    }
-}
-
-/// TASK-1458: source-shape guard — `pr_ship_handler` routes its merge
-/// through `pr_ship_approval_gate` and hands the returned pin to the forge
-/// merge, so the tested gate is the one ship runs. Needles are split so this
-/// block cannot match its own literals.
-// trace:TASK-1458 | ai:claude
-#[cfg(test)]
-mod task_1458_pr_ship_wiring_guard {
-    #[test]
-    fn pr_ship_handler_pins_its_merge_through_the_approval_gate() {
-        let src = include_str!("pr_cmd.rs");
-        let start = src
-            .find(concat!("pub(crate) fn pr_ship_", "handler("))
-            .expect("handler");
-        let body = &src[start..];
-        let gate = body
-            .find(concat!("let match_head = pr_ship_", "approval_gate("))
-            .expect("the handler runs the approval gate");
-        let opts = body
-            .find(concat!("match_head, // trace:", "TASK-1458"))
-            .expect("the gate's pin reaches MergeOptions");
-        let merge = body
-            .find(concat!(".merge_", "change("))
-            .expect("the handler merges");
-        assert!(gate < opts && opts < merge, "gate → pin → merge order");
     }
 }
 
@@ -9464,7 +8553,7 @@ mod story_1663_rebase_ship_tests {
     fn rebase_ship_without_independent_approval_at_head_is_refused() {
         // trace:STORY-1663.ac28109e | ai:antigravity
         let tmp = tempfile::tempdir().unwrap();
-        let policy = pr_ship::ShipApprovalPolicy::default();
+        let policy = crate::gate::ship::ShipApprovalPolicy::default();
         let err = pr_ship_approval_gate(
             tmp.path(),
             1490,
@@ -9477,8 +8566,9 @@ mod story_1663_rebase_ship_tests {
         )
         .expect_err("rebase ship uses the same approval gate and must refuse without verdict");
         assert_eq!(
-            err.downcast_ref::<pr_ship::ShipFailure>().map(|f| f.reason),
-            Some(pr_ship::ShipRefusal::Review)
+            err.downcast_ref::<crate::gate::ship::ShipFailure>()
+                .map(|f| f.reason),
+            Some(crate::gate::ship::ShipRefusal::Review)
         );
     }
 
@@ -9522,7 +8612,7 @@ mod story_1663_rebase_ship_tests {
     #[test]
     fn rebase_ship_refuses_stale_head_and_missing_head_pin() {
         // trace:STORY-1663.ac3b41d5 | ai:antigravity
-        let stale = pr_ship::stale_head_after_ci_refusal(
+        let stale = crate::gate::ship::stale_head_after_ci_refusal(
             1490,
             Some("1111111111111111111111111111111111111111"),
             Some("2222222222222222222222222222222222222222"),
@@ -9539,24 +8629,27 @@ mod story_1663_rebase_ship_tests {
             (h, None, "merge"),
             (h, Some("  "), "merge"),
         ] {
-            let refusal = pr_ship::stale_head_after_ci_refusal(1490, pre, post)
+            let refusal = crate::gate::ship::stale_head_after_ci_refusal(1490, pre, post)
                 .expect("an unreadable head must refuse");
             assert!(
                 refusal.contains(&format!("could not be read at {at}")),
                 "{refusal}"
             );
         }
-        assert!(pr_ship::stale_head_after_ci_refusal(1490, h, h).is_none());
+        assert!(crate::gate::ship::stale_head_after_ci_refusal(1490, h, h).is_none());
 
-        let unpinned =
-            pr_ship::require_rebase_head_pin(1490, crate::forge::MergeMethod::Rebase, None)
-                .expect_err("rebase merge without --match-head-commit pin must refuse");
+        let unpinned = crate::gate::ship::require_rebase_head_pin(
+            1490,
+            crate::forge::MergeMethod::Rebase,
+            None,
+        )
+        .expect_err("rebase merge without --match-head-commit pin must refuse");
         assert!(
             unpinned.contains("without a pinned head commit"),
             "{unpinned}"
         );
 
-        assert!(pr_ship::require_rebase_head_pin(
+        assert!(crate::gate::ship::require_rebase_head_pin(
             1490,
             crate::forge::MergeMethod::Rebase,
             Some("1111111111111111111111111111111111111111"),
@@ -9811,9 +8904,9 @@ mod story_1663_rebase_ship_tests {
         .expect_err("unresolvable range must fail closed when verifier is present");
         assert_eq!(
             range_err
-                .downcast_ref::<pr_ship::ShipFailure>()
+                .downcast_ref::<crate::gate::ship::ShipFailure>()
                 .map(|f| f.reason),
-            Some(pr_ship::ShipRefusal::Review)
+            Some(crate::gate::ship::ShipRefusal::Review)
         );
         assert!(
             range_err
@@ -9837,8 +8930,9 @@ mod story_1663_rebase_ship_tests {
         let err = run_optional_slice_stack_verifier(root, root, 1490, "origin/main", "HEAD")
             .expect_err("invalid slice commit must fail real verify_stack.py");
         assert_eq!(
-            err.downcast_ref::<pr_ship::ShipFailure>().map(|f| f.reason),
-            Some(pr_ship::ShipRefusal::Review)
+            err.downcast_ref::<crate::gate::ship::ShipFailure>()
+                .map(|f| f.reason),
+            Some(crate::gate::ship::ShipRefusal::Review)
         );
         let msg = err.to_string();
         assert!(

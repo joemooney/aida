@@ -717,7 +717,7 @@ fn canonical_light_role_name(raw: &str) -> String {
 /// The validated grant captured by this MCP server process. The role env is
 /// only a display hint and cannot authorize tools.
 fn role_active_env() -> Option<String> {
-    crate::seat_authority::current_seat(&crate::statusline_project_root())
+    crate::gate::seat_authority::current_seat(&crate::statusline_project_root())
 }
 
 fn mcp_server_role_label() -> String {
@@ -734,7 +734,7 @@ fn mcp_authority_line_for(server_role: Option<&str>, caller_role: Option<&str>) 
         .map(canonical_light_role_name)
         .filter(|r| !r.trim().is_empty())
         .unwrap_or_else(|| "unknown over stdio MCP".to_string());
-    let advisor = crate::advisor_authority_from(&server_role, false, false);
+    let advisor = crate::gate::role_authority::advisor_authority_from(&server_role, false, false);
     format!(
         "MCP authority: server seat={} (advisor authority: {}); caller shell hint={}; enter advisor at a TTY, then restart the MCP server",
         server_role,
@@ -2204,7 +2204,7 @@ impl<'a> McpServer<'a> {
         // Non-advisor seats are refused, mirroring
         // the BUG-449 status-gate principle. trace:STORY-776 | ai:claude
         if let Some(mode_arg) = args.get("execution_mode").and_then(|v| v.as_str()) {
-            if !crate::has_advisor_authority() {
+            if !crate::gate::role_authority::has_advisor_authority() {
                 return Err(format!(
                     "execution_mode is the advisor's routing classification — this MCP seat \
                      lacks advisor authority. {} Have the advisor groom it (`aida groom`, or \
@@ -6262,13 +6262,13 @@ fn mcp_caller_has_advisor_authority() -> bool {
     // trace:BUG-486
     let role = role_active_env().unwrap_or_default();
     // is_tty = false, orchestrated = false: an MCP server is neither.
-    crate::advisor_authority_from(&role, false, false)
+    crate::gate::role_authority::advisor_authority_from(&role, false, false)
 }
 
 // trace:STORY-1353 | ai:codex
 fn mcp_caller_has_dispatch_authority() -> bool {
     let role = role_active_env().unwrap_or_default();
-    crate::dispatch_authority_from(&role, false)
+    crate::gate::role_authority::dispatch_authority_from(&role, false)
 }
 
 /// BUG-480 / BUG-486: the refusal message for MCP queue-for-execution tools

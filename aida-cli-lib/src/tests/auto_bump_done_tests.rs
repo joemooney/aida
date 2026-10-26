@@ -590,7 +590,7 @@ fn auto_bump_closes_the_refusal_verdict_when_reworked_pr_merges() {
     let pre_sha = aida_core::git_ops::head_sha(&project_root).unwrap();
 
     // A reviewer refused the work at the pre-rework sha.
-    crate::review_verdict::record_verdict(
+    crate::gate::review_verdict::record_verdict(
         &project_root,
         &spec_id,
         Some("request-changes"),
@@ -601,10 +601,10 @@ fn auto_bump_closes_the_refusal_verdict_when_reworked_pr_merges() {
         "reviewer-a",
     )
     .unwrap();
-    let before = crate::review_verdict::read_recorded_verdict(&project_root, &spec_id)
+    let before = crate::gate::review_verdict::read_recorded_verdict(&project_root, &spec_id)
         .expect("verdict recorded");
     assert!(
-        crate::review_verdict::is_outstanding_refusal(&before, false),
+        crate::gate::review_verdict::is_outstanding_refusal(&before, false),
         "a fresh refusal with the spec still open must read as outstanding"
     );
 
@@ -627,7 +627,7 @@ fn auto_bump_closes_the_refusal_verdict_when_reworked_pr_merges() {
     let req = after.get_requirement_by_spec_id(&spec_id).unwrap();
     assert!(matches!(req.status, RequirementStatus::Completed));
 
-    let closed = crate::review_verdict::read_recorded_verdict(&project_root, &spec_id)
+    let closed = crate::gate::review_verdict::read_recorded_verdict(&project_root, &spec_id)
         .expect("verdict still on disk");
     assert!(
         closed.is_closed(),
@@ -637,12 +637,12 @@ fn auto_bump_closes_the_refusal_verdict_when_reworked_pr_merges() {
     // The refusal itself is preserved, not rewritten to an approval.
     assert_eq!(
         closed.kind,
-        crate::review_verdict::VerdictKind::RequestChanges
+        crate::gate::review_verdict::VerdictKind::RequestChanges
     );
 
     // The whole point: a reader asking "does this spec carry an outstanding
     // refusal?" now gets no, using the spec's real (post-merge) status.
-    assert!(!crate::review_verdict::is_outstanding_refusal(
+    assert!(!crate::gate::review_verdict::is_outstanding_refusal(
         &closed, true
     ));
 }

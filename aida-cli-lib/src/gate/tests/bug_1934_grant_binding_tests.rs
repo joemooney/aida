@@ -5,7 +5,7 @@
 // trace:BUG-1934 | ai:claude
 
 use super::*;
-use crate::review_authority::{with_identity_source, IdentitySource, ProcEntry};
+use crate::gate::review_authority::{with_identity_source, IdentitySource, ProcEntry};
 use crate::test_env::EnvVarsGuard;
 
 const SUBJECT: &str = "bug-1934-fixture-user";
@@ -217,7 +217,7 @@ fn doctor_and_status_are_silent_or_valid_for_a_bound_grant() {
 /// start or a scheme mismatch refuses rather than matching.
 #[test]
 fn binding_match_is_strict() {
-    use crate::review_authority::binding_tokens_match as m;
+    use crate::gate::review_authority::binding_tokens_match as m;
     assert!(m("proc:42@linux-starttime:7", "proc:42@linux-starttime:7"));
     assert!(m("sid:42@linux-starttime:7", "proc:42@linux-starttime:7"));
     assert!(m("shell:42@linux-starttime:7", "proc:42@linux-starttime:7"));
@@ -236,7 +236,7 @@ fn binding_match_is_strict() {
     assert!(!m("session:abc", "session:abc"), "env ids never bind");
     assert!(!m("lease:abc", "lease:abc"));
     // The lenient refusal matcher would have accepted the scheme mismatch.
-    assert!(crate::review_authority::tokens_match(
+    assert!(crate::gate::review_authority::tokens_match(
         "proc:42@2026-10-10T00:00:00Z",
         "proc:42@linux-starttime:7"
     ));
@@ -454,7 +454,7 @@ fn advisor_live_requires_the_stamped_binding() {
     // advisor_live scans every grant in the home: use a private one.
     let home = tempfile::tempdir().unwrap();
     env.set_key("AIDA_HOME", &home.path().display().to_string());
-    let id = test_support::mint_grant_for(root, SUBJECT, crate::mandate::MANDATE_SEAT, &[]);
+    let id = test_support::mint_grant_for(root, SUBJECT, crate::gate::mandate::MANDATE_SEAT, &[]);
     env.set_key(GRANT_ENV, &id);
     let now = Utc::now();
     set_binding(&id, &[FOREIGN]);
@@ -479,7 +479,7 @@ fn an_unbound_presenter_does_not_overwrite_the_bound_turn_stamp() {
     let mut env = pinned_env();
     let home = tempfile::tempdir().unwrap();
     env.set_key("AIDA_HOME", &home.path().display().to_string());
-    let id = test_support::mint_grant_for(root, SUBJECT, crate::mandate::MANDATE_SEAT, &[]);
+    let id = test_support::mint_grant_for(root, SUBJECT, crate::gate::mandate::MANDATE_SEAT, &[]);
     env.set_key(GRANT_ENV, &id);
     set_binding(&id, &["proc:4242@linux-starttime:424"]);
     let now = Utc::now();
@@ -507,7 +507,7 @@ fn an_unbound_presenter_does_not_overwrite_the_bound_turn_stamp() {
 
 #[test]
 fn bg_launch_refuses_a_seat_it_cannot_bind() {
-    let err = crate::seat_authority::bg_seat_refusal("reviewer")
+    let err = crate::gate::seat_authority::bg_seat_refusal("reviewer")
         .unwrap_err()
         .to_string();
     assert!(
@@ -516,7 +516,7 @@ fn bg_launch_refuses_a_seat_it_cannot_bind() {
     );
     assert!(err.contains("aida role enter reviewer"), "{err}");
     assert!(err.contains("`--bind-pid` would serve only"), "{err}");
-    crate::seat_authority::bg_seat_refusal("implementer").unwrap();
+    crate::gate::seat_authority::bg_seat_refusal("implementer").unwrap();
 }
 
 /// TASK-2158: `aida review record` driven end to end with an exported grant

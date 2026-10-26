@@ -69,7 +69,7 @@ pub(crate) fn enforce_reasoned_operator_hold(
 
 // trace:BUG-1793 | ai:antigravity
 pub(crate) fn hold_authorized() -> bool {
-    crate::has_hold_authority()
+    crate::gate::role_authority::has_hold_authority()
 }
 
 /// The refusal for a spec under a reasoned operator hold, if it is one: a

@@ -10,7 +10,7 @@
 //! closed/completed flags), with no network and no clock (AC5).
 // trace:BUG-1773 | ai:claude
 
-use crate::review_verdict::{self, VerdictKind};
+use crate::gate::review_verdict::{self, VerdictKind};
 
 const HEAD: &str = "9cd65761d7aa4f3b2c1e0d9a8b7c6d5e4f3a2b1c";
 const OLD: &str = "1111111111111111111111111111111111111111";
@@ -35,7 +35,7 @@ fn body(verdict: &str, sha: &str, findings: &[&str], closed: Option<&str>) -> St
 // marker file and no label anywhere in the inputs.
 #[test]
 fn request_changes_at_the_current_head_holds_the_pr() {
-    let hold = review_verdict::corpus_hold_at_head(
+    let hold = crate::gate::review_verdict::corpus_hold_at_head(
         &[body(
             "request-changes",
             HEAD,
@@ -55,7 +55,7 @@ fn request_changes_at_the_current_head_holds_the_pr() {
 // AC1 — `rejected` is a refusal too, not only `request-changes`.
 #[test]
 fn rejected_at_the_current_head_holds_the_pr() {
-    assert!(review_verdict::corpus_hold_at_head(
+    assert!(crate::gate::review_verdict::corpus_hold_at_head(
         &[body("rejected", HEAD, &[], None)],
         Some(HEAD),
         false
@@ -68,7 +68,7 @@ fn rejected_at_the_current_head_holds_the_pr() {
 // returns `true` here (not cleanly approved); this view must hold nothing.
 #[test]
 fn a_verdict_only_at_an_older_head_holds_nothing() {
-    assert!(review_verdict::corpus_hold_at_head(
+    assert!(crate::gate::review_verdict::corpus_hold_at_head(
         &[body("request-changes", OLD, &["stale"], None)],
         Some(HEAD),
         false
@@ -81,7 +81,7 @@ fn a_verdict_only_at_an_older_head_holds_nothing() {
 // apply itself; if it stops doing so, this is the test that notices.
 #[test]
 fn a_verdict_closed_by_a_merge_holds_nothing() {
-    assert!(review_verdict::corpus_hold_at_head(
+    assert!(crate::gate::review_verdict::corpus_hold_at_head(
         &[body("request-changes", HEAD, &["addressed"], Some(OLD))],
         Some(HEAD),
         false
@@ -93,7 +93,7 @@ fn a_verdict_closed_by_a_merge_holds_nothing() {
 // definition, so a still-refusing record on it is the measured false positive.
 #[test]
 fn a_blocking_verdict_on_a_completed_spec_holds_nothing() {
-    assert!(review_verdict::corpus_hold_at_head(
+    assert!(crate::gate::review_verdict::corpus_hold_at_head(
         &[body("request-changes", HEAD, &["shipped anyway"], None)],
         Some(HEAD),
         /* spec_completed */ true
@@ -107,7 +107,7 @@ fn a_blocking_verdict_on_a_completed_spec_holds_nothing() {
 // whose head could not be read.
 #[test]
 fn an_unknown_head_holds_nothing_even_with_a_live_refusal() {
-    assert!(review_verdict::corpus_hold_at_head(
+    assert!(crate::gate::review_verdict::corpus_hold_at_head(
         &[body("request-changes", HEAD, &["real finding"], None)],
         None,
         false
@@ -118,7 +118,7 @@ fn an_unknown_head_holds_nothing_even_with_a_live_refusal() {
 // AC3e — an approval at the current head releases.
 #[test]
 fn an_approval_at_the_current_head_holds_nothing() {
-    assert!(review_verdict::corpus_hold_at_head(
+    assert!(crate::gate::review_verdict::corpus_hold_at_head(
         &[body("approved", HEAD, &[], None)],
         Some(HEAD),
         false
@@ -130,7 +130,7 @@ fn an_approval_at_the_current_head_holds_nothing() {
 // rejected sha must NOT lift a refusal standing at the current head.
 #[test]
 fn an_approval_at_the_old_sha_does_not_lift_a_refusal_at_the_head() {
-    let hold = review_verdict::corpus_hold_at_head(
+    let hold = crate::gate::review_verdict::corpus_hold_at_head(
         &[
             body("request-changes", HEAD, &["still open"], None),
             body("approved", OLD, &[], None),
@@ -147,7 +147,7 @@ fn an_approval_at_the_old_sha_does_not_lift_a_refusal_at_the_head() {
 // AC4 — no artifact at all is not an error and holds nothing.
 #[test]
 fn no_verdict_artifact_holds_nothing() {
-    assert!(review_verdict::corpus_hold_at_head(&[], Some(HEAD), false).is_none());
+    assert!(crate::gate::review_verdict::corpus_hold_at_head(&[], Some(HEAD), false).is_none());
 }
 
 // Two reviewers disagreeing at ONE commit is an integrity error, and the hold
@@ -156,7 +156,7 @@ fn no_verdict_artifact_holds_nothing() {
 fn conflicting_verdicts_at_one_head_hold_the_pr_and_name_the_conflict() {
     let other =
         format!(r#"{{"verdict":"approved","reviewed_sha":"{HEAD}","recorded_by":"reviewer-b"}}"#);
-    let hold = review_verdict::corpus_hold_at_head(
+    let hold = crate::gate::review_verdict::corpus_hold_at_head(
         &[body("request-changes", HEAD, &["disputed"], None), other],
         Some(HEAD),
         false,
@@ -175,7 +175,7 @@ fn conflicting_verdicts_at_one_head_hold_the_pr_and_name_the_conflict() {
 // the number the reader sees is the number of things they must still address.
 #[test]
 fn the_findings_count_comes_from_the_recording_at_this_head() {
-    let hold = review_verdict::corpus_hold_at_head(
+    let hold = crate::gate::review_verdict::corpus_hold_at_head(
         &[body("request-changes", HEAD, &["a", "b", "c"], None)],
         Some(HEAD),
         false,
@@ -188,7 +188,7 @@ fn the_findings_count_comes_from_the_recording_at_this_head() {
 // producer armed the hold — while the detail says it came from the corpus.
 #[test]
 fn a_corpus_hold_projects_as_rework_and_names_its_provenance() {
-    let hold = review_verdict::corpus_hold_at_head(
+    let hold = crate::gate::review_verdict::corpus_hold_at_head(
         &[body("request-changes", HEAD, &["one"], None)],
         Some(HEAD),
         false,
@@ -198,7 +198,7 @@ fn a_corpus_hold_projects_as_rework_and_names_its_provenance() {
     assert_eq!(item.pr, 2242);
     assert_eq!(
         item.reason_kind,
-        crate::merge_hold::HoldReasonKind::Rework.as_str()
+        crate::gate::merge_hold_core::HoldReasonKind::Rework.as_str()
     );
     assert!(item.detail.contains("1 finding"), "detail: {}", item.detail);
     assert!(
@@ -225,7 +225,7 @@ fn a_qualified_approval_at_the_head_is_surfaced_not_released() {
         VerdictKind::parse("approved pending cross-platform green"),
         VerdictKind::Unknown
     );
-    let hold = review_verdict::corpus_hold_at_head(
+    let hold = crate::gate::review_verdict::corpus_hold_at_head(
         &[body(
             "approved pending cross-platform green",
             HEAD,
@@ -281,7 +281,7 @@ fn the_seam_surfaces_a_refusal_that_no_marker_backs() {
     assert_eq!(items[0].pr, 2242);
     assert_eq!(
         items[0].reason_kind,
-        crate::merge_hold::HoldReasonKind::Rework.as_str()
+        crate::gate::merge_hold_core::HoldReasonKind::Rework.as_str()
     );
 }
 
@@ -353,8 +353,12 @@ fn the_bug_1705_witness_shape_is_held_although_it_records_no_sha() {
       "summary":"Independent exact-head review requests a focused unwind test",
       "verdict":"CHANGES REQUESTED"
     }"#;
-    let hold = review_verdict::corpus_hold_at_head(&[measured.to_string()], Some(HEAD), false)
-        .expect("the refusal BUG-1705 reported must not read as released");
+    let hold = crate::gate::review_verdict::corpus_hold_at_head(
+        &[measured.to_string()],
+        Some(HEAD),
+        false,
+    )
+    .expect("the refusal BUG-1705 reported must not read as released");
     let message = hold
         .integrity_error
         .expect("a verdict with no provenance must say so");

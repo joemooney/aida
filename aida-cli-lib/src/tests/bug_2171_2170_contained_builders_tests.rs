@@ -193,7 +193,7 @@ fn burndown_verbose_builder_argv_and_env_contained_vs_uncontained() {
         Some(Some("implementer".to_string()))
     );
     assert_eq!(
-        env_of(&cmd, crate::seat_authority::GRANT_ENV),
+        env_of(&cmd, crate::gate::seat_authority::GRANT_ENV),
         Some(Some("child-grant-1".to_string()))
     );
     let args = args_of(&cmd);
@@ -273,7 +273,7 @@ fn autopilot_intake_builder_argv_and_env_contained_vs_uncontained() {
         Some(Some("advisor".to_string()))
     );
     assert_eq!(
-        env_of(&cmd, crate::seat_authority::GRANT_ENV),
+        env_of(&cmd, crate::gate::seat_authority::GRANT_ENV),
         Some(Some("child-intake-grant".to_string()))
     );
     let args = args_of(&cmd);
@@ -338,7 +338,7 @@ fn questions_clarify_builder_argv_and_env_contained_vs_uncontained() {
         Some(Some("advisor".to_string()))
     );
     assert_eq!(
-        env_of(&cmd, crate::seat_authority::GRANT_ENV),
+        env_of(&cmd, crate::gate::seat_authority::GRANT_ENV),
         Some(Some("child-clarify-grant".to_string()))
     );
     let args = args_of(&cmd);
@@ -387,7 +387,7 @@ fn burndown_verbose_args_with_containment_helper() {
 fn child_grant_revocation_helper() {
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path();
-    let id = crate::seat_authority::test_support::mint_grant_for(
+    let id = crate::gate::seat_authority::test_support::mint_grant_for(
         root,
         "test-subject",
         "advisor",
@@ -398,6 +398,6 @@ fn child_grant_revocation_helper() {
     crate::session::revoke_headless_child_grant(&id);
 
     // Second revoke should return false because it's already revoked
-    let second = crate::seat_authority::revoke_by_id(&id).unwrap();
+    let second = crate::gate::seat_authority::revoke_by_id(&id).unwrap();
     assert!(!second, "grant must already be revoked");
 }

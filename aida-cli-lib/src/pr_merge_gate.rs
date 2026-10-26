@@ -1,6 +1,7 @@
 //! Drain merge-approval gate, PR review-verdict stamping and spec-done-after-PR (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
+use crate::gate::approval::*;
 use crate::*;
 
 /// Accept a reconciliation-time CI result only when it is terminal green and
@@ -176,50 +177,6 @@ pub(crate) fn dispatched_branch_head_sha(
     git_rev_parse_quiet(project_root, &format!("origin/{branch}"))
 }
 
-/// TASK-1448: the drain merge phase's approval-covers-head gate. `Err` is a
-/// shelvable, never-retried `StaleApproval` failure carrying the same
-/// refusal text `aida pr ship` prints — the drain parks the spec and moves
-/// on rather than exiting. Pure over the verdicts + policy + head so every
-/// branch is testable without a forge.
-///
-/// BUG-1918: approval AUTHORITY is checked first, exactly as `aida pr ship`
-/// checks it — no approval, an unattested one, or one recorded by an author
-/// session shelves the spec; the drain's own provenance-stamped verdict is
-/// not an approval.
-// trace:TASK-1448 trace:BUG-1918 | ai:claude
-pub(crate) fn drain_merge_approval_gate(
-    candidates: &[review_verdict::RecordedVerdict],
-    policy: &pr_ship::ShipApprovalPolicy,
-    head_sha: Option<&str>,
-    pr: u64,
-) -> Result<(), auto_complete::PhaseFailure> {
-    if let Some(refusal) = pr_ship::approval_authority_refusal(candidates, policy) {
-        return Err(auto_complete::PhaseFailure::of(
-            auto_complete::FailureKind::StaleApproval,
-            pr_ship::approval_authority_refusal_message(pr, &refusal),
-        ));
-    }
-    match pr_ship::approval_head_refusal(candidates, head_sha) {
-        None => Ok(()),
-        Some(refusal) => Err(auto_complete::PhaseFailure::of(
-            auto_complete::FailureKind::StaleApproval,
-            pr_ship::approval_head_refusal_message(pr, &refusal),
-        )),
-    }
-}
-
-/// TASK-1458: the `MergeOptions.match_head` pin for the drain's phase-4
-/// merge — the approved commit once `drain_merge_approval_gate` has passed.
-/// Kept beside the gate so the wiring test drives the same pair of calls the
-/// real `merge()` makes.
-// trace:TASK-1458 | ai:claude
-pub(crate) fn drain_merge_match_head(
-    candidates: &[review_verdict::RecordedVerdict],
-    head_sha: Option<&str>,
-) -> Option<String> {
-    pr_ship::approved_match_head(candidates, head_sha)
-}
-
 /// Add the orchestrator-owned review context to a reviewer-written PR verdict.
 ///
 /// The reviewer owns the verdict, summary, findings, and any future fields;
@@ -238,8 +195,8 @@ pub(crate) fn stamp_pr_review_verdict(
     // folded onto the built object, so they also reach the per-sha archive
     // and nothing re-reads or rewrites the verdict by path.
     // trace:TASK-1951 trace:TASK-1668 | ai:claude
-    let path = review_verdict::verdict_path(project_root, &format!("PR-{pr}"));
-    let mut object = review_verdict::build_verdict_object(
+    let path = crate::gate::review_verdict::verdict_path(project_root, &format!("PR-{pr}"));
+    let mut object = crate::gate::review_verdict::build_verdict_object(
         project_root,
         &path,
         None,
@@ -258,149 +215,8 @@ pub(crate) fn stamp_pr_review_verdict(
     if let Some(green) = ci_terminal_green {
         object.insert("ci_terminal_green".into(), serde_json::Value::Bool(green));
     }
-    review_verdict::write_verdict_object(&path, &object)?;
+    crate::gate::review_verdict::write_verdict_object(&path, &object)?;
     Ok(path)
-}
-
-#[cfg(test)]
-mod task_1448_drain_merge_approval_gate_tests {
-    // trace:TASK-1448 | ai:claude
-    use super::*;
-
-    const HEAD: &str = "1aca4e3e9251aaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-    const OLD: &str = "08834c6045a9bbbbbbbbbbbbbbbbbbbbbbbbbbbb";
-
-    /// An attested, independent human-at-TTY approval (BUG-1918), so these
-    /// tests reach the head-coverage gate behind the authority gate.
-    fn approval(sha: Option<&str>) -> review_verdict::RecordedVerdict {
-        review_verdict::RecordedVerdict {
-            kind: review_verdict::VerdictKind::Approved,
-            raw: "approved".into(),
-            reviewed_sha: sha.map(str::to_string),
-            recorded_at: Some("2026-09-23T00:00:00Z".into()),
-            attestation: Some(review_verdict::RecorderAttestation {
-                sha: sha.unwrap_or(HEAD).into(),
-                human_at_tty: true,
-                receipt_id: Some("rcpt".into()),
-                identity: vec!["session:independent-reviewer".into()],
-                ..Default::default()
-            }),
-            ..Default::default()
-        }
-    }
-
-    fn policy(verdicts: &[review_verdict::RecordedVerdict]) -> pr_ship::ShipApprovalPolicy {
-        let mut p = pr_ship::ShipApprovalPolicy {
-            reviewed_committed_at: Some("2026-09-22T00:00:00Z".parse().unwrap()),
-            ..Default::default()
-        };
-        for v in verdicts {
-            if let Some(a) = v.attestation.as_ref() {
-                if let Some(k) = a.authority_key(v.recorded_at.as_deref()) {
-                    p.verified_authority.insert(k, a.identity.clone());
-                }
-            }
-        }
-        p
-    }
-
-    fn gate(
-        v: &[review_verdict::RecordedVerdict],
-        head: Option<&str>,
-    ) -> Result<(), auto_complete::PhaseFailure> {
-        drain_merge_approval_gate(v, &policy(v), head, 5)
-    }
-
-    fn assert_shelves(result: Result<(), auto_complete::PhaseFailure>) -> String {
-        let failure = result.expect_err("the merge phase must refuse");
-        assert_eq!(failure.kind, auto_complete::FailureKind::StaleApproval);
-        // Shelve-and-continue, never stop the drain; never a transient retry.
-        assert!(failure.kind.is_shelvable());
-        assert!(!auto_complete::should_retry_transient_failure(
-            failure.kind,
-            0,
-            3
-        ));
-        failure.reason
-    }
-
-    fn assert_shelves_stale(result: Result<(), auto_complete::PhaseFailure>) -> String {
-        let reason = assert_shelves(result);
-        assert!(reason.contains("Re-review the current head"), "{reason}");
-        reason
-    }
-
-    #[test]
-    fn approval_at_head_lets_the_drain_merge() {
-        assert!(gate(&[approval(Some(HEAD))], Some(HEAD)).is_ok());
-    }
-
-    #[test]
-    fn approval_behind_head_shelves() {
-        let reason = assert_shelves_stale(gate(&[approval(Some(OLD))], Some(HEAD)));
-        assert!(
-            reason.contains(&OLD[..12]) && reason.contains(&HEAD[..12]),
-            "{reason}"
-        );
-    }
-
-    #[test]
-    fn approval_without_sha_shelves() {
-        // No reviewed sha: the attestation cannot authorize it either.
-        assert_shelves(gate(&[approval(None)], Some(HEAD)));
-    }
-
-    #[test]
-    fn unreadable_head_shelves() {
-        assert_shelves_stale(gate(&[approval(Some(HEAD))], None));
-    }
-
-    /// BUG-1918: the drain routes through the same authority gate as `aida pr
-    /// ship` — no approval, the drain's own unattested provenance stamp, or
-    /// an author session's approval all shelve.
-    // trace:BUG-1918 | ai:claude
-    #[test]
-    fn drain_merge_refuses_without_an_attested_independent_approval() {
-        let reason = assert_shelves(gate(&[], Some(HEAD)));
-        assert!(reason.contains("no approval recorded"), "{reason}");
-        let stamped = review_verdict::RecordedVerdict {
-            kind: review_verdict::VerdictKind::Approved,
-            raw: "approved".into(),
-            reviewed_sha: Some(HEAD.into()),
-            recorded_by: Some("aida drain reviewer".into()),
-            ..Default::default()
-        };
-        let reason = assert_shelves(gate(&[stamped], Some(HEAD)));
-        assert!(reason.contains("no verified reviewer identity"), "{reason}");
-        let v = [approval(Some(HEAD))];
-        let mut by_author = policy(&v);
-        by_author.author_sessions = vec![pr_ship::AuthorSession {
-            label: "lease l on TASK-1".into(),
-            tokens: vec!["session:independent-reviewer".into()],
-        }];
-        let reason = assert_shelves(drain_merge_approval_gate(&v, &by_author, Some(HEAD), 5));
-        assert!(reason.contains("cannot approve its own work"), "{reason}");
-    }
-
-    #[test]
-    fn stale_approval_recovery_hint_names_the_re_review() {
-        let ctx = auto_complete::HintContext {
-            spec: "TASK-1448".into(),
-            pr_number: Some(5),
-            ..Default::default()
-        };
-        let hint = auto_complete::recovery_hint(
-            auto_complete::Phase::Merge,
-            auto_complete::FailureKind::StaleApproval,
-            &ctx,
-        );
-        assert!(hint.contains("Re-review the"), "{hint}");
-        assert!(hint.contains("PR-5"), "{hint}");
-        assert_eq!(
-            auto_complete::FailureKind::StaleApproval.cause_slug(),
-            "stale-approval"
-        );
-    }
 }
 
 #[cfg(test)]
@@ -410,7 +226,7 @@ mod task_168_pr_verdict_metadata_tests {
     #[test]
     fn stamps_pr_verdict_metadata_without_losing_reviewer_fields() {
         let tmp = tempfile::TempDir::new().unwrap();
-        let path = review_verdict::verdict_path(tmp.path(), "PR-1965");
+        let path = crate::gate::review_verdict::verdict_path(tmp.path(), "PR-1965");
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(
             &path,
@@ -450,13 +266,13 @@ mod task_168_pr_verdict_metadata_tests {
     fn stamped_ci_fields_reach_the_per_sha_archive() {
         let tmp = tempfile::TempDir::new().unwrap();
         let sha = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef";
-        let path = review_verdict::verdict_path(tmp.path(), "PR-1966");
+        let path = crate::gate::review_verdict::verdict_path(tmp.path(), "PR-1966");
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(&path, r#"{"verdict":"approved","summary":"clean"}"#).unwrap();
 
         stamp_pr_review_verdict(tmp.path(), 1966, Some(sha), None, Some(sha), Some(true)).unwrap();
 
-        let archive = review_verdict::archived_verdict_file_for_sha(&path, sha)
+        let archive = crate::gate::review_verdict::archived_verdict_file_for_sha(&path, sha)
             .expect("the round is archived by sha");
         let value: serde_json::Value =
             serde_json::from_str(&std::fs::read_to_string(archive).unwrap()).unwrap();

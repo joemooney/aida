@@ -2640,9 +2640,9 @@ fn no_human_ack_source(project_root: &Path) -> Option<String> {
 }
 
 fn held_specs(project_root: &Path) -> BTreeSet<String> {
-    crate::merge_hold::list_holds(project_root)
+    crate::gate::merge_hold_core::list_holds(project_root)
         .into_iter()
-        .filter_map(|(pr, _)| crate::merge_hold::read_hold_record(project_root, pr))
+        .filter_map(|(pr, _)| crate::gate::merge_hold_core::read_hold_record(project_root, pr))
         .filter_map(|r| r.spec)
         .map(|s| s.to_ascii_uppercase())
         .collect()

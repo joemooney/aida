@@ -17,7 +17,7 @@ use std::path::Path;
 use std::process::Command;
 
 use crate::evaluator::EvaluatorEngine;
-use crate::review_verdict::VerdictKind;
+use crate::gate::review_verdict::VerdictKind;
 
 /// Categorized acceptance criterion.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

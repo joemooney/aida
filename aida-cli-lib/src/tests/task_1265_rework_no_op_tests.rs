@@ -38,7 +38,7 @@ fn fixture() -> tempfile::TempDir {
 #[test]
 fn pr_keyed_reviewer_verdict_arms_rework_guard() {
     let tmp = tempfile::tempdir().unwrap();
-    review_verdict::record_verdict(
+    crate::gate::review_verdict::record_verdict(
         tmp.path(),
         "STORY-1350",
         Some("Approved"),
@@ -49,7 +49,7 @@ fn pr_keyed_reviewer_verdict_arms_rework_guard() {
         "codex",
     )
     .unwrap();
-    review_verdict::record_verdict(
+    crate::gate::review_verdict::record_verdict(
         tmp.path(),
         "PR-1974",
         Some("RequestChanges"),
@@ -63,7 +63,10 @@ fn pr_keyed_reviewer_verdict_arms_rework_guard() {
 
     let verdict = blocking_rework_verdict(tmp.path(), "STORY-1350", 1974)
         .expect("the canonical PR-N reviewer artifact must arm the guard");
-    assert_eq!(verdict.kind, review_verdict::VerdictKind::RequestChanges);
+    assert_eq!(
+        verdict.kind,
+        crate::gate::review_verdict::VerdictKind::RequestChanges
+    );
     // BUG-1466 criterion 2 / "salvaged from PR #2029": this test asserted the
     // returned verdict's KIND and not WHICH verdict was returned. Pinning
     // identity (not just kind) asserts the property BUG-1466 is about — that
@@ -150,7 +153,7 @@ fn no_op_failure_names_the_actual_rework_round() {
 #[test]
 fn stale_spec_verdict_does_not_mask_a_blocking_pr_verdict() {
     let tmp = tempfile::tempdir().unwrap();
-    review_verdict::record_verdict(
+    crate::gate::review_verdict::record_verdict(
         tmp.path(),
         "BUG-1432",
         Some("approved"),
@@ -161,7 +164,7 @@ fn stale_spec_verdict_does_not_mask_a_blocking_pr_verdict() {
         "older test reviewer",
     )
     .unwrap();
-    review_verdict::record_verdict(
+    crate::gate::review_verdict::record_verdict(
         tmp.path(),
         "PR-2024",
         Some("request-changes"),
@@ -189,7 +192,7 @@ fn stale_spec_verdict_does_not_mask_a_blocking_pr_verdict() {
 #[test]
 fn rework_guard_ignores_non_blocking_pr_verdict() {
     let tmp = tempfile::tempdir().unwrap();
-    review_verdict::record_verdict(
+    crate::gate::review_verdict::record_verdict(
         tmp.path(),
         "PR-2024",
         Some("approved"),
