@@ -7,8 +7,15 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-26T22:43:57.404688441Z
-modified_at: 2026-10-26T22:44:38.255981714Z
+modified_at: 2026-10-26T23:07:53.462851722Z
 req_type: Bug
+comments:
+- id: 01a17a78-66f6-74b1-bb6f-378a0a8cc5da
+  author: joe
+  content: 'Confirmed 16:00 MST: merge-time auto-complete ALSO missed the four node-local TASK IDs in PR #2955 squash subject; fix both parsers.'
+  created_at: 2026-10-26T23:07:53.462851722Z
+  modified_at: 2026-10-26T23:07:53.462851722Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
 history:
 - id: 01a17a62-a2d0-73d3-9d61-92681014a1e5
   author: joe
