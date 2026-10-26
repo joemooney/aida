@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-24T22:36:06.984229716Z
-modified_at: 2026-10-25T20:07:29.036320836Z
+modified_at: 2026-10-26T14:47:45.835778712Z
 req_type: Task
 tags:
 - from-review:PR-2905
@@ -35,6 +35,12 @@ comments:
   content: 'PROXY DECISION for joe: Approve enforcement of the signed default-branch restriction at submission and execution, using established read-only local/default resolution and fail-closed unknown evidence. Fixtures cover nonstandard default branch and stale/missing evidence; no forge/config mutations.'
   created_at: 2026-10-25T04:52:06.667250346Z
   modified_at: 2026-10-25T04:52:06.667250346Z
+- id: 01a178ae-85ab-72c3-9673-548774c92760
+  author: joe
+  content: 'ADVISOR: landed in e27af75054 (PR #2924, Refs-titled train car); the round-4 reviewer verified this task item by item (verdict at 4b2b0b3983).'
+  created_at: 2026-10-26T14:47:45.835778712Z
+  modified_at: 2026-10-26T14:47:45.835778712Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
 history:
 - id: 01a17166-e59a-7a70-bca5-390be8dc799e
   author: joe
