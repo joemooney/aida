@@ -59,6 +59,18 @@ pub(crate) enum Field {
     /// tick itself re-checks the principal and every other floor.
     // trace:STORY-1700 | ai:claude
     MandateDriveActive,
+    /// `mandate.dispatch_active` — an unexpired, unstopped mandate record
+    /// covering `dispatch` exists in the AIDA home (flag). Gates the
+    /// `dispatch-tick` substrate job; the tick itself re-checks the exact
+    /// request mandate ID, principal, and every other floor.
+    // trace:STORY-1917 | ai:agy
+    MandateDispatchActive,
+    /// `dispatch.pending` — validated `Pending` dispatch requests in
+    /// `.aida/dispatch/` (count). Confers no authority; `review`, `flow`, and
+    /// `train` stay `Pending` (`waiting for serve`) while `dispatch tick`
+    /// executes only `take` and `impl`.
+    // trace:STORY-1917 | ai:agy
+    DispatchPending,
 }
 
 /// The literal type each field carries; the parser refuses a mismatch.
@@ -71,7 +83,7 @@ pub(crate) enum FieldType {
 
 impl Field {
     /// Every field, in documentation order.
-    pub(crate) const ALL: [Field; 10] = [
+    pub(crate) const ALL: [Field; 12] = [
         Field::MailUnread,
         Field::MailOldestUnreadAge,
         Field::DrainLockFree,
@@ -82,6 +94,8 @@ impl Field {
         Field::FindingsOpen,
         Field::EscalationsOpen,
         Field::MandateDriveActive,
+        Field::MandateDispatchActive,
+        Field::DispatchPending,
     ];
 
     /// The dotted name used in config.
@@ -97,13 +111,17 @@ impl Field {
             Field::FindingsOpen => "findings.open",
             Field::EscalationsOpen => "escalations.open",
             Field::MandateDriveActive => "mandate.drive_active",
+            Field::MandateDispatchActive => "mandate.dispatch_active",
+            Field::DispatchPending => "dispatch.pending",
         }
     }
 
     pub(crate) fn field_type(self) -> FieldType {
         match self {
             Field::MailOldestUnreadAge => FieldType::Duration,
-            Field::DrainLockFree | Field::MandateDriveActive => FieldType::Flag,
+            Field::DrainLockFree | Field::MandateDriveActive | Field::MandateDispatchActive => {
+                FieldType::Flag
+            }
             _ => FieldType::Count,
         }
     }
@@ -201,6 +219,10 @@ pub(crate) struct Snapshot {
     pub escalations_open: i64,
     // trace:STORY-1700 | ai:claude
     pub mandate_drive_active: bool,
+    // trace:STORY-1917 | ai:agy
+    pub mandate_dispatch_active: bool,
+    // trace:STORY-1917 | ai:agy
+    pub dispatch_pending: i64,
 }
 
 impl Snapshot {
@@ -216,6 +238,8 @@ impl Snapshot {
             Field::FindingsOpen => Value::Count(self.findings_open),
             Field::EscalationsOpen => Value::Count(self.escalations_open),
             Field::MandateDriveActive => Value::Flag(self.mandate_drive_active),
+            Field::MandateDispatchActive => Value::Flag(self.mandate_dispatch_active),
+            Field::DispatchPending => Value::Count(self.dispatch_pending),
         }
     }
 }

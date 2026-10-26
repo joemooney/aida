@@ -279,6 +279,7 @@ pub(crate) const GATE_PROTECTED_PATHS: &[&str] = &[
     // Retained while STORY-1917 finishes on dispatch.rs; shared dispatch
     // extraction completes after STORY-1917 lands (STORY-1889 advisor signoff).
     "aida-cli-lib/src/dispatch.rs",
+    "aida-cli-lib/src/dispatch_flow.rs",
     // Gate authority, code and its tests together (STORY-1889).
     "aida-cli-lib/src/gate/",
     // The drift ratchet that keeps this list complete (STORY-1888 C1).

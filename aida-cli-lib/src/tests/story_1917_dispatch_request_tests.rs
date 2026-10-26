@@ -24,8 +24,8 @@
 // trace:STORY-1917 | ai:agy
 
 use super::*;
+use crate::gate::mandate::{self};
 use crate::gate::mandate::{Mandate, Scope};
-use crate::mandate::{self};
 use chrono::Duration;
 use std::collections::BTreeSet;
 
@@ -105,6 +105,14 @@ impl Fixture {
             .unwrap();
         let sha = String::from_utf8(head.stdout).unwrap().trim().to_string();
         git(&root, &["update-ref", "refs/remotes/origin/main", &sha]);
+        git(
+            &root,
+            &[
+                "symbolic-ref",
+                "refs/remotes/origin/HEAD",
+                "refs/remotes/origin/main",
+            ],
+        );
 
         let store = root.join(".aida-store");
         std::fs::create_dir_all(store.join("objects")).unwrap();
@@ -822,9 +830,9 @@ fn human_gates_gate_dispatch_and_ship_with_gated_audit_rows() {
     );
 }
 
-// trace:STORY-1917 | ai:agy
+// trace:STORY-1917 trace:TASK-2344 | ai:agy
 #[test]
-fn load_all_pairs_skips_and_warns_on_malformed_or_orphan_entries() {
+fn load_all_pairs_and_recovery_fence_handle_orphan_and_corrupt_entries() {
     let f = Fixture::new(&["reviewer", "implementer"]);
     f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
     let now = Utc::now();
@@ -841,25 +849,51 @@ fn load_all_pairs_skips_and_warns_on_malformed_or_orphan_entries() {
     )
     .unwrap();
 
-    // Write a corrupt JSON request file with a UUID stem and an orphan request
-    // file with no companion result file (simulating a crash mid-submit).
-    let corrupt_id = Uuid::new_v4().to_string();
-    write_private_atomic(&request_path(&f.root, &corrupt_id), b"{not valid json").unwrap();
-
+    // 1. Write an orphan request file for PR #705 with no companion result file.
     let orphan_id = Uuid::new_v4().to_string();
     let mut orphan_req = good.request.clone();
     orphan_req.id = orphan_id.clone();
+    orphan_req.action = DispatchVerb::Review {
+        pr: 705,
+        vendor: None,
+    };
+    orphan_req.target_key = orphan_req.action.target_key();
+    orphan_req.dedupe_key = orphan_req.action.dedupe_key();
     write_private_atomic(
         &request_path(&f.root, &orphan_id),
         &serde_json::to_vec_pretty(&orphan_req).unwrap(),
     )
     .unwrap();
 
-    // `load_all_pairs` must skip both broken records and still return the valid one,
-    // and subsequent `submit_request` / `cancel_request` calls must not wedge.
+    // Read-only `load_all_pairs` returns only valid pairs without mutating disk,
+    // while `inspect_dispatch_inventory_readonly` surfaces `orphan_id` as `needs-recovery`.
     let pairs = load_all_pairs(&f.root).unwrap();
     assert_eq!(pairs.len(), 1);
     assert_eq!(pairs[0].0.id, good.request.id);
+    let inv = inspect_dispatch_inventory_readonly(&f.root).unwrap();
+    assert_eq!(inv.fences.len(), 1);
+    assert_eq!(inv.fences[0].id, orphan_id);
+    assert!(!inv.fences[0].blocks_all_admission);
+
+    // Submitting a second request for the orphan's target (`pr:705`) is refused
+    // naming the `needs-recovery` record, while an unrelated target (`pr:701`)
+    // is admitted and can be cancelled.
+    let clash_err = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Review {
+            pr: 705,
+            vendor: None,
+        },
+        now,
+    )
+    .unwrap_err();
+    assert!(
+        clash_err.to_string().contains(&orphan_id)
+            && clash_err.to_string().contains("needs-recovery"),
+        "expected needs-recovery target refusal for pr:705, got: {clash_err:#}"
+    );
 
     let second = submit_request(
         &f.root,
@@ -874,4 +908,768 @@ fn load_all_pairs_skips_and_warns_on_malformed_or_orphan_entries() {
     .unwrap();
     let cancelled = cancel_request(&f.root, &second.request.id, now).unwrap();
     assert_eq!(cancelled.status, DispatchStatus::Cancelled);
+
+    // 2. A corrupt request file with an unknown target/verb sets `blocks_all_admission`
+    //    and causes new `submit_request` admissions to fail closed.
+    let corrupt_id = Uuid::new_v4().to_string();
+    write_private_atomic(&request_path(&f.root, &corrupt_id), b"{not valid json").unwrap();
+    let blocked_err = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Review {
+            pr: 702,
+            vendor: None,
+        },
+        now,
+    )
+    .unwrap_err();
+    assert!(
+        blocked_err.to_string().contains(&corrupt_id)
+            && blocked_err.to_string().contains("needs-recovery"),
+        "corrupt request with unknown target must fail closed on new admission, got: {blocked_err:#}"
+    );
+}
+
+// trace:STORY-1917 trace:TASK-2340 | ai:agy
+#[test]
+fn task_2340_scope_refusals_emit_audit_event_only_for_active_mandates() {
+    let f = Fixture::new(&["reviewer", "implementer"]);
+    let now = Utc::now();
+
+    // 1. Active mandate lacking `Scope::Dispatch` emits exactly one `Outcome::Refused`
+    //    row under its exact `mandate.id`, with persisted reason and principal.
+    let m_ship_only = f.start_mandate(&[Scope::ShipHeld], false);
+    let err1 = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Review {
+            pr: 801,
+            vendor: None,
+        },
+        now,
+    )
+    .unwrap_err();
+    assert!(err1.to_string().contains("does not cover `dispatch`"));
+    let rows1 = crate::mandate_drive::ledger_rows(&f.root, &m_ship_only.id);
+    assert_eq!(
+        rows1.len(),
+        1,
+        "missing Scope::Dispatch must emit 1 audit row"
+    );
+    assert_eq!(rows1[0].2.outcome, Outcome::Refused);
+    assert_eq!(rows1[0].2.action, "review");
+    assert_eq!(rows1[0].2.subject, "PR #801");
+    assert!(
+        rows1[0]
+            .2
+            .why
+            .as_deref()
+            .is_some_and(|w| w.contains("does not cover `dispatch`")),
+        "expected persisted Refused reason to mention `does not cover `dispatch``, got: {:?}",
+        rows1[0].2.why
+    );
+
+    // Also verify the persisted event in `.aida/events.jsonl` carries the exact principal.
+    let recent_events: Vec<crate::events::Event> =
+        std::fs::read_to_string(f.root.join(".aida/events.jsonl"))
+            .unwrap()
+            .lines()
+            .filter_map(|l| serde_json::from_str(l).ok())
+            .collect();
+    let ev1 = recent_events
+        .iter()
+        .find(|e| {
+            matches!(
+                &e.kind,
+                crate::events::EventKind::MandateDriveAction { mandate_id, action, outcome, why, .. }
+                    if *mandate_id == m_ship_only.id
+                        && action == "review"
+                        && outcome == "refused"
+                        && why.as_deref().is_some_and(|w| w.contains("does not cover `dispatch`"))
+            )
+        })
+        .expect("persisted MandateDriveAction event for m_ship_only");
+    assert_eq!(m_ship_only.principal, f.principal);
+    assert_eq!(ev1.seat.as_deref(), Some("advisor"));
+
+    // 2. Active mandate covering `Scope::Dispatch` but lacking `Scope::ShipHeld`
+    //    emits one `Outcome::Refused` row for shipping `flow` and one for `train`.
+    mandate::stop(&f.mandate_dir, &|| Ok(()), &f.principal, now).unwrap();
+    let m_dispatch_only = f.start_mandate(&[Scope::Dispatch], false);
+    let err_flow = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Flow {
+            pr: 802,
+            no_ship: false,
+            vendor: None,
+        },
+        now,
+    )
+    .unwrap_err();
+    assert!(err_flow.to_string().contains("does not cover `ship-held`"));
+    let err_train = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Train {
+            prs: vec![802, 803],
+        },
+        now,
+    )
+    .unwrap_err();
+    assert!(err_train.to_string().contains("does not cover `ship-held`"));
+    let rows2 = crate::mandate_drive::ledger_rows(&f.root, &m_dispatch_only.id);
+    assert_eq!(rows2.len(), 2);
+    assert!(rows2.iter().all(|r| r.2.outcome == Outcome::Refused));
+    assert_eq!(rows2[0].2.action, "flow");
+    assert_eq!(rows2[0].2.subject, "PR #802");
+    assert!(
+        rows2[0]
+            .2
+            .why
+            .as_deref()
+            .is_some_and(|w| w.contains("does not cover `ship-held`")),
+        "expected flow Refused why to mention `does not cover `ship-held``, got: {:?}",
+        rows2[0].2.why
+    );
+    assert_eq!(rows2[1].2.action, "train");
+    assert_eq!(rows2[1].2.subject, "PRs #802, #803");
+    assert!(
+        rows2[1]
+            .2
+            .why
+            .as_deref()
+            .is_some_and(|w| w.contains("does not cover `ship-held`")),
+        "expected train Refused why to mention `does not cover `ship-held``, got: {:?}",
+        rows2[1].2.why
+    );
+    let recent_events2: Vec<crate::events::Event> =
+        std::fs::read_to_string(f.root.join(".aida/events.jsonl"))
+            .unwrap()
+            .lines()
+            .filter_map(|l| serde_json::from_str(l).ok())
+            .collect();
+    let dispatch_only_events: Vec<_> = recent_events2
+        .iter()
+        .filter(|e| {
+            matches!(
+                &e.kind,
+                crate::events::EventKind::MandateDriveAction { mandate_id, outcome, why, .. }
+                    if *mandate_id == m_dispatch_only.id
+                        && outcome == "refused"
+                        && why.as_deref().is_some_and(|w| w.contains("does not cover `ship-held`"))
+            )
+        })
+        .collect();
+    assert_eq!(dispatch_only_events.len(), 2);
+    assert_eq!(m_dispatch_only.principal, f.principal);
+    assert!(dispatch_only_events
+        .iter()
+        .all(|e| e.seat.as_deref() == Some("advisor")));
+
+    // 3. Stopped mandate must NOT emit a new audit row borrowing the stopped ID.
+    mandate::stop(&f.mandate_dir, &|| Ok(()), &f.principal, now).unwrap();
+    let _ = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Review {
+            pr: 804,
+            vendor: None,
+        },
+        now,
+    )
+    .unwrap_err();
+    let rows_after_stop = crate::mandate_drive::ledger_rows(&f.root, &m_dispatch_only.id);
+    assert_eq!(
+        rows_after_stop.len(),
+        2,
+        "Stopped mandate refusal must not append ledger rows under the stopped mandate ID"
+    );
+}
+
+// trace:STORY-1917 trace:TASK-2338 | ai:agy
+#[test]
+fn task_2338_expired_mandate_submission_refusal_uses_hermetic_time() {
+    let f = Fixture::new(&["reviewer", "implementer"]);
+    let now = Utc::now();
+    // Start a 2-hour mandate at `now` (while the advisor grant is valid for 24 hours).
+    let set: BTreeSet<Scope> = [Scope::ShipHeld, Scope::Dispatch].into_iter().collect();
+    let m = mandate::start_with_scopes(
+        &f.mandate_dir,
+        &|| Ok(()),
+        &f.principal,
+        Duration::hours(2),
+        Some("short mandate".into()),
+        false,
+        false,
+        set,
+        now,
+    )
+    .unwrap();
+
+    // 1. Baseline before expiry (`now + 30m`) succeeds.
+    let sub_ok = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Review {
+            pr: 830,
+            vendor: None,
+        },
+        now + Duration::minutes(30),
+    )
+    .unwrap();
+    assert_eq!(sub_ok.result.status, DispatchStatus::Pending);
+
+    // 2. Submission after mandate expiry (`now + 3h`, while 24h advisor grant is still valid)
+    //    hits the `MandateRefusal::Expired` branch in `check_request_authority` and refuses
+    //    without emitting a `Refused` audit row under the expired mandate ID.
+    let rows_before = crate::mandate_drive::ledger_rows(&f.root, &m.id).len();
+    let exp_err = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Review {
+            pr: 831,
+            vendor: None,
+        },
+        now + Duration::hours(3),
+    )
+    .unwrap_err();
+    let exp_msg = exp_err.to_string();
+    assert!(
+        exp_msg.contains(&m.id) && exp_msg.contains("expired at"),
+        "expected expired-mandate submission refusal naming mandate {}, got: {exp_msg}",
+        m.id
+    );
+    let rows_after = crate::mandate_drive::ledger_rows(&f.root, &m.id).len();
+    assert_eq!(
+        rows_after, rows_before,
+        "expired mandate refusal must not append ledger rows under the expired mandate ID"
+    );
+}
+
+// trace:STORY-1917 trace:TASK-2339 | ai:agy
+#[test]
+fn task_2339_wrong_seat_principal_mismatch_and_missing_reviewer_delegation_refusals() {
+    let now = Utc::now();
+
+    // 1. Missing `reviewer` delegation (`Fixture::new(&["implementer"])` and `Fixture::new(&[])`):
+    //    - Valid baseline for non-reviewer verb (`Train`) succeeds (proving mandate, advisor seat,
+    //      principal, and grant binding all pass);
+    //    - `Review` and `Flow` refuse specifically at the `delegates_reviewer` check!
+    {
+        let f_no_rev = Fixture::new(&["implementer"]);
+        f_no_rev.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
+
+        let ok_train = submit_request(
+            &f_no_rev.root,
+            &f_no_rev.mandate_dir,
+            &f_no_rev.principal,
+            &DispatchRequestVerb::Train { prs: vec![840] },
+            now,
+        )
+        .expect("train does not require reviewer delegation");
+        assert_eq!(ok_train.result.status, DispatchStatus::Pending);
+
+        let rev_err = submit_request(
+            &f_no_rev.root,
+            &f_no_rev.mandate_dir,
+            &f_no_rev.principal,
+            &DispatchRequestVerb::Review {
+                pr: 841,
+                vendor: None,
+            },
+            now,
+        )
+        .unwrap_err();
+        assert!(
+            rev_err
+                .to_string()
+                .contains("does not delegate the `reviewer` seat"),
+            "expected missing reviewer delegation refusal on review, got: {rev_err:#}"
+        );
+
+        let flow_err = submit_request(
+            &f_no_rev.root,
+            &f_no_rev.mandate_dir,
+            &f_no_rev.principal,
+            &DispatchRequestVerb::Flow {
+                pr: 842,
+                no_ship: false,
+                vendor: None,
+            },
+            now,
+        )
+        .unwrap_err();
+        assert!(
+            flow_err
+                .to_string()
+                .contains("does not delegate the `reviewer` seat"),
+            "expected missing reviewer delegation refusal on flow, got: {flow_err:#}"
+        );
+    }
+
+    // 2. Wrong grant seat & principal mismatch, starting from a valid baseline that
+    //    succeeds on `Review` before each isolated mutation:
+    {
+        let f = Fixture::new(&["reviewer", "implementer"]);
+        f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
+
+        // Baseline succeeds.
+        let baseline = submit_request(
+            &f.root,
+            &f.mandate_dir,
+            &f.principal,
+            &DispatchRequestVerb::Review {
+                pr: 843,
+                vendor: None,
+            },
+            now,
+        )
+        .expect("baseline advisor grant with reviewer delegation succeeds");
+        assert_eq!(baseline.result.status, DispatchStatus::Pending);
+
+        let grant_id = std::env::var(crate::gate::seat_authority::GRANT_ENV).unwrap();
+        let grant_file = crate::gate::seat_authority::grant_dir()
+            .unwrap()
+            .join(format!("{grant_id}.json"));
+        let orig_grant_bytes = std::fs::read(&grant_file).unwrap();
+
+        // 2a. Wrong grant seat (`seat = "reviewer"` and `"implementer"`):
+        for wrong_seat in ["reviewer", "implementer"] {
+            let mut grant_rec: crate::gate::seat_authority::SeatGrant =
+                serde_json::from_slice(&orig_grant_bytes).unwrap();
+            grant_rec.seat = wrong_seat.to_string();
+            write_private_atomic(&grant_file, &serde_json::to_vec_pretty(&grant_rec).unwrap())
+                .unwrap();
+
+            let seat_err = submit_request(
+                &f.root,
+                &f.mandate_dir,
+                &f.principal,
+                &DispatchRequestVerb::Review {
+                    pr: 844,
+                    vendor: None,
+                },
+                now,
+            )
+            .unwrap_err();
+            assert!(
+                seat_err
+                    .to_string()
+                    .contains(&format!("holds seat `{wrong_seat}`")),
+                "expected wrong-seat refusal for `{wrong_seat}`, got: {seat_err:#}"
+            );
+        }
+
+        // Restore valid grant and verify it works again before testing principal mismatch.
+        write_private_atomic(&grant_file, &orig_grant_bytes).unwrap();
+
+        // 2b. Grant / mandate principal mismatch: active mandate belongs to `"other-operator"`
+        //     while the valid, roster-checked `advisor` seat grant belongs to `f.principal`.
+        let extra: BTreeSet<Scope> = [Scope::ShipHeld, Scope::Dispatch].into_iter().collect();
+        mandate::start_with_scopes(
+            &f.mandate_dir,
+            &|| Ok(()),
+            "other-operator",
+            Duration::hours(2),
+            Some("other operator mandate".into()),
+            false,
+            false,
+            extra,
+            now,
+        )
+        .unwrap();
+
+        let prin_err = submit_request(
+            &f.root,
+            &f.mandate_dir,
+            "other-operator",
+            &DispatchRequestVerb::Review {
+                pr: 845,
+                vendor: None,
+            },
+            now,
+        )
+        .unwrap_err();
+        assert!(
+            prin_err.to_string().contains(&format!(
+                "advisor grant principal `{}` does not match mandate principal `other-operator`",
+                f.principal
+            )),
+            "expected principal mismatch refusal, got: {prin_err:#}"
+        );
+    }
+}
+
+// trace:STORY-1917 trace:TASK-2343 | ai:agy
+#[test]
+fn task_2343_persisted_request_action_variant_and_result_deny_unknown_fields_on_disk() {
+    let f = Fixture::new(&["reviewer", "implementer"]);
+    f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
+    let now = Utc::now();
+    let brief_take = f.write_brief("b2343-take.md", "Take brief.\n");
+    let brief_impl = f.write_brief("b2343-impl.md", "Impl brief.\n");
+
+    let verbs = [
+        DispatchRequestVerb::Flow {
+            pr: 850,
+            no_ship: false,
+            vendor: Some(DispatchVendor::Claude),
+        },
+        DispatchRequestVerb::Review {
+            pr: 851,
+            vendor: Some(DispatchVendor::Codex),
+        },
+        DispatchRequestVerb::Take {
+            pr: 852,
+            branch: "claude/fix-100".into(),
+            spec: "TASK-100".into(),
+            brief: brief_take,
+            vendor: None,
+        },
+        DispatchRequestVerb::Impl {
+            name: "lane-853".into(),
+            branch: "claude/lane-853".into(),
+            spec: "TASK-100".into(),
+            brief: brief_impl,
+            vendor: None,
+        },
+        DispatchRequestVerb::Train { prs: vec![854] },
+    ];
+
+    for verb in verbs {
+        let sub = submit_request(&f.root, &f.mandate_dir, &f.principal, &verb, now).unwrap();
+        let id = sub.request.id.clone();
+        let req_file = request_path(&f.root, &id);
+        let res_file = result_path(&f.root, &id);
+        let orig_req_bytes = std::fs::read(&req_file).unwrap();
+        let orig_res_bytes = std::fs::read(&res_file).unwrap();
+
+        // Baseline on-disk load succeeds.
+        load_pair(&f.root, &id).expect("clean persisted pair loads");
+
+        // 1. Unknown top-level field on persisted `requests/<id>.json` is rejected.
+        let mut req_val: serde_json::Value = serde_json::from_slice(&orig_req_bytes).unwrap();
+        req_val
+            .as_object_mut()
+            .unwrap()
+            .insert("unknown_top_field".into(), serde_json::json!("tamper"));
+        write_private_atomic(&req_file, &serde_json::to_vec_pretty(&req_val).unwrap()).unwrap();
+        let err_top = load_pair(&f.root, &id).unwrap_err();
+        assert!(
+            format!("{err_top:#}").contains("unknown field `unknown_top_field`"),
+            "expected deny_unknown_fields on top-level DispatchRequest, got: {err_top:#}"
+        );
+        let inv_top = inspect_dispatch_inventory_readonly(&f.root).unwrap();
+        assert!(
+            inv_top
+                .fences
+                .iter()
+                .any(|fe| fe.id == id && fe.blocks_all_admission),
+            "unknown top-level field in request must be fenced as corrupt"
+        );
+
+        // 2. Unknown field inside internally-tagged `"action"` (`DispatchVerb` variant) is rejected.
+        let mut req_action_val: serde_json::Value =
+            serde_json::from_slice(&orig_req_bytes).unwrap();
+        req_action_val
+            .get_mut("action")
+            .unwrap()
+            .as_object_mut()
+            .unwrap()
+            .insert("unknown_action_field".into(), serde_json::json!(99));
+        write_private_atomic(
+            &req_file,
+            &serde_json::to_vec_pretty(&req_action_val).unwrap(),
+        )
+        .unwrap();
+        let err_action = load_pair(&f.root, &id).unwrap_err();
+        assert!(
+            format!("{err_action:#}").contains("unknown field `unknown_action_field`"),
+            "expected deny_unknown_fields on internally-tagged DispatchVerb variant {:?}, got: {err_action:#}",
+            sub.request.action.verb_str()
+        );
+        write_private_atomic(&req_file, &orig_req_bytes).unwrap();
+
+        // 3. Unknown top-level field on persisted `results/<id>.json` is rejected.
+        let mut res_val: serde_json::Value = serde_json::from_slice(&orig_res_bytes).unwrap();
+        res_val
+            .as_object_mut()
+            .unwrap()
+            .insert("unknown_result_field".into(), serde_json::json!(true));
+        write_private_atomic(&res_file, &serde_json::to_vec_pretty(&res_val).unwrap()).unwrap();
+        let err_res = load_pair(&f.root, &id).unwrap_err();
+        assert!(
+            format!("{err_res:#}").contains("unknown field `unknown_result_field`"),
+            "expected deny_unknown_fields on DispatchResult, got: {err_res:#}"
+        );
+        write_private_atomic(&res_file, &orig_res_bytes).unwrap();
+        load_pair(&f.root, &id).expect("restored pair loads cleanly");
+    }
+}
+
+// trace:STORY-1917 trace:TASK-2341 | ai:agy
+#[test]
+fn task_2341_validate_branch_rejects_verified_local_default_branch_and_missing_origin_head() {
+    let f = Fixture::new(&["reviewer", "implementer"]);
+    f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
+    let now = Utc::now();
+    let brief = f.write_brief("trunk.md", "Test default branch check.\n");
+
+    let head = crate::test_git::git_command()
+        .arg("-C")
+        .arg(&f.root)
+        .args(["rev-parse", "HEAD"])
+        .output()
+        .unwrap();
+    let sha = String::from_utf8(head.stdout).unwrap().trim().to_string();
+
+    // 1. Point `refs/remotes/origin/HEAD` to `refs/remotes/origin/trunk`:
+    //    `trunk` must be rejected while `claude/feature-trunk` succeeds.
+    git(&f.root, &["update-ref", "refs/remotes/origin/trunk", &sha]);
+    git(
+        &f.root,
+        &[
+            "symbolic-ref",
+            "refs/remotes/origin/HEAD",
+            "refs/remotes/origin/trunk",
+        ],
+    );
+    let trunk_err = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Impl {
+            name: "trunk-lane".into(),
+            branch: "trunk".into(),
+            spec: "TASK-100".into(),
+            brief: brief.clone(),
+            vendor: None,
+        },
+        now,
+    )
+    .unwrap_err();
+    assert!(
+        trunk_err
+            .to_string()
+            .contains("cannot target the repository default branch `trunk` directly"),
+        "expected default branch `trunk` refusal, got: {trunk_err:#}"
+    );
+
+    let ok_sub = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Impl {
+            name: "feature-lane".into(),
+            branch: "claude/feature-trunk".into(),
+            spec: "TASK-100".into(),
+            brief: brief.clone(),
+            vendor: None,
+        },
+        now,
+    )
+    .unwrap();
+    assert_eq!(ok_sub.result.status, DispatchStatus::Pending);
+
+    // 2. Dangling `refs/remotes/origin/HEAD` -> fails closed.
+    git(
+        &f.root,
+        &[
+            "symbolic-ref",
+            "refs/remotes/origin/HEAD",
+            "refs/remotes/origin/nonexistent",
+        ],
+    );
+    let dangling_err = validate_branch(&f.root, "claude/other").unwrap_err();
+    assert!(
+        dangling_err
+            .to_string()
+            .contains("is missing, dangling, or does not resolve to a commit"),
+        "expected dangling default branch refusal, got: {dangling_err:#}"
+    );
+
+    // 3. Non-origin target (`refs/heads/main`) -> fails closed.
+    git(
+        &f.root,
+        &[
+            "symbolic-ref",
+            "refs/remotes/origin/HEAD",
+            "refs/heads/main",
+        ],
+    );
+    let non_origin_err = validate_branch(&f.root, "claude/other").unwrap_err();
+    assert!(
+        non_origin_err
+            .to_string()
+            .contains("points to non-origin target"),
+        "expected non-origin symref refusal, got: {non_origin_err:#}"
+    );
+
+    // 4. Missing `refs/remotes/origin/HEAD` -> fails closed without falling back to `main`.
+    git(
+        &f.root,
+        &["symbolic-ref", "--delete", "refs/remotes/origin/HEAD"],
+    );
+    let missing_err = validate_branch(&f.root, "claude/other").unwrap_err();
+    assert!(
+        missing_err
+            .to_string()
+            .contains("symbolic-ref is missing or unreadable"),
+        "expected missing origin/HEAD refusal, got: {missing_err:#}"
+    );
+}
+
+// trace:STORY-1917 trace:TASK-2342 | ai:agy
+#[test]
+fn task_2342_mandate_status_line_renders_all_effective_scopes_in_canonical_order() {
+    let f = Fixture::new(&["reviewer", "implementer"]);
+    let now = Utc::now();
+
+    // 1. Multi-scope non-drive mandate renders all scopes in canonical order (`ship-held, dispatch`).
+    let m = f.start_mandate(&[Scope::Dispatch, Scope::ShipHeld], false);
+    let line = crate::mandate::current_status_line(&f.mandate_dir, Some(&f.root), now).unwrap();
+    assert!(
+        line.starts_with("MANDATE ship-held, dispatch ·"),
+        "expected `MANDATE ship-held, dispatch · ...`, got: {line}"
+    );
+    let _ = m;
+
+    // 2. Single-scope `dispatch` renders `MANDATE dispatch · ...`.
+    mandate::stop(&f.mandate_dir, &|| Ok(()), &f.principal, now).unwrap();
+    f.start_mandate(&[Scope::Dispatch], false);
+    let line_single =
+        crate::mandate::current_status_line(&f.mandate_dir, Some(&f.root), now).unwrap();
+    assert!(
+        line_single.starts_with("MANDATE dispatch ·"),
+        "expected `MANDATE dispatch · ...`, got: {line_single}"
+    );
+
+    // 3. Drive mandate retains `MANDATE drive · ...` shorthand.
+    mandate::stop(&f.mandate_dir, &|| Ok(()), &f.principal, now).unwrap();
+    let drive_scopes: BTreeSet<Scope> = [Scope::ShipHeld, Scope::Dispatch].into_iter().collect();
+    mandate::start_with_scopes(
+        &f.mandate_dir,
+        &|| Ok(()),
+        &f.principal,
+        Duration::hours(2),
+        None,
+        false,
+        true,
+        drive_scopes,
+        now,
+    )
+    .unwrap();
+    let line_drive =
+        crate::mandate::current_status_line(&f.mandate_dir, Some(&f.root), now).unwrap();
+    assert!(
+        line_drive.starts_with("MANDATE drive ·"),
+        "expected `MANDATE drive · ...`, got: {line_drive}"
+    );
+}
+
+// trace:STORY-1917 | ai:agy
+#[test]
+fn schedule_predicates_and_result_first_submit_rollbacks() {
+    let f = Fixture::new(&["reviewer", "implementer"]);
+    let now = Utc::now();
+
+    // Predicates parse and evaluate cleanly.
+    let expr =
+        crate::schedule_predicate::parse("mandate.dispatch_active == true && dispatch.pending > 0")
+            .unwrap();
+    let mut snap = crate::schedule_predicate::Snapshot::default();
+    assert!(!crate::schedule_predicate::eval(&expr, &snap).unwrap());
+    snap.mandate_dispatch_active = true;
+    snap.dispatch_pending = 2;
+    assert!(crate::schedule_predicate::eval(&expr, &snap).unwrap());
+
+    f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
+    assert_eq!(pending_request_count(&f.root), 0);
+
+    // Stage 1 and Stage 2 in-invocation submit failures clean up exact owned files.
+    let brief = f.write_brief("stage.md", "Stage rollback test.\n");
+    TEST_FAIL_SUBMIT_STAGE.with(|c| c.set(1));
+    let e1 = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Impl {
+            name: "stage-one".into(),
+            branch: "claude/stage-one".into(),
+            spec: "TASK-100".into(),
+            brief: brief.clone(),
+            vendor: None,
+        },
+        now,
+    );
+    TEST_FAIL_SUBMIT_STAGE.with(|c| c.set(0));
+    assert!(e1.is_err());
+    assert_eq!(
+        inspect_dispatch_inventory_readonly(&f.root)
+            .unwrap()
+            .fences
+            .len(),
+        0,
+        "stage-1 failure must clean up frozen brief and leave zero recovery fences"
+    );
+
+    TEST_FAIL_SUBMIT_STAGE.with(|c| c.set(2));
+    let e2 = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Impl {
+            name: "stage-two".into(),
+            branch: "claude/stage-two".into(),
+            spec: "TASK-100".into(),
+            brief: brief.clone(),
+            vendor: None,
+        },
+        now,
+    );
+    TEST_FAIL_SUBMIT_STAGE.with(|c| c.set(0));
+    assert!(e2.is_err());
+    assert_eq!(
+        inspect_dispatch_inventory_readonly(&f.root)
+            .unwrap()
+            .fences
+            .len(),
+        0,
+        "same-invocation stage-2 failure must clean up Pending result + frozen brief"
+    );
+
+    // Simulated hard crash after result write leaves orphan Pending result on disk,
+    // which the next inspection classifies as `needs-recovery` (`RequestMissing`)
+    // without deleting it.
+    TEST_SIMULATE_CRASH_AFTER_RESULT_WRITE.with(|c| c.set(true));
+    let crash_res = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Review {
+            pr: 990,
+            vendor: None,
+        },
+        now,
+    );
+    TEST_SIMULATE_CRASH_AFTER_RESULT_WRITE.with(|c| c.set(false));
+    assert!(crash_res.is_err());
+    let inv_after_crash = inspect_dispatch_inventory_readonly(&f.root).unwrap();
+    assert_eq!(inv_after_crash.fences.len(), 1);
+    assert_eq!(
+        inv_after_crash.fences[0].known_target_key.as_deref(),
+        Some("pr:990")
+    );
+    assert!(
+        result_path(&f.root, &inv_after_crash.fences[0].id).exists(),
+        "orphan Pending result after hard crash must never be auto-deleted on restart"
+    );
 }

@@ -30,10 +30,13 @@ use uuid::Uuid;
 pub(crate) mod dispatch_args;
 pub(crate) use dispatch_args::*;
 
+#[path = "dispatch_flow.rs"]
+pub(crate) mod dispatch_flow;
+
+use crate::gate::mandate;
 use crate::gate::mandate::{Mandate, MandateState, Scope};
 use crate::gate::mandate_gates::{GateOp, HumanGates};
 use crate::gate::seat_authority::{self, GrantCheck, GrantRejection};
-use crate::mandate::{self};
 use crate::mandate_drive::{ActionRow, Outcome};
 
 pub(crate) const DISPATCH_SCHEMA_VERSION: u32 = 1;
@@ -47,6 +50,42 @@ const BRIEFS_SUBDIR: &str = "briefs";
 const RESULTS_SUBDIR: &str = "results";
 const LOGS_SUBDIR: &str = "logs";
 const TICK_LOCK_FILE: &str = "tick.lock";
+const TICK_LOCK_V2_FILE: &str = "v2.lock";
+const TICK_LOCK_VERSION_FILE: &str = "version";
+const TICK_LOCK_VERSION_BODY: &[u8] = b"2\n";
+const TICK_LOCK_STAGING_DIR: &str = ".tick.lock.v2-staging";
+const RECOVERY_FILE: &str = "recovery.json";
+
+#[cfg(test)]
+pub(crate) static TEST_PROC_PID_ALLOWLIST: std::sync::Mutex<Option<Vec<u32>>> =
+    std::sync::Mutex::new(None);
+/// Stands in for this process's `/proc` view (namespace probe, `/proc`
+/// mount options) in [`verify_sole_open_fd_for_inode`]. Unset, a test that
+/// pins [`TEST_PROC_PID_ALLOWLIST`] scans only the pids it names, so the view
+/// is not consulted.
+// trace:STORY-1917 | ai:claude
+#[cfg(test)]
+pub(crate) static TEST_PROC_VIEW: std::sync::Mutex<
+    Option<(crate::agent_registry::PidNamespaceProbe, Option<String>)>,
+> = std::sync::Mutex::new(None);
+#[cfg(test)]
+pub(crate) static TEST_POST_EXCHANGE_HOOK: std::sync::Mutex<
+    Option<Box<dyn FnOnce() + Send + 'static>>,
+> = std::sync::Mutex::new(None);
+#[cfg(test)]
+pub(crate) static TEST_PRE_FLOCK_V2_HOOK: std::sync::Mutex<
+    Option<Box<dyn FnOnce() + Send + 'static>>,
+> = std::sync::Mutex::new(None);
+/// Makes the next activation rollback exchange fail, to prove the failure is
+/// reported and fenced.
+// trace:STORY-1917 trace:TASK-2344 | ai:claude
+#[cfg(test)]
+pub(crate) static TEST_FAIL_ROLLBACK_EXCHANGE: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+pub(crate) const RECOVERY_SCHEMA_VERSION: u32 = 1;
+pub(crate) const MAX_RECOVERY_FILE_BYTES: usize = 256 * 1024;
+pub(crate) const MAX_DISPATCH_INVENTORY_ENTRIES: usize = 4_096;
 
 /// On-disk request record (`requests/<id>.json`, mode 0600).
 // trace:STORY-1917 | ai:agy
@@ -322,9 +361,22 @@ pub(crate) fn brief_path(main_worktree: &Path, id: &str) -> PathBuf {
     briefs_dir(main_worktree).join(format!("{id}.md"))
 }
 
-/// Exclusive flock over `.aida/dispatch/tick.lock`, explicitly unlocked on
-/// Drop before closing the fd (BUG-2160).
-struct DispatchLock(std::fs::File);
+pub(crate) fn recovery_path(main_worktree: &Path) -> PathBuf {
+    dispatch_root(main_worktree).join(RECOVERY_FILE)
+}
+
+/// Exclusive flock over `.aida/dispatch/tick.lock/v2.lock`, explicitly unlocked
+/// on Drop before closing the fd (BUG-2160, TASK-2344 Q1).
+///
+/// Replacing the Slice 1/2 regular file `.aida/dispatch/tick.lock` with a
+/// pinned `0700` directory `.aida/dispatch/tick.lock/` (containing `v2.lock`)
+/// creates a kernel-enforced physical compatibility boundary: any pre-Slice-3
+/// binary attempting to open `.aida/dispatch/tick.lock` for `read+write` across
+/// any of the 5 mutation entrypoints fails immediately at the OS boundary with
+/// `EISDIR` (`Is a directory`) before mutating request/result state.
+// trace:STORY-1917 trace:TASK-2344 | ai:agy
+#[derive(Debug)]
+pub(crate) struct DispatchLock(std::fs::File);
 
 impl Drop for DispatchLock {
     fn drop(&mut self) {
@@ -332,18 +384,1193 @@ impl Drop for DispatchLock {
     }
 }
 
+pub(crate) fn acquire_dispatch_lock_for_gate(main_worktree: &Path) -> Result<DispatchLock> {
+    acquire_dispatch_lock(main_worktree)
+}
+
+fn is_vanished_proc_error(err: &std::io::Error) -> bool {
+    err.kind() == std::io::ErrorKind::NotFound
+        || matches!(err.raw_os_error(), Some(libc::ENOENT | libc::ESRCH))
+}
+
+/// The options `/proc` is mounted with (per-mount and superblock), from the
+/// last `/proc` entry in `mountinfo` (the one this process sees). `None` when
+/// there is none.
+// trace:STORY-1917 | ai:claude
+pub(crate) fn proc_mount_options(mountinfo: &str) -> Option<String> {
+    mountinfo.lines().rev().find_map(|line| {
+        let (mount, fs) = line.split_once(" - ")?;
+        let mut fields = mount.split_whitespace();
+        let mount_point = fields.nth(4)?;
+        let mount_opts = fields.next()?;
+        let mut fs = fs.split_whitespace();
+        let (fs_type, _source, super_opts) = (fs.next()?, fs.next()?, fs.next()?);
+        (mount_point == "/proc" && fs_type == "proc").then(|| format!("{mount_opts},{super_opts}"))
+    })
+}
+
+/// Why this process's `/proc` cannot show every process that might hold the
+/// legacy lock, if it cannot: it runs in a PID namespace of its own (a
+/// sandbox, `bwrap --unshare-pid`, a container), or `/proc` is mounted with
+/// `hidepid`. Either way a scan that finds no other holder proves nothing.
+// trace:STORY-1917 | ai:claude
+pub(crate) fn proc_view_refusal(
+    probe: &crate::agent_registry::PidNamespaceProbe,
+    proc_mount_options: Option<&str>,
+) -> Option<String> {
+    if probe.is_isolated() {
+        return Some(
+            "this process runs in its own PID namespace (a sandbox or container), so /proc \
+             cannot show processes outside it"
+                .to_string(),
+        );
+    }
+    let Some(options) = proc_mount_options else {
+        return Some("the /proc mount options could not be read".to_string());
+    };
+    let hidepid = options
+        .split(',')
+        .filter_map(|o| o.strip_prefix("hidepid="))
+        .find(|v| !matches!(*v, "0" | "off"));
+    hidepid.map(|v| {
+        format!("/proc is mounted with hidepid={v}, so other processes' descriptors are hidden")
+    })
+}
+
+fn live_proc_view_refusal() -> Option<String> {
+    let mountinfo = std::fs::read_to_string("/proc/self/mountinfo").ok();
+    proc_view_refusal(
+        &crate::agent_registry::PidNamespaceProbe::read(),
+        mountinfo.as_deref().and_then(proc_mount_options).as_deref(),
+    )
+}
+
+/// Verify via `/proc` that `(dev, ino)` is not open on any file descriptor in
+/// the current process or any other process owned by the current UID other than
+/// `(std::process::id(), own_fd)`.
+///
+/// Any `/proc` directory entry error, unreadable `/proc/<pid>` metadata,
+/// unreadable `/proc/<pid>/fd` directory for a live same-UID process (e.g.
+/// `EACCES` on a non-dumpable or foreign-user-namespace process), or unreadable
+/// descriptor metadata on a still-open FD is treated as **unknown coverage**
+/// and fails closed (`Err`). So is a `/proc` that cannot see every process
+/// ([`proc_view_refusal`]). Processes of other users are skipped: a
+/// pre-Slice-3 dispatch binary runs as the operator who owns the store.
+// trace:STORY-1917 trace:TASK-2344 | ai:agy
+fn verify_sole_open_fd_for_inode(
+    dev: u64,
+    ino: u64,
+    own_fd: std::os::fd::RawFd,
+    display_path: &Path,
+) -> Result<()> {
+    use std::os::unix::fs::MetadataExt;
+    let self_pid = std::process::id();
+    let uid = unsafe { libc::geteuid() };
+    #[cfg(test)]
+    let pid_allowlist = TEST_PROC_PID_ALLOWLIST.lock().ok().and_then(|g| g.clone());
+
+    // trace:STORY-1917 | ai:claude
+    #[cfg(not(test))]
+    let view_refusal = live_proc_view_refusal();
+    #[cfg(test)]
+    let view_refusal = match TEST_PROC_VIEW.lock().ok().and_then(|g| g.clone()) {
+        Some((probe, options)) => proc_view_refusal(&probe, options.as_deref()),
+        None if pid_allowlist.is_some() => None,
+        None => live_proc_view_refusal(),
+    };
+    if let Some(why) = view_refusal {
+        bail!(
+            "cannot prove legacy {} is unused: {why} (unknown process coverage; fail-closed). \
+             Run `aida dispatch activate-lock` from the host's own PID namespace",
+            display_path.display()
+        );
+    }
+
+    let proc_entries = std::fs::read_dir("/proc")
+        .context("cannot read /proc to verify legacy dispatch lock quiescence")?;
+    let mut saw_own_fd = false;
+
+    for entry_res in proc_entries {
+        let entry = entry_res.context(
+            "error reading /proc directory entry during legacy lock quiescence check (fail-closed)",
+        )?;
+        let name = entry.file_name();
+        let Some(name_str) = name.to_str() else {
+            bail!("non-UTF-8 entry in /proc during legacy lock quiescence check (fail-closed)");
+        };
+        let Ok(pid) = name_str.parse::<u32>() else {
+            // Non-PID entries in /proc (`self`, `thread-self`, `mounts`, `cpuinfo`, etc.).
+            continue;
+        };
+        #[cfg(test)]
+        if let Some(ref allowed) = pid_allowlist {
+            if !allowed.contains(&pid) {
+                continue;
+            }
+        }
+        let proc_path = entry.path();
+        if pid != self_pid {
+            let proc_meta = match std::fs::symlink_metadata(&proc_path) {
+                Ok(m) => m,
+                Err(e) if is_vanished_proc_error(&e) && !proc_path.exists() => continue,
+                Err(e) => {
+                    bail!(
+                        "cannot stat {} during legacy lock quiescence check: {e} (unknown process coverage; fail-closed)",
+                        proc_path.display()
+                    );
+                }
+            };
+            if proc_meta.uid() != uid {
+                continue;
+            }
+        }
+        let fd_dir = proc_path.join("fd");
+        let fd_entries = match std::fs::read_dir(&fd_dir) {
+            Ok(rd) => rd,
+            Err(e) if is_vanished_proc_error(&e) && !proc_path.exists() => continue,
+            Err(e) => {
+                bail!(
+                    "cannot read {} for same-uid pid {pid} during legacy lock quiescence check: {e} (unknown FD coverage; fail-closed)",
+                    fd_dir.display()
+                );
+            }
+        };
+        for fd_entry_res in fd_entries {
+            let fd_entry = match fd_entry_res {
+                Ok(fe) => fe,
+                Err(e) if is_vanished_proc_error(&e) && !proc_path.exists() => break,
+                Err(e) => {
+                    bail!(
+                        "error reading entry in {} for same-uid pid {pid}: {e} (unknown FD coverage; fail-closed)",
+                        fd_dir.display()
+                    );
+                }
+            };
+            let fd_name = fd_entry.file_name();
+            let Some(fd_str) = fd_name.to_str() else {
+                bail!(
+                    "non-UTF-8 fd entry in {} for pid {pid} (fail-closed)",
+                    fd_dir.display()
+                );
+            };
+            let Ok(fd_num) = fd_str.parse::<i32>() else {
+                bail!(
+                    "unexpected non-numeric fd entry `{fd_str}` in {} for pid {pid} (fail-closed)",
+                    fd_dir.display()
+                );
+            };
+            let fd_path = fd_entry.path();
+            let target_meta = match std::fs::metadata(&fd_path) {
+                Ok(m) => m,
+                Err(e) => {
+                    // Distinguish a descriptor that closed (or process that exited)
+                    // between `readdir` and `stat` from an open descriptor whose
+                    // target cannot be inspected.
+                    match std::fs::symlink_metadata(&fd_path) {
+                        Err(le) if is_vanished_proc_error(&le) => continue,
+                        _ => {
+                            bail!(
+                                "cannot stat open descriptor {} (pid {pid} fd {fd_num}) during legacy lock quiescence check: {e} (unknown FD coverage; fail-closed)",
+                                fd_path.display()
+                            );
+                        }
+                    }
+                }
+            };
+            if target_meta.dev() == dev && target_meta.ino() == ino {
+                if pid == self_pid && fd_num == own_fd {
+                    saw_own_fd = true;
+                } else {
+                    bail!(
+                        "legacy {} (dev={dev}, ino={ino}) is still open in pid {pid} fd {fd_num} (open-before-flock or waiter race detected); stop all pre-Slice-3 dispatch processes before activating v2 lock",
+                        display_path.display()
+                    );
+                }
+            }
+        }
+    }
+
+    if !saw_own_fd {
+        bail!(
+            "cannot confirm own descriptor (pid={self_pid}, fd={own_fd}) in /proc for legacy {} (fail-closed)",
+            display_path.display()
+        );
+    }
+    Ok(())
+}
+
+/// Stat a child entry relative to `parent_fd` with `AT_SYMLINK_NOFOLLOW`.
+fn fstatat_nofollow(
+    parent_fd: &std::fs::File,
+    child_cstr: &std::ffi::CStr,
+    display_path: &Path,
+) -> Result<libc::stat> {
+    use std::os::fd::AsRawFd;
+    let mut st: libc::stat = unsafe { std::mem::zeroed() };
+    let rc = unsafe {
+        libc::fstatat(
+            parent_fd.as_raw_fd(),
+            child_cstr.as_ptr(),
+            &mut st,
+            libc::AT_SYMLINK_NOFOLLOW,
+        )
+    };
+    if rc != 0 {
+        return Err(std::io::Error::last_os_error())
+            .with_context(|| format!("cannot lstat {}", display_path.display()));
+    }
+    Ok(st)
+}
+
+fn cleanup_staging_lock_dir(disp_fd: &std::fs::File) {
+    use std::os::fd::{AsRawFd, FromRawFd};
+    let Ok(c_staging) = std::ffi::CString::new(TICK_LOCK_STAGING_DIR) else {
+        return;
+    };
+    let st_fd = unsafe {
+        libc::openat(
+            disp_fd.as_raw_fd(),
+            c_staging.as_ptr(),
+            libc::O_RDONLY | libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC,
+            0,
+        )
+    };
+    if st_fd >= 0 {
+        let st_dir = unsafe { std::fs::File::from_raw_fd(st_fd) };
+        if let Ok(c_v2) = std::ffi::CString::new(TICK_LOCK_V2_FILE) {
+            unsafe { libc::unlinkat(st_dir.as_raw_fd(), c_v2.as_ptr(), 0) };
+        }
+        if let Ok(c_ver) = std::ffi::CString::new(TICK_LOCK_VERSION_FILE) {
+            unsafe { libc::unlinkat(st_dir.as_raw_fd(), c_ver.as_ptr(), 0) };
+        }
+        drop(st_dir);
+        unsafe { libc::unlinkat(disp_fd.as_raw_fd(), c_staging.as_ptr(), libc::AT_REMOVEDIR) };
+    } else {
+        unsafe { libc::unlinkat(disp_fd.as_raw_fd(), c_staging.as_ptr(), 0) };
+    }
+}
+
+fn write_lock_version_file(lock_dir: &std::fs::File, lock_dir_display: &Path) -> Result<()> {
+    use std::io::Write;
+    use std::os::fd::{AsRawFd, FromRawFd};
+    let c_ver = std::ffi::CString::new(TICK_LOCK_VERSION_FILE)?;
+    let ver_display = lock_dir_display.join(TICK_LOCK_VERSION_FILE);
+    let ver_fd = unsafe {
+        libc::openat(
+            lock_dir.as_raw_fd(),
+            c_ver.as_ptr(),
+            libc::O_WRONLY | libc::O_CREAT | libc::O_TRUNC | libc::O_NOFOLLOW | libc::O_CLOEXEC,
+            0o600,
+        )
+    };
+    if ver_fd < 0 {
+        return Err(std::io::Error::last_os_error())
+            .with_context(|| format!("cannot write {}", ver_display.display()));
+    }
+    let mut ver_file = unsafe { std::fs::File::from_raw_fd(ver_fd) };
+    ver_file
+        .write_all(TICK_LOCK_VERSION_BODY)
+        .with_context(|| format!("cannot write {}", ver_display.display()))?;
+    ver_file
+        .sync_all()
+        .with_context(|| format!("cannot sync {}", ver_display.display()))?;
+    Ok(())
+}
+
+/// Operator recovery steps named by every refusal that involves the legacy
+/// lock file or an unfinished activation.
+// trace:STORY-1917 trace:TASK-2344 | ai:claude
+const LOCK_ACTIVATION_GUIDANCE: &str = "stop every `aida dispatch serve`, `aida dispatch tick` and `aida dispatch run` process and the schedule driver, then run `aida dispatch activate-lock` from your terminal";
+
+fn verify_lock_version_file(lock_dir: &std::fs::File, lock_dir_display: &Path) -> Result<()> {
+    use std::io::Read;
+    use std::os::fd::{AsRawFd, FromRawFd};
+    use std::os::unix::fs::MetadataExt;
+    let c_ver = std::ffi::CString::new(TICK_LOCK_VERSION_FILE)?;
+    let ver_display = lock_dir_display.join(TICK_LOCK_VERSION_FILE);
+    let ver_fd = unsafe {
+        libc::openat(
+            lock_dir.as_raw_fd(),
+            c_ver.as_ptr(),
+            libc::O_RDONLY | libc::O_NOFOLLOW | libc::O_NONBLOCK | libc::O_CLOEXEC,
+            0,
+        )
+    };
+    if ver_fd < 0 {
+        let err = std::io::Error::last_os_error();
+        // A v2 directory without its marker is an activation that stopped
+        // after its exchange (a crash, or a rollback that failed). It is
+        // never adopted here: only the activation command may finish it.
+        // trace:STORY-1917 trace:TASK-2344 | ai:claude
+        if err.raw_os_error() == Some(libc::ENOENT) {
+            bail!(
+                "{} has no version marker: a dispatch lock activation was interrupted or its rollback failed, so dispatch refuses to use it. To finish or recover it, {LOCK_ACTIVATION_GUIDANCE}",
+                lock_dir_display.display()
+            );
+        }
+        return Err(err).with_context(|| {
+            format!(
+                "unreadable dispatch lock version marker {}",
+                ver_display.display()
+            )
+        });
+    }
+    let mut ver_file = unsafe { std::fs::File::from_raw_fd(ver_fd) };
+    let meta = ver_file
+        .metadata()
+        .with_context(|| format!("cannot stat {}", ver_display.display()))?;
+    if !meta.is_file() || meta.nlink() != 1 {
+        bail!(
+            "{} is not a singly-linked regular file (refused)",
+            ver_display.display()
+        );
+    }
+    let uid = unsafe { libc::geteuid() };
+    if meta.uid() != uid {
+        bail!(
+            "{} is owned by uid {}, not current uid {uid}",
+            ver_display.display(),
+            meta.uid()
+        );
+    }
+    if (meta.mode() & 0o7777) != 0o600 {
+        bail!(
+            "{} has mode {:04o}, expected 0600 (refused)",
+            ver_display.display(),
+            meta.mode() & 0o7777
+        );
+    }
+    let mut body = String::new();
+    ver_file
+        .read_to_string(&mut body)
+        .with_context(|| format!("cannot read {}", ver_display.display()))?;
+    if body.trim() != "2" {
+        bail!(
+            "unsupported dispatch lock version {:?} in {} (expected \"2\")",
+            body.trim(),
+            ver_display.display()
+        );
+    }
+    Ok(())
+}
+
+/// `true` when `tick.lock` (already known to be a directory) carries its
+/// `version` marker, `false` when the marker is absent.
+// trace:STORY-1917 trace:TASK-2344 | ai:claude
+fn lock_dir_has_version(disp_fd: &std::fs::File, lock_dir_display: &Path) -> Result<bool> {
+    use std::os::fd::{AsRawFd, FromRawFd};
+    let c_lock_dir = std::ffi::CString::new(TICK_LOCK_FILE)?;
+    let raw = unsafe {
+        libc::openat(
+            disp_fd.as_raw_fd(),
+            c_lock_dir.as_ptr(),
+            libc::O_RDONLY | libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC,
+            0,
+        )
+    };
+    if raw < 0 {
+        return Err(std::io::Error::last_os_error())
+            .with_context(|| format!("cannot open {}", lock_dir_display.display()));
+    }
+    let dir = unsafe { std::fs::File::from_raw_fd(raw) };
+    let c_ver = std::ffi::CString::new(TICK_LOCK_VERSION_FILE)?;
+    let ver_display = lock_dir_display.join(TICK_LOCK_VERSION_FILE);
+    match fstatat_nofollow(&dir, &c_ver, &ver_display) {
+        Ok(_) => Ok(true),
+        Err(e)
+            if e.downcast_ref::<std::io::Error>()
+                .and_then(|io| io.raw_os_error())
+                == Some(libc::ENOENT) =>
+        {
+            Ok(false)
+        }
+        Err(e) => Err(e),
+    }
+}
+
+/// Create `.aida/dispatch/tick.lock/` for a dispatch root that has none. The
+/// directory is assembled under a private name with its `v2.lock` and
+/// `version` already in place, then renamed into position with
+/// `RENAME_NOREPLACE`, so no process can ever observe a v2 directory that
+/// lacks its marker. Losing the race to another creator is not an error.
+// trace:STORY-1917 trace:TASK-2344 | ai:claude
+fn create_lock_dir_if_absent(disp_fd: &std::fs::File, main_worktree: &Path) -> Result<()> {
+    use std::os::fd::{AsRawFd, FromRawFd};
+    let c_lock_dir = std::ffi::CString::new(TICK_LOCK_FILE)?;
+    let lock_dir_display = dispatch_root(main_worktree).join(TICK_LOCK_FILE);
+    let mut st: libc::stat = unsafe { std::mem::zeroed() };
+    let rc = unsafe {
+        libc::fstatat(
+            disp_fd.as_raw_fd(),
+            c_lock_dir.as_ptr(),
+            &mut st,
+            libc::AT_SYMLINK_NOFOLLOW,
+        )
+    };
+    if rc == 0 {
+        return Ok(());
+    }
+    let err = std::io::Error::last_os_error();
+    if err.raw_os_error() != Some(libc::ENOENT) {
+        return Err(err).with_context(|| format!("cannot lstat {}", lock_dir_display.display()));
+    }
+
+    let init_name = format!(
+        ".tick.lock.init-{}-{}",
+        std::process::id(),
+        Uuid::new_v4().simple()
+    );
+    let init_display = dispatch_root(main_worktree).join(&init_name);
+    let c_init = std::ffi::CString::new(init_name)?;
+    if unsafe { libc::mkdirat(disp_fd.as_raw_fd(), c_init.as_ptr(), 0o700) } != 0 {
+        return Err(std::io::Error::last_os_error())
+            .with_context(|| format!("cannot create {}", init_display.display()));
+    }
+    let c_v2 = std::ffi::CString::new(TICK_LOCK_V2_FILE)?;
+    let c_ver = std::ffi::CString::new(TICK_LOCK_VERSION_FILE)?;
+    let discard = |dir: Option<&std::fs::File>| {
+        if let Some(dir) = dir {
+            unsafe { libc::unlinkat(dir.as_raw_fd(), c_v2.as_ptr(), 0) };
+            unsafe { libc::unlinkat(dir.as_raw_fd(), c_ver.as_ptr(), 0) };
+        }
+        unsafe { libc::unlinkat(disp_fd.as_raw_fd(), c_init.as_ptr(), libc::AT_REMOVEDIR) };
+    };
+    let dir_raw = unsafe {
+        libc::openat(
+            disp_fd.as_raw_fd(),
+            c_init.as_ptr(),
+            libc::O_RDONLY | libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC,
+            0,
+        )
+    };
+    if dir_raw < 0 {
+        let err = std::io::Error::last_os_error();
+        discard(None);
+        return Err(err).with_context(|| format!("cannot open {}", init_display.display()));
+    }
+    let init_dir = unsafe { std::fs::File::from_raw_fd(dir_raw) };
+    let v2_raw = unsafe {
+        libc::openat(
+            init_dir.as_raw_fd(),
+            c_v2.as_ptr(),
+            libc::O_RDWR | libc::O_CREAT | libc::O_EXCL | libc::O_NOFOLLOW | libc::O_CLOEXEC,
+            0o600,
+        )
+    };
+    if v2_raw < 0 {
+        let err = std::io::Error::last_os_error();
+        discard(Some(&init_dir));
+        return Err(err).with_context(|| {
+            format!(
+                "cannot create {}",
+                init_display.join(TICK_LOCK_V2_FILE).display()
+            )
+        });
+    }
+    drop(unsafe { std::fs::File::from_raw_fd(v2_raw) });
+    if let Err(e) = write_lock_version_file(&init_dir, &init_display) {
+        discard(Some(&init_dir));
+        return Err(e);
+    }
+    let rc = unsafe {
+        libc::renameat2(
+            disp_fd.as_raw_fd(),
+            c_init.as_ptr(),
+            disp_fd.as_raw_fd(),
+            c_lock_dir.as_ptr(),
+            libc::RENAME_NOREPLACE,
+        )
+    };
+    if rc != 0 {
+        let err = std::io::Error::last_os_error();
+        discard(Some(&init_dir));
+        if err.raw_os_error() == Some(libc::EEXIST) {
+            return Ok(());
+        }
+        return Err(err).with_context(|| {
+            format!(
+                "cannot move {} into place at {}",
+                init_display.display(),
+                lock_dir_display.display()
+            )
+        });
+    }
+    Ok(())
+}
+
+/// Undo an activation's `RENAME_EXCHANGE`: put the legacy regular-file inode
+/// back at `tick.lock`, then remove the staging `v2.lock` and directory. A
+/// failed exchange-back is reported, never ignored. It leaves the v2
+/// directory at `tick.lock` without its `version` marker, which every v2
+/// mutator refuses (and every pre-Slice-3 binary fails on with `EISDIR`), so
+/// nothing can lock either inode until `aida dispatch activate-lock` resumes.
+// trace:STORY-1917 trace:TASK-2344 | ai:claude
+fn rollback_activation_exchange(
+    disp_fd: &std::fs::File,
+    staging_dir: std::fs::File,
+    main_worktree: &Path,
+) -> Result<()> {
+    use std::os::fd::AsRawFd;
+    let c_staging = std::ffi::CString::new(TICK_LOCK_STAGING_DIR)?;
+    let c_lock_dir = std::ffi::CString::new(TICK_LOCK_FILE)?;
+    let c_v2 = std::ffi::CString::new(TICK_LOCK_V2_FILE)?;
+    let lock_dir_display = dispatch_root(main_worktree).join(TICK_LOCK_FILE);
+    let staging_display = dispatch_root(main_worktree).join(TICK_LOCK_STAGING_DIR);
+
+    #[cfg(test)]
+    let injected = TEST_FAIL_ROLLBACK_EXCHANGE.swap(false, std::sync::atomic::Ordering::SeqCst);
+    #[cfg(not(test))]
+    let injected = false;
+    let rc = if injected {
+        -1
+    } else {
+        unsafe {
+            libc::renameat2(
+                disp_fd.as_raw_fd(),
+                c_staging.as_ptr(),
+                disp_fd.as_raw_fd(),
+                c_lock_dir.as_ptr(),
+                libc::RENAME_EXCHANGE,
+            )
+        }
+    };
+    if rc != 0 {
+        let err = if injected {
+            std::io::Error::from_raw_os_error(libc::EIO)
+        } else {
+            std::io::Error::last_os_error()
+        };
+        bail!(
+            "rolling back the dispatch lock activation failed ({err}). {} is left as the v2 directory without its version marker, so every dispatch command refuses and pre-Slice-3 binaries fail with EISDIR; the legacy lock file is at {}. To finish or recover it, {LOCK_ACTIVATION_GUIDANCE}",
+            lock_dir_display.display(),
+            staging_display.display()
+        );
+    }
+    let mut problems = Vec::new();
+    if unsafe { libc::unlinkat(staging_dir.as_raw_fd(), c_v2.as_ptr(), 0) } != 0 {
+        problems.push(format!(
+            "cannot unlink {}: {}",
+            staging_display.join(TICK_LOCK_V2_FILE).display(),
+            std::io::Error::last_os_error()
+        ));
+    }
+    drop(staging_dir);
+    if unsafe { libc::unlinkat(disp_fd.as_raw_fd(), c_staging.as_ptr(), libc::AT_REMOVEDIR) } != 0 {
+        problems.push(format!(
+            "cannot remove {}: {}",
+            staging_display.display(),
+            std::io::Error::last_os_error()
+        ));
+    }
+    if !problems.is_empty() {
+        bail!(
+            "the dispatch lock activation was rolled back and {} is the legacy lock file again, but cleanup failed ({}); the next `aida dispatch activate-lock` removes the leftovers",
+            lock_dir_display.display(),
+            problems.join("; ")
+        );
+    }
+    Ok(())
+}
+
+/// Finish an activation that stopped after its `RENAME_EXCHANGE`: `tick.lock`
+/// is the v2 directory but has no `version` marker, and the legacy inode is
+/// at the staging name. Quiescence is proven again on that inode (no flock,
+/// no other open descriptor, full `/proc` coverage) before the marker is
+/// written and the legacy inode is unlinked. Any other shape is refused with
+/// manual recovery guidance, never guessed at.
+// trace:STORY-1917 trace:TASK-2344 | ai:claude
+fn resume_interrupted_activation(
+    disp_fd: &std::fs::File,
+    main_worktree: &Path,
+) -> Result<DispatchLock> {
+    use std::os::fd::{AsRawFd, FromRawFd};
+    use std::os::unix::fs::MetadataExt;
+    let lock_dir_display = dispatch_root(main_worktree).join(TICK_LOCK_FILE);
+    let staging_display = dispatch_root(main_worktree).join(TICK_LOCK_STAGING_DIR);
+    let c_staging = std::ffi::CString::new(TICK_LOCK_STAGING_DIR)?;
+    let c_lock_dir = std::ffi::CString::new(TICK_LOCK_FILE)?;
+    let uid = unsafe { libc::geteuid() };
+
+    let manual = format!(
+        "confirm no dispatch process runs, remove {} by hand, and run `aida dispatch activate-lock` again",
+        lock_dir_display.display()
+    );
+    let st = match fstatat_nofollow(disp_fd, &c_staging, &staging_display) {
+        Ok(st) => st,
+        Err(_) => bail!(
+            "{} has no version marker and no legacy lock file remains at {} to prove quiescence against, so the activation cannot be resumed; {manual}",
+            lock_dir_display.display(),
+            staging_display.display()
+        ),
+    };
+    if (st.st_mode & libc::S_IFMT) != libc::S_IFREG || st.st_nlink != 1 || st.st_uid != uid {
+        bail!(
+            "{} has no version marker and {} is not your singly-linked legacy lock file, so the activation cannot be resumed; {manual}",
+            lock_dir_display.display(),
+            staging_display.display()
+        );
+    }
+    let leg_raw = unsafe {
+        libc::openat(
+            disp_fd.as_raw_fd(),
+            c_staging.as_ptr(),
+            libc::O_RDWR | libc::O_NOFOLLOW | libc::O_NONBLOCK | libc::O_CLOEXEC,
+            0,
+        )
+    };
+    if leg_raw < 0 {
+        return Err(std::io::Error::last_os_error())
+            .with_context(|| format!("cannot open {}", staging_display.display()));
+    }
+    let leg_file = unsafe { std::fs::File::from_raw_fd(leg_raw) };
+    let leg_meta = leg_file.metadata()?;
+    if !leg_meta.is_file() || leg_meta.dev() != st.st_dev || leg_meta.ino() != st.st_ino {
+        bail!(
+            "{} changed identity during open (refused)",
+            staging_display.display()
+        );
+    }
+    if unsafe { libc::flock(leg_file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } != 0 {
+        bail!(
+            "the legacy lock file {} is still locked by another process; {LOCK_ACTIVATION_GUIDANCE}",
+            staging_display.display()
+        );
+    }
+    verify_sole_open_fd_for_inode(
+        leg_meta.dev(),
+        leg_meta.ino(),
+        leg_file.as_raw_fd(),
+        &staging_display,
+    )?;
+
+    let dir_raw = unsafe {
+        libc::openat(
+            disp_fd.as_raw_fd(),
+            c_lock_dir.as_ptr(),
+            libc::O_RDONLY | libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC,
+            0,
+        )
+    };
+    if dir_raw < 0 {
+        return Err(std::io::Error::last_os_error())
+            .with_context(|| format!("cannot open {}", lock_dir_display.display()));
+    }
+    let lock_dir = unsafe { std::fs::File::from_raw_fd(dir_raw) };
+    let dir_meta = lock_dir.metadata()?;
+    if !dir_meta.is_dir() || dir_meta.uid() != uid || (dir_meta.mode() & 0o7777) != 0o700 {
+        bail!(
+            "{} is not your 0700 v2 lock directory (refused); {manual}",
+            lock_dir_display.display()
+        );
+    }
+    let c_v2 = std::ffi::CString::new(TICK_LOCK_V2_FILE)?;
+    let v2_display = lock_dir_display.join(TICK_LOCK_V2_FILE);
+    let v2_raw = unsafe {
+        libc::openat(
+            lock_dir.as_raw_fd(),
+            c_v2.as_ptr(),
+            libc::O_RDWR | libc::O_NOFOLLOW | libc::O_NONBLOCK | libc::O_CLOEXEC,
+            0,
+        )
+    };
+    if v2_raw < 0 {
+        let err = std::io::Error::last_os_error();
+        bail!(
+            "cannot open {} to resume the activation ({err}); {manual}",
+            v2_display.display()
+        );
+    }
+    let v2_file = unsafe { std::fs::File::from_raw_fd(v2_raw) };
+    let v2_meta = v2_file.metadata()?;
+    if !v2_meta.is_file()
+        || v2_meta.nlink() != 1
+        || v2_meta.uid() != uid
+        || (v2_meta.mode() & 0o7777) != 0o600
+    {
+        bail!(
+            "{} is not your singly-linked 0600 lock file (refused); {manual}",
+            v2_display.display()
+        );
+    }
+    if unsafe { libc::flock(v2_file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } != 0 {
+        bail!(
+            "{} is held by another process; {LOCK_ACTIVATION_GUIDANCE}",
+            v2_display.display()
+        );
+    }
+    if lock_dir_has_version(disp_fd, &lock_dir_display)? {
+        bail!(
+            "another `aida dispatch activate-lock` finished while this one was resuming; run it again to confirm"
+        );
+    }
+    let now_st = fstatat_nofollow(disp_fd, &c_staging, &staging_display)?;
+    if now_st.st_dev != leg_meta.dev() || now_st.st_ino != leg_meta.ino() {
+        bail!(
+            "{} changed identity while resuming the activation (refused)",
+            staging_display.display()
+        );
+    }
+    write_lock_version_file(&lock_dir, &lock_dir_display)?;
+    if unsafe { libc::unlinkat(disp_fd.as_raw_fd(), c_staging.as_ptr(), 0) } != 0 {
+        let err = std::io::Error::last_os_error();
+        bail!(
+            "the dispatch lock is active, but the legacy lock file {} could not be removed ({err}); remove it by hand",
+            staging_display.display()
+        );
+    }
+    let _ = fs2::FileExt::unlock(&leg_file);
+    drop(leg_file);
+    Ok(DispatchLock(v2_file))
+}
+
+/// Explicit quiescent migration from a legacy Slice 1/2 regular-file
+/// `.aida/dispatch/tick.lock` to the Slice 3 directory `.aida/dispatch/tick.lock/`
+/// containing `v2.lock` and `version`. Run by `aida dispatch activate-lock`.
+///
+/// Ordinary mutation entrypoints (`acquire_dispatch_lock`) NEVER perform this
+/// replacement automatically. This helper:
+/// 1. Verifies `lstat` (`fstatat(..., AT_SYMLINK_NOFOLLOW)`) is a singly-linked
+///    regular file owned by the current UID with no special or world-write
+///    bits. Slice 1/2 created it with the umask's default mode (typically
+///    0644 or 0664), and the inode is discarded once activation commits.
+/// 2. Opens the file with `O_NOFOLLOW | O_NONBLOCK` and verifies exact
+///    pathname-to-handle `(st_dev, st_ino)` identity.
+/// 3. Acquires a non-blocking exclusive `flock` (`LOCK_EX | LOCK_NB`), refusing
+///    if any legacy mutator holds the lock, and re-verifies pathname-to-handle
+///    identity after locking.
+/// 4. Scans `/proc` via [`verify_sole_open_fd_for_inode`] to refuse if any
+///    other process (or descriptor) has opened the legacy inode before `flock`
+///    or if any same-UID process has unknown `/proc/<pid>/fd` coverage.
+/// 5. Creates a staging directory `.aida/dispatch/.tick.lock.v2-staging` (`0700`)
+///    containing `v2.lock` (`0600`) and acquires `flock(LOCK_EX | LOCK_NB)` on
+///    `v2.lock` BEFORE replacing `.aida/dispatch/tick.lock`.
+/// 6. Atomically exchanges `.tick.lock.v2-staging` and `tick.lock` via
+///    `renameat2(..., RENAME_EXCHANGE)`, eliminating any `ENOENT` window where
+///    an ordinary `acquire_dispatch_lock` could create `tick.lock` or enter `v2`
+///    before the second `/proc` scan completes.
+/// 7. Re-runs [`verify_sole_open_fd_for_inode`] while holding BOTH `leg_file`
+///    and `v2.lock`. If the second scan fails, [`rollback_activation_exchange`]
+///    swaps the **exact original regular-file inode `(st_dev, st_ino)`** back to
+///    `tick.lock` and unlinks the staging `v2.lock` before releasing it, so any
+///    concurrent `acquire_dispatch_lock` waiter aborts fail-closed. A failed
+///    rollback is reported and leaves the marker-less directory fenced.
+/// 8. On success, writes `tick.lock/version` (`"2\n"`), unlinks the swapped-out
+///    legacy regular file at `.tick.lock.v2-staging` (verifying `nlink == 0`),
+///    drops `leg_file`, and returns `DispatchLock(v2_file)`.
+///
+/// A `tick.lock` directory without its marker is an activation that stopped
+/// after step 6; it is finished by [`resume_interrupted_activation`].
+// trace:STORY-1917 trace:TASK-2344 | ai:agy
+pub(crate) fn activate_dispatch_v2_lock_quiescent(main_worktree: &Path) -> Result<DispatchLock> {
+    use std::os::fd::{AsRawFd, FromRawFd};
+    use std::os::unix::fs::MetadataExt;
+
+    let disp_fd = open_pinned_dispatch_subdir(main_worktree, None)?;
+    let lock_dir_display = dispatch_root(main_worktree).join(TICK_LOCK_FILE);
+    let c_lock_dir = std::ffi::CString::new(TICK_LOCK_FILE)?;
+
+    let pre_st = match fstatat_nofollow(&disp_fd, &c_lock_dir, &lock_dir_display) {
+        Ok(st) => st,
+        Err(e)
+            if e.downcast_ref::<std::io::Error>()
+                .and_then(|io| io.raw_os_error())
+                == Some(libc::ENOENT) =>
+        {
+            // No lock at all: nothing legacy to migrate from.
+            return acquire_dispatch_lock(main_worktree);
+        }
+        Err(e) => return Err(e),
+    };
+    if (pre_st.st_mode & libc::S_IFMT) == libc::S_IFDIR {
+        // trace:STORY-1917 trace:TASK-2344 | ai:claude
+        if lock_dir_has_version(&disp_fd, &lock_dir_display)? {
+            return acquire_dispatch_lock(main_worktree);
+        }
+        return resume_interrupted_activation(&disp_fd, main_worktree);
+    }
+    if (pre_st.st_mode & libc::S_IFMT) != libc::S_IFREG || pre_st.st_nlink != 1 {
+        bail!(
+            "legacy {} is not a singly-linked regular file (refused)",
+            lock_dir_display.display()
+        );
+    }
+    let uid = unsafe { libc::geteuid() };
+    if pre_st.st_uid != uid {
+        bail!(
+            "legacy {} is owned by uid {}, not current uid {uid}",
+            lock_dir_display.display(),
+            pre_st.st_uid
+        );
+    }
+    // trace:STORY-1917 trace:TASK-2344 | ai:claude
+    if (pre_st.st_mode & 0o7002) != 0 {
+        bail!(
+            "legacy {} has mode {:04o} (special or world-writable bits set); refused. Run `chmod 0600 {}` once no dispatch process runs, then retry",
+            lock_dir_display.display(),
+            pre_st.st_mode & 0o7777,
+            lock_dir_display.display()
+        );
+    }
+
+    let leg_raw = unsafe {
+        libc::openat(
+            disp_fd.as_raw_fd(),
+            c_lock_dir.as_ptr(),
+            libc::O_RDWR | libc::O_NOFOLLOW | libc::O_NONBLOCK | libc::O_CLOEXEC,
+            0,
+        )
+    };
+    if leg_raw < 0 {
+        let open_err = std::io::Error::last_os_error();
+        bail!(
+            "cannot open legacy {} for quiescent migration: {open_err}",
+            lock_dir_display.display()
+        );
+    }
+    let leg_file = unsafe { std::fs::File::from_raw_fd(leg_raw) };
+    let leg_meta = leg_file
+        .metadata()
+        .with_context(|| format!("cannot fstat legacy {}", lock_dir_display.display()))?;
+    if !leg_meta.is_file()
+        || leg_meta.nlink() != 1
+        || leg_meta.dev() != pre_st.st_dev
+        || leg_meta.ino() != pre_st.st_ino
+    {
+        bail!(
+            "legacy {} changed identity during open (pathname-to-handle mismatch; refused)",
+            lock_dir_display.display()
+        );
+    }
+
+    let flock_rc = unsafe { libc::flock(leg_file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) };
+    if flock_rc != 0 {
+        bail!(
+            "legacy {} is actively held by another process; refusing concurrent dispatch lock migration (fail-closed). {LOCK_ACTIVATION_GUIDANCE}",
+            lock_dir_display.display()
+        );
+    }
+
+    let post_lock_st = fstatat_nofollow(&disp_fd, &c_lock_dir, &lock_dir_display)?;
+    if post_lock_st.st_dev != leg_meta.dev()
+        || post_lock_st.st_ino != leg_meta.ino()
+        || post_lock_st.st_nlink != 1
+    {
+        bail!(
+            "legacy {} pathname-to-handle identity changed before migration (refused)",
+            lock_dir_display.display()
+        );
+    }
+
+    verify_sole_open_fd_for_inode(
+        leg_meta.dev(),
+        leg_meta.ino(),
+        leg_file.as_raw_fd(),
+        &lock_dir_display,
+    )?;
+
+    // Prepare pre-locked staging directory `.aida/dispatch/.tick.lock.v2-staging`.
+    cleanup_staging_lock_dir(&disp_fd);
+    let staging_display = dispatch_root(main_worktree).join(TICK_LOCK_STAGING_DIR);
+    let c_staging = std::ffi::CString::new(TICK_LOCK_STAGING_DIR)?;
+    let mk_st = unsafe { libc::mkdirat(disp_fd.as_raw_fd(), c_staging.as_ptr(), 0o700) };
+    if mk_st != 0 {
+        return Err(std::io::Error::last_os_error())
+            .with_context(|| format!("cannot create staging dir {}", staging_display.display()));
+    }
+    let st_dir_raw = unsafe {
+        libc::openat(
+            disp_fd.as_raw_fd(),
+            c_staging.as_ptr(),
+            libc::O_RDONLY | libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC,
+            0,
+        )
+    };
+    if st_dir_raw < 0 {
+        let err = std::io::Error::last_os_error();
+        cleanup_staging_lock_dir(&disp_fd);
+        return Err(err)
+            .with_context(|| format!("cannot open staging dir {}", staging_display.display()));
+    }
+    let staging_dir = unsafe { std::fs::File::from_raw_fd(st_dir_raw) };
+
+    let c_v2 = std::ffi::CString::new(TICK_LOCK_V2_FILE)?;
+    let v2_raw = unsafe {
+        libc::openat(
+            staging_dir.as_raw_fd(),
+            c_v2.as_ptr(),
+            libc::O_RDWR
+                | libc::O_CREAT
+                | libc::O_EXCL
+                | libc::O_NOFOLLOW
+                | libc::O_NONBLOCK
+                | libc::O_CLOEXEC,
+            0o600,
+        )
+    };
+    if v2_raw < 0 {
+        let err = std::io::Error::last_os_error();
+        drop(staging_dir);
+        cleanup_staging_lock_dir(&disp_fd);
+        return Err(err).with_context(|| {
+            format!(
+                "cannot create staging lock {}",
+                staging_display.join(TICK_LOCK_V2_FILE).display()
+            )
+        });
+    }
+    let v2_file = unsafe { std::fs::File::from_raw_fd(v2_raw) };
+    let v2_flock_rc = unsafe { libc::flock(v2_file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) };
+    if v2_flock_rc != 0 {
+        let err = std::io::Error::last_os_error();
+        drop(v2_file);
+        drop(staging_dir);
+        cleanup_staging_lock_dir(&disp_fd);
+        return Err(err).context("cannot lock staging v2.lock before exchange");
+    }
+
+    // Atomically exchange `.tick.lock.v2-staging` (directory with `v2.lock`
+    // already locked by us) and `tick.lock` (legacy regular file). There is no
+    // `ENOENT` window where `tick.lock` is missing.
+    let ex_rc = unsafe {
+        libc::renameat2(
+            disp_fd.as_raw_fd(),
+            c_staging.as_ptr(),
+            disp_fd.as_raw_fd(),
+            c_lock_dir.as_ptr(),
+            libc::RENAME_EXCHANGE,
+        )
+    };
+    if ex_rc != 0 {
+        let err = std::io::Error::last_os_error();
+        let _ = fs2::FileExt::unlock(&v2_file);
+        drop(v2_file);
+        drop(staging_dir);
+        cleanup_staging_lock_dir(&disp_fd);
+        return Err(err).with_context(|| {
+            format!(
+                "cannot atomically exchange {} with staging v2 directory",
+                lock_dir_display.display()
+            )
+        });
+    }
+
+    #[cfg(test)]
+    if let Some(hook) = TEST_POST_EXCHANGE_HOOK
+        .lock()
+        .ok()
+        .and_then(|mut g| g.take())
+    {
+        hook();
+    }
+
+    // Re-check `/proc` after `RENAME_EXCHANGE` while holding BOTH `leg_file`
+    // and `v2_file`. Because `tick.lock` is now a directory, no new old-binary
+    // `open("tick.lock", O_RDWR)` can succeed after the exchange. If a process
+    // opened `leg_file` in the narrow window immediately before the exchange
+    // (or `/proc` coverage is unknown), swap the exact original regular-file
+    // inode back to `tick.lock` and unlink the staging `v2.lock` before
+    // releasing `v2_file`; a failed rollback is reported, not swallowed.
+    // trace:STORY-1917 trace:TASK-2344 | ai:claude
+    let step = verify_sole_open_fd_for_inode(
+        leg_meta.dev(),
+        leg_meta.ino(),
+        leg_file.as_raw_fd(),
+        &lock_dir_display,
+    )
+    .and_then(|()| write_lock_version_file(&staging_dir, &lock_dir_display));
+    if let Err(step_err) = step {
+        let rollback = rollback_activation_exchange(&disp_fd, staging_dir, main_worktree);
+        let _ = fs2::FileExt::unlock(&v2_file);
+        drop(v2_file);
+        let _ = fs2::FileExt::unlock(&leg_file);
+        drop(leg_file);
+        return Err(match rollback {
+            Ok(()) => step_err,
+            Err(rollback_err) => step_err.context(format!("{rollback_err:#}")),
+        });
+    }
+
+    // Unlink the swapped-out legacy regular file from `.tick.lock.v2-staging`.
+    let un_rc = unsafe { libc::unlinkat(disp_fd.as_raw_fd(), c_staging.as_ptr(), 0) };
+    if un_rc != 0 {
+        let un_err = std::io::Error::last_os_error();
+        bail!(
+            "the dispatch lock is active, but the swapped-out legacy lock file {} could not be removed ({un_err}); remove it by hand",
+            staging_display.display()
+        );
+    }
+    let unlinked_meta = leg_file
+        .metadata()
+        .with_context(|| format!("cannot fstat unlinked {}", lock_dir_display.display()))?;
+    if unlinked_meta.nlink() != 0 {
+        bail!(
+            "legacy {} still has nlink={} after unlink (refused)",
+            lock_dir_display.display(),
+            unlinked_meta.nlink()
+        );
+    }
+
+    let _ = fs2::FileExt::unlock(&leg_file);
+    drop(leg_file);
+    drop(staging_dir);
+    Ok(DispatchLock(v2_file))
+}
+
 fn acquire_dispatch_lock(main_worktree: &Path) -> Result<DispatchLock> {
     use fs2::FileExt;
-    let dir = dispatch_root(main_worktree);
-    std::fs::create_dir_all(&dir)?;
-    let file = std::fs::OpenOptions::new()
-        .create(true)
-        .truncate(false)
-        .read(true)
-        .write(true)
-        .open(dir.join(TICK_LOCK_FILE))?;
+    use std::os::fd::{AsRawFd, FromRawFd};
+    use std::os::unix::fs::MetadataExt;
+
+    let disp_fd = open_pinned_dispatch_subdir(main_worktree, None)?;
+    let lock_dir_display = dispatch_root(main_worktree).join(TICK_LOCK_FILE);
+    let c_lock_dir = std::ffi::CString::new(TICK_LOCK_FILE)?;
+
+    // A fresh `.aida/dispatch/` root gets its `tick.lock` directory (with
+    // `version` already inside) atomically. An entry that already exists must
+    // be the v2 directory; a legacy regular-file `tick.lock` is NEVER
+    // silently unlinked/replaced by ordinary mutations.
+    // trace:STORY-1917 trace:TASK-2344 | ai:claude
+    create_lock_dir_if_absent(&disp_fd, main_worktree)?;
+
+    let dir_fd_raw = unsafe {
+        libc::openat(
+            disp_fd.as_raw_fd(),
+            c_lock_dir.as_ptr(),
+            libc::O_RDONLY | libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC,
+            0,
+        )
+    };
+    let (lock_dir, lock_dir_meta) = if dir_fd_raw >= 0 {
+        let dir = unsafe { std::fs::File::from_raw_fd(dir_fd_raw) };
+        let meta = dir
+            .metadata()
+            .with_context(|| format!("cannot stat {}", lock_dir_display.display()))?;
+        if !meta.is_dir() {
+            bail!(
+                "{} is not a directory (refused)",
+                lock_dir_display.display()
+            );
+        }
+        let uid = unsafe { libc::geteuid() };
+        if meta.uid() != uid {
+            bail!(
+                "{} is owned by uid {}, not current uid {uid}",
+                lock_dir_display.display(),
+                meta.uid()
+            );
+        }
+        if (meta.mode() & 0o7777) != 0o700 {
+            bail!(
+                "{} has mode {:04o}, expected 0700 (refused)",
+                lock_dir_display.display(),
+                meta.mode() & 0o7777
+            );
+        }
+        (dir, meta)
+    } else {
+        let err = std::io::Error::last_os_error();
+        match err.raw_os_error() {
+            Some(libc::ELOOP) => {
+                bail!("{} is a symlink (refused)", lock_dir_display.display());
+            }
+            Some(libc::ENOTDIR) => {
+                bail!(
+                    "legacy regular-file dispatch lock {} detected (written by an aida from before the v2 lock); automatic live lock replacement is refused to prevent split-brain with older dispatch processes. To migrate it, {LOCK_ACTIVATION_GUIDANCE}",
+                    lock_dir_display.display()
+                );
+            }
+            _ => {
+                return Err(err)
+                    .with_context(|| format!("cannot open {}", lock_dir_display.display()));
+            }
+        }
+    };
+
+    let v2_display = lock_dir_display.join(TICK_LOCK_V2_FILE);
+    let c_v2 = std::ffi::CString::new(TICK_LOCK_V2_FILE)?;
+    let v2_fd = unsafe {
+        libc::openat(
+            lock_dir.as_raw_fd(),
+            c_v2.as_ptr(),
+            libc::O_RDWR | libc::O_CREAT | libc::O_NOFOLLOW | libc::O_NONBLOCK | libc::O_CLOEXEC,
+            0o600,
+        )
+    };
+    if v2_fd < 0 {
+        let err = std::io::Error::last_os_error();
+        if err.raw_os_error() == Some(libc::ELOOP) {
+            bail!("{} is a symlink (refused)", v2_display.display());
+        }
+        return Err(err).with_context(|| format!("cannot open {}", v2_display.display()));
+    }
+    let file = unsafe { std::fs::File::from_raw_fd(v2_fd) };
+    let meta = file
+        .metadata()
+        .with_context(|| format!("cannot stat {}", v2_display.display()))?;
+    if !meta.is_file() || meta.nlink() != 1 {
+        bail!(
+            "{} is not a singly-linked regular file (refused)",
+            v2_display.display()
+        );
+    }
+    let uid = unsafe { libc::geteuid() };
+    if meta.uid() != uid {
+        bail!(
+            "{} is owned by uid {}, not current uid {uid}",
+            v2_display.display(),
+            meta.uid()
+        );
+    }
+    if (meta.mode() & 0o7777) != 0o600 {
+        bail!(
+            "{} has mode {:04o}, expected 0600 (refused)",
+            v2_display.display(),
+            meta.mode() & 0o7777
+        );
+    }
+    #[cfg(test)]
+    if let Some(hook) = TEST_PRE_FLOCK_V2_HOOK
+        .lock()
+        .ok()
+        .and_then(|mut g| g.take())
+    {
+        hook();
+    }
     file.lock_exclusive()
-        .context("failed to acquire .aida/dispatch/tick.lock")?;
+        .context("failed to acquire .aida/dispatch/tick.lock/v2.lock")?;
+
+    // Post-flock verification: ensure `v2.lock` was not unlinked and `tick.lock`
+    // was not rolled back to the legacy regular file while we waited for `flock`.
+    let post_meta = file
+        .metadata()
+        .with_context(|| format!("cannot stat {} after lock", v2_display.display()))?;
+    if post_meta.nlink() != 1 {
+        let _ = fs2::FileExt::unlock(&file);
+        bail!(
+            "{} was unlinked or rolled back while waiting for dispatch lock (refused)",
+            v2_display.display()
+        );
+    }
+    let cur_dir_st = fstatat_nofollow(&disp_fd, &c_lock_dir, &lock_dir_display)?;
+    if (cur_dir_st.st_mode & libc::S_IFMT) != libc::S_IFDIR
+        || cur_dir_st.st_dev != lock_dir_meta.dev()
+        || cur_dir_st.st_ino != lock_dir_meta.ino()
+    {
+        let _ = fs2::FileExt::unlock(&file);
+        bail!(
+            "{} directory identity changed or rolled back while waiting for dispatch lock (refused)",
+            lock_dir_display.display()
+        );
+    }
+
+    // The marker is never written here: a directory without it is an
+    // unfinished activation, and only `aida dispatch activate-lock` may finish
+    // it. trace:STORY-1917 trace:TASK-2344 | ai:claude
+    if let Err(ver_err) = verify_lock_version_file(&lock_dir, &lock_dir_display) {
+        let _ = fs2::FileExt::unlock(&file);
+        return Err(ver_err);
+    }
+
     Ok(DispatchLock(file))
 }
 
@@ -458,7 +1685,7 @@ fn open_or_create_pinned_child_dir(
 /// `openat(O_DIRECTORY | O_NOFOLLOW)` traversal so no symlink at `.aida`,
 /// `.aida/dispatch`, or `.aida/dispatch/<subdir>` is ever followed.
 // trace:STORY-1917 | ai:agy
-fn open_pinned_dispatch_subdir(
+pub(crate) fn open_pinned_dispatch_subdir(
     main_worktree: &Path,
     subdir: Option<&str>,
 ) -> Result<std::fs::File> {
@@ -600,6 +1827,13 @@ pub(crate) fn read_bounded_regular_file(
         );
     }
     if require_0600 {
+        if meta.nlink() != 1 {
+            bail!(
+                "{} has {} hard links, expected 1 (refused)",
+                path.display(),
+                meta.nlink()
+            );
+        }
         let mode = meta.mode() & 0o7777;
         if mode != 0o600 {
             bail!("{} has mode {:04o}, expected 0600", path.display(), mode);
@@ -671,10 +1905,86 @@ pub(crate) fn validate_prs(prs: &[u64]) -> Result<Vec<u64>> {
     Ok(out)
 }
 
+/// Resolve and verify the repository's default branch strictly from local
+/// `refs/remotes/origin/HEAD` without network calls, config writes, or
+/// conventional-branch (`main`/`master`) fallback (TASK-2341, R2).
+///
+/// Fails closed if `refs/remotes/origin/HEAD` is missing, unreadable, points
+/// outside `refs/remotes/origin/*`, or its target ref is dangling or does not
+/// resolve to a commit object.
+// trace:TASK-2341 | ai:agy
+pub(crate) fn resolve_verified_local_default_branch(main_worktree: &Path) -> Result<String> {
+    let out = aida_core::git_ops::host_git_command(main_worktree)
+        .args(["symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"])
+        .output()
+        .with_context(|| {
+            format!(
+                "cannot read local `refs/remotes/origin/HEAD` in {}",
+                main_worktree.display()
+            )
+        })?;
+    if !out.status.success() {
+        bail!(
+            "cannot verify repository default branch from local `refs/remotes/origin/HEAD` (symbolic-ref is missing or unreadable); set or refresh it locally with `git symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/<default>` or `git remote set-head origin -a`"
+        );
+    }
+    let raw = std::str::from_utf8(&out.stdout).map_err(|_| {
+        anyhow::anyhow!(
+            "cannot verify repository default branch from local `refs/remotes/origin/HEAD` (non-UTF-8 symbolic-ref target)"
+        )
+    })?;
+    let symref = raw.trim_end_matches(['\r', '\n']);
+    let Some(default_branch) = symref.strip_prefix("refs/remotes/origin/") else {
+        bail!(
+            "cannot verify repository default branch from local `refs/remotes/origin/HEAD` (points to non-origin target `{symref}`); set it to `refs/remotes/origin/<default>`"
+        );
+    };
+    if default_branch.is_empty()
+        || default_branch == "HEAD"
+        || default_branch.starts_with('/')
+        || default_branch.ends_with('/')
+        || default_branch.contains("..")
+        || default_branch.contains("//")
+        || default_branch
+            .chars()
+            .any(|c| c.is_whitespace() || c.is_control())
+    {
+        bail!(
+            "cannot verify repository default branch from local `refs/remotes/origin/HEAD` (malformed default branch `{default_branch}`)"
+        );
+    }
+
+    let target_commit_spec = format!("refs/remotes/origin/{default_branch}^{{commit}}");
+    let rev_out = aida_core::git_ops::host_git_command(main_worktree)
+        .args(["rev-parse", "--verify", "--quiet", &target_commit_spec])
+        .output()
+        .with_context(|| {
+            format!(
+                "cannot verify `{target_commit_spec}` in {}",
+                main_worktree.display()
+            )
+        })?;
+    let commit_sha = std::str::from_utf8(&rev_out.stdout)
+        .ok()
+        .map(str::trim)
+        .unwrap_or("");
+    if !rev_out.status.success()
+        || commit_sha.is_empty()
+        || !commit_sha.chars().all(|c| c.is_ascii_hexdigit())
+    {
+        bail!(
+            "cannot verify repository default branch from local `refs/remotes/origin/HEAD` (`refs/remotes/origin/{default_branch}` is missing, dangling, or does not resolve to a commit); refresh local remote refs or run `git symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/<default>`"
+        );
+    }
+
+    Ok(default_branch.to_string())
+}
+
 /// Validate a branch name (`^[A-Za-z0-9._/-]{1,80}$` plus git check-ref-format
-/// rules, forbidding `main` and `master`).
-// trace:STORY-1917 | ai:agy
-pub(crate) fn validate_branch(branch: &str) -> Result<String> {
+/// rules, forbidding `main`, `master`, `HEAD`, and the repository's verified
+/// local default branch from `refs/remotes/origin/HEAD`).
+// trace:STORY-1917 trace:TASK-2341 | ai:agy
+pub(crate) fn validate_branch(main_worktree: &Path, branch: &str) -> Result<String> {
     let b = branch.trim();
     if b.is_empty() || b.len() > 80 {
         bail!("invalid branch `{branch}`: length must be 1..=80 characters");
@@ -707,6 +2017,10 @@ pub(crate) fn validate_branch(branch: &str) -> Result<String> {
         .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '/' | '-'))
     {
         bail!("invalid branch `{b}`: only `[A-Za-z0-9._/-]` characters are allowed");
+    }
+    let default_branch = resolve_verified_local_default_branch(main_worktree)?;
+    if b == default_branch {
+        bail!("invalid branch `{b}`: cannot target the repository default branch `{default_branch}` directly");
     }
     Ok(b.to_string())
 }
@@ -946,7 +2260,7 @@ pub(crate) fn revalidate_request(
             ..
         } => {
             validate_pr(*pr)?;
-            validate_branch(branch)?;
+            validate_branch(main_worktree, branch)?;
             validate_spec_in_store(main_worktree, mandate_dir, spec, include_supervised)?;
             verify_frozen_brief(main_worktree, &req.id, brief_relpath, brief_sha256)?;
         }
@@ -959,7 +2273,7 @@ pub(crate) fn revalidate_request(
             ..
         } => {
             validate_lane_name(name)?;
-            validate_branch(branch)?;
+            validate_branch(main_worktree, branch)?;
             validate_spec_in_store(main_worktree, mandate_dir, spec, include_supervised)?;
             verify_frozen_brief(main_worktree, &req.id, brief_relpath, brief_sha256)?;
         }
@@ -1089,11 +2403,21 @@ pub(crate) fn check_request_authority(
         MandateState::Active(m) => m,
     };
 
+    // trace:TASK-2340 | ai:agy
     if !mandate.covers(Scope::Dispatch) {
-        bail!(
+        let msg = format!(
             "active mandate {} does not cover `dispatch`; stop it and start one with `aida mandate start --ship-held --scope dispatch` (or `--drive`)",
             mandate.id
         );
+        emit_dispatch_event(
+            main_worktree,
+            &mandate.id,
+            verb_name_of(verb),
+            &verb_subject_of(verb),
+            Outcome::Refused,
+            Some(msg.clone()),
+        );
+        bail!("{msg}");
     }
 
     let ships_pr = matches!(
@@ -1101,7 +2425,7 @@ pub(crate) fn check_request_authority(
         DispatchRequestVerb::Flow { no_ship: false, .. } | DispatchRequestVerb::Train { .. }
     );
     if ships_pr && !mandate.covers(Scope::ShipHeld) {
-        bail!(
+        let msg = format!(
             "active mandate {} does not cover `ship-held`, which `{}` requires",
             mandate.id,
             match verb {
@@ -1109,6 +2433,15 @@ pub(crate) fn check_request_authority(
                 _ => "flow",
             }
         );
+        emit_dispatch_event(
+            main_worktree,
+            &mandate.id,
+            verb_name_of(verb),
+            &verb_subject_of(verb),
+            Outcome::Refused,
+            Some(msg.clone()),
+        );
+        bail!("{msg}");
     }
 
     let gates =
@@ -1304,6 +2637,780 @@ fn emit_dispatch_event(
 
 // ── Store Operations (Submit / List / Show / Cancel) ────────────────────────
 
+/// One non-runnable (`needs-recovery`) record in `.aida/dispatch/recovery.json`
+/// (TASK-2344, R4 + Q1).
+// trace:STORY-1917 trace:TASK-2344 | ai:agy
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct RecoveryFenceEntry {
+    pub id: String,
+    pub reason: String,
+    pub evidence_fingerprint: String,
+    pub detected_at: DateTime<Utc>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub known_verb: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub known_target_key: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub known_dedupe_key: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub known_mandate_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub known_requested_at: Option<DateTime<Utc>>,
+    #[serde(default)]
+    pub blocks_all_admission: bool,
+}
+
+/// Private versioned recovery index persisted at `.aida/dispatch/recovery.json`
+/// (mode 0600, `#[serde(deny_unknown_fields)]`, bounded size/entry count).
+// trace:STORY-1917 trace:TASK-2344 | ai:agy
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct RecoveryIndex {
+    pub schema_version: u32,
+    pub updated_at: DateTime<Utc>,
+    pub entries: Vec<RecoveryFenceEntry>,
+}
+
+/// Shared bounded dispatch inventory combining valid `CompletePair` records and
+/// `RecoveryRequired` fences (`fences` + optional `global_block_reason`).
+// trace:STORY-1917 trace:TASK-2344 | ai:agy
+#[derive(Debug, Clone, Default)]
+pub(crate) struct DispatchInventory {
+    pub pairs: Vec<(DispatchRequest, DispatchResult)>,
+    pub fences: Vec<RecoveryFenceEntry>,
+    pub global_block_reason: Option<String>,
+}
+
+impl DispatchInventory {
+    pub(crate) fn find_fence(&self, id_or_prefix: &str) -> Option<&RecoveryFenceEntry> {
+        let needle = id_or_prefix.trim();
+        if needle.is_empty() {
+            return None;
+        }
+        self.fences
+            .iter()
+            .find(|f| f.id == needle || f.id.starts_with(needle))
+    }
+
+    /// Check whether a new request submission `(id, dedupe_key, target_key)` is
+    /// blocked by a global inventory error or a `RecoveryRequired` fence.
+    pub(crate) fn check_submission_fence(
+        &self,
+        id: &str,
+        dedupe_key: &str,
+        target_key: &str,
+    ) -> Result<()> {
+        if let Some(reason) = &self.global_block_reason {
+            bail!(
+                "dispatch inventory is in `needs-recovery` state and refuses new admissions: {reason}. {RECOVERY_GUIDANCE}"
+            );
+        }
+        for fence in &self.fences {
+            if fence.blocks_all_admission {
+                bail!(
+                    "dispatch record {} is in `needs-recovery` state with an unknown target/verb ({}), so no new dispatch request is admitted. {RECOVERY_GUIDANCE}",
+                    fence.id,
+                    fence.reason
+                );
+            }
+            if fence.id == id
+                || fence.known_dedupe_key.as_deref() == Some(dedupe_key)
+                || fence.known_target_key.as_deref() == Some(target_key)
+            {
+                bail!(
+                    "target `{target_key}` has a dispatch record {} in `needs-recovery` state ({}); automatic replay or replacement is refused. {RECOVERY_GUIDANCE}",
+                    fence.id,
+                    fence.reason
+                );
+            }
+        }
+        Ok(())
+    }
+
+    /// A recovery fence, other than `id`'s own, that reserves `target_key`.
+    /// Fences reserve their target at execution as well as at submission, so
+    /// a request queued before another record on its target lost evidence is
+    /// not claimed while that record awaits recovery.
+    // trace:STORY-1917 trace:TASK-2344 | ai:claude
+    pub(crate) fn execution_target_fence(
+        &self,
+        id: &str,
+        target_key: &str,
+    ) -> Option<&RecoveryFenceEntry> {
+        self.fences
+            .iter()
+            .find(|f| f.id != id && f.known_target_key.as_deref() == Some(target_key))
+    }
+
+    /// Check whether claiming/running new work is blocked globally by an unsafe
+    /// or unknown-verb `RecoveryRequired` fence, and return `(review_slots,
+    /// flow_slots, train_slots)` consumed by active `Running` records PLUS
+    /// known-verb `RecoveryRequired` records (without double-counting).
+    pub(crate) fn active_and_fenced_cap_usage(
+        &self,
+        exclude_id: Option<&str>,
+    ) -> Result<(usize, usize, usize)> {
+        if let Some(reason) = &self.global_block_reason {
+            bail!(
+                "dispatch inventory is in `needs-recovery` state and refuses new execution claims: {reason}. {RECOVERY_GUIDANCE}"
+            );
+        }
+        let mut reviews = 0usize;
+        let mut flows = 0usize;
+        let mut trains = 0usize;
+        for (req, res) in &self.pairs {
+            if exclude_id == Some(req.id.as_str()) {
+                continue;
+            }
+            if res.status == DispatchStatus::Running {
+                match req.action {
+                    DispatchVerb::Review { .. } => reviews += 1,
+                    DispatchVerb::Flow { .. } => flows += 1,
+                    DispatchVerb::Train { .. } => trains += 1,
+                    DispatchVerb::Take { .. } | DispatchVerb::Impl { .. } => {}
+                }
+            }
+        }
+        for fence in &self.fences {
+            if exclude_id == Some(fence.id.as_str()) {
+                continue;
+            }
+            if fence.blocks_all_admission {
+                bail!(
+                    "dispatch record {} is in `needs-recovery` state with an unknown verb/target ({}); refusing new execution claims. {RECOVERY_GUIDANCE}",
+                    fence.id,
+                    fence.reason
+                );
+            }
+            match fence.known_verb.as_deref() {
+                Some("review") => reviews += 1,
+                Some("flow") => flows += 1,
+                Some("train") => trains += 1,
+                Some("take") | Some("impl") => {}
+                _ => {
+                    bail!(
+                        "dispatch record {} is in `needs-recovery` state with unknown verb ({}); refusing new execution claims. {RECOVERY_GUIDANCE}",
+                        fence.id,
+                        fence.reason
+                    );
+                }
+            }
+        }
+        Ok((reviews, flows, trains))
+    }
+}
+
+enum HalfRead<T> {
+    Missing,
+    Valid(T),
+    Corrupt(String),
+}
+
+fn read_json_half<T: for<'de> Deserialize<'de>>(path: &Path, label: &str) -> HalfRead<T> {
+    match std::fs::symlink_metadata(path) {
+        Ok(m) if m.file_type().is_symlink() => {
+            return HalfRead::Corrupt(format!("{} is a symlink (refused)", path.display()));
+        }
+        Ok(_) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return HalfRead::Missing,
+        Err(e) => return HalfRead::Corrupt(format!("cannot stat {}: {e}", path.display())),
+    }
+    match read_bounded_regular_file(path, MAX_BRIEF_BYTES, true) {
+        Ok(bytes) => match serde_json::from_slice::<T>(&bytes) {
+            Ok(val) => HalfRead::Valid(val),
+            Err(err) => HalfRead::Corrupt(format!(
+                "malformed {label} JSON ({}): {err}",
+                path.display()
+            )),
+        },
+        Err(err) => HalfRead::Corrupt(format!("{err:#}")),
+    }
+}
+
+fn read_existing_recovery_index(
+    main_worktree: &Path,
+) -> std::result::Result<Option<RecoveryIndex>, String> {
+    let path = recovery_path(main_worktree);
+    match std::fs::symlink_metadata(&path) {
+        Ok(m) if m.file_type().is_symlink() => {
+            return Err(format!("{} is a symlink (refused)", path.display()));
+        }
+        Ok(_) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(format!("cannot stat {}: {e}", path.display())),
+    }
+    let bytes = read_bounded_regular_file(&path, MAX_RECOVERY_FILE_BYTES, true)
+        .map_err(|e| format!("invalid recovery index {}: {e:#}", path.display()))?;
+    let idx: RecoveryIndex = serde_json::from_slice(&bytes)
+        .map_err(|e| format!("malformed recovery index {}: {e}", path.display()))?;
+    if idx.schema_version != RECOVERY_SCHEMA_VERSION {
+        return Err(format!(
+            "unsupported recovery index schema_version {} in {} (expected {})",
+            idx.schema_version,
+            path.display(),
+            RECOVERY_SCHEMA_VERSION
+        ));
+    }
+    if idx.entries.len() > MAX_DISPATCH_INVENTORY_ENTRIES {
+        return Err(format!(
+            "recovery index {} exceeds maximum entry count ({})",
+            path.display(),
+            MAX_DISPATCH_INVENTORY_ENTRIES
+        ));
+    }
+    Ok(Some(idx))
+}
+
+fn scan_uuid_dir_entries(
+    dir_path: &Path,
+    stems: &mut BTreeSet<String>,
+    anomalies: &mut Vec<RecoveryFenceEntry>,
+    now: DateTime<Utc>,
+) -> std::result::Result<(), String> {
+    match std::fs::symlink_metadata(dir_path) {
+        Ok(m) if m.file_type().is_symlink() || !m.is_dir() => {
+            return Err(format!(
+                "{} is a symlink or not a directory (refused)",
+                dir_path.display()
+            ));
+        }
+        Ok(_) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => return Err(format!("cannot stat {}: {e}", dir_path.display())),
+    }
+    let entries = std::fs::read_dir(dir_path)
+        .map_err(|e| format!("cannot read directory {}: {e}", dir_path.display()))?;
+    let mut count = 0usize;
+    for entry in entries {
+        count += 1;
+        if count > MAX_DISPATCH_INVENTORY_ENTRIES {
+            return Err(format!(
+                "directory {} exceeds maximum entry limit ({MAX_DISPATCH_INVENTORY_ENTRIES})",
+                dir_path.display()
+            ));
+        }
+        let entry =
+            entry.map_err(|e| format!("unreadable entry in {}: {e}", dir_path.display()))?;
+        let path = entry.path();
+        let file_name = entry.file_name();
+        let Some(name_str) = file_name.to_str() else {
+            let reason = format!("non-UTF-8 entry in {}", dir_path.display());
+            anomalies.push(RecoveryFenceEntry {
+                id: format!(
+                    "invalid-entry:{}",
+                    sha256_hex(file_name.as_encoded_bytes())[..12].to_string()
+                ),
+                evidence_fingerprint: sha256_hex(reason.as_bytes()),
+                reason,
+                detected_at: now,
+                known_verb: None,
+                known_target_key: None,
+                known_dedupe_key: None,
+                known_mandate_id: None,
+                known_requested_at: None,
+                blocks_all_admission: true,
+            });
+            continue;
+        };
+        if name_str.starts_with('.') {
+            // Temporary atomic write files (`..<name>.tmp-<uuid>`) are ignored
+            // unless someone planted a symlink or subdirectory.
+            if let Ok(m) = std::fs::symlink_metadata(&path) {
+                if m.file_type().is_symlink() || m.is_dir() {
+                    let reason = format!(
+                        "unexpected hidden symlink or directory `{name_str}` in {}",
+                        dir_path.display()
+                    );
+                    anomalies.push(RecoveryFenceEntry {
+                        id: format!("invalid-entry:{name_str}"),
+                        evidence_fingerprint: sha256_hex(reason.as_bytes()),
+                        reason,
+                        detected_at: now,
+                        known_verb: None,
+                        known_target_key: None,
+                        known_dedupe_key: None,
+                        known_mandate_id: None,
+                        known_requested_at: None,
+                        blocks_all_admission: true,
+                    });
+                }
+            }
+            continue;
+        }
+        let stem_opt = path.file_stem().and_then(|s| s.to_str());
+        let ext_opt = path.extension().and_then(|s| s.to_str());
+        if let (Some(stem), Some("json")) = (stem_opt, ext_opt) {
+            if Uuid::parse_str(stem).is_ok() {
+                stems.insert(stem.to_string());
+                continue;
+            }
+        }
+        let reason = format!(
+            "unexpected non-UUID or non-JSON entry `{name_str}` in {}",
+            dir_path.display()
+        );
+        anomalies.push(RecoveryFenceEntry {
+            id: format!("invalid-entry:{name_str}"),
+            evidence_fingerprint: sha256_hex(reason.as_bytes()),
+            reason,
+            detected_at: now,
+            known_verb: None,
+            known_target_key: None,
+            known_dedupe_key: None,
+            known_mandate_id: None,
+            known_requested_at: None,
+            blocks_all_admission: true,
+        });
+    }
+    Ok(())
+}
+
+/// Inspect `.aida/dispatch/` without mutating disk or printing stderr warnings
+/// (used by read-only `list`, `show`, `load_all_pairs`, and `pending_request_count`).
+// trace:STORY-1917 trace:TASK-2344 | ai:agy
+pub(crate) fn inspect_dispatch_inventory_readonly(
+    main_worktree: &Path,
+) -> Result<DispatchInventory> {
+    let now = Utc::now();
+    let mut inv = DispatchInventory::default();
+
+    let existing_recovery = match read_existing_recovery_index(main_worktree) {
+        Ok(idx) => idx,
+        Err(err) => {
+            inv.global_block_reason = Some(err.clone());
+            inv.fences.push(RecoveryFenceEntry {
+                id: "recovery-index".to_string(),
+                evidence_fingerprint: sha256_hex(err.as_bytes()),
+                reason: err,
+                detected_at: now,
+                known_verb: None,
+                known_target_key: None,
+                known_dedupe_key: None,
+                known_mandate_id: None,
+                known_requested_at: None,
+                blocks_all_admission: true,
+            });
+            None
+        }
+    };
+    let mut prior_by_id: std::collections::BTreeMap<String, RecoveryFenceEntry> =
+        std::collections::BTreeMap::new();
+    if let Some(idx) = existing_recovery {
+        for entry in idx.entries {
+            prior_by_id.insert(entry.id.clone(), entry);
+        }
+    }
+
+    let mut stems = BTreeSet::new();
+    for prior_id in prior_by_id.keys() {
+        if Uuid::parse_str(prior_id).is_ok() {
+            stems.insert(prior_id.clone());
+        }
+    }
+    let mut dir_anomalies = Vec::new();
+    if let Err(err) = scan_uuid_dir_entries(
+        &requests_dir(main_worktree),
+        &mut stems,
+        &mut dir_anomalies,
+        now,
+    ) {
+        inv.global_block_reason = Some(err.clone());
+        return Ok(inv);
+    }
+    if let Err(err) = scan_uuid_dir_entries(
+        &results_dir(main_worktree),
+        &mut stems,
+        &mut dir_anomalies,
+        now,
+    ) {
+        inv.global_block_reason = Some(err.clone());
+        return Ok(inv);
+    }
+    for mut anomaly in dir_anomalies {
+        if let Some(prev) = prior_by_id.get(&anomaly.id) {
+            if prev.evidence_fingerprint == anomaly.evidence_fingerprint {
+                anomaly.detected_at = prev.detected_at;
+            }
+        }
+        inv.fences.push(anomaly);
+    }
+
+    for id in stems {
+        let req_half: HalfRead<DispatchRequest> =
+            read_json_half(&request_path(main_worktree, &id), "request");
+        let res_half: HalfRead<DispatchResult> =
+            read_json_half(&result_path(main_worktree, &id), "result");
+
+        let fence_opt: Option<RecoveryFenceEntry> = match (req_half, res_half) {
+            (HalfRead::Valid(req), HalfRead::Valid(res)) => {
+                if req.id != id || res.id != id {
+                    let reason = format!(
+                        "mismatched inner id on dispatch pair {id} (request.id={}, result.id={})",
+                        req.id, res.id
+                    );
+                    Some(RecoveryFenceEntry {
+                        id: id.clone(),
+                        evidence_fingerprint: sha256_hex(reason.as_bytes()),
+                        reason,
+                        detected_at: now,
+                        known_verb: Some(req.action.verb_str().to_string()),
+                        known_target_key: Some(req.target_key),
+                        known_dedupe_key: Some(req.dedupe_key),
+                        known_mandate_id: Some(req.mandate_id),
+                        known_requested_at: Some(req.requested_at),
+                        blocks_all_admission: true,
+                    })
+                } else if req.action.verb_str() != res.verb
+                    || req.target_key != res.target
+                    || req.dedupe_key != res.dedupe_key
+                {
+                    let reason = format!(
+                        "mismatched request/result metadata for {id} (req={}/{}/{}, res={}/{}/{})",
+                        req.action.verb_str(),
+                        req.target_key,
+                        req.dedupe_key,
+                        res.verb,
+                        res.target,
+                        res.dedupe_key
+                    );
+                    Some(RecoveryFenceEntry {
+                        id: id.clone(),
+                        evidence_fingerprint: sha256_hex(reason.as_bytes()),
+                        reason,
+                        detected_at: now,
+                        known_verb: None,
+                        known_target_key: None,
+                        known_dedupe_key: None,
+                        known_mandate_id: Some(req.mandate_id),
+                        known_requested_at: Some(req.requested_at),
+                        blocks_all_admission: true,
+                    })
+                } else if let Some(prev) = prior_by_id.get(&id) {
+                    // Once a record has been fenced in `recovery.json`, it stays
+                    // fenced until explicit operator recovery removes the fence.
+                    Some(prev.clone())
+                } else {
+                    inv.pairs.push((req, res));
+                    None
+                }
+            }
+            (HalfRead::Valid(req), HalfRead::Missing) => {
+                let valid_id = req.id == id
+                    && req.target_key == req.action.target_key()
+                    && req.dedupe_key == req.action.dedupe_key();
+                let reason = format!(
+                    "result file results/{id}.json is missing for request {id} ({} {}); automatic replay is refused (needs-recovery)",
+                    req.action.verb_str(),
+                    req.target_key
+                );
+                Some(RecoveryFenceEntry {
+                    id: id.clone(),
+                    evidence_fingerprint: sha256_hex(reason.as_bytes()),
+                    reason,
+                    detected_at: now,
+                    known_verb: valid_id.then(|| req.action.verb_str().to_string()),
+                    known_target_key: valid_id.then(|| req.target_key),
+                    known_dedupe_key: valid_id.then(|| req.dedupe_key),
+                    known_mandate_id: Some(req.mandate_id),
+                    known_requested_at: Some(req.requested_at),
+                    blocks_all_admission: !valid_id,
+                })
+            }
+            (HalfRead::Missing, HalfRead::Valid(res)) => {
+                let valid_verb = matches!(
+                    res.verb.as_str(),
+                    "flow" | "review" | "take" | "impl" | "train"
+                );
+                let valid_meta = res.id == id
+                    && valid_verb
+                    && !res.target.is_empty()
+                    && !res.dedupe_key.is_empty();
+                let reason = format!(
+                    "request file requests/{id}.json is missing for result {id} (status: {}, target: {}); automatic cleanup or rewrite is refused (needs-recovery)",
+                    res.status.as_str(),
+                    res.target
+                );
+                Some(RecoveryFenceEntry {
+                    id: id.clone(),
+                    evidence_fingerprint: sha256_hex(reason.as_bytes()),
+                    reason,
+                    detected_at: now,
+                    known_verb: valid_meta.then(|| res.verb),
+                    known_target_key: valid_meta.then(|| res.target),
+                    known_dedupe_key: valid_meta.then(|| res.dedupe_key),
+                    known_mandate_id: Some(res.mandate_id),
+                    known_requested_at: Some(res.requested_at),
+                    blocks_all_admission: !valid_meta,
+                })
+            }
+            (HalfRead::Valid(req), HalfRead::Corrupt(res_err)) => {
+                let valid_id = req.id == id
+                    && req.target_key == req.action.target_key()
+                    && req.dedupe_key == req.action.dedupe_key();
+                let reason = format!(
+                    "corrupt result file for request {id} ({} {}): {res_err} (needs-recovery)",
+                    req.action.verb_str(),
+                    req.target_key
+                );
+                Some(RecoveryFenceEntry {
+                    id: id.clone(),
+                    evidence_fingerprint: sha256_hex(reason.as_bytes()),
+                    reason,
+                    detected_at: now,
+                    known_verb: valid_id.then(|| req.action.verb_str().to_string()),
+                    known_target_key: valid_id.then(|| req.target_key),
+                    known_dedupe_key: valid_id.then(|| req.dedupe_key),
+                    known_mandate_id: Some(req.mandate_id),
+                    known_requested_at: Some(req.requested_at),
+                    blocks_all_admission: !valid_id,
+                })
+            }
+            (HalfRead::Corrupt(req_err), HalfRead::Valid(res)) => {
+                // Corrupt request means we cannot verify the canonical request
+                // definition; block new admissions while still reporting the
+                // result's verb/target for diagnostics.
+                let reason = format!(
+                    "corrupt request file for result {id} (status: {}): {req_err} (needs-recovery)",
+                    res.status.as_str()
+                );
+                Some(RecoveryFenceEntry {
+                    id: id.clone(),
+                    evidence_fingerprint: sha256_hex(reason.as_bytes()),
+                    reason,
+                    detected_at: now,
+                    known_verb: Some(res.verb),
+                    known_target_key: Some(res.target),
+                    known_dedupe_key: Some(res.dedupe_key),
+                    known_mandate_id: Some(res.mandate_id),
+                    known_requested_at: Some(res.requested_at),
+                    blocks_all_admission: true,
+                })
+            }
+            (HalfRead::Corrupt(req_err), HalfRead::Missing) => {
+                let reason =
+                    format!("corrupt orphan request file {id}: {req_err} (needs-recovery)");
+                Some(RecoveryFenceEntry {
+                    id: id.clone(),
+                    evidence_fingerprint: sha256_hex(reason.as_bytes()),
+                    reason,
+                    detected_at: now,
+                    known_verb: None,
+                    known_target_key: None,
+                    known_dedupe_key: None,
+                    known_mandate_id: None,
+                    known_requested_at: None,
+                    blocks_all_admission: true,
+                })
+            }
+            (HalfRead::Missing, HalfRead::Corrupt(res_err)) => {
+                let reason = format!("corrupt orphan result file {id}: {res_err} (needs-recovery)");
+                Some(RecoveryFenceEntry {
+                    id: id.clone(),
+                    evidence_fingerprint: sha256_hex(reason.as_bytes()),
+                    reason,
+                    detected_at: now,
+                    known_verb: None,
+                    known_target_key: None,
+                    known_dedupe_key: None,
+                    known_mandate_id: None,
+                    known_requested_at: None,
+                    blocks_all_admission: true,
+                })
+            }
+            (HalfRead::Corrupt(req_err), HalfRead::Corrupt(res_err)) => {
+                let reason = format!(
+                    "corrupt request and result files for {id}: {req_err}; {res_err} (needs-recovery)"
+                );
+                Some(RecoveryFenceEntry {
+                    id: id.clone(),
+                    evidence_fingerprint: sha256_hex(reason.as_bytes()),
+                    reason,
+                    detected_at: now,
+                    known_verb: None,
+                    known_target_key: None,
+                    known_dedupe_key: None,
+                    known_mandate_id: None,
+                    known_requested_at: None,
+                    blocks_all_admission: true,
+                })
+            }
+            (HalfRead::Missing, HalfRead::Missing) => prior_by_id.get(&id).cloned(),
+        };
+
+        if let Some(mut fence) = fence_opt {
+            if let Some(prev) = prior_by_id.get(&id) {
+                if prev.evidence_fingerprint == fence.evidence_fingerprint {
+                    fence.detected_at = prev.detected_at;
+                }
+                if fence.known_verb.is_none() {
+                    fence.known_verb = prev.known_verb.clone();
+                }
+                if fence.known_target_key.is_none() {
+                    fence.known_target_key = prev.known_target_key.clone();
+                }
+                if fence.known_dedupe_key.is_none() {
+                    fence.known_dedupe_key = prev.known_dedupe_key.clone();
+                }
+                if fence.known_mandate_id.is_none() {
+                    fence.known_mandate_id = prev.known_mandate_id.clone();
+                }
+                if fence.known_requested_at.is_none() {
+                    fence.known_requested_at = prev.known_requested_at;
+                }
+                fence.blocks_all_admission |= prev.blocks_all_admission;
+            }
+            inv.fences.push(fence);
+        }
+    }
+
+    inv.pairs
+        .sort_by(|(a, _), (b, _)| a.requested_at.cmp(&b.requested_at).then(a.id.cmp(&b.id)));
+    inv.fences.sort_by(|a, b| a.id.cmp(&b.id));
+    Ok(inv)
+}
+
+/// Reconcile `.aida/dispatch/` under `tick.lock`: persists `.aida/dispatch/recovery.json`
+/// (mode 0600) and emits one audit event per newly detected `(id, evidence_fingerprint)`.
+/// Never deletes or rewrites broken request/result files and never replays orphans.
+// trace:STORY-1917 trace:TASK-2344 | ai:agy
+pub(crate) fn reconcile_inventory_locked(
+    main_worktree: &Path,
+    now: DateTime<Utc>,
+) -> Result<DispatchInventory> {
+    let prior = read_existing_recovery_index(main_worktree).ok().flatten();
+    let mut prior_fingerprints = BTreeSet::new();
+    if let Some(idx) = &prior {
+        for e in &idx.entries {
+            prior_fingerprints.insert((e.id.clone(), e.evidence_fingerprint.clone()));
+        }
+    }
+
+    let inv = inspect_dispatch_inventory_readonly(main_worktree)?;
+    if inv.global_block_reason.is_none() {
+        for fence in &inv.fences {
+            let key = (fence.id.clone(), fence.evidence_fingerprint.clone());
+            if !prior_fingerprints.contains(&key) {
+                emit_dispatch_event(
+                    main_worktree,
+                    fence.known_mandate_id.as_deref().unwrap_or(""),
+                    fence.known_verb.as_deref().unwrap_or("recovery"),
+                    fence.known_target_key.as_deref().unwrap_or(&fence.id),
+                    Outcome::Refused,
+                    Some(fence.reason.clone()),
+                );
+            }
+        }
+        let rec_path = recovery_path(main_worktree);
+        if inv.fences.is_empty() {
+            if rec_path.exists() {
+                let _ = std::fs::remove_file(&rec_path);
+            }
+        } else {
+            let idx = RecoveryIndex {
+                schema_version: RECOVERY_SCHEMA_VERSION,
+                updated_at: now,
+                entries: inv.fences.clone(),
+            };
+            let body = serde_json::to_vec_pretty(&idx)?;
+            // The writer holds itself to the reader's bounds: an index the
+            // reader would reject is never written, so the last readable
+            // index (and every fence in it) stays in place and the refusal
+            // names the overflow. trace:STORY-1917 trace:TASK-2344 | ai:claude
+            check_recovery_index_bounds(idx.entries.len(), body.len())?;
+            write_private_atomic(&rec_path, &body)?;
+        }
+    }
+    Ok(inv)
+}
+
+/// The operator procedure for a `needs-recovery` record. Fences are sticky:
+/// removing a record's request or result file does not release one; only
+/// deleting that record's entry from `recovery.json` does.
+// trace:STORY-1917 trace:TASK-2344 | ai:claude
+pub(crate) const RECOVERY_GUIDANCE: &str = "To recover: find out what the record really did (`aida dispatch show <id>`, its log in .aida/dispatch/logs/<id>.log, and the PR or lane it targeted); stop every `aida dispatch serve`, `tick` and `run` process; move that record's files out of .aida/dispatch/requests/ and .aida/dispatch/results/; then delete only that record's entry from .aida/dispatch/recovery.json. Deleting the whole file releases every fence at once";
+
+/// Refuse a recovery index the reader ([`read_existing_recovery_index`])
+/// would reject for its entry count or size.
+// trace:STORY-1917 trace:TASK-2344 | ai:claude
+pub(crate) fn check_recovery_index_bounds(entries: usize, bytes: usize) -> Result<()> {
+    if entries > MAX_DISPATCH_INVENTORY_ENTRIES || bytes > MAX_RECOVERY_FILE_BYTES {
+        bail!(
+            "dispatch needs recovery for {entries} record(s), more than the recovery index can hold ({MAX_DISPATCH_INVENTORY_ENTRIES} entries, {MAX_RECOVERY_FILE_BYTES} bytes); dispatch refuses new work until records are recovered. {RECOVERY_GUIDANCE}"
+        );
+    }
+    Ok(())
+}
+
+/// True when an active Mandate record on disk covers [`Scope::Dispatch`]
+/// (used by the `mandate.dispatch_active` schedule predicate, R5).
+// trace:STORY-1917 | ai:agy
+pub(crate) fn dispatch_record_active(now: DateTime<Utc>) -> bool {
+    let Ok(dir) = mandate::mandate_dir() else {
+        return false;
+    };
+    let principal = crate::current_user_id(None);
+    let (valid, _) = mandate::load_valid(&dir, &principal, now);
+    matches!(
+        mandate::state_at(&valid, now),
+        MandateState::Active(m) if m.covers(Scope::Dispatch)
+    )
+}
+
+/// The `dispatch.pending` schedule predicate (R5): every validated `Pending`
+/// request, plus one per `needs-recovery` record and one for a blocked or
+/// unreadable inventory. Unknown state is never a false zero: it keeps the
+/// tick firing so the tick's own refusal reaches the schedule log. The count
+/// grants nothing; the tick re-checks authority itself.
+// trace:STORY-1917 | ai:agy
+// trace:STORY-1917 trace:TASK-2344 | ai:claude
+pub(crate) fn pending_request_count(main_worktree: &Path) -> i64 {
+    let inv = match inspect_dispatch_inventory_readonly(main_worktree) {
+        Ok(inv) => inv,
+        Err(e) => {
+            eprintln!(
+                "warning: dispatch.pending: the dispatch inventory is unreadable ({e:#}); counting it as pending so the dispatch tick reports why"
+            );
+            return 1;
+        }
+    };
+    let pending = inv
+        .pairs
+        .iter()
+        .filter(|(_, res)| res.status == DispatchStatus::Pending)
+        .count();
+    (pending + inv.fences.len() + usize::from(inv.global_block_reason.is_some())) as i64
+}
+
+/// Clean up only the exact unpublished files created by the current
+/// `submit_request` invocation while still holding `tick.lock` BEFORE
+/// `requests/<id>.json` is published (TASK-2344, R4).
+fn cleanup_unpublished_submission_locked(
+    main_worktree: &Path,
+    request_id: &str,
+    wrote_brief: bool,
+    wrote_result: bool,
+) {
+    if request_path(main_worktree, request_id).exists() {
+        return;
+    }
+    if wrote_result {
+        let res_p = result_path(main_worktree, request_id);
+        if let HalfRead::Valid(res) = read_json_half::<DispatchResult>(&res_p, "result") {
+            if res.id == request_id
+                && res.status == DispatchStatus::Pending
+                && res.worker_pid.is_none()
+                && res.claim_token.is_none()
+            {
+                let _ = std::fs::remove_file(&res_p);
+            }
+        }
+    }
+    if wrote_brief {
+        let _ = std::fs::remove_file(brief_path(main_worktree, request_id));
+    }
+}
+
 /// Outcome of `submit_request`: either a newly created request or an existing
 /// active (`Pending`/`Running`) request with the same `dedupe_key`.
 #[derive(Debug, Clone)]
@@ -1313,8 +3420,10 @@ pub(crate) struct SubmittedDispatch {
     pub deduplicated: bool,
 }
 
-/// Validate and persist a dispatch request under `.aida/dispatch/`.
-// trace:STORY-1917 | ai:agy
+/// Validate and persist a dispatch request under `.aida/dispatch/` using
+/// result-first publication (`briefs/<id>.md` -> `results/<id>.json` ->
+/// `requests/<id>.json`) under `tick.lock` (TASK-2344, R4).
+// trace:STORY-1917 trace:TASK-2344 | ai:agy
 pub(crate) fn submit_request(
     main_worktree: &Path,
     mandate_dir: &Path,
@@ -1324,8 +3433,10 @@ pub(crate) fn submit_request(
 ) -> Result<SubmittedDispatch> {
     let caller = check_request_authority(main_worktree, mandate_dir, principal, verb, now)?;
     let _lock = acquire_dispatch_lock(main_worktree)?;
+    let inv = reconcile_inventory_locked(main_worktree, now)?;
 
     let request_id = Uuid::new_v4().to_string();
+    let mut wrote_brief = false;
     let action_res: Result<DispatchVerb> = (|| match verb {
         DispatchRequestVerb::Flow {
             pr,
@@ -1354,7 +3465,7 @@ pub(crate) fn submit_request(
             vendor,
         } => {
             let pr = validate_pr(*pr)?;
-            let branch = validate_branch(branch)?;
+            let branch = validate_branch(main_worktree, branch)?;
             let spec = validate_spec_in_store(
                 main_worktree,
                 mandate_dir,
@@ -1362,6 +3473,7 @@ pub(crate) fn submit_request(
                 caller.mandate.include_supervised,
             )?;
             let (brief_relpath, brief_sha256) = freeze_brief(main_worktree, &request_id, brief)?;
+            wrote_brief = true;
             Ok(DispatchVerb::Take {
                 pr,
                 branch,
@@ -1379,7 +3491,7 @@ pub(crate) fn submit_request(
             vendor,
         } => {
             let name = validate_lane_name(name)?;
-            let branch = validate_branch(branch)?;
+            let branch = validate_branch(main_worktree, branch)?;
             let spec = validate_spec_in_store(
                 main_worktree,
                 mandate_dir,
@@ -1387,6 +3499,7 @@ pub(crate) fn submit_request(
                 caller.mandate.include_supervised,
             )?;
             let (brief_relpath, brief_sha256) = freeze_brief(main_worktree, &request_id, brief)?;
+            wrote_brief = true;
             Ok(DispatchVerb::Impl {
                 name,
                 branch,
@@ -1405,7 +3518,7 @@ pub(crate) fn submit_request(
     let action = match action_res {
         Ok(action) => action,
         Err(err) => {
-            let _ = std::fs::remove_file(brief_path(main_worktree, &request_id));
+            cleanup_unpublished_submission_locked(main_worktree, &request_id, wrote_brief, false);
             emit_dispatch_event(
                 main_worktree,
                 &caller.mandate.id,
@@ -1421,14 +3534,27 @@ pub(crate) fn submit_request(
     let dedupe_key = action.dedupe_key();
     let target_key = action.target_key();
 
+    // Check RecoveryRequired fences BEFORE deduplication or target admission (TASK-2344, R4).
+    if let Err(err) = inv.check_submission_fence(&request_id, &dedupe_key, &target_key) {
+        cleanup_unpublished_submission_locked(main_worktree, &request_id, wrote_brief, false);
+        emit_dispatch_event(
+            main_worktree,
+            &caller.mandate.id,
+            action.verb_str(),
+            &action.subject_label(),
+            Outcome::Refused,
+            Some(format!("{err:#}")),
+        );
+        return Err(err);
+    }
+
     // Check existing active requests for idempotency or target collision.
-    for (existing_req, existing_res) in load_all_pairs(main_worktree)? {
+    for (existing_req, existing_res) in inv.pairs {
         if !existing_res.status.is_active() {
             continue;
         }
         if existing_req.dedupe_key == dedupe_key {
-            // Clean up the newly frozen brief if we deduplicate onto an existing request.
-            let _ = std::fs::remove_file(brief_path(main_worktree, &request_id));
+            cleanup_unpublished_submission_locked(main_worktree, &request_id, wrote_brief, false);
             return Ok(SubmittedDispatch {
                 request: existing_req,
                 result: existing_res,
@@ -1436,7 +3562,7 @@ pub(crate) fn submit_request(
             });
         }
         if existing_req.target_key == target_key {
-            let _ = std::fs::remove_file(brief_path(main_worktree, &request_id));
+            cleanup_unpublished_submission_locked(main_worktree, &request_id, wrote_brief, false);
             let msg = format!(
                 "target `{target_key}` already has an active dispatch request {} ({}, status: {}); cancel it first with `aida dispatch cancel {}`",
                 existing_req.id,
@@ -1477,7 +3603,7 @@ pub(crate) fn submit_request(
         &req,
         caller.mandate.include_supervised,
     ) {
-        let _ = std::fs::remove_file(brief_path(main_worktree, &request_id));
+        cleanup_unpublished_submission_locked(main_worktree, &request_id, wrote_brief, false);
         bail!("internal validation check failed: {err:#}");
     }
 
@@ -1513,14 +3639,43 @@ pub(crate) fn submit_request(
         notified_at: None,
     };
 
-    write_private_atomic(
-        &request_path(main_worktree, &request_id),
-        &serde_json::to_vec_pretty(&req)?,
-    )?;
-    write_private_atomic(
-        &result_path(main_worktree, &request_id),
-        &serde_json::to_vec_pretty(&res)?,
-    )?;
+    let res_bytes = serde_json::to_vec_pretty(&res)?;
+    let req_bytes = serde_json::to_vec_pretty(&req)?;
+
+    #[cfg(test)]
+    if TEST_FAIL_SUBMIT_STAGE.with(|c| c.get()) == 1 {
+        cleanup_unpublished_submission_locked(main_worktree, &request_id, wrote_brief, false);
+        bail!("simulated submit failure before result write");
+    }
+
+    // 1. Write `results/<id>.json` (`Pending`) FIRST so no published
+    //    `requests/<id>.json` can ever exist without its companion result file.
+    if let Err(err) = write_private_atomic(&result_path(main_worktree, &request_id), &res_bytes) {
+        cleanup_unpublished_submission_locked(main_worktree, &request_id, wrote_brief, false);
+        return Err(err);
+    }
+
+    #[cfg(test)]
+    if TEST_SIMULATE_CRASH_AFTER_RESULT_WRITE.with(|c| c.get()) {
+        // Simulate an abrupt process crash after writing `results/<id>.json`
+        // before `requests/<id>.json` is written (skipping same-invocation
+        // cleanup so the next invocation sees an orphan Pending result).
+        bail!("simulated hard crash after result write before request write");
+    }
+
+    #[cfg(test)]
+    if TEST_FAIL_SUBMIT_STAGE.with(|c| c.get()) == 2 {
+        cleanup_unpublished_submission_locked(main_worktree, &request_id, wrote_brief, true);
+        bail!("simulated submit failure after result write before request write");
+    }
+
+    // 2. Publish `requests/<id>.json`. If this write fails within the same
+    //    invocation under `_lock`, roll back the just-written `results/<id>.json`
+    //    and `briefs/<id>.md`.
+    if let Err(err) = write_private_atomic(&request_path(main_worktree, &request_id), &req_bytes) {
+        cleanup_unpublished_submission_locked(main_worktree, &request_id, wrote_brief, true);
+        return Err(err);
+    }
 
     emit_dispatch_event(
         main_worktree,
@@ -1586,58 +3741,31 @@ pub(crate) fn resolve_pair(
 }
 
 /// Load all valid `(DispatchRequest, DispatchResult)` pairs sorted by
-/// `requested_at` ascending (then `id`).
-// trace:STORY-1917 | ai:agy
+/// `requested_at` ascending (then `id`) without mutating disk or spamming
+/// stderr warnings (TASK-2344, R4).
+// trace:STORY-1917 trace:TASK-2344 | ai:agy
 pub(crate) fn load_all_pairs(
     main_worktree: &Path,
 ) -> Result<Vec<(DispatchRequest, DispatchResult)>> {
-    let req_dir = requests_dir(main_worktree);
-    let entries = match std::fs::read_dir(&req_dir) {
-        Ok(entries) => entries,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
-        Err(e) => return Err(e).with_context(|| format!("cannot read {}", req_dir.display())),
-    };
-    let mut pairs = Vec::new();
-    for entry in entries {
-        let entry = match entry {
-            Ok(entry) => entry,
-            Err(err) => {
-                eprintln!(
-                    "warning: ignoring unreadable entry in {}: {err}",
-                    req_dir.display()
-                );
-                continue;
-            }
-        };
-        let path = entry.path();
-        let (Some(stem), Some(ext)) = (
-            path.file_stem().and_then(|s| s.to_str()),
-            path.extension().and_then(|s| s.to_str()),
-        ) else {
-            continue;
-        };
-        if ext != "json" || stem.starts_with('.') || Uuid::parse_str(stem).is_err() {
-            continue;
-        }
-        match load_pair(main_worktree, stem) {
-            Ok(pair) => pairs.push(pair),
-            Err(err) => {
-                eprintln!("warning: ignoring malformed dispatch record {stem}: {err:#}");
-            }
-        }
-    }
-    pairs.sort_by(|(a, _), (b, _)| a.requested_at.cmp(&b.requested_at).then(a.id.cmp(&b.id)));
-    Ok(pairs)
+    Ok(inspect_dispatch_inventory_readonly(main_worktree)?.pairs)
 }
 
 /// Cancel a `Pending` dispatch request.
-// trace:STORY-1917 | ai:agy
+// trace:STORY-1917 trace:TASK-2344 | ai:agy
 pub(crate) fn cancel_request(
     main_worktree: &Path,
     id_or_prefix: &str,
     now: DateTime<Utc>,
 ) -> Result<DispatchResult> {
     let _lock = acquire_dispatch_lock(main_worktree)?;
+    let inv = reconcile_inventory_locked(main_worktree, now)?;
+    if let Some(fence) = inv.find_fence(id_or_prefix) {
+        bail!(
+            "cannot cancel dispatch request {}: record is in `needs-recovery` state ({})",
+            fence.id,
+            fence.reason
+        );
+    }
     let (req, mut res) = resolve_pair(main_worktree, id_or_prefix)?;
     if res.status != DispatchStatus::Pending {
         bail!(
@@ -1681,7 +3809,14 @@ pub(crate) fn display_status(req: &DispatchRequest, res: &DispatchResult) -> Str
 }
 
 pub(crate) fn format_list_text(pairs: &[(DispatchRequest, DispatchResult)]) -> String {
-    if pairs.is_empty() {
+    format_inventory_list_text(pairs, &[])
+}
+
+pub(crate) fn format_inventory_list_text(
+    pairs: &[(DispatchRequest, DispatchResult)],
+    fences: &[RecoveryFenceEntry],
+) -> String {
+    if pairs.is_empty() && fences.is_empty() {
         return "No dispatch requests.\n".to_string();
     }
     let mut out = String::new();
@@ -1698,11 +3833,31 @@ pub(crate) fn format_list_text(pairs: &[(DispatchRequest, DispatchResult)]) -> S
             res.summary
         ));
     }
+    for fence in fences {
+        let short_id: String = fence.id.chars().take(8).collect();
+        let verb = fence.known_verb.as_deref().unwrap_or("unknown");
+        let target = fence.known_target_key.as_deref().unwrap_or("unknown");
+        let ts = fence
+            .known_requested_at
+            .unwrap_or(fence.detected_at)
+            .format("%Y-%m-%d %H:%M:%S");
+        out.push_str(&format!(
+            "{short_id}  {:<28}  {:<6}  {:<18}  {}  {}\n",
+            "needs-recovery", verb, target, ts, fence.reason
+        ));
+    }
     out
 }
 
 pub(crate) fn list_json(pairs: &[(DispatchRequest, DispatchResult)]) -> serde_json::Value {
-    let rows: Vec<serde_json::Value> = pairs
+    inventory_list_json(pairs, &[])
+}
+
+pub(crate) fn inventory_list_json(
+    pairs: &[(DispatchRequest, DispatchResult)],
+    fences: &[RecoveryFenceEntry],
+) -> serde_json::Value {
+    let mut rows: Vec<serde_json::Value> = pairs
         .iter()
         .map(|(req, res)| {
             serde_json::json!({
@@ -1725,6 +3880,25 @@ pub(crate) fn list_json(pairs: &[(DispatchRequest, DispatchResult)]) -> serde_js
             })
         })
         .collect();
+    for fence in fences {
+        rows.push(serde_json::json!({
+            "id": fence.id,
+            "verb": fence.known_verb.as_deref().unwrap_or("unknown"),
+            "target": fence.known_target_key.as_deref().unwrap_or("unknown"),
+            "dedupe_key": fence.known_dedupe_key,
+            "status": "needs-recovery",
+            "display_status": "needs-recovery",
+            "waiting_for_serve": false,
+            "requested_at": fence.known_requested_at.unwrap_or(fence.detected_at).to_rfc3339(),
+            "started_at": serde_json::Value::Null,
+            "finished_at": serde_json::Value::Null,
+            "mandate_id": fence.known_mandate_id,
+            "requester_grant_prefix": serde_json::Value::Null,
+            "summary": fence.reason,
+            "refusal_reason": fence.reason,
+            "recovery": fence,
+        }));
+    }
     serde_json::Value::Array(rows)
 }
 
@@ -1771,18 +3945,52 @@ pub(crate) fn handle_dispatch(action: &DispatchAction) -> Result<()> {
             Ok(())
         }
         DispatchAction::List { status, json } => {
-            let mut pairs = load_all_pairs(&main_worktree)?;
+            let inv = inspect_dispatch_inventory_readonly(&main_worktree)?;
+            let mut pairs = inv.pairs;
+            let fences = if status.is_none() {
+                inv.fences
+            } else {
+                Vec::new()
+            };
             if let Some(filter) = status {
                 pairs.retain(|(_, res)| res.status.matches_filter(*filter));
             }
             if *json {
-                println!("{}", serde_json::to_string_pretty(&list_json(&pairs))?);
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&inventory_list_json(&pairs, &fences))?
+                );
             } else {
-                print!("{}", format_list_text(&pairs));
+                print!("{}", format_inventory_list_text(&pairs, &fences));
             }
             Ok(())
         }
         DispatchAction::Show { id, json } => {
+            let inv = inspect_dispatch_inventory_readonly(&main_worktree)?;
+            if let Some(fence) = inv.find_fence(id) {
+                if *json {
+                    let payload = serde_json::json!({
+                        "display_status": "needs-recovery",
+                        "waiting_for_serve": false,
+                        "recovery": fence,
+                    });
+                    println!("{}", serde_json::to_string_pretty(&payload)?);
+                } else {
+                    println!("id:             {}", fence.id);
+                    println!(
+                        "verb:           {}",
+                        fence.known_verb.as_deref().unwrap_or("unknown")
+                    );
+                    println!(
+                        "target:         {}",
+                        fence.known_target_key.as_deref().unwrap_or("unknown")
+                    );
+                    println!("status:         needs-recovery");
+                    println!("detected_at:    {}", fence.detected_at.to_rfc3339());
+                    println!("summary:        {}", fence.reason);
+                }
+                return Ok(());
+            }
             let (req, res) = resolve_pair(&main_worktree, id)?;
             if *json {
                 let payload = serde_json::json!({
@@ -1832,6 +4040,21 @@ pub(crate) fn handle_dispatch(action: &DispatchAction) -> Result<()> {
         }
         DispatchAction::Serve { once, poll_ms } => {
             run_dispatch_serve(&main_worktree, &mandate_dir, *once, *poll_ms)
+        }
+        DispatchAction::ActivateLock => {
+            // trace:STORY-1917 trace:TASK-2344 | ai:claude
+            seat_authority::require_direct_human().map_err(|_| {
+                anyhow::anyhow!(
+                    "`aida dispatch activate-lock` needs a direct human session at an interactive TTY; run it from your terminal"
+                )
+            })?;
+            let lock = activate_dispatch_v2_lock_quiescent(&main_worktree)?;
+            drop(lock);
+            println!(
+                "dispatch lock active: {} is the v2 lock directory",
+                dispatch_root(&main_worktree).join(TICK_LOCK_FILE).display()
+            );
+            Ok(())
         }
         DispatchAction::Run { id, via_serve } => {
             let res = execute_one_request(&main_worktree, &mandate_dir, id, *via_serve, now)?;
@@ -2058,27 +4281,105 @@ pub(crate) fn check_serve_grant(
     Ok(grant)
 }
 
-/// Reap any `Running` request whose recorded `(worker_pid, worker_start)` is
-/// provably dead without having recorded completion. Caller must hold
+/// Tri-state worker identity probe (`Alive` / `Dead` / `Unknown`, TASK-2344 R4).
+///
+/// Reaping a `Running` worker requires positive `Probe::Dead` evidence
+/// (`/proc/<pid>/stat` is `NotFound`, process state is exited/zombie `Z`/`X`, or
+/// field-22 `starttime` ticks differ from the recorded `linux-starttime:<ticks>`).
+/// Missing `worker_pid`, missing/unrecognized `worker_start`, or `/proc` read
+/// errors (`EACCES`, etc.) return `Probe::Unknown` so callers retain the claim
+/// fail-closed rather than guessing.
+// trace:STORY-1917 trace:TASK-2344 | ai:agy
+pub(crate) fn probe_worker_identity(
+    worker_pid: Option<u32>,
+    worker_start: Option<&str>,
+) -> aida_core::process_probe::Probe {
+    use aida_core::process_probe::Probe;
+
+    #[cfg(test)]
+    if let Some(forced) = TEST_FORCE_WORKER_PROBE.with(|c| c.borrow().clone()) {
+        return forced;
+    }
+
+    let Some(pid) = worker_pid.filter(|&p| p > 0) else {
+        return Probe::Unknown("worker_pid is missing or zero".to_string());
+    };
+    let Some(raw_start) = worker_start.map(str::trim).filter(|s| !s.is_empty()) else {
+        return Probe::Unknown(format!("worker_start is missing for pid {pid}"));
+    };
+    let Some(rec_ticks_str) = raw_start.strip_prefix("linux-starttime:") else {
+        return Probe::Unknown(format!(
+            "worker_start `{raw_start}` for pid {pid} does not use `linux-starttime:<ticks>`"
+        ));
+    };
+    let Ok(recorded_ticks) = rec_ticks_str.parse::<u64>() else {
+        return Probe::Unknown(format!(
+            "worker_start `{raw_start}` for pid {pid} has invalid start ticks"
+        ));
+    };
+
+    let stat_path = format!("/proc/{pid}/stat");
+    let stat_str = match std::fs::read_to_string(&stat_path) {
+        Ok(s) => s,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            return Probe::Dead(format!("process {pid} no longer exists"));
+        }
+        Err(e) => {
+            return Probe::Unknown(format!("cannot read {stat_path}: {e}"));
+        }
+    };
+    let Some(rparen) = stat_str.rfind(')') else {
+        return Probe::Unknown(format!("malformed {stat_path} (missing `)`)"));
+    };
+    let mut fields = stat_str[rparen + 1..].split_whitespace();
+    let Some(state_tok) = fields.next() else {
+        return Probe::Unknown(format!("malformed {stat_path} (missing state field)"));
+    };
+    let state_char = state_tok.chars().next().unwrap_or('?');
+    // Field 3 was consumed by `fields.next()`; field 22 (`starttime`) is 18 fields later (`nth(18)`).
+    let Some(ticks_tok) = fields.nth(22 - 4) else {
+        return Probe::Unknown(format!(
+            "malformed {stat_path} (missing starttime field 22)"
+        ));
+    };
+    let Ok(live_ticks) = ticks_tok.parse::<u64>() else {
+        return Probe::Unknown(format!(
+            "malformed {stat_path} (non-numeric starttime `{ticks_tok}`)"
+        ));
+    };
+    if live_ticks != recorded_ticks {
+        return Probe::Dead(format!(
+            "pid {pid} start ticks changed ({recorded_ticks} -> {live_ticks}); PID was recycled"
+        ));
+    }
+    if matches!(state_char, 'Z' | 'X' | 'x') {
+        return Probe::Dead(format!(
+            "process {pid} is in exited/zombie state `{state_char}`"
+        ));
+    }
+    Probe::Alive
+}
+
+/// Reap any `CompletePair` `Running` request whose recorded `(worker_pid,
+/// worker_start)` has positive `Probe::Dead` evidence without having recorded
+/// completion. `Probe::Alive` and `Probe::Unknown` records (and all
+/// `RecoveryRequired` records) are retained untouched. Caller must hold
 /// `acquire_dispatch_lock`.
-// trace:STORY-1917 | ai:agy
+// trace:STORY-1917 trace:TASK-2344 | ai:agy
 fn reap_dead_workers_locked(main_worktree: &Path, now: DateTime<Utc>) -> Result<usize> {
+    let inv = reconcile_inventory_locked(main_worktree, now)?;
     let mut reaped = 0usize;
-    for (req, mut res) in load_all_pairs(main_worktree)? {
+    for (req, mut res) in inv.pairs {
         if res.status != DispatchStatus::Running {
             continue;
         }
-        let alive = match res.worker_pid {
-            Some(pid) => {
-                crate::process_probe::process_identity_is_alive(pid, res.worker_start.as_deref())
-            }
-            None => false,
+        let dead_reason = match probe_worker_identity(res.worker_pid, res.worker_start.as_deref()) {
+            aida_core::process_probe::Probe::Alive
+            | aida_core::process_probe::Probe::Unknown(_) => continue,
+            aida_core::process_probe::Probe::Dead(why) => why,
         };
-        if alive {
-            continue;
-        }
         let reason = format!(
-            "worker (pid {:?}) exited unexpectedly without recording completion",
+            "worker (pid {:?}) exited unexpectedly without recording completion ({dead_reason})",
             res.worker_pid
         );
         res.status = DispatchStatus::Failed;
@@ -2175,21 +4476,10 @@ pub(crate) fn claim_and_dispatch_pass(
     let _ = clean_stale_git_config_lock(main_worktree, std::time::SystemTime::from(now));
     let _lock = acquire_dispatch_lock(main_worktree)?;
     let reaped = reap_dead_workers_locked(main_worktree, now)?;
-    let pairs = load_all_pairs(main_worktree)?;
-
-    let mut running_reviews = 0usize;
-    let mut running_flows = 0usize;
-    let mut running_trains = 0usize;
-    for (req, res) in &pairs {
-        if res.status == DispatchStatus::Running {
-            match req.action {
-                DispatchVerb::Review { .. } => running_reviews += 1,
-                DispatchVerb::Flow { .. } => running_flows += 1,
-                DispatchVerb::Train { .. } => running_trains += 1,
-                DispatchVerb::Take { .. } | DispatchVerb::Impl { .. } => {}
-            }
-        }
-    }
+    let inv = reconcile_inventory_locked(main_worktree, now)?;
+    let (mut running_reviews, mut running_flows, mut running_trains) =
+        inv.active_and_fenced_cap_usage(None)?;
+    let pairs = inv.pairs.clone();
 
     let mut summary = DispatchPassSummary {
         reaped,
@@ -2205,6 +4495,12 @@ pub(crate) fn claim_and_dispatch_pass(
         }
         if req.action.requires_serve() && !via_serve {
             summary.waiting_for_serve += 1;
+            continue;
+        }
+        if inv
+            .execution_target_fence(&req.id, &req.target_key)
+            .is_some()
+        {
             continue;
         }
         match req.action {
@@ -2294,10 +4590,21 @@ pub(crate) fn claim_and_dispatch_pass(
                         res.summary = reason.clone();
                         res.refusal_reason = Some(reason);
                         res.notified_at = notify_advisor_outcome(main_worktree, &req, &res, now);
-                        let _ = write_private_atomic(
+                        // A lost Failed write would leave a Running claim with
+                        // no worker that the reaper cannot judge, holding a cap
+                        // slot forever: stop the pass and name the record.
+                        // trace:STORY-1917 trace:TASK-2344 | ai:claude
+                        write_private_atomic(
                             &result_path(main_worktree, &req.id),
                             &serde_json::to_vec_pretty(&res)?,
-                        );
+                        )
+                        .with_context(|| {
+                            format!(
+                                "dispatch request {} was left Running with no worker after its worker was killed ({reason}); the Failed result could not be written. {RECOVERY_GUIDANCE}",
+                                req.id,
+                                reason = res.summary
+                            )
+                        })?;
                         continue;
                     }
                 }
@@ -2523,6 +4830,13 @@ pub(crate) fn execute_one_request_with_token(
     // BEFORE reading/validating the request or recording any refusal.
     let (mut res, claim, raw_req_res) = {
         let _lock = acquire_dispatch_lock(main_worktree)?;
+        let inv = reconcile_inventory_locked(main_worktree, now)?;
+        if let Some(fence) = inv.find_fence(id) {
+            bail!(
+                "dispatch request {id} is in `needs-recovery` state and cannot be executed: {}. {RECOVERY_GUIDANCE}",
+                fence.reason
+            );
+        }
 
         let res_bytes =
             read_bounded_regular_file(&result_path(main_worktree, id), MAX_BRIEF_BYTES, true)?;
@@ -2586,11 +4900,10 @@ pub(crate) fn execute_one_request_with_token(
                 };
                 let pid_matches = recorded_pid == self_pid && res.worker_start == self_start;
                 if !pid_matches {
-                    let recorded_alive = crate::process_probe::process_identity_is_alive(
-                        recorded_pid,
-                        res.worker_start.as_deref(),
-                    );
-                    if !recorded_alive {
+                    if matches!(
+                        probe_worker_identity(Some(recorded_pid), res.worker_start.as_deref()),
+                        aida_core::process_probe::Probe::Dead(_)
+                    ) {
                         let _ = reap_dead_workers_locked(main_worktree, now);
                     }
                     bail!(
@@ -2607,21 +4920,19 @@ pub(crate) fn execute_one_request_with_token(
             }
             DispatchStatus::Pending => {
                 let _ = reap_dead_workers_locked(main_worktree, now);
+                let inv_after_reap = reconcile_inventory_locked(main_worktree, now)?;
+                let (running_reviews, running_flows, running_trains) =
+                    inv_after_reap.active_and_fenced_cap_usage(Some(id))?;
                 // Enforce concurrency caps on direct `aida dispatch run <id>` as well.
                 if let Ok(ref req) = raw_req_res {
-                    let pairs = load_all_pairs(main_worktree)?;
-                    let mut running_reviews = 0usize;
-                    let mut running_flows = 0usize;
-                    let mut running_trains = 0usize;
-                    for (other_req, other_res) in &pairs {
-                        if other_req.id != id && other_res.status == DispatchStatus::Running {
-                            match other_req.action {
-                                DispatchVerb::Review { .. } => running_reviews += 1,
-                                DispatchVerb::Flow { .. } => running_flows += 1,
-                                DispatchVerb::Train { .. } => running_trains += 1,
-                                DispatchVerb::Take { .. } | DispatchVerb::Impl { .. } => {}
-                            }
-                        }
+                    if let Some(fence) = inv_after_reap.execution_target_fence(id, &req.target_key)
+                    {
+                        bail!(
+                            "cannot run dispatch request {id}: target `{}` is reserved by dispatch record {} in `needs-recovery` state ({}). {RECOVERY_GUIDANCE}",
+                            req.target_key,
+                            fence.id,
+                            fence.reason
+                        );
                     }
                     match req.action {
                         DispatchVerb::Review { .. }
@@ -2982,12 +5293,23 @@ pub(crate) fn execute_one_request_with_token(
             *vendor,
             now,
         ),
-        DispatchVerb::Flow { .. } | DispatchVerb::Train { .. } => RunnerOutcome::Refused {
-            reason: format!(
-                "verb `{}` runner is not enabled in this build (scheduled for Slice 3)",
-                req.action.verb_str()
-            ),
-        },
+        DispatchVerb::Flow {
+            pr,
+            no_ship,
+            vendor,
+        } => dispatch_flow::run_flow_verb(
+            main_worktree,
+            mandate_dir,
+            &req,
+            &claim,
+            *pr,
+            *no_ship,
+            *vendor,
+            now,
+        ),
+        DispatchVerb::Train { prs } => {
+            dispatch_flow::run_train_verb(main_worktree, mandate_dir, &req, &claim, prs, now)
+        }
     };
 
     match runner_outcome {
@@ -3038,7 +5360,7 @@ pub(crate) fn execute_one_request_with_token(
 }
 
 #[derive(Debug)]
-enum RunnerOutcome {
+pub(crate) enum RunnerOutcome {
     Done {
         summary: String,
         spawned_session: Option<String>,
@@ -3053,13 +5375,21 @@ enum RunnerOutcome {
     },
 }
 
-/// Verify under `tick.lock` that the on-disk result for `id` is still `Running`
-/// and owned by `claim` before allowing a terminal state write (F2).
+/// Verify under `tick.lock` that the on-disk result for `id` is still `Running`,
+/// not fenced in `.aida/dispatch/recovery.json`, and owned by `claim` before
+/// allowing a terminal state write (F2, TASK-2344 R4).
 pub(crate) fn verify_claim_locked(
     main_worktree: &Path,
     id: &str,
     claim: &WorkerClaim,
 ) -> Result<()> {
+    let inv = reconcile_inventory_locked(main_worktree, Utc::now())?;
+    if let Some(fence) = inv.find_fence(id) {
+        bail!(
+            "fenced result transition refused for {id}: record is in `needs-recovery` state ({})",
+            fence.reason
+        );
+    }
     let on_disk_bytes =
         read_bounded_regular_file(&result_path(main_worktree, id), MAX_BRIEF_BYTES, true)?;
     let on_disk: DispatchResult = serde_json::from_slice(&on_disk_bytes)
@@ -3708,6 +6038,9 @@ std::thread_local! {
     pub(crate) static TEST_AIDA_BIN: std::cell::RefCell<Option<PathBuf>> = const { std::cell::RefCell::new(None) };
     pub(crate) static TEST_AGENT_BIN: std::cell::RefCell<Option<PathBuf>> = const { std::cell::RefCell::new(None) };
     pub(crate) static TEST_FAIL_POST_SPAWN_PUBLICATION: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    pub(crate) static TEST_FAIL_SUBMIT_STAGE: std::cell::Cell<u8> = const { std::cell::Cell::new(0) };
+    pub(crate) static TEST_SIMULATE_CRASH_AFTER_RESULT_WRITE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    pub(crate) static TEST_FORCE_WORKER_PROBE: std::cell::RefCell<Option<aida_core::process_probe::Probe>> = const { std::cell::RefCell::new(None) };
 }
 
 fn resolve_aida_bin() -> Result<PathBuf> {
@@ -3737,7 +6070,7 @@ fn resolve_vendor_bin(vendor: DispatchVendor) -> PathBuf {
 /// Runs only under `aida dispatch serve` so it inherits the human advisor's
 /// bound seat grant directly.
 // trace:STORY-1917 | ai:agy
-fn run_review_verb(
+pub(crate) fn run_review_verb(
     main_worktree: &Path,
     req: &DispatchRequest,
     pr: u64,
@@ -4082,8 +6415,22 @@ fn run_impl_verb(
         };
     }
 
-    if let Err(err) = prepare_lane_worktree(main_worktree, &wt_path, branch, "main", "origin/main")
-    {
+    let default_branch = match resolve_verified_local_default_branch(main_worktree) {
+        Ok(b) => b,
+        Err(err) => {
+            return RunnerOutcome::Refused {
+                reason: format!("default branch verification failed for `{name}`: {err:#}"),
+            };
+        }
+    };
+    let default_remote_ref = format!("origin/{default_branch}");
+    if let Err(err) = prepare_lane_worktree(
+        main_worktree,
+        &wt_path,
+        branch,
+        &default_branch,
+        &default_remote_ref,
+    ) {
         return RunnerOutcome::Failed {
             summary: format!("impl worktree setup failed for `{name}`: {err:#}"),
             exit_code: None,
@@ -4205,6 +6552,10 @@ mod story_1917_dispatch_request_tests;
 #[cfg(test)]
 #[path = "tests/story_1917_dispatch_exec_tests.rs"]
 mod story_1917_dispatch_exec_tests;
+
+#[cfg(test)]
+#[path = "tests/story_1917_dispatch_flow_schedule_tests.rs"]
+mod story_1917_dispatch_flow_schedule_tests;
 
 /// Queue and inspect typed dispatch requests (`flow`, `review`, `take`,
 /// `impl`, `train`) from a sandboxed advisor seat for unsandboxed execution.
