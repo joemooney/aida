@@ -1125,8 +1125,10 @@ fn explicit_reconciliation_refreshes_routes_and_render_stays_read_only() {
         include_str!("../../status_awaiting.rs")
     )
     .replace("\r\n", "\n");
+    // The collector body lives behind the mail-facts seam; the `_inner`
+    // wrapper only supplies production facts. trace:TASK-2345 | ai:claude
     let awaiting = lib_source
-        .split("fn collect_awaiting_report_inner(")
+        .split("fn collect_awaiting_report_with_mail_facts(")
         .nth(1)
         // The collector body ends at its closing brace in column 0.
         .and_then(|body| body.split("\n}\n").next())

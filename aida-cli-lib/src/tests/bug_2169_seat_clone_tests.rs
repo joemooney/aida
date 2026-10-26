@@ -1701,3 +1701,46 @@ fn auto_queue_reports_a_failed_origin_lookup_as_needs_attention() {
         );
     }
 }
+
+/// TASK-2356: other `has_remote(.., "origin")` callers that can run from a
+/// seat clone read host git's refusal there as "no origin". The awaiting-
+/// commit hint keeps "open a PR" for a seat clone, and the mirror sync
+/// reports the failed lookup instead of skipping as if origin were missing.
+// trace:TASK-2356 | ai:claude
+#[test]
+fn seat_clone_origin_callers_never_read_a_refusal_as_no_origin() {
+    use crate::status_prs::origin_hint_present;
+    let fx = fixture();
+    assert!(origin_hint_present(&fx.main));
+    let bare = fx.root.join("no-remote");
+    std::fs::create_dir_all(&bare).unwrap();
+    git_ok(&bare, &["init", "-q"]);
+    assert!(
+        !origin_hint_present(&bare),
+        "a confirmed absence is local-only"
+    );
+
+    let clone = fx.root.join("seats").join("aida-seat-aida-t2356");
+    create(&fx.main, &clone, "feat", "origin/main").unwrap();
+    let clone = clone.canonicalize().unwrap();
+    assert!(
+        origin_hint_present(&clone),
+        "unverified clone keeps the PR hint"
+    );
+    write_lease(&fx.main, &clone, "clone");
+    assert!(
+        origin_hint_present(&clone),
+        "verified clone asks its host main"
+    );
+
+    std::fs::create_dir_all(clone.join(".aida")).unwrap();
+    std::fs::write(
+        clone.join(".aida/config.toml"),
+        "[store.sync]\nmirror_remotes = [\"mirror\"]\n",
+    )
+    .unwrap();
+    let err = crate::remote_create::mirror_sync_hubs(&clone)
+        .expect_err("a refused origin lookup is an error, not a skip")
+        .to_string();
+    assert!(err.contains("remote get-url origin"), "{err}");
+}

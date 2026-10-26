@@ -294,27 +294,89 @@ pub(crate) fn mailbox_line_body(m: &aida_core::mailbox::Message) -> String {
 // trace:TASK-818 | ai:claude
 // trace:BUG-1592 | ai:claude
 pub(crate) fn inbox_identities() -> Vec<String> {
-    // A raw child can inherit a parent's launch aliases. Its persisted
-    // process/session binding wins for private mail, as on the sender side.
-    // trace:STORY-1843 | ai:codex
-    let own_session = crate::agent_handle::current_session_entry_for_cwd();
-    let own_handle = own_session.as_ref().and_then(|e| e.name.clone());
-    let user = current_user_id(None);
+    inbox_identities_from_facts(&MailIdentityFacts::collect())
+}
+
+/// Everything [`inbox_identities`] reads from the process, gathered once:
+/// the persisted session binding, env aliases, user and role. Production
+/// collects real facts; tests construct them, so the identity policy is
+/// asserted without depending on who runs the suite (the real process
+/// ancestry and registry otherwise decide the session binding).
+// trace:TASK-2345 | ai:claude
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct MailIdentityFacts {
+    /// Handle of this process's persisted session binding.
+    pub(crate) own_handle: Option<String>,
+    /// Vendor recorded on that same binding.
+    pub(crate) own_vendor: Option<String>,
+    /// `current_user_id(None)`.
+    pub(crate) user: String,
+    /// The user is an intentional person in the people catalog. Only
+    /// consulted when a bound handle differs from the user.
+    pub(crate) user_is_known_person: bool,
+    /// Non-empty handle/launch-name env values, in precedence order.
+    pub(crate) aliases: Vec<String>,
+    /// Raw non-empty `AIDA_SESSION_ROLE`.
+    pub(crate) role: Option<String>,
+    /// Raw non-empty `AIDA_AGENT_TYPE`.
+    pub(crate) env_vendor: Option<String>,
+}
+
+impl MailIdentityFacts {
+    /// The one production collector: ancestry/registry, catalog and env.
+    // trace:TASK-2345 | ai:claude
+    pub(crate) fn collect() -> Self {
+        let nonempty = |key: &str| std::env::var(key).ok().filter(|s| !s.trim().is_empty());
+        // A raw child can inherit a parent's launch aliases. Its persisted
+        // process/session binding wins for private mail, as on the sender side.
+        // trace:STORY-1843 | ai:codex
+        let own_session = crate::agent_handle::current_session_entry_for_cwd();
+        let own_handle = own_session.as_ref().and_then(|e| e.name.clone());
+        let user = current_user_id(None);
+        let user_is_known_person = own_handle
+            .as_deref()
+            .is_some_and(|own| !own.eq_ignore_ascii_case(&user))
+            && std::env::current_dir()
+                .ok()
+                .and_then(|cwd| crate::find_aida_project_root_from(&cwd).ok())
+                .map(|root| crate::main_worktree_root_from(&root).join(".aida-store"))
+                .is_some_and(|store| {
+                    known_mailbox_people(&store).contains_key(&user.to_lowercase())
+                });
+        Self {
+            own_handle,
+            own_vendor: own_session.map(|e| e.agent_type),
+            user,
+            user_is_known_person,
+            aliases: [crate::agent_handle::HANDLE_ENV, "AIDA_AGENT_NAME"]
+                .into_iter()
+                .filter_map(nonempty)
+                .collect(),
+            role: nonempty("AIDA_SESSION_ROLE"),
+            env_vendor: nonempty("AIDA_AGENT_TYPE"),
+        }
+    }
+}
+
+/// The [`inbox_identities`] policy over explicit facts. Reads nothing from
+/// the process.
+// trace:TASK-2345 | ai:claude
+pub(crate) fn inbox_identities_from_facts(facts: &MailIdentityFacts) -> Vec<String> {
+    let own_handle = facts.own_handle.as_deref();
+    let user = &facts.user;
     // AIDA_USER is also inherited by raw children. Once a session has its
     // own handle, an unrelated user string cannot add another private agent
     // inbox. Keep intentional human inboxes from the people catalog; shared
     // role/vendor audiences are added independently below. This changes only
     // mail visibility, never the principal used for grants or queue ownership.
     // trace:STORY-1843 | ai:codex
-    let include_user = own_handle
-        .as_deref()
-        .is_none_or(|own| own.eq_ignore_ascii_case(&user))
-        || std::env::current_dir()
-            .ok()
-            .and_then(|cwd| crate::find_aida_project_root_from(&cwd).ok())
-            .map(|root| crate::main_worktree_root_from(&root).join(".aida-store"))
-            .is_some_and(|store| known_mailbox_people(&store).contains_key(&user.to_lowercase()));
-    let mut ids = if include_user { vec![user] } else { Vec::new() };
+    let include_user =
+        own_handle.is_none_or(|own| own.eq_ignore_ascii_case(user)) || facts.user_is_known_person;
+    let mut ids = if include_user {
+        vec![user.clone()]
+    } else {
+        Vec::new()
+    };
     // BUG-1592: `resolve_mail_sender_identity` puts `AIDA_AGENT_NAME` FIRST in
     // the send-side precedence (ahead of `AIDA_USER`), but this read-side set
     // never included it — a seat whose launcher sets `AIDA_AGENT_NAME` to
@@ -325,20 +387,15 @@ pub(crate) fn inbox_identities() -> Vec<String> {
     // read-identity without this union.
     // A headless child also reads its own handle's inbox (STORY-1843).
     // trace:STORY-1843 | ai:claude
-    for key in [crate::agent_handle::HANDLE_ENV, "AIDA_AGENT_NAME"] {
-        if let Some(agent_name) = std::env::var(key).ok().filter(|s| !s.trim().is_empty()) {
-            if own_handle.as_deref().is_some_and(|own| own != agent_name) {
-                continue;
-            }
-            if !ids.iter().any(|i| i == &agent_name) {
-                ids.push(agent_name);
-            }
+    for agent_name in &facts.aliases {
+        if own_handle.is_some_and(|own| own != agent_name) {
+            continue;
+        }
+        if !ids.iter().any(|i| i == agent_name) {
+            ids.push(agent_name.clone());
         }
     }
-    if let Some(raw) = std::env::var("AIDA_SESSION_ROLE")
-        .ok()
-        .filter(|s| !s.trim().is_empty())
-    {
+    if let Some(raw) = &facts.role {
         let (role, _is_default) = resolve_effective_role(Some(raw.as_str()));
         if !ids.iter().any(|i| i == &role) {
             ids.push(role);
@@ -359,9 +416,10 @@ pub(crate) fn inbox_identities() -> Vec<String> {
     // multi-instance-same-type case.
     // Prefer the child's registered vendor to an inherited parent vendor.
     // trace:STORY-1843 | ai:codex
-    if let Some(raw) = own_session
-        .map(|e| e.agent_type)
-        .or_else(|| std::env::var("AIDA_AGENT_TYPE").ok())
+    if let Some(raw) = facts
+        .own_vendor
+        .clone()
+        .or_else(|| facts.env_vendor.clone())
         .filter(|s| !s.trim().is_empty())
     {
         let type_name = agent_registry::normalize_agent_type(raw);
@@ -374,8 +432,8 @@ pub(crate) fn inbox_identities() -> Vec<String> {
     // mail sent to the handle reaches a session no launcher named.
     // trace:STORY-1843 | ai:claude
     if let Some(handle) = own_handle {
-        if !ids.iter().any(|i| i.eq_ignore_ascii_case(&handle)) {
-            ids.push(handle);
+        if !ids.iter().any(|i| i.eq_ignore_ascii_case(handle)) {
+            ids.push(handle.to_string());
         }
     }
     ids

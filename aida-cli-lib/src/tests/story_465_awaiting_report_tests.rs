@@ -36,6 +36,23 @@ fn awaiting_clean_env() -> crate::test_env::EnvVarsGuard {
     ])
 }
 
+/// The full awaiting report with an unbound `operator-under-test` reader's
+/// mail facts (role from `ctx` only), so the mail split never depends on the
+/// session binding of whoever runs the suite.
+// trace:TASK-2345 | ai:claude
+fn awaiting_report_unbound(
+    project_root: &std::path::Path,
+    backend: &CachedGitBackend,
+    ctx: &UserStatusContext,
+) -> awaiting_you::AwaitingReport {
+    collect_awaiting_report_with_mail_facts(project_root, backend, ctx, true, false, || {
+        crate::MailIdentityFacts {
+            user: "operator-under-test".into(),
+            ..Default::default()
+        }
+    })
+}
+
 // STORY-465 acceptance: with no findings, no escalations, no briefs,
 // and `--no-ci` short-circuiting the gh call, the report comes back
 // empty so the section stays hidden. The quiet-day signal. trace:STORY-465
@@ -88,7 +105,7 @@ fn awaiting_report_folds_in_unread_mail_without_a_network_call() {
     let ctx = empty_user_ctx(Some("implementer"));
     // no_ci = true → the gh-backed PR probe is skipped (the network-free
     // path the per-turn notice rides).
-    let report = collect_awaiting_report(dir.path(), &backend, &ctx, true);
+    let report = awaiting_report_unbound(dir.path(), &backend, &ctx);
 
     assert!(
         report.mail.unread >= 1,
@@ -140,13 +157,9 @@ fn role_addressed_mail_does_not_inflate_the_operator_mail_count() {
         crate::mailbox_store::write_message(dir.path(), &msg).unwrap();
     }
 
-    let _env = crate::test_env::EnvVarsGuard::set(&[
-        ("AIDA_USER", "operator-under-test"),
-        ("AIDA_SESSION_ROLE", "advisor"),
-        ("AIDA_AGENT_TYPE", ""),
-    ]);
+    let _env = awaiting_clean_env();
     let ctx = empty_user_ctx(Some("advisor"));
-    let report = collect_awaiting_report(dir.path(), &backend, &ctx, true);
+    let report = awaiting_report_unbound(dir.path(), &backend, &ctx);
 
     assert_eq!(
         report.mail.unread, 0,
@@ -188,13 +201,9 @@ fn ctx_role_includes_shared_role_mail_when_env_role_is_absent() {
     };
     crate::mailbox_store::write_message(dir.path(), &msg).unwrap();
 
-    let _env = crate::test_env::EnvVarsGuard::set(&[
-        ("AIDA_USER", "operator-under-test"),
-        ("AIDA_SESSION_ROLE", ""),
-        ("AIDA_AGENT_TYPE", ""),
-    ]);
+    let _env = awaiting_clean_env();
     let ctx = empty_user_ctx(Some("advisor"));
-    let report = collect_awaiting_report(dir.path(), &backend, &ctx, true);
+    let report = awaiting_report_unbound(dir.path(), &backend, &ctx);
 
     assert_eq!(
         report.mail.unread, 0,
@@ -211,6 +220,101 @@ fn ctx_role_includes_shared_role_mail_when_env_role_is_absent() {
         line.contains("shared mail"),
         "compact line should name the shared mail channel: {line}"
     );
+}
+
+/// One unread message addressed to `to`.
+// trace:TASK-2345 | ai:claude
+fn write_mail_to(project_root: &std::path::Path, id: &str, to: &str) {
+    let msg = aida_core::mailbox::Message {
+        subject: None,
+        id: id.to_string(),
+        thread_id: format!("t-{id}"),
+        from: "someone-else".to_string(),
+        to: aida_core::mailbox::Recipient::Agent(to.to_string()),
+        timestamp: 1_000,
+        in_reply_to: None,
+        body: "hello".to_string(),
+        urgent: false,
+        intent: aida_core::mailbox::Intent::Fyi,
+        retracted: false,
+        deleted: false,
+        archived: false,
+        from_source: aida_core::mailbox::SenderSource::Explicit,
+        from_role: None,
+        relayed_from: None,
+    };
+    crate::mailbox_store::write_message(project_root, &msg).unwrap();
+}
+
+/// The awaiting report for a session bound to `handle` (vendor `claude`)
+/// while the inherited user is `operator-under-test`.
+// trace:TASK-2345 | ai:claude
+fn awaiting_report_bound(
+    project_root: &std::path::Path,
+    backend: &CachedGitBackend,
+    ctx: &UserStatusContext,
+    handle: &str,
+) -> awaiting_you::AwaitingReport {
+    let handle = handle.to_string();
+    collect_awaiting_report_with_mail_facts(project_root, backend, ctx, true, false, || {
+        crate::MailIdentityFacts {
+            own_handle: Some(handle),
+            own_vendor: Some("claude".into()),
+            user: "operator-under-test".into(),
+            ..Default::default()
+        }
+    })
+}
+
+// A bound session's headline is its own handle; its vendor and role inboxes
+// are shared, and the inherited user's inbox is neither. trace:TASK-2345
+#[test]
+fn bound_session_headline_is_its_handle_and_vendor_is_shared() {
+    let dir = tempdir().unwrap();
+    let backend = open_backend(dir.path());
+    write_mail_to(dir.path(), "m-handle", "seat-handle");
+    write_mail_to(dir.path(), "m-vendor", "claude");
+    write_mail_to(dir.path(), "m-role", "advisor");
+    write_mail_to(dir.path(), "m-user", "operator-under-test");
+
+    let _env = awaiting_clean_env();
+    let ctx = empty_user_ctx(Some("advisor"));
+    let report = awaiting_report_bound(dir.path(), &backend, &ctx, "seat-handle");
+
+    assert_eq!(
+        report.mail.unread, 1,
+        "only the handle's own mail headlines"
+    );
+    assert_eq!(report.mail.shared_unread, 2, "vendor + role mail is shared");
+    assert_eq!(
+        report.mail.shared_scope.as_deref(),
+        Some("claude + advisor"),
+        "shared scopes hold the vendor and role, never the handle or user"
+    );
+}
+
+// A binding whose registry name fails the handle spelling rules is not a
+// handle: the headline falls back to the user with only the role shared,
+// exactly as an unbound reader. trace:TASK-2345
+#[test]
+fn misspelled_bound_handle_falls_back_to_the_user_headline() {
+    let dir = tempdir().unwrap();
+    let backend = open_backend(dir.path());
+    write_mail_to(dir.path(), "m-handle", "Claude_Reviewer");
+    write_mail_to(dir.path(), "m-vendor", "claude");
+    write_mail_to(dir.path(), "m-role", "advisor");
+    write_mail_to(dir.path(), "m-user", "operator-under-test");
+
+    let _env = awaiting_clean_env();
+    let ctx = empty_user_ctx(Some("advisor"));
+    let report = awaiting_report_bound(dir.path(), &backend, &ctx, "Claude_Reviewer");
+
+    assert_eq!(report.mail.unread, 1, "the user's own mail headlines");
+    assert_eq!(
+        report.mail.shared_unread, 1,
+        "only the role inbox is shared"
+    );
+    assert_eq!(report.mail.shared_scope.as_deref(), Some("advisor"));
 }
 
 // A spec parked in NeedsAttention surfaces as an escalation line —
