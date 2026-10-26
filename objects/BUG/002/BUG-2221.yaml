@@ -28,7 +28,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T06:38:42.269077518Z
-modified_at: 2026-10-26T09:16:12.807409171Z
+modified_at: 2026-10-26T09:51:04.340283556Z
 req_type: Bug
 comments:
 - id: 01a17250-10a0-76e1-b802-890d5a4ca31b
@@ -367,6 +367,13 @@ comments:
   created_at: 2026-10-26T09:16:12.807409171Z
   modified_at: 2026-10-26T09:16:12.807409171Z
   session_id: 761a4fea-f388-41d1-93d9-f1386951253c
+- id: 01a1779e-e494-7d01-8c58-16dbdff59d29
+  author: joe
+  content: 'Round 3 on PR #2945 (20237c278b, Refs BUG-2221), per the advisor 02:20 MST ruling: a refused or failed branch-search git call is now UNKNOWN. A seat clone runs no git and reports truncated (0,n). Elsewhere a failed --contains call stops the scan. Either way unknown_reason = branch scan, and review surfaces read Unknown, not never-pushed. Id matching is on a token boundary (BUG-1 no longer matches bug-10/bug-123), shared by the fast path and the scan. Sketch doc title and P2 item 3 amended. Ran: 12/12 bug_2221_branch tests; check-ci-fast green except fmt, fixed and re-checked. NOT done: P2 before/after timing for an unshipped spec; this clone refuses host git and the sandbox denied timing commands, so an operator run is needed. The PR body was not updated (edit denied in this session). Round-1 findings 1-7 (5f777c654a) remain resolved on main by 98e6823c07. AC4 open.'
+  created_at: 2026-10-26T09:51:04.340283556Z
+  modified_at: 2026-10-26T09:51:04.340283556Z
+  session_id: 01a1777c83a6
+  harness_version: 2.1.310 (Claude Code)
 history:
 - id: 01a173f1-1a2e-7c12-a2a1-e6bdafd814de
   author: joe
