@@ -251,3 +251,129 @@ fn branch_name_match_expired_deadline_is_a_miss() {
         None
     );
 }
+
+/// The branch-scan state as a show's linkage carries it, for the review
+/// surface classifier.
+fn unshipped_linkage(scan: crate::linkage_branch::BranchScan) -> GitLinkage {
+    GitLinkage {
+        commits: Vec::new(),
+        files: Vec::new(),
+        shipped: false,
+        branch: scan.branch,
+        other_branches: scan.other_branches,
+        branch_scan_truncated: scan.truncated,
+        files_scan_incomplete: false,
+        commits_scan_incomplete: false,
+        shipped_unknown: false,
+        worktree_scan_incomplete: false,
+        worktree: None,
+        shipped_pr: None,
+        repo: None,
+    }
+}
+
+#[test]
+fn seat_clone_branch_search_is_unknown_and_runs_no_git() {
+    // Advisor ruling 2026-10-26 02:20 MST: host git refuses a seat clone, and
+    // a refused search is UNKNOWN, never "no branch" (never-pushed).
+    let tmp = tempfile::TempDir::new().unwrap();
+    let root = tmp.path().join("aida-seat-fixture");
+    std::fs::create_dir(&root).unwrap();
+    git(&root, &["init", "--initial-branch=main", "--quiet"]);
+    git(&root, &["config", "user.email", "t@example.com"]);
+    git(&root, &["config", "user.name", "Test"]);
+    git(&root, &["checkout", "-q", "-b", "bug-9-work"]);
+    commit_at(&root, "fix: x (BUG-9)", 1_700_000_100);
+    git(&root, &["checkout", "-q", "-b", "other"]);
+    commit_at(&root, "fix: y (BUG-9)", 1_700_000_200);
+    let ids = vec!["BUG-9".to_string()];
+    let commits = referencing_commits(&root, "BUG-9");
+    assert_eq!(commits.len(), 2);
+    assert!(aida_core::seat_clone_detect::seat_clone_root(&root).is_some());
+
+    crate::linkage_branch::BRANCH_GIT_CALLS.with(|n| n.set(0));
+    let scan = crate::linkage_branch::in_flight_branch_scan(&root, &ids, &commits, far(), true);
+    assert_eq!(
+        crate::linkage_branch::BRANCH_GIT_CALLS.with(|n| n.get()),
+        0,
+        "no git runs in a seat clone"
+    );
+    assert_eq!(scan.branch, None);
+    assert!(scan.other_branches.is_empty());
+    assert_eq!(scan.truncated, Some((0, 2)));
+
+    let linkage = unshipped_linkage(scan);
+    assert_eq!(
+        linkage.unknown_reason(),
+        Some(LINKAGE_UNKNOWN_REASON_BRANCH_SCAN)
+    );
+    assert!(!linkage.incomplete_notes().is_empty());
+    match classify_review_surface(&linkage, None) {
+        ReviewSurface::Unknown { reason } => {
+            assert_eq!(reason, LINKAGE_UNKNOWN_REASON_BRANCH_SCAN)
+        }
+        other => panic!("a refused branch search must be Unknown, got {other:?}"),
+    }
+}
+
+#[test]
+fn failed_contains_call_is_unknown_not_empty() {
+    // A git call that fails (here: a commit the repo does not hold) is not a
+    // "no": the fast path misses and the scan stops with every commit
+    // unchecked, so the linkage is unknown rather than branch-less.
+    let (_tmp, root) = init_repo();
+    git(&root, &["checkout", "-q", "-b", "bug-9-work"]);
+    commit_at(&root, "fix: x (BUG-9)", 1_700_000_100);
+    git(&root, &["checkout", "-q", "main"]);
+    let ids = vec!["BUG-9".to_string()];
+    let missing = "0123456789abcdef0123456789abcdef01234567".to_string();
+    let commits = vec![(
+        missing,
+        "0123456".to_string(),
+        "fix: gone (BUG-9)".to_string(),
+    )];
+    assert_eq!(
+        crate::linkage_branch::name_matched_branch_scan(&root, &ids, &commits, far()),
+        None
+    );
+    let scan = crate::linkage_branch::in_flight_branch_scan(&root, &ids, &commits, far(), true);
+    assert_eq!(scan.branch, None);
+    assert_eq!(scan.truncated, Some((0, 1)));
+    assert_eq!(
+        unshipped_linkage(scan).unknown_reason(),
+        Some(LINKAGE_UNKNOWN_REASON_BRANCH_SCAN)
+    );
+}
+
+#[test]
+fn branch_id_match_is_on_a_token_boundary() {
+    let ids = vec!["BUG-1".to_string()];
+    for name in ["bug-1", "bug-1-work", "aida-bug-1", "seat/bug-1/round2"] {
+        assert!(
+            crate::linkage_branch::branch_matches_ids(name, &ids),
+            "{name} names BUG-1"
+        );
+    }
+    for name in ["bug-10", "bug-123-fix", "abug-1", "bug-1x", "debug-1"] {
+        assert!(
+            !crate::linkage_branch::branch_matches_ids(name, &ids),
+            "{name} does not name BUG-1"
+        );
+    }
+}
+
+#[test]
+fn branch_name_match_ignores_longer_ids() {
+    // `-F --grep BUG-1` also returns BUG-10 commits. The newest is held only
+    // by `aaa-bug-10`, which lists first; it is not an id-named candidate for
+    // BUG-1, so the spec's own `bug-1-work` is the answer in both searches.
+    let (_tmp, root) = init_repo();
+    git(&root, &["checkout", "-q", "-b", "bug-1-work"]);
+    commit_at(&root, "fix: own (BUG-1)", 1_700_000_100);
+    git(&root, &["checkout", "-q", "-b", "aaa-bug-10"]);
+    commit_at(&root, "fix: other (BUG-10)", 1_700_000_200);
+    git(&root, &["checkout", "-q", "main"]);
+    let got = assert_equivalent(&root, "BUG-1");
+    assert_eq!(got.branch.as_deref(), Some("bug-1-work"));
+    assert!(got.other_branches.is_empty());
+}

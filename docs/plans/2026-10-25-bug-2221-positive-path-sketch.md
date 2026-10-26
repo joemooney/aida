@@ -1,4 +1,4 @@
-# BUG-2221 positive-path slice: diagnosis and SKETCH v2 (awaiting advisor signoff)
+# BUG-2221 positive-path slice: diagnosis and SKETCH v2 (signed 2026-10-25 23:55 MST)
 
 Status: signed 2026-10-25 23:55 MST (P1 with O1, P2 with a condition). P2 is
 implemented. P1 is held on two soundness gaps; see "Implementation status".
@@ -141,9 +141,23 @@ refs whose name matches a spec id. P2 does the following:
    and local-before-remote ranking that the `--contains` union produces for
    those refs.
 3. If no id-named ref contains any referencing commit, run the
-   **unchanged** `--contains` scan, so the fallback-to-first-candidate
-   behaviour stays byte-identical. `branch_scan_truncated` keeps its
-   meaning: it is set only when the fallback scan is cut short.
+   `--contains` scan, so the fallback-to-first-candidate behaviour is
+   unchanged. *Amended 2026-10-26 (advisor ruling 02:20 MST):* a refused or
+   failed git call is UNKNOWN, never an empty answer. The scan used to count
+   a failed call as scanned and move on. It now stops at the first failed
+   call. In a contained seat's clone, where host git always refuses, the
+   search runs no git at all. In both cases `branch_scan_truncated` reports
+   the unchecked commits, so `GitLinkage::unknown_reason` is the branch-scan
+   reason and review surfaces never read the spec as never-pushed.
+   `branch_scan_truncated` is therefore set when the fallback scan is cut
+   short (cap, budget, timeout) **or** cannot run.
+
+*Amended 2026-10-26:* step 1 as implemented reuses the scan's own `git branch
+--all --format=%(refname:short)%00%(objectname)` listing rather than
+`for-each-ref`. The id match is on a token boundary (`BUG-1` matches
+`bug-1-work` but not `bug-10` or `bug-123-fix`). This applies to the scan's
+selection as well, so both searches stay equal and the fast path does not
+spend its 500 ms share on false candidates.
 
 Equivalence test: on fixtures with a branch-crossing (`bug-N-work` plus
 `bug-N-round2`), a stacked sibling branch (BUG-553), a remote-only newer

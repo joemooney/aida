@@ -19,6 +19,13 @@
 //! id-named ref, none containing a commit, any failed or timed-out call)
 //! proves nothing and falls through to the unchanged scan, within the same
 //! branch budget (advisor signoff 2026-10-25 23:55 MST).
+//!
+//! A refused or failed git call is UNKNOWN, never an empty answer (advisor
+//! ruling 2026-10-26 02:20 MST). Host git refuses a contained seat's clone,
+//! so the search there runs no git at all and reports every commit
+//! unchecked; anywhere else a failed `--contains` call stops the scan. Both
+//! set `truncated`, so `GitLinkage::unknown_reason` names the branch scan and
+//! review surfaces never read the spec as never-pushed.
 // trace:BUG-2221 | ai:claude
 
 use crate::*;
@@ -36,7 +43,8 @@ const NAME_MATCH_FAST_PATH_SHARE: Duration = Duration::from_millis(500);
 pub(crate) struct BranchScan {
     pub(crate) branch: Option<String>,
     pub(crate) other_branches: Vec<String>,
-    /// `(scanned, total)` referencing commits when the search stopped short.
+    /// `(scanned, total)` referencing commits when the search stopped short
+    /// or could not run (a refused or failed git call).
     pub(crate) truncated: Option<(usize, usize)>,
 }
 
@@ -51,20 +59,35 @@ pub(crate) fn in_flight_branch_scan(
     branch_deadline: Instant,
     bounded: bool,
 ) -> BranchScan {
+    // trace:BUG-2221 | ai:claude
+    if aida_core::seat_clone_detect::seat_clone_root(project_root).is_some() {
+        return BranchScan {
+            truncated: (!commits.is_empty()).then_some((0, commits.len())),
+            ..BranchScan::default()
+        };
+    }
     let fast_deadline = branch_deadline.min(Instant::now() + NAME_MATCH_FAST_PATH_SHARE);
     name_matched_branch_scan(project_root, ids, commits, fast_deadline).unwrap_or_else(|| {
         contains_branch_scan(project_root, ids, commits, branch_deadline, bounded)
     })
 }
 
-/// BUG-1528: a branch name matches the spec when its normalized form equals
-/// or contains a normalized spec id.
-fn branch_matches_ids(b: &str, ids: &[String]) -> bool {
+/// BUG-1528: a branch name matches the spec when its normalized form
+/// contains a normalized spec id. BUG-2221: only on a token boundary, so
+/// `BUG-1` names `bug-1-work` and `aida-bug-1` but not `bug-10` or
+/// `bug-123-fix` (a false candidate would also spend the fast path's share).
+// trace:BUG-2221 | ai:claude
+pub(crate) fn branch_matches_ids(b: &str, ids: &[String]) -> bool {
     let norm_id = |s: &str| s.to_ascii_lowercase().replace([' ', '_'], "-");
     let bl = b.to_ascii_lowercase();
+    let is_word = |c: Option<char>| c.is_some_and(|c| c.is_ascii_alphanumeric());
     ids.iter().any(|id| {
         let nid = norm_id(id);
-        !nid.is_empty() && (bl == nid || bl.contains(&nid))
+        !nid.is_empty()
+            && bl.match_indices(nid.as_str()).any(|(at, _)| {
+                !is_word(bl[..at].chars().next_back())
+                    && !is_word(bl[at + nid.len()..].chars().next())
+            })
     })
 }
 
@@ -159,7 +182,7 @@ pub(crate) fn contains_branch_scan(
         }
         // Clone-safe builder: host git refuses a seat clone (TASK-2143
         // ratchet). trace:BUG-2221 | ai:claude
-        let mut cmd = aida_core::git_ops::host_git_command(project_root);
+        let mut cmd = branch_git(project_root);
         cmd.args([
             "branch",
             "--all",
@@ -182,11 +205,10 @@ pub(crate) fn contains_branch_scan(
                 scanned += 1;
                 String::from_utf8_lossy(&o.stdout).trim_end().to_string()
             }
-            BoundedCommandOutput::TimedOut => break,
-            _ => {
-                scanned += 1;
-                continue;
-            }
+            // A refused, failed or timed-out call is unknown, not "no
+            // branch": stop, and `truncated` reports the unchecked commits.
+            // trace:BUG-2221 | ai:claude
+            _ => break,
         };
         // BUG-553: a commit can be reachable from MULTIPLE branches when a
         // later spec's branch was stacked on this one's unmerged commit (the
@@ -244,7 +266,7 @@ pub(crate) fn name_matched_branch_scan(
         if left.is_zero() {
             return None;
         }
-        let mut cmd = aida_core::git_ops::host_git_command(project_root);
+        let mut cmd = branch_git(project_root);
         cmd.args(args);
         match command_output_with_timeout_detail(cmd, left) {
             BoundedCommandOutput::Completed(o) => Some(o),
@@ -325,6 +347,20 @@ pub(crate) fn name_matched_branch_scan(
         other_branches,
         truncated: (n < commits.len()).then_some((n, commits.len())),
     })
+}
+
+/// Every git call the branch search makes, through the clone-safe builder.
+/// Tests count them per thread to prove a seat clone runs none.
+// trace:BUG-2221 | ai:claude
+fn branch_git(project_root: &std::path::Path) -> std::process::Command {
+    #[cfg(test)]
+    BRANCH_GIT_CALLS.with(|n| n.set(n.get() + 1));
+    aida_core::git_ops::host_git_command(project_root)
+}
+
+#[cfg(test)]
+thread_local! {
+    pub(crate) static BRANCH_GIT_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 #[cfg(test)]
