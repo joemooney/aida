@@ -18,12 +18,12 @@ description: |
   - aida mailbox send <handle> delivers to that agent's inbox, which its per-turn mailbox notice hook surfaces. A handle that resolves to no live agent is refused with a hint, rather than creating a phantom inbox.
   - A Claude session can address an agy session by handle and the agy session sees the message on its next turn (black-box test with the agy hook shape).
   - After this ships, the operator runs the C3 write-mode mailbox migration against the advisor-approved dry-run report (rulings 1c/1d: operator-run, never an agent; not a code obligation of this story).
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-26T20:20:13.354571355Z
+modified_at: 2026-10-26T20:20:30.100540468Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -1363,6 +1363,14 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a179df-2714-7e71-861a-058a9b20b369
+  author: aida-session-start
+  timestamp: 2026-10-26T20:20:30.100534820Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: ba665aaf98777ed00ac96a782a6d6f51dfd528bd
   branch: main
