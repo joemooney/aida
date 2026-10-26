@@ -46,7 +46,9 @@ fn guard_is_before_claim_boundary() {
         .unwrap()
         .1;
     let guard = work.find("// BUG-1761: the suffix allocator").unwrap();
-    let claim = work.find("    session_start(").unwrap();
+    let claim = work
+        .find("crate::session_start::session_start_with_receipt(")
+        .unwrap();
     assert!(guard < claim, "guard must run before claim boundary");
 }
 

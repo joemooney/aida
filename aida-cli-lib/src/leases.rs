@@ -4284,9 +4284,7 @@ pub(crate) fn lease_adoption_refusal(
         return Some(why);
     }
     let registered = || {
-        std::process::Command::new("git")
-            .arg("-C")
-            .arg(project_root)
+        aida_core::git_ops::host_git_command(project_root)
             .args(["worktree", "list", "--porcelain"])
             .output()
             .ok()
