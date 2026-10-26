@@ -28,7 +28,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T06:38:42.269077518Z
-modified_at: 2026-10-26T11:34:55.420329637Z
+modified_at: 2026-10-26T11:43:42.022884430Z
 req_type: Bug
 comments:
 - id: 01a17250-10a0-76e1-b802-890d5a4ca31b
@@ -423,6 +423,17 @@ comments:
   created_at: 2026-10-26T11:34:24.156708987Z
   modified_at: 2026-10-26T11:34:24.156708987Z
   session_id: 761a4fea-f388-41d1-93d9-f1386951253c
+- id: 01a17806-01c6-7b33-b479-e9d72eb9111e
+  author: joe
+  content: |
+    SKETCH v3 posted (no production code): docs/plans/2026-10-26-bug-2221-sketch-v3.md on branch bug-2221-v3 (21b12ee0fd), per the advisor ruling of 04:38.
+    (1) Consumers of order: nothing depends on Git's exact Kahn order. Besides display (human show trace.rs:1736, show JSON requirements_cli.rs:6324, MCP mcp.rs:891/6088, review lib_part5.rs:1001), three semantic readers use "newest": the shipped anchor commits.first() (trace.rs:1251), shipped_pr (trace.rs:1288), and the branch-search prefix (trace.rs:1319). This repo has zero committer-date skew (0 of 83,827 commits are older than a parent). --date-order output was date-monotone for all 12 sampled ids, and it differs from a date sort only inside same-second groups. Recommend O2 with a topo-safe tie-break: ct desc, then batch desc, then walk position.
+    (2) Index: append-only, sharded, in the git common dir. A show reads the tips once (rev-list --all --no-walk), walks only changed tips ^frontier, checks hit reachability with one rev-list against those same tips, and gets subjects and short SHAs from git at query time. Cold start answers from the build walk itself. Any doubt runs the original query (sketch section 2.5).
+    (3) Measured here at load 3-6: original 650 ms. Warm index path 120 ms (12 hits) to 225 ms (124 hits after a day of churn). Projected at load ~10: 180-340 ms. BUG-2224 --json should drop from ~1.35 s to ~0.7 s. STORY-1889 still does not fit: its filing-drift hint is a serial 450 ms walk the index cannot reach. Question 3 in the doc asks for a ruling on it.
+    Stopped for signoff.
+  created_at: 2026-10-26T11:43:42.022884430Z
+  modified_at: 2026-10-26T11:43:42.022884430Z
+  session_id: a9f57777-a124-4af6-85d1-088f9d50cdd3
 history:
 - id: 01a173f1-1a2e-7c12-a2a1-e6bdafd814de
   author: joe
