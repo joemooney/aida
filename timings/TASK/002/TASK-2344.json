@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-2344",
+  "publishes": [
+    {
+      "at": "2026-10-26T14:48:45.572006082Z",
+      "closed_by": "edit"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-25T04:52:31.648828286Z",
+      "spec": "TASK-2344",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-26T14:48:39.729412374Z",
+      "spec": "TASK-2344",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "Done"
+      }
+    },
+    {
+      "ts": "2026-10-26T14:48:45.375842315Z",
+      "spec": "TASK-2344",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Done",
+        "after": "Completed"
+      }
+    },
+    {
+      "ts": "2026-10-26T14:48:45.425736558Z",
+      "spec": "TASK-2344",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "",
+        "closed_by": "edit"
+      }
+    }
+  ]
+}
