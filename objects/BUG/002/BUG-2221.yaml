@@ -28,7 +28,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T06:38:42.269077518Z
-modified_at: 2026-10-26T09:15:14.099741886Z
+modified_at: 2026-10-26T09:16:12.807409171Z
 req_type: Bug
 comments:
 - id: 01a17250-10a0-76e1-b802-890d5a4ca31b
@@ -355,6 +355,17 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: P2 fast path is exact against the --contains scan and CI is green at ad05fa66 (lib-0 first attempt red, passed on rerun = flake), but the round-2 switch to host_git_command makes a seat-clone show report ''no in-flight branch'' with no incomplete/unknown label (AC2 truthful-linkage regression, refusal path untested). AC1 met for positive path; AC2 partial; AC3 regression met, before/after timing unverified; AC4 n/a (Refs slice, still open). Bug protocol: touches test file = met.. No triage reason was given.'
   created_at: 2026-10-26T09:12:18.375859465Z
   modified_at: 2026-10-26T09:12:18.375859465Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
+- id: 01a1777e-fa87-76e2-84d8-796153b91294
+  author: joe
+  content: |-
+    ADVISOR 02:50 MST: PR #2947 (P1) round-1 request-changes, queued for the BUG-2221 lane AFTER #2945 is pushed (same seat). Binding: the seed must be pinned to an S/R snapshot captured BEFORE the oracle reads any ref (the 16:15 ruling (a) and the 23:55 carry-over); a ref move between snapshot and oracle must seed nothing. Fix all findings on branch bug-2221-p1 for #2947:
+    - [blocker] The seeding race poisons the positive cone. show_negative.rs:254/356 spawns the BEFORE capture_snapshot on a thread, and trace.rs immediately starts the original 'git log --all --date-order', which reads refs within milliseconds. capture_roots (for-each-ref + 'log --all --no-walk') usually reads refs AFTER the oracle did, so nothing orders BEFORE ahead of the oracle. The doc comment at show_negative.rs:234 ('still pinned before the oracle's own ref read') is false. Scenario: the oracle reads refs at state A, then a merge or deletion moves a ref to B, then BEFORE reads B and AFTER reads B. settle_oracle (show_negative.rs:610-620) then publishes a cone with roots=B and hits=A. Warm shows with roots==B return A's hits (show_negative.rs positive_warm, the roots.digest==cone.roots_digest branch). Later NEW walks run '^cone_roots(B)', so a referencing commit added by the move sits in OLD and is never found again. Until some guard fails, linkage silently omits the commit (or shows a phantom one after a deletion). The window is shaped exactly like the ship merges that create references. Fix: finish the R capture before the oracle starts its ref read (S can still overlap), or otherwise make the oracle's root set provably equal to BEFORE's (for example, feed it the captured roots, with proved order equivalence to --all). Add a regression that moves a ref after the oracle's ref read and before BEFORE's ref read, and assert that nothing seeds. positive_seeding_snapshot_overlaps_original (tests:1688) only proves that the overlap happens, and it holds config --list, not the root read.
+    - [major] AC4 and the advisor's 01:25 directive ('run the AC4 measurement plan ... report before/after in the PR body') are unmet. No latency or warm-hit-rate numbers exist. The design can also be slower than the code it replaces on positive shows. A warm key still pays a serial BEFORE capture_snapshot (show_negative.rs:366: config --list, for-each-ref, worktree list, log --all --no-walk), then the NEW log, the grep log, and the render log. Guard 1 (show_negative.rs:872) fails whenever any cone root ref disappears, which happens constantly in this fleet (branches pruned after every merge, about 1.3k refs). That failure costs the whole warm attempt plus the full original query plus a reseed. Measure on the promoted or local build, on the same shapes as the advisor's 23:08 baseline (BUG-2224, STORY-1889, TASK-2347; default vs --no-git), including the warm-hit rate under real ref churn. Then report before/after in the PR body.
+    - [minor] Evidence gap: CI was pending at the reviewed head (only cli-1 had passed). The 8 bug_2221 and 4 bug_1993 PATH-isolated tests, including positive_warm_walks_only_new_commits and positive_seeding_snapshot_overlaps_original, have never run anywhere, so CI will be their first run. The next round must cite a green CI run at its head.
+    - [minor] Scope and ruling: the P1' guards (comment 16) were proposed and the spec was punted for a ruling, but the advisor's 01:25 comment said to implement P1/O1 'exactly as signed' and never explicitly ruled on P1'. The guards only narrow which cached answers are served, which is conservative and needed for exact --date-order, but record an advisor ack of P1' on BUG-2221 so the design basis is explicit.
+  created_at: 2026-10-26T09:16:12.807409171Z
+  modified_at: 2026-10-26T09:16:12.807409171Z
   session_id: 761a4fea-f388-41d1-93d9-f1386951253c
 history:
 - id: 01a173f1-1a2e-7c12-a2a1-e6bdafd814de
