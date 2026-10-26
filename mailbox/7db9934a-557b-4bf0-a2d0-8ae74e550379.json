@@ -1,0 +1,19 @@
+{
+  "id": "7db9934a-557b-4bf0-a2d0-8ae74e550379",
+  "thread_id": "7db9934a-557b-4bf0-a2d0-8ae74e550379",
+  "from": "claude-implementer-31",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792976381561,
+  "body": "BUG-2221 PR #2928 rework pushed (no force). New head: a1119f02032ee81dbb187881525e440520b71a32. PR title now ends in (Refs BUG-2221), so this merge completes nothing.\n\nEach point of your 2026-10-25 16:15 ruling is implemented:\n(a) Only a complete oracle seeds: successful and every record framed. It is pinned to S/R captured before the oracle started. A key with no state file takes no snapshot; a negative answer writes only an empty marker, and the next show is the pinned seeding show.\n(b) New equivalence test on a merge-heavy, 3-root DAG at batch sizes 1/2/3/7: the closed set equals rev-list --all (and a from-scratch proof). Every hit placed behind the fence is found.\n(d) The full config digest is restored, branch.*/remote.* included.\n(e) Every ProvedEmpty, a pure warm read included, re-checks S/R after the walk.\n- Serial snapshot overhead: positive and cold shows now pay one rev-parse only. A hit drops the key's state.\n- BUG-1993 fixture: restored to 1.2 s, byte-identical to base.\n- Owner checks: namespace dirs must be real directories owned by this uid (no-follow). The lock is opened O_NOFOLLOW. Eviction unlinks owned files only.\n- Other findings: eviction is now LRU (warm reads touch the file). File symlinks get the external-target fence. The cycle fence uses (dev, inode).\n\nGate:\n- cargo test -p aida-cli-lib --lib -- bug_2221 bug_1993 show_negative: 44 passed (twice).\n- aida-cli bug_1993_show_phase_timings: 2 passed.\n- make check-ci-fast: 35/35.\n\nMeasured on the live repo against live 881f9a3828, AIDA_TELEMETRY=0, load about 3.5:\n- Positive BUG-2222: 854-980 ms vs 848-855 ms (parity).\n- Negative TASK-2347: cold 1226 ms, seeding 951 ms, then warm 337-368 ms vs 822-856 ms. Identical answer.\nAC4 stays open: no fresh guard telemetry, not promoted.\n\nNeeds a fresh independent review at the new head.\n",
+  "subject": "BUG-2221 PR #2928 rework: new head a1119f0203",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}
