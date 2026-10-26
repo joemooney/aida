@@ -189,6 +189,33 @@ pub(crate) fn tracked_changes_pending(project_root: &std::path::Path) -> bool {
         .unwrap_or(true)
 }
 
+/// Step 1's commit: stage tracked changes only (`git add -u`) and commit them
+/// under `subject`. Untracked paths stay out of the commit.
+// trace:TASK-2351 trace:TASK-2359 | ai:claude
+pub(crate) fn commit_tracked_changes(
+    project_root: &std::path::Path,
+    subject: &str,
+) -> anyhow::Result<()> {
+    use anyhow::Context as _;
+    // Clone-safe builder: host git refuses a seat clone (TASK-2143 ratchet).
+    // trace:TASK-2359 | ai:claude
+    let add = aida_core::git_ops::host_git_command(project_root)
+        .args(["add", "-u"])
+        .status()
+        .context("could not invoke `git add`")?;
+    if !add.success() {
+        anyhow::bail!("`git add -u` failed — investigate before retrying");
+    }
+    let commit = aida_core::git_ops::host_git_command(project_root)
+        .args(["commit", "-m", subject])
+        .status()
+        .context("could not invoke `git commit`")?;
+    if !commit.success() {
+        anyhow::bail!("`git commit` failed — investigate before retrying");
+    }
+    Ok(())
+}
+
 /// Untracked, non-ignored paths that are real files or symlinks — the ones a
 /// human may have meant to ship but step 1 leaves out. Devices, FIFOs and
 /// other placeholders the sandbox mounts are dropped.
@@ -514,6 +541,39 @@ mod tests {
         std::fs::write(tmp.path().join("new.txt"), "n\n").unwrap();
         git(tmp.path(), &["add", "new.txt"]);
         assert!(tracked_changes_pending(tmp.path()));
+    }
+
+    // Reverting step 1 to `git add -A` sweeps the stray file into HEAD.
+    // trace:TASK-2359 | ai:claude
+    #[test]
+    fn step1_commit_takes_tracked_edit_and_leaves_stray_untracked() {
+        let tmp = repo();
+        git(tmp.path(), &["config", "user.name", "t"]);
+        git(tmp.path(), &["config", "user.email", "t@example.com"]);
+        // host_git_command adds NO_AUTO_MAINTENANCE only under a store write
+        // lock, so the repo config keeps step 1's commit from starting
+        // detached maintenance in the fixture (BUG-2191).
+        git(tmp.path(), &["config", "maintenance.auto", "false"]);
+        git(tmp.path(), &["config", "gc.auto", "0"]);
+        std::fs::write(tmp.path().join("a.txt"), "changed\n").unwrap();
+        std::fs::write(tmp.path().join("stray.txt"), "x\n").unwrap();
+
+        commit_tracked_changes(tmp.path(), "feat: x (TASK-1)").unwrap();
+
+        let show = crate::test_git::git_command()
+            .args(["show", "HEAD:a.txt"])
+            .current_dir(tmp.path())
+            .output()
+            .unwrap();
+        assert_eq!(String::from_utf8_lossy(&show.stdout), "changed\n");
+        let files = crate::test_git::git_command()
+            .args(["ls-tree", "-r", "--name-only", "HEAD"])
+            .current_dir(tmp.path())
+            .output()
+            .unwrap();
+        assert_eq!(String::from_utf8_lossy(&files.stdout), "a.txt\n");
+        assert!(!tracked_changes_pending(tmp.path()));
+        assert_eq!(untracked_regular_files(tmp.path()), vec!["stray.txt"]);
     }
 
     #[cfg(unix)]
