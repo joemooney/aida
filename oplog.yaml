@@ -78137,5 +78137,21 @@ operations:
   timestamp: 2026-10-26T22:44:07.964654860Z
   kind: !SetStatus
     status: Approved
-clock: 6066
+- id: 01a17a63-207b-7ef0-859a-78475b362c0b
+  target_id: 01a17a62-7d5c-7552-b112-546a5a598e92
+  author: aida
+  node_id: '1'
+  lamport: 6067
+  timestamp: 2026-10-26T22:44:39.163164100Z
+  kind: !SetStatus
+    status: In Progress
+- id: 01a17a63-214b-7e52-8305-2c13c9caa0c2
+  target_id: 01a17a62-7d5c-7552-b112-546a5a598e92
+  author: aida
+  node_id: '1'
+  lamport: 6068
+  timestamp: 2026-10-26T22:44:39.371415574Z
+  kind: !SetOwner
+    owner: joe.mooney@gmail.com
+clock: 6068
 node_id: '1'
