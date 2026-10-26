@@ -8,18 +8,27 @@ description: |-
 
   PR: #2934
   Reviewed sha: 994a4c1e25d4b4d61eb9b13a45e37c19b05cce04
-status: Draft
+status: Approved
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-26T14:46:28.516485744Z
-modified_at: 2026-10-26T14:46:28.516485744Z
+modified_at: 2026-10-26T22:23:30.517256349Z
 req_type: Task
 tags:
 - carried-from:BUG-2223
 - finding-hash:6e5e3a90
 - from-review:PR-2934
 - kind:carried-forward
+history:
+- id: 01a17a4f-c4d5-7273-adb8-dce8b4d5f2a0
+  author: joe
+  timestamp: 2026-10-26T22:23:30.517251907Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 06fa4fb01ee79b1502a096893ce99891b61b9cc6
   branch: main
