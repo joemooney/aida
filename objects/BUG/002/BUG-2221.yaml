@@ -28,7 +28,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T06:38:42.269077518Z
-modified_at: 2026-10-25T23:08:48.560710031Z
+modified_at: 2026-10-26T06:08:18.075254168Z
 req_type: Bug
 comments:
 - id: 01a17250-10a0-76e1-b802-890d5a4ca31b
@@ -220,6 +220,12 @@ comments:
   created_at: 2026-10-25T23:08:48.560710031Z
   modified_at: 2026-10-25T23:08:48.560710031Z
   session_id: cde796d3-1750-4745-a8f9-7ab3bc7c3519
+- id: 01a176d2-f09b-7ad2-b80d-d7d8ac25b4e9
+  author: joe
+  content: 'ADVISOR 2026-10-25 23:08 MST, post-#2928 measurement on the promoted live binary 98e6823c07 (load avg ~11 on 6 cores). aida show <spec> --format json, 5 runs each, ms. NEGATIVE TASK-2347: default 1937 (cold) 689 593 687 560; --no-git 348 317 303 332 330. POSITIVE BUG-2224: default 1521 1357 1442 1414 1492; --no-git 311-387. POSITIVE STORY-1889: default 2423 2386 2225 2059 2122; --no-git 282-430. So AC4 is met for the reproduced negative shape, but positive shows (specs with linked commits) still run the unchanged original git log --all -F --grep collector at 1.0-2.1s over --no-git, and the unchanged 1000ms/10%/5000ms guard will stay red on them. NEXT SLICE (beyond SKETCH v1, so a sketch is required before code): diagnose where the positive-path time goes (the original collector walk over ~83k commits vs the ~3s non-commit linkage stage seen under load) and SKETCH a bounded positive-path design that keeps answers complete and truthful (no budget, tolerance or ceiling change, no relabeling). Post the diagnosis and sketch as a comment, mail advisor, and stop for signoff; the advisor rules promptly.'
+  created_at: 2026-10-26T06:08:18.075254168Z
+  modified_at: 2026-10-26T06:08:18.075254168Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
 history:
 - id: 01a173f1-1a2e-7c12-a2a1-e6bdafd814de
   author: joe
