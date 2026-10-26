@@ -2,12 +2,12 @@ id: 01a176fc-67d2-7862-a865-e8becb8cb9e3
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-003
 title: Seat clones commit the Claude Code sandbox placeholder files (.gitmodules, .idea, .vscode, .claude/launch.json ...) because they lack the primary clone info/exclude
 description: 'PR #2943 (BUG-b6b1...-002 lane, seat clone aida-seat-aida-bug-b6b1...-002) committed nine empty read-only files: .claude/agents, .claude/launch.json, .claude/loop.md, .claude/output-styles, .claude/routines, .claude/scheduled_tasks.json, .gitmodules, .idea, .vscode. These are the stand-ins the Claude Code bash sandbox creates for denied paths. The primary clone ignores them through .git/info/exclude (entries at lines ~27-33); seat clones are separate clones with their own minimal info/exclude, so a lane commit picks them up. The committed .gitmodules then made aida session end / aida worktree dismiss refuse salvage ("the clone has submodules"). The advisor removed them from #2943 by hand (9fa1d8b24d). Related: an empty read-only .git/config.lock keeps reappearing in the primary (sandbox placeholder for a protected path), which makes git config writes fail (worktree add -B, upstream config) until removed. Fix: seat-clone creation must carry the primary info/exclude sandbox entries (or ship them in a tracked ignore file), and ship/commit staging must refuse zero-byte read-only placeholders; add a test. Consider a doctor check for a stale read-only config.lock.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-26T06:53:35.570888485Z
-modified_at: 2026-10-26T11:28:40.349002791Z
+modified_at: 2026-10-26T15:08:21.749157223Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -51,6 +51,13 @@ comments:
   created_at: 2026-10-26T11:28:40.349002791Z
   modified_at: 2026-10-26T11:28:40.349002791Z
   session_id: 01a177ed255c
+  harness_version: 2.1.310 (Claude Code)
+- id: 01a178c1-6175-7863-9d0b-65b717a20682
+  author: joe
+  content: 'Reviewer round 4 (PR-2946, head 871837d): REQUEST CHANGES. Blocking: ship.rs:328 raw Command::new("git") breaks the TASK-2143 ratchet (ship.rs allowlist 0, always scanned since TASK-2359 #2935). Use host_git_command, which fails closed in seat clones, and change ship_refuses_a_staged_stand_in_inside_a_seat_clone to expect the refusal. Non-blocking finding (could not file as a draft TASK: ID allocation failed in this seat): an_unrunnable_stand_in_probe_refuses assumes its tempdir is outside any git repo; consider GIT_CEILING_DIRECTORIES. Review: https://github.com/joemooney/aida/pull/2946#issuecomment-6419478901'
+  created_at: 2026-10-26T15:08:21.749157223Z
+  modified_at: 2026-10-26T15:08:21.749157223Z
+  session_id: 01a178be316f
   harness_version: 2.1.310 (Claude Code)
 history:
 - id: 01a176fc-8760-7d10-b3cb-bbc1ec863bed
@@ -133,6 +140,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a178c0-de03-7ca1-b389-27c9c141f9f2
+  author: aida-orchestrator
+  timestamp: 2026-10-26T15:07:48.099381379Z
+  session_id: 01a178be316f
+  harness_version: 2.1.310 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: e4c2dd0575990c64b7b14ee242b02012c22195dd
   branch: main
@@ -145,3 +161,11 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-26T07:27:18.186807549Z
   implemented_by: joe
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Round 4 (after merge from main): the seat-clone exclude fix and its tests are correct, but main''s TASK-2359 (#2935) made ship.rs an always-scanned TASK-2143 ratchet file with 0 raw git builders allowed, and this PR adds one at ship.rs:328, so task_2143_no_new_raw_git_where_a_lease_tree_is_read fails at this head. CI was still pending at review time.'
+  recovery_hint: address the review findings, move BUG-B6B1278890774EF993D2EBC327862470-003 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-10-26T15:07:48.099355455Z
