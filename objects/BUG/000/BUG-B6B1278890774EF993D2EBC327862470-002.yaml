@@ -2,13 +2,22 @@ id: 01a1763d-1fb1-73c2-99e6-b19fcd09595b
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-002
 title: 'role enter --bind-pid rejects Claude Code: the versioned binary runs as comm 2.1.310, so the harness check calls it neither harness nor shell'
 description: 'Operator ran: aida role enter advisor --bind-pid 1862682 (the Claude Code session process, /home/joe/.local/share/claude/versions/2.1.310 --session-id ...). Refused: "--bind-pid 1862682: `2.1.310` is neither an agent harness (claude, codex, agy, ...) nor a shell". Its parent bg-pty-host also has comm 2.1.310. Claude Code installs as ~/.local/share/claude/versions/<version>, so /proc/<pid>/comm is the version string. aida role status in the session also reports no stable harness pid. Detection should also look at /proc/<pid>/exe or cmdline (a path under .../claude/versions/) before refusing. Workaround used 2026-10-25: a long-lived bash runner bound with --bind-pid, but commands it backgrounds lose the grant once their parent shell exits (reparenting), so a nohup launch must keep its parent alive until the headless child is minted.'
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-26T03:24:39.729565889Z
-modified_at: 2026-10-26T03:24:39.729565889Z
+modified_at: 2026-10-26T05:56:26.637356498Z
 req_type: Bug
+history:
+- id: 01a176c8-158d-7102-9c08-8b27251c9cd9
+  author: joe
+  timestamp: 2026-10-26T05:56:26.637350630Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: c2ccffe193f128408b97726023888006f0d27e03
   branch: main
