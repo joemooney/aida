@@ -20,7 +20,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-24T22:36:09.690369218Z
-modified_at: 2026-10-25T20:07:32.154803613Z
+modified_at: 2026-10-26T14:48:00.627535569Z
 req_type: Task
 tags:
 - authority
@@ -39,6 +39,12 @@ comments:
   content: 'PROXY DECISION for joe: Approve rendering all effective mandate scopes consistently with status_text; display changes grant no authority.'
   created_at: 2026-10-25T04:52:13.422916933Z
   modified_at: 2026-10-25T04:52:13.422916933Z
+- id: 01a178ae-bf73-7a61-aef0-615a48b8c7ba
+  author: joe
+  content: 'ADVISOR: landed in e27af75054 (PR #2924, Refs-titled train car); the round-4 reviewer verified this task item by item (verdict at 4b2b0b3983).'
+  created_at: 2026-10-26T14:48:00.627535569Z
+  modified_at: 2026-10-26T14:48:00.627535569Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
 history:
 - id: 01a17166-f5c0-7330-a2e7-8c3d863d1cf3
   author: joe
