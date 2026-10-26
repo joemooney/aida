@@ -78085,5 +78085,17 @@ operations:
   timestamp: 2026-10-26T22:23:56.247970094Z
   kind: !SetOwner
     owner: joe.mooney@gmail.com
-clock: 6061
+- id: 01a17a5f-f5ac-7fe2-b3dc-d39dbbbbb29a
+  target_id: 01a17a5f-eeb0-7d42-a5af-d0c95c62020a
+  author: aida
+  node_id: '1'
+  lamport: 6062
+  timestamp: 2026-10-26T22:41:11.596023789Z
+  kind: !Create
+    title: Commit trailer parser rejects hash-form TASK/STORY IDs (41+ chars), so reviewer auto-queue and merge-time completion miss them
+    description: 'pr_lookup::looks_like_spec_id (aida-cli-lib/src/pr_lookup.rs:1563) rejects any token longer than 40 chars. A hash-form ID such as TASK-b6b1278890774ef993d2ebc327862470-003 is 41 chars (BUG-<32hex>-NNN is exactly 40, so BUG IDs pass by luck; TASK/STORY/EPIC hash IDs never do). Observed on PR #2955: commit subject ends ''(TASK-b6b1278890774ef993d2ebc327862470-003, ... -006)'' and ''aida pr auto-queue-review'' reports ''carries no (REQ-ID) trailers'' and files no reviewer story. The same parser feeds merge-time completion, so those tasks will also not auto-complete on merge. Fix: raise the length bound to cover <PREFIX>-<32 hex>-<seq> (or drop it in favor of the shape check) and add a test for a hash-form TASK id.'
+    req_type: Bug
+    status: Draft
+    priority: High
+clock: 6062
 node_id: '1'
