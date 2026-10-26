@@ -11098,6 +11098,41 @@ pub(crate) fn build_queue_work_claude_command(
     )
 }
 
+/// BUG-2223: the sentence a scope-conflict refusal adds about keeping the
+/// conflicting lease's tree. It offers `--resume` only when `--resume` would
+/// adopt that lease (`refusal` from [`crate::leases::lease_adoption_refusal`]
+/// is `None` and no other orphan is being adopted), so this refusal and the
+/// `--resume` path never point at each other.
+// trace:BUG-2223 | ai:claude
+pub(crate) fn scope_conflict_resume_hint(
+    scope: &str,
+    conflict_id: &str,
+    refusal: Option<&str>,
+    adopting: Option<&str>,
+) -> String {
+    let id = &conflict_id[..conflict_id.len().min(8)];
+    match (refusal, adopting) {
+        (Some(why), _) => format!(
+            " `--resume` cannot re-enter it in place: {why} (`aida session show {id}` shows \
+             its liveness). To keep the work, commit or stash it there; `aida session end \
+             {id} --force` discards it."
+        ),
+        (None, Some(adopted)) => {
+            let adopted = &adopted[..adopted.len().min(8)];
+            format!(
+                " `--resume` re-enters only the newest orphaned lease ({adopted}), not this \
+                 one: commit or stash its work there, or `aida session end {id} --force` \
+                 discards it, then re-run."
+            )
+        }
+        (None, None) => format!(
+            " To keep its tree and work: `aida queue work {scope} --resume` re-enters it in \
+             place (a new session starts there when none was recorded), or `aida session \
+             end {id} --force` discards it."
+        ),
+    }
+}
+
 /// STORY-42: the orchestrator. Resolves the plan, optionally pulls,
 /// runs session_start in non-launch mode (so we can write the manifest
 /// from the freshly minted lease), then either prints next-steps or
@@ -12147,21 +12182,16 @@ pub(crate) fn handle_queue_work(
         // a hypothetical infinite loop if session_end ever returns Ok
         // without actually removing the lease (defense-in-depth).
         let mut remaining = 16usize;
-        while let Some(conflict) =
-            find_scope_lease_conflict(&list_leases(&project_root_for_conflict), &plan.scope)
-        {
-            // BUG-2223: the orphan `--resume` adopts stays, tree and all;
-            // session start replaces its lease record in place.
-            // trace:BUG-2223 | ai:claude
-            if adopt_orphan.as_ref().is_some_and(|o| o.id == conflict.id) {
-                eprintln!(
-                    "  {} re-entering orphaned lease {}'s tree in place (--resume): {}",
-                    crate::glyph(crate::glyphs::Glyph::Info).cyan(),
-                    (&conflict.id[..conflict.id.len().min(8)]).yellow(),
-                    conflict.worktree_path.display()
-                );
-                break;
-            }
+        // BUG-2223: the orphan `--resume` adopts stays, tree and all (session
+        // start replaces its lease record in place); every OTHER lease on the
+        // scope is still swept, so a live one refuses the pickup.
+        // trace:BUG-2223 | ai:claude
+        let adopting = adopt_orphan.as_ref().map(|o| o.id.as_str());
+        while let Some(conflict) = crate::leases::next_scope_conflict(
+            list_leases(&project_root_for_conflict),
+            &plan.scope,
+            adopting,
+        ) {
             // BUG-307: classify before deciding to refuse. The auto-release
             // path only fires when every liveness signal says the lease is
             // truly dormant; a live or freshly-minted lease falls through to
@@ -12228,32 +12258,16 @@ pub(crate) fn handle_queue_work(
                     // existing worktree. `--steal` would remove the worktree the
                     // WIP lives in, so name it as the destructive path, not the
                     // default. trace:TASK-402 | ai:claude
-                    // BUG-2223: `--resume` adopts an orphan before this sweep,
-                    // so reaching here with it means adoption was refused: say
-                    // why instead of naming another `--resume` that bails the
-                    // same way. trace:BUG-2223 | ai:claude
-                    let resume_hint = if resume.is_some() {
-                        let why = crate::leases::orphan_adoption_refusal(
-                            &stale_lease_recovery_for_lease(&conflict),
-                        )
-                        .unwrap_or("its owning process could not be confirmed gone");
-                        format!(
-                            " --resume cannot re-enter it in place: {why}. \
-                             `aida session show {}` shows its liveness; commit or stash \
-                             the work there to keep it.",
-                            &conflict.id[..conflict.id.len().min(8)]
-                        )
-                    } else {
-                        format!(
-                            " To keep the work, resume into this worktree: \
-                             `aida queue work {} --resume` re-enters it in place (a new \
-                             session starts there when none was recorded). \
-                             Only commit/stash or `aida session end {} --force` (discards) \
-                             if you intend to abandon it.",
-                            plan.scope,
-                            &conflict.id[..conflict.id.len().min(8)]
-                        )
-                    };
+                    // BUG-2223: offer `--resume` only when it adopts this very
+                    // lease (a lease recording no owner pid is DormantDirty
+                    // here but cannot be adopted); otherwise say why and name
+                    // what does work. trace:BUG-2223 | ai:claude
+                    let resume_hint = scope_conflict_resume_hint(
+                        &plan.scope,
+                        &conflict.id,
+                        crate::leases::lease_adoption_refusal(&conflict),
+                        adopting,
+                    );
                     anyhow::bail!(
                         "lease {} for scope `{}` looks orphaned (dormant process, \
                          worktree has {} uncommitted change(s) at {}).{}",
@@ -12318,18 +12332,20 @@ pub(crate) fn handle_queue_work(
                         "scope `{}` is held by lease {} ({}) whose owning session is no longer \
                          running, but its worktree at {} still has {} uncommitted change(s) — \
                          refusing so that work is not discarded (--force-claim does NOT \
-                         override this). Uncommitted: {}. To keep the work: \
-                         `aida queue work {} --resume` re-enters that worktree in place, or commit \
-                         /stash it there. To discard it: `aida session end {} --force`, then \
-                         re-run.",
+                         override this). Uncommitted: {}.{}",
                         plan.scope,
                         short_conflict_id,
                         conflict.role.as_deref().unwrap_or("(unset)"),
                         conflict.worktree_path.display(),
                         dirty_entries,
                         recovery.dirty_sample(),
-                        plan.scope,
-                        short_conflict_id
+                        // trace:BUG-2223 | ai:claude
+                        scope_conflict_resume_hint(
+                            &plan.scope,
+                            &conflict.id,
+                            crate::leases::lease_adoption_refusal(&conflict),
+                            adopting,
+                        )
                     );
                 }
                 StaleLeaseRecovery::ReclaimableClean { .. } if !steal => {
@@ -12345,14 +12361,14 @@ pub(crate) fn handle_queue_work(
                         recovery.worktree_state_phrase(),
                         plan.scope,
                         // trace:BUG-2223 | ai:claude
-                        if recovery.worktree_exists {
-                            format!(
-                                " To keep its worktree and branch instead: `aida queue work {} \
-                                 --resume` re-enters it in place.",
-                                plan.scope
-                            )
-                        } else {
-                            String::new()
+                        match crate::leases::lease_adoption_refusal(&conflict) {
+                            None => scope_conflict_resume_hint(
+                                &plan.scope,
+                                &conflict.id,
+                                None,
+                                adopting,
+                            ),
+                            Some(_) => String::new(),
                         }
                     );
                 }
@@ -12475,6 +12491,15 @@ pub(crate) fn handle_queue_work(
                     plan.scope
                 );
             }
+        }
+        // trace:BUG-2223 | ai:claude
+        if let Some(orphan) = &adopt_orphan {
+            eprintln!(
+                "  {} re-entering orphaned lease {}'s tree in place (--resume): {}",
+                crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                (&orphan.id[..orphan.id.len().min(8)]).yellow(),
+                orphan.worktree_path.display()
+            );
         }
     }
 
@@ -12656,7 +12681,7 @@ pub(crate) fn handle_queue_work(
     // it — the ledger must name the worker, not this launcher.
     // trace:BUG-1918 | ai:claude
     let start = || {
-        session_start(
+        crate::session_start::session_start_with_receipt(
             &plan.scope,
             session_branch_override,
             resolved_base.as_deref(),
@@ -12675,10 +12700,7 @@ pub(crate) fn handle_queue_work(
             /* launch_contained */
             false,
             /* role */ Some(role.clone()),
-            // BUG-2223: adopting an orphan is session start's --path +
-            // --force-claim re-entry; it re-checks the orphan itself.
-            /* force_claim */
-            force_claim || adopt_orphan.is_some(),
+            /* force_claim */ force_claim,
             // STORY-714: config-driven ([worktree_pool] enabled). The pool is used
             // only for non-stacked spawns (resolved_base is None unless --stack /
             // --base), so stacked work keeps a fresh `git worktree add`.
@@ -12691,7 +12713,14 @@ pub(crate) fn handle_queue_work(
             // trace:BUG-2169 | ai:claude
             /* contained_seat */
             contained,
+            /* rollback_failed_setup */ false,
+            // BUG-2223: re-enter the orphan's tree in place. Session start
+            // re-checks it and bypasses nothing else: a live claim on the
+            // scope still refuses. trace:BUG-2223 | ai:claude
+            /* adopt_orphan */
+            adopt_orphan.is_some(),
         )
+        .map(|mut receipt| receipt.disarm())
     };
     if no_launch {
         start()?;

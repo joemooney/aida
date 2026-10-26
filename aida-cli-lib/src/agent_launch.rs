@@ -3893,6 +3893,7 @@ fn prepare_agent_launch_attempt_inner(
                     // trace:BUG-2169 | ai:claude
                     contained_seat,
                     true,
+                    /* adopt_orphan */ false,
                 )
             });
             let restore_result = std::env::set_current_dir(&previous_cwd);

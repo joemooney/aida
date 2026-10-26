@@ -3948,6 +3948,23 @@ pub(crate) fn find_scope_lease_conflict(
         .cloned()
 }
 
+/// BUG-2223: the freshest lease on `scope` other than `adopting`, the orphan
+/// `aida queue work --resume` re-enters in place. The queue-work conflict
+/// sweep releases or refuses each of these in turn, exactly as without
+/// `--resume`.
+// trace:BUG-2223 | ai:claude
+pub(crate) fn next_scope_conflict(
+    leases: Vec<SessionLease>,
+    scope: &str,
+    adopting: Option<&str>,
+) -> Option<SessionLease> {
+    let others: Vec<SessionLease> = leases
+        .into_iter()
+        .filter(|l| Some(l.id.as_str()) != adopting)
+        .collect();
+    find_scope_lease_conflict(&others, scope)
+}
+
 /// BUG-307: gather the three independent liveness signals for `lease` and
 /// hand them to [`orchestrator::classify_for_auto_release`]. The classifier
 /// is pure; this wrapper is where we touch the process table, lease-file
@@ -4250,21 +4267,28 @@ pub(crate) fn orphan_adoption_refusal(report: &StaleLeaseRecoveryReport) -> Opti
     }
 }
 
+/// BUG-2223: [`orphan_adoption_refusal`] for `lease` itself, also refusing a
+/// lease that records no tree. Every `--resume` hint a scope-conflict refusal
+/// gives is gated on this, so a hint never offers a re-entry that refuses.
+// trace:BUG-2223 | ai:claude
+pub(crate) fn lease_adoption_refusal(lease: &SessionLease) -> Option<&'static str> {
+    if lease.worktree_path.as_os_str().is_empty() {
+        return Some("it records no tree");
+    }
+    orphan_adoption_refusal(&stale_lease_recovery_for_lease(lease))
+}
+
 /// BUG-2223: the orphaned lease on `scope` whose tree `aida queue work
 /// --resume` re-enters in place, if there is one: the freshest lease on the
-/// scope, with a recorded tree that [`orphan_adoption_refusal`] accepts.
+/// scope, when [`lease_adoption_refusal`] accepts it. Other leases on the
+/// scope are still swept: a live one refuses the pickup.
 // trace:BUG-2223 | ai:claude
 pub(crate) fn adoptable_orphan_lease(
     project_root: &std::path::Path,
     scope: &str,
 ) -> Option<SessionLease> {
     let lease = find_scope_lease_conflict(&list_leases(project_root), scope)?;
-    if lease.worktree_path.as_os_str().is_empty() {
-        return None;
-    }
-    orphan_adoption_refusal(&stale_lease_recovery_for_lease(&lease))
-        .is_none()
-        .then_some(lease)
+    lease_adoption_refusal(&lease).is_none().then_some(lease)
 }
 
 /// BUG-906: before a transient phase retry relaunches a child session, reap any

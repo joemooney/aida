@@ -53,6 +53,43 @@ fn start(
     )
 }
 
+/// `aida queue work --resume`'s session start: adopt the orphan at `path`,
+/// with no `--force-claim`.
+fn adopt(owns: &str, branch: &str, path: &Path) -> anyhow::Result<()> {
+    crate::session_start::session_start_with_receipt(
+        owns,
+        Some(branch),
+        None,
+        false,
+        path.to_str(),
+        None,
+        "auto",
+        false,
+        None,
+        false,
+        None,
+        None,
+        false,
+        None,
+        /* force_claim */ false,
+        Some(false),
+        /* self_claim */ true,
+        /* review_coexistence */ None,
+        /* contained_seat */ true,
+        /* rollback_failed_setup */ false,
+        /* adopt_orphan */ true,
+    )
+    .map(|mut receipt| receipt.disarm())
+}
+
+fn write_lease(main: &Path, lease: &crate::SessionLease) {
+    std::fs::write(
+        crate::lease_path(main, &lease.id),
+        toml::to_string_pretty(lease).unwrap(),
+    )
+    .unwrap();
+}
+
 fn lease_for(main: &Path, scope: &str) -> crate::SessionLease {
     crate::list_leases(main)
         .into_iter()
@@ -66,11 +103,7 @@ fn set_owner(main: &Path, lease: &crate::SessionLease, pid: u32) {
     let mut lease = lease.clone();
     lease.active_pid = Some(pid);
     lease.active_pid_start_time = crate::process_probe::process_start_identity(pid);
-    std::fs::write(
-        crate::lease_path(main, &lease.id),
-        toml::to_string_pretty(&lease).unwrap(),
-    )
-    .unwrap();
+    write_lease(main, &lease);
 }
 
 /// A pid that has exited: the orphaned worker.
@@ -145,14 +178,7 @@ fn an_orphaned_clone_with_uncommitted_work_is_re_entered_in_place() {
         "queue work --resume adopts this lease"
     );
 
-    start(
-        "TASK-2223",
-        Some(&orphan.branch),
-        Some(&clone),
-        /* force_claim */ true,
-        /* contained */ true,
-    )
-    .unwrap();
+    adopt("TASK-2223", &orphan.branch, &clone).unwrap();
 
     let leases: Vec<_> = crate::list_leases(&fx.main)
         .into_iter()
@@ -298,4 +324,111 @@ fn the_containment_refusal_names_the_vendor_fix_in_its_first_line() {
         assert!(first.contains("--vendor claude"), "{first}");
         assert!(first.contains("`codex`"), "{first}");
     }
+}
+
+/// Binding 3, at the queue-work conflict sweep: its refusal offers `--resume`
+/// exactly when `--resume` adopts the lease. A dirty orphan whose dead owner
+/// is recorded is offered and adopted; one that records no owner pid reads as
+/// dormant to the sweep but cannot be proven dead, so it is neither offered
+/// nor adopted, and `--resume` then names dropping it, never this refusal.
+#[test]
+fn the_conflict_hint_offers_resume_only_when_resume_adopts() {
+    let fx = fixture();
+    clone_config(&fx.main, &fx.root);
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+    let scope = "TASK-922701";
+    let resume_cmd = format!("aida queue work {scope} --resume");
+    let orphan = orphaned_clone(&fx.main, scope);
+
+    let refusal = crate::leases::lease_adoption_refusal(&orphan);
+    assert_eq!(refusal, None);
+    let hint = crate::queue_cmd::scope_conflict_resume_hint(scope, &orphan.id, refusal, None);
+    assert!(hint.contains(&resume_cmd), "{hint}");
+    let adopted = crate::leases::adoptable_orphan_lease(&fx.main, scope).expect("adopted");
+    assert_eq!(adopted.id, orphan.id);
+
+    // The same orphan, recording no owning process at all.
+    let mut no_pid = orphan.clone();
+    no_pid.active_pid = None;
+    no_pid.active_pid_start_time = None;
+    no_pid.creator_pid = None;
+    no_pid.creator_pid_start_time = None;
+    write_lease(&fx.main, &no_pid);
+    let refusal = crate::leases::lease_adoption_refusal(&no_pid);
+    assert!(
+        refusal.is_some_and(|why| why.contains("no owning process")),
+        "{refusal:?}"
+    );
+    let hint = crate::queue_cmd::scope_conflict_resume_hint(scope, &no_pid.id, refusal, None);
+    assert!(!hint.contains("queue work"), "{hint}");
+    assert!(hint.contains("cannot re-enter"), "{hint}");
+    assert!(hint.contains("session end"), "{hint}");
+    assert!(crate::leases::adoptable_orphan_lease(&fx.main, scope).is_none());
+    let err = crate::resolve_queue_work_launch(scope, Some(""), false, None, None)
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("drop --resume"), "{err}");
+}
+
+/// Binding 1, multiplicity: adopting the newest orphan does not skip the
+/// other leases on its scope. The sweep still reaches a live one, and session
+/// start, given no `--force-claim`, refuses to adopt past it.
+#[test]
+fn adopting_an_orphan_still_refuses_a_live_lease_on_the_scope() {
+    let fx = fixture();
+    clone_config(&fx.main, &fx.root);
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+    let scope = "TASK-922702";
+    let orphan = orphaned_clone(&fx.main, scope);
+    let clone = orphan.worktree_path.clone();
+    let head = git_ok(&clone, &["rev-parse", "HEAD"]);
+
+    // An older lease on the same scope whose owner is alive.
+    let mut live = orphan.clone();
+    live.id = uuid::Uuid::now_v7().to_string();
+    live.started_at = orphan.started_at - chrono::Duration::hours(1);
+    live.worktree_path = fx.root.join("live-tree");
+    live.tree_kind = TreeKind::Worktree;
+    std::fs::create_dir_all(&live.worktree_path).unwrap();
+    write_lease(&fx.main, &live);
+    set_owner(&fx.main, &live, std::process::id());
+
+    assert_eq!(
+        crate::leases::adoptable_orphan_lease(&fx.main, scope).map(|l| l.id),
+        Some(orphan.id.clone()),
+        "the newest lease is the orphan"
+    );
+    let next =
+        crate::leases::next_scope_conflict(crate::list_leases(&fx.main), scope, Some(&orphan.id))
+            .expect("the live lease is still swept");
+    assert_eq!(next.id, live.id);
+    assert!(
+        crate::leases::lease_adoption_refusal(&next).is_some_and(|w| w.contains("live process"))
+    );
+
+    let err = format!("{:#}", adopt(scope, &orphan.branch, &clone).unwrap_err());
+    assert!(err.contains(&live.id[..8]), "{err}");
+    let mut ids: Vec<_> = crate::list_leases(&fx.main)
+        .into_iter()
+        .filter(|l| l.scope == scope)
+        .map(|l| l.id)
+        .collect();
+    ids.sort();
+    let mut want = vec![orphan.id.clone(), live.id.clone()];
+    want.sort();
+    assert_eq!(ids, want, "both leases are left as they were");
+    assert_work_intact(&clone, &orphan.branch, &head);
+}
+
+/// An adoption at a path no orphaned lease of the scope records refuses
+/// instead of starting a session there.
+#[test]
+fn adopting_a_path_that_is_not_an_orphans_tree_is_refused() {
+    let fx = fixture();
+    clone_config(&fx.main, &fx.root);
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+    let missing = fx.root.join("seats").join("aida-seat-aida-gone");
+    let err = format!("{:#}", adopt("TASK-922703", "x", &missing).unwrap_err());
+    assert!(err.contains("no longer the tree of an orphaned"), "{err}");
+    assert!(!missing.exists());
 }

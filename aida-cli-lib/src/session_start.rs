@@ -1764,6 +1764,7 @@ pub(crate) fn session_start(
         review_coexistence,
         contained_seat,
         false,
+        /* adopt_orphan */ false,
     )
     .map(|mut receipt| receipt.disarm())
 }
@@ -1805,6 +1806,11 @@ pub(crate) fn session_start_with_receipt(
     // `[contained] seat_tree = "clone"` it gets a private clone, not a worktree.
     contained_seat: bool,
     rollback_failed_setup: bool,
+    // BUG-2223: re-enter the orphaned lease `explicit_path` records, in place
+    // (`aida queue work --resume`). Unlike `force_claim` it bypasses no live
+    // claim: it only permits the path re-entry, and refuses when that path is
+    // not an adoptable orphan's.
+    adopt_orphan: bool,
 ) -> Result<SessionStartReceipt> {
     // BUG-75: derive paths from the MAIN worktree root, not from cwd's
     // git ancestor — when the user invokes `aida session start` from
@@ -1890,8 +1896,10 @@ pub(crate) fn session_start_with_receipt(
         Some(p) => std::path::PathBuf::from(p),
         None => pickup_worktree_path(&project_root, &slug)?,
     };
+    // BUG-2223: an orphan adoption may re-enter its recorded --path too.
+    let path_reentry = force_claim || adopt_orphan;
     let reuse_existing_worktree_path = explicit_path.is_some()
-        && force_claim
+        && path_reentry
         && worktree_path.exists()
         && aida_core::git_ops::is_git_repo(&worktree_path)
         && std::process::Command::new("git")
@@ -1911,7 +1919,7 @@ pub(crate) fn session_start_with_receipt(
     // clone no orphaned lease of this scope and branch records.
     // trace:BUG-2223 | ai:claude
     let clone_reentry = explicit_path.is_some()
-        && force_claim
+        && path_reentry
         && worktree_path.exists()
         && crate::seat_clone::seat_clone_root(&worktree_path)
             .is_some_and(|root| worktree_path.canonicalize().ok() == Some(root));
@@ -1926,6 +1934,13 @@ pub(crate) fn session_start_with_receipt(
     } else {
         None
     };
+    if adopt_orphan && adopted_orphan.is_none() {
+        anyhow::bail!(
+            "cannot re-enter {} in place: it is no longer the tree of an orphaned `{owns}` \
+             session on branch `{branch_name}`. Nothing was changed in it.",
+            worktree_path.display()
+        );
+    }
     if clone_reentry && !contained_seat {
         anyhow::bail!(
             "{} is a contained seat's private clone, so only a contained launch may re-enter it: \
@@ -2018,10 +2033,23 @@ pub(crate) fn session_start_with_receipt(
     // Mirrors the BUG-573 contract (a completing read-only op exits 0).
     // trace:BUG-574 | ai:claude
     // BUG-2143: only a lease holding a live linked worktree is re-entered.
-    let existing_leases = crate::worktree_gc::reenterable_leases(&project_root);
     // BUG-2223: the orphan being adopted is replaced below, not re-entered.
-    let existing = existing_lease_for_scope(&existing_leases, owns)
-        .filter(|e| !adopted_orphan.as_ref().is_some_and(|o| o.id == e.id));
+    let existing_leases: Vec<SessionLease> = crate::worktree_gc::reenterable_leases(&project_root)
+        .into_iter()
+        .filter(|e| !adopted_orphan.as_ref().is_some_and(|o| o.id == e.id))
+        .collect();
+    let existing = existing_lease_for_scope(&existing_leases, owns);
+    // ...and another session's tree on the scope refuses the adoption rather
+    // than being re-entered in its place.
+    if let (Some(existing), Some(orphan)) = (existing, &adopted_orphan) {
+        anyhow::bail!(
+            "scope `{owns}` is also held by session {} ({}), so the orphaned lease {}'s tree \
+             is not re-entered. Nothing was changed in it.",
+            &existing.id[..existing.id.len().min(8)],
+            existing.worktree_path.display(),
+            &orphan.id[..orphan.id.len().min(8)],
+        );
+    }
     if let Some(existing) = existing {
         {
             eprintln!(
@@ -2145,10 +2173,13 @@ pub(crate) fn session_start_with_receipt(
     let orchestrator_corroborated = orchestrator::detect(&project_root).is_orchestrated();
     let force_claim_effective =
         effective_force_claim_for_session_start(force_claim, orchestrator_corroborated);
+    // BUG-2223: the orphan being adopted is what holds the spec In Progress,
+    // so adopting it passes the status gate; it bypasses nothing after this.
+    // trace:BUG-2223 | ai:claude
     match preflight_spec_status_review_aware(
         owns,
         preflight_status.as_ref(),
-        force_claim_effective,
+        force_claim_effective || adopted_orphan.is_some(),
         is_review_session,
     ) {
         PreflightDecision::Refuse(msg) => anyhow::bail!("{}", msg),
