@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-24T22:36:25.133277125Z
-modified_at: 2026-10-25T20:07:34.105983247Z
+modified_at: 2026-10-26T14:48:16.018018158Z
 req_type: Task
 tags:
 - from-review:PR-2905
@@ -33,6 +33,12 @@ comments:
   content: 'PROXY DECISION for joe: Approve adversarial persisted-JSON tests for top-level and tagged-action unknown fields; any parser repair must retain strict rejection.'
   created_at: 2026-10-25T04:52:17.674882013Z
   modified_at: 2026-10-25T04:52:17.674882013Z
+- id: 01a178ae-fb92-7a70-8fb6-0c6cf51d4d35
+  author: joe
+  content: 'ADVISOR: landed in e27af75054 (PR #2924, Refs-titled train car); the round-4 reviewer verified this task item by item (verdict at 4b2b0b3983).'
+  created_at: 2026-10-26T14:48:16.018018158Z
+  modified_at: 2026-10-26T14:48:16.018018158Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
 history:
 - id: 01a17167-0dae-72d3-a87d-24d9abb31ea7
   author: joe
