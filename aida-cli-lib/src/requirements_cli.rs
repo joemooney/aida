@@ -6275,6 +6275,10 @@ fn run_show(
                                     #[serde(skip_serializing_if = "Option::is_none")]
                                     drift_since_filing: Option<String>,
                                 }
+                                // BUG-2221: name the per-target relationship
+                                // resolution so it is attributable (one backend
+                                // read per edge). trace:BUG-2221 | ai:claude
+                                let relationships_phase = crate::usage::phase("relationships");
                                 let relationships: Vec<RelJson> = req
                                     .relationships
                                     .iter()
@@ -6290,6 +6294,7 @@ fn run_show(
                                         }
                                     })
                                     .collect();
+                                drop(relationships_phase);
                                 let git_linkage = if *no_git {
                                     None
                                 } else {
@@ -6364,6 +6369,11 @@ fn run_show(
                                         drift_since_filing,
                                     })
                                 };
+                                // BUG-2221: everything from here to the final
+                                // `println!` (queue-membership read, blocker
+                                // resolution, JSON assembly, serialization) is
+                                // the `render` phase. trace:BUG-2221 | ai:claude
+                                let _render_phase = crate::usage::phase("render");
                                 // BUG-527: carry the human-visible queue membership
                                 // into JSON as structured role/position pairs. The
                                 // helper uses the same per-role rank as the human

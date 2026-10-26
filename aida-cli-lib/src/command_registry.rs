@@ -380,8 +380,37 @@ pub(crate) fn lookup(name: &str) -> Option<&'static CommandReg> {
 
 /// The full CLI clap tree: the legacy derived `Cli` plus every registered
 /// command, each placed after its `help_after` anchor.
+///
+/// BUG-2221: built once per process into [`PRISTINE_COMMAND`] and cloned per
+/// caller. `aida show <id> --format json` used to construct this tree up to
+/// five times before dispatch (alias guarding, extension shadowing, the parse,
+/// the JSON capability gate, and the capability reparse); each construction
+/// re-derives the legacy `Cli`, instantiates every registered command, and
+/// re-sorts help order. The tree is immutable per process (the registry is
+/// static), so one build is semantically identical — callers that mutate
+/// (parsing) mutate their own clone. trace:BUG-2221 | ai:claude
 // trace:STORY-1728 | ai:claude
 pub(crate) fn built_command() -> clap::Command {
+    PRISTINE_COMMAND.get_or_init(build_pristine_command).clone()
+}
+
+/// BUG-2221: the one pristine tree per process. trace:BUG-2221 | ai:claude
+static PRISTINE_COMMAND: std::sync::OnceLock<clap::Command> = std::sync::OnceLock::new();
+
+/// BUG-2221: how many times the tree was actually CONSTRUCTED (not cloned) in
+/// this process — the structural regression surface for the one-pristine-tree
+/// guarantee. trace:BUG-2221 | ai:claude
+static PRISTINE_BUILDS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+/// BUG-2221: observed pristine-tree construction count (tests only assert it
+/// stops growing; they never assume a starting value, since any earlier call
+/// in the process initializes the tree). trace:BUG-2221 | ai:claude
+pub(crate) fn pristine_tree_builds() -> usize {
+    PRISTINE_BUILDS.load(std::sync::atomic::Ordering::SeqCst)
+}
+
+fn build_pristine_command() -> clap::Command {
+    PRISTINE_BUILDS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     let mut root = Cli::command();
     let legacy: Vec<String> = root
         .get_subcommands()
@@ -541,3 +570,7 @@ mod story_1728_policy_parity_tests;
 #[cfg(test)]
 #[path = "tests/bug_2189_format_collision_tests.rs"]
 mod bug_2189_format_collision_tests;
+
+#[cfg(test)]
+#[path = "tests/bug_2221_pristine_tree_tests.rs"]
+mod bug_2221_pristine_tree_tests;
