@@ -7,8 +7,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-26T06:53:35.570888485Z
-modified_at: 2026-10-26T06:53:43.648332482Z
+modified_at: 2026-10-26T06:54:20.709680663Z
 req_type: Bug
+comments:
+- id: 01a176fd-1825-7843-905a-562d813d45c1
+  author: joe
+  content: 'ADVISOR brief: high priority, every seat lane is exposed. Before committing, run git status and make sure none of the sandbox placeholder paths (zero-byte read-only files such as .gitmodules, .idea, .vscode, .claude/launch.json, .claude/loop.md, .claude/agents, .claude/routines, .claude/output-styles, .claude/scheduled_tasks.json) are staged in YOUR OWN commit. Find where seat clones are created (BUG-2169 seat_clone code) and carry the primary info/exclude sandbox entries into the clone; add a test that a fresh seat clone ignores a zero-byte read-only placeholder. LIGHT gate.'
+  created_at: 2026-10-26T06:54:20.709680663Z
+  modified_at: 2026-10-26T06:54:20.709680663Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
 history:
 - id: 01a176fc-8760-7d10-b3cb-bbc1ec863bed
   author: joe
