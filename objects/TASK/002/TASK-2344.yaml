@@ -13,12 +13,12 @@ description: |
   Options: write the result record first, or reap orphans older than a TTL during the lock held by submit_request/cancel_request.
 
   Raised in review of PR-2905: https://github.com/joemooney/aida/pull/2905#issuecomment-6390394038
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-24T22:36:27.858473051Z
-modified_at: 2026-10-26T14:48:33.424425918Z
+modified_at: 2026-10-26T14:48:36.278271156Z
 req_type: Task
 tags:
 - from-review:PR-2905
@@ -63,6 +63,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a178af-4ab6-7460-8ab5-038932e4eb23
+  author: joe
+  timestamp: 2026-10-26T14:48:36.278264552Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 9457e495247a3c9de111d15507fabd2cd0923079
   branch: pr-2905
