@@ -27,7 +27,9 @@
 //! This module owns the **pure pieces** so they're unit-testable without
 //! `git`/`gh`: spec resolution from the worktree's branch/lease, the commit
 //! subject derivation (with the `(SPEC-ID)` trailer), the finish-mode
-//! selection from the flags, and the dry-run plan formatting.
+//! selection from the flags, and the dry-run plan formatting. It also owns the
+//! step-1 staging probes: only tracked or already-staged changes are
+//! committed (`git add -u`); untracked files are named, never swept in.
 //!
 //! trace:STORY-720
 
@@ -172,6 +174,75 @@ pub(crate) fn format_ship_plan(spec: &str, branch: &str, mode: FinishMode, dirty
     out
 }
 
+/// Whether step 1 has anything to commit: a modified/deleted tracked file or
+/// an addition the human already staged. Untracked paths do not count — a
+/// sandboxed seat worktree carries untracked bind-mounted devices
+/// (`.claude/agents`, `.gitmodules`, ...) that `git add` cannot stage, and a
+/// stray scratch file must never ride into the spec commit. A failed status
+/// is pending work, never "nothing to commit" (BUG-1985 F4).
+// trace:TASK-2351 | ai:claude
+pub(crate) fn tracked_changes_pending(project_root: &std::path::Path) -> bool {
+    aida_core::git_ops::host_git_command(project_root)
+        .args(["status", "--porcelain", "--untracked-files=no"])
+        .output()
+        .map(|o| !o.status.success() || !o.stdout.is_empty())
+        .unwrap_or(true)
+}
+
+/// Untracked, non-ignored paths that are real files or symlinks — the ones a
+/// human may have meant to ship but step 1 leaves out. Devices, FIFOs and
+/// other placeholders the sandbox mounts are dropped.
+// trace:TASK-2351 | ai:claude
+pub(crate) fn untracked_regular_files(project_root: &std::path::Path) -> Vec<String> {
+    let Ok(out) = aida_core::git_ops::host_git_command(project_root)
+        .args(["ls-files", "--others", "--exclude-standard", "-z"])
+        .output()
+    else {
+        return Vec::new();
+    };
+    if !out.status.success() {
+        return Vec::new();
+    }
+    let paths: Vec<String> = out
+        .stdout
+        .split(|b| *b == 0)
+        .filter(|p| !p.is_empty())
+        .map(|p| String::from_utf8_lossy(p).into_owned())
+        .collect();
+    regular_paths_only(project_root, paths)
+}
+
+/// Keep the paths under `root` that are regular files or symlinks.
+fn regular_paths_only(root: &std::path::Path, paths: Vec<String>) -> Vec<String> {
+    paths
+        .into_iter()
+        .filter(|p| {
+            std::fs::symlink_metadata(root.join(p))
+                .map(|m| m.file_type().is_file() || m.file_type().is_symlink())
+                .unwrap_or(false)
+        })
+        .collect()
+}
+
+/// Warning printed when step 1 leaves untracked files out of the commit.
+/// `None` when there are none. Lists at most five paths.
+// trace:TASK-2351 | ai:claude
+pub(crate) fn untracked_left_out_note(paths: &[String]) -> Option<String> {
+    if paths.is_empty() {
+        return None;
+    }
+    let shown: Vec<&str> = paths.iter().take(5).map(String::as_str).collect();
+    let more = paths.len().saturating_sub(shown.len());
+    let mut list = shown.join(", ");
+    if more > 0 {
+        list.push_str(&format!(", and {more} more"));
+    }
+    Some(format!(
+        "untracked files not committed: {list} — `git add` the ones that belong to this \
+         change and re-run"
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -277,5 +348,71 @@ mod tests {
         assert!(plan.contains("open the PR"));
         assert!(plan.contains("not merged"));
         assert!(!plan.contains("squash-merge"));
+    }
+
+    // trace:TASK-2351 | ai:claude
+    fn git(dir: &std::path::Path, args: &[&str]) {
+        let out = crate::test_git::git_command()
+            .args(["-c", "user.name=t", "-c", "user.email=t@example.com"])
+            .args(args)
+            .current_dir(dir)
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "git {args:?} failed");
+    }
+
+    fn repo() -> tempfile::TempDir {
+        let tmp = tempfile::tempdir().unwrap();
+        git(tmp.path(), &["init", "-q", "-b", "main"]);
+        std::fs::write(tmp.path().join("a.txt"), "a\n").unwrap();
+        git(tmp.path(), &["add", "a.txt"]);
+        git(tmp.path(), &["commit", "-qm", "init"]);
+        tmp
+    }
+
+    #[test]
+    fn untracked_files_alone_are_not_pending_work() {
+        let tmp = repo();
+        std::fs::write(tmp.path().join("stray.txt"), "x\n").unwrap();
+        assert!(!tracked_changes_pending(tmp.path()));
+        assert_eq!(untracked_regular_files(tmp.path()), vec!["stray.txt"]);
+    }
+
+    #[test]
+    fn tracked_edit_and_staged_addition_are_pending_work() {
+        let tmp = repo();
+        std::fs::write(tmp.path().join("a.txt"), "changed\n").unwrap();
+        assert!(tracked_changes_pending(tmp.path()));
+
+        let tmp = repo();
+        std::fs::write(tmp.path().join("new.txt"), "n\n").unwrap();
+        git(tmp.path(), &["add", "new.txt"]);
+        assert!(tracked_changes_pending(tmp.path()));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn non_regular_untracked_paths_are_dropped() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::write(tmp.path().join("real.txt"), "r\n").unwrap();
+        let fifo = std::process::Command::new("mkfifo")
+            .arg(tmp.path().join("agents"))
+            .status()
+            .unwrap();
+        assert!(fifo.success());
+        let kept = regular_paths_only(
+            tmp.path(),
+            vec!["real.txt".into(), "agents".into(), "missing".into()],
+        );
+        assert_eq!(kept, vec!["real.txt"]);
+    }
+
+    #[test]
+    fn left_out_note_caps_the_list() {
+        assert_eq!(untracked_left_out_note(&[]), None);
+        let paths: Vec<String> = (0..7).map(|i| format!("f{i}")).collect();
+        let note = untracked_left_out_note(&paths).unwrap();
+        assert!(note.contains("f0, f1, f2, f3, f4, and 2 more"));
+        assert!(!note.contains("f5"));
     }
 }
