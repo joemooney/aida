@@ -28,7 +28,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T06:38:42.269077518Z
-modified_at: 2026-10-26T06:13:05.535543693Z
+modified_at: 2026-10-26T06:17:05.603326736Z
 req_type: Bug
 comments:
 - id: 01a17250-10a0-76e1-b802-890d5a4ca31b
@@ -251,6 +251,29 @@ comments:
   created_at: 2026-10-26T06:08:29.011387101Z
   modified_at: 2026-10-26T06:08:29.011387101Z
   session_id: 761a4fea-f388-41d1-93d9-f1386951253c
+- id: 01a176da-fd43-7be1-885e-25733aed60af
+  author: joe
+  content: |-
+    SKETCH v2 (positive path) — AWAITING ADVISOR SIGNOFF. Full text: docs/plans/2026-10-25-bug-2221-positive-path-sketch.md (branch bug-2221-positive).
+
+    Round-2 review findings 1-7 (verdict at 5f777c654a) are all already resolved on main by the 5th branch commit 'apply the 2026-10-25 advisor ruling', which is part of squash 98e6823c07. There is no further code change for them. The plan doc maps each finding to its file:line.
+
+    Diagnosis. Seat clone sharing the primary's objects: 80,603 commits, 1,337 refs, load 12-14 on 6 cores.
+    (1) Every positive show's floor is the unchanged original 'log --all -F --date-order --grep': 0.75-1.0 s. --date-order alone adds about 0.28 s; even 'rev-list --all' costs 0.8 s. BUG-2224 measured 1562 ms by default vs 405 ms with --no-git, and the log was 837 ms of that.
+    (2) The primary's commit-graph is stale (2026-09-26). 20,543 commits (25%) postdate it and objects span 50 packs. This is an environment issue and its effect is not measured: the seat refused a scratch commit-graph write.
+    (3) The ~3 s non-commit stage under load is the in-flight branch search for unshipped specs: one 'branch --all --contains' per referencing commit at ~0.43 s idle each, up to 20 commits / 2 s budget.
+    (4) About 0.3 s of the BUG-2224 gap is unattributed. Phase telemetry cannot be redirected in this seat, so an operator-run phased show is needed.
+
+    Proposal.
+    P1: extend the v1 CLOSED cache with exact parsed hits (OID/short/subject/committer date) and the same seed/snapshot/after-recheck rules. A warm positive show then walks only the commits above the frontier. Exact --date-order order is rebuilt from hit-ancestry recorded during the walk (O1, recommended); O2, date-only sort, needs a ruling that the order is non-normative.
+    P2: unshipped specs check id-named refs first with 'merge-base --is-ancestor' (~14-44 ms each). The original --contains scan stays as the unchanged fallback.
+    No budget, deadline, cutoff, or telemetry change. Named hermetic tests and the AC4 measurement plan are in the doc.
+
+    Questions: approve P1/O1 (or O2)? Approve P2? Is an operator commit-graph refresh in scope before the AC4 measurement?
+  created_at: 2026-10-26T06:17:05.603326736Z
+  modified_at: 2026-10-26T06:17:05.603326736Z
+  session_id: 01a176d74bc8
+  harness_version: 2.1.310 (Claude Code)
 history:
 - id: 01a173f1-1a2e-7c12-a2a1-e6bdafd814de
   author: joe
