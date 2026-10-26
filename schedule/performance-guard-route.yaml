@@ -7,19 +7,19 @@ result: done
 due_since: 2026-10-25T18:52:01.239658684Z
 due_reason: on CronJobFailed:performance-guard
 due_failure:
-  trip_id: performance-guard@2026-10-26T12:56:01.554848718Z
+  trip_id: performance-guard@2026-10-26T19:01:27.776479177Z
   performance:
   - command: show
     budget_ms: 1000
-    over_budget: 177
-    denominator: 275
-    proportion_millipercent: 64364
+    over_budget: 131
+    denominator: 224
+    proportion_millipercent: 58482
     tolerated_millipercent: 10000
     window_hours: 24
-    worst_ms: 11840
-    excluded_samples: 90
+    worst_ms: 4306
+    excluded_samples: 117
     lineage_scoped: true
     ceiling_ms: 5000
-    ceiling_breached: true
+    ceiling_breached: false
   job: performance-guard
   error: 'exit 1: '
