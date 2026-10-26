@@ -10,12 +10,12 @@ description: |-
   No path re-launches a worker in the existing orphaned worktree. Workaround: trust the worktree and run `claude --bg` inside it.
   Also: with the advisor seat left at a codex default, every headless launch failed with the containment-vendor error ('codex vendor cannot run a contained session'); consider defaulting contained headless launches to a vendor that supports containment or naming AIDA_HEADLESS_VENDOR in the first line.
   Acceptance: when the lease is orphaned and no claude session is recorded, the hint offers a working in-place relaunch (e.g. --resume falls back to a cold launch in the orphaned worktree on its existing branch), and the two error messages never point at each other.
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T17:38:11.351372157Z
-modified_at: 2026-10-26T07:41:50.542514858Z
+modified_at: 2026-10-26T14:45:38.542516367Z
 req_type: Bug
 tags:
 - from-advisor
@@ -144,6 +144,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a178ac-93ef-7990-ac5a-6280cb3ab33b
+  author: aida-auto-bump
+  timestamp: 2026-10-26T14:45:38.415732033Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a178ac-946e-7341-b9d9-8be0341d50f3
+  timestamp: 2026-10-26T14:45:38.542509598Z
+  agent: aida
+  commit_sha: b3bad5b36fafe528c458a604c932c3683d77178e
+  summary: All BUG-2223 acceptance + advisor bindings 1-5 met with tests (orphan_reentry_tests); round-2 ratchet fixed via host_git_command; CI green at head 994a4c1
+  review_verdict: approved
 filed_at:
   code_sha: 54c64e26a58810f213f0a0fa1720a69bcce37ea3
   branch: main
@@ -152,3 +166,7 @@ filed_at:
   aida_build_sha: a01a698998
   vendor: claude
   session: cde796d3-1750-4745-a8f9-7ab3bc7c3519
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-26T14:45:38.415727904Z
+  completion_sha: b3bad5b36fafe528c458a604c932c3683d77178e
