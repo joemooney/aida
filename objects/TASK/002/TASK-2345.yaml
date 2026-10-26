@@ -10,12 +10,12 @@ description: |
   Not a merge blocker (green in CI), but a latent test-fragility: a function on the per-turn mailbox-notice path now depends on the real process tree. Consider a fixture seam (inject the ancestry/registry lookup) so the test asserts behaviour without reaching outside its hermetic root.
 
   Raised in review of PR-2909: https://github.com/joemooney/aida/pull/2909#issuecomment-6390882870
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-24T23:29:02.942675586Z
-modified_at: 2026-10-26T02:23:57.405216496Z
+modified_at: 2026-10-26T03:17:07.552671645Z
 req_type: Task
 tags:
 - from-review:PR-2909
@@ -105,6 +105,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a17636-3960-70f0-9cb5-974039f55da9
+  author: aida-orchestrator
+  timestamp: 2026-10-26T03:17:07.552693928Z
+  session_id: 01a17633a959
+  harness_version: 2.1.310 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: de9c0ffb7f27102fbf477a2c7aa5155724fe20bc
   branch: pr-2909
@@ -114,3 +123,11 @@ filed_at:
   vendor: claude
   session: 01a16ff80ae6
   harness_version: 2.1.310 (Claude Code)
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Isolation seam and pure inbox-identity policy are sound and match the TASK-2345 ruling, but the awaiting mail headline lost its handle-spelling validation (a production behaviour change the PR says it does not make), and no test covers the bound-session awaiting path; CI was still in progress at the reviewed head.
+  recovery_hint: address the review findings, move TASK-2345 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-10-26T03:17:07.552671645Z
