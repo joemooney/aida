@@ -1,0 +1,33 @@
+id: 01a176bd-2c60-75c3-accb-92f2a1e45533
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-003
+title: 'Review PR-2936: [AI:claude] fix(status): seat-clone origin lookups never read a refusal as local-only (TASK-2356)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a17552`) for branch `task-2356`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2936>
+  - Branch: `task-2356` → `main`
+
+  ## Covers
+
+  - TASK-2356
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2936` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-26T05:44:31.584823055Z
+modified_at: 2026-10-26T05:44:31.584823055Z
+req_type: Story
+filed_at:
+  code_sha: abc38c78319ae555fd76db8cb668a8dc0c814444
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c2ccffe193
+  vendor: claude
+  session: 761a4fea-f388-41d1-93d9-f1386951253c
