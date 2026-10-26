@@ -116,6 +116,27 @@ that exercise a function reading an env var directly. The same root
 cause underlies both: shared mutable state across the test set, with
 no synchronisation.
 
+## Tests that resolve the current agent session
+
+Agents run the suite from inside live sessions. Code that resolves "this
+session" (`current_native_session_id`, `current_session_entry_for_cwd`,
+`touch_session_start_agent`, `inbox_identities`) reads the client's
+session env (`CLAUDE_CODE_SESSION_ID`, `CLAUDE_PID`, `CODEX_THREAD_ID`,
+`AIDA_HANDLE`, `AIDA_AGENT_TYPE`, …), walks the real process ancestry, and
+matches the real project registry. A test that clears only the keys it
+sets passes in CI and fails in an agent shell.
+
+- Use `test_env::AgentSessionIsolation::apply(&[...])` for such tests. It
+  clears the session evidence and launch identity, applies your pairs
+  under one env lock, and makes the vendor-ancestor walk see no client
+  (a `#[cfg(test)]` seam; production has no switch).
+- Prefer a pure policy over explicit facts when the logic allows it:
+  mailbox identity tests build `MailIdentityFacts` and call
+  `inbox_identities_from_facts`; the awaiting report and urgent count take
+  injected facts/identities.
+- To check a change: run the affected filter once with the session env
+  present and once with it scrubbed. Both must pass. (TASK-2349, TASK-2345)
+
 ## What stays out of scope
 
 This doc is about *test* hygiene. Production code that mutates the
