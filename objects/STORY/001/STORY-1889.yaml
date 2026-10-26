@@ -12,12 +12,12 @@ description: |-
   4. Behaviour is unchanged. Show it with the existing story_1698/story_1700 mandate tests plus a before/after list of every refusal reason string.
 
   Sequencing: one human-merged refactor PR. Land it after the open PRs touching these files (#2798, #2792, #2789) merge, to avoid conflicts. Architecture change, so it needs a sketch with advisor signoff first.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-21T15:33:51.496539087Z
-modified_at: 2026-10-26T18:22:22.464295572Z
+modified_at: 2026-10-26T19:53:29.657290220Z
 req_type: Story
 tags:
 - architecture
@@ -487,6 +487,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a179c6-6d39-7493-83f9-b1ae385702ab
+  author: aida-orchestrator
+  timestamp: 2026-10-26T19:53:29.657310608Z
+  session_id: 01a179b75a37
+  harness_version: 2.1.310 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 7be4321436b8f93b2daba2bd71b649046818e35f
   branch: main
@@ -495,3 +504,11 @@ filed_at:
   aida_build_sha: 7be4321436
   vendor: claude
   session: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Round-2 findings addressed (record transitions + sealed admissions + reviewer-hold preservation moved verbatim into gate/, ratchets pin each call; lib-1 now green). But taking dispatch.rs off the floor leaves gate-trusted primitives (sha256_hex, read_bounded_regular_file, result/request/brief paths, open_pinned_dispatch_subdir, write_private_atomic) unprotected, and 4 new refusal strings are undeclared in the AC4 inventory. CI lib-0/cli-0/rest/gates still running at review time.
+  recovery_hint: address the review findings, move STORY-1889 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-10-26T19:53:29.657290220Z
