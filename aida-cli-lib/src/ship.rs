@@ -224,6 +224,44 @@ fn regular_paths_only(root: &std::path::Path, paths: Vec<String>) -> Vec<String>
         .collect()
 }
 
+/// Whether `path` (repository-relative) on disk at `meta` looks like a sandbox
+/// stand-in: an empty file that is either read-only or sits at one of the
+/// paths the Claude Code sandbox masks. A real empty file a human adds (an
+/// `__init__.py`) is writable and at no masked path, so it passes.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-003 | ai:claude
+pub(crate) fn is_sandbox_placeholder(path: &str, meta: &std::fs::Metadata) -> bool {
+    if !meta.file_type().is_file() || meta.len() != 0 {
+        return false;
+    }
+    meta.permissions().readonly() || crate::seat_clone::SANDBOX_PLACEHOLDER_PATHS.contains(&path)
+}
+
+/// Staged additions that are sandbox stand-ins (see [`is_sandbox_placeholder`]).
+/// Step 1 refuses to commit while any is staged: a committed `.gitmodules`
+/// stand-in makes session end and worktree dismiss refuse salvage.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-003 | ai:claude
+pub(crate) fn staged_sandbox_placeholders(project_root: &std::path::Path) -> Vec<String> {
+    let Ok(out) = aida_core::git_ops::host_git_command(project_root)
+        .args(["diff", "--cached", "--name-only", "--diff-filter=A", "-z"])
+        .output()
+    else {
+        return Vec::new();
+    };
+    if !out.status.success() {
+        return Vec::new();
+    }
+    out.stdout
+        .split(|b| *b == 0)
+        .filter(|p| !p.is_empty())
+        .map(|p| String::from_utf8_lossy(p).into_owned())
+        .filter(|p| {
+            std::fs::symlink_metadata(project_root.join(p))
+                .map(|m| is_sandbox_placeholder(p, &m))
+                .unwrap_or(false)
+        })
+        .collect()
+}
+
 /// Warning printed when step 1 leaves untracked files out of the commit.
 /// `None` when there are none. Lists at most five paths.
 // trace:TASK-2351 | ai:claude
@@ -405,6 +443,40 @@ mod tests {
             vec!["real.txt".into(), "agents".into(), "missing".into()],
         );
         assert_eq!(kept, vec!["real.txt"]);
+    }
+
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-003 | ai:claude
+    #[test]
+    fn staged_sandbox_stand_ins_are_named_and_real_files_pass() {
+        let tmp = repo();
+        let root = tmp.path();
+        // Empty at a masked path, writable: the host view of a stand-in.
+        std::fs::write(root.join(".gitmodules"), "").unwrap();
+        // Empty and read-only at an unlisted path: also a stand-in.
+        std::fs::write(root.join("masked"), "").unwrap();
+        // A real empty source file and a real non-empty .idea-style file.
+        std::fs::write(root.join("__init__.py"), "").unwrap();
+        std::fs::write(root.join(".vscode"), "{}\n").unwrap();
+        git(
+            root,
+            &["add", ".gitmodules", "masked", "__init__.py", ".vscode"],
+        );
+        let mut ro = std::fs::metadata(root.join("masked"))
+            .unwrap()
+            .permissions();
+        ro.set_readonly(true);
+        std::fs::set_permissions(root.join("masked"), ro).unwrap();
+
+        let mut found = staged_sandbox_placeholders(root);
+        found.sort();
+        assert_eq!(found, vec![".gitmodules", "masked"]);
+    }
+
+    #[test]
+    fn nothing_staged_names_no_stand_ins() {
+        let tmp = repo();
+        std::fs::write(tmp.path().join(".idea"), "").unwrap();
+        assert!(staged_sandbox_placeholders(tmp.path()).is_empty());
     }
 
     #[test]

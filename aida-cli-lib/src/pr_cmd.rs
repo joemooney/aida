@@ -1350,6 +1350,15 @@ pub(crate) fn run_human_finish_ceremony(opts: HumanFinishOptions) -> Result<()> 
     if dirty {
         let subject = ship::commit_subject(&spec, opts.message.as_deref());
         eprintln!("  step 1: committing uncommitted work — {}", subject);
+        // trace:BUG-b6b1278890774ef993d2ebc327862470-003 | ai:claude
+        let placeholders = ship::staged_sandbox_placeholders(&project_root);
+        if !placeholders.is_empty() {
+            anyhow::bail!(
+                "staged files are empty sandbox stand-ins, not source: {} — unstage them with \
+                 `git rm --cached -- <path>` and re-run",
+                placeholders.join(", ")
+            );
+        }
         let add = std::process::Command::new("git")
             .current_dir(&project_root)
             .args(["add", "-u"])

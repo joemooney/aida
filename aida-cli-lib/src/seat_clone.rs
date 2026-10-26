@@ -528,12 +528,11 @@ fn clone_and_checkout(
     if let Some(dir) = exclude.parent() {
         std::fs::create_dir_all(dir)?;
     }
-    let mut body = std::fs::read_to_string(&exclude).unwrap_or_default();
-    if !body.is_empty() && !body.ends_with('\n') {
-        body.push('\n');
-    }
-    body.push_str("# AIDA runtime state (BUG-2169 seat clone)\n/.aida/*\n.aida-store\n");
-    std::fs::write(&exclude, body).with_context(|| format!("write {}", exclude.display()))?;
+    let existing = std::fs::read_to_string(&exclude).unwrap_or_default();
+    let primary =
+        std::fs::read_to_string(main.join(".git").join("info").join("exclude")).unwrap_or_default();
+    std::fs::write(&exclude, seat_exclude_body(&existing, &primary))
+        .with_context(|| format!("write {}", exclude.display()))?;
 
     let marker = SeatCloneMarker {
         main: main.canonicalize().unwrap_or_else(|_| main.to_path_buf()),
@@ -549,6 +548,58 @@ fn clone_and_checkout(
     std::fs::write(&marker_path, toml::to_string(&marker)?)
         .with_context(|| format!("write {}", marker_path.display()))?;
     Ok(())
+}
+
+/// Repository-relative paths the Claude Code bash sandbox masks with
+/// stand-ins (`/dev/null` binds inside the sandbox, empty read-only files on
+/// the host). They are never source: a seat clone excludes them, and ship
+/// refuses to commit one that was staged anyway.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-003 | ai:claude
+pub(crate) const SANDBOX_PLACEHOLDER_PATHS: &[&str] = &[
+    ".claude/agents",
+    ".claude/launch.json",
+    ".claude/loop.md",
+    ".claude/output-styles",
+    ".claude/routines",
+    ".claude/scheduled_tasks.json",
+    ".gitmodules",
+    ".idea",
+    ".vscode",
+];
+
+/// The seat clone's `info/exclude`: the clone's own body, then the AIDA
+/// runtime entries, the sandbox stand-ins, and every entry of the primary's
+/// `info/exclude` the clone lacks. A seat clone is a separate clone, so
+/// without this it sees the stand-ins as untracked files a lane commit picks
+/// up. Primary entries naming `.aida` are skipped: the clone keeps its own
+/// `/.aida/*`, which leaves tracked `.aida/` config re-includable.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-003 | ai:claude
+pub(crate) fn seat_exclude_body(existing: &str, primary: &str) -> String {
+    let mut body = existing.to_string();
+    if !body.is_empty() && !body.ends_with('\n') {
+        body.push('\n');
+    }
+    body.push_str("# AIDA runtime state (BUG-2169 seat clone)\n/.aida/*\n.aida-store\n");
+    body.push_str("# Claude Code sandbox stand-ins, never source\n");
+    for path in SANDBOX_PLACEHOLDER_PATHS {
+        body.push_str(&format!("/{path}\n"));
+    }
+    let mut present: std::collections::HashSet<String> =
+        body.lines().map(|l| l.trim().to_string()).collect();
+    let inherited: Vec<&str> = primary
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty() && !l.starts_with('#') && !l.contains(".aida"))
+        .filter(|l| present.insert(l.to_string()))
+        .collect();
+    if !inherited.is_empty() {
+        body.push_str("# Inherited from the primary checkout's info/exclude\n");
+        for line in inherited {
+            body.push_str(line);
+            body.push('\n');
+        }
+    }
+    body
 }
 
 /// Removes a just-made clone and releases its pin when dropped armed, so a

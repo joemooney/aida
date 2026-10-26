@@ -213,6 +213,45 @@ fn create_makes_a_reference_clone_pins_the_base_and_writes_the_marker() {
     assert!(!ref_exists(&fx.main, &made.pin));
 }
 
+// trace:BUG-b6b1278890774ef993d2ebc327862470-003 | ai:claude
+#[test]
+fn a_seat_clone_excludes_sandbox_stand_ins_and_inherits_the_primary_exclude() {
+    let fx = fixture();
+    std::fs::write(
+        fx.main.join(".git/info/exclude"),
+        "# comment\n/.aida/\nlocal-scratch/\n/.idea\n",
+    )
+    .unwrap();
+    let dest = fx.root.join("seats").join("aida-seat-aida-stand-ins");
+
+    create(&fx.main, &dest, "feat", "origin/main").unwrap();
+
+    for path in SANDBOX_PLACEHOLDER_PATHS {
+        let full = dest.join(path);
+        std::fs::create_dir_all(full.parent().unwrap()).unwrap();
+        std::fs::write(&full, "").unwrap();
+    }
+    std::fs::create_dir_all(dest.join("local-scratch")).unwrap();
+    std::fs::write(dest.join("local-scratch/x"), "x").unwrap();
+    assert!(
+        git_ok(&dest, &["status", "--porcelain"]).is_empty(),
+        "stand-ins and the primary's own excludes stay out of the clone's status"
+    );
+    let exclude = std::fs::read_to_string(dest.join(".git/info/exclude")).unwrap();
+    assert!(!exclude.contains("/.aida/\n"), "{exclude}");
+    assert_eq!(exclude.matches("/.idea\n").count(), 1, "{exclude}");
+}
+
+#[test]
+fn seat_exclude_body_dedupes_and_skips_aida_and_comments() {
+    let body = seat_exclude_body("# git default\n", "#c\n\n/.aida/*\nfoo\nfoo\n/.vscode\n");
+    assert!(body.starts_with("# git default\n"));
+    assert_eq!(body.matches("foo\n").count(), 1, "{body}");
+    assert_eq!(body.matches("/.vscode\n").count(), 1, "{body}");
+    assert_eq!(body.matches("/.aida/*\n").count(), 1, "{body}");
+    assert!(!body.contains("#c\n"), "{body}");
+}
+
 #[test]
 fn a_failed_clone_refuses_loudly_and_leaves_no_directory_and_no_pin() {
     let fx = fixture();
