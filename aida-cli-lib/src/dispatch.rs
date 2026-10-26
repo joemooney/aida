@@ -38,30 +38,19 @@ pub(crate) use dispatch_args::*;
 pub(crate) mod dispatch_flow;
 
 use crate::gate::dispatch_authority::{
-    check_request_authority, check_serve_grant, emit_dispatch_event, execution_refusal,
-    pass_admission, probe_worker_identity, resolve_verified_local_default_branch,
-    revalidate_request, run_admission, validate_branch, validate_lane_name, validate_pr,
-    validate_prs, validate_spec_in_store, verb_name_of, verb_subject_of, verify_claim_locked,
-    verify_frozen_brief, verify_running_claim, ClaimCaps, DispatchRequest, DispatchResult,
-    DispatchStatus, DispatchVerb, PassAdmission, RunningClaim, WorkerClaim,
+    check_request_authority, check_serve_grant, dead_claims, emit_dispatch_event,
+    execution_refusal, pass_admission, probe_worker_identity,
+    resolve_verified_local_default_branch, revalidate_request, run_admission, validate_branch,
+    validate_lane_name, validate_pr, validate_prs, validate_spec_in_store, verb_name_of,
+    verb_subject_of, verify_claim_locked, verify_frozen_brief, verify_running_claim, ClaimCaps,
+    DispatchRequest, DispatchResult, DispatchStatus, DispatchVerb, PassAdmission, RunningClaim,
+    WorkerClaim,
 };
 use crate::gate::dispatch_ledger::{
     inspect_dispatch_inventory_readonly, read_json_half, reconcile_inventory_locked, HalfRead,
     RecoveryFenceEntry, RECOVERY_GUIDANCE,
 };
 use crate::gate::dispatch_lock::{acquire_dispatch_lock, activate_lock_as_human, TICK_LOCK_FILE};
-// The STORY-1917 dispatch tests mounted below reach these moved gate items
-// through `super::*`.
-#[cfg(test)]
-use crate::gate::dispatch_ledger::{
-    check_recovery_index_bounds, MAX_DISPATCH_INVENTORY_ENTRIES, MAX_RECOVERY_FILE_BYTES,
-};
-#[cfg(test)]
-use crate::gate::dispatch_lock::{
-    activate_dispatch_v2_lock_quiescent, proc_mount_options, proc_view_refusal,
-    verify_sole_open_fd_for_inode, TEST_FAIL_ROLLBACK_EXCHANGE, TEST_POST_EXCHANGE_HOOK,
-    TEST_PRE_FLOCK_V2_HOOK, TEST_PROC_PID_ALLOWLIST, TEST_PROC_VIEW,
-};
 use crate::gate::mandate;
 use crate::gate::mandate::{MandateState, Scope};
 use crate::gate::seat_authority;
@@ -553,10 +542,7 @@ fn cleanup_unpublished_submission_locked(
     if wrote_result {
         let res_p = result_path(main_worktree, request_id);
         if let HalfRead::Valid(res) = read_json_half::<DispatchResult>(&res_p, "result") {
-            if res.id == request_id
-                && res.status == DispatchStatus::Pending
-                && res.worker_pid.is_none()
-                && res.claim_token.is_none()
+            if res.id() == request_id && res.status == DispatchStatus::Pending && res.is_unclaimed()
             {
                 let _ = std::fs::remove_file(&res_p);
             }
@@ -709,7 +695,7 @@ pub(crate) fn submit_request(
         if !existing_res.status.is_active() {
             continue;
         }
-        if existing_req.dedupe_key == dedupe_key {
+        if existing_req.dedupe_key() == dedupe_key {
             cleanup_unpublished_submission_locked(main_worktree, &request_id, wrote_brief, false);
             return Ok(SubmittedDispatch {
                 request: existing_req,
@@ -717,14 +703,14 @@ pub(crate) fn submit_request(
                 deduplicated: true,
             });
         }
-        if existing_req.target_key == target_key {
+        if existing_req.target_key() == target_key {
             cleanup_unpublished_submission_locked(main_worktree, &request_id, wrote_brief, false);
             let msg = format!(
                 "target `{target_key}` already has an active dispatch request {} ({}, status: {}); cancel it first with `aida dispatch cancel {}`",
-                existing_req.id,
-                existing_req.action.verb_str(),
+                existing_req.id(),
+                existing_req.action().verb_str(),
                 existing_res.status.as_str(),
-                existing_req.id
+                existing_req.id()
             );
             emit_dispatch_event(
                 main_worktree,
@@ -758,7 +744,6 @@ pub(crate) fn submit_request(
         bail!("internal validation check failed: {err:#}");
     }
 
-    let grant_prefix: String = caller.grant_id().chars().take(8).collect();
     let summary = if action.requires_serve() {
         format!(
             "queued {} {} (waiting for serve)",
@@ -768,27 +753,11 @@ pub(crate) fn submit_request(
     } else {
         format!("queued {} {}", action.verb_str(), action.subject_label())
     };
-    let res = DispatchResult {
-        id: request_id.clone(),
-        verb: action.verb_str().to_string(),
-        target: target_key,
-        dedupe_key,
-        status: DispatchStatus::Pending,
-        requested_at: now,
-        started_at: None,
-        finished_at: None,
-        requester_grant_prefix: grant_prefix,
-        mandate_id: caller.mandate().id.clone(),
-        worker_pid: None,
-        worker_start: None,
-        claim_token: None,
-        spawned_session: None,
-        exit_code: None,
-        summary: summary.clone(),
-        refusal_reason: None,
-        log_path: format!("{LOGS_SUBDIR}/{request_id}.log"),
-        notified_at: None,
-    };
+    let res = caller.pending_result(
+        &req,
+        summary.clone(),
+        format!("{LOGS_SUBDIR}/{request_id}.log"),
+    );
 
     let res_bytes = serde_json::to_vec_pretty(&res)?;
     let req_bytes = serde_json::to_vec_pretty(&req)?;
@@ -857,15 +826,15 @@ pub(crate) fn load_pair(
         read_bounded_regular_file(&request_path(main_worktree, id), MAX_BRIEF_BYTES, true)?;
     let req: DispatchRequest = serde_json::from_slice(&req_bytes)
         .with_context(|| format!("malformed request JSON for {id}"))?;
-    if req.id != id {
-        bail!("request file {id}.json has mismatched id `{}`", req.id);
+    if req.id() != id {
+        bail!("request file {id}.json has mismatched id `{}`", req.id());
     }
     let res_bytes =
         read_bounded_regular_file(&result_path(main_worktree, id), MAX_BRIEF_BYTES, true)?;
     let res: DispatchResult = serde_json::from_slice(&res_bytes)
         .with_context(|| format!("malformed result JSON for {id}"))?;
-    if res.id != id {
-        bail!("result file {id}.json has mismatched id `{}`", res.id);
+    if res.id() != id {
+        bail!("result file {id}.json has mismatched id `{}`", res.id());
     }
     Ok((req, res))
 }
@@ -882,7 +851,7 @@ pub(crate) fn resolve_pair(
     }
     let mut matches: Vec<(DispatchRequest, DispatchResult)> = load_all_pairs(main_worktree)?
         .into_iter()
-        .filter(|(req, _)| req.id.starts_with(needle))
+        .filter(|(req, _)| req.id().starts_with(needle))
         .collect();
     match matches.len() {
         0 => bail!("no dispatch request matching `{needle}`"),
@@ -921,7 +890,7 @@ pub(crate) fn cancel_request(
     if res.status != DispatchStatus::Pending {
         bail!(
             "cannot cancel dispatch request {}: status is `{}` (only `pending` requests can be cancelled)",
-            req.id,
+            req.id(),
             res.status.as_str()
         );
     }
@@ -929,18 +898,18 @@ pub(crate) fn cancel_request(
     res.finished_at = Some(now);
     res.summary = format!(
         "cancelled {} {}",
-        req.action.verb_str(),
-        req.action.subject_label()
+        req.action().verb_str(),
+        req.action().subject_label()
     );
     write_private_atomic(
-        &result_path(main_worktree, &req.id),
+        &result_path(main_worktree, &req.id()),
         &serde_json::to_vec_pretty(&res)?,
     )?;
     emit_dispatch_event(
         main_worktree,
-        &req.mandate_id,
-        req.action.verb_str(),
-        &req.action.subject_label(),
+        &req.mandate_id(),
+        req.action().verb_str(),
+        &req.action().subject_label(),
         Outcome::Skipped,
         Some("cancelled".to_string()),
     );
@@ -952,7 +921,7 @@ pub(crate) fn cancel_request(
 /// `"pending (waiting for serve)"`.
 // trace:STORY-1917 | ai:agy
 pub(crate) fn display_status(req: &DispatchRequest, res: &DispatchResult) -> String {
-    if res.status == DispatchStatus::Pending && req.action.requires_serve() {
+    if res.status == DispatchStatus::Pending && req.action().requires_serve() {
         "pending (waiting for serve)".to_string()
     } else {
         res.status.as_str().to_string()
@@ -972,14 +941,14 @@ pub(crate) fn format_inventory_list_text(
     }
     let mut out = String::new();
     for (req, res) in pairs {
-        let short_id: String = req.id.chars().take(8).collect();
+        let short_id: String = req.id().chars().take(8).collect();
         let status = display_status(req, res);
-        let ts = req.requested_at.format("%Y-%m-%d %H:%M:%S");
+        let ts = req.requested_at().format("%Y-%m-%d %H:%M:%S");
         out.push_str(&format!(
             "{short_id}  {:<28}  {:<6}  {:<18}  {}  {}\n",
             status,
-            req.action.verb_str(),
-            req.target_key,
+            req.action().verb_str(),
+            req.target_key(),
             ts,
             res.summary
         ));
@@ -1012,18 +981,18 @@ pub(crate) fn inventory_list_json(
         .iter()
         .map(|(req, res)| {
             serde_json::json!({
-                "id": req.id,
-                "verb": req.action.verb_str(),
-                "target": req.target_key,
-                "dedupe_key": req.dedupe_key,
+                "id": req.id(),
+                "verb": req.action().verb_str(),
+                "target": req.target_key(),
+                "dedupe_key": req.dedupe_key(),
                 "status": res.status.as_str(),
                 "display_status": display_status(req, res),
-                "waiting_for_serve": res.status == DispatchStatus::Pending && req.action.requires_serve(),
-                "requested_at": req.requested_at.to_rfc3339(),
+                "waiting_for_serve": res.status == DispatchStatus::Pending && req.action().requires_serve(),
+                "requested_at": req.requested_at().to_rfc3339(),
                 "started_at": res.started_at.map(|t| t.to_rfc3339()),
                 "finished_at": res.finished_at.map(|t| t.to_rfc3339()),
-                "mandate_id": req.mandate_id,
-                "requester_grant_prefix": res.requester_grant_prefix,
+                "mandate_id": req.mandate_id(),
+                "requester_grant_prefix": res.requester_grant_prefix(),
                 "summary": res.summary,
                 "refusal_reason": res.refusal_reason,
                 "request": req,
@@ -1070,7 +1039,7 @@ pub(crate) fn handle_dispatch(action: &DispatchAction) -> Result<()> {
                 let payload = serde_json::json!({
                     "deduplicated": submitted.deduplicated,
                     "waiting_for_serve": submitted.result.status == DispatchStatus::Pending
-                        && submitted.request.action.requires_serve(),
+                        && submitted.request.action().requires_serve(),
                     "display_status": display_status(&submitted.request, &submitted.result),
                     "request": submitted.request,
                     "result": submitted.result,
@@ -1081,15 +1050,15 @@ pub(crate) fn handle_dispatch(action: &DispatchAction) -> Result<()> {
             if submitted.deduplicated {
                 println!(
                     "already active: {} ({})",
-                    submitted.request.id,
+                    submitted.request.id(),
                     display_status(&submitted.request, &submitted.result)
                 );
             } else {
                 println!(
                     "queued: {} ({} {} — {})",
-                    submitted.request.id,
-                    submitted.request.action.verb_str(),
-                    submitted.request.action.subject_label(),
+                    submitted.request.id(),
+                    submitted.request.action().verb_str(),
+                    submitted.request.action().subject_label(),
                     display_status(&submitted.request, &submitted.result)
                 );
             }
@@ -1146,26 +1115,26 @@ pub(crate) fn handle_dispatch(action: &DispatchAction) -> Result<()> {
             if *json {
                 let payload = serde_json::json!({
                     "display_status": display_status(&req, &res),
-                    "waiting_for_serve": res.status == DispatchStatus::Pending && req.action.requires_serve(),
+                    "waiting_for_serve": res.status == DispatchStatus::Pending && req.action().requires_serve(),
                     "request": req,
                     "result": res,
                 });
                 println!("{}", serde_json::to_string_pretty(&payload)?);
             } else {
-                println!("id:             {}", req.id);
-                println!("verb:           {}", req.action.verb_str());
-                println!("target:         {}", req.target_key);
-                println!("dedupe_key:     {}", req.dedupe_key);
+                println!("id:             {}", req.id());
+                println!("verb:           {}", req.action().verb_str());
+                println!("target:         {}", req.target_key());
+                println!("dedupe_key:     {}", req.dedupe_key());
                 println!("status:         {}", display_status(&req, &res));
-                println!("requested_at:   {}", req.requested_at.to_rfc3339());
+                println!("requested_at:   {}", req.requested_at().to_rfc3339());
                 if let Some(started) = res.started_at {
                     println!("started_at:     {}", started.to_rfc3339());
                 }
                 if let Some(finished) = res.finished_at {
                     println!("finished_at:    {}", finished.to_rfc3339());
                 }
-                println!("mandate_id:     {}", req.mandate_id);
-                println!("grant_prefix:   {}", res.requester_grant_prefix);
+                println!("mandate_id:     {}", req.mandate_id());
+                println!("grant_prefix:   {}", res.requester_grant_prefix());
                 println!("summary:        {}", res.summary);
                 if let Some(reason) = &res.refusal_reason {
                     println!("refusal_reason: {reason}");
@@ -1176,7 +1145,7 @@ pub(crate) fn handle_dispatch(action: &DispatchAction) -> Result<()> {
         }
         DispatchAction::Cancel { id } => {
             let res = cancel_request(&main_worktree, id, now)?;
-            println!("cancelled: {} ({})", res.id, res.summary);
+            println!("cancelled: {} ({})", res.id(), res.summary);
             Ok(())
         }
         DispatchAction::Tick => {
@@ -1204,7 +1173,7 @@ pub(crate) fn handle_dispatch(action: &DispatchAction) -> Result<()> {
         }
         DispatchAction::Run { id, via_serve } => {
             let res = execute_one_request(&main_worktree, &mandate_dir, id, *via_serve, now)?;
-            println!("{}: {} ({})", res.status.as_str(), res.id, res.summary);
+            println!("{}: {} ({})", res.status.as_str(), res.id(), res.summary);
             Ok(())
         }
     }
@@ -1279,17 +1248,17 @@ pub(crate) fn notify_advisor_outcome(
     use aida_core::mailbox::{Intent, Message, Recipient};
     let subject = format!(
         "dispatch {} {}: {} ({})",
-        req.action.verb_str(),
-        req.action.subject_label(),
+        req.action().verb_str(),
+        req.action().subject_label(),
         res.status.as_str(),
-        &req.id[..8.min(req.id.len())]
+        &req.id()[..8.min(req.id().len())]
     );
     let body = match &res.refusal_reason {
         Some(reason) => format!(
             "Dispatch request {} ({} {}) {}: {}\nreason: {}\nlog: {}",
-            req.id,
-            req.action.verb_str(),
-            req.action.subject_label(),
+            req.id(),
+            req.action().verb_str(),
+            req.action().subject_label(),
             res.status.as_str(),
             res.summary,
             reason,
@@ -1297,9 +1266,9 @@ pub(crate) fn notify_advisor_outcome(
         ),
         None => format!(
             "Dispatch request {} ({} {}) {}: {}\nlog: {}",
-            req.id,
-            req.action.verb_str(),
-            req.action.subject_label(),
+            req.id(),
+            req.action().verb_str(),
+            req.action().subject_label(),
             res.status.as_str(),
             res.summary,
             res.log_path
@@ -1372,48 +1341,39 @@ pub(crate) fn append_dispatch_log(main_worktree: &Path, id: &str, text: &str) ->
     Ok(())
 }
 
-/// Reap any `CompletePair` `Running` request whose recorded `(worker_pid,
-/// worker_start)` has positive `Probe::Dead` evidence without having recorded
-/// completion. `Probe::Alive` and `Probe::Unknown` records (and all
-/// `RecoveryRequired` records) are retained untouched. Caller must hold
-/// `acquire_dispatch_lock`.
+/// Fail every `Running` claim the gate's [`dead_claims`] releases (positive
+/// `Probe::Dead` evidence), notify the advisor and log the event. Caller must
+/// hold `acquire_dispatch_lock`.
 // trace:STORY-1917 trace:TASK-2344 | ai:agy
-fn reap_dead_workers_locked(main_worktree: &Path, now: DateTime<Utc>) -> Result<usize> {
+// trace:STORY-1889 | ai:claude
+pub(crate) fn reap_dead_workers_locked(main_worktree: &Path, now: DateTime<Utc>) -> Result<usize> {
     let inv = reconcile_inventory_locked(main_worktree, now)?;
+    let dead = dead_claims(&inv);
     let mut reaped = 0usize;
     for (req, mut res) in inv.pairs {
-        if res.status != DispatchStatus::Running {
+        let Some((_, reason)) = dead.iter().find(|(id, _)| id == req.id()) else {
             continue;
-        }
-        let dead_reason = match probe_worker_identity(res.worker_pid, res.worker_start.as_deref()) {
-            aida_core::process_probe::Probe::Alive
-            | aida_core::process_probe::Probe::Unknown(_) => continue,
-            aida_core::process_probe::Probe::Dead(why) => why,
         };
-        let reason = format!(
-            "worker (pid {:?}) exited unexpectedly without recording completion ({dead_reason})",
-            res.worker_pid
-        );
         res.status = DispatchStatus::Failed;
         res.finished_at = Some(now);
         res.summary = format!(
             "failed {} {}: {reason}",
-            req.action.verb_str(),
-            req.action.subject_label()
+            req.action().verb_str(),
+            req.action().subject_label()
         );
         res.refusal_reason = Some(reason.clone());
         res.notified_at = notify_advisor_outcome(main_worktree, &req, &res, now);
         write_private_atomic(
-            &result_path(main_worktree, &req.id),
+            &result_path(main_worktree, req.id()),
             &serde_json::to_vec_pretty(&res)?,
         )?;
         emit_dispatch_event(
             main_worktree,
-            &req.mandate_id,
-            req.action.verb_str(),
-            &req.action.subject_label(),
+            req.mandate_id(),
+            req.action().verb_str(),
+            &req.action().subject_label(),
             Outcome::Skipped,
-            Some(reason),
+            Some(reason.clone()),
         );
         reaped += 1;
     }
@@ -1521,49 +1481,44 @@ pub(crate) fn claim_and_dispatch_pass(
         let claim_token = Uuid::new_v4().to_string();
         res.status = DispatchStatus::Running;
         res.started_at = Some(now);
-        res.worker_pid = if spawn_detached { None } else { Some(self_pid) };
-        res.worker_start = if spawn_detached {
-            None
-        } else {
-            self_start.clone()
-        };
-        res.claim_token = Some(claim_token.clone());
+        res.set_claim(
+            (!spawn_detached).then(|| (self_pid, self_start.clone())),
+            claim_token.clone(),
+        );
         res.summary = format!(
             "running {} {}",
-            req.action.verb_str(),
-            req.action.subject_label()
+            req.action().verb_str(),
+            req.action().subject_label()
         );
         write_private_atomic(
-            &result_path(main_worktree, &req.id),
+            &result_path(main_worktree, &req.id()),
             &serde_json::to_vec_pretty(&res)?,
         )?;
 
         if spawn_detached {
-            match spawn_detached_worker(main_worktree, &req.id, via_serve, &claim_token) {
+            match spawn_detached_worker(main_worktree, &req.id(), via_serve, &claim_token) {
                 Ok((mut child, pid, start)) => {
-                    res.worker_pid = Some(pid);
-                    res.worker_start = start;
+                    res.set_worker(pid, start);
                     res.summary = format!(
                         "running {} {} (pid {pid})",
-                        req.action.verb_str(),
-                        req.action.subject_label()
+                        req.action().verb_str(),
+                        req.action().subject_label()
                     );
-                    if let Err(pub_err) = publish_spawned_worker_claim(main_worktree, &req.id, &res)
+                    if let Err(pub_err) =
+                        publish_spawned_worker_claim(main_worktree, &req.id(), &res)
                     {
                         // Parent publication failed: kill and reap the spawned
                         // child while still holding `tick.lock` so no unowned
                         // child can ever execute work, then fail the claim.
                         let _ = child.kill();
                         let _ = child.wait();
-                        caps.release(&req.action);
+                        caps.release(&req.action());
                         let reason = format!(
                             "failed to publish dispatch worker claim for pid {pid}: {pub_err:#}"
                         );
                         res.status = DispatchStatus::Failed;
                         res.finished_at = Some(now);
-                        res.worker_pid = None;
-                        res.worker_start = None;
-                        res.claim_token = None;
+                        res.clear_claim();
                         res.summary = reason.clone();
                         res.refusal_reason = Some(reason);
                         res.notified_at = notify_advisor_outcome(main_worktree, &req, &res, now);
@@ -1572,13 +1527,13 @@ pub(crate) fn claim_and_dispatch_pass(
                         // slot forever: stop the pass and name the record.
                         // trace:STORY-1917 trace:TASK-2344 | ai:claude
                         write_private_atomic(
-                            &result_path(main_worktree, &req.id),
+                            &result_path(main_worktree, &req.id()),
                             &serde_json::to_vec_pretty(&res)?,
                         )
                         .with_context(|| {
                             format!(
                                 "dispatch request {} was left Running with no worker after its worker was killed ({reason}); the Failed result could not be written. {RECOVERY_GUIDANCE}",
-                                req.id,
+                                req.id(),
                                 reason = res.summary
                             )
                         })?;
@@ -1586,18 +1541,16 @@ pub(crate) fn claim_and_dispatch_pass(
                     }
                 }
                 Err(err) => {
-                    caps.release(&req.action);
+                    caps.release(&req.action());
                     let reason = format!("failed to spawn dispatch worker: {err:#}");
                     res.status = DispatchStatus::Failed;
                     res.finished_at = Some(now);
-                    res.worker_pid = None;
-                    res.worker_start = None;
-                    res.claim_token = None;
+                    res.clear_claim();
                     res.summary = reason.clone();
                     res.refusal_reason = Some(reason);
                     res.notified_at = notify_advisor_outcome(main_worktree, &req, &res, now);
                     write_private_atomic(
-                        &result_path(main_worktree, &req.id),
+                        &result_path(main_worktree, &req.id()),
                         &serde_json::to_vec_pretty(&res)?,
                     )?;
                     continue;
@@ -1606,7 +1559,7 @@ pub(crate) fn claim_and_dispatch_pass(
         }
 
         summary.spawned += 1;
-        summary.claimed_ids.push(req.id);
+        summary.claimed_ids.push(req.id().to_string());
     }
 
     Ok(summary)
@@ -1636,7 +1589,7 @@ pub(crate) fn run_dispatch_tick_sync(
     for id in &summary.claimed_ids {
         let token = load_pair(main_worktree, id)
             .ok()
-            .and_then(|(_, res)| res.claim_token);
+            .and_then(|(_, res)| res.claim_token().map(str::to_string));
         let _ = execute_one_request_with_token(
             main_worktree,
             mandate_dir,
@@ -1665,22 +1618,18 @@ pub(crate) fn run_dispatch_serve_once_sync(
     for id in &summary.claimed_ids {
         let token = load_pair(main_worktree, id)
             .ok()
-            .and_then(|(_, res)| res.claim_token);
+            .and_then(|(_, res)| res.claim_token().map(str::to_string));
         // Re-check the advisor grant before each request so mid-pass expiry
         // stops immediately and reverts unclaimed requests back to Pending.
         if check_serve_grant(main_worktree, Utc::now()).is_err() {
             if let Ok(_lock) = acquire_dispatch_lock(main_worktree) {
                 if let Ok((_req, mut res)) = load_pair(main_worktree, id) {
                     if res.status == DispatchStatus::Running
-                        && res.worker_pid == Some(self_pid)
-                        && res.worker_start == self_start
-                        && res.claim_token == token
+                        && res.claim_is(self_pid, self_start.as_deref(), token.as_deref())
                     {
                         res.status = DispatchStatus::Pending;
                         res.started_at = None;
-                        res.worker_pid = None;
-                        res.worker_start = None;
-                        res.claim_token = None;
+                        res.clear_claim();
                         let _ = write_private_atomic(
                             &result_path(main_worktree, id),
                             &serde_json::to_vec_pretty(&res)?,
@@ -1808,8 +1757,8 @@ pub(crate) fn execute_one_request_with_token(
             read_bounded_regular_file(&result_path(main_worktree, id), MAX_BRIEF_BYTES, true)?;
         let mut res: DispatchResult = serde_json::from_slice(&res_bytes)
             .with_context(|| format!("malformed result JSON for {id}"))?;
-        if res.id != id {
-            bail!("result file {id}.json has mismatched id `{}`", res.id);
+        if res.id() != id {
+            bail!("result file {id}.json has mismatched id `{}`", res.id());
         }
         if matches!(
             res.status,
@@ -1838,9 +1787,7 @@ pub(crate) fn execute_one_request_with_token(
                     RunningClaim::Unpublished { reason, refusal } => {
                         res.status = DispatchStatus::Failed;
                         res.finished_at = Some(now);
-                        res.worker_pid = None;
-                        res.worker_start = None;
-                        res.claim_token = None;
+                        res.clear_claim();
                         res.summary = reason.clone();
                         res.refusal_reason = Some(reason);
                         let _ = write_private_atomic(
@@ -1864,9 +1811,7 @@ pub(crate) fn execute_one_request_with_token(
                 let claim_token = Uuid::new_v4().to_string();
                 res.status = DispatchStatus::Running;
                 res.started_at = Some(now);
-                res.worker_pid = Some(self_pid);
-                res.worker_start = self_start.clone();
-                res.claim_token = Some(claim_token.clone());
+                res.set_claim(Some((self_pid, self_start.clone())), claim_token.clone());
                 write_private_atomic(
                     &result_path(main_worktree, id),
                     &serde_json::to_vec_pretty(&res)?,
@@ -1884,11 +1829,11 @@ pub(crate) fn execute_one_request_with_token(
     };
 
     let req: DispatchRequest = match raw_req_res {
-        Ok(req) if req.id == id => req,
+        Ok(req) if req.id() == id => req,
         Ok(req) => {
             let reason = format!(
                 "tampered request JSON for {id}: inner id `{}` does not match `{id}`",
-                req.id
+                req.id()
             );
             return record_tampered_refusal(main_worktree, id, &claim, &mut res, &reason, now);
         }
@@ -1917,7 +1862,7 @@ pub(crate) fn execute_one_request_with_token(
     }
 
     // 6. Execute the verb's runner.
-    let runner_outcome = match &req.action {
+    let runner_outcome = match &req.action() {
         DispatchVerb::Review { pr, vendor } => run_review_verb(main_worktree, &req, *pr, *vendor),
         DispatchVerb::Take {
             pr,
@@ -2058,7 +2003,7 @@ pub(crate) fn record_tampered_refusal(
     )?;
     emit_dispatch_event(
         main_worktree,
-        &res.mandate_id,
+        &res.mandate_id(),
         &res.verb,
         &res.target,
         Outcome::Refused,
@@ -2082,10 +2027,10 @@ pub(crate) fn finalize_request(
     now: DateTime<Utc>,
 ) -> Result<DispatchResult> {
     let _lock = acquire_dispatch_lock(main_worktree)?;
-    verify_claim_locked(main_worktree, &req.id, claim)?;
+    verify_claim_locked(main_worktree, &req.id(), claim)?;
     let _ = append_dispatch_log(
         main_worktree,
-        &req.id,
+        &req.id(),
         &format!("{}: {}\n", status.as_str(), summary),
     );
     res.status = status;
@@ -2096,14 +2041,14 @@ pub(crate) fn finalize_request(
     res.refusal_reason = refusal_reason.clone();
     res.notified_at = notify_advisor_outcome(main_worktree, req, &res, now);
     write_private_atomic(
-        &result_path(main_worktree, &req.id),
+        &result_path(main_worktree, &req.id()),
         &serde_json::to_vec_pretty(&res)?,
     )?;
     emit_dispatch_event(
         main_worktree,
-        &req.mandate_id,
-        req.action.verb_str(),
-        &req.action.subject_label(),
+        &req.mandate_id(),
+        req.action().verb_str(),
+        &req.action().subject_label(),
         event_outcome,
         refusal_reason.or(Some(summary)),
     );
@@ -2741,7 +2686,7 @@ pub(crate) fn run_review_verb(
                 String::from_utf8_lossy(&out.stdout),
                 String::from_utf8_lossy(&out.stderr)
             );
-            let _ = append_dispatch_log(main_worktree, &req.id, &combined);
+            let _ = append_dispatch_log(main_worktree, &req.id(), &combined);
             let code = out.status.code();
             if out.status.success() {
                 RunnerOutcome::Done {
@@ -2946,15 +2891,15 @@ fn run_take_verb(
     vendor: Option<DispatchVendor>,
     now: DateTime<Utc>,
 ) -> RunnerOutcome {
-    let brief_body = match verify_frozen_brief(main_worktree, &req.id, brief_relpath, brief_sha256)
-    {
-        Ok(b) => b,
-        Err(err) => {
-            return RunnerOutcome::Refused {
-                reason: format!("frozen brief verification failed: {err:#}"),
+    let brief_body =
+        match verify_frozen_brief(main_worktree, &req.id(), brief_relpath, brief_sha256) {
+            Ok(b) => b,
+            Err(err) => {
+                return RunnerOutcome::Refused {
+                    reason: format!("frozen brief verification failed: {err:#}"),
+                }
             }
-        }
-    };
+        };
 
     let wt_name = format!("take-{pr}");
     let default_wt = worktrees_root(main_worktree).join(&wt_name);
@@ -2982,7 +2927,7 @@ fn run_take_verb(
     }
 
     let prompt_text =
-        match render_lane_prompt(main_worktree, &wt_path, &req.action, &brief_body, now) {
+        match render_lane_prompt(main_worktree, &wt_path, &req.action(), &brief_body, now) {
             Ok(p) => p,
             Err(err) => {
                 return RunnerOutcome::Failed {
@@ -2991,7 +2936,7 @@ fn run_take_verb(
                 }
             }
         };
-    let rendered_prompt_path = briefs_dir(main_worktree).join(format!("{}.prompt.md", req.id));
+    let rendered_prompt_path = briefs_dir(main_worktree).join(format!("{}.prompt.md", req.id()));
     if let Err(err) = write_private_atomic(&rendered_prompt_path, prompt_text.as_bytes()) {
         return RunnerOutcome::Failed {
             summary: format!("failed to write rendered prompt: {err:#}"),
@@ -3022,15 +2967,15 @@ fn run_impl_verb(
     vendor: Option<DispatchVendor>,
     now: DateTime<Utc>,
 ) -> RunnerOutcome {
-    let brief_body = match verify_frozen_brief(main_worktree, &req.id, brief_relpath, brief_sha256)
-    {
-        Ok(b) => b,
-        Err(err) => {
-            return RunnerOutcome::Refused {
-                reason: format!("frozen brief verification failed: {err:#}"),
+    let brief_body =
+        match verify_frozen_brief(main_worktree, &req.id(), brief_relpath, brief_sha256) {
+            Ok(b) => b,
+            Err(err) => {
+                return RunnerOutcome::Refused {
+                    reason: format!("frozen brief verification failed: {err:#}"),
+                }
             }
-        }
-    };
+        };
 
     let wt_path = worktrees_root(main_worktree).join(name);
     if let Some(busy) =
@@ -3064,7 +3009,7 @@ fn run_impl_verb(
     }
 
     let prompt_text =
-        match render_lane_prompt(main_worktree, &wt_path, &req.action, &brief_body, now) {
+        match render_lane_prompt(main_worktree, &wt_path, &req.action(), &brief_body, now) {
             Ok(p) => p,
             Err(err) => {
                 return RunnerOutcome::Failed {
@@ -3073,7 +3018,7 @@ fn run_impl_verb(
                 }
             }
         };
-    let rendered_prompt_path = briefs_dir(main_worktree).join(format!("{}.prompt.md", req.id));
+    let rendered_prompt_path = briefs_dir(main_worktree).join(format!("{}.prompt.md", req.id()));
     if let Err(err) = write_private_atomic(&rendered_prompt_path, prompt_text.as_bytes()) {
         return RunnerOutcome::Failed {
             summary: format!("failed to write rendered prompt: {err:#}"),
@@ -3137,15 +3082,15 @@ fn launch_implementer_lane(
             let stdout = String::from_utf8_lossy(&out.stdout);
             let stderr = String::from_utf8_lossy(&out.stderr);
             let combined = format!("{stdout}{stderr}");
-            let _ = append_dispatch_log(main_worktree, &req.id, &combined);
+            let _ = append_dispatch_log(main_worktree, &req.id(), &combined);
             let code = out.status.code();
             if out.status.success() {
                 let bg_id = parse_spawned_bg_session_id(&stdout);
                 RunnerOutcome::Done {
                     summary: format!(
                         "launched {} {} in {}",
-                        req.action.verb_str(),
-                        req.action.subject_label(),
+                        req.action().verb_str(),
+                        req.action().subject_label(),
                         wt_path.display()
                     ),
                     spawned_session: bg_id,
@@ -3155,8 +3100,8 @@ fn launch_implementer_lane(
                 RunnerOutcome::Failed {
                     summary: format!(
                         "{} {} launcher exited with {:?}: {}",
-                        req.action.verb_str(),
-                        req.action.subject_label(),
+                        req.action().verb_str(),
+                        req.action().subject_label(),
                         code,
                         stderr.lines().next().unwrap_or("launch failed").trim()
                     ),
@@ -3170,18 +3115,6 @@ fn launch_implementer_lane(
         },
     }
 }
-
-#[cfg(test)]
-#[path = "tests/story_1917_dispatch_request_tests.rs"]
-mod story_1917_dispatch_request_tests;
-
-#[cfg(test)]
-#[path = "tests/story_1917_dispatch_exec_tests.rs"]
-mod story_1917_dispatch_exec_tests;
-
-#[cfg(test)]
-#[path = "tests/story_1917_dispatch_flow_schedule_tests.rs"]
-mod story_1917_dispatch_flow_schedule_tests;
 
 /// Queue and inspect typed dispatch requests (`flow`, `review`, `take`,
 /// `impl`, `train`) from a sandboxed advisor seat for unsandboxed execution.

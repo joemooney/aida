@@ -40,17 +40,62 @@ pub(crate) const MAX_PR_NUMBER: u64 = 999_999;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct DispatchRequest {
-    pub schema_version: u32,
-    pub id: String,
-    pub requested_at: DateTime<Utc>,
-    pub principal: String,
-    pub requester_seat: String,
-    pub requester_grant_id: String,
-    pub matched_binding: Vec<String>,
-    pub mandate_id: String,
-    pub dedupe_key: String,
-    pub target_key: String,
-    pub action: DispatchVerb,
+    // Gate-private (STORY-1889): only `admitted_request` builds a record, and
+    // the orchestration reads it through the accessors below.
+    pub(in crate::gate) schema_version: u32,
+    pub(in crate::gate) id: String,
+    pub(in crate::gate) requested_at: DateTime<Utc>,
+    pub(in crate::gate) principal: String,
+    pub(in crate::gate) requester_seat: String,
+    pub(in crate::gate) requester_grant_id: String,
+    pub(in crate::gate) matched_binding: Vec<String>,
+    pub(in crate::gate) mandate_id: String,
+    pub(in crate::gate) dedupe_key: String,
+    pub(in crate::gate) target_key: String,
+    pub(in crate::gate) action: DispatchVerb,
+}
+
+// trace:STORY-1889 | ai:claude
+impl DispatchRequest {
+    pub(crate) fn id(&self) -> &str {
+        &self.id
+    }
+
+    pub(crate) fn requested_at(&self) -> DateTime<Utc> {
+        self.requested_at
+    }
+
+    pub(crate) fn principal(&self) -> &str {
+        &self.principal
+    }
+
+    pub(crate) fn requester_seat(&self) -> &str {
+        &self.requester_seat
+    }
+
+    pub(crate) fn requester_grant_id(&self) -> &str {
+        &self.requester_grant_id
+    }
+
+    pub(crate) fn matched_binding(&self) -> &[String] {
+        &self.matched_binding
+    }
+
+    pub(crate) fn mandate_id(&self) -> &str {
+        &self.mandate_id
+    }
+
+    pub(crate) fn dedupe_key(&self) -> &str {
+        &self.dedupe_key
+    }
+
+    pub(crate) fn target_key(&self) -> &str {
+        &self.target_key
+    }
+
+    pub(crate) fn action(&self) -> &DispatchVerb {
+        &self.action
+    }
 }
 
 /// Closed verbs persisted in [`DispatchRequest`].
@@ -245,24 +290,27 @@ impl DispatchStatus {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct DispatchResult {
-    pub id: String,
+    // The record identity, its mandate and requester grant, and the worker
+    // claim are gate-private (STORY-1889): `pending_result` binds the first
+    // from the admission, and only the claim methods below change the claim.
+    pub(in crate::gate) id: String,
     pub verb: String,
     pub target: String,
     pub dedupe_key: String,
     pub status: DispatchStatus,
-    pub requested_at: DateTime<Utc>,
+    pub(in crate::gate) requested_at: DateTime<Utc>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub started_at: Option<DateTime<Utc>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub finished_at: Option<DateTime<Utc>>,
-    pub requester_grant_prefix: String,
-    pub mandate_id: String,
+    pub(in crate::gate) requester_grant_prefix: String,
+    pub(in crate::gate) mandate_id: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub worker_pid: Option<u32>,
+    pub(in crate::gate) worker_pid: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub worker_start: Option<String>,
+    pub(in crate::gate) worker_start: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub claim_token: Option<String>,
+    pub(in crate::gate) claim_token: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub spawned_session: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -273,6 +321,70 @@ pub(crate) struct DispatchResult {
     pub log_path: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub notified_at: Option<DateTime<Utc>>,
+}
+
+// trace:STORY-1889 | ai:claude
+impl DispatchResult {
+    pub(crate) fn id(&self) -> &str {
+        &self.id
+    }
+
+    pub(crate) fn requested_at(&self) -> DateTime<Utc> {
+        self.requested_at
+    }
+
+    pub(crate) fn requester_grant_prefix(&self) -> &str {
+        &self.requester_grant_prefix
+    }
+
+    pub(crate) fn mandate_id(&self) -> &str {
+        &self.mandate_id
+    }
+
+    pub(crate) fn worker_pid(&self) -> Option<u32> {
+        self.worker_pid
+    }
+
+    pub(crate) fn worker_start(&self) -> Option<&str> {
+        self.worker_start.as_deref()
+    }
+
+    pub(crate) fn claim_token(&self) -> Option<&str> {
+        self.claim_token.as_deref()
+    }
+
+    /// Whether the record carries no worker and no claim token.
+    pub(crate) fn is_unclaimed(&self) -> bool {
+        self.worker_pid.is_none() && self.claim_token.is_none()
+    }
+
+    /// Whether `(pid, start, token)` is exactly the recorded claim.
+    pub(crate) fn claim_is(&self, pid: u32, start: Option<&str>, token: Option<&str>) -> bool {
+        self.worker_pid == Some(pid)
+            && self.worker_start.as_deref() == start
+            && self.claim_token.as_deref() == token
+    }
+
+    /// Record a fresh claim `token`, held by `worker` once it is known.
+    pub(crate) fn set_claim(&mut self, worker: Option<(u32, Option<String>)>, token: String) {
+        let (pid, start) = worker.map_or((None, None), |(p, s)| (Some(p), s));
+        self.worker_pid = pid;
+        self.worker_start = start;
+        self.claim_token = Some(token);
+    }
+
+    /// Publish the spawned worker behind an existing claim.
+    pub(crate) fn set_worker(&mut self, pid: u32, start: Option<String>) {
+        self.worker_pid = Some(pid);
+        self.worker_start = start;
+    }
+
+    /// Drop the worker and its claim token.
+    pub(crate) fn clear_claim(&mut self) {
+        self.worker_pid = None;
+        self.worker_start = None;
+        self.claim_token = None;
+    }
 }
 
 pub(crate) const MAX_CONCURRENT_REVIEWS: usize = 2;
@@ -736,6 +848,38 @@ impl AuthorizedDispatchCaller {
             action,
         }
     }
+
+    /// The `Pending` result record for `req`. Its identity, mandate and
+    /// requester grant prefix come from `req` and this admission.
+    // trace:STORY-1889 | ai:claude
+    pub(crate) fn pending_result(
+        &self,
+        req: &DispatchRequest,
+        summary: String,
+        log_path: String,
+    ) -> DispatchResult {
+        DispatchResult {
+            id: req.id.clone(),
+            verb: req.action.verb_str().to_string(),
+            target: req.target_key.clone(),
+            dedupe_key: req.dedupe_key.clone(),
+            status: DispatchStatus::Pending,
+            requested_at: req.requested_at,
+            started_at: None,
+            finished_at: None,
+            requester_grant_prefix: self.grant_id.chars().take(8).collect(),
+            mandate_id: self.mandate.id.clone(),
+            worker_pid: None,
+            worker_start: None,
+            claim_token: None,
+            spawned_session: None,
+            exit_code: None,
+            summary,
+            refusal_reason: None,
+            log_path,
+            notified_at: None,
+        }
+    }
 }
 
 /// Check Mandate (`Scope::Dispatch` + `Scope::ShipHeld` when shipping),
@@ -1127,6 +1271,32 @@ pub(crate) fn probe_worker_identity(
     Probe::Alive
 }
 
+/// The `Running` claims in `inv` the reaper releases, with the reason: only
+/// those whose recorded `(worker_pid, worker_start)` probes as positively
+/// `Probe::Dead`. `Alive` and `Unknown` claims (and every recovery fence,
+/// which is not in `inv.pairs`) keep their cap slot and target, so an
+/// unreadable probe never frees a slot for a duplicate or replacement run.
+// trace:STORY-1889 trace:STORY-1917 trace:TASK-2344 | ai:claude
+pub(crate) fn dead_claims(inv: &DispatchInventory) -> Vec<(String, String)> {
+    inv.pairs
+        .iter()
+        .filter(|(_, res)| res.status == DispatchStatus::Running)
+        .filter_map(|(req, res)| {
+            match probe_worker_identity(res.worker_pid, res.worker_start.as_deref()) {
+                aida_core::process_probe::Probe::Dead(dead_reason) => Some((
+                    req.id.clone(),
+                    format!(
+                        "worker (pid {:?}) exited unexpectedly without recording completion ({dead_reason})",
+                        res.worker_pid
+                    ),
+                )),
+                aida_core::process_probe::Probe::Alive
+                | aida_core::process_probe::Probe::Unknown(_) => None,
+            }
+        })
+        .collect()
+}
+
 /// Verify under `tick.lock` that the on-disk result for `id` is still `Running`,
 /// not fenced in `.aida/dispatch/recovery.json`, and owned by `claim` before
 /// allowing a terminal state write (F2, TASK-2344 R4).
@@ -1193,6 +1363,29 @@ pub(crate) fn ci_state_is_green(pr: u64, state: crate::forge::CiState) -> Result
             bail!("PR #{pr} has no CI checks; flow reports green only after CI passes")
         }
         other => bail!("CI for PR #{pr} did not pass (state {other:?})"),
+    }
+}
+
+/// What `flow` does with the review verdict at the PR head.
+// trace:STORY-1889 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum FlowVerdict {
+    /// An APPROVED verdict pinned to the head: `flow` may hand the PR to ship.
+    Ship,
+    /// CHANGES_REQUESTED or REJECTED: stop with the hold intact.
+    ChangesRequested,
+    /// No usable verdict at the head: stop.
+    NoVerdict,
+}
+
+/// Only an APPROVED verdict at the current head lets `flow` ship; anything
+/// else stops the flow (the ship gate in `pr ship` still decides the merge).
+// trace:STORY-1889 | ai:claude
+pub(crate) fn flow_ship_decision(verdict: Option<VerdictKind>) -> FlowVerdict {
+    match verdict {
+        Some(VerdictKind::Approved) => FlowVerdict::Ship,
+        Some(VerdictKind::RequestChanges | VerdictKind::Rejected) => FlowVerdict::ChangesRequested,
+        _ => FlowVerdict::NoVerdict,
     }
 }
 
@@ -1595,3 +1788,14 @@ pub(crate) fn execution_refusal(
 #[cfg(test)]
 #[path = "tests/story_1889_dispatch_authority_tests.rs"]
 mod story_1889_dispatch_authority_tests;
+
+// The STORY-1917 behavioural suites for the dispatch gate (request admission,
+// execution-time refusals, claim fencing, reaping and caps) stay on the floor
+// with the code they test.
+#[cfg(test)]
+#[path = "tests/story_1917_dispatch_request_tests.rs"]
+mod story_1917_dispatch_request_tests;
+
+#[cfg(test)]
+#[path = "tests/story_1917_dispatch_exec_tests.rs"]
+mod story_1917_dispatch_exec_tests;

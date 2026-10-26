@@ -26,9 +26,9 @@ use crate::dispatch::{
 };
 use crate::gate::dispatch_auth::{is_dispatch_authority_aborted, DispatchExecutionContext};
 use crate::gate::dispatch_authority::{
-    ci_state_is_green, verdict_at_head, DispatchRequest, WorkerClaim,
+    ci_state_is_green, flow_ship_decision, verdict_at_head, DispatchRequest, FlowVerdict,
+    WorkerClaim,
 };
-use crate::gate::review_verdict::VerdictKind;
 
 const MAX_FLOW_TRIES: usize = 4;
 const FLOW_SHIP_WAIT_SECS: u64 = 3600;
@@ -480,7 +480,7 @@ pub(crate) fn run_flow_verb(
     let ctx = match DispatchExecutionContext::establish(
         main_worktree,
         mandate_dir,
-        &req.id,
+        &req.id(),
         &claim.claim_token,
         now,
     ) {
@@ -513,18 +513,21 @@ pub(crate) fn run_flow_verb(
         && !initial_view
             .merge_state_status
             .eq_ignore_ascii_case("BEHIND")
-        && verdict_at_head(main_worktree, pr, &initial_view.head_ref_oid)
-            == Some(VerdictKind::Approved)
+        && flow_ship_decision(verdict_at_head(
+            main_worktree,
+            pr,
+            &initial_view.head_ref_oid,
+        )) == FlowVerdict::Ship
     {
         let _ = append_dispatch_log(
             main_worktree,
-            &req.id,
+            &req.id(),
             &format!(
                 "fast-path: PR #{pr} already has APPROVED verdict at head {}; shipping\n",
                 initial_view.head_ref_oid
             ),
         );
-        return match ship_or_train_single_pr(main_worktree, &req.id, pr, &ctx, false) {
+        return match ship_or_train_single_pr(main_worktree, &req.id(), pr, &ctx, false) {
             Ok(summary) => RunnerOutcome::Done {
                 summary,
                 spawned_session: None,
@@ -575,7 +578,7 @@ pub(crate) fn run_flow_verb(
             }
             if let Err(err) = update_pr_branch_non_force(
                 main_worktree,
-                &req.id,
+                &req.id(),
                 pr,
                 &view.base_ref_name,
                 &view.head_ref_name,
@@ -630,9 +633,9 @@ pub(crate) fn run_flow_verb(
             }
         };
 
-        match current_verdict {
-            Some(VerdictKind::Approved) => {}
-            Some(VerdictKind::RequestChanges | VerdictKind::Rejected) => {
+        match flow_ship_decision(current_verdict) {
+            FlowVerdict::Ship => {}
+            FlowVerdict::ChangesRequested => {
                 // Stop immediately on CHANGES_REQUESTED / REJECTED without clearing any hold!
                 return RunnerOutcome::Failed {
                     summary: format!(
@@ -642,7 +645,7 @@ pub(crate) fn run_flow_verb(
                     exit_code: Some(1),
                 };
             }
-            _ => {
+            FlowVerdict::NoVerdict => {
                 return RunnerOutcome::Failed {
                     summary: format!(
                         "PR #{pr} review completed without a valid verdict pinned to head {}",
@@ -669,7 +672,7 @@ pub(crate) fn run_flow_verb(
         {
             let _ = append_dispatch_log(
                 main_worktree,
-                &req.id,
+                &req.id(),
                 &format!(
                     "PR #{pr} head/mergeState moved during attempt {attempt} ({} -> {}, mergeState={}); retrying\n",
                     view.head_ref_oid, post_view.head_ref_oid, post_view.merge_state_status
@@ -689,7 +692,7 @@ pub(crate) fn run_flow_verb(
             };
         }
 
-        return match ship_or_train_single_pr(main_worktree, &req.id, pr, &ctx, false) {
+        return match ship_or_train_single_pr(main_worktree, &req.id(), pr, &ctx, false) {
             Ok(summary) => RunnerOutcome::Done {
                 summary,
                 spawned_session: None,
@@ -745,7 +748,7 @@ pub(crate) fn run_train_verb(
     let ctx = match DispatchExecutionContext::establish(
         main_worktree,
         mandate_dir,
-        &req.id,
+        &req.id(),
         &claim.claim_token,
         now,
     ) {
@@ -769,7 +772,7 @@ pub(crate) fn run_train_verb(
                 reason: format!("{err:#}"),
             };
         }
-        match ship_or_train_single_pr(main_worktree, &req.id, pr, &ctx, true) {
+        match ship_or_train_single_pr(main_worktree, &req.id(), pr, &ctx, true) {
             Ok(note) => landed_notes.push(note),
             Err(err) => {
                 let msg = format!("{err:#}");

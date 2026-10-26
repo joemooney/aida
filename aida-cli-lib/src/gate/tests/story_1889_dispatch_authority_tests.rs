@@ -270,3 +270,59 @@ fn only_success_is_green_ci() {
         "CI failed for PR #1"
     );
 }
+
+// The reaper releases only positively dead `Running` claims; `Unknown` and
+// `Alive` claims keep their slot (TASK-2344 tri-state fence).
+// trace:STORY-1889 trace:TASK-2344 | ai:claude
+#[test]
+fn only_positively_dead_running_claims_are_released() {
+    let gone = u32::MAX - 1;
+    let me = std::process::id();
+    let my_start = crate::process_probe::process_start_identity(me);
+    let dead = request("00000000-0000-0000-0000-00000000000a", take(1));
+    let unknown = request("00000000-0000-0000-0000-00000000000b", take(2));
+    let alive = request("00000000-0000-0000-0000-00000000000c", take(3));
+    let done = request("00000000-0000-0000-0000-00000000000d", take(4));
+    let mut alive_res = running(&alive, Some(me), Some("t"));
+    alive_res.worker_start = my_start;
+    let mut done_res = running(&done, Some(gone), Some("t"));
+    done_res.status = DispatchStatus::Done;
+    let inv = DispatchInventory {
+        pairs: vec![
+            (dead.clone(), running(&dead, Some(gone), Some("t"))),
+            (unknown.clone(), running(&unknown, None, Some("t"))),
+            (alive, alive_res),
+            (done, done_res),
+        ],
+        ..Default::default()
+    };
+    let released = dead_claims(&inv);
+    assert_eq!(released.len(), 1, "{released:?}");
+    assert_eq!(released[0].0, dead.id);
+    assert!(
+        released[0]
+            .1
+            .contains("exited unexpectedly without recording completion"),
+        "{released:?}"
+    );
+}
+
+// trace:STORY-1889 | ai:claude
+#[test]
+fn only_an_approved_verdict_lets_flow_ship() {
+    assert_eq!(
+        flow_ship_decision(Some(VerdictKind::Approved)),
+        FlowVerdict::Ship
+    );
+    for kind in [VerdictKind::RequestChanges, VerdictKind::Rejected] {
+        assert_eq!(
+            flow_ship_decision(Some(kind)),
+            FlowVerdict::ChangesRequested
+        );
+    }
+    assert_eq!(flow_ship_decision(None), FlowVerdict::NoVerdict);
+    assert_eq!(
+        flow_ship_decision(Some(VerdictKind::default())),
+        FlowVerdict::NoVerdict
+    );
+}

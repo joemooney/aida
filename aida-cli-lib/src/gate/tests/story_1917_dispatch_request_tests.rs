@@ -24,10 +24,13 @@
 // trace:STORY-1917 | ai:agy
 
 use super::*;
+use crate::dispatch::*;
+use crate::gate::dispatch_ledger::inspect_dispatch_inventory_readonly;
 use crate::gate::mandate::{self};
 use crate::gate::mandate::{Mandate, Scope};
 use chrono::Duration;
 use std::collections::BTreeSet;
+use std::path::PathBuf;
 
 fn git(dir: &Path, args: &[&str]) {
     let out = crate::test_git::git_command()

@@ -30,10 +30,21 @@
 // trace:STORY-1917 | ai:agy
 
 use super::*;
+use crate::dispatch::*;
+use crate::gate::dispatch_ledger::{
+    check_recovery_index_bounds, inspect_dispatch_inventory_readonly,
+    MAX_DISPATCH_INVENTORY_ENTRIES, MAX_RECOVERY_FILE_BYTES,
+};
+use crate::gate::dispatch_lock::{
+    acquire_dispatch_lock, activate_dispatch_v2_lock_quiescent, proc_mount_options,
+    proc_view_refusal, verify_sole_open_fd_for_inode, TEST_FAIL_ROLLBACK_EXCHANGE,
+    TEST_POST_EXCHANGE_HOOK, TEST_PRE_FLOCK_V2_HOOK, TEST_PROC_PID_ALLOWLIST, TEST_PROC_VIEW,
+};
 use crate::gate::mandate::{self, Mandate, Scope};
 use chrono::Duration;
 use std::collections::BTreeSet;
 use std::os::unix::fs::PermissionsExt;
+use std::path::PathBuf;
 
 fn git(dir: &Path, args: &[&str]) {
     let out = crate::test_git::git_command()
@@ -1368,7 +1379,7 @@ fn f2_worker_claim_persisted_before_spawn_and_fenced_against_unowned_or_concurre
                export AIDA_TEST_1917_MANDATE_DIR='{}'\n\
                export AIDA_TEST_1917_BARRIER_DIR='{}'\n\
                export AIDA_TEST_1917_SYNTHETIC_AIDA='{}'\n\
-               exec '{}' --exact dispatch::story_1917_dispatch_exec_tests::story_1917_detached_worker_child_entry --nocapture --test-threads=1\n\
+               exec '{}' --exact gate::dispatch_authority::story_1917_dispatch_exec_tests::story_1917_detached_worker_child_entry --nocapture --test-threads=1\n\
              fi\n\
              if [ \"${{1:-}}\" = \"queue\" ] && [ \"${{2:-}}\" = \"work\" ]; then\n\
                pr_tag=\"${{3:-PR-0}}\"\n\
@@ -2451,7 +2462,7 @@ fn task_2344_real_detached_worker_missing_result_and_no_duplicate_replay() {
                export AIDA_TEST_1917_MANDATE_DIR='{}'\n\
                export AIDA_TEST_1917_BARRIER_DIR='{}'\n\
                export AIDA_TEST_1917_SYNTHETIC_AIDA='{}'\n\
-               exec '{}' --exact dispatch::story_1917_dispatch_exec_tests::story_1917_detached_worker_child_entry --nocapture --test-threads=1\n\
+               exec '{}' --exact gate::dispatch_authority::story_1917_dispatch_exec_tests::story_1917_detached_worker_child_entry --nocapture --test-threads=1\n\
              fi\n\
              if [ \"${{1:-}}\" = \"queue\" ] && [ \"${{2:-}}\" = \"work\" ]; then\n\
                pr_tag=\"${{3:-PR-0}}\"\n\
@@ -2980,7 +2991,7 @@ fn task_2344_q1_physical_tick_lock_directory_migration_and_legacy_mutator_refusa
     let release_marker = race_dir.join("child-release");
     let mut open_waiter_child = std::process::Command::new(crate::resolve_aida_exe())
         .arg("--exact")
-        .arg("dispatch::story_1917_dispatch_exec_tests::story_1917_detached_worker_child_entry")
+        .arg("gate::dispatch_authority::story_1917_dispatch_exec_tests::story_1917_detached_worker_child_entry")
         .arg("--nocapture")
         .env("AIDA_TEST_1917_OPEN_LOCK_PATH", &legacy_lock_path)
         .env("AIDA_TEST_1917_OPENED_MARKER", &opened_marker)
@@ -3033,7 +3044,7 @@ fn task_2344_q1_physical_tick_lock_directory_migration_and_legacy_mutator_refusa
     let nd_release_marker = race_dir.join("nd-child-release");
     let mut nd_child = std::process::Command::new(crate::resolve_aida_exe())
         .arg("--exact")
-        .arg("dispatch::story_1917_dispatch_exec_tests::story_1917_detached_worker_child_entry")
+        .arg("gate::dispatch_authority::story_1917_dispatch_exec_tests::story_1917_detached_worker_child_entry")
         .arg("--nocapture")
         .env("AIDA_TEST_1917_OPEN_LOCK_PATH", &legacy_lock_path)
         .env("AIDA_TEST_1917_NON_DUMPABLE", "1")
