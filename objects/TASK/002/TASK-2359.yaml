@@ -11,7 +11,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T20:53:10.804761312Z
-modified_at: 2026-10-26T06:10:30.403455556Z
+modified_at: 2026-10-26T06:10:34.439867322Z
 req_type: Task
 tags:
 - from-review:PR-2932
@@ -43,6 +43,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Test meets TASK-2359 acceptance (reverting to git add -A fails ls-tree assertion; prod path pr_cmd.rs:1353 calls the same helper), but the refactor launders two raw Command::new("git") builders out of the TASK-2143 ratchet while lowering pr_cmd.rs''s allowance; CI still pending at review time.. Triage reason: PR-2935 round-1 RC: route commit_tracked_changes through the clone-safe git helper'
   created_at: 2026-10-26T06:10:30.403451833Z
   modified_at: 2026-10-26T06:10:30.403451833Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
+- id: 01a176d5-046f-7073-86ad-92d12434cb70
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-2359):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 6bd2d356115d
+    Recorded: 2026-10-26T05:57:38.371514973+00:00
+    Findings:
+    1. aida-cli-lib/src/ship.rs:200,208 + task_2143_clone_git_ratchet_tests.rs:27: commit_tracked_changes keeps raw std::process::Command::new("git") for git add -u / git commit, but ship.rs never names worktree_path, so the TASK-2143 ratchet does not scan it. Lowering pr_cmd.rs 53->51 therefore records progress that did not happen: the same two raw builders still run against project_root (a seat clone when ship runs in one), and new raw git can now accumulate in ship.rs unseen. The ratchet doc says to lower a count only when a call moves onto host_git_command. Fix: build both calls with aida_core::git_ops::host_git_command(project_root), like the sibling probes tracked_changes_pending (ship.rs:185) and untracked_regular_files (ship.rs:224) — step 1 already cannot succeed in a seat clone because the probe refuses there (BUG-2169). Or, if the raw builders must stay, keep the git invocation in pr_cmd.rs, or say in the PR and in a code comment why the move is a ratchet exception, so the allowlist reflects reality.
+    2. aida-cli-lib/src/ship.rs:200-215 (minor, non-blocking): the new test drives commit_tracked_changes, which spawns plain git without aida_core::git_ops::NO_AUTO_MAINTENANCE. The fixture repo's templateDir config currently suppresses auto-maintenance, so this is not flaky today. If the helper moves to host_git_command (finding 1), confirm the fixture still disables maintenance (BUG-2191).
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-10-26T06:10:34.223196499Z
+  modified_at: 2026-10-26T06:10:34.223196499Z
   session_id: 761a4fea-f388-41d1-93d9-f1386951253c
 history:
 - id: 01a17551-2846-7f12-adfe-a404c48cd2da
