@@ -9,13 +9,22 @@ description: |-
   2. .aida-store/.aida/dispenser.toml had mode node_id rewritten from "1" to "2" at 14:17 (GLOBAL = 499 kept). Node 2 is not registered; node.toml says 1. Bootstrap would then refuse with 'legacy node/provider binding mismatch'. Reset to "1"; sequence 499 equals node 1's highest object ID, so no reuse. Backup: .aida-store/.aida/dispenser.toml.node2-bak-20261025.
 
   Fix needed: (a) find what wrote node 2 into the primary clone's counter at 14:17 (14:16 was the TASK-2351 ship); (b) surface the underlying dispenser/bootstrap error text instead of the generic message (models.rs add_requirement_with_id poisons spec_id to empty and next_meta_id uses unwrap_or_default, discarding the cause); (c) aida doctor should check node.toml/dispenser.toml permissions and mode-vs-node agreement, and offer the repair; (d) consider whether a group-writable but user-owned node.toml under a 0002 umask should be refused at all, or normalised during migration.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-26T02:22:46.645176120Z
-modified_at: 2026-10-26T02:22:46.645176120Z
+modified_at: 2026-10-26T05:56:23.441406057Z
 req_type: Bug
+history:
+- id: 01a176c8-0911-7173-a3f0-75b92e750859
+  author: joe
+  timestamp: 2026-10-26T05:56:23.441400990Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 194e40346c073dccb33f397d247b63b27c3bf862
   branch: main
