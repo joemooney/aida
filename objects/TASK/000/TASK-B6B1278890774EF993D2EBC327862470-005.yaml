@@ -13,13 +13,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-26T14:46:33.353762509Z
-modified_at: 2026-10-26T22:23:34.022289198Z
+modified_at: 2026-10-26T23:07:14.157171309Z
 req_type: Task
 tags:
 - carried-from:BUG-2223
 - finding-hash:54b4b220
 - from-review:PR-2934
 - kind:carried-forward
+comments:
+- id: 01a17a77-cd6d-7863-8913-f8a9bfade8a4
+  author: joe
+  content: 'ADVISOR: landed in PR #2955 (approved at d03e1735). Completed by hand because merge-time auto-complete missed node-local IDs (BUG-b6b1278890774ef993d2ebc327862470-006).'
+  created_at: 2026-10-26T23:07:14.157171309Z
+  modified_at: 2026-10-26T23:07:14.157171309Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
 history:
 - id: 01a17a4f-d286-7591-8bfc-c6758dcfcbc4
   author: joe
