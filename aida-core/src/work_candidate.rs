@@ -7,6 +7,18 @@ use crate::dispenser::{Dispenser, DispenserState, IdMode};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
+/// One allocation-prefix grammar for `next` and `format_id`, so a prefix that
+/// cannot be formatted never spends a sequence.
+// trace:STORY-1742 | ai:claude
+fn valid_prefix(prefix: &str) -> Result<()> {
+    let bare = prefix.strip_prefix('$').unwrap_or(prefix);
+    anyhow::ensure!(
+        !bare.is_empty() && prefix.len() <= 128 && bare.chars().all(|c| c.is_ascii_uppercase()),
+        "invalid node-local allocation prefix"
+    );
+    Ok(())
+}
+
 struct Detached {
     state: Mutex<DispenserState>,
     owner: std::thread::ThreadId,
@@ -32,21 +44,12 @@ impl Dispenser for Detached {
     }
     fn next(&self, prefix: &str) -> Result<u32> {
         self.check(true)?;
-        anyhow::ensure!(
-            !prefix.strip_prefix('$').unwrap_or(prefix).is_empty()
-                && prefix
-                    .strip_prefix('$')
-                    .unwrap_or(prefix)
-                    .chars()
-                    .all(|c| c.is_ascii_alphabetic()),
-            "invalid node-local allocation prefix"
-        );
-        anyhow::ensure!(prefix.len() <= 128, "invalid node-local allocation prefix");
+        valid_prefix(prefix)?;
         let mut state = self
             .state
             .lock()
             .map_err(|_| anyhow::anyhow!("candidate state unavailable"))?;
-        let counter = state.sequences.entry(prefix.to_uppercase()).or_default();
+        let counter = state.sequences.entry(prefix.to_owned()).or_default();
         *counter = counter
             .checked_add(1)
             .context("node-local sequence exhausted")?;
@@ -74,16 +77,7 @@ impl Dispenser for Detached {
     }
     fn format_id(&self, prefix: &str, seq: u32) -> Result<String> {
         self.check(false)?;
-        anyhow::ensure!(
-            !prefix.strip_prefix('$').unwrap_or(prefix).is_empty()
-                && prefix.len() <= 128
-                && prefix
-                    .strip_prefix('$')
-                    .unwrap_or(prefix)
-                    .chars()
-                    .all(|c| c.is_ascii_uppercase()),
-            "invalid node-local allocation prefix"
-        );
+        valid_prefix(prefix)?;
         anyhow::ensure!(seq > 0, "node-local sequence is exhausted or invalid");
         match self.state()?.mode {
             IdMode::Distributed { node_id } => Ok(format!("{prefix}-{node_id}-{seq:03}")),
@@ -461,6 +455,9 @@ mod tests {
                 .join()
                 .unwrap()
                 .is_err());
+            // A prefix format_id would refuse never spends a sequence.
+            assert!(provider.next_id("bug").is_err());
+            assert!(provider.next("Bug").is_err());
             assert_eq!(provider.next("BUG")?, 1);
             let _sealed = candidate.seal()?;
             assert!(provider.next("BUG").is_err());

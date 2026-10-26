@@ -9,8 +9,18 @@ use std::sync::LazyLock;
 
 pub const SCANNER_VERSION: u32 = 1;
 pub const MAX_BYTES: usize = 1_048_576;
+/// The native oplog is append-only and grows with history, so it is bounded
+/// per record (each line, and each operation's node budget, keeps the
+/// ordinary limits) under this larger whole-file ceiling.
+// trace:STORY-1742 | ai:claude
+pub const MAX_OPLOG_BYTES: usize = 64 * MAX_BYTES;
+const MAX_OPLOG_OPERATIONS: usize = 1_000_000;
 const MAX_NODES: usize = 50_000;
 const MAX_DEPTH: usize = 64;
+
+#[path = "transport_yaml.rs"]
+mod yaml_grammar;
+pub use yaml_grammar::{plain as yaml_plain, Tags as YamlTags};
 
 /// Values never appear in errors or the public status projection.
 #[derive(Clone, Serialize, Deserialize)]
@@ -384,11 +394,29 @@ impl Policy {
     /// and unknown formats refuse. Both source bytes and decoded keys/scalars
     /// are inspected; no whole-section or schema-suffix exemptions exist.
     pub fn document(&self, extension: &str, bytes: &[u8]) -> ScanResult {
-        if bytes.len() > MAX_BYTES {
+        let oplog = extension == "aida-oplog";
+        if bytes.len() > if oplog { MAX_OPLOG_BYTES } else { MAX_BYTES } {
             return Err(Refusal::Limit);
         }
         let text = std::str::from_utf8(bytes).map_err(|_| Refusal::Encoding)?;
-        self.text(text)?;
+        if oplog {
+            // Every source byte is still scanned, in whole-line chunks; a
+            // single line beyond the ordinary bound refuses.
+            let mut chunk = 0..0;
+            for line in text.split_inclusive('\n') {
+                if line.len() > MAX_BYTES {
+                    return Err(Refusal::Limit);
+                }
+                if chunk.len() + line.len() > MAX_BYTES {
+                    self.text(&text[chunk.clone()])?;
+                    chunk = chunk.end..chunk.end;
+                }
+                chunk.end += line.len();
+            }
+            self.text(&text[chunk])?;
+        } else {
+            self.text(text)?;
+        }
         // Conservative pre-parse bound, including quoted delimiters. False
         // refusals are preferable to parser recursion on hostile documents.
         let mut nesting = 0usize;
@@ -423,11 +451,10 @@ impl Policy {
                 Ok(())
             }
             "yaml" | "yml" => {
-                // serde_yaml expands aliases. Forbid them before parsing so a
-                // small source cannot cause unbounded expanded allocations.
-                if text.contains(['&', '*', '!']) {
-                    return Err(Refusal::Unsupported);
-                }
+                // serde_yaml expands aliases. Forbid them (and tags) by event
+                // before parsing so a small source cannot cause unbounded
+                // expanded allocations. Prose bytes are not structure.
+                yaml_plain(bytes, YamlTags::Core)?;
                 let value: serde_yaml::Value =
                     serde_yaml::from_str(text).map_err(|_| Refusal::Encoding)?;
                 self.yaml(&value, 0, &mut nodes)
@@ -461,9 +488,7 @@ impl Policy {
     /// inspected; arbitrary YAML tags and aliases remain unsupported.
     // trace:STORY-1742 | ai:codex
     fn oplog_document(&self, text: &str, nodes: &mut usize) -> ScanResult {
-        if text.contains(['&', '*']) {
-            return Err(Refusal::Unsupported);
-        }
+        yaml_plain(text.as_bytes(), YamlTags::Variants)?;
         let _: crate::oplog::OpLog = serde_yaml::from_str(text).map_err(|_| Refusal::Encoding)?;
         let mut value: serde_yaml::Value =
             serde_yaml::from_str(text).map_err(|_| Refusal::Encoding)?;
@@ -478,7 +503,10 @@ impl Policy {
             .get_mut(serde_yaml::Value::String("operations".into()))
             .and_then(serde_yaml::Value::as_sequence_mut)
             .ok_or(Refusal::Unsupported)?;
-        for operation in operations {
+        if operations.len() > MAX_OPLOG_OPERATIONS {
+            return Err(Refusal::Limit);
+        }
+        for operation in operations.iter_mut() {
             let operation = operation.as_mapping_mut().ok_or(Refusal::Unsupported)?;
             if operation.keys().any(|key| {
                 !matches!(
@@ -529,7 +557,23 @@ impl Policy {
                 return Err(Refusal::Unsupported);
             }
         }
-        self.yaml(&value, 0, nodes)
+        // Node budgets are per operation record; the header shares `nodes`.
+        for (key, value) in value.as_mapping().ok_or(Refusal::Unsupported)? {
+            let key = key.as_str().ok_or(Refusal::Unsupported)?;
+            self.text(key)?;
+            self.explicit_field(key, value.as_str())?;
+            match value.as_sequence() {
+                Some(records) if key == "operations" => {
+                    Self::budget(1, nodes)?;
+                    for record in records {
+                        let mut budget = MAX_NODES;
+                        self.yaml(record, 2, &mut budget)?;
+                    }
+                }
+                _ => self.yaml(value, 1, nodes)?,
+            }
+        }
+        Ok(())
     }
 
     fn json_document(&self, text: &str, nodes: &mut usize) -> ScanResult {

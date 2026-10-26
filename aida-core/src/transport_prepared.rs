@@ -25,21 +25,90 @@ pub(crate) struct PreparedMutation<'scope> {
     admission: &'scope Admission,
 }
 
+/// Modes every prepared artifact is written with, whatever the process umask:
+/// a WORK write must never leave the store in a shape the next one refuses.
+// trace:STORY-1742 | ai:claude
+const FILE_MODE: u32 = 0o644;
+const DIR_MODE: u32 = 0o755;
+
+/// Shared-write store files are refused, never silently accepted; the
+/// message names the store-relative path and the fix.
+fn shared_write(relative: &str) -> anyhow::Error {
+    anyhow::anyhow!(
+        "WORK store path {relative} is group- or other-writable; enabled WORK intake writes \
+         only owner-writable files. Run `chmod go-w <store>/{relative}` (or `chmod -R go-w \
+         <store>` for the whole store) and retry. Nothing was changed."
+    )
+}
+
 fn safe_parents(root: &Path, relative: &str) -> Result<()> {
     let mut path = root.to_owned();
     let components: Vec<_> = relative.split('/').collect();
+    let mut walked = String::new();
     for component in components.iter().take(components.len().saturating_sub(1)) {
         path.push(component);
+        if !walked.is_empty() {
+            walked.push('/');
+        }
+        walked.push_str(component);
         match std::fs::symlink_metadata(&path) {
-            Ok(meta)
-                if meta.is_dir()
-                    && meta.uid() == unsafe { libc::geteuid() }
-                    && meta.mode() & 0o022 == 0 => {}
+            Ok(meta) if meta.is_dir() && meta.uid() == unsafe { libc::geteuid() } => {
+                if meta.mode() & 0o022 != 0 {
+                    return Err(shared_write(&walked));
+                }
+            }
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
             _ => bail!("Unsupported or changed WORK artifact directory"),
         }
     }
     Ok(())
+}
+
+/// The append-only oplog has its own per-record bound in the policy; every
+/// other artifact keeps the ordinary per-file bound.
+fn bound(relative: &str) -> usize {
+    if relative == "oplog.yaml" {
+        crate::transport_sanitization::MAX_OPLOG_BYTES
+    } else {
+        crate::transport_sanitization::MAX_BYTES
+    }
+}
+
+/// Write `bytes` with exact modes: directories 0755, the file 0644, staged
+/// beside the target and renamed into place.
+fn write_exact(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    use std::io::Write;
+    use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
+    if let Some(parent) = path.parent() {
+        if !parent.exists() {
+            std::fs::DirBuilder::new()
+                .recursive(true)
+                .mode(DIR_MODE)
+                .create(parent)?;
+        }
+    }
+    let tmp = path.with_extension(format!(
+        "tmp.{}.{}",
+        std::process::id(),
+        uuid::Uuid::new_v4()
+    ));
+    let result = (|| {
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(FILE_MODE)
+            .custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC)
+            .open(&tmp)?;
+        // The create mode is masked by the umask; set it exactly.
+        file.set_permissions(std::fs::Permissions::from_mode(FILE_MODE))?;
+        file.write_all(bytes)?;
+        file.sync_all()?;
+        std::fs::rename(&tmp, path)
+    })();
+    if result.is_err() {
+        let _ = std::fs::remove_file(&tmp);
+    }
+    result
 }
 
 pub(crate) fn read(root: &Path, relative: &str) -> Result<Option<Vec<u8>>> {
@@ -54,17 +123,22 @@ pub(crate) fn read(root: &Path, relative: &str) -> Result<Option<Vec<u8>>> {
         Err(_) => bail!("WORK artifact is unavailable or unsafe"),
     };
     let meta = file.metadata()?;
+    let limit = bound(relative);
     anyhow::ensure!(
         meta.is_file()
             && meta.nlink() == 1
             && meta.uid() == unsafe { libc::geteuid() }
-            && meta.mode() & 0o022 == 0
-            && meta.len() <= 1_048_576,
+            && meta.len() <= limit as u64,
         "WORK artifact is unavailable or exceeds its bound"
     );
+    if meta.mode() & 0o022 != 0 {
+        return Err(shared_write(relative));
+    }
     let mut bytes = Vec::new();
-    file.by_ref().take(1_048_577).read_to_end(&mut bytes)?;
-    anyhow::ensure!(bytes.len() <= 1_048_576, "WORK artifact exceeds its bound");
+    file.by_ref()
+        .take(limit as u64 + 1)
+        .read_to_end(&mut bytes)?;
+    anyhow::ensure!(bytes.len() <= limit, "WORK artifact exceeds its bound");
     Ok(Some(bytes))
 }
 
@@ -95,10 +169,13 @@ impl<'scope> PreparedMutation<'scope> {
                 "Duplicate WORK artifact destination"
             );
             if let Some(bytes) = &effect.after {
-                total = total
-                    .checked_add(bytes.len())
-                    .context("WORK artifact size overflow")?;
-                anyhow::ensure!(total <= 64 * 1_048_576, "WORK mutation byte limit exceeded");
+                // The oplog's own ceiling is enforced by its policy format.
+                if effect.path != "oplog.yaml" {
+                    total = total
+                        .checked_add(bytes.len())
+                        .context("WORK artifact size overflow")?;
+                    anyhow::ensure!(total <= 64 * 1_048_576, "WORK mutation byte limit exceeded");
+                }
                 snapshot
                     .policy
                     .artifact(&effect.path, bytes)
@@ -251,12 +328,7 @@ impl<'scope> PreparedMutation<'scope> {
         for effect in &self.effects {
             let path = self.root.join(&effect.path);
             let result = match &effect.after {
-                Some(bytes) => (|| -> std::io::Result<()> {
-                    if let Some(parent) = path.parent() {
-                        std::fs::create_dir_all(parent)?;
-                    }
-                    crate::write_atomic(&path, bytes)
-                })(),
+                Some(bytes) => write_exact(&path, bytes),
                 None => match std::fs::remove_file(path) {
                     Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
                     result => result,

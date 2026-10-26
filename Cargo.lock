@@ -115,6 +115,7 @@ dependencies = [
  "tokio",
  "toml",
  "ts-rs-forge",
+ "unsafe-libyaml",
  "uuid",
 ]
 

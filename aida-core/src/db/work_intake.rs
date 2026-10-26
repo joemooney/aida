@@ -40,8 +40,10 @@ impl GitBackend {
             "WORK native mutation requires its prepared commit boundary"
         );
         crate::work_binding::candidate::with_unspent(&self.root, |candidate| {
-            // Bound and reject alias/recursion encodings before legacy model
-            // readers parse an existing snapshot. This is not trust promotion.
+            // Bound and reject alias/anchor/tag encodings, by YAML event,
+            // before legacy model readers parse an existing snapshot. Prose
+            // bytes such as '&', '*' or '!' are content, not structure. This
+            // is not trust promotion. trace:STORY-1742 | ai:claude
             let inventory = object_store::list_objects_strict(&self.objects_root)?;
             anyhow::ensure!(
                 inventory.len() <= 10_000,
@@ -59,8 +61,12 @@ impl GitBackend {
                 total += bytes.len();
                 anyhow::ensure!(
                     total <= 64 * 1_048_576
-                        && !bytes.iter().any(|b| matches!(b, b'&' | b'*' | b'!')),
-                    "Unsupported WORK source snapshot grammar or size"
+                        && crate::transport_sanitization::yaml_plain(
+                            &bytes,
+                            crate::transport_sanitization::YamlTags::Core
+                        )
+                        .is_ok(),
+                    "Unsupported WORK source snapshot grammar or size: {path}"
                 );
             }
             let mut store = self.load()?;
@@ -177,15 +183,31 @@ impl GitBackend {
             if self.oplog_enabled && !operations.is_empty() {
                 let before = read_artifact(&self.root, "oplog.yaml")?;
                 let mut log: crate::oplog::OpLog = match &before {
-                    Some(bytes) => serde_yaml::from_slice(bytes)?,
+                    Some(bytes) => {
+                        anyhow::ensure!(
+                            crate::transport_sanitization::yaml_plain(
+                                bytes,
+                                crate::transport_sanitization::YamlTags::Variants
+                            )
+                            .is_ok(),
+                            "Unsupported WORK source oplog grammar"
+                        );
+                        serde_yaml::from_slice(bytes)?
+                    }
                     None => crate::oplog::OpLog::new(candidate.node().to_owned()),
                 };
-                // Existing operations retain their original node evidence.
-                // Only the current append context follows this clone binding.
+                // The ordinary rule (`record_op`): the shared header names a
+                // node only once, so clones never churn it. Operations this
+                // write appends still carry this clone's node as evidence.
+                let header = match log.node_id.as_str() {
+                    "0" => candidate.node().to_owned(),
+                    node => node.to_owned(),
+                };
                 log.node_id = candidate.node().to_owned();
                 for (id, kind) in operations {
                     log.append(id, "aida".into(), kind);
                 }
+                log.node_id = header;
                 effects.push(FileEffect {
                     path: "oplog.yaml".into(),
                     before,
@@ -762,6 +784,193 @@ mod tests {
 
     fn row(title: &str) -> Requirement {
         Requirement::new(title.into(), "Synthetic reproduction".into())
+    }
+
+    /// Seed an ordinary, already-shared store shape: object and metadata
+    /// prose carrying '&', '*' and '!' (markdown emphasis, punctuation) and an
+    /// oplog well past one MiB, committed outside the WORK path.
+    fn seed_realistic(root: &Path) -> Vec<Requirement> {
+        let mut rows = Vec::new();
+        for (n, (title, description)) in [
+            ("Spacing & Layout", "*this is bold* and **strong** text!"),
+            ("Borders & Rounding", "- item one\n- item *two* & three !"),
+            ("Exclamation!", "Emphasis: _italic_, *bold*, R&D, a*b!c"),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let mut row = Requirement::new(title.into(), description.into());
+            row.spec_id = Some(format!("BUG-{:03}", n + 1));
+            let path = object_store::relative_object_path(row.spec_id.as_deref().unwrap()).unwrap();
+            std::fs::create_dir_all(root.join(&path).parent().unwrap()).unwrap();
+            std::fs::write(root.join(&path), serde_yaml::to_string(&row).unwrap()).unwrap();
+            rows.push(row);
+        }
+        let metadata = std::fs::read_to_string(root.join("metadata.yaml"))
+            .unwrap()
+            .replacen(
+                "\ndescription: ''\n",
+                "\ndescription: 'Spacing & Layout: *this is bold* and ''!'''\n",
+                1,
+            );
+        assert!(metadata.contains("*this is bold*"));
+        std::fs::write(root.join("metadata.yaml"), metadata).unwrap();
+        let mut log = crate::oplog::OpLog::new("1".into());
+        for n in 0..9_000 {
+            log.append(
+                rows[n % rows.len()].id,
+                "aida".into(),
+                crate::oplog::OpKind::SetTitle {
+                    title: format!("Spacing & Layout *note* {n}!"),
+                },
+            );
+        }
+        let oplog = serde_yaml::to_string(&log).unwrap();
+        assert!(oplog.len() > 2 * 1_048_576, "{}", oplog.len());
+        std::fs::write(root.join("oplog.yaml"), oplog).unwrap();
+        crate::git_ops::add(root, &["objects", "metadata.yaml", "oplog.yaml"]).unwrap();
+        crate::git_ops::commit(root, "seed shared store").unwrap();
+        rows
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn story_1742_work_writes_succeed_on_a_realistic_shared_store() {
+        // trace:STORY-1742 | ai:claude
+        if !isolated("db::git_backend::work_intake::tests::story_1742_work_writes_succeed_on_a_realistic_shared_store") {
+            return;
+        }
+        let (_temp, root, backend) = fixture();
+        let seeded = seed_realistic(&root);
+
+        // Add, update (prose kept), delete, metadata rewrite: all admitted.
+        let added = backend.add_requirement(row("Generic failure")).unwrap();
+        let mut changed = backend.get_requirement(&seeded[0].id).unwrap().unwrap();
+        changed.description = "*still bold* & **strong**, now clarified!".into();
+        backend.update_requirement(&changed).unwrap();
+        backend.delete_requirement(&seeded[1].id).unwrap();
+        let mut store = backend.load().unwrap();
+        store.title = "Research & design *tracker*!".into();
+        backend.save(&store).unwrap();
+
+        let stored = backend.load().unwrap();
+        assert_eq!(stored.title, "Research & design *tracker*!");
+        assert!(stored.description.contains("*this is bold*"));
+        assert_eq!(stored.requirements.len(), 3);
+        assert!(stored.requirements.iter().any(|r| r.id == added.id));
+        assert!(!stored.requirements.iter().any(|r| r.id == seeded[1].id));
+        assert_eq!(
+            backend
+                .get_requirement(&seeded[0].id)
+                .unwrap()
+                .unwrap()
+                .description,
+            changed.description
+        );
+        // The shared oplog header keeps its node; appended operations carry
+        // this clone's node; history past one MiB is preserved.
+        let log: crate::oplog::OpLog =
+            serde_yaml::from_slice(&std::fs::read(root.join("oplog.yaml")).unwrap()).unwrap();
+        let node = crate::work_binding::load(&root).unwrap().unwrap().node_id;
+        assert_eq!(log.node_id, "1");
+        assert!(log.operations.len() > 9_000);
+        assert_eq!(log.operations.last().unwrap().node_id, node);
+        assert_eq!(log.operations[0].node_id, "1");
+
+        // Real structure still refuses before any effect.
+        let path = object_store::relative_object_path("BUG-003").unwrap();
+        let original = std::fs::read_to_string(root.join(&path)).unwrap();
+        std::fs::write(
+            root.join(&path),
+            format!("{original}extra: &shared [1]\nagain: *shared\n"),
+        )
+        .unwrap();
+        let accepted = snapshot(&root);
+        let error = backend.add_requirement(row("Another failure")).unwrap_err();
+        assert!(error.to_string().contains("grammar"), "{error}");
+        assert_eq!(snapshot(&root), accepted);
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn story_1742_umask_002_work_writes_never_brick_the_next_write() {
+        // trace:STORY-1742 | ai:claude
+        if !isolated("db::git_backend::work_intake::tests::story_1742_umask_002_work_writes_never_brick_the_next_write") {
+            return;
+        }
+        use std::os::unix::fs::PermissionsExt;
+        let (_temp, root, backend) = fixture();
+        let mode = |relative: &str| {
+            std::fs::metadata(root.join(relative))
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o777
+        };
+        std::fs::set_permissions(
+            root.join("metadata.yaml"),
+            std::fs::Permissions::from_mode(0o644),
+        )
+        .unwrap();
+        // The operator's shared-group umask; the isolated child owns it.
+        unsafe { libc::umask(0o002) };
+        let first = backend.add_requirement(row("Generic failure")).unwrap();
+        let path = object_store::relative_object_path(first.spec_id.as_deref().unwrap()).unwrap();
+        assert_eq!(mode(&path), 0o644);
+        assert_eq!(mode("objects"), 0o755);
+        assert_eq!(mode(path.rsplit_once('/').unwrap().0), 0o755);
+        assert_eq!(mode("oplog.yaml"), 0o644);
+        let second = backend.add_requirement(row("Second failure")).unwrap();
+        assert_ne!(first.spec_id, second.spec_id);
+        let mut changed = first.clone();
+        changed.description = "Generic clarified reproduction".into();
+        backend.update_requirement(&changed).unwrap();
+        assert_eq!(mode(&path), 0o644);
+
+        // A pre-existing shared-write file refuses, naming the path and fix.
+        std::fs::set_permissions(
+            root.join("metadata.yaml"),
+            std::fs::Permissions::from_mode(0o664),
+        )
+        .unwrap();
+        let accepted = snapshot(&root);
+        let error = backend
+            .add_requirement(row("Third failure"))
+            .unwrap_err()
+            .to_string();
+        assert!(
+            error.contains("metadata.yaml") && error.contains("chmod go-w"),
+            "{error}"
+        );
+        assert_eq!(snapshot(&root), accepted);
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn story_1742_concurrent_work_writers_serialize_instead_of_failing() {
+        // trace:STORY-1742 | ai:claude
+        if !isolated("db::git_backend::work_intake::tests::story_1742_concurrent_work_writers_serialize_instead_of_failing") {
+            return;
+        }
+        let (_temp, root, _backend) = fixture();
+        let barrier = std::sync::Arc::new(std::sync::Barrier::new(4));
+        let writers: Vec<_> = (0..4)
+            .map(|n| {
+                let (root, barrier) = (root.clone(), barrier.clone());
+                std::thread::spawn(move || {
+                    let backend = GitBackend::new(&root).unwrap();
+                    barrier.wait();
+                    backend.add_requirement(row(&format!("Concurrent failure {n}")))
+                })
+            })
+            .collect();
+        let mut ids = HashSet::new();
+        for writer in writers {
+            let added = writer.join().unwrap().unwrap();
+            assert!(ids.insert(added.spec_id.unwrap()));
+        }
+        let store = GitBackend::new(&root).unwrap().load().unwrap();
+        assert_eq!(store.requirements.len(), 4);
     }
 
     #[test]

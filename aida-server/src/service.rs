@@ -65,6 +65,11 @@ pub struct ServerState {
     pub version: String,
     pub shutdown_requested: RwLock<bool>,
     last_loaded_mtime: RwLock<SystemTime>,
+    /// Set when a refused enabled-WORK save could not reload: the in-memory
+    /// store was cleared rather than keep refused rows, and stays unusable
+    /// (every save refuses, every reload check reloads) until a reload works.
+    // trace:STORY-1742 | ai:claude
+    unusable: std::sync::atomic::AtomicBool,
 }
 
 impl ServerState {
@@ -78,6 +83,7 @@ impl ServerState {
             version: env!("CARGO_PKG_VERSION").to_string(),
             shutdown_requested: RwLock::new(false),
             last_loaded_mtime: RwLock::new(mtime),
+            unusable: std::sync::atomic::AtomicBool::new(false),
         })
     }
 
@@ -104,6 +110,25 @@ impl ServerState {
     /// is returned; the client retries against current state.
     // trace:BUG-1612 | ai:claude
     pub fn save_store(&self, store: &mut RequirementsStore) -> Result<(), StoreSaveError> {
+        use std::sync::atomic::Ordering;
+        // A handler that ran on cleared state must never be saved: reload and
+        // refuse this attempt either way; the client retries on fresh state.
+        // trace:STORY-1742 | ai:claude
+        if self.unusable.load(Ordering::SeqCst) {
+            return Err(StoreSaveError::Failed(match self.backend.load() {
+                Ok(fresh) => {
+                    *store = fresh;
+                    self.unusable.store(false, Ordering::SeqCst);
+                    "Server state was reloaded after an earlier refused write; nothing was \
+                     saved. Retry against the current state."
+                        .into()
+                }
+                Err(e) => format!(
+                    "Server state is unusable until it reloads from disk after an earlier \
+                     refused write; nothing was saved: {e}"
+                ),
+            }));
+        }
         // Server writes carry no caller identity or session: their write
         // events are authored by the REST convention, never by the operator
         // who launched the server. trace:STORY-1674 | ai:claude
@@ -132,7 +157,15 @@ impl ServerState {
                     match self.backend.load() {
                         Ok(fresh) => *store = fresh,
                         Err(reload_err) => {
-                            tracing::warn!("Reload after refused save failed: {}", reload_err)
+                            // Fail closed: drop the refused rows and refuse
+                            // further saves until a reload succeeds.
+                            tracing::warn!("Reload after refused save failed: {}", reload_err);
+                            *store = RequirementsStore::new();
+                            self.unusable.store(true, Ordering::SeqCst);
+                            return Err(StoreSaveError::Failed(format!(
+                                "Failed to save: {e}. Server state could not reload and is \
+                                 unusable until it does: {reload_err}"
+                            )));
                         }
                     }
                 }
@@ -174,6 +207,8 @@ impl ServerState {
         let mtime = Self::compute_db_mtime(self.backend.path());
         *self.store.write().await = new_store;
         *self.last_loaded_mtime.write().await = mtime;
+        self.unusable
+            .store(false, std::sync::atomic::Ordering::SeqCst);
         tracing::info!("Reloaded store from disk ({} requirements)", count);
         Ok(count)
     }
@@ -181,11 +216,12 @@ impl ServerState {
     /// Check if the DB file has been modified since last load and reload if so
     pub async fn check_reload(&self) {
         let current_mtime = Self::compute_db_mtime(self.backend.path());
-        if current_mtime == SystemTime::UNIX_EPOCH {
+        let unusable = self.unusable.load(std::sync::atomic::Ordering::SeqCst);
+        if current_mtime == SystemTime::UNIX_EPOCH && !unusable {
             return;
         }
         let last = *self.last_loaded_mtime.read().await;
-        if current_mtime > last {
+        if unusable || current_mtime > last {
             if let Err(e) = self.reload().await {
                 tracing::warn!("Auto-reload failed: {}", e);
             }
@@ -2047,5 +2083,131 @@ impl RequirementsService for AidaServiceMultiProject {
                 message: "User not found".to_string(),
             })),
         }
+    }
+}
+
+#[cfg(all(test, unix))]
+mod work_refusal_tests {
+    // trace:STORY-1742 | ai:claude
+    use super::*;
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+
+    /// A store whose saves refuse like an enabled-WORK prepared write (or
+    /// succeed on demand) and whose reloads fail on demand.
+    #[derive(Default)]
+    struct Switches {
+        refuse_saves: AtomicBool,
+        fail_loads: AtomicBool,
+        saved: AtomicUsize,
+    }
+
+    struct Refusing {
+        root: std::path::PathBuf,
+        disk: RequirementsStore,
+        switches: Arc<Switches>,
+    }
+
+    impl DatabaseBackend for Refusing {
+        fn backend_type(&self) -> aida_core::db::BackendType {
+            aida_core::db::BackendType::Git
+        }
+        fn path(&self) -> &std::path::Path {
+            &self.root
+        }
+        fn load(&self) -> anyhow::Result<RequirementsStore> {
+            anyhow::ensure!(
+                !self.switches.fail_loads.load(Ordering::SeqCst),
+                "synthetic reload failure"
+            );
+            Ok(self.disk.clone())
+        }
+        fn save(&self, _: &RequirementsStore) -> anyhow::Result<()> {
+            anyhow::ensure!(
+                !self.switches.refuse_saves.load(Ordering::SeqCst),
+                "WORK prepared artifact refused: reviewed deny token"
+            );
+            self.switches.saved.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }
+    }
+
+    /// A Git project whose clone-local profile enables WORK intake.
+    fn enrolled_root() -> tempfile::TempDir {
+        let dir = tempfile::tempdir().unwrap();
+        let init = std::process::Command::new("git")
+            .args(["init", "-q"])
+            .current_dir(dir.path())
+            .output()
+            .unwrap();
+        assert!(init.status.success());
+        let profile = serde_json::json!({
+            "version": 1, "name": "work", "origin_sha256": "a".repeat(64), "baseline": null
+        });
+        aida_core::transport_policy::Private::open(&dir.path().join(".git"))
+            .unwrap()
+            .write(
+                aida_core::transport_policy::PROFILE_FILE,
+                profile.to_string().as_bytes(),
+            )
+            .unwrap();
+        assert!(aida_core::transport_policy::enrolled(dir.path()).unwrap());
+        dir
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn story_1742_refused_work_saves_never_keep_refused_rows() {
+        let dir = enrolled_root();
+        let mut disk = RequirementsStore::new();
+        disk.requirements
+            .push(Requirement::new("Generic".into(), "Generic".into()));
+        let kept = disk.requirements[0].id;
+        let switches = Arc::new(Switches::default());
+        switches.refuse_saves.store(true, Ordering::SeqCst);
+        let state = ServerState::new(Box::new(Refusing {
+            root: dir.path().to_owned(),
+            disk,
+            switches: switches.clone(),
+        }))
+        .unwrap();
+        let refused = || Requirement::new("Refused".into(), "Refused".into());
+        let ids = |store: &RequirementsStore| -> Vec<Uuid> {
+            store.requirements.iter().map(|r| r.id).collect()
+        };
+
+        // A refused save reloads authoritative state from disk.
+        {
+            let mut store = state.store.write().await;
+            store.requirements.push(refused());
+            assert!(matches!(
+                state.save_store(&mut store),
+                Err(StoreSaveError::Failed(_))
+            ));
+            assert_eq!(ids(&store), vec![kept]);
+        }
+
+        // A refused save whose reload fails clears state and fails closed.
+        switches.fail_loads.store(true, Ordering::SeqCst);
+        {
+            let mut store = state.store.write().await;
+            store.requirements.push(refused());
+            let error = state.save_store(&mut store).unwrap_err();
+            assert!(error.message().contains("unusable"), "{error}");
+            assert!(store.requirements.is_empty());
+            // Even a save the backend would accept is refused until reload:
+            // the handler ran on cleared state.
+            switches.refuse_saves.store(false, Ordering::SeqCst);
+            store.requirements.push(refused());
+            assert!(state.save_store(&mut store).is_err());
+            assert_eq!(switches.saved.load(Ordering::SeqCst), 0);
+        }
+
+        // Once the store loads again, the next reload check restores it and
+        // saves work.
+        switches.fail_loads.store(false, Ordering::SeqCst);
+        state.check_reload().await;
+        let mut store = state.store.write().await;
+        assert_eq!(ids(&store), vec![kept]);
+        state.save_store(&mut store).unwrap();
+        assert_eq!(switches.saved.load(Ordering::SeqCst), 1);
     }
 }

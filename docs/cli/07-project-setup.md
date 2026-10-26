@@ -504,10 +504,12 @@ aida add --sanitized "Generic failure" --description-from-file defect.md
 `--sanitized` files one draft (a bug unless `--type` says otherwise) with only a
 title, description, type and priority. It never adds an owner, tags, feature,
 parent or session context, and refuses flags that would. `--template` and
-`--preview` work in any clone and write nothing: preview reports this clone's
-policy verdict and, when the text passes, shows the candidate. Preview is for
-your review only; it reserves no identifier and is not a permission token. A
-`--sanitized` write requires an enabled profile.
+`--preview` work in any clone and write nothing: preview reports the policy
+verdict of the store a write would use (an explicit `--file`, the detected
+store, or the project), not of the current directory, and, when the text
+passes, shows the candidate. Preview is for your review only; it reserves no
+identifier and is not a permission token. A `--sanitized` write requires an
+enabled profile.
 
 New requirements omit the optional machine and session filing context and say so
 in a `filing_provenance_omission_reason` custom field. Existing filing context
@@ -515,13 +517,24 @@ is never changed. Identifiers come from this clone's own counter, allocated only
 inside the prepared write; a refused write consumes no number. Global metadata
 counters cannot change.
 
+Existing store content is read by its YAML structure, not by its characters:
+prose with `&`, `*` or `!` (Markdown emphasis, punctuation) is ordinary text,
+while real YAML anchors, aliases and non-core tags refuse. `oplog.yaml` is
+bounded per record rather than per file, so a long shared history stays
+writable. Written files are always `0644` and directories `0755`, whatever the
+umask. A store file or directory that is already group- or other-writable is
+refused with its path and the `chmod go-w` fix. Concurrent writers on one clone
+wait their turn for up to 30 seconds instead of failing at once.
+
 Supported prepared writes: adding, updating and deleting requirements, whole-store
 saves (including their concurrent-edit conflict rules), bulk updates, per-spec
 compare-and-swap updates and additive batches, through the CLI, MCP and the
-server. Writers without a prepared form refuse before any change while a profile
+server. MCP `add_requirement` files through the same prepared add; its `parent`
+option is refused while a profile is enabled. Writers without a prepared form refuse before any change while a profile
 is enabled: imports, queue edits, direct object, registry and dispenser writes,
 legacy single-file storage and store initialization. A server discards the
-refused change from its in-memory state instead of reporting success.
+refused change from its in-memory state instead of reporting success; if it
+cannot reload, it refuses further saves until a reload succeeds.
 
 **Remaining acceptance:** actual recoverable FF pull is not available in this
 slice. The client guard does not enforce hub receiving hooks or PUBLIC

@@ -203,9 +203,9 @@ mod relay_stall;
 mod codex_mail_health;
 mod remote_cmd;
 mod requirements_cli;
-// trace:STORY-1742 | ai:claude
 mod review_cmd;
 mod review_gates;
+// trace:STORY-1742 | ai:claude
 #[cfg(unix)]
 mod sanitized_intake;
 // trace:TASK-1993 | ai:codex

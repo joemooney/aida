@@ -1,7 +1,7 @@
 //! Bounded, local-only scan of immutable Git objects, through every parent.
 // trace:STORY-1742 | ai:codex
 use super::*;
-use aida_core::transport_sanitization::{Policy, MAX_BYTES, SCANNER_VERSION};
+use aida_core::transport_sanitization::{Policy, MAX_BYTES, MAX_OPLOG_BYTES, SCANNER_VERSION};
 use std::collections::HashSet;
 use std::io::{BufRead, BufReader, Write};
 use std::os::unix::process::CommandExt;
@@ -428,7 +428,8 @@ impl Reader<'_> {
             .lines()
         {
             let size: u64 = line.parse().context("Transport graph object is missing")?;
-            if size > MAX_BYTES as u64 {
+            // The largest per-format bound; `document` applies the exact one.
+            if size > MAX_OPLOG_BYTES as u64 {
                 bail!("Transport object exceeds size limit");
             }
             total += size;
@@ -555,7 +556,7 @@ impl Batch {
                     bail!("Transport graph object is missing");
                 };
                 let size: usize = size.parse().map_err(|_| incomplete())?;
-                if size > MAX_BYTES {
+                if size > MAX_OPLOG_BYTES {
                     bail!("Transport object exceeds size limit");
                 }
                 let mut bytes = vec![0; size + 1];

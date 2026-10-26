@@ -1,9 +1,11 @@
 //! `aida add --sanitized`: generic intake for a clone with an enabled WORK
 //! transport profile. `--template` and `--preview` are read-only: they never
-//! open the store, allocate an identifier, persist counters or commit. A write
-//! goes through the backend's prepared path, which rechecks everything.
+//! open the store backend, allocate an identifier, persist counters or commit.
+//! `--preview` reads enrollment and policy from the store root the dispatcher
+//! would use, resolved read-only (never by attaching a worktree). A write goes
+//! through the backend's prepared path, which rechecks everything.
 // trace:STORY-1742 | ai:claude
-use crate::command_registry::{Flow, StoreCtx};
+use crate::command_registry::{DispatchCtx, Flow, StoreCtx};
 use crate::requirements_cli::{parse_requirement_type, resolve_description, AddArgs};
 use aida_core::transport_policy::PreviewVerdict;
 use aida_core::{DatabaseBackend, Requirement, RequirementPriority, RequirementStatus};
@@ -98,10 +100,24 @@ fn candidate(args: &AddArgs) -> Result<Requirement> {
     Ok(row)
 }
 
-fn preview(args: &AddArgs) -> Result<()> {
+/// The root a write would be governed by, in the dispatcher's own order: an
+/// explicit `--file`, then the detected store, then the project root (which
+/// shares its Git common directory with any store worktree attached later).
+fn preview_root(ctx: &DispatchCtx) -> Result<std::path::PathBuf> {
+    if let Some(file) = ctx.globals.and_then(|globals| globals.file.as_deref()) {
+        return Ok(std::path::PathBuf::from(file));
+    }
+    if let Some(store) = crate::store_sync::detect_distributed_store() {
+        return Ok(store);
+    }
+    crate::kernel::find_project_root()
+        .or_else(|_| std::env::current_dir().context("current directory unavailable"))
+}
+
+fn preview(store_path: &std::path::Path, args: &AddArgs) -> Result<()> {
     let row = candidate(args)?;
-    let root = std::env::current_dir().context("current directory unavailable")?;
-    let verdict = aida_core::transport_policy::preview(&root, &[&row.title, &row.description])?;
+    let verdict =
+        aida_core::transport_policy::preview(store_path, &[&row.title, &row.description])?;
     println!("Sanitized intake preview. Nothing was written and no identifier was assigned.");
     match verdict {
         PreviewVerdict::Refused(category) => {
@@ -149,13 +165,13 @@ fn write(
 
 /// Dispatch for every phase: template and preview finish before storage is
 /// opened; a write runs only against the attached git store.
-pub(crate) fn run(args: &AddArgs, store: &Option<StoreCtx>) -> Result<Flow> {
-    match store {
+pub(crate) fn run(args: &AddArgs, ctx: &DispatchCtx) -> Result<Flow> {
+    match &ctx.store {
         None if args.template => {
             print!("{TEMPLATE}");
             Ok(Flow::Return)
         }
-        None if args.preview => preview(args).map(|()| Flow::Return),
+        None if args.preview => preview(&preview_root(ctx)?, args).map(|()| Flow::Return),
         None => {
             // Refuse unsupported flags before any storage is opened.
             candidate(args)?;

@@ -1668,6 +1668,25 @@ impl Storage {
     // =========================================================================
     // trace:STORY-0366 | ai:claude
 
+    /// Whether this is a git store owned by a clone with an enabled WORK
+    /// transport profile. Such a store files new requirements only through
+    /// [`Self::add_prepared`].
+    // trace:STORY-1742 | ai:claude
+    #[cfg(unix)]
+    pub fn work_enrolled(&self) -> Result<bool> {
+        Ok(self.file_path.is_dir() && crate::transport_policy::enrolled(&self.file_path)?)
+    }
+
+    /// File one new requirement through the git backend's prepared add, which
+    /// allocates its identifier inside the admitted write. A caller-side
+    /// allocation followed by a whole-store save is refused in WORK mode.
+    // trace:STORY-1742 | ai:claude
+    #[cfg(unix)]
+    pub fn add_prepared(&self, req: Requirement) -> Result<Requirement> {
+        use crate::db::DatabaseBackend;
+        self.git_backend_for(&self.file_path)?.add_requirement(req)
+    }
+
     /// Pick the right backend for queue operations: SQLite for .db paths,
     /// GitBackend for directory paths. Returns an error for YAML files (no
     /// queue support there). Per EPIC-1-001 the canonical path is git.

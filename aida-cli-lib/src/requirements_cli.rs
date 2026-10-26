@@ -2686,7 +2686,7 @@ fn run_add(
     // trace:STORY-1742 | ai:claude
     #[cfg(unix)]
     if args.sanitized {
-        return crate::sanitized_intake::run(&args, &ctx.store);
+        return crate::sanitized_intake::run(&args, ctx);
     }
     match &ctx.store {
         None => Ok(crate::command_registry::Flow::Continue),

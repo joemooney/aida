@@ -1785,3 +1785,179 @@ fn sanitized_intake_template_and_preview_are_read_only_and_never_echo_refusals()
         assert!(!fixture.common.join(name).exists(), "{name}");
     }
 }
+
+#[test]
+// trace:STORY-1742 | ai:claude
+fn sanitized_intake_write_files_one_generic_draft_only_when_enrolled() {
+    let fixture = Fixture::new();
+    let store = fixture.root.join(".aida-store");
+    fixture.git(&[
+        "worktree",
+        "add",
+        "-q",
+        store.to_str().unwrap(),
+        "aida-store",
+    ]);
+    fs::write(store.join("metadata.yaml"), "title: Generic\n").unwrap();
+    // An attached store is recognised by its object tree.
+    fs::create_dir(store.join("objects")).unwrap();
+    fixture.git_at(&store, &["add", "metadata.yaml"]);
+    fixture.git_at(&store, &["commit", "-qm", "seed store"]);
+    let head = || fixture.git_at(&store, &["rev-parse", "HEAD"]);
+
+    // Without a profile a sanitized write refuses before any change.
+    let seeded = head();
+    let refused = fixture.aida(&["add", "--sanitized", "Generic failure"]);
+    assert!(!refused.status.success());
+    assert!(
+        diagnostics(&refused).contains("enabled WORK transport profile"),
+        "{}",
+        diagnostics(&refused)
+    );
+    assert_eq!(head(), seeded);
+
+    let enabled = fixture.json(&[
+        "config",
+        "transport",
+        "enable",
+        "work",
+        "--baseline",
+        &seeded,
+        "--json",
+    ]);
+    assert_eq!(enabled["enabled"], true);
+    fixture.enroll_policy();
+
+    // Preview reads the store a write would use, not the working directory:
+    // from outside the project, an explicit store still previews enrolled.
+    let outside = fixture.aida_at(
+        &fixture.home,
+        &[
+            "--file",
+            store.to_str().unwrap(),
+            "add",
+            "--sanitized",
+            "--preview",
+            "Generic failure",
+        ],
+    );
+    assert!(outside.status.success(), "{}", diagnostics(&outside));
+    assert!(
+        String::from_utf8_lossy(&outside.stdout).contains("passes this clone's reviewed policy"),
+        "{}",
+        diagnostics(&outside)
+    );
+
+    // Unsupported flags and refused text change nothing and never echo.
+    let flagged = fixture.aida(&[
+        "add",
+        "--sanitized",
+        "Generic failure",
+        "--owner",
+        "someone",
+    ]);
+    assert!(!flagged.status.success());
+    assert!(diagnostics(&flagged).contains("--owner is not available with --sanitized"));
+    let unsafe_text = fixture.aida(&[
+        "add",
+        "--sanitized",
+        "Generic failure",
+        "--description",
+        "seen on private-marker",
+    ]);
+    assert!(!unsafe_text.status.success());
+    assert!(!diagnostics(&unsafe_text).contains("private-marker"));
+    assert_eq!(head(), seeded);
+    for name in ["aida-work-dispenser.toml", "aida-work-node.toml"] {
+        assert!(!fixture.common.join(name).exists(), "{name}");
+    }
+
+    // An enrolled write files exactly one draft in one pseudonymous commit.
+    let added = fixture.aida(&[
+        "add",
+        "--sanitized",
+        "Generic failure",
+        "--description",
+        "Synthetic reproduction",
+    ]);
+    assert!(added.status.success(), "{}", diagnostics(&added));
+    let stdout = String::from_utf8_lossy(&added.stdout).into_owned();
+    let id = stdout
+        .lines()
+        .find_map(|line| line.strip_prefix("Added: "))
+        .expect("the write reports its identifier")
+        .trim()
+        .to_owned();
+    assert!(id.starts_with("BUG-") && id.ends_with("-001"), "{id}");
+    assert_eq!(
+        fixture.git_at(&store, &["rev-list", "--count", &format!("{seeded}..HEAD")]),
+        "1"
+    );
+    assert_eq!(
+        fixture.git_at(&store, &["log", "-1", "--format=%an %ae %cn %ce"]),
+        "Fixture aida Fixture aida"
+    );
+    let changed = fixture.git_at(&store, &["show", "--name-only", "--format=", "HEAD"]);
+    let object = changed
+        .lines()
+        .find(|path| path.starts_with("objects/"))
+        .expect("one object written");
+    let row = fs::read_to_string(store.join(object)).unwrap();
+    assert!(row.contains("status: Draft"), "{row}");
+    assert!(row.contains("filing_provenance_omission_reason"), "{row}");
+
+    // The MCP route takes the same prepared path: a refused add changes
+    // nothing, an admitted add allocates from this clone's own counter.
+    let mcp = |title: &str| {
+        use std::io::Write;
+        let request = |id: u32, method: &str, params: Value| {
+            serde_json::json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params})
+                .to_string()
+        };
+        let input = [
+            request(1, "initialize", serde_json::json!({})),
+            request(
+                2,
+                "tools/call",
+                serde_json::json!({"name": "add_requirement", "arguments": {
+                    "title": title, "description": "Synthetic reproduction", "type": "bug"}}),
+            ),
+        ]
+        .join("\n");
+        let mut child = fixture
+            .command(env!("CARGO_BIN_EXE_aida"), &fixture.root, &["mcp-serve"])
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .unwrap();
+        child
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(format!("{input}\n").as_bytes())
+            .unwrap();
+        let output = child.wait_with_output().unwrap();
+        let reply = String::from_utf8_lossy(&output.stdout)
+            .lines()
+            .filter_map(|line| serde_json::from_str::<Value>(line).ok())
+            .find(|reply| reply["id"] == 2)
+            .unwrap_or_else(|| panic!("no tools/call reply: {}", diagnostics(&output)));
+        (reply["result"].to_string(), diagnostics(&output))
+    };
+    let accepted = head();
+    let (refused, _) = mcp("private-marker failure");
+    assert!(refused.contains("isError\":true"), "{refused}");
+    assert!(!refused.contains("private-marker"), "{refused}");
+    assert_eq!(head(), accepted);
+    let (added, log) = mcp("Second generic failure");
+    assert!(added.contains("Requirement added: BUG-"), "{added}\n{log}");
+    assert!(added.contains("-002"), "{added}");
+    assert_eq!(
+        fixture.git_at(
+            &store,
+            &["rev-list", "--count", &format!("{accepted}..HEAD")]
+        ),
+        "1"
+    );
+}

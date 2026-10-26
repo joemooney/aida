@@ -1934,29 +1934,50 @@ impl<'a> McpServer<'a> {
             }
         }
 
-        let type_prefix = store.get_type_prefix(&req.req_type).ok_or_else(|| {
-            format!(
-                "No configured ID prefix for requirement type '{}'",
-                req.req_type
-            )
-        })?;
-        store.add_requirement_with_id(req, None, Some(type_prefix.as_str()));
+        // An enabled-WORK clone allocates only inside the backend's prepared
+        // add; a caller-side allocation plus whole-store save is refused.
+        // trace:STORY-1742 | ai:claude
+        #[cfg(unix)]
+        let work = self.storage.work_enrolled().map_err(|e| e.to_string())?;
+        #[cfg(not(unix))]
+        let work = false;
+        let new_spec_id = if work {
+            if parent_link.is_some() {
+                return Err("parent is not available while this clone's WORK transport \
+                     profile is enabled; add the requirement, then link it separately"
+                    .to_string());
+            }
+            #[cfg(unix)]
+            let added = self.storage.add_prepared(req).map_err(|e| e.to_string())?;
+            #[cfg(not(unix))]
+            let added = req;
+            added.spec_id.unwrap_or_else(|| "?".to_string())
+        } else {
+            let type_prefix = store.get_type_prefix(&req.req_type).ok_or_else(|| {
+                format!(
+                    "No configured ID prefix for requirement type '{}'",
+                    req.req_type
+                )
+            })?;
+            store.add_requirement_with_id(req, None, Some(type_prefix.as_str()));
 
-        let (new_spec_id, new_id) = store
-            .requirements
-            .last()
-            .map(|r| (r.spec_id.clone().unwrap_or_else(|| "?".to_string()), r.id))
-            .unwrap_or_else(|| ("?".to_string(), uuid::Uuid::nil()));
+            let (new_spec_id, new_id) = store
+                .requirements
+                .last()
+                .map(|r| (r.spec_id.clone().unwrap_or_else(|| "?".to_string()), r.id))
+                .unwrap_or_else(|| ("?".to_string(), uuid::Uuid::nil()));
 
-        // STORY-82: link the parent (Parent→child on parent, Child→parent on
-        // the new req via the bidirectional inverse) once the id exists.
-        if let Some((parent_id, _parent_spec)) = &parent_link {
-            store
-                .add_relationship(parent_id, RelationshipType::Parent, &new_id, true)
-                .map_err(|e| e.to_string())?;
-        }
+            // STORY-82: link the parent (Parent→child on parent, Child→parent on
+            // the new req via the bidirectional inverse) once the id exists.
+            if let Some((parent_id, _parent_spec)) = &parent_link {
+                store
+                    .add_relationship(parent_id, RelationshipType::Parent, &new_id, true)
+                    .map_err(|e| e.to_string())?;
+            }
 
-        self.storage.save(&store).map_err(|e| e.to_string())?;
+            self.storage.save(&store).map_err(|e| e.to_string())?;
+            new_spec_id
+        };
 
         // STORY-82: note the parent link in the result so the agent sees the
         // edge landed.

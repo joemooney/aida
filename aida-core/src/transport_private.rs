@@ -9,6 +9,12 @@ use std::os::fd::{AsRawFd, FromRawFd};
 use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 
+/// How long a WORK write or transport operation waits for another holder of
+/// the transport lock before refusing, so concurrent writers serialize like
+/// ordinary store writes instead of failing at once.
+// trace:STORY-1742 | ai:claude
+const LOCK_WAIT: std::time::Duration = std::time::Duration::from_secs(30);
+
 /// Names that predate owner-only private storage (see `Private::file`).
 const LEGACY_NAMES: &[&str] = &["aida-transport.json", "aida-transport.lock"];
 
@@ -105,8 +111,18 @@ impl Private {
     pub fn lock(&self) -> Result<File> {
         self.revalidate()?;
         let file = self.file("aida-transport.lock", true)?.unwrap();
-        file.try_lock_exclusive()
-            .map_err(|_| anyhow::anyhow!("Transport configuration is busy"))?;
+        let deadline = std::time::Instant::now() + LOCK_WAIT;
+        while file.try_lock_exclusive().is_err() {
+            if std::time::Instant::now() >= deadline {
+                bail!(
+                    "Transport configuration is busy: another AIDA write or transport operation \
+                     on this clone held its lock for {}s. Nothing was changed; retry once it \
+                     finishes.",
+                    LOCK_WAIT.as_secs()
+                );
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
         // Migrate a legacy lock in place: same inode, never unlinked.
         if file.metadata()?.mode() & 0o777 != 0o600
             && unsafe { libc::fchmod(file.as_raw_fd(), 0o600) } != 0
