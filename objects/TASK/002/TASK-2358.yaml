@@ -12,12 +12,19 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T20:40:12.011993597Z
-modified_at: 2026-10-25T23:16:08.761510376Z
+modified_at: 2026-10-26T00:39:51.420318534Z
 req_type: Task
 tags:
 - from-implementer:TASK-2351
 - kind:bug-spotted
 - severity:minor
+comments:
+- id: 01a175a6-3d7c-7f50-8397-403787fb9f06
+  author: joe
+  content: 'ADVISOR 2026-10-25 17:40 MST: implementer analysis confirmed. aida-host bin/cargo-reap counts only ''git worktree list'' entries as owners, so every aida-seat-* clone''s target dir is reaped as ''no-worktree'' every 30 min with no age check (the cold rebuilds explain today''s slow lanes). MITIGATION: advisor stopped the aida-cargo-reap.timer at 17:40 (135G free on /dev/sdd1). Re-enable with ''systemctl --user start aida-cargo-reap.timer'' once the aida-host fix lands. Required fix (aida-host): (1) treat <main>/../aida-worktrees/<name> seat clones and .aida/sessions lease paths as owners; (2) never reap a ''no-worktree'' dir younger than a minimum age. TASK-2358 closes when that fix ships.'
+  created_at: 2026-10-26T00:39:51.420318534Z
+  modified_at: 2026-10-26T00:39:51.420318534Z
+  session_id: cde796d3-1750-4745-a8f9-7ab3bc7c3519
 history:
 - id: 01a17551-1594-7f80-bc42-e4cea75364da
   author: joe
