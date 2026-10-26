@@ -6,12 +6,12 @@ description: |-
   2026-10-25: aida review watch could not launch reviewers for PR-2927 (TASK-2348) and PR-2928 (BUG-2221): queue work tried to end the finished implementer's dead lease and got 'seat clone ... holds work origin does not have:' followed by an EMPTY list. Investigation: the seat clone carried 55 local tags (slice-*-r*, gl-v-check-*, wip/*) copied from the primary checkout; none are on origin, all are present in the primary, the worktree was clean and the branch fully pushed. session end --force then 'salvaged' a patch.
   Impact: every finished lane blocks its own automatic review until someone force-ends it by hand.
   Acceptance: the unpushed-work probe ignores refs that are also present in the primary repository (or that were inherited at clone time), and the refusal message lists the refs it counts. A clean, fully pushed seat ends without --force.
-status: NeedsAttention
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T19:59:04.310057151Z
-modified_at: 2026-10-26T02:23:18.319250375Z
+modified_at: 2026-10-26T05:24:19.817735874Z
 req_type: Bug
 tags:
 - from-advisor
@@ -60,6 +60,21 @@ history:
   timestamp: 2026-10-26T02:23:19.863854342Z
   session_id: 761a4fea-f388-41d1-93d9-f1386951253c
   changes: []
+- id: 01a176aa-aee4-71b3-891f-f8c620aefd57
+  author: aida-auto-bump
+  timestamp: 2026-10-26T05:24:19.812693212Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a176aa-aee9-7513-bf49-c991f4950261
+  timestamp: 2026-10-26T05:24:19.817731196Z
+  agent: aida
+  commit_sha: abc38c78319ae555fd76db8cb668a8dc0c814444
+  summary: 'All three BUG-2224 acceptance criteria verified: the probe excuses clone ref tips main reaches (live bwrap test green in CI gates), refusal/reap/destroy messages name the refs, and a clean seat with inherited tags and wip/* ends without --force; fail-closed on every error path; CI green at head.'
+  review_verdict: approved
 filed_at:
   code_sha: 011e33b65ee2ee1ecd96518e3cab472108cc18c5
   branch: main
@@ -68,11 +83,7 @@ filed_at:
   aida_build_sha: a01a698998
   vendor: claude
   session: cde796d3-1750-4745-a8f9-7ab3bc7c3519
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Code meets BUG-2224 acceptance (main-reachable clone ref tips excused, refusals name each ref, clean seat ends without --force, live bwrap test in gates passed); blocked only by red PR CI: CI (cli-0) ''Test time budget'' failed at head c411dbb (tests passed), so Build is red'
-  recovery_hint: address the review findings, move BUG-2224 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-26T00:02:58.844646735Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-26T05:24:19.812688682Z
+  completion_sha: abc38c78319ae555fd76db8cb668a8dc0c814444
