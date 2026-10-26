@@ -1034,11 +1034,12 @@ fn pool_reuse_revokes_only_the_prior_occupants_child_grant() {
     let root = tmp.path();
     let _ambient =
         crate::test_env::AmbientGuard::hermetic_with_seat(root, "advisor", &["implementer"]);
-    let parent = std::env::var(crate::seat_authority::GRANT_ENV).unwrap();
+    let parent = std::env::var(crate::gate::seat_authority::GRANT_ENV).unwrap();
     let subject = crate::test_env::HERMETIC_TEST_USER;
     let mint_child = || {
-        let crate::seat_authority::HeadlessChildGrant::Issued(child) =
-            crate::seat_authority::issue_headless_child(root, "implementer", subject).unwrap()
+        let crate::gate::seat_authority::HeadlessChildGrant::Issued(child) =
+            crate::gate::seat_authority::issue_headless_child(root, "implementer", subject)
+                .unwrap()
         else {
             panic!("fixture must mint a delegated child");
         };
@@ -1059,15 +1060,15 @@ fn pool_reuse_revokes_only_the_prior_occupants_child_grant() {
     }
     let valid = |id: &str| {
         matches!(
-            crate::seat_authority::grant_check_for(root, id, subject),
-            crate::seat_authority::GrantCheck::Valid(_)
+            crate::gate::seat_authority::grant_check_for(root, id, subject),
+            crate::gate::seat_authority::GrantCheck::Valid(_)
         )
     };
     assert!(valid(&mine) && valid(&sibling) && valid(&parent));
     assert_eq!(clear_worktree_session_leases(root, &root.join("pool-0")), 2);
     assert!(!lease_path(root, "old").exists());
     assert!(!lease_path(root, "plain").exists());
-    assert!(crate::seat_authority::read_grant(&mine)
+    assert!(crate::gate::seat_authority::read_grant(&mine)
         .unwrap()
         .revoked_at
         .is_some());

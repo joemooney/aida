@@ -743,14 +743,14 @@ fn dead_reviewer_of_a_merged_pr_is_reaped_and_its_hold_adopted() {
             review.to_str().unwrap(),
         ],
     );
-    let mut hold = crate::merge_hold::typed_hold(
+    let mut hold = crate::gate::merge_hold_core::typed_hold(
         7,
-        crate::merge_hold::HoldReasonKind::Rework,
+        crate::gate::merge_hold_core::HoldReasonKind::Rework,
         "CHANGES REQUESTED for BUG-9 at 1111111",
         Some("1111111aaaa".into()),
     );
     hold.spec = Some("BUG-9".into());
-    let marker = crate::merge_hold::local_hold_path(&review, 7);
+    let marker = crate::gate::merge_hold_core::local_hold_path(&review, 7);
     std::fs::create_dir_all(marker.parent().unwrap()).unwrap();
     std::fs::write(&marker, serde_json::to_vec_pretty(&hold).unwrap()).unwrap();
 
@@ -803,7 +803,7 @@ fn dead_reviewer_of_a_merged_pr_is_reaped_and_its_hold_adopted() {
     let outcome = reap_one(&root, &lease, row.branch_tip.as_deref());
     assert!(!review.exists(), "review worktree removed: {outcome}");
     assert!(!lease_path(&root, &lease.id).exists(), "lease released");
-    let adopted = crate::merge_hold::read_hold_record(&root, 7).expect("hold adopted");
+    let adopted = crate::gate::merge_hold_core::read_hold_record(&root, 7).expect("hold adopted");
     assert_eq!(adopted.spec.as_deref(), Some("BUG-9"));
 }
 
@@ -927,7 +927,7 @@ fn reviewer_without_a_recorded_head_is_reaped_only_when_nothing_is_unpushed() {
 fn reviewer_reap_gate_checks_pr_scope_before_any_git() {
     let wt = Path::new("unused");
     let spec_lease = lease_json("l1", wt, serde_json::json!({ "scope": "TASK-1" }));
-    assert!(!review_pr_terminal_gate(
+    assert!(!crate::gate::review_authority::review_pr_terminal_gate(
         true,
         &spec_lease,
         || panic!("a non-review lease must not run the review-branch git checks"),
@@ -938,7 +938,7 @@ fn reviewer_reap_gate_checks_pr_scope_before_any_git() {
         wt,
         serde_json::json!({ "scope": "PR-7", "role": "reviewer" }),
     );
-    assert!(review_pr_terminal_gate(
+    assert!(crate::gate::review_authority::review_pr_terminal_gate(
         true,
         &review,
         || true,
@@ -947,7 +947,7 @@ fn reviewer_reap_gate_checks_pr_scope_before_any_git() {
             Some(true)
         }
     ));
-    assert!(!review_pr_terminal_gate(
+    assert!(!crate::gate::review_authority::review_pr_terminal_gate(
         true,
         &review,
         || false,

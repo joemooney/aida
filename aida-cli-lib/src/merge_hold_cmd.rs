@@ -195,7 +195,7 @@ fn finish_clear(
         Some(merge_hold::ForgeLabel::Absent | merge_hold::ForgeLabel::NoForge)
     ) {
         if let Some((detail, actor)) = &tail.tampering {
-            emit_release(merge_hold::MARKER_MISSING_REASON);
+            emit_release(crate::gate::merge_hold_core::MARKER_MISSING_REASON);
             lines.push(format!(
                 "PR #{pr} had a recorded hold placement whose marker went missing with no clearance. Recorded the release as {actor} ({detail}); `aida merge-hold list` and `aida doctor` stop reporting it, and the clearance record keeps the evidence."
             ));
@@ -320,14 +320,14 @@ pub(crate) fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<
         // trace:STORY-1687 | ai:codex
         crate::cli::MergeHoldAction::AutoRelease { pr } => {
             let prs = pr.map(|n| vec![n]).unwrap_or_else(|| {
-                merge_hold::list_holds(&root)
+                crate::gate::merge_hold_core::list_holds(&root)
                     .into_iter()
                     .map(|(n, _)| n)
                     .collect()
             });
             let mut refused = false;
             for pr in prs {
-                match crate::rework_hold_release::auto_release(&root, pr) {
+                match crate::gate::rework_hold_release::auto_release(&root, pr) {
                     Ok(outcome) => println!("{}", outcome.line(pr)),
                     Err(error) => {
                         eprintln!("PR #{pr}: held — {error:#}");
@@ -428,7 +428,7 @@ pub(crate) fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<
             Ok(())
         }
         crate::cli::MergeHoldAction::List { json, fix } => {
-            let holds = merge_hold::list_holds(&root);
+            let holds = crate::gate::merge_hold_core::list_holds(&root);
             // TASK-1455 / TASK-189: ONE pinned forge read per hold answers
             // both "is the PR merged" (stale sweep) and "does the forge carry
             // the label" (the column). The label column reports the FORGE,
@@ -489,9 +489,13 @@ pub(crate) fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<
                     .iter()
                     .map(|(pr, _)| *pr)
                     .filter(|pr| {
-                        merge_hold::read_hold_record(&root, *pr).is_some_and(|r| {
-                            r.reason_kind == merge_hold::HoldReasonKind::Recusal && !r.legacy
-                        })
+                        crate::gate::merge_hold_core::read_hold_record(&root, *pr).is_some_and(
+                            |r| {
+                                r.reason_kind
+                                    == crate::gate::merge_hold_core::HoldReasonKind::Recusal
+                                    && !r.legacy
+                            },
+                        )
                     })
                     .collect();
                 if !recusals.is_empty() {
@@ -501,7 +505,7 @@ pub(crate) fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<
                         .filter_map(|pr| pr.head_sha.map(|sha| (pr.number, sha)))
                         .collect();
                     for pr in recusals {
-                        if let Some(record) = merge_hold::reconcile_recusal_hold(
+                        if let Some(record) = crate::gate::merge_hold_core::reconcile_recusal_hold(
                             &root,
                             pr,
                             heads.get(&pr).map(String::as_str),
@@ -509,7 +513,7 @@ pub(crate) fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<
                             let routed = record
                                 .routed_to
                                 .iter()
-                                .map(merge_hold::PrincipalIdentity::key)
+                                .map(crate::gate::merge_hold_core::PrincipalIdentity::key)
                                 .collect::<Vec<_>>()
                                 .join(", ");
                             println!(
@@ -543,7 +547,9 @@ pub(crate) fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<
                 .chain(stale.iter().map(|(pr, _, _)| *pr))
                 .collect();
             let label_only: Vec<u64> = match &label_scan {
-                Ok(Some(labeled)) => merge_hold::label_only_holds(labeled, &marker_prs),
+                Ok(Some(labeled)) => {
+                    crate::gate::merge_hold_core::label_only_holds(labeled, &marker_prs)
+                }
                 _ => Vec::new(),
             };
             // A live marker the per-PR read saw labeled but the scan did not
@@ -565,7 +571,8 @@ pub(crate) fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<
                 Ok(None) => "no-forge".to_string(),
                 Err(e) => format!("unknown: {}", e.lines().next().unwrap_or("")),
             };
-            let unrecorded_removals = merge_hold::unrecorded_marker_removals(&root);
+            let unrecorded_removals =
+                crate::gate::merge_hold_core::unrecorded_marker_removals(&root);
             // BUG-2176: a marker left in a linked worktree holds nothing here.
             // trace:BUG-2176 | ai:claude
             let strays = merge_hold::stray_worktree_markers(&root);
@@ -595,11 +602,11 @@ pub(crate) fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<
                 _ => None,
             };
             let premise_of = |pr: u64| -> Option<String> {
-                let record = merge_hold::read_hold_record(&root, pr)?;
+                let record = crate::gate::merge_hold_core::read_hold_record(&root, pr)?;
                 merge_hold::premise_stale(
                     &record,
                     head_of(pr).as_deref(),
-                    |spec| review_verdict::read_recorded_verdict(&root, spec),
+                    |spec| crate::gate::review_verdict::read_recorded_verdict(&root, spec),
                     |spec| spec_status.get(&spec.to_ascii_uppercase()).cloned(),
                 )
             };
@@ -607,33 +614,37 @@ pub(crate) fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<
             // condition (a fresh APPROVED verdict at the current head) is met.
             // Reported only — the release itself stays behind the human floor.
             // trace:BUG-1532 | ai:claude
-            let refusal_state_of = |pr: u64| -> Option<merge_hold::RefusalRelease> {
-                let record = merge_hold::read_hold_record(&root, pr)?;
-                record.is_refusal().then(|| {
-                    crate::pr_cmd::ship_refusal_release(
-                        &[root.as_path()],
-                        &record,
-                        head_of(pr).as_deref(),
-                    )
-                })
-            };
+            let refusal_state_of =
+                |pr: u64| -> Option<crate::gate::merge_hold_core::RefusalRelease> {
+                    let record = crate::gate::merge_hold_core::read_hold_record(&root, pr)?;
+                    record.is_refusal().then(|| {
+                        crate::pr_cmd::ship_refusal_release(
+                            &[root.as_path()],
+                            &record,
+                            head_of(pr).as_deref(),
+                        )
+                    })
+                };
             let source_of = |pr: u64| {
                 if forge_label_of(pr) == merge_hold::ForgeLabel::Present {
-                    merge_hold::HoldSource::MarkerAndLabel
+                    crate::gate::merge_hold_core::HoldSource::MarkerAndLabel
                 } else {
-                    merge_hold::HoldSource::Marker
+                    crate::gate::merge_hold_core::HoldSource::Marker
                 }
             };
-            let recorded_of = |pr: u64| match merge_hold::read_label_state(&root, pr) {
-                merge_hold::LabelState::Synced => "synced".to_string(),
-                merge_hold::LabelState::Unsynced(e) => format!("unsynced: {e}"),
-                merge_hold::LabelState::Unknown => "unknown".to_string(),
-            };
+            let recorded_of =
+                |pr: u64| match crate::gate::merge_hold_core::read_label_state(&root, pr) {
+                    crate::gate::merge_hold_core::LabelState::Synced => "synced".to_string(),
+                    crate::gate::merge_hold_core::LabelState::Unsynced(e) => {
+                        format!("unsynced: {e}")
+                    }
+                    crate::gate::merge_hold_core::LabelState::Unknown => "unknown".to_string(),
+                };
             if *json {
                 let row = |pr: u64, reason: &str, terminal: Option<merge_hold::TerminalState>| {
                     let is_stale = terminal.is_some();
                     let forge_label = forge_label_of(pr);
-                    let record = merge_hold::read_hold_record(&root, pr);
+                    let record = crate::gate::merge_hold_core::read_hold_record(&root, pr);
                     let kind = record
                         .as_ref()
                         .map(|r| format!("{:?}", r.reason_kind).to_ascii_lowercase())
@@ -669,10 +680,10 @@ pub(crate) fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<
                         "release_condition_default": condition.as_ref().map(|(_, d)| *d),
                         "verdict_ref": record.as_ref().and_then(|r| r.verdict_ref.clone()),
                         "spec": record.as_ref().and_then(|r| r.spec.clone()),
-                        "refusal_released": refusal.as_ref().map(|r| matches!(r, merge_hold::RefusalRelease::Released(_))),
+                        "refusal_released": refusal.as_ref().map(|r| matches!(r, crate::gate::merge_hold_core::RefusalRelease::Released(_))),
                         "refusal_detail": refusal.as_ref().and_then(|r| match r {
-                            merge_hold::RefusalRelease::Held(why) => Some(why.clone()),
-                            merge_hold::RefusalRelease::Released(_) => None,
+                            crate::gate::merge_hold_core::RefusalRelease::Held(why) => Some(why.clone()),
+                            crate::gate::merge_hold_core::RefusalRelease::Released(_) => None,
                         }),
                     })
                 };
@@ -684,11 +695,11 @@ pub(crate) fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<
                 for pr in &label_only {
                     items.push(serde_json::json!({
                         "pr": pr,
-                        "reason": merge_hold::LABEL_ONLY_REASON,
+                        "reason": crate::gate::merge_hold_core::LABEL_ONLY_REASON,
                         "reason_kind": "unknown",
                         "routing_state": "pending",
                         "recused_principals": [],
-                        "source": merge_hold::HoldSource::LabelOnly.as_str(),
+                        "source": crate::gate::merge_hold_core::HoldSource::LabelOnly.as_str(),
                         "stale": false,
                         "stale_reason": null,
                         "premise_stale": null,
@@ -776,7 +787,7 @@ pub(crate) fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<
                 // and, for a refusal, the verdict it points at and whether a
                 // fresh verdict at the head has met it. The reason above is a
                 // placement-time summary. trace:BUG-1532 trace:BUG-1562 | ai:claude
-                if let Some(record) = merge_hold::read_hold_record(&root, *pr) {
+                if let Some(record) = crate::gate::merge_hold_core::read_hold_record(&root, *pr) {
                     let (cond, is_default) = record.release_condition_or_default();
                     println!(
                         "      release when: {cond}{}",
@@ -796,19 +807,21 @@ pub(crate) fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<
                         // TASK-1582: clear → ship, never ship alone (the two
                         // messages used to point at each other).
                         // trace:TASK-1582 | ai:antigravity
-                        Some(merge_hold::RefusalRelease::Released(v)) => println!(
-                            "      {}",
-                            merge_hold::release_met_next_action(
-                                *pr,
-                                &v.key,
-                                v.reviewed_sha
-                                    .as_deref()
-                                    .map(review_verdict::short_sha)
-                                    .unwrap_or("?"),
+                        Some(crate::gate::merge_hold_core::RefusalRelease::Released(v)) => {
+                            println!(
+                                "      {}",
+                                crate::gate::merge_hold_core::release_met_next_action(
+                                    *pr,
+                                    &v.key,
+                                    v.reviewed_sha
+                                        .as_deref()
+                                        .map(crate::gate::review_verdict::short_sha)
+                                        .unwrap_or("?"),
+                                )
+                                .green()
                             )
-                            .green()
-                        ),
-                        Some(merge_hold::RefusalRelease::Held(why)) => {
+                        }
+                        Some(crate::gate::merge_hold_core::RefusalRelease::Held(why)) => {
                             println!("      release condition not met: {why}")
                         }
                         None => {}
@@ -827,7 +840,7 @@ pub(crate) fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<
             for pr in &label_only {
                 println!(
                     "  PR #{pr}  {}  [{} | recorded: none — no marker, no reason; `aida merge-hold clear {pr}` releases it]",
-                    merge_hold::LABEL_ONLY_REASON,
+                    crate::gate::merge_hold_core::LABEL_ONLY_REASON,
                     "label: present".green()
                 );
             }
@@ -861,46 +874,50 @@ pub(crate) fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<
                 .filter(|r| !r.is_empty())
                 .unwrap_or("held by hand — merge requires human/advisor review")
                 .to_string();
-            let kind = merge_hold::HoldReasonKind::parse(reason_kind).ok_or_else(|| {
-                anyhow::anyhow!("--reason-kind must be supervision, recusal, rework, or decision")
-            })?;
-            let recused_principals: Vec<merge_hold::PrincipalIdentity> = recused_principals
+            let kind = crate::gate::merge_hold_core::HoldReasonKind::parse(reason_kind)
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "--reason-kind must be supervision, recusal, rework, or decision"
+                    )
+                })?;
+            let recused_principals: Vec<crate::gate::merge_hold_core::PrincipalIdentity> =
+                recused_principals
+                    .iter()
+                    .map(|p| crate::gate::merge_hold_core::PrincipalIdentity::parse(p))
+                    .filter(|p| !p.principal_id.is_empty())
+                    .collect();
+            let routed_to: Vec<crate::gate::merge_hold_core::PrincipalIdentity> = routed_to
                 .iter()
-                .map(|p| merge_hold::PrincipalIdentity::parse(p))
+                .map(|p| crate::gate::merge_hold_core::PrincipalIdentity::parse(p))
                 .filter(|p| !p.principal_id.is_empty())
                 .collect();
-            let routed_to: Vec<merge_hold::PrincipalIdentity> = routed_to
-                .iter()
-                .map(|p| merge_hold::PrincipalIdentity::parse(p))
-                .filter(|p| !p.principal_id.is_empty())
-                .collect();
-            let routing_state = if kind == merge_hold::HoldReasonKind::Recusal {
+            let routing_state = if kind == crate::gate::merge_hold_core::HoldReasonKind::Recusal {
                 if routed_to.is_empty() {
-                    merge_hold::HoldRoutingState::NoIndependentReader
+                    crate::gate::merge_hold_core::HoldRoutingState::NoIndependentReader
                 } else {
-                    merge_hold::HoldRoutingState::Routed
+                    crate::gate::merge_hold_core::HoldRoutingState::Routed
                 }
             } else {
-                merge_hold::HoldRoutingState::Pending
+                crate::gate::merge_hold_core::HoldRoutingState::Pending
             };
             // BUG-1532 criterion 10: a rework hold REFERENCES the verdict
             // record it stands on (key + the sha and seat currently recorded
             // there) instead of quoting it. trace:BUG-1532 | ai:claude
             let verdict_ref = match verdict.as_deref().map(str::trim).filter(|v| !v.is_empty()) {
                 None => None,
-                Some(_) if kind != merge_hold::HoldReasonKind::Rework => {
+                Some(_) if kind != crate::gate::merge_hold_core::HoldReasonKind::Rework => {
                     anyhow::bail!("--verdict applies to a rework hold (`--reason-kind rework`)");
                 }
                 Some(key) => {
-                    let current = review_verdict::read_recorded_verdict(&root, key);
+                    let current = crate::gate::review_verdict::read_recorded_verdict(&root, key);
                     if current.is_none() {
                         eprintln!(
                             "  {} no verdict is recorded under {} yet — the hold references it anyway and releases only once an approving verdict is recorded at the PR's head",
                             crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
-                            review_verdict::verdict_path(&root, key).display()
+                            crate::gate::review_verdict::verdict_path(&root, key).display()
                         );
                     }
-                    Some(merge_hold::VerdictRef::new(
+                    Some(crate::gate::merge_hold_core::VerdictRef::new(
                         key,
                         Some(*pr),
                         current.as_ref().and_then(|v| v.reviewed_sha.clone()),
@@ -913,7 +930,7 @@ pub(crate) fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<
                 .map(str::trim)
                 .filter(|c| !c.is_empty())
                 .map(str::to_string);
-            let record = merge_hold::MergeHoldRecord {
+            let record = crate::gate::merge_hold_core::MergeHoldRecord {
                 schema_version: 2,
                 pr: *pr,
                 reason_kind: kind,
@@ -927,7 +944,7 @@ pub(crate) fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<
                 verdict_ref,
                 release_condition,
                 spec: None,
-                placed_by: Some(merge_hold::placing_seat()),
+                placed_by: Some(crate::gate::merge_hold_core::placing_seat()),
                 absorbed: Vec::new(),
             };
             // STORY-1416 criterion 1a: before the marker lands, show what is
@@ -944,7 +961,7 @@ pub(crate) fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<
             }
             // BUG-1562: never silently overwrite an existing marker's body.
             // trace:BUG-1562 | ai:claude
-            merge_hold::place_hand_hold(&root, &record, *replace)
+            crate::gate::merge_hold_core::place_hand_hold(&root, &record, *replace)
                 .map_err(|e| anyhow::anyhow!(e))?;
             if record.release_condition.is_none() {
                 println!(
@@ -970,7 +987,7 @@ pub(crate) fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<
             // floor, independent of dispatch/disposition roles.
             // trace:STORY-1353 | ai:codex
             if let Some(refusal) = crate::gate::merge_hold_core::hold_clear_floor_refusal(
-                has_integrity_floor_authority(),
+                crate::gate::role_authority::has_integrity_floor_authority(),
             ) {
                 // STORY-1436: the floor HELD — record it (PR, refused seat,
                 // reason, ts) so floor refusals can be counted against
@@ -1005,12 +1022,12 @@ pub(crate) fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<
                     // definition. A self-declared AIDA_AGENT_ID can only
                     // refuse (when it names a recused principal); it never
                     // satisfies independence. trace:STORY-1397 | ai:claude
-                    let cleared = match merge_hold::read_hold_record(&root, *pr) {
+                    let cleared = match crate::gate::merge_hold_core::read_hold_record(&root, *pr) {
                         Some(record) => {
-                            let actor = merge_hold::human_clear_actor(
+                            let actor = crate::gate::merge_hold_core::human_clear_actor(
                                 &record,
                                 &current_user_id(None),
-                                merge_hold::current_principal().as_ref(),
+                                crate::gate::merge_hold_core::current_principal().as_ref(),
                             )
                             .map_err(|e| anyhow::anyhow!(e))?;
                             Some((record, actor))
@@ -1037,16 +1054,16 @@ pub(crate) fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<
                     };
                     let label_only_record = match &label_only_forge {
                         Some(merge_hold::ForgeLabel::Present) => {
-                            let record = merge_hold::typed_hold(
+                            let record = crate::gate::merge_hold_core::typed_hold(
                                 *pr,
-                                merge_hold::HoldReasonKind::Unknown,
-                                merge_hold::LABEL_ONLY_REASON,
+                                crate::gate::merge_hold_core::HoldReasonKind::Unknown,
+                                crate::gate::merge_hold_core::LABEL_ONLY_REASON,
                                 None,
                             );
-                            let actor = merge_hold::human_clear_actor(
+                            let actor = crate::gate::merge_hold_core::human_clear_actor(
                                 &record,
                                 &current_user_id(None),
-                                merge_hold::current_principal().as_ref(),
+                                crate::gate::merge_hold_core::current_principal().as_ref(),
                             )
                             .map_err(|e| anyhow::anyhow!(e))?;
                             Some((record, actor))
@@ -1063,18 +1080,19 @@ pub(crate) fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<
                     // trace:BUG-1693 | ai:claude
                     let tampering_record = if cleared.is_none()
                         && label_only_record.is_none()
-                        && merge_hold::unrecorded_marker_removals(&root).contains(pr)
+                        && crate::gate::merge_hold_core::unrecorded_marker_removals(&root)
+                            .contains(pr)
                     {
-                        let record = merge_hold::typed_hold(
+                        let record = crate::gate::merge_hold_core::typed_hold(
                             *pr,
-                            merge_hold::HoldReasonKind::Unknown,
-                            merge_hold::MARKER_MISSING_REASON,
+                            crate::gate::merge_hold_core::HoldReasonKind::Unknown,
+                            crate::gate::merge_hold_core::MARKER_MISSING_REASON,
                             None,
                         );
-                        let actor = merge_hold::human_clear_actor(
+                        let actor = crate::gate::merge_hold_core::human_clear_actor(
                             &record,
                             &current_user_id(None),
-                            merge_hold::current_principal().as_ref(),
+                            crate::gate::merge_hold_core::current_principal().as_ref(),
                         )
                         .map_err(|e| anyhow::anyhow!(e))?;
                         Some((record, actor))
@@ -1102,8 +1120,10 @@ pub(crate) fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<
                                 record,
                                 head.as_deref(),
                             ) {
-                                merge_hold::RefusalRelease::Released(v) => Some(v),
-                                merge_hold::RefusalRelease::Held(why) => {
+                                crate::gate::merge_hold_core::RefusalRelease::Released(v) => {
+                                    Some(v)
+                                }
+                                crate::gate::merge_hold_core::RefusalRelease::Held(why) => {
                                     eprintln!(
                                         "  {} PR #{pr} is a reviewer refusal whose release condition is NOT met: {why}. Clearing it anyway as a recorded human override.",
                                         crate::glyph(crate::glyphs::Glyph::Warning).yellow()
@@ -1119,26 +1139,36 @@ pub(crate) fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<
                     // write must leave the hold in place.
                     // TASK-1757: the same per-PR hold lock auto-release and
                     // every placement take. trace:TASK-1951 trace:TASK-1757 | ai:claude
-                    merge_hold::with_hold_lock(&root, *pr, || -> anyhow::Result<()> {
-                        if let Some((record, actor)) = &cleared {
-                            merge_hold::record_clearance_with_verdict(
-                                &root,
-                                record,
-                                actor,
-                                released_by_verdict.clone(),
-                            )?;
-                        }
-                        if let Some((record, actor)) = &tampering_record {
-                            merge_hold::record_clearance(&root, record, actor)?;
-                        }
-                        if let Some((record, actor)) = &label_only_record {
-                            merge_hold::record_clearance(&root, record, actor)?;
-                        }
-                        merge_hold::clear_hold(&root, *pr)?;
-                        Ok(())
-                    })??;
+                    crate::gate::merge_hold_core::with_hold_lock(
+                        &root,
+                        *pr,
+                        || -> anyhow::Result<()> {
+                            if let Some((record, actor)) = &cleared {
+                                crate::gate::merge_hold_core::record_clearance_with_verdict(
+                                    &root,
+                                    record,
+                                    actor,
+                                    released_by_verdict.clone(),
+                                )?;
+                            }
+                            if let Some((record, actor)) = &tampering_record {
+                                crate::gate::merge_hold_core::record_clearance(
+                                    &root, record, actor,
+                                )?;
+                            }
+                            if let Some((record, actor)) = &label_only_record {
+                                crate::gate::merge_hold_core::record_clearance(
+                                    &root, record, actor,
+                                )?;
+                            }
+                            crate::gate::merge_hold_core::clear_hold(&root, *pr)?;
+                            Ok(())
+                        },
+                    )??;
                     if let Some((record, actor)) = &cleared {
-                        if record.reason_kind == merge_hold::HoldReasonKind::Recusal {
+                        if record.reason_kind
+                            == crate::gate::merge_hold_core::HoldReasonKind::Recusal
+                        {
                             println!(
                                 "Recusal hold on PR #{pr} cleared by {} (independent of the recused author).",
                                 actor.key()
@@ -1161,16 +1191,19 @@ pub(crate) fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<
                                 // carry the integrity-floor attestation this
                                 // command verified above. trace:BUG-2214 | ai:claude
                                 principal: Some(
-                                    merge_hold::PrincipalIdentity::human(current_user_id(None))
-                                        .key(),
+                                    crate::gate::merge_hold_core::PrincipalIdentity::human(
+                                        current_user_id(None),
+                                    )
+                                    .key(),
                                 ),
-                                human_attested: has_integrity_floor_authority(),
+                                human_attested:
+                                    crate::gate::role_authority::has_integrity_floor_authority(),
                             },
                         );
                         ev.seat = events::active_seat();
                         // Beside the placement event (TASK-1406).
                         // trace:TASK-1951 trace:TASK-1406 | ai:claude
-                        events::emit(&merge_hold::hold_store_root(&root), &ev);
+                        events::emit(&crate::gate::merge_hold_core::hold_store_root(&root), &ev);
                     };
                     let tail = ClearTail {
                         pr: *pr,
@@ -1195,7 +1228,7 @@ pub(crate) fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<
                     Ok(())
                 }
                 (None, true) => {
-                    let holds = merge_hold::list_holds(&root);
+                    let holds = crate::gate::merge_hold_core::list_holds(&root);
                     // TASK-1455: the "is it merged" read that authorises
                     // removing a marker is pinned to this project's repo — a
                     // same-numbered merged PR elsewhere must not sweep a live
@@ -1217,7 +1250,7 @@ pub(crate) fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<
                         return Ok(());
                     }
                     for (pr, _reason, terminal) in &stale {
-                        let _ = merge_hold::clear_hold(&root, *pr);
+                        let _ = crate::gate::merge_hold_core::clear_hold(&root, *pr);
                         if let Err(err) = merge_hold::sync_label(&root, *pr, false) {
                             eprintln!(
                                 "  {} label not dropped on PR #{pr}: {err}",

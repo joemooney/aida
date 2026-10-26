@@ -5,7 +5,7 @@
 //! trace:BUG-2164 | ai:antigravity
 
 use super::*;
-use crate::pr_ship::{
+use crate::gate::ship::{
     format_default_branch_ship_refusal, parse_open_approved_prs_json, OpenApprovedPr,
 };
 

@@ -4,11 +4,11 @@
 // trace:BUG-2165 | ai:antigravity
 
 use crate::burndown_run::{build_burndown_quiet_command, build_burndown_verbose_command};
+use crate::gate::seat_authority::GRANT_ENV;
 use crate::leases::SessionLease;
 use crate::orchestrator_leases::{mark_lease_escalated_to_human, update_lease_branch};
 use crate::phase_driver::build_phase_driver_advisor_command;
 use crate::phase_driver_trait::build_phase_driver_ci_fix_command;
-use crate::seat_authority::GRANT_ENV;
 use crate::session::HeadlessVendor;
 use std::path::Path;
 

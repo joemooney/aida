@@ -120,13 +120,13 @@ pub(crate) fn claim_role(
     match cwd.and_then(|cwd| crate::lane_env::lane_lease_for_cwd(project_root, cwd)) {
         Some(lease) => match crate::lane_env::lease_role(&lease) {
             Ok(Some(role)) => Some(role),
-            Ok(None) => crate::seat_authority::current_seat(project_root),
+            Ok(None) => crate::gate::seat_authority::current_seat(project_root),
             Err(e) => {
                 eprintln!("warning: {e:#}; the claim records no role");
                 None
             }
         },
-        None => crate::seat_authority::current_seat(project_root),
+        None => crate::gate::seat_authority::current_seat(project_root),
     }
 }
 
@@ -227,7 +227,7 @@ pub(crate) fn handle_claim(spec: &str, worktree: Option<&str>) -> Result<()> {
     )?;
     // BUG-1918: durable record of who claimed this spec, surviving release.
     // trace:BUG-1918 | ai:claude
-    crate::review_authority::record_authoring_lease(&project_root, &lease);
+    crate::gate::review_authority::record_authoring_lease(&project_root, &lease);
 
     let id_short: String = id.chars().take(8).collect();
     if refreshed {

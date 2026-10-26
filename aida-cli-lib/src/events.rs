@@ -836,7 +836,7 @@ pub fn active_seat() -> Option<String> {
     crate::find_project_root()
         .ok()
         // trace:TASK-1593 | ai:antigravity
-        .and_then(|root| crate::seat_authority::current_seat(&root))
+        .and_then(|root| crate::gate::seat_authority::current_seat(&root))
 }
 
 /// Path to the event stream for a project, given its root directory.

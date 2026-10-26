@@ -1307,7 +1307,7 @@ fn review_lease_running(
 // verdict (or a FIFO named `*.json`) never counts as a started review.
 // trace:TASK-1951 trace:TASK-1670 | ai:claude
 fn recorded_verdict_shas(project_root: &Path) -> Vec<String> {
-    crate::review_verdict::list_active_verdicts(project_root)
+    crate::gate::review_verdict::list_active_verdicts(project_root)
         .into_iter()
         .filter_map(|(_, v)| v.reviewed_sha)
         .collect()
@@ -1358,13 +1358,15 @@ fn load_open_prs(
         // A rework push past a reviewer refusal's head awaits re-review; the
         // hold's own gate check stays red until that review, so it is not a
         // readiness signal there.
-        let reworked_past_refusal = crate::merge_hold::read_hold_record(project_root, pr.number)
-            .is_some_and(|h| {
-                h.is_refusal()
-                    && h.target_head_sha
-                        .as_deref()
-                        .is_some_and(|t| !crate::review_verdict::same_reviewed_sha(t, head))
-            });
+        let reworked_past_refusal =
+            crate::gate::merge_hold_core::read_hold_record(project_root, pr.number).is_some_and(
+                |h| {
+                    h.is_refusal()
+                        && h.target_head_sha.as_deref().is_some_and(|t| {
+                            !crate::gate::review_verdict::same_reviewed_sha(t, head)
+                        })
+                },
+            );
         let checks_green_at = rollup_green_at(
             &pr.status_check_rollup,
             reworked_past_refusal,
@@ -1380,14 +1382,14 @@ fn load_open_prs(
                 && review_lease_running(project_root, l, live_sessions, &mut live_agents, now)
                 && l.pr_head_sha
                     .as_deref()
-                    .is_none_or(|sha| crate::review_verdict::same_reviewed_sha(sha, head))
+                    .is_none_or(|sha| crate::gate::review_verdict::same_reviewed_sha(sha, head))
         });
         let review_started = review_lease
             || (checks_green_at.is_some()
                 && verdict_shas
                     .get_or_insert_with(|| recorded_verdict_shas(project_root))
                     .iter()
-                    .any(|sha| crate::review_verdict::same_reviewed_sha(sha, head)));
+                    .any(|sha| crate::gate::review_verdict::same_reviewed_sha(sha, head)));
         snapshot.open_prs.push(OpenPrFact {
             number: pr.number,
             title: pr.title,
@@ -1401,10 +1403,10 @@ fn load_open_prs(
 /// Holds that only a human releases: everything but a reviewer refusal,
 /// which a fresh verdict at the new head releases instead.
 fn load_human_holds(project_root: &Path, snapshot: &mut LaneLivenessSnapshot) {
-    let holds: Vec<crate::merge_hold::MergeHoldRecord> =
-        crate::merge_hold::list_holds(project_root)
+    let holds: Vec<crate::gate::merge_hold_core::MergeHoldRecord> =
+        crate::gate::merge_hold_core::list_holds(project_root)
             .into_iter()
-            .filter_map(|(pr, _)| crate::merge_hold::read_hold_record(project_root, pr))
+            .filter_map(|(pr, _)| crate::gate::merge_hold_core::read_hold_record(project_root, pr))
             .filter(|h| !h.is_refusal())
             .collect();
     if holds.is_empty() {
@@ -1415,7 +1417,7 @@ fn load_human_holds(project_root: &Path, snapshot: &mut LaneLivenessSnapshot) {
     let mut placed_since: BTreeMap<u64, DateTime<Utc>> = BTreeMap::new();
     // Hold events live beside the markers, in the primary (TASK-1406).
     // trace:TASK-1951 trace:TASK-1406 | ai:claude
-    for event in events::read_all(&crate::merge_hold::hold_store_root(project_root)) {
+    for event in events::read_all(&crate::gate::merge_hold_core::hold_store_root(project_root)) {
         if let EventKind::MergeHoldChanged { pr, placed, .. } = event.kind {
             let pr = u64::from(pr);
             if placed {
@@ -1426,11 +1428,12 @@ fn load_human_holds(project_root: &Path, snapshot: &mut LaneLivenessSnapshot) {
         }
     }
     for hold in holds {
-        let Some(waiting_since) = placed_since
-            .get(&hold.pr)
-            .copied()
-            .or_else(|| file_mtime_utc(&crate::merge_hold::hold_path(project_root, hold.pr)))
-        else {
+        let Some(waiting_since) = placed_since.get(&hold.pr).copied().or_else(|| {
+            file_mtime_utc(&crate::gate::merge_hold_core::hold_path(
+                project_root,
+                hold.pr,
+            ))
+        }) else {
             continue;
         };
         snapshot.human_holds.push(HumanHoldFact {

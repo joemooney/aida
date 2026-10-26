@@ -370,3 +370,8 @@ pub(crate) fn hold(root: &Path, m: Marker) -> std::io::Result<MarkerGuard> {
 #[cfg(test)]
 #[path = "tests/review_marker_tests.rs"]
 mod tests;
+
+// trace:TASK-2335 | ai:agy
+#[cfg(test)]
+#[path = "tests/story_1405_review_marker_tests.rs"]
+mod story_1405_review_marker_tests;

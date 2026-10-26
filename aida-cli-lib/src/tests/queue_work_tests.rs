@@ -3548,7 +3548,7 @@ fn done_spec_with_outstanding_refusal_is_awaiting_rework_not_awaiting_merge() {
 
     // A LIVE refusal (never closed by a merge), still pinned to the current
     // branch tip, flips the classification.
-    crate::review_verdict::record_verdict(
+    crate::gate::review_verdict::record_verdict(
         root,
         "BUG-1515",
         Some("request-changes"),
@@ -3586,7 +3586,7 @@ fn done_spec_with_outstanding_refusal_is_awaiting_rework_not_awaiting_merge() {
         &["commit", "--allow-empty", "-m", "approved round", "--quiet"],
     );
     let approved_head = git_head(root);
-    crate::review_verdict::record_verdict(
+    crate::gate::review_verdict::record_verdict(
         root,
         "BUG-1515",
         Some("approved"),
@@ -3624,7 +3624,7 @@ fn stale_refusal_on_an_old_head_is_not_classified_awaiting_rework() {
     git(root, &["commit", "--allow-empty", "-m", "root", "--quiet"]);
     let old_head = git_head(root);
 
-    crate::review_verdict::record_verdict(
+    crate::gate::review_verdict::record_verdict(
         root,
         "BUG-1515",
         Some("request-changes"),
@@ -3664,7 +3664,7 @@ fn stale_refusal_on_an_old_head_is_not_classified_awaiting_rework() {
 fn closed_refusal_does_not_count_as_outstanding() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
-    crate::review_verdict::record_verdict(
+    crate::gate::review_verdict::record_verdict(
         root,
         "BUG-1515",
         Some("request-changes"),
@@ -3676,11 +3676,11 @@ fn closed_refusal_does_not_count_as_outstanding() {
     )
     .unwrap();
     // Close it the way BUG-1529's merge-close path does.
-    let path = crate::review_verdict::verdict_path(root, "BUG-1515");
+    let path = crate::gate::review_verdict::verdict_path(root, "BUG-1515");
     let body = std::fs::read_to_string(&path).unwrap();
     let mut value: serde_json::Value = serde_json::from_str(&body).unwrap();
     value["closed_by_merge"] = serde_json::Value::String("abc1234".to_string());
-    crate::review_verdict::write_verdict_atomic(&path, &value.to_string()).unwrap();
+    crate::gate::review_verdict::write_verdict_atomic(&path, &value.to_string()).unwrap();
 
     let mut store = aida_core::RequirementsStore::default();
     let mut r = Requirement::new("closed refusal".to_string(), String::new());

@@ -274,7 +274,7 @@ struct Entry {
     // (and validated) so an older state file loads, and dropped on the next
     // write. trace:TASK-1955 | ai:claude (TASK-1-414)
     #[serde(default, skip_serializing)]
-    historical_keys: BTreeSet<crate::review_verdict::RecordingKey>,
+    historical_keys: BTreeSet<crate::gate::review_verdict::RecordingKey>,
     notices: BTreeMap<String, Notice>,
     // Advisor ready wakes for the current head, keyed `<head>:<kind>`.
     // trace:TASK-1945 | ai:claude
@@ -641,12 +641,12 @@ impl Store {
     /// outside state.json so pruning (a draft toggle, close and reopen) can
     /// never forget a consumed round.
     // trace:TASK-1993 | ai:claude
-    fn retained(&self, key: &str) -> Result<BTreeSet<crate::review_verdict::RecordingKey>> {
+    fn retained(&self, key: &str) -> Result<BTreeSet<crate::gate::review_verdict::RecordingKey>> {
         let dir = Directory::open(&self.dir.path().join("history"))?;
         let Some(bytes) = dir.read(&format!("{key}.json"))? else {
             return Ok(BTreeSet::new());
         };
-        let keys: BTreeSet<crate::review_verdict::RecordingKey> =
+        let keys: BTreeSet<crate::gate::review_verdict::RecordingKey> =
             serde_json::from_slice(&bytes).context("invalid retained review history")?;
         anyhow::ensure!(
             keys.len() <= 16 && keys.iter().all(valid_recording_key),
@@ -657,7 +657,7 @@ impl Store {
     fn retain(
         &self,
         key: &str,
-        keys: impl Iterator<Item = crate::review_verdict::RecordingKey>,
+        keys: impl Iterator<Item = crate::gate::review_verdict::RecordingKey>,
     ) -> Result<()> {
         let mut retained = self.retained(key)?;
         let before = retained.len();
@@ -873,10 +873,10 @@ impl Store {
 // trace:TASK-1993 | ai:codex
 #[derive(Default)]
 struct History {
-    keys: BTreeSet<crate::review_verdict::RecordingKey>,
+    keys: BTreeSet<crate::gate::review_verdict::RecordingKey>,
     // The verdict files each recording was read from, relative to
     // `.aida/review-verdicts/`, for the findings mail. trace:TASK-1945 | ai:claude
-    files: BTreeMap<crate::review_verdict::RecordingKey, Vec<String>>,
+    files: BTreeMap<crate::gate::review_verdict::RecordingKey, Vec<String>>,
 }
 impl History {
     fn add(&mut self, bytes: &[u8], file: &str) -> Result<()> {
@@ -899,7 +899,7 @@ impl History {
                     .is_none_or(|v| v.as_u64() == Some(0)),
                 "unidentifiable historical rounds require advisor reconciliation"
             );
-            let key = crate::review_verdict::recording_key(object);
+            let key = crate::gate::review_verdict::recording_key(object);
             anyhow::ensure!(
                 valid_recording_key(&key),
                 "unidentifiable historical review requires advisor reconciliation"
@@ -916,7 +916,7 @@ impl History {
         self.keys.iter().any(|key| {
             key.0
                 .as_deref()
-                .is_some_and(|sha| crate::review_verdict::same_reviewed_sha(sha, head))
+                .is_some_and(|sha| crate::gate::review_verdict::same_reviewed_sha(sha, head))
         })
     }
     // The ordinary round (queue_cmd::review_round_from_comments) counts the
@@ -924,10 +924,12 @@ impl History {
     // verdicts that block done. Approvals never consume a round, so a head
     // approved and then merged with main still gets its re-review at round 1.
     // trace:TASK-1993 | ai:claude
-    fn blocking_keys(&self) -> impl Iterator<Item = crate::review_verdict::RecordingKey> + '_ {
+    fn blocking_keys(
+        &self,
+    ) -> impl Iterator<Item = crate::gate::review_verdict::RecordingKey> + '_ {
         self.keys
             .iter()
-            .filter(|key| crate::review_verdict::VerdictKind::parse(&key.2).blocks_done())
+            .filter(|key| crate::gate::review_verdict::VerdictKind::parse(&key.2).blocks_done())
             .cloned()
     }
     fn blocking(&self) -> usize {
@@ -936,12 +938,12 @@ impl History {
 }
 
 // trace:TASK-1993 | ai:codex
-fn valid_recording_key(key: &crate::review_verdict::RecordingKey) -> bool {
+fn valid_recording_key(key: &crate::gate::review_verdict::RecordingKey) -> bool {
     key.0.as_deref().is_some_and(|sha| {
         (7..=64).contains(&sha.len()) && sha.bytes().all(|b| b.is_ascii_hexdigit())
     }) && !key.1.is_empty()
-        && crate::review_verdict::VerdictKind::parse(&key.2)
-            != crate::review_verdict::VerdictKind::Unknown
+        && crate::gate::review_verdict::VerdictKind::parse(&key.2)
+            != crate::gate::review_verdict::VerdictKind::Unknown
 }
 
 impl State {
@@ -1829,7 +1831,7 @@ pub(crate) fn reviewer_status_on_spawn(
 pub(crate) fn run(args: &ReviewWatchArgs) -> Result<()> {
     let root = forge::main_root(&std::env::current_dir()?)?;
     let repo = forge::Repository::load(&root)?;
-    crate::seat_authority::validate_child_delegation(&root, "reviewer")?;
+    crate::gate::seat_authority::validate_child_delegation(&root, "reviewer")?;
     if let Some(reservation) = args.launch_reservation.as_deref() {
         return child(&root, &repo, reservation);
     }

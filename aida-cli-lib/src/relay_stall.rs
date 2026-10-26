@@ -21,10 +21,10 @@ use std::path::Path;
 #[cfg(test)]
 use std::path::PathBuf;
 
-use crate::fleet_lanes::acknowledgement_marker;
+use crate::gate::fleet_lanes::acknowledgement_marker;
 #[cfg(test)]
-use crate::fleet_lanes::parse_status;
-use crate::fleet_lanes::updated_at;
+use crate::gate::fleet_lanes::parse_status;
+use crate::gate::fleet_lanes::updated_at;
 use crate::DoctorFinding;
 use chrono::{DateTime, Duration, Utc};
 #[cfg(test)]
@@ -43,7 +43,7 @@ pub(crate) fn scan(project_root: &Path) -> Vec<DoctorFinding> {
 
 fn scan_at(project_root: &Path, now: DateTime<Utc>) -> Vec<DoctorFinding> {
     let mut findings = Vec::new();
-    for lane in crate::fleet_lanes::classify_lanes(project_root, now) {
+    for lane in crate::gate::fleet_lanes::classify_lanes(project_root, now) {
         let run_dir = lane.run_dir;
         let status = lane.evidence.status;
         let state = status.get("state").map(String::as_str).unwrap_or("");

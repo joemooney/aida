@@ -2708,14 +2708,14 @@ fn tracked_fake_agent_receives_env_and_registry_is_removed() {
     // needs an active parent grant whose delegation set covers the child's
     // seat. trace:STORY-1473 | ai:claude
     let launcher = crate::current_user_id(None);
-    let grant_id = crate::seat_authority::test_support::mint_grant_for(
+    let grant_id = crate::gate::seat_authority::test_support::mint_grant_for(
         &project,
         &launcher,
         "advisor",
         &["implementer"],
     );
     let _env = crate::test_env::EnvVarsGuard::apply(&[(
-        crate::seat_authority::GRANT_ENV,
+        crate::gate::seat_authority::GRANT_ENV,
         Some(grant_id.as_str()),
     )]);
     let fake_bin = tmp.path().join("bin");
@@ -2824,14 +2824,14 @@ fn tracked_fake_antigravity_receives_env_args_and_registry_is_removed() {
     // needs an active parent grant whose delegation set covers the child's
     // seat. trace:STORY-1473 | ai:claude
     let launcher = crate::current_user_id(None);
-    let grant_id = crate::seat_authority::test_support::mint_grant_for(
+    let grant_id = crate::gate::seat_authority::test_support::mint_grant_for(
         &project,
         &launcher,
         "advisor",
         &["implementer"],
     );
     let _env = crate::test_env::EnvVarsGuard::apply(&[(
-        crate::seat_authority::GRANT_ENV,
+        crate::gate::seat_authority::GRANT_ENV,
         Some(grant_id.as_str()),
     )]);
     let fake_agent = tmp.path().join("agy");
@@ -3259,14 +3259,14 @@ fn tracked_fake_agent_receives_context_file_env_and_cleans_file() {
     // needs an active parent grant whose delegation set covers the child's
     // seat. trace:STORY-1473 | ai:claude
     let launcher = crate::current_user_id(None);
-    let grant_id = crate::seat_authority::test_support::mint_grant_for(
+    let grant_id = crate::gate::seat_authority::test_support::mint_grant_for(
         &project,
         &launcher,
         "advisor",
         &["advisor"],
     );
     let _env = crate::test_env::EnvVarsGuard::apply(&[(
-        crate::seat_authority::GRANT_ENV,
+        crate::gate::seat_authority::GRANT_ENV,
         Some(grant_id.as_str()),
     )]);
     let fake_agent = tmp.path().join("agent");
@@ -3858,7 +3858,7 @@ fn run_tracked_agent_contained_exports_aida_contained_and_uncontained_strips_it(
     )
     .unwrap();
     let launcher = crate::current_user_id(None);
-    let grant_id = crate::seat_authority::test_support::mint_grant_for(
+    let grant_id = crate::gate::seat_authority::test_support::mint_grant_for(
         &project,
         &launcher,
         "advisor",
@@ -3886,7 +3886,10 @@ fn run_tracked_agent_contained_exports_aida_contained_and_uncontained_strips_it(
     // 1. Uncontained with ambient AIDA_CONTAINED=1 -> stripped in child
     {
         let _env = crate::test_env::EnvVarsGuard::apply(&[
-            (crate::seat_authority::GRANT_ENV, Some(grant_id.as_str())),
+            (
+                crate::gate::seat_authority::GRANT_ENV,
+                Some(grant_id.as_str()),
+            ),
             ("AIDA_CONTAINED", Some("1")),
         ]);
         let config = AgentLaunchConfig {
@@ -3923,7 +3926,10 @@ fn run_tracked_agent_contained_exports_aida_contained_and_uncontained_strips_it(
     // 2. Contained without ambient AIDA_CONTAINED -> exported in child
     {
         let _env = crate::test_env::EnvVarsGuard::apply(&[
-            (crate::seat_authority::GRANT_ENV, Some(grant_id.as_str())),
+            (
+                crate::gate::seat_authority::GRANT_ENV,
+                Some(grant_id.as_str()),
+            ),
             ("AIDA_CONTAINED", None),
         ]);
         let config = AgentLaunchConfig {

@@ -15,6 +15,10 @@ use std::process::Output;
 
 #[path = "transport_executor.rs"]
 mod executor;
+#[path = "transport_private.rs"]
+mod private;
+#[path = "transport_scan.rs"]
+mod scan;
 
 const PROFILE_FILE: &str = "aida-transport.json";
 const STORE_REF: &str = "refs/heads/aida-store";
@@ -25,7 +29,7 @@ const BYPASS_LIMIT: &str =
     "The profile governs aida push/pull only; raw Git bypasses it. No server-side enforcement.";
 const PENDING: &str =
     "Transport pull execution is not available in this slice; use --dry-run to inspect the plan.";
-const SANITIZATION_PENDING: &str = "Outbound sanitization is not available in this slice; export only operator-sanitized generic AIDA defects.";
+const SANITIZATION_PENDING: &str = "Intake sanitization is not available in this slice. Outbound scanning requires an explicitly reviewed private policy and trust root; unsafe history refuses.";
 const FORBIDDEN: &str = "Flag forbidden by the work transport profile: code push/pull, commit messages, and automatic rebases are disabled. Inspect `aida config transport show`.";
 
 #[derive(Subcommand, Debug)]
@@ -52,6 +56,15 @@ pub enum TransportCommand {
         /// Emit machine-readable JSON.
         #[clap(long)]
         json: bool,
+    },
+    /// Enroll a reviewed owner-only JSON deny policy and pseudonymous identity.
+    Policy {
+        /// Owner-only JSON file; values are never printed or shared.
+        #[clap(long)]
+        file: PathBuf,
+        /// Confirm operator review, including an intentionally empty deny list.
+        #[clap(long, required = true)]
+        reviewed: bool,
     },
 }
 
@@ -152,22 +165,17 @@ fn common_dir(root: &Path) -> Result<Option<PathBuf>> {
 }
 
 fn load(common: &Path) -> Result<Option<Profile>> {
-    let path = common.join(PROFILE_FILE);
-    match fs::symlink_metadata(&path) {
+    // Ordinary shared/group-writable clones retain their existing behavior
+    // until explicit enrollment. Presence requires the full private trust
+    // checks; disappearance after this probe must never disable enforcement.
+    match fs::symlink_metadata(common.join(PROFILE_FILE)) {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(_) => bail!("Cannot read clone-local transport profile; push/pull refused."),
-        Ok(meta) if !meta.file_type().is_file() => {
-            bail!("Clone-local transport profile must be a regular file; push/pull refused.")
-        }
+        Err(_) => bail!("Cannot determine clone-local transport policy; refused"),
         Ok(_) => {}
     }
-    let mut bytes = Vec::new();
-    File::open(path)
-        .and_then(|file| file.take(65_537).read_to_end(&mut bytes))
-        .map_err(|_| anyhow::anyhow!("Cannot read clone-local transport profile"))?;
-    if bytes.len() > 65_536 {
-        bail!("Clone-local transport profile exceeds its size limit");
-    }
+    let bytes = private::Private::open(common)?
+        .read(PROFILE_FILE)?
+        .context("Transport profile changed during discovery; refused")?;
     // serde errors can quote values; do not echo a corrupt profile's content.
     let profile: Profile = serde_json::from_slice(&bytes).map_err(|_| {
         anyhow::anyhow!("Invalid clone-local transport profile; push/pull refused.")
@@ -323,7 +331,11 @@ struct ProfileStatus<'a> {
     execution_available: bool,
     pull_execution_available: bool,
     sanitization_available: bool,
+    scanner_version: u32,
+    scan_categories: Vec<&'static str>,
     origin_matches: Option<bool>,
+    scan_policy_ready: bool,
+    sanitized_intake_available: bool,
     limitations: Vec<&'static str>,
 }
 
@@ -341,7 +353,20 @@ fn show(root: &Path, profile: Option<&Profile>, json: bool) -> Result<()> {
         },
         execution_available: profile.is_some(),
         pull_execution_available: false,
-        sanitization_available: false,
+        sanitization_available: true,
+        scanner_version: aida_core::transport_sanitization::SCANNER_VERSION,
+        scan_categories: vec![
+            "email",
+            "IPv4",
+            "IPv6",
+            "hostname",
+            "host-bearing URL",
+            "reviewed deny token",
+        ],
+        scan_policy_ready: common_dir(root)?
+            .and_then(|dir| private::Private::open(&dir).ok())
+            .is_some_and(|dir| scan::Scan::load(&dir).is_ok()),
+        sanitized_intake_available: false,
         origin_matches: profile
             .map(|p| origin_fingerprint(root).map(|hash| hash == p.origin_sha256))
             .transpose()?,
@@ -391,6 +416,22 @@ fn configure_in(root: &Path, command: &TransportCommand) -> Result<()> {
     if let TransportCommand::Show { json } = command {
         return show(root, load(&common)?.as_ref(), *json);
     }
+    // Disable must clear any safely stored profile, including a corrupt or
+    // legacy one, without parsing it (TASK-2336). Unsafe storage refuses
+    // with a recovery hint rather than following or deleting it.
+    // trace:STORY-1742 | ai:claude
+    if let TransportCommand::Disable { json } = command {
+        if let Err(error) = fs::symlink_metadata(common.join(PROFILE_FILE)) {
+            if error.kind() == std::io::ErrorKind::NotFound {
+                return show(root, None, *json);
+            }
+        }
+        let _lock = configuration_lock(&common)?;
+        let private = private::Private::open(&common)?;
+        private.remove("aida-transport-receipt.json")?;
+        private.remove(PROFILE_FILE)?;
+        return show(root, None, *json);
+    }
     let _lock = configuration_lock(&common)?;
     let previous = load(&common)?;
     match command {
@@ -418,19 +459,34 @@ fn configure_in(root: &Path, command: &TransportCommand) -> Result<()> {
                 origin_sha256: fingerprint,
                 baseline,
             };
-            aida_core::write_atomic(
-                &common.join(PROFILE_FILE),
-                serde_json::to_vec_pretty(&profile)?,
-            )?;
+            private::Private::open(&common)?
+                .write(PROFILE_FILE, &serde_json::to_vec_pretty(&profile)?)?;
             show(root, Some(&profile), *json)
         }
-        TransportCommand::Disable { json } => {
-            if previous.is_some() {
-                fs::remove_file(common.join(PROFILE_FILE))?;
+        TransportCommand::Show { .. } | TransportCommand::Disable { .. } => unreachable!(),
+        TransportCommand::Policy { file, reviewed } => {
+            if !reviewed || previous.is_none() {
+                bail!("Enable the WORK profile and explicitly review the policy first");
             }
-            show(root, None, *json)
+            let parent = file
+                .parent()
+                .filter(|p| !p.as_os_str().is_empty())
+                .unwrap_or(Path::new("."));
+            let name = file
+                .file_name()
+                .and_then(|n| n.to_str())
+                .context("Invalid policy source")?;
+            let source = private::Private::open(parent)?;
+            let bytes = source.read(name)?.context("Policy source missing")?;
+            let policy: aida_core::transport_sanitization::Policy = serde_json::from_slice(&bytes)
+                .map_err(|_| anyhow::anyhow!("Invalid policy encoding"))?;
+            policy
+                .validate()
+                .map_err(|_| anyhow::anyhow!("Invalid or unreviewed policy"))?;
+            private::Private::open(&common)?.write(scan::POLICY_FILE, &bytes)?;
+            println!("Reviewed private transport policy enrolled. Future pushes rescan from the original trust root.");
+            Ok(())
         }
-        TransportCommand::Show { .. } => unreachable!(),
     }
 }
 
@@ -438,15 +494,7 @@ fn configure_in(root: &Path, command: &TransportCommand) -> Result<()> {
 // Execution retains it so profile edits cannot race a pinned push.
 // trace:STORY-1742 | ai:codex
 fn configuration_lock(common: &Path) -> Result<File> {
-    let lock = OpenOptions::new()
-        .create(true)
-        .truncate(false)
-        .read(true)
-        .write(true)
-        .open(common.join("aida-transport.lock"))?;
-    lock.try_lock_exclusive()
-        .context("Transport configuration is busy; retry")?;
-    Ok(lock)
+    private::Private::open(common)?.lock()
 }
 
 #[derive(Debug, Serialize)]
