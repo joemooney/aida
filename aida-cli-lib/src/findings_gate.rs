@@ -1449,8 +1449,8 @@ pub(crate) fn handle_findings_promote_gate(
         anyhow::anyhow!("unknown --detectable answer `{raw}` — expected mechanical, agent, or none")
     })?;
     let authority = GateAuthority {
-        advisor: has_advisor_authority(),
-        dispatch: has_dispatch_authority(),
+        advisor: crate::gate::role_authority::has_advisor_authority(),
+        dispatch: crate::gate::role_authority::has_dispatch_authority(),
     };
     let outcome = promote_finding_to_gate(
         backend, store_path, finding, id, screen, reason, for_role, force, authority,
@@ -1937,7 +1937,7 @@ mod story_1421_carry_forward_findings_tests;
 /// around it (`try_emit_nonblocking_findings_on_completion`) is not.
 // trace:STORY-1421 | ai:claude
 pub(crate) fn findings_needing_a_successor(
-    verdict: &review_verdict::RecordedVerdict,
+    verdict: &crate::gate::review_verdict::RecordedVerdict,
     already_filed: &std::collections::HashSet<String>,
 ) -> Vec<(String, String)> {
     if !verdict.kind.approves() {
@@ -2019,11 +2019,11 @@ pub(crate) fn try_emit_nonblocking_findings_on_completion(
     sha: &str,
     pr_hint: Option<u64>,
 ) -> anyhow::Result<usize> {
-    let verdict_file = review_verdict::verdict_path(project_root, spec_id);
-    let Ok(body) = review_verdict::read_verdict_body(&verdict_file) else {
+    let verdict_file = crate::gate::review_verdict::verdict_path(project_root, spec_id);
+    let Ok(body) = crate::gate::review_verdict::read_verdict_body(&verdict_file) else {
         return Ok(0);
     };
-    let Some(verdict) = review_verdict::parse_recorded_verdict(&body) else {
+    let Some(verdict) = crate::gate::review_verdict::parse_recorded_verdict(&body) else {
         return Ok(0);
     };
     // Cheap pre-check against an empty history: if nothing would ever be filed

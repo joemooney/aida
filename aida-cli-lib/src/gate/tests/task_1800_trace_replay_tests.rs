@@ -38,7 +38,7 @@ const FROZEN_STORE: &str = "a5dae7145abd11d2480271c466030b12db6e7668";
 /// The frozen ledger: entries first seen up to the frozen store commit, whose
 /// spec-keyed map must hash (sorted compact JSON) to the recorded digest.
 // trace:TASK-2067 | ai:claude
-fn frozen_ledger(path: &std::ffi::OsStr) -> BTreeMap<String, crate::mandate::Exclusion> {
+fn frozen_ledger(path: &std::ffi::OsStr) -> BTreeMap<String, crate::gate::mandate::Exclusion> {
     const FROZEN_AT: &str = "2026-10-16T20:56:57Z";
     const DIGEST: &str = "753d1a323b18af13ed73a18f20f9a6f7c6242e3584edf01049897d0dba7289af";
     let frozen_at: chrono::DateTime<chrono::Utc> = FROZEN_AT.parse().unwrap();
@@ -46,7 +46,7 @@ fn frozen_ledger(path: &std::ffi::OsStr) -> BTreeMap<String, crate::mandate::Exc
     let mut ledger = BTreeMap::new();
     for line in std::fs::read_to_string(path).unwrap().lines() {
         let value: Value = serde_json::from_str(line).unwrap();
-        let entry: crate::mandate::Exclusion = serde_json::from_value(value.clone()).unwrap();
+        let entry: crate::gate::mandate::Exclusion = serde_json::from_value(value.clone()).unwrap();
         if entry.first_seen <= frozen_at {
             raw.entry(entry.spec.clone()).or_insert(value);
             ledger
@@ -108,13 +108,13 @@ struct Resolved {
 fn resolve_all(
     store: &Path,
     ids: &BTreeSet<String>,
-    ledger: &BTreeMap<String, crate::mandate::Exclusion>,
+    ledger: &BTreeMap<String, crate::gate::mandate::Exclusion>,
 ) -> BTreeMap<String, Resolved> {
-    use crate::mandate::MandateRefusal;
+    use crate::gate::mandate::MandateRefusal;
     let backend = aida_core::GitBackend::new(store).unwrap();
     let current = aida_core::DatabaseBackend::load(&backend).unwrap();
     let specs =
-        crate::mandate_ship::resolve_exclusion_specs(Some(&current), store, &[], ids.clone());
+        crate::gate::mandate_ship::resolve_exclusion_specs(Some(&current), store, &[], ids.clone());
     specs
         .into_iter()
         .map(|spec| {
@@ -125,7 +125,7 @@ fn resolve_all(
                     .is_some_and(|s| s.eq_ignore_ascii_case(&spec.id))
             });
             let kind = resolution_kind(current, versions, spec.aliases.is_empty());
-            let class = match crate::mandate::judge_exclusion_spec(&spec, ledger, false) {
+            let class = match crate::gate::mandate::judge_exclusion_spec(&spec, ledger, false) {
                 Ok(()) => None,
                 Err(MandateRefusal::AlwaysHuman { class, .. }) => Some(class),
                 Err(MandateRefusal::Excluded { why, .. }) => Some(why),

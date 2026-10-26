@@ -24,7 +24,8 @@
 // trace:STORY-1917 | ai:agy
 
 use super::*;
-use crate::mandate::{self, Mandate, Scope};
+use crate::gate::mandate::{self};
+use crate::gate::mandate::{Mandate, Scope};
 use chrono::Duration;
 use std::collections::BTreeSet;
 
@@ -136,7 +137,7 @@ impl Fixture {
 
     fn start_mandate(&self, scopes: &[Scope], include_supervised: bool) -> Mandate {
         let extra: BTreeSet<Scope> = scopes.iter().copied().collect();
-        mandate::start_with_scopes(
+        crate::gate::mandate::start_with_scopes(
             &self.mandate_dir,
             &|| Ok(()),
             &self.principal,
@@ -164,7 +165,7 @@ fn mandate_start_scope_dispatch_is_explicit_and_not_default() {
     let now = Utc::now();
 
     // 1. Default `start` (--ship-held only) covers ShipHeld and NOT Dispatch.
-    let ship_only = mandate::start(
+    let ship_only = crate::gate::mandate::start(
         &f.mandate_dir,
         &|| Ok(()),
         &f.principal,
@@ -179,11 +180,11 @@ fn mandate_start_scope_dispatch_is_explicit_and_not_default() {
         !ship_only.covers(Scope::Dispatch),
         "Scope::Dispatch must stay explicit and not be enabled by default on --ship-held"
     );
-    mandate::stop(&f.mandate_dir, &|| Ok(()), &f.principal, now).unwrap();
+    crate::gate::mandate::stop(&f.mandate_dir, &|| Ok(()), &f.principal, now).unwrap();
 
     // 2. Scope-only `--scope dispatch` (without `--ship-held` or `--drive`) covers
     //    Dispatch ONLY and does NOT imply ShipHeld.
-    let dispatch_only = mandate::start_with_scopes(
+    let dispatch_only = crate::gate::mandate::start_with_scopes(
         &f.mandate_dir,
         &|| Ok(()),
         &f.principal,
@@ -206,10 +207,10 @@ fn mandate_start_scope_dispatch_is_explicit_and_not_default() {
     let ship_state = MandateState::Active(dispatch_only.clone());
     let ship_policy = Default::default();
     let ship_ledger = Ok(Default::default());
-    let ship_hold = mandate::HoldFacts::ClearedByHuman;
+    let ship_hold = crate::gate::mandate::HoldFacts::ClearedByHuman;
     let ship_paths = vec!["README.md".to_string()];
     let ship_head = "a".repeat(40);
-    let ship_check = mandate::ShipCheck {
+    let ship_check = crate::gate::mandate::ShipCheck {
         state: &ship_state,
         grant: Some(("advisor", &f.principal)),
         now,
@@ -223,15 +224,15 @@ fn mandate_start_scope_dispatch_is_explicit_and_not_default() {
         head: Some(ship_head.as_str()),
         carry_over: None,
         changed_paths: Some(&ship_paths),
-        protected: crate::mandate_gates::ProtectedPaths::floor_ref(),
+        protected: crate::gate::mandate_gates::ProtectedPaths::floor_ref(),
         ship_gate: None,
         hold_clear_gate: None,
     };
     assert_eq!(
-        mandate::ship_decision(&ship_check),
-        Err(mandate::MandateRefusal::ScopeNotCovered {
+        crate::gate::mandate::ship_decision(&ship_check),
+        Err(crate::gate::mandate::MandateRefusal::ScopeNotCovered {
             id: dispatch_only.id.clone(),
-            scope: mandate::SCOPE_SHIP_HELD,
+            scope: crate::gate::mandate::SCOPE_SHIP_HELD,
         })
     );
 
@@ -287,10 +288,10 @@ fn mandate_start_scope_dispatch_is_explicit_and_not_default() {
         train_err.to_string().contains("does not cover `ship-held`"),
         "expected ship-held refusal for train, got: {train_err:#}"
     );
-    mandate::stop(&f.mandate_dir, &|| Ok(()), &f.principal, now).unwrap();
+    crate::gate::mandate::stop(&f.mandate_dir, &|| Ok(()), &f.principal, now).unwrap();
 
     // 3. Explicit `--ship-held --scope dispatch` covers BOTH ShipHeld and Dispatch.
-    let with_both = mandate::start_with_scopes(
+    let with_both = crate::gate::mandate::start_with_scopes(
         &f.mandate_dir,
         &|| Ok(()),
         &f.principal,
@@ -476,7 +477,7 @@ fn refuses_without_active_dispatch_mandate_or_bound_advisor_grant() {
     );
 
     // 3. Stopped mandate
-    mandate::stop(&f.mandate_dir, &|| Ok(()), &f.principal, now).unwrap();
+    crate::gate::mandate::stop(&f.mandate_dir, &|| Ok(()), &f.principal, now).unwrap();
     let err = submit_request(&f.root, &f.mandate_dir, &f.principal, &verb, now).unwrap_err();
     assert!(
         err.to_string().contains("was stopped"),
@@ -1534,7 +1535,7 @@ fn task_2342_mandate_status_line_renders_all_effective_scopes_in_canonical_order
 
     // 1. Multi-scope non-drive mandate renders all scopes in canonical order (`ship-held, dispatch`).
     let m = f.start_mandate(&[Scope::Dispatch, Scope::ShipHeld], false);
-    let line = mandate::current_status_line(&f.mandate_dir, Some(&f.root), now).unwrap();
+    let line = crate::mandate::current_status_line(&f.mandate_dir, Some(&f.root), now).unwrap();
     assert!(
         line.starts_with("MANDATE ship-held, dispatch ·"),
         "expected `MANDATE ship-held, dispatch · ...`, got: {line}"
@@ -1544,7 +1545,8 @@ fn task_2342_mandate_status_line_renders_all_effective_scopes_in_canonical_order
     // 2. Single-scope `dispatch` renders `MANDATE dispatch · ...`.
     mandate::stop(&f.mandate_dir, &|| Ok(()), &f.principal, now).unwrap();
     f.start_mandate(&[Scope::Dispatch], false);
-    let line_single = mandate::current_status_line(&f.mandate_dir, Some(&f.root), now).unwrap();
+    let line_single =
+        crate::mandate::current_status_line(&f.mandate_dir, Some(&f.root), now).unwrap();
     assert!(
         line_single.starts_with("MANDATE dispatch ·"),
         "expected `MANDATE dispatch · ...`, got: {line_single}"
@@ -1565,7 +1567,8 @@ fn task_2342_mandate_status_line_renders_all_effective_scopes_in_canonical_order
         now,
     )
     .unwrap();
-    let line_drive = mandate::current_status_line(&f.mandate_dir, Some(&f.root), now).unwrap();
+    let line_drive =
+        crate::mandate::current_status_line(&f.mandate_dir, Some(&f.root), now).unwrap();
     assert!(
         line_drive.starts_with("MANDATE drive ·"),
         "expected `MANDATE drive · ...`, got: {line_drive}"

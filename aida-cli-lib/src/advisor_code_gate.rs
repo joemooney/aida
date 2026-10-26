@@ -416,10 +416,10 @@ mod tests {
         // trace:STORY-1473 | ai:claude
         let user = crate::current_user_id(None);
         let grant_id =
-            crate::seat_authority::test_support::mint_grant_for(root, &user, "advisor", &[]);
+            crate::gate::seat_authority::test_support::mint_grant_for(root, &user, "advisor", &[]);
         let store = crate::detect_distributed_store_from(root).expect("fixture store detected");
         let _env = crate::test_env::EnvVarsGuard::apply(&[(
-            crate::seat_authority::GRANT_ENV,
+            crate::gate::seat_authority::GRANT_ENV,
             Some(grant_id.as_str()),
         )]);
         let granted_role = crate::team::effective_role_for_user(&store, &user);

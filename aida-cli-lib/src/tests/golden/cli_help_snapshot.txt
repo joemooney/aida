@@ -15949,6 +15949,7 @@ Commands:
   enable   Enable a named clone-local store-only profile
   show     Show effective policy, fixed refs, and the raw-Git bypass limitation
   disable  Remove the clone-local profile; restore ordinary AIDA push/pull behavior
+  policy   Enroll a reviewed owner-only JSON deny policy and pseudonymous identity
   help     Print this message or the help of the given subcommand(s)
 
 Options:
@@ -16021,6 +16022,30 @@ Usage: aida config transport disable [OPTIONS]
 Options:
       --json
           Emit machine-readable JSON
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida config transport policy
+Enroll a reviewed owner-only JSON deny policy and pseudonymous identity
+
+Usage: aida config transport policy [OPTIONS] --file <FILE> --reviewed
+
+Options:
+      --file <FILE>
+          Owner-only JSON file; values are never printed or shared
+
+      --reviewed
+          Confirm operator review, including an intentionally empty deny list
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -40388,6 +40413,38 @@ Working on aida itself
         "name": "json",
         "takes_value": false,
         "help": "Emit machine-readable JSON"
+      }
+    ],
+    "hidden": true
+  },
+  {
+    "path": [
+      "aida",
+      "config",
+      "transport",
+      "policy"
+    ],
+    "about": "Enroll a reviewed owner-only JSON deny policy and pseudonymous identity",
+    "flags": [
+      {
+        "name": "file",
+        "takes_value": true,
+        "help": "Owner-only JSON file; values are never printed or shared"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "reviewed",
+        "takes_value": false,
+        "help": "Confirm operator review, including an intentionally empty deny list"
       }
     ],
     "hidden": true

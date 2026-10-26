@@ -1093,25 +1093,25 @@ pub(crate) fn probe_resume_facts(
                 return false;
             };
             let paths = [
-                review_verdict::verdict_path(project_root, &format!("PR-{n}")),
-                review_verdict::verdict_path(project_root, spec),
+                crate::gate::review_verdict::verdict_path(project_root, &format!("PR-{n}")),
+                crate::gate::review_verdict::verdict_path(project_root, spec),
             ];
             let bodies: Vec<String> = match paths
                 .iter()
                 .filter(|path| path.exists())
                 // trace:TASK-1801 | ai:claude
-                .map(review_verdict::read_verdict_body)
+                .map(crate::gate::review_verdict::read_verdict_body)
                 .collect::<Result<Vec<String>, _>>()
             {
                 Ok(bodies) if !bodies.is_empty() => bodies,
                 _ => return false,
             };
             matches!(
-                review_verdict::reconcile_artifacts_for_sha(
+                crate::gate::review_verdict::reconcile_artifacts_for_sha(
                     bodies.iter().map(String::as_str),
                     head
                 ),
-                Ok(Some(review_verdict::VerdictKind::Approved))
+                Ok(Some(crate::gate::review_verdict::VerdictKind::Approved))
             )
         })
         .unwrap_or(false);

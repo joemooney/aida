@@ -107,7 +107,8 @@ fn draft_only_tagged_spec_keeps_its_draft() {
     // roots by design — BUG-1598).
     let mut req = aida_core::Requirement::new("draft-only reuse".to_string(), String::new());
     req.spec_id = Some("BUG-1690".to_string());
-    req.tags.insert(crate::pr_ship::DRAFT_ONLY_TAG.to_string());
+    req.tags
+        .insert(crate::gate::ship::DRAFT_ONLY_TAG.to_string());
     let mut store = aida_core::RequirementsStore::default();
     store.requirements.push(req);
     Storage::new(tmp.path().join("requirements.yaml"))
@@ -138,7 +139,8 @@ fn draft_only_tagged_spec_keeps_its_draft() {
 fn tag_draft_only(root: &std::path::Path, spec: &str) {
     let mut req = aida_core::Requirement::new("draft-only reuse".to_string(), String::new());
     req.spec_id = Some(spec.to_string());
-    req.tags.insert(crate::pr_ship::DRAFT_ONLY_TAG.to_string());
+    req.tags
+        .insert(crate::gate::ship::DRAFT_ONLY_TAG.to_string());
     let mut store = aida_core::RequirementsStore::default();
     store.requirements.push(req);
     Storage::new(root.join("requirements.yaml"))

@@ -252,12 +252,12 @@ fn ci_reader_error_refuses_with_the_error_and_sends_no_wake() {
 // (5)
 #[test]
 fn hold_marker_label_or_unreadable_hold_is_not_ready() {
-    use crate::merge_hold::HoldReasonKind;
+    use crate::gate::merge_hold_core::HoldReasonKind;
     let temp = tempfile::tempdir().unwrap();
     let root = temp.path();
     let no_label = || Ok(false);
     assert_eq!(ready::hold_at(root, 7, no_label).unwrap(), None);
-    let path = crate::merge_hold::hold_path(root, 7);
+    let path = crate::gate::merge_hold_core::hold_path(root, 7);
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     for kind in [
         HoldReasonKind::Supervision,
@@ -265,7 +265,7 @@ fn hold_marker_label_or_unreadable_hold_is_not_ready() {
         HoldReasonKind::Rework,
         HoldReasonKind::Decision,
     ] {
-        let record = crate::merge_hold::typed_hold(7, kind, "held for a test", None);
+        let record = crate::gate::merge_hold_core::typed_hold(7, kind, "held for a test", None);
         std::fs::write(&path, serde_json::to_vec(&record).unwrap()).unwrap();
         let hold = ready::hold_at(root, 7, no_label).unwrap().expect("held");
         let name = format!("{kind:?}").to_lowercase();
@@ -343,10 +343,10 @@ mod gate {
     //! The production approval gate, decided read-only, on real git
     //! fixtures (TASK-1960's carry-over repository).
     use super::*;
-    use crate::pr_ship::ShipApprovalPolicy;
+    use crate::gate::review_verdict::{RecordedVerdict, RecorderAttestation, VerdictKind};
+    use crate::gate::ship::ShipApprovalPolicy;
     use crate::review_carryover::tests::{commit, fixture, head, write};
     use crate::review_carryover::CarryOverSite;
-    use crate::review_verdict::{RecordedVerdict, RecorderAttestation, VerdictKind};
 
     fn verdict(sha: &str) -> RecordedVerdict {
         RecordedVerdict {
@@ -474,7 +474,7 @@ mod gate {
         assert!(!refusal.is_empty());
         // Recorded by the work's own author session: a self-approval.
         let mut own = policy(&candidates);
-        own.author_sessions = vec![crate::pr_ship::AuthorSession {
+        own.author_sessions = vec![crate::gate::ship::AuthorSession {
             label: "implementer lease".into(),
             tokens: vec!["session:independent-reviewer".into()],
         }];
@@ -503,7 +503,7 @@ mod gate {
             (&candidates[..], ShipApprovalPolicy::default()),
             (&[][..], policy(&[])),
         ] {
-            let _ = crate::pr_cmd::approval_decision(
+            let _ = crate::gate::approval::approval_decision(
                 42,
                 candidates,
                 Some(&merged),
@@ -511,7 +511,7 @@ mod gate {
                 Some(&site),
             );
         }
-        let _ = crate::pr_cmd::approval_decision(
+        let _ = crate::gate::approval::approval_decision(
             42,
             &candidates,
             Some(&merged),
@@ -926,17 +926,25 @@ fn live_review_marker_is_read_for_the_head() {
     let c = change(0, false);
     assert_eq!(ready::live_under_review(root, &c), None);
     let other = format!("{:040x}", 0xe);
-    let marker =
-        crate::review_marker::Marker::for_this_process(7, Some(&other), None, "reviewer seat");
-    crate::review_marker::write(root, &marker).unwrap();
+    let marker = crate::gate::review_marker::Marker::for_this_process(
+        7,
+        Some(&other),
+        None,
+        "reviewer seat",
+    );
+    crate::gate::review_marker::write(root, &marker).unwrap();
     assert_eq!(
         ready::live_under_review(root, &c),
         None,
         "a marker for another head does not cover this one"
     );
-    let marker =
-        crate::review_marker::Marker::for_this_process(7, Some(&c.head), None, "reviewer seat");
-    crate::review_marker::write(root, &marker).unwrap();
+    let marker = crate::gate::review_marker::Marker::for_this_process(
+        7,
+        Some(&c.head),
+        None,
+        "reviewer seat",
+    );
+    crate::gate::review_marker::write(root, &marker).unwrap();
     let described = ready::live_under_review(root, &c).expect("live marker at the head");
     assert!(described.contains("reviewer seat"), "{described}");
 }
@@ -951,7 +959,7 @@ fn live_corpus_gate_refuses_a_blocking_verdict_at_the_head() {
     let refusal = ready::corpus_at(root, &c, &[]).unwrap_err();
     assert!(refusal.contains("request-changes"), "{refusal}");
     assert!(
-        crate::merge_hold::read_hold_record(root, 7).is_none(),
+        crate::gate::merge_hold_core::read_hold_record(root, 7).is_none(),
         "the read-only gate arms no hold"
     );
     record_verdict(root, "approved");
@@ -984,13 +992,13 @@ fn live_hold_reads_the_marker_then_the_label() {
         "{error:#}"
     );
     // A marker is reported before the label is read.
-    let hold = crate::merge_hold::typed_hold(
+    let hold = crate::gate::merge_hold_core::typed_hold(
         7,
-        crate::merge_hold::HoldReasonKind::Rework,
+        crate::gate::merge_hold_core::HoldReasonKind::Rework,
         "findings outstanding",
         Some(c.head.clone()),
     );
-    crate::merge_hold::write_typed_hold(root, &hold).unwrap();
+    crate::gate::merge_hold_core::write_typed_hold(root, &hold).unwrap();
     let held = ready::live_hold(root, &c).unwrap().expect("marker hold");
     assert!(held.contains("rework hold"), "{held}");
 }

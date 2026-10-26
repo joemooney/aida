@@ -388,8 +388,17 @@ plans dispatch before store initialization; plans do not fetch or run lifecycle
 actions. Push execution validates the attached clean store under its writer
 lock, releases the lock, and makes one attempt to push the pinned commit through
 verified store-only hooks. It preserves identity policy without code hooks or
-other lifecycle actions. Pull execution, sanitization and sanitized intake remain
-pending. Fixed store refspecs cannot expand through environment defaults, and
+other lifecycle actions. Outbound publication additionally requires an owner-only,
+operator-reviewed policy and an explicit public-safe trust root. The shared core
+scanner checks raw and decoded text, full new commit history, identities and tree
+paths; unsupported or incomplete evidence refuses before any push. Private
+profile/policy/receipt IO uses anchored no-follow handles. Exact successful-push
+receipts bind endpoint/ref/tip/root/policy/scanner; every attempt rescans from the
+original root, so receipts neither cache scans nor grant trust to tracking refs.
+Intake enforcement and actual recoverable FF pull remain pending. This bounded
+known-identifier guard requires operator review; raw Git/foreign writers and
+PUBLIC forwarding remain outside enforcement. Fixed store refspecs cannot expand
+through environment defaults, and
 changed/ambiguous origin endpoints refuse. Raw Git and other sync commands are
 outside this client-only boundary; there is no receiving-side enforcement.
 See [transport configuration](docs/cli/07-project-setup.md#aida-config-transport).

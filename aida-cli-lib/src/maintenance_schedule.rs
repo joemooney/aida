@@ -2951,7 +2951,7 @@ pub(crate) fn collect_snapshot(
     }
     // trace:STORY-1700 | ai:claude
     if fields.contains(&Field::MandateDriveActive) {
-        snap.mandate_drive_active = crate::mandate_drive::drive_record_active(now);
+        snap.mandate_drive_active = crate::gate::mandate_drive::drive_record_active(now);
     }
     // trace:STORY-1917 | ai:agy
     if fields.contains(&Field::MandateDispatchActive) {

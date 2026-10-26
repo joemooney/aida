@@ -22,9 +22,9 @@ use uuid::Uuid;
 use crate::dispatch::{
     self, DispatchRequest, DispatchResult, DispatchStatus, WorkerClaim, MAX_BRIEF_BYTES,
 };
+use crate::gate::mandate::{self, Scope};
+use crate::gate::mandate_gates::GateOp;
 use crate::gate::seat_authority;
-use crate::mandate::{self, Scope};
-use crate::mandate_gates::GateOp;
 
 /// Typed error marker returned when [`DispatchExecutionContext::reverify`]
 /// aborts an in-flight dispatch operation due to revoked/expired authority,
@@ -261,16 +261,16 @@ impl DispatchExecutionContext {
         }
 
         // 5. Re-verify HumanGates from committed + operator config layers.
-        let gates = crate::mandate_gates::load_human_gates(&self.main_worktree)
+        let gates = crate::gate::mandate_gates::load_human_gates(&self.main_worktree)
             .map_err(|e| format!("{e:#}"));
-        if let Some(why) = crate::mandate_gates::gate_reason(&gates, GateOp::Dispatch) {
+        if let Some(why) = crate::gate::mandate_gates::gate_reason(&gates, GateOp::Dispatch) {
             bail!(
                 "dispatch request {} aborted: dispatch is gated by human gates ({why})",
                 self.request_id
             );
         }
         if need_ship_scope {
-            if let Some(why) = crate::mandate_gates::gate_reason(&gates, GateOp::Ship) {
+            if let Some(why) = crate::gate::mandate_gates::gate_reason(&gates, GateOp::Ship) {
                 bail!(
                     "dispatch request {} aborted: shipping is gated by human gates ({why})",
                     self.request_id

@@ -288,7 +288,7 @@ fn agent_new_reentry_respects_reasoned_operator_hold() {
     )
     .unwrap_err();
     assert!(error
-        .downcast_ref::<defer_cmd::OperatorHoldRefusal>()
+        .downcast_ref::<crate::gate::operator_hold::OperatorHoldRefusal>()
         .is_some());
 }
 
@@ -639,20 +639,30 @@ fn bug2188_failed_command_revokes_only_its_issued_grant() {
     let (_tmp, root, _tree) = receipt_project();
     let _env =
         crate::test_env::AmbientGuard::hermetic_with_seat(&root, "advisor", &["implementer"]);
-    let parent = seat_authority::current_grant(&root).unwrap().id;
-    let child =
-        seat_authority::issue_child(&root, "implementer", crate::test_env::HERMETIC_TEST_USER)
-            .unwrap();
+    let parent = crate::gate::seat_authority::current_grant(&root)
+        .unwrap()
+        .id;
+    let child = crate::gate::seat_authority::issue_child(
+        &root,
+        "implementer",
+        crate::test_env::HERMETIC_TEST_USER,
+    )
+    .unwrap();
     let mut command = std::process::Command::new("/missing/agent");
-    command.env(seat_authority::GRANT_ENV, &child.id);
+    command.env(crate::gate::seat_authority::GRANT_ENV, &child.id);
     let guard = IssuedLaunchGrant::from_command(&command);
     assert!(command.spawn().is_err());
     drop(guard);
     assert!(
-        !seat_authority::revoke_by_id(&child.id).unwrap(),
+        !crate::gate::seat_authority::revoke_by_id(&child.id).unwrap(),
         "already revoked"
     );
-    assert_eq!(seat_authority::current_grant(&root).unwrap().id, parent);
+    assert_eq!(
+        crate::gate::seat_authority::current_grant(&root)
+            .unwrap()
+            .id,
+        parent
+    );
 }
 
 // trace:BUG-2188 | ai:codex
@@ -923,7 +933,9 @@ fn bug2188_production_failed_launches_rollback_setup_and_child_grant() {
                 ("AIDA_CONTAINED", None),
             ],
         );
-        let parent = seat_authority::current_grant(&root).unwrap().id;
+        let parent = crate::gate::seat_authority::current_grant(&root)
+            .unwrap()
+            .id;
         let script = root.join("fail-child");
         crate::test_exec::write_executable(
             &script,
@@ -985,10 +997,10 @@ fn bug2188_production_failed_launches_rollback_setup_and_child_grant() {
                 path == root || pool.entries.iter().any(|entry| entry.path == path)
             }));
         assert!(list_leases(&root).is_empty());
-        let children = std::fs::read_dir(seat_authority::grant_dir().unwrap())
+        let children = std::fs::read_dir(crate::gate::seat_authority::grant_dir().unwrap())
             .unwrap()
             .map(|entry| {
-                serde_json::from_slice::<seat_authority::SeatGrant>(
+                serde_json::from_slice::<crate::gate::seat_authority::SeatGrant>(
                     &std::fs::read(entry.unwrap().path()).unwrap(),
                 )
                 .unwrap()
@@ -1008,7 +1020,12 @@ fn bug2188_production_failed_launches_rollback_setup_and_child_grant() {
             );
             assert!(children[0].revoked_at.is_some());
         }
-        assert_eq!(seat_authority::current_grant(&root).unwrap().id, parent);
+        assert_eq!(
+            crate::gate::seat_authority::current_grant(&root)
+                .unwrap()
+                .id,
+            parent
+        );
     }
 }
 

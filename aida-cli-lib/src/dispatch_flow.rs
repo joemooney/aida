@@ -346,7 +346,7 @@ fn wait_for_pr_ci_with_ctx(
         base: view.base_ref_name.clone(),
         title: (!view.title.trim().is_empty()).then(|| view.title.clone()),
     };
-    let hold_present = crate::merge_hold::read_hold(main_worktree, pr).is_some();
+    let hold_present = crate::gate::merge_hold_core::read_hold(main_worktree, pr).is_some();
     let label_only_hold =
         !hold_present && crate::merge_hold::label_present(main_worktree, pr).unwrap_or(false);
     let state = crate::ci_gate::wait_for_ship_ci(

@@ -8,7 +8,7 @@
 // trace:TASK-2067 | ai:antigravity
 
 use super::{collect_on_stable_store, MANDATE_COLLECT_ATTEMPTS};
-use crate::mandate::MandateRefusal;
+use crate::gate::mandate::MandateRefusal;
 use std::cell::Cell;
 use std::time::Duration;
 

@@ -9,7 +9,7 @@ use super::dispatch_flow::{
 };
 use super::*;
 use crate::gate::dispatch_auth::DispatchExecutionContext;
-use crate::mandate::{self, Mandate, Scope};
+use crate::gate::mandate::{self, Mandate, Scope};
 use chrono::Duration;
 use std::collections::BTreeSet;
 
@@ -582,13 +582,13 @@ fn task_2338_flow_runner_fast_path_re_review_loop_changes_requested_and_no_ship(
         r#"{"headRefOid":"cccc1111","headRefName":"claude/pr-403","baseRefName":"main","state":"OPEN","mergeStateStatus":"CLEAN","title":"PR 403 (TASK-100)"}"#,
     )
     .unwrap();
-    let hold_403 = crate::merge_hold::typed_hold(
+    let hold_403 = crate::gate::merge_hold_core::typed_hold(
         403,
-        crate::merge_hold::HoldReasonKind::Rework,
+        crate::gate::merge_hold_core::HoldReasonKind::Rework,
         "findings",
         None,
     );
-    crate::merge_hold::write_typed_hold(&f.root, &hold_403).unwrap();
+    crate::gate::merge_hold_core::write_typed_hold(&f.root, &hold_403).unwrap();
     let fake_aida_403 = f.write_executable_script(
         "fake-aida-flow-403.sh",
         &format!(
@@ -624,7 +624,7 @@ fn task_2338_flow_runner_fast_path_re_review_loop_changes_requested_and_no_ship(
         res_403.summary
     );
     assert!(
-        crate::merge_hold::read_hold(&f.root, 403).is_some(),
+        crate::gate::merge_hold_core::read_hold(&f.root, 403).is_some(),
         "merge hold on PR #403 must remain intact after CHANGES_REQUESTED"
     );
     assert_eq!(*shipped_prs.lock().unwrap(), vec![401, 402]);
@@ -984,7 +984,7 @@ fn task_2344_q2_mid_execution_authority_revocation_aborts_before_merge_and_rearm
                 head: "head602".into(),
                 subject: format!("feat: pr {pr} (TASK-100)"),
                 body: String::new(),
-                release: Some(crate::pr_cmd::MandateCover {
+                release: Some(crate::gate::mandate_ship::MandateCover {
                     id: self.ctx.mandate_id().to_string(),
                     principal: self.principal.clone(),
                 }),
@@ -1015,17 +1015,17 @@ fn task_2344_q2_mid_execution_authority_revocation_aborts_before_merge_and_rearm
         fn release_hold(
             &mut self,
             member: &crate::pr_train::Member,
-        ) -> std::result::Result<crate::merge_hold::MergeHoldRecord, String> {
+        ) -> std::result::Result<crate::gate::merge_hold_core::MergeHoldRecord, String> {
             self.ctx.reverify_now(true).map_err(|e| format!("{e:#}"))?;
             self.released = true;
-            Ok(crate::merge_hold::MergeHoldRecord {
+            Ok(crate::gate::merge_hold_core::MergeHoldRecord {
                 schema_version: 1,
                 pr: member.pr,
-                reason_kind: crate::merge_hold::HoldReasonKind::Supervision,
+                reason_kind: crate::gate::merge_hold_core::HoldReasonKind::Supervision,
                 detail: "held for test".into(),
                 recused_principals: vec![],
                 routed_to: vec![],
-                routing_state: crate::merge_hold::HoldRoutingState::Pending,
+                routing_state: crate::gate::merge_hold_core::HoldRoutingState::Pending,
                 target_head_sha: Some(member.head.clone()),
                 label_state: None,
                 legacy: false,
@@ -1036,7 +1036,7 @@ fn task_2344_q2_mid_execution_authority_revocation_aborts_before_merge_and_rearm
                 absorbed: vec![],
             })
         }
-        fn rearm_hold(&mut self, record: &crate::merge_hold::MergeHoldRecord) -> String {
+        fn rearm_hold(&mut self, record: &crate::gate::merge_hold_core::MergeHoldRecord) -> String {
             self.rearmed = true;
             format!(" re-armed PR #{}", record.pr)
         }
@@ -1596,10 +1596,10 @@ impl crate::pr_train::TrainForge for NativePorts<'_> {
     fn release_hold(
         &mut self,
         member: &crate::pr_train::Member,
-    ) -> std::result::Result<crate::merge_hold::MergeHoldRecord, String> {
+    ) -> std::result::Result<crate::gate::merge_hold_core::MergeHoldRecord, String> {
         self.live.release_hold(member)
     }
-    fn rearm_hold(&mut self, record: &crate::merge_hold::MergeHoldRecord) -> String {
+    fn rearm_hold(&mut self, record: &crate::gate::merge_hold_core::MergeHoldRecord) -> String {
         self.live.rearm_hold(record)
     }
     fn hold_gate_green_after_release(
@@ -1662,7 +1662,10 @@ fn live_ports<'a>(
     }
 }
 
-fn member(pr: u64, release: Option<crate::pr_cmd::MandateCover>) -> crate::pr_train::Member {
+fn member(
+    pr: u64,
+    release: Option<crate::gate::mandate_ship::MandateCover>,
+) -> crate::pr_train::Member {
     crate::pr_train::Member {
         pr,
         head: "4ead000000000000000000000000000000000000".into(),
@@ -1672,15 +1675,15 @@ fn member(pr: u64, release: Option<crate::pr_cmd::MandateCover>) -> crate::pr_tr
     }
 }
 
-fn hold_record(pr: u64) -> crate::merge_hold::MergeHoldRecord {
-    crate::merge_hold::MergeHoldRecord {
+fn hold_record(pr: u64) -> crate::gate::merge_hold_core::MergeHoldRecord {
+    crate::gate::merge_hold_core::MergeHoldRecord {
         schema_version: 1,
         pr,
-        reason_kind: crate::merge_hold::HoldReasonKind::Supervision,
+        reason_kind: crate::gate::merge_hold_core::HoldReasonKind::Supervision,
         detail: "held for the native checkpoint test".into(),
         recused_principals: vec![],
         routed_to: vec![],
-        routing_state: crate::merge_hold::HoldRoutingState::Pending,
+        routing_state: crate::gate::merge_hold_core::HoldRoutingState::Pending,
         target_head_sha: Some("4ead000000000000000000000000000000000000".into()),
         label_state: None,
         legacy: false,
@@ -1721,7 +1724,7 @@ fn story_1917_native_train_held_member_mandate_replaced_during_hold_gate_wait_ne
     let mandate_a = f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
     let ctx = establish_train_ctx(&f, vec![9701]);
     let hold_root = crate::pr_cmd::pr_ship_hold_root(&f.root);
-    crate::merge_hold::rearm_typed_hold(&hold_root, &hold_record(9701)).unwrap();
+    crate::gate::merge_hold_core::rearm_typed_hold(&hold_root, &hold_record(9701)).unwrap();
 
     let forge = NetForge::default();
     let (mdir, principal) = (f.mandate_dir.clone(), f.principal.clone());
@@ -1741,7 +1744,7 @@ fn story_1917_native_train_held_member_mandate_replaced_during_hold_gate_wait_ne
         )
         .unwrap();
     }));
-    let cover = crate::pr_cmd::MandateCover {
+    let cover = crate::gate::mandate_ship::MandateCover {
         id: mandate_a.id.clone(),
         principal: f.principal.clone(),
     };
@@ -1762,7 +1765,7 @@ fn story_1917_native_train_held_member_mandate_replaced_during_hold_gate_wait_ne
     assert_eq!(forge.merges.get(), 0, "nothing merges after the abort");
     assert!(forge.closed.get() >= 1, "the train PR is retired");
     assert!(
-        crate::merge_hold::read_hold_record(&hold_root, 9701).is_some(),
+        crate::gate::merge_hold_core::read_hold_record(&hold_root, 9701).is_some(),
         "the released hold is re-armed"
     );
 }

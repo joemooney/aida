@@ -363,14 +363,18 @@ pub(crate) fn scan_default_branch_linkage(
     scan_default_branch_linkage_within(project_root, ids, SHIPPED_SCAN_BUDGET)
 }
 
-/// TASK-2314: does any default-branch ref (`origin/<default>` or local
-/// `<default>`) carry a merged commit referencing any of `ids`? Unlike
+/// TASK-2314: does the authoritative default-branch ref (`origin/<default>`,
+/// falling back to local `<default>` only when no remote tracking ref exists)
+/// carry a merged commit referencing any of `ids`? Unlike
 /// [`DefaultBranchLinkage::corroborated`], a `trace:` comment in a tracked
 /// file on the default branch does not count here — a trace-derived mandate
 /// exclusion already has a `trace:` comment in the touched file, so only a
-/// referencing commit on the default branch proves the spec shipped. Fails
+/// referencing commit on the default branch proves the spec shipped. TASK-1863:
+/// when `origin/<default>` exists and local `<default>` has diverged with
+/// local-only commits, only `origin/<default>` is consulted so an unpushed
+/// local commit on `main` cannot corroborate a trace exclusion. Fails
 /// closed (`false`) when no default branch resolves or the scan times out.
-// trace:TASK-2314 | ai:agy
+// trace:TASK-2314 trace:TASK-1863 | ai:agy
 pub(crate) fn has_shipped_commit_on_default_branch(
     project_root: &std::path::Path,
     ids: &[String],
@@ -387,16 +391,13 @@ pub(crate) fn has_shipped_commit_on_default_branch(
     let Ok(branch_refs) = default_branch_refs_until(project_root, deadline) else {
         return false;
     };
-    for git_ref in refs_worth_scanning(project_root, &branch_refs, deadline) {
-        let Ok(commits) = referencing_commits_on_ref(project_root, &git_ref, &wanted, deadline)
-        else {
-            return false;
-        };
-        if !commits.is_empty() {
-            return true;
-        }
-    }
-    false
+    let Some(git_ref) = branch_refs.remote.or(branch_refs.local) else {
+        return false;
+    };
+    let Ok(commits) = referencing_commits_on_ref(project_root, &git_ref, &wanted, deadline) else {
+        return false;
+    };
+    !commits.is_empty()
 }
 
 /// [`scan_default_branch_linkage`] with an explicit budget. Default-branch

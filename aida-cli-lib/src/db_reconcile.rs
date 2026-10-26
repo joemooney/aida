@@ -1189,7 +1189,7 @@ pub(crate) fn read_review_verdict_for_record(
         .join("review-verdicts")
         .join(format!("{spec_id}.json"));
     // trace:TASK-1801 | ai:claude
-    let body = crate::review_verdict::read_verdict_body(path).ok()?;
+    let body = crate::gate::review_verdict::read_verdict_body(path).ok()?;
     reviewer_summary::parse_verdict_file(&body)
 }
 
@@ -1319,7 +1319,7 @@ pub(crate) fn build_processing_record(
     record.punted = punted;
     // trace:BUG-1505 | ai:claude — persist the canonical spelling.
     record.review_verdict = verdict
-        .map(|v| review_verdict::canonical_verdict_word(&v.verdict))
+        .map(|v| crate::gate::review_verdict::canonical_verdict_word(&v.verdict))
         .filter(|s| !s.is_empty());
     record
 }
@@ -2850,14 +2850,18 @@ pub(crate) fn auto_bump_done_to_completed_with(
     // missing or unwritable verdict file must never fail the bump itself.
     // trace:BUG-1529 | ai:claude
     for flip in &confirmed {
-        let _ = review_verdict::close_verdict_on_merge(project_root, &flip.spec_id, &flip.sha);
+        let _ = crate::gate::review_verdict::close_verdict_on_merge(
+            project_root,
+            &flip.spec_id,
+            &flip.sha,
+        );
     }
     for (spec_id, sha, _, _) in &confirmed_stale {
-        let _ = review_verdict::close_verdict_on_merge(project_root, spec_id, sha);
+        let _ = crate::gate::review_verdict::close_verdict_on_merge(project_root, spec_id, sha);
     }
     for resolution in &confirmed_stranded {
         if resolution.outcome == StrandedReviewPrOutcome::Merged {
-            let _ = review_verdict::close_verdict_on_merge(
+            let _ = crate::gate::review_verdict::close_verdict_on_merge(
                 project_root,
                 &resolution.spec_id,
                 &format!("PR-{}", resolution.pr_n),

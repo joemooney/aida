@@ -3,7 +3,8 @@
 //! stem only adds versions to judge (advisor conditions C1 and C2).
 // trace:TASK-2067 | ai:claude
 use super::*;
-use crate::mandate::{judge_exclusion_spec, store_history_alias_map, MandateRefusal};
+use crate::gate::mandate::{judge_exclusion_spec, MandateRefusal};
+use crate::mandate::store_history_alias_map;
 
 fn git(dir: &std::path::Path, args: &[&str]) -> String {
     let out = crate::test_git::git_command()

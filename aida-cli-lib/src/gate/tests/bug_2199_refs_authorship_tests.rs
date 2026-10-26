@@ -5,8 +5,8 @@
 // trace:BUG-2199 | ai:claude
 
 use super::*;
-use crate::pr_ship::{approval_authority_refusal, ApprovalAuthorityRefusal};
-use crate::review_verdict::{RecordedVerdict, RecorderAttestation, VerdictKind};
+use crate::gate::review_verdict::{RecordedVerdict, RecorderAttestation, VerdictKind};
+use crate::gate::ship::{approval_authority_refusal, ApprovalAuthorityRefusal};
 use crate::worktree_lease::HARNESS_WORKTREE_SCOPE;
 
 const SPEC: &str = "BUG-91901";
@@ -116,10 +116,20 @@ fn spec_less_subject() -> crate::ReviewPrSubject {
     }
 }
 
-fn ship_policy(subject: crate::ReviewPrSubject, root: &Path) -> crate::pr_ship::ShipApprovalPolicy {
+fn ship_policy(
+    subject: crate::ReviewPrSubject,
+    root: &Path,
+) -> crate::gate::ship::ShipApprovalPolicy {
     let head = subject.head_ref.clone();
     crate::with_review_pr_subject(subject, || {
-        crate::pr_cmd::merge_approval_inputs(&[root], root, PR, &[], Some(&head), Some(HEAD))
+        crate::gate::approval::merge_approval_inputs(
+            &[root],
+            root,
+            PR,
+            &[],
+            Some(&head),
+            Some(HEAD),
+        )
     })
     .1
 }
@@ -228,7 +238,7 @@ fn refs_only_pr_with_a_main_checkout_harness_lease_ships_a_non_author_approval()
     let v = [reviewer_approval(recorder.tokens.clone())];
 
     let (_, policy) = crate::with_review_pr_subject(refs_only_subject(), || {
-        crate::pr_cmd::merge_approval_inputs(
+        crate::gate::approval::merge_approval_inputs(
             &[root.path()],
             root.path(),
             PR,
@@ -269,7 +279,7 @@ fn refs_only_pr_still_refuses_the_refs_specs_author() {
     let v = [reviewer_approval(recorder.tokens.clone())];
 
     let (_, policy) = crate::with_review_pr_subject(refs_only_subject(), || {
-        crate::pr_cmd::merge_approval_inputs(
+        crate::gate::approval::merge_approval_inputs(
             &[root.path()],
             root.path(),
             PR,

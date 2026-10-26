@@ -337,21 +337,22 @@ pub(crate) fn add_requirement_cli(
     // only file `draft`; a requested approved+ status is downgraded with a
     // one-line triage notice. Advisor role or an interactive human is
     // unaffected. trace:TASK-647 | ai:claude
-    let intake_downgraded_from =
-        if status_requires_advisor_authority(&requirement.status) && !has_advisor_authority() {
-            let from = requirement.status;
-            requirement.status = RequirementStatus::Draft;
-            Some(from)
-        } else {
-            // BUG-498: an approved+ status that was NOT downgraded means the
-            // caller exercised advisor authority — if that authority came from
-            // an `AIDA_SESSION_ROLE=advisor` prefix rather than a seated role,
-            // nudge them to seat it. trace:BUG-498 | ai:claude
-            if status_requires_advisor_authority(&requirement.status) {
-                maybe_hint_advisor_seat();
-            }
-            None
-        };
+    let intake_downgraded_from = if status_requires_advisor_authority(&requirement.status)
+        && !crate::gate::role_authority::has_advisor_authority()
+    {
+        let from = requirement.status;
+        requirement.status = RequirementStatus::Draft;
+        Some(from)
+    } else {
+        // BUG-498: an approved+ status that was NOT downgraded means the
+        // caller exercised advisor authority — if that authority came from
+        // an `AIDA_SESSION_ROLE=advisor` prefix rather than a seated role,
+        // nudge them to seat it. trace:BUG-498 | ai:claude
+        if status_requires_advisor_authority(&requirement.status) {
+            maybe_hint_advisor_seat();
+        }
+        None
+    };
 
     if let Some(priority) = priority_str {
         requirement.priority = parse_priority(priority)?;
@@ -2904,7 +2905,7 @@ fn run_add(
                     // downgraded with a one-line triage notice. An interactive human
                     // (TTY) or the advisor role is unaffected. trace:TASK-647 | ai:claude
                     let intake_downgraded_from = if status_requires_advisor_authority(&req.status)
-                    && !has_advisor_authority()
+                    && !crate::gate::role_authority::has_advisor_authority()
                     // trace:STORY-1642 | ai:claude — a Completed FAQ is reference,
                     // never pickable work; any other FAQ status stays gated.
                     && !faq_born_completed
@@ -2998,7 +2999,7 @@ fn run_add(
                     // judgment as `aida edit --mode`; validate it before persisting.
                     // trace:TASK-1267 | ai:codex
                     if let Some(m) = mode {
-                        if !has_advisor_authority() {
+                        if !crate::gate::role_authority::has_advisor_authority() {
                             anyhow::bail!(
                             "--mode sets the advisor's routing classification and needs advisor authority"
                         );
@@ -8179,7 +8180,7 @@ fn run_edit(
                     // commit) records who classified it and when. An empty string
                     // clears back to ungroomed. trace:STORY-776 | ai:claude
                     if let Some(m) = mode {
-                        if !has_advisor_authority() {
+                        if !crate::gate::role_authority::has_advisor_authority() {
                             anyhow::bail!(
                             "--mode sets the advisor's routing classification and needs advisor \
                              authority (advisor role or an interactive session). Leave it for \
@@ -8336,7 +8337,7 @@ fn run_edit(
                                 canonical
                             );
                             }
-                            if !has_advisor_authority() {
+                            if !crate::gate::role_authority::has_advisor_authority() {
                                 anyhow::bail!(
                                 "promoting a {} spec to {} needs advisor authority (advisor role or \
                                  an interactive session). Leave it for advisor triage, or run as \

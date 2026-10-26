@@ -10,7 +10,10 @@ fn direct_human_refusal() -> anyhow::Error {
 fn grant_without_agent_identity_names_the_identity_variables() {
     let msg = format!(
         "{:#}",
-        review_record_attribution_refusal(direct_human_refusal(), Some("advisor"))
+        crate::gate::review_author::review_record_attribution_refusal(
+            direct_human_refusal(),
+            Some("advisor")
+        )
     );
     assert!(msg.contains("seat grant was found"), "{msg}");
     assert!(msg.contains("no agent identity is set"), "{msg}");
@@ -31,7 +34,7 @@ fn grant_without_agent_identity_names_the_identity_variables() {
 fn no_grant_keeps_the_existing_role_enter_guidance() {
     let msg = format!(
         "{:#}",
-        review_record_attribution_refusal(direct_human_refusal(), None)
+        crate::gate::review_author::review_record_attribution_refusal(direct_human_refusal(), None)
     );
     assert_eq!(
         msg,
