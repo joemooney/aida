@@ -10,12 +10,12 @@ description: |
   Not a merge blocker (green in CI), but a latent test-fragility: a function on the per-turn mailbox-notice path now depends on the real process tree. Consider a fixture seam (inject the ancestry/registry lookup) so the test asserts behaviour without reaching outside its hermetic root.
 
   Raised in review of PR-2909: https://github.com/joemooney/aida/pull/2909#issuecomment-6390882870
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-24T23:29:02.942675586Z
-modified_at: 2026-10-26T02:23:50.990146187Z
+modified_at: 2026-10-26T02:23:57.405216496Z
 req_type: Task
 tags:
 - from-review:PR-2909
@@ -97,6 +97,14 @@ history:
   timestamp: 2026-10-26T02:23:52.548402019Z
   session_id: 761a4fea-f388-41d1-93d9-f1386951253c
   changes: []
+- id: 01a17605-8bdd-7233-8a4d-c7e51831b109
+  author: aida-pr-open
+  timestamp: 2026-10-26T02:23:57.405215737Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: de9c0ffb7f27102fbf477a2c7aa5155724fe20bc
   branch: pr-2909
