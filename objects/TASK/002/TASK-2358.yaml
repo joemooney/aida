@@ -7,12 +7,12 @@ description: |
 
   Raised by the implementer while working TASK-2351.
   Branch: task-2351  ·  Commit: 24edd8a0b8  ·  PR #2932
-status: NeedsAttention
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T20:40:12.011993597Z
-modified_at: 2026-10-26T06:38:43.458492959Z
+modified_at: 2026-10-26T06:39:24.065614115Z
 req_type: Task
 tags:
 - from-implementer:TASK-2351
@@ -30,6 +30,12 @@ comments:
   content: 'ADVISOR 2026-10-25 23:40 MST: fixed in aida-host MR !1 (merge 96be848, BUG-1a161bc1ac2a4193bf66f50ac6f0a2e8-001): seat clones under ../aida-worktrees and .aida/sessions lease paths count as target owners; ownerless dirs younger than 24h are kept (--no-worktree-min-hours). Advisor reviewed the diff and ran tests/test_cargo_reap_owners.sh (ALL PASS). Dry run reaps only merged/closed-PR targets. aida-cargo-reap.timer restarted.'
   created_at: 2026-10-26T06:38:43.458492959Z
   modified_at: 2026-10-26T06:38:43.458492959Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
+- id: 01a176ef-69a1-7bc1-b59e-e0e9418dc29e
+  author: joe
+  content: 'Returned from NeedsAttention to In Progress via `aida edit --status`. It was punted on: blocked-dependency: Root cause is outside this repo. The seat launcher already pre-creates the dir for clone seats (aida-cli-lib/src/session_start.rs:2779, BUG-2169 S2, since 2026-10-21). In seat 2351 the dir was created at launch (19:44:20Z) and then DELETED by the host reaper: journalctl --user -u aida-cargo-reap shows at 12:46:01 local ''reaped 0B aida-seat-aida-task-2351 (no-worktree)'' (and ''reaped 9.6G aida-seat-aida-task-2348 (no-worktree)''). /home/joe/ai/aida-host/bin/cargo-reap (30-min systemd timer, --apply) builds its ownership map only from ''git worktree list''; AIDA seat clones (tree_kind=clone) are independent clones, not linked worktrees, so every seat target is classified no-worktree and reaped with NO age gate (bin/cargo-reap ~line 412). The sandbox then cannot recreate it because target/worktrees/ is read-only. aida-host is a separate repo (gitlab ai/aida-host) outside this seat''s write sandbox, so I cannot fix it here. Current seats 2356/2358/2359 are exposed to the next reaper run.. No triage reason was given.'
+  created_at: 2026-10-26T06:39:24.065602480Z
+  modified_at: 2026-10-26T06:39:24.065602480Z
   session_id: 761a4fea-f388-41d1-93d9-f1386951253c
 history:
 - id: 01a17551-1594-7f80-bc42-e4cea75364da
@@ -57,15 +63,17 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a176ef-69a1-7bc1-b59e-e0dfda6e6696
+  author: joe
+  timestamp: 2026-10-26T06:39:24.065586658Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: InProgress
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: a01a698998
   vendor: claude
   session: 01a17497b0d5
   harness_version: 2.1.310 (Claude Code)
-attention_reason:
-  category: blocked-dependency
-  detail: 'Root cause is outside this repo. The seat launcher already pre-creates the dir for clone seats (aida-cli-lib/src/session_start.rs:2779, BUG-2169 S2, since 2026-10-21). In seat 2351 the dir was created at launch (19:44:20Z) and then DELETED by the host reaper: journalctl --user -u aida-cargo-reap shows at 12:46:01 local ''reaped 0B aida-seat-aida-task-2351 (no-worktree)'' (and ''reaped 9.6G aida-seat-aida-task-2348 (no-worktree)''). /home/joe/ai/aida-host/bin/cargo-reap (30-min systemd timer, --apply) builds its ownership map only from ''git worktree list''; AIDA seat clones (tree_kind=clone) are independent clones, not linked worktrees, so every seat target is classified no-worktree and reaped with NO age gate (bin/cargo-reap ~line 412). The sandbox then cannot recreate it because target/worktrees/ is read-only. aida-host is a separate repo (gitlab ai/aida-host) outside this seat''s write sandbox, so I cannot fix it here. Current seats 2356/2358/2359 are exposed to the next reaper run.'
-  lean: 'Fix in aida-host bin/cargo-reap: (1) treat a target/worktrees/<name> as owned when <worktree-parent>/<name> exists as an aida-seat-* clone or a lease in <main>/.aida/sessions/*.toml has worktree_path ending in /<name> (or cargo_target_dir == tdir); (2) age-gate the no-worktree reason (e.g. >= merged_idle_hours since newest mtime) so a fresh empty dir is never reaped. No aida-repo change is needed; close TASK-2358 once the aida-host fix lands.'
-  raised_by: implementer
-  raised_at: 2026-10-25T23:16:08.761510376Z
