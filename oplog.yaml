@@ -77544,5 +77544,23 @@ operations:
     req_type: Task
     status: Draft
     priority: Medium
-clock: 6004
+- id: 01a178ad-8710-7330-9c81-1df8efb8aa68
+  target_id: 01a178ad-7d53-7392-9ca9-0d54061e8254
+  author: aida
+  node_id: '1'
+  lamport: 6005
+  timestamp: 2026-10-26T14:46:40.656977244Z
+  kind: !Create
+    title: 'Non-blocking (minor): server.join() in ownership_and_ci_share_one_wait_deadline…'
+    description: |-
+      Non-blocking finding carried forward from an APPROVED review verdict on TASK-2354, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+      Non-blocking (minor): server.join() in ownership_and_ci_share_one_wait_deadline (aida-cli/tests/task_1287_label_only_merge_hold.rs:828) runs after the 120s watchdog has already finished. If a regression makes pr ship exit 21 after the waiting line without a second drive probe and without printing the timeout text, the server thread stays blocked in a blocking FIFO open-for-write and the test hangs with nothing to stop it, instead of failing. Bound the join (for example recv_timeout on a done channel), or unblock the server by opening the FIFO's read end in the test after the child exits.
+
+      PR: #2942
+      Reviewed sha: d9ac6762e71ab5c1e62c56997e9a12de9ed2fe0f
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 6005
 node_id: '1'
