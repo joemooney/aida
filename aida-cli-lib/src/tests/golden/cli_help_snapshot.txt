@@ -4434,9 +4434,10 @@ Commands:
   migrate        Preview legacy mailbox reconciliation before recipient migration
   latency        Show mailbox read latency for the active identity (or an explicit recipient)
   send           Send a message to another agent, or `--broadcast` to all
-  inbox          Show an agent's inbox: messages addressed to it + broadcasts, oldest-first. Reading
-                 marks the inbox seen (clears unread); `--all` is the operator-wide read-only view
-                 across every agent
+  inbox          Show your inbox: mail addressed to this session's own inboxes (its handle or user,
+                 role and agent type) + broadcasts, from every worktree of this repository and the
+                 canonical store. Reading marks the shown unread mail seen; `--all` is the
+                 operator-wide read-only view
   notice         Ambient unread-mail notice for an agent's context: a capped, plain,
                  role+user-scoped summary of unread messages, or nothing when the inbox is caught
                  up. Never marks anything seen. The SessionStart / per-turn hook calls this;
@@ -4615,14 +4616,16 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 ===== aida mailbox inbox
-Show an agent's inbox: messages addressed to it + broadcasts, oldest-first. Reading marks the inbox
-seen (clears unread); `--all` is the operator-wide read-only view across every agent
+Show your inbox: mail addressed to this session's own inboxes (its handle or user, role and agent
+type) + broadcasts, from every worktree of this repository and the canonical store. Reading marks
+the shown unread mail seen; `--all` is the operator-wide read-only view
 
 Usage: aida mailbox inbox [OPTIONS] [AGENT]
 
 Arguments:
   [AGENT]
-          Whose inbox (default: this shell's agent/user identity)
+          Narrow to one of your own inboxes. Naming any other inbox is a read-only inspection of
+          this checkout and the store; nothing is marked
 
 Options:
       --all
@@ -4633,12 +4636,13 @@ Options:
           Show only archived messages. Read-only — does not mark anything seen
 
       --peek
-          Show the inbox WITHOUT marking it seen (does not advance the read-watermark). Lets a hook
-          or a glance surface mail without consuming the unread flag — reading/acking stays an
-          explicit act (a plain `aida mailbox inbox`)
+          Show the inbox WITHOUT marking it seen (writes no read receipt). Lets a hook or a glance
+          surface mail without consuming the unread flag — reading/acking stays an explicit act (a
+          plain `aida mailbox inbox`)
 
       --unread
-          Show only UNREAD messages (newer than this inbox's read-watermark)
+          Show only UNREAD messages (no read receipt; mail an older version marked read with a
+          timestamp watermark shows as read (legacy))
 
       --recent-read-tail <RECENT_READ_TAIL>
           Number of already-read messages to keep in the default newest-first inbox tail. Use 0 for
@@ -4667,8 +4671,8 @@ Usage: aida mailbox notice [OPTIONS] [AGENT]
 
 Arguments:
   [AGENT]
-          Whose mail to summarize. Default: the union of this shell's agent/user identity and the
-          session role (`AIDA_SESSION_ROLE`)
+          Narrow to one of this session's own inboxes. Default: all of them (its handle or user, the
+          session role and the agent type)
 
 Options:
       --cap <CAP>
@@ -29257,7 +29261,7 @@ Working on aida itself
       "mailbox",
       "inbox"
     ],
-    "about": "Show an agent's inbox: messages addressed to it + broadcasts, oldest-first. Reading marks the inbox seen (clears unread); `--all` is the operator-wide read-only view across every agent",
+    "about": "Show your inbox: mail addressed to this session's own inboxes (its handle or user, role and agent type) + broadcasts, from every worktree of this repository and the canonical store. Reading marks the shown unread mail seen; `--all` is the operator-wide read-only view",
     "flags": [
       {
         "name": "all",
@@ -29282,7 +29286,7 @@ Working on aida itself
       {
         "name": "peek",
         "takes_value": false,
-        "help": "Show the inbox WITHOUT marking it seen (does not advance the read-watermark). Lets a hook or a glance surface mail without consuming the unread flag — reading/acking stays an explicit act (a plain `aida mailbox inbox`)"
+        "help": "Show the inbox WITHOUT marking it seen (writes no read receipt). Lets a hook or a glance surface mail without consuming the unread flag — reading/acking stays an explicit act (a plain `aida mailbox inbox`)"
       },
       {
         "name": "recent-read-tail",
@@ -29292,7 +29296,7 @@ Working on aida itself
       {
         "name": "unread",
         "takes_value": false,
-        "help": "Show only UNREAD messages (newer than this inbox's read-watermark)"
+        "help": "Show only UNREAD messages (no read receipt; mail an older version marked read with a timestamp watermark shows as read (legacy))"
       }
     ],
     "hidden": false

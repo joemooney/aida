@@ -110,11 +110,15 @@ pub enum MailboxCommand {
         allow_second_person: bool,
     },
 
-    /// Show an agent's inbox: messages addressed to it + broadcasts, oldest-first.
-    /// Reading marks the inbox seen (clears unread); `--all` is the operator-wide
-    /// read-only view across every agent.
+    /// Show your inbox: mail addressed to this session's own inboxes (its
+    /// handle or user, role and agent type) + broadcasts, from every worktree
+    /// of this repository and the canonical store. Reading marks the shown
+    /// unread mail seen; `--all` is the operator-wide read-only view.
+    // trace:STORY-1843 | ai:claude
     Inbox {
-        /// Whose inbox (default: this shell's agent/user identity).
+        /// Narrow to one of your own inboxes. Naming any other inbox is a
+        /// read-only inspection of this checkout and the store; nothing is
+        /// marked.
         agent: Option<String>,
 
         /// Operator-wide view: every message across all agents, oldest-first,
@@ -127,15 +131,16 @@ pub enum MailboxCommand {
         #[clap(long, conflicts_with_all = ["all", "unread"])]
         archived: bool,
 
-        /// Show the inbox WITHOUT marking it seen (does not advance the
-        /// read-watermark). Lets a hook or a glance surface mail without
+        /// Show the inbox WITHOUT marking it seen (writes no read receipt).
+        /// Lets a hook or a glance surface mail without
         /// consuming the unread flag — reading/acking stays an explicit act
         /// (a plain `aida mailbox inbox`).
         // trace:STORY-585
         #[clap(long, alias = "no-mark")]
         peek: bool,
 
-        /// Show only UNREAD messages (newer than this inbox's read-watermark).
+        /// Show only UNREAD messages (no read receipt; mail an older version
+        /// marked read with a timestamp watermark shows as read (legacy)).
         // trace:STORY-585
         #[clap(long)]
         unread: bool,
@@ -153,8 +158,8 @@ pub enum MailboxCommand {
     /// is caught up. Never marks anything seen. The SessionStart / per-turn
     /// hook calls this; reading/acking stays the explicit `aida mailbox inbox`.
     Notice {
-        /// Whose mail to summarize. Default: the union of this shell's
-        /// agent/user identity and the session role (`AIDA_SESSION_ROLE`).
+        /// Narrow to one of this session's own inboxes. Default: all of them
+        /// (its handle or user, the session role and the agent type).
         agent: Option<String>,
 
         /// Max messages to list before collapsing the rest into "+N more"

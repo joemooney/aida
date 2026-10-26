@@ -17,6 +17,9 @@ fn empty_user_ctx(role: Option<&str>) -> UserStatusContext {
 }
 
 fn open_backend(project_root: &std::path::Path) -> CachedGitBackend {
+    // STORY-1843: the mail channel reads the repository's logical view, so
+    // the project is a real Git checkout (a non-Git one is a partial view).
+    crate::mailbox_view::tests::git(project_root, &["init", "-q", "-b", "main"]);
     let store_root = project_root.join("store");
     let cache_path = project_root.join(".aida").join("cache.db");
     std::fs::create_dir_all(&store_root).unwrap();
@@ -45,12 +48,14 @@ fn awaiting_report_unbound(
     backend: &CachedGitBackend,
     ctx: &UserStatusContext,
 ) -> awaiting_you::AwaitingReport {
-    collect_awaiting_report_with_mail_facts(project_root, backend, ctx, true, false, || {
-        crate::MailIdentityFacts {
-            user: "operator-under-test".into(),
-            ..Default::default()
-        }
-    })
+    collect_awaiting_report_with_mail_facts(
+        project_root,
+        backend,
+        ctx,
+        true,
+        false,
+        crate::mailbox_view::observed_unbound_facts,
+    )
 }
 
 // STORY-465 acceptance: with no findings, no escalations, no briefs,
@@ -255,14 +260,8 @@ fn awaiting_report_bound(
     ctx: &UserStatusContext,
     handle: &str,
 ) -> awaiting_you::AwaitingReport {
-    let handle = handle.to_string();
     collect_awaiting_report_with_mail_facts(project_root, backend, ctx, true, false, || {
-        crate::MailIdentityFacts {
-            own_handle: Some(handle),
-            own_vendor: Some("claude".into()),
-            user: "operator-under-test".into(),
-            ..Default::default()
-        }
+        crate::mailbox_view::bound_facts(handle, "claude")
     })
 }
 

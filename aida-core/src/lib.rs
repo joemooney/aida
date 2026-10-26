@@ -133,6 +133,9 @@ pub mod liveness;
 pub mod lock;
 pub mod mailbox;
 // trace:STORY-1843 | ai:claude
+#[cfg(feature = "native")]
+pub mod mailbox_identity;
+// trace:STORY-1843 | ai:claude
 pub mod mailbox_logical;
 pub mod meta;
 pub mod models;

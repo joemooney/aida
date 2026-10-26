@@ -23,6 +23,7 @@
 // trace:STORY-1843 | ai:claude
 
 use crate::mailbox::{message_state_rank, Message, Recipient};
+use crate::mailbox_identity::{classified_identities, IdentityClass, MailIdentityFacts};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::ffi::{CStr, CString, OsStr};
 use std::fs::File;
@@ -121,7 +122,8 @@ pub enum CanonicalCoverage {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MailboxContext {
     requested_checkout: CheckoutRoot,
-    repository: VerifiedCommonGit,
+    /// `None` for a local-only context (see [`Self::resolve_or_local`]).
+    repository: Option<VerifiedCommonGit>,
     canonical: CanonicalCoverage,
 }
 
@@ -148,17 +150,54 @@ impl MailboxContext {
         };
         Ok(Self {
             requested_checkout: CheckoutRoot(checkout),
-            repository: VerifiedCommonGit(repository),
+            repository: Some(VerifiedCommonGit(repository)),
             canonical,
         })
+    }
+
+    /// [`Self::resolve`], except that a directory with no `.git` entry in it
+    /// or any ancestor (a local-only, non-Git project) still reads its own local
+    /// mailbox. Such a context has no verified repository: no sibling is
+    /// inventoried, no store is read (it could be another repository's), and
+    /// every snapshot reports [`SourceErrorCode::NotAGitCheckout`] as its
+    /// inventory error, so it is never complete or caught up.
+    // trace:STORY-1843 | ai:claude
+    pub fn resolve_or_local(
+        checkout: &Path,
+        store: Option<&Path>,
+    ) -> Result<Self, SourceErrorCode> {
+        match Self::resolve(checkout, store) {
+            Err(SourceErrorCode::NotAGitCheckout) if checkout.is_dir() => {
+                let checkout = std::fs::canonicalize(checkout)
+                    .map_err(|_| SourceErrorCode::NotAGitCheckout)?;
+                // Inside a Git checkout (say a subdirectory of one) is a
+                // wrong root, not a local-only project.
+                if checkout
+                    .ancestors()
+                    .any(|dir| std::fs::symlink_metadata(dir.join(".git")).is_ok())
+                {
+                    return Err(SourceErrorCode::NotAGitCheckout);
+                }
+                Ok(Self {
+                    requested_checkout: CheckoutRoot(checkout),
+                    repository: None,
+                    canonical: match store {
+                        None => CanonicalCoverage::NotConfigured,
+                        Some(_) => CanonicalCoverage::Refused(SourceErrorCode::NotAGitCheckout),
+                    },
+                })
+            }
+            other => other,
+        }
     }
 
     pub fn requested_checkout(&self) -> &CheckoutRoot {
         &self.requested_checkout
     }
 
-    pub fn repository(&self) -> &VerifiedCommonGit {
-        &self.repository
+    /// The verified common Git directory; `None` for a local-only context.
+    pub fn repository(&self) -> Option<&VerifiedCommonGit> {
+        self.repository.as_ref()
     }
 
     pub fn canonical(&self) -> &CanonicalCoverage {
@@ -187,13 +226,6 @@ impl ResolvedAudience {
     /// people-catalog inboxes; `shared`: role and vendor audiences. Each key
     /// must be a bounded mailbox identity. Crate-private: only the verified
     /// identity path may mint recipient authority.
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "STORY-1843 B2 adds the verified-identity caller; drop this then"
-        )
-    )]
     pub(crate) fn from_identity_policy(
         private: Vec<String>,
         human: Vec<String>,
@@ -214,7 +246,49 @@ impl ResolvedAudience {
         })
     }
 
-    fn keys(&self) -> impl Iterator<Item = &str> {
+    /// The audience the mailbox identity policy grants for `facts`. Keys that
+    /// are not bounded mailbox identities are dropped, never widened.
+    // trace:STORY-1843 | ai:claude
+    pub fn from_facts(facts: &MailIdentityFacts) -> Self {
+        let bounded = |key: &str| {
+            !key.is_empty()
+                && key.len() <= 128
+                && !key.chars().any(|c| c.is_control() || c == '/' || c == '\\')
+        };
+        let mut private = Vec::new();
+        let mut human = Vec::new();
+        let mut shared = Vec::new();
+        for (key, class) in classified_identities(facts) {
+            if !bounded(&key) {
+                continue;
+            }
+            match class {
+                IdentityClass::Private => private.push(key),
+                IdentityClass::Human => human.push(key),
+                IdentityClass::Shared => shared.push(key),
+            }
+        }
+        Self::from_identity_policy(private, human, shared)
+            .expect("every key was checked as a bounded mailbox identity")
+    }
+
+    /// This session's own handle/names (or an unbound user).
+    pub fn private_keys(&self) -> &[String] {
+        &self.private
+    }
+
+    /// Intentional people-catalog inboxes.
+    pub fn human_keys(&self) -> &[String] {
+        &self.human
+    }
+
+    /// Role and agent-type audiences several sessions share.
+    pub fn shared_keys(&self) -> &[String] {
+        &self.shared
+    }
+
+    /// Every key, private first.
+    pub fn keys(&self) -> impl Iterator<Item = &str> {
         self.private
             .iter()
             .chain(&self.human)
@@ -222,9 +296,29 @@ impl ResolvedAudience {
             .map(String::as_str)
     }
 
+    /// This audience restricted to the one key spelled `key`
+    /// (case-insensitively), or `None` when `key` is not one of its keys: a
+    /// selector can only narrow the authority the facts granted.
+    pub fn narrowed_to(&self, key: &str) -> Option<Self> {
+        let pick = |keys: &[String]| -> Vec<String> {
+            keys.iter()
+                .filter(|k| k.eq_ignore_ascii_case(key.trim()))
+                .take(1)
+                .cloned()
+                .collect()
+        };
+        let narrowed = Self {
+            private: pick(&self.private),
+            human: pick(&self.human),
+            shared: pick(&self.shared),
+        };
+        let any = narrowed.keys().next().is_some();
+        any.then_some(narrowed)
+    }
+
     /// Audience keys this message is addressed to: direct or broadcast,
     /// never the key's own sent mail, never a deleted message.
-    fn matching_keys(&self, m: &Message) -> Vec<&str> {
+    pub fn matching_keys(&self, m: &Message) -> Vec<&str> {
         self.keys().filter(|key| m.addressed_to(key)).collect()
     }
 }
@@ -731,6 +825,9 @@ fn inventory(
         _ => None,
     };
     let mut roots = vec![Ok(requested.clone())];
+    let Some(repository) = &ctx.repository else {
+        return (roots, Some(SourceErrorCode::NotAGitCheckout));
+    };
     let records =
         match list_worktrees(&requested, budget).and_then(|b| parse_worktree_porcelain_z(&b)) {
             Ok(records) => records,
@@ -771,7 +868,7 @@ fn inventory(
             }
         }
         match common_git_of(&path) {
-            Ok(common) if common == *ctx.repository.path() => roots.push(Ok(path)),
+            Ok(common) if common == *repository.path() => roots.push(Ok(path)),
             Ok(_) => roots.push(Err((path, SourceErrorCode::CommonGitMismatch))),
             Err(code) => roots.push(Err((path, code))),
         }

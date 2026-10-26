@@ -1156,42 +1156,30 @@ pub(crate) fn read_draft_backlog_depth(cache_path: &std::path::Path) -> usize {
 /// spawn — so the statusline's no-git contract still holds.
 // trace:STORY-539 trace:BUG-625 | ai:claude
 pub(crate) fn read_urgent_unread_count(project_root: &std::path::Path) -> Option<usize> {
-    read_urgent_unread_count_for(project_root, inbox_identities)
+    read_urgent_unread_count_for(project_root, &crate::mailbox_view::own_audience())
 }
 
-/// [`read_urgent_unread_count`] over a supplied identity union (resolved only
-/// once there is mail), so a test drives the same merge/watermark/notice path
-/// from synthetic identity facts.
-// trace:TASK-2345 | ai:claude
+/// [`read_urgent_unread_count`] for a given verified audience. STORY-1843:
+/// the count reads the same logical view (every worktree of this repository
+/// plus the canonical store) and the same read evidence the inbox marks, so
+/// reading the inbox clears it. `None` when there is no visible mail. The
+/// statusline segment shows only a positive urgent count; a partial view is
+/// surfaced by the status, notice and awaiting surfaces.
+// trace:TASK-2345 trace:STORY-1843 | ai:claude
 pub(crate) fn read_urgent_unread_count_for(
     project_root: &std::path::Path,
-    identities: impl FnOnce() -> Vec<String>,
+    audience: &aida_core::mailbox_logical::ResolvedAudience,
 ) -> Option<usize> {
-    let local = mailbox_store::read_local_messages(project_root).ok()?;
-    // Merge in the canonical (orphan-store) layer so this sees exactly what
-    // `aida mailbox inbox` reads (and advances watermarks against). Best-effort:
-    // a missing/unreadable canonical dir degrades to the local layer rather than
-    // silencing the nag. trace:BUG-625
-    let store_root = project_root.join(".aida-store");
-    let canonical = mailbox_store::read_canonical_messages(&store_root).unwrap_or_default();
-    let merged = aida_core::mailbox::merge_dedup(&local, &canonical);
-    if merged.is_empty() {
+    let view = crate::mailbox_view::read_own_mail(
+        project_root,
+        &project_root.join(".aida-store"),
+        audience,
+        &crate::mailbox_view::passive_limits(),
+    );
+    if view.records().is_empty() {
         return None;
     }
-    // Scope to the same identity union the agent-facing notice and the inbox-read
-    // use (shell user + session role + agent type), so a role-/type-addressed
-    // urgent message isn't invisible here while the notice surfaces it.
-    // build_notice dedups a broadcast across identities and counts urgent across
-    // the unread set. trace:STORY-585 trace:BUG-625
-    let identities = identities();
-    let watermarks = mailbox_store::read_all_watermarks(project_root).ok()?;
-    let summary = aida_core::mailbox::build_notice(
-        identities.iter().map(String::as_str),
-        &merged,
-        &watermarks,
-        aida_core::mailbox::NOTICE_DEFAULT_CAP,
-    );
-    Some(summary.urgent)
+    Some(view.unread().iter().filter(|m| m.urgent).count())
 }
 
 // ─── STORY-127: Scope-B runtime anti-pattern detectors ──────────────────

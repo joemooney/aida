@@ -130,21 +130,10 @@ pub fn send_mail_argv(
 }
 
 // ---------------------------------------------------------------------------
-// IO boundary: reading the local mailbox layer + resolving this shell's
-// identity / project root. Not unit-tested against a terminal — these are
-// thin, best-effort wrappers around aida_core::mailbox + std::fs.
+// IO boundary: reading the logical mailbox view (STORY-1843) + resolving
+// the project root. Not unit-tested against a terminal — these are thin,
+// best-effort wrappers around aida_core::mailbox_logical + std::fs.
 // ---------------------------------------------------------------------------
-
-/// This shell's mail identity: the same precedence the CLI's queue/mailbox
-/// user resolution uses (BUG-89) — `AIDA_USER`, then `USER`, then `USERNAME`
-/// (Windows), then `"default"`.
-// trace:STORY-701 | ai:claude
-fn mail_identity() -> String {
-    std::env::var("AIDA_USER")
-        .or_else(|_| std::env::var("USER"))
-        .or_else(|_| std::env::var("USERNAME"))
-        .unwrap_or_else(|_| "default".to_string())
-}
 
 /// Resolve the AIDA project root from `cwd`.
 ///
@@ -181,22 +170,74 @@ fn resolve_project_root(cwd: &Path) -> PathBuf {
     cwd.to_path_buf()
 }
 
-/// Read this operator's unread mail from the LOCAL mailbox layer (the fast,
-/// live-exchange layer) and project it into cockpit rows — the Mail scope's
-/// item set. Read-only: never advances the watermark, so painting the
-/// cockpit never marks mail seen (mirrors `aida mailbox inbox --peek`). Best
-/// effort: any read failure yields an empty Vec so the cockpit still paints.
-// trace:STORY-701 | ai:claude
+/// Read this operator's unread mail and project it into cockpit rows — the
+/// Mail scope's item set. STORY-1843: the same logical view the CLI inbox
+/// reads (every worktree of this repository plus the canonical store),
+/// filtered to the audience the core identity policy grants. The cockpit is
+/// the operator's own surface and has no agent-session lookup, so it reads
+/// as an unbound session. Read-only: never marks mail seen (mirrors
+/// `aida mailbox inbox --peek`); only mail with no read evidence is a row.
+/// A partial view adds one row saying so instead of looking caught up.
+// trace:STORY-701 trace:STORY-1843 | ai:claude
 pub fn fetch_mail_items() -> Vec<TargetItem> {
     let Ok(cwd) = std::env::current_dir() else {
         return Vec::new();
     };
-    let project_root = resolve_project_root(&cwd);
-    let messages = aida_core::mailbox::read_local_messages(&project_root).unwrap_or_default();
-    let agent = mail_identity();
-    let watermark = aida_core::mailbox::read_local_watermark(&project_root, &agent);
-    let unread = aida_core::mailbox::unread_inbox(&agent, &messages, watermark);
-    mail_items(&unread)
+    mail_items_for(&resolve_project_root(&cwd))
+}
+
+/// [`fetch_mail_items`] for an explicit project root.
+// trace:STORY-1843 | ai:claude
+pub fn mail_items_for(project_root: &Path) -> Vec<TargetItem> {
+    use aida_core::mailbox_identity::{
+        IdentityEnv, MailIdentityFacts, PeopleCatalogView, SessionBinding,
+    };
+    use aida_core::mailbox_logical::{
+        logical_snapshot, MailboxContext, Query, ReadEvidence, ReadLimits, ResolvedAudience,
+    };
+    let facts = MailIdentityFacts::observed(
+        SessionBinding::Unbound,
+        &PeopleCatalogView::default(),
+        IdentityEnv::observed(),
+    );
+    let audience = ResolvedAudience::from_facts(&facts);
+    let store = project_root.join(".aida-store");
+    let store = std::fs::symlink_metadata(&store).is_ok().then_some(store);
+    let Ok(ctx) = MailboxContext::resolve_or_local(project_root, store.as_deref()) else {
+        return vec![partial_row()];
+    };
+    let limits = ReadLimits::with_deadline(
+        std::time::Instant::now() + std::time::Duration::from_millis(500),
+    );
+    let snapshot = logical_snapshot(&ctx, &audience, &Query::Inbox, &limits);
+    let unread: Vec<&Message> = snapshot
+        .records
+        .iter()
+        .filter(|r| !r.message.archived && r.read == ReadEvidence::Unread)
+        .map(|r| &r.message)
+        .collect();
+    let mut rows = mail_items(&unread);
+    if !snapshot.complete() {
+        rows.push(partial_row());
+    }
+    rows
+}
+
+/// The row a partial mail view adds. It has no sender, so no reply gesture
+/// applies to it.
+// trace:STORY-1843 | ai:claude
+fn partial_row() -> TargetItem {
+    TargetItem {
+        id: "mail-view-partial".to_string(),
+        title: "Mail view partial — some mail may be missing".to_string(),
+        req_type: "Mail".to_string(),
+        status: "partial view · run `aida mailbox inbox`".to_string(),
+        priority: String::new(),
+        body: String::new(),
+        has_test_plan: false,
+        routed_role: None,
+        tags: Vec::new(),
+    }
 }
 
 #[cfg(test)]
@@ -453,5 +494,35 @@ mod tests {
             "TUI mail path must resolve to the MAIN worktree root, matching \
              `aida mailbox send`, not the nested worktree it was invoked from"
         );
+    }
+
+    /// STORY-1843: the cockpit reads the logical view. A non-Git project
+    /// still shows its own unread mail, plus a row saying the view is
+    /// partial instead of looking caught up; read mail is not a row.
+    // trace:STORY-1843 | ai:claude
+    #[test]
+    fn mail_items_for_reads_the_logical_view_and_flags_a_partial_one() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut unread = mail_msg("m-new", "codex", "please look", false, 20);
+        unread.to = Recipient::Broadcast;
+        let mut read = mail_msg("m-read", "codex", "already seen", false, 10);
+        read.to = Recipient::Broadcast;
+        aida_core::mailbox::write_local_message(dir.path(), &unread).unwrap();
+        aida_core::mailbox::write_local_message(dir.path(), &read).unwrap();
+        // An unbound reader always holds its user inbox; a receipt there
+        // acknowledges the broadcast `m-read`.
+        let user = std::env::var("AIDA_USER")
+            .or_else(|_| std::env::var("USER"))
+            .or_else(|_| std::env::var("USERNAME"))
+            .unwrap_or_else(|_| "default".into());
+        let receipts = dir.path().join(".aida/mailbox/.read-receipts").join(&user);
+        std::fs::create_dir_all(&receipts).unwrap();
+        std::fs::write(receipts.join("m-read.txt"), "11").unwrap();
+        let rows = mail_items_for(dir.path());
+        let ids: Vec<&str> = rows.iter().map(|r| r.id.as_str()).collect();
+        assert!(ids.contains(&"m-new"), "{ids:?}");
+        assert!(!ids.contains(&"m-read"), "{ids:?}");
+        assert_eq!(ids.last(), Some(&"mail-view-partial"), "{ids:?}");
+        assert!(mail_sender(rows.last().unwrap()).is_none());
     }
 }

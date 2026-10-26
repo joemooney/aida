@@ -704,3 +704,41 @@ fn story1843_readdir_error_is_never_a_complete_listing() {
         Err(SourceErrorCode::Unreadable)
     );
 }
+
+/// A non-Git project still reads its own local mailbox, but the view is
+/// typed partial: no siblings, no store (it could belong to any repository),
+/// never complete or caught up. A path inside a Git checkout is not
+/// downgraded to local-only.
+// trace:STORY-1843 | ai:claude
+#[test]
+fn story1843_local_only_context_is_partial_and_reads_no_store() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = std::fs::canonicalize(dir.path()).unwrap();
+    let store = root.join(".aida-store");
+    put(&root, &message("local-1", "t", "advisor", 1));
+    put_canonical(&store, &message("store-1", "t", "advisor", 2));
+    let ctx = MailboxContext::resolve_or_local(&root, Some(&store)).unwrap();
+    assert!(ctx.repository().is_none());
+    let s = logical_snapshot(
+        &ctx,
+        &advisor(),
+        &Query::Inbox,
+        &ReadLimits::explicit_read(),
+    );
+    assert_eq!(ids(&s), vec!["local-1"]);
+    assert_eq!(s.inventory_error, Some(SourceErrorCode::NotAGitCheckout));
+    assert!(!s.complete());
+    assert_eq!(s.caught_up(), None);
+
+    let r = repo();
+    assert!(MailboxContext::resolve_or_local(&r.main, None)
+        .unwrap()
+        .repository()
+        .is_some());
+    std::fs::create_dir_all(r.main.join("sub")).unwrap();
+    assert_eq!(
+        MailboxContext::resolve_or_local(&r.main.join("sub"), None).unwrap_err(),
+        SourceErrorCode::NotAGitCheckout,
+        "a directory inside a checkout is not a local-only project"
+    );
+}

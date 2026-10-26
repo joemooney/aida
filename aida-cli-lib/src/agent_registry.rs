@@ -474,7 +474,7 @@ pub(crate) fn agents_dir(project_root: &Path) -> PathBuf {
     project_root.join(".aida").join("agents")
 }
 
-fn registry_path(project_root: &Path, id: &str) -> PathBuf {
+pub(crate) fn registry_path(project_root: &Path, id: &str) -> PathBuf {
     agents_dir(project_root).join(format!("{id}.toml"))
 }
 

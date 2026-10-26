@@ -437,6 +437,8 @@ mod intent;
 mod internal_cmd;
 mod mailbox_cmd;
 mod mailbox_store;
+// trace:STORY-1843 | ai:claude
+mod mailbox_view;
 // trace:TASK-2347 | ai:codex
 mod mailbox_wake;
 // trace:STORY-1648 | ai:claude — read-only primary-checkout drift probe.

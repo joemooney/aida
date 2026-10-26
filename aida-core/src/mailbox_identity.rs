@@ -1,0 +1,537 @@
+//! Which inboxes a mail reader may see (STORY-1843 slice B2b).
+//!
+//! The mailbox identity policy used to live in the CLI, so core could not
+//! mint a non-empty [`crate::mailbox_logical::ResolvedAudience`] and any
+//! crate could hand the snapshot a list of strings as recipient authority.
+//! The policy now lives here, over inputs that only core produces:
+//!
+//! - [`IdentityEnv`]: this process's own environment, read by core.
+//! - [`PeopleCatalogView`]: the store's people catalog, read by core.
+//! - [`SessionBindingFacts`]: a persisted agent-registry row, read by core
+//!   and accepted only when this process's own evidence binds it (the row's
+//!   process is this process or an ancestor, or its native session id is in
+//!   this process's hook payload or client session environment).
+//!
+//! None of them can be built from caller-supplied strings outside tests, so
+//! the audience a snapshot filters to is always derived from the reader's
+//! own process and store, never from a raw `--agent` value.
+// trace:STORY-1843 | ai:claude
+
+use std::collections::HashMap;
+use std::io::Read;
+use std::path::Path;
+
+/// Environment keys the identity policy reads.
+const HANDLE_ENV: &str = "AIDA_HANDLE";
+const ALIAS_ENVS: [&str; 2] = [HANDLE_ENV, "AIDA_AGENT_NAME"];
+/// Upper bound on a registry row this module will parse.
+const REGISTRY_ROW_BYTES: u64 = 64 * 1024;
+
+fn nonempty_env(key: &str) -> Option<String> {
+    std::env::var(key).ok().filter(|s| !s.trim().is_empty())
+}
+
+/// Canonical role spelling: `dialog` is the advisor; `human`, `guest` and
+/// `requester` fold to lowercase; anything else is kept as written.
+pub fn canonical_role_name(raw: &str) -> String {
+    if raw.eq_ignore_ascii_case("dialog") {
+        "advisor".to_string()
+    } else if raw.eq_ignore_ascii_case("human")
+        || raw.eq_ignore_ascii_case("guest")
+        || raw.eq_ignore_ascii_case("requester")
+    {
+        raw.to_ascii_lowercase()
+    } else {
+        raw.to_string()
+    }
+}
+
+/// The effective role for a raw `AIDA_SESSION_ROLE`: blank is the implicit
+/// `implementer` default (`true`), anything else is canonicalized.
+pub fn effective_role(raw: Option<&str>) -> (String, bool) {
+    match raw.map(str::trim).filter(|s| !s.is_empty()) {
+        Some(r) => (canonical_role_name(r), false),
+        None => ("implementer".to_string(), true),
+    }
+}
+
+/// The short agent type a vendor spelling names.
+pub fn normalize_agent_type(raw: &str) -> String {
+    match raw.to_ascii_lowercase().replace(['_', '-'], "").as_str() {
+        "claude" | "claudecode" => "claude",
+        "codex" => "codex",
+        "antigravity" | "gemini" => "antigravity",
+        "shell" => "shell",
+        "web" => "web",
+        _ => "other",
+    }
+    .to_string()
+}
+
+/// The identity-relevant part of this process's environment.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct IdentityEnv {
+    /// `AIDA_USER`, else `USER`, else `USERNAME`, else `default`.
+    user: String,
+    /// Non-empty handle/launch-name values, in precedence order.
+    aliases: Vec<String>,
+    /// Raw non-empty `AIDA_SESSION_ROLE`.
+    role: Option<String>,
+    /// Raw non-empty `AIDA_AGENT_TYPE`.
+    vendor: Option<String>,
+    /// Session id from the hook payload this process was handed.
+    payload_session: Option<String>,
+    /// Client session variables, as `(vendor, value)`.
+    client_sessions: Vec<(&'static str, String)>,
+    /// `CLAUDE_PID`, when it parses.
+    claude_pid: Option<u32>,
+}
+
+impl IdentityEnv {
+    /// Read this process's own environment.
+    pub fn observed() -> Self {
+        let user = ["AIDA_USER", "USER", "USERNAME"]
+            .into_iter()
+            .find_map(|k| std::env::var(k).ok())
+            .unwrap_or_else(|| "default".to_string());
+        let client_sessions = [
+            ("claude", "CLAUDE_CODE_SESSION_ID"),
+            ("codex", "CODEX_THREAD_ID"),
+            ("codex", "CODEX_SESSION_ID"),
+        ]
+        .into_iter()
+        .filter_map(|(vendor, key)| nonempty_env(key).map(|v| (vendor, v)))
+        .collect();
+        Self {
+            user,
+            aliases: ALIAS_ENVS.into_iter().filter_map(nonempty_env).collect(),
+            role: nonempty_env("AIDA_SESSION_ROLE"),
+            vendor: nonempty_env("AIDA_AGENT_TYPE"),
+            payload_session: std::env::var("AIDA_HOOK_PAYLOAD")
+                .ok()
+                .and_then(|raw| session_id_from_payload(&raw)),
+            client_sessions,
+            claude_pid: std::env::var("CLAUDE_PID")
+                .ok()
+                .and_then(|p| p.trim().parse().ok()),
+        }
+    }
+
+    pub fn user(&self) -> &str {
+        &self.user
+    }
+
+    pub fn role(&self) -> Option<&str> {
+        self.role.as_deref()
+    }
+
+    /// Whether `sid` is this process's own native session id for a client
+    /// of `vendor`: from the hook payload, or that vendor's own session
+    /// variable (a child of another vendor may inherit the parent's).
+    fn owns_session(&self, vendor: &str, sid: &str) -> bool {
+        self.payload_session.as_deref() == Some(sid)
+            || self
+                .client_sessions
+                .iter()
+                .any(|(v, value)| *v == vendor && value == sid)
+    }
+
+    /// Test-only environment.
+    #[cfg(test)]
+    pub(crate) fn fixture(user: &str, aliases: &[&str], role: Option<&str>) -> Self {
+        Self {
+            user: user.to_string(),
+            aliases: aliases.iter().map(|s| s.to_string()).collect(),
+            role: role.map(str::to_string),
+            ..Self::default()
+        }
+    }
+}
+
+/// A client payload's session id: Claude/Codex `session_id`, Agy
+/// `conversationId`.
+fn session_id_from_payload(raw: &str) -> Option<String> {
+    let v: serde_json::Value = serde_json::from_str(raw).ok()?;
+    [
+        "session_id",
+        "sessionId",
+        "conversationId",
+        "conversation_id",
+    ]
+    .iter()
+    .find_map(|k| v.get(*k).and_then(|s| s.as_str()).map(str::to_string))
+    .filter(|s| !s.trim().is_empty())
+}
+
+/// The people catalog of one store: team members, roster keys, user
+/// handles and person aliases, keyed case-folded, valued by the stored
+/// spelling (first source wins). Human inboxes need no running process.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct PeopleCatalogView {
+    by_key: HashMap<String, String>,
+}
+
+impl PeopleCatalogView {
+    /// Read the catalog of the store at `store_root`. A missing store reads
+    /// as an empty catalog.
+    pub fn load(store_root: &Path) -> Self {
+        let mut by_key = HashMap::new();
+        let mut add = |s: &str| {
+            let t = s.trim();
+            if !t.is_empty() {
+                by_key
+                    .entry(t.to_lowercase())
+                    .or_insert_with(|| t.to_string());
+            }
+        };
+        for member in crate::team::build_team_members(store_root) {
+            add(&member.user_id);
+        }
+        for (user, _) in crate::team::TeamRoster::load(store_root).entries() {
+            add(&user);
+        }
+        if let Ok(store) = crate::GitBackend::read_metadata_only(store_root) {
+            for user in store.users {
+                add(&user.handle);
+            }
+        }
+        let aliases = crate::alias::AliasRegistry::load(store_root);
+        for (alias, canonical) in &aliases.aliases {
+            add(canonical);
+            add(alias);
+        }
+        Self { by_key }
+    }
+
+    /// Case-folded key → stored spelling.
+    pub fn spellings(&self) -> &HashMap<String, String> {
+        &self.by_key
+    }
+
+    pub fn contains(&self, name: &str) -> bool {
+        self.by_key.contains_key(&name.trim().to_lowercase())
+    }
+
+    #[cfg(test)]
+    pub(crate) fn fixture(people: &[&str]) -> Self {
+        Self {
+            by_key: people
+                .iter()
+                .map(|p| (p.to_lowercase(), p.to_string()))
+                .collect(),
+        }
+    }
+}
+
+/// Fields of a persisted agent-registry row this module needs. Unknown
+/// fields are ignored, so newer writers stay readable.
+#[derive(Debug, serde::Deserialize)]
+struct RegistryRow {
+    id: String,
+    agent_type: String,
+    pid: u32,
+    #[serde(default)]
+    pid_start: Option<String>,
+    #[serde(default)]
+    name: Option<String>,
+    #[serde(default)]
+    native_session_id: Option<String>,
+    #[serde(default)]
+    claude_session_id: Option<String>,
+    #[serde(default)]
+    ended_at: Option<toml::Value>,
+}
+
+/// Why a registry row was not accepted as this process's session binding.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BindingRefusal {
+    /// The row could not be read as a bounded regular file.
+    Unreadable,
+    /// The row does not parse, or its id does not match its file name.
+    Corrupt,
+    /// The session the row records has ended.
+    Ended,
+    /// The row carries no valid handle.
+    NoHandle,
+    /// Nothing in this process's own evidence binds it to the row.
+    NotThisProcess,
+}
+
+/// The persisted session binding of this process: its handle and vendor,
+/// taken from one registry row that this process's own evidence binds.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SessionBindingFacts {
+    handle: String,
+    vendor: String,
+}
+
+impl SessionBindingFacts {
+    /// Accept the registry row at `row` (a `<id>.toml` file the caller's
+    /// session lookup selected) only when it is live and bound to this
+    /// process: its process is this process or an ancestor (start identity
+    /// matching when recorded), or its native session id is this process's
+    /// own (hook payload or that vendor's session variable), or, for a
+    /// Claude row, `CLAUDE_PID` names it.
+    pub fn verify(row: &Path, env: &IdentityEnv) -> Result<Self, BindingRefusal> {
+        let body = read_bounded_regular(row).ok_or(BindingRefusal::Unreadable)?;
+        let parsed: RegistryRow = toml::from_str(&body).map_err(|_| BindingRefusal::Corrupt)?;
+        if row.file_stem().and_then(|s| s.to_str()) != Some(parsed.id.as_str()) {
+            return Err(BindingRefusal::Corrupt);
+        }
+        if parsed.ended_at.is_some() {
+            return Err(BindingRefusal::Ended);
+        }
+        let handle = parsed
+            .name
+            .clone()
+            .filter(|n| valid_handle(n))
+            .ok_or(BindingRefusal::NoHandle)?;
+        let vendor = normalize_agent_type(&parsed.agent_type);
+        let by_session = [&parsed.claude_session_id, &parsed.native_session_id]
+            .into_iter()
+            .flatten()
+            .any(|sid| !sid.trim().is_empty() && env.owns_session(&vendor, sid));
+        let by_claude_pid = vendor == "claude" && env.claude_pid == Some(parsed.pid);
+        if !(by_session || by_claude_pid || is_self_or_ancestor(&parsed)) {
+            return Err(BindingRefusal::NotThisProcess);
+        }
+        Ok(Self { handle, vendor })
+    }
+
+    pub fn handle(&self) -> &str {
+        &self.handle
+    }
+
+    #[cfg(test)]
+    pub(crate) fn fixture(handle: &str, vendor: &str) -> Self {
+        Self {
+            handle: handle.to_string(),
+            vendor: vendor.to_string(),
+        }
+    }
+}
+
+/// The handle spelling registry rows are allocated under.
+fn valid_handle(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= 63
+        && name
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+        && name.starts_with(|c: char| c.is_ascii_alphanumeric())
+}
+
+fn read_bounded_regular(path: &Path) -> Option<String> {
+    use std::os::unix::fs::OpenOptionsExt;
+    let file = std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
+        .open(path)
+        .ok()?;
+    let meta = file.metadata().ok()?;
+    if !meta.is_file() || meta.len() > REGISTRY_ROW_BYTES {
+        return None;
+    }
+    let mut body = String::new();
+    file.take(REGISTRY_ROW_BYTES)
+        .read_to_string(&mut body)
+        .ok()?;
+    Some(body)
+}
+
+/// Whether the row's process is this process or one of its ancestors. An
+/// exact recorded start identity must match, so a recycled pid never binds.
+fn is_self_or_ancestor(row: &RegistryRow) -> bool {
+    let Ok(chain) = crate::process_probe::ProbeSource::system().ancestry(std::process::id()) else {
+        return false;
+    };
+    chain.iter().any(|p| {
+        p.identity.pid == row.pid
+            && match row
+                .pid_start
+                .as_deref()
+                .and_then(|s| s.strip_prefix("linux-starttime:"))
+            {
+                Some(ticks) => p.identity.start.rsplit(':').next() == Some(ticks),
+                None => true,
+            }
+    })
+}
+
+/// What this process's session lookup found.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SessionBinding {
+    /// A registry row this process's own evidence binds.
+    Bound(SessionBindingFacts),
+    /// No session row names this process (a plain shell or CI runner).
+    Unbound,
+    /// A row was selected but could not be verified. Fails closed: no
+    /// private inbox is granted, not even the inherited user's.
+    Unverified(BindingRefusal),
+}
+
+/// Everything the identity policy decides from, gathered once. Fields are
+/// private: production builds it only through [`Self::observed`].
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct MailIdentityFacts {
+    own_handle: Option<String>,
+    own_vendor: Option<String>,
+    user: String,
+    /// The user is an intentional person in the people catalog. Only
+    /// consulted when a bound handle differs from the user.
+    user_is_known_person: bool,
+    aliases: Vec<String>,
+    role: Option<String>,
+    env_vendor: Option<String>,
+    /// A selected session row failed verification: no private inbox.
+    unverified: bool,
+}
+
+impl MailIdentityFacts {
+    /// Combine this process's session binding, the store's people catalog
+    /// (consulted only when a bound handle differs from the user) and its
+    /// environment.
+    pub fn observed(
+        binding: SessionBinding,
+        catalog: &PeopleCatalogView,
+        env: IdentityEnv,
+    ) -> Self {
+        let (own_handle, own_vendor, unverified) = match binding {
+            SessionBinding::Bound(b) => (Some(b.handle), Some(b.vendor), false),
+            SessionBinding::Unbound => (None, None, false),
+            SessionBinding::Unverified(_) => (None, None, true),
+        };
+        let user_is_known_person = (unverified
+            || own_handle
+                .as_deref()
+                .is_some_and(|h| !h.eq_ignore_ascii_case(&env.user)))
+            && catalog.contains(&env.user);
+        Self {
+            own_handle,
+            own_vendor,
+            user: env.user,
+            user_is_known_person,
+            aliases: if unverified { Vec::new() } else { env.aliases },
+            role: env.role,
+            env_vendor: env.vendor,
+            unverified,
+        }
+    }
+
+    /// Whether a session row was found that could not be verified.
+    pub fn binding_unverified(&self) -> bool {
+        self.unverified
+    }
+
+    /// The bound session's handle, when there is one.
+    pub fn own_handle(&self) -> Option<&str> {
+        self.own_handle.as_deref()
+    }
+
+    pub fn user(&self) -> &str {
+        &self.user
+    }
+
+    /// The raw session role.
+    pub fn role(&self) -> Option<&str> {
+        self.role.as_deref()
+    }
+
+    /// Test-only facts.
+    #[cfg(test)]
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn fixture(
+        own_handle: Option<&str>,
+        own_vendor: Option<&str>,
+        user: &str,
+        user_is_known_person: bool,
+        aliases: &[&str],
+        role: Option<&str>,
+        env_vendor: Option<&str>,
+    ) -> Self {
+        Self {
+            own_handle: own_handle.map(str::to_string),
+            own_vendor: own_vendor.map(str::to_string),
+            user: user.to_string(),
+            user_is_known_person,
+            aliases: aliases.iter().map(|s| s.to_string()).collect(),
+            role: role.map(str::to_string),
+            env_vendor: env_vendor.map(str::to_string),
+            unverified: false,
+        }
+    }
+}
+
+/// How the policy classes one inbox identity.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IdentityClass {
+    /// This session's own handle, launch names, or an unbound user.
+    Private,
+    /// An intentional person from the people catalog.
+    Human,
+    /// A role or agent-type audience several sessions share.
+    Shared,
+}
+
+/// The inbox identities a session reads, in order, each classed. Deduped.
+///
+/// The persisted handle wins for private mail: once a session has its own
+/// handle, an inherited `AIDA_USER` adds no private inbox (only an
+/// intentional catalog person stays, as a human inbox), and a launch-name
+/// alias other than the handle is ignored. The role (`dialog` → `advisor`)
+/// and the agent type (the binding's vendor before an inherited
+/// `AIDA_AGENT_TYPE`) are shared audiences. This changes only mail
+/// visibility, never the principal used for grants or queue ownership.
+pub fn classified_identities(facts: &MailIdentityFacts) -> Vec<(String, IdentityClass)> {
+    let own_handle = facts.own_handle.as_deref();
+    let user = &facts.user;
+    let mut ids: Vec<(String, IdentityClass)> = Vec::new();
+    let mut push = |ids: &mut Vec<(String, IdentityClass)>, id: String, class| {
+        if !ids.iter().any(|(i, _)| i.eq_ignore_ascii_case(&id)) {
+            ids.push((id, class));
+        }
+    };
+    if facts.unverified {
+        if facts.user_is_known_person {
+            push(&mut ids, user.clone(), IdentityClass::Human);
+        }
+    } else if own_handle.is_none_or(|own| own.eq_ignore_ascii_case(user)) {
+        push(&mut ids, user.clone(), IdentityClass::Private);
+    } else if facts.user_is_known_person {
+        push(&mut ids, user.clone(), IdentityClass::Human);
+    }
+    for alias in &facts.aliases {
+        if own_handle.is_some_and(|own| own != alias) {
+            continue;
+        }
+        push(&mut ids, alias.clone(), IdentityClass::Private);
+    }
+    if let Some(raw) = &facts.role {
+        let (role, _default) = effective_role(Some(raw));
+        push(&mut ids, role, IdentityClass::Shared);
+    }
+    if let Some(raw) = facts
+        .own_vendor
+        .clone()
+        .or_else(|| facts.env_vendor.clone())
+        .filter(|s| !s.trim().is_empty())
+    {
+        push(&mut ids, normalize_agent_type(&raw), IdentityClass::Shared);
+    }
+    if let Some(handle) = own_handle {
+        push(&mut ids, handle.to_string(), IdentityClass::Private);
+    }
+    ids
+}
+
+/// [`classified_identities`] without the classes.
+pub fn inbox_identities(facts: &MailIdentityFacts) -> Vec<String> {
+    classified_identities(facts)
+        .into_iter()
+        .map(|(id, _)| id)
+        .collect()
+}
+
+#[cfg(test)]
+#[path = "mailbox_identity_tests.rs"]
+mod tests;

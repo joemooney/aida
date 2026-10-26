@@ -950,6 +950,10 @@ pub(crate) struct MailChannel {
     /// the label that keeps this surface distinct from the operator's own.
     // trace:BUG-767 | ai:claude
     pub shared_scope: Option<String>,
+    /// The mail view could not read every source: the counts may be low,
+    /// so the report must not read as caught up.
+    // trace:STORY-1843 | ai:claude
+    pub partial: bool,
 }
 
 /// BUG-767: split unread mail into the operator's OWN inbox and the SHARED
@@ -993,6 +997,7 @@ pub(crate) fn split_mail_scopes(
         } else {
             None
         },
+        partial: false,
     }
 }
 
@@ -1638,6 +1643,8 @@ impl AwaitingReport {
                 "mail_shared_unread",
                 usize::from(self.mail.shared_unread > 0),
             ),
+            // trace:STORY-1843 | ai:claude — a partial view is never caught up.
+            ("mail_partial", usize::from(self.mail.partial)),
             (
                 "directives_pending",
                 usize::from(self.worker_directives.pending > 0),
@@ -1716,6 +1723,7 @@ impl AwaitingReport {
         // `mail_unread` stays the operator's own, deterministic count.
         // trace:BUG-767 | ai:claude
         let _ = writeln!(out, "mail_shared_unread: {}", self.mail.shared_unread);
+        let _ = writeln!(out, "mail_partial: {}", self.mail.partial);
         let _ = writeln!(
             out,
             "mail_shared_scope: {}",
@@ -2360,6 +2368,20 @@ impl AwaitingReport {
                 budget -= 1;
             }
         }
+        // trace:STORY-1843 | ai:claude
+        if self.mail.partial {
+            if budget == 0 {
+                overflow += 1;
+            } else {
+                writeln!(
+                    w,
+                    "  {} mail view partial: some mail may be missing — `{}`",
+                    crate::glyph(crate::glyphs::Glyph::Warning),
+                    "aida mailbox inbox".cyan(),
+                )?;
+                budget -= 1;
+            }
+        }
         // trace:TASK-1146 | ai:claude
         if self.worker_directives.pending > 0 {
             if budget == 0 {
@@ -2661,6 +2683,7 @@ impl AwaitingReport {
                 // reported alongside (never inside) the operator's own count.
                 "shared_unread": self.mail.shared_unread,
                 "shared_scope": self.mail.shared_scope,
+                "partial": self.mail.partial,
             },
             "worker_directives": {
                 "pending": self.worker_directives.pending,
@@ -2861,6 +2884,10 @@ impl AwaitingReport {
         // trace:BUG-767 | ai:claude
         if self.mail.shared_unread > 0 {
             parts.push(format!("{} shared mail", self.mail.shared_unread));
+        }
+        // trace:STORY-1843 | ai:claude
+        if self.mail.partial {
+            parts.push("mail view partial".to_string());
         }
         // trace:TASK-1146 | ai:claude
         if self.worker_directives.pending > 0 {
@@ -4160,6 +4187,7 @@ mod tests {
                 urgent: 0,
                 shared_unread: 18,
                 shared_scope: Some("advisor".to_string()),
+                partial: false,
             },
             ..Default::default()
         };
@@ -5139,6 +5167,7 @@ mod tests {
             ("findings", |r| r.findings_total = 2),
             ("mail_unread", |r| r.mail.unread = 1),
             ("mail_shared_unread", |r| r.mail.shared_unread = 1),
+            ("mail_partial", |r| r.mail.partial = true),
             ("directives_pending", |r| r.worker_directives.pending = 1),
             ("cron_due", |r| r.cron.due = 1),
             ("unshipped_work", |r| {
