@@ -1,0 +1,36 @@
+id: 01a17859-8b14-76a3-8654-ab3f550faa18
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-009
+title: 'Review PR-2949: [AI:claude] feat(mailbox): C1 lifecycle anchor, admitted-writer permits, retention barrier (Refs STORY-1843, TASK-b6b1278890774ef993d2ebc327862470-002)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1783f`) for branch `story-1843-c1`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2949>
+  - Branch: `story-1843-c1` → `main`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - STORY-1843
+  - TASK-B6B1278890774EF993D2EBC327862470-002
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2949` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-26T13:14:56.660272002Z
+modified_at: 2026-10-26T13:14:56.660272002Z
+req_type: Story
+filed_at:
+  code_sha: c5b55cbfec7bb6296056f0acada6eaf7813b7eb2
+  branch: story-1843-c1
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e4c2dd0575
+  vendor: claude
+  session: a7f313b1-1b0d-4fbb-9da4-ff9bb2125343
