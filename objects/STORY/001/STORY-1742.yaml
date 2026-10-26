@@ -38,7 +38,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T22:02:03.191649035Z
-modified_at: 2026-10-25T19:52:18.390265195Z
+modified_at: 2026-10-26T00:17:18.424527954Z
 req_type: Story
 tags:
 - docs:impacted
@@ -426,6 +426,12 @@ comments:
     S3b foundation target run subsequently passed120 affected-core tests, including whole-batch unsafe-final-artifact refusal before any counter/object/metadata effect. B remains isolated and unwired (full native/server/adapter boundaries still required); no B PR or completion claim. Existing work_binding/allocation_authority/git_backend test modules verified byte-for-byte unchanged against starting HEAD. S3b PR must retain joint Refs and strict independent lock-order/allocation review per handoff.
   created_at: 2026-10-25T19:34:05.791811397Z
   modified_at: 2026-10-25T19:34:05.791811397Z
+- id: 01a17591-9858-7442-9c60-5be402ba8c96
+  author: joe
+  content: 'S3a round-1 rework (claude implementer, took over from codex1): PR-2929 head c556c56250 addresses all seven independent-review findings (closed real-store path grammar, delta-only scan with index-pack --strict integrity and separate limits plus synthetic scale fixture, legacy 0644 profile/lock tolerance + working disable, dedicated push runner with no prompts/tty and signal forwarding, HTML entity refusal, integration negatives; config-trust guard green unweakened). Local targeted+fast+compile gates passed. Refs-only, aida:no-complete; needs independent re-review. S3b WIP untouched.'
+  created_at: 2026-10-26T00:17:18.424527954Z
+  modified_at: 2026-10-26T00:17:18.424527954Z
+  session_id: 1d041043-fc20-4cb4-8e5c-66abc1ab32a9
 history:
 - id: 01a16ee2-ad7a-7b30-aaeb-ec8f892fbe76
   author: joe
