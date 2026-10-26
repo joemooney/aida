@@ -341,20 +341,23 @@ fn inbox_identities_same_session_and_role_alias() {
     assert_eq!(ids, vec!["CLAUDE-ADVISOR-01", "advisor", "claude"]);
 }
 
-/// The production collector reads the env adapters it owns. Only the
-/// env-derived fields are asserted: the session binding is whoever runs
-/// the suite.
+/// The production collector reads the env adapters it owns, and with the
+/// suite runner's own session hidden it projects no binding: no handle, no
+/// registered vendor, and no known-person lookup.
 // trace:TASK-2345 | ai:claude
 #[test]
 fn mail_identity_facts_collect_reads_env_adapters() {
-    let _g = crate::test_env::EnvVarsGuard::set(&[
-        ("AIDA_USER", "collector-user"),
-        (crate::agent_handle::HANDLE_ENV, "child-handle"),
-        ("AIDA_AGENT_NAME", "launch-name"),
-        ("AIDA_SESSION_ROLE", "reviewer"),
-        ("AIDA_AGENT_TYPE", "codex"),
+    let _g = crate::test_env::AgentSessionIsolation::apply(&[
+        ("AIDA_USER", Some("collector-user")),
+        (crate::agent_handle::HANDLE_ENV, Some("child-handle")),
+        ("AIDA_AGENT_NAME", Some("launch-name")),
+        ("AIDA_SESSION_ROLE", Some("reviewer")),
+        ("AIDA_AGENT_TYPE", Some("codex")),
     ]);
     let facts = MailIdentityFacts::collect();
+    assert_eq!(facts.own_handle, None);
+    assert_eq!(facts.own_vendor, None);
+    assert!(!facts.user_is_known_person);
     assert_eq!(facts.user, "collector-user");
     assert_eq!(facts.aliases, vec!["child-handle", "launch-name"]);
     assert_eq!(facts.role.as_deref(), Some("reviewer"));
@@ -1318,7 +1321,6 @@ fn promote_surfaces_queue_add_failure() {
 // merged-newest — exactly what the inbox-read does — drives the count to 0.
 // trace:BUG-625 | ai:claude
 
-/// Build an urgent broadcast `Message` with the given id, sender, timestamp.
 /// The unbound `operator` reader's identities, from facts rather than the
 /// live session binding.
 // trace:TASK-2345 | ai:claude
@@ -1326,6 +1328,7 @@ fn operator_identities() -> Vec<String> {
     inbox_identities_from_facts(&unbound_facts("operator"))
 }
 
+/// Build an urgent broadcast `Message` with the given id, sender, timestamp.
 fn urgent_broadcast(id: &str, from: &str, ts: i64) -> aida_core::mailbox::Message {
     aida_core::mailbox::Message {
         subject: None,

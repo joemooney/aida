@@ -844,7 +844,13 @@ pub(crate) fn collect_awaiting_report_with_mail_facts(
         // One resolved fact set feeds both the headline and the shared
         // scopes. trace:TASK-2345 | ai:claude
         let facts = mail_facts();
-        let own_handle = facts.own_handle.clone();
+        // The headline only trusts a well-spelled handle; a misspelled
+        // binding falls back to the user headline, as before the seam.
+        // trace:TASK-2345 | ai:claude
+        let own_handle = facts
+            .own_handle
+            .clone()
+            .filter(|h| crate::agent_handle::handle_spelling_rejection(h).is_none());
         let operator = own_handle.clone().unwrap_or_else(|| facts.user.clone());
         let mut shared: Vec<String> = if own_handle.is_some() {
             inbox_identities_from_facts(&facts)
