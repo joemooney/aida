@@ -28,7 +28,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T06:38:42.269077518Z
-modified_at: 2026-10-26T06:08:25.450299586Z
+modified_at: 2026-10-26T06:08:29.241262408Z
 req_type: Bug
 comments:
 - id: 01a17250-10a0-76e1-b802-890d5a4ca31b
@@ -231,6 +231,25 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Slices 1-3 are implemented with strong hermetic tests and CI is green at 5f777c65, but the PR declares itself incomplete (AC4 unmet) while carrying completing (BUG-2221) trailers, and its beyond-sketch design (oracle seed, deadline semantics, config-digest exclusions) has no advisor ruling yet.. Triage reason: positive-path slice: diagnose and sketch first, then advisor signoff'
   created_at: 2026-10-26T06:08:25.450295584Z
   modified_at: 2026-10-26T06:08:25.450295584Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
+- id: 01a176d3-1b53-72f1-a9bb-26295d34ba4d
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2221):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 5f777c654a9d
+    Recorded: 2026-10-25T23:05:12.921435823+00:00
+    Findings:
+    1. [blocker] Merging would falsely complete the spec. All 4 commit subjects and the PR title end in '(BUG-2221)', and the trailing IDs drive merge-time completion. The PR body says 'This PR does not complete BUG-2221', and AC4 is unmet: no fresh lineage-scoped guard telemetry, the positive path is still over budget, BUG-2221 warm runs measured 755-1050ms, and a ~3s branch/worktree linkage stage at load is undiagnosed. Retitle the PR and reword the commit subjects to '(Refs BUG-2221)', as 54c64e26a5 did for BUG-2017.
+    2. [blocker] Unruled architecture change. Items (a)-(e) in 'Beyond the sketch' go past SKETCH v1 and the advisor's binding amendments, and no ruling has been recorded on the spec since comment 7. The items: (a) seeding every root as CLOSED from the original oracle's zero-reference answer (show_negative.rs:382-428, trace.rs publish_oracle_negative call); (b) the ^fence discovery walk plus closure-by-inclusion (show_negative.rs:1138-1213); (c) warm read on the outer deadline, and RunOriginal instead of Incomplete when there is no progress; (d) dropping branch.*/remote.* from the S config digest (show_negative.rs:516-525), where amendment 1 requires an 'effective Git configuration digest'; (e) concurrent S/R capture. Also needing a ruling: a pure warm read (batches_ran==0, show_negative.rs:289-291) returns ProvedEmpty without the after S/R re-check that amendment 1 lists as required. Get an advisor ruling on the spec before approval.
+    3. [major] Positive and cold keys pay extra serial cost for no benefit. Positive state is never cached, so every show of a spec with commits runs capture_snapshot (config --list, rev-parse, for-each-ref over all refs, worktree list, log --all --no-walk) before the unchanged original --all log (show_negative.rs:229, trace.rs probe call before args). The BUG-1993 one-deadline fixture had to widen its deadline from 1.2s to 1.5s to absorb exactly this added serial span (bug_1993_show_deadline_tests.rs:218). The PR's own measurements show positive BUG-2222 at 1456-2166ms vs 1554-1820ms before. Positive shows are the common shape and are also failing the guard. Overlap the snapshot with the original query, or otherwise remove this serial overhead, and measure it.
+    4. [minor] Cache eviction and directory handling don't fully meet amendment 2 ('cannot traverse/unlink unowned paths'). enforce_aggregate_bounds_with (show_negative.rs:957-999) unlinks state-named regular files without an owner (uid) check. publish_state (show_negative.rs:894-898) creates and enters <common>/aida-cache/show-negative-v1 with create_dir_all, which follows a symlinked aida-cache or show-negative-v1 directory. So a symlinked namespace dir redirects both writes and evictions outside the git dir. Check that the namespace dirs are real, owned directories (no-follow), and check uid before unlinking.
+    5. [minor] Eviction order is least-recently-written, not least-recently-used. Warm reads never touch a state file's mtime, so under the 256-file cap (keys are per worktree gitdir x per query across a fleet) the hottest read-only negative keys are evicted first, and they then pay the cold oracle+seed cost again (show_negative.rs:985-999). Touch the file's mtime on a successful warm read, or evict by access time.
+    6. [minor] The trace walk doesn't match its docs for file symlinks. Only directory symlinks get the external-target fence (trace.rs:336-346). A file symlink whose target is outside the project root is still read silently and complete stays true. But docs/cli/02-specs.md:182 says 'a link that points outside the project ... marks the file list incomplete', and the sketch says the walk must not widen the scan. Apply the same canonical-target check to file symlinks, or correct the docs.
+    7. [cosmetic] The streaming walk calls std::fs::canonicalize (a full realpath) for every non-symlink directory (trace.rs:337) just to feed the cycle fence. That adds per-component lstat syscalls on the hot enumeration path the PR is trying to speed up. Compare (dev, inode) of the opened directory instead, and canonicalize only symlink targets.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-10-26T06:08:29.011387101Z
+  modified_at: 2026-10-26T06:08:29.011387101Z
   session_id: 761a4fea-f388-41d1-93d9-f1386951253c
 history:
 - id: 01a173f1-1a2e-7c12-a2a1-e6bdafd814de
