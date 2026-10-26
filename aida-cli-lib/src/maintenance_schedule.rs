@@ -2865,7 +2865,7 @@ pub(crate) fn collect_snapshot(
     }
     // trace:STORY-1700 | ai:claude
     if fields.contains(&Field::MandateDriveActive) {
-        snap.mandate_drive_active = crate::mandate_drive::drive_record_active(now);
+        snap.mandate_drive_active = crate::gate::mandate_drive::drive_record_active(now);
     }
     if fields.contains(&Field::QueueDepth) {
         snap.queue_depth = crate::read_queue_depth(project_root, None).unwrap_or(0) as i64;

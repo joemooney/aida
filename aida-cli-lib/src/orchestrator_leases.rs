@@ -872,26 +872,32 @@ pub(crate) const EXIT_CODES: &[(i32, &str)] = &[
     (drain_next_n::DRAIN_CAP_EXIT_CODE, "drain cap reached"),
     (pr_rebase::REBASE_EXIT_CODE_CONFLICT, "pr rebase conflict"),
     (pr_rebase::REBASE_EXIT_CODE_REFUSED, "pr rebase refused"),
-    (pr_ship::ShipRefusal::CiRed as i32, "pr ship: CI red"),
     (
-        pr_ship::ShipRefusal::CiTimeout as i32,
+        crate::gate::ship::ShipRefusal::CiRed as i32,
+        "pr ship: CI red",
+    ),
+    (
+        crate::gate::ship::ShipRefusal::CiTimeout as i32,
         "pr ship: CI timeout",
     ),
     (
-        pr_ship::ShipRefusal::NotMergeable as i32,
+        crate::gate::ship::ShipRefusal::NotMergeable as i32,
         "pr ship: not mergeable",
     ),
-    (pr_ship::ShipRefusal::Review as i32, "pr ship: review"),
     (
-        pr_ship::ShipRefusal::StaleDefinition as i32,
+        crate::gate::ship::ShipRefusal::Review as i32,
+        "pr ship: review",
+    ),
+    (
+        crate::gate::ship::ShipRefusal::StaleDefinition as i32,
         "pr ship: stale definition",
     ),
     (
-        pr_ship::ShipRefusal::MergeHold as i32,
+        crate::gate::ship::ShipRefusal::MergeHold as i32,
         "pr ship: merge hold",
     ),
     (
-        pr_ship::ShipRefusal::BehindBase as i32,
+        crate::gate::ship::ShipRefusal::BehindBase as i32,
         "pr ship: head behind its base",
     ),
     (
@@ -931,7 +937,7 @@ pub(crate) const EXIT_CODES: &[(i32, &str)] = &[
 // trace:BUG-1295 | ai:claude
 pub(crate) fn exit_code_for_error(err: &anyhow::Error) -> i32 {
     // trace:TASK-1606 | ai:codex
-    if let Some(failure) = err.downcast_ref::<pr_ship::ShipFailure>() {
+    if let Some(failure) = err.downcast_ref::<crate::gate::ship::ShipFailure>() {
         return named_exit_code(failure.reason as i32);
     }
     // trace:BUG-2149 | ai:claude
@@ -1620,7 +1626,7 @@ impl RealPhaseDriver {
         // TASK-1460: a skill heredoc write bypassed the record path; archive
         // it, then let a fresh archived verdict AT the head answer when the
         // current file does not. trace:TASK-1460 | ai:claude
-        let _ = review_verdict::adopt_direct_write(&verdict_path);
+        let _ = crate::gate::review_verdict::adopt_direct_write(&verdict_path);
         let outcome = match read_verdict_file_for_head(&verdict_path, gate_head_sha.as_deref())
             .or_else(|e| {
                 phase3_head_archive_fallback(
@@ -2103,7 +2109,7 @@ mod forge_seam_tests {
             "an inconclusive outcome must never close the PR: {:?}",
             forge.closed()
         );
-        let record = crate::merge_hold::read_hold_record(tmp.path(), 42)
+        let record = crate::gate::merge_hold_core::read_hold_record(tmp.path(), 42)
             .expect("the PR must be left unmergeable by a typed merge-hold marker");
         assert!(
             record.detail.contains("could not complete"),
@@ -2260,7 +2266,7 @@ mod forge_seam_tests {
             "a foreign PR must not be closed: {:?}",
             forge.closed()
         );
-        let record = crate::merge_hold::read_hold_record(tmp.path(), 47)
+        let record = crate::gate::merge_hold_core::read_hold_record(tmp.path(), 47)
             .expect("the unclosable refused PR must carry a typed merge-hold marker");
         assert!(
             record.detail.contains("refused"),
@@ -2301,7 +2307,7 @@ mod forge_seam_tests {
             "unknown ownership must fail closed"
         );
         assert!(
-            crate::merge_hold::read_hold_record(tmp.path(), 48).is_some(),
+            crate::gate::merge_hold_core::read_hold_record(tmp.path(), 48).is_some(),
             "an author-unknown refused PR must be held unmergeable"
         );
     }
@@ -2326,7 +2332,7 @@ mod forge_seam_tests {
             forge.closed()
         );
         assert!(
-            crate::merge_hold::read_hold_record(tmp.path(), 49).is_some(),
+            crate::gate::merge_hold_core::read_hold_record(tmp.path(), 49).is_some(),
             "an unverifiable refused PR must be held unmergeable"
         );
     }
@@ -2351,7 +2357,7 @@ mod forge_seam_tests {
             forge.closed()
         );
         assert!(
-            crate::merge_hold::read_hold_record(tmp.path(), 50).is_none(),
+            crate::gate::merge_hold_core::read_hold_record(tmp.path(), 50).is_none(),
             "a no-longer-open change must not be held"
         );
         assert!(
@@ -2380,7 +2386,7 @@ mod forge_seam_tests {
             "the close must have been attempted"
         );
         assert!(
-            crate::merge_hold::read_hold_record(tmp.path(), 51).is_some(),
+            crate::gate::merge_hold_core::read_hold_record(tmp.path(), 51).is_some(),
             "a refused PR whose close failed must be held unmergeable"
         );
     }

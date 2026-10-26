@@ -1,4 +1,6 @@
-use crate::review_verdict::{build_verdict_object, parse_recorded_verdict, write_verdict_object};
+use crate::gate::review_verdict::{
+    build_verdict_object, parse_recorded_verdict, write_verdict_object,
+};
 use std::path::Path;
 
 #[test]

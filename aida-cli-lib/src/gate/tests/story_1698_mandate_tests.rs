@@ -3,8 +3,12 @@
 // trace:STORY-1698 | ai:claude
 
 use super::*;
-use crate::pr_ship::{AuthorSession, ShipApprovalPolicy};
-use crate::review_verdict::{RecordedVerdict, RecorderAttestation, VerdictKind};
+use crate::gate::review_verdict::{RecordedVerdict, RecorderAttestation, VerdictKind};
+use crate::gate::ship::{AuthorSession, ShipApprovalPolicy};
+use crate::mandate::{
+    emit_changed, statusline_segment, store_history_alias_ids, store_history_alias_map,
+    store_history_versions, store_history_versions_optional, StoreHistoryBatch,
+};
 
 const HEAD: &str = "1aca4e3e9251aaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const OLD: &str = "08834c6045a9bbbbbbbbbbbbbbbbbbbbbbbbbbbb";
@@ -135,7 +139,7 @@ impl Case {
             now: now(),
             ledger: Ok(Default::default()),
             hold: HoldFacts::Marker {
-                kind: crate::merge_hold::HoldReasonKind::Supervision,
+                kind: crate::gate::merge_hold_core::HoldReasonKind::Supervision,
                 legacy: false,
             },
             carry_over: None,
@@ -157,7 +161,7 @@ impl Case {
             hold: &self.hold,
             carry_over: self.carry_over.clone(),
             changed_paths: Some(&[]),
-            protected: crate::mandate_gates::ProtectedPaths::floor_ref(),
+            protected: crate::gate::mandate_gates::ProtectedPaths::floor_ref(),
             ship_gate: None,
             hold_clear_gate: None,
         })
@@ -202,7 +206,7 @@ fn an_agent_without_a_tty_cannot_start_or_stop_a_mandate() {
 fn require_direct_human_refuses_a_managed_agent_session() {
     let tmp = tempfile::tempdir().unwrap();
     let _env = crate::test_env::EnvVarsGuard::set(&[("AIDA_AGENT_NAME", "drain-worker")]);
-    let gate = || crate::seat_authority::require_direct_human();
+    let gate = || crate::gate::seat_authority::require_direct_human();
     assert!(start(tmp.path(), &gate, "joe", DEFAULT_TTL, None, false, now()).is_err());
     assert!(load_valid(tmp.path(), "joe", now()).0.is_empty());
 }
@@ -286,15 +290,15 @@ fn advisor_ships_a_held_pr_with_attested_independent_approval() {
 /// a supervision hold then releases (the approval gate runs separately).
 #[test]
 fn an_active_cover_satisfies_the_hold_release_gates() {
-    let hold = crate::merge_hold::typed_hold(
+    let hold = crate::gate::merge_hold_core::typed_hold(
         7,
-        crate::merge_hold::HoldReasonKind::Supervision,
+        crate::gate::merge_hold_core::HoldReasonKind::Supervision,
         "operator review",
         None,
     );
-    assert!(crate::pr_ship::ship_hold_gate(Some(&hold), false, 7, |_| unreachable!()).is_some());
-    assert!(crate::pr_ship::ship_hold_gate(Some(&hold), true, 7, |_| unreachable!()).is_none());
-    assert!(crate::pr_ship::ship_hold_release_refusal_for(true, false, true, 7).is_none());
+    assert!(crate::gate::ship::ship_hold_gate(Some(&hold), false, 7, |_| unreachable!()).is_some());
+    assert!(crate::gate::ship::ship_hold_gate(Some(&hold), true, 7, |_| unreachable!()).is_none());
+    assert!(crate::gate::ship::ship_hold_release_refusal_for(true, false, true, 7).is_none());
 }
 
 // ── Acceptance: refused cases ──────────────────────────────────────────────
@@ -447,15 +451,16 @@ fn stop_takes_effect_immediately() {
 #[test]
 fn a_mandate_release_is_recorded_in_the_hold_ledger_and_events() {
     let tmp = tempfile::tempdir().unwrap();
-    let hold = crate::merge_hold::typed_hold(
+    let hold = crate::gate::merge_hold_core::typed_hold(
         42,
-        crate::merge_hold::HoldReasonKind::Supervision,
+        crate::gate::merge_hold_core::HoldReasonKind::Supervision,
         "operator review",
         None,
     );
-    crate::merge_hold::record_mandate_clearance(tmp.path(), &hold, "joe", "M-1", None).unwrap();
+    crate::gate::merge_hold_core::record_mandate_clearance(tmp.path(), &hold, "joe", "M-1", None)
+        .unwrap();
     let clearance: serde_json::Value = serde_json::from_slice(
-        &std::fs::read(crate::merge_hold::clearance_path(tmp.path(), 42)).unwrap(),
+        &std::fs::read(crate::gate::merge_hold_core::clearance_path(tmp.path(), 42)).unwrap(),
     )
     .unwrap();
     assert_eq!(clearance["cleared_by"], "advisor:joe");
@@ -524,19 +529,21 @@ fn override_stale_approval_is_refused_under_a_mandate() {
 fn a_label_only_hold_stays_human_only_under_a_mandate() {
     // Authority granted (as a mandate cover grants it), but a label-only
     // hold leaves no record to clear against: refused.
-    assert!(crate::pr_ship::ship_hold_release_refusal_for(false, true, true, 9).is_some());
+    assert!(crate::gate::ship::ship_hold_release_refusal_for(false, true, true, 9).is_some());
 }
 
 #[test]
 fn a_recusal_hold_is_refused_under_a_mandate() {
-    let mut hold = crate::merge_hold::typed_hold(
+    let mut hold = crate::gate::merge_hold_core::typed_hold(
         9,
-        crate::merge_hold::HoldReasonKind::Recusal,
+        crate::gate::merge_hold_core::HoldReasonKind::Recusal,
         "advisor recused",
         Some(HEAD.into()),
     );
-    hold.recused_principals = vec![crate::merge_hold::PrincipalIdentity::human("joe")];
-    assert!(crate::pr_ship::ship_hold_gate(Some(&hold), true, 9, |_| unreachable!()).is_some());
+    hold.recused_principals = vec![crate::gate::merge_hold_core::PrincipalIdentity::human(
+        "joe",
+    )];
+    assert!(crate::gate::ship::ship_hold_gate(Some(&hold), true, 9, |_| unreachable!()).is_some());
 }
 
 // ── Statusline ─────────────────────────────────────────────────────────────
@@ -556,7 +563,7 @@ fn statusline_shows_an_active_mandate_only() {
 
 #[test]
 fn pr_ship_consults_the_mandate_at_every_hold_gate_and_before_the_merge() {
-    let src = include_str!("../pr_cmd.rs");
+    let src = include_str!("../../pr_cmd.rs");
     let handler = src
         .split("pub(crate) fn pr_ship_handler(")
         .nth(1)
@@ -573,7 +580,7 @@ fn pr_ship_consults_the_mandate_at_every_hold_gate_and_before_the_merge() {
         .nth(1)
         .expect("release_hold_under_mandate");
     assert!(shared.contains("record_mandate_clearance("));
-    let train = include_str!("../pr_train.rs");
+    let train = include_str!("../../pr_train.rs");
     assert!(
         train.contains("release_hold_under_mandate("),
         "the train releases through the shared sequence, not a copy"
@@ -979,10 +986,13 @@ fn a_missing_or_untyped_marker_is_refused() {
     let mut c = Case::ok();
     c.hold = HoldFacts::None;
     assert_eq!(c.decide(), Err(MandateRefusal::NoHoldMarker));
-    c.hold = HoldFacts::of(None, Some(crate::merge_hold::MARKER_MISSING_REASON));
+    c.hold = HoldFacts::of(
+        None,
+        Some(crate::gate::merge_hold_core::MARKER_MISSING_REASON),
+    );
     assert_eq!(c.decide(), Err(MandateRefusal::MarkerMissing));
     c.hold = HoldFacts::Marker {
-        kind: crate::merge_hold::HoldReasonKind::Supervision,
+        kind: crate::gate::merge_hold_core::HoldReasonKind::Supervision,
         legacy: true,
     };
     assert!(matches!(
@@ -990,8 +1000,8 @@ fn a_missing_or_untyped_marker_is_refused() {
         Err(MandateRefusal::HoldNotReleasable { .. })
     ));
     for kind in [
-        crate::merge_hold::HoldReasonKind::Recusal,
-        crate::merge_hold::HoldReasonKind::Unknown,
+        crate::gate::merge_hold_core::HoldReasonKind::Recusal,
+        crate::gate::merge_hold_core::HoldReasonKind::Unknown,
     ] {
         c.hold = HoldFacts::Marker {
             kind,
@@ -1003,8 +1013,8 @@ fn a_missing_or_untyped_marker_is_refused() {
         ));
     }
     for kind in [
-        crate::merge_hold::HoldReasonKind::Decision,
-        crate::merge_hold::HoldReasonKind::Rework,
+        crate::gate::merge_hold_core::HoldReasonKind::Decision,
+        crate::gate::merge_hold_core::HoldReasonKind::Rework,
     ] {
         c.hold = HoldFacts::Marker {
             kind,
@@ -1017,33 +1027,35 @@ fn a_missing_or_untyped_marker_is_refused() {
 #[test]
 fn a_mandate_released_hold_is_re_armed_after_a_merge_failure() {
     let tmp = tempfile::tempdir().unwrap();
-    let hold = crate::merge_hold::typed_hold(
+    let hold = crate::gate::merge_hold_core::typed_hold(
         44,
-        crate::merge_hold::HoldReasonKind::Supervision,
+        crate::gate::merge_hold_core::HoldReasonKind::Supervision,
         "operator review",
         None,
     );
-    crate::merge_hold::write_typed_hold(tmp.path(), &hold).unwrap();
-    crate::merge_hold::clear_hold(tmp.path(), 44).unwrap();
-    assert!(crate::merge_hold::read_hold_record(tmp.path(), 44).is_none());
-    crate::pr_cmd::rearm_mandate_hold_with(tmp.path(), &hold, || Ok(())).unwrap();
-    let back = crate::merge_hold::read_hold_record(tmp.path(), 44).expect("re-armed");
+    crate::gate::merge_hold_core::write_typed_hold(tmp.path(), &hold).unwrap();
+    crate::gate::merge_hold_core::clear_hold(tmp.path(), 44).unwrap();
+    assert!(crate::gate::merge_hold_core::read_hold_record(tmp.path(), 44).is_none());
+    crate::gate::mandate_ship::rearm_mandate_hold_with(tmp.path(), &hold, || Ok(())).unwrap();
+    let back = crate::gate::merge_hold_core::read_hold_record(tmp.path(), 44).expect("re-armed");
     assert_eq!(
         back.reason_kind,
-        crate::merge_hold::HoldReasonKind::Supervision
+        crate::gate::merge_hold_core::HoldReasonKind::Supervision
     );
     // A label that cannot be restored is reported, never swallowed.
-    let err = crate::pr_cmd::rearm_mandate_hold_with(tmp.path(), &hold, || Err("gh down".into()))
-        .unwrap_err();
+    let err = crate::gate::mandate_ship::rearm_mandate_hold_with(tmp.path(), &hold, || {
+        Err("gh down".into())
+    })
+    .unwrap_err();
     assert!(err.contains("gh down"), "{err}");
 }
 
 #[test]
 fn every_failure_after_a_mandate_release_re_arms_the_hold() {
-    let src = include_str!("../pr_cmd.rs");
+    let src = include_str!("../../pr_cmd.rs");
     let handler = src.split("pub(crate) fn pr_ship_handler(").nth(1).unwrap();
     let release = handler
-        .find("crate::merge_hold::clear_hold(&hold_root, pr_number)")
+        .find("crate::gate::merge_hold_core::clear_hold(&hold_root, pr_number)")
         .unwrap();
     let after = &handler[release..];
     let merged = after.find("merged_this_run = true;").unwrap();
@@ -1226,6 +1238,49 @@ fn task_1790_mandate_human_errors_use_mandate_commands() {
     }
 }
 
+// STORY-1889 review F1: the production entries bind the human floor
+// themselves; off a terminal they refuse before reading or writing anything.
+// trace:STORY-1889 | ai:claude
+#[test]
+fn start_and_stop_as_human_refuse_off_a_terminal() {
+    let tmp = tempfile::tempdir().unwrap();
+    let dir = tmp.path().join("mandates");
+    let _ambient =
+        crate::test_env::AmbientGuard::hermetic_with_seat_and(tmp.path(), "advisor", &[], &[]);
+    crate::test_ambient::replace(Some(crate::test_ambient::Ambient {
+        project_root: tmp.path().to_owned(),
+        stdin_is_terminal: false,
+        stdout_is_terminal: false,
+        stderr_is_terminal: false,
+    }));
+    let err = start_as_human(
+        &dir,
+        "joe",
+        Duration::hours(1),
+        None,
+        true,
+        false,
+        false,
+        std::collections::BTreeSet::new(),
+        Utc::now(),
+    )
+    .unwrap_err()
+    .to_string();
+    assert!(
+        err.starts_with("a mandate can only be started by a human at an interactive terminal ("),
+        "{err}"
+    );
+    assert!(err.contains("mandates require a direct human"), "{err}");
+    assert!(!dir.exists(), "nothing is written before the floor");
+    let err = stop_as_human(&dir, "joe", Utc::now())
+        .unwrap_err()
+        .to_string();
+    assert!(
+        err.starts_with("a mandate can only be stopped by a human at an interactive terminal ("),
+        "{err}"
+    );
+}
+
 // trace:TASK-1790 | ai:codex
 #[test]
 fn task_1790_rearm_audit_follows_release_before_label_and_keeps_reason() {
@@ -1236,15 +1291,16 @@ fn task_1790_rearm_audit_follows_release_before_label_and_keeps_reason() {
         &[],
         &[("AIDA_EVENTS_DISABLE", None)],
     );
-    let hold = crate::merge_hold::typed_hold(
+    let hold = crate::gate::merge_hold_core::typed_hold(
         44,
-        crate::merge_hold::HoldReasonKind::Supervision,
+        crate::gate::merge_hold_core::HoldReasonKind::Supervision,
         "operator review",
         None,
     );
-    crate::merge_hold::write_typed_hold(tmp.path(), &hold).unwrap();
-    crate::merge_hold::clear_hold(tmp.path(), 44).unwrap();
-    crate::merge_hold::record_mandate_clearance(tmp.path(), &hold, "joe", "M-1", None).unwrap();
+    crate::gate::merge_hold_core::write_typed_hold(tmp.path(), &hold).unwrap();
+    crate::gate::merge_hold_core::clear_hold(tmp.path(), 44).unwrap();
+    crate::gate::merge_hold_core::record_mandate_clearance(tmp.path(), &hold, "joe", "M-1", None)
+        .unwrap();
     // Same release event emitted by pr_ship_handler after clearance.
     crate::events::emit(
         tmp.path(),
@@ -1261,12 +1317,12 @@ fn task_1790_rearm_audit_follows_release_before_label_and_keeps_reason() {
         ),
     );
     let before = crate::events::read_all(tmp.path()).len();
-    let err = crate::pr_cmd::rearm_mandate_hold_with(tmp.path(), &hold, || {
+    let err = crate::gate::mandate_ship::rearm_mandate_hold_with(tmp.path(), &hold, || {
         let events = crate::events::read_all(tmp.path());
         assert_eq!(events.len(), before + 1, "one placement event, no duplicate audit");
         assert!(matches!(&events[before - 1].kind, crate::events::EventKind::MergeHoldChanged { placed: false, .. }));
         assert!(matches!(&events[before].kind, crate::events::EventKind::MergeHoldChanged { pr: 44, placed: true, reason: Some(reason), .. } if reason == "Re-armed after mandate ship failure: operator review"));
-        let restored = crate::merge_hold::read_hold_record(tmp.path(), 44).unwrap();
+        let restored = crate::gate::merge_hold_core::read_hold_record(tmp.path(), 44).unwrap();
         assert_eq!(restored.detail, hold.detail);
         assert_eq!(restored.reason_kind, hold.reason_kind);
         Err("label unavailable".into())
@@ -1284,17 +1340,17 @@ fn task_1790_failed_marker_rearm_emits_no_placement_event() {
         &[],
         &[("AIDA_EVENTS_DISABLE", None)],
     );
-    let hold = crate::merge_hold::typed_hold(
+    let hold = crate::gate::merge_hold_core::typed_hold(
         45,
-        crate::merge_hold::HoldReasonKind::Supervision,
+        crate::gate::merge_hold_core::HoldReasonKind::Supervision,
         "operator review",
         None,
     );
-    let path = crate::merge_hold::hold_path(tmp.path(), 45);
+    let path = crate::gate::merge_hold_core::hold_path(tmp.path(), 45);
     std::fs::create_dir_all(&path).unwrap();
     let before = crate::events::read_all(tmp.path()).len();
     let mut label_tried = false;
-    let err = crate::pr_cmd::rearm_mandate_hold_with(tmp.path(), &hold, || {
+    let err = crate::gate::mandate_ship::rearm_mandate_hold_with(tmp.path(), &hold, || {
         label_tried = true;
         Err("label unavailable".into())
     })
@@ -1340,7 +1396,7 @@ fn named_union_trace_assembly_refuses_trace_only_supervised_spec() {
     let mut c = Case::ok();
     let named = vec!["TASK-1".to_owned()];
     let traced = ["TASK-2".to_owned()].into_iter().collect();
-    c.specs = crate::pr_cmd::mandate_exclusion_specs(&named, traced, |id, is_named| {
+    c.specs = crate::gate::mandate_ship::mandate_exclusion_specs(&named, traced, |id, is_named| {
         let mut value = spec(id);
         value.named = is_named;
         if id == "TASK-2" {
@@ -1485,7 +1541,7 @@ fn mandate_ship_cover_passes_committed_trace_ids_to_the_decision() {
     // that setup before exercising the production clean-store boundary.
     git(&store, &["add", "-A"]);
     git(&store, &["commit", "-qm", "seed fixture seat roster"]);
-    assert!(crate::mandate_traces::store_snapshot(&store).is_ok());
+    assert!(crate::gate::mandate_traces::store_snapshot(&store).is_ok());
     let mut mandate = active(false);
     mandate.principal = crate::current_user_id(None);
     mandate.issued_at = Utc::now() - Duration::minutes(1);
@@ -1497,7 +1553,7 @@ fn mandate_ship_cover_passes_committed_trace_ids_to_the_decision() {
             commit_subjects: vec!["change (TASK-1)".into()],
         },
         || {
-            crate::pr_cmd::mandate_ship_cover(
+            crate::gate::mandate_ship::mandate_ship_cover(
                 root,
                 root,
                 root,
@@ -1560,12 +1616,12 @@ fn a_solo_self_approval_never_covers_a_mandate_ship_or_release() {
     assert!(key.starts_with("receipt:"), "{key}");
     c.policy.solo_human = true;
     c.policy.verified_solo.insert(key);
-    assert!(crate::pr_ship::solo_self_approval(&v, &c.policy));
+    assert!(crate::gate::ship::solo_self_approval(&v, &c.policy));
     assert_eq!(c.decide(), Err(MandateRefusal::SoloSelfApproval));
     // The rework-release path refuses it too.
     c.state = MandateState::Active(active(true));
     c.hold = HoldFacts::Marker {
-        kind: crate::merge_hold::HoldReasonKind::Rework,
+        kind: crate::gate::merge_hold_core::HoldReasonKind::Rework,
         legacy: false,
     };
     let release = rework_release_decision(&ShipCheck {
@@ -1582,7 +1638,7 @@ fn a_solo_self_approval_never_covers_a_mandate_ship_or_release() {
         hold: &c.hold,
         carry_over: None,
         changed_paths: Some(&[]),
-        protected: crate::mandate_gates::ProtectedPaths::floor_ref(),
+        protected: crate::gate::mandate_gates::ProtectedPaths::floor_ref(),
         ship_gate: None,
         hold_clear_gate: None,
     });
@@ -1800,13 +1856,13 @@ fn task_1800_aliased_id_resolves_through_alias_and_is_judged_normally() {
     mandate.expires_at = Utc::now() + Duration::hours(1);
     plant(&mandate_dir().unwrap(), &mandate, 0o600);
 
-    let hold = crate::merge_hold::typed_hold(
+    let hold = crate::gate::merge_hold_core::typed_hold(
         42,
-        crate::merge_hold::HoldReasonKind::Supervision,
+        crate::gate::merge_hold_core::HoldReasonKind::Supervision,
         "operator review",
         None,
     );
-    crate::merge_hold::write_typed_hold(root, &hold).unwrap();
+    crate::gate::merge_hold_core::write_typed_hold(root, &hold).unwrap();
 
     // Run mandate_ship_cover and verify that:
     // 1. Dangling FR-0042 does not cause HistoryUnreadable or SpecsUnresolved.
@@ -1817,7 +1873,7 @@ fn task_1800_aliased_id_resolves_through_alias_and_is_judged_normally() {
             commit_subjects: vec!["change (TASK-1)".into()],
         },
         || {
-            crate::pr_cmd::mandate_ship_cover(
+            crate::gate::mandate_ship::mandate_ship_cover(
                 root,
                 root,
                 root,
@@ -1826,7 +1882,7 @@ fn task_1800_aliased_id_resolves_through_alias_and_is_judged_normally() {
                 Some("feature"),
                 || Some(head.clone()),
                 false,
-                crate::mandate::ship_decision,
+                crate::gate::mandate::ship_decision,
                 true,
             )
         },
@@ -1870,7 +1926,7 @@ fn task_1800_alias_search_outside_a_store_repository_is_an_error() {
 // trace:TASK-1800 | ai:claude
 fn ship_tracing_deleted_agreed_id_spec(
     stored_at: Option<&str>,
-) -> std::result::Result<crate::pr_cmd::MandateCover, MandateRefusal> {
+) -> std::result::Result<crate::gate::mandate_ship::MandateCover, MandateRefusal> {
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path();
     let git_out = |dir: &Path, args: &[&str]| {
@@ -1986,13 +2042,13 @@ fn ship_tracing_deleted_agreed_id_spec(
     mandate.expires_at = Utc::now() + Duration::hours(1);
     plant(&mandate_dir().unwrap(), &mandate, 0o600);
 
-    let hold = crate::merge_hold::typed_hold(
+    let hold = crate::gate::merge_hold_core::typed_hold(
         42,
-        crate::merge_hold::HoldReasonKind::Supervision,
+        crate::gate::merge_hold_core::HoldReasonKind::Supervision,
         "operator review",
         None,
     );
-    crate::merge_hold::write_typed_hold(root, &hold).unwrap();
+    crate::gate::merge_hold_core::write_typed_hold(root, &hold).unwrap();
 
     let result = crate::with_review_pr_subject(
         crate::ReviewPrSubject {
@@ -2000,7 +2056,7 @@ fn ship_tracing_deleted_agreed_id_spec(
             commit_subjects: vec!["change (TASK-1)".into()],
         },
         || {
-            crate::pr_cmd::mandate_ship_cover(
+            crate::gate::mandate_ship::mandate_ship_cover(
                 root,
                 root,
                 root,
@@ -2009,7 +2065,7 @@ fn ship_tracing_deleted_agreed_id_spec(
                 Some("feature"),
                 || Some(head.clone()),
                 false,
-                crate::mandate::ship_decision,
+                crate::gate::mandate::ship_decision,
                 true,
             )
         },
@@ -2063,8 +2119,13 @@ fn mandate_ship_carries_over_a_clean_main_merge_but_not_an_evil_one() {
         case.decide(),
         Err(MandateRefusal::StaleApproval(_))
     ));
-    case.carry_over =
-        crate::pr_cmd::mandate_carry_over(repo, 42, &case.candidates, case.head, Some("main"));
+    case.carry_over = crate::gate::mandate_ship::mandate_carry_over(
+        repo,
+        42,
+        &case.candidates,
+        case.head,
+        Some("main"),
+    );
     assert_eq!(case.carry_over, Some(Ok(clean.to_string())));
     assert_eq!(
         case.decide().as_deref(),
@@ -2080,8 +2141,13 @@ fn mandate_ship_carries_over_a_clean_main_merge_but_not_an_evil_one() {
 
     let evil = leak(fx::evil_merge(repo, approved));
     case.head = Some(evil);
-    case.carry_over =
-        crate::pr_cmd::mandate_carry_over(repo, 42, &case.candidates, case.head, Some("main"));
+    case.carry_over = crate::gate::mandate_ship::mandate_carry_over(
+        repo,
+        42,
+        &case.candidates,
+        case.head,
+        Some("main"),
+    );
     match case.decide() {
         Err(MandateRefusal::StaleApproval(why)) => {
             assert!(why.contains("did not carry over"), "{why}")
@@ -2572,7 +2638,7 @@ fn bug_2214_the_rework_release_path_never_accepts_a_cleared_hold() {
         hold: &c.hold,
         carry_over: None,
         changed_paths: Some(&[]),
-        protected: crate::mandate_gates::ProtectedPaths::floor_ref(),
+        protected: crate::gate::mandate_gates::ProtectedPaths::floor_ref(),
         ship_gate: None,
         hold_clear_gate: None,
     });
@@ -2842,7 +2908,7 @@ fn task_2168_unreadable_store_for_operator_only_trace_still_excludes() {
     loaded.requirements = vec![r1.clone(), r963.clone()];
     let mut c = Case::ok();
     c.state = MandateState::Active(active(true));
-    c.specs = crate::mandate_ship::resolve_exclusion_specs(
+    c.specs = crate::gate::mandate_ship::resolve_exclusion_specs(
         Some(&loaded),
         root,
         &["TASK-1".into()],
@@ -2854,7 +2920,7 @@ fn task_2168_unreadable_store_for_operator_only_trace_still_excludes() {
     // `current` is `None`), the exclusion from history/ledger still applies
     // even though the committed object had `status: Completed` and a merged
     // commit on `main`.
-    let unresolved_traced = crate::mandate_ship::resolve_exclusion_specs(
+    let unresolved_traced = crate::gate::mandate_ship::resolve_exclusion_specs(
         None,
         root,
         &[],
@@ -3151,7 +3217,7 @@ fn task_2314_completed_without_shipped_commit_still_excludes() {
     loaded.requirements = vec![r1, r963, r964];
 
     for traced_id in ["TASK-963", "TASK-964"] {
-        let specs = crate::mandate_ship::resolve_exclusion_specs(
+        let specs = crate::gate::mandate_ship::resolve_exclusion_specs(
             Some(&loaded),
             root,
             &["TASK-1".into()],
@@ -3221,7 +3287,7 @@ fn task_2314_completed_and_shipped_on_main_expires() {
     let mut loaded = aida_core::RequirementsStore::new();
     loaded.requirements = vec![r1, r963, r964];
 
-    let specs = crate::mandate_ship::resolve_exclusion_specs(
+    let specs = crate::gate::mandate_ship::resolve_exclusion_specs(
         Some(&loaded),
         root,
         &["TASK-1".into()],

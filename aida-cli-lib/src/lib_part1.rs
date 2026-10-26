@@ -1618,7 +1618,7 @@ pub(crate) fn run() -> Result<()> {
     // BUG-2221: anchor for the `argv` phase recorded below once dispatch
     // knows the command is `show`. trace:BUG-2221 | ai:claude
     let run_started = std::time::Instant::now();
-    crate::seat_authority::ensure_commit_authority_resolver_registered();
+    crate::gate::seat_authority::ensure_commit_authority_resolver_registered();
     let raw_args: Vec<String> = std::env::args().collect();
     // Intercept --version / -V before clap so we can include the build-time
     // banner (build.rs stamps build time + git sha + dirty flag). Clap's

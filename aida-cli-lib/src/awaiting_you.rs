@@ -12,7 +12,7 @@
 //!
 //! trace:STORY-465 | ai:claude
 
-use crate::review_verdict;
+use crate::gate::review_verdict;
 use crate::status_cleanup::OpenPrItem;
 use colored::Colorize;
 use std::collections::HashSet;
@@ -401,7 +401,7 @@ pub(crate) struct PrReviewDecision {
 }
 
 fn recorded_instant(
-    v: &review_verdict::RecordedVerdict,
+    v: &crate::gate::review_verdict::RecordedVerdict,
 ) -> Option<chrono::DateTime<chrono::FixedOffset>> {
     v.recorded_at
         .as_deref()
@@ -512,12 +512,13 @@ pub(crate) fn blocked_age_label_unverifiable(
 /// Invariant: `suppressed` iff `row` explains a suppression.
 // trace:BUG-1549 | ai:claude
 pub(crate) fn classify_pr_review(
-    candidates: &[review_verdict::RecordedVerdict],
+    candidates: &[crate::gate::review_verdict::RecordedVerdict],
     head: Option<&str>,
 ) -> PrReviewDecision {
-    let rel =
-        |v: &review_verdict::RecordedVerdict| review_relation(v.reviewed_sha.as_deref(), head);
-    let sha = |v: &review_verdict::RecordedVerdict| {
+    let rel = |v: &crate::gate::review_verdict::RecordedVerdict| {
+        review_relation(v.reviewed_sha.as_deref(), head)
+    };
+    let sha = |v: &crate::gate::review_verdict::RecordedVerdict| {
         v.reviewed_sha.as_deref().unwrap_or("").trim().to_string()
     };
     // BUG-1529: a refusal closed by its PR's merge is history, not a live
@@ -528,7 +529,7 @@ pub(crate) fn classify_pr_review(
         .collect();
     let approvals: Vec<_> = candidates.iter().filter(|v| v.kind.approves()).collect();
 
-    let superseded = |r: &review_verdict::RecordedVerdict| -> bool {
+    let superseded = |r: &crate::gate::review_verdict::RecordedVerdict| -> bool {
         let Some(rt) = recorded_instant(r) else {
             return false;
         };
@@ -1309,17 +1310,17 @@ pub(crate) struct HeldPrItem {
 /// actions from different people, so each kind names its own.
 // trace:STORY-1397 | ai:claude
 pub(crate) fn project_held_pr(
-    record: &crate::merge_hold::MergeHoldRecord,
+    record: &crate::gate::merge_hold_core::MergeHoldRecord,
     title: &str,
     approved_at_head: Option<&str>,
     is_draft: bool,
 ) -> HeldPrItem {
-    use crate::merge_hold::HoldReasonKind;
+    use crate::gate::merge_hold_core::HoldReasonKind;
     let pr = record.pr;
     let action = match record.reason_kind {
         HoldReasonKind::Rework => {
             if let Some(head) = approved_at_head {
-                let short = crate::review_verdict::short_sha(head);
+                let short = crate::gate::review_verdict::short_sha(head);
                 if is_draft {
                     format!("rework checkpoint approved at {short}; PR is Draft — finish implementation and mark ready")
                 } else {
@@ -1360,7 +1361,7 @@ pub(crate) fn project_held_pr(
 pub(crate) fn project_corpus_held_pr(
     pr: u64,
     title: &str,
-    hold: &crate::review_verdict::CorpusHold,
+    hold: &crate::gate::review_verdict::CorpusHold,
 ) -> HeldPrItem {
     let short: String = hold.sha.chars().take(12).collect();
     let detail = match &hold.integrity_error {
@@ -1380,7 +1381,7 @@ pub(crate) fn project_corpus_held_pr(
     HeldPrItem {
         pr,
         title: title.to_string(),
-        reason_kind: crate::merge_hold::HoldReasonKind::Rework
+        reason_kind: crate::gate::merge_hold_core::HoldReasonKind::Rework
             .as_str()
             .to_string(),
         detail,
@@ -1420,7 +1421,7 @@ pub(crate) fn corpus_held_prs(candidates: &[CorpusHoldCandidate]) -> Vec<HeldPrI
         // carries the richer typed reason. One row per PR, never two.
         .filter(|candidate| !candidate.has_marker_hold)
         .filter_map(|candidate| {
-            let hold = crate::review_verdict::corpus_hold_at_head(
+            let hold = crate::gate::review_verdict::corpus_hold_at_head(
                 &candidate.bodies,
                 candidate.head_sha.as_deref(),
                 candidate.spec_completed,
@@ -1438,15 +1439,15 @@ pub(crate) fn corpus_held_prs(candidates: &[CorpusHoldCandidate]) -> Vec<HeldPrI
 /// sharing a role or vendor does not make two agents the same reviewer.
 // trace:STORY-1397 | ai:codex
 pub(crate) fn project_recusal_hold(
-    record: &crate::merge_hold::MergeHoldRecord,
+    record: &crate::gate::merge_hold_core::MergeHoldRecord,
     current_principal: &str,
 ) -> Option<RecusalHoldItem> {
-    if record.reason_kind != crate::merge_hold::HoldReasonKind::Recusal {
+    if record.reason_kind != crate::gate::merge_hold_core::HoldReasonKind::Recusal {
         return None;
     }
-    let me = crate::merge_hold::PrincipalIdentity::parse(current_principal);
-    let verified = me.identity_status == crate::merge_hold::IdentityStatus::Verified;
-    let recused = verified && crate::merge_hold::principal_is_recused(record, &me);
+    let me = crate::gate::merge_hold_core::PrincipalIdentity::parse(current_principal);
+    let verified = me.identity_status == crate::gate::merge_hold_core::IdentityStatus::Verified;
+    let recused = verified && crate::gate::merge_hold_core::principal_is_recused(record, &me);
     let routed = verified && record.routed_to.iter().any(|p| p == &me);
     let (relationship, action) = if recused {
         (
@@ -1459,7 +1460,9 @@ pub(crate) fn project_recusal_hold(
             "routed-reader".to_string(),
             format!("independently review PR-{} at exact head", record.pr),
         )
-    } else if record.routing_state == crate::merge_hold::HoldRoutingState::NoIndependentReader {
+    } else if record.routing_state
+        == crate::gate::merge_hold_core::HoldRoutingState::NoIndependentReader
+    {
         (
             "operator-attention".to_string(),
             format!(
@@ -1467,7 +1470,7 @@ pub(crate) fn project_recusal_hold(
                 pr = record.pr
             ),
         )
-    } else if record.routing_state == crate::merge_hold::HoldRoutingState::StaleHead {
+    } else if record.routing_state == crate::gate::merge_hold_core::HoldRoutingState::StaleHead {
         // trace:STORY-1397 | ai:claude
         (
             "operator-attention".to_string(),
@@ -1499,7 +1502,7 @@ pub(crate) struct ReviewerQueueItem {
     /// forge call. The row is kept and rendered regardless of state (routed
     /// rows never vanish); this only changes how it reads.
     // trace:BUG-1508 | ai:claude
-    pub state: review_verdict::ReviewActionability,
+    pub state: crate::gate::review_verdict::ReviewActionability,
 }
 
 #[derive(Debug, Clone)]
@@ -1978,7 +1981,7 @@ impl AwaitingReport {
     pub(crate) fn reviewer_actionable_count(&self) -> usize {
         self.reviewer_queue_items
             .iter()
-            .filter(|q| q.state == review_verdict::ReviewActionability::NeedsReview)
+            .filter(|q| q.state == crate::gate::review_verdict::ReviewActionability::NeedsReview)
             .count()
     }
 
@@ -2501,11 +2504,15 @@ impl AwaitingReport {
                     continue;
                 }
                 let (glyph, label) = match q.state {
-                    review_verdict::ReviewActionability::NeedsReview => ("👀", "needs-review"),
-                    review_verdict::ReviewActionability::AwaitingRework => {
+                    crate::gate::review_verdict::ReviewActionability::NeedsReview => {
+                        ("👀", "needs-review")
+                    }
+                    crate::gate::review_verdict::ReviewActionability::AwaitingRework => {
                         ("🔧", "awaiting-rework")
                     }
-                    review_verdict::ReviewActionability::Resolved => ("✅", "resolved"),
+                    crate::gate::review_verdict::ReviewActionability::Resolved => {
+                        ("✅", "resolved")
+                    }
                 };
                 writeln!(
                     w,
@@ -3081,11 +3088,13 @@ mod tests {
         }
     }
 
-    fn recusal(state: crate::merge_hold::HoldRoutingState) -> crate::merge_hold::MergeHoldRecord {
-        crate::merge_hold::MergeHoldRecord {
+    fn recusal(
+        state: crate::gate::merge_hold_core::HoldRoutingState,
+    ) -> crate::gate::merge_hold_core::MergeHoldRecord {
+        crate::gate::merge_hold_core::MergeHoldRecord {
             schema_version: 2,
             pr: 2023,
-            reason_kind: crate::merge_hold::HoldReasonKind::Recusal,
+            reason_kind: crate::gate::merge_hold_core::HoldReasonKind::Recusal,
             detail: "author recusal".into(),
             recused_principals: vec!["agent:author".into()],
             routed_to: vec!["agent:reader".into()],
@@ -3105,7 +3114,7 @@ mod tests {
     #[test]
     fn recusal_projection_never_offers_the_author_the_merge() {
         let author = project_recusal_hold(
-            &recusal(crate::merge_hold::HoldRoutingState::Routed),
+            &recusal(crate::gate::merge_hold_core::HoldRoutingState::Routed),
             "agent:author",
         )
         .unwrap();
@@ -3121,7 +3130,7 @@ mod tests {
         );
 
         let reader = project_recusal_hold(
-            &recusal(crate::merge_hold::HoldRoutingState::Routed),
+            &recusal(crate::gate::merge_hold_core::HoldRoutingState::Routed),
             "agent:reader",
         )
         .unwrap();
@@ -3131,7 +3140,8 @@ mod tests {
 
     #[test]
     fn no_reader_is_an_explicit_operator_state_in_all_report_shapes() {
-        let mut record = recusal(crate::merge_hold::HoldRoutingState::NoIndependentReader);
+        let mut record =
+            recusal(crate::gate::merge_hold_core::HoldRoutingState::NoIndependentReader);
         record.routed_to.clear();
         let item = project_recusal_hold(&record, "operator").unwrap();
         assert_eq!(item.relationship, "operator-attention");
@@ -3155,9 +3165,9 @@ mod tests {
     // must stay visible (with its reason) rather than vanish from awaiting.
     #[test]
     fn supervision_held_pr_stays_visible_with_its_reason() {
-        let record = crate::merge_hold::typed_hold(
+        let record = crate::gate::merge_hold_core::typed_hold(
             2103,
-            crate::merge_hold::HoldReasonKind::Supervision,
+            crate::gate::merge_hold_core::HoldReasonKind::Supervision,
             "STORY-1397 is marked guided — merge requires review",
             None,
         );
@@ -3186,10 +3196,10 @@ mod tests {
 
     #[test]
     fn each_non_recusal_hold_kind_names_its_own_action() {
-        use crate::merge_hold::HoldReasonKind;
+        use crate::gate::merge_hold_core::HoldReasonKind;
         let action = |kind| {
             project_held_pr(
-                &crate::merge_hold::typed_hold(7, kind, "d", None),
+                &crate::gate::merge_hold_core::typed_hold(7, kind, "d", None),
                 "t",
                 None,
                 false,
@@ -3204,9 +3214,9 @@ mod tests {
     // trace:BUG-1788 | ai:antigravity
     #[test]
     fn rework_hold_with_approval_flips_action() {
-        use crate::merge_hold::HoldReasonKind;
+        use crate::gate::merge_hold_core::HoldReasonKind;
         let action_unapproved = project_held_pr(
-            &crate::merge_hold::typed_hold(7, HoldReasonKind::Rework, "d", None),
+            &crate::gate::merge_hold_core::typed_hold(7, HoldReasonKind::Rework, "d", None),
             "t",
             None,
             false,
@@ -3215,7 +3225,7 @@ mod tests {
         assert!(action_unapproved.contains("implementer"));
 
         let action_approved = project_held_pr(
-            &crate::merge_hold::typed_hold(7, HoldReasonKind::Rework, "d", None),
+            &crate::gate::merge_hold_core::typed_hold(7, HoldReasonKind::Rework, "d", None),
             "t",
             Some("48433c6b00000000000000000000000000000000"),
             false,
@@ -3227,8 +3237,8 @@ mod tests {
 
     #[test]
     fn stale_head_recusal_is_operator_attention_not_a_phantom_route() {
-        let mut record = recusal(crate::merge_hold::HoldRoutingState::Routed);
-        record = crate::merge_hold::project_live_head(&record, Some("newhead"));
+        let mut record = recusal(crate::gate::merge_hold_core::HoldRoutingState::Routed);
+        record = crate::gate::merge_hold_core::project_live_head(&record, Some("newhead"));
         let item = project_recusal_hold(&record, "").unwrap();
         assert_eq!(item.state, "stale-head");
         assert_eq!(item.relationship, "operator-attention");
@@ -3431,19 +3441,29 @@ mod tests {
     const T2: &str = "2026-09-02T00:00:00+00:00";
     const T3: &str = "2026-09-03T00:00:00+00:00";
 
-    fn verdict(kind: &str, sha: Option<&str>, at: Option<&str>) -> review_verdict::RecordedVerdict {
-        review_verdict::RecordedVerdict {
-            kind: review_verdict::VerdictKind::parse(kind),
+    fn verdict(
+        kind: &str,
+        sha: Option<&str>,
+        at: Option<&str>,
+    ) -> crate::gate::review_verdict::RecordedVerdict {
+        crate::gate::review_verdict::RecordedVerdict {
+            kind: crate::gate::review_verdict::VerdictKind::parse(kind),
             raw: kind.to_string(),
             reviewed_sha: sha.map(str::to_string),
             recorded_at: at.map(str::to_string),
             ..Default::default()
         }
     }
-    fn refusal(sha: Option<&str>, at: Option<&str>) -> review_verdict::RecordedVerdict {
+    fn refusal(
+        sha: Option<&str>,
+        at: Option<&str>,
+    ) -> crate::gate::review_verdict::RecordedVerdict {
         verdict("request-changes", sha, at)
     }
-    fn approval(sha: Option<&str>, at: Option<&str>) -> review_verdict::RecordedVerdict {
+    fn approval(
+        sha: Option<&str>,
+        at: Option<&str>,
+    ) -> crate::gate::review_verdict::RecordedVerdict {
         verdict("approved", sha, at)
     }
 
@@ -3479,7 +3499,7 @@ mod tests {
         #[allow(clippy::type_complexity)]
         let cases: Vec<(
             &str,
-            Vec<review_verdict::RecordedVerdict>,
+            Vec<crate::gate::review_verdict::RecordedVerdict>,
             Option<&str>,
             bool,
             Kind,
@@ -5179,7 +5199,7 @@ mod tests {
             ("reviewer_actionable", |r| {
                 r.reviewer_queue_items.push(reviewer_item(
                     "BUG-7",
-                    review_verdict::ReviewActionability::NeedsReview,
+                    crate::gate::review_verdict::ReviewActionability::NeedsReview,
                 ))
             }),
             ("shelved", |r| r.shelved_total = 4),
@@ -5394,7 +5414,7 @@ mod tests {
         let mut report = AwaitingReport::default();
         report.reviewer_queue_items.push(reviewer_item(
             "BUG-6",
-            review_verdict::ReviewActionability::NeedsReview,
+            crate::gate::review_verdict::ReviewActionability::NeedsReview,
         ));
         assert_eq!(report.total(), 2, "one routed item plus the summary row");
         let rendered = report.render_agent_view();
@@ -5451,7 +5471,7 @@ mod tests {
 
     fn reviewer_item(
         spec_id: &str,
-        state: review_verdict::ReviewActionability,
+        state: crate::gate::review_verdict::ReviewActionability,
     ) -> ReviewerQueueItem {
         ReviewerQueueItem {
             spec_id: spec_id.to_string(),
@@ -5468,9 +5488,18 @@ mod tests {
     fn reviewer_rows_all_render_and_report_actionable_of_routed() {
         let r = AwaitingReport {
             reviewer_queue_items: vec![
-                reviewer_item("BUG-1", review_verdict::ReviewActionability::NeedsReview),
-                reviewer_item("BUG-2", review_verdict::ReviewActionability::AwaitingRework),
-                reviewer_item("BUG-3", review_verdict::ReviewActionability::Resolved),
+                reviewer_item(
+                    "BUG-1",
+                    crate::gate::review_verdict::ReviewActionability::NeedsReview,
+                ),
+                reviewer_item(
+                    "BUG-2",
+                    crate::gate::review_verdict::ReviewActionability::AwaitingRework,
+                ),
+                reviewer_item(
+                    "BUG-3",
+                    crate::gate::review_verdict::ReviewActionability::Resolved,
+                ),
             ],
             ..Default::default()
         };
@@ -5496,7 +5525,7 @@ mod tests {
         let r = AwaitingReport {
             reviewer_queue_items: vec![reviewer_item(
                 "BUG-7",
-                review_verdict::ReviewActionability::AwaitingRework,
+                crate::gate::review_verdict::ReviewActionability::AwaitingRework,
             )],
             ..Default::default()
         };
@@ -5518,7 +5547,7 @@ mod tests {
             shelved_total: 8,
             reviewer_queue_items: vec![reviewer_item(
                 "BUG-9",
-                review_verdict::ReviewActionability::NeedsReview,
+                crate::gate::review_verdict::ReviewActionability::NeedsReview,
             )],
             role: Some(role.to_string()),
             ..Default::default()

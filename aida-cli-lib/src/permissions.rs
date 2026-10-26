@@ -285,7 +285,7 @@ pub(crate) fn gated_effective_role_for_user(
     let _ = (user_id, config);
     let seat = store_root
         .and_then(|store| store.parent())
-        .and_then(crate::seat_authority::current_seat);
+        .and_then(crate::gate::seat_authority::current_seat);
     match seat {
         Some(role) => (role, RoleSource::Grant),
         None => ("implementer".to_string(), RoleSource::Default),

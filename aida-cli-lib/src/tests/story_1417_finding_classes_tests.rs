@@ -3,7 +3,7 @@
 // trace:STORY-1417 | ai:claude
 
 use super::*;
-use crate::review_verdict::{build_verdict_object, write_verdict_object};
+use crate::gate::review_verdict::{build_verdict_object, write_verdict_object};
 use tempfile::TempDir;
 
 fn s(v: &[&str]) -> Vec<String> {
@@ -18,7 +18,7 @@ fn record(
     findings: &[String],
     classes: &[String],
 ) -> serde_json::Map<String, serde_json::Value> {
-    let path = crate::review_verdict::verdict_path(root, key);
+    let path = crate::gate::review_verdict::verdict_path(root, key);
     let mut obj = build_verdict_object(
         root,
         &path,
@@ -84,7 +84,7 @@ fn classes_are_stored_alongside_findings_and_old_files_parse() {
     // The existing reader is unaffected by the new field.
     let body =
         std::fs::read_to_string(dir.path().join(".aida/review-verdicts/TASK-1.json")).unwrap();
-    let v = crate::review_verdict::parse_recorded_verdict(&body).unwrap();
+    let v = crate::gate::review_verdict::parse_recorded_verdict(&body).unwrap();
     assert_eq!(v.findings.len(), 2);
 
     // Unclassified findings write no `finding_classes` at all, and new

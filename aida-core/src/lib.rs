@@ -170,6 +170,8 @@ pub mod templates;
 // TOML string quoting for hand-built config files. trace:BUG-1649 | ai:claude
 // trace:BUG-1650 | ai:claude
 pub mod toml_quote;
+// Shared refusal-only content grammar; no intake adapter authority. trace:STORY-1742 | ai:codex
+pub mod transport_sanitization;
 #[cfg(feature = "native")]
 pub mod user_prefs;
 #[cfg(feature = "native")]

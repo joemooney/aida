@@ -1,4 +1,4 @@
-use super::*;
+use crate::*;
 
 fn tempdir_root() -> tempfile::TempDir {
     let root = tempfile::tempdir().unwrap();
@@ -27,18 +27,18 @@ fn recording_the_verdict_clears_the_marker_and_unblocks_merge() {
         ("AIDA_DRIVE_ROOT", Some(root_str)),
         ("AIDA_REVIEW_VERDICT_FILE", None),
     ]);
-    let mut m = review_marker::Marker::for_this_process(
+    let mut m = crate::gate::review_marker::Marker::for_this_process(
         14051,
         Some("abc1234"),
         Some("BUG-14051"),
         "reviewer seat",
     );
     m.pid = 0;
-    m.ttl_secs = review_marker::CLAIM_TTL_SECS;
-    review_marker::write(root.path(), &m).unwrap();
+    m.ttl_secs = crate::gate::review_marker::CLAIM_TTL_SECS;
+    crate::gate::review_marker::write(root.path(), &m).unwrap();
     assert!(matches!(
-        review_marker::merge_gate(root.path(), 14051, || Some("abc1234".into())),
-        review_marker::MergeGate::UnderReview(_)
+        crate::gate::review_marker::merge_gate(root.path(), 14051, || Some("abc1234".into())),
+        crate::gate::review_marker::MergeGate::UnderReview(_)
     ));
 
     // BUG-1918: a PR approval resolves the PR's subject through the forge.
@@ -47,12 +47,12 @@ fn recording_the_verdict_clears_the_marker_and_unblocks_merge() {
         commit_subjects: vec![],
     };
     // BUG-1918: an approval must name its recorder (here, a session id).
-    let reviewer = review_authority::IdentitySource {
+    let reviewer = crate::gate::review_authority::IdentitySource {
         session_ids: vec!["independent-reviewer".into()],
         ..Default::default()
     };
     with_review_pr_subject(subject, || {
-        review_authority::with_identity_source(reviewer, || {
+        crate::gate::review_authority::with_identity_source(reviewer, || {
             handle_review_record_at(
                 root.path().to_path_buf(),
                 "BUG-14051",
@@ -68,10 +68,12 @@ fn recording_the_verdict_clears_the_marker_and_unblocks_merge() {
     })
     .expect("recording an approval must succeed");
 
-    assert!(review_marker::read(root.path(), 14051).is_none());
+    assert!(crate::gate::review_marker::read(root.path(), 14051).is_none());
     assert_eq!(
-        review_marker::merge_gate(root.path(), 14051, || panic!("no marker, no lookup")),
-        review_marker::MergeGate::Clear
+        crate::gate::review_marker::merge_gate(root.path(), 14051, || panic!(
+            "no marker, no lookup"
+        )),
+        crate::gate::review_marker::MergeGate::Clear
     );
 }
 
@@ -93,12 +95,12 @@ fn record_with_anchor(
         head_ref: "bug-14053-work".into(),
         commit_subjects: vec![],
     };
-    let reviewer = review_authority::IdentitySource {
+    let reviewer = crate::gate::review_authority::IdentitySource {
         session_ids: vec!["independent-reviewer".into()],
         ..Default::default()
     };
     with_review_pr_subject(subject, || {
-        review_authority::with_identity_source(reviewer, || {
+        crate::gate::review_authority::with_identity_source(reviewer, || {
             handle_review_record_at(
                 worktree.to_path_buf(),
                 "BUG-14053",
@@ -162,12 +164,13 @@ fn contained_record_falls_back_to_worktree_when_anchor_is_read_only() {
 fn verdict_without_pr_clears_markers_naming_the_spec_only() {
     let root = tempdir_root();
     for (pr, spec) in [(1, "TASK-1"), (2, "TASK-2")] {
-        let m = review_marker::Marker::for_this_process(pr, Some("abc"), Some(spec), "r");
-        review_marker::write(root.path(), &m).unwrap();
+        let m =
+            crate::gate::review_marker::Marker::for_this_process(pr, Some("abc"), Some(spec), "r");
+        crate::gate::review_marker::write(root.path(), &m).unwrap();
     }
     let cleared = clear_review_markers_for_verdict(root.path(), "task-1", None);
     assert_eq!(cleared, vec![1]);
-    assert!(review_marker::read(root.path(), 2).is_some());
+    assert!(crate::gate::review_marker::read(root.path(), 2).is_some());
 }
 
 // TASK-1459: `aida review <SPEC>` prefers the forge's live PR head over
@@ -225,10 +228,15 @@ fn marker_head_best_effort_is_none_with_no_forge_and_no_local_ref() {
 #[test]
 fn awaiting_annotation_is_head_scoped_and_read_only() {
     let root = tempdir_root();
-    let m = review_marker::Marker::for_this_process(5, Some("aaa111"), None, "reviewer seat");
-    review_marker::write(root.path(), &m).unwrap();
-    assert!(review_marker::live_description(root.path(), 5, Some("aaa111")).is_some());
-    assert!(review_marker::live_description(root.path(), 5, Some("bbb222")).is_none());
-    assert!(review_marker::live_description(root.path(), 6, Some("aaa111")).is_none());
-    assert!(review_marker::read(root.path(), 5).is_some());
+    let m = crate::gate::review_marker::Marker::for_this_process(
+        5,
+        Some("aaa111"),
+        None,
+        "reviewer seat",
+    );
+    crate::gate::review_marker::write(root.path(), &m).unwrap();
+    assert!(crate::gate::review_marker::live_description(root.path(), 5, Some("aaa111")).is_some());
+    assert!(crate::gate::review_marker::live_description(root.path(), 5, Some("bbb222")).is_none());
+    assert!(crate::gate::review_marker::live_description(root.path(), 6, Some("aaa111")).is_none());
+    assert!(crate::gate::review_marker::read(root.path(), 5).is_some());
 }

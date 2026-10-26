@@ -71,7 +71,7 @@ fn review_story_row_needs_review_again_once_the_branch_moves_past_the_verdict() 
         created_by: None,
     });
 
-    review_verdict::record_verdict(
+    crate::gate::review_verdict::record_verdict(
         root,
         "BUG-9001",
         Some("request-changes"),
@@ -97,7 +97,7 @@ fn review_story_row_needs_review_again_once_the_branch_moves_past_the_verdict() 
     });
     assert_eq!(
         at_reviewed,
-        review_verdict::ReviewActionability::AwaitingRework
+        crate::gate::review_verdict::ReviewActionability::AwaitingRework
     );
 
     // The implementer pushes a follow-up commit -- the head moves past what
@@ -113,7 +113,10 @@ fn review_story_row_needs_review_again_once_the_branch_moves_past_the_verdict() 
             None
         }
     });
-    assert_eq!(moved, review_verdict::ReviewActionability::NeedsReview);
+    assert_eq!(
+        moved,
+        crate::gate::review_verdict::ReviewActionability::NeedsReview
+    );
 }
 
 /// A directly-routed row (no review-story wrapper) with no verdict on disk
@@ -129,5 +132,8 @@ fn direct_routed_row_with_no_verdict_needs_review() {
     spec.agreed_id = Some("BUG-9003".to_string());
 
     let state = reviewer_row_actionability(root, &spec, &[], |_| None);
-    assert_eq!(state, review_verdict::ReviewActionability::NeedsReview);
+    assert_eq!(
+        state,
+        crate::gate::review_verdict::ReviewActionability::NeedsReview
+    );
 }

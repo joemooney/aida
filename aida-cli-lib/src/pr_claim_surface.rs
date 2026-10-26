@@ -21,8 +21,9 @@
 
 use std::path::Path;
 
-use crate::merge_hold::{self, MergeHoldRecord};
-use crate::review_verdict::{self, RecordedVerdict, VerdictKind};
+use crate::gate::merge_hold_core::MergeHoldRecord;
+use crate::gate::review_verdict::{self, RecordedVerdict, VerdictKind};
+use crate::merge_hold::{self};
 
 /// What is on record for one PR at the moment of a write.
 #[derive(Debug, Clone, Default)]
@@ -62,8 +63,8 @@ pub(crate) struct IncomingVerdict<'a> {
 /// marker references, the spec the marker was placed for, and `extra_keys`.
 /// Filesystem-only and cheap; no forge or store access.
 pub(crate) fn read_pr_record(root: &Path, pr: u64, extra_keys: &[&str]) -> PrRecord {
-    let marker = merge_hold::read_hold_record(root, pr);
-    let marker_at = std::fs::metadata(merge_hold::hold_path(root, pr))
+    let marker = crate::gate::merge_hold_core::read_hold_record(root, pr);
+    let marker_at = std::fs::metadata(crate::gate::merge_hold_core::hold_path(root, pr))
         .and_then(|m| m.modified())
         .ok()
         .map(chrono::DateTime::<chrono::Utc>::from);
@@ -85,7 +86,7 @@ pub(crate) fn read_pr_record(root: &Path, pr: u64, extra_keys: &[&str]) -> PrRec
             continue;
         }
         seen.push(key.clone());
-        if let Some(v) = review_verdict::read_recorded_verdict(root, &key) {
+        if let Some(v) = crate::gate::review_verdict::read_recorded_verdict(root, &key) {
             verdicts.push((key, v));
         }
     }
@@ -184,11 +185,11 @@ fn disagreement(
             (Some(cb), Some(vb)) if cb.trim() == vb.trim()
         );
     if let (Some(cs), Some(vs), false) = (claim.sha.as_deref(), sha, same_seat_same_outcome) {
-        if !review_verdict::same_reviewed_sha(cs, vs) {
+        if !crate::gate::review_verdict::same_reviewed_sha(cs, vs) {
             parts.push(format!(
                 "it cites {} but the verdict is at {}",
-                review_verdict::short_sha(cs),
-                review_verdict::short_sha(vs)
+                crate::gate::review_verdict::short_sha(cs),
+                crate::gate::review_verdict::short_sha(vs)
             ));
         }
     }
@@ -221,7 +222,10 @@ fn marker_line(m: &MergeHoldRecord) -> String {
         .as_deref()
         .filter(|s| !s.trim().is_empty())
     {
-        meta.push(format!("head {}", review_verdict::short_sha(sha)));
+        meta.push(format!(
+            "head {}",
+            crate::gate::review_verdict::short_sha(sha)
+        ));
     }
     if let Some(r) = &m.verdict_ref {
         let mut cite = format!("cites verdict {}", r.key);
@@ -229,7 +233,10 @@ fn marker_line(m: &MergeHoldRecord) -> String {
             cite.push_str(&format!(" by {by}"));
         }
         if let Some(sha) = &r.reviewed_sha {
-            cite.push_str(&format!(" at {}", review_verdict::short_sha(sha)));
+            cite.push_str(&format!(
+                " at {}",
+                crate::gate::review_verdict::short_sha(sha)
+            ));
         }
         meta.push(cite);
     }
@@ -242,7 +249,7 @@ fn verdict_line(key: &str, v: &RecordedVerdict) -> String {
         v.kind.label(),
         v.reviewed_sha
             .as_deref()
-            .map(review_verdict::short_sha)
+            .map(crate::gate::review_verdict::short_sha)
             .unwrap_or("(no sha)"),
         v.recorded_by.as_deref().unwrap_or("(not recorded)"),
         v.recorded_at
@@ -357,7 +364,7 @@ pub(crate) fn print(pr: u64, lines: &[String]) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::merge_hold::{typed_hold, HoldReasonKind, VerdictRef};
+    use crate::gate::merge_hold_core::{typed_hold, HoldReasonKind, VerdictRef};
 
     fn write_verdict(root: &Path, key: &str, verdict: &str, sha: &str, by: &str, at: &str) {
         let dir = root.join(".aida").join("review-verdicts");
@@ -404,7 +411,7 @@ mod tests {
     fn marker_write_surfaces_existing_marker_and_verdict() {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path();
-        merge_hold::write_typed_hold(
+        crate::gate::merge_hold_core::write_typed_hold(
             root,
             &rework_marker(
                 2034,
@@ -450,7 +457,7 @@ mod tests {
             None,
         );
         m.placed_by = Some("driver-advisor".into());
-        merge_hold::write_typed_hold(root, &m).unwrap();
+        crate::gate::merge_hold_core::write_typed_hold(root, &m).unwrap();
         let rec = read_pr_record(root, 1972, &["STORY-9"]);
         let inc = IncomingVerdict {
             key: "STORY-9",
@@ -479,7 +486,7 @@ mod tests {
             "waiting on claude-reviewer-1's verdict before merge",
             None,
         );
-        merge_hold::write_typed_hold(root, &m).unwrap();
+        crate::gate::merge_hold_core::write_typed_hold(root, &m).unwrap();
         write_verdict(
             root,
             "PR-1989",
@@ -509,7 +516,7 @@ mod tests {
     fn verdict_write_flags_a_marker_quoting_a_different_verdict() {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path();
-        merge_hold::write_typed_hold(
+        crate::gate::merge_hold_core::write_typed_hold(
             root,
             &rework_marker(
                 2034,
@@ -541,7 +548,7 @@ mod tests {
     fn older_verdict_does_not_contradict_a_newer_marker() {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path();
-        merge_hold::write_typed_hold(
+        crate::gate::merge_hold_core::write_typed_hold(
             root,
             &rework_marker(
                 7,

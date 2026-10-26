@@ -958,10 +958,10 @@ pub(crate) fn refusal_verdict_keys(record: &MergeHoldRecord) -> Vec<String> {
 pub(crate) fn refusal_release(
     record: &MergeHoldRecord,
     live_head: Option<&str>,
-    current_of: impl Fn(&str) -> Option<crate::review_verdict::RecordedVerdict>,
-    at_sha: impl Fn(&str, &str) -> Option<crate::review_verdict::RecordedVerdict>,
+    current_of: impl Fn(&str) -> Option<crate::gate::review_verdict::RecordedVerdict>,
+    at_sha: impl Fn(&str, &str) -> Option<crate::gate::review_verdict::RecordedVerdict>,
 ) -> RefusalRelease {
-    use crate::review_verdict::{same_reviewed_sha, short_sha, VerdictKind};
+    use crate::gate::review_verdict::{same_reviewed_sha, short_sha, VerdictKind};
     let keys = refusal_verdict_keys(record);
     let Some(head) = live_head.map(str::trim).filter(|h| !h.is_empty()) else {
         return RefusalRelease::Held(
@@ -1116,7 +1116,7 @@ pub(crate) fn corpus_merge_gate(
 /// no carry-over is available here.
 // trace:TASK-1968 | ai:claude
 pub(crate) type CorpusCarryOverProver<'a> = &'a dyn Fn(
-    &crate::pr_ship::ApprovalHeadRefusal,
+    &crate::gate::ship::ApprovalHeadRefusal,
 ) -> Option<
     Result<crate::review_carryover::CarryOver, crate::review_carryover::CarryOverRefusal>,
 >;
@@ -1134,7 +1134,7 @@ pub(crate) fn corpus_merge_gate_carrying(
     head: Option<&str>,
     prove: CorpusCarryOverProver<'_>,
 ) -> CorpusMergeGate {
-    use crate::review_verdict as rv;
+    use crate::gate::review_verdict as rv;
     let live: Vec<&(String, String)> = bodies
         .iter()
         .filter(|(_, body)| rv::parse_recorded_verdict(body).is_none_or(|v| !v.is_closed()))
@@ -1247,7 +1247,7 @@ fn corpus_carry_over(
     head: &str,
     prove: CorpusCarryOverProver<'_>,
 ) -> Option<Result<crate::review_carryover::CarryOver, crate::review_carryover::CarryOverRefusal>> {
-    use crate::review_verdict as rv;
+    use crate::gate::review_verdict as rv;
     let mut approved: Vec<String> = Vec::new();
     for (_, body) in live {
         let verdict = rv::parse_recorded_verdict(body)?;
@@ -1272,7 +1272,7 @@ fn corpus_carry_over(
         if !corpus_approves {
             continue;
         }
-        let refusal = crate::pr_ship::ApprovalHeadRefusal::Moved {
+        let refusal = crate::gate::ship::ApprovalHeadRefusal::Moved {
             reviewed_sha: sha,
             head_sha: head.to_string(),
         };
@@ -1308,7 +1308,7 @@ pub(crate) fn corpus_gate_bodies(
     let mut out = Vec::new();
     for root in roots {
         for key in &keys {
-            let path = crate::review_verdict::verdict_path(root, key);
+            let path = crate::gate::review_verdict::verdict_path(root, key);
             if std::fs::symlink_metadata(&path).is_err() {
                 continue;
             }
@@ -1318,7 +1318,7 @@ pub(crate) fn corpus_gate_bodies(
             }
             seen.push(canon);
             // trace:TASK-1801 | ai:claude
-            match crate::review_verdict::read_verdict_body(&path) {
+            match crate::gate::review_verdict::read_verdict_body(&path) {
                 Ok(body) => out.push((key.clone(), body)),
                 Err(e) => {
                     return Err(format!(
@@ -1392,7 +1392,7 @@ pub(crate) fn corpus_gate_decision(
     let head = head();
     let base_branch = base_branch.map(str::trim).filter(|b| !b.is_empty());
     let site = crate::review_carryover::CarryOverSite::quiet(main_root.as_path(), base_branch);
-    let prove = |refusal: &crate::pr_ship::ApprovalHeadRefusal| {
+    let prove = |refusal: &crate::gate::ship::ApprovalHeadRefusal| {
         crate::review_carryover::prove_for_refusal(&site, pr, refusal)
     };
     Ok(corpus_merge_gate_carrying(
@@ -1414,7 +1414,7 @@ fn arm_corpus_mirrors(project_root: &Path, pr: u64, arm: &CorpusArm) {
         "{} for {} at {}",
         arm.verdict_raw,
         arm.key,
-        crate::review_verdict::short_sha(&arm.sha)
+        crate::gate::review_verdict::short_sha(&arm.sha)
     );
     let mut hold = typed_hold(pr, HoldReasonKind::Rework, &reason, Some(arm.sha.clone()));
     hold.verdict_ref = Some(VerdictRef::new(

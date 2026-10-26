@@ -149,7 +149,7 @@ where
     F: FnMut(&str) -> bool,
 {
     let parsed = syn::parse_file(text).ok()?;
-    let comments = crate::mandate_traces::rust_comments(text)?;
+    let comments = crate::gate::mandate_traces::rust_comments(text)?;
     let lines: Vec<&str> = text.lines().collect();
     let anchor = crate::trace::coverage_anchor_re();
     let mut ids = |c: &str| -> Vec<String> {
@@ -174,7 +174,7 @@ where
         .into_iter()
         .map(|(kind, name, range, marker_end)| {
             let start =
-                crate::mandate_traces::leading_comment_start(range.start, &lines, &comments);
+                crate::gate::mandate_traces::leading_comment_start(range.start, &lines, &comments);
             let specs = (start..marker_end)
                 .filter_map(|i| comments.get(i))
                 .flat_map(|(_, c)| ids(c))

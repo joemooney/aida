@@ -208,7 +208,9 @@ default_limit = 10
 "aida-core db::git_backend::tests::bug_1677_concurrent_queue_writers_lose_nothing_and_readers_see_no_torn_file" = 15  # max 5.4s, median 4.2s over 7 runs
 "aida-core db::git_backend::tests::bulk_update_atomically_decides_on_the_stored_object_in_one_commit" = 15  # max 5.2s, median 3.8s over 7 runs
 "aida-core db::hypothesis_tests::hypothesis_both_edge_directions_and_types_lock_but_other_edges_and_legacy_do_not" = 15  # max 6.4s, median 4.5s over 7 runs
-"aida-cli-lib mandate_traces::replay_tests::task_1800_audited_cases_replay_from_the_vendored_bundle" = 45  # TASK-2068 CI replay: the production collector over 18 frozen cases (multi-MB Rust files); 56.7s in PR-2853 run 39965617424 with three passes, now one (~19s), x2 rounded up
+"aida-core allocation_authority::tests::bug_2017_batch_alias_conflicts_refuse_before_any_persistence" = 30  # measured 13.6s in PR-2926 CI (rest) after merging main; x2 rounded up
+"aida-cli-lib gate::mandate_gates::story_1888_gate_paths_tests::gate_authority_code_is_on_the_floor" = 30  # measured 13.5s in PR-2926 CI (AST scan over all aida-cli-lib/src/*.rs); x2 rounded up
+"aida-cli-lib gate::mandate_traces::replay_tests::task_1800_audited_cases_replay_from_the_vendored_bundle" = 45  # TASK-2068 CI replay: the production collector over 18 frozen cases (multi-MB Rust files); 56.7s in PR-2853 run 39965617424 with three passes, now one (~19s), x2 rounded up
 
 # Deterministic CLI half-split weights, measured on main 128a5bb6eb,
 # CI run 39348896342. Independent of the enforcement limits above.

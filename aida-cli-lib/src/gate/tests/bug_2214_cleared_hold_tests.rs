@@ -7,9 +7,10 @@
 //! forge-moved head into the local clone before the exclusion diff reads it.
 // trace:BUG-2214 | ai:claude
 
-use crate::mandate::HoldFacts;
-use crate::mandate_ship::cleared_by_human_facts;
-use crate::merge_hold::{self, ChangeState, HoldClearance, HoldReasonKind, PinnedChange};
+use crate::gate::mandate::HoldFacts;
+use crate::gate::mandate_ship::cleared_by_human_facts;
+use crate::gate::merge_hold_core::{HoldClearance, HoldReasonKind};
+use crate::merge_hold::{self, ChangeState, PinnedChange};
 
 const PR: u64 = 44;
 
@@ -24,7 +25,7 @@ fn write_clearance(root: &std::path::Path, pr: u64, cleared_by: &str, mandate: O
         released_by_verdict: None,
         released_under_mandate: mandate.map(String::from),
     };
-    let path = merge_hold::clearance_path(root, pr);
+    let path = crate::gate::merge_hold_core::clearance_path(root, pr);
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     std::fs::write(&path, serde_json::to_vec_pretty(&clearance).unwrap()).unwrap();
 }
@@ -186,8 +187,12 @@ fn a_copied_clearance_record_does_not_qualify() {
     // trace:BUG-2214.acd6c45c | ai:claude
     let tmp = qualified_root();
     write_clearance(tmp.path(), PR + 1, "human:joe", None);
-    let copied = merge_hold::clearance_path(tmp.path(), PR + 1);
-    std::fs::copy(&copied, merge_hold::clearance_path(tmp.path(), PR)).unwrap();
+    let copied = crate::gate::merge_hold_core::clearance_path(tmp.path(), PR + 1);
+    std::fs::copy(
+        &copied,
+        crate::gate::merge_hold_core::clearance_path(tmp.path(), PR),
+    )
+    .unwrap();
     assert_eq!(
         cleared_by_human_facts(tmp.path(), PR, || Ok(Some(labels(false, true, true)))),
         HoldFacts::None
@@ -251,7 +256,7 @@ fn hold_event_serde_is_backward_compatible() {
 //    reading mandate evidence) ───────────────────────────────────────────────
 
 fn git(repo: &std::path::Path, args: &[&str]) {
-    let ok = std::process::Command::new("git")
+    let ok = crate::test_git::git_command()
         .arg("-C")
         .arg(repo)
         .args([
@@ -259,10 +264,6 @@ fn git(repo: &std::path::Path, args: &[&str]) {
             "user.name=AIDA Test",
             "-c",
             "user.email=aida@example.test",
-            "-c",
-            "maintenance.auto=false",
-            "-c",
-            "gc.auto=0",
         ])
         .args(args)
         .status();
@@ -337,5 +338,51 @@ fn every_mandate_cover_call_site_passes_the_head_branch() {
     assert!(
         rework.contains("change_metadata"),
         "the head branch comes from the forge's change metadata"
+    );
+}
+
+// trace:TASK-1864 | ai:agy
+#[test]
+fn have_ship_refs_locally_requires_both_head_commit_and_origin_base_ref() {
+    let tmp = tempfile::tempdir().unwrap();
+    let origin = tmp.path().join("origin");
+    let clone = tmp.path().join("clone");
+    let git = |dir: &std::path::Path, args: &[&str]| -> String {
+        let out = crate::test_git::git_command()
+            .arg("-C")
+            .arg(dir)
+            .args(args)
+            .output()
+            .expect("git");
+        assert!(
+            out.status.success(),
+            "git {args:?}: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        String::from_utf8_lossy(&out.stdout).trim().to_string()
+    };
+    std::fs::create_dir_all(&origin).unwrap();
+    git(&origin, &["init", "-b", "main"]);
+    git(&origin, &["config", "user.email", "t@t"]);
+    git(&origin, &["config", "user.name", "t"]);
+    git(&origin, &["commit", "--allow-empty", "-m", "base"]);
+    git(
+        tmp.path(),
+        &["clone", origin.to_str().unwrap(), clone.to_str().unwrap()],
+    );
+    let base_oid = git(&clone, &["rev-parse", "HEAD"]);
+    assert!(
+        super::have_ship_refs_locally(&clone, &base_oid, "main"),
+        "both head_oid and refs/remotes/origin/main exist locally"
+    );
+    git(&origin, &["commit", "--allow-empty", "-m", "unfetched"]);
+    let unfetched_oid = git(&origin, &["rev-parse", "HEAD"]);
+    assert!(
+        !super::have_ship_refs_locally(&clone, &unfetched_oid, "main"),
+        "missing head_oid must return false"
+    );
+    assert!(
+        !super::have_ship_refs_locally(&clone, &base_oid, "missing-base"),
+        "missing refs/remotes/origin/<base_ref> must return false"
     );
 }

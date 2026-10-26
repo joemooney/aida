@@ -118,7 +118,7 @@ fn a_directory_entry_without_a_trailing_slash_matches_files_under_it() {
 #[test]
 fn no_layer_can_shrink_the_floor() {
     let committed = layer(
-        "[mandate.human_gates]\nops = []\nprotected_paths = [\"aida-cli-lib/src/mandate.rs\", \"a.rs\"]\n",
+        "[mandate.human_gates]\nops = []\nprotected_paths = [\"aida-cli-lib/src/gate/\", \"a.rs\"]\n",
     );
     let operator = layer("[mandate.human_gates]\nprotected_paths = [\"a.rs\", \"b/\"]\n");
     for g in [
@@ -156,7 +156,7 @@ fn no_layer_can_shrink_the_floor() {
 fn an_unreadable_load_still_checks_the_floor() {
     let gates: std::result::Result<HumanGates, String> = Err("no origin/main".into());
     let set = ProtectedPaths::of(&gates);
-    assert!(touches_gates(&paths(&["aida-cli-lib/src/pr_ship.rs"]), &set).is_some());
+    assert!(touches_gates(&paths(&["aida-cli-lib/src/gate/ship.rs"]), &set).is_some());
     assert!(gate_reason(&gates, GateOp::Ship).is_some());
 }
 
@@ -224,7 +224,7 @@ fn refusal_text_names_the_entry_and_its_source() {
         hit.describe(),
         "`gate/x.rs`, protected by `gate/` (~/.aida/config.toml)"
     );
-    let refusal = crate::mandate::MandateRefusal::TouchesGates(hit);
+    let refusal = crate::gate::mandate::MandateRefusal::TouchesGates(hit);
     let msg = refusal.message(7);
     assert!(
         msg.contains("`gate/`") && msg.contains("~/.aida/config.toml"),
@@ -267,7 +267,7 @@ fn mandate_status_lists_every_protected_entry_with_its_source() {
     let repo = repo_with_committed_config(
         "[mandate.human_gates]\nprotected_paths = [\"gate/\", \"kept.rs\"]\n",
     );
-    let state = crate::mandate::MandateState::None;
+    let state = crate::gate::mandate::MandateState::None;
     let now = chrono::Utc::now();
     let text = crate::mandate::status_report(&state, now, Some(repo.path()), false);
     assert!(text.contains("  protected paths:\n"), "{text}");
@@ -302,7 +302,7 @@ fn mandate_status_lists_every_protected_entry_with_its_source() {
 #[test]
 fn mandate_status_with_an_unreadable_committed_layer_shows_the_floor_only() {
     let repo = repo_with_committed_config("[mandate.human_gates]\nprotected_paths = [\"a//\"]\n");
-    let state = crate::mandate::MandateState::None;
+    let state = crate::gate::mandate::MandateState::None;
     let now = chrono::Utc::now();
     let text = crate::mandate::status_report(&state, now, Some(repo.path()), false);
     assert!(
@@ -549,20 +549,19 @@ fn ratchet_sees_qualified_fns() {
     }
 }
 
-// trace:STORY-1888.aca70d99 | ai:claude
+// trace:STORY-1888.aca70d99 trace:STORY-1889 | ai:claude
 #[test]
 fn gate_authority_code_is_on_the_floor() {
     let missing: Vec<String> = scan()
         .into_iter()
-        .filter(|(path, _)| !on_floor(path) && !KNOWN_UNPROTECTED.contains(&path.as_str()))
+        .filter(|(path, _)| !on_floor(path))
         .map(|(path, why)| format!("  {path} ({why})"))
         .collect();
     assert!(
         missing.is_empty(),
         "gate-authority code outside the mandate's protected floor:\n{}\n\
          Move it into aida-cli-lib/src/gate/ (the change then needs a human merge). \
-         Do not remove the marker, rename the function, or widen \
-         KNOWN_UNPROTECTED to get past this check.",
+         Do not remove the marker or rename the function to get past this check.",
         missing.join("\n")
     );
 }
@@ -603,23 +602,6 @@ fn every_floor_source_file_carries_the_marker() {
     );
 }
 
-// trace:STORY-1888.aca70d99 | ai:claude
-#[test]
-fn known_unprotected_only_shrinks() {
-    let found = scan();
-    let stale: Vec<&str> = KNOWN_UNPROTECTED
-        .iter()
-        .copied()
-        .filter(|p| !found.contains_key(*p) || on_floor(p))
-        .collect();
-    assert!(
-        stale.is_empty(),
-        "KNOWN_UNPROTECTED entries that no longer hold gate authority outside the \
-         floor: {stale:?}. Delete them from KNOWN_UNPROTECTED in mandate_gates.rs; \
-         the list only shrinks."
-    );
-}
-
 #[test]
 fn not_gate_authority_only_shrinks() {
     let root = workspace_root();
@@ -643,9 +625,10 @@ fn not_gate_authority_only_shrinks() {
 }
 
 /// The non-test lines of `text` that re-export a `crate::gate` item.
+// trace:TASK-2319 | ai:agy
 fn gate_reexports(text: &str) -> Vec<String> {
     let reexport = regex::Regex::new(
-        r"^\s*pub(\([^)]*\))?\s+use\s+(crate::|self::|super::)*(\{[^}]*\b)?gate(::|\s*;|\s*\})",
+        r"^\s*pub(\([^)]*\))?\s+use\s+(crate::|self::|super::)*(\{[^}]*\b)?gate(::|\s*;|\s*\}|\s*,|\s+as\b)",
     )
     .unwrap();
     non_test_lines(text)
@@ -670,20 +653,107 @@ fn reexport_detection() {
     assert!(gate_reexports("pub(crate) use crate::gateway::x;\n").is_empty());
 }
 
+// trace:TASK-2319 | ai:agy
+#[test]
+fn reexport_detection_sees_aliases() {
+    for line in [
+        "pub(crate) use crate::gate as g;\n",
+        "pub use self::gate as _;\n",
+        "pub use crate::{gate, other};\n",
+        "pub use crate::{other, gate as g};\n",
+    ] {
+        assert_eq!(gate_reexports(line).len(), 1, "{line}");
+    }
+    assert!(gate_reexports("pub(crate) use crate::gateway as g;\n").is_empty());
+}
+
+/// The `#[path = "..."]` targets in `text` that point into `gate/`.
+// trace:TASK-2335 | ai:agy
+fn gate_path_mounts(text: &str) -> Vec<String> {
+    let path_attr = regex::Regex::new(r#"^\s*#\s*\[\s*path\s*=\s*"([^"]+)"\s*\]"#).unwrap();
+    text.lines()
+        .filter_map(|l| {
+            let p = path_attr.captures(l)?.get(1)?.as_str();
+            (p.starts_with("gate/") || p.contains("/gate/")).then(|| p.to_string())
+        })
+        .collect()
+}
+
+// trace:TASK-2335 | ai:agy
+#[test]
+fn gate_path_mount_detection() {
+    assert_eq!(
+        gate_path_mounts(
+            "#[cfg(test)]\n#[path = \"gate/tests/story_1405_review_marker_tests.rs\"]\nmod t;\n"
+        ),
+        vec!["gate/tests/story_1405_review_marker_tests.rs".to_string()]
+    );
+    assert_eq!(
+        gate_path_mounts("#[path = \"../gate/tests/x.rs\"]\nmod x;\n"),
+        vec!["../gate/tests/x.rs".to_string()]
+    );
+    assert!(gate_path_mounts("#[path = \"tests/review_marker_tests.rs\"]\nmod t;\n").is_empty());
+}
+
+// trace:TASK-2335 | ai:agy
+#[test]
+fn no_unprotected_file_mounts_a_gate_module() {
+    let bad: Vec<String> = sources()
+        .into_iter()
+        .filter(|(path, _)| !on_floor(path))
+        .filter_map(|(path, text)| {
+            let mounts = gate_path_mounts(&text);
+            (!mounts.is_empty()).then(|| format!("  {path}: {}", mounts.join(", ")))
+        })
+        .collect();
+    assert!(
+        bad.is_empty(),
+        "unprotected files mount `gate/` modules via `#[path = ...]`:\n{}\n\
+         A `#[path]` declaration in an unprotected file can be repointed or \
+         removed without a human merge. Mount `gate/tests/*` inside a protected \
+         `aida-cli-lib/src/gate/` module instead.",
+        bad.join("\n")
+    );
+
+    let root = workspace_root();
+    let gate_dir = root.join("aida-cli-lib/src/gate");
+    let mut gate_sources = Vec::new();
+    for entry in std::fs::read_dir(&gate_dir).unwrap() {
+        let entry = entry.unwrap();
+        let path = entry.path();
+        if path.extension().and_then(|s| s.to_str()) == Some("rs") {
+            if let Ok(text) = std::fs::read_to_string(&path) {
+                gate_sources.push(text);
+            }
+        }
+    }
+    let mut unmounted = Vec::new();
+    for entry in std::fs::read_dir(gate_dir.join("tests")).unwrap() {
+        let entry = entry.unwrap();
+        let path = entry.path();
+        if path.extension().and_then(|s| s.to_str()) == Some("rs") {
+            let rel = format!("tests/{}", path.file_name().unwrap().to_string_lossy());
+            let needle = format!("\"{rel}\"");
+            if !gate_sources.iter().any(|t| t.contains(&needle)) {
+                unmounted.push(rel);
+            }
+        }
+    }
+    assert!(
+        unmounted.is_empty(),
+        "`aida-cli-lib/src/gate/tests/` files not mounted by any `gate/*.rs` module: {unmounted:?}"
+    );
+}
+
 #[test]
 fn no_unprotected_file_reexports_gate_items() {
-    let found: std::collections::BTreeMap<String, Vec<String>> = sources()
+    let unlisted: Vec<String> = sources()
         .into_iter()
         .filter(|(path, _)| !on_floor(path))
         .filter_map(|(path, text)| {
             let lines = gate_reexports(&text);
-            (!lines.is_empty()).then_some((path, lines))
+            (!lines.is_empty()).then(|| format!("  {path}: {}", lines.join(" | ")))
         })
-        .collect();
-    let unlisted: Vec<String> = found
-        .iter()
-        .filter(|(path, _)| !TRANSITIONAL_GATE_REEXPORTS.contains(&path.as_str()))
-        .map(|(path, lines)| format!("  {path}: {}", lines.join(" | ")))
         .collect();
     assert!(
         unlisted.is_empty(),
@@ -692,14 +762,174 @@ fn no_unprotected_file_reexports_gate_items() {
          without a human merge. Call `crate::gate::...` directly instead.",
         unlisted.join("\n")
     );
-    let stale: Vec<&str> = TRANSITIONAL_GATE_REEXPORTS
-        .iter()
-        .copied()
-        .filter(|p| !found.contains_key(*p))
+}
+
+// ── authority inputs bound inside the gate (STORY-1889 review F1-F3) ───────
+
+/// The non-test source of the gate file `name` (under `aida-cli-lib/src/gate/`).
+fn gate_source(name: &str) -> String {
+    let text =
+        std::fs::read_to_string(workspace_root().join("aida-cli-lib/src/gate").join(name)).unwrap();
+    non_test_lines(&text).join("\n")
+}
+
+/// The body of `fn name` in `text` (from its signature to the next item).
+fn fn_body<'a>(text: &'a str, name: &str) -> &'a str {
+    let start = text
+        .find(&format!("fn {name}("))
+        .or_else(|| text.find(&format!("fn {name}<")))
+        .unwrap_or_else(|| panic!("fn {name} is defined"));
+    let rest = &text[start..];
+    let end = rest[1..]
+        .find("\nfn ")
+        .or_else(|| rest[1..].find("\npub"))
+        .unwrap_or(rest.len() - 1);
+    &rest[..end + 1]
+}
+
+/// Names whose use decides gate authority. Outside the floor nothing may
+/// name them: a caller that picks the human floor, the ship decision or the
+/// supervised default could pick a permissive one without a human merge.
+const GATE_ONLY_NAMES: &[&str] = &[
+    "require_mandate_human",
+    "ship_decision",
+    "rework_release_decision",
+    "drive_includes_supervised",
+    "collect_held_prs_with",
+    "verify_fresh_restart_plan",
+    "append_restart",
+];
+
+// trace:STORY-1889 | ai:claude
+#[test]
+fn no_unprotected_file_names_a_gate_only_authority_input() {
+    let word = |n: &str| regex::Regex::new(&format!(r"\b{n}\b")).unwrap();
+    let names: Vec<(&str, regex::Regex)> = GATE_ONLY_NAMES.iter().map(|n| (*n, word(n))).collect();
+    let bad: Vec<String> = sources()
+        .into_iter()
+        .filter(|(path, _)| !on_floor(path))
+        .filter_map(|(path, text)| {
+            let body = non_test_lines(&text).join("\n");
+            let hits: Vec<&str> = names
+                .iter()
+                .filter(|(_, re)| re.is_match(&body))
+                .map(|(n, _)| *n)
+                .collect();
+            (!hits.is_empty()).then(|| format!("  {path}: {}", hits.join(", ")))
+        })
         .collect();
     assert!(
-        stale.is_empty(),
-        "TRANSITIONAL_GATE_REEXPORTS entries that no longer re-export: {stale:?}. \
-         Delete them from mandate_gates.rs; the list only shrinks."
+        bad.is_empty(),
+        "unprotected files name gate-only authority inputs:\n{}\n\
+         Call the gate entry that binds them instead (`start_as_human`, \
+         `stop_as_human`, `mandate_ship_cover_for_ship`, `with_live_tick_inputs`, \
+         `record_fresh_restart`).",
+        bad.join("\n")
     );
+}
+
+// F1: mandate start/stop bind the human floor in the gate; the injectable
+// seams exist only under `cfg(test)`.
+// trace:STORY-1889 | ai:claude
+#[test]
+fn mandate_start_and_stop_bind_the_human_floor_in_the_gate() {
+    let src = gate_source("mandate.rs");
+    let fns = defined_fns(&src);
+    for seam in ["start", "start_with", "start_with_scopes", "stop"] {
+        assert!(
+            !fns.iter().any(|f| f == seam),
+            "gate::mandate::{seam} takes an injectable human floor; it must be #[cfg(test)]"
+        );
+    }
+    for private in ["mint", "tombstone_all"] {
+        assert!(
+            src.contains(&format!("\nfn {private}(")),
+            "gate::mandate::{private} must stay private to the gate module"
+        );
+    }
+    assert!(fn_body(&src, "start_as_human").contains("&require_mandate_human,"));
+    assert!(fn_body(&src, "start_as_human").contains("drive_includes_supervised("));
+    assert!(fn_body(&src, "stop_as_human").contains("&require_mandate_human,"));
+}
+
+// F2: the drive tick's authority inputs are private to the gate, built only
+// by `with_live_tick_inputs`.
+// trace:STORY-1889 | ai:claude
+#[test]
+fn drive_tick_authority_inputs_are_private_to_the_gate() {
+    let src = gate_source("mandate_drive.rs");
+    let body = src
+        .split("pub(crate) struct TickInputs<'a> {")
+        .nth(1)
+        .and_then(|s| s.split("\n}").next())
+        .expect("TickInputs is defined in gate/mandate_drive.rs");
+    for field in [
+        "mandate_dir",
+        "principal",
+        "clock",
+        "gates",
+        "lanes",
+        "held_prs",
+        "spec_always_human",
+        "spec_signoff",
+        "store_readable",
+    ] {
+        let decl = body
+            .lines()
+            .map(str::trim)
+            .find(|l| l.starts_with(&format!("{field}:")) || l.contains(&format!(" {field}:")))
+            .unwrap_or_else(|| panic!("TickInputs::{field} is declared"));
+        assert!(
+            !decl.starts_with("pub"),
+            "TickInputs::{field} must be private to the gate: {decl}"
+        );
+    }
+    let live = fn_body(&src, "with_live_tick_inputs");
+    for input in [
+        "load_store_for_lookup(",
+        "read_exclusions(",
+        "spec_always_human_from(",
+        "spec_signoff_from(",
+        "load_human_gates(",
+        "collect_held_prs(",
+        "current_user_id(",
+    ] {
+        assert!(
+            live.contains(input),
+            "with_live_tick_inputs must call {input}"
+        );
+    }
+    assert!(fn_body(&src, "collect_held_prs").contains("&changed_paths)"));
+    assert!(
+        src.contains("\nfn changed_paths("),
+        "changed_paths stays gate-private"
+    );
+    let restart = fn_body(&src, "record_fresh_restart");
+    let verify = restart.find("verify_fresh_restart_plan(").expect("verify");
+    let append = restart.find("append_restart(").expect("append");
+    assert!(
+        verify < append,
+        "the fresh re-check runs before the lineage line"
+    );
+    for (path, text) in sources() {
+        if !on_floor(&path) {
+            assert!(
+                !non_test_lines(&text).join("\n").contains("TickInputs {"),
+                "{path} constructs TickInputs outside the gate"
+            );
+        }
+    }
+}
+
+// F3: the ship cover's decision is bound in the gate.
+// trace:STORY-1889 | ai:claude
+#[test]
+fn the_ship_cover_decision_is_bound_in_the_gate() {
+    let src = gate_source("mandate_ship.rs");
+    assert!(
+        src.contains("pub(in crate::gate) fn mandate_ship_cover("),
+        "the decision-taking cover must be gate-private"
+    );
+    let ship = fn_body(&src, "mandate_ship_cover_for_ship");
+    assert!(ship.contains("crate::gate::mandate::ship_decision,\n        true,"));
 }
