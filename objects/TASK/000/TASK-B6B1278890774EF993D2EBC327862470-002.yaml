@@ -2,12 +2,12 @@ id: 01a1783f-1990-7492-94cf-0d8e4ad59539
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-002
 title: 'STORY-1843 slice C1: mail retention core (anchor, safe IO, source generations, local permit admission, retire_source journal with replay)'
 description: 'Child of STORY-1843. Implements C SKETCH v1 (comment 75) slice C1 exactly as signed 2026-10-26 06:00 MST: core only, no production caller of retire_source yet (expect(dead_code) until C2), RetentionCoverage stays Unestablished in every production path, section 6 crash fixtures required, 2 s bounded try-lock refusing on timeout. STRICT review; PR title (Refs STORY-1843, TASK-<this>).'
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-26T12:46:03.664293299Z
-modified_at: 2026-10-26T12:46:15.369529402Z
+modified_at: 2026-10-26T12:46:46.231516729Z
 req_type: Task
 history:
 - id: 01a1783f-4749-7031-a07c-c8e19f0d19a2
@@ -18,6 +18,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1783f-bfd7-7092-b71e-a84cda075e4e
+  author: aida-session-start
+  timestamp: 2026-10-26T12:46:46.231513481Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: e4c2dd0575990c64b7b14ee242b02012c22195dd
   branch: main
