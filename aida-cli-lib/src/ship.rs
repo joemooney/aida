@@ -197,16 +197,16 @@ pub(crate) fn commit_tracked_changes(
     subject: &str,
 ) -> anyhow::Result<()> {
     use anyhow::Context as _;
-    let add = std::process::Command::new("git")
-        .current_dir(project_root)
+    // Clone-safe builder: host git refuses a seat clone (TASK-2143 ratchet).
+    // trace:TASK-2359 | ai:claude
+    let add = aida_core::git_ops::host_git_command(project_root)
         .args(["add", "-u"])
         .status()
         .context("could not invoke `git add`")?;
     if !add.success() {
         anyhow::bail!("`git add -u` failed — investigate before retrying");
     }
-    let commit = std::process::Command::new("git")
-        .current_dir(project_root)
+    let commit = aida_core::git_ops::host_git_command(project_root)
         .args(["commit", "-m", subject])
         .status()
         .context("could not invoke `git commit`")?;
@@ -424,6 +424,11 @@ mod tests {
         let tmp = repo();
         git(tmp.path(), &["config", "user.name", "t"]);
         git(tmp.path(), &["config", "user.email", "t@example.com"]);
+        // host_git_command adds NO_AUTO_MAINTENANCE only under a store write
+        // lock, so the repo config keeps step 1's commit from starting
+        // detached maintenance in the fixture (BUG-2191).
+        git(tmp.path(), &["config", "maintenance.auto", "false"]);
+        git(tmp.path(), &["config", "gc.auto", "0"]);
         std::fs::write(tmp.path().join("a.txt"), "changed\n").unwrap();
         std::fs::write(tmp.path().join("stray.txt"), "x\n").unwrap();
 
