@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a169c3-090b-7350-9b07-de2fa0c4ad61
+  position: 287000
+  added_by: role:implementer
+  note: 'PR-2924 round-3 final review at 92216690 = request-changes (record failed on a revoked reviewer grant; advisor ruling: F1 blocking per the signed Q2 ruling, F2+F3 folded in, F4 no action under a Refs squash). Rework lane relaunched by the advisor.'
+  added_at: 2026-10-26T03:25:51.084276973Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a173f2-8dcc-7752-a87b-03b7ef311900
   position: 288000
   added_by: role:implementer
@@ -88,13 +95,5 @@
   added_by: role:implementer
   note: Full signed three-slice scope after STORY-1742 v1; non-executable adoption plane, projection/adapters, inventory-only migration/uninstall/CI/docs. Readiness map in progress; no premature implementation or narrower completion.
   added_at: 2026-10-25T13:50:54.938319618Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
-  requirement_id: 01a169c3-090b-7350-9b07-de2fa0c4ad61
-  position: 486000
-  added_by: role:implementer
-  note: Existing agy2 owner/worktree only. Apply bounded e3db source-preview recovery/legacy-activation/test corrections plus full R6/Q2; do not start a duplicate worker or stale dispatch extraction. See current antigravity brief145136 and canonical advisor decision.
-  added_at: 2026-10-25T14:52:25.461918334Z
   for_role: implementer
   added_by_machine: imac
