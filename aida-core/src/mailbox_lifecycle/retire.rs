@@ -11,6 +11,12 @@
 //! mailbox and keeps the retained copy: the caller keeps its tree, lease,
 //! claim and manifest. Retirement is retryable; it never blocks.
 //!
+//! Retention bound: every attempt that reaches preservation keeps its copy
+//! under `retained/<key>/<generation>/`, refused attempts included, and C1
+//! prunes none of them. A source refused N times after preserving holds N
+//! copies of its mailbox; pruning copies superseded by a later attempt or a
+//! committed retirement is C2 work.
+//!
 //! The caller performs the destructive step after `Retired` and then calls
 //! `complete_retirement`. C2 wires the destructive entries; until then this
 //! module has no production caller.
@@ -618,7 +624,14 @@ fn move_tree(
             if let Err(reason) = move_tree(&path, &target, same_fs, moved)? {
                 return Ok(Err(reason));
             }
-            std::fs::remove_dir(&path)?;
+            // A writer that took no permit may have added an entry here after
+            // the listing: refuse (the abort restores and reopens) rather than
+            // fail with the source left fenced.
+            if let Err(e) = std::fs::remove_dir(&path) {
+                return Ok(Err(RefusalReason::StateChanged {
+                    detail: format!("{} could not be emptied: {e}", path.display()),
+                }));
+            }
             continue;
         }
         if let Err(e) = check_regular(&meta, &path, PRESERVE_CAP) {
@@ -633,14 +646,22 @@ fn move_tree(
                     detail: format!("{} is already preserved with other bytes", path.display()),
                 }));
             }
-            std::fs::remove_file(&path)?;
+            if let Err(reason) = remove_preserved(&path) {
+                return Ok(Err(reason));
+            }
         } else if same_fs {
-            std::fs::rename(&path, &target)?;
+            if let Err(e) = std::fs::rename(&path, &target) {
+                return Ok(Err(RefusalReason::PreserveFailed {
+                    detail: format!("moving {}: {e}", path.display()),
+                }));
+            }
         } else {
             if let Err(reason) = copy_verified(&path, &target)? {
                 return Ok(Err(reason));
             }
-            std::fs::remove_file(&path)?;
+            if let Err(reason) = remove_preserved(&path) {
+                return Ok(Err(reason));
+            }
         }
         *moved += 1;
         if *moved == 1 {
@@ -650,6 +671,13 @@ fn move_tree(
     fsync_dir(dst)?;
     fsync_dir(src)?;
     Ok(Ok(()))
+}
+
+/// Remove a source file whose bytes are already preserved.
+fn remove_preserved(path: &Path) -> std::result::Result<(), RefusalReason> {
+    std::fs::remove_file(path).map_err(|e| RefusalReason::PreserveFailed {
+        detail: format!("removing preserved {}: {e}", path.display()),
+    })
 }
 
 static COPY_SEQ: AtomicU64 = AtomicU64::new(0);

@@ -186,7 +186,12 @@ fn local_write_is_admitted_and_releases_its_permit() {
     let dir = repo();
     let ((), classes) =
         observe_lock_classes(|| write_local_message(dir.path(), &message("m1")).unwrap());
-    // Two short leaf holds (admit, complete); no other lock class.
+    // Git resolves the anchor before any lock, then two short leaf holds
+    // (admit, complete); nothing is entered under either.
+    assert_eq!(classes, vec!["git", "lifecycle", "lifecycle"]);
+    // The resolved anchor is cached for the process: no Git on later writes.
+    let ((), classes) =
+        observe_lock_classes(|| write_local_message(dir.path(), &message("m2")).unwrap());
     assert_eq!(classes, vec!["lifecycle", "lifecycle"]);
     assert!(mailbox(dir.path()).join("m1.json").is_file());
     let record = record(dir.path());
@@ -234,6 +239,71 @@ fn the_anchor_lives_in_the_common_git_dir_and_is_private() {
             .mode();
         assert_eq!(mode & 0o777, 0o700, "{sub}");
     }
+}
+
+#[test]
+fn a_group_writable_common_git_dir_keeps_local_mail_working() {
+    // Under umask 002 Git makes the repository's dirs 0775. That mode is the
+    // repository's, not the anchor's: mail is admitted and the anchor AIDA
+    // creates is still private.
+    let dir = repo();
+    for path in [dir.path().to_path_buf(), dir.path().join(".git")] {
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o775)).unwrap();
+    }
+    write_local_message(dir.path(), &message("m1")).unwrap();
+    assert!(mailbox(dir.path()).join("m1.json").is_file());
+    let source = source(dir.path());
+    for sub in ["", SOURCES_DIR] {
+        let mode = std::fs::metadata(source.anchor.join(sub))
+            .unwrap()
+            .permissions()
+            .mode();
+        assert_eq!(mode & 0o777, 0o700, "{sub}");
+    }
+    let record_mode = std::fs::metadata(record_path(&source.anchor, &source.key))
+        .unwrap()
+        .permissions()
+        .mode();
+    assert_eq!(record_mode & 0o777, 0o600);
+    assert!(matches!(
+        cover_local_write(dir.path()).unwrap(),
+        RetentionCoverage::Admitted(_)
+    ));
+}
+
+#[test]
+fn an_unusable_anchor_delivers_uncovered_and_retirement_refuses() {
+    let dir = repo();
+    write_local_message(dir.path(), &message("m1")).unwrap();
+    let source = source(dir.path());
+    let path = record_path(&source.anchor, &source.key);
+
+    // A damaged record: delivery is unchanged, coverage stays unestablished.
+    std::fs::write(&path, "not json").unwrap();
+    write_local_message(dir.path(), &message("m2")).unwrap();
+    assert!(mailbox(dir.path()).join("m2.json").is_file());
+    assert!(matches!(
+        cover_local_write(dir.path()).unwrap(),
+        RetentionCoverage::Unestablished(Some(_))
+    ));
+    // Retirement is the side that fails closed.
+    assert!(matches!(
+        retire_source(dir.path(), &opts()),
+        Err(LifecycleError::Corrupt { .. })
+    ));
+    assert_eq!(std::fs::read(&path).unwrap(), b"not json");
+
+    // An anchor AIDA can no longer trust: the same.
+    std::fs::remove_file(&path).unwrap();
+    std::fs::set_permissions(&source.anchor, std::fs::Permissions::from_mode(0o755)).unwrap();
+    write_local_message(dir.path(), &message("m3")).unwrap();
+    assert!(mailbox(dir.path()).join("m3.json").is_file());
+    let (reason, _) = refusal(retire_source(dir.path(), &opts()).unwrap());
+    assert!(
+        matches!(reason, RefusalReason::UnsafeMailbox { .. }),
+        "{reason:?}"
+    );
+    std::fs::set_permissions(&source.anchor, std::fs::Permissions::from_mode(0o700)).unwrap();
 }
 
 #[test]
@@ -354,6 +424,98 @@ fn the_lifecycle_lock_is_a_leaf_in_both_directions() {
         inside.unwrap(),
         "a Store-held region must not take Lifecycle"
     );
+}
+
+#[test]
+fn git_and_the_pool_lock_never_start_under_lifecycle() {
+    let dir = repo();
+    let anchor = source(dir.path()).anchor;
+    let root = dir.path().to_path_buf();
+    // The assertion is a debug assertion; the class is recorded either way.
+    if cfg!(debug_assertions) {
+        let held = lock(&anchor, LIFECYCLE_LOCK_TIMEOUT).unwrap();
+        let git = std::panic::catch_unwind(|| crate::git_ops::host_git_command(&root));
+        assert!(git.is_err(), "Git built under the Lifecycle lock");
+        let pool =
+            std::panic::catch_unwind(|| crate::worktree_pool::with_state_lock(&root, |_| Ok(())));
+        assert!(
+            pool.is_err(),
+            "the pool lock taken under the Lifecycle lock"
+        );
+        drop(held);
+    }
+    let ((), classes) = observe_lock_classes(|| {
+        drop(crate::git_ops::host_git_command(&root));
+    });
+    assert_eq!(classes, vec!["git"]);
+}
+
+// ── Permit rows ─────────────────────────────────────────────────────────────
+
+fn dead_identity() -> ProcessIdentity {
+    let mut child = std::process::Command::new("sleep")
+        .arg("30")
+        .spawn()
+        .unwrap();
+    let identity = ProbeSource::system().capture(child.id()).unwrap();
+    child.kill().unwrap();
+    child.wait().unwrap();
+    identity
+}
+
+#[test]
+fn admission_reaps_rows_whose_writer_is_proven_dead() {
+    let dir = repo();
+    ensure_mailbox(dir.path());
+    let dead = dead_identity();
+    edit_record(dir.path(), |r| {
+        r.permits = vec![
+            Permit {
+                permit_id: "dead".into(),
+                kind: PermitKind::Local,
+                holder: Some(dead.clone()),
+                generation: r.generation,
+            },
+            Permit {
+                permit_id: "unknown".into(),
+                kind: PermitKind::Local,
+                holder: None,
+                generation: r.generation,
+            },
+        ]
+    });
+    let permit = admit_local_write(dir.path()).unwrap().unwrap();
+    let ids: Vec<String> = record(dir.path())
+        .permits
+        .into_iter()
+        .map(|p| p.permit_id)
+        .collect();
+    assert_eq!(ids.len(), 2, "{ids:?}");
+    assert_eq!(ids[0], "unknown");
+    permit.complete().unwrap();
+    assert_eq!(record(dir.path()).permits.len(), 1);
+}
+
+#[test]
+fn a_failed_release_keeps_the_row_for_drop_to_retry() {
+    let dir = repo();
+    ensure_mailbox(dir.path());
+    let anchor = source(dir.path()).anchor;
+    let permit = admit_local_write(dir.path()).unwrap().unwrap();
+    let (taken_tx, taken_rx) = std::sync::mpsc::channel();
+    let holder = std::thread::spawn(move || {
+        let _held = lock(&anchor, LIFECYCLE_LOCK_TIMEOUT).unwrap();
+        taken_tx.send(()).unwrap();
+        // Past complete()'s bounded try, inside Drop's retry.
+        std::thread::sleep(LIFECYCLE_LOCK_TIMEOUT + Duration::from_millis(600));
+    });
+    taken_rx.recv().unwrap();
+    assert!(matches!(
+        permit.complete(),
+        Err(LifecycleError::LockTimeout { .. })
+    ));
+    holder.join().unwrap();
+    assert!(record(dir.path()).permits.is_empty());
 }
 
 // ── Retirement ──────────────────────────────────────────────────────────────
@@ -592,6 +754,34 @@ fn a_non_admitting_late_writer_is_caught_and_everything_is_kept() {
     assert_eq!(files_under(&mailbox(dir.path())), expected);
     let retained = retained.expect("the retained copy is kept");
     assert_eq!(files_under(&retained.join("data")), SEEDED);
+    assert_open(dir.path());
+}
+
+#[test]
+fn a_write_into_a_listed_subdirectory_during_preserve_refuses_and_reopens() {
+    let dir = repo();
+    seed_mail(dir.path());
+    activate(dir.path());
+    // `.read` is listed and moved first; a writer that takes no permit adds
+    // to it before it is removed.
+    let extra = mailbox(dir.path()).join(".read/alice.txt");
+    let extra_path = extra.clone();
+    HOOK_AT.with(|h| {
+        *h.borrow_mut() = Some((
+            Point::MidPreserve,
+            Box::new(move || std::fs::write(&extra_path, "3").unwrap()),
+        ))
+    });
+    let (reason, retained) = refusal(retire_source(dir.path(), &opts()).unwrap());
+    assert!(
+        matches!(reason, RefusalReason::StateChanged { .. }),
+        "{reason:?}"
+    );
+    assert!(retained.is_some());
+    let mut expected: Vec<String> = SEEDED.iter().map(|s| s.to_string()).collect();
+    expected.push(".read/alice.txt".into());
+    expected.sort();
+    assert_eq!(files_under(&mailbox(dir.path())), expected);
     assert_open(dir.path());
 }
 

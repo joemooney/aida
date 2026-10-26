@@ -183,6 +183,10 @@ fn authorize_with_caller(
     scope: Option<&super::scope::ChildScopeGraph>,
     locked_caller: impl FnOnce() -> Caller,
 ) -> Result<SeatPermit> {
+    // A seat permit is never taken under the mailbox Lifecycle lock.
+    // trace:STORY-1843 | ai:claude
+    #[cfg(unix)]
+    aida_core::mailbox_lifecycle::enter_lock_class("seat");
     let claims_possible = matches!(op, SeatOp::LoopStart { .. } | SeatOp::HandoffWrite)
         || caller.grant.as_ref().is_some_and(|g| g.seat == seat);
     let store = match SeatStore::for_project_opt(project_root)? {

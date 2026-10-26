@@ -31,6 +31,19 @@
 //! and mail delivery is unchanged; `retire` has no production caller until
 //! C2.
 //!
+//! Hardening applies to what AIDA creates and owns: the anchor directories
+//! (0700) and their files (0600), whatever the umask. The common Git
+//! directory is the repository's, not AIDA's: it must be a real directory
+//! owned by this uid, but it may be group-writable (umask 002, or Git's
+//! `core.sharedRepository` layout).
+//!
+//! Degraded path: a writer that cannot establish the anchor (no Git, an
+//! unusable or damaged anchor, a busy lock) writes exactly as it did before
+//! C1, with no permit, and its [`RetentionCoverage`] stays `Unestablished`.
+//! Only a source recorded as fenced or retired refuses a write. Retirement
+//! is the side that fails closed: it refuses whatever it cannot prove, and
+//! its final check catches a write that took no permit.
+//!
 //! trace:STORY-1843 | ai:claude
 
 pub(crate) mod retire;
@@ -41,14 +54,16 @@ mod tests;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::cell::{Cell, RefCell};
+use std::collections::HashMap;
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Write};
 use std::os::unix::fs::{DirBuilderExt, MetadataExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
-use crate::process_probe::{ProbeSource, ProcessIdentity};
+use crate::process_probe::{Probe, ProbeSource, ProcessIdentity};
 
 /// How long any Lifecycle acquisition waits before refusing (QC2). The lock is
 /// never held across Git, network, hooks or another lock, so a longer wait
@@ -237,12 +252,78 @@ pub(crate) struct Source {
 
 // ── Source resolution ───────────────────────────────────────────────────────
 
+/// Where a checkout's anchor is, once resolved: the common Git dir, the
+/// worktree admin name and the anchor directory.
+#[derive(Debug, Clone)]
+struct Anchored {
+    common: PathBuf,
+    admin: String,
+    anchor: PathBuf,
+}
+
+/// Per-process cache of [`Anchored`] by checkout root, so a process that
+/// writes many messages runs `git rev-parse` once. The mailbox identity is
+/// re-read on every call; an entry is dropped on any lifecycle error.
+fn anchored_cache() -> &'static Mutex<HashMap<PathBuf, Anchored>> {
+    static CACHE: OnceLock<Mutex<HashMap<PathBuf, Anchored>>> = OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn forget_anchor(project_root: &Path) {
+    if let Ok(mut cache) = anchored_cache().lock() {
+        cache.remove(project_root);
+    }
+}
+
 /// Resolve the mail source for the checkout at `project_root`, creating the
 /// anchor if needed. `Ok(None)` when the checkout is not in a Git repository
 /// (or host Git refuses to run there, as in a seat clone): such a source has
 /// no anchor, takes no permit and cannot be retired. The mailbox directory
 /// must already exist; its device and inode are part of the key.
 pub(crate) fn resolve_source(project_root: &Path) -> Result<Option<Source>> {
+    let cached = anchored_cache()
+        .lock()
+        .ok()
+        .and_then(|cache| cache.get(project_root).cloned());
+    let anchored = match cached {
+        // The anchor is re-checked (one lstat) so a swapped directory is
+        // refused, not trusted from the cache.
+        Some(anchored) => {
+            check_owned_dir(&anchored.anchor, true)?;
+            anchored
+        }
+        None => {
+            let Some(anchored) = locate_anchor(project_root)? else {
+                return Ok(None);
+            };
+            if let Ok(mut cache) = anchored_cache().lock() {
+                cache.insert(project_root.to_path_buf(), anchored.clone());
+            }
+            anchored
+        }
+    };
+    let mailbox = crate::mailbox::local_mailbox_dir(project_root);
+    let meta = std::fs::metadata(&mailbox)?;
+    if !meta.is_dir() {
+        return Err(LifecycleError::Unsafe {
+            path: mailbox,
+            why: "the mailbox is not a directory".into(),
+        });
+    }
+    let key = source_key(&anchored.common, &anchored.admin, meta.dev(), meta.ino());
+    Ok(Some(Source {
+        anchor: anchored.anchor,
+        key,
+        mailbox,
+        admin: anchored.admin,
+        dev: meta.dev(),
+        ino: meta.ino(),
+    }))
+}
+
+/// Ask Git for the common and per-worktree Git dirs, verify them and create
+/// the anchor. Runs Git, so it is never called under the Lifecycle lock.
+fn locate_anchor(project_root: &Path) -> Result<Option<Anchored>> {
     let out = crate::git_ops::host_git_command(project_root)
         .args([
             "rev-parse",
@@ -262,7 +343,7 @@ pub(crate) fn resolve_source(project_root: &Path) -> Result<Option<Source>> {
     };
     let common = std::fs::canonicalize(common)?;
     let git_dir = std::fs::canonicalize(git_dir)?;
-    check_owned_dir(&common, false)?;
+    check_repository_dir(&common)?;
     let admin = if git_dir == common {
         String::new()
     } else if git_dir.parent() == Some(common.join("worktrees").as_path()) {
@@ -280,23 +361,11 @@ pub(crate) fn resolve_source(project_root: &Path) -> Result<Option<Source>> {
             ),
         });
     };
-    let mailbox = crate::mailbox::local_mailbox_dir(project_root);
-    let meta = std::fs::metadata(&mailbox)?;
-    if !meta.is_dir() {
-        return Err(LifecycleError::Unsafe {
-            path: mailbox,
-            why: "the mailbox is not a directory".into(),
-        });
-    }
     let anchor = ensure_anchor(&common)?;
-    let key = source_key(&common, &admin, meta.dev(), meta.ino());
-    Ok(Some(Source {
-        anchor,
-        key,
-        mailbox,
+    Ok(Some(Anchored {
+        common,
         admin,
-        dev: meta.dev(),
-        ino: meta.ino(),
+        anchor,
     }))
 }
 
@@ -337,6 +406,24 @@ pub(crate) fn ensure_dir(dir: &Path, private: bool) -> Result<()> {
         Err(e) => return Err(e.into()),
     }
     check_owned_dir(dir, private)
+}
+
+/// The common Git dir belongs to the repository, not to AIDA: require a real
+/// directory owned by this uid, and leave its mode alone (umask 002 and
+/// `core.sharedRepository` make it group-writable).
+fn check_repository_dir(dir: &Path) -> Result<()> {
+    let meta = std::fs::symlink_metadata(dir)?;
+    let unsafe_dir = |why: String| LifecycleError::Unsafe {
+        path: dir.to_path_buf(),
+        why,
+    };
+    if !meta.file_type().is_dir() {
+        return Err(unsafe_dir("not a directory (or a symlink)".into()));
+    }
+    if meta.uid() != euid() {
+        return Err(unsafe_dir(format!("owned by uid {}", meta.uid())));
+    }
+    Ok(())
 }
 
 fn check_owned_dir(dir: &Path, private: bool) -> Result<()> {
@@ -430,6 +517,13 @@ static STAGING_SEQ: AtomicU64 = AtomicU64::new(0);
 /// (mode 0600) is written and fsynced, renamed over the target, and the
 /// directory is fsynced. An existing target must pass [`check_regular`].
 pub(crate) fn write_durable(path: &Path, bytes: &[u8]) -> Result<()> {
+    write_replace(path, bytes, true)
+}
+
+/// [`write_durable`] without the fsyncs when `sync` is false: the rename is
+/// still atomic for every reader on this machine, but a crash of the machine
+/// may lose the write.
+fn write_replace(path: &Path, bytes: &[u8], sync: bool) -> Result<()> {
     match std::fs::symlink_metadata(path) {
         Ok(meta) => check_regular(&meta, path, u64::MAX)?,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
@@ -450,14 +544,18 @@ pub(crate) fn write_durable(path: &Path, bytes: &[u8]) -> Result<()> {
             .custom_flags(libc::O_NOFOLLOW)
             .open(&tmp)?;
         file.write_all(bytes)?;
-        file.sync_all()?;
+        if sync {
+            file.sync_all()?;
+        }
         std::fs::rename(&tmp, path)
     })();
     if let Err(e) = staged {
         let _ = std::fs::remove_file(&tmp);
         return Err(e.into());
     }
-    fsync_dir(dir)?;
+    if sync {
+        fsync_dir(dir)?;
+    }
     Ok(())
 }
 
@@ -497,6 +595,21 @@ thread_local! {
 /// refuses to start inside a Lifecycle hold.
 pub fn lifecycle_lock_held() -> bool {
     HELD.with(Cell::get)
+}
+
+/// Record that this thread is entering `class` (a Git command, the worktree
+/// pool lock, a seat permit). None of them may start inside a Lifecycle
+/// hold: the Lifecycle lock is a leaf.
+pub fn enter_lock_class(class: &'static str) {
+    debug_assert!(
+        !lifecycle_lock_held(),
+        "lock-order violation: {class} entered while the mailbox lifecycle lock is held"
+    );
+    OBSERVED.with(|o| {
+        if let Some(seen) = o.borrow_mut().as_mut() {
+            seen.push(class);
+        }
+    });
 }
 
 /// Run `f` and return the lock classes this thread entered meanwhile, in
@@ -570,12 +683,8 @@ pub(crate) fn lock(anchor: &Path, timeout: Duration) -> Result<LifecycleGuard> {
             Err(e) => return Err(e.into()),
         }
     }
+    enter_lock_class("lifecycle");
     HELD.with(|h| h.set(true));
-    OBSERVED.with(|o| {
-        if let Some(seen) = o.borrow_mut().as_mut() {
-            seen.push("lifecycle");
-        }
-    });
     Ok(LifecycleGuard { file })
 }
 
@@ -644,6 +753,19 @@ pub(crate) fn store_record(
     write_json(&record_path(anchor, &record.key), record)
 }
 
+/// Persist a permit-row change. Lifecycle held. While the source is `Open`
+/// the write skips the fsyncs: a row only has to be visible to processes on
+/// this machine, and a machine crash ends every writer it could name. A
+/// fenced or retired record is always written durably.
+fn store_permits(anchor: &Path, record: &SourceRecord, _held: &LifecycleGuard) -> Result<()> {
+    let bytes = serde_json::to_vec_pretty(record).map_err(|e| LifecycleError::Corrupt {
+        path: record_path(anchor, &record.key),
+        why: e.to_string(),
+    })?;
+    let sync = record.state != SourceState::Open;
+    write_replace(&record_path(anchor, &record.key), &bytes, sync)
+}
+
 /// Remove the record for `key`. Lifecycle held.
 #[cfg_attr(
     not(test),
@@ -692,9 +814,13 @@ pub struct LocalPermit {
 }
 
 impl LocalPermit {
+    /// Remove the row. On failure the permit drops undone, so `Drop` tries
+    /// once more; a row that still survives is reaped by the next admission
+    /// once this process is proven dead.
     pub fn complete(mut self) -> Result<()> {
+        release_permit(&self.anchor, &self.key, &self.permit_id)?;
         self.done = true;
-        release_permit(&self.anchor, &self.key, &self.permit_id)
+        Ok(())
     }
 }
 
@@ -711,11 +837,20 @@ impl Drop for LocalPermit {
 /// with [`LifecycleError::SourceRetiring`] when the source is fenced or
 /// retired. The mailbox directory must already exist.
 pub fn admit_local_write(project_root: &Path) -> Result<Option<LocalPermit>> {
+    let admitted = admit(project_root);
+    if admitted.is_err() {
+        forget_anchor(project_root);
+    }
+    admitted
+}
+
+fn admit(project_root: &Path) -> Result<Option<LocalPermit>> {
     // Git runs here, before any lock.
     let Some(source) = resolve_source(project_root)? else {
         return Ok(None);
     };
-    let holder = ProbeSource::system().capture(std::process::id()).ok();
+    let probe = ProbeSource::system();
+    let holder = this_process();
     let held = lock(&source.anchor, LIFECYCLE_LOCK_TIMEOUT)?;
     let mut record = load_or_create(&source, &held)?;
     match &record.state {
@@ -726,6 +861,14 @@ pub fn admit_local_write(project_root: &Path) -> Result<Option<LocalPermit>> {
             })
         }
     }
+    // Reap rows whose writer is proven dead (killed mid-write, or a release
+    // that failed twice), so an open source's record never grows to the cap.
+    // Rows of unknown liveness stay for retirement to refuse on.
+    record.permits.retain(|p| {
+        !p.holder
+            .as_ref()
+            .is_some_and(|h| matches!(probe.probe(h), Probe::Dead(_)))
+    });
     let permit_id = uuid::Uuid::new_v4().to_string();
     record.permits.push(Permit {
         permit_id: permit_id.clone(),
@@ -733,7 +876,7 @@ pub fn admit_local_write(project_root: &Path) -> Result<Option<LocalPermit>> {
         holder,
         generation: record.generation,
     });
-    store_record(&source.anchor, &record, &held)?;
+    store_permits(&source.anchor, &record, &held)?;
     drop(held);
     Ok(Some(LocalPermit {
         anchor: source.anchor,
@@ -741,6 +884,49 @@ pub fn admit_local_write(project_root: &Path) -> Result<Option<LocalPermit>> {
         permit_id,
         done: false,
     }))
+}
+
+/// This process's identity, captured once.
+fn this_process() -> Option<ProcessIdentity> {
+    static ME: OnceLock<(u32, Option<ProcessIdentity>)> = OnceLock::new();
+    let pid = std::process::id();
+    match ME.get_or_init(|| (pid, ProbeSource::system().capture(pid).ok())) {
+        (cached, id) if *cached == pid => id.clone(),
+        // A forked child has its own identity.
+        _ => ProbeSource::system().capture(pid).ok(),
+    }
+}
+
+/// Whether a local write is covered by the retention barrier.
+#[derive(Debug)]
+#[must_use = "a permit row stays until the permit completes or drops"]
+pub enum RetentionCoverage {
+    /// Admitted: retirement waits for this write.
+    Admitted(LocalPermit),
+    /// No anchor could be established; the write proceeds as it did before
+    /// C1, with no permit. `None` when the checkout has no Git repository.
+    Unestablished(Option<String>),
+}
+
+/// The delivery-side admission policy: refuse only a source recorded as
+/// fenced or retired; on any other lifecycle failure warn once and write
+/// uncovered, exactly as before C1.
+pub fn cover_local_write(project_root: &Path) -> Result<RetentionCoverage> {
+    match admit_local_write(project_root) {
+        Ok(Some(permit)) => Ok(RetentionCoverage::Admitted(permit)),
+        Ok(None) => Ok(RetentionCoverage::Unestablished(None)),
+        Err(e @ LifecycleError::SourceRetiring { .. }) => Err(e),
+        Err(e) => {
+            static WARNED: AtomicBool = AtomicBool::new(false);
+            if !WARNED.swap(true, Ordering::Relaxed) {
+                eprintln!(
+                    "warning: mail retention is not established for {}; delivering without it: {e}",
+                    project_root.display()
+                );
+            }
+            Ok(RetentionCoverage::Unestablished(Some(e.to_string())))
+        }
+    }
 }
 
 fn release_permit(anchor: &Path, key: &str, permit_id: &str) -> Result<()> {
@@ -751,7 +937,7 @@ fn release_permit(anchor: &Path, key: &str, permit_id: &str) -> Result<()> {
     let before = record.permits.len();
     record.permits.retain(|p| p.permit_id != permit_id);
     if record.permits.len() != before {
-        store_record(anchor, &record, &held)?;
+        store_permits(anchor, &record, &held)?;
     }
     Ok(())
 }

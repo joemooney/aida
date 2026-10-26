@@ -1159,15 +1159,17 @@ pub fn write_local_message(project_root: &Path, msg: &Message) -> std::io::Resul
     let json = serde_json::to_string_pretty(msg)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
     // Admit before writing so a retiring source refuses the write instead of
-    // losing it; the permit row is removed once the file is in place.
+    // losing it; the permit row is removed once the file is in place. Only a
+    // fenced or retired source refuses: an anchor that cannot be established
+    // leaves delivery exactly as it was.
     // trace:STORY-1843 | ai:claude
     #[cfg(all(unix, feature = "native"))]
-    let permit = crate::mailbox_lifecycle::admit_local_write(project_root)?;
+    let coverage = crate::mailbox_lifecycle::cover_local_write(project_root)?;
     crate::write_atomic(&path, json.as_bytes())?;
     // The message is written; a row left behind is reaped once this process
     // is proven dead, so a failed release must not report the write failed.
     #[cfg(all(unix, feature = "native"))]
-    if let Some(permit) = permit {
+    if let crate::mailbox_lifecycle::RetentionCoverage::Admitted(permit) = coverage {
         let _ = permit.complete();
     }
     Ok(())
