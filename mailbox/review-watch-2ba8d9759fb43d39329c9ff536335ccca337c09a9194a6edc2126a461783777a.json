@@ -1,0 +1,18 @@
+{
+  "id": "review-watch-2ba8d9759fb43d39329c9ff536335ccca337c09a9194a6edc2126a461783777a",
+  "thread_id": "review-watch-2ba8d9759fb43d39329c9ff536335ccca337c09a9194a6edc2126a461783777a",
+  "from": "review-watch",
+  "to": {
+    "kind": "agent",
+    "agent": "joemooney"
+  },
+  "timestamp": 1793045996,
+  "body": "PR-2952 at f17f6ac6845f55dc981343020dfb528d5d23d664: the review by claude-reviewer (claude reviewer seat) recorded `request-changes` with 4 finding(s), round 2 of 2. The findings are in `.aida/review-verdicts/PR-2952.json`. This was the last review round under the two-round cap: a new head is not reviewed automatically, and the advisor decides the next step.",
+  "subject": "PR-2952: review requested changes (round 2 of 2)",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
