@@ -2,12 +2,12 @@ id: 01a176fc-67d2-7862-a865-e8becb8cb9e3
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-003
 title: Seat clones commit the Claude Code sandbox placeholder files (.gitmodules, .idea, .vscode, .claude/launch.json ...) because they lack the primary clone info/exclude
 description: 'PR #2943 (BUG-b6b1...-002 lane, seat clone aida-seat-aida-bug-b6b1...-002) committed nine empty read-only files: .claude/agents, .claude/launch.json, .claude/loop.md, .claude/output-styles, .claude/routines, .claude/scheduled_tasks.json, .gitmodules, .idea, .vscode. These are the stand-ins the Claude Code bash sandbox creates for denied paths. The primary clone ignores them through .git/info/exclude (entries at lines ~27-33); seat clones are separate clones with their own minimal info/exclude, so a lane commit picks them up. The committed .gitmodules then made aida session end / aida worktree dismiss refuse salvage ("the clone has submodules"). The advisor removed them from #2943 by hand (9fa1d8b24d). Related: an empty read-only .git/config.lock keeps reappearing in the primary (sandbox placeholder for a protected path), which makes git config writes fail (worktree add -B, upstream config) until removed. Fix: seat-clone creation must carry the primary info/exclude sandbox entries (or ship them in a tracked ignore file), and ship/commit staging must refuse zero-byte read-only placeholders; add a test. Consider a doctor check for a stale read-only config.lock.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-26T06:53:35.570888485Z
-modified_at: 2026-10-26T16:35:47.270185049Z
+modified_at: 2026-10-26T16:36:00.864329282Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -163,6 +163,14 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a17911-a0e0-7c21-bade-579231247b0f
+  author: aida-session-start
+  timestamp: 2026-10-26T16:36:00.864327347Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: e4c2dd0575990c64b7b14ee242b02012c22195dd
   branch: main
