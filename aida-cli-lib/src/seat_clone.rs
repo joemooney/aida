@@ -529,8 +529,14 @@ fn clone_and_checkout(
         std::fs::create_dir_all(dir)?;
     }
     let existing = std::fs::read_to_string(&exclude).unwrap_or_default();
-    let primary =
-        std::fs::read_to_string(main.join(".git").join("info").join("exclude")).unwrap_or_default();
+    // Read the exclude from git's resolved common dir rather than a literal
+    // `.git/info/exclude`, so it stays correct if `create` ever accepts a
+    // primary whose `.git` is a gitfile (today it refuses one).
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-003 | ai:claude
+    let mut common = git(main);
+    common.args(["rev-parse", "--path-format=absolute", "--git-common-dir"]);
+    let common = PathBuf::from(run(common, "resolve the primary checkout's git dir")?);
+    let primary = std::fs::read_to_string(common.join("info").join("exclude")).unwrap_or_default();
     std::fs::write(&exclude, seat_exclude_body(&existing, &primary))
         .with_context(|| format!("write {}", exclude.display()))?;
 
