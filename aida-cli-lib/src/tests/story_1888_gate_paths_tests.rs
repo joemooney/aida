@@ -969,7 +969,8 @@ const DISPATCH_AUTHORITY_FNS: &[&str] = &[
     "pass_admission",
     "run_admission",
     "verify_running_claim",
-    "execution_refusal",
+    "admit_execution",
+    "submission_collision",
     "verdict_at_head",
     "ci_state_is_green",
     "flow_ship_decision",
@@ -981,6 +982,8 @@ const DISPATCH_AUTHORITY_FNS: &[&str] = &[
     "reconcile_inventory_locked",
     "inspect_dispatch_inventory_readonly",
     "check_recovery_index_bounds",
+    "remove_reviewer_worktree_preserving_hold",
+    "preserve_reviewer_worktree_hold",
 ];
 
 const DISPATCH_AUTHORITY_TYPES: &[&str] = &[
@@ -996,6 +999,10 @@ const DISPATCH_AUTHORITY_TYPES: &[&str] = &[
     "DispatchInventory",
     "DispatchLock",
     "FlowVerdict",
+    "ClaimAdmission",
+    "ExecutionAdmission",
+    "ExecutionEntry",
+    "SubmissionCollision",
 ];
 
 fn defined_types(text: &str) -> Vec<String> {
@@ -1006,12 +1013,28 @@ fn defined_types(text: &str) -> Vec<String> {
         .collect()
 }
 
+/// Matches any definition of a dispatch authority name in raw text, so the
+/// ratchets parse test items only in the few files that can define one.
+fn dispatch_authority_definition() -> regex::Regex {
+    let names = DISPATCH_AUTHORITY_FNS
+        .iter()
+        .chain(DISPATCH_AUTHORITY_TYPES)
+        .copied()
+        .collect::<Vec<_>>()
+        .join("|");
+    regex::Regex::new(&format!(r"\b(fn|struct|enum)\s+({names})\b")).unwrap()
+}
+
 // trace:STORY-1889 | ai:claude
 #[test]
 fn dispatch_authority_is_defined_only_in_the_gate() {
     let mut in_gate: Vec<String> = Vec::new();
     let mut outside: Vec<String> = Vec::new();
+    let candidate = dispatch_authority_definition();
     for (path, text) in sources() {
+        if !candidate.is_match(&text) {
+            continue;
+        }
         let fns = defined_fns(&text);
         let types = defined_types(&text);
         let names = fns.iter().chain(types.iter()).filter(|n| {
@@ -1056,7 +1079,26 @@ fn dispatch_authority_inputs_are_bound_in_the_gate() {
     assert!(human < quiescent, "the human check runs before activation");
 
     let auth = gate_source("dispatch_authority.rs");
-    for ty in ["AuthorizedDispatchCaller", "ClaimCaps"] {
+    let unprotected: Vec<(String, String)> = sources()
+        .into_iter()
+        .filter(|(path, _)| !on_floor(path))
+        .collect();
+    // No file outside the floor writes a gate-built record as a literal.
+    let constructs_outside = |ty: &str| {
+        let literal = format!("{ty} {{");
+        unprotected
+            .iter()
+            .filter(|(_, text)| text.contains(&literal))
+            .filter(|(_, text)| non_test_lines(text).join("\n").contains(&literal))
+            .map(|(path, _)| path.clone())
+            .collect::<Vec<_>>()
+    };
+    for ty in [
+        "AuthorizedDispatchCaller",
+        "ClaimCaps",
+        "ClaimAdmission",
+        "ExecutionAdmission",
+    ] {
         let body = auth
             .split(&format!("pub(crate) struct {ty} {{"))
             .nth(1)
@@ -1068,20 +1110,12 @@ fn dispatch_authority_inputs_are_bound_in_the_gate() {
                 "{ty} field must be private: {field}"
             );
         }
-        for (path, text) in sources() {
-            if !on_floor(&path) {
-                assert!(
-                    !non_test_lines(&text)
-                        .join("\n")
-                        .contains(&format!("{ty} {{")),
-                    "{path} constructs {ty} outside the gate"
-                );
-            }
-        }
+        let bad = constructs_outside(ty);
+        assert!(bad.is_empty(), "{bad:?} construct {ty} outside the gate");
     }
     // The request and result records: the request's fields and the result's
-    // identity, mandate, grant and claim fields are gate-private, and no file
-    // outside the floor writes either record as a literal.
+    // identity, mandate, grant, claim and status fields are gate-private, and
+    // no file outside the floor writes either record as a literal.
     for (ty, fields) in [
         (
             "DispatchRequest",
@@ -1109,6 +1143,10 @@ fn dispatch_authority_inputs_are_bound_in_the_gate() {
                 "worker_pid",
                 "worker_start",
                 "claim_token",
+                "status",
+                "started_at",
+                "finished_at",
+                "summary",
             ][..],
         ),
     ] {
@@ -1128,16 +1166,8 @@ fn dispatch_authority_inputs_are_bound_in_the_gate() {
                 "{ty}::{field} must be private to the gate: {decl}"
             );
         }
-        for (path, text) in sources() {
-            if !on_floor(&path) {
-                assert!(
-                    !non_test_lines(&text)
-                        .join("\n")
-                        .contains(&format!("{ty} {{")),
-                    "{path} constructs {ty} outside the gate"
-                );
-            }
-        }
+        let bad = constructs_outside(ty);
+        assert!(bad.is_empty(), "{bad:?} construct {ty} outside the gate");
     }
     let pending = fn_body(&auth, "pending_result");
     for bound in [
@@ -1179,6 +1209,7 @@ fn dispatch_orchestration_calls_the_gate_at_each_admission_point() {
             &[
                 "check_request_authority(",
                 "check_submission_fence(",
+                "submission_collision(",
                 "caller.admitted_request(",
                 "revalidate_request(",
             ][..],
@@ -1189,21 +1220,45 @@ fn dispatch_orchestration_calls_the_gate_at_each_admission_point() {
                 "acquire_dispatch_lock(",
                 "ClaimCaps::from_inventory(",
                 "pass_admission(",
+                "PassAdmission::Claim(admission)",
+                "res.begin_running(",
+                "res.publish_worker(",
+                "res.fail_running(",
             ][..],
         ),
         (
             "execute_one_request_with_token",
             &[
                 "acquire_dispatch_lock(",
+                "res.execution_entry(",
                 "verify_running_claim(",
-                "run_admission(",
-                "execution_refusal(",
+                "let admission = run_admission(",
+                "res.begin_running(",
+                "admit_execution(",
             ][..],
         ),
-        ("reap_dead_workers_locked", &["dead_claims("][..]),
-        ("finalize_request", &["verify_claim_locked("][..]),
-        ("record_tampered_refusal", &["verify_claim_locked("][..]),
+        (
+            "reap_dead_workers_locked",
+            &["dead_claims(", "res.fail_running("][..],
+        ),
+        (
+            "finalize_request",
+            &["verify_claim_locked(", "res.finish("][..],
+        ),
+        (
+            "record_tampered_refusal",
+            &["verify_claim_locked(", "res.finish("][..],
+        ),
+        ("cancel_request", &["res.cancel("][..]),
         ("run_dispatch_serve", &["check_serve_grant("][..]),
+        (
+            "run_dispatch_serve_once_sync",
+            &["check_serve_grant(", "res.revert_unstarted_claim("][..],
+        ),
+        (
+            "cleanup_dead_reviewer_worktree",
+            &["remove_reviewer_worktree_preserving_hold("][..],
+        ),
         ("handle_dispatch", &["activate_lock_as_human("][..]),
     ] {
         let body = fn_body(&src, f);
@@ -1211,6 +1266,66 @@ fn dispatch_orchestration_calls_the_gate_at_each_admission_point() {
             assert!(body.contains(call), "dispatch.rs `{f}` must call `{call}`");
         }
     }
+    // Every verb runner takes the gate's `ExecutionAdmission`, which only
+    // `admit_execution` builds, so a runner cannot run on a discarded or
+    // skipped admission.
+    let flow_text =
+        std::fs::read_to_string(workspace_root().join("aida-cli-lib/src/dispatch_flow.rs"))
+            .unwrap();
+    let flow_src = non_test_lines(&flow_text).join("\n");
+    for (text, runner) in [
+        (&src, "run_review_verb"),
+        (&src, "run_take_verb"),
+        (&src, "run_impl_verb"),
+        (&flow_src, "run_flow_verb"),
+        (&flow_src, "run_train_verb"),
+    ] {
+        let body = fn_body(text, runner);
+        let signature = &body[..body.find('{').unwrap()];
+        assert!(
+            signature.contains("&ExecutionAdmission"),
+            "`{runner}` must take the gate's `&ExecutionAdmission`"
+        );
+    }
+    // No record-status write outside the gate's transition methods.
+    for write in [".status =", ".started_at =", ".finished_at =", ".summary ="] {
+        assert!(
+            !src.contains(write) && !flow_src.contains(write),
+            "dispatch orchestration writes a record field (`{write}`) outside the gate"
+        );
+    }
+    // A reviewer worktree is removed only by the gate, after its merge-hold
+    // marker is preserved.
+    for (name, text) in [("dispatch.rs", &src), ("dispatch_flow.rs", &flow_src)] {
+        assert!(
+            !text.contains("\"worktree\", \"remove\""),
+            "{name} removes a worktree itself; call \
+             `crate::gate::dispatch_reviewer_hold::remove_reviewer_worktree_preserving_hold`"
+        );
+        assert!(
+            !text.contains("fn preserve_reviewer_worktree_hold"),
+            "{name} defines the merge-hold preservation outside the gate"
+        );
+    }
+    let hold = gate_source("dispatch_reviewer_hold.rs");
+    let remove = fn_body(&hold, "remove_reviewer_worktree_preserving_hold");
+    let preserve = remove
+        .find("preserve_reviewer_worktree_hold(main_worktree, rev_wt, pr_scope)?;")
+        .expect("the removal preserves the hold and stops on failure");
+    let git_remove = remove
+        .find("\"worktree\", \"remove\"")
+        .expect("the removal runs git worktree remove");
+    assert!(
+        preserve < git_remove,
+        "the merge-hold is preserved before `git worktree remove`"
+    );
+    assert_eq!(
+        hold.matches("\"worktree\", \"remove\"").count(),
+        1,
+        "gate/dispatch_reviewer_hold.rs removes a worktree only in \
+         `remove_reviewer_worktree_preserving_hold`"
+    );
+
     // The reaper only writes what the gate's `dead_claims` released; it never
     // probes a worker or reads the probe's tri-state itself.
     let reap = fn_body(&src, "reap_dead_workers_locked");
@@ -1303,8 +1418,9 @@ fn dispatch_policy_suites_are_mounted_on_the_floor() {
             stray.push(format!("  {rel} (a dispatch suite outside the floor)"));
         }
     }
+    let any_mount = regex::Regex::new(r"(?m)^\s*#\s*\[\s*path\s*=").unwrap();
     for (path, text) in sources() {
-        if on_floor(&path) {
+        if on_floor(&path) || !any_mount.is_match(&text) {
             continue;
         }
         for line in text.lines() {

@@ -26,8 +26,8 @@ use crate::dispatch::{
 };
 use crate::gate::dispatch_auth::{is_dispatch_authority_aborted, DispatchExecutionContext};
 use crate::gate::dispatch_authority::{
-    ci_state_is_green, flow_ship_decision, verdict_at_head, DispatchRequest, FlowVerdict,
-    WorkerClaim,
+    ci_state_is_green, flow_ship_decision, verdict_at_head, DispatchRequest, ExecutionAdmission,
+    FlowVerdict, WorkerClaim,
 };
 
 const MAX_FLOW_TRIES: usize = 4;
@@ -471,6 +471,7 @@ pub(crate) fn run_flow_verb(
     main_worktree: &Path,
     mandate_dir: &Path,
     req: &DispatchRequest,
+    admission: &ExecutionAdmission,
     claim: &WorkerClaim,
     pr: u64,
     no_ship: bool,
@@ -620,7 +621,7 @@ pub(crate) fn run_flow_verb(
                         reason: format!("{err:#}"),
                     };
                 }
-                match run_review_verb(main_worktree, req, pr, vendor) {
+                match run_review_verb(main_worktree, req, admission, pr, vendor) {
                     RunnerOutcome::Done { .. } => {}
                     other => return other,
                 }
@@ -726,6 +727,7 @@ pub(crate) fn run_train_verb(
     main_worktree: &Path,
     mandate_dir: &Path,
     req: &DispatchRequest,
+    admission: &ExecutionAdmission,
     claim: &WorkerClaim,
     prs: &[u64],
     now: DateTime<Utc>,

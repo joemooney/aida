@@ -38,19 +38,20 @@ pub(crate) use dispatch_args::*;
 pub(crate) mod dispatch_flow;
 
 use crate::gate::dispatch_authority::{
-    check_request_authority, check_serve_grant, dead_claims, emit_dispatch_event,
-    execution_refusal, pass_admission, probe_worker_identity,
-    resolve_verified_local_default_branch, revalidate_request, run_admission, validate_branch,
-    validate_lane_name, validate_pr, validate_prs, validate_spec_in_store, verb_name_of,
-    verb_subject_of, verify_claim_locked, verify_frozen_brief, verify_running_claim, ClaimCaps,
-    DispatchRequest, DispatchResult, DispatchStatus, DispatchVerb, PassAdmission, RunningClaim,
-    WorkerClaim,
+    admit_execution, check_request_authority, check_serve_grant, dead_claims, emit_dispatch_event,
+    pass_admission, probe_worker_identity, resolve_verified_local_default_branch,
+    revalidate_request, run_admission, submission_collision, validate_branch, validate_lane_name,
+    validate_pr, validate_prs, validate_spec_in_store, verb_name_of, verb_subject_of,
+    verify_claim_locked, verify_frozen_brief, verify_running_claim, ClaimCaps, DispatchRequest,
+    DispatchResult, DispatchStatus, DispatchVerb, ExecutionAdmission, ExecutionEntry,
+    PassAdmission, RunningClaim, SubmissionCollision, WorkerClaim,
 };
 use crate::gate::dispatch_ledger::{
     inspect_dispatch_inventory_readonly, read_json_half, reconcile_inventory_locked, HalfRead,
     RecoveryFenceEntry, RECOVERY_GUIDANCE,
 };
 use crate::gate::dispatch_lock::{acquire_dispatch_lock, activate_lock_as_human, TICK_LOCK_FILE};
+use crate::gate::dispatch_reviewer_hold::remove_reviewer_worktree_preserving_hold;
 use crate::gate::mandate;
 use crate::gate::mandate::{MandateState, Scope};
 use crate::gate::seat_authority;
@@ -522,7 +523,7 @@ pub(crate) fn pending_request_count(main_worktree: &Path) -> i64 {
     let pending = inv
         .pairs
         .iter()
-        .filter(|(_, res)| res.status == DispatchStatus::Pending)
+        .filter(|(_, res)| res.status() == DispatchStatus::Pending)
         .count();
     (pending + inv.fences.len() + usize::from(inv.global_block_reason.is_some())) as i64
 }
@@ -542,7 +543,9 @@ fn cleanup_unpublished_submission_locked(
     if wrote_result {
         let res_p = result_path(main_worktree, request_id);
         if let HalfRead::Valid(res) = read_json_half::<DispatchResult>(&res_p, "result") {
-            if res.id() == request_id && res.status == DispatchStatus::Pending && res.is_unclaimed()
+            if res.id() == request_id
+                && res.status() == DispatchStatus::Pending
+                && res.is_unclaimed()
             {
                 let _ = std::fs::remove_file(&res_p);
             }
@@ -691,27 +694,17 @@ pub(crate) fn submit_request(
     }
 
     // Check existing active requests for idempotency or target collision.
-    for (existing_req, existing_res) in inv.pairs {
-        if !existing_res.status.is_active() {
-            continue;
-        }
-        if existing_req.dedupe_key() == dedupe_key {
+    match submission_collision(&inv, &dedupe_key, &target_key) {
+        Some(SubmissionCollision::Duplicate { request, result }) => {
             cleanup_unpublished_submission_locked(main_worktree, &request_id, wrote_brief, false);
             return Ok(SubmittedDispatch {
-                request: existing_req,
-                result: existing_res,
+                request,
+                result,
                 deduplicated: true,
             });
         }
-        if existing_req.target_key() == target_key {
+        Some(SubmissionCollision::TargetBusy(msg)) => {
             cleanup_unpublished_submission_locked(main_worktree, &request_id, wrote_brief, false);
-            let msg = format!(
-                "target `{target_key}` already has an active dispatch request {} ({}, status: {}); cancel it first with `aida dispatch cancel {}`",
-                existing_req.id(),
-                existing_req.action().verb_str(),
-                existing_res.status.as_str(),
-                existing_req.id()
-            );
             emit_dispatch_event(
                 main_worktree,
                 &caller.mandate().id,
@@ -722,6 +715,7 @@ pub(crate) fn submit_request(
             );
             bail!("{msg}");
         }
+        None => {}
     }
 
     let req = caller.admitted_request(
@@ -887,20 +881,7 @@ pub(crate) fn cancel_request(
         );
     }
     let (req, mut res) = resolve_pair(main_worktree, id_or_prefix)?;
-    if res.status != DispatchStatus::Pending {
-        bail!(
-            "cannot cancel dispatch request {}: status is `{}` (only `pending` requests can be cancelled)",
-            req.id(),
-            res.status.as_str()
-        );
-    }
-    res.status = DispatchStatus::Cancelled;
-    res.finished_at = Some(now);
-    res.summary = format!(
-        "cancelled {} {}",
-        req.action().verb_str(),
-        req.action().subject_label()
-    );
+    res.cancel(&req, now)?;
     write_private_atomic(
         &result_path(main_worktree, &req.id()),
         &serde_json::to_vec_pretty(&res)?,
@@ -921,10 +902,10 @@ pub(crate) fn cancel_request(
 /// `"pending (waiting for serve)"`.
 // trace:STORY-1917 | ai:agy
 pub(crate) fn display_status(req: &DispatchRequest, res: &DispatchResult) -> String {
-    if res.status == DispatchStatus::Pending && req.action().requires_serve() {
+    if res.status() == DispatchStatus::Pending && req.action().requires_serve() {
         "pending (waiting for serve)".to_string()
     } else {
-        res.status.as_str().to_string()
+        res.status().as_str().to_string()
     }
 }
 
@@ -950,7 +931,7 @@ pub(crate) fn format_inventory_list_text(
             req.action().verb_str(),
             req.target_key(),
             ts,
-            res.summary
+            res.summary()
         ));
     }
     for fence in fences {
@@ -985,15 +966,15 @@ pub(crate) fn inventory_list_json(
                 "verb": req.action().verb_str(),
                 "target": req.target_key(),
                 "dedupe_key": req.dedupe_key(),
-                "status": res.status.as_str(),
+                "status": res.status().as_str(),
                 "display_status": display_status(req, res),
-                "waiting_for_serve": res.status == DispatchStatus::Pending && req.action().requires_serve(),
+                "waiting_for_serve": res.status() == DispatchStatus::Pending && req.action().requires_serve(),
                 "requested_at": req.requested_at().to_rfc3339(),
-                "started_at": res.started_at.map(|t| t.to_rfc3339()),
-                "finished_at": res.finished_at.map(|t| t.to_rfc3339()),
+                "started_at": res.started_at().map(|t| t.to_rfc3339()),
+                "finished_at": res.finished_at().map(|t| t.to_rfc3339()),
                 "mandate_id": req.mandate_id(),
                 "requester_grant_prefix": res.requester_grant_prefix(),
-                "summary": res.summary,
+                "summary": res.summary(),
                 "refusal_reason": res.refusal_reason,
                 "request": req,
                 "result": res,
@@ -1038,7 +1019,7 @@ pub(crate) fn handle_dispatch(action: &DispatchAction) -> Result<()> {
             if *json {
                 let payload = serde_json::json!({
                     "deduplicated": submitted.deduplicated,
-                    "waiting_for_serve": submitted.result.status == DispatchStatus::Pending
+                    "waiting_for_serve": submitted.result.status() == DispatchStatus::Pending
                         && submitted.request.action().requires_serve(),
                     "display_status": display_status(&submitted.request, &submitted.result),
                     "request": submitted.request,
@@ -1073,7 +1054,7 @@ pub(crate) fn handle_dispatch(action: &DispatchAction) -> Result<()> {
                 Vec::new()
             };
             if let Some(filter) = status {
-                pairs.retain(|(_, res)| res.status.matches_filter(*filter));
+                pairs.retain(|(_, res)| res.status().matches_filter(*filter));
             }
             if *json {
                 println!(
@@ -1115,7 +1096,7 @@ pub(crate) fn handle_dispatch(action: &DispatchAction) -> Result<()> {
             if *json {
                 let payload = serde_json::json!({
                     "display_status": display_status(&req, &res),
-                    "waiting_for_serve": res.status == DispatchStatus::Pending && req.action().requires_serve(),
+                    "waiting_for_serve": res.status() == DispatchStatus::Pending && req.action().requires_serve(),
                     "request": req,
                     "result": res,
                 });
@@ -1127,15 +1108,15 @@ pub(crate) fn handle_dispatch(action: &DispatchAction) -> Result<()> {
                 println!("dedupe_key:     {}", req.dedupe_key());
                 println!("status:         {}", display_status(&req, &res));
                 println!("requested_at:   {}", req.requested_at().to_rfc3339());
-                if let Some(started) = res.started_at {
+                if let Some(started) = res.started_at() {
                     println!("started_at:     {}", started.to_rfc3339());
                 }
-                if let Some(finished) = res.finished_at {
+                if let Some(finished) = res.finished_at() {
                     println!("finished_at:    {}", finished.to_rfc3339());
                 }
                 println!("mandate_id:     {}", req.mandate_id());
                 println!("grant_prefix:   {}", res.requester_grant_prefix());
-                println!("summary:        {}", res.summary);
+                println!("summary:        {}", res.summary());
                 if let Some(reason) = &res.refusal_reason {
                     println!("refusal_reason: {reason}");
                 }
@@ -1145,7 +1126,7 @@ pub(crate) fn handle_dispatch(action: &DispatchAction) -> Result<()> {
         }
         DispatchAction::Cancel { id } => {
             let res = cancel_request(&main_worktree, id, now)?;
-            println!("cancelled: {} ({})", res.id(), res.summary);
+            println!("cancelled: {} ({})", res.id(), res.summary());
             Ok(())
         }
         DispatchAction::Tick => {
@@ -1173,7 +1154,12 @@ pub(crate) fn handle_dispatch(action: &DispatchAction) -> Result<()> {
         }
         DispatchAction::Run { id, via_serve } => {
             let res = execute_one_request(&main_worktree, &mandate_dir, id, *via_serve, now)?;
-            println!("{}: {} ({})", res.status.as_str(), res.id(), res.summary);
+            println!(
+                "{}: {} ({})",
+                res.status().as_str(),
+                res.id(),
+                res.summary()
+            );
             Ok(())
         }
     }
@@ -1250,7 +1236,7 @@ pub(crate) fn notify_advisor_outcome(
         "dispatch {} {}: {} ({})",
         req.action().verb_str(),
         req.action().subject_label(),
-        res.status.as_str(),
+        res.status().as_str(),
         &req.id()[..8.min(req.id().len())]
     );
     let body = match &res.refusal_reason {
@@ -1259,8 +1245,8 @@ pub(crate) fn notify_advisor_outcome(
             req.id(),
             req.action().verb_str(),
             req.action().subject_label(),
-            res.status.as_str(),
-            res.summary,
+            res.status().as_str(),
+            res.summary(),
             reason,
             res.log_path
         ),
@@ -1269,8 +1255,8 @@ pub(crate) fn notify_advisor_outcome(
             req.id(),
             req.action().verb_str(),
             req.action().subject_label(),
-            res.status.as_str(),
-            res.summary,
+            res.status().as_str(),
+            res.summary(),
             res.log_path
         ),
     };
@@ -1284,7 +1270,10 @@ pub(crate) fn notify_advisor_outcome(
         in_reply_to: None,
         body,
         subject: Some(subject),
-        urgent: matches!(res.status, DispatchStatus::Refused | DispatchStatus::Failed),
+        urgent: matches!(
+            res.status(),
+            DispatchStatus::Refused | DispatchStatus::Failed
+        ),
         intent: Intent::Fyi,
         retracted: false,
         deleted: false,
@@ -1354,14 +1343,16 @@ pub(crate) fn reap_dead_workers_locked(main_worktree: &Path, now: DateTime<Utc>)
         let Some((_, reason)) = dead.iter().find(|(id, _)| id == req.id()) else {
             continue;
         };
-        res.status = DispatchStatus::Failed;
-        res.finished_at = Some(now);
-        res.summary = format!(
-            "failed {} {}: {reason}",
-            req.action().verb_str(),
-            req.action().subject_label()
-        );
-        res.refusal_reason = Some(reason.clone());
+        res.fail_running(
+            format!(
+                "failed {} {}: {reason}",
+                req.action().verb_str(),
+                req.action().subject_label()
+            ),
+            reason.clone(),
+            false,
+            now,
+        )?;
         res.notified_at = notify_advisor_outcome(main_worktree, &req, &res, now);
         write_private_atomic(
             &result_path(main_worktree, req.id()),
@@ -1461,17 +1452,17 @@ pub(crate) fn claim_and_dispatch_pass(
     let self_start = crate::process_probe::process_start_identity(self_pid);
 
     for (req, mut res) in pairs {
-        if res.status != DispatchStatus::Pending {
+        if res.status() != DispatchStatus::Pending {
             continue;
         }
-        match pass_admission(&inv, &req, via_serve, &mut caps) {
+        let admission = match pass_admission(&inv, &req, via_serve, &mut caps) {
             PassAdmission::WaitingForServe => {
                 summary.waiting_for_serve += 1;
                 continue;
             }
             PassAdmission::Skip => continue,
-            PassAdmission::Claim => {}
-        }
+            PassAdmission::Claim(admission) => admission,
+        };
 
         // Persist the Running claim and fresh claim_token BEFORE spawning (F2).
         // When `spawn_detached` is true, `worker_pid` starts as `None` until the
@@ -1479,17 +1470,13 @@ pub(crate) fn claim_and_dispatch_pass(
         // if post-spawn publication fails, the child is immediately killed and
         // reaped under `tick.lock` and the claim is rolled back to `Failed`.
         let claim_token = Uuid::new_v4().to_string();
-        res.status = DispatchStatus::Running;
-        res.started_at = Some(now);
-        res.set_claim(
+        res.begin_running(
+            admission,
+            Some(&req),
             (!spawn_detached).then(|| (self_pid, self_start.clone())),
             claim_token.clone(),
-        );
-        res.summary = format!(
-            "running {} {}",
-            req.action().verb_str(),
-            req.action().subject_label()
-        );
+            now,
+        )?;
         write_private_atomic(
             &result_path(main_worktree, &req.id()),
             &serde_json::to_vec_pretty(&res)?,
@@ -1498,12 +1485,7 @@ pub(crate) fn claim_and_dispatch_pass(
         if spawn_detached {
             match spawn_detached_worker(main_worktree, &req.id(), via_serve, &claim_token) {
                 Ok((mut child, pid, start)) => {
-                    res.set_worker(pid, start);
-                    res.summary = format!(
-                        "running {} {} (pid {pid})",
-                        req.action().verb_str(),
-                        req.action().subject_label()
-                    );
+                    res.publish_worker(&req, pid, start);
                     if let Err(pub_err) =
                         publish_spawned_worker_claim(main_worktree, &req.id(), &res)
                     {
@@ -1516,11 +1498,7 @@ pub(crate) fn claim_and_dispatch_pass(
                         let reason = format!(
                             "failed to publish dispatch worker claim for pid {pid}: {pub_err:#}"
                         );
-                        res.status = DispatchStatus::Failed;
-                        res.finished_at = Some(now);
-                        res.clear_claim();
-                        res.summary = reason.clone();
-                        res.refusal_reason = Some(reason);
+                        res.fail_running(reason.clone(), reason, true, now)?;
                         res.notified_at = notify_advisor_outcome(main_worktree, &req, &res, now);
                         // A lost Failed write would leave a Running claim with
                         // no worker that the reaper cannot judge, holding a cap
@@ -1534,7 +1512,7 @@ pub(crate) fn claim_and_dispatch_pass(
                             format!(
                                 "dispatch request {} was left Running with no worker after its worker was killed ({reason}); the Failed result could not be written. {RECOVERY_GUIDANCE}",
                                 req.id(),
-                                reason = res.summary
+                                reason = res.summary()
                             )
                         })?;
                         continue;
@@ -1543,11 +1521,7 @@ pub(crate) fn claim_and_dispatch_pass(
                 Err(err) => {
                     caps.release(&req.action());
                     let reason = format!("failed to spawn dispatch worker: {err:#}");
-                    res.status = DispatchStatus::Failed;
-                    res.finished_at = Some(now);
-                    res.clear_claim();
-                    res.summary = reason.clone();
-                    res.refusal_reason = Some(reason);
+                    res.fail_running(reason.clone(), reason, true, now)?;
                     res.notified_at = notify_advisor_outcome(main_worktree, &req, &res, now);
                     write_private_atomic(
                         &result_path(main_worktree, &req.id()),
@@ -1624,12 +1598,8 @@ pub(crate) fn run_dispatch_serve_once_sync(
         if check_serve_grant(main_worktree, Utc::now()).is_err() {
             if let Ok(_lock) = acquire_dispatch_lock(main_worktree) {
                 if let Ok((_req, mut res)) = load_pair(main_worktree, id) {
-                    if res.status == DispatchStatus::Running
-                        && res.claim_is(self_pid, self_start.as_deref(), token.as_deref())
+                    if res.revert_unstarted_claim(self_pid, self_start.as_deref(), token.as_deref())
                     {
-                        res.status = DispatchStatus::Pending;
-                        res.started_at = None;
-                        res.clear_claim();
                         let _ = write_private_atomic(
                             &result_path(main_worktree, id),
                             &serde_json::to_vec_pretty(&res)?,
@@ -1760,18 +1730,7 @@ pub(crate) fn execute_one_request_with_token(
         if res.id() != id {
             bail!("result file {id}.json has mismatched id `{}`", res.id());
         }
-        if matches!(
-            res.status,
-            DispatchStatus::Done
-                | DispatchStatus::Refused
-                | DispatchStatus::Failed
-                | DispatchStatus::Cancelled
-        ) {
-            bail!(
-                "dispatch request {id} is already in terminal state `{}` (refusing execution)",
-                res.status.as_str()
-            );
-        }
+        let entry = res.execution_entry(id)?;
 
         let raw_req_res =
             read_bounded_regular_file(&request_path(main_worktree, id), MAX_BRIEF_BYTES, true)
@@ -1780,16 +1739,12 @@ pub(crate) fn execute_one_request_with_token(
                         .with_context(|| format!("malformed request JSON for {id}"))
                 });
 
-        let claim = match res.status {
-            DispatchStatus::Running => {
+        let claim = match entry {
+            ExecutionEntry::Running => {
                 match verify_running_claim(id, &res, presented_token, self_pid, &self_start)? {
                     RunningClaim::Owned(claim) => claim,
                     RunningClaim::Unpublished { reason, refusal } => {
-                        res.status = DispatchStatus::Failed;
-                        res.finished_at = Some(now);
-                        res.clear_claim();
-                        res.summary = reason.clone();
-                        res.refusal_reason = Some(reason);
+                        res.fail_running(reason.clone(), reason, true, now)?;
                         let _ = write_private_atomic(
                             &result_path(main_worktree, id),
                             &serde_json::to_vec_pretty(&res)?,
@@ -1804,14 +1759,18 @@ pub(crate) fn execute_one_request_with_token(
                     }
                 }
             }
-            DispatchStatus::Pending => {
+            ExecutionEntry::Pending => {
                 let _ = reap_dead_workers_locked(main_worktree, now);
                 let inv_after_reap = reconcile_inventory_locked(main_worktree, now)?;
-                run_admission(&inv_after_reap, id, &raw_req_res)?;
+                let admission = run_admission(&inv_after_reap, id, &raw_req_res)?;
                 let claim_token = Uuid::new_v4().to_string();
-                res.status = DispatchStatus::Running;
-                res.started_at = Some(now);
-                res.set_claim(Some((self_pid, self_start.clone())), claim_token.clone());
+                res.begin_running(
+                    admission,
+                    None,
+                    Some((self_pid, self_start.clone())),
+                    claim_token.clone(),
+                    now,
+                )?;
                 write_private_atomic(
                     &result_path(main_worktree, id),
                     &serde_json::to_vec_pretty(&res)?,
@@ -1822,7 +1781,6 @@ pub(crate) fn execute_one_request_with_token(
                     claim_token,
                 }
             }
-            _ => unreachable!(),
         };
 
         (res, claim, raw_req_res)
@@ -1844,26 +1802,32 @@ pub(crate) fn execute_one_request_with_token(
     };
 
     // 1-5. Execution-time admission (Boundary B, serve grant, exact mandate,
-    // human gates, requester grant, dual-end re-validation).
-    if let Some(refusal) = execution_refusal(main_worktree, mandate_dir, &req, via_serve, now) {
-        return finalize_request(
-            main_worktree,
-            &req,
-            &claim,
-            res,
-            DispatchStatus::Refused,
-            refusal.outcome,
-            None,
-            None,
-            refusal.reason.clone(),
-            Some(refusal.reason),
-            now,
-        );
-    }
+    // human gates, requester grant, dual-end re-validation). Every runner
+    // takes the admission it returns.
+    let admission = match admit_execution(main_worktree, mandate_dir, &req, via_serve, now) {
+        Ok(admission) => admission,
+        Err(refusal) => {
+            return finalize_request(
+                main_worktree,
+                &req,
+                &claim,
+                res,
+                DispatchStatus::Refused,
+                refusal.outcome,
+                None,
+                None,
+                refusal.reason.clone(),
+                Some(refusal.reason),
+                now,
+            );
+        }
+    };
 
     // 6. Execute the verb's runner.
     let runner_outcome = match &req.action() {
-        DispatchVerb::Review { pr, vendor } => run_review_verb(main_worktree, &req, *pr, *vendor),
+        DispatchVerb::Review { pr, vendor } => {
+            run_review_verb(main_worktree, &req, &admission, *pr, *vendor)
+        }
         DispatchVerb::Take {
             pr,
             branch,
@@ -1874,6 +1838,7 @@ pub(crate) fn execute_one_request_with_token(
         } => run_take_verb(
             main_worktree,
             &req,
+            &admission,
             *pr,
             branch,
             spec,
@@ -1892,6 +1857,7 @@ pub(crate) fn execute_one_request_with_token(
         } => run_impl_verb(
             main_worktree,
             &req,
+            &admission,
             name,
             branch,
             spec,
@@ -1908,15 +1874,22 @@ pub(crate) fn execute_one_request_with_token(
             main_worktree,
             mandate_dir,
             &req,
+            &admission,
             &claim,
             *pr,
             *no_ship,
             *vendor,
             now,
         ),
-        DispatchVerb::Train { prs } => {
-            dispatch_flow::run_train_verb(main_worktree, mandate_dir, &req, &claim, prs, now)
-        }
+        DispatchVerb::Train { prs } => dispatch_flow::run_train_verb(
+            main_worktree,
+            mandate_dir,
+            &req,
+            &admission,
+            &claim,
+            prs,
+            now,
+        ),
     };
 
     match runner_outcome {
@@ -1993,10 +1966,14 @@ pub(crate) fn record_tampered_refusal(
     let _lock = acquire_dispatch_lock(main_worktree)?;
     verify_claim_locked(main_worktree, id, claim)?;
     let _ = append_dispatch_log(main_worktree, id, &format!("refused: {reason}\n"));
-    res.status = DispatchStatus::Refused;
-    res.finished_at = Some(now);
-    res.summary = reason.to_string();
-    res.refusal_reason = Some(reason.to_string());
+    res.finish(
+        DispatchStatus::Refused,
+        reason.to_string(),
+        Some(reason.to_string()),
+        None,
+        None,
+        now,
+    )?;
     write_private_atomic(
         &result_path(main_worktree, id),
         &serde_json::to_vec_pretty(res)?,
@@ -2033,12 +2010,14 @@ pub(crate) fn finalize_request(
         &req.id(),
         &format!("{}: {}\n", status.as_str(), summary),
     );
-    res.status = status;
-    res.finished_at = Some(now);
-    res.spawned_session = spawned_session;
-    res.exit_code = exit_code;
-    res.summary = summary.clone();
-    res.refusal_reason = refusal_reason.clone();
+    res.finish(
+        status,
+        summary.clone(),
+        refusal_reason.clone(),
+        spawned_session,
+        exit_code,
+        now,
+    )?;
     res.notified_at = notify_advisor_outcome(main_worktree, req, &res, now);
     write_private_atomic(
         &result_path(main_worktree, &req.id()),
@@ -2396,161 +2375,6 @@ pub(crate) fn check_live_worktree_or_branch_occupant(
     None
 }
 
-/// Preserve any merge-hold marker `<rev_wt>/.aida/merge-holds/PR-<pr>` into
-/// `<main_worktree>/.aida/merge-holds/PR-<pr>` using atomic no-clobber
-/// publication and post-transfer verification (F4). Any read, write, symlink,
-/// or verification error aborts worktree cleanup so a hold is never lost.
-// trace:STORY-1917 | ai:agy
-fn preserve_reviewer_worktree_hold(
-    main_worktree: &Path,
-    rev_wt: &Path,
-    pr_scope: &str,
-) -> Result<bool> {
-    let wt_aida = rev_wt.join(".aida");
-    match std::fs::symlink_metadata(&wt_aida) {
-        Ok(m) if m.file_type().is_symlink() => {
-            let main_aida_canon = main_worktree
-                .join(".aida")
-                .canonicalize()
-                .unwrap_or_else(|_| main_worktree.join(".aida"));
-            let wt_aida_canon = wt_aida.canonicalize().unwrap_or_else(|_| wt_aida.clone());
-            if wt_aida_canon != main_aida_canon {
-                bail!(
-                    "refusing reviewer worktree cleanup: {} is a symlink outside main worktree .aida",
-                    wt_aida.display()
-                );
-            }
-        }
-        Ok(_) => {}
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(false),
-        Err(e) => {
-            return Err(e).with_context(|| format!("cannot stat {}", wt_aida.display()));
-        }
-    }
-
-    let wt_hold_dir = wt_aida.join("merge-holds");
-    match std::fs::symlink_metadata(&wt_hold_dir) {
-        Ok(m) if m.file_type().is_symlink() || !m.is_dir() => {
-            bail!(
-                "refusing reviewer worktree cleanup: {} is a symlink or not a directory",
-                wt_hold_dir.display()
-            );
-        }
-        Ok(_) => {}
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(false),
-        Err(e) => {
-            return Err(e).with_context(|| format!("cannot stat {}", wt_hold_dir.display()));
-        }
-    }
-
-    let wt_hold = wt_hold_dir.join(pr_scope);
-    match std::fs::symlink_metadata(&wt_hold) {
-        Ok(_) => {}
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(false),
-        Err(e) => {
-            return Err(e)
-                .with_context(|| format!("cannot stat reviewer merge-hold {}", wt_hold.display()));
-        }
-    }
-
-    // Source hold exists in `rev_wt`: read and validate it with `O_NOFOLLOW`.
-    // If unreadable, empty, or a symlink, abort cleanup immediately!
-    let wt_bytes = read_bounded_regular_file(&wt_hold, MAX_BRIEF_BYTES, false)
-        .with_context(|| format!("cannot read reviewer merge-hold {}", wt_hold.display()))?;
-    if wt_bytes.is_empty() {
-        bail!(
-            "refusing reviewer worktree cleanup: merge-hold {} is empty",
-            wt_hold.display()
-        );
-    }
-
-    let main_hold_dir = main_worktree.join(".aida").join("merge-holds");
-    std::fs::create_dir_all(&main_hold_dir)
-        .with_context(|| format!("cannot create {}", main_hold_dir.display()))?;
-    let main_dir_meta = std::fs::symlink_metadata(&main_hold_dir)
-        .with_context(|| format!("cannot stat {}", main_hold_dir.display()))?;
-    if main_dir_meta.file_type().is_symlink() || !main_dir_meta.is_dir() {
-        bail!(
-            "refusing reviewer worktree cleanup: {} is a symlink or not a directory",
-            main_hold_dir.display()
-        );
-    }
-
-    let main_hold = main_hold_dir.join(pr_scope);
-    let tmp_hold = main_hold_dir.join(format!(".{pr_scope}.tmp-{}", Uuid::new_v4()));
-    {
-        use std::io::Write;
-        let mut opts = std::fs::OpenOptions::new();
-        opts.write(true).create_new(true);
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::OpenOptionsExt;
-            opts.mode(0o600).custom_flags(libc::O_NOFOLLOW);
-        }
-        let mut f = opts.open(&tmp_hold).with_context(|| {
-            format!(
-                "cannot stage merge-hold transfer in {}",
-                main_hold_dir.display()
-            )
-        })?;
-        if let Err(e) = f.write_all(&wt_bytes).and_then(|()| f.sync_all()) {
-            drop(f);
-            let _ = std::fs::remove_file(&tmp_hold);
-            return Err(e).with_context(|| {
-                format!("failed writing staged merge-hold {}", tmp_hold.display())
-            });
-        }
-    }
-
-    match crate::gate::review_verdict::publish_verdict_no_replace(&tmp_hold, &main_hold) {
-        Ok(()) => {
-            let landed = read_bounded_regular_file(&main_hold, MAX_BRIEF_BYTES, false)
-                .with_context(|| {
-                    format!(
-                        "cannot verify transferred merge-hold at {}",
-                        main_hold.display()
-                    )
-                })?;
-            if landed != wt_bytes {
-                bail!(
-                    "transferred merge-hold {} content did not match source {}",
-                    main_hold.display(),
-                    wt_hold.display()
-                );
-            }
-            Ok(true)
-        }
-        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
-            let _ = std::fs::remove_file(&tmp_hold);
-            // Destination hold already exists (pre-existing or concurrently placed);
-            // verify it is a valid non-empty regular file before allowing cleanup.
-            let existing = read_bounded_regular_file(&main_hold, MAX_BRIEF_BYTES, false)
-                .with_context(|| {
-                    format!(
-                        "existing destination merge-hold {} is invalid or unreadable",
-                        main_hold.display()
-                    )
-                })?;
-            if existing.is_empty() {
-                bail!(
-                    "existing destination merge-hold {} is empty; refusing reviewer worktree cleanup",
-                    main_hold.display()
-                );
-            }
-            Ok(true)
-        }
-        Err(e) => {
-            let _ = std::fs::remove_file(&tmp_hold);
-            Err(e).with_context(|| {
-                format!(
-                    "failed atomic no-clobber transfer of merge-hold to {}",
-                    main_hold.display()
-                )
-            })
-        }
-    }
-}
-
 /// Prepare a dead reviewer worktree (`aida-pr-<pr>`) before launching a fresh
 /// review:
 /// 1. Refuses if a live or unknown occupant (lease, registered agent, or live
@@ -2559,7 +2383,10 @@ fn preserve_reviewer_worktree_hold(
 ///    `<main_worktree>/.aida/merge-holds/PR-<pr>` with verified no-clobber
 ///    transfer, aborting cleanup on any preservation failure (F4).
 /// 3. Removes `rev_wt` via `git worktree remove --force`.
+///
+/// Steps 2 and 3 are the gate's [`remove_reviewer_worktree_preserving_hold`].
 // trace:STORY-1917 | ai:agy
+// trace:STORY-1889 | ai:claude
 pub(crate) fn cleanup_dead_reviewer_worktree(main_worktree: &Path, pr: u64) -> Result<()> {
     let pr_scope = format!("PR-{pr}");
     let pr_branch = format!("pr-{pr}");
@@ -2582,19 +2409,7 @@ pub(crate) fn cleanup_dead_reviewer_worktree(main_worktree: &Path, pr: u64) -> R
         if !rev_wt.exists() && std::fs::symlink_metadata(&rev_wt).is_err() {
             continue;
         }
-        preserve_reviewer_worktree_hold(main_worktree, &rev_wt, &pr_scope)?;
-        let out = aida_core::git_ops::host_git_command(main_worktree)
-            .args(["worktree", "remove", "--force"])
-            .arg(&rev_wt)
-            .output()
-            .with_context(|| {
-                format!("failed to run git worktree remove on {}", rev_wt.display())
-            })?;
-        if !out.status.success() && rev_wt.exists() {
-            let _ = aida_core::git_ops::host_git_command(main_worktree)
-                .args(["worktree", "prune"])
-                .output();
-        }
+        remove_reviewer_worktree_preserving_hold(main_worktree, &rev_wt, &pr_scope)?;
     }
     // Best-effort cleanup of a leftover `pr-<pr>` branch after removing any dead
     // reviewer worktree, matching `review-one.sh`.
@@ -2644,6 +2459,7 @@ fn resolve_vendor_bin(vendor: DispatchVendor) -> PathBuf {
 pub(crate) fn run_review_verb(
     main_worktree: &Path,
     req: &DispatchRequest,
+    _admission: &ExecutionAdmission,
     pr: u64,
     vendor: Option<DispatchVendor>,
 ) -> RunnerOutcome {
@@ -2883,6 +2699,7 @@ pub(crate) fn build_implementer_launch_command(
 fn run_take_verb(
     main_worktree: &Path,
     req: &DispatchRequest,
+    _admission: &ExecutionAdmission,
     pr: u64,
     branch: &str,
     spec: &str,
@@ -2959,6 +2776,7 @@ fn run_take_verb(
 fn run_impl_verb(
     main_worktree: &Path,
     req: &DispatchRequest,
+    _admission: &ExecutionAdmission,
     name: &str,
     branch: &str,
     spec: &str,

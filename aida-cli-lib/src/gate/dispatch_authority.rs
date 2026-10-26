@@ -290,19 +290,20 @@ impl DispatchStatus {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct DispatchResult {
-    // The record identity, its mandate and requester grant, and the worker
-    // claim are gate-private (STORY-1889): `pending_result` binds the first
-    // from the admission, and only the claim methods below change the claim.
+    // The record identity, its mandate and requester grant, the worker claim
+    // and the status with its timestamps and summary are gate-private
+    // (STORY-1889): `pending_result` binds the first from the admission, and
+    // only the transition methods below change the claim or the status.
     pub(in crate::gate) id: String,
     pub verb: String,
     pub target: String,
     pub dedupe_key: String,
-    pub status: DispatchStatus,
+    pub(in crate::gate) status: DispatchStatus,
     pub(in crate::gate) requested_at: DateTime<Utc>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub started_at: Option<DateTime<Utc>>,
+    pub(in crate::gate) started_at: Option<DateTime<Utc>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub finished_at: Option<DateTime<Utc>>,
+    pub(in crate::gate) finished_at: Option<DateTime<Utc>>,
     pub(in crate::gate) requester_grant_prefix: String,
     pub(in crate::gate) mandate_id: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -315,7 +316,7 @@ pub(crate) struct DispatchResult {
     pub spawned_session: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub exit_code: Option<i32>,
-    pub summary: String,
+    pub(in crate::gate) summary: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub refusal_reason: Option<String>,
     pub log_path: String,
@@ -327,6 +328,22 @@ pub(crate) struct DispatchResult {
 impl DispatchResult {
     pub(crate) fn id(&self) -> &str {
         &self.id
+    }
+
+    pub(crate) fn status(&self) -> DispatchStatus {
+        self.status
+    }
+
+    pub(crate) fn started_at(&self) -> Option<DateTime<Utc>> {
+        self.started_at
+    }
+
+    pub(crate) fn finished_at(&self) -> Option<DateTime<Utc>> {
+        self.finished_at
+    }
+
+    pub(crate) fn summary(&self) -> &str {
+        &self.summary
     }
 
     pub(crate) fn requested_at(&self) -> DateTime<Utc> {
@@ -366,25 +383,237 @@ impl DispatchResult {
     }
 
     /// Record a fresh claim `token`, held by `worker` once it is known.
-    pub(crate) fn set_claim(&mut self, worker: Option<(u32, Option<String>)>, token: String) {
+    fn set_claim(&mut self, worker: Option<(u32, Option<String>)>, token: String) {
         let (pid, start) = worker.map_or((None, None), |(p, s)| (Some(p), s));
         self.worker_pid = pid;
         self.worker_start = start;
         self.claim_token = Some(token);
     }
 
-    /// Publish the spawned worker behind an existing claim.
-    pub(crate) fn set_worker(&mut self, pid: u32, start: Option<String>) {
-        self.worker_pid = Some(pid);
-        self.worker_start = start;
-    }
-
     /// Drop the worker and its claim token.
-    pub(crate) fn clear_claim(&mut self) {
+    fn clear_claim(&mut self) {
         self.worker_pid = None;
         self.worker_start = None;
         self.claim_token = None;
     }
+
+    // ── Record-status transitions ───────────────────────────────────────────
+
+    /// `Pending` -> `Cancelled`; only a `Pending` request can be cancelled.
+    pub(crate) fn cancel(&mut self, req: &DispatchRequest, now: DateTime<Utc>) -> Result<()> {
+        if self.status != DispatchStatus::Pending {
+            bail!(
+                "cannot cancel dispatch request {}: status is `{}` (only `pending` requests can be cancelled)",
+                req.id,
+                self.status.as_str()
+            );
+        }
+        self.status = DispatchStatus::Cancelled;
+        self.finished_at = Some(now);
+        self.summary = format!(
+            "cancelled {} {}",
+            req.action.verb_str(),
+            req.action.subject_label()
+        );
+        Ok(())
+    }
+
+    /// `Pending` -> `Running` under a fresh claim `token`, held by `worker`
+    /// once it is known. Only a [`ClaimAdmission`] from [`pass_admission`] or
+    /// [`run_admission`] admits the claim. `req`, when already read, names
+    /// the run in the summary.
+    pub(crate) fn begin_running(
+        &mut self,
+        _admission: ClaimAdmission,
+        req: Option<&DispatchRequest>,
+        worker: Option<(u32, Option<String>)>,
+        token: String,
+        now: DateTime<Utc>,
+    ) -> Result<()> {
+        if self.status != DispatchStatus::Pending {
+            bail!(
+                "cannot claim dispatch request {}: status is `{}`, not `pending`",
+                self.id,
+                self.status.as_str()
+            );
+        }
+        self.status = DispatchStatus::Running;
+        self.started_at = Some(now);
+        self.set_claim(worker, token);
+        if let Some(req) = req {
+            self.summary = format!(
+                "running {} {}",
+                req.action.verb_str(),
+                req.action.subject_label()
+            );
+        }
+        Ok(())
+    }
+
+    /// Publish the spawned worker behind this record's `Running` claim.
+    pub(crate) fn publish_worker(
+        &mut self,
+        req: &DispatchRequest,
+        pid: u32,
+        start: Option<String>,
+    ) {
+        self.worker_pid = Some(pid);
+        self.worker_start = start;
+        self.summary = format!(
+            "running {} {} (pid {pid})",
+            req.action.verb_str(),
+            req.action.subject_label()
+        );
+    }
+
+    /// `Running` -> `Failed` with `summary` and `reason`. `release_claim`
+    /// drops the worker and claim token (a worker that never started).
+    pub(crate) fn fail_running(
+        &mut self,
+        summary: String,
+        reason: String,
+        release_claim: bool,
+        now: DateTime<Utc>,
+    ) -> Result<()> {
+        if self.status != DispatchStatus::Running {
+            bail!(
+                "cannot fail dispatch request {}: status is `{}`, not `running`",
+                self.id,
+                self.status.as_str()
+            );
+        }
+        self.status = DispatchStatus::Failed;
+        self.finished_at = Some(now);
+        if release_claim {
+            self.clear_claim();
+        }
+        self.summary = summary;
+        self.refusal_reason = Some(reason);
+        Ok(())
+    }
+
+    /// `Running` -> `Pending` when the serve grant expired before this
+    /// process started the claimed request: only a claim exactly
+    /// `(pid, start, token)` reverts. Returns whether it did.
+    pub(crate) fn revert_unstarted_claim(
+        &mut self,
+        pid: u32,
+        start: Option<&str>,
+        token: Option<&str>,
+    ) -> bool {
+        if self.status != DispatchStatus::Running || !self.claim_is(pid, start, token) {
+            return false;
+        }
+        self.status = DispatchStatus::Pending;
+        self.started_at = None;
+        self.clear_claim();
+        true
+    }
+
+    /// Which execution path a record admits; a terminal record refuses.
+    pub(crate) fn execution_entry(&self, id: &str) -> Result<ExecutionEntry> {
+        match self.status {
+            DispatchStatus::Running => Ok(ExecutionEntry::Running),
+            DispatchStatus::Pending => Ok(ExecutionEntry::Pending),
+            DispatchStatus::Done
+            | DispatchStatus::Refused
+            | DispatchStatus::Failed
+            | DispatchStatus::Cancelled => bail!(
+                "dispatch request {id} is already in terminal state `{}` (refusing execution)",
+                self.status.as_str()
+            ),
+        }
+    }
+
+    /// `Running` -> the terminal `status` the claimed execution ended in.
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn finish(
+        &mut self,
+        status: DispatchStatus,
+        summary: String,
+        refusal_reason: Option<String>,
+        spawned_session: Option<String>,
+        exit_code: Option<i32>,
+        now: DateTime<Utc>,
+    ) -> Result<()> {
+        if status.is_active() {
+            bail!(
+                "dispatch request {} cannot finish in active status `{}`",
+                self.id,
+                status.as_str()
+            );
+        }
+        if self.status != DispatchStatus::Running {
+            bail!(
+                "cannot finish dispatch request {}: status is `{}`, not `running`",
+                self.id,
+                self.status.as_str()
+            );
+        }
+        self.status = status;
+        self.finished_at = Some(now);
+        self.spawned_session = spawned_session;
+        self.exit_code = exit_code;
+        self.summary = summary;
+        self.refusal_reason = refusal_reason;
+        Ok(())
+    }
+}
+
+/// The execution path [`DispatchResult::execution_entry`] admits.
+// trace:STORY-1889 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ExecutionEntry {
+    /// Verify the existing claim belongs to this process.
+    Running,
+    /// Claim it now, through [`run_admission`].
+    Pending,
+}
+
+/// An active request already holding a new submission's dedupe key or
+/// target.
+// trace:STORY-1889 trace:STORY-1917 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum SubmissionCollision {
+    /// The same request is already active: return it, deduplicated.
+    Duplicate {
+        request: DispatchRequest,
+        result: DispatchResult,
+    },
+    /// Another active request owns the target: refuse with this reason.
+    TargetBusy(String),
+}
+
+/// Submission admission against the active requests in `inv`: the first
+/// active pair with the same dedupe key deduplicates, one with the same
+/// target refuses.
+// trace:STORY-1889 trace:STORY-1917 | ai:claude
+pub(crate) fn submission_collision(
+    inv: &DispatchInventory,
+    dedupe_key: &str,
+    target_key: &str,
+) -> Option<SubmissionCollision> {
+    for (existing_req, existing_res) in &inv.pairs {
+        if !existing_res.status.is_active() {
+            continue;
+        }
+        if existing_req.dedupe_key == dedupe_key {
+            return Some(SubmissionCollision::Duplicate {
+                request: existing_req.clone(),
+                result: existing_res.clone(),
+            });
+        }
+        if existing_req.target_key == target_key {
+            return Some(SubmissionCollision::TargetBusy(format!(
+                "target `{target_key}` already has an active dispatch request {} ({}, status: {}); cancel it first with `aida dispatch cancel {}`",
+                existing_req.id,
+                existing_req.action.verb_str(),
+                existing_res.status.as_str(),
+                existing_req.id
+            )));
+        }
+    }
+    None
 }
 
 pub(crate) const MAX_CONCURRENT_REVIEWS: usize = 2;
@@ -1460,16 +1689,27 @@ impl ClaimCaps {
     }
 }
 
+/// Proof that the gate admitted a claim on one `Pending` record. Only
+/// [`pass_admission`] and [`run_admission`] build one, and
+/// [`DispatchResult::begin_running`] consumes it, so no claim is written
+/// without the admission.
+// trace:STORY-1889 | ai:claude
+#[derive(Debug, PartialEq, Eq)]
+#[must_use]
+pub(crate) struct ClaimAdmission {
+    _sealed: (),
+}
+
 /// Whether a tick or serve pass claims one `Pending` record.
 // trace:STORY-1889 trace:STORY-1917 | ai:claude
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub(crate) enum PassAdmission {
     /// `review`, `flow` and `train` run only under `aida dispatch serve`.
     WaitingForServe,
     /// A recovery fence reserves the target, or the verb's cap is full.
     Skip,
     /// Claimed; `caps` now counts its slot.
-    Claim,
+    Claim(ClaimAdmission),
 }
 
 /// Claim admission for one `Pending` record on a tick or serve pass.
@@ -1492,7 +1732,7 @@ pub(crate) fn pass_admission(
     if !caps.try_take(&req.action) {
         return PassAdmission::Skip;
     }
-    PassAdmission::Claim
+    PassAdmission::Claim(ClaimAdmission { _sealed: () })
 }
 
 /// Claim admission for `aida dispatch run <id>` on a `Pending` record: the
@@ -1502,7 +1742,7 @@ pub(crate) fn run_admission(
     inv_after_reap: &DispatchInventory,
     id: &str,
     raw_req_res: &Result<DispatchRequest>,
-) -> Result<()> {
+) -> Result<ClaimAdmission> {
     let (running_reviews, running_flows, running_trains) =
         inv_after_reap.active_and_fenced_cap_usage(Some(id))?;
     // Enforce concurrency caps on direct `aida dispatch run <id>` as well.
@@ -1534,7 +1774,7 @@ pub(crate) fn run_admission(
             _ => {}
         }
     }
-    Ok(())
+    Ok(ClaimAdmission { _sealed: () })
 }
 
 /// A `Running` record's claim, checked against this process.
@@ -1617,12 +1857,37 @@ pub(crate) struct ExecutionRefusal {
     pub(crate) outcome: Outcome,
 }
 
+/// Proof that [`admit_execution`] admitted a claimed request. Only the gate
+/// builds one, and every verb runner takes it, so a runner cannot run
+/// without the execution-time admission.
+// trace:STORY-1889 | ai:claude
+#[derive(Debug)]
+#[must_use]
+pub(crate) struct ExecutionAdmission {
+    _sealed: (),
+}
+
 /// Execution-time admission of a claimed request, first refusal wins:
 /// Boundary B, the serve grant, the exact recorded mandate and its scopes,
 /// human gates, the requester grant and its `reviewer` delegation, then the
 /// dual-end re-validation of the request and its frozen brief.
 // trace:STORY-1889 trace:STORY-1917 | ai:claude
-pub(crate) fn execution_refusal(
+pub(crate) fn admit_execution(
+    main_worktree: &Path,
+    mandate_dir: &Path,
+    req: &DispatchRequest,
+    via_serve: bool,
+    now: DateTime<Utc>,
+) -> std::result::Result<ExecutionAdmission, ExecutionRefusal> {
+    match execution_refusal(main_worktree, mandate_dir, req, via_serve, now) {
+        Some(refusal) => Err(refusal),
+        None => Ok(ExecutionAdmission { _sealed: () }),
+    }
+}
+
+/// The first execution-time refusal for `req`, if any (see
+/// [`admit_execution`]).
+fn execution_refusal(
     main_worktree: &Path,
     mandate_dir: &Path,
     req: &DispatchRequest,
