@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-24T22:35:50.576500759Z
-modified_at: 2026-10-25T20:07:26.153390298Z
+modified_at: 2026-10-26T14:47:29.470300716Z
 req_type: Task
 tags:
 - audit
@@ -40,6 +40,12 @@ comments:
   content: 'PROXY DECISION for joe: Approve completion of the signed audit contract: known-mandate scope refusals append Refused events with that exact mandate ID; invalid/missing mandate identity must not borrow another mandate or disclose secrets. Pin event cardinality/reasons. Preserve refusal decisions.'
   created_at: 2026-10-25T04:51:47.026354703Z
   modified_at: 2026-10-25T04:51:47.026354703Z
+- id: 01a178ae-45be-7b51-bbe3-a3967deb1094
+  author: joe
+  content: 'ADVISOR: landed in e27af75054 (PR #2924, Refs-titled train car); the round-4 reviewer verified this task item by item (verdict at 4b2b0b3983).'
+  created_at: 2026-10-26T14:47:29.470300716Z
+  modified_at: 2026-10-26T14:47:29.470300716Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
 history:
 - id: 01a17166-c529-7770-8dcb-2ba76ebef242
   author: joe
