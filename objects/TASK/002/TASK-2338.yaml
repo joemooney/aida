@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-24T22:35:30.036362668Z
-modified_at: 2026-10-25T20:07:19.694585598Z
+modified_at: 2026-10-26T14:46:23.288821978Z
 req_type: Task
 tags:
 - authority
@@ -34,6 +34,12 @@ comments:
   content: 'PROXY DECISION for joe: Approve expired-mandate refusal regression using hermetic fixture time; preserve authority behavior.'
   created_at: 2026-10-25T04:51:35.775599523Z
   modified_at: 2026-10-25T04:51:35.775599523Z
+- id: 01a178ad-4338-7933-9af4-8161cb6ab68a
+  author: joe
+  content: 'ADVISOR: landed in e27af75054 (PR #2924, Refs-titled train car); the round-4 reviewer verified this task item by item (verdict at 4b2b0b3983).'
+  created_at: 2026-10-26T14:46:23.288821978Z
+  modified_at: 2026-10-26T14:46:23.288821978Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
 history:
 - id: 01a17166-68f9-7031-8da8-051bf49e9889
   author: joe
