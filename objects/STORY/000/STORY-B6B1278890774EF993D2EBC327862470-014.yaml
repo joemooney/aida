@@ -2,13 +2,20 @@ id: 01a17a61-25ff-7271-a738-b8a8309334d5
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-014
 title: 'Review PR-2955: [AI:claude] fix(queue-work): review follow-ups from #2934 and #2942'
 description: 'Hand-filed review story: auto-queue found no REQ-ID trailers because the node-local TASK-b6b1...-00N IDs in the commit subjects are not recognised by the trailer parser.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-26T22:42:29.503097262Z
-modified_at: 2026-10-26T22:42:36.851323605Z
+modified_at: 2026-10-26T23:01:20.067179239Z
 req_type: Story
+comments:
+- id: 01a17a72-6643-7cb1-b1ca-379e97772de1
+  author: aida-auto-bump
+  content: 'Auto-completed: PR #2955 is merged on the forge (its merge commit was outside the local scan window).'
+  created_at: 2026-10-26T23:01:20.067296740Z
+  modified_at: 2026-10-26T23:01:20.067296740Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
 history:
 - id: 01a17a61-42b3-7a03-9a38-dfb1e4bdb62b
   author: joe
@@ -18,6 +25,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a17a72-6643-7cb1-b1ca-37a345953c77
+  author: aida-auto-bump
+  timestamp: 2026-10-26T23:01:20.067302104Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
 filed_at:
   code_sha: 773015b8d26e43b909b379eea62d14b9d357f8fa
   branch: main
@@ -26,3 +41,6 @@ filed_at:
   aida_build_sha: f34fd14323
   vendor: claude
   session: 761a4fea-f388-41d1-93d9-f1386951253c
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-26T23:01:20.067295999Z
