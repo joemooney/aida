@@ -1,0 +1,18 @@
+{
+  "id": "review-watch-85dfbf19f3dead79d2691abcad11caef441ac4bd5ed877d850bf6723b6115b53",
+  "thread_id": "review-watch-85dfbf19f3dead79d2691abcad11caef441ac4bd5ed877d850bf6723b6115b53",
+  "from": "review-watch",
+  "to": {
+    "kind": "agent",
+    "agent": "joemooney"
+  },
+  "timestamp": 1793006167,
+  "body": "PR-2947 at 816839ecabfcb738965cb299e572a381e6aa107b: the review by claude-reviewer (claude reviewer seat) recorded `request-changes` with 4 finding(s), round 1 of 2. The findings are in `.aida/review-verdicts/PR-2947.json` and `.aida/review-verdicts/PR-2947/816839ecabfcb738965cb299e572a381e6aa107b.json`. Address them and push a new head; the watcher starts its review when it sees the head.",
+  "subject": "PR-2947: review requested changes (round 1 of 2)",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
