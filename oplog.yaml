@@ -77526,5 +77526,23 @@ operations:
     req_type: Task
     status: Draft
     priority: Medium
-clock: 6003
+- id: 01a178ad-72f5-7cf2-9036-ceb6c9791d96
+  target_id: 01a178ad-6a89-7182-8a6b-02324525b409
+  author: aida
+  node_id: '1'
+  lamport: 6004
+  timestamp: 2026-10-26T14:46:35.509429646Z
+  kind: !Create
+    title: 'minor test gap (non-blocking): the clone adoption is tested via session_start_w…'
+    description: |-
+      Non-blocking finding carried forward from an APPROVED review verdict on BUG-2223, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+      minor test gap (non-blocking): the clone adoption is tested via session_start_with_receipt and the branch preflight, but not end to end through handle_queue_work --resume (only the linked-worktree case is)
+
+      PR: #2934
+      Reviewed sha: 994a4c1e25d4b4d61eb9b13a45e37c19b05cce04
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 6004
 node_id: '1'
