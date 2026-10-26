@@ -1,5 +1,5 @@
 job: disk-headroom-guard
-last_run: 2026-10-26T17:11:32.784798985Z
+last_run: 2026-10-26T17:48:18.267764390Z
 last_by:
   seat: substrate
   vendor: tick
@@ -61,4 +61,7 @@ failure_trips:
   status: 1
 - trip_id: disk-headroom-guard@2026-10-26T17:11:32.784798985Z
   at: 2026-10-26T17:11:32.784798985Z
+  status: 1
+- trip_id: disk-headroom-guard@2026-10-26T17:48:18.267764390Z
+  at: 2026-10-26T17:48:18.267764390Z
   status: 1
