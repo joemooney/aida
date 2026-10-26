@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-26T06:52:23.641289836Z
+modified_at: 2026-10-26T07:05:25.491468333Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -847,6 +847,13 @@ comments:
     - UnknownLegacy (watermark-only) read state: B1 reports it distinctly; whether B2 renders it read or unread is the B2 adapter policy question.
   created_at: 2026-10-26T06:52:23.641289836Z
   modified_at: 2026-10-26T06:52:23.641289836Z
+  session_id: 01a176f8bdec
+  harness_version: 2.1.310 (Claude Code)
+- id: 01a17707-3cf3-73b2-8b0e-8a5f9566b226
+  author: joe
+  content: 'B1 PR opened: #2944 (b3a5add805, Refs, non-completing). New aida_core::mailbox_logical read-only snapshot + conformance tests. Not compiled/tested locally: sandbox mounts the cargo slot dir read-only and the hook blocks the slot bypass; CI is the first gate. B2/C/D/E remain.'
+  created_at: 2026-10-26T07:05:25.491468333Z
+  modified_at: 2026-10-26T07:05:25.491468333Z
   session_id: 01a176f8bdec
   harness_version: 2.1.310 (Claude Code)
 history:
