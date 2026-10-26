@@ -3948,6 +3948,23 @@ pub(crate) fn find_scope_lease_conflict(
         .cloned()
 }
 
+/// BUG-2223: the freshest lease on `scope` other than `adopting`, the orphan
+/// `aida queue work --resume` re-enters in place. The queue-work conflict
+/// sweep releases or refuses each of these in turn, exactly as without
+/// `--resume`.
+// trace:BUG-2223 | ai:claude
+pub(crate) fn next_scope_conflict(
+    leases: Vec<SessionLease>,
+    scope: &str,
+    adopting: Option<&str>,
+) -> Option<SessionLease> {
+    let others: Vec<SessionLease> = leases
+        .into_iter()
+        .filter(|l| Some(l.id.as_str()) != adopting)
+        .collect();
+    find_scope_lease_conflict(&others, scope)
+}
+
 /// BUG-307: gather the three independent liveness signals for `lease` and
 /// hand them to [`orchestrator::classify_for_auto_release`]. The classifier
 /// is pure; this wrapper is where we touch the process table, lease-file
@@ -4225,6 +4242,79 @@ fn stale_lease_recovery_with_owner(
         in_use,
         base_verdict,
     }
+}
+
+/// BUG-2223: why a resumed pickup may not adopt this lease's tree in place,
+/// or `None` when it may: the owning process is verifiably gone and the tree
+/// is still on disk. Judged on the base verdict, like the BUG-908 retry:
+/// adoption keeps the tree, its commits and its uncommitted work untouched,
+/// so a stray process still in the tree does not block it. A live claude in
+/// the tree still reads as `Live`.
+// trace:BUG-2223 | ai:claude
+pub(crate) fn orphan_adoption_refusal(report: &StaleLeaseRecoveryReport) -> Option<&'static str> {
+    match report.base_verdict {
+        StaleLeaseRecovery::StaleDirty { .. }
+        | StaleLeaseRecovery::ReclaimableClean {
+            worktree_missing: false,
+        } => None,
+        StaleLeaseRecovery::ReclaimableClean {
+            worktree_missing: true,
+        } => Some("its tree no longer exists"),
+        StaleLeaseRecovery::Live => Some("a live process still backs it"),
+        StaleLeaseRecovery::UnknownLiveness => {
+            Some("it records no owning process, so it cannot be proven dead")
+        }
+    }
+}
+
+/// BUG-2223: [`orphan_adoption_refusal`] for `lease` itself, also refusing a
+/// lease that records no tree, or a linked worktree git no longer lists
+/// (session start re-enters a worktree only when `git worktree list` does).
+/// Every `--resume` hint a scope-conflict refusal gives is gated on this, so
+/// a hint never offers a re-entry that refuses.
+// trace:BUG-2223 | ai:claude
+pub(crate) fn lease_adoption_refusal(
+    project_root: &std::path::Path,
+    lease: &SessionLease,
+) -> Option<&'static str> {
+    if lease.worktree_path.as_os_str().is_empty() {
+        return Some("it records no tree");
+    }
+    if let Some(why) = orphan_adoption_refusal(&stale_lease_recovery_for_lease(lease)) {
+        return Some(why);
+    }
+    let registered = || {
+        aida_core::git_ops::host_git_command(project_root)
+            .args(["worktree", "list", "--porcelain"])
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .is_some_and(|o| {
+                crate::worktree::is_registered(
+                    &String::from_utf8_lossy(&o.stdout),
+                    &lease.worktree_path,
+                )
+            })
+    };
+    if lease.tree_kind != crate::seat_clone::TreeKind::Clone && !registered() {
+        return Some("git no longer lists its worktree (`git worktree list`)");
+    }
+    None
+}
+
+/// BUG-2223: the orphaned lease on `scope` whose tree `aida queue work
+/// --resume` re-enters in place, if there is one: the freshest lease on the
+/// scope, when [`lease_adoption_refusal`] accepts it. Other leases on the
+/// scope are still swept: a live one refuses the pickup.
+// trace:BUG-2223 | ai:claude
+pub(crate) fn adoptable_orphan_lease(
+    project_root: &std::path::Path,
+    scope: &str,
+) -> Option<SessionLease> {
+    let lease = find_scope_lease_conflict(&list_leases(project_root), scope)?;
+    lease_adoption_refusal(project_root, &lease)
+        .is_none()
+        .then_some(lease)
 }
 
 /// BUG-906: before a transient phase retry relaunches a child session, reap any
