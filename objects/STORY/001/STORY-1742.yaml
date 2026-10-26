@@ -38,7 +38,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T22:02:03.191649035Z
-modified_at: 2026-10-26T07:13:32.495584063Z
+modified_at: 2026-10-26T07:14:02.962590401Z
 req_type: Story
 tags:
 - docs:impacted
@@ -437,6 +437,27 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: S3b design/lock order/allocation authority sound and CI green, but prepared WORK intake refuses on any realistic store (source byte ban + 1 MiB bound vs real metadata/oplog) and under group-writable modes; CLI write/server reload untested. Triage reason: PR-2938 S3b round-1 RC: 2 majors + minors; rework lane'
   created_at: 2026-10-26T07:13:32.495581624Z
   modified_at: 2026-10-26T07:13:32.495581624Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
+- id: 01a1770f-2191-7dd3-8daf-7c6524e2624a
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #2938):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 86f7fe118a5e
+    Recorded: 2026-10-26T06:54:30.618263460+00:00
+    Review comment: https://github.com/joemooney/aida/pull/2938#issuecomment-6410109552
+    Findings:
+    1. MAJOR aida-core/src/db/work_intake.rs:57-64 + transport_prepared.rs:57-67: work_update refuses the WHOLE store if any existing object or metadata.yaml contains '&','*' or '!' bytes, and read_artifact caps every artifact at 1 MiB. The real shared aida-store has 1566/6174 objects plus metadata.yaml containing those bytes and a 3.8 MiB oplog.yaml, so every WORK add/update/delete/save on the actual store a WORK clone transports fails ('Unsupported WORK source snapshot grammar or size' / bound error). Tests only use an empty synthetic store, yet transport show reports sanitized_intake_available=true and docs say every write is supported. Scope the alias guard to a real YAML anchor/alias/tag check (or to touched artifacts), give oplog an appropriate bound, and add a fixture with existing prose (e.g. '!' / '**bold**' rows, >1 MiB oplog) - or report intake unavailable honestly.
+    2. MAJOR aida-core/src/transport_prepared.rs:28-43,56-64 vs 251-259: read()/safe_parents refuse any group-writable file or directory, but git checkout and apply() (create_dir_all + fs_atomic::write_atomic) honor the process umask. Under umask 002 (operator's own store is 0664/0775) existing store files refuse every WORK write, and a WORK write itself creates 0775 dirs/0664 objects that make the NEXT write refuse (self-bricking). Write prepared artifacts with explicit 0644/0755 modes (and/or refuse with an actionable chmod hint), and add a umask-002 test. (Static evidence; my umask-002 repro stopped earlier at the S3a private-dir check.)
+    3. MINOR aida-core/src/transport_private.rs:108 via transport_policy.rs:162: Admission::enter uses try_lock_exclusive, so concurrent WORK writers (server + CLI, two CLI writes, or a transport op holding the lock) fail immediately with 'Transport configuration is busy' instead of serializing like ordinary store writes. Use a bounded blocking wait or a write-specific actionable error, and test two concurrent writers.
+    4. MINOR aida-cli-lib/src/sanitized_intake.rs:113: --preview resolves enrollment/policy from std::env::current_dir() instead of the resolved store root, contrary to the S3b contract (bound to the actual owned root, not cwd). Run from outside the project or with an explicit store path, preview can say NotEnrolled/Clean for a store whose write would be governed differently.
+    5. MINOR test coverage: there is no test of an actual 'aida add --sanitized' write via the CLI (enrolled success, refusal without a profile, unsupported flags refused in the Git phase), none of ServerState::save_store reloading after a refused save (aida-server/src/service.rs:126-140), and none of the MCP route, although docs/cli/07-project-setup.md claims CLI, MCP and server support.
+    6. MINOR aida-server/src/service.rs:131-137: if backend.load() fails after a refused WORK save, the refused rows stay in authoritative in-memory state with only a warn - the fail-open the S3b contract forbids. Mark state unusable / return an error that forces a reload instead of keeping the refused rows.
+    7. MINOR aida-core/src/db/work_intake.rs:185: the WORK path overwrites the shared oplog.yaml header node_id on every write, while the ordinary record_op (git_backend.rs:588) sets it only when it is '0'. This diverges from ordinary semantics and churns a tracked shared file across clones. Match the ordinary rule.
+    8. COSMETIC aida-core/src/work_candidate.rs:33-53 vs 75-86: Detached::next accepts any ASCII-alphabetic prefix and increments the counter, but format_id rejects non-uppercase prefixes, so next_id('bug') spends a sequence that seal() then publishes as a gap. Validate the same grammar in both. Also aida-cli-lib/src/lib.rs:206: the STORY-1742 trace comment sits above 'mod review_cmd;' instead of 'mod sanitized_intake;'.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-10-26T07:14:02.769959895Z
+  modified_at: 2026-10-26T07:14:02.769959895Z
   session_id: 761a4fea-f388-41d1-93d9-f1386951253c
 history:
 - id: 01a16ee2-ad7a-7b30-aaeb-ec8f892fbe76
