@@ -237,6 +237,27 @@ fn is_harness_command(arg: &str) -> bool {
         || AGENT_HARNESSES
             .iter()
             .any(|h| bare == *h || bare.starts_with(&format!("{h}-")))
+        || is_versioned_harness_install(arg)
+}
+
+/// A harness installed as `…/<harness>/versions/<version>` (Claude Code's
+/// native installer: `~/.local/share/claude/versions/2.1.310`), whose process
+/// name is the bare version string. Only the path shape counts, never the
+/// name alone.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-002 | ai:claude
+fn is_versioned_harness_install(arg: &str) -> bool {
+    let path = Path::new(arg);
+    let mut up = path
+        .ancestors()
+        .skip(1)
+        .filter_map(|p| p.file_name()?.to_str());
+    path.file_name()
+        .and_then(|s| s.to_str())
+        .is_some_and(|v| !v.is_empty())
+        && up.next() == Some("versions")
+        && up
+            .next()
+            .is_some_and(|h| AGENT_HARNESSES.contains(&h.to_ascii_lowercase().as_str()))
 }
 
 /// Is a process with this name and command line an agent harness (Claude
