@@ -58,7 +58,9 @@ pub(crate) fn pr_has_approved_verdict(project_root: &std::path::Path, pr_number:
 ///
 /// Returns `None` for a comment that is not a review at all.
 // trace:BUG-1672 | ai:claude
-pub(crate) fn review_comment_verdict(content: &str) -> Option<review_verdict::VerdictKind> {
+pub(crate) fn review_comment_verdict(
+    content: &str,
+) -> Option<crate::gate::review_verdict::VerdictKind> {
     if crate::review_verdict_display::is_findings_block(content) {
         return None;
     }
@@ -89,10 +91,10 @@ pub(crate) fn review_comment_verdict(content: &str) -> Option<review_verdict::Ve
         || has_seq("CHANGES", "REQUESTED")
         || has_seq("NEEDS", "CHANGES");
     if request_changes || has("PARTIAL") {
-        return Some(review_verdict::VerdictKind::RequestChanges);
+        return Some(crate::gate::review_verdict::VerdictKind::RequestChanges);
     }
     if has("REJECT") || has("REJECTED") {
-        return Some(review_verdict::VerdictKind::Rejected);
+        return Some(crate::gate::review_verdict::VerdictKind::Rejected);
     }
     if has("APPROVE") || has("APPROVED") || has("LGTM") {
         let qualified = has("WITHHELD")
@@ -100,12 +102,12 @@ pub(crate) fn review_comment_verdict(content: &str) -> Option<review_verdict::Ve
             || has_seq("NOT", "APPROVED")
             || has_seq("NOT", "APPROVE");
         return Some(if qualified {
-            review_verdict::VerdictKind::Unknown
+            crate::gate::review_verdict::VerdictKind::Unknown
         } else {
-            review_verdict::VerdictKind::Approved
+            crate::gate::review_verdict::VerdictKind::Approved
         });
     }
-    Some(review_verdict::VerdictKind::Unknown)
+    Some(crate::gate::review_verdict::VerdictKind::Unknown)
 }
 
 /// BUG-1672: the LATEST review comment on the spec and the verdict it
@@ -123,7 +125,10 @@ pub(crate) fn review_comment_verdict(content: &str) -> Option<review_verdict::Ve
 // trace:BUG-1672 | ai:claude
 pub(crate) fn latest_review_comment_verdict(
     comments: &[aida_core::Comment],
-) -> Option<(review_verdict::VerdictKind, chrono::DateTime<chrono::Utc>)> {
+) -> Option<(
+    crate::gate::review_verdict::VerdictKind,
+    chrono::DateTime<chrono::Utc>,
+)> {
     comments
         .iter()
         .filter_map(|c| review_comment_verdict(&c.content).map(|k| (k, c.created_at)))
@@ -138,7 +143,7 @@ pub(crate) fn verdict_file_written_at(
     path: &std::path::Path,
 ) -> Option<chrono::DateTime<chrono::Utc>> {
     // trace:TASK-1801 | ai:claude
-    let modified = review_verdict::verdict_file_modified(path)?;
+    let modified = crate::gate::review_verdict::verdict_file_modified(path)?;
     Some(chrono::DateTime::<chrono::Utc>::from(modified))
 }
 
@@ -167,7 +172,8 @@ pub(crate) fn spec_review_approved(
         candidates.push((kind.approves(), Some(at)));
     }
 
-    let pr_path = review_verdict::verdict_path(project_root, &format!("PR-{pr_number}"));
+    let pr_path =
+        crate::gate::review_verdict::verdict_path(project_root, &format!("PR-{pr_number}"));
     if pr_path.is_file() {
         // Preserve the drain reader's conflict/escalation checks. An unknown
         // or unreadable verdict is blocking evidence, never an approval.
@@ -186,13 +192,13 @@ pub(crate) fn spec_review_approved(
         .into_iter()
         .flatten()
         .filter(|id| !id.trim().is_empty() && *id != "???")
-        .map(|id| review_verdict::verdict_path(project_root, id))
+        .map(|id| crate::gate::review_verdict::verdict_path(project_root, id))
         .filter(|p| p.is_file())
     {
         // trace:TASK-1801 | ai:claude
-        let record = review_verdict::read_verdict_body(&path)
+        let record = crate::gate::review_verdict::read_verdict_body(&path)
             .ok()
-            .and_then(|body| review_verdict::parse_recorded_verdict(&body));
+            .and_then(|body| crate::gate::review_verdict::parse_recorded_verdict(&body));
         if record.as_ref().is_some_and(|v| v.is_closed()) {
             continue;
         }
@@ -243,16 +249,17 @@ pub(crate) fn pr_has_local_verdict(project_root: &std::path::Path, pr_number: u6
 pub(crate) fn verdict_candidates_for_pr(
     project_root: &std::path::Path,
     pr: &status_cleanup::OpenPrItem,
-) -> Vec<review_verdict::RecordedVerdict> {
-    let mut candidates: Vec<review_verdict::RecordedVerdict> =
+) -> Vec<crate::gate::review_verdict::RecordedVerdict> {
+    let mut candidates: Vec<crate::gate::review_verdict::RecordedVerdict> =
         pr_ship::extract_spec_ids_from_text(&pr.title)
             .iter()
             .filter(|id| !id.trim().is_empty())
-            .filter_map(|id| review_verdict::read_recorded_verdict(project_root, id))
+            .filter_map(|id| crate::gate::review_verdict::read_recorded_verdict(project_root, id))
             .collect();
-    if let Some(pr_verdict) =
-        review_verdict::read_recorded_verdict(project_root, &format!("PR-{}", pr.number))
-    {
+    if let Some(pr_verdict) = crate::gate::review_verdict::read_recorded_verdict(
+        project_root,
+        &format!("PR-{}", pr.number),
+    ) {
         candidates.push(pr_verdict);
     }
     candidates

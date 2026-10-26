@@ -265,7 +265,7 @@ pub fn collect_class_report(
     let mut report = ClassReport::default();
     for (key, path) in files {
         // trace:TASK-1801 | ai:claude
-        let Some(round) = crate::review_verdict::read_verdict_body(&path)
+        let Some(round) = crate::gate::review_verdict::read_verdict_body(&path)
             .ok()
             .and_then(|b| serde_json::from_str::<RoundView>(&b).ok())
         else {

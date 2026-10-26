@@ -763,7 +763,7 @@ impl Verdict {
     /// `None` — never an approval.
     // trace:BUG-1505 | ai:claude
     pub(crate) fn parse(s: &str) -> Option<Self> {
-        use crate::review_verdict::VerdictKind;
+        use crate::gate::review_verdict::VerdictKind;
         match VerdictKind::parse(s) {
             VerdictKind::Approved => Some(Self::Approved),
             VerdictKind::RequestChanges => Some(Self::RequestChanges),

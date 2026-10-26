@@ -209,21 +209,21 @@ fn handle_role_enter(
     bind_pid: Option<u32>,
 ) -> Result<()> {
     // trace:TASK-1787 | ai:antigravity
-    let requested_ttl = crate::seat_authority::parse_ttl(project_root, ttl)?;
+    let requested_ttl = crate::gate::seat_authority::parse_ttl(project_root, ttl)?;
 
     // BUG-1196: stakeholder personas are shell identities, not persisted role
     // files or build seats.  Handle an explicit persona before role lookup so
     // it has the same outcome as choosing that tagged row in the picker.
     // trace:BUG-1196 | ai:codex
     if let Some(persona) = name.and_then(stakeholder_persona_name) {
-        let grant = crate::seat_authority::issue_direct(
+        let grant = crate::gate::seat_authority::issue_direct(
             project_root,
             persona,
             delegate_seats.to_vec(),
             requested_ttl,
             bind_pid,
         )?;
-        let dur_str = crate::seat_authority::format_ttl(grant.expires_at - grant.issued_at);
+        let dur_str = crate::gate::seat_authority::format_ttl(grant.expires_at - grant.issued_at);
         eprintln!(
             "grant expires {} ({})",
             grant.expires_at.format("%Y-%m-%d %H:%M UTC"),
@@ -233,7 +233,7 @@ fn handle_role_enter(
             emit_bound_grant_eval(&grant);
             return Ok(());
         }
-        crate::seat_authority::revoke_current()?;
+        crate::gate::seat_authority::revoke_current()?;
         emit_persona_enter_eval(
             project_root,
             persona,
@@ -255,14 +255,14 @@ fn handle_role_enter(
                 match pick_role_interactively(project_root, explicit)? {
                     Some(chosen) => {
                         if let Some(persona) = stakeholder_persona_name(&chosen) {
-                            let grant = crate::seat_authority::issue_direct(
+                            let grant = crate::gate::seat_authority::issue_direct(
                                 project_root,
                                 persona,
                                 delegate_seats.to_vec(),
                                 requested_ttl,
                                 bind_pid,
                             )?;
-                            let dur_str = crate::seat_authority::format_ttl(
+                            let dur_str = crate::gate::seat_authority::format_ttl(
                                 grant.expires_at - grant.issued_at,
                             );
                             eprintln!(
@@ -274,7 +274,7 @@ fn handle_role_enter(
                                 emit_bound_grant_eval(&grant);
                                 return Ok(());
                             }
-                            crate::seat_authority::revoke_current()?;
+                            crate::gate::seat_authority::revoke_current()?;
                             emit_persona_enter_eval(
                                 project_root,
                                 persona,
@@ -338,7 +338,7 @@ fn handle_role_enter(
     {
         // trace:TASK-1597 | ai:claude
 
-        if crate::seat_authority::roster_allows(
+        if crate::gate::seat_authority::roster_allows(
             project_root,
             &crate::current_user_id(None),
             "advisor",
@@ -358,14 +358,14 @@ Include it in the TTY-issued delegation set?";
         }
     }
 
-    let grant = crate::seat_authority::issue_direct(
+    let grant = crate::gate::seat_authority::issue_direct(
         project_root,
         &seat_name,
         final_delegate_seats,
         requested_ttl,
         bind_pid,
     )?;
-    let dur_str = crate::seat_authority::format_ttl(grant.expires_at - grant.issued_at);
+    let dur_str = crate::gate::seat_authority::format_ttl(grant.expires_at - grant.issued_at);
     eprintln!(
         "grant expires {} ({})",
         grant.expires_at.format("%Y-%m-%d %H:%M UTC"),
@@ -377,7 +377,7 @@ Include it in the TTY-issued delegation set?";
         emit_bound_grant_eval(&grant);
         return Ok(());
     }
-    crate::seat_authority::revoke_current()?;
+    crate::gate::seat_authority::revoke_current()?;
     state.last_active_at = chrono::Utc::now();
     state.working_directory = std::env::current_dir().ok();
     let save_path = role_save_path(project_root, &state)?;
@@ -417,9 +417,9 @@ Include it in the TTY-issued delegation set?";
 /// changes nothing in this shell: it only says which process the grant is
 /// bound to and the id that session exports.
 // trace:BUG-1934 | ai:claude
-fn emit_bound_grant_eval(grant: &crate::seat_authority::SeatGrant) {
+fn emit_bound_grant_eval(grant: &crate::gate::seat_authority::SeatGrant) {
     let _eval = crate::shell_eval::EvalBlock::open();
-    let bound_to = crate::seat_authority::describe_binding(&grant.binding);
+    let bound_to = crate::gate::seat_authority::describe_binding(&grant.binding);
     println!(
         "# aida role enter --bind-pid — {} grant bound to {}; this shell is unchanged",
         eval_comment_text(&grant.seat),
@@ -430,7 +430,7 @@ fn emit_bound_grant_eval(grant: &crate::seat_authority::SeatGrant) {
         crate::glyph(crate::glyphs::Glyph::Check),
         sh_single_quote(&grant.seat),
         sh_single_quote(&bound_to),
-        crate::seat_authority::GRANT_ENV,
+        crate::gate::seat_authority::GRANT_ENV,
         sh_single_quote(&grant.id)
     );
 }
@@ -473,7 +473,7 @@ fn emit_persona_enter_eval(
     // trace:TASK-1752 | ai:claude
     println!(
         "export {}='{}'",
-        crate::seat_authority::GRANT_ENV,
+        crate::gate::seat_authority::GRANT_ENV,
         sh_single_quote(grant_id)
     );
     // trace:BUG-1934 | ai:claude
@@ -628,7 +628,7 @@ fn handle_role_add(
     // and enter it label-only — the emitted hint confers no authority, and
     // `aida role enter <seat>` at a human TTY remains the issuance path.
     // trace:STORY-1473 | ai:claude
-    let grant_id = match crate::seat_authority::issue_direct(
+    let grant_id = match crate::gate::seat_authority::issue_direct(
         project_root,
         &canonical_role_name(name),
         Vec::new(),
@@ -636,7 +636,7 @@ fn handle_role_add(
         None,
     ) {
         Ok(issued) => {
-            crate::seat_authority::revoke_current()?;
+            crate::gate::seat_authority::revoke_current()?;
             Some(issued)
         }
         Err(reason) => {
@@ -783,7 +783,7 @@ fn emit_role_enter_eval(
         Some(grant_id) => {
             println!(
                 "export {}='{}'",
-                crate::seat_authority::GRANT_ENV,
+                crate::gate::seat_authority::GRANT_ENV,
                 sh_single_quote(grant_id)
             );
             // trace:BUG-1934 | ai:claude
@@ -791,7 +791,7 @@ fn emit_role_enter_eval(
                 println!("{line}");
             }
         }
-        None => println!("unset {}", crate::seat_authority::GRANT_ENV),
+        None => println!("unset {}", crate::gate::seat_authority::GRANT_ENV),
     }
     if let Some(p) = &state.purpose {
         println!("export AIDA_SESSION_PURPOSE='{}'", sh_single_quote(p));
@@ -967,7 +967,7 @@ fn role_enter_launch_title(
 // work without parsing. trace:TASK-42 | ai:claude
 fn handle_role_active() -> Result<()> {
     let project_root = statusline_project_root();
-    match crate::seat_authority::current_seat(&project_root) {
+    match crate::gate::seat_authority::current_seat(&project_root) {
         Some(role) if !role.is_empty() => {
             println!("{}", role);
             Ok(())
@@ -984,7 +984,8 @@ fn handle_role_active() -> Result<()> {
 // can capture the value and branch on exit code separately.
 // trace:STORY-64 | ai:claude
 fn handle_role_current(check: bool) -> Result<()> {
-    let role = crate::seat_authority::current_seat(&statusline_project_root()).unwrap_or_default();
+    let role =
+        crate::gate::seat_authority::current_seat(&statusline_project_root()).unwrap_or_default();
     println!("{}", role);
     if check && role.is_empty() {
         std::process::exit(1);
@@ -1013,20 +1014,20 @@ fn handle_role_expiry(warn_within: &str, refuse_within: Option<&str>) -> Result<
     // records. Only launch refusal consumes the strict authority verdict.
     // trace:BUG-2011 | ai:codex
     let lookup = if refuse_within.is_some() {
-        crate::seat_authority::session_grant_lookup()
+        crate::gate::seat_authority::session_grant_lookup()
     } else {
-        match crate::seat_authority::session_grant_expiry() {
-            Some(expiry) => crate::seat_authority::GrantLookup::Expiry(expiry),
-            None => crate::seat_authority::GrantLookup::NoGrant,
+        match crate::gate::seat_authority::session_grant_expiry() {
+            Some(expiry) => crate::gate::seat_authority::GrantLookup::Expiry(expiry),
+            None => crate::gate::seat_authority::GrantLookup::NoGrant,
         }
     };
     let expiry = match lookup {
-        crate::seat_authority::GrantLookup::Expiry(expiry) => expiry,
-        crate::seat_authority::GrantLookup::Unresolved(reason) if refuse_within.is_some() => {
+        crate::gate::seat_authority::GrantLookup::Expiry(expiry) => expiry,
+        crate::gate::seat_authority::GrantLookup::Unresolved(reason) if refuse_within.is_some() => {
             let label = std::env::var("AIDA_SESSION_ROLE").ok();
             eprintln!(
                 "{}",
-                crate::seat_authority::unresolved_launch_refusal(&reason, label.as_deref())
+                crate::gate::seat_authority::unresolved_launch_refusal(&reason, label.as_deref())
             );
             std::process::exit(3);
         }
@@ -1034,13 +1035,13 @@ fn handle_role_expiry(warn_within: &str, refuse_within: Option<&str>) -> Result<
     };
     let now = chrono::Utc::now();
     if let Some(within) = refuse_within {
-        if let Some(refusal) = crate::seat_authority::launch_refusal(&expiry, now, within) {
+        if let Some(refusal) = crate::gate::seat_authority::launch_refusal(&expiry, now, within) {
             eprintln!("{refusal}");
             std::process::exit(3);
         }
         return Ok(());
     }
-    if let Some(warning) = crate::seat_authority::expiry_warning(&expiry, now, warn_within) {
+    if let Some(warning) = crate::gate::seat_authority::expiry_warning(&expiry, now, warn_within) {
         println!("{warning}");
     }
     Ok(())
@@ -1052,7 +1053,7 @@ fn handle_role_adopt_key(id: &str) -> Result<()> {
     let mut secret = String::new();
     let mut input = std::io::Read::take(std::io::stdin(), 4096);
     std::io::Read::read_to_string(&mut input, &mut secret)?;
-    crate::seat_authority::adopt_key(id, &secret).map_err(|why| {
+    crate::gate::seat_authority::adopt_key(id, &secret).map_err(|why| {
         anyhow::anyhow!(
             "the grant was entered, but its session key was not installed ({why:#}); sandboxed tool calls from this terminal will be refused"
         )
@@ -1090,7 +1091,7 @@ pub(crate) fn adopt_key_eval_lines(grant_id: &str, secret: Option<&str>) -> Vec<
 /// BUG-1934: `aida role status [--json]`.
 // trace:BUG-1934 | ai:claude
 fn handle_role_status(project_root: &std::path::Path, json: bool) -> Result<()> {
-    let status = crate::seat_authority::grant_status(project_root);
+    let status = crate::gate::seat_authority::grant_status(project_root);
     if json {
         println!("{}", serde_json::to_string_pretty(&status)?);
         return Ok(());
@@ -1127,7 +1128,7 @@ fn handle_role_status(project_root: &std::path::Path, json: bool) -> Result<()> 
 }
 
 fn handle_role_end() -> Result<()> {
-    crate::seat_authority::revoke_current()?;
+    crate::gate::seat_authority::revoke_current()?;
     // Use a uniquely-named env var rather than `local` so the eval works
     // both at the shell top level and inside a wrapper function.
     // trace:TASK-1171 | ai:claude
@@ -1150,7 +1151,7 @@ fn handle_role_end() -> Result<()> {
     // trace:TASK-1752 | ai:claude
     println!(
         "unset AIDA_SESSION_ROLE {} AIDA_SESSION_PURPOSE AIDA_SESSION_PROJECT",
-        crate::seat_authority::GRANT_ENV
+        crate::gate::seat_authority::GRANT_ENV
     );
     println!("if [ -n \"$__AIDA_ROLE_END_PREV\" ]; then");
     println!(
@@ -1166,7 +1167,7 @@ fn handle_role_end() -> Result<()> {
 
 fn handle_role_list(project_root: &std::path::Path) -> Result<()> {
     let roles = list_roles(project_root)?;
-    let active = crate::seat_authority::current_seat(project_root);
+    let active = crate::gate::seat_authority::current_seat(project_root);
     if roles.is_empty() {
         println!("(no roles defined for {})", project_root.display());
         println!(
@@ -1240,7 +1241,7 @@ fn print_stakeholder_personas(active: Option<&str>) {
 fn handle_role_show(project_root: &std::path::Path, name: Option<&str>) -> Result<()> {
     let resolved = match name {
         Some(n) => n.to_string(),
-        None => crate::seat_authority::current_seat(project_root).ok_or_else(|| {
+        None => crate::gate::seat_authority::current_seat(project_root).ok_or_else(|| {
             anyhow::anyhow!(
                 "No role active and no name given. Use `aida role list` to see options."
             )

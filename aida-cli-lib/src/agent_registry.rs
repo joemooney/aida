@@ -1800,7 +1800,7 @@ pub(crate) fn mcp_authority_status_lines(agents: &[AgentRegistryView]) -> Vec<St
         .filter(|agent| agent.source == "mcp" && agent.status != AgentStatus::Stale)
         .map(|agent| {
             let server_role = agent.role.as_deref().unwrap_or("(none)");
-            let advisor = crate::advisor_authority_from(server_role, false, false);
+            let advisor = crate::gate::role_authority::advisor_authority_from(server_role, false, false);
             format!(
                 "  MCP authority: {} server#{} seat={} (advisor authority: {}); recovery: enter advisor at a TTY, then restart MCP",
                 agent.agent_type,

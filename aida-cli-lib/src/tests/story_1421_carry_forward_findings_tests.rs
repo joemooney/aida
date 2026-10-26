@@ -1,6 +1,6 @@
 // trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
 use super::*;
-use crate::review_verdict::{RecordedVerdict, VerdictKind};
+use crate::gate::review_verdict::{RecordedVerdict, VerdictKind};
 use std::collections::HashSet;
 
 fn approved_verdict(findings: &[&str]) -> RecordedVerdict {
@@ -162,7 +162,7 @@ fn emit_writes_targeted_commits_and_preserves_concurrent_spec() {
 
     // An APPROVED verdict carrying 2 non-blocking findings for the spec
     // that's completing.
-    let verdict_path = crate::review_verdict::verdict_path(&project_root, "STORY-9821");
+    let verdict_path = crate::gate::review_verdict::verdict_path(&project_root, "STORY-9821");
     std::fs::create_dir_all(verdict_path.parent().unwrap()).unwrap();
     std::fs::write(
         &verdict_path,

@@ -916,7 +916,8 @@ pub(crate) fn ps_overlay_integration_standing(project_root: &std::path::Path, ro
             continue;
         }
         let branch = row.lease.branch.clone();
-        let verdict = review_verdict::read_recorded_verdict_any(project_root, &[spec.as_str()]);
+        let verdict =
+            crate::gate::review_verdict::read_recorded_verdict_any(project_root, &[spec.as_str()]);
         let standing = dispatch_health_ps::integration_standing(
             finished.contains(&spec.to_ascii_uppercase()),
             verdict.as_ref().is_some_and(|v| v.kind.approves()),

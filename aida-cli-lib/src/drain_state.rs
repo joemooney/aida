@@ -2769,13 +2769,13 @@ mod tests {
             Some(1948),
         );
         let read = DrainState::read(dir.path()).unwrap();
-        let liveness = crate::pr_ship::reviewer_liveness_for_pr(
+        let liveness = crate::gate::ship::reviewer_liveness_for_pr(
             read.members.iter().map(|m| (m.is_running(), m.pr)),
             1948,
         );
         assert_eq!(
             liveness,
-            crate::pr_ship::ReviewerLiveness::OnThisPr,
+            crate::gate::ship::ReviewerLiveness::OnThisPr,
             "PR-1948's live sibling-spec reviewer must be found regardless of which spec's run it belongs to"
         );
     }

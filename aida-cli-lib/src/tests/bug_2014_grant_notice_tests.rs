@@ -1,11 +1,11 @@
 // trace:BUG-2014 | ai:codex
 use super::*;
-use crate::seat_authority::{self, SeatGrant, GRANT_ENV};
+use crate::gate::seat_authority::{self, SeatGrant, GRANT_ENV};
 
 fn record(id: &str) -> SeatGrant {
     serde_json::from_slice(
         &std::fs::read(
-            seat_authority::grant_dir()
+            crate::gate::seat_authority::grant_dir()
                 .unwrap()
                 .join(format!("{id}.json")),
         )
@@ -17,7 +17,7 @@ fn change(id: &str, f: impl FnOnce(&mut SeatGrant)) {
     let mut grant = record(id);
     f(&mut grant);
     std::fs::write(
-        seat_authority::grant_dir()
+        crate::gate::seat_authority::grant_dir()
             .unwrap()
             .join(format!("{id}.json")),
         serde_json::to_vec(&grant).unwrap(),
@@ -32,8 +32,12 @@ fn deterministic_crossings_renewal_and_poisoned_store() {
         crate::test_env::EnvVarsGuard::snapshot(&[GRANT_ENV, "AIDA_USER", "AIDA_SESSION_ROLE"]);
     env.set_key("AIDA_USER", "notice-user");
     env.set_key("AIDA_SESSION_ROLE", "product");
-    let id =
-        seat_authority::test_support::mint_grant_for(root.path(), "notice-user", "advisor", &[]);
+    let id = crate::gate::seat_authority::test_support::mint_grant_for(
+        root.path(),
+        "notice-user",
+        "advisor",
+        &[],
+    );
     env.set_key(GRANT_ENV, &id);
     let now = Utc::now();
     let at = now + Duration::hours(3);
@@ -65,8 +69,12 @@ fn deterministic_crossings_renewal_and_poisoned_store() {
     });
     assert!(notice(root.path(), at).unwrap().is_some());
     assert!(notice(root.path(), at).unwrap().is_none());
-    let renewed =
-        seat_authority::test_support::mint_grant_for(root.path(), "notice-user", "advisor", &[]);
+    let renewed = crate::gate::seat_authority::test_support::mint_grant_for(
+        root.path(),
+        "notice-user",
+        "advisor",
+        &[],
+    );
     change(&renewed, |grant| {
         grant.expires_at = at + Duration::minutes(90)
     });
@@ -79,14 +87,18 @@ fn child_effective_expiry_and_typed_rejections() {
     let root = tempfile::tempdir().unwrap();
     let mut env = crate::test_env::EnvVarsGuard::snapshot(&[GRANT_ENV, "AIDA_USER"]);
     env.set_key("AIDA_USER", "notice-child");
-    let parent = seat_authority::test_support::mint_grant_for(
+    let parent = crate::gate::seat_authority::test_support::mint_grant_for(
         root.path(),
         "notice-child",
         "advisor",
         &["reviewer"],
     );
-    let child =
-        seat_authority::test_support::mint_grant_for(root.path(), "notice-child", "reviewer", &[]);
+    let child = crate::gate::seat_authority::test_support::mint_grant_for(
+        root.path(),
+        "notice-child",
+        "reviewer",
+        &[],
+    );
     let now = Utc::now();
     change(&parent, |grant| {
         grant.expires_at = now + Duration::minutes(20)
@@ -105,7 +117,7 @@ fn child_effective_expiry_and_typed_rejections() {
         .contains("reviewer seat grant expired"));
     // Both records expired: retain the parent's earlier effective timestamp.
     let late = now + Duration::hours(5);
-    let metadata = seat_authority::notice_grant(root.path(), late)
+    let metadata = crate::gate::seat_authority::notice_grant(root.path(), late)
         .unwrap()
         .unwrap();
     assert_eq!(metadata.expiry.expires_at, now + Duration::minutes(20));
@@ -196,16 +208,20 @@ fn baseline_grants_at_twenty_minutes_emit_nothing() {
     env.set_key("AIDA_USER", "notice-baseline");
     let now = Utc::now();
     for seat in ["implementer", "guest", "requester"] {
-        let id =
-            seat_authority::test_support::mint_grant_for(root.path(), "notice-baseline", seat, &[]);
+        let id = crate::gate::seat_authority::test_support::mint_grant_for(
+            root.path(),
+            "notice-baseline",
+            seat,
+            &[],
+        );
         change(&id, |grant| grant.expires_at = now + Duration::minutes(20));
         env.set_key(GRANT_ENV, &id);
         assert!(matches!(
-            seat_authority::grant_check_at(root.path(), now),
-            seat_authority::GrantCheck::Valid(_)
+            crate::gate::seat_authority::grant_check_at(root.path(), now),
+            crate::gate::seat_authority::GrantCheck::Valid(_)
         ));
         assert!(
-            seat_authority::notice_grant(root.path(), now)
+            crate::gate::seat_authority::notice_grant(root.path(), now)
                 .unwrap()
                 .is_none(),
             "{seat}"

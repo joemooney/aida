@@ -690,7 +690,7 @@ mod tests {
     fn bug_2178_mandate_snapshot_reads_store_after_completion() {
         let (_g, project, store) = git_fixture("BUG-11");
         crate::completion::emit_spec_completed(&project, "BUG-11", "", None, "done");
-        assert!(crate::mandate_traces::store_snapshot(&store).is_ok());
+        assert!(crate::gate::mandate_traces::store_snapshot(&store).is_ok());
 
         // An older binary may leave a timing record uncommitted; BUG-2213
         // permits that non-evidence dirt without weakening object checks.
@@ -700,12 +700,15 @@ mod tests {
             &[ev("2026-10-18T11:00:00Z", "BUG-12", EventKind::RunStarted)],
         );
         write_record(&store, &project, "BUG-12", &rel, "done").unwrap();
-        assert!(crate::mandate_traces::store_snapshot(&store).is_ok());
+        assert!(crate::gate::mandate_traces::store_snapshot(&store).is_ok());
 
         std::fs::create_dir_all(store.join("objects")).unwrap();
         std::fs::write(store.join("objects/uncommitted.yaml"), "tags: [security]\n").unwrap();
-        let err = crate::mandate_traces::store_snapshot(&store).unwrap_err();
-        assert!(err.is::<crate::mandate_traces::StoreDirty>(), "{err:#}");
+        let err = crate::gate::mandate_traces::store_snapshot(&store).unwrap_err();
+        assert!(
+            err.is::<crate::gate::mandate_traces::StoreDirty>(),
+            "{err:#}"
+        );
     }
 
     /// A failed record commit is reported and never fails the completion:
