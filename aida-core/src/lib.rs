@@ -132,6 +132,8 @@ pub mod liveness;
 // trace:STORY-711 | ai:claude
 pub mod lock;
 pub mod mailbox;
+// trace:STORY-1843 | ai:claude
+pub mod mailbox_logical;
 pub mod meta;
 pub mod models;
 pub mod node;

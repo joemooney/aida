@@ -158,6 +158,13 @@ pub enum DispatchAction {
         #[clap(long, default_value_t = 2000)]
         poll_ms: u64,
     },
+    /// Migrate the dispatch lock left by an older aida (a plain
+    /// `.aida/dispatch/tick.lock` file) to the current lock directory, or
+    /// finish a migration that was interrupted. Operator command: run it from
+    /// your terminal after stopping every dispatch process; it refuses while
+    /// any process still has the old lock open.
+    // trace:STORY-1917 trace:TASK-2344 | ai:claude
+    ActivateLock,
     /// Internal per-request worker spawned by `dispatch tick` or `dispatch serve`.
     #[clap(hide = true)]
     Run {

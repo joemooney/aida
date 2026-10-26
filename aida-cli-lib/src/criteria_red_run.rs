@@ -945,7 +945,9 @@ mod tests {
         let src = include_str!("queue_cmd.rs");
         let start = src.find("pub(crate) fn handle_queue_work(").unwrap();
         let body = &src[start..];
-        let created = body.find("    session_start(").unwrap();
+        let created = body
+            .find("crate::session_start::session_start_with_receipt(")
+            .unwrap();
         let lease = body.find("let lease = list_leases(&project_root)").unwrap();
         let hook = body.find("criteria_red_run::after_lane_created(").unwrap();
         let launch = body.find("session::exec_claude_with_session(").unwrap();

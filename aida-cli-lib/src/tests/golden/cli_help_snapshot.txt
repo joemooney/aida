@@ -24689,16 +24689,20 @@ sandboxed advisor seat for unsandboxed execution
 Usage: aida dispatch [OPTIONS] <COMMAND>
 
 Commands:
-  request  Queue a validated, mandate-authorized dispatch request
-  list     List queued, running, and completed dispatch requests
-  show     Show one dispatch request and its current result record
-  cancel   Cancel a pending dispatch request
-  tick     Execute one substrate scheduler pass over pending `take` and `impl` requests (leaves
-           `review`, `flow`, and `train` waiting for `serve`)
-  serve    Long-running executor started from a human advisor terminal after `eval "$(aida role
-           enter advisor ...)"` to run grant-requiring verbs (`review`, `flow`, `train`) as well as
-           `take` and `impl`
-  help     Print this message or the help of the given subcommand(s)
+  request        Queue a validated, mandate-authorized dispatch request
+  list           List queued, running, and completed dispatch requests
+  show           Show one dispatch request and its current result record
+  cancel         Cancel a pending dispatch request
+  tick           Execute one substrate scheduler pass over pending `take` and `impl` requests
+                 (leaves `review`, `flow`, and `train` waiting for `serve`)
+  serve          Long-running executor started from a human advisor terminal after `eval "$(aida
+                 role enter advisor ...)"` to run grant-requiring verbs (`review`, `flow`, `train`)
+                 as well as `take` and `impl`
+  activate-lock  Migrate the dispatch lock left by an older aida (a plain `.aida/dispatch/tick.lock`
+                 file) to the current lock directory, or finish a migration that was interrupted.
+                 Operator command: run it from your terminal after stopping every dispatch process;
+                 it refuses while any process still has the old lock open
+  help           Print this message or the help of the given subcommand(s)
 
 Options:
       --format <FORMAT>
@@ -25019,6 +25023,27 @@ Options:
           
           [default: 2000]
 
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida dispatch activate-lock
+Migrate the dispatch lock left by an older aida (a plain `.aida/dispatch/tick.lock` file) to the
+current lock directory, or finish a migration that was interrupted. Operator command: run it from
+your terminal after stopping every dispatch process; it refuses while any process still has the old
+lock open
+
+Usage: aida dispatch activate-lock [OPTIONS]
+
+Options:
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -49231,6 +49256,27 @@ Working on aida itself
         "name": "poll-ms",
         "takes_value": true,
         "help": "Poll interval in milliseconds when running continuously"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "dispatch",
+      "activate-lock"
+    ],
+    "about": "Migrate the dispatch lock left by an older aida (a plain `.aida/dispatch/tick.lock` file) to the current lock directory, or finish a migration that was interrupted. Operator command: run it from your terminal after stopping every dispatch process; it refuses while any process still has the old lock open",
+    "flags": [
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
       }
     ],
     "hidden": false
