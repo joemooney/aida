@@ -754,13 +754,24 @@ fn ownership_and_ci_share_one_wait_deadline() {
     )
     .unwrap();
     std::fs::write(fixture.state.join("required"), "[]").unwrap();
-    let started = std::time::Instant::now();
     let mut child = operator_ship(&fixture)
         .args(["--wait", "2"])
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .spawn()
         .unwrap();
+    // TASK-2348: an independent watchdog bounds a hung child; it is never
+    // the evidence for the shared deadline. trace:TASK-2348 | ai:claude
+    let (finished, watched) = std::sync::mpsc::channel::<()>();
+    let pid = child.id().to_string();
+    let watchdog = std::thread::spawn(move || {
+        let expired = watched.recv_timeout(std::time::Duration::from_secs(120))
+            == Err(std::sync::mpsc::RecvTimeoutError::Timeout);
+        if expired {
+            let _ = Command::new("kill").args(["-9", &pid]).status();
+        }
+        expired
+    });
     let mut stderr = BufReader::new(child.stderr.take().unwrap());
     let mut prefix = String::new();
     loop {
@@ -777,16 +788,30 @@ fn ownership_and_ci_share_one_wait_deadline() {
     std::fs::remove_file(path).unwrap();
     child.stderr = Some(stderr.into_inner());
     let output = child.wait_with_output().unwrap();
-    assert_eq!(
-        output.status.code(),
-        Some(21),
-        "{prefix}{}",
-        output_text(&output)
-    );
+    let _ = finished.send(());
     assert!(
-        started.elapsed() < std::time::Duration::from_millis(3500),
-        "a second CI budget was incorrectly granted"
+        !watchdog.join().unwrap(),
+        "watchdog killed a hung `pr ship`"
     );
+    let text = format!("{prefix}{}", output_text(&output));
+    assert_eq!(output.status.code(), Some(21), "{text}");
     let calls = std::fs::read_to_string(fixture.state.join("calls")).unwrap();
     assert!(!calls.contains("pr merge"), "{calls}");
+    // Ownership was released (not timed out) and the CI wait, not the
+    // ownership wait, refused — naming the real pending check.
+    assert!(!text.contains("Drive ownership wait timed out"), "{text}");
+    assert!(text.contains("still pending: Build"), "{text}");
+    // TASK-2348: the ownership wait spent the whole two seconds, so CI got
+    // a ZERO remainder: exactly one row observation and no re-poll. A
+    // renewed allowance would print a pending line and read the rows again.
+    // This replaces a whole-process wall-clock inference.
+    // trace:TASK-2348 | ai:claude
+    assert!(!text.contains("CI pending for PR-1287"), "{text}");
+    let row_reads = calls
+        .lines()
+        .filter(|call| {
+            call.starts_with("pr checks") && call.contains("--json") && !call.contains("--required")
+        })
+        .count();
+    assert_eq!(row_reads, 1, "{calls}");
 }
