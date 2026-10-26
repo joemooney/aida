@@ -1280,8 +1280,9 @@ pub(crate) fn classify_clone_reap(
     }
     if facts.unpushed > 0 {
         return ReapVerdict::Skip(format!(
-            "seat clone holds {} commit(s) origin does not have",
-            facts.unpushed
+            "seat clone holds {} commit(s) origin does not have ({})",
+            facts.unpushed,
+            facts.unpushed_refs.join("; ") // trace:BUG-2224 | ai:claude
         ));
     }
     if !merged() {
