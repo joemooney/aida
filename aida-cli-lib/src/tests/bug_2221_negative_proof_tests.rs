@@ -107,6 +107,7 @@ fn seed_key(repo: &Path, queries: &[&str]) {
     let negative = || OracleAnswer {
         complete: true,
         references: 0,
+        records: Vec::new(),
     };
     let (_, mark) = probe_inner(repo, &ids(queries), &oracle_tuning());
     assert!(
@@ -256,7 +257,7 @@ fn stable_dag_eventually_completes_over_repeated_shows() {
     let mut outcomes = Vec::new();
     for _ in 0..16 {
         let outcome = probe(&repo, &["TASK-7"], &t);
-        outcomes.push(outcome);
+        outcomes.push(outcome.clone());
         if outcome == NegativeProbe::ProvedEmpty {
             break;
         }
@@ -938,6 +939,7 @@ fn cold_oracle_seed_warms_key_only_on_unchanged_snapshot() {
     let negative = || OracleAnswer {
         complete: true,
         references: 0,
+        records: Vec::new(),
     };
 
     let (outcome, mark) = probe_inner(&repo, &ids(&["TASK-7"]), &oracle_tuning());
@@ -1046,6 +1048,7 @@ fn incomplete_oracle_seeds_nothing() {
     let partial = || OracleAnswer {
         complete: false,
         references: 0,
+        records: Vec::new(),
     };
     let (_, mark) = probe_inner(&repo, &ids(&["TASK-7"]), &oracle_tuning());
     assert!(!settle_oracle(
@@ -1067,7 +1070,8 @@ fn incomplete_oracle_seeds_nothing() {
         mark.unwrap(),
         OracleAnswer {
             complete: true,
-            references: 0
+            references: 0,
+            records: Vec::new(),
         },
         far_deadline()
     ));
@@ -1090,7 +1094,8 @@ fn incomplete_oracle_seeds_nothing() {
         seed.unwrap(),
         OracleAnswer {
             complete: true,
-            references: 1
+            references: 1,
+            records: Vec::new(),
         },
         far_deadline()
     ));
@@ -1362,9 +1367,11 @@ fn pure_warm_read_rechecks_snapshot_after_walk() {
 
 /// Ruling 2026-10-25: positive and cold shows pay NO serial snapshot in
 /// front of the original query — structurally, no snapshot-only git read
-/// (`config --list`, the `--no-walk=unsorted` root listing) runs. That holds
-/// for a never-negative key and for a key that turned positive after
-/// holding a negative proof (the hit drops its state).
+/// (`config --list`, the `--no-walk=unsorted` root listing) runs on a cold
+/// positive show. That holds for a never-shown key and for a key that turned
+/// positive after holding a negative proof (the hit drops its state). (P1:
+/// the SECOND show of a positive key seeds its cone with a snapshot that
+/// overlaps the original — `positive_seeding_snapshot_overlaps_original`.)
 #[cfg(unix)]
 #[test]
 fn positive_show_takes_no_snapshot() {
@@ -1394,10 +1401,12 @@ fn positive_show_takes_no_snapshot() {
             .collect()
     };
 
-    for _ in 0..2 {
-        assert_eq!(show("TASK-7").commits.len(), 1);
-    }
+    assert_eq!(show("TASK-7").commits.len(), 1);
     assert_eq!(snapshot_reads(), Vec::<String>::new(), "positive key");
+    assert!(
+        state_on_disk(&repo, &["TASK-7"]).is_some_and(|st| st.positive && st.cone.is_none()),
+        "a complete positive answer leaves a positive marker only"
+    );
 
     // The first show after TASK-8 turned positive pays one warm snapshot and
     // finds the hit; the state is dropped, so the next show pays nothing.
@@ -1467,4 +1476,316 @@ fn warm_read_touches_state_for_lru_eviction() {
     );
     let touched = std::fs::metadata(&path).unwrap().modified().unwrap();
     assert!(touched > old, "a warm hit must refresh its eviction age");
+}
+
+// ---------------------------------------------------------------------------
+// P1 (SKETCH v2): the positive cone.
+// ---------------------------------------------------------------------------
+
+/// A commit with pinned author/committer timestamps (`ct`, epoch seconds), so
+/// fixtures control `--date-order` exactly, clock skew included.
+fn commit_at(repo: &Path, msg: &str, ct: i64) -> String {
+    git_at(repo, &["commit", "-q", "--allow-empty", "-m", msg], ct);
+    git(repo, &["rev-parse", "HEAD"])
+}
+
+fn git_at(repo: &Path, args: &[&str], ct: i64) {
+    let date = format!("@{ct} +0000");
+    let out = std::process::Command::new(real_git())
+        .args(aida_core::git_ops::NO_AUTO_MAINTENANCE)
+        .arg("-C")
+        .arg(repo)
+        .args(args)
+        .env("GIT_COMMITTER_DATE", &date)
+        .env("GIT_AUTHOR_DATE", &date)
+        .output()
+        .expect("git runs");
+    assert!(
+        out.status.success(),
+        "git {args:?}: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+fn show_now(repo: &Path, key: &str) -> GitLinkage {
+    collect_git_linkage_until(repo, &ids(&[key]), Instant::now() + Duration::from_secs(30))
+}
+
+/// The original query's records for `key`, in its order.
+fn oracle_records(repo: &Path, key: &str) -> Vec<String> {
+    git(
+        repo,
+        &[
+            "log",
+            "--all",
+            "-F",
+            "--date-order",
+            "--grep",
+            key,
+            "--pretty=format:%H",
+        ],
+    )
+    .lines()
+    .map(str::to_string)
+    .collect()
+}
+
+/// P1 (O1 under the P1' guards): across a DAG grown in stages (new hits
+/// above the cone, a merge that is itself a hit, a rebased chain sharing one
+/// committer second, clock skew that reorders unrelated hits (the Gap-1
+/// counterexample), deleted refs holding hits (Gap 2)), every show answers
+/// EXACTLY what the original `--all --date-order` collector answers, in its
+/// order, and complete. A guard that cannot prove the order falls back to
+/// the original; it never guesses.
+#[test]
+fn positive_order_matches_date_order_oracle() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let repo = init_repo(tmp.path());
+    let keys = ["TASK-1", "TASK-2"];
+    let check = |stage: &str| {
+        for key in keys {
+            let oracle = collect_git_linkage_opts(&repo, &ids(&[key]), false);
+            for round in 0..3 {
+                let shown = show_now(&repo, key);
+                assert_eq!(
+                    shown.commits, oracle.commits,
+                    "{stage}: {key} round {round}"
+                );
+                assert!(
+                    !shown.commits_scan_incomplete,
+                    "{stage}: {key} round {round}"
+                );
+            }
+        }
+    };
+    let cone_hits = |key: &str| {
+        state_on_disk(&repo, &[key])
+            .and_then(|st| st.cone)
+            .map(|c| c.hits)
+    };
+
+    commit_at(&repo, "fix: one (TASK-1)", 1_000);
+    commit_at(&repo, "fix: two (TASK-2)", 1_100);
+    check("stage 0");
+    assert_eq!(cone_hits("TASK-1"), Some(oracle_records(&repo, "TASK-1")));
+
+    // Stage 1: new commits above the cone, a hit on a side branch, and a
+    // merge commit that is itself a hit.
+    commit_at(&repo, "feat: above", 2_000);
+    git(&repo, &["checkout", "-q", "-b", "side"]);
+    commit_at(&repo, "fix: side (TASK-1)", 2_100);
+    git(&repo, &["checkout", "-q", "main"]);
+    commit_at(&repo, "fix: main (TASK-2)", 2_200);
+    git_at(
+        &repo,
+        &[
+            "merge",
+            "-q",
+            "--no-ff",
+            "-m",
+            "merge side (TASK-1) (TASK-2)",
+            "side",
+        ],
+        2_300,
+    );
+    check("stage 1");
+    assert_eq!(
+        cone_hits("TASK-1"),
+        Some(oracle_records(&repo, "TASK-1")),
+        "the warm read extended the cone in Git's order"
+    );
+    let warm = |key: &str| probe_inner(&repo, &ids(&[key]), &oracle_tuning()).0;
+    commit_at(&repo, "fix: probe (TASK-1)", 2_400);
+    assert!(
+        matches!(warm("TASK-1"), NegativeProbe::ProvedPositive(_)),
+        "a warm positive key answers from its cone, not the original"
+    );
+
+    // Stage 2: a rebased chain sharing one committer second (never two of
+    // them ready at once, so the order is still unique).
+    for i in 0..3 {
+        commit_at(&repo, &format!("fix: chain {i} (TASK-1)"), 3_000);
+    }
+    check("stage 2");
+
+    // Stage 3: Gap 1. base - A(hit) - C(skewed OLD date, tip of x) and
+    // base - B(hit, tip of y): Git prints B before A.
+    let base = git(&repo, &["rev-parse", "HEAD"]);
+    git(&repo, &["checkout", "-q", "-b", "x", &base]);
+    commit_at(&repo, "fix: A (TASK-2)", 9_000);
+    commit_at(&repo, "feat: C skewed", 10);
+    git(&repo, &["checkout", "-q", "-b", "y", &base]);
+    commit_at(&repo, "fix: B (TASK-2)", 5_000);
+    git(&repo, &["checkout", "-q", "main"]);
+    assert_eq!(
+        warm("TASK-2"),
+        NegativeProbe::RunOriginal,
+        "a skewed NEW commit fails the order guard"
+    );
+    check("stage 3");
+
+    // Stage 4: Gap 2. Refs holding hits are deleted; their commits leave
+    // `--all`.
+    git(&repo, &["branch", "-D", "x"]);
+    assert_eq!(
+        warm("TASK-2"),
+        NegativeProbe::RunOriginal,
+        "a lost cone root fails the reachability guard"
+    );
+    check("stage 4");
+    git(&repo, &["branch", "-D", "y"]);
+    check("stage 4b");
+
+    // Stage 5: growth on top again, after the reseeds.
+    commit_at(&repo, "fix: later (TASK-1) (TASK-2)", 20_000);
+    check("stage 5");
+    assert_eq!(cone_hits("TASK-2"), Some(oracle_records(&repo, "TASK-2")));
+}
+
+/// P1: a warm positive show walks only the commits added since the cone.
+/// Structurally, no `--date-order` (the original full-history query) runs,
+/// and the answer still equals the original's.
+#[cfg(unix)]
+#[test]
+fn positive_warm_walks_only_new_commits() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let tmp = tempfile::TempDir::new().unwrap();
+    let repo = init_repo(tmp.path());
+    for i in 0..5 {
+        commit_at(&repo, &format!("feat: history {i}"), 1_000 + i);
+    }
+    commit_at(&repo, "fix: work (TASK-7)", 2_000);
+    show_now(&repo, "TASK-7"); // marks the key positive
+    show_now(&repo, "TASK-7"); // seeds the cone
+    assert!(state_on_disk(&repo, &["TASK-7"]).is_some_and(|st| st.cone.is_some()));
+    commit_at(&repo, "feat: unrelated", 3_000);
+    commit_at(&repo, "fix: more work (TASK-7)", 3_100);
+    let oracle = collect_git_linkage_opts(&repo, &ids(&["TASK-7"]), false);
+    assert_eq!(oracle.commits.len(), 2);
+
+    let (log_path, _path) = install_logging_shim(tmp.path());
+    for round in 0..2 {
+        let shown = show_now(&repo, "TASK-7");
+        assert_eq!(shown.commits, oracle.commits, "round {round}");
+        assert!(!shown.commits_scan_incomplete);
+    }
+    let calls = std::fs::read_to_string(&log_path).unwrap_or_default();
+    assert!(
+        !calls.lines().any(|l| l.contains("--date-order")),
+        "a warm positive show never runs the full-history query:\n{calls}"
+    );
+}
+
+/// P1 + ruling 2026-10-25: the seeding show's BEFORE snapshot overlaps the
+/// original query instead of running in front of it. The shim holds every
+/// `config --list` until the original (`--date-order`) query has started. A
+/// serial snapshot would wait out the shim's generous liveness cap, which
+/// the shim records.
+#[cfg(unix)]
+#[test]
+fn positive_seeding_snapshot_overlaps_original() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let tmp = tempfile::TempDir::new().unwrap();
+    let repo = init_repo(tmp.path());
+    commit_at(&repo, "fix: work (TASK-7)", 2_000);
+    show_now(&repo, "TASK-7"); // cold: marks the key positive
+
+    let real = real_git();
+    let shim_dir = tmp.path().join("shim");
+    std::fs::create_dir_all(&shim_dir).unwrap();
+    let gate = tmp.path().join("original-started");
+    let serial = tmp.path().join("snapshot-waited-out");
+    crate::test_exec::write_executable(
+        &shim_dir.join("git"),
+        format!(
+            "#!/bin/sh\ncase \" $* \" in\n  *' --date-order '*) : > '{gate}' ;;\n  *' config --list '*)\n    i=0\n    while [ ! -e '{gate}' ]; do\n      i=$((i+1)); if [ \"$i\" -gt 200 ]; then : > '{serial}'; break; fi\n      sleep 0.1\n    done ;;\nesac\nexec '{real}' \"$@\"\n",
+            gate = gate.display(),
+            serial = serial.display(),
+            real = real.display(),
+        ),
+    );
+    let mut paths = vec![shim_dir];
+    paths.extend(std::env::split_paths(
+        &std::env::var_os("PATH").unwrap_or_default(),
+    ));
+    let _path = crate::test_env::EnvVarGuard::set("PATH", std::env::join_paths(paths).unwrap());
+
+    let shown = show_now(&repo, "TASK-7");
+    assert_eq!(shown.commits.len(), 1);
+    assert!(
+        !serial.exists(),
+        "the seeding snapshot ran in front of the original"
+    );
+    assert!(
+        state_on_disk(&repo, &["TASK-7"]).is_some_and(|st| st.cone.is_some()),
+        "the overlapped snapshot still seeds the cone"
+    );
+}
+
+/// P1 seeding follows ruling 2026-10-25 (a) verbatim: only a COMPLETE
+/// original answer, pinned to a snapshot that is unchanged afterwards, seeds
+/// a cone. An incomplete answer or a moved snapshot publishes nothing.
+#[test]
+fn positive_incomplete_oracle_seeds_nothing() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let repo = init_repo(tmp.path());
+    commit_at(&repo, "fix: work (TASK-7)", 2_000);
+    let answer = |repo: &Path, complete: bool| OracleAnswer {
+        complete,
+        references: 1,
+        records: oracle_records(repo, "TASK-7"),
+    };
+    let positive_marker = |repo: &Path| {
+        state_on_disk(repo, &["TASK-7"]).is_some_and(|st| st.positive && st.cone.is_none())
+    };
+    let (_, mark) = probe_inner(&repo, &ids(&["TASK-7"]), &oracle_tuning());
+    assert!(matches!(mark, Some(OracleSeed::Mark { .. })));
+    assert!(settle_oracle(
+        &repo,
+        mark.unwrap(),
+        answer(&repo, true),
+        far_deadline()
+    ));
+    assert!(positive_marker(&repo));
+
+    let (_, seed) = probe_inner(&repo, &ids(&["TASK-7"]), &oracle_tuning());
+    assert!(matches!(seed, Some(OracleSeed::Concurrent { .. })));
+    assert!(!settle_oracle(
+        &repo,
+        seed.unwrap(),
+        answer(&repo, false),
+        far_deadline()
+    ));
+    assert!(positive_marker(&repo), "an incomplete oracle seeds nothing");
+
+    let (_, mut seed) = probe_inner(&repo, &ids(&["TASK-7"]), &oracle_tuning());
+    if let Some(OracleSeed::Concurrent { pending, .. }) = seed.as_mut() {
+        pending.finish(); // the BEFORE capture is done; then the fleet moves
+    }
+    commit_at(&repo, "feat: fleet moved meanwhile", 3_000);
+    assert!(!settle_oracle(
+        &repo,
+        seed.unwrap(),
+        answer(&repo, true),
+        far_deadline()
+    ));
+    assert!(positive_marker(&repo), "a moved snapshot seeds nothing");
+
+    let (_, seed) = probe_inner(&repo, &ids(&["TASK-7"]), &oracle_tuning());
+    assert!(settle_oracle(
+        &repo,
+        seed.unwrap(),
+        answer(&repo, true),
+        far_deadline()
+    ));
+    assert_eq!(
+        state_on_disk(&repo, &["TASK-7"])
+            .and_then(|st| st.cone)
+            .map(|c| c.hits),
+        Some(oracle_records(&repo, "TASK-7"))
+    );
 }

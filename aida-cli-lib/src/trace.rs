@@ -1132,6 +1132,11 @@ fn collect_git_linkage_inner(
                         crate::show_negative::NegativeProbe::Incomplete => {
                             return (String::new(), true, None);
                         }
+                        // P1: a warm positive key, rendered by Git exactly as
+                        // the original query prints it. trace:BUG-2221 | ai:claude
+                        crate::show_negative::NegativeProbe::ProvedPositive(log) => {
+                            return (log.trim_end().to_string(), false, None);
+                        }
                         crate::show_negative::NegativeProbe::PositiveHit
                         | crate::show_negative::NegativeProbe::RunOriginal => {}
                     }
@@ -1142,7 +1147,7 @@ fn collect_git_linkage_inner(
                     "--all",
                     "-F",
                     "--date-order",
-                    "--pretty=format:%H\u{1f}%h\u{1f}%s\u{1f}%B%x1e",
+                    crate::show_negative::COLLECTOR_PRETTY,
                 ];
                 for id in ids {
                     args.push("--grep");
@@ -1189,6 +1194,7 @@ fn collect_git_linkage_inner(
     // BUG-2221: a record that does not frame is dropped as before, but the
     // answer then is not a COMPLETE oracle for seeding. trace:BUG-2221 | ai:claude
     let mut oracle_framed = true;
+    let mut oracle_records: Vec<String> = Vec::new();
     let commits: Vec<(String, String, String)> = log
         .split('\u{1e}')
         .filter_map(|record| {
@@ -1202,6 +1208,7 @@ fn collect_git_linkage_inner(
                 return None;
             };
             let (full, short, subject) = (full.to_string(), short.to_string(), subject.to_string());
+            oracle_records.push(full.clone());
             let body = p.next().unwrap_or("");
             // Resolve the commit's full message and keep it only when it
             // actually references one of the wanted ids via a trailer or a
@@ -1234,6 +1241,7 @@ fn collect_git_linkage_inner(
             crate::show_negative::OracleAnswer {
                 complete: oracle_framed,
                 references: commits.len(),
+                records: oracle_records,
             },
             d,
         );

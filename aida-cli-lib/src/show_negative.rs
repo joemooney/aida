@@ -55,6 +55,17 @@
 //! an AFTER S/R capture taken once the frontier walk is done (amendment 1;
 //! ruling 2026-10-25 (e)).
 //!
+//! P1 (SKETCH v2, signed 2026-10-25 23:55): POSITIVE keys are cached too. A
+//! complete positive answer leaves a positive marker; the next show seeds a
+//! [`PositiveCone`] (the roots Git started from plus its records in their
+//! exact `--date-order` order) under the same seed rule, with the BEFORE
+//! snapshot overlapping the original query rather than preceding it. A warm
+//! positive show walks only the commits above the cone, orders them by
+//! their own ancestry and dates (O1), and answers only when the guards in
+//! [`positive_warm`] prove that equals Git's whole-graph order; otherwise
+//! the original runs and re-seeds. Git renders the answer, so it is
+//! byte-for-byte what the original prints.
+//!
 //! Losing or corrupting the cache changes speed/completeness, never canonical
 //! spec content; contention or an unwritable repo degrades to the original
 //! bounded foreground query. Only digests of effective config/environment are
@@ -116,6 +127,16 @@ const MAX_STATE_BYTES: u64 = 8 * 1024 * 1024;
 // trace:BUG-2221 | ai:claude
 const MAX_STATE_NODES: usize = 150_000;
 
+/// P1: most grep-matched records a positive cone caches. A key past it is
+/// pinned to the original query (an `oversize` positive marker).
+// trace:BUG-2221 | ai:claude
+const MAX_POSITIVE_HITS: usize = 4096;
+
+/// P1: most commits a warm positive read walks above its cone. More new
+/// history than this → the original query (and a re-seed).
+// trace:BUG-2221 | ai:claude
+const MAX_NEW_COMMITS: usize = 4096;
+
 /// Aggregate namespace bounds, enforced deterministically at publish time:
 /// oldest (mtime, then name) state files are evicted first. Sized for a
 /// fleet: keys are per (worktree context, query), and an oracle-seeded state
@@ -142,11 +163,16 @@ fn process_entry() -> Instant {
 }
 
 /// Outcome of the negative probe, as seen by the linkage collector.
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub(crate) enum NegativeProbe {
     /// Every current root is CLOSED under an unchanged snapshot: exact proof
     /// of zero referencing commits — return complete empty commits.
     ProvedEmpty,
+    /// P1 (SKETCH v2): a warm POSITIVE key answered from its cached cone. The
+    /// payload is byte-for-byte what the original `--all --date-order -F
+    /// --grep` collector prints (same pretty format, same records, same
+    /// order), rendered by Git from the proved, ordered OID list.
+    ProvedPositive(String),
     /// A batch surfaced a parsed hit: run the ORIGINAL `--date-order`
     /// collector (ordering/branch/shipped stay Git-owned).
     PositiveHit,
@@ -201,6 +227,57 @@ pub(crate) enum OracleSeed {
         /// The proof state the seed extends (empty for a marked/reset key).
         state: NegativeState,
     },
+    /// P1: a seeding show for a key whose last complete answer was POSITIVE.
+    /// The BEFORE snapshot is captured on a thread started before the
+    /// original collector, so it overlaps that query instead of running in
+    /// front of it (ruling 2026-10-25: no serial snapshot on positive
+    /// shows). It is still pinned before the oracle's own ref read and
+    /// compared with an AFTER capture taken once the oracle finished.
+    Concurrent {
+        queries: QueryKey,
+        pending: PendingSnapshot,
+    },
+}
+
+/// A BEFORE snapshot being captured on its own thread. Dropping it joins the
+/// thread (its git children are bounded by the same deadline), so no child
+/// outlives the command.
+// trace:BUG-2221 | ai:claude
+pub(crate) struct PendingSnapshot {
+    handle: Option<std::thread::JoinHandle<Snapshot>>,
+    done: Option<Snapshot>,
+}
+
+type Snapshot = (Option<ContextSnapshot>, Option<RootsSnapshot>);
+
+impl PendingSnapshot {
+    fn start(project_root: &Path, loc: Location, deadline: Instant) -> Self {
+        let root = project_root.to_path_buf();
+        PendingSnapshot {
+            handle: Some(std::thread::spawn(move || {
+                capture_snapshot(&root, Some(loc), deadline)
+            })),
+            done: None,
+        }
+    }
+
+    /// Wait for the capture to finish (idempotent).
+    fn finish(&mut self) {
+        if let Some(h) = self.handle.take() {
+            self.done = Some(h.join().unwrap_or((None, None)));
+        }
+    }
+
+    fn join(mut self) -> Snapshot {
+        self.finish();
+        self.done.take().unwrap_or((None, None))
+    }
+}
+
+impl Drop for PendingSnapshot {
+    fn drop(&mut self) {
+        self.finish();
+    }
 }
 
 /// The production probe for `aida show`'s linkage commit scan.
@@ -262,10 +339,24 @@ fn probe_inner(
         let Some(loc) = locate(project_root, tuning.deadline) else {
             return outcome(NegativeProbe::RunOriginal);
         };
-        if !key_file_present(&loc, &queries) {
+        let Some(on_disk) = key_file_state(&loc, &queries) else {
             return (
                 NegativeProbe::RunOriginal,
                 Some(OracleSeed::Mark { loc, queries }),
+            );
+        };
+        if on_disk.positive && on_disk.cone.is_none() {
+            // P1: the last complete answer was positive. Too many hits to
+            // cache → the original query alone, as before P1. Otherwise a
+            // seeding show whose BEFORE snapshot overlaps the original.
+            // trace:BUG-2221 | ai:claude
+            if on_disk.oversize {
+                return outcome(NegativeProbe::RunOriginal);
+            }
+            let pending = PendingSnapshot::start(project_root, loc, tuning.deadline);
+            return (
+                NegativeProbe::RunOriginal,
+                Some(OracleSeed::Concurrent { queries, pending }),
             );
         }
         located = Some(loc);
@@ -292,6 +383,30 @@ fn probe_inner(
 
     let wanted_uc: HashSet<String> = ids.iter().map(|s| s.to_ascii_uppercase()).collect();
     let mut state = load_state(&ctx, &queries);
+    if let Some(cone) = state.cone.take() {
+        // P1: a warm POSITIVE key. Exact answer from the cone plus the
+        // commits added since, or — on any guard failure — the original
+        // query, re-seeding against THIS (before) snapshot.
+        // trace:BUG-2221 | ai:claude
+        return match positive_warm(project_root, &queries, &ctx, &roots, &cone, tuning.deadline) {
+            Some(log) => outcome(NegativeProbe::ProvedPositive(log)),
+            None => (
+                NegativeProbe::RunOriginal,
+                Some(OracleSeed::Seed {
+                    ctx,
+                    roots,
+                    queries,
+                    state: NegativeState {
+                        oversize: false,
+                        positive: false,
+                        closed: BTreeSet::new(),
+                        open: BTreeMap::new(),
+                        ..state
+                    },
+                }),
+            ),
+        };
+    }
     if tuning.cold_oracle && (state.oversize || state.is_empty()) {
         // Marked (or reset, or made under another S) key: a SEEDING show. The
         // original complete collector runs with its unchanged bounded
@@ -440,6 +555,9 @@ pub(crate) struct OracleAnswer {
     pub(crate) complete: bool,
     /// Parsed referencing commits it returned.
     pub(crate) references: usize,
+    /// P1: the full OID of EVERY record it printed (grep-matched, before the
+    /// parsers), in its exact `--date-order` output order.
+    pub(crate) records: Vec<String>,
 }
 
 /// Settle a deferral with the ORIGINAL collector's answer. Returns whether
@@ -467,10 +585,40 @@ pub(crate) fn settle_oracle(
         return false;
     }
     if answer.references > 0 {
-        if let OracleSeed::Seed { ctx, queries, .. } = &seed {
-            forget_key(&ctx.loc, queries);
-        }
-        return false;
+        // trace:BUG-2221 | ai:claude
+        let usable = answer.records.len() >= answer.references
+            && answer.records.iter().all(|o| git_arg_guard::is_hex_sha(o));
+        return match seed {
+            // P1: a positive MARKER (no claim) — the next show seeds.
+            OracleSeed::Mark { loc, queries } if usable => publish_state(
+                &loc,
+                &NegativeState::positive_marker(&queries, answer.records.len()),
+            ),
+            OracleSeed::Mark { .. } => false,
+            OracleSeed::Seed {
+                ctx,
+                roots,
+                queries,
+                ..
+            } => {
+                if !usable {
+                    forget_key(&ctx.loc, &queries);
+                    return false;
+                }
+                publish_positive_seed(project_root, ctx, roots, &queries, answer.records, deadline)
+            }
+            OracleSeed::Concurrent { queries, pending } => {
+                let (ctx, roots) = pending.join();
+                let (Some(ContextSnapshot::Supported(ctx)), Some(roots)) = (ctx, roots) else {
+                    return false;
+                };
+                if !usable || roots.replace_refs {
+                    forget_key(&ctx.loc, &queries);
+                    return false;
+                }
+                publish_positive_seed(project_root, ctx, roots, &queries, answer.records, deadline)
+            }
+        };
     }
     match seed {
         OracleSeed::Mark { loc, queries } => publish_state(&loc, &NegativeState::marker(&queries)),
@@ -480,7 +628,60 @@ pub(crate) fn settle_oracle(
             queries: _,
             state,
         } => publish_seed(project_root, ctx, roots, state, deadline),
+        // A key that turned negative: start over from a plain marker.
+        OracleSeed::Concurrent { queries, pending } => {
+            let (ctx, _) = pending.join();
+            match ctx {
+                Some(ContextSnapshot::Supported(ctx)) => {
+                    publish_state(&ctx.loc, &NegativeState::marker(&queries))
+                }
+                _ => false,
+            }
+        }
     }
+}
+
+/// P1: seed a POSITIVE key's cone from a COMPLETE original answer pinned to
+/// the BEFORE snapshot `ctx`/`roots` (same rule as [`publish_seed`]: S and R
+/// re-captured after the oracle must be unchanged, else nothing is
+/// published). The cone stores the roots Git started from (in its own
+/// `--all` order, with committer timestamps) and the oracle's records in
+/// their exact output order.
+// trace:BUG-2221 | ai:claude
+fn publish_positive_seed(
+    project_root: &Path,
+    ctx: GitContext,
+    roots: RootsSnapshot,
+    queries: &QueryKey,
+    records: Vec<String>,
+    deadline: Instant,
+) -> bool {
+    if records.len() > MAX_POSITIVE_HITS {
+        // Too many to cache: the original query alone from now on.
+        let mut tomb = NegativeState::positive_marker(queries, records.len());
+        tomb.oversize = true;
+        return publish_state(&ctx.loc, &tomb);
+    }
+    let (ctx_after, roots_after) = capture_snapshot(project_root, None, deadline);
+    let Some(ContextSnapshot::Supported(ctx_after)) = ctx_after else {
+        return false;
+    };
+    if ctx_after.s_digest != ctx.s_digest {
+        return false;
+    }
+    let Some(roots_after) = roots_after else {
+        return false;
+    };
+    if roots_after.digest != roots.digest || roots_after.replace_refs {
+        return false;
+    }
+    let state = NegativeState {
+        s_digest: ctx.s_digest.clone(),
+        positive: true,
+        cone: Some(PositiveCone::new(&roots, records)),
+        ..NegativeState::marker(queries)
+    };
+    publish_state(&ctx.loc, &state)
 }
 
 fn publish_seed(
@@ -519,6 +720,269 @@ fn publish_seed(
         }
     }
     publish_state(&ctx.loc, &state)
+}
+
+/// The original collector's pretty format (`trace.rs`), so a warm positive
+/// answer renders byte-for-byte what that query prints for the same records.
+pub(crate) const COLLECTOR_PRETTY: &str = "--pretty=format:%H\u{1f}%h\u{1f}%s\u{1f}%B%x1e";
+
+/// P1: answer a warm POSITIVE key exactly, or `None` (the caller runs the
+/// original query and re-seeds against the same BEFORE snapshot).
+///
+/// `git log --all --date-order` is Kahn's algorithm over the WHOLE reachable
+/// graph (the newest ready commit first, ties by insertion order), and
+/// `--grep` filters that sequence. Let OLD be everything reachable from the
+/// cone's roots (Git walked it at seed time; `hits` is its filtered order)
+/// and NEW be what the current roots reach beyond it. The answer is
+/// `kahn(NEW) filtered ++ hits` exactly when:
+///
+/// 1. every cone root is still reachable — a current root, or a parent of a
+///    NEW commit (so OLD is unchanged and still inside `--all`; a deleted
+///    ref otherwise falls back);
+/// 2. every NEW commit is strictly newer than every cone root (only a cone
+///    root, or an OLD commit unblocked by popping one, can compete with a
+///    NEW commit, so Git prints all of NEW first);
+/// 3. a cone root whose readiness NEW changed (a parent of a NEW commit, or
+///    a root no longer listed) has a timestamp no other cone root shares,
+///    and cone roots that do share one keep their relative `--all` order (so
+///    insertion-order tie breaks inside OLD replay as at seed time);
+/// 4. Kahn over NEW never has two ready commits tied on the newest
+///    timestamp (the ancestry/date order of NEW — O1 — is then unique).
+///
+/// Every guard failure, a failed or truncated Git read, a moved snapshot in
+/// the mandatory AFTER re-check, or a hit count past the bound returns
+/// `None`. A guard never reorders or drops anything itself.
+// trace:BUG-2221 | ai:claude
+fn positive_warm(
+    project_root: &Path,
+    queries: &QueryKey,
+    ctx: &GitContext,
+    roots: &RootsSnapshot,
+    cone: &PositiveCone,
+    deadline: Instant,
+) -> Option<String> {
+    let ordered: Vec<String> = if roots.digest == cone.roots_digest {
+        // The same ref evidence Git started from at seed time: same answer.
+        cone.hits.clone()
+    } else {
+        let mut fresh = positive_new_hits(project_root, queries, roots, cone, deadline)?;
+        fresh.extend(cone.hits.iter().cloned());
+        fresh
+    };
+    if ordered.len() > MAX_POSITIVE_HITS {
+        return None;
+    }
+
+    // Render through Git in the given order, and re-capture S/R once the
+    // walk is done (amendment 1: mandatory on every cached answer). The two
+    // reads are independent, so they overlap.
+    let (rendered, (ctx_after, roots_after)) = std::thread::scope(|s| {
+        let after = s.spawn(|| capture_snapshot(project_root, None, deadline));
+        let rendered = git_stdin(
+            project_root,
+            &["log", "--no-walk=unsorted", COLLECTOR_PRETTY, "--stdin"],
+            Some(&ordered),
+            deadline,
+        );
+        (rendered, after.join().unwrap_or((None, None)))
+    });
+    let unchanged = matches!(ctx_after, Some(ContextSnapshot::Supported(ref c)) if c.s_digest == ctx.s_digest)
+        && roots_after.is_some_and(|r| r.digest == roots.digest);
+    if !unchanged {
+        return None;
+    }
+    let rendered = rendered?;
+    // Exact framing: one record per OID, in order.
+    let framed: Vec<&str> = rendered
+        .split('\u{1e}')
+        .map(|r| r.trim_start_matches(['\n', '\r']))
+        .filter(|r| !r.is_empty())
+        .map(|r| r.split('\u{1f}').next().unwrap_or("").trim())
+        .collect();
+    if framed.len() != ordered.len() || framed.iter().zip(&ordered).any(|(a, b)| a != b) {
+        return None;
+    }
+
+    if roots.digest == cone.roots_digest {
+        // A warm hit is a USE: keep it off the eviction front.
+        touch_state(&ctx.loc, queries);
+    } else {
+        let state = NegativeState {
+            s_digest: ctx.s_digest.clone(),
+            positive: true,
+            cone: Some(PositiveCone::new(roots, ordered)),
+            ..NegativeState::marker(queries)
+        };
+        // A failed publication costs speed only; this answer is proved.
+        let _ = publish_state(&ctx.loc, &state);
+    }
+    Some(rendered)
+}
+
+/// P1: the grep-matched NEW commits (above the cone), in Git's
+/// `--date-order`, or `None` when guards 1-4 of [`positive_warm`] cannot be
+/// proved.
+// trace:BUG-2221 | ai:claude
+fn positive_new_hits(
+    project_root: &Path,
+    queries: &QueryKey,
+    roots: &RootsSnapshot,
+    cone: &PositiveCone,
+    deadline: Instant,
+) -> Option<Vec<String>> {
+    let cone_roots: HashSet<&str> = cone.roots.iter().map(String::as_str).collect();
+    let current: HashSet<&str> = roots.roots.iter().map(String::as_str).collect();
+    let new_tips: Vec<&String> = roots
+        .roots
+        .iter()
+        .filter(|r| !cone_roots.contains(r.as_str()))
+        .collect();
+
+    // NEW, framed with parents and committer timestamps.
+    let mut new: HashMap<String, (Vec<String>, i64)> = HashMap::new();
+    if !new_tips.is_empty() {
+        let mut lines: Vec<String> = new_tips.iter().map(|s| s.to_string()).collect();
+        lines.extend(cone.roots.iter().map(|r| format!("^{r}")));
+        let limit = format!("-n{}", MAX_NEW_COMMITS + 1);
+        let out = git_stdin(
+            project_root,
+            &["log", &limit, "--pretty=format:%H %ct %P", "--stdin"],
+            Some(&lines),
+            deadline,
+        )?;
+        for line in out.lines() {
+            let mut toks = line.split_whitespace();
+            let oid = toks.next()?;
+            let ct: i64 = toks.next()?.parse().ok()?;
+            let parents: Vec<String> = toks.map(str::to_string).collect();
+            if !git_arg_guard::is_hex_sha(oid)
+                || parents.iter().any(|p| !git_arg_guard::is_hex_sha(p))
+            {
+                return None;
+            }
+            if new.insert(oid.to_string(), (parents, ct)).is_some() {
+                return None;
+            }
+        }
+        if new.len() > MAX_NEW_COMMITS {
+            return None;
+        }
+    }
+
+    // Guard 1: no cone root lost.
+    let new_parents: HashSet<&str> = new
+        .values()
+        .flat_map(|(parents, _)| parents.iter().map(String::as_str))
+        .collect();
+    if cone
+        .roots
+        .iter()
+        .any(|r| !current.contains(r.as_str()) && !new_parents.contains(r.as_str()))
+    {
+        return None;
+    }
+
+    // Guard 2: NEW strictly newer than every cone root.
+    let max_root_ct = cone.root_ct.iter().copied().max().unwrap_or(i64::MIN);
+    if new.values().any(|(_, ct)| *ct <= max_root_ct) {
+        return None;
+    }
+
+    // Guard 3: tie-safety of the cone roots' replay.
+    let mut ct_count: HashMap<i64, usize> = HashMap::new();
+    for ct in &cone.root_ct {
+        *ct_count.entry(*ct).or_default() += 1;
+    }
+    let affected = |r: &str| !current.contains(r) || new_parents.contains(r);
+    for (r, ct) in cone.roots.iter().zip(&cone.root_ct) {
+        if affected(r) && ct_count[ct] > 1 {
+            return None;
+        }
+    }
+    let tied = |r: &str, ct: i64| !affected(r) && ct_count[&ct] > 1;
+    let cone_tied: Vec<&str> = cone
+        .roots
+        .iter()
+        .zip(&cone.root_ct)
+        .filter(|(r, ct)| tied(r, **ct))
+        .map(|(r, _)| r.as_str())
+        .collect();
+    let cone_tied_set: HashSet<&str> = cone_tied.iter().copied().collect();
+    let current_tied: Vec<&str> = roots
+        .roots
+        .iter()
+        .map(String::as_str)
+        .filter(|r| cone_tied_set.contains(r))
+        .collect();
+    if current_tied != cone_tied {
+        return None;
+    }
+    if new.is_empty() {
+        return Some(Vec::new());
+    }
+
+    // Guard 4 + O1: Kahn over NEW by committer date, refusing any tie at the
+    // top of the ready set.
+    let mut pending_children: HashMap<&str, usize> = new.keys().map(|k| (k.as_str(), 0)).collect();
+    for (parents, _) in new.values() {
+        for p in parents {
+            if let Some(n) = pending_children.get_mut(p.as_str()) {
+                *n += 1;
+            }
+        }
+    }
+    let mut ready: std::collections::BinaryHeap<(i64, &str)> = pending_children
+        .iter()
+        .filter(|(_, n)| **n == 0)
+        .map(|(oid, _)| (new[*oid].1, *oid))
+        .collect();
+    let mut order: Vec<&str> = Vec::with_capacity(new.len());
+    while let Some((ct, oid)) = ready.pop() {
+        if ready.peek().is_some_and(|(next, _)| *next == ct) {
+            return None;
+        }
+        order.push(oid);
+        for p in &new[oid].0 {
+            if let Some(n) = pending_children.get_mut(p.as_str()) {
+                *n -= 1;
+                if *n == 0 {
+                    ready.push((new[p.as_str()].1, p.as_str()));
+                }
+            }
+        }
+    }
+    if order.len() != new.len() {
+        return None;
+    }
+
+    // Git's own prefilter over exactly NEW.
+    let mut grep_args: Vec<String> = vec!["log".into(), "--no-walk=unsorted".into(), "-F".into()];
+    for q in &queries.strings {
+        grep_args.push(format!("--grep={q}"));
+    }
+    grep_args.push("--pretty=format:%H".into());
+    grep_args.push("--stdin".into());
+    let grep_args: Vec<&str> = grep_args.iter().map(String::as_str).collect();
+    let new_oids: Vec<String> = order.iter().map(|s| s.to_string()).collect();
+    let matched_raw = git_stdin(project_root, &grep_args, Some(&new_oids), deadline)?;
+    let mut matched: HashSet<&str> = HashSet::new();
+    for line in matched_raw.lines() {
+        let oid = line.trim();
+        if oid.is_empty() {
+            continue;
+        }
+        if !new.contains_key(oid) {
+            return None;
+        }
+        matched.insert(oid);
+    }
+    Some(
+        order
+            .into_iter()
+            .filter(|o| matched.contains(o))
+            .map(str::to_string)
+            .collect(),
+    )
 }
 
 fn expired(deadline: Instant) -> bool {
@@ -605,7 +1069,7 @@ fn sha256_hex(parts: &[&[u8]]) -> String {
 fn git_version() -> Option<String> {
     static V: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
     V.get_or_init(|| {
-        let out = std::process::Command::new("git")
+        let out = aida_core::git_ops::host_git_command(std::env::temp_dir())
             .arg("--version")
             .output()
             .ok()?;
@@ -618,12 +1082,36 @@ fn git_version() -> Option<String> {
 
 /// One bounded git call, stdout on success.
 fn git_capture(project_root: &Path, args: &[&str], deadline: Instant) -> Option<String> {
+    git_stdin(project_root, args, None, deadline)
+}
+
+/// One bounded git call through the clone-safe builder (host git refuses a
+/// seat clone; the TASK-2143 ratchet), with optional `--stdin` lines. Stdout
+/// on success. OIDs reach Git only via stdin, never argv interpolation.
+// trace:BUG-2221 | ai:claude
+fn git_stdin(
+    project_root: &Path,
+    args: &[&str],
+    stdin_lines: Option<&[String]>,
+    deadline: Instant,
+) -> Option<String> {
     let left = remaining(deadline);
     if left.is_zero() {
         return None;
     }
-    let mut cmd = std::process::Command::new("git");
-    cmd.arg("-C").arg(project_root).args(args);
+    let mut cmd = aida_core::git_ops::host_git_command(project_root);
+    cmd.args(args);
+    // Keep the stdin file alive until the child has exited.
+    let mut _stdin_file = None;
+    if let Some(lines) = stdin_lines {
+        let mut file = tempfile::NamedTempFile::new().ok()?;
+        for line in lines {
+            writeln!(file, "{line}").ok()?;
+        }
+        file.flush().ok()?;
+        cmd.stdin(std::process::Stdio::from(file.reopen().ok()?));
+        _stdin_file = Some(file);
+    }
     match command_output_with_timeout_detail(cmd, left) {
         BoundedCommandOutput::Completed(o) if o.status.success() => {
             Some(String::from_utf8_lossy(&o.stdout).to_string())
@@ -712,6 +1200,9 @@ pub(crate) struct RootsSnapshot {
     /// annotated tags — obtained from Git's own revision machinery, never
     /// reconstructed from `rev-parse --all` (which omits detached HEADs).
     roots: Vec<String>,
+    /// Committer timestamp of each root, parallel to `roots` (P1 ordering
+    /// guards).
+    root_ct: Vec<i64>,
     /// Digest over the root listing plus companion ref/HEAD evidence
     /// (`for-each-ref` names/OIDs/symrefs and the worktree HEAD list).
     digest: String,
@@ -752,7 +1243,12 @@ fn capture_roots(project_root: &Path, deadline: Instant) -> Option<RootsSnapshot
             s.spawn(|| git_capture(project_root, &["worktree", "list", "--porcelain"], deadline));
         let roots_raw = git_capture(
             project_root,
-            &["log", "--all", "--no-walk=unsorted", "--pretty=format:%H"],
+            &[
+                "log",
+                "--all",
+                "--no-walk=unsorted",
+                "--pretty=format:%H %ct",
+            ],
             deadline,
         );
         (
@@ -763,23 +1259,28 @@ fn capture_roots(project_root: &Path, deadline: Instant) -> Option<RootsSnapshot
     });
     let (roots_raw, refs, worktrees) = (roots_raw?, refs?, worktrees?);
     let mut roots: Vec<String> = Vec::new();
+    let mut root_ct: Vec<i64> = Vec::new();
     let mut seen: HashSet<&str> = HashSet::new();
     for line in roots_raw.lines() {
-        let oid = line.trim();
-        if oid.is_empty() {
+        let line = line.trim();
+        if line.is_empty() {
             continue;
         }
+        let (oid, ct) = line.split_once(' ')?;
+        let ct: i64 = ct.trim().parse().ok()?;
         if !git_arg_guard::is_hex_sha(oid) {
             return None;
         }
         if seen.insert(oid) {
             roots.push(oid.to_string());
+            root_ct.push(ct);
         }
     }
     let replace_refs = refs.lines().any(|l| l.starts_with("refs/replace/"));
     let digest = sha256_hex(&[roots_raw.as_bytes(), refs.as_bytes(), worktrees.as_bytes()]);
     Some(RootsSnapshot {
         roots,
+        root_ct,
         digest,
         replace_refs,
     })
@@ -826,9 +1327,65 @@ pub(crate) struct NegativeState {
     /// parent OIDs (the resumable frontier evidence).
     #[serde(default)]
     open: BTreeMap<String, Vec<String>>,
+    /// P1: the last complete original answer for this key was POSITIVE. With
+    /// no `cone` this is a marker only (proves nothing); with `oversize` it
+    /// pins the key to the original query (too many hits to cache).
+    #[serde(default)]
+    positive: bool,
+    /// P1: the proved positive answer for one snapshot of roots.
+    #[serde(default)]
+    cone: Option<PositiveCone>,
+}
+
+/// P1 (SKETCH v2, signed 2026-10-25 23:55; guards per the P1' amendment in
+/// `docs/plans/2026-10-25-bug-2221-positive-path-sketch.md`): Git's own
+/// complete answer for one root set. Every commit reachable from `roots` was
+/// walked by Git; `hits` is every record it printed, in its exact order.
+// trace:BUG-2221 | ai:claude
+#[derive(Default, Clone, serde::Serialize, serde::Deserialize)]
+pub(crate) struct PositiveCone {
+    /// The roots Git started from, in its own `--all` order.
+    roots: Vec<String>,
+    /// Committer timestamp of each root, parallel to `roots`.
+    root_ct: Vec<i64>,
+    /// The R digest those roots were captured under.
+    roots_digest: String,
+    /// Grep-matched OIDs (before the parsers), in Git's output order.
+    hits: Vec<String>,
+}
+
+impl PositiveCone {
+    fn new(roots: &RootsSnapshot, hits: Vec<String>) -> Self {
+        PositiveCone {
+            roots: roots.roots.clone(),
+            root_ct: roots.root_ct.clone(),
+            roots_digest: roots.digest.clone(),
+            hits,
+        }
+    }
+
+    fn well_formed(&self) -> bool {
+        self.roots.len() == self.root_ct.len()
+            && self.hits.len() <= MAX_POSITIVE_HITS
+            && self.roots.len() <= MAX_STATE_NODES
+            && self
+                .roots
+                .iter()
+                .chain(&self.hits)
+                .all(|o| git_arg_guard::is_hex_sha(o))
+    }
 }
 
 impl NegativeState {
+    /// A positive MARKER: the last complete answer had `hits` records.
+    fn positive_marker(queries: &QueryKey, hits: usize) -> Self {
+        NegativeState {
+            positive: true,
+            oversize: hits > MAX_POSITIVE_HITS,
+            ..NegativeState::marker(queries)
+        }
+    }
+
     /// An empty state for `queries` under no S: the "last complete oracle
     /// answer was zero references" MARKER — and the base every fresh state
     /// is built from. It proves nothing and is never read as a proof.
@@ -951,10 +1508,10 @@ fn state_path(loc: &Location, queries: &QueryKey) -> PathBuf {
 /// Whether the key has ANY usable state file (a marker, a proof under any
 /// S, a tombstone) — the cold check. Owned no-follow bounded read; a file
 /// for another query or schema counts as absent.
-fn key_file_present(loc: &Location, queries: &QueryKey) -> bool {
+fn key_file_state(loc: &Location, queries: &QueryKey) -> Option<NegativeState> {
     read_owned_regular_file(&state_path(loc, queries), MAX_STATE_BYTES)
         .and_then(|bytes| serde_json::from_slice::<NegativeState>(&bytes).ok())
-        .is_some_and(|st| {
+        .filter(|st| {
             st.schema == SCHEMA_VERSION
                 && st.query_digest == queries.digest
                 && st.queries == queries.strings
@@ -993,6 +1550,9 @@ fn load_state(ctx: &GitContext, queries: &QueryKey) -> NegativeState {
         .chain(state.open.values().flatten())
         .all(|oid| git_arg_guard::is_hex_sha(oid));
     if !hex_ok || state_nodes(&state).len() > MAX_STATE_NODES {
+        return fresh();
+    }
+    if state.cone.as_ref().is_some_and(|c| !c.well_formed()) {
         return fresh();
     }
     state
@@ -1268,8 +1828,8 @@ fn run_batch(
         if left.is_zero() {
             return None;
         }
-        let mut cmd = std::process::Command::new("git");
-        cmd.arg("-C").arg(project_root).args(args);
+        let mut cmd = aida_core::git_ops::host_git_command(project_root);
+        cmd.args(args);
         let file = std::fs::File::open(stdin_path).ok()?;
         cmd.stdin(std::process::Stdio::from(file));
         match command_output_with_timeout_detail(cmd, left) {
