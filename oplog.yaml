@@ -77131,5 +77131,31 @@ operations:
   timestamp: 2026-10-26T09:26:00.068308304Z
   kind: !SetStatus
     status: In Progress
-clock: 5964
+- id: 01a177c4-f63c-7d03-83e5-91ea325254be
+  target_id: 01a177c4-ef54-7660-a2ce-f04013296889
+  author: aida
+  node_id: '1'
+  lamport: 5965
+  timestamp: 2026-10-26T10:32:39.228151610Z
+  kind: !Create
+    title: 'Review PR-2946: [AI:claude] fix(seat): seat clones exclude sandbox stand-ins; ship refuses staged placeholders (BUG-b6b1278890774ef993d2ebc327862470-003)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a17776`) for branch `bug-b6b1278890774ef993d2ebc327862470-003`.
+
+      - PR: <https://github.com/joemooney/aida/pull/2946>
+      - Branch: `bug-b6b1278890774ef993d2ebc327862470-003` → `main`
+
+      ## Covers
+
+      - BUG-b6b1278890774ef993d2ebc327862470-003
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 2946` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 5965
 node_id: '1'
