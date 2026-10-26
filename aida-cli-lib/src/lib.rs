@@ -233,6 +233,8 @@ mod schedule_driver;
 mod shift;
 // trace:STORY-1649 | ai:claude
 mod shipped_linkage;
+// trace:BUG-2221 | ai:claude — `aida show` negative-linkage ancestry proof.
+mod show_negative;
 mod terminal_cmd;
 // trace:TASK-1427 | ai:codex
 mod token_ledger;

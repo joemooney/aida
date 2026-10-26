@@ -82,8 +82,24 @@ fn phase_names(record: &serde_json::Value) -> Vec<String> {
         .unwrap_or_default()
 }
 
-#[test]
-fn show_usage_event_records_phase_timings() {
+/// BUG-2221: the four BUG-1993 aggregate phases, in first-seen order, with
+/// the finer attribution phases filtered out — the aggregate meanings the
+/// guard and operators read are unchanged by the added sub-phases.
+// trace:BUG-2221 | ai:claude
+fn aggregate_phase_names(record: &serde_json::Value) -> Vec<String> {
+    phase_names(record)
+        .into_iter()
+        .filter(|n| matches!(n.as_str(), "open" | "lookup" | "context" | "linkage"))
+        .collect()
+}
+
+/// A fixture project with one spec; returns (tempdir guard, repo, home, spec).
+fn fixture() -> (
+    tempfile::TempDir,
+    std::path::PathBuf,
+    std::path::PathBuf,
+    String,
+) {
     let base = tempfile::tempdir().expect("tempdir");
     let base_dir = base.path().canonicalize().expect("canonicalize tempdir");
     let repo = base_dir.join("repo");
@@ -115,6 +131,12 @@ fn show_usage_event_records_phase_timings() {
         .find(|t| t.starts_with("BUG-"))
         .unwrap_or_else(|| panic!("no spec id in add output:\n{add_out}"))
         .to_string();
+    (base, repo, home, spec)
+}
+
+#[test]
+fn show_usage_event_records_phase_timings() {
+    let (_base, repo, home, spec) = fixture();
 
     // Every render surface times the same phases, linkage included.
     for args in [
@@ -126,7 +148,7 @@ fn show_usage_event_records_phase_timings() {
         let record = usage_record_of(&repo, &home, &args);
         assert_eq!(record["cmd"], "show", "{record}");
         assert_eq!(
-            phase_names(&record),
+            aggregate_phase_names(&record),
             ["open", "lookup", "context", "linkage"],
             "aida {args:?} recorded {record}"
         );
@@ -135,9 +157,15 @@ fn show_usage_event_records_phase_timings() {
     // `--no-git` skips linkage, so it records no linkage phase.
     let record = usage_record_of(&repo, &home, &["show", &spec, "--no-git"]);
     assert_eq!(
-        phase_names(&record),
+        aggregate_phase_names(&record),
         ["open", "lookup", "context"],
         "{record}"
+    );
+    assert!(
+        phase_names(&record)
+            .iter()
+            .all(|n| !n.starts_with("linkage")),
+        "--no-git records no linkage sub-phase either: {record}"
     );
 
     // Commands that never arm the recorder keep their record unchanged.
@@ -146,4 +174,54 @@ fn show_usage_event_records_phase_timings() {
         record.get("phases").is_none(),
         "list recorded phases: {record}"
     );
+}
+
+/// BUG-2221: the finer attribution phases land in the same usage-event
+/// `phases` vec — pre-dispatch (`argv`), linkage sub-spans (`linkage.log`
+/// runs in parallel with the trace walk's `linkage.enum`/`linkage.content`,
+/// so sub-spans overlap and are NOT summed into the aggregate), and the JSON
+/// surface's `relationships`/`render` — while the four aggregate phases keep
+/// their BUG-1993 names and order.
+// trace:BUG-2221 | ai:claude
+#[test]
+fn show_phase_accounting_preserves_aggregate_semantics() {
+    let (_base, repo, home, spec) = fixture();
+    let record = usage_record_of(&repo, &home, &["show", &spec, "--format", "json"]);
+    let names = phase_names(&record);
+    assert_eq!(
+        aggregate_phase_names(&record),
+        ["open", "lookup", "context", "linkage"],
+        "{record}"
+    );
+    for sub in [
+        "argv",
+        "linkage.log",
+        "linkage.enum",
+        "linkage.content",
+        "relationships",
+        "render",
+    ] {
+        assert!(
+            names.iter().any(|n| n == sub),
+            "missing `{sub}` phase: {record}"
+        );
+    }
+    let ms = |name: &str| -> u64 {
+        record["phases"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|p| p["name"] == name)
+            .and_then(|p| p["ms"].as_u64())
+            .unwrap()
+    };
+    // Sub-spans of the parallel linkage section each fit inside the
+    // aggregate (a structural relation, not a timing threshold); the 1 ms
+    // slack absorbs independent millisecond truncation.
+    for sub in ["linkage.log", "linkage.enum", "linkage.content"] {
+        assert!(
+            ms(sub) <= ms("linkage") + 1,
+            "`{sub}` exceeds `linkage`: {record}"
+        );
+    }
 }
