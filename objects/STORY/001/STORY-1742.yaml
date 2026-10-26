@@ -33,12 +33,12 @@ description: |
   - Defining a general-purpose synchronization language or plugin system.
   - Disabling the verified store security hooks, including the identity gate.
   - Automatically resolving diverged code or store history.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T22:02:03.191649035Z
-modified_at: 2026-10-26T07:14:28.427076306Z
+modified_at: 2026-10-26T10:39:42.503571848Z
 req_type: Story
 tags:
 - docs:impacted
@@ -555,6 +555,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a177cb-6ba7-7650-8b09-33ae3c0189f4
+  author: aida-orchestrator
+  timestamp: 2026-10-26T10:39:42.503599296Z
+  session_id: 01a177c5f8d2
+  harness_version: 2.1.310 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 3dfcf99117e6efbaa8259155a576276ab424a335
   branch: main
@@ -562,3 +571,11 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 3dfcf99117
   vendor: codex
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Round 2: all 8 round-1 findings addressed in code, but CI is red at the head (cli-1/rest tests, time budget, CLI-manual drift guard) and the new delta-only WORK intake scan admits writes the S3a push gate then refuses, citing an advisor ruling that is not recorded'
+  recovery_hint: address the review findings, move STORY-1742 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-10-26T10:39:42.503571848Z
