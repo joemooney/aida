@@ -8,12 +8,12 @@ description: |-
 
   PR: #2934
   Reviewed sha: 994a4c1e25d4b4d61eb9b13a45e37c19b05cce04
-status: InProgress
+status: Done
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-26T14:46:33.353762509Z
-modified_at: 2026-10-26T23:07:18.070996159Z
+modified_at: 2026-10-26T23:07:21.835624750Z
 req_type: Task
 tags:
 - carried-from:BUG-2223
@@ -44,6 +44,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a17a77-eb6b-7402-b75c-d8e0db9536b9
+  author: joe
+  timestamp: 2026-10-26T23:07:21.835620678Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 06fa4fb01ee79b1502a096893ce99891b61b9cc6
   branch: main
