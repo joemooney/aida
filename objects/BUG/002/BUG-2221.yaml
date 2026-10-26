@@ -28,7 +28,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T06:38:42.269077518Z
-modified_at: 2026-10-26T06:17:05.603326736Z
+modified_at: 2026-10-26T06:41:35.769184334Z
 req_type: Bug
 comments:
 - id: 01a17250-10a0-76e1-b802-890d5a4ca31b
@@ -274,6 +274,17 @@ comments:
   modified_at: 2026-10-26T06:17:05.603326736Z
   session_id: 01a176d74bc8
   harness_version: 2.1.310 (Claude Code)
+- id: 01a176f1-6c19-7802-a326-a986dd10ac7a
+  author: joe
+  content: |-
+    ADVISOR SIGNOFF 2026-10-25 23:55 MST on SKETCH v2 (positive path), docs/plans/2026-10-25-bug-2221-positive-path-sketch.md:
+    P1 APPROVED with O1. Extend the v1 CLOSED cache with exact parsed hits under the SAME seed / snapshot-pinning / mandatory after-S/R-recheck rules as v1 (the 16:15 ruling's conditions carry over verbatim: only a complete oracle seeds; every cached answer re-checks S/R after the walk). Exact --date-order output is rebuilt from hit-ancestry recorded during the walk. O2 (date-only sort) REJECTED: output order stays normative.
+    P2 APPROVED WITH CONDITION: check id-named refs first with merge-base --is-ancestor; a fast-path HIT may short-circuit; a fast-path MISS proves nothing and must fall through to the unchanged --contains scan within its existing budget. No budget, deadline, cutoff or telemetry change.
+    Commit-graph: IN SCOPE as an environment action only. The advisor refreshes the primary's commit-graph now and records before/after timings separately; the code must not depend on a fresh commit-graph and tests must not assume one. Finding (4) (~0.3s unattributed): the advisor runs the operator-side phased show after the refresh.
+    Implement on bug-2221-positive. LIGHT gate (one targeted cargo run with the bug_2221 filter + make check-ci-fast). PR title (Refs BUG-2221) unless AC4 is fully demonstrated on the promoted build.
+  created_at: 2026-10-26T06:41:35.769184334Z
+  modified_at: 2026-10-26T06:41:35.769184334Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
 history:
 - id: 01a173f1-1a2e-7c12-a2a1-e6bdafd814de
   author: joe
