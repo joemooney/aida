@@ -1,16 +1,16 @@
 - user_id: role:implementer
+  requirement_id: 01a171c8-6a5d-7073-80cf-9dfcd9667c53
+  position: 284000
+  added_by: role:implementer
+  note: SKETCH v2 signed 23:55; implement P1/O1 + P2
+  added_at: 2026-10-26T06:45:02.171183273Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a174d6-b614-77b2-a0cf-6db07bb1f8d6
   position: 285000
   added_by: role:implementer
   note: 'PR-2935 round-1 RC: route commit_tracked_changes through the clone-safe git helper'
   added_at: 2026-10-26T06:10:37.076041304Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a171c8-6a5d-7073-80cf-9dfcd9667c53
-  position: 286000
-  added_by: role:implementer
-  note: 'positive-path slice: diagnose and sketch first, then advisor signoff'
-  added_at: 2026-10-26T06:08:32.030563586Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a169c3-090b-7350-9b07-de2fa0c4ad61
