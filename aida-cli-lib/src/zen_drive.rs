@@ -615,30 +615,19 @@ const MAX_DRAFT_TITLE_LEN: usize = 200;
 
 /// Whether `arg` looks like a spec id (`TASK-123`, `STORY-45`, `BUG-9`,
 /// `ADR-7`, and multi-segment agreed ids like `FR-1-042`) rather than a
-/// free-text thought. The rule: a single whitespace-free token of an
-/// all-alphabetic prefix followed by one or more `-<digits>` groups. Anything
+/// free-text thought. The rule: a single whitespace-free token matching the
+/// shared [`crate::looks_like_spec_id`] shape (alphabetic prefix, optional
+/// alphanumeric node segments, numeric sequence — node-local ids such as
+/// `TASK-b6b1278890774ef993d2ebc327862470-003` included). Anything
 /// else — multiple words, a bare word, an empty string — is treated as a
 /// thought. A spec id keeps the existing resolve-or-refuse behavior; a thought
 /// routes to the draft-and-drive front door. Case-insensitive (`task-7`).
 // trace:STORY-725 | ai:claude
 pub(crate) fn looks_like_spec_id(arg: &str) -> bool {
-    let s = arg.trim();
-    if s.is_empty() || s.chars().any(char::is_whitespace) {
-        return false;
-    }
-    let mut segments = s.split('-');
-    match segments.next() {
-        Some(prefix) if !prefix.is_empty() && prefix.chars().all(|c| c.is_ascii_alphabetic()) => {}
-        _ => return false,
-    }
-    let mut saw_numeric_segment = false;
-    for seg in segments {
-        if seg.is_empty() || !seg.chars().all(|c| c.is_ascii_digit()) {
-            return false;
-        }
-        saw_numeric_segment = true;
-    }
-    saw_numeric_segment
+    // One shape rule with the trailer parsers, so `aida do` accepts the
+    // node-local ids (`TASK-<node>-NNN`) that commit trailers name.
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-006 | ai:claude
+    !arg.chars().any(char::is_whitespace) && crate::looks_like_spec_id(arg)
 }
 
 /// Which path produced a drafted spec's body — for the operator-facing report
