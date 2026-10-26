@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-26T06:49:36.488554629Z
+modified_at: 2026-10-26T06:52:23.641289836Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -808,6 +808,47 @@ comments:
   created_at: 2026-10-26T06:48:19.786152206Z
   modified_at: 2026-10-26T06:48:19.786152206Z
   session_id: 761a4fea-f388-41d1-93d9-f1386951253c
+- id: 01a176fb-4ed9-7a52-bbbd-cb85cc2444f1
+  author: joe
+  content: |-
+    ## Implementer inventory + approach (claude, 2026-10-26, main e4c2dd0575)
+
+    ### DONE on main
+    - Handles at session start, registry binding, statusline handle, `aida agent ls` (vendor/role/spec/liveness): #2864 f19b73debf.
+    - Refuse unroutable/phantom recipients: 597ea98e77; PR2 migration dry-run, layout-manifest refusal, reader liveness: b6aa5e8701; shared live resolver (#2808 line).
+    - Child-handle guard, inherited AIDA_USER privacy, agy per-turn mail delivery (black-box agy hook shape): #2909 94124569c9.
+    - Signed slice A: TASK-2345 pure identity seam (MailIdentityFacts / inbox_identities_from_facts) #2937 e4c2dd0575; TASK-2346 redundant lookup removal 011e33b65e.
+    - TASK-2347 Codex wake adapter (per-source ID-only snapshot): #2915 a01a698998.
+
+    ### REMAINS (per signed A–E, comments 47/48/60/63)
+    - **B1** core typed context + read-only logical snapshot + conformance (authorized by 63 #8). Not started.
+    - **B2** all ordinary reader adapters (CLI/MCP/TUI/notice/status/launch/liveness/maintenance/watcher) + post-flush explicit ACK + private common-Git receipt anchor. Must ship integrated with C's lifecycle provider (63 #8).
+    - **C** fail-closed retention barrier for every destructive caller, canonical publication permit, clone binding (63 #1–7).
+    - **D** additive delivery UUID/cohort ownership + relay lifetime (needs the aida-relay implementation spec; the AIDA STORY-122 id here is an unrelated usage story, the link in comment 49 refers to the aida-relay repo).
+    - **E** full conformance + STRICT review; C3 write migration is operator-run.
+    - Acceptance item "every live agent registered by SessionStart for all three clients" and "mailbox send to dead handle refused" are implemented; the original C1 cohort semantics remain owned by D.
+
+    ## Implementer approach — this PR = B1 core only (Refs STORY-1843, non-completing)
+
+    ### Acceptance criteria as tests (B1 subset of signoff 60)
+    - **Unit (real temp Git repo):** `story1843_logical_inbox_conformance` in `aida-core/src/mailbox_logical.rs` tests: main + sibling A/B + detached worktree with NO `.aida-store` alias + canonical store worktree + unrelated clone. One sibling-only message is found from main; canonical store is listed exactly once and excluded as a product source; unrelated clone excluded.
+    - **Unit:** context keeps requested checkout independent of store root; a store of a different common Git dir is a canonical coverage error, not silently used.
+    - **Unit:** reconciliation by ID uses `message_state_rank` (delete marker suppresses sibling replica; canonical preferred on equal rank); same-ID audience/payload divergence is a typed conflict with no record.
+    - **Unit:** receipt evidence: explicit per-ID receipt = Acknowledged; LOCAL watermark covers only IDs physically in that source and is reported as `LegacyWatermark` (uncorroborated, never a Seen); unknown sibling-private and canonical-only late arrivals stay Unread; late same-source old-timestamp arrival is LegacyWatermark not Acknowledged.
+    - **Unit:** symlinked mailbox dir, FIFO, hardlink, corrupt JSON, over-budget, prunable/missing worktree → typed per-source error, `complete == false`, `caught_up() == None`; no files created by the snapshot.
+    - **Unit:** audience filtering precedes projection: another recipient's message never appears in records, thread queries, or errors.
+    - **Not in B1 (flagged):** adapter parity matrix (CLI/MCP/TUI…), ACK commit, receipt anchor, retention coverage — B2/C. Snapshot reports retention coverage as `Unestablished`.
+
+    ### Expected files
+    - `aida-core/src/mailbox_logical.rs` (new), `aida-core/src/lib.rs` (mod), `aida-core/src/mailbox.rs` (expose `addressed_to` as pub(crate)).
+
+    ### Ambiguities / questions
+    - Audience construction: core cannot see the CLI identity policy. B1 exposes `ResolvedAudience::from_identity_policy(private, human, shared)` taking already-classified keys; B2 will build it only from `MailIdentityFacts`. Is a typed-but-public constructor acceptable, or must the classification move into core in B2?
+    - UnknownLegacy (watermark-only) read state: B1 reports it distinctly; whether B2 renders it read or unread is the B2 adapter policy question.
+  created_at: 2026-10-26T06:52:23.641289836Z
+  modified_at: 2026-10-26T06:52:23.641289836Z
+  session_id: 01a176f8bdec
+  harness_version: 2.1.310 (Claude Code)
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
   author: joe
