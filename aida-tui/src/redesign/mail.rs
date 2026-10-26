@@ -656,8 +656,9 @@ mod tests {
         std::fs::write(
             agents.join("child-row.toml"),
             format!(
-                "id = \"child-row\"\nagent_type = \"claude\"\npid = {}\nname = \"child-seat\"\n",
-                std::process::id()
+                "id = \"child-row\"\nagent_type = \"claude\"\npid = {}\nname = \"child-seat\"\npid_start = \"{}\"\n",
+                std::process::id(),
+                aida_core::liveness::process_start_identity(std::process::id()).unwrap_or_default()
             ),
         )
         .unwrap();

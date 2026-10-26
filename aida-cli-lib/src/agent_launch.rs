@@ -4673,7 +4673,15 @@ pub(crate) fn render_launch_mailbox_section(
     let local = mailbox_store::read_local_messages(project_root).unwrap_or_default();
     let canonical = mailbox_store::read_canonical_messages(&store_root).unwrap_or_default();
     let merged = aida_core::mailbox::merge_dedup(&local, &canonical);
-    let watermarks = mailbox_store::read_all_watermarks(project_root).unwrap_or_default();
+    // trace:STORY-1843 | ai:claude — mail the agent read through an inbox
+    // (a receipt in any worktree, no watermark move) is not unread here.
+    let (merged, watermarks) = match mailbox_store::ReadEvidence::load(project_root) {
+        Ok(evidence) => (
+            evidence.without_receipted_for(agent_name, &merged),
+            evidence.watermarks,
+        ),
+        Err(_) => (merged, Default::default()),
+    };
     let identities = [agent_name.to_string()];
     let summary = aida_core::mailbox::build_notice(
         identities.iter().map(String::as_str),

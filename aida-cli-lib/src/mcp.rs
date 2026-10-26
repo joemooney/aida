@@ -2980,11 +2980,12 @@ impl<'a> McpServer<'a> {
         let canonical =
             crate::mailbox_store::read_canonical_messages(&store_root).unwrap_or_default();
         let all = aida_core::mailbox::merge_dedup(&local, &canonical);
-        let mark =
-            crate::mailbox_store::read_watermark(&self.project_root, agent).unwrap_or(i64::MIN);
+        // trace:STORY-1843 | ai:claude — a receipt in any worktree is a read.
+        let evidence = crate::mailbox_store::ReadEvidence::load(&self.project_root)
+            .map_err(|e| e.to_string())?;
         let messages: Vec<Value> = inbox_for(agent, &all)
             .into_iter()
-            .filter(|m| !unread_only || m.timestamp > mark)
+            .filter(|m| !unread_only || !evidence.read_by(agent, m))
             .map(mcp_mail_entry)
             .collect();
         serde_json::to_string_pretty(&json!({
@@ -7543,7 +7544,7 @@ pub fn tool_descriptors() -> Value {
                 "type": "object",
                 "properties": {
                     "agent": { "type": "string", "description": "Whose inbox (default: this server's agent/user identity).", "example": "claude" },
-                    "unread": { "type": "boolean", "description": "Return only unread messages (newer than this inbox's read-watermark). Default false (whole inbox).", "default": false, "example": true },
+                    "unread": { "type": "boolean", "description": "Return only unread messages (no read receipt, and newer than any legacy read-watermark). Default false (whole inbox).", "default": false, "example": true },
                     "mark_seen": { "type": "boolean", "description": "Record a read receipt for each returned unread message — the explicit ack that clears the unread/notice surface. Default false, so a plain read is a non-marking peek (STORY-585 acceptance #4).", "default": false, "example": true }
                 }
             },
@@ -11106,6 +11107,33 @@ mod tests {
             .unwrap();
         let full_p: Value = serde_json::from_str(&full).unwrap();
         assert_eq!(full_p["count"], 2);
+    }
+
+    /// STORY-1843 R2-F1: inspecting another inbox counts a receipt (what
+    /// an inbox read writes, with no watermark move) as a read.
+    // trace:STORY-1843 | ai:claude
+    #[test]
+    fn mcp_inspection_unread_counts_receipts_as_read() {
+        let _env = crate::test_env::AgentSessionIsolation::apply(&[
+            ("AIDA_USER", Some("claude")),
+            ("AIDA_SESSION_ROLE", None),
+            ("AIDA_AGENT_TYPE", None),
+        ]);
+        let dir = tempdir().unwrap();
+        let server = mk_server(dir.path());
+        let m = crate::mailbox_view::tests::mail("insp-1", "reviewer-seat", 10, false);
+        crate::mailbox_store::write_message(dir.path(), &m).unwrap();
+        let unread = |server: &McpServer<'static>| -> Value {
+            serde_json::from_str(&server.inspect_inbox("reviewer-seat", true, false).unwrap())
+                .unwrap()
+        };
+        assert_eq!(unread(&server)["count"], 1);
+        crate::mailbox_store::record_seen(dir.path(), "reviewer-seat", &[m.id.as_str()]).unwrap();
+        assert_eq!(
+            crate::mailbox_store::read_watermark(dir.path(), "reviewer-seat"),
+            None
+        );
+        assert_eq!(unread(&server)["count"], 0);
     }
 
     // trace:TASK-1271 | ai:codex

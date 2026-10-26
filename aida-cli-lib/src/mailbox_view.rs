@@ -25,7 +25,10 @@
 //! Readers that address someone else's inbox (`--all`, `--agent` naming an
 //! inbox this process does not hold, launch context for a child, the
 //! resume brief, fleet-wide counts) are operator inspection and keep their
-//! own source-local reads: an audience is never built from a string.
+//! own source-local message reads: an audience is never built from a
+//! string. Their read state is still the snapshot's evidence: a receipt in
+//! any product worktree, or the legacy watermark
+//! ([`crate::mailbox_store::ReadEvidence`]).
 // trace:STORY-1843 | ai:claude
 
 use aida_core::mailbox::Message;
@@ -460,8 +463,9 @@ pub(crate) fn bound_facts(handle: &str, vendor: &str) -> crate::MailIdentityFact
     std::fs::write(
         &row,
         format!(
-            "id = \"test-row\"\nagent_type = \"{vendor}\"\npid = {}\nname = \"{handle}\"\n",
-            std::process::id()
+            "id = \"test-row\"\nagent_type = \"{vendor}\"\npid = {}\nname = \"{handle}\"\npid_start = \"{}\"\n",
+            std::process::id(),
+            aida_core::liveness::process_start_identity(std::process::id()).unwrap_or_default()
         ),
     )
     .unwrap();

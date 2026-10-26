@@ -359,8 +359,9 @@ fn read_bounded_regular(path: &Path) -> Option<String> {
 
 /// Whether the row's process is this process or one of its ancestors. A
 /// recorded start identity must positively match the live process under its
-/// own scheme, so a recycled pid never binds; a record in an unknown scheme
-/// or one that cannot be compared refuses.
+/// own scheme, so a recycled pid never binds; a row with no recorded start,
+/// a record in an unknown scheme, or one that cannot be compared refuses
+/// (such a row binds only by session id or `CLAUDE_PID`).
 fn is_self_or_ancestor(row: &RegistryRow) -> bool {
     let Ok(chain) = crate::process_probe::ProbeSource::system().ancestry(std::process::id()) else {
         return false;
@@ -380,7 +381,8 @@ fn row_binds_chain(
     mut chain: impl Iterator<Item = u32>,
     matches: impl Fn(u32, &str) -> bool,
 ) -> bool {
-    chain.any(|p| p == pid) && pid_start.is_none_or(|recorded| matches(pid, recorded))
+    // trace:STORY-1843 | ai:claude
+    chain.any(|p| p == pid) && pid_start.is_some_and(|recorded| matches(pid, recorded))
 }
 
 /// What this process's session lookup found.

@@ -274,14 +274,65 @@ pub(crate) struct RecipientUnread {
     pub(crate) oldest_ts: i64,
 }
 
+/// Read evidence for the fleet-wide counters that count every recipient's
+/// mail (night-shift latency, maintenance predicates, launch context, the
+/// dead-letter list, operator inspection): a message is read when it is at
+/// or below the recipient's legacy watermark in this checkout, or when any
+/// product worktree holds a per-ID receipt for it (the receipt evidence of
+/// the logical snapshot, which is all an inbox read writes since STORY-1843
+/// B2b).
+// trace:STORY-1843 | ai:claude
+pub(crate) struct ReadEvidence {
+    pub(crate) watermarks: std::collections::HashMap<String, i64>,
+    receipts: aida_core::mailbox_logical::ReceiptInspection,
+}
+
+impl ReadEvidence {
+    /// Watermarks from `project_root`; receipts from every product worktree
+    /// of its repository. A missing watermark directory is empty.
+    pub(crate) fn load(project_root: &Path) -> Result<Self> {
+        use aida_core::mailbox_logical::{inspect_read_receipts, MailboxContext, ReadLimits};
+        let store = project_root.join(".aida-store");
+        let store = std::fs::symlink_metadata(&store).is_ok().then_some(store);
+        let receipts = MailboxContext::resolve_or_local(project_root, store.as_deref())
+            .map(|ctx| inspect_read_receipts(&ctx, &ReadLimits::explicit_read()))
+            .unwrap_or_default();
+        Ok(Self {
+            watermarks: read_all_watermarks(project_root)?,
+            receipts,
+        })
+    }
+
+    /// Whether `key` has a receipt for `msg` in any product worktree.
+    pub(crate) fn receipted(&self, key: &str, msg: &Message) -> bool {
+        self.receipts.receipted(key, &msg.id)
+    }
+
+    /// Whether `key` has read `msg`: receipt or legacy watermark.
+    pub(crate) fn read_by(&self, key: &str, msg: &Message) -> bool {
+        msg.timestamp <= self.watermarks.get(key).copied().unwrap_or(i64::MIN)
+            || self.receipted(key, msg)
+    }
+
+    /// `messages` without the ones `key` holds a receipt for, so a
+    /// watermark-only core helper sees receipt reads as read.
+    pub(crate) fn without_receipted_for(&self, key: &str, messages: &[Message]) -> Vec<Message> {
+        messages
+            .iter()
+            .filter(|m| !self.receipted(key, m))
+            .cloned()
+            .collect()
+    }
+}
+
 /// PURE: per agent recipient, the unread messages in an already-merged
 /// (`merge_dedup`) mailbox, measured against each recipient's read
-/// watermark. Deleted, retracted and archived messages never count; mail to a
-/// non-agent recipient is not per-seat mail.
-// trace:TASK-1492 | ai:claude
+/// watermark and receipts. Deleted, retracted and archived messages never
+/// count; mail to a non-agent recipient is not per-seat mail.
+// trace:TASK-1492 trace:STORY-1843 | ai:claude
 pub(crate) fn unread_by_recipient(
     merged: &[Message],
-    watermarks: &std::collections::HashMap<String, i64>,
+    evidence: &ReadEvidence,
 ) -> std::collections::BTreeMap<String, RecipientUnread> {
     let mut out: std::collections::BTreeMap<String, RecipientUnread> = Default::default();
     for m in merged {
@@ -291,7 +342,9 @@ pub(crate) fn unread_by_recipient(
         let aida_core::mailbox::Recipient::Agent(to) = &m.to else {
             continue;
         };
-        if m.timestamp <= watermarks.get(to).copied().unwrap_or(0) {
+        if m.timestamp <= evidence.watermarks.get(to).copied().unwrap_or(0)
+            || evidence.receipted(to, m)
+        {
             continue;
         }
         let slot = out.entry(to.clone()).or_insert(RecipientUnread {
@@ -306,10 +359,11 @@ pub(crate) fn unread_by_recipient(
 
 /// Per recipient, the unread mail read the same way the `when` predicate
 /// snapshot reads it (local + canonical layers through `merge_dedup`, then
-/// the read watermarks). Unlike the snapshot, a read failure is an error: an
+/// [`ReadEvidence`]). Unlike the snapshot, a read failure is an error: an
 /// unattended escalation must not mistake an unreadable mailbox for an empty
-/// one.
-// trace:TASK-1492 | ai:claude
+/// one. A worktree whose receipts could not be listed only leaves its reads
+/// uncounted, as the watermark-only read did.
+// trace:TASK-1492 trace:STORY-1843 | ai:claude
 pub(crate) fn oldest_unread_by_recipient(
     project_root: &Path,
     store_root: &Path,
@@ -317,8 +371,8 @@ pub(crate) fn oldest_unread_by_recipient(
     let local = read_local_messages(project_root)?;
     let canonical = read_canonical_messages(store_root)?;
     let merged = aida_core::mailbox::merge_dedup(&local, &canonical);
-    let watermarks = read_all_watermarks(project_root)?;
-    Ok(unread_by_recipient(&merged, &watermarks))
+    let evidence = ReadEvidence::load(project_root)?;
+    Ok(unread_by_recipient(&merged, &evidence))
 }
 
 /// Read every recorded read-watermark, keyed by agent id. Absent dir → empty.

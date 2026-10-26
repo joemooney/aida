@@ -298,7 +298,7 @@ fn run(store: &Path, cmd: crate::cli::MailboxCommand) -> Result<()> {
     crate::mailbox_cmd::handle_mailbox_command(&cmd, store)
 }
 
-/// F1 (ruling on PR #2952): every ID an own-audience listing displays
+/// F1 (PR #2952 review, round 1): every ID an own-audience listing displays
 /// resolves in the follow-up verbs against the same logical snapshot. A
 /// sibling-only message is listed by the inbox, then read, threaded and
 /// replied to from main; a source-local write to it refuses and names the
@@ -576,4 +576,79 @@ fn story1843_bound_child_never_sees_inherited_parent_mail() {
     assert!(crate::mailbox_store::read_receipts(&r.main, "parent-user").is_empty());
     assert!(crate::mailbox_store::read_receipts(&r.main, "parent-handle").is_empty());
     assert!(crate::mailbox_store::read_receipts(&r.main, "child-seat").contains_key("to-child"));
+}
+
+/// R2-F1 (advisor ruling, round 3): an inbox read writes receipts only, so
+/// every fleet-wide unread reader counts a receipt in any worktree as a
+/// read. The operator reads from the sibling; from main the night-shift
+/// probe, the maintenance snapshot, the launch section and the read
+/// predicate behind `mailbox list`/inspection then all report 0 unread.
+#[test]
+fn story1843_inbox_read_clears_every_fleet_wide_unread_reader() {
+    let r = mail_repo();
+    let audience = operator();
+    crate::mailbox_store::write_message(&r.main, &mail("main-mail", "operator", 10, true)).unwrap();
+    put_canonical(&r.store, &mail("canon-mail", "operator", 20, false));
+    let fields: std::collections::BTreeSet<_> =
+        [crate::schedule_predicate::Field::MailUnread].into();
+    let shift_unread = || {
+        crate::mailbox_store::oldest_unread_by_recipient(&r.main, &r.store)
+            .unwrap()
+            .get("operator")
+            .map_or(0, |u| u.count)
+    };
+    let maintenance_unread =
+        || crate::maintenance_schedule::collect_snapshot(&r.main, &fields, None).mail_unread;
+    let launch = || crate::agent_launch::render_launch_mailbox_section(&r.main, "operator");
+    let inspected_unread = || {
+        let evidence = crate::mailbox_store::ReadEvidence::load(&r.main).unwrap();
+        ["main-mail", "canon-mail"]
+            .iter()
+            .filter(|id| !evidence.read_by("operator", &mail(id, "operator", 10, false)))
+            .count()
+    };
+    assert_eq!(shift_unread(), 2);
+    assert_eq!(maintenance_unread(), 2);
+    assert!(
+        !launch().contains("No unread mailbox messages"),
+        "{}",
+        launch()
+    );
+    assert_eq!(inspected_unread(), 2);
+
+    let view = view_from(&r.sib, &r.store, &audience);
+    let rows = crate::mailbox_cmd::select_inbox_rows(view.records(), false, true, 0);
+    assert_eq!(rows.len(), 2);
+    mark_displayed(&r.sib, view.audience(), &rows).unwrap();
+    assert_eq!(
+        crate::mailbox_store::read_watermark(&r.sib, "operator"),
+        None
+    );
+
+    assert_eq!(shift_unread(), 0);
+    assert_eq!(maintenance_unread(), 0);
+    assert!(
+        launch().contains("No unread mailbox messages"),
+        "{}",
+        launch()
+    );
+    assert_eq!(inspected_unread(), 0);
+    let local = crate::mailbox_store::read_local_messages(&r.main).unwrap();
+    let canonical = crate::mailbox_store::read_canonical_messages(&r.store).unwrap();
+    let merged = aida_core::mailbox::merge_dedup(&local, &canonical);
+    let evidence = crate::mailbox_store::ReadEvidence::load(&r.main).unwrap();
+    let summaries = aida_core::mailbox::agent_summaries_read_by(
+        &merged,
+        &evidence.watermarks,
+        ["operator"],
+        |agent, m| evidence.read_by(agent, m),
+    );
+    assert_eq!(summaries[0].unread, 0, "{summaries:?}");
+    assert_eq!(summaries[0].total, 2, "{summaries:?}");
+    let stranded = aida_core::mailbox::stranded_recipients_read_by(
+        &merged,
+        |_| false,
+        |who, m| evidence.read_by(who, m),
+    );
+    assert!(stranded.is_empty(), "{stranded:?}");
 }

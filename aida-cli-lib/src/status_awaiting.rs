@@ -520,7 +520,8 @@ pub(crate) fn collect_awaiting_report_inner(
 
 /// Unread mail addressed to `role` that the reader's audience does not
 /// cover, counted (never shown) over this checkout and the canonical store
-/// with the role's read watermark and receipts, skipping IDs already counted.
+/// with the role's read watermark and its receipts in any worktree, skipping
+/// IDs already counted.
 // trace:TASK-1245 trace:STORY-1843 | ai:claude
 fn inspected_role_unread(
     project_root: &std::path::Path,
@@ -531,11 +532,12 @@ fn inspected_role_unread(
     let local = mailbox_store::read_local_messages(project_root).unwrap_or_default();
     let canonical = mailbox_store::read_canonical_messages(&store_root).unwrap_or_default();
     let merged = aida_core::mailbox::merge_dedup(&local, &canonical);
-    let watermarks = mailbox_store::read_all_watermarks(project_root).unwrap_or_default();
-    let receipts = mailbox_store::read_receipts(project_root, role);
-    aida_core::mailbox::unread_for_identities([role], &merged, &watermarks)
+    let Ok(evidence) = mailbox_store::ReadEvidence::load(project_root) else {
+        return 0;
+    };
+    aida_core::mailbox::unread_for_identities([role], &merged, &evidence.watermarks)
         .into_iter()
-        .filter(|m| !counted.contains(m.id.as_str()) && !receipts.contains_key(&m.id))
+        .filter(|m| !counted.contains(m.id.as_str()) && !evidence.receipted(role, m))
         .count()
 }
 

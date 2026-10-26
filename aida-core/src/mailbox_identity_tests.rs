@@ -151,11 +151,27 @@ fn row(dir: &Path, id: &str, body: &str) -> std::path::PathBuf {
     path
 }
 
+/// A registry row. A row for this process records its live start identity
+/// (what registration writes) unless `extra` records one itself.
 fn row_body(id: &str, pid: u32, extra: &str) -> String {
+    let start = (pid == std::process::id() && !extra.contains("pid_start"))
+        .then(|| crate::liveness::process_start_identity(pid))
+        .flatten()
+        .map(|start| format!("pid_start = \"{start}\"\n"))
+        .unwrap_or_default();
     format!(
         "id = \"{id}\"\nagent_type = \"claude\"\npid = {pid}\nname = \"seat-a\"\n\
          started_at = \"2026-10-26T00:00:00Z\"\nlast_active_at = \"2026-10-26T00:00:00Z\"\n\
-         worktree_path = \"/x\"\nsource = \"session-start-hook\"\n{extra}"
+         worktree_path = \"/x\"\nsource = \"session-start-hook\"\n{start}{extra}"
+    )
+}
+
+/// [`row_body`] with no recorded start identity (a legacy or crashed row).
+fn row_body_without_start(id: &str, pid: u32) -> String {
+    format!(
+        "id = \"{id}\"\nagent_type = \"claude\"\npid = {pid}\nname = \"seat-a\"\n\
+         started_at = \"2026-10-26T00:00:00Z\"\nlast_active_at = \"2026-10-26T00:00:00Z\"\n\
+         worktree_path = \"/x\"\nsource = \"session-start-hook\"\n"
     )
 }
 
@@ -376,4 +392,34 @@ fn lookup_binds_the_nearest_registered_ancestor_and_fails_closed() {
         SessionBinding::lookup_in_chain(only_far.path(), &env, &[me, u32::MAX - 3]),
         SessionBinding::Unverified(BindingRefusal::NotThisProcess)
     );
+}
+
+#[test]
+fn a_row_with_no_recorded_start_never_binds_by_pid_alone() {
+    // trace:STORY-1843 | ai:claude — a legacy or crashed row whose pid an
+    // ancestor shell now reuses: the pid matches, nothing proves the process.
+    let chain = || [10u32, 7, 1].into_iter();
+    assert!(!row_binds_chain(7, None, chain(), |_, _| true));
+    let dir = tempfile::tempdir().unwrap();
+    let me = std::process::id();
+    let recycled = row(
+        dir.path(),
+        "recycled",
+        &row_body_without_start("recycled", me),
+    );
+    let env = IdentityEnv::fixture("u", &[], None);
+    assert_eq!(
+        SessionBindingFacts::verify(&recycled, &env),
+        Err(BindingRefusal::NotThisProcess)
+    );
+    assert_eq!(
+        SessionBinding::lookup_in_chain(dir.path(), &env, &[me]),
+        SessionBinding::Unverified(BindingRefusal::NotThisProcess)
+    );
+    // The same row still binds by the session evidence it names.
+    let claude = IdentityEnv {
+        claude_pid: Some(me),
+        ..IdentityEnv::fixture("u", &[], None)
+    };
+    assert!(SessionBindingFacts::verify(&recycled, &claude).is_ok());
 }

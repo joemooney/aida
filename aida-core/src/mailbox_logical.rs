@@ -628,6 +628,84 @@ pub fn logical_snapshot(
     snapshot
 }
 
+/// Every explicit per-ID read receipt in every inventoried LOCAL source,
+/// keyed by receipt directory (the sanitized mailbox key). Operator
+/// inspection for fleet-wide counters (night-shift latency, maintenance
+/// predicates, launch context, dead-letter list) that count every
+/// recipient's unread mail: it exposes which IDs were read, never message
+/// content, so it needs no audience. The same receipt evidence
+/// [`logical_snapshot`] treats as acknowledgement.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ReceiptInspection {
+    by_key: HashMap<String, HashSet<String>>,
+    /// Every inventoried source was fully listed.
+    pub complete: bool,
+}
+
+impl ReceiptInspection {
+    /// Whether some local source holds a receipt for `id` under `key`.
+    pub fn receipted(&self, key: &str, id: &str) -> bool {
+        self.by_key
+            .get(&sanitize_key(key))
+            .is_some_and(|ids| ids.contains(id))
+    }
+}
+
+/// Inspect the read receipts of every product worktree of `ctx`. Never
+/// writes; a source that cannot be listed leaves the result incomplete.
+// trace:STORY-1843 | ai:claude
+pub fn inspect_read_receipts(ctx: &MailboxContext, limits: &ReadLimits) -> ReceiptInspection {
+    let mut budget = Budget::new(limits);
+    let (roots, inventory_error) = inventory(ctx, &mut budget);
+    let mut out = ReceiptInspection {
+        complete: inventory_error.is_none(),
+        ..Default::default()
+    };
+    for root in roots {
+        let Ok(root) = root else {
+            out.complete = false;
+            continue;
+        };
+        if receipts_of_source(&root, &mut budget, &mut out.by_key).is_err() {
+            out.complete = false;
+        }
+    }
+    out
+}
+
+fn receipts_of_source(
+    root: &Path,
+    budget: &mut Budget,
+    out: &mut HashMap<String, HashSet<String>>,
+) -> Result<(), SourceErrorCode> {
+    let mut dir = PinnedDir::open_root(root)?;
+    for component in [".aida", "mailbox", ".read-receipts"] {
+        match dir.child_dir(component)? {
+            Some(child) => dir = child,
+            None => return Ok(()),
+        }
+    }
+    for key in dir.names(budget)? {
+        if budget.expired() {
+            return Err(SourceErrorCode::OverBudget);
+        }
+        if key.starts_with(b".") {
+            continue;
+        }
+        let key = String::from_utf8_lossy(&key).into_owned();
+        let Some(ids) = dir.child_dir(&key)? else {
+            continue;
+        };
+        let slot = out.entry(key).or_default();
+        for name in ids.names(budget)? {
+            if let Some(id) = name.strip_suffix(b".txt") {
+                slot.insert(String::from_utf8_lossy(id).into_owned());
+            }
+        }
+    }
+    Ok(())
+}
+
 fn observation(
     result: Result<Option<ObservedSource>, SourceErrorCode>,
 ) -> (SourceStatus, Option<SourceIdentity>, Option<ObservedSource>) {
