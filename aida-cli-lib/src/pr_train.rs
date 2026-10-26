@@ -95,10 +95,11 @@ pub(crate) fn members_line(cars: &[Car]) -> String {
 }
 
 /// The members a train PR body names, in order. `None` when the body has no
-/// members line, names no member, or any entry is malformed: the gate fails
-/// closed on it. It parses exactly as merge-hold-gate.yml's bash does (the
-/// binding parser); tests/fixtures/train-members-lines.txt holds the cases
-/// both are checked against.
+/// members line, names no member, or any entry is malformed: the merge-hold
+/// gate fails closed on it (the rider gate, `train_rider_refusal`, fails
+/// open). It parses exactly as merge-hold-gate.yml's bash does (the binding
+/// parser); tests/fixtures/train-members-lines.txt holds the cases both are
+/// checked against.
 // trace:STORY-1690 | ai:claude
 pub(crate) fn parse_members_line(body: &str) -> Option<Vec<(u64, String)>> {
     let rest = body
@@ -1258,6 +1259,9 @@ fn live_trains(
         {
             continue;
         }
+        // An unreadable body names nobody (the rider gate fails open, as for
+        // a malformed members line), but say so rather than pass silently.
+        // trace:TASK-1865 | ai:claude
         let body = gh_stdout(
             main_worktree,
             &[
@@ -1270,7 +1274,13 @@ fn live_trains(
                 ".body",
             ],
         )
-        .unwrap_or_default();
+        .unwrap_or_else(|e| {
+            eprintln!(
+                "  warning: could not read leased train PR #{train}'s members; \
+                 not checking whether this PR already rides it: {e:#}"
+            );
+            String::new()
+        });
         leased.push((train, parse_members_line(&body)));
     }
     Ok((open, leased))

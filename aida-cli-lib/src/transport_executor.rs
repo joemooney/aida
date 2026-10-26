@@ -136,6 +136,7 @@ fn store_preflight(store: &Path, expected: &str) -> Result<()> {
 pub(super) fn push(root: &Path, profile: &Profile, expected: Option<&str>) -> Result<()> {
     let common = common_dir(root)?.context("Transport push requires a Git clone")?;
     let _configuration_lock = configuration_lock(&common)?;
+    let private = private::Private::open(&common)?;
     if load(&common)?.as_ref() != Some(profile) {
         bail!("Transport profile changed during planning; push refused.");
     }
@@ -155,13 +156,16 @@ pub(super) fn push(root: &Path, profile: &Profile, expected: Option<&str>) -> Re
     }
     let endpoint = pinned_endpoint(root, profile)?;
     let store = attached_store(root, &common)?;
+    let scan = scan::Scan::load(&private)?;
     // The destination is already absolute/frozen in the invoking worktree.
     // Do not reinterpret a relative origin from the nested store checkout.
     refuse_endpoint_rewrites(&store, &endpoint)?;
     // Pin and validate under the existing writer lock. Do not keep that lock
     // across network IO or hooks: the shipped identity hook is a read-only CLI.
     check_store_state(&store, expected)?;
-    aida_core::db::with_store_write_lock(&store, || Ok(store_preflight(&store, expected)))
+    aida_core::db::with_store_write_lock(&store, || {
+        Ok(store_preflight(&store, expected).and_then(|()| scan.history(&store, profile, expected)))
+    })
         .map_err(|_| anyhow::anyhow!("Store writer lock or verified hook profile unavailable; push refused. Check for a busy writer, lock permissions, or unsupported hooks before retrying."))??;
 
     if aida_core::db::any_store_write_lock_held() {
@@ -169,6 +173,10 @@ pub(super) fn push(root: &Path, profile: &Profile, expected: Option<&str>) -> Re
     }
     if pinned_endpoint(root, profile)? != endpoint {
         bail!("Origin changed during store preflight; push refused.");
+    }
+    scan.revalidate(&private)?;
+    if load(&common)?.as_ref() != Some(profile) {
+        bail!("Transport profile changed; push refused");
     }
     check_store_state(&store, expected)?;
     let refspec = format!("{expected}:{STORE_REF}");
@@ -204,14 +212,38 @@ pub(super) fn push(root: &Path, profile: &Profile, expected: Option<&str>) -> Re
         &endpoint,
         Some(&endpoint),
     );
-    let output = push.output().map_err(|_| {
-        anyhow::anyhow!("Could not execute the store push; inspect origin before retrying.")
+    // Own runner (trace:STORY-1742 | ai:claude): no terminal prompts, Ctrl+C
+    // forwarded to git, and no wall-clock kill of a long first transfer.
+    let (status, stdout, interrupted) = scan::publish(push, 65536).map_err(|_| {
+        anyhow::anyhow!("Store push execution or settlement is uncertain; receipt unchanged. Inspect origin before retrying.")
     })?;
-    if !output.status.success() {
+    if interrupted {
+        bail!("Store push was interrupted; remote acceptance is uncertain and the receipt is unchanged. Inspect origin before retrying.");
+    }
+    if !status.success() {
         // Hook and remote diagnostics can contain emails, URLs or hostnames.
-        bail!("Store push failed or was refused by a hook/remote; no retry was attempted. Remote acceptance may be uncertain; inspect origin and store policy before retrying.");
+        bail!("Store push failed or was refused by a hook/remote; no retry was attempted. Remote acceptance may be uncertain; inspect origin and store policy before retrying. Terminal prompts are disabled: configure a credential helper or SSH agent (and known host key) for origin.");
+    }
+    // An exit status alone does not attest which ref was accepted. Require
+    // exactly the inspected SHA/ref's successful porcelain status row.
+    let expected_row = format!("{expected}:{STORE_REF}");
+    let rows: Vec<_> = stdout
+        .split(|b| *b == b'\n')
+        .filter(|line| line.len() > 1 && line[1] == b'\t')
+        .collect();
+    if rows.len() != 1
+        || !matches!(rows[0][0], b' ' | b'*' | b'=')
+        || rows[0].split(|b| *b == b'\t').nth(1) != Some(expected_row.as_bytes())
+    {
+        bail!("Store publication may have succeeded, but exact acceptance evidence is unavailable; receipt unchanged. Inspect origin before retrying.");
+    }
+    if pinned_endpoint(root, profile).ok().as_deref() != Some(endpoint.as_str())
+        || load(&common).ok().flatten().as_ref() != Some(profile)
+        || scan.receipt(&private, profile, expected).is_err()
+    {
+        bail!("Store publication succeeded for the inspected tip, but durable receipt recording could not be confirmed; inspect origin before retrying.");
     }
     println!("Pushed aida-store {expected} to pinned origin (store ref only).");
-    println!("{SANITIZATION_PENDING}");
+    println!("Refusal-only history scan passed; exact successful-push receipt recorded.");
     Ok(())
 }
