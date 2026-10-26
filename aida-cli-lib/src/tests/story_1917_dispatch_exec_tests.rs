@@ -30,7 +30,7 @@
 // trace:STORY-1917 | ai:agy
 
 use super::*;
-use crate::mandate::{self, Mandate, Scope};
+use crate::gate::mandate::{self, Mandate, Scope};
 use chrono::Duration;
 use std::collections::BTreeSet;
 use std::os::unix::fs::PermissionsExt;
@@ -139,7 +139,7 @@ impl ExecFixture {
 
     fn start_mandate(&self, scopes: &[Scope], include_supervised: bool) -> Mandate {
         let set: BTreeSet<Scope> = scopes.iter().copied().collect();
-        mandate::start_with_scopes(
+        crate::gate::mandate::start_with_scopes(
             &self.mandate_dir,
             &|| Ok(()),
             &self.principal,

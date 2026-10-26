@@ -476,7 +476,7 @@ pub(crate) fn handle_done_command(
         return Ok(());
     }
     if status_advance_requires_advisor_authority(&req.status, &RequirementStatus::Completed)
-        && !has_advisor_authority()
+        && !crate::gate::role_authority::has_advisor_authority()
     {
         // BUG-585: name the ACTUAL escape hatches, not a circular re-run of the
         // same command. A non-TTY agent/script gets nothing new by re-running

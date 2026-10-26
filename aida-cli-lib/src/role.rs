@@ -305,7 +305,7 @@ pub(crate) fn list_roles(project_root: &std::path::Path) -> Result<Vec<RoleState
 /// recovery surfaces need to distinguish "defaulted" from "seated".
 // trace:BUG-1044 | ai:codex
 pub(crate) fn active_role_env_present() -> bool {
-    seat_authority::current_grant(&statusline_project_root()).is_some()
+    crate::gate::seat_authority::current_grant(&statusline_project_root()).is_some()
 }
 
 /// Most recently used role, derived from the same role files `aida role list`
@@ -353,7 +353,9 @@ pub(crate) fn roleless_recovery_sentence() -> String {
     let Ok(project_root) = find_project_root() else {
         return String::new();
     };
-    if let Some(rejection) = seat_authority::grant_check(&project_root).rejection_sentence() {
+    if let Some(rejection) =
+        crate::gate::seat_authority::grant_check(&project_root).rejection_sentence()
+    {
         return format!(" {rejection}.");
     }
     roleless_recovery_line(&project_root)
@@ -1322,7 +1324,7 @@ pub(crate) fn effective_role_resolved() -> (String, bool) {
 // trace:TASK-1593 | ai:antigravity
 pub(crate) fn effective_role_with_roster() -> (String, team::RoleSource) {
     match find_project_root() {
-        Ok(root) => match seat_authority::current_seat(&root) {
+        Ok(root) => match crate::gate::seat_authority::current_seat(&root) {
             Some(seat) => (seat, team::RoleSource::Grant),
             None => ("implementer".to_string(), team::RoleSource::Default),
         },
@@ -1422,9 +1424,8 @@ where
 }
 
 // STORY-1889: the authority decisions live in the protected gate module.
-// Transitional re-export; the final STORY-1889 PR repoints the callers.
 // trace:STORY-1889 | ai:claude
-pub(crate) use crate::gate::role_authority::{
+use crate::gate::role_authority::{
     advisor_authority_from, dispatch_authority_from, has_advisor_authority, has_dispatch_authority,
     has_hold_authority, has_integrity_floor_authority, hold_authority_from,
     integrity_floor_authority_from,

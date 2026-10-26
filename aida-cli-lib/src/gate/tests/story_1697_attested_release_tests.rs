@@ -6,10 +6,10 @@
 // trace:STORY-1697 | ai:claude
 
 use super::*;
-use crate::mandate::{HoldFacts, Mandate, MandateState, ShipCheck, ShipSpec};
-use crate::merge_hold::HoldReasonKind;
-use crate::pr_ship::{AuthorSession, ShipApprovalPolicy};
-use crate::review_verdict::{RecordedVerdict, RecorderAttestation, VerdictKind};
+use crate::gate::mandate::{HoldFacts, Mandate, MandateState, ShipCheck, ShipSpec};
+use crate::gate::merge_hold_core::HoldReasonKind;
+use crate::gate::review_verdict::{RecordedVerdict, RecorderAttestation, VerdictKind};
+use crate::gate::ship::{AuthorSession, ShipApprovalPolicy};
 use chrono::Utc;
 use std::cell::RefCell;
 
@@ -26,8 +26,8 @@ fn mandate(include_supervised: bool) -> Mandate {
     Mandate {
         id: MANDATE_ID.into(),
         principal: "joe".into(),
-        seat: crate::mandate::MANDATE_SEAT.into(),
-        scope: crate::mandate::SCOPE_SHIP_HELD.into(),
+        seat: crate::gate::mandate::MANDATE_SEAT.into(),
+        scope: crate::gate::mandate::SCOPE_SHIP_HELD.into(),
         include_supervised,
         reason: Some("fire".into()),
         issued_at: Utc::now() - chrono::Duration::hours(1),
@@ -203,7 +203,7 @@ impl Case {
                         state => state.clone(),
                     };
                     consulted.set(consulted.get() + 1);
-                    crate::mandate::rework_release_decision(&ShipCheck {
+                    crate::gate::mandate::rework_release_decision(&ShipCheck {
                         state: &state,
                         now: Utc::now(),
                         grant: Some(self.seat),
@@ -217,7 +217,7 @@ impl Case {
                         hold: &HoldFacts::of(hold.as_ref(), None),
                         carry_over: None,
                         changed_paths: Some(&[]),
-                        protected: crate::mandate_gates::ProtectedPaths::floor_ref(),
+                        protected: crate::gate::mandate_gates::ProtectedPaths::floor_ref(),
                         ship_gate: None,
                         hold_clear_gate: None,
                     })
@@ -510,7 +510,7 @@ fn an_advisor_cannot_release_a_sensitive_hold_on_its_own_approval() {
 fn an_advisor_releases_a_sensitive_hold_on_an_independent_reviewers_approval() {
     let mut case = Case::ok().sensitive();
     case.state = MandateState::Active(mandate(true));
-    assert!(!crate::review_authority::identities_overlap(
+    assert!(!crate::gate::review_authority::identities_overlap(
         &case.policy.shipper,
         &case.candidates[0].attestation.as_ref().unwrap().identity
     ));

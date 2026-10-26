@@ -5,13 +5,13 @@
 // trace:STORY-1655 | ai:claude
 
 use super::*;
-use crate::pr_ship::{
+use crate::gate::review_author::{review_author_gate, review_author_refusal, ReviewAuthorGate};
+use crate::gate::review_authority::RecorderIdentity;
+use crate::gate::review_verdict::{RecordedVerdict, RecorderAttestation, VerdictKind};
+use crate::gate::ship::{
     approval_authority_refusal, solo_approval_notice, ApprovalAuthorityRefusal, AuthorSession,
     ShipApprovalPolicy,
 };
-use crate::review_authority::RecorderIdentity;
-use crate::review_verdict::{RecordedVerdict, RecorderAttestation, VerdictKind};
-use crate::{review_author_gate, review_author_refusal, ReviewAuthorGate};
 
 const SPEC: &str = "STORY-91655";
 const PR: u64 = 4242;
@@ -52,12 +52,21 @@ const SOLO_ON: &str = "[review]\nsolo_human_self_approval = true\n";
 
 #[test]
 fn solo_human_allows_tty_human_to_approve_own_claim() {
-    let gate = review_author_gate(&authors(), &the_author(), true, true, || true);
-    assert_eq!(gate, ReviewAuthorGate::SoloSelfApproval);
+    let gate = crate::gate::review_author::review_author_gate(
+        &authors(),
+        &the_author(),
+        true,
+        true,
+        || true,
+    );
+    assert_eq!(
+        gate,
+        crate::gate::review_author::ReviewAuthorGate::SoloSelfApproval
+    );
 
     // The receipt and the attestation the verdict carries both say solo.
     let dir = tempfile::tempdir().unwrap();
-    let id = crate::review_authority::write_human_receipt_as(
+    let id = crate::gate::review_authority::write_human_receipt_as(
         dir.path(),
         HEAD,
         SPEC,
@@ -65,7 +74,7 @@ fn solo_human_allows_tty_human_to_approve_own_claim() {
         true,
     )
     .unwrap();
-    let receipt = crate::review_authority::human_receipt_in(dir.path(), &id, HEAD).unwrap();
+    let receipt = crate::gate::review_authority::human_receipt_in(dir.path(), &id, HEAD).unwrap();
     assert!(receipt.solo_human);
     let att = RecorderAttestation {
         sha: HEAD.into(),
@@ -83,26 +92,51 @@ fn solo_human_allows_tty_human_to_approve_own_claim() {
 fn solo_human_never_covers_agents() {
     // Solo mode on, but the recorder did not pass the human-at-TTY floor
     // (every agent, and every non-TTY session): the BUG-1918 refusal stands.
-    let expected = review_author_refusal(&authors(), &the_author(), true).unwrap();
-    let gate = review_author_gate(&authors(), &the_author(), true, false, || true);
-    assert_eq!(gate, ReviewAuthorGate::Refused(expected));
+    let expected =
+        crate::gate::review_author::review_author_refusal(&authors(), &the_author(), true).unwrap();
+    let gate = crate::gate::review_author::review_author_gate(
+        &authors(),
+        &the_author(),
+        true,
+        false,
+        || true,
+    );
+    assert_eq!(
+        gate,
+        crate::gate::review_author::ReviewAuthorGate::Refused(expected)
+    );
 }
 
 #[test]
 fn solo_human_off_keeps_bug_1918_refusal_byte_identical() {
     for resolved in [true, false] {
-        let expected = review_author_refusal(&authors(), &the_author(), resolved).unwrap();
-        let gate = review_author_gate(&authors(), &the_author(), resolved, true, || false);
-        assert_eq!(gate, ReviewAuthorGate::Refused(expected));
+        let expected =
+            crate::gate::review_author::review_author_refusal(&authors(), &the_author(), resolved)
+                .unwrap();
+        let gate = crate::gate::review_author::review_author_gate(
+            &authors(),
+            &the_author(),
+            resolved,
+            true,
+            || false,
+        );
+        assert_eq!(
+            gate,
+            crate::gate::review_author::ReviewAuthorGate::Refused(expected)
+        );
     }
     // An independent recorder never consults the mode at all.
     let other = RecorderIdentity {
         tokens: vec!["session:independent".into()],
     };
-    let gate = review_author_gate(&authors(), &other, true, true, || {
-        panic!("solo mode must not be read for an independent approval")
-    });
-    assert_eq!(gate, ReviewAuthorGate::Independent);
+    let gate =
+        crate::gate::review_author::review_author_gate(&authors(), &other, true, true, || {
+            panic!("solo mode must not be read for an independent approval")
+        });
+    assert_eq!(
+        gate,
+        crate::gate::review_author::ReviewAuthorGate::Independent
+    );
 }
 
 #[test]
@@ -153,7 +187,7 @@ fn solo_human_mode_on_still_refuses_the_author_agent_end_to_end() {
         err.to_string().contains("cannot approve its own work"),
         "{err}"
     );
-    assert!(crate::review_verdict::read_recorded_verdict(root.path(), SPEC).is_none());
+    assert!(crate::gate::review_verdict::read_recorded_verdict(root.path(), SPEC).is_none());
 }
 
 const AUTHOR_SESSION: &str = "cb4777a7-0000-4000-8000-000000016550";
@@ -193,7 +227,7 @@ fn record_author_lease(root: &Path) {
         interrupted_reason: None,
     };
     let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_SESSION_ID", Some(AUTHOR_SESSION))]);
-    crate::review_authority::record_authoring_lease(root, &lease);
+    crate::gate::review_authority::record_authoring_lease(root, &lease);
 }
 
 /// TASK-1808: end to end through `aida review record`. A human at the
@@ -243,19 +277,21 @@ fn solo_self_approval_recorded_through_the_cli_carries_solo_and_clears_the_ship_
     };
     let err = record("STORY-91655 1").expect_err("a wrong answer is refused");
     assert!(err.to_string().contains("did not match"), "{err}");
-    assert!(crate::review_verdict::read_recorded_verdict(root.path(), SPEC).is_none());
+    assert!(crate::gate::review_verdict::read_recorded_verdict(root.path(), SPEC).is_none());
 
     record(&format!("{SPEC} #{PR}")).expect("the solo human approves their own claim");
     let raw: serde_json::Value = serde_json::from_str(
-        &std::fs::read_to_string(crate::review_verdict::verdict_path(root.path(), SPEC)).unwrap(),
+        &std::fs::read_to_string(crate::gate::review_verdict::verdict_path(root.path(), SPEC))
+            .unwrap(),
     )
     .unwrap();
     assert!(raw.to_string().contains("\"solo_human\":true"), "{raw}");
-    let v = crate::review_verdict::read_recorded_verdict(root.path(), SPEC).expect("verdict");
+    let v = crate::gate::review_verdict::read_recorded_verdict(root.path(), SPEC).expect("verdict");
     let att = v.attestation.clone().expect("attestation");
     assert!(att.solo_human && att.human_at_tty, "{att:?}");
     let receipt_id = att.receipt_id.clone().expect("a receipt");
-    let receipt = crate::review_authority::human_receipt_for(&receipt_id, HEAD).expect("receipt");
+    let receipt =
+        crate::gate::review_authority::human_receipt_for(&receipt_id, HEAD).expect("receipt");
     assert!(receipt.solo_human, "{receipt:?}");
     assert!(
         std::fs::read_to_string(
@@ -274,13 +310,13 @@ fn solo_self_approval_recorded_through_the_cli_carries_solo_and_clears_the_ship_
             label: "claim by the solo human".into(),
             tokens: att.identity.clone(),
         }],
-        verified_authority: crate::review_authority::verified_authority_keys(
+        verified_authority: crate::gate::review_authority::verified_authority_keys(
             root.path(),
             &candidates,
         ),
         reviewed_committed_at: Some(chrono::Utc::now() - chrono::Duration::hours(1)),
         solo_human: solo_on,
-        verified_solo: crate::review_authority::verified_solo_keys(&candidates),
+        verified_solo: crate::gate::review_authority::verified_solo_keys(&candidates),
         ..Default::default()
     };
     assert_eq!(approval_authority_refusal(&candidates, &policy(true)), None);
@@ -467,7 +503,7 @@ fn ship_gate_refuses_a_solo_flag_its_receipt_does_not_carry() {
     let home_s = aida_home.path().to_string_lossy().to_string();
     let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_HOME", Some(&home_s))]);
     let receipts = aida_home.path().join(".aida").join("review-receipts");
-    let plain = crate::review_authority::write_human_receipt_as(
+    let plain = crate::gate::review_authority::write_human_receipt_as(
         &receipts,
         HEAD,
         SPEC,
@@ -475,7 +511,7 @@ fn ship_gate_refuses_a_solo_flag_its_receipt_does_not_carry() {
         false,
     )
     .unwrap();
-    let solo = crate::review_authority::write_human_receipt_as(
+    let solo = crate::gate::review_authority::write_human_receipt_as(
         &receipts,
         HEAD,
         SPEC,
@@ -485,7 +521,8 @@ fn ship_gate_refuses_a_solo_flag_its_receipt_does_not_carry() {
     .unwrap();
     let forged = solo_approval(&plain);
     let genuine = solo_approval(&solo);
-    let verified = crate::review_authority::verified_solo_keys(&[forged.clone(), genuine.clone()]);
+    let verified =
+        crate::gate::review_authority::verified_solo_keys(&[forged.clone(), genuine.clone()]);
     let key = |v: &RecordedVerdict| {
         v.attestation
             .as_ref()

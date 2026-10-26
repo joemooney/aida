@@ -1,6 +1,6 @@
 // trace:STORY-1687 | ai:codex
 use super::*;
-use crate::merge_hold::{AbsorbedHold, HoldReasonKind};
+use crate::gate::merge_hold_core::{AbsorbedHold, HoldReasonKind};
 use chrono::Utc;
 use std::cell::Cell;
 

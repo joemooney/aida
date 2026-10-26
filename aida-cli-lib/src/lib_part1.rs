@@ -1611,7 +1611,7 @@ pub(crate) fn parse_help_commands_args(args: &[String]) -> Result<(bool, bool, b
 }
 
 pub(crate) fn run() -> Result<()> {
-    crate::seat_authority::ensure_commit_authority_resolver_registered();
+    crate::gate::seat_authority::ensure_commit_authority_resolver_registered();
     let raw_args: Vec<String> = std::env::args().collect();
     // Intercept --version / -V before clap so we can include the build-time
     // banner (build.rs stamps build time + git sha + dirty flag). Clap's

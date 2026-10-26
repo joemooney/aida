@@ -2777,8 +2777,8 @@ fn t1458_run_merge(
             ("PATH", Some(path.as_str())),
         ],
     );
-    let grant = crate::seat_authority::current_grant(root).expect("reviewer seat");
-    let verdict = crate::review_verdict::record_verdict(
+    let grant = crate::gate::seat_authority::current_grant(root).expect("reviewer seat");
+    let verdict = crate::gate::review_verdict::record_verdict(
         root,
         "PR-77",
         Some("approved"),
@@ -2791,8 +2791,8 @@ fn t1458_run_merge(
     .unwrap();
     let mut body: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(&verdict).unwrap()).unwrap();
-    body[crate::review_verdict::ATTESTATION_KEY] =
-        serde_json::to_value(crate::review_verdict::RecorderAttestation {
+    body[crate::gate::review_verdict::ATTESTATION_KEY] =
+        serde_json::to_value(crate::gate::review_verdict::RecorderAttestation {
             sha: reviewed_sha.to_string(),
             seat: Some(grant.seat.clone()),
             grant_id: Some(grant.id.clone()),
@@ -2982,7 +2982,7 @@ fn bug_2180_reviewer_request_changes_leaves_store_worktree_clean() {
         "the shelve is written and left for the host: {}",
         porcelain()
     );
-    assert!(crate::mandate_traces::store_snapshot(&store_root).is_err());
+    assert!(crate::gate::mandate_traces::store_snapshot(&store_root).is_err());
 
     // The host launcher, after the reviewer exits.
     let committed =
@@ -2996,7 +2996,7 @@ fn bug_2180_reviewer_request_changes_leaves_store_worktree_clean() {
         "",
         "reviewer request-changes left the store dirty"
     );
-    assert!(crate::mandate_traces::store_snapshot(&store_root).is_ok());
+    assert!(crate::gate::mandate_traces::store_snapshot(&store_root).is_ok());
     let reloaded = crate::test_env::home_fixture_backend(&store_root)
         .unwrap()
         .load()
@@ -3148,15 +3148,15 @@ fn bug_2185_standalone_reviewer_commits_child_store_writes_on_its_error_exit() {
         ("AIDA_HOME", Some(home.to_str().unwrap())),
         ("HOME", Some(home.to_str().unwrap())),
         ("AIDA_AGENT_CMD", Some(mock.to_str().unwrap())),
-        (crate::seat_authority::GRANT_ENV, None),
+        (crate::gate::seat_authority::GRANT_ENV, None),
     ]);
-    let grant_id = crate::seat_authority::test_support::mint_grant_for(
+    let grant_id = crate::gate::seat_authority::test_support::mint_grant_for(
         &work,
         &crate::current_user_id(None),
         "advisor",
         &["reviewer"],
     );
-    env.set_key(crate::seat_authority::GRANT_ENV, &grant_id);
+    env.set_key(crate::gate::seat_authority::GRANT_ENV, &grant_id);
     crate::session::set_headless_vendor_override(None);
     let launch_vendor = crate::session::resolve_enabled_headless_vendor(&work).unwrap();
     let worktree = tmp.path().join("reviewer-worktree");

@@ -1394,8 +1394,11 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 // red ambiguous, row-read failure is ci-unavailable, never
                 // evidence of a real failing check. trace:BUG-1265 | ai:codex
                 let refined_green = {
-                    let hold_present =
-                        merge_hold::read_hold(&self.project_root, pr_number as u64).is_some();
+                    let hold_present = crate::gate::merge_hold_core::read_hold(
+                        &self.project_root,
+                        pr_number as u64,
+                    )
+                    .is_some();
                     let hold_label_present = !hold_present
                         && merge_hold::label_present(&self.project_root, pr_number as u64)
                             .unwrap_or(false);
@@ -1635,9 +1638,9 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // whose dead pid expires it. This is a marker, not the BUG-511 review
         // lease — the drain's reviewer still takes no lease (see the gate
         // comment in `handle_review_spec`). trace:STORY-1405 | ai:claude
-        let _review_marker = match crate::review_marker::hold(
+        let _review_marker = match crate::gate::review_marker::hold(
             &main_worktree_root_from(&self.project_root),
-            crate::review_marker::Marker::for_this_process(
+            crate::gate::review_marker::Marker::for_this_process(
                 pr as u64,
                 self.ci_terminal_sha.as_deref(),
                 Some(&self.spec),
@@ -2191,7 +2194,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // TASK-1460: see `run_one_agent_gate` — archive a direct skill write,
         // then fall back to a fresh archived verdict at the reviewed head.
         // trace:TASK-1460 | ai:claude
-        let _ = review_verdict::adopt_direct_write(&verdict_path);
+        let _ = crate::gate::review_verdict::adopt_direct_write(&verdict_path);
         let outcome = match read_verdict_file_for_head(
             &verdict_path,
             pre_review_head_sha.as_deref(),
@@ -2468,10 +2471,15 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // be computed refuses too. trace:BUG-1468 | ai:claude
         // trace:STORY-1690 | ai:claude
         if let Some(branch) = self.branch.clone() {
-            crate::pr_cmd::ship_behind_base_gate(&self.project_root, &branch, pr as u64, false)
-                .map_err(|(_, refusal)| {
-                    auto_complete::PhaseFailure::of(auto_complete::FailureKind::BehindBase, refusal)
-                })?;
+            crate::gate::ci_freshness::ship_behind_base_gate(
+                &self.project_root,
+                &branch,
+                pr as u64,
+                false,
+            )
+            .map_err(|(_, refusal)| {
+                auto_complete::PhaseFailure::of(auto_complete::FailureKind::BehindBase, refusal)
+            })?;
         }
 
         // STORY-516/TASK-669 + BUG-1037: keep the forge CLI-on-PATH guard as a
@@ -2563,7 +2571,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // PR's authors resolved from the spec, its head branch, and what the
         // forge says it ships — checked before head coverage.
         // trace:BUG-1918 | ai:claude
-        let (candidates, approval_policy) = crate::pr_cmd::merge_approval_inputs(
+        let (candidates, approval_policy) = crate::gate::approval::merge_approval_inputs(
             &[self.project_root.as_path(), lease_root.as_path()],
             &lease_root,
             pr as u64,
@@ -2571,7 +2579,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             self.branch.as_deref(),
             head_sha.as_deref(),
         );
-        drain_merge_approval_gate(
+        crate::gate::approval::drain_merge_approval_gate(
             &candidates,
             &approval_policy,
             head_sha.as_deref(),
@@ -2581,24 +2589,25 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // verified, so a push landing between this check and the merge is
         // refused by the forge rather than merged unreviewed.
         // trace:TASK-1458 | ai:claude
-        opts.match_head = drain_merge_match_head(&candidates, head_sha.as_deref());
+        opts.match_head =
+            crate::gate::approval::drain_merge_match_head(&candidates, head_sha.as_deref());
         // STORY-1405: another seat's review in progress on this head stops
         // the drain's merge the same way it stops `aida pr ship`. The drain's
         // own phase-3 marker was released when `run_reviewer` returned.
         // trace:STORY-1405 | ai:claude
-        let review_gate = crate::review_marker::merge_gate(&lease_root, pr as u64, || {
+        let review_gate = crate::gate::review_marker::merge_gate(&lease_root, pr as u64, || {
             pr_head_sha_best_effort(self, pr)
         });
-        if let crate::review_marker::MergeGate::UnderReview(m) = &review_gate {
+        if let crate::gate::review_marker::MergeGate::UnderReview(m) = &review_gate {
             // TASK-1459: this is a live REVIEW, not a merge-LEASE conflict —
             // FailureKind::LeaseConflict previously mislabeled it, so the
             // recovery hint wrongly pointed at `aida merge-lock`.
             return Err(auto_complete::PhaseFailure::of(
                 auto_complete::FailureKind::ReviewInProgress,
-                crate::review_marker::refusal_message(m),
+                crate::gate::review_marker::refusal_message(m),
             ));
         }
-        if let Some(note) = crate::review_marker::proceed_note(&review_gate) {
+        if let Some(note) = crate::gate::review_marker::proceed_note(&review_gate) {
             println!(
                 "  {} {note}",
                 crate::glyph(crate::glyphs::Glyph::Info).cyan()
@@ -2647,11 +2656,11 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                     .map(|s| s.eq_ignore_ascii_case(&want))
                     .unwrap_or(false)
         })?;
-        if pr_ship::merge_requires_supervision(req.execution_mode) {
+        if crate::gate::ship::merge_requires_supervision(req.execution_mode) {
             Some(format!(
                 "{} is marked {} — auto-merge refused; merge requires human/advisor review",
                 self.spec,
-                pr_ship::supervision_mode_label(req.execution_mode)
+                crate::gate::ship::supervision_mode_label(req.execution_mode)
             ))
         } else {
             None
@@ -2665,11 +2674,11 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
     fn record_merge_supervision_hold(&mut self, reason: &str) {
         if let Some(pr) = self.pr_number {
             let pr = u64::from(pr);
-            let _ = crate::merge_hold::write_typed_hold(
+            let _ = crate::gate::merge_hold_core::write_typed_hold(
                 &self.project_root,
-                &crate::merge_hold::typed_hold(
+                &crate::gate::merge_hold_core::typed_hold(
                     pr,
-                    crate::merge_hold::HoldReasonKind::Supervision,
+                    crate::gate::merge_hold_core::HoldReasonKind::Supervision,
                     reason,
                     None,
                 )
@@ -3760,13 +3769,13 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             }
         }
         // trace:BUG-2165 | ai:antigravity
-        let child_grant = match crate::seat_authority::issue_headless_child(
+        let child_grant = match crate::gate::seat_authority::issue_headless_child(
             &self.project_root,
             "implementer",
             &crate::current_user_id(None),
         ) {
             Ok(g) => {
-                if let crate::seat_authority::HeadlessChildGrant::Baseline { cause } = &g {
+                if let crate::gate::seat_authority::HeadlessChildGrant::Baseline { cause } = &g {
                     eprintln!(
                         "  {} {}",
                         crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),

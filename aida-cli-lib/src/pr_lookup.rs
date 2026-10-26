@@ -999,7 +999,7 @@ pub(crate) fn pr_has_merge_hold(
     project_root: &std::path::Path,
     pr: &status_cleanup::OpenPrItem,
 ) -> bool {
-    merge_hold::read_hold(project_root, pr.number).is_some()
+    crate::gate::merge_hold_core::read_hold(project_root, pr.number).is_some()
         || pr
             .labels
             .iter()

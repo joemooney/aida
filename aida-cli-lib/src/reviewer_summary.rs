@@ -195,7 +195,7 @@ pub fn parse_verdict_file(json: &str) -> Option<VerdictFile> {
 /// string. trace:BUG-226 | ai:claude
 fn verdict_label(raw: &str) -> Option<&'static str> {
     // trace:BUG-1505 | ai:claude — the one canonical parser, not a local match.
-    use crate::review_verdict::VerdictKind;
+    use crate::gate::review_verdict::VerdictKind;
     match VerdictKind::parse(raw) {
         VerdictKind::Approved => Some("PASS"),
         VerdictKind::RequestChanges => Some("CHANGES REQUESTED"),

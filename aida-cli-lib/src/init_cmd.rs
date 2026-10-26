@@ -4589,7 +4589,7 @@ pub(crate) fn handle_init_distributed_worktree(
     // STORY-1540: seed the initializer into the new store's team roster if at a direct human TTY.
     let mut roster_seeded = false;
     let mut seeded_user = String::new();
-    if crate::seat_authority::require_direct_human().is_ok() {
+    if crate::gate::seat_authority::require_direct_human().is_ok() {
         let current_user = crate::current_user_id(None);
         seeded_user = current_user.clone();
         std::fs::create_dir_all(store_path.join("registry")).ok();

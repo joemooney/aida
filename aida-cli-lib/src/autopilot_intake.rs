@@ -972,7 +972,7 @@ pub(crate) fn handle_intake_command(
         crate::session::prepare_contained_mailbox_for_launch(&project_root)?;
     }
     let child_grant =
-        seat_authority::issue_child(&project_root, "advisor", &current_user_id(None))?;
+        crate::gate::seat_authority::issue_child(&project_root, "advisor", &current_user_id(None))?;
     let mut command = build_autopilot_intake_command(
         &prompt,
         mode,
@@ -1031,7 +1031,7 @@ pub(crate) fn build_autopilot_intake_command(
     }
     command
         .env("AIDA_SESSION_ROLE", "advisor")
-        .env(seat_authority::GRANT_ENV, child_grant_id)
+        .env(crate::gate::seat_authority::GRANT_ENV, child_grant_id)
         .env("AIDA_INTAKE_APPLY", if apply { "1" } else { "0" })
         .env("AIDA_INTAKE_CANDIDATES", eligible.join(","))
         .env("AIDA_INTAKE_TRIVIAL_PROPOSALS", trivial_proposals.join(","))

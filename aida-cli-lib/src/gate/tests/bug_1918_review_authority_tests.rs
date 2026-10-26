@@ -10,10 +10,10 @@
 // trace:BUG-1918 | ai:claude
 
 use super::*;
-use crate::pr_ship::{
+use crate::gate::review_verdict::{RecordedVerdict, RecorderAttestation, VerdictKind};
+use crate::gate::ship::{
     approval_authority_refusal, ApprovalAuthorityRefusal, AuthorSession, ShipApprovalPolicy,
 };
-use crate::review_verdict::{RecordedVerdict, RecorderAttestation, VerdictKind};
 
 const SPEC: &str = "BUG-91801";
 const HEAD: &str = "1aca4e3e9251aaaaaaaaaaaaaaaaaaaaaaaaaaaa";
@@ -194,7 +194,8 @@ fn author_identity_survives_cwd_change_new_process_and_lease_release() {
     );
     let authors = author_sessions_at(root.path(), &subjects(), None);
     assert_eq!(authors.len(), 1, "the claim record outlives the lease");
-    let refusal = crate::review_author_refusal(&authors, &recorder, true).expect("must refuse");
+    let refusal = crate::gate::review_author::review_author_refusal(&authors, &recorder, true)
+        .expect("must refuse");
     assert!(refusal.contains("cannot approve its own work"), "{refusal}");
 
     // An independent session from the same directory is not the author.
@@ -204,7 +205,10 @@ fn author_identity_survives_cwd_change_new_process_and_lease_release() {
         &[root.path().into()],
         None,
     );
-    assert_eq!(crate::review_author_refusal(&authors, &other, true), None);
+    assert_eq!(
+        crate::gate::review_author::review_author_refusal(&authors, &other, true),
+        None
+    );
 
     // The ledger is also consulted by branch, for a PR whose specs differ.
     assert_eq!(
@@ -226,10 +230,11 @@ fn recorder_inside_the_authoring_worktree_is_the_author() {
     let recorder =
         RecorderIdentity::with_context(vec![], &leases, &[l.worktree_path.clone()], None);
     let authors = author_sessions_at(root.path(), &subjects(), None);
-    assert!(crate::review_author_refusal(&authors, &recorder, true).is_some());
+    assert!(crate::gate::review_author::review_author_refusal(&authors, &recorder, true).is_some());
     // Unresolvable subject: every authoring lease counts (fails closed).
-    let authors = crate::review_recorder_authors(root.path(), &[], None);
-    let refusal = crate::review_author_refusal(&authors, &recorder, false).expect("fails closed");
+    let authors = crate::gate::review_author::review_recorder_authors(root.path(), &[], None);
+    let refusal = crate::gate::review_author::review_author_refusal(&authors, &recorder, false)
+        .expect("fails closed");
     assert!(refusal.contains("could not be resolved"), "{refusal}");
 }
 
@@ -269,7 +274,7 @@ fn review_record_refuses_the_author_session_even_with_a_reviewer_seat() {
         "{err}"
     );
     assert!(
-        crate::review_verdict::read_recorded_verdict(root.path(), SPEC).is_none(),
+        crate::gate::review_verdict::read_recorded_verdict(root.path(), SPEC).is_none(),
         "a refused approval writes no verdict"
     );
 }
@@ -386,7 +391,7 @@ fn operator_label_without_a_receipt_is_unattested_at_ship() {
 fn seat_grant_is_revalidated_against_the_grant_store() {
     let root = tempfile::tempdir().unwrap();
     let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(root.path(), "reviewer", &[]);
-    let grant = crate::seat_authority::current_grant(root.path()).expect("seated");
+    let grant = crate::gate::seat_authority::current_grant(root.path()).expect("seated");
     let now = chrono::Utc::now();
     let in_window = (now + chrono::Duration::minutes(1)).to_rfc3339();
     let before_issue = (grant.issued_at - chrono::Duration::hours(1)).to_rfc3339();
@@ -443,7 +448,7 @@ fn seat_grant_is_revalidated_against_the_grant_store() {
     }
 
     // Revocation before the verdict's timestamp invalidates it.
-    assert!(crate::seat_authority::revoke_current().unwrap());
+    assert!(crate::gate::seat_authority::revoke_current().unwrap());
     let after_revoke = (chrono::Utc::now() + chrono::Duration::minutes(2)).to_rfc3339();
     let v = at("reviewer", &grant.id, &after_revoke);
     assert!(verified_authority_keys(root.path(), &[v]).is_empty());
@@ -457,7 +462,7 @@ fn seat_grant_is_revalidated_against_the_grant_store() {
 fn ship_refuses_grant_attestation_whose_binding_does_not_overlap() {
     let root = tempfile::tempdir().unwrap();
     let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(root.path(), "reviewer", &[]);
-    let grant = crate::seat_authority::current_grant(root.path()).expect("seated");
+    let grant = crate::gate::seat_authority::current_grant(root.path()).expect("seated");
     assert!(!grant.binding.is_empty(), "fixture grants are bound");
     let in_window = (chrono::Utc::now() + chrono::Duration::minutes(1)).to_rfc3339();
     let at = |grant_binding: Vec<String>| {
@@ -513,7 +518,7 @@ fn ship_refuses_grant_attestation_whose_binding_does_not_overlap() {
 #[test]
 fn ship_policy_without_a_store_requires_review() {
     let tmp = tempfile::tempdir().unwrap();
-    let policy = crate::pr_cmd::ship_approval_policy(tmp.path(), &subjects(), None, &[]);
+    let policy = crate::gate::approval::ship_approval_policy(tmp.path(), &subjects(), None, &[]);
     assert_eq!(
         approval_authority_refusal(&[], &policy),
         Some(ApprovalAuthorityRefusal::NoApproval)
@@ -525,8 +530,13 @@ fn ship_policy_without_a_store_requires_review() {
 
 // ── Vendor-neutral agent identity (injected ancestry) ───────────────────────
 
-fn proc(pid: u32, name: &str, cmd: &[&str], start: &str) -> crate::review_authority::ProcEntry {
-    crate::review_authority::ProcEntry {
+fn proc(
+    pid: u32,
+    name: &str,
+    cmd: &[&str],
+    start: &str,
+) -> crate::gate::review_authority::ProcEntry {
+    crate::gate::review_authority::ProcEntry {
         pid,
         name: name.into(),
         cmd: cmd.iter().map(|s| s.to_string()).collect(),
@@ -539,8 +549,8 @@ fn proc(pid: u32, name: &str, cmd: &[&str], start: &str) -> crate::review_author
 fn source_under(
     aida: u32,
     shell: u32,
-    harness: crate::review_authority::ProcEntry,
-    leader: Option<crate::review_authority::ProcEntry>,
+    harness: crate::gate::review_authority::ProcEntry,
+    leader: Option<crate::gate::review_authority::ProcEntry>,
 ) -> IdentitySource {
     IdentitySource {
         session_ids: vec![],
@@ -627,7 +637,7 @@ fn harness_agent_claim_in_one_shell_then_approve_in_another_is_refused() {
             "{}: {err}",
             harness.name
         );
-        assert!(crate::review_verdict::read_recorded_verdict(root.path(), SPEC).is_none());
+        assert!(crate::gate::review_verdict::read_recorded_verdict(root.path(), SPEC).is_none());
 
         // A different harness instance (another agent) is not the author.
         let authors = author_sessions_at(root.path(), &subjects(), None);
@@ -645,7 +655,10 @@ fn harness_agent_claim_in_one_shell_then_approve_in_another_is_refused() {
             ),
             || RecorderIdentity::current(&[]),
         );
-        assert_eq!(crate::review_author_refusal(&authors, &other, true), None);
+        assert_eq!(
+            crate::gate::review_author::review_author_refusal(&authors, &other, true),
+            None
+        );
     }
 }
 
@@ -672,7 +685,7 @@ fn unrecognised_agent_is_bound_by_its_session_leader() {
     let same = with_identity_source(source_under(101, 201, tool.clone(), leader), || {
         RecorderIdentity::current(&[])
     });
-    assert!(crate::review_author_refusal(&authors, &same, true).is_some());
+    assert!(crate::gate::review_author::review_author_refusal(&authors, &same, true).is_some());
 
     let other_leader = Some(proc(61, "", &[], "t1"));
     let other = with_identity_source(
@@ -684,7 +697,10 @@ fn unrecognised_agent_is_bound_by_its_session_leader() {
         ),
         || RecorderIdentity::current(&[]),
     );
-    assert_eq!(crate::review_author_refusal(&authors, &other, true), None);
+    assert_eq!(
+        crate::gate::review_author::review_author_refusal(&authors, &other, true),
+        None
+    );
 }
 
 /// A harness's own session id (e.g. `CLAUDE_CODE_SESSION_ID`) binds claim
@@ -705,7 +721,7 @@ fn harness_session_id_binds_claim_and_record() {
     with_identity_source(src(70), || record_authoring_lease(root.path(), &l));
     let authors = author_sessions_at(root.path(), &subjects(), None);
     let later = with_identity_source(src(71), || RecorderIdentity::current(&[]));
-    assert!(crate::review_author_refusal(&authors, &later, true).is_some());
+    assert!(crate::gate::review_author::review_author_refusal(&authors, &later, true).is_some());
 }
 
 /// MAJOR 6: the ship policy, built from an on-disk ledger, refuses the
@@ -730,7 +746,7 @@ fn ship_policy_from_on_disk_ledger_refuses_the_harness_authors_approval() {
     };
     let v = [approval(Some(att), "2026-10-10T05:30:00Z")];
     let policy = with_identity_source(source_under(102, 202, harness, None), || {
-        crate::pr_cmd::ship_approval_policy(root.path(), &subjects(), Some(&l.branch), &v)
+        crate::gate::approval::ship_approval_policy(root.path(), &subjects(), Some(&l.branch), &v)
     });
     assert_eq!(policy.author_sessions.len(), 1);
     assert!(matches!(
@@ -926,7 +942,8 @@ fn ship_from_main_with_a_renamed_branch_still_finds_the_author() {
     assert!(resolved);
     assert_eq!(branch.as_deref(), Some("renamed-branch"));
     assert_eq!(ids, subjects());
-    let policy = crate::pr_cmd::ship_approval_policy(root.path(), &ids, branch.as_deref(), &v);
+    let policy =
+        crate::gate::approval::ship_approval_policy(root.path(), &ids, branch.as_deref(), &v);
     assert_eq!(policy.author_sessions.len(), 1, "{policy:?}");
     assert!(matches!(
         approval_authority_refusal(&v, &policy),
@@ -940,7 +957,7 @@ fn ship_from_main_with_a_renamed_branch_still_finds_the_author() {
         crate::pr_cmd::pr_gate_subject(root.path(), 2485, &claimed, Some("task-99901-work"));
     assert!(!resolved);
     assert_eq!(ids, claimed);
-    let (_, policy) = crate::pr_cmd::merge_approval_inputs(
+    let (_, policy) = crate::gate::approval::merge_approval_inputs(
         &[root.path()],
         root.path(),
         2485,
@@ -976,10 +993,10 @@ fn worker_with_a_different_session_id_than_the_launcher_is_the_author() {
     }
     // The launcher stamps the worker's process onto the lease.
     let worker = proc(95, "codex", &["codex"], "W");
-    crate::review_authority::record_lease_identity(
+    crate::gate::review_authority::record_lease_identity(
         root.path(),
         &l.id,
-        &[crate::review_authority::process_token(
+        &[crate::gate::review_authority::process_token(
             "proc",
             worker.pid,
             worker.start.as_deref(),
@@ -1000,7 +1017,7 @@ fn worker_with_a_different_session_id_than_the_launcher_is_the_author() {
             RecorderIdentity::current(&[])
         })
     };
-    assert!(crate::review_author_refusal(&authors, &with_id, true).is_some());
+    assert!(crate::gate::review_author::review_author_refusal(&authors, &with_id, true).is_some());
     // The worker with no session id at all: its stamped process binds it.
     let bare = {
         let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_SESSION_ID", None)]);
@@ -1008,7 +1025,7 @@ fn worker_with_a_different_session_id_than_the_launcher_is_the_author() {
             RecorderIdentity::current(&[])
         })
     };
-    assert!(crate::review_author_refusal(&authors, &bare, true).is_some());
+    assert!(crate::gate::review_author::review_author_refusal(&authors, &bare, true).is_some());
     // An unrelated reviewer is not the author.
     let other = {
         let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_SESSION_ID", None)]);
@@ -1017,7 +1034,10 @@ fn worker_with_a_different_session_id_than_the_launcher_is_the_author() {
             || RecorderIdentity::current(&[]),
         )
     };
-    assert_eq!(crate::review_author_refusal(&authors, &other, true), None);
+    assert_eq!(
+        crate::gate::review_author::review_author_refusal(&authors, &other, true),
+        None
+    );
 }
 
 /// `aida agent new` / `aida session start --launch`: the launcher creates a
@@ -1037,15 +1057,19 @@ fn launcher_may_approve_the_worker_it_launched_but_the_worker_may_not() {
             crate::test_env::EnvVarsGuard::apply(&[("AIDA_SESSION_ID", Some("advisor-session"))]);
         with_identity_source(
             source_under(100, 200, launcher_harness.clone(), None),
-            || crate::review_authority::as_launcher(|| record_authoring_lease(root.path(), &l)),
+            || {
+                crate::gate::review_authority::as_launcher(|| {
+                    record_authoring_lease(root.path(), &l)
+                })
+            },
         );
     }
     // The launcher stamps the worker's process onto the lease.
     let worker = proc(95, "codex", &["codex"], "W");
-    crate::review_authority::record_lease_identity(
+    crate::gate::review_authority::record_lease_identity(
         root.path(),
         &l.id,
-        &[crate::review_authority::process_token(
+        &[crate::gate::review_authority::process_token(
             "proc",
             worker.pid,
             worker.start.as_deref(),
@@ -1073,7 +1097,7 @@ fn launcher_may_approve_the_worker_it_launched_but_the_worker_may_not() {
         })
     };
     assert_eq!(
-        crate::review_author_refusal(&authors, &launcher, true),
+        crate::gate::review_author::review_author_refusal(&authors, &launcher, true),
         None,
         "the launcher did not author the worker's commits"
     );
@@ -1087,7 +1111,7 @@ fn launcher_may_approve_the_worker_it_launched_but_the_worker_may_not() {
     };
     assert!(same_shell.tokens.contains(&"shell:4242@t0".to_string()));
     assert_eq!(
-        crate::review_author_refusal(&authors, &same_shell, true),
+        crate::gate::review_author::review_author_refusal(&authors, &same_shell, true),
         None
     );
     // The worker, carrying the lease id as its session id: refused.
@@ -1097,7 +1121,7 @@ fn launcher_may_approve_the_worker_it_launched_but_the_worker_may_not() {
             RecorderIdentity::current(&[])
         })
     };
-    assert!(crate::review_author_refusal(&authors, &with_id, true).is_some());
+    assert!(crate::gate::review_author::review_author_refusal(&authors, &with_id, true).is_some());
     // The worker with no session id: its stamped process binds it.
     let bare = {
         let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_SESSION_ID", None)]);
@@ -1105,7 +1129,7 @@ fn launcher_may_approve_the_worker_it_launched_but_the_worker_may_not() {
             RecorderIdentity::current(&[])
         })
     };
-    assert!(crate::review_author_refusal(&authors, &bare, true).is_some());
+    assert!(crate::gate::review_author::review_author_refusal(&authors, &bare, true).is_some());
 }
 
 /// `aida worktree add` / `enter` / `do-guided` are the implementer claiming
@@ -1157,7 +1181,7 @@ fn implementer_claim_via_worktree_add_cannot_self_approve_from_main() {
         })
     };
     assert!(
-        crate::review_author_refusal(&authors, &from_main, true).is_some(),
+        crate::gate::review_author::review_author_refusal(&authors, &from_main, true).is_some(),
         "the implementer approving its own work from main is refused"
     );
     let policy = ShipApprovalPolicy {
@@ -1166,7 +1190,7 @@ fn implementer_claim_via_worktree_add_cannot_self_approve_from_main() {
         ..Default::default()
     };
     assert!(
-        crate::pr_ship::stale_override_refusal(&policy).is_some(),
+        crate::gate::ship::stale_override_refusal(&policy).is_some(),
         "the implementer cannot override a stale approval of its own work"
     );
 }
@@ -1218,7 +1242,11 @@ fn launched_worker_is_bound_by_the_real_launch_binding() {
             crate::test_env::EnvVarsGuard::apply(&[("AIDA_SESSION_ID", Some("advisor-session"))]);
         with_identity_source(
             source_under(100, 200, launcher_harness.clone(), None),
-            || crate::review_authority::as_launcher(|| record_authoring_lease(root.path(), &l)),
+            || {
+                crate::gate::review_authority::as_launcher(|| {
+                    record_authoring_lease(root.path(), &l)
+                })
+            },
         );
     }
     // Spawn a real worker the way `run_tracked_agent` does.
@@ -1226,14 +1254,14 @@ fn launched_worker_is_bound_by_the_real_launch_binding() {
     cmd.args(["-c", "printf '%s\\n' \"$AIDA_SESSION_ID\"; exec sleep 30"])
         .env("AIDA_SESSION_ID", "advisor-session")
         .stdout(std::process::Stdio::piped());
-    crate::review_authority::bind_worker_env(&mut cmd, &l.id);
+    crate::gate::review_authority::bind_worker_env(&mut cmd, &l.id);
     let mut child = cmd.spawn().expect("spawn worker");
-    crate::review_authority::record_launched_worker(root.path(), &l.id, child.id());
+    crate::gate::review_authority::record_launched_worker(root.path(), &l.id, child.id());
     let mut seen = String::new();
     std::io::BufReader::new(child.stdout.take().unwrap())
         .read_line(&mut seen)
         .unwrap();
-    let worker = crate::review_authority::ProcEntry {
+    let worker = crate::gate::review_authority::ProcEntry {
         pid: child.id(),
         name: "claude".into(),
         cmd: vec!["claude".into()],
@@ -1265,13 +1293,13 @@ fn launched_worker_is_bound_by_the_real_launch_binding() {
     };
     let _ = child.kill();
     let _ = child.wait();
-    assert!(crate::review_author_refusal(&authors, &with_env, true).is_some());
+    assert!(crate::gate::review_author::review_author_refusal(&authors, &with_env, true).is_some());
     assert!(
-        crate::review_author_refusal(&authors, &bare, true).is_some(),
+        crate::gate::review_author::review_author_refusal(&authors, &bare, true).is_some(),
         "the worker's real process identity binds it without the env"
     );
     assert_eq!(
-        crate::review_author_refusal(&authors, &launcher, true),
+        crate::gate::review_author::review_author_refusal(&authors, &launcher, true),
         None
     );
 }
@@ -1281,7 +1309,7 @@ fn launched_worker_is_bound_by_the_real_launch_binding() {
 /// written.
 #[test]
 fn an_unanchored_identity_cannot_record_an_approval() {
-    use crate::review_authority::has_identity_anchor;
+    use crate::gate::review_authority::has_identity_anchor;
     assert!(!has_identity_anchor(&[]));
     assert!(!has_identity_anchor(&["lease:aaaabbbb1111".into()]));
     assert!(!has_identity_anchor(&["session: ".into(), "proc:".into()]));
@@ -1314,7 +1342,7 @@ fn an_unanchored_identity_cannot_record_an_approval() {
         err.to_string().contains("no identity AIDA can bind"),
         "{err}"
     );
-    assert!(crate::review_verdict::read_recorded_verdict(root.path(), SPEC).is_none());
+    assert!(crate::gate::review_verdict::read_recorded_verdict(root.path(), SPEC).is_none());
 }
 
 /// Source-shape guards: `aida release --after-pr`, burndown's wave merge and

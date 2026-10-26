@@ -1412,7 +1412,7 @@ fn current_file_readers_are_unchanged_by_the_archive() {
     assert_eq!(top, vec![verdict_path(root, "PR-11")]);
 
     // The TASK-1448 merge-gate candidate set is unchanged: one PR-keyed record.
-    let cands = crate::pr_ship::merge_gate_verdict_candidates(&[root], 11, &[], None);
+    let cands = crate::gate::ship::merge_gate_verdict_candidates(&[root], 11, &[], None);
     assert_eq!(cands.len(), 1);
     assert_eq!(cands[0].kind, VerdictKind::Approved);
 }
@@ -1590,21 +1590,21 @@ fn merge_gate_candidates_include_the_archived_verdict_at_head() {
     // A later round at a different commit replaces the current file.
     record_pr(root, "PR-20", "request-changes", SHA_R2, "reviewer-b", &[]);
 
-    let without_head = crate::pr_ship::merge_gate_verdict_candidates(&[root], 20, &[], None);
+    let without_head = crate::gate::ship::merge_gate_verdict_candidates(&[root], 20, &[], None);
     assert_eq!(without_head.len(), 1);
-    let at_head = crate::pr_ship::merge_gate_verdict_candidates(&[root], 20, &[], Some(SHA_R1));
+    let at_head = crate::gate::ship::merge_gate_verdict_candidates(&[root], 20, &[], Some(SHA_R1));
     assert_eq!(at_head.len(), 2);
     assert!(at_head
         .iter()
         .any(|v| v.kind == VerdictKind::Approved && v.reviewed_sha.as_deref() == Some(SHA_R1)));
     // The approval covers the head, so the TASK-1448 gate passes.
     assert_eq!(
-        crate::pr_ship::approval_head_refusal(&at_head, Some(SHA_R1)),
+        crate::gate::ship::approval_head_refusal(&at_head, Some(SHA_R1)),
         None
     );
     // When the current file is already at head nothing is duplicated.
     let current_head =
-        crate::pr_ship::merge_gate_verdict_candidates(&[root], 20, &[], Some(SHA_R2));
+        crate::gate::ship::merge_gate_verdict_candidates(&[root], 20, &[], Some(SHA_R2));
     assert_eq!(current_head.len(), 1);
 }
 
@@ -2076,9 +2076,10 @@ fn task1801_ship_and_phase_gates_refuse_linked_verdicts() {
     let path = verdict_path(root, "PR-30");
     let dir = root.join(".aida/review-verdicts");
     let gates_accept = || {
-        let cands = crate::pr_ship::merge_gate_verdict_candidates(&[root], 30, &[], Some(SHA_R1));
-        let pin = crate::pr_ship::approved_match_head(&cands, Some(SHA_R1));
-        let ship = crate::merge_hold::enforce_corpus_gate_before_merge(
+        let cands =
+            crate::gate::ship::merge_gate_verdict_candidates(&[root], 30, &[], Some(SHA_R1));
+        let pin = crate::gate::ship::approved_match_head(&cands, Some(SHA_R1));
+        let ship = crate::gate::merge_hold_core::enforce_corpus_gate_before_merge(
             root,
             30,
             &[],
@@ -2323,7 +2324,7 @@ fn per_sha_archive_carries_unarchived_rounds() {
 // trace:TASK-1801 | ai:codex
 #[test]
 fn task1801_retained_history_rejects_linked_archive_entries_and_directories() {
-    use crate::rework_hold_release::RetainedHistory;
+    use crate::gate::rework_hold_release::RetainedHistory;
     use std::os::unix::fs::symlink;
     let tmp = TempDir::new().unwrap();
     let dir = tmp.path().join(".aida/review-verdicts");
@@ -2360,7 +2361,7 @@ fn task1801_retained_history_rejects_linked_archive_entries_and_directories() {
 // trace:TASK-1801 | ai:claude
 #[test]
 fn task1801_record_refuses_to_rewrite_a_refused_archive_entry() {
-    use crate::rework_hold_release::RetainedHistory;
+    use crate::gate::rework_hold_release::RetainedHistory;
     let tmp = TempDir::new().unwrap();
     let dir = tmp.path().join(".aida/review-verdicts");
     std::fs::create_dir_all(&dir).unwrap();

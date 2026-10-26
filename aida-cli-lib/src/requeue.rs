@@ -92,7 +92,7 @@ impl ClearedMarkers {
 /// is NOT enough, because a non-TTY advisor agent and an orchestrated drain
 /// phase both hold it.
 pub(crate) fn may_clear_escalation(human_present: bool) -> bool {
-    crate::integrity_floor_authority_from(human_present)
+    crate::gate::role_authority::integrity_floor_authority_from(human_present)
 }
 
 /// The same decision for the running process: stdin is a terminal. Always
@@ -693,8 +693,14 @@ mod tests {
         assert!(may_clear_escalation(true));
         // Non-TTY advisor agent, and an orchestrated drain phase: both hold
         // advisor authority but no human is present.
-        assert!(crate::advisor_authority_from("advisor", false, false));
-        assert!(crate::advisor_authority_from("implementer", false, true));
+        assert!(crate::gate::role_authority::advisor_authority_from(
+            "advisor", false, false
+        ));
+        assert!(crate::gate::role_authority::advisor_authority_from(
+            "implementer",
+            false,
+            true
+        ));
         assert!(!may_clear_escalation(false));
     }
 
