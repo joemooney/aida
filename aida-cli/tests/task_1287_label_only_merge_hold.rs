@@ -745,9 +745,33 @@ fn drive_merge_during_wait_skips_ci_and_merge_without_claiming_credit() {
 // trace:TASK-1606 | ai:codex
 #[test]
 fn ownership_and_ci_share_one_wait_deadline() {
-    use std::io::{BufRead, BufReader};
+    use std::io::{BufRead, BufReader, Write};
     let fixture = Fixture::new(false);
     let path = drive_state(&fixture);
+    // TASK-2354: the drive state is a FIFO the fixture serves one probe at a
+    // time, so release is ordered by the child's own reads, not by the test
+    // thread beating the two-second ownership sleep. Probe 1 reads the
+    // owning state. Probe 2 blocks in open() until the test has seen the
+    // waiting line, then finds the path unlinked and an empty body, which
+    // reads exactly like a removed file. trace:TASK-2354 | ai:claude
+    let owning = std::fs::read(&path).unwrap();
+    std::fs::remove_file(&path).unwrap();
+    let mkfifo = Command::new("mkfifo").arg(&path).status().unwrap();
+    assert!(mkfifo.success(), "mkfifo {}", path.display());
+    let (release, released) = std::sync::mpsc::channel::<()>();
+    let server = std::thread::spawn(move || {
+        let open = || std::fs::OpenOptions::new().write(true).open(&path);
+        open().unwrap().write_all(&owning).unwrap();
+        if released.recv().is_err() {
+            return false;
+        }
+        let writer = open().unwrap();
+        // Unlink while the reader holds the FIFO open: any later read sees
+        // a missing file instead of blocking on an unserved FIFO.
+        std::fs::remove_file(&path).unwrap();
+        drop(writer);
+        true
+    });
     std::fs::write(
         fixture.state.join("rows"),
         r#"[{"name":"Build","workflow":"CI","bucket":"pending"}]"#,
@@ -785,7 +809,7 @@ fn ownership_and_ci_share_one_wait_deadline() {
     }
     // The ownership poll consumes the budget, then release leads into CI
     // with no new two-second allowance.
-    std::fs::remove_file(path).unwrap();
+    release.send(()).unwrap();
     child.stderr = Some(stderr.into_inner());
     let output = child.wait_with_output().unwrap();
     let _ = finished.send(());
@@ -800,6 +824,8 @@ fn ownership_and_ci_share_one_wait_deadline() {
     // Ownership was released (not timed out) and the CI wait, not the
     // ownership wait, refused — naming the real pending check.
     assert!(!text.contains("Drive ownership wait timed out"), "{text}");
+    // Release happened, so the server already handed probe 2 its writer.
+    assert!(server.join().unwrap(), "release was never served");
     assert!(text.contains("still pending: Build"), "{text}");
     // TASK-2348: the ownership wait spent the whole two seconds, so CI got
     // a ZERO remainder: exactly one row observation and no re-poll. A

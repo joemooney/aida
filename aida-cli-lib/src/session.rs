@@ -2583,12 +2583,15 @@ pub(crate) fn require_vendor_containment(
     contained: bool,
     what: &str,
 ) -> Result<()> {
+    // BUG-2223: the fix leads, on the first line; a seat left at a codex
+    // default hit this on every headless launch and the remedy sat at the end.
+    // trace:BUG-2223 | ai:claude
     if contained && !containment_applied(vendor, true) {
         anyhow::bail!(
-            "[contained] containment was requested (--sandbox, AIDA_CONTAINED, or \
-             [agents] contained), but the `{}` vendor cannot run a contained session — \
-             refusing to launch the {what} uncontained. Re-run on claude (--vendor claude \
-             or AIDA_HEADLESS_VENDOR=claude) or turn containment off for this run.",
+            "the `{}` vendor cannot run a contained session: re-run with --vendor claude or \
+             AIDA_HEADLESS_VENDOR=claude, or turn containment off for this run\n  \
+             [contained] containment was requested (--sandbox, AIDA_CONTAINED, or [agents] \
+             contained), so aida is refusing to launch the {what} uncontained.",
             vendor.as_str()
         );
     }
@@ -2626,11 +2629,13 @@ pub(crate) fn child_containment_preflight(
     if !contained {
         return Ok(());
     }
+    // trace:BUG-2223 | ai:claude
     if !containment_applied(vendor, true) {
         anyhow::bail!(
-            "[contained] this drain is contained, but the `{}` vendor cannot run a contained \
-             session — refusing to launch the {child} uncontained. Run the drain on claude \
-             (AIDA_HEADLESS_VENDOR=claude) or turn containment off for this drain.",
+            "the `{}` vendor cannot run a contained session: run the drain on claude \
+             (AIDA_HEADLESS_VENDOR=claude or --vendor claude), or turn containment off for \
+             this drain\n  [contained] this drain is contained, so aida is refusing to launch \
+             the {child} uncontained.",
             vendor.as_str()
         );
     }

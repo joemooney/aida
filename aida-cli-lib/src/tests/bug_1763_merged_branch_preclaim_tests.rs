@@ -204,7 +204,9 @@ fn preclaim_block_probes_forge_not_ancestry() {
         .unwrap()
         .1;
     let guard_start = work.find("// BUG-1761: the suffix allocator").unwrap();
-    let claim = work.find("    session_start(").unwrap();
+    let claim = work
+        .find("crate::session_start::session_start_with_receipt(")
+        .unwrap();
     let preclaim_block = &work[guard_start..claim];
     assert!(
         preclaim_block.contains("detect_merged_pr_for_branch_via_forge"),

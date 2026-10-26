@@ -2571,6 +2571,19 @@ command = "cache refresh --history --if-behind"
 every = "15m"
 enabled = true
 
+# STORY-1917: execute pending `take` and `impl` dispatch requests outside any
+# agent sandbox. `while` gates the 2-minute cadence: the tick runs (and the
+# schedule ledger is written) only while a mandate covering `dispatch` is
+# active and requests are pending, so with no dispatch mandate it never runs.
+# `review`, `flow`, and `train` remain Pending (`waiting for serve`).
+# trace:STORY-1917 | ai:agy
+[[schedule.jobs]]
+name = "dispatch-tick"
+command = "dispatch tick"
+every = "2m"
+while = "mandate.dispatch_active == true && dispatch.pending > 0"
+enabled = true
+
 # The performance guard. Scaffolded DISABLED and commented, deliberately: a
 # project has nothing to guard until it declares a budget under
 # [performance.budgets], and a job that runs against an empty budget list would
@@ -2770,6 +2783,7 @@ mod story_1226_init_schedule_section_tests {
             // trace:TASK-1527 | ai:claude
             "cache-refresh-tick",
             "history-index-tick",
+            "dispatch-tick",
             "groom-drafts",
             "hub-drift-guard",
             "hub-drift-guard-route",
@@ -2791,12 +2805,24 @@ mod story_1226_init_schedule_section_tests {
         assert!(section.contains("when = \"mail.oldest_unread_age > 15m\""));
         let parsed: toml::Value = toml::from_str(section).expect("defaults parse");
         let jobs = parsed["schedule"]["jobs"].as_array().unwrap();
-        // The history tick joins the four existing enabled defaults.
+        // The history tick and dispatch-tick join the four existing enabled defaults.
         // trace:STORY-1661 | ai:codex
-        assert_eq!(jobs.len(), 5);
+        // trace:STORY-1917 | ai:agy
+        assert_eq!(jobs.len(), 6);
         assert!(jobs
             .iter()
             .all(|job| job["enabled"].as_bool() == Some(true)));
+        let dispatch = jobs
+            .iter()
+            .find(|job| job["name"].as_str() == Some("dispatch-tick"))
+            .expect("dispatch-tick scaffolded");
+        assert_eq!(dispatch["command"].as_str(), Some("dispatch tick"));
+        assert_eq!(dispatch["every"].as_str(), Some("2m"));
+        assert!(dispatch.get("when").is_none());
+        assert_eq!(
+            dispatch["while"].as_str(),
+            Some("mandate.dispatch_active == true && dispatch.pending > 0")
+        );
         // trace:TASK-1527 | ai:claude
         let tick = jobs
             .iter()

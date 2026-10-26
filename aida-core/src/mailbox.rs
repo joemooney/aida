@@ -495,7 +495,7 @@ impl Message {
     /// Is this message visible in `agent`'s inbox? Addressed to it directly or
     /// broadcast — but not its own sent messages (an agent doesn't inbox what
     /// it sent, including its own broadcasts).
-    fn addressed_to(&self, agent: &str) -> bool {
+    pub(crate) fn addressed_to(&self, agent: &str) -> bool {
         if self.deleted {
             return false;
         }
