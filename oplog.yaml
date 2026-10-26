@@ -78097,5 +78097,17 @@ operations:
     req_type: Bug
     status: Draft
     priority: High
-clock: 6062
+- id: 01a17a61-2cf8-7bf3-9cc6-d32f7908c0c1
+  target_id: 01a17a61-25ff-7271-a738-b8a8309334d5
+  author: aida
+  node_id: '1'
+  lamport: 6063
+  timestamp: 2026-10-26T22:42:31.288927626Z
+  kind: !Create
+    title: 'Review PR-2955: [AI:claude] fix(queue-work): review follow-ups from #2934 and #2942'
+    description: 'Hand-filed review story: auto-queue found no REQ-ID trailers because the node-local TASK-b6b1...-00N IDs in the commit subjects are not recognised by the trailer parser.'
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 6063
 node_id: '1'

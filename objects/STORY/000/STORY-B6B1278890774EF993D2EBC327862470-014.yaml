@@ -1,0 +1,19 @@
+id: 01a17a61-25ff-7271-a738-b8a8309334d5
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-014
+title: 'Review PR-2955: [AI:claude] fix(queue-work): review follow-ups from #2934 and #2942'
+description: 'Hand-filed review story: auto-queue found no REQ-ID trailers because the node-local TASK-b6b1...-00N IDs in the commit subjects are not recognised by the trailer parser.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-26T22:42:29.503097262Z
+modified_at: 2026-10-26T22:42:29.503097262Z
+req_type: Story
+filed_at:
+  code_sha: 773015b8d26e43b909b379eea62d14b9d357f8fa
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f34fd14323
+  vendor: claude
+  session: 761a4fea-f388-41d1-93d9-f1386951253c
