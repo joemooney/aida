@@ -5,9 +5,34 @@
     {
       "at": "2026-10-26T06:31:03.424199179Z",
       "closed_by": "queue-done"
+    },
+    {
+      "at": "2026-10-26T14:46:18.186368078Z",
+      "closed_by": "auto-bump"
     }
   ],
   "events": [
+    {
+      "ts": "2026-10-25T23:06:39.531622398Z",
+      "spec": "TASK-2354",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-26T05:57:44.425030774Z",
+      "spec": "TASK-2354",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
     {
       "ts": "2026-10-26T05:58:10.008355411Z",
       "spec": "TASK-2354",
@@ -16,6 +41,45 @@
         "event": "DispositionChanged",
         "before": "In Progress",
         "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-26T09:53:25.554377161Z",
+      "spec": "TASK-2354",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-2354",
+        "branch": "pr-2942",
+        "first_seen": "2026-10-26T09:53:25.554329384+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-26T09:53:25.572699968Z",
+      "spec": "TASK-2354",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-2354",
+        "branch": "origin/task-2354",
+        "first_seen": "2026-10-26T09:53:25.572648538+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-26T14:45:20.151711193Z",
+      "spec": "TASK-2354",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2942
+      }
+    },
+    {
+      "ts": "2026-10-26T14:46:18.023917378Z",
+      "spec": "TASK-2354",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "671c0d62a3c7b204fc86dd9d5524393cb0cb213d",
+        "pr": 2942,
+        "closed_by": "auto-bump"
       }
     }
   ]
