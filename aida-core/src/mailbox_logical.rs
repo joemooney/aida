@@ -1,0 +1,1131 @@
+//! Read-only logical mailbox snapshot across the product worktrees of one
+//! repository (STORY-1843 slice B1).
+//!
+//! Every ordinary reader today composes its own view of "my mail" from one
+//! checkout's local `.aida/mailbox/` plus the canonical store mailbox, so a
+//! message written in a sibling worktree is invisible from main. This module
+//! is the one composition: a typed [`MailboxContext`] that keeps the requested
+//! checkout independent of the canonical store root, a bounded inventory of
+//! the Git-registered product worktrees of the SAME common Git directory, and
+//! a pure-inspection [`logical_snapshot`] that reconciles messages by
+//! immutable ID, filters to the resolved audience before anything is
+//! projected, and reports per-source coverage and typed errors.
+//!
+//! The snapshot never writes: no receipts, watermarks, markers or directories
+//! are created. An empty `records` list means nothing on its own — callers use
+//! [`LogicalSnapshot::caught_up`], which is `None` unless every source was
+//! fully observed. Retention of mail from retired worktrees is not
+//! established here (signed slice C), and ACK is signed slice B2.
+//!
+//! Source-local write paths (digest, archive/retract/delete, migration,
+//! lifecycle) keep using the explicit per-source readers in
+//! [`crate::mailbox`]; this global view grants no write scope.
+// trace:STORY-1843 | ai:claude
+
+use crate::mailbox::{message_state_rank, Message, Recipient};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::ffi::{CStr, CString, OsStr};
+use std::fs::File;
+use std::io::Read;
+use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
+use std::os::unix::ffi::OsStrExt;
+use std::os::unix::fs::MetadataExt;
+use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
+
+/// Branch the canonical store worktree checks out; never a product source.
+const STORE_BRANCH: &str = "refs/heads/aida-store";
+/// Upper bound on `git worktree list` output.
+const INVENTORY_BYTES: usize = 1024 * 1024;
+/// Upper bound on small pointer/watermark/receipt files.
+const SMALL_FILE: u64 = 4096;
+
+/// Why a source (or the inventory) could not be fully observed. Codes are
+/// safe to show: they never carry message filenames, bodies or recipients.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SourceErrorCode {
+    /// The path is not a Git worktree root.
+    NotAGitCheckout,
+    /// The source belongs to a different common Git directory.
+    CommonGitMismatch,
+    /// A registered worktree is gone from disk.
+    WorktreeMissing,
+    /// Git reports the registered worktree as prunable.
+    WorktreePrunable,
+    /// `git worktree list` failed or was refused.
+    InventoryFailed,
+    /// More worktrees, inventory bytes or time than the read limits allow.
+    InventoryOverBudget,
+    /// A symlink, hardlink, FIFO or other non-regular entry.
+    UnsafeEntry,
+    /// Not owned by the current user, or world-writable.
+    OwnershipRefused,
+    /// An I/O error other than absence.
+    Unreadable,
+    /// A message file that does not parse, or carries an unsafe ID.
+    CorruptMessage,
+    /// The mailbox path is a layout manifest or other non-directory.
+    LayoutUnsupported,
+    /// Entry, byte or time budget exhausted while reading the source.
+    OverBudget,
+    /// The source directory was replaced while it was being read.
+    SourceChanged,
+    /// A watermark or read receipt that does not parse.
+    CorruptReceipt,
+}
+
+/// The checkout the caller is reading from. Never replaced by main or the
+/// store's parent: a pooled checkout without a `.aida-store` alias still
+/// reads its own local mailbox.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CheckoutRoot(PathBuf);
+
+impl CheckoutRoot {
+    pub fn path(&self) -> &Path {
+        &self.0
+    }
+}
+
+/// The canonical store worktree root (its `mailbox/` is the canonical layer).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StoreRoot(PathBuf);
+
+impl StoreRoot {
+    pub fn path(&self) -> &Path {
+        &self.0
+    }
+}
+
+/// The canonicalized common Git directory every source must share.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VerifiedCommonGit(PathBuf);
+
+impl VerifiedCommonGit {
+    pub fn path(&self) -> &Path {
+        &self.0
+    }
+}
+
+/// What the context knows about the canonical layer.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CanonicalCoverage {
+    /// No store was located for this repository.
+    NotConfigured,
+    /// A verified store worktree of the same common Git directory.
+    Store(StoreRoot),
+    /// A store was named but could not be verified; its mail is not read.
+    Refused(SourceErrorCode),
+}
+
+/// Typed facts a logical read starts from, resolved before any mail is read.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MailboxContext {
+    requested_checkout: CheckoutRoot,
+    repository: VerifiedCommonGit,
+    canonical: CanonicalCoverage,
+}
+
+impl MailboxContext {
+    /// Verify `checkout` (a worktree root) and, independently, the store
+    /// root located for it (`None` when no store exists). A store of another
+    /// common Git directory is refused, not read.
+    pub fn resolve(checkout: &Path, store: Option<&Path>) -> Result<Self, SourceErrorCode> {
+        let checkout =
+            std::fs::canonicalize(checkout).map_err(|_| SourceErrorCode::NotAGitCheckout)?;
+        let repository = common_git_of(&checkout)?;
+        let canonical = match store {
+            None => CanonicalCoverage::NotConfigured,
+            Some(store) => match std::fs::canonicalize(store) {
+                Err(_) => CanonicalCoverage::Refused(SourceErrorCode::WorktreeMissing),
+                Ok(store) => match common_git_of(&store) {
+                    Ok(common) if common == repository => {
+                        CanonicalCoverage::Store(StoreRoot(store))
+                    }
+                    Ok(_) => CanonicalCoverage::Refused(SourceErrorCode::CommonGitMismatch),
+                    Err(code) => CanonicalCoverage::Refused(code),
+                },
+            },
+        };
+        Ok(Self {
+            requested_checkout: CheckoutRoot(checkout),
+            repository: VerifiedCommonGit(repository),
+            canonical,
+        })
+    }
+
+    pub fn requested_checkout(&self) -> &CheckoutRoot {
+        &self.requested_checkout
+    }
+
+    pub fn repository(&self) -> &VerifiedCommonGit {
+        &self.repository
+    }
+
+    pub fn canonical(&self) -> &CanonicalCoverage {
+        &self.canonical
+    }
+}
+
+/// Recipient keys a reader is authorized for, classified. Built only from
+/// the output of the mailbox identity policy (the CLI's
+/// `inbox_identities_from_facts`), never from a raw `--agent` argument or an
+/// inherited environment value.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ResolvedAudience {
+    private: Vec<String>,
+    human: Vec<String>,
+    shared: Vec<String>,
+}
+
+impl ResolvedAudience {
+    /// `private`: this session's own handle/name; `human`: intentional
+    /// people-catalog inboxes; `shared`: role and vendor audiences. Each key
+    /// must be a bounded mailbox identity.
+    pub fn from_identity_policy(
+        private: Vec<String>,
+        human: Vec<String>,
+        shared: Vec<String>,
+    ) -> Result<Self, String> {
+        for key in private.iter().chain(&human).chain(&shared) {
+            if key.is_empty()
+                || key.len() > 128
+                || key.chars().any(|c| c.is_control() || c == '/' || c == '\\')
+            {
+                return Err("audience key is not a bounded mailbox identity".into());
+            }
+        }
+        Ok(Self {
+            private,
+            human,
+            shared,
+        })
+    }
+
+    fn keys(&self) -> impl Iterator<Item = &str> {
+        self.private
+            .iter()
+            .chain(&self.human)
+            .chain(&self.shared)
+            .map(String::as_str)
+    }
+
+    /// Audience keys this message is addressed to: direct or broadcast,
+    /// never the key's own sent mail, never a deleted message.
+    fn matching_keys<'a>(&'a self, m: &Message) -> Vec<&'a str> {
+        if m.deleted {
+            return Vec::new();
+        }
+        self.keys()
+            .filter(|key| {
+                m.from != *key
+                    && match &m.to {
+                        Recipient::Agent(a) => a == *key,
+                        Recipient::Broadcast => true,
+                    }
+            })
+            .collect()
+    }
+}
+
+/// What the snapshot is asked for.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Query {
+    /// Every message visible to the audience.
+    Inbox,
+    /// One message by exact ID.
+    ExactId(String),
+    /// The visible members of one thread.
+    Thread(String),
+}
+
+/// One shared budget for a whole snapshot: inventory, sources and receipts
+/// all draw from the same deadline, root, entry and byte limits.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ReadLimits {
+    pub deadline: Instant,
+    pub max_roots: usize,
+    pub max_entries: usize,
+    pub max_message_bytes: u64,
+    pub max_total_bytes: u64,
+}
+
+impl ReadLimits {
+    /// The bounded foreground profile for an explicit read (2 s). Passive
+    /// callers pass their own shorter deadline.
+    pub fn explicit_read() -> Self {
+        Self::with_deadline(Instant::now() + Duration::from_secs(2))
+    }
+
+    pub fn with_deadline(deadline: Instant) -> Self {
+        Self {
+            deadline,
+            max_roots: 512,
+            max_entries: 16_384,
+            max_message_bytes: 1024 * 1024,
+            max_total_bytes: 32 * 1024 * 1024,
+        }
+    }
+}
+
+/// Where a source lives.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SourceKind {
+    /// A product worktree's `.aida/mailbox/`.
+    Local(PathBuf),
+    /// The store worktree's `mailbox/`, read once per snapshot.
+    Canonical(PathBuf),
+}
+
+/// How one source was observed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SourceStatus {
+    /// Fully read; `messages` files parsed.
+    Observed { messages: usize },
+    /// The source exists but has no mailbox yet (a successful observation).
+    Absent,
+    /// Could not be fully observed; its mail may be missing from the view.
+    Error(SourceErrorCode),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SourceReport {
+    pub kind: SourceKind,
+    pub status: SourceStatus,
+}
+
+/// Where one replica of a record was read: the index into
+/// [`LogicalSnapshot::sources`] and the SHA-256 of its raw bytes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Provenance {
+    pub source: usize,
+    pub fingerprint: String,
+}
+
+/// Read evidence for one visible record, for the key it is addressed to.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ReadEvidence {
+    /// An explicit per-ID receipt in a local source.
+    Acknowledged { source: usize, key: String, at: i64 },
+    /// Covered only by a legacy timestamp watermark in a local source that
+    /// physically holds this ID. Compatibility evidence: not proof the ID was
+    /// present when the watermark was set, and carries no read time.
+    LegacyWatermark { source: usize, key: String },
+    /// No evidence of a read.
+    Unread,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SnapshotRecord {
+    pub message: Message,
+    pub provenance: Vec<Provenance>,
+    pub read: ReadEvidence,
+}
+
+/// Retention of mail from retired worktrees. Always unestablished until the
+/// retention barrier (signed slice C) exists: a removed worktree's mail is
+/// not covered by this snapshot.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RetentionCoverage {
+    Unestablished,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LogicalSnapshot {
+    /// Visible, reconciled records, oldest first.
+    pub records: Vec<SnapshotRecord>,
+    /// IDs of visible messages whose replicas disagree; never projected.
+    pub conflicts: Vec<String>,
+    pub sources: Vec<SourceReport>,
+    pub inventory_error: Option<SourceErrorCode>,
+    pub canonical: CanonicalCoverage,
+    pub retention: RetentionCoverage,
+    /// For [`Query::ExactId`]: `Some(false)` only when coverage is complete.
+    pub exact_found: Option<bool>,
+}
+
+impl LogicalSnapshot {
+    /// Every inventoried source, the canonical layer (when configured) and
+    /// every receipt lookup was fully observed.
+    pub fn complete(&self) -> bool {
+        self.inventory_error.is_none()
+            && !matches!(self.canonical, CanonicalCoverage::Refused(_))
+            && self
+                .sources
+                .iter()
+                .all(|s| !matches!(s.status, SourceStatus::Error(_)))
+            && self.conflicts.is_empty()
+    }
+
+    /// Records with no read evidence (archived records excluded).
+    pub fn unread_ids(&self) -> Vec<&str> {
+        self.records
+            .iter()
+            .filter(|r| !r.message.archived && r.read == ReadEvidence::Unread)
+            .map(|r| r.message.id.as_str())
+            .collect()
+    }
+
+    /// `Some(true)` only when coverage is complete and nothing is unread;
+    /// `None` when any source is partial — never "empty means caught up".
+    pub fn caught_up(&self) -> Option<bool> {
+        self.complete().then(|| self.unread_ids().is_empty())
+    }
+}
+
+/// Take a pure-inspection snapshot for `audience`. Never writes.
+pub fn logical_snapshot(
+    ctx: &MailboxContext,
+    audience: &ResolvedAudience,
+    query: &Query,
+    limits: &ReadLimits,
+) -> LogicalSnapshot {
+    let mut budget = Budget::new(limits);
+    let (roots, inventory_error) = inventory(ctx, &budget);
+    let mut sources = Vec::new();
+    let mut observed: Vec<Option<ObservedSource>> = Vec::new();
+    for root in roots {
+        let (path, result) = match root {
+            Err((path, code)) => (path, Err(code)),
+            Ok(path) => {
+                let result = read_source(&path, &[".aida", "mailbox"], &mut budget);
+                (path, result)
+            }
+        };
+        let (status, obs) = observation(result);
+        sources.push(SourceReport {
+            kind: SourceKind::Local(path),
+            status,
+        });
+        observed.push(obs);
+    }
+    let local_count = sources.len();
+    // The canonical layer is read exactly once, however many worktrees
+    // carry a `.aida-store` alias to it.
+    if let CanonicalCoverage::Store(store) = &ctx.canonical {
+        let (status, obs) = observation(read_source(store.path(), &["mailbox"], &mut budget));
+        sources.push(SourceReport {
+            kind: SourceKind::Canonical(store.path().to_path_buf()),
+            status,
+        });
+        observed.push(obs);
+    }
+
+    let (mut records, conflicts) = reconcile(&observed, local_count, audience);
+    records.retain(|(m, _)| match query {
+        Query::Inbox => true,
+        Query::ExactId(id) => &m.id == id,
+        Query::Thread(thread) => &m.thread_id == thread,
+    });
+
+    let mut out_records = Vec::with_capacity(records.len());
+    for (message, provenance) in records {
+        let read = read_evidence(
+            &message,
+            &provenance,
+            &observed,
+            local_count,
+            audience,
+            &mut sources,
+            &mut budget,
+        );
+        out_records.push(SnapshotRecord {
+            message,
+            provenance,
+            read,
+        });
+    }
+
+    let mut snapshot = LogicalSnapshot {
+        records: out_records,
+        conflicts,
+        sources,
+        inventory_error,
+        canonical: ctx.canonical.clone(),
+        retention: RetentionCoverage::Unestablished,
+        exact_found: None,
+    };
+    if let Query::ExactId(id) = query {
+        let found = snapshot.records.iter().any(|r| &r.message.id == id)
+            || snapshot.conflicts.iter().any(|c| c == id);
+        snapshot.exact_found = (found || snapshot.complete()).then_some(found);
+    }
+    snapshot
+}
+
+fn observation(
+    result: Result<Option<ObservedSource>, SourceErrorCode>,
+) -> (SourceStatus, Option<ObservedSource>) {
+    match result {
+        Ok(Some(obs)) => (
+            SourceStatus::Observed {
+                messages: obs.messages.len(),
+            },
+            Some(obs),
+        ),
+        Ok(None) => (SourceStatus::Absent, None),
+        Err(code) => (SourceStatus::Error(code), None),
+    }
+}
+
+// ── Budget ───────────────────────────────────────────────────────────────────
+
+struct Budget {
+    deadline: Instant,
+    max_roots: usize,
+    max_entries: usize,
+    max_message_bytes: u64,
+    bytes_left: u64,
+}
+
+impl Budget {
+    fn new(limits: &ReadLimits) -> Self {
+        Self {
+            deadline: limits.deadline,
+            max_roots: limits.max_roots,
+            max_entries: limits.max_entries,
+            max_message_bytes: limits.max_message_bytes,
+            bytes_left: limits.max_total_bytes,
+        }
+    }
+
+    fn expired(&self) -> bool {
+        Instant::now() >= self.deadline
+    }
+
+    fn take(&mut self, bytes: usize) -> Result<(), SourceErrorCode> {
+        self.bytes_left = self
+            .bytes_left
+            .checked_sub(bytes as u64)
+            .ok_or(SourceErrorCode::OverBudget)?;
+        Ok(())
+    }
+}
+
+// ── Git identity and inventory ───────────────────────────────────────────────
+
+fn read_small(path: &Path) -> Option<String> {
+    let mut s = String::new();
+    File::open(path)
+        .ok()?
+        .take(SMALL_FILE)
+        .read_to_string(&mut s)
+        .ok()?;
+    Some(s.trim().to_string())
+}
+
+/// The canonical common Git directory of worktree root `root`, verified from
+/// its `.git` pointer and the admin directory's back-pointer. No git process.
+fn common_git_of(root: &Path) -> Result<PathBuf, SourceErrorCode> {
+    let dotgit = root.join(".git");
+    let meta = std::fs::symlink_metadata(&dotgit).map_err(|_| SourceErrorCode::NotAGitCheckout)?;
+    if meta.is_dir() {
+        return std::fs::canonicalize(&dotgit).map_err(|_| SourceErrorCode::NotAGitCheckout);
+    }
+    if !meta.is_file() {
+        return Err(SourceErrorCode::NotAGitCheckout);
+    }
+    let pointer = read_small(&dotgit).ok_or(SourceErrorCode::NotAGitCheckout)?;
+    let admin = pointer
+        .strip_prefix("gitdir:")
+        .map(|p| root.join(p.trim()))
+        .ok_or(SourceErrorCode::NotAGitCheckout)?;
+    let admin = std::fs::canonicalize(admin).map_err(|_| SourceErrorCode::CommonGitMismatch)?;
+    // The admin directory must point back at this worktree, so a copied or
+    // forged `.git` file cannot borrow another repository's identity.
+    let back = read_small(&admin.join("gitdir")).ok_or(SourceErrorCode::CommonGitMismatch)?;
+    let back_ok = std::fs::canonicalize(admin.join(&back))
+        .ok()
+        .zip(std::fs::canonicalize(&dotgit).ok())
+        .is_some_and(|(a, b)| a == b);
+    if !back_ok {
+        return Err(SourceErrorCode::CommonGitMismatch);
+    }
+    let common = read_small(&admin.join("commondir")).ok_or(SourceErrorCode::CommonGitMismatch)?;
+    std::fs::canonicalize(admin.join(common)).map_err(|_| SourceErrorCode::CommonGitMismatch)
+}
+
+#[derive(Debug, Default, PartialEq, Eq)]
+struct WorktreeRecord {
+    path: PathBuf,
+    branch: Option<String>,
+    bare: bool,
+    prunable: bool,
+}
+
+/// Parse `git worktree list --porcelain -z`: NUL-terminated fields, records
+/// ended by an empty field. A record without a `worktree` line is an error.
+fn parse_worktree_porcelain_z(bytes: &[u8]) -> Result<Vec<WorktreeRecord>, SourceErrorCode> {
+    let mut out = Vec::new();
+    let mut current: Option<WorktreeRecord> = None;
+    let mut fields = bytes.split(|b| *b == 0);
+    while let Some(field) = fields.next() {
+        if field.is_empty() {
+            if let Some(rec) = current.take() {
+                out.push(rec);
+            }
+            continue;
+        }
+        let (key, value) = match field.iter().position(|b| *b == b' ') {
+            Some(i) => (&field[..i], &field[i + 1..]),
+            None => (field, &field[field.len()..]),
+        };
+        if key == b"worktree" {
+            if current.is_some() {
+                return Err(SourceErrorCode::InventoryFailed);
+            }
+            current = Some(WorktreeRecord {
+                path: PathBuf::from(OsStr::from_bytes(value)),
+                ..Default::default()
+            });
+            continue;
+        }
+        let rec = current.as_mut().ok_or(SourceErrorCode::InventoryFailed)?;
+        match key {
+            b"branch" => rec.branch = Some(String::from_utf8_lossy(value).into_owned()),
+            b"bare" => rec.bare = true,
+            b"prunable" => rec.prunable = true,
+            _ => {}
+        }
+    }
+    if let Some(rec) = current {
+        out.push(rec);
+    }
+    Ok(out)
+}
+
+/// Bounded `git worktree list --porcelain -z` from `checkout`.
+fn list_worktrees(checkout: &Path, budget: &Budget) -> Result<Vec<u8>, SourceErrorCode> {
+    let mut child = crate::git_ops::host_git_command(checkout)
+        .args(["worktree", "list", "--porcelain", "-z"])
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .map_err(|_| SourceErrorCode::InventoryFailed)?;
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or(SourceErrorCode::InventoryFailed)?;
+    let reader = std::thread::spawn(move || {
+        let mut buf = Vec::new();
+        let _ = stdout
+            .take(INVENTORY_BYTES as u64 + 1)
+            .read_to_end(&mut buf);
+        buf
+    });
+    loop {
+        if budget.expired() {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(SourceErrorCode::InventoryOverBudget);
+        }
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                let out = reader
+                    .join()
+                    .map_err(|_| SourceErrorCode::InventoryFailed)?;
+                if out.len() > INVENTORY_BYTES {
+                    return Err(SourceErrorCode::InventoryOverBudget);
+                }
+                return if status.success() {
+                    Ok(out)
+                } else {
+                    Err(SourceErrorCode::InventoryFailed)
+                };
+            }
+            Ok(None) => std::thread::sleep(Duration::from_millis(5)),
+            Err(_) => return Err(SourceErrorCode::InventoryFailed),
+        }
+    }
+}
+
+type RootEntry = Result<PathBuf, (PathBuf, SourceErrorCode)>;
+
+/// The requested checkout first, then every other registered product
+/// worktree of the same common Git directory. The store worktree and bare
+/// entries are not product sources; aliases of one directory appear once.
+fn inventory(ctx: &MailboxContext, budget: &Budget) -> (Vec<RootEntry>, Option<SourceErrorCode>) {
+    let requested = ctx.requested_checkout.path().to_path_buf();
+    let mut seen: HashSet<(u64, u64)> = HashSet::new();
+    if let Ok(meta) = std::fs::metadata(&requested) {
+        seen.insert((meta.dev(), meta.ino()));
+    }
+    let store = match &ctx.canonical {
+        CanonicalCoverage::Store(s) => Some(s.path().to_path_buf()),
+        _ => None,
+    };
+    let mut roots = vec![Ok(requested.clone())];
+    let records =
+        match list_worktrees(&requested, budget).and_then(|b| parse_worktree_porcelain_z(&b)) {
+            Ok(records) => records,
+            Err(code) => return (roots, Some(code)),
+        };
+    let mut inventory_error = None;
+    for rec in records {
+        if rec.bare || rec.branch.as_deref() == Some(STORE_BRANCH) {
+            continue;
+        }
+        let canonical = std::fs::canonicalize(&rec.path).ok();
+        if canonical.is_some() && canonical == store {
+            continue;
+        }
+        if canonical.as_ref() == Some(&requested) {
+            continue;
+        }
+        if roots.len() >= budget.max_roots {
+            inventory_error = Some(SourceErrorCode::InventoryOverBudget);
+            break;
+        }
+        let Some(path) = canonical else {
+            let code = if rec.prunable {
+                SourceErrorCode::WorktreePrunable
+            } else {
+                SourceErrorCode::WorktreeMissing
+            };
+            roots.push(Err((rec.path, code)));
+            continue;
+        };
+        if rec.prunable {
+            roots.push(Err((path, SourceErrorCode::WorktreePrunable)));
+            continue;
+        }
+        if let Ok(meta) = std::fs::metadata(&path) {
+            if !seen.insert((meta.dev(), meta.ino())) {
+                continue;
+            }
+        }
+        match common_git_of(&path) {
+            Ok(common) if common == *ctx.repository.path() => roots.push(Ok(path)),
+            Ok(_) => roots.push(Err((path, SourceErrorCode::CommonGitMismatch))),
+            Err(code) => roots.push(Err((path, code))),
+        }
+    }
+    (roots, inventory_error)
+}
+
+// ── Pinned, no-follow, bounded source reads ──────────────────────────────────
+
+/// A directory opened without following symlinks; children are opened
+/// relative to its descriptor so a swapped ancestor cannot redirect reads.
+struct PinnedDir {
+    fd: OwnedFd,
+}
+
+fn errno_code(e: &std::io::Error) -> SourceErrorCode {
+    match e.raw_os_error() {
+        Some(libc::ELOOP) | Some(libc::EMLINK) => SourceErrorCode::UnsafeEntry,
+        Some(libc::ENOTDIR) => SourceErrorCode::LayoutUnsupported,
+        Some(libc::EACCES) | Some(libc::EPERM) => SourceErrorCode::OwnershipRefused,
+        _ => SourceErrorCode::Unreadable,
+    }
+}
+
+fn owned_ok(meta: &std::fs::Metadata) -> bool {
+    meta.uid() == unsafe { libc::geteuid() } && meta.mode() & 0o002 == 0
+}
+
+fn openat(dir: Option<&OwnedFd>, name: &OsStr, flags: libc::c_int) -> std::io::Result<OwnedFd> {
+    let c = CString::new(name.as_bytes())
+        .map_err(|_| std::io::Error::from_raw_os_error(libc::EINVAL))?;
+    let base = dir.map_or(libc::AT_FDCWD, |d| d.as_raw_fd());
+    let fd = unsafe {
+        libc::openat(
+            base,
+            c.as_ptr(),
+            flags | libc::O_NOFOLLOW | libc::O_NONBLOCK | libc::O_CLOEXEC,
+        )
+    };
+    if fd < 0 {
+        Err(std::io::Error::last_os_error())
+    } else {
+        Ok(unsafe { OwnedFd::from_raw_fd(fd) })
+    }
+}
+
+impl PinnedDir {
+    /// Open the source root itself. The root path is canonicalized (no
+    /// symlink components); everything below it is opened relative to the
+    /// pinned descriptor, no-follow.
+    fn open_root(path: &Path) -> Result<Self, SourceErrorCode> {
+        let fd = openat(None, path.as_os_str(), libc::O_RDONLY | libc::O_DIRECTORY)
+            .map_err(|e| errno_code(&e))?;
+        Ok(Self { fd })
+    }
+
+    /// `Ok(None)` when `name` does not exist.
+    fn child_dir(&self, name: &str) -> Result<Option<PinnedDir>, SourceErrorCode> {
+        match openat(
+            Some(&self.fd),
+            OsStr::new(name),
+            libc::O_RDONLY | libc::O_DIRECTORY,
+        ) {
+            Ok(fd) => {
+                let dir = PinnedDir { fd };
+                if !owned_ok(&dir.metadata()?) {
+                    return Err(SourceErrorCode::OwnershipRefused);
+                }
+                Ok(Some(dir))
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(e) => Err(errno_code(&e)),
+        }
+    }
+
+    fn metadata(&self) -> Result<std::fs::Metadata, SourceErrorCode> {
+        let dup = self
+            .fd
+            .try_clone()
+            .map_err(|_| SourceErrorCode::Unreadable)?;
+        File::from(dup)
+            .metadata()
+            .map_err(|_| SourceErrorCode::Unreadable)
+    }
+
+    /// Read regular file `name` (owned, single link, at most `limit` bytes).
+    /// `Ok(None)` when it does not exist.
+    fn read_file(&self, name: &OsStr, limit: u64) -> Result<Option<Vec<u8>>, SourceErrorCode> {
+        let fd = match openat(Some(&self.fd), name, libc::O_RDONLY) {
+            Ok(fd) => fd,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(e) => return Err(errno_code(&e)),
+        };
+        let mut file = File::from(fd);
+        let meta = file.metadata().map_err(|_| SourceErrorCode::Unreadable)?;
+        if !meta.is_file() || meta.nlink() != 1 {
+            return Err(SourceErrorCode::UnsafeEntry);
+        }
+        if !owned_ok(&meta) {
+            return Err(SourceErrorCode::OwnershipRefused);
+        }
+        if meta.len() > limit {
+            return Err(SourceErrorCode::OverBudget);
+        }
+        let mut bytes = Vec::new();
+        Read::by_ref(&mut file)
+            .take(limit + 1)
+            .read_to_end(&mut bytes)
+            .map_err(|_| SourceErrorCode::Unreadable)?;
+        if bytes.len() as u64 > limit {
+            return Err(SourceErrorCode::OverBudget);
+        }
+        Ok(Some(bytes))
+    }
+
+    /// Entry names of this directory, bounded by `max` entries.
+    fn names(&self, max: usize, budget: &Budget) -> Result<Vec<Vec<u8>>, SourceErrorCode> {
+        let dup = self
+            .fd
+            .try_clone()
+            .map_err(|_| SourceErrorCode::Unreadable)?;
+        let raw = std::os::fd::IntoRawFd::into_raw_fd(dup);
+        let dirp = unsafe { libc::fdopendir(raw) };
+        if dirp.is_null() {
+            unsafe { libc::close(raw) };
+            return Err(SourceErrorCode::Unreadable);
+        }
+        // Rewind: the duplicate shares the original's offset.
+        unsafe { libc::rewinddir(dirp) };
+        let mut out = Vec::new();
+        let result = loop {
+            if out.len() > max || budget.expired() {
+                break Err(SourceErrorCode::OverBudget);
+            }
+            let entry = unsafe { libc::readdir(dirp) };
+            if entry.is_null() {
+                break Ok(());
+            }
+            let name = unsafe { CStr::from_ptr((*entry).d_name.as_ptr()) }.to_bytes();
+            if name != b"." && name != b".." {
+                out.push(name.to_vec());
+            }
+        };
+        unsafe { libc::closedir(dirp) };
+        result.map(|()| out)
+    }
+}
+
+struct ObservedMessage {
+    message: Message,
+    fingerprint: String,
+}
+
+struct ObservedSource {
+    mailbox: PinnedDir,
+    messages: Vec<ObservedMessage>,
+}
+
+fn safe_id(id: &str) -> bool {
+    !id.is_empty()
+        && id.len() <= 200
+        && id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+}
+
+/// Mirror of the writers' filename mapping for identities.
+fn sanitize_key(key: &str) -> String {
+    key.chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect()
+}
+
+fn fingerprint(bytes: &[u8]) -> String {
+    use sha2::{Digest, Sha256};
+    format!("{:x}", Sha256::digest(bytes))
+}
+
+/// Read every top-level `*.json` message under `root/<components…>`.
+/// `Ok(None)` when the mailbox directory (or an ancestor) does not exist.
+fn read_source(
+    root: &Path,
+    components: &[&str],
+    budget: &mut Budget,
+) -> Result<Option<ObservedSource>, SourceErrorCode> {
+    let mut dir = PinnedDir::open_root(root)?;
+    for component in components {
+        match dir.child_dir(component)? {
+            Some(child) => dir = child,
+            None => return Ok(None),
+        }
+    }
+    let identity = dir.metadata().map(|m| (m.dev(), m.ino()))?;
+    let mut messages = Vec::new();
+    for name in dir.names(budget.max_entries, budget)? {
+        if !name.ends_with(b".json") || name.starts_with(b".") {
+            continue;
+        }
+        if budget.expired() {
+            return Err(SourceErrorCode::OverBudget);
+        }
+        let Some(bytes) = dir.read_file(OsStr::from_bytes(&name), budget.max_message_bytes)? else {
+            // Listed but gone: the source changed under the read.
+            return Err(SourceErrorCode::SourceChanged);
+        };
+        budget.take(bytes.len())?;
+        let message: Message =
+            serde_json::from_slice(&bytes).map_err(|_| SourceErrorCode::CorruptMessage)?;
+        if !safe_id(&message.id) {
+            return Err(SourceErrorCode::CorruptMessage);
+        }
+        messages.push(ObservedMessage {
+            fingerprint: fingerprint(&bytes),
+            message,
+        });
+    }
+    // Recheck that the path still names the directory that was read.
+    let mut again = PinnedDir::open_root(root)?;
+    for component in components {
+        again = again
+            .child_dir(component)?
+            .ok_or(SourceErrorCode::SourceChanged)?;
+    }
+    if again.metadata().map(|m| (m.dev(), m.ino()))? != identity {
+        return Err(SourceErrorCode::SourceChanged);
+    }
+    Ok(Some(ObservedSource {
+        mailbox: dir,
+        messages,
+    }))
+}
+
+// ── Reconciliation ───────────────────────────────────────────────────────────
+
+/// Fields that never change across state markers; replicas must agree.
+fn audience_tuple(m: &Message) -> (&str, &str, &Recipient, i64, Option<&str>) {
+    (
+        &m.thread_id,
+        &m.from,
+        &m.to,
+        m.timestamp,
+        m.in_reply_to.as_deref(),
+    )
+}
+
+/// Reconcile all observed replicas by immutable ID, then filter to the
+/// audience. The highest state rank wins (a delete marker suppresses every
+/// replica); on equal rank the canonical copy is preferred. Replicas that
+/// disagree on audience, or on content at equal rank, are a conflict: no
+/// replica is chosen. Only IDs visible to the audience are reported.
+fn reconcile(
+    observed: &[Option<ObservedSource>],
+    local_count: usize,
+    audience: &ResolvedAudience,
+) -> (Vec<(Message, Vec<Provenance>)>, Vec<String>) {
+    let mut by_id: BTreeMap<&str, Vec<(usize, &ObservedMessage)>> = BTreeMap::new();
+    for (index, source) in observed.iter().enumerate() {
+        for m in source.iter().flat_map(|s| &s.messages) {
+            by_id
+                .entry(m.message.id.as_str())
+                .or_default()
+                .push((index, m));
+        }
+    }
+    let mut records = Vec::new();
+    let mut conflicts = Vec::new();
+    for (id, replicas) in by_id {
+        let visible = replicas
+            .iter()
+            .any(|(_, m)| !audience.matching_keys(&m.message).is_empty())
+            || replicas.iter().any(|(_, m)| {
+                // A delete marker hides the message, but its audience is the
+                // original one; check visibility on the undeleted shape.
+                m.message.deleted
+                    && !audience
+                        .matching_keys(&Message {
+                            deleted: false,
+                            ..m.message.clone()
+                        })
+                        .is_empty()
+            });
+        if !visible {
+            continue;
+        }
+        let first = audience_tuple(&replicas[0].1.message);
+        let audience_conflict = replicas
+            .iter()
+            .any(|(_, m)| audience_tuple(&m.message) != first);
+        let top_rank = replicas
+            .iter()
+            .map(|(_, m)| message_state_rank(&m.message))
+            .max()
+            .unwrap_or(0);
+        let top: Vec<_> = replicas
+            .iter()
+            .filter(|(_, m)| message_state_rank(&m.message) == top_rank)
+            .collect();
+        let content_conflict = top.iter().any(|(_, m)| m.message != top[0].1.message);
+        if audience_conflict || content_conflict {
+            conflicts.push(id.to_string());
+            continue;
+        }
+        let winner = top
+            .iter()
+            .find(|(source, _)| *source >= local_count)
+            .unwrap_or(&top[0]);
+        let message = winner.1.message.clone();
+        if message.deleted || audience.matching_keys(&message).is_empty() {
+            continue;
+        }
+        let provenance = replicas
+            .iter()
+            .map(|(source, m)| Provenance {
+                source: *source,
+                fingerprint: m.fingerprint.clone(),
+            })
+            .collect();
+        records.push((message, provenance));
+    }
+    records.sort_by(|a, b| {
+        a.0.timestamp
+            .cmp(&b.0.timestamp)
+            .then_with(|| a.0.id.cmp(&b.0.id))
+    });
+    (records, conflicts)
+}
+
+// ── Read evidence ────────────────────────────────────────────────────────────
+
+/// Exact per-ID lookups only (no receipt directory scan). An explicit
+/// receipt in any LOCAL source for a key the message is addressed to is
+/// acknowledgement. A LOCAL watermark counts only for IDs physically present
+/// in that same source, and only as legacy compatibility evidence.
+/// Unreadable receipt evidence marks that source as errored.
+fn read_evidence(
+    message: &Message,
+    provenance: &[Provenance],
+    observed: &[Option<ObservedSource>],
+    local_count: usize,
+    audience: &ResolvedAudience,
+    sources: &mut [SourceReport],
+    budget: &mut Budget,
+) -> ReadEvidence {
+    let keys = audience.matching_keys(message);
+    let holders: BTreeSet<usize> = provenance.iter().map(|p| p.source).collect();
+    let mut legacy = None;
+    for (index, source) in observed.iter().enumerate().take(local_count) {
+        let Some(source) = source else { continue };
+        for key in &keys {
+            match receipt_at(&source.mailbox, key, &message.id, budget) {
+                Ok(Some(at)) => {
+                    return ReadEvidence::Acknowledged {
+                        source: index,
+                        key: key.to_string(),
+                        at,
+                    }
+                }
+                Ok(None) => {}
+                Err(code) => sources[index].status = SourceStatus::Error(code),
+            }
+            if legacy.is_none() && holders.contains(&index) {
+                match watermark(&source.mailbox, key, budget) {
+                    Ok(Some(mark)) if message.timestamp <= mark => {
+                        legacy = Some(ReadEvidence::LegacyWatermark {
+                            source: index,
+                            key: key.to_string(),
+                        })
+                    }
+                    Ok(_) => {}
+                    Err(code) => sources[index].status = SourceStatus::Error(code),
+                }
+            }
+        }
+    }
+    legacy.unwrap_or(ReadEvidence::Unread)
+}
+
+fn parse_millis(bytes: &[u8]) -> Result<i64, SourceErrorCode> {
+    std::str::from_utf8(bytes)
+        .ok()
+        .and_then(|s| s.trim().parse::<i64>().ok())
+        .ok_or(SourceErrorCode::CorruptReceipt)
+}
+
+fn receipt_at(
+    mailbox: &PinnedDir,
+    key: &str,
+    id: &str,
+    budget: &mut Budget,
+) -> Result<Option<i64>, SourceErrorCode> {
+    let Some(receipts) = mailbox.child_dir(".read-receipts")? else {
+        return Ok(None);
+    };
+    let Some(dir) = receipts.child_dir(&sanitize_key(key))? else {
+        return Ok(None);
+    };
+    let name = format!("{id}.txt");
+    match dir.read_file(OsStr::new(&name), SMALL_FILE)? {
+        None => Ok(None),
+        Some(bytes) => {
+            budget.take(bytes.len())?;
+            parse_millis(&bytes).map(Some)
+        }
+    }
+}
+
+fn watermark(
+    mailbox: &PinnedDir,
+    key: &str,
+    budget: &mut Budget,
+) -> Result<Option<i64>, SourceErrorCode> {
+    let Some(dir) = mailbox.child_dir(".read")? else {
+        return Ok(None);
+    };
+    let name = format!("{}.txt", sanitize_key(key));
+    match dir.read_file(OsStr::new(&name), SMALL_FILE)? {
+        None => Ok(None),
+        Some(bytes) => {
+            budget.take(bytes.len())?;
+            parse_millis(&bytes).map(Some)
+        }
+    }
+}
+
+#[cfg(test)]
+#[path = "mailbox_logical_tests.rs"]
+mod tests;
