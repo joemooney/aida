@@ -406,6 +406,15 @@ fn bind_pid_target_rules() {
     assert!(err(4300, None).contains("no running process"));
     assert!(err(4300, Some(&target(4300, "claude", 0))).contains("does not belong"));
     assert!(err(4400, Some(&target(4400, "python3", 1000))).contains("neither an agent harness"));
+    // BUG-b6b1278890774ef993d2ebc327862470-002: Claude Code's versioned
+    // install runs with the version string as its process name.
+    let mut versioned = target(4500, "2.1.310", 1000);
+    versioned.entry.cmd = vec![
+        "/home/u/.local/share/claude/versions/2.1.310".into(),
+        "--session-id".into(),
+    ];
+    assert!(ok(4500, &versioned).is_ok());
+    assert!(err(4600, Some(&target(4600, "2.1.310", 1000))).contains("neither an agent harness"));
     assert!(
         err(70, Some(&target(70, "bash", 1000))).contains("above this terminal session"),
         "an ancestor above the caller's session"
