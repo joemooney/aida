@@ -21,8 +21,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-26T21:59:39.357383924Z
-modified_at: 2026-10-26T21:59:39.357383924Z
+modified_at: 2026-10-26T21:59:46.455998142Z
 req_type: Story
+relationships:
+- rel_type:
+    custom: implements
+  target_id: 01a17996-fb22-7570-ba08-fecd8f8ce058
+  created_at: 2026-10-26T21:59:46.455994995Z
+  created_by: joe
+history:
+- id: 01a17a3a-1095-7ca0-b06c-14bfa3b63b9f
+  author: joe
+  timestamp: 2026-10-26T21:59:48.117136122Z
+  session_id: 51a4e262-9424-4628-881e-703dae468bcc
+  changes: []
 filed_at:
   code_sha: 21a12518c8be6d02a02d870c254342ad8333f235
   branch: bug-workbinding-flake
