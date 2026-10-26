@@ -253,3 +253,24 @@ fn trace_files_on_ref_counts_colon_path() {
         2
     );
 }
+
+// trace:TASK-1863 | ai:agy
+#[test]
+fn has_shipped_commit_on_default_branch_ignores_diverged_local_main_when_origin_exists() {
+    let (tmp, root) = init_repo();
+    add_bare_origin(&tmp, &root);
+
+    // Local main advances with an unpushed commit referencing TASK-1863.
+    commit(&root, "local.txt", "x\n", "feat: local only (TASK-1863)");
+    assert!(
+        !has_shipped_commit_on_default_branch(&root, &["TASK-1863".to_string()]),
+        "diverged local main must not count as shipped when origin/main exists"
+    );
+
+    // Once pushed to origin/main, it counts as shipped.
+    git(&root, &["push", "-q", "origin", "main"]);
+    assert!(
+        has_shipped_commit_on_default_branch(&root, &["TASK-1863".to_string()]),
+        "origin/main commit must count as shipped"
+    );
+}

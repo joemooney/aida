@@ -13,7 +13,7 @@
 //! store/forge plumbing already in scope.
 // trace:TASK-1307 | ai:claude
 
-use crate::review_verdict::{self, RecordedVerdict, TipRelation, VerdictKind};
+use crate::gate::review_verdict::{self, RecordedVerdict, TipRelation, VerdictKind};
 
 /// Which of the four TASK-1307 conditions hold for one spec. All four true
 /// is the stranded state the sweep reports; any single false condition
@@ -145,7 +145,7 @@ pub(crate) fn is_stalled(
     spec_completed: bool,
     relation: TipRelation,
 ) -> bool {
-    review_verdict::is_outstanding_refusal(verdict, spec_completed)
+    crate::gate::review_verdict::is_outstanding_refusal(verdict, spec_completed)
         && matches!(relation, TipRelation::AtReviewedSha)
 }
 
@@ -167,7 +167,7 @@ pub(crate) fn sort_by_staleness(rows: &mut [StalledRow]) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::review_verdict::VerdictKind;
+    use crate::gate::review_verdict::VerdictKind;
 
     fn verdict(kind: VerdictKind, sha: &str) -> RecordedVerdict {
         RecordedVerdict {

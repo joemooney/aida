@@ -89,7 +89,7 @@ fn a_hold_written_from_a_linked_worktree_is_read_from_the_primary_checkout() {
     // `aida pr ship` feeds `read_hold_record(&main_worktree, pr)` to its gate.
     let record = read_hold_record(&primary, 2726).expect("ship sees the marker");
     assert_eq!(record.reason_kind, HoldReasonKind::Rework);
-    let refusal = crate::pr_ship::ship_hold_gate(Some(&record), true, 2726, |_| {
+    let refusal = crate::gate::ship::ship_hold_gate(Some(&record), true, 2726, |_| {
         RefusalRelease::Held("no APPROVED verdict at the head".into())
     });
     assert!(refusal.is_some_and(|r| r.contains("rework hold")));
@@ -239,7 +239,7 @@ fn list_json_reports_stray_markers_with_their_label_only_state() {
 fn the_standalone_reviewer_adopts_its_marker_after_collecting_the_verdict() {
     let src = include_str!("../../queue_cmd.rs");
     let collect = src
-        .find("crate::review_verdict::collect_standalone_verdict(")
+        .find("crate::gate::review_verdict::collect_standalone_verdict(")
         .expect("verdict collection");
     let adopt = src
         .find("crate::merge_hold::adopt_worktree_hold(project_root, worktree, pr, launched_at)")

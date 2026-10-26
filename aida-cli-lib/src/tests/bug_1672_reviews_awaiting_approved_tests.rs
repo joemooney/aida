@@ -11,7 +11,7 @@
 // trace:BUG-1672 | ai:claude
 
 use super::{latest_review_comment_verdict, review_comment_verdict, spec_review_approved};
-use crate::review_verdict::VerdictKind;
+use crate::gate::review_verdict::VerdictKind;
 use aida_core::{Comment, Requirement};
 use chrono::{Duration, Utc};
 use tempfile::TempDir;

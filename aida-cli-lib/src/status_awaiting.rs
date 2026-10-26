@@ -547,10 +547,11 @@ pub(crate) fn collect_awaiting_report_with_mail_facts(
     // brief, or probes process liveness; `aida merge-hold list --fix` owns
     // that. A held PR is never offered as ready-to-merge, and every held PR
     // stays visible with its typed hold reason. trace:STORY-1397 | ai:claude
-    let hold_records: Vec<merge_hold::MergeHoldRecord> = merge_hold::list_holds(project_root)
-        .into_iter()
-        .filter_map(|(pr, _)| merge_hold::read_hold_record(project_root, pr))
-        .collect();
+    let hold_records: Vec<crate::gate::merge_hold_core::MergeHoldRecord> =
+        crate::gate::merge_hold_core::list_holds(project_root)
+            .into_iter()
+            .filter_map(|(pr, _)| crate::gate::merge_hold_core::read_hold_record(project_root, pr))
+            .collect();
     let held_numbers: std::collections::HashSet<u64> =
         hold_records.iter().map(|record| record.pr).collect();
     let open_prs: Option<Vec<status_cleanup::OpenPrItem>> = (!no_ci).then(|| {
@@ -579,7 +580,7 @@ pub(crate) fn collect_awaiting_report_with_mail_facts(
                     .find(|p| p.number == item.number)
                     .and_then(|p| p.head_sha.as_deref());
                 item.under_review =
-                    review_marker::live_description(&marker_root, item.number, head);
+                    crate::gate::review_marker::live_description(&marker_root, item.number, head);
             }
             items
         }
@@ -592,12 +593,14 @@ pub(crate) fn collect_awaiting_report_with_mail_facts(
         None => Vec::new(),
         Some(all_prs) => hold_records
             .iter()
-            .filter(|record| record.reason_kind != merge_hold::HoldReasonKind::Recusal)
+            .filter(|record| {
+                record.reason_kind != crate::gate::merge_hold_core::HoldReasonKind::Recusal
+            })
             .filter_map(|record| {
                 all_prs.iter().find(|pr| pr.number == record.pr).map(|pr| {
                     // trace:BUG-1788 | ai:antigravity
                     let approved_at_head = pr.head_sha.as_deref().filter(|head| {
-                        crate::review_verdict::verdicts_for_sha(project_root, head)
+                        crate::gate::review_verdict::verdicts_for_sha(project_root, head)
                             .into_iter()
                             .any(|v| !v.is_closed() && v.kind.approves())
                     });
@@ -613,7 +616,7 @@ pub(crate) fn collect_awaiting_report_with_mail_facts(
     // A moved head is PROJECTED as stale in memory; nothing is written here.
     // The principal comes from the self-declared AIDA_AGENT_ID and only
     // personalizes this read-only view (see `merge_hold::current_principal`).
-    let current_principal = merge_hold::current_principal()
+    let current_principal = crate::gate::merge_hold_core::current_principal()
         .map(|p| p.key())
         .unwrap_or_default();
     let live_pr_heads: std::collections::HashMap<u64, &str> = open_prs
@@ -623,8 +626,15 @@ pub(crate) fn collect_awaiting_report_with_mail_facts(
         .collect();
     let recusal_holds = hold_records
         .iter()
-        .filter(|record| record.reason_kind == merge_hold::HoldReasonKind::Recusal)
-        .map(|record| merge_hold::project_live_head(record, live_pr_heads.get(&record.pr).copied()))
+        .filter(|record| {
+            record.reason_kind == crate::gate::merge_hold_core::HoldReasonKind::Recusal
+        })
+        .map(|record| {
+            crate::gate::merge_hold_core::project_live_head(
+                record,
+                live_pr_heads.get(&record.pr).copied(),
+            )
+        })
         .filter_map(|record| awaiting_you::project_recusal_hold(&record, &current_principal))
         .collect();
 
@@ -689,9 +699,9 @@ pub(crate) fn collect_awaiting_report_with_mail_facts(
                 keys.extend(spec.clone());
                 let bodies = keys
                     .iter()
-                    .map(|key| review_verdict::verdict_path(project_root, key))
+                    .map(|key| crate::gate::review_verdict::verdict_path(project_root, key))
                     // trace:TASK-1801 | ai:claude
-                    .filter_map(|path| review_verdict::read_verdict_body(path).ok())
+                    .filter_map(|path| crate::gate::review_verdict::read_verdict_body(path).ok())
                     .collect();
                 let spec_completed = spec.as_deref().is_some_and(|id| {
                     status_by_spec
@@ -791,7 +801,7 @@ pub(crate) fn collect_awaiting_report_with_mail_facts(
                                     .and_then(|r| r.agreed_id.or(r.spec_id))
                             })
                         })
-                        .unwrap_or(review_verdict::ReviewActionability::NeedsReview);
+                        .unwrap_or(crate::gate::review_verdict::ReviewActionability::NeedsReview);
                     awaiting_you::ReviewerQueueItem {
                         spec_id: r.spec_id.clone(),
                         title: r.title.clone(),
@@ -1191,7 +1201,7 @@ pub(crate) fn emit_notice_time_line() {
     // per seat when it expires or is stopped. The grant's turn stamp lets the
     // drive tick tell whether an advisor seat is live. Fail-open.
     // trace:STORY-1700 | ai:claude
-    let grant = crate::seat_authority::current_grant_id();
+    let grant = crate::gate::seat_authority::current_grant_id();
     crate::mandate_drive::stamp_grant_turn(grant.as_deref(), now.with_timezone(&chrono::Utc));
     if let Some(line) = mandate_notice_line(now.with_timezone(&chrono::Utc), session_id.as_deref())
     {
@@ -1231,15 +1241,15 @@ pub(crate) fn mandate_notice_line(
     now: chrono::DateTime<chrono::Utc>,
     session_id: Option<&str>,
 ) -> Option<String> {
-    let dir = crate::mandate::mandate_dir().ok()?;
-    let state = crate::mandate::current_state();
+    let dir = crate::gate::mandate::mandate_dir().ok()?;
+    let state = crate::gate::mandate::current_state();
     let seat = mandate_seen_key(
-        crate::seat_authority::current_grant_id().as_deref(),
+        crate::gate::seat_authority::current_grant_id().as_deref(),
         session_id,
         std::env::var("AIDA_SESSION_ROLE").ok().as_deref(),
     );
     let gates = match &state {
-        crate::mandate::MandateState::Active(_) => {
+        crate::gate::mandate::MandateState::Active(_) => {
             crate::mandate_gates::describe(crate::find_main_worktree_root().ok().as_deref())
         }
         _ => String::new(),
@@ -1396,8 +1406,8 @@ pub(crate) fn handle_awaiting_command(
     let report = collect_awaiting_report(&project_root, backend, &ctx, no_ci);
     // STORY-1655: approvals awaiting this human may be self-approved; say so.
     // trace:STORY-1655 | ai:claude
-    if !json && crate::solo_review::effective(&project_root) {
-        println!("{}", crate::solo_review::MODE_ON_LINE);
+    if !json && crate::gate::solo_review::effective(&project_root) {
+        println!("{}", crate::gate::solo_review::MODE_ON_LINE);
     }
     if json {
         println!("{}", crate::cache_output::json_pretty(&report.to_json())?);

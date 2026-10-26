@@ -150,7 +150,7 @@ pub(crate) fn fix_for(
 /// The shell lines for `fix`: only `AIDA_SESSION_*` variables, values
 /// single-quoted (and already validated as plain names).
 pub(crate) fn render(fix: &LaneFix) -> String {
-    let grant_env = crate::seat_authority::GRANT_ENV;
+    let grant_env = crate::gate::seat_authority::GRANT_ENV;
     let mut out = format!("export {ROLE_ENV}='{}'\n", fix.role);
     match &fix.grant {
         GrantFix::Export(id) => out.push_str(&format!("export {grant_env}='{id}'\n")),
@@ -165,13 +165,13 @@ pub(crate) fn render(fix: &LaneFix) -> String {
 
 /// The inherited grant, classified against the store.
 fn inherited_grant(project_root: &Path) -> InheritedGrant {
-    match crate::seat_authority::grant_check(project_root) {
-        crate::seat_authority::GrantCheck::Absent => InheritedGrant::Absent,
-        crate::seat_authority::GrantCheck::Valid(grant) => InheritedGrant::Valid {
+    match crate::gate::seat_authority::grant_check(project_root) {
+        crate::gate::seat_authority::GrantCheck::Absent => InheritedGrant::Absent,
+        crate::gate::seat_authority::GrantCheck::Valid(grant) => InheritedGrant::Valid {
             id: grant.id,
             seat: grant.seat,
         },
-        crate::seat_authority::GrantCheck::Rejected { .. } => InheritedGrant::Invalid,
+        crate::gate::seat_authority::GrantCheck::Rejected { .. } => InheritedGrant::Invalid,
     }
 }
 
@@ -244,7 +244,7 @@ pub(crate) fn in_linked_worktree(cwd: &Path) -> bool {
 /// Fails closed: on an error inside a linked worktree it drops the grant and
 /// purpose and sets no role.
 pub(crate) fn apply_in_process(project_root: &Path, cwd: &Path) {
-    let grant_env = crate::seat_authority::GRANT_ENV;
+    let grant_env = crate::gate::seat_authority::GRANT_ENV;
     match fix_at(project_root, cwd) {
         Ok(None) => {}
         Ok(Some(fix)) => {
@@ -279,7 +279,7 @@ pub(crate) fn daemons_holding_a_grant(proc_root: &Path) -> Vec<u32> {
     let Ok(entries) = std::fs::read_dir(proc_root) else {
         return Vec::new();
     };
-    let grant_prefix = format!("{}=", crate::seat_authority::GRANT_ENV);
+    let grant_prefix = format!("{}=", crate::gate::seat_authority::GRANT_ENV);
     let mut pids: Vec<u32> = entries
         .flatten()
         .filter_map(|e| e.file_name().to_str()?.parse::<u32>().ok())

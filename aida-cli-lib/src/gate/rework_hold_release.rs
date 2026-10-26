@@ -7,7 +7,11 @@
 //! the human clear.
 // trace:STORY-1687 | ai:codex
 // mandate-gate
-use crate::{merge_hold as mh, review_verdict as rv, seat_authority as sa};
+use crate::gate::{review_verdict as rv, seat_authority as sa};
+mod mh {
+    pub(super) use crate::gate::merge_hold_core::*;
+    pub(super) use crate::merge_hold::*;
+}
 use anyhow::{bail, ensure, Context, Result};
 use chrono::{DateTime, FixedOffset};
 use serde_json::{Map, Value};
@@ -97,7 +101,7 @@ impl Outcome {
             }
             Self::Released { mandate: Some(id) } => format!(
                 "PR #{pr}: merge-hold auto-released by recorded verdict ({})",
-                crate::mandate::release_note(id)
+                crate::gate::mandate::release_note(id)
             ),
         }
     }
@@ -181,7 +185,7 @@ fn eligible(
         let req = req.context("covered spec is missing or unreadable; human clear required")?;
         // Operator-only and decide-mode specs never release without a human,
         // whatever a mandate says. trace:STORY-1697 | ai:claude
-        if let Some(class) = crate::mandate::always_human_class(req) {
+        if let Some(class) = crate::gate::mandate::always_human_class(req) {
             let human = format!("{class} spec always requires a human clear");
             match sensitive(req) {
                 Some(reason) => bail!("{reason}; {human}"),
@@ -320,11 +324,11 @@ fn eligible(
 // trace:STORY-1697 | ai:claude
 pub(crate) fn approval_attested(
     candidates: &[rv::RecordedVerdict],
-    policy: &crate::pr_ship::ShipApprovalPolicy,
+    policy: &crate::gate::ship::ShipApprovalPolicy,
     head: &str,
     pr: u64,
 ) -> Result<()> {
-    crate::pr_merge_gate::drain_merge_approval_gate(candidates, policy, Some(head), pr)
+    crate::gate::approval::drain_merge_approval_gate(candidates, policy, Some(head), pr)
         .map_err(|failure| anyhow::anyhow!("{}", failure.reason))
 }
 
@@ -419,7 +423,7 @@ fn release_with(
                 None => "covered specs require no human signoff".to_string(),
                 Some(id) => format!(
                     "a sensitive covered spec is {}",
-                    crate::mandate::release_note(id)
+                    crate::gate::mandate::release_note(id)
                 ),
             };
             let answered = if also.is_empty() {
@@ -476,7 +480,7 @@ fn release_with(
                 reason: Some(match &release.mandate {
                     Some(id) => format!(
                         "{} — auto-released by recorded verdict {}",
-                        crate::mandate::release_note(id),
+                        crate::gate::mandate::release_note(id),
                         verdict.path()
                     ),
                     None => format!("auto-released by recorded verdict {}", verdict.path()),
@@ -616,7 +620,7 @@ pub(crate) fn auto_release(project: &Path, pr: u64) -> Result<Outcome> {
             grant_check: &|id, subject| sa::grant_check_for(&root, id, subject),
             // trace:STORY-1697 | ai:claude
             approval_authority: &|head| {
-                let (candidates, policy) = crate::pr_cmd::merge_approval_inputs(
+                let (candidates, policy) = crate::gate::approval::merge_approval_inputs(
                     &[project, root.as_path()],
                     &root,
                     pr,
@@ -636,7 +640,7 @@ pub(crate) fn auto_release(project: &Path, pr: u64) -> Result<Outcome> {
                     .ok()
                     .map(|m| m.head_ref.trim().to_string())
                     .filter(|r: &String| !r.is_empty());
-                crate::pr_cmd::mandate_ship_cover(
+                crate::gate::mandate_ship::mandate_ship_cover(
                     project,
                     &root,
                     &root,
@@ -645,7 +649,7 @@ pub(crate) fn auto_release(project: &Path, pr: u64) -> Result<Outcome> {
                     head_branch.as_deref(),
                     || open_change_head(live_head().ok().flatten()).ok(),
                     false,
-                    crate::mandate::rework_release_decision,
+                    crate::gate::mandate::rework_release_decision,
                     // It ignores the carry-over. trace:TASK-1968 | ai:claude
                     false,
                 )

@@ -81,8 +81,8 @@ fn member(pr: u64, head: &str, subject: &str) -> Member {
 }
 
 /// BUG-2214: the cover a fake gate hands a held member.
-fn fake_cover() -> crate::pr_cmd::MandateCover {
-    crate::pr_cmd::MandateCover {
+fn fake_cover() -> crate::gate::mandate_ship::MandateCover {
+    crate::gate::mandate_ship::MandateCover {
         id: "6f1c1d6e-0000-4000-8000-00000000fake".into(),
         principal: "joe".into(),
     }
@@ -669,13 +669,13 @@ fn ship_refuses_a_head_behind_its_base_and_points_at_the_train() {
     let w = warning.as_ref().expect("the head is behind origin/main");
     // Only a test file moved on main: before STORY-1690 this only warned.
     assert!(w.definition_files.is_empty(), "{w:?}");
-    let why = crate::pr_cmd::stale_gate_decision(7, "main", warning.as_ref(), false)
+    let why = crate::gate::ci_freshness::stale_gate_decision(7, "main", warning.as_ref(), false)
         .expect_err("a head behind its base must not ship");
     assert!(why.contains("aida pr train 7"), "{why}");
     assert!(why.contains("1 commit(s) behind main"), "{why}");
     // No override: the flag that once shipped a stale definition does not
     // ship a behind head.
-    let why = crate::pr_cmd::stale_gate_decision(7, "main", warning.as_ref(), true)
+    let why = crate::gate::ci_freshness::stale_gate_decision(7, "main", warning.as_ref(), true)
         .expect_err("--override-stale-check must not ship a behind head");
     assert!(why.contains("aida pr train 7"), "{why}");
 }
@@ -691,7 +691,7 @@ fn ship_still_ships_a_head_that_contains_its_base() {
     let warning = crate::pr_stale_check_warning(r, "pr", "origin/main");
     assert!(warning.is_none(), "{warning:?}");
     assert_eq!(
-        crate::pr_cmd::stale_gate_decision(7, "main", warning.as_ref(), false),
+        crate::gate::ci_freshness::stale_gate_decision(7, "main", warning.as_ref(), false),
         Ok(())
     );
 }
@@ -732,7 +732,7 @@ fn the_behind_base_gate_fetches_so_a_main_moved_elsewhere_still_refuses() {
     let (tmp, _dir, origin, clone) = origin_and_clone();
     // The clone's origin/main is current: the gate passes.
     assert_eq!(
-        crate::pr_cmd::behind_base_gate_on(&clone, "pr", 7, "main", false),
+        crate::gate::ci_freshness::behind_base_gate_on(&clone, "pr", 7, "main", false),
         Ok(())
     );
     // Another machine moves main on origin; the clone's ref is now stale.
@@ -743,9 +743,10 @@ fn the_behind_base_gate_fetches_so_a_main_moved_elsewhere_still_refuses() {
         seed,
         &["push", "--quiet", &origin.to_string_lossy(), "main"],
     );
-    let (kind, why) = crate::pr_cmd::behind_base_gate_on(&clone, "pr", 7, "main", false)
-        .expect_err("the gate must fetch and see main moved");
-    assert_eq!(kind, crate::pr_ship::ShipRefusal::BehindBase);
+    let (kind, why) =
+        crate::gate::ci_freshness::behind_base_gate_on(&clone, "pr", 7, "main", false)
+            .expect_err("the gate must fetch and see main moved");
+    assert_eq!(kind, crate::gate::ship::ShipRefusal::BehindBase);
     assert!(why.contains("1 commit(s) behind main"), "{why}");
     assert!(why.contains("aida pr train 7"), "{why}");
 }
@@ -765,13 +766,16 @@ fn the_behind_base_gate_fails_closed_when_staleness_cannot_be_computed() {
             &r.join("missing.git").to_string_lossy(),
         ],
     );
-    let (kind, why) = crate::pr_cmd::behind_base_gate_on(r, "pr", 7, "main", false)
+    let (kind, why) = crate::gate::ci_freshness::behind_base_gate_on(r, "pr", 7, "main", false)
         .expect_err("an unknown staleness must refuse");
-    assert_eq!(kind, crate::pr_ship::ShipRefusal::BehindBase);
+    assert_eq!(kind, crate::gate::ship::ShipRefusal::BehindBase);
     assert!(why.contains("could not be computed"), "{why}");
     // A missing ref (the head branch never existed) refuses too.
     assert!(crate::pr_stale_check(r, "no-such-branch", "origin/main").is_err());
-    assert!(crate::pr_cmd::behind_base_refusal(7, "main", Err("boom".into()), true).is_err());
+    assert!(
+        crate::gate::ci_freshness::behind_base_refusal(7, "main", Err("boom".into()), true)
+            .is_err()
+    );
 }
 
 // trace:STORY-1690 | ai:claude
@@ -785,19 +789,20 @@ fn a_behind_head_with_no_definition_change_refuses_as_behind_base() {
         }))
     };
     let (kind, _) =
-        crate::pr_cmd::behind_base_refusal(7, "main", warning(vec![]), false).unwrap_err();
-    assert_eq!(kind, crate::pr_ship::ShipRefusal::BehindBase);
-    let (kind, why) = crate::pr_cmd::behind_base_refusal(
+        crate::gate::ci_freshness::behind_base_refusal(7, "main", warning(vec![]), false)
+            .unwrap_err();
+    assert_eq!(kind, crate::gate::ship::ShipRefusal::BehindBase);
+    let (kind, why) = crate::gate::ci_freshness::behind_base_refusal(
         7,
         "main",
         warning(vec![".github/workflows/ci.yml".into()]),
         false,
     )
     .unwrap_err();
-    assert_eq!(kind, crate::pr_ship::ShipRefusal::StaleDefinition);
+    assert_eq!(kind, crate::gate::ship::ShipRefusal::StaleDefinition);
     assert!(why.contains("OLDER definition"), "{why}");
     assert_eq!(
-        crate::pr_cmd::behind_base_refusal(7, "main", Ok(None), false),
+        crate::gate::ci_freshness::behind_base_refusal(7, "main", Ok(None), false),
         Ok(())
     );
 }
@@ -871,7 +876,7 @@ struct FakeChecks {
     drive: Option<String>,
     records: Vec<crate::pr_cmd::ShipGateSpecRecord>,
     tty: bool,
-    mandate: std::result::Result<crate::pr_cmd::MandateCover, Option<String>>,
+    mandate: std::result::Result<crate::gate::mandate_ship::MandateCover, Option<String>>,
     /// BUG-2214: whether the gate defers a held member to the mandate cover.
     mandate_active: bool,
     /// The IDs the spec-policy gates were asked about.
@@ -979,7 +984,7 @@ impl MemberChecks for FakeChecks {
         _ids: &[String],
         _head_ref: &str,
         _head: &str,
-    ) -> std::result::Result<crate::pr_cmd::MandateCover, Option<String>> {
+    ) -> std::result::Result<crate::gate::mandate_ship::MandateCover, Option<String>> {
         self.calls.push("mandate");
         self.mandate.clone()
     }
@@ -989,8 +994,9 @@ impl MemberChecks for FakeChecks {
 }
 
 fn claim_for_review(root: &Path, pr: u64, head: &str) {
-    let m = crate::review_marker::Marker::for_this_process(pr, Some(head), None, "reviewer seat");
-    crate::review_marker::write(root, &m).unwrap();
+    let m =
+        crate::gate::review_marker::Marker::for_this_process(pr, Some(head), None, "reviewer seat");
+    crate::gate::review_marker::write(root, &m).unwrap();
 }
 
 #[test]
@@ -1039,14 +1045,14 @@ fn live_gate_refuses_a_pr_a_live_drive_owns() {
 fn live_gate_refuses_a_review_draft_only_spec_even_for_a_human() {
     let mut c = FakeChecks::shipping(
         "TASK-9",
-        &[crate::pr_ship::DRAFT_ONLY_TAG],
+        &[crate::gate::ship::DRAFT_ONLY_TAG],
         Some(aida_core::ExecutionMode::Drain),
     );
     c.tty = true;
     c.mandate = Ok(fake_cover());
     let why = gate_member_with(&mut c, "main", 41).unwrap_err();
     assert!(why.contains("TASK-9"), "{why}");
-    assert!(why.contains(crate::pr_ship::DRAFT_ONLY_TAG), "{why}");
+    assert!(why.contains(crate::gate::ship::DRAFT_ONLY_TAG), "{why}");
 }
 
 #[test]
@@ -1232,19 +1238,19 @@ impl TrainForge for FakeForge {
     fn release_hold(
         &mut self,
         member: &Member,
-    ) -> std::result::Result<crate::merge_hold::MergeHoldRecord, String> {
+    ) -> std::result::Result<crate::gate::merge_hold_core::MergeHoldRecord, String> {
         if self.release_fails_for == Some(member.pr) {
             return Err("the mandate is no longer active".into());
         }
         self.released.push(member.pr);
-        Ok(crate::merge_hold::typed_hold(
+        Ok(crate::gate::merge_hold_core::typed_hold(
             member.pr,
-            crate::merge_hold::HoldReasonKind::Supervision,
+            crate::gate::merge_hold_core::HoldReasonKind::Supervision,
             "supervised spec",
             None,
         ))
     }
-    fn rearm_hold(&mut self, record: &crate::merge_hold::MergeHoldRecord) -> String {
+    fn rearm_hold(&mut self, record: &crate::gate::merge_hold_core::MergeHoldRecord) -> String {
         self.rearmed.push(record.pr);
         format!(" PR-{}'s merge-hold is re-armed.", record.pr)
     }
@@ -1971,6 +1977,99 @@ fn bug_2220_members_lines_parse_into_the_gate_and_malformed_names_nobody() {
     assert!(train_rider_refusal(14, &open, &[]).is_none());
     let malformed = vec![(78, parse_members_line("aida-train-members: nonsense"))];
     assert!(train_rider_refusal(12, &malformed, &[]).is_none());
+}
+
+/// TASK-1865 fixture: a private live train lease on PR #2891 that is not an
+/// open `train/*` PR, and a fake `gh` whose `pr list` returns no open train
+/// and whose `pr view 2891` runs `view_script`. Returns what the real
+/// `live_trains` lookup made of it.
+// trace:TASK-1865 | ai:claude
+#[cfg(unix)]
+#[allow(clippy::type_complexity)]
+fn task_1865_leased_lookup(
+    view_script: &str,
+) -> (
+    Vec<(u64, Option<Vec<(u64, String)>>)>,
+    Vec<(u64, Option<Vec<(u64, String)>>)>,
+) {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("main");
+    write_retry_config(&root);
+    let bin = tmp.path().join("bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    crate::test_exec::write_executable(
+        &bin.join("gh"),
+        format!(
+            "#!/bin/sh\n\
+             if [ \"$1\" = pr ] && [ \"$2\" = list ]; then echo '[]'; exit 0; fi\n\
+             if [ \"$1\" = pr ] && [ \"$2\" = view ] && [ \"$3\" = 2891 ]; then\n{view_script}\nfi\n\
+             echo unexpected gh args: \"$@\" >&2\n\
+             exit 1\n"
+        ),
+    );
+    let path = format!(
+        "{}:{}",
+        bin.display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("PATH", Some(path.as_str()))]);
+    let _lease = crate::merge_lock::acquire(
+        &root,
+        "main",
+        Some(2891),
+        TRAIN_LEASE_NOTE,
+        std::time::Duration::ZERO,
+    )
+    .unwrap();
+    live_trains(&root).unwrap()
+}
+
+/// An unreadable leased train body still names nobody (the rider gate fails
+/// open, as before), but the failed probe is said on stderr naming the train.
+// trace:TASK-1865 | ai:claude
+#[cfg(unix)]
+#[test]
+fn task_1865_an_unreadable_leased_train_warns_and_still_fails_open() {
+    if let Some(out) = crate::test_env::run_path_isolated_test_output() {
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(
+            stderr.contains("warning: could not read leased train PR #2891's members"),
+            "{stderr}"
+        );
+        assert!(
+            stderr.contains("gh pr view 2891") && stderr.contains("could not resolve PR 2891"),
+            "the warning must name the failed probe: {stderr}"
+        );
+        return;
+    }
+    let (open, leased) =
+        task_1865_leased_lookup("  echo 'GraphQL: could not resolve PR 2891' >&2; exit 1");
+    assert!(open.is_empty(), "{open:?}");
+    assert_eq!(leased, vec![(2891, None)]);
+    assert!(train_rider_refusal(2864, &open, &leased).is_none());
+}
+
+/// A readable leased train body keeps refusing its known member, with no
+/// failure warning.
+// trace:TASK-1865 | ai:claude
+#[cfg(unix)]
+#[test]
+fn task_1865_a_readable_leased_train_refuses_its_member_without_warning() {
+    if let Some(out) = crate::test_env::run_path_isolated_test_output() {
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(!stderr.contains("could not read leased train"), "{stderr}");
+        return;
+    }
+    let (open, leased) =
+        task_1865_leased_lookup(&format!("  echo '{MEMBERS_LINE} #2864@abc1234'; exit 0"));
+    assert!(open.is_empty(), "{open:?}");
+    assert_eq!(
+        leased,
+        vec![(2891, Some(vec![(2864, "abc1234".to_string())]))]
+    );
+    let why = train_rider_refusal(2864, &open, &leased).unwrap();
+    assert!(why.contains("#2891") && why.contains("lease"), "{why}");
+    assert!(train_rider_refusal(2899, &open, &leased).is_none());
 }
 
 // ── BUG-2219: train network steps retry transient failures ────────────────

@@ -117,7 +117,7 @@ impl CarryOverRefusal {
     /// The reason, as a clause for the ship refusal.
     // trace:TASK-1960 | ai:claude
     pub(crate) fn reason(&self) -> String {
-        let short = |s: &str| crate::review_verdict::short_sha(s).to_string();
+        let short = |s: &str| crate::gate::review_verdict::short_sha(s).to_string();
         match self {
             Self::Unresolvable { what } => format!("{what} could not be resolved locally"),
             Self::NotDescendant => "the head does not descend from the approved commit (a rebase \
@@ -210,7 +210,7 @@ pub(crate) fn record_carry_over(root: &Path, proof: &CarryOver) -> std::io::Resu
         }
     }
     let body = serde_json::to_string_pretty(proof).map_err(std::io::Error::other)?;
-    crate::review_verdict::write_verdict_atomic(&path, &format!("{body}\n"))?;
+    crate::gate::review_verdict::write_verdict_atomic(&path, &format!("{body}\n"))?;
     Ok(if existed {
         RecordOutcome::Replaced
     } else {
@@ -221,7 +221,7 @@ pub(crate) fn record_carry_over(root: &Path, proof: &CarryOver) -> std::io::Resu
 /// The one line a gate prints when an approval carries over.
 // trace:TASK-1960 | ai:claude
 pub(crate) fn carry_over_line(proof: &CarryOver, outcome: &RecordOutcome) -> String {
-    let short = |s: &str| crate::review_verdict::short_sha(s).to_string();
+    let short = |s: &str| crate::gate::review_verdict::short_sha(s).to_string();
     let noted = match outcome {
         RecordOutcome::Written => String::new(),
         RecordOutcome::AlreadyRecorded { recorded_at } => format!("; recorded {recorded_at}"),
@@ -326,9 +326,9 @@ pub(crate) fn protected_base(repo: &Path) -> Result<String, CarryOverRefusal> {
 pub(crate) fn prove_for_refusal(
     site: &CarryOverSite<'_>,
     pr: u64,
-    refusal: &crate::pr_ship::ApprovalHeadRefusal,
+    refusal: &crate::gate::ship::ApprovalHeadRefusal,
 ) -> Option<Result<CarryOver, CarryOverRefusal>> {
-    let crate::pr_ship::ApprovalHeadRefusal::Moved {
+    let crate::gate::ship::ApprovalHeadRefusal::Moved {
         reviewed_sha,
         head_sha,
     } = refusal
@@ -360,7 +360,7 @@ pub(crate) fn prove_for_refusal(
 pub(crate) fn carry_over_for_refusal(
     site: &CarryOverSite<'_>,
     pr: u64,
-    refusal: &crate::pr_ship::ApprovalHeadRefusal,
+    refusal: &crate::gate::ship::ApprovalHeadRefusal,
 ) -> Option<Result<(CarryOver, Option<RecordOutcome>), CarryOverRefusal>> {
     let proved = prove_for_refusal(site, pr, refusal)?;
     Some(proved.and_then(|proof| {

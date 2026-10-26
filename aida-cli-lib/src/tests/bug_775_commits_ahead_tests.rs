@@ -185,19 +185,19 @@ fn verdict_tip_relation_tracks_the_branch_against_the_reviewed_sha() {
     // Nothing new since the review.
     assert_eq!(
         verdict_tip_relation(p, Some("feat"), Some(&reviewed)),
-        review_verdict::TipRelation::AtReviewedSha
+        crate::gate::review_verdict::TipRelation::AtReviewedSha
     );
     // A short sha (what a reviewer actually writes) resolves the same way.
     assert_eq!(
         verdict_tip_relation(p, Some("feat"), Some(&reviewed[..7])),
-        review_verdict::TipRelation::AtReviewedSha
+        crate::gate::review_verdict::TipRelation::AtReviewedSha
     );
 
     // The rework lands a real commit.
     git_ok(p, &["commit", "--allow-empty", "-m", "fix", "--quiet"]);
     assert_eq!(
         verdict_tip_relation(p, Some("feat"), Some(&reviewed)),
-        review_verdict::TipRelation::AdvancedPast
+        crate::gate::review_verdict::TipRelation::AdvancedPast
     );
 
     // A sha from another clone is not in this history at all.
@@ -207,12 +207,12 @@ fn verdict_tip_relation_tracks_the_branch_against_the_reviewed_sha() {
             Some("feat"),
             Some("0123456789abcdef0123456789abcdef01234567")
         ),
-        review_verdict::TipRelation::Unknown
+        crate::gate::review_verdict::TipRelation::Unknown
     );
     // No recorded sha → unknowable.
     assert_eq!(
         verdict_tip_relation(p, Some("feat"), None),
-        review_verdict::TipRelation::Unknown
+        crate::gate::review_verdict::TipRelation::Unknown
     );
 }
 
@@ -238,7 +238,7 @@ fn verdict_tip_relation_reports_rewritten_history() {
     );
     assert_eq!(
         verdict_tip_relation(p, Some("feat"), Some(&reviewed)),
-        review_verdict::TipRelation::Rewritten
+        crate::gate::review_verdict::TipRelation::Rewritten
     );
 }
 
@@ -252,7 +252,7 @@ fn recorded_request_changes_blocks_until_a_commit_lands() {
     let reviewed = String::from_utf8_lossy(&git(p, &["rev-parse", "HEAD"]).stdout)
         .trim()
         .to_string();
-    review_verdict::record_verdict(
+    crate::gate::review_verdict::record_verdict(
         p,
         "TASK-5",
         Some("RequestChanges"),
@@ -264,14 +264,14 @@ fn recorded_request_changes_blocks_until_a_commit_lands() {
     )
     .unwrap();
 
-    let v = review_verdict::read_recorded_verdict(p, "TASK-5").unwrap();
-    let before = review_verdict::queue_done_verdict_gate(
+    let v = crate::gate::review_verdict::read_recorded_verdict(p, "TASK-5").unwrap();
+    let before = crate::gate::review_verdict::queue_done_verdict_gate(
         "TASK-5",
         Some(&v),
         verdict_tip_relation(p, Some("feat"), v.reviewed_sha.as_deref()),
     );
     assert!(
-        matches!(before, review_verdict::VerdictGate::Refuse(_)),
+        matches!(before, crate::gate::review_verdict::VerdictGate::Refuse(_)),
         "unchanged branch must refuse, got {before:?}"
     );
 
@@ -279,12 +279,12 @@ fn recorded_request_changes_blocks_until_a_commit_lands() {
         p,
         &["commit", "--allow-empty", "-m", "address review", "--quiet"],
     );
-    let after = review_verdict::queue_done_verdict_gate(
+    let after = crate::gate::review_verdict::queue_done_verdict_gate(
         "TASK-5",
         Some(&v),
         verdict_tip_relation(p, Some("feat"), v.reviewed_sha.as_deref()),
     );
-    assert_eq!(after, review_verdict::VerdictGate::Proceed);
+    assert_eq!(after, crate::gate::review_verdict::VerdictGate::Proceed);
 }
 
 // ── BUG-802: the drive-root anchor + PR handshake ────────────────────────────
@@ -318,7 +318,7 @@ fn a_dangling_drive_root_falls_back_rather_than_writing_into_the_void() {
 // trace:BUG-802 | ai:claude
 #[test]
 fn the_handshake_the_verb_writes_is_the_handshake_phase4_parses() {
-    use crate::review_verdict::VerdictKind;
+    use crate::gate::review_verdict::VerdictKind;
     for raw in ["approved", "request-changes", "rejected"] {
         let kind = VerdictKind::parse(raw);
         let label = kind.label();
@@ -358,12 +358,12 @@ fn review_record_pr_handshake_honors_explicit_verdict_file() {
         commit_subjects: vec![],
     };
     // BUG-1918: an approval must name its recorder (here, a session id).
-    let reviewer = crate::review_authority::IdentitySource {
+    let reviewer = crate::gate::review_authority::IdentitySource {
         session_ids: vec!["independent-reviewer".into()],
         ..Default::default()
     };
     crate::with_review_pr_subject(subject, || {
-        crate::review_authority::with_identity_source(reviewer, || {
+        crate::gate::review_authority::with_identity_source(reviewer, || {
             crate::handle_review_record(
                 "STORY-993",
                 "approved",
@@ -851,7 +851,7 @@ fn approved_verdict_at_a_stale_sha_does_not_silently_proceed() {
     let reviewed = String::from_utf8_lossy(&git(p, &["rev-parse", "HEAD"]).stdout)
         .trim()
         .to_string();
-    review_verdict::record_verdict(
+    crate::gate::review_verdict::record_verdict(
         p,
         "TASK-9",
         Some("approved"),
@@ -878,7 +878,7 @@ fn approved_verdict_at_a_stale_sha_does_not_silently_proceed() {
         crate::gate::review_verdict::evaluate_review_verdict_gate(p, "TASK-9", "TASK-9");
     assert!(verdict.is_some(), "the recorded approval must be found");
     assert!(
-        !matches!(gate, review_verdict::VerdictGate::Proceed),
+        !matches!(gate, crate::gate::review_verdict::VerdictGate::Proceed),
         "an approval recorded before new, unreviewed commits landed must not silently clear \
          the gate: {gate:?}"
     );
@@ -893,7 +893,7 @@ fn approved_verdict_at_a_stale_sha_does_not_silently_proceed() {
 fn approved_verdict_with_no_reviewed_sha_refuses_through_the_real_gate() {
     let tmp = local_only_repo("master", 0);
     let p = tmp.path();
-    review_verdict::record_verdict(
+    crate::gate::review_verdict::record_verdict(
         p,
         "TASK-10",
         Some("approved"),
@@ -909,7 +909,7 @@ fn approved_verdict_with_no_reviewed_sha_refuses_through_the_real_gate() {
         crate::gate::review_verdict::evaluate_review_verdict_gate(p, "TASK-10", "TASK-10");
     assert!(verdict.is_some());
     match gate {
-        review_verdict::VerdictGate::Refuse(lines) => {
+        crate::gate::review_verdict::VerdictGate::Refuse(lines) => {
             assert!(lines.join("\n").contains("UNVERIFIABLE"), "{lines:?}");
         }
         other => panic!("a sha-less approval must refuse, got {other:?}"),
@@ -926,7 +926,7 @@ fn approved_verdict_still_at_the_reviewed_sha_proceeds() {
     let reviewed = String::from_utf8_lossy(&git(p, &["rev-parse", "HEAD"]).stdout)
         .trim()
         .to_string();
-    review_verdict::record_verdict(
+    crate::gate::review_verdict::record_verdict(
         p,
         "TASK-11",
         Some("approved"),
@@ -940,7 +940,7 @@ fn approved_verdict_still_at_the_reviewed_sha_proceeds() {
 
     let (gate, _) =
         crate::gate::review_verdict::evaluate_review_verdict_gate(p, "TASK-11", "TASK-11");
-    assert_eq!(gate, review_verdict::VerdictGate::Proceed);
+    assert_eq!(gate, crate::gate::review_verdict::VerdictGate::Proceed);
 }
 
 #[test]
@@ -1032,9 +1032,11 @@ fn concurrent_sibling_publication_has_one_winner_and_never_two_links() {
         let no_replace = {
             let probe = parent.path().join("no-replace-probe");
             std::fs::write(&probe, b"").unwrap();
-            let supported =
-                crate::review_verdict::rename_no_replace(&probe, &parent.path().join("probed"))
-                    .is_ok();
+            let supported = crate::gate::review_verdict::rename_no_replace(
+                &probe,
+                &parent.path().join("probed"),
+            )
+            .is_ok();
             let _ = std::fs::remove_file(&probe);
             let _ = std::fs::remove_file(parent.path().join("probed"));
             supported
@@ -1082,7 +1084,7 @@ fn concurrent_sibling_publication_has_one_winner_and_never_two_links() {
         done.store(true, Ordering::SeqCst);
         watcher.join().unwrap();
         assert_eq!(std::fs::metadata(&dest).unwrap().nlink(), 1);
-        assert!(crate::review_verdict::read_verdict_body(&dest).is_ok());
+        assert!(crate::gate::review_verdict::read_verdict_body(&dest).is_ok());
         let leftovers: Vec<_> = std::fs::read_dir(dest.parent().unwrap())
             .unwrap()
             .filter_map(Result::ok)

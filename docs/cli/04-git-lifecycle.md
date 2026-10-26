@@ -290,9 +290,8 @@ requests one at a time with `aida pr ship N`.
 Here's the thing raw git doesn't know about your AIDA project: **there are two branches that must move together** — your **code** branch, and the orphan **`aida-store`** branch that holds the specs. `aida fetch`/`pull`/`push` are the verbs that keep both legs in sync, because doing one and forgetting the other is the mistake everyone makes. Each takes `--code-only` / `--store-only` to scope to one leg when you mean to.
 
 An explicitly enabled clone-local `work` transport profile changes push/pull
-to store-only refs. Push executes one pinned store-ref push through verified
-store hooks, without lifecycle actions. Pull remains plan-only; dry-run/JSON
-plans perform no fetch. Sanitization and sanitized intake remain pending.
+planning to store-only refs. In the current profile-and-plan slice, actual
+push/pull refuses; dry-run/JSON plans perform no fetch or lifecycle actions.
 See [transport configuration](07-project-setup.md#aida-config-transport) for
 enrollment, the execution boundary, and the raw-Git bypass limit.
 <!-- trace:STORY-1742 | ai:codex -->
@@ -613,9 +612,8 @@ ops = ["ship"]   # any of: ship, sketch-signoff, dispatch, hold-clear, relay-res
   gates, so a branch cannot remove one.
 - If the committed layer cannot be read, every action is gated.
 - A PR that changes `.aida/config.toml` or the mandate code
-  (`mandate.rs`, `mandate_gates.rs`, `mandate_drive.rs`, `mandate_ship.rs`,
-  `mandate_traces.rs`, `relay_launch.rs`, `rework_hold_release.rs`,
-  `fleet_lanes.rs`, `pr_ship.rs`, `pr_ship_batch.rs`, and everything under
+  (`dispatch.rs`, `mandate_drive.rs`, `mandate_traces.rs`, `relay_launch.rs`,
+  `pr_ship_batch.rs`, and everything under
   `aida-cli-lib/src/gate/`) never ships under a mandate, and a mandate never
   releases its rework hold either.
   Listing `ship` or `hold-clear` stops mandate rework releases too.

@@ -270,14 +270,12 @@ fn label_only_clear_is_recorded_as_the_human_principal() {
         .expect("clear handler must remain inspectable");
     let floor = clear.find("has_integrity_floor_authority()").unwrap();
     let read = clear.find("merge_hold::fetch_pinned_change(").unwrap();
-    let recorded = clear
-        .rfind("merge_hold::record_clearance(&root, record, actor)")
-        .unwrap();
+    let recorded = clear.rfind("merge_hold_core::record_clearance(").unwrap();
     assert!(
         floor < read && read < recorded,
         "floor, then forge read, then record"
     );
-    assert!(clear.contains("merge_hold::LABEL_ONLY_REASON"));
+    assert!(clear.contains("merge_hold_core::LABEL_ONLY_REASON"));
     // BUG-1693: a marker deleted by hand leaves AIDA fail-closed on that
     // PR forever unless `merge-hold clear` can RECORD the release. Pin the
     // door itself, not merely a mention of it: whitespace-normalised so
@@ -288,7 +286,7 @@ fn label_only_clear_is_recorded_as_the_human_principal() {
     let door = squashed
         .find(
             "if let Some((record, actor)) = &tampering_record { \
-             merge_hold::record_clearance(&root, record, actor)?; }",
+             crate::gate::merge_hold_core::record_clearance( &root, record, actor, )?; }",
         )
         .expect("clear must RECORD a clearance for a hold whose marker went missing");
     // TASK-2152: the no-hold return now lives in `finish_clear`, which
@@ -361,7 +359,9 @@ fn list_surfaces_a_tampered_pr_and_its_empty_state_cannot_swallow_it() {
 // trace:BUG-1532 | ai:claude
 #[test]
 fn refusal_hold_releases_only_on_a_fresh_verdict_at_the_current_head() {
-    use crate::review_verdict::{read_recorded_verdict, read_verdict_for_sha, record_verdict};
+    use crate::gate::review_verdict::{
+        read_recorded_verdict, read_verdict_for_sha, record_verdict,
+    };
     const OLD: &str = "3acf3671fd7a0000000000000000000000000000";
     const HEAD: &str = "cd21a1dc0a9e1111111111111111111111111111";
     const OTHER: &str = "af49b12b83fc2222222222222222222222222222";
@@ -484,7 +484,7 @@ fn refusal_hold_releases_only_on_a_fresh_verdict_at_the_current_head() {
 // trace:TASK-1801 | ai:claude
 #[test]
 fn a_refused_current_verdict_does_not_fall_back_to_its_archive() {
-    use crate::review_verdict::{
+    use crate::gate::review_verdict::{
         archived_verdict_file_for_sha, read_recorded_verdict, read_verdict_for_sha, record_verdict,
         verdict_file_for_sha, verdict_path,
     };
@@ -551,7 +551,7 @@ fn a_refused_current_verdict_does_not_fall_back_to_its_archive() {
 // trace:BUG-1532 | ai:claude
 #[test]
 fn refusal_with_an_unstamped_verdict_names_the_missing_provenance() {
-    use crate::review_verdict::{read_recorded_verdict, read_verdict_for_sha, verdict_path};
+    use crate::gate::review_verdict::{read_recorded_verdict, read_verdict_for_sha, verdict_path};
     const HEAD: &str = "35de6d3abb00000000000000000000000000000a";
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
@@ -1166,7 +1166,7 @@ fn explicit_reconciliation_refreshes_routes_and_render_stays_read_only() {
         .and_then(|body| body.split("MergeHoldAction::Add").next())
         .expect("merge-hold list handler must remain inspectable");
     assert!(
-        handler.contains("merge_hold::reconcile_recusal_hold"),
+        handler.contains("merge_hold_core::reconcile_recusal_hold"),
         "`aida merge-hold list --fix` must reconcile recusal routing"
     );
     // TASK-189: the label column is a live (pinned) forge read; the

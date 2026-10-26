@@ -300,8 +300,14 @@ pub(super) fn live_approval(
     change: &forge::Change,
 ) -> std::result::Result<Approval, String> {
     let head = change.head.as_str();
-    let (candidates, policy, ids) =
-        crate::pr_cmd::merge_approval_subject(&[root], root, change.id, &[], None, Some(head));
+    let (candidates, policy, ids) = crate::gate::approval::merge_approval_subject(
+        &[root],
+        root,
+        change.id,
+        &[],
+        None,
+        Some(head),
+    );
     let site = crate::review_carryover::CarryOverSite::quiet(root, Some(&change.base));
     approval_then_corpus(
         || approval_at(change.id, &candidates, head, &policy, &site),
@@ -316,8 +322,14 @@ pub(super) fn live_approval_only(
     change: &forge::Change,
 ) -> std::result::Result<Approval, String> {
     let head = change.head.as_str();
-    let (candidates, policy, _) =
-        crate::pr_cmd::merge_approval_subject(&[root], root, change.id, &[], None, Some(head));
+    let (candidates, policy, _) = crate::gate::approval::merge_approval_subject(
+        &[root],
+        root,
+        change.id,
+        &[],
+        None,
+        Some(head),
+    );
     let site = crate::review_carryover::CarryOverSite::quiet(root, Some(&change.base));
     approval_at(change.id, &candidates, head, &policy, &site)
 }
@@ -342,17 +354,21 @@ pub(super) fn corpus_at(
     change: &forge::Change,
     ids: &[String],
 ) -> std::result::Result<(), String> {
-    match crate::merge_hold::corpus_gate_decision(root, change.id, ids, Some(&change.base), || {
-        Some(change.head.clone())
-    }) {
-        Ok(crate::merge_hold::CorpusMergeGate::Clear) => Ok(()),
-        Ok(crate::merge_hold::CorpusMergeGate::Refuse { message, .. }) => Err(message),
+    match crate::gate::merge_hold_core::corpus_gate_decision(
+        root,
+        change.id,
+        ids,
+        Some(&change.base),
+        || Some(change.head.clone()),
+    ) {
+        Ok(crate::gate::merge_hold_core::CorpusMergeGate::Clear) => Ok(()),
+        Ok(crate::gate::merge_hold_core::CorpusMergeGate::Refuse { message, .. }) => Err(message),
         Err(error) => Err(format!("{error:#}")),
     }
 }
 
 pub(super) fn live_under_review(root: &Path, change: &forge::Change) -> Option<String> {
-    crate::review_marker::live_description(root, change.id, Some(&change.head))
+    crate::gate::review_marker::live_description(root, change.id, Some(&change.head))
 }
 
 pub(super) fn live_hold(root: &Path, change: &forge::Change) -> Result<Option<String>> {
@@ -407,24 +423,29 @@ pub(crate) fn required_checks(root: &Path) -> Result<Vec<String>> {
 /// through `site` (which must be quiet). `Err` is the gate's refusal.
 pub(super) fn approval_at(
     pr: u64,
-    candidates: &[crate::review_verdict::RecordedVerdict],
+    candidates: &[crate::gate::review_verdict::RecordedVerdict],
     head: &str,
-    policy: &crate::pr_ship::ShipApprovalPolicy,
+    policy: &crate::gate::ship::ShipApprovalPolicy,
     site: &crate::review_carryover::CarryOverSite<'_>,
 ) -> std::result::Result<Approval, String> {
     debug_assert!(site.quiet, "readiness never records a carry-over");
-    let carried =
-        match crate::pr_cmd::approval_decision(pr, candidates, Some(head), policy, Some(site))? {
-            crate::pr_cmd::HeadDecision::Covered(Some(_)) => None,
-            crate::pr_cmd::HeadDecision::Covered(None) => {
-                return Err("no approval covers the head".into())
-            }
-            crate::pr_cmd::HeadDecision::CarriedOver(proof, _) => Some(format!(
-                "carried over clean merges of `{}` to the head, the PR's own diff unchanged",
-                proof.base_branch()
-            )),
-            crate::pr_cmd::HeadDecision::Stale { message, .. } => return Err(message),
-        };
+    let carried = match crate::gate::approval::approval_decision(
+        pr,
+        candidates,
+        Some(head),
+        policy,
+        Some(site),
+    )? {
+        crate::gate::approval::HeadDecision::Covered(Some(_)) => None,
+        crate::gate::approval::HeadDecision::Covered(None) => {
+            return Err("no approval covers the head".into())
+        }
+        crate::gate::approval::HeadDecision::CarriedOver(proof, _) => Some(format!(
+            "carried over clean merges of `{}` to the head, the PR's own diff unchanged",
+            proof.base_branch()
+        )),
+        crate::gate::approval::HeadDecision::Stale { message, .. } => return Err(message),
+    };
     let mut approval = approval_of(candidates).ok_or("no approval covers the head")?;
     approval.carried = carried;
     Ok(approval)
@@ -438,14 +459,14 @@ pub(super) fn hold_at(
     pr: u64,
     label: impl FnOnce() -> std::result::Result<bool, String>,
 ) -> Result<Option<String>> {
-    if let Some(record) = crate::merge_hold::read_hold_record(root, pr) {
+    if let Some(record) = crate::gate::merge_hold_core::read_hold_record(root, pr) {
         return Ok(Some(format!(
             "{} hold: {}",
             format!("{:?}", record.reason_kind).to_lowercase(),
             record.detail
         )));
     }
-    if let Some(reason) = crate::merge_hold::read_hold(root, pr) {
+    if let Some(reason) = crate::gate::merge_hold_core::read_hold(root, pr) {
         return Ok(Some(reason));
     }
     match label() {
@@ -457,14 +478,14 @@ pub(super) fn hold_at(
 
 /// The newest open approval among `candidates`, as a wake identity.
 pub(super) fn approval_of(
-    candidates: &[crate::review_verdict::RecordedVerdict],
+    candidates: &[crate::gate::review_verdict::RecordedVerdict],
 ) -> Option<Approval> {
     let open: Vec<_> = candidates
         .iter()
         .filter(|v| v.kind.approves() && !v.is_closed())
         .cloned()
         .collect();
-    let newest = crate::pr_ship::newest_approval(&open)?;
+    let newest = crate::gate::ship::newest_approval(&open)?;
     let reviewed = newest.reviewed_sha.clone()?;
     Some(Approval {
         identity: format!(

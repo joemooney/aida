@@ -2218,9 +2218,9 @@ mod tests {
         let baseline = {
             let _env = crate::test_env::EnvVarsGuard::apply(&[
                 ("AIDA_AGENT_NAME", None),
-                (crate::seat_authority::GRANT_ENV, None),
+                (crate::gate::seat_authority::GRANT_ENV, None),
             ]);
-            crate::review_authority::RecorderIdentity::current(&leases)
+            crate::gate::review_authority::RecorderIdentity::current(&leases)
         };
         let reviewer = reserve_handle(
             project,
@@ -2243,37 +2243,47 @@ mod tests {
             .unwrap();
             let _env = crate::test_env::EnvVarsGuard::apply(&[
                 ("AIDA_AGENT_NAME", Some(handle.as_str())),
-                (crate::seat_authority::GRANT_ENV, None),
+                (crate::gate::seat_authority::GRANT_ENV, None),
             ]);
             assert!(
                 matches!(
-                    crate::seat_authority::grant_check(project),
-                    crate::seat_authority::GrantCheck::Absent
+                    crate::gate::seat_authority::grant_check(project),
+                    crate::gate::seat_authority::GrantCheck::Absent
                 ),
                 "{handle}"
             );
-            assert!(crate::seat_authority::current_seat(project).is_none());
+            assert!(crate::gate::seat_authority::current_seat(project).is_none());
             assert!(
-                crate::seat_authority::resolve_commit_authority(&project.join(".aida-store"))
+                crate::gate::seat_authority::resolve_commit_authority(&project.join(".aida-store"))
                     .is_none(),
                 "{handle}"
             );
-            let recorder = crate::review_authority::RecorderIdentity::current(&leases);
+            let recorder = crate::gate::review_authority::RecorderIdentity::current(&leases);
             assert_eq!(recorder.tokens, baseline.tokens, "{handle}");
             assert!(!recorder.tokens.iter().any(|t| t.contains(handle.as_str())));
             // The author gate keys on session identity: the author recording
             // under a seat-shaped handle is still refused.
             let mut tokens = recorder.tokens.clone();
             tokens.push("session:author-s".to_string());
-            let recorder =
-                crate::review_authority::RecorderIdentity::with_context(tokens, &[], &[], None);
-            let author = crate::pr_ship::AuthorSession {
+            let recorder = crate::gate::review_authority::RecorderIdentity::with_context(
+                tokens,
+                &[],
+                &[],
+                None,
+            );
+            let author = crate::gate::ship::AuthorSession {
                 label: "implementer".to_string(),
                 tokens: vec!["session:author-s".to_string()],
             };
             assert!(matches!(
-                crate::review_author_gate(&[author], &recorder, true, false, || true),
-                crate::ReviewAuthorGate::Refused(_)
+                crate::gate::review_author::review_author_gate(
+                    &[author],
+                    &recorder,
+                    true,
+                    false,
+                    || true
+                ),
+                crate::gate::review_author::ReviewAuthorGate::Refused(_)
             ));
         }
     }
