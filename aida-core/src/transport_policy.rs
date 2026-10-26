@@ -12,7 +12,7 @@ use std::rc::{Rc, Weak};
 
 #[path = "transport_private.rs"]
 mod private;
-pub use private::Private;
+pub use private::{with_lock_wait, Private};
 
 #[path = "transport_process.rs"]
 mod process;
@@ -291,6 +291,23 @@ pub fn refuse_unsupported(root: &Path) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn story_1742_bounded_lock_wait_refuses_contention_quickly() {
+        // trace:STORY-1742 | ai:claude
+        let root = tempfile::tempdir().unwrap();
+        crate::git_ops::init(root.path()).unwrap();
+        let common = crate::allocation_authority::common_dir(root.path()).unwrap();
+        let private = Private::open(&common).unwrap();
+        let held = private.lock().unwrap();
+        let started = std::time::Instant::now();
+        let error =
+            with_lock_wait(std::time::Duration::from_millis(100), || private.lock()).unwrap_err();
+        assert!(error.to_string().contains("busy"), "{error}");
+        assert!(started.elapsed() < std::time::Duration::from_secs(5));
+        drop(held);
+        private.lock().unwrap();
+    }
 
     pub(super) fn enrolled() -> tempfile::TempDir {
         let root = tempfile::tempdir().unwrap();

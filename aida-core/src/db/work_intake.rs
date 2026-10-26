@@ -833,8 +833,9 @@ mod tests {
 
     /// Seed an ordinary, already-shared store shape: object and metadata
     /// prose carrying '&', '*' and '!' (markdown emphasis, punctuation) and an
-    /// oplog well past one MiB, committed outside the WORK path.
-    fn seed_realistic(root: &Path) -> Vec<Requirement> {
+    /// oplog of `records` long prose records (600 is just past one MiB),
+    /// committed outside the WORK path.
+    fn seed_realistic(root: &Path, records: usize) -> Vec<Requirement> {
         let mut rows = Vec::new();
         for (n, (title, description)) in [
             ("Spacing & Layout", "*this is bold* and **strong** text!"),
@@ -861,17 +862,17 @@ mod tests {
         assert!(metadata.contains("*this is bold*"));
         std::fs::write(root.join("metadata.yaml"), metadata).unwrap();
         let mut log = crate::oplog::OpLog::new("1".into());
-        for n in 0..9_000 {
+        let prose = "Spacing & Layout *note*, **bold** and more! ".repeat(40);
+        for n in 0..records {
             log.append(
                 rows[n % rows.len()].id,
                 "aida".into(),
                 crate::oplog::OpKind::SetTitle {
-                    title: format!("Spacing & Layout *note* {n}!"),
+                    title: format!("{prose}{n}!"),
                 },
             );
         }
         let oplog = serde_yaml::to_string(&log).unwrap();
-        assert!(oplog.len() > 2 * 1_048_576, "{}", oplog.len());
         std::fs::write(root.join("oplog.yaml"), oplog).unwrap();
         crate::git_ops::add(root, &["objects", "metadata.yaml", "oplog.yaml"]).unwrap();
         crate::git_ops::commit(root, "seed shared store").unwrap();
@@ -886,7 +887,7 @@ mod tests {
             return;
         }
         let (_temp, root, backend) = fixture();
-        let seeded = seed_realistic(&root);
+        let seeded = seed_realistic(&root, 30);
 
         // Add, update (prose kept), delete, metadata rewrite: all admitted.
         let added = backend.add_requirement(row("Generic failure")).unwrap();
@@ -913,12 +914,12 @@ mod tests {
             changed.description
         );
         // The shared oplog header keeps its node; appended operations carry
-        // this clone's node; history past one MiB is preserved.
+        // this clone's node.
         let log: crate::oplog::OpLog =
             serde_yaml::from_slice(&std::fs::read(root.join("oplog.yaml")).unwrap()).unwrap();
         let node = crate::work_binding::load(&root).unwrap().unwrap().node_id;
         assert_eq!(log.node_id, "1");
-        assert!(log.operations.len() > 9_000);
+        assert!(log.operations.len() > 30);
         assert_eq!(log.operations.last().unwrap().node_id, node);
         assert_eq!(log.operations[0].node_id, "1");
 
@@ -934,6 +935,31 @@ mod tests {
         let error = backend.add_requirement(row("Another failure")).unwrap_err();
         assert!(error.to_string().contains("grammar"), "{error}");
         assert_eq!(snapshot(&root), accepted);
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn story_1742_work_write_appends_to_an_oplog_past_one_mib() {
+        // trace:STORY-1742 | ai:claude
+        if !isolated("db::git_backend::work_intake::tests::story_1742_work_write_appends_to_an_oplog_past_one_mib") {
+            return;
+        }
+        let (_temp, root, backend) = fixture();
+        seed_realistic(&root, 600);
+        let before = std::fs::read(root.join("oplog.yaml")).unwrap();
+        assert!(
+            before.len() > crate::transport_sanitization::MAX_BYTES,
+            "{}",
+            before.len()
+        );
+        // The oplog is bounded per record, not per file: one write appends.
+        backend.add_requirement(row("Generic failure")).unwrap();
+        let after = std::fs::read(root.join("oplog.yaml")).unwrap();
+        let prefix = crate::transport_sanitization::oplog_prefix(&before).unwrap();
+        assert!(after.starts_with(prefix));
+        let log: crate::oplog::OpLog = serde_yaml::from_slice(&after).unwrap();
+        assert_eq!(log.operations.len(), 601);
+        assert_eq!(log.node_id, "1");
     }
 
     #[test]

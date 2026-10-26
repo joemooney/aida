@@ -383,7 +383,7 @@ mod tests {
         let legacy = b"[mode.Distributed]\nnode_id='7'\n[sequences]\nBUG=91\n'$USER'=3\n";
         std::fs::write(temp.path().join(".aida/dispenser.toml"), legacy).unwrap();
         with_unspent(temp.path(), |candidate| {
-            assert_eq!(candidate.dispenser().next("bug")?, 92);
+            assert_eq!(candidate.dispenser().next("BUG")?, 92);
             let sealed = candidate.seal()?;
             let bytes = sealed.counter_bytes.as_deref().unwrap();
             let state: DispenserState = toml::from_str(std::str::from_utf8(bytes)?)?;

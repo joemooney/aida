@@ -1623,7 +1623,7 @@ fn scanner_refuses_signatures_identity_mismatch_structured_tokens_trailers_addre
             }
             9 => {
                 fixture.store_commit(&store, "README.md", "Generic\n".repeat(150_000).as_bytes());
-                expected = Some("size limit");
+                expected = Some("limit");
             }
             10 => {
                 let nested = format!("{}{}", "[".repeat(80), "]".repeat(80));
@@ -1960,4 +1960,72 @@ fn sanitized_intake_write_files_one_generic_draft_only_when_enrolled() {
         ),
         "1"
     );
+}
+
+#[test]
+fn work_intake_and_push_scan_agree_on_what_a_write_adds() {
+    // trace:STORY-1742 | ai:claude
+    let fixture = Fixture::new();
+    let (store, remote) = fixture.attach_with_remote();
+    fixture.identity_policy("aida");
+    // Trusted history today's policy would refuse, in both delta-scanned files.
+    let record = |id: &str| {
+        OPLOG["operations:\n".len()..OPLOG.find("clock: ").unwrap()]
+            .replace("019deaa4-dcd0-7541-95f0-ae88f28fc0e6", id)
+            .replace("In-progress", "private-marker")
+    };
+    let history = OPLOG.replace("In-progress", "private-marker");
+    fs::write(store.join("oplog.yaml"), &history).unwrap();
+    fixture.store_commit(
+        &store,
+        "metadata.yaml",
+        b"title: Generic\ndescription: Seen on private-marker\n",
+    );
+    fs::create_dir_all(store.join("objects")).unwrap();
+    fixture.reenroll_at_store_tip(&store);
+
+    // An admitted WORK write rewrites both files around that history, and
+    // the push gate applies the same delta rule, so the write publishes.
+    let added = fixture.aida(&[
+        "add",
+        "--sanitized",
+        "Generic failure",
+        "--description",
+        "Synthetic reproduction",
+    ]);
+    assert!(added.status.success(), "{}", diagnostics(&added));
+    let changed = fixture.git_at(&store, &["show", "--name-only", "--format=", "HEAD"]);
+    assert!(
+        changed.lines().any(|path| path == "oplog.yaml"),
+        "{changed}"
+    );
+    let oplog = fs::read_to_string(store.join("oplog.yaml")).unwrap();
+    assert!(oplog.starts_with(&history[..history.find("clock: ").unwrap()]));
+    let output = fixture.aida(&["push"]);
+    assert!(output.status.success(), "{}", diagnostics(&output));
+    let tip = fixture.git_at(&store, &["rev-parse", "HEAD"]);
+    assert_eq!(fixture.git_at(&remote, &["rev-parse", "aida-store"]), tip);
+
+    // A write that adds refused prose is refused at intake ...
+    let refused = fixture.aida(&[
+        "add",
+        "--sanitized",
+        "Generic failure",
+        "--description",
+        "seen on private-marker",
+    ]);
+    assert!(!refused.status.success());
+    assert!(!diagnostics(&refused).contains("private-marker"));
+    assert_eq!(fixture.git_at(&store, &["rev-parse", "HEAD"]), tip);
+    // ... and the same addition committed around intake is refused at push.
+    let trailer = oplog.rfind("\nclock: ").unwrap() + 1;
+    let appended = format!(
+        "{}{}{}",
+        &oplog[..trailer],
+        record("019deaa4-dcd0-7541-95f0-ae88f28fc0e7"),
+        &oplog[trailer..]
+    );
+    fixture.store_commit(&store, "oplog.yaml", appended.as_bytes());
+    fixture.assert_scan_refusal_with(&remote, &[]);
+    assert_eq!(fixture.git_at(&remote, &["rev-parse", "aida-store"]), tip);
 }

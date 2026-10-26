@@ -290,6 +290,26 @@ impl Policy {
         self.document(self.path_format(path)?, bytes)
     }
 
+    /// The one rule for what a new file version scans, shared by WORK intake
+    /// and the push gate so the two never disagree. `oplog.yaml` and
+    /// `metadata.yaml` scan only their delta against `before` (the parent
+    /// version); every other file is scanned whole. Policy covers what a
+    /// change adds, never history.
+    // trace:STORY-1742 | ai:claude
+    pub fn change(&self, path: &str, before: Option<&[u8]>, after: &[u8]) -> ScanResult {
+        match path {
+            "oplog.yaml" => self.oplog_append(before, after),
+            "metadata.yaml" => self.yaml_change(before, after),
+            path => self.artifact(path, after),
+        }
+    }
+
+    /// Whether [`Self::change`] reads a parent version for `path`.
+    // trace:STORY-1742 | ai:claude
+    pub fn scans_delta(path: &str) -> bool {
+        matches!(path, "oplog.yaml" | "metadata.yaml")
+    }
+
     pub fn validate(&self) -> ScanResult {
         if self.version != 1 || !self.reviewed || self.deny_tokens.len() > 256 {
             return Err(Refusal::Policy);
@@ -515,7 +535,14 @@ impl Policy {
         Self::shape(after, text)?;
         yaml_plain(after, YamlTags::Variants)?;
         let _: crate::oplog::OpLog = serde_yaml::from_str(text).map_err(|_| Refusal::Encoding)?;
-        let added = format!("operations:\n{}", &text[prefix.len()..]);
+        // An unchanged record list (a trailer-only change, or a file a later
+        // commit carries as is) adds no records. trace:STORY-1742 | ai:claude
+        let rest = &text[prefix.len()..];
+        let added = if rest.starts_with("- ") {
+            format!("operations:\n{rest}")
+        } else {
+            format!("operations: []\n{rest}")
+        };
         self.document("aida-oplog", added.as_bytes())?;
         let records = |bytes: &[u8]| -> Result<Vec<serde_yaml::Value>, Refusal> {
             let value: serde_yaml::Value =
@@ -1042,6 +1069,23 @@ mod tests {
             );
         }
         assert!(policy.yaml_change(None, metadata).is_err());
+
+        // `change` is the one rule intake and push share: an unchanged or
+        // trailer-only oplog adds nothing, other files scan whole.
+        policy
+            .change("oplog.yaml", Some(before.as_bytes()), before.as_bytes())
+            .unwrap();
+        let ticked = before.replace("clock: 1\n", "clock: 2\n");
+        assert_ne!(ticked, before);
+        policy
+            .change("oplog.yaml", Some(before.as_bytes()), ticked.as_bytes())
+            .unwrap();
+        policy
+            .change("metadata.yaml", Some(metadata), metadata)
+            .unwrap();
+        assert!(policy
+            .change("README.md", Some(b"R&D\n"), b"R&D\n")
+            .is_err());
     }
 
     #[test]

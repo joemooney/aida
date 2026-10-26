@@ -144,7 +144,7 @@ impl Scan {
         let mut walked = HashSet::new();
         let mut scanned = HashSet::new();
         for (ordinal, oid) in commits.iter().enumerate() {
-            let tree = self.commit(&mut batch, ordinal, oid)?;
+            let (tree, parent) = self.commit(&mut batch, ordinal, oid)?;
             // Inspect paths on EVERY new commit, even where a whole subtree
             // or blob is reused from the trusted root. Memoizing an exact
             // (directory path, tree) pair repeats no distinct path verdict.
@@ -175,16 +175,31 @@ impl Scan {
                             if (mode == "120000") != (format == "symlink") {
                                 bail!("Unsupported tree mode; transport refused");
                             }
-                            if fresh.contains(child.as_str())
-                                && scanned.insert((child.clone(), format))
-                            {
+                            if !fresh.contains(child.as_str()) {
+                                continue;
+                            }
+                            // Intake's own rule: delta-scanned files read
+                            // their first-parent version. trace:STORY-1742 | ai:claude
+                            let before = match &parent {
+                                Some(parent) if Policy::scans_delta(&path) => {
+                                    parent_blob(&mut batch, parent, &path)?
+                                }
+                                _ => None,
+                            };
+                            if scanned.insert((child.clone(), format, before.clone())) {
                                 let bytes = batch.get(&child, "blob")?;
-                                self.policy.document(format, &bytes).map_err(|category| {
-                                    anyhow::anyhow!(
-                                        "Transport scan refused: object {}, {category}",
-                                        scanned.len()
-                                    )
-                                })?;
+                                let before = match &before {
+                                    Some(oid) => Some(batch.get(oid, "blob")?),
+                                    None => None,
+                                };
+                                self.policy
+                                    .change(&path, before.as_deref(), &bytes)
+                                    .map_err(|category| {
+                                        anyhow::anyhow!(
+                                            "Transport scan refused: object {}, {category}",
+                                            scanned.len()
+                                        )
+                                    })?;
                             }
                         }
                         _ => bail!("Unsupported tree mode; transport refused"),
@@ -197,7 +212,12 @@ impl Scan {
 
     /// Commit metadata is safe only as the explicitly enrolled pseudonym;
     /// the shipped identity hook still runs at push time.
-    fn commit(&self, batch: &mut Batch, ordinal: usize, oid: &str) -> Result<String> {
+    fn commit(
+        &self,
+        batch: &mut Batch,
+        ordinal: usize,
+        oid: &str,
+    ) -> Result<(String, Option<String>)> {
         let bytes = batch.get(oid, "commit")?;
         let text = std::str::from_utf8(&bytes)
             .map_err(|_| anyhow::anyhow!("Transport scan refused: commit encoding"))?;
@@ -211,12 +231,15 @@ impl Scan {
             .split_once("\n\n")
             .context("Unsupported commit structure")?;
         let mut tree = None;
+        let mut parent = None;
         let mut identities = 0;
         for line in headers.lines() {
             let (key, value) = line.split_once(' ').context("Unsupported commit header")?;
             match key {
                 "tree" if tree.is_none() && is_hex_id(value, &[oid.len()]) => tree = Some(value),
-                "parent" if is_hex_id(value, &[oid.len()]) => {}
+                "parent" if is_hex_id(value, &[oid.len()]) => {
+                    parent.get_or_insert(value);
+                }
                 "author" | "committer" => {
                     let prefix =
                         format!("{} <{}> ", self.policy.git_name, self.policy.git_identity);
@@ -246,7 +269,10 @@ impl Scan {
         if identities != 3 {
             bail!("Incomplete commit identities");
         }
-        Ok(tree.context("Missing commit tree")?.to_owned())
+        Ok((
+            tree.context("Missing commit tree")?.to_owned(),
+            parent.map(str::to_owned),
+        ))
     }
 
     pub(super) fn receipt(
@@ -267,6 +293,27 @@ impl Scan {
         };
         private.write(RECEIPT_FILE, &serde_json::to_vec(&receipt)?)
     }
+}
+
+/// The blob a root-level `name` had in `parent`'s tree, if any. The parent's
+/// own metadata was vetted when it was scanned or is trusted history.
+// trace:STORY-1742 | ai:claude
+fn parent_blob(batch: &mut Batch, parent: &str, name: &str) -> Result<Option<String>> {
+    let bytes = batch.get(parent, "commit")?;
+    let text = std::str::from_utf8(&bytes)
+        .map_err(|_| anyhow::anyhow!("Transport scan refused: commit encoding"))?;
+    let tree = text
+        .lines()
+        .next()
+        .and_then(|line| line.strip_prefix("tree "))
+        .filter(|tree| is_hex_id(tree, &[parent.len()]))
+        .context("Missing commit tree")?
+        .to_owned();
+    let bytes = batch.get(&tree, "tree")?;
+    Ok(tree_entries(&bytes, tree.len() / 2)?
+        .into_iter()
+        .find(|(mode, entry, _)| *mode == "100644" && *entry == name)
+        .map(|(_, _, child)| child))
 }
 
 /// Raw tree object entries: `<mode> <name>\0<binary id>`.

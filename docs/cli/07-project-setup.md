@@ -505,8 +505,8 @@ aida add --sanitized "Generic failure" --description-from-file defect.md
 title, description, type and priority. It never adds an owner, tags, feature,
 parent or session context, and refuses flags that would. `--template` and
 `--preview` work in any clone and write nothing: preview reports the policy
-verdict of the store a write would use (an explicit `--file`, the detected
-store, or the project), not of the current directory, and, when the text
+verdict of the store a write would use (an explicitly chosen requirements
+file, the detected store, or the project), not of the current directory, and, when the text
 passes, shows the candidate. Preview is for your review only; it reserves no
 identifier and is not a permission token. A `--sanitized` write requires an
 enabled profile.
@@ -521,10 +521,16 @@ Existing store content is read by its YAML structure, not by its characters:
 prose with `&`, `*` or `!` (Markdown emphasis, punctuation) is ordinary text,
 while real YAML anchors, aliases and non-core tags refuse. `oplog.yaml` is
 bounded per record rather than per file, so a long shared history stays
-writable. Written files are always `0644` and directories `0755`, whatever the
+writable. Content policy covers what a write adds, never history: for
+`oplog.yaml` and `metadata.yaml`, intake and `aida push` both scan only the
+change against the previous version of the file (appended records, changed
+values), while the YAML structure and size checks still cover the whole file.
+Every other file is scanned whole. Older text the current policy would refuse
+therefore blocks neither a new write nor its push. Written files are always `0644` and directories `0755`, whatever the
 umask. A store file or directory that is already group- or other-writable is
 refused with its path and the `chmod go-w` fix. Concurrent writers on one clone
-wait their turn for up to 30 seconds instead of failing at once.
+wait their turn for up to 30 seconds (5 seconds for a server save) instead of
+failing at once.
 
 Supported prepared writes: adding, updating and deleting requirements, whole-store
 saves (including their concurrent-edit conflict rules), bulk updates, per-spec

@@ -72,6 +72,34 @@ pub struct ServerState {
     unusable: std::sync::atomic::AtomicBool,
 }
 
+/// How long a server save waits for the clone's transport lock. The caller
+/// holds the in-memory store write guard, so contention refuses quickly
+/// rather than stalling every reader for the CLI's full wait.
+// trace:STORY-1742 | ai:claude
+const SERVER_TRANSPORT_LOCK_WAIT: std::time::Duration = std::time::Duration::from_secs(5);
+
+#[cfg(unix)]
+fn bounded_transport_wait<T>(f: impl FnOnce() -> T) -> T {
+    aida_core::transport_policy::with_lock_wait(SERVER_TRANSPORT_LOCK_WAIT, f)
+}
+
+#[cfg(not(unix))]
+fn bounded_transport_wait<T>(f: impl FnOnce() -> T) -> T {
+    f()
+}
+
+/// Run blocking store work (file locks, git) off the async worker when on a
+/// multi-threaded runtime, so a contended save never parks a tokio worker.
+// trace:STORY-1742 | ai:claude
+fn off_async_worker<T>(f: impl FnOnce() -> T) -> T {
+    match tokio::runtime::Handle::try_current() {
+        Ok(handle) if handle.runtime_flavor() == tokio::runtime::RuntimeFlavor::MultiThread => {
+            tokio::task::block_in_place(f)
+        }
+        _ => f(),
+    }
+}
+
 impl ServerState {
     pub fn new(backend: Box<dyn DatabaseBackend>) -> anyhow::Result<Self> {
         let store = backend.load()?;
@@ -135,7 +163,7 @@ impl ServerState {
         let saved = aida_core::provenance::with_write_actor(
             crate::rest::REST_STATUS_AUTHOR,
             aida_core::provenance::WriteContext::default(),
-            || self.backend.save(store),
+            || off_async_worker(|| bounded_transport_wait(|| self.backend.save(store))),
         );
         match saved {
             Ok(()) => Ok(()),

@@ -15,6 +15,27 @@ use std::path::{Path, PathBuf};
 // trace:STORY-1742 | ai:claude
 const LOCK_WAIT: std::time::Duration = std::time::Duration::from_secs(30);
 
+thread_local! {
+    static LOCK_WAIT_BOUND: std::cell::Cell<Option<std::time::Duration>> =
+        const { std::cell::Cell::new(None) };
+}
+
+/// Run `f` with transport-lock waits on this thread bounded to `bound` (never
+/// longer than the default). A server holding its in-memory store lock uses
+/// this so a contended write refuses quickly instead of stalling readers.
+// trace:STORY-1742 | ai:claude
+pub fn with_lock_wait<T>(bound: std::time::Duration, f: impl FnOnce() -> T) -> T {
+    let previous = LOCK_WAIT_BOUND.with(|cell| cell.replace(Some(bound)));
+    struct Restore(Option<std::time::Duration>);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            LOCK_WAIT_BOUND.with(|cell| cell.set(self.0));
+        }
+    }
+    let _restore = Restore(previous);
+    f()
+}
+
 /// Names that predate owner-only private storage (see `Private::file`).
 const LEGACY_NAMES: &[&str] = &["aida-transport.json", "aida-transport.lock"];
 
@@ -111,14 +132,24 @@ impl Private {
     pub fn lock(&self) -> Result<File> {
         self.revalidate()?;
         let file = self.file("aida-transport.lock", true)?.unwrap();
-        let deadline = std::time::Instant::now() + LOCK_WAIT;
-        while file.try_lock_exclusive().is_err() {
+        let wait = LOCK_WAIT_BOUND
+            .with(|cell| cell.get())
+            .map_or(LOCK_WAIT, |bound| bound.min(LOCK_WAIT));
+        let deadline = std::time::Instant::now() + wait;
+        // Only contention is retried; any other lock error fails at once.
+        // trace:STORY-1742 | ai:claude
+        loop {
+            match file.try_lock_exclusive() {
+                Ok(()) => break,
+                Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
+                Err(_) => bail!("Transport lock unavailable. Nothing was changed."),
+            }
             if std::time::Instant::now() >= deadline {
                 bail!(
                     "Transport configuration is busy: another AIDA write or transport operation \
                      on this clone held its lock for {}s. Nothing was changed; retry once it \
                      finishes.",
-                    LOCK_WAIT.as_secs()
+                    wait.as_secs()
                 );
             }
             std::thread::sleep(std::time::Duration::from_millis(20));
