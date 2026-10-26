@@ -1694,6 +1694,21 @@ pub(crate) fn is_seat_clone_location(main: &Path, clone: &Path) -> bool {
     !clone.starts_with(&main) && !main.starts_with(&clone)
 }
 
+/// The branch a seat clone has checked out, read from its `.git/HEAD` as a
+/// plain file: host git never runs in a clone. `None` for a detached HEAD, a
+/// rewired `.git` or anything that is not a regular `ref: refs/heads/` line.
+// trace:BUG-2223 | ai:claude
+pub(crate) fn checked_out_branch(clone_root: &Path) -> Option<String> {
+    if !aida_core::seat_clone_detect::has_real_git_dir(clone_root) {
+        return None;
+    }
+    let head = aida_core::seat_clone_detect::read_regular_file(&clone_root.join(".git/HEAD"))?;
+    head.trim()
+        .strip_prefix("ref: refs/heads/")
+        .filter(|b| !b.is_empty())
+        .map(str::to_string)
+}
+
 /// How [`destroy`] treats a clone holding work origin does not have.
 // trace:TASK-2053 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1951,3 +1966,7 @@ mod clone_git_ratchet_tests;
 #[cfg(test)]
 #[path = "tests/task_2053_s4b_seat_trees_tests.rs"]
 mod s4b_seat_trees_tests;
+
+#[cfg(test)]
+#[path = "tests/bug_2223_orphan_seat_reentry_tests.rs"]
+mod orphan_reentry_tests;
