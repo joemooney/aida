@@ -1,0 +1,18 @@
+{
+  "id": "review-watch-c3ca1c2703e8c27c782164542871676ef233277d51b2f4acf76f08edec2eb03b",
+  "thread_id": "review-watch-c3ca1c2703e8c27c782164542871676ef233277d51b2f4acf76f08edec2eb03b",
+  "from": "review-watch",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792995587,
+  "body": "PR-2940 at d9c17cac3ad6016e4bca824a4e7efead6bd60b8c is ready to ship: an authorized approval of d9c17cac3ad6016e4bca824a4e7efead6bd60b8c covers the head, every CI check on d9c17cac3ad6016e4bca824a4e7efead6bd60b8c passed, it is 0 commits behind `main`, and no merge hold or review in progress is recorded. Run `aida pr ship 2940` to merge it. The watcher only reports; it did not merge or update the branch.",
+  "subject": "PR-2940: ready to ship",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
