@@ -109,7 +109,7 @@ fn run_mock_reviewer_mode(
         ("PATH", Some(path.as_str())),
         ("AIDA_AGENT_CMD", Some(mock.to_str().unwrap())),
         ("AIDA_TEST_PR_HEAD_SHA", Some(HEAD)),
-        (crate::seat_authority::GRANT_ENV, None),
+        (crate::gate::seat_authority::GRANT_ENV, None),
     ]);
     // Headless launch resolves its grant root independently of the arguments
     // passed to the standalone collector; pin that root to this fixture too.
@@ -128,13 +128,13 @@ fn run_mock_reviewer_mode(
             stderr_is_terminal: false,
         },
     )));
-    let launcher_grant = crate::seat_authority::test_support::mint_grant_for(
+    let launcher_grant = crate::gate::seat_authority::test_support::mint_grant_for(
         &project,
         &crate::current_user_id(None),
         "advisor",
         &["reviewer"],
     );
-    env.set_key(crate::seat_authority::GRANT_ENV, &launcher_grant);
+    env.set_key(crate::gate::seat_authority::GRANT_ENV, &launcher_grant);
     let script = setup(
         &Launch {
             project: &project,
@@ -143,7 +143,7 @@ fn run_mock_reviewer_mode(
         },
         &mut env,
     );
-    env.set_key(crate::seat_authority::GRANT_ENV, &launcher_grant);
+    env.set_key(crate::gate::seat_authority::GRANT_ENV, &launcher_grant);
     crate::test_exec::write_executable(&mock, script);
     crate::session::set_headless_vendor_override(None);
     let launch_vendor = crate::session::resolve_enabled_headless_vendor(&project).unwrap();
@@ -178,7 +178,7 @@ fn run_mock_reviewer_mode(
 /// a parallel sibling reviewer of the same launcher would hold.
 #[cfg(unix)]
 fn sibling_reviewer_grant(l: &Launch<'_>) -> String {
-    crate::seat_authority::issue_child(l.project, "reviewer", &crate::current_user_id(None))
+    crate::gate::seat_authority::issue_child(l.project, "reviewer", &crate::current_user_id(None))
         .unwrap()
         .id
 }
@@ -195,7 +195,7 @@ fn assert_refused(result: Result<()>, project: &std::path::Path, reason: &str) {
     let msg = format!("{err:#}");
     assert!(msg.contains(reason), "expected `{reason}` in: {msg}");
     assert!(!project.join(".aida/review-verdicts/PR-59.json").exists());
-    assert!(crate::review_verdict::read_recorded_verdict(project, "STORY-77").is_none());
+    assert!(crate::gate::review_verdict::read_recorded_verdict(project, "STORY-77").is_none());
 }
 
 /// BUG-2149: the reviewer recorded its approval inside the review worktree
@@ -219,15 +219,21 @@ fn standalone_reviewer_verdict_written_in_worktree_reaches_launcher_checkout() {
 
     let body = std::fs::read_to_string(project.join(".aida/review-verdicts/PR-59.json"))
         .expect("the launcher checkout must hold the canonical PR-59.json verdict");
-    let verdict = crate::review_verdict::parse_recorded_verdict(&body).unwrap();
-    assert_eq!(verdict.kind, crate::review_verdict::VerdictKind::Approved);
+    let verdict = crate::gate::review_verdict::parse_recorded_verdict(&body).unwrap();
+    assert_eq!(
+        verdict.kind,
+        crate::gate::review_verdict::VerdictKind::Approved
+    );
     assert!(
         verdict.attestation.is_some(),
         "the reviewer's attestation must survive collection"
     );
-    let spec = crate::review_verdict::read_recorded_verdict(&project, "STORY-77")
+    let spec = crate::gate::review_verdict::read_recorded_verdict(&project, "STORY-77")
         .expect("the PR's spec record must be mirrored into the launcher checkout");
-    assert_eq!(spec.kind, crate::review_verdict::VerdictKind::Approved);
+    assert_eq!(
+        spec.kind,
+        crate::gate::review_verdict::VerdictKind::Approved
+    );
     assert_eq!(spec.reviewed_sha.as_deref(), Some(HEAD));
 }
 
@@ -312,15 +318,15 @@ fn fresh_verdict_from_other_launchers_reviewer_grant_is_refused() {
     }
     let tmp = tempfile::tempdir().unwrap();
     let (result, project) = run_mock_reviewer(tmp.path(), |l, env| {
-        let other_parent = crate::seat_authority::test_support::mint_grant_for(
+        let other_parent = crate::gate::seat_authority::test_support::mint_grant_for(
             l.project,
             &crate::current_user_id(None),
             "advisor",
             &["reviewer"],
         );
         assert_ne!(other_parent, l.launcher_grant);
-        env.set_key(crate::seat_authority::GRANT_ENV, &other_parent);
-        let foreign = crate::seat_authority::issue_child(
+        env.set_key(crate::gate::seat_authority::GRANT_ENV, &other_parent);
+        let foreign = crate::gate::seat_authority::issue_child(
             l.project,
             "reviewer",
             &crate::current_user_id(None),
@@ -752,9 +758,12 @@ fn bug2187_scrubbed_parent_supplies_headless_reviewer_attribution() {
     });
     result.expect("a scrubbed launcher must still identify its actual child vendor");
     let body = std::fs::read_to_string(project.join(".aida/review-verdicts/PR-59.json")).unwrap();
-    let verdict = crate::review_verdict::parse_recorded_verdict(&body).unwrap();
+    let verdict = crate::gate::review_verdict::parse_recorded_verdict(&body).unwrap();
     assert!(verdict.attestation.is_some());
-    assert_eq!(verdict.kind, crate::review_verdict::VerdictKind::Approved);
+    assert_eq!(
+        verdict.kind,
+        crate::gate::review_verdict::VerdictKind::Approved
+    );
 }
 
 /// BUG-2187: a scrubbed parent and a headless Claude reviewer, as the

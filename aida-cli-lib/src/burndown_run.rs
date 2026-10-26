@@ -319,7 +319,7 @@ pub(crate) fn handle_burndown_run(
     }
     // Starting a wave is dispatch, not disposition. `--force` remains the
     // audited guardrail escape hatch. trace:STORY-647 trace:STORY-1353 | ai:codex
-    if !force && !has_dispatch_authority() {
+    if !force && !crate::gate::role_authority::has_dispatch_authority() {
         anyhow::bail!(
             "starting an autonomous drain needs dispatch authority (product, advisor, or \
              integrator role, or a live orchestrator)"
@@ -588,12 +588,14 @@ pub(crate) fn handle_burndown_run(
             if contained {
                 session::prepare_contained_mailbox_for_launch(&project_root)?;
             }
-            let child_grant = seat_authority::issue_headless_child(
+            let child_grant = crate::gate::seat_authority::issue_headless_child(
                 &project_root,
                 "implementer",
                 &current_user_id(None),
             )?;
-            if let seat_authority::HeadlessChildGrant::Baseline { cause } = &child_grant {
+            if let crate::gate::seat_authority::HeadlessChildGrant::Baseline { cause } =
+                &child_grant
+            {
                 eprintln!(
                     "  {} {}",
                     crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
@@ -752,7 +754,9 @@ pub(crate) fn probe_burndown_residual(
                         // TASK-1169: a non-`drain` execution_mode holds the
                         // merge for a human (BUG-727) — deliberate, not
                         // stranded. trace:TASK-1169 | ai:claude
-                        supervised: pr_ship::merge_requires_supervision(req.execution_mode),
+                        supervised: crate::gate::ship::merge_requires_supervision(
+                            req.execution_mode,
+                        ),
                     },
                 );
             }
@@ -958,8 +962,8 @@ pub(crate) fn supervision_hold_label(
         None => Some(format!(
             "merge supervision unresolved for {spec} — held for safety"
         )),
-        Some(mode) if pr_ship::merge_requires_supervision(mode) => {
-            Some(pr_ship::supervision_mode_label(mode))
+        Some(mode) if crate::gate::ship::merge_requires_supervision(mode) => {
+            Some(crate::gate::ship::supervision_mode_label(mode))
         }
         Some(_) => None,
     }
@@ -1056,8 +1060,8 @@ pub(crate) fn local_verdict_blocks_merge(
     current_sha: Option<&str>,
 ) -> bool {
     let paths = [
-        review_verdict::verdict_path(project_root, &format!("PR-{pr_number}")),
-        review_verdict::verdict_path(project_root, spec),
+        crate::gate::review_verdict::verdict_path(project_root, &format!("PR-{pr_number}")),
+        crate::gate::review_verdict::verdict_path(project_root, spec),
     ];
     let existing: Vec<_> = paths.iter().filter(|path| path.exists()).collect();
     if existing.is_empty() {
@@ -1066,7 +1070,7 @@ pub(crate) fn local_verdict_blocks_merge(
     let bodies: Vec<String> = match existing
         .iter()
         // trace:TASK-1801 | ai:claude
-        .map(|path| review_verdict::read_verdict_body(path))
+        .map(|path| crate::gate::review_verdict::read_verdict_body(path))
         .collect::<Result<_, _>>()
     {
         Ok(bodies) => bodies,
@@ -1076,8 +1080,11 @@ pub(crate) fn local_verdict_blocks_merge(
         return true;
     };
     !matches!(
-        review_verdict::reconcile_artifacts_for_sha(bodies.iter().map(String::as_str), current_sha),
-        Ok(Some(review_verdict::VerdictKind::Approved))
+        crate::gate::review_verdict::reconcile_artifacts_for_sha(
+            bodies.iter().map(String::as_str),
+            current_sha
+        ),
+        Ok(Some(crate::gate::review_verdict::VerdictKind::Approved))
     )
 }
 
@@ -1189,11 +1196,11 @@ pub(crate) fn merge_wave_pr(project_root: &std::path::Path, pr: &burndown::Resid
         // merger (an integrate sweep, another agent session, a stale-binary
         // drain) also refuses at the merge_change chokepoint — not just this
         // in-process guard, which was the BUG-1167 gap. trace:BUG-1167 | ai:claude
-        let _ = crate::merge_hold::write_typed_hold(
+        let _ = crate::gate::merge_hold_core::write_typed_hold(
             project_root,
-            &crate::merge_hold::typed_hold(
+            &crate::gate::merge_hold_core::typed_hold(
                 pr.number,
-                crate::merge_hold::HoldReasonKind::Supervision,
+                crate::gate::merge_hold_core::HoldReasonKind::Supervision,
                 &label,
                 None,
             )
@@ -1258,7 +1265,7 @@ pub(crate) fn merge_wave_pr(project_root: &std::path::Path, pr: &burndown::Resid
     // approval by a non-author session covering the forge head — checked
     // under the merge lease and pinned to that head.
     // trace:BUG-1918 | ai:claude
-    let wave_match_head = match crate::pr_cmd::merge_path_approval_gate(
+    let wave_match_head = match crate::gate::approval::merge_path_approval_gate(
         project_root,
         pr.number,
         std::slice::from_ref(&pr.spec),
@@ -2079,9 +2086,12 @@ pub(crate) fn run_burndown_verbose(
     let tee_handle = headless_tee::start_tee(&log_path, &tee_opts);
 
     // trace:BUG-2165 | ai:antigravity
-    let child_grant =
-        seat_authority::issue_headless_child(&project_root, "implementer", &current_user_id(None))?;
-    if let seat_authority::HeadlessChildGrant::Baseline { cause } = &child_grant {
+    let child_grant = crate::gate::seat_authority::issue_headless_child(
+        &project_root,
+        "implementer",
+        &current_user_id(None),
+    )?;
+    if let crate::gate::seat_authority::HeadlessChildGrant::Baseline { cause } = &child_grant {
         eprintln!(
             "  {} {}",
             crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
@@ -2164,7 +2174,7 @@ pub(crate) fn burndown_sigterm_cleanup(project_root: &std::path::Path) -> bool {
 // trace:TASK-1952 | trace:TASK-1798 | ai:claude
 pub(crate) fn stamp_burndown_child_grant(
     project_root: &std::path::Path,
-    child_grant: &seat_authority::HeadlessChildGrant,
+    child_grant: &crate::gate::seat_authority::HeadlessChildGrant,
 ) -> Result<()> {
     let Some(id) = child_grant.id() else {
         return Ok(());

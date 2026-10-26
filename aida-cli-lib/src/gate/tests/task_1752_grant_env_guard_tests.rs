@@ -334,8 +334,8 @@ fn only_seat_authority_names_or_reads_the_grant_env_var() {
     assert!(
         offenders.is_empty(),
         "the session grant env var is named or read outside seat_authority.rs; ask \
-         seat_authority::grant_check (or current_grant_id for the raw handle), and set or \
-         strip a child's grant with seat_authority::GRANT_ENV:\n{}",
+         crate::gate::seat_authority::grant_check (or current_grant_id for the raw handle), and set or \
+         strip a child's grant with crate::gate::seat_authority::GRANT_ENV:\n{}",
         offenders.join("\n")
     );
     for (at, (suffix, allowed, _)) in ALLOWED_LITERAL_LINES.iter().enumerate() {

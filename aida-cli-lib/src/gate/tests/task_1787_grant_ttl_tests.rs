@@ -535,7 +535,7 @@ fn test_session_show_displays_grant_ttl() {
         &[],
         Some(Duration::hours(72)),
     );
-    _env.set_key(crate::seat_authority::GRANT_ENV, grant_id.as_str());
+    _env.set_key(crate::gate::seat_authority::GRANT_ENV, grant_id.as_str());
 
     let lease = crate::leases::SessionLease {
         tree_kind: Default::default(),
@@ -588,7 +588,7 @@ fn test_session_show_displays_grant_ttl() {
     assert!(resolved.is_some(), "grant must resolve for current session");
     let grant = resolved.unwrap();
     let ttl = grant.expires_at.signed_duration_since(grant.issued_at);
-    assert_eq!(crate::seat_authority::format_ttl(ttl), "72h");
+    assert_eq!(crate::gate::seat_authority::format_ttl(ttl), "72h");
 
     let ttl_line = crate::session_misc::format_session_grant_ttl_line(&lease);
     assert!(

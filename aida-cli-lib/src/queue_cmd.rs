@@ -393,7 +393,7 @@ pub(crate) fn advance_dispatch(
             // non-advisor / non-TTY run could auto-approve drafts. trace:STORY-566
             let new_status = RequirementStatus::Approved;
             if status_advance_requires_advisor_authority(&req.status, &new_status)
-                && !has_advisor_authority()
+                && !crate::gate::role_authority::has_advisor_authority()
             {
                 println!(
                     "  {} approving {} needs advisor authority. Enter the advisor role at an interactive TTY with `aida role enter advisor`, or ask an advisor session to do it.{}",
@@ -447,7 +447,7 @@ pub(crate) fn advance_dispatch(
                     .ok_or_else(|| not_found::requirement_not_found(display, Some(store_path)))?;
                 let new_status = RequirementStatus::Rejected;
                 if status_advance_requires_advisor_authority(&req.status, &new_status)
-                    && !has_advisor_authority()
+                    && !crate::gate::role_authority::has_advisor_authority()
                 {
                     println!(
                         "  {} rejecting {} needs advisor authority. Enter the advisor role at an interactive TTY with `aida role enter advisor`, or ask an advisor session to do it.{}",
@@ -536,7 +536,7 @@ pub(crate) fn advance_dispatch_close(display: &str, store_path: &std::path::Path
     // reject); an interactive operator clears it via the TTY branch of
     // `has_advisor_authority`. trace:BUG-543
     if status_advance_requires_advisor_authority(&req.status, &RequirementStatus::Completed)
-        && !has_advisor_authority()
+        && !crate::gate::role_authority::has_advisor_authority()
     {
         println!(
             "  {} closing {} needs advisor authority. Enter the advisor role at an interactive TTY with `aida role enter advisor`, or ask an advisor session to do it.{}",
@@ -639,15 +639,17 @@ pub(crate) fn queue_json_rows(
 /// Human-readable chip for a reviewer-routed row's actionability. Rendered
 /// inline -- rows never vanish because of this label, they're annotated.
 // trace:BUG-1508 | ai:claude
-pub(crate) fn reviewer_state_chip(state: review_verdict::ReviewActionability) -> String {
+pub(crate) fn reviewer_state_chip(
+    state: crate::gate::review_verdict::ReviewActionability,
+) -> String {
     match state {
-        review_verdict::ReviewActionability::NeedsReview => {
+        crate::gate::review_verdict::ReviewActionability::NeedsReview => {
             format!("[{}]", "needs-review".yellow().bold())
         }
-        review_verdict::ReviewActionability::AwaitingRework => {
+        crate::gate::review_verdict::ReviewActionability::AwaitingRework => {
             format!("[{}]", "awaiting-rework".blue())
         }
-        review_verdict::ReviewActionability::Resolved => {
+        crate::gate::review_verdict::ReviewActionability::Resolved => {
             format!("[{}]", "resolved".green().dimmed())
         }
     }
@@ -1860,7 +1862,7 @@ pub(crate) fn handle_queue_command(
                                 })
                                 .map(|state| {
                                     reviewer_routed += 1;
-                                    if state == review_verdict::ReviewActionability::NeedsReview {
+                                    if state == crate::gate::review_verdict::ReviewActionability::NeedsReview {
                                         reviewer_actionable += 1;
                                     }
                                     state.as_str().to_string()
@@ -2357,7 +2359,7 @@ pub(crate) fn handle_queue_command(
             // reviewer-routed row is actually present. trace:BUG-1508 | ai:claude
             let reviewer_state_by_entry: std::collections::HashMap<
                 Uuid,
-                review_verdict::ReviewActionability,
+                crate::gate::review_verdict::ReviewActionability,
             > = if entries
                 .iter()
                 .any(|e| e.for_role.as_deref() == Some("reviewer"))
@@ -2408,7 +2410,7 @@ pub(crate) fn handle_queue_command(
                 .count();
             let reviewer_actionable_count = reviewer_state_by_entry
                 .values()
-                .filter(|s| **s == review_verdict::ReviewActionability::NeedsReview)
+                .filter(|s| **s == crate::gate::review_verdict::ReviewActionability::NeedsReview)
                 .count();
 
             if !skip_regular_render {
@@ -3318,7 +3320,8 @@ pub(crate) fn handle_queue_command(
             // Dispatch is routing, not disposition. Product, advisor, and
             // integrator seats (plus a live orchestrator) may do it without
             // acquiring advisor authority. trace:STORY-1353 | ai:codex
-            if for_target_requires_dispatch_authority(r#for.as_deref()) && !has_dispatch_authority()
+            if for_target_requires_dispatch_authority(r#for.as_deref())
+                && !crate::gate::role_authority::has_dispatch_authority()
             {
                 anyhow::bail!(
                     "queuing work for execution needs dispatch authority (product, advisor, or \
@@ -3689,7 +3692,7 @@ pub(crate) fn handle_queue_command(
             r#for,
         } => {
             // Removing a route is a dispatch mutation. trace:STORY-1353 | ai:codex
-            if !has_dispatch_authority() {
+            if !crate::gate::role_authority::has_dispatch_authority() {
                 anyhow::bail!(
                     "removing queued work needs dispatch authority (product, advisor, or \
                      integrator role, or a live orchestrator)"
@@ -3863,7 +3866,7 @@ pub(crate) fn handle_queue_command(
             force,
         } => {
             // Reordering work is a dispatch mutation. trace:STORY-1353 | ai:codex
-            if !has_dispatch_authority() {
+            if !crate::gate::role_authority::has_dispatch_authority() {
                 anyhow::bail!(
                     "moving queued work needs dispatch authority (product, advisor, or \
                      integrator role, or a live orchestrator)"
@@ -4946,7 +4949,7 @@ pub(crate) fn handle_queue_command(
                     // rejected the branch — that is how a rejected commit got
                     // merged and marked done. trace:BUG-775 | ai:claude
                     if let Ok(root) = find_project_root() {
-                        if let Some(v) = review_verdict::read_recorded_verdict_any(
+                        if let Some(v) = crate::gate::review_verdict::read_recorded_verdict_any(
                             &root,
                             &[&display_id_owned, spec_id],
                         ) {
@@ -5041,9 +5044,10 @@ pub(crate) fn handle_queue_command(
             // this: it overrides evidence gates, not authority. The drain's
             // own `queue done` from Approved / In Progress is unaffected.
             // trace:BUG-1611 | ai:claude
-            if let Some(refusal) =
-                crate::queue_done_lifecycle_refusal(&req.status, has_advisor_authority())
-            {
+            if let Some(refusal) = crate::queue_done_lifecycle_refusal(
+                &req.status,
+                crate::gate::role_authority::has_advisor_authority(),
+            ) {
                 anyhow::bail!(crate::queue_done_lifecycle_refusal_message(
                     display_id,
                     &req.status,
@@ -5180,18 +5184,18 @@ pub(crate) fn handle_queue_command(
             // trace:BUG-775 | ai:claude
             if let Ok(project_root) = find_project_root() {
                 match evaluate_review_verdict_gate(&project_root, display_id, spec_id) {
-                    (review_verdict::VerdictGate::Refuse(lines), _) if !*force => {
+                    (crate::gate::review_verdict::VerdictGate::Refuse(lines), _) if !*force => {
                         for line in &lines {
                             eprintln!("{}", line);
                         }
                         std::process::exit(1);
                     }
-                    (review_verdict::VerdictGate::Warn(lines), _) => {
+                    (crate::gate::review_verdict::VerdictGate::Warn(lines), _) => {
                         for line in &lines {
                             eprintln!("{}", line);
                         }
                     }
-                    (review_verdict::VerdictGate::Refuse(_), Some(v)) => {
+                    (crate::gate::review_verdict::VerdictGate::Refuse(_), Some(v)) => {
                         eprintln!(
                             "{} --force: overriding the recorded review verdict for {} ({}).",
                             "warning:".yellow().bold(),
@@ -6048,9 +6052,10 @@ pub(crate) fn handle_queue_command(
                 // dispatch authority. Only a FRESH, non-dry-run launch is
                 // gated here; a live dispatch without `--resume-dry-run`
                 // stays refused. trace:BUG-1517 | ai:claude
-                if let Err(msg) =
-                    auto_complete_dispatch_authority_ok(*resume_dry_run, has_dispatch_authority())
-                {
+                if let Err(msg) = auto_complete_dispatch_authority_ok(
+                    *resume_dry_run,
+                    crate::gate::role_authority::has_dispatch_authority(),
+                ) {
                     anyhow::bail!(msg);
                 }
             }
@@ -6795,7 +6800,7 @@ pub(crate) fn handle_queue_command(
         } => {
             // Requeueing is dispatch; any status transition it entails is
             // checked separately by the handler. trace:STORY-1353 | ai:codex
-            if !has_dispatch_authority() {
+            if !crate::gate::role_authority::has_dispatch_authority() {
                 anyhow::bail!(
                     "reworking queued work needs dispatch authority (product, advisor, or \
                      integrator role, or a live orchestrator)"
@@ -8243,7 +8248,7 @@ pub(crate) fn handle_queue_rework(
     if let Some(ref new_status) = target_status {
         if new_status != &current_status
             && status_advance_requires_advisor_authority(&current_status, new_status)
-            && !has_advisor_authority()
+            && !crate::gate::role_authority::has_advisor_authority()
         {
             println!(
                 "  {} reworking {} from {} to {} needs advisor authority. Enter the advisor role at an interactive TTY with `aida role enter advisor`, or ask an advisor session to do it.{}",
@@ -10607,7 +10612,10 @@ fn review_ref_from_verdict_filename(path: &std::path::Path) -> String {
     stem.to_string()
 }
 
-fn verdict_mentions_spec(verdict: &review_verdict::RecordedVerdict, ids: &[&str]) -> bool {
+fn verdict_mentions_spec(
+    verdict: &crate::gate::review_verdict::RecordedVerdict,
+    ids: &[&str],
+) -> bool {
     let haystack = [
         verdict.summary.as_deref(),
         verdict.review_comment.as_deref(),
@@ -10634,7 +10642,7 @@ pub(crate) fn rework_findings_block_for_spec(
         .iter()
         .filter(|id| !id.trim().is_empty() && **id != "???")
     {
-        if let Some(v) = review_verdict::read_recorded_verdict(project_root, id) {
+        if let Some(v) = crate::gate::review_verdict::read_recorded_verdict(project_root, id) {
             return crate::review_verdict_display::rework_findings_comment(id, id, &v);
         }
     }
@@ -10646,8 +10654,8 @@ pub(crate) fn rework_findings_block_for_spec(
         .map(|entry| entry.path())
         .filter(|path| path.extension().and_then(|s| s.to_str()) == Some("json"))
         .filter_map(|path| {
-            let body = review_verdict::read_verdict_body(&path).ok()?;
-            let verdict = review_verdict::parse_recorded_verdict(&body)?;
+            let body = crate::gate::review_verdict::read_verdict_body(&path).ok()?;
+            let verdict = crate::gate::review_verdict::parse_recorded_verdict(&body)?;
             verdict.kind.blocks_done().then_some((path, verdict))
         })
         .collect::<Vec<_>>();
@@ -10839,7 +10847,7 @@ pub(crate) fn queue_work_is_fresh_headless(
 // trace:BUG-2139 | ai:claude
 pub(crate) fn headless_baseline_notice(seat: &str, cause: &str) -> String {
     // trace:TASK-1752 | ai:claude
-    let grant_env = crate::seat_authority::GRANT_ENV;
+    let grant_env = crate::gate::seat_authority::GRANT_ENV;
     format!(
         "headless `{seat}` child runs ungranted at baseline authority ({grant_env}=\"\"): \
          the launcher cannot delegate `{seat}` ({cause})"
@@ -11528,14 +11536,20 @@ pub(crate) fn handle_queue_work(
                     matches!(launch, Some(QueueWorkLaunch::Resume(_))),
                     is_standalone_reviewer(&role, plan.review_target.is_some()),
                 ) {
-                    crate::seat_authority::preflight_headless_child(&project_root, &child_seat)
-                        .map(|_| ())
+                    crate::gate::seat_authority::preflight_headless_child(
+                        &project_root,
+                        &child_seat,
+                    )
+                    .map(|_| ())
                 } else {
-                    crate::seat_authority::validate_child_delegation(&project_root, &child_seat)
-                        .map(|_| ())
+                    crate::gate::seat_authority::validate_child_delegation(
+                        &project_root,
+                        &child_seat,
+                    )
+                    .map(|_| ())
                 };
                 if let Err(cause) = preflight {
-                    let launcher = crate::seat_authority::current_grant(&project_root);
+                    let launcher = crate::gate::seat_authority::current_grant(&project_root);
                     anyhow::bail!(queue_work_delegation_refusal(
                         &child_seat,
                         role_origin,
@@ -12725,7 +12739,7 @@ pub(crate) fn handle_queue_work(
     if no_launch {
         start()?;
     } else {
-        crate::review_authority::as_launcher(start)?;
+        crate::gate::review_authority::as_launcher(start)?;
     }
 
     // The lease this pickup minted, for the refused-delegation release below.
@@ -12980,7 +12994,7 @@ pub(crate) fn handle_queue_work(
         // BUG-1918: the launched worker (exec'd or spawned below) carries its
         // lease id, so it stays its lease's author wherever it later runs.
         // trace:BUG-1918 | ai:claude
-        crate::review_authority::export_worker_session_env(&lease.id);
+        crate::gate::review_authority::export_worker_session_env(&lease.id);
 
         // TASK-112: exec — resume the prior conversation, or cold-launch
         // with the minted session id so this conversation is itself
@@ -13051,7 +13065,7 @@ pub(crate) fn handle_queue_work(
         // never inherited from the launcher. `None` on every other arm.
         let mut headless_child_grant = None;
         if !no_human {
-            let child_grant = crate::seat_authority::issue_child(
+            let child_grant = crate::gate::seat_authority::issue_child(
                 &project_root,
                 &crate::canonical_role_name(&role),
                 &crate::current_user_id(None),
@@ -13060,13 +13074,13 @@ pub(crate) fn handle_queue_work(
         } else if matches!(launch, QueueWorkLaunch::Fresh(_)) {
             // trace:BUG-2139 | ai:claude
             let seat = crate::canonical_role_name(&role);
-            let grant = crate::seat_authority::issue_headless_child(
+            let grant = crate::gate::seat_authority::issue_headless_child(
                 &project_root,
                 &seat,
                 &crate::current_user_id(None),
             )?;
             match &grant {
-                crate::seat_authority::HeadlessChildGrant::Issued(issued) => {
+                crate::gate::seat_authority::HeadlessChildGrant::Issued(issued) => {
                     // Stamped beside `active_pid`, so a lease end or reap
                     // revokes it even if this launcher dies before the child.
                     if let Err(e) =
@@ -13078,7 +13092,7 @@ pub(crate) fn handle_queue_work(
                         );
                     }
                 }
-                crate::seat_authority::HeadlessChildGrant::Baseline { cause } => eprintln!(
+                crate::gate::seat_authority::HeadlessChildGrant::Baseline { cause } => eprintln!(
                     "  {} {}",
                     crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
                     headless_baseline_notice(&seat, cause)
@@ -13097,7 +13111,7 @@ pub(crate) fn handle_queue_work(
                     &project_root,
                     &lease.id,
                     child_grant,
-                    crate::seat_authority::current_grant_id().as_deref(),
+                    crate::gate::seat_authority::current_grant_id().as_deref(),
                 );
                 eprintln!();
                 return crate::standalone_implementer::run(crate::standalone_implementer::Launch {
@@ -13393,7 +13407,7 @@ pub(crate) fn refused_review_launch_releases_lease(
     review_scoped: bool,
     err: &anyhow::Error,
 ) -> bool {
-    review_scoped && crate::seat_authority::ChildGrantRefused::is_in(err)
+    review_scoped && crate::gate::seat_authority::ChildGrantRefused::is_in(err)
 }
 
 /// The specs a reviewed PR credits for calibration: the same title / branch
@@ -13487,7 +13501,7 @@ pub(crate) fn run_standalone_reviewer(
     // included. trace:BUG-2185 | ai:claude
     let store_commit = crate::child_store_commit::ChildStoreCommit::arm(project_root, "reviewer");
     // trace:TASK-1752 | ai:claude
-    let launcher_grant = crate::seat_authority::current_grant_id();
+    let launcher_grant = crate::gate::seat_authority::current_grant_id();
     // Spawn the resolved vendor, wait, and capture the headless JSONL log
     // path (None for an interactive review — there is no stream-json log).
     // BUG-2149: every arm returns the id of the child reviewer grant it
@@ -13563,7 +13577,7 @@ pub(crate) fn run_standalone_reviewer(
                     )
                     .cyan()
                 );
-                let grant = crate::seat_authority::issue_child(
+                let grant = crate::gate::seat_authority::issue_child(
                     project_root,
                     "reviewer",
                     &crate::current_user_id(None),
@@ -13678,7 +13692,7 @@ pub(crate) fn run_standalone_reviewer(
     // the record path — archive its round by reviewed commit the same way a
     // recorded verdict is. Best-effort; the current file is left as written.
     // trace:TASK-1460 | ai:claude
-    let _ = crate::review_verdict::adopt_direct_write(verdict_path);
+    let _ = crate::gate::review_verdict::adopt_direct_write(verdict_path);
 
     // BUG-2180: a contained reviewer's request-changes shelve (and any other
     // store write it made) is left uncommitted for its host — this launcher.
@@ -13706,7 +13720,7 @@ pub(crate) fn run_standalone_reviewer(
         launcher_grant,
         child_grant,
     };
-    let collected = crate::review_verdict::collect_standalone_verdict(
+    let collected = crate::gate::review_verdict::collect_standalone_verdict(
         project_root,
         worktree,
         verdict_path,
@@ -13782,7 +13796,7 @@ pub(crate) fn run_standalone_reviewer(
         )
     });
     if !quiet {
-        let verdict_json = review_verdict::read_verdict_body(verdict_path).ok();
+        let verdict_json = crate::gate::review_verdict::read_verdict_body(verdict_path).ok();
         let summary = reviewer_summary::format_reviewer_summary(
             pr,
             verdict_json.as_deref(),
@@ -13952,9 +13966,12 @@ pub(crate) struct StandaloneVerdictChecks<'a> {
     pub(crate) child_grant: Option<String>,
 }
 
-impl crate::review_verdict::VerdictCollectionChecks for StandaloneVerdictChecks<'_> {
-    fn check_record(&self, c: &crate::review_verdict::VerdictCandidate) -> Result<(), String> {
-        if c.verdict.kind == review_verdict::VerdictKind::Unknown {
+impl crate::gate::review_verdict::VerdictCollectionChecks for StandaloneVerdictChecks<'_> {
+    fn check_record(
+        &self,
+        c: &crate::gate::review_verdict::VerdictCandidate,
+    ) -> Result<(), String> {
+        if c.verdict.kind == crate::gate::review_verdict::VerdictKind::Unknown {
             return Err("not a recognized verdict record".to_string());
         }
         if let Some(pr) = c.obj.get("pr") {
@@ -13972,7 +13989,7 @@ impl crate::review_verdict::VerdictCollectionChecks for StandaloneVerdictChecks<
             ));
         };
         match c.verdict.reviewed_sha.as_deref() {
-            Some(sha) if review_verdict::same_reviewed_sha(sha, head) => Ok(()),
+            Some(sha) if crate::gate::review_verdict::same_reviewed_sha(sha, head) => Ok(()),
             Some(sha) => Err(format!(
                 "it reviewed {sha}, but PR-{}'s head is now {head}",
                 self.pr
@@ -13993,13 +14010,13 @@ impl crate::review_verdict::VerdictCollectionChecks for StandaloneVerdictChecks<
                 "it was recorded under grant {grant_id}, not this launch's reviewer grant"
             ));
         }
-        match crate::seat_authority::grant_check_for(
+        match crate::gate::seat_authority::grant_check_for(
             self.project_root,
             grant_id,
             &crate::current_user_id(None),
         ) {
-            crate::seat_authority::GrantCheck::Valid(g) if g.seat == "reviewer" => Ok(()),
-            crate::seat_authority::GrantCheck::Valid(g) => {
+            crate::gate::seat_authority::GrantCheck::Valid(g) if g.seat == "reviewer" => Ok(()),
+            crate::gate::seat_authority::GrantCheck::Valid(g) => {
                 Err(format!("it was recorded by a `{}` seat", g.seat))
             }
             _ => Err(format!("its recording grant {grant_id} is not valid")),
@@ -15278,14 +15295,14 @@ pub(crate) fn probe_pr_integration_state(
         .map(|i| {
             let n = i.number;
             let paths = [
-                review_verdict::verdict_path(project_root, &format!("PR-{n}")),
-                review_verdict::verdict_path(project_root, spec_id),
+                crate::gate::review_verdict::verdict_path(project_root, &format!("PR-{n}")),
+                crate::gate::review_verdict::verdict_path(project_root, spec_id),
             ];
             let existing: Vec<_> = paths.iter().filter(|path| path.exists()).collect();
             let bodies: Vec<String> = match existing
                 .iter()
                 // trace:TASK-1801 | ai:claude
-                .map(|path| review_verdict::read_verdict_body(path))
+                .map(|path| crate::gate::review_verdict::read_verdict_body(path))
                 .collect::<Result<_, _>>()
             {
                 Ok(bodies) => bodies,
@@ -15297,11 +15314,13 @@ pub(crate) fn probe_pr_integration_state(
             let Some(head) = i.head_sha.as_deref() else {
                 return (false, true);
             };
-            match review_verdict::reconcile_artifacts_for_sha(
+            match crate::gate::review_verdict::reconcile_artifacts_for_sha(
                 bodies.iter().map(String::as_str),
                 head,
             ) {
-                Ok(Some(review_verdict::VerdictKind::Approved)) | Ok(None) => (false, false),
+                Ok(Some(crate::gate::review_verdict::VerdictKind::Approved)) | Ok(None) => {
+                    (false, false)
+                }
                 Ok(Some(_)) => (true, false),
                 Err(_) => (false, true),
             }
@@ -16637,16 +16656,23 @@ fn cheap_outstanding_refusal_candidate(
     primary_root: &std::path::Path,
     display_id: &str,
     spec_id: &str,
-) -> Option<review_verdict::RecordedVerdict> {
-    let verdict = review_verdict::read_recorded_verdict_any(project_root, &[display_id, spec_id])
-        .or_else(|| {
+) -> Option<crate::gate::review_verdict::RecordedVerdict> {
+    let verdict = crate::gate::review_verdict::read_recorded_verdict_any(
+        project_root,
+        &[display_id, spec_id],
+    )
+    .or_else(|| {
         (primary_root != project_root)
             .then(|| {
-                review_verdict::read_recorded_verdict_any(primary_root, &[display_id, spec_id])
+                crate::gate::review_verdict::read_recorded_verdict_any(
+                    primary_root,
+                    &[display_id, spec_id],
+                )
             })
             .flatten()
     })?;
-    review_verdict::is_outstanding_refusal(&verdict, /* spec_completed */ false).then_some(verdict)
+    crate::gate::review_verdict::is_outstanding_refusal(&verdict, /* spec_completed */ false)
+        .then_some(verdict)
 }
 
 /// BUG-1515: whether a `Done` spec's most recently recorded review verdict is
@@ -16678,7 +16704,7 @@ pub(crate) fn done_spec_outstanding_refusal(
     project_root: &std::path::Path,
     display_id: &str,
     spec_id: &str,
-) -> Option<review_verdict::RecordedVerdict> {
+) -> Option<crate::gate::review_verdict::RecordedVerdict> {
     let primary_root = main_worktree_root_from(project_root);
     let verdict =
         cheap_outstanding_refusal_candidate(project_root, &primary_root, display_id, spec_id)?;
@@ -16687,7 +16713,11 @@ pub(crate) fn done_spec_outstanding_refusal(
         verdict.reviewed_branch.as_deref(),
         verdict.reviewed_sha.as_deref(),
     );
-    matches!(relation, review_verdict::TipRelation::AtReviewedSha).then_some(verdict)
+    matches!(
+        relation,
+        crate::gate::review_verdict::TipRelation::AtReviewedSha
+    )
+    .then_some(verdict)
 }
 
 /// Cap on how many candidates [`resolve_done_rework_ids`] will run the git
@@ -16767,7 +16797,7 @@ pub(crate) fn resolve_done_rework_ids(
     // with no local verdict (the common case), an O(N) `git worktree list`
     // spawn. trace:TASK-1456 | ai:claude
     let primary_root = main_worktree_root_from(project_root);
-    let candidates: Vec<(uuid::Uuid, review_verdict::RecordedVerdict)> = done_rows
+    let candidates: Vec<(uuid::Uuid, crate::gate::review_verdict::RecordedVerdict)> = done_rows
         .iter()
         .filter_map(|r| {
             let verdict = cheap_outstanding_refusal_candidate(
@@ -16788,7 +16818,11 @@ pub(crate) fn resolve_done_rework_ids(
                 verdict.reviewed_branch.as_deref(),
                 verdict.reviewed_sha.as_deref(),
             );
-            matches!(relation, review_verdict::TipRelation::AtReviewedSha).then_some(id)
+            matches!(
+                relation,
+                crate::gate::review_verdict::TipRelation::AtReviewedSha
+            )
+            .then_some(id)
         })
         .collect()
 }

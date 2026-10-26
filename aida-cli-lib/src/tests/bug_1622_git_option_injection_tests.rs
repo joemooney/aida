@@ -257,7 +257,7 @@ fn a_verdict_never_stores_a_reviewed_sha_that_is_not_a_commit_id() {
     let root = tmp.path();
     let path = root.join("PR-1.json");
     let build = |sha: &str| {
-        crate::review_verdict::build_verdict_object(
+        crate::gate::review_verdict::build_verdict_object(
             root,
             &path,
             Some("approved"),

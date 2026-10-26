@@ -362,7 +362,7 @@ pub(crate) fn effective_role_for_user(store_root: &Path, user_id: &str) -> (Stri
     let _ = user_id;
     store_root
         .parent()
-        .and_then(crate::seat_authority::current_seat)
+        .and_then(crate::gate::seat_authority::current_seat)
         .map(|seat| (seat, RoleSource::Grant))
         .unwrap_or_else(|| ("implementer".to_string(), RoleSource::Default))
 }
@@ -378,7 +378,7 @@ pub(crate) fn set_role_cas(store_root: &Path, user_id: &str, role: &str) -> anyh
     // trace:STORY-650 | ai:claude
     // trace:TASK-1955 | ai:claude (TASK-2222: comment kept above the cfg guard)
     #[cfg(test)]
-    crate::seat_authority::test_support::assert_scratch_store(store_root); // trace:BUG-2209 | ai:claude
+    crate::gate::seat_authority::test_support::assert_scratch_store(store_root); // trace:BUG-2209 | ai:claude
     aida_core::team::set_role_cas(store_root, user_id, role)
         .map_err(|e| anyhow::anyhow!("setting team role failed: {}", e))
 }
@@ -389,14 +389,14 @@ pub(crate) fn set_role_cas(store_root: &Path, user_id: &str, role: &str) -> anyh
 /// duplicate keys. trace:STORY-654 | ai:claude
 pub(crate) fn unset_role_cas(store_root: &Path, user_id: &str) -> anyhow::Result<bool> {
     #[cfg(test)]
-    crate::seat_authority::test_support::assert_scratch_store(store_root); // trace:BUG-2209 | ai:claude
+    crate::gate::seat_authority::test_support::assert_scratch_store(store_root); // trace:BUG-2209 | ai:claude
     aida_core::team::unset_role_cas(store_root, user_id)
         .map_err(|e| anyhow::anyhow!("removing team role failed: {}", e))
 }
 
 pub(crate) fn allow_seat_cas(store_root: &Path, user_id: &str, seat: &str) -> anyhow::Result<()> {
     #[cfg(test)]
-    crate::seat_authority::test_support::assert_scratch_store(store_root); // trace:BUG-2209 | ai:claude
+    crate::gate::seat_authority::test_support::assert_scratch_store(store_root); // trace:BUG-2209 | ai:claude
     aida_core::team::allow_seat_cas(store_root, user_id, seat)
         .map_err(|e| anyhow::anyhow!("allowing team seat failed: {}", e))
 }
@@ -407,7 +407,7 @@ pub(crate) fn disallow_seat_cas(
     seat: &str,
 ) -> anyhow::Result<bool> {
     #[cfg(test)]
-    crate::seat_authority::test_support::assert_scratch_store(store_root); // trace:BUG-2209 | ai:claude
+    crate::gate::seat_authority::test_support::assert_scratch_store(store_root); // trace:BUG-2209 | ai:claude
     aida_core::team::disallow_seat_cas(store_root, user_id, seat)
         .map_err(|e| anyhow::anyhow!("removing team seat failed: {}", e))
 }
@@ -609,11 +609,14 @@ mod tests {
         // TeamMemberDto.user_id now carries); the person's grant validates
         // against it.
         let grant_id =
-            crate::seat_authority::test_support::mint_grant_for(root, &key, "advisor", &[]);
+            crate::gate::seat_authority::test_support::mint_grant_for(root, &key, "advisor", &[]);
         let store = crate::detect_distributed_store_from(root).expect("fixture store detected");
         let _env = crate::test_env::EnvVarsGuard::apply(&[
             ("AIDA_USER", Some(key.as_str())),
-            (crate::seat_authority::GRANT_ENV, Some(grant_id.as_str())),
+            (
+                crate::gate::seat_authority::GRANT_ENV,
+                Some(grant_id.as_str()),
+            ),
         ]);
 
         // effective_role_for_user resolves the granted seat, kept alive by the

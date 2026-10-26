@@ -172,7 +172,7 @@ pub(crate) fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             // it, the caller is the one who will work the lease.
             // trace:BUG-1918 | ai:claude
             if *launch {
-                review_authority::as_launcher(start)
+                crate::gate::review_authority::as_launcher(start)
             } else {
                 start()
             }
@@ -3072,7 +3072,7 @@ pub(crate) fn agent_new_bg_dispatch(
             // BUG-1918: the backgrounded agent — not this launcher — works
             // the lease; record its session id as one of the lease's authors.
             // trace:BUG-1918 | ai:claude
-            review_authority::record_lease_identity(
+            crate::gate::review_authority::record_lease_identity(
                 &plan.project_root,
                 lease_id,
                 &[format!("session:{sid}")],
@@ -3468,7 +3468,7 @@ struct IssuedLaunchGrant(Option<String>);
 impl IssuedLaunchGrant {
     fn from_command(command: &std::process::Command) -> Self {
         Self(command.get_envs().find_map(|(key, value)| {
-            (key == std::ffi::OsStr::new(seat_authority::GRANT_ENV))
+            (key == std::ffi::OsStr::new(crate::gate::seat_authority::GRANT_ENV))
                 .then_some(value)
                 .flatten()
                 .and_then(|value| value.to_str())
@@ -3483,7 +3483,7 @@ impl IssuedLaunchGrant {
 impl Drop for IssuedLaunchGrant {
     fn drop(&mut self) {
         if let Some(id) = &self.0 {
-            if let Err(error) = seat_authority::revoke_by_id(id) {
+            if let Err(error) = crate::gate::seat_authority::revoke_by_id(id) {
                 eprintln!("could not revoke failed child launch grant: {error:#}");
             }
         }
@@ -3509,11 +3509,11 @@ fn preflight_agent_new_delegation(
 ) -> Result<()> {
     if let Some(role) = role {
         let seat = canonical_role_name(role);
-        seat_authority::validate_child_delegation(project_root, &seat).map_err(|cause| {
+        crate::gate::seat_authority::validate_child_delegation(project_root, &seat).map_err(|cause| {
             anyhow::anyhow!(
                 "cannot launch child seat `{seat}`: {cause:#}. From a human terminal in {}, run `eval \"$(aida role enter advisor --delegate-seat {seat})\"`, then retry the original `aida agent new` command in that same shell with its {} intact; remove only AIDA_SESSION_PURPOSE. An ambient AIDA_SESSION_ROLE does not supply a grant.",
                 project_root.display(),
-                seat_authority::GRANT_ENV
+                crate::gate::seat_authority::GRANT_ENV
             )
         })?;
     }
@@ -3563,7 +3563,7 @@ pub(crate) fn preflight_agent_launch_lease(
             sh_single_quote(&lease.worktree_path.display().to_string()),
         );
     }
-    defer_cmd::enforce_reasoned_operator_hold(project_root, spec)?;
+    crate::gate::operator_hold::enforce_reasoned_operator_hold(project_root, spec)?;
     // BUG-2169: a seat clone's branch comes from its sandboxed probe; host
     // git never runs in it. trace:TASK-2053 | ai:claude
     let current = if lease.tree_kind == crate::seat_clone::TreeKind::Clone {
@@ -3861,7 +3861,7 @@ fn prepare_agent_launch_attempt_inner(
                 .with_context(|| format!("failed to cd to {}", project_root.display()))?;
             // BUG-1918: `agent new` claims FOR the agent it launches.
             // trace:BUG-1918 | ai:claude
-            let start_result = review_authority::as_launcher(|| {
+            let start_result = crate::gate::review_authority::as_launcher(|| {
                 crate::session_start::session_start_with_receipt(
                     &spec,
                     /* branch */ None,
@@ -4551,7 +4551,7 @@ fresh `aida agent new ... --spec NEXT-ID` session.\n"
     // Omitted entirely when no mandate is active.
     // trace:TASK-1955 | ai:claude (TASK-1806)
     if let Some(section) = render_launch_mandate_section(
-        crate::mandate::mandate_dir().ok().as_deref(),
+        crate::gate::mandate::mandate_dir().ok().as_deref(),
         &plan.project_root,
         chrono::Utc::now(),
     ) {
@@ -5219,7 +5219,7 @@ fn reported_harness_version(
     // either (nor the seat's role or purpose).
     // trace:TASK-1793 | ai:claude
     probe
-        .env_remove(seat_authority::GRANT_ENV)
+        .env_remove(crate::gate::seat_authority::GRANT_ENV)
         .env_remove("AIDA_SESSION_ROLE")
         .env_remove("AIDA_SESSION_PURPOSE");
     // Nor the launching session's identity. trace:STORY-1843 | ai:claude
@@ -5339,7 +5339,7 @@ pub(crate) fn build_agent_new_bg_command(
         // registry/brief identity. trace:BUG-558 | ai:claude
         .env("AIDA_USER", &plan.name)
         .env("AIDA_PROJECT_ROOT", &plan.project_root)
-        .env_remove(seat_authority::GRANT_ENV) // trace:TASK-1752 | ai:claude
+        .env_remove(crate::gate::seat_authority::GRANT_ENV) // trace:TASK-1752 | ai:claude
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped());
@@ -5377,10 +5377,10 @@ pub(crate) fn build_agent_new_bg_command(
     // BUG-1918: the backgrounded worker carries its lease id too.
     // trace:BUG-1918 | ai:claude
     if let Some(lease_id) = &plan.lease_id {
-        review_authority::bind_worker_env(&mut command, lease_id);
+        crate::gate::review_authority::bind_worker_env(&mut command, lease_id);
     }
     if let Some(role) = &plan.role {
-        seat_authority::bg_seat_refusal(role)?;
+        crate::gate::seat_authority::bg_seat_refusal(role)?;
         // BUG-1934: a baseline seat needs no grant, and a child grant here
         // could never be presented (see `seat_authority::bg_seat_refusal`).
         command.env("AIDA_SESSION_ROLE", role);
@@ -5598,7 +5598,7 @@ fn run_tracked_agent_after_spawn(
         // USER (see the bg-dispatch block above). trace:BUG-558 | ai:claude
         .env("AIDA_USER", &plan.name)
         .env("AIDA_PROJECT_ROOT", &plan.project_root)
-        .env_remove(seat_authority::GRANT_ENV) // trace:TASK-1752 | ai:claude
+        .env_remove(crate::gate::seat_authority::GRANT_ENV) // trace:TASK-1752 | ai:claude
         .stdin(std::process::Stdio::inherit())
         .stdout(std::process::Stdio::inherit())
         .stderr(std::process::Stdio::inherit());
@@ -5640,18 +5640,18 @@ fn run_tracked_agent_after_spawn(
     // author after it leaves the worktree or the lease is released.
     // trace:BUG-1918 | ai:claude
     if let Some(lease_id) = &plan.lease_id {
-        review_authority::bind_worker_env(&mut command, lease_id);
+        crate::gate::review_authority::bind_worker_env(&mut command, lease_id);
     }
 
     if let Some(role) = &plan.role {
-        let grant = seat_authority::issue_child(
+        let grant = crate::gate::seat_authority::issue_child(
             &plan.project_root,
             &canonical_role_name(role),
             &plan.name,
         )?;
         command
             .env("AIDA_SESSION_ROLE", role)
-            .env(seat_authority::GRANT_ENV, grant.id);
+            .env(crate::gate::seat_authority::GRANT_ENV, grant.id);
     } else {
         command.env_remove("AIDA_SESSION_ROLE");
     }
@@ -5667,7 +5667,11 @@ fn run_tracked_agent_after_spawn(
     // BUG-1918: this launcher made the claim; record the worker it spawned.
     // trace:BUG-1918 | ai:claude
     if let Some(lease_id) = &plan.lease_id {
-        review_authority::record_launched_worker(&plan.project_root, lease_id, child_pid);
+        crate::gate::review_authority::record_launched_worker(
+            &plan.project_root,
+            lease_id,
+            child_pid,
+        );
     }
     let terminal = agent_registry::current_terminal_identity();
     let title_enabled = title && agent_registry::terminal_title_enabled(&plan.project_root);
@@ -5957,9 +5961,9 @@ mod task_1806_launch_mandate_tests {
         let before = render_agent_launch_context(&config, &plan, "t").unwrap();
         assert!(!before.contains("## Mandate"), "{before}");
 
-        let dir = crate::mandate::mandate_dir().unwrap();
+        let dir = crate::gate::mandate::mandate_dir().unwrap();
         std::fs::create_dir_all(&dir).unwrap();
-        crate::mandate::start_with(
+        crate::gate::mandate::start_with(
             &dir,
             &|| Ok(()),
             &crate::current_user_id(None),
@@ -6068,7 +6072,7 @@ mod task_1806_launch_mandate_tests {
         );
         assert_eq!(render_launch_mandate_section(None, &project, now), None);
 
-        crate::mandate::start_with(
+        crate::gate::mandate::start_with(
             &dir,
             &|| Ok(()),
             &crate::current_user_id(None),

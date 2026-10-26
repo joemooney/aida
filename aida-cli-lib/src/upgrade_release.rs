@@ -657,7 +657,7 @@ exit 2
                 reads.display()
             );
             crate::test_exec::write_executable(&gh, script);
-            merge_hold::write_hold(&root, 1265, "supervised test hold").unwrap();
+            crate::gate::merge_hold_core::write_hold(&root, 1265, "supervised test hold").unwrap();
             Self {
                 _temp: temp,
                 root,
@@ -769,7 +769,7 @@ exit 2
         }
         let fixture = Fixture::new();
         assert!(
-            merge_hold::read_hold(&fixture.root, 1265).is_some(),
+            crate::gate::merge_hold_core::read_hold(&fixture.root, 1265).is_some(),
             "the regression requires a real local supervised-hold marker"
         );
         let (result, finish_ci_calls, shelf_calls) = fixture.run_drain("hold");
@@ -782,7 +782,7 @@ exit 2
         assert!(result.shelved_reason.is_none(), "{result:?}");
         assert_eq!(result.process_exit_code(), auto_complete::DRIVE_EXIT_CLEAN);
         assert!(
-            merge_hold::read_hold(&fixture.root, 1265).is_some(),
+            crate::gate::merge_hold_core::read_hold(&fixture.root, 1265).is_some(),
             "finish_ci must not clear the supervised hold marker"
         );
     }
@@ -1081,7 +1081,7 @@ mod bug_1173_detection_hold_tests {
             .unwrap_or(src.len());
         let body = &src[start..end];
         assert!(
-            body.contains("merge_hold::write_typed_hold")
+            body.contains("merge_hold_core::write_typed_hold")
                 && body.contains("HoldReasonKind::Supervision"),
             "set_pr_number must stamp a typed supervision marker at PR-detection"
         );
@@ -1648,7 +1648,7 @@ pub(crate) fn handle_release(
         if let Some(title) = &change_ref.title {
             after_pr_ids.extend(pr_ship::extract_spec_ids_from_text(title));
         }
-        let after_pr_match_head = crate::pr_cmd::merge_path_approval_gate(
+        let after_pr_match_head = crate::gate::approval::merge_path_approval_gate(
             &merge_root,
             n,
             &after_pr_ids,

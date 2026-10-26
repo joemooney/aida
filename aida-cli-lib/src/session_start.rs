@@ -2013,7 +2013,7 @@ pub(crate) fn session_start_with_receipt(
 
     // BUG-1793: an operator-held spec must refuse before creating a lease or
     // acquiring cross-clone coordination state. trace:BUG-1793 | ai:codex
-    defer_cmd::enforce_reasoned_operator_hold(&project_root, owns)?;
+    crate::gate::operator_hold::enforce_reasoned_operator_hold(&project_root, owns)?;
 
     // Check the lease dir exists; create if not.
     let leases = leases_dir(&project_root);
@@ -3119,7 +3119,7 @@ pub(crate) fn session_start_with_receipt(
     }
     // BUG-1918: durable record of who claimed this spec, surviving release.
     // trace:BUG-1918 | ai:claude
-    review_authority::record_authoring_lease(&project_root, &lease);
+    crate::gate::review_authority::record_authoring_lease(&project_root, &lease);
 
     // BUG-2010: update the resolved agent's own registry entry with its new
     // current_spec and worktree path.
@@ -3370,7 +3370,7 @@ pub(crate) fn session_start_with_receipt(
             .with_context(|| format!("failed to chdir into {}", worktree_path.display()))?;
         // BUG-1918: the exec'd worker carries its lease id.
         // trace:BUG-1918 | ai:claude
-        review_authority::export_worker_session_env(&id);
+        crate::gate::review_authority::export_worker_session_env(&id);
         // TASK-31: pass a display name to claude so the /resume picker and
         // terminal title can distinguish concurrent worktrees. Explicit
         // --name wins; otherwise derive from scope+branch+role.

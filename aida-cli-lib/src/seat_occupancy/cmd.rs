@@ -135,7 +135,7 @@ fn with_transfer_ctx<T>(project_root: &Path, f: impl FnOnce(&super::Ctx) -> T) -
             req.requester_subject
                 .as_deref()
                 .and_then(|subject| {
-                    crate::seat_authority::validated_grant(
+                    crate::gate::seat_authority::validated_grant(
                         project_root,
                         &req.requester_grant_id,
                         subject,
@@ -450,7 +450,7 @@ mod transfer_authority_tests {
     fn transfer_context_reads_current_authority_and_binds_subject_session_seat() {
         let tmp = tempfile::tempdir().unwrap();
         let _env = crate::test_env::AmbientGuard::hermetic(tmp.path(), None);
-        let id = crate::seat_authority::test_support::mint_grant_for(
+        let id = crate::gate::seat_authority::test_support::mint_grant_for(
             tmp.path(),
             "requester",
             "orchestrator",
@@ -461,7 +461,8 @@ mod transfer_authority_tests {
             .join(".aida/session-grants")
             .join(format!("{id}.json"));
         let original = std::fs::read(&grant_path).unwrap();
-        let grant: crate::seat_authority::SeatGrant = serde_json::from_slice(&original).unwrap();
+        let grant: crate::gate::seat_authority::SeatGrant =
+            serde_json::from_slice(&original).unwrap();
         let now = chrono::Utc::now();
         let request = TakeoverRequest {
             id: uuid::Uuid::new_v4().to_string(),

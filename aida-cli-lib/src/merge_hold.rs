@@ -17,10 +17,9 @@
 
 // STORY-1889: the hold record types, the hold read path, the marker write path
 // and the hold decisions live in the protected gate module; this file keeps
-// forge labels and the pinned-change plumbing. Transitional re-export; the
-// final STORY-1889 PR repoints the callers.
+// forge labels and the pinned-change plumbing.
 // trace:STORY-1889 | ai:claude
-pub(crate) use crate::gate::merge_hold_core::*;
+use crate::gate::merge_hold_core::*;
 
 use crate::process_retry::RetryEtxtbsy;
 use std::path::{Path, PathBuf};
@@ -1139,10 +1138,10 @@ fn cited_shas(text: &str) -> Vec<String> {
 pub(crate) fn premise_stale(
     record: &MergeHoldRecord,
     live_head: Option<&str>,
-    verdict_of: impl Fn(&str) -> Option<crate::review_verdict::RecordedVerdict>,
+    verdict_of: impl Fn(&str) -> Option<crate::gate::review_verdict::RecordedVerdict>,
     status_of: impl Fn(&str) -> Option<String>,
 ) -> Option<String> {
-    use crate::review_verdict::{same_reviewed_sha, short_sha};
+    use crate::gate::review_verdict::{same_reviewed_sha, short_sha};
     let mut why = Vec::new();
     let prose_specs = || crate::pr_ship::extract_spec_ids_from_text(&record.detail);
     if record.reason_kind == HoldReasonKind::Rework {

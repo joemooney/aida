@@ -1230,7 +1230,7 @@ pub(crate) fn build_claude_exec_command(
     }
     let mut cmd = Command::new(program);
     if let Some(grant) = grant_id {
-        cmd.env(crate::seat_authority::GRANT_ENV, grant);
+        cmd.env(crate::gate::seat_authority::GRANT_ENV, grant);
     }
     if contained {
         cmd.env("AIDA_CONTAINED", "1");
@@ -1606,7 +1606,7 @@ pub(crate) fn spawn_vendor_headless_with_seat_granted(
     // every headless phase behaves identically whoever launched it.
     // trace:TASK-1169 | ai:claude
     let (ceiling_key, ceiling_value) = crate::bg_wait_ceiling_env(Some(&headless_worktree_root()));
-    let child_grant = crate::seat_authority::issue_child(
+    let child_grant = crate::gate::seat_authority::issue_child(
         &headless_worktree_root(),
         seat.as_str(),
         &crate::current_user_id(None),
@@ -1615,7 +1615,7 @@ pub(crate) fn spawn_vendor_headless_with_seat_granted(
     cmd.args(args)
         .env("AIDA_HEADLESS", "1")
         .env("AIDA_SESSION_ROLE", seat.as_str())
-        .env(crate::seat_authority::GRANT_ENV, &child_grant.id)
+        .env(crate::gate::seat_authority::GRANT_ENV, &child_grant.id)
         // BUG-802: anchor the drive root so `aida review record --pr N` (and
         // any future handshake writer) lands artifacts where the orchestrator
         // polls, no matter where the session wanders (PR checkouts, /tmp).
@@ -1808,7 +1808,7 @@ pub(crate) fn spawn_claude_resume_with_grant(
         cmd.env_remove(key);
     }
     if let Some(grant) = grant_id {
-        cmd.env(crate::seat_authority::GRANT_ENV, grant)
+        cmd.env(crate::gate::seat_authority::GRANT_ENV, grant)
             .env("AIDA_SESSION_ROLE", "reviewer");
         // A resume keeps the session's handle. trace:BUG-2187 | ai:claude
         apply_resumed_child_agent_identity(&mut cmd, HeadlessVendor::Claude, "reviewer", id);
@@ -1872,7 +1872,7 @@ pub(crate) fn build_codex_session_command(
 ) -> std::process::Command {
     let mut cmd = std::process::Command::new("codex");
     if let Some(id) = grant_id {
-        cmd.env(crate::seat_authority::GRANT_ENV, id);
+        cmd.env(crate::gate::seat_authority::GRANT_ENV, id);
     }
     cmd.env_remove("AIDA_CONTAINED");
     cmd.args(codex_session_args(initial_prompt, bypass, model));
@@ -2009,14 +2009,14 @@ pub(crate) fn spawn_reviewer_launch_plan_granted(
     if plan.contained {
         prepare_contained_mailbox_for_launch(&std::env::current_dir()?)?;
     }
-    let grant = crate::seat_authority::issue_child(
+    let grant = crate::gate::seat_authority::issue_child(
         project_root,
         "reviewer",
         &crate::current_user_id(None),
     )?;
     let mut cmd = std::process::Command::new(&plan.program);
     cmd.args(&plan.args)
-        .env(crate::seat_authority::GRANT_ENV, &grant.id)
+        .env(crate::gate::seat_authority::GRANT_ENV, &grant.id)
         .env("AIDA_SESSION_ROLE", "reviewer");
     // trace:BUG-2187 | ai:claude
     // trace:STORY-1843 | ai:codex
@@ -4201,7 +4201,7 @@ pub(crate) fn exec_vendor_headless(
     contained: bool,
     lease_id: Option<&str>,
     seat: &str,
-    child_grant: &crate::seat_authority::HeadlessChildGrant,
+    child_grant: &crate::gate::seat_authority::HeadlessChildGrant,
 ) -> Result<()> {
     let result = run_vendor_headless_child(
         vendor,
@@ -4229,7 +4229,7 @@ pub(crate) fn exec_vendor_headless(
 /// BUG-2139: revoke a headless child's grant, warning (never failing) on error.
 // trace:BUG-2139 | ai:claude
 pub(crate) fn revoke_headless_child_grant(id: &str) {
-    if let Err(e) = crate::seat_authority::revoke_by_id(id) {
+    if let Err(e) = crate::gate::seat_authority::revoke_by_id(id) {
         eprintln!(
             "{} could not revoke headless child grant {}: {e:#} (it still expires with its parent)",
             "Warning:".yellow().bold(),
@@ -4249,7 +4249,7 @@ pub(crate) fn apply_headless_child_seat_env(
     grant_env: &str,
 ) {
     cmd.env("AIDA_SESSION_ROLE", seat)
-        .env(crate::seat_authority::GRANT_ENV, grant_env);
+        .env(crate::gate::seat_authority::GRANT_ENV, grant_env);
     scrub_launcher_session_env(cmd);
 }
 
@@ -4449,7 +4449,7 @@ pub(crate) fn run_standalone_implementer_child(
     tee_opts: &crate::headless_tee::TeeOptions,
     contained: bool,
     lease_id: &str,
-    child_grant: &crate::seat_authority::HeadlessChildGrant,
+    child_grant: &crate::gate::seat_authority::HeadlessChildGrant,
     hooks: &HeadlessChildHooks<'_>,
 ) -> Result<std::process::ExitStatus> {
     let result = run_vendor_headless_child(
@@ -4728,10 +4728,10 @@ pub(crate) fn stamp_lease_active_pid_at(
     // this lease; record its process as one of the lease's authors so the
     // ledger outlives the lease.
     // trace:BUG-1918 | ai:claude
-    crate::review_authority::record_lease_identity(
+    crate::gate::review_authority::record_lease_identity(
         project_root,
         lease_id,
-        &[crate::review_authority::process_token(
+        &[crate::gate::review_authority::process_token(
             "proc",
             pid,
             start_time.as_deref(),
@@ -4994,13 +4994,14 @@ pub(crate) fn spawn_claude_headless_resume_granted(
     if contained {
         prepare_contained_mailbox_for_launch(cwd)?;
     }
-    let child_grant = crate::seat_authority::issue_child(cwd, seat, &crate::current_user_id(None))?;
+    let child_grant =
+        crate::gate::seat_authority::issue_child(cwd, seat, &crate::current_user_id(None))?;
     let mut cmd = Command::new(program);
     cmd.current_dir(cwd)
         .args(args)
         .env("AIDA_HEADLESS", "1")
         .env("AIDA_SESSION_ROLE", seat)
-        .env(crate::seat_authority::GRANT_ENV, &child_grant.id)
+        .env(crate::gate::seat_authority::GRANT_ENV, &child_grant.id)
         // BUG-802: same drive-root anchor as the spawn path — the two launch
         // paths must never diverge on env.
         .env("AIDA_DRIVE_ROOT", headless_worktree_root())
@@ -6387,7 +6388,7 @@ pub(crate) fn build_claude_resume_exec_command(
     let mut cmd = Command::new(program);
     cmd.args(args);
     if let Some(grant) = grant_id {
-        cmd.env(crate::seat_authority::GRANT_ENV, grant);
+        cmd.env(crate::gate::seat_authority::GRANT_ENV, grant);
     }
     if contained {
         cmd.env("AIDA_CONTAINED", "1");
@@ -9999,10 +10000,18 @@ mod tests {
         let root = tmp.path();
         let _lock = crate::test_env::env_lock();
         let subject = "bug-2139-lease-user";
-        let id =
-            crate::seat_authority::test_support::mint_grant_for(root, subject, "implementer", &[]);
-        let other =
-            crate::seat_authority::test_support::mint_grant_for(root, subject, "implementer", &[]);
+        let id = crate::gate::seat_authority::test_support::mint_grant_for(
+            root,
+            subject,
+            "implementer",
+            &[],
+        );
+        let other = crate::gate::seat_authority::test_support::mint_grant_for(
+            root,
+            subject,
+            "implementer",
+            &[],
+        );
         let sessions = root.join(".aida").join("sessions");
         std::fs::create_dir_all(&sessions).unwrap();
         for lease in ["stamped", "plain"] {
@@ -10022,8 +10031,8 @@ mod tests {
         revoke_lease_child_grant(&sessions.join("missing.toml"));
         let valid = |g: &str| {
             matches!(
-                crate::seat_authority::grant_check_for(root, g, subject),
-                crate::seat_authority::GrantCheck::Valid(_)
+                crate::gate::seat_authority::grant_check_for(root, g, subject),
+                crate::gate::seat_authority::GrantCheck::Valid(_)
             )
         };
         assert!(valid(&id) && valid(&other), "nothing revoked yet");
@@ -10043,10 +10052,18 @@ mod tests {
         let root = tmp.path();
         let _lock = crate::test_env::env_lock();
         let subject = "task-1798-lease-user";
-        let implementer =
-            crate::seat_authority::test_support::mint_grant_for(root, subject, "implementer", &[]);
-        let ci_fix =
-            crate::seat_authority::test_support::mint_grant_for(root, subject, "implementer", &[]);
+        let implementer = crate::gate::seat_authority::test_support::mint_grant_for(
+            root,
+            subject,
+            "implementer",
+            &[],
+        );
+        let ci_fix = crate::gate::seat_authority::test_support::mint_grant_for(
+            root,
+            subject,
+            "implementer",
+            &[],
+        );
         let sessions = root.join(".aida").join("sessions");
         std::fs::create_dir_all(&sessions).unwrap();
         std::fs::write(sessions.join("l.toml"), "id = \"l\"\nactive_pid = 1\n").unwrap();
@@ -10070,8 +10087,8 @@ mod tests {
         set_lease_grant_key_at(root, "l", LEASE_CI_FIX_CHILD_GRANT_KEY, Some(&ci_fix)).unwrap();
         let valid = |g: &str| {
             matches!(
-                crate::seat_authority::grant_check_for(root, g, subject),
-                crate::seat_authority::GrantCheck::Valid(_)
+                crate::gate::seat_authority::grant_check_for(root, g, subject),
+                crate::gate::seat_authority::GrantCheck::Valid(_)
             )
         };
         assert!(valid(&implementer) && valid(&ci_fix));
@@ -10088,14 +10105,14 @@ mod tests {
     #[test]
     fn exec_headless_child_never_inherits_the_launcher_seat_env() {
         let mut env = crate::test_env::EnvVarsGuard::snapshot(&[
-            crate::seat_authority::GRANT_ENV,
+            crate::gate::seat_authority::GRANT_ENV,
             "AIDA_SESSION_ROLE",
             "AIDA_SESSION_PURPOSE",
             "AIDA_CONTAINED",
         ]);
         env.unset_key("AIDA_CONTAINED");
         env.set_key(
-            crate::seat_authority::GRANT_ENV,
+            crate::gate::seat_authority::GRANT_ENV,
             "11111111-1111-4111-8111-111111111111",
         );
         env.set_key("AIDA_SESSION_ROLE", "advisor");
@@ -10118,7 +10135,7 @@ mod tests {
                 let envs: std::collections::HashMap<_, _> = cmd.get_envs().collect();
                 let get = |k: &str| envs.get(std::ffi::OsStr::new(k)).copied();
                 assert_eq!(
-                    get(crate::seat_authority::GRANT_ENV),
+                    get(crate::gate::seat_authority::GRANT_ENV),
                     Some(Some(std::ffi::OsStr::new(grant))),
                     "{vendor:?} {seat}: the grant is set explicitly"
                 );

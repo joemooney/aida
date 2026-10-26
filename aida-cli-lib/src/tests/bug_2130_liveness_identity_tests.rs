@@ -189,7 +189,7 @@ fn bug_2130_review_authority_tokens_match_across_legacy_and_exact() {
     let exact_tok = "shell:42@linux-starttime:987654";
 
     // 1. Same live pid where both tokens strictly match the live process -> true.
-    assert!(crate::review_authority::tokens_match_with(
+    assert!(crate::gate::review_authority::tokens_match_with(
         legacy_tok,
         exact_tok,
         |pid, rec| {
@@ -201,22 +201,22 @@ fn bug_2130_review_authority_tokens_match_across_legacy_and_exact() {
     // check must not depend on the author process staying alive; within one
     // scheme different starts stay distinct (a recycled pid).
     // trace:TASK-1951 trace:TASK-2049 | ai:claude
-    assert!(crate::review_authority::tokens_match_with(
+    assert!(crate::gate::review_authority::tokens_match_with(
         legacy_tok,
         exact_tok,
         |_, _| false,
     ));
-    assert!(!crate::review_authority::tokens_match_with(
+    assert!(!crate::gate::review_authority::tokens_match_with(
         "proc:42@linux-starttime:1",
         "shell:42@linux-starttime:2",
         |_, _| false,
     ));
-    assert!(!crate::review_authority::tokens_match_with(
+    assert!(!crate::gate::review_authority::tokens_match_with(
         "proc:42@2026-10-18T00:00:00+00:00",
         "proc:42@2026-10-19T00:00:00+00:00",
         |_, _| false,
     ));
-    assert!(!crate::review_authority::tokens_match_with(
+    assert!(!crate::gate::review_authority::tokens_match_with(
         "proc:42@garbage",
         exact_tok,
         |_, _| false,
@@ -224,19 +224,19 @@ fn bug_2130_review_authority_tokens_match_across_legacy_and_exact() {
     // TASK-2136: the two exact schemes are distinct too, so a dead pid's
     // linux-starttime / sysinfo-start pair also matches without a probe.
     // trace:TASK-1951 trace:TASK-2136 | ai:claude
-    assert!(crate::review_authority::tokens_match_with(
+    assert!(crate::gate::review_authority::tokens_match_with(
         "proc:42@linux-starttime:987654",
         "shell:42@sysinfo-start:1760745600",
         |_, _| false,
     ));
-    assert!(!crate::review_authority::tokens_match_with(
+    assert!(!crate::gate::review_authority::tokens_match_with(
         "proc:42@sysinfo-start:1",
         "shell:42@sysinfo-start:2",
         |_, _| false,
     ));
 
     // 3. Different pids -> false even if strict_match would return true.
-    assert!(!crate::review_authority::tokens_match_with(
+    assert!(!crate::gate::review_authority::tokens_match_with(
         "proc:42@2026-10-18T00:00:00+00:00",
         "proc:43@linux-starttime:987654",
         |_, _| true,
@@ -246,7 +246,7 @@ fn bug_2130_review_authority_tokens_match_across_legacy_and_exact() {
     let me = std::process::id();
     let legacy = aida_core::liveness::process_start_identity_legacy(me).expect("own legacy start");
     let exact = aida_core::liveness::process_start_identity(me).expect("own exact start");
-    assert!(crate::review_authority::tokens_match(
+    assert!(crate::gate::review_authority::tokens_match(
         &format!("proc:{me}@{legacy}"),
         &format!("shell:{me}@{exact}"),
     ));
@@ -357,21 +357,21 @@ fn bug_2130_relay_stall_owner_alive_parses_wall_clock_for_live_owner() {
 
     let me = std::process::id();
     let future_updated = (chrono::Utc::now() + chrono::Duration::seconds(60)).to_rfc3339();
-    let status = crate::fleet_lanes::parse_status(&format!(
+    let status = crate::gate::fleet_lanes::parse_status(&format!(
         "state=running\npid={me}\nupdated={future_updated}\n"
     ));
     assert_eq!(
-        crate::fleet_lanes::owner_alive(run_dir, &status),
+        crate::gate::fleet_lanes::owner_alive(run_dir, &status),
         Some(true),
         "live owner whose process_start_time <= updated must report Some(true)"
     );
 
     let past_updated = "1999-01-01T00:00:00Z";
-    let recycled_status = crate::fleet_lanes::parse_status(&format!(
+    let recycled_status = crate::gate::fleet_lanes::parse_status(&format!(
         "state=running\npid={me}\nupdated={past_updated}\n"
     ));
     assert_eq!(
-        crate::fleet_lanes::owner_alive(run_dir, &recycled_status),
+        crate::gate::fleet_lanes::owner_alive(run_dir, &recycled_status),
         Some(false),
         "process started after relay.status updated timestamp must report Some(false)"
     );

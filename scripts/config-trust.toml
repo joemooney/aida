@@ -271,9 +271,14 @@ sites = 1
 # home) in refusals and `aida mandate status`; nothing is read through them.
 # trace:STORY-1700 | ai:claude
 # trace:STORY-1888 | ai:claude
-[readers."aida-cli-lib/src/mandate_gates.rs"]
+# trace:STORY-1889 | ai:agy
+[readers."aida-cli-lib/src/gate/mandate_gates.rs"]
 channels = ["trusted", "home", "probe", "prose"]
-sites = 6
+sites = 5
+
+[readers."aida-cli-lib/src/mandate_gates.rs"]
+channels = ["home"]
+sites = 1
 
 [readers."aida-cli-lib/src/maintenance_schedule.rs"]
 channels = ["worktree", "prose"]

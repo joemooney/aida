@@ -572,7 +572,7 @@ pub(crate) fn session_prune(
 // trace:TASK-1787 | ai:antigravity
 pub(crate) fn resolve_session_grant(
     lease: &SessionLease,
-) -> Option<crate::seat_authority::SeatGrant> {
+) -> Option<crate::gate::seat_authority::SeatGrant> {
     let mut gid = None;
     #[cfg(target_os = "linux")]
     if let Some((pid, start_time)) = lease
@@ -586,7 +586,7 @@ pub(crate) fn resolve_session_grant(
     {
         if crate::process_probe::process_identity_is_alive(pid, start_time) {
             if let Some(vars) = crate::ps_integrate::read_pid_environ_vars(pid) {
-                gid = vars.get(crate::seat_authority::GRANT_ENV).cloned();
+                gid = vars.get(crate::gate::seat_authority::GRANT_ENV).cloned();
             }
         }
     }
@@ -596,7 +596,7 @@ pub(crate) fn resolve_session_grant(
             .unwrap_or(false);
         if is_current_session {
             // trace:TASK-1752 | ai:claude
-            gid = crate::seat_authority::current_grant_id();
+            gid = crate::gate::seat_authority::current_grant_id();
         }
     }
     gid.and_then(|id| {
@@ -604,7 +604,7 @@ pub(crate) fn resolve_session_grant(
         if id.is_empty() {
             None
         } else {
-            crate::seat_authority::read_grant(id).ok()
+            crate::gate::seat_authority::read_grant(id).ok()
         }
     })
 }
@@ -618,7 +618,7 @@ pub(crate) fn format_session_grant_ttl_line(lease: &SessionLease) -> Option<Stri
         Some(format!(
             "  {}: {}",
             "grant ttl".bold(),
-            crate::seat_authority::format_ttl(ttl)
+            crate::gate::seat_authority::format_ttl(ttl)
         ))
     } else {
         None
@@ -988,9 +988,9 @@ pub(crate) fn session_handoff_seat(
     let handoff = seat_rotation::read_latest_handoff(&project_root, &seat)?;
     // STORY-1700: the active mandate, read live, prints first.
     // trace:STORY-1700 | ai:claude
-    let state = crate::mandate::current_state();
+    let state = crate::gate::mandate::current_state();
     let mandate = match &state {
-        crate::mandate::MandateState::Active(_) => crate::mandate::status_line(
+        crate::gate::mandate::MandateState::Active(_) => crate::mandate::status_line(
             &state,
             chrono::Utc::now(),
             &crate::mandate_gates::describe(Some(&project_root)),

@@ -743,7 +743,7 @@ pub(crate) fn run_zen_drive(
             let env = load_autopilot_envelope(project_root.as_deref());
             match zen_drive::run_draft_gate(&env, &display, &req_type, &tags) {
                 zen_drive::DraftGate::AutoApprove
-                    if !zen_auto_approve_authorized(&req.status, has_advisor_authority()) =>
+                    if !zen_auto_approve_authorized(&req.status, crate::gate::role_authority::has_advisor_authority()) =>
                 {
                     // BUG-1611: `approve = "auto"` without approval authority
                     // routes to the advisor exactly like the propose policy —
@@ -770,7 +770,7 @@ pub(crate) fn run_zen_drive(
                              auto-approve it (status → Approved) and drive."
                         );
                     } else {
-                        zen_auto_approve(store_path, req, has_advisor_authority())?;
+                        zen_auto_approve(store_path, req, crate::gate::role_authority::has_advisor_authority())?;
                         // TASK-1018: the ONLY wired `Execute` outcome today —
                         // so it gets the durable record + the one-command
                         // reversal, right where the side effect lands. Prior

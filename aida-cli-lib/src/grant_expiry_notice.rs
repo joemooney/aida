@@ -107,14 +107,14 @@ fn claim(dir: &Path, id: &str, epoch: &str, crossing: u8) -> Result<bool> {
 }
 
 fn notice(root: &Path, now: DateTime<Utc>) -> Result<Option<String>> {
-    let Some(grant) = crate::seat_authority::notice_grant(root, now)? else {
+    let Some(grant) = crate::gate::seat_authority::notice_grant(root, now)? else {
         return Ok(None);
     };
     let crossing = threshold(grant.expiry.expires_at - now);
     // Expiry changes also reset the epoch for an in-place renewal.
     let epoch = format!("{}:{}", grant.id, grant.expiry.expires_at);
     if !claim(
-        &crate::seat_authority::grant_dir()?,
+        &crate::gate::seat_authority::grant_dir()?,
         &grant.id,
         &epoch,
         crossing,
@@ -123,7 +123,7 @@ fn notice(root: &Path, now: DateTime<Utc>) -> Result<Option<String>> {
     }
     let expiry = grant.expiry;
     // Existing warning's strict '<' boundary needs one millisecond at 2h.
-    Ok(crate::seat_authority::expiry_warning(
+    Ok(crate::gate::seat_authority::expiry_warning(
         &expiry,
         now,
         Duration::hours(2) + Duration::milliseconds(1),

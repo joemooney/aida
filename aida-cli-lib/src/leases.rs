@@ -348,7 +348,7 @@ pub(crate) fn session_harness_worktree_register(
     )?;
     // BUG-1918: durable record of who is authoring this worktree's work.
     // trace:BUG-1918 | ai:claude
-    review_authority::record_authoring_lease(&project_root, &lease);
+    crate::gate::review_authority::record_authoring_lease(&project_root, &lease);
     println!(
         "registered harness worktree lease {} scope:{} branch:{}",
         id, lease.scope, lease.branch
@@ -369,7 +369,7 @@ pub(crate) fn session_harness_worktree_register(
             .into_iter()
             .find(|l| l.id == adopted)
         {
-            review_authority::record_authoring_lease(&project_root, &spec_lease);
+            crate::gate::review_authority::record_authoring_lease(&project_root, &spec_lease);
         }
     }
     // BUG-754: a spec-scoped harness lease means a fanned-out implementer is

@@ -94,19 +94,19 @@ fn run_standalone_reviewer_with_codex_only_project_launches_codex_after_worktree
         ("AIDA_HOME", Some(home.to_str().unwrap())),
         ("HOME", Some(home.to_str().unwrap())),
         ("AIDA_AGENT_CMD", Some(mock.to_str().unwrap())),
-        (crate::seat_authority::GRANT_ENV, None),
+        (crate::gate::seat_authority::GRANT_ENV, None),
     ]);
     // ADR-66: the standalone reviewer launch issues the child a scoped
     // reviewer grant, so the launcher needs an active grant delegating
     // `reviewer`. Minted AFTER the guard so the record lands under the
     // fixture AIDA_HOME the launch resolves. trace:STORY-1473 | ai:claude
-    let grant_id = crate::seat_authority::test_support::mint_grant_for(
+    let grant_id = crate::gate::seat_authority::test_support::mint_grant_for(
         &project,
         &crate::current_user_id(None),
         "advisor",
         &["reviewer"],
     );
-    env.set_key(crate::seat_authority::GRANT_ENV, &grant_id);
+    env.set_key(crate::gate::seat_authority::GRANT_ENV, &grant_id);
     crate::session::set_headless_vendor_override(None);
 
     // Resolve the vendor from the REAL codex-only project config — the same
@@ -221,20 +221,20 @@ fn review_spec_resolve_and_launch_uses_codex_for_codex_only_project() {
         ("AIDA_HOME", Some(home.to_str().unwrap())),
         ("HOME", Some(home.to_str().unwrap())),
         ("AIDA_AGENT_CMD", Some(mock.to_str().unwrap())),
-        (crate::seat_authority::GRANT_ENV, None),
+        (crate::gate::seat_authority::GRANT_ENV, None),
     ]);
     // ADR-66: the reviewer launch issues a scoped child grant validated
     // against the project root (pinned through the ambient seam), so the
     // launcher needs a grant delegating `reviewer`. Minted AFTER the guard so
     // the record lands under the fixture AIDA_HOME.
     // trace:STORY-1473 | ai:claude
-    let grant_id = crate::seat_authority::test_support::mint_grant_for(
+    let grant_id = crate::gate::seat_authority::test_support::mint_grant_for(
         &project,
         &crate::current_user_id(None),
         "advisor",
         &["reviewer"],
     );
-    env.set_key(crate::seat_authority::GRANT_ENV, &grant_id);
+    env.set_key(crate::gate::seat_authority::GRANT_ENV, &grant_id);
     let outer = crate::test_ambient::replace(Some(crate::test_ambient::Ambient {
         project_root: project.clone(),
         stdin_is_terminal: false,
