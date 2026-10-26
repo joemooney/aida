@@ -17,12 +17,12 @@ description: |
   Local reproduction attempts all passed: 5/5 sequential runs on the PR branch, 5/5 on origin/main f34fd14323, and 40/40 concurrent runs of the test binary. The failure only shows under CI load: a load-dependent race in concurrent bootstrap or in the dispenser's first-use path.
 
   Next step: capture the inner error. Replace `.unwrap()` with `.expect(&format!("{e:#}"))`, or log it, so the next CI hit names the failing step. Then make bootstrap's first-writer path idempotent under contention.
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-26T19:01:40.258047669Z
-modified_at: 2026-10-26T21:59:49.958697185Z
+modified_at: 2026-10-26T22:17:31.169850177Z
 req_type: Bug
 tags:
 - test-flake
@@ -61,6 +61,21 @@ history:
   timestamp: 2026-10-26T21:59:51.629623863Z
   session_id: 51a4e262-9424-4628-881e-703dae468bcc
   changes: []
+- id: 01a17a4a-490b-7713-b6ea-2db5692c67dd
+  author: aida-auto-bump
+  timestamp: 2026-10-26T22:17:31.147968430Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a17a4a-4921-7122-9011-ea1101ea0744
+  timestamp: 2026-10-26T22:17:31.169841731Z
+  agent: aida
+  commit_sha: 773015b8d26e43b909b379eea62d14b9d357f8fa
+  summary: 'Real race fixed in code: read_handle accepts a superseded (nlink 0) counter handle; all writers share the <counter>.lock so locked read-modify-write stays fresh; retry loop removed, hard links/FIFO/symlink/foreign/shared-write still refuse; deterministic regression test plus 80/80 parallel-load proof; PR CI run 40408865071 green at head.'
+  review_verdict: approved
 filed_at:
   code_sha: cd2188e4f7f2e85c2f4332faa82b679ea951c766
   branch: story-1889-dispatch
@@ -69,3 +84,7 @@ filed_at:
   aida_build_sha: f34fd14323
   vendor: claude
   session: 0ac9ff76-4cbb-472f-88ac-b0ed9cd67638
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-26T22:17:31.147964169Z
+  completion_sha: 773015b8d26e43b909b379eea62d14b9d357f8fa
