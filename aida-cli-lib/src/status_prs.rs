@@ -633,7 +633,7 @@ pub(crate) fn render_in_flight_grouped(
         // origin), and show a literal commit example so the trailer isn't
         // dropped — the exact mistake that strands a spec in this state.
         // trace:TASK-671 | ai:claude
-        let has_origin = aida_core::git_ops::has_remote(project_root, "origin");
+        let has_origin = origin_hint_present(project_root);
         if no_commit.len() == 1 {
             let id = &no_commit[0];
             if has_origin {
@@ -675,6 +675,16 @@ pub(crate) fn render_in_flight_grouped(
             );
         }
     }
+}
+
+/// Whether the "awaiting commit" hint should say "open a PR". Host git
+/// refuses to run in a seat clone (BUG-2169), so a plain `has_remote` there
+/// read the refusal as "no origin" and showed the local-only hint. A seat
+/// clone is answered from its host main; a failed lookup keeps the PR hint,
+/// since only a confirmed "no such remote" means a local-only project.
+// trace:TASK-2356 | ai:claude
+pub(crate) fn origin_hint_present(project_root: &std::path::Path) -> bool {
+    crate::review_gates::origin_remote_presence(project_root).unwrap_or(true)
 }
 
 /// One record from `git worktree list --porcelain`. The main worktree is

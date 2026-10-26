@@ -508,6 +508,28 @@ pub(crate) fn collect_awaiting_report_inner(
     no_ci: bool,
     notice_fast: bool,
 ) -> awaiting_you::AwaitingReport {
+    collect_awaiting_report_with_mail_facts(
+        project_root,
+        backend,
+        ctx,
+        no_ci,
+        notice_fast,
+        MailIdentityFacts::collect,
+    )
+}
+
+/// [`collect_awaiting_report_inner`] with the mail channel's identity facts
+/// supplied, so a test asserts the operator/shared mail split from synthetic
+/// facts instead of the real session binding of whoever runs it.
+// trace:TASK-2345 | ai:claude
+pub(crate) fn collect_awaiting_report_with_mail_facts(
+    project_root: &std::path::Path,
+    backend: &aida_core::CachedGitBackend,
+    ctx: &UserStatusContext,
+    no_ci: bool,
+    notice_fast: bool,
+    mail_facts: impl FnOnce() -> MailIdentityFacts,
+) -> awaiting_you::AwaitingReport {
     // BUG-1288: the nightly channel performs independent forge reads. Start it
     // while the PR/store/local channels are collected so network latency is
     // paid once rather than serially on the machine-readable path.
@@ -819,10 +841,19 @@ pub(crate) fn collect_awaiting_report_inner(
         // user-only headline. Other permitted inbox identities stay labelled
         // separately, matching mailbox notice and explicit acknowledgement.
         // trace:STORY-1843 | ai:codex
-        let own_handle = crate::agent_handle::current_session_handle_for_cwd();
-        let operator = own_handle.clone().unwrap_or_else(|| current_user_id(None));
+        // One resolved fact set feeds both the headline and the shared
+        // scopes. trace:TASK-2345 | ai:claude
+        let facts = mail_facts();
+        // The headline only trusts a well-spelled handle; a misspelled
+        // binding falls back to the user headline, as before the seam.
+        // trace:TASK-2345 | ai:claude
+        let own_handle = facts
+            .own_handle
+            .clone()
+            .filter(|h| crate::agent_handle::handle_spelling_rejection(h).is_none());
+        let operator = own_handle.clone().unwrap_or_else(|| facts.user.clone());
         let mut shared: Vec<String> = if own_handle.is_some() {
-            inbox_identities()
+            inbox_identities_from_facts(&facts)
                 .into_iter()
                 .filter(|id| id != &operator)
                 .collect()
@@ -832,7 +863,7 @@ pub(crate) fn collect_awaiting_report_inner(
         if let Some(raw) = ctx
             .role
             .clone()
-            .or_else(|| std::env::var("AIDA_SESSION_ROLE").ok())
+            .or_else(|| facts.role.clone())
             .filter(|s| !s.trim().is_empty())
         {
             let (role, _is_default) = resolve_effective_role(Some(raw.as_str()));

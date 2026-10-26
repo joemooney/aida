@@ -1850,7 +1850,9 @@ mod tests {
         let store = project.path().join(".aida-store");
         std::fs::create_dir_all(&store).unwrap();
         seed_send_recipients(&store);
-        let _env = crate::test_env::EnvVarsGuard::apply(&[
+        // The sender's session handle would outrank AIDA_AGENT_NAME; isolate
+        // from the session running the suite. trace:TASK-2345 | ai:claude
+        let _env = crate::test_env::AgentSessionIsolation::apply(&[
             ("AIDA_AGENT_NAME", Some("claude-product-1")),
             ("AIDA_USER", None),
             ("AIDA_SESSION_ROLE", None),
@@ -1905,7 +1907,7 @@ mod tests {
         // process-global env lock for its whole lifetime, and a second
         // acquisition on the same thread deadlocks (it is not reentrant) —
         // see `test_env::env_lock`.
-        let _env = crate::test_env::EnvVarsGuard::apply(&[
+        let _env = crate::test_env::AgentSessionIsolation::apply(&[
             ("AIDA_AGENT_NAME", Some("claude-product-1")),
             ("AIDA_USER", None),
             ("AIDA_SESSION_ROLE", None),
@@ -1933,7 +1935,7 @@ mod tests {
         let store = project.path().join(".aida-store");
         std::fs::create_dir_all(&store).unwrap();
         seed_send_recipients(&store);
-        let role_guard = crate::test_env::EnvVarsGuard::apply(&[
+        let role_guard = crate::test_env::AgentSessionIsolation::apply(&[
             ("AIDA_AGENT_NAME", None),
             ("AIDA_USER", None),
             ("AIDA_SESSION_ROLE", Some("advisor")),
@@ -1956,7 +1958,7 @@ mod tests {
         // as the ambiguous shell-user fallback rather than looking like a
         // resolved seat.
         drop(role_guard);
-        let _no_role = crate::test_env::EnvVarsGuard::apply(&[
+        let _no_role = crate::test_env::AgentSessionIsolation::apply(&[
             ("AIDA_AGENT_NAME", None),
             ("AIDA_USER", None),
             ("AIDA_SESSION_ROLE", None),
@@ -1984,7 +1986,7 @@ mod tests {
         seed_send_recipients(&store);
 
         {
-            let _env = crate::test_env::EnvVarsGuard::apply(&[
+            let _env = crate::test_env::AgentSessionIsolation::apply(&[
                 ("AIDA_AGENT_NAME", Some("claude-product-1")),
                 ("AIDA_USER", None),
                 ("AIDA_SESSION_ROLE", None),
@@ -1992,7 +1994,7 @@ mod tests {
             handle_mailbox_command(&send_command("from-product"), &store).unwrap();
         }
         {
-            let _env = crate::test_env::EnvVarsGuard::apply(&[
+            let _env = crate::test_env::AgentSessionIsolation::apply(&[
                 ("AIDA_AGENT_NAME", Some("claude-reviewer-1")),
                 ("AIDA_USER", None),
                 ("AIDA_SESSION_ROLE", None),
@@ -2017,10 +2019,10 @@ mod tests {
     // name went unread. trace:BUG-1592 | ai:claude
     #[test]
     fn inbox_identities_includes_agent_name_when_distinct_from_aida_user() {
-        let _env = crate::test_env::EnvVarsGuard::apply(&[
+        // trace:TASK-2345 | ai:claude
+        let _env = crate::test_env::AgentSessionIsolation::apply(&[
             ("AIDA_AGENT_NAME", Some("claude-impl-7")),
             ("AIDA_USER", Some("alice")),
-            ("AIDA_SESSION_ROLE", None),
         ]);
         let ids = inbox_identities();
         assert!(
@@ -2047,10 +2049,10 @@ mod tests {
         to_agent_name.timestamp = 42;
         mailbox_store::write_message(project.path(), &to_agent_name).unwrap();
 
-        let _env = crate::test_env::EnvVarsGuard::apply(&[
+        // trace:TASK-2345 | ai:claude
+        let _env = crate::test_env::AgentSessionIsolation::apply(&[
             ("AIDA_AGENT_NAME", Some("claude-impl-7")),
             ("AIDA_USER", Some("alice")),
-            ("AIDA_SESSION_ROLE", None),
         ]);
         handle_mailbox_command(
             &MailboxCommand::Inbox {
@@ -2082,7 +2084,7 @@ mod tests {
         let store = project.path().join(".aida-store");
         std::fs::create_dir_all(&store).unwrap();
         seed_send_recipients(&store);
-        let _env = crate::test_env::EnvVarsGuard::apply(&[
+        let _env = crate::test_env::AgentSessionIsolation::apply(&[
             ("AIDA_AGENT_NAME", Some("claude-impl-7")),
             ("AIDA_USER", None),
             ("AIDA_SESSION_ROLE", Some("advisor")),
@@ -2115,7 +2117,7 @@ mod tests {
         let store = project.path().join(".aida-store");
         std::fs::create_dir_all(&store).unwrap();
         seed_send_recipients(&store);
-        let _env = crate::test_env::EnvVarsGuard::apply(&[
+        let _env = crate::test_env::AgentSessionIsolation::apply(&[
             ("AIDA_AGENT_NAME", Some("claude-impl-7")),
             ("AIDA_USER", None),
             ("AIDA_SESSION_ROLE", None),
