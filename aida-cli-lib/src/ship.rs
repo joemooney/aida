@@ -308,9 +308,9 @@ pub(crate) fn is_sandbox_placeholder(
 }
 
 /// Staged additions that are sandbox stand-ins (see [`is_sandbox_placeholder`]).
-/// The probe runs the same plain `git` step 1 commits with, so it works in a
-/// seat clone, where host git refuses; a probe that cannot run is an error,
-/// never "no stand-ins".
+/// The probe runs through the same seat-safe host git step 1 commits with, so
+/// in a seat clone it gets the host-git refusal; a probe that cannot run is an
+/// error, never "no stand-ins".
 // trace:BUG-b6b1278890774ef993d2ebc327862470-003 | ai:claude
 pub(crate) fn staged_sandbox_placeholders(
     project_root: &std::path::Path,
@@ -325,8 +325,7 @@ fn staged_sandbox_placeholders_with(
     probe: impl Fn(&std::path::Path) -> std::io::Result<std::fs::Metadata>,
 ) -> anyhow::Result<Vec<String>> {
     use anyhow::Context as _;
-    let out = std::process::Command::new("git")
-        .current_dir(project_root)
+    let out = aida_core::git_ops::host_git_command(project_root)
         .args([
             "diff",
             "--cached",
@@ -336,7 +335,10 @@ fn staged_sandbox_placeholders_with(
             "-z",
         ])
         .output()
-        .context("could not invoke `git diff --cached` to check for staged sandbox stand-ins")?;
+        .context(
+            "could not list staged files to check for sandbox stand-ins: \
+             `git diff --cached` did not start",
+        )?;
     if !out.status.success() {
         anyhow::bail!(
             "could not list staged files to check for sandbox stand-ins: {} — fix the \
@@ -674,8 +676,10 @@ mod tests {
 
     #[test]
     fn an_unrunnable_stand_in_probe_refuses() {
+        // A missing directory, so git cannot discover an enclosing repository
+        // even when the temp dir sits inside a checkout.
         let tmp = tempfile::tempdir().unwrap();
-        let err = refuse_staged_sandbox_placeholders(tmp.path()).unwrap_err();
+        let err = refuse_staged_sandbox_placeholders(&tmp.path().join("missing")).unwrap_err();
         assert!(
             err.to_string().contains("could not list staged files"),
             "{err}"

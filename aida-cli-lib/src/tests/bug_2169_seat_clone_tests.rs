@@ -271,9 +271,8 @@ fn a_seat_clone_does_not_exclude_stand_in_paths_the_primary_does_not_ignore() {
     assert_eq!(git_ok(&dest, &["status", "--porcelain"]), "?? .gitmodules");
 }
 
-/// The ship step-1 guard runs inside a seat clone, where host git refuses,
-/// and refuses a staged zero-byte read-only stand-in instead of reading the
-/// refusal as "nothing staged".
+/// Inside a seat clone the ship step-1 guard gets the host-git refusal and
+/// fails closed instead of reading the refusal as "nothing staged".
 // trace:BUG-b6b1278890774ef993d2ebc327862470-003 | ai:claude
 #[cfg(unix)]
 #[test]
@@ -295,8 +294,7 @@ fn ship_refuses_a_staged_stand_in_inside_a_seat_clone() {
 
     let err = crate::ship::refuse_staged_sandbox_placeholders(&dest).unwrap_err();
     assert!(
-        err.to_string()
-            .contains("sandbox stand-ins, not source: masked"),
+        err.to_string().contains("could not list staged files"),
         "{err}"
     );
 }
