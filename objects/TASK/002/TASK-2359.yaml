@@ -6,12 +6,12 @@ description: |
   PR-2932 (TASK-2351) changed aida ship step 1 from `git add -A` to `git add -u` (aida-cli-lib/src/pr_cmd.rs:1352). The new unit tests cover only the probes (tracked_changes_pending, untracked_regular_files, untracked_left_out_note), so reverting the staging flag to -A would still pass every test. Add an end-to-end step-1 test: a repo with a tracked edit and an untracked stray file. After step 1, HEAD should contain the edit and the stray file should still be untracked.
 
   Raised in review of PR-2932: https://github.com/joemooney/aida/pull/2932#issuecomment-6403120664
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T20:53:10.804761312Z
-modified_at: 2026-10-26T06:10:50.169757937Z
+modified_at: 2026-10-26T14:45:54.710817755Z
 req_type: Task
 tags:
 - from-review:PR-2932
@@ -119,6 +119,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a178ac-d391-7322-bd85-3e0881d7080a
+  author: aida-auto-bump
+  timestamp: 2026-10-26T14:45:54.705322985Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a178ac-d396-7121-ad8f-9b978292a7e6
+  timestamp: 2026-10-26T14:45:54.710813843Z
+  agent: aida
+  commit_sha: ae7c52aa2c0723cca5b563ffdfb668fdff3cbafc
+  summary: 'TASK-2359 met: step1_commit_takes_tracked_edit_and_leaves_stray_untracked (ship.rs) asserts HEAD:a.txt=changed, HEAD tree is only a.txt, stray.txt still untracked — reverting to git add -A fails the ls-tree assert; prod path pr_cmd.rs:1353 calls the same ship::commit_tracked_changes. Round-1 findings fixed: both builders now use host_git_command (ratchet 53->51 is real), ship.rs added to ALWAYS_SCANNED at allowance 0 with scanner unit test, fixture disables maintenance.auto/gc.auto. CI green at head (run 40281911140); 2 behind main, no overlap.'
+  review_verdict: approved
 filed_at:
   code_sha: 24edd8a0b8f6371a1685f94d02a843c0d4bd9a0a
   branch: pr-2932
@@ -132,3 +146,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-26T00:13:34.702841206Z
   implemented_by: joe
+  completed_at: 2026-10-26T14:45:54.705318493Z
+  completion_sha: ae7c52aa2c0723cca5b563ffdfb668fdff3cbafc
