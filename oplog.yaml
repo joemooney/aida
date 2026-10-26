@@ -78117,5 +78117,17 @@ operations:
   timestamp: 2026-10-26T22:42:37.819988478Z
   kind: !SetStatus
     status: Approved
-clock: 6064
+- id: 01a17a62-8613-7e90-a49e-2602af48e28b
+  target_id: 01a17a62-7d5c-7552-b112-546a5a598e92
+  author: aida
+  node_id: '1'
+  lamport: 6065
+  timestamp: 2026-10-26T22:43:59.635586040Z
+  kind: !Create
+    title: aida pr auto-queue-review ignores node-local spec IDs (TASK-<node>-NNN) in commit trailers, so no review story is filed
+    description: 'PR #2955 commit subject ends (TASK-b6b1278890774ef993d2ebc327862470-003, ...-004, ...-005, ...-006), yet auto-queue-review says: carries no (REQ-ID) trailers in its commit range. Since the 2026-10-25 WORK migration every new spec gets a long node-local ID, so every PR for a new spec silently gets no review story (the watcher then cannot review it). The completion trailer path may have the same gap (check that merge-time auto-complete recognises these IDs; it did complete BUG-b6b1...-002 and -004, so verify which parser differs). Fix the auto-queue trailer regex to accept node-local IDs, with a test.'
+    req_type: Bug
+    status: Draft
+    priority: Medium
+clock: 6065
 node_id: '1'
