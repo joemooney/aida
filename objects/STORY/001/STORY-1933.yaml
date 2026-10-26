@@ -19,12 +19,12 @@ description: |
   - Generate a structured review prompt with `aida review prompt --pr 2929` and verify each spec's acceptance criteria.
   - Approve and merge, or request changes by spec id.
   - Mark this story `completed` once the PR is merged.
-status: Draft
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-25T19:32:51.458432179Z
-modified_at: 2026-10-25T19:34:14.295282653Z
+modified_at: 2026-10-26T01:13:17.668221223Z
 req_type: Story
 relationships:
 - rel_type:
@@ -38,11 +38,25 @@ comments:
   content: Independent STRICT S3a review requested at full head3e0b31357e306f592fad7f1912b910b38ac7bca8, PR2929. This is a non-completing slice of STORY1742 signed-v2 (S3a only). Please audit full-parent/historical graph closure, raw+decoded and declared opaque encoding refusals, structural path scoping, anchored private policy/receipt trust, exact identity/hook/credential preservation, source/policy revalidation and store-lock release before one pinned non-forced push, uncertain-publication/receipt outcomes, ordinary unprofiled clone behavior. Existing23 regressions retained within31transportfixtures; author-controlled3round findings checks are NOT independent approval. S3b allocator/shared-backend changes are isolated uncommitted in another worktree and not part of this PR. All intake/pull/e2e rows remain required on the parent; do not mark parent Completed from this Refs PR. CI running, no merge/hold-clear permission.
   created_at: 2026-10-25T19:34:14.295264444Z
   modified_at: 2026-10-25T19:34:14.295264444Z
+- id: 01a175c4-da64-71e1-8999-399690a4a7af
+  author: aida-auto-bump
+  content: 'Auto-completed: PR #2929 is merged on the forge (its merge commit was outside the local scan window).'
+  created_at: 2026-10-26T01:13:17.668491234Z
+  modified_at: 2026-10-26T01:13:17.668491234Z
+  session_id: cde796d3-1750-4745-a8f9-7ab3bc7c3519
 history:
 - id: 01a1748d-69bb-7e12-9991-61063cbb7965
   author: joe
   timestamp: 2026-10-25T19:33:07.131529285Z
   changes: []
+- id: 01a175c4-da64-71e1-8999-39a831a8e5ed
+  author: aida-auto-bump
+  timestamp: 2026-10-26T01:13:17.668500487Z
+  session_id: cde796d3-1750-4745-a8f9-7ab3bc7c3519
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Completed
 filed_at:
   code_sha: 3e0b31357e306f592fad7f1912b910b38ac7bca8
   branch: codex/story-1742-slice2-credentials
@@ -50,3 +64,6 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: a01a698998
   vendor: codex
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-26T01:13:17.668489766Z
