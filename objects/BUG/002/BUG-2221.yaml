@@ -23,12 +23,12 @@ description: |-
   3. Add a decisive hermetic regression for the identified mechanism using existing load-aware/child-process test idioms; report before/after timings on the same shape/artifact conditions. Do not add an unexplained fragile wall-clock assertion.
   4. Demonstrate the reproduced slow case under1000ms after the fix, and collect fresh lineage-scoped telemetry for the unchanged guard; distinguish old24h samples from new-build evidence. Do not declare an old-window guard green by relabeling binaries or deleting samples.
   Independent review and normal PR gates required. Local verification: one targeted regression run plus check-ci-fast; touched/compile only shared test infra or>10files. No broad Cargo or slot bypass. Implementer first produces narrow diagnosis if the source change remains unclear.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T06:38:42.269077518Z
-modified_at: 2026-10-26T11:32:20.271078828Z
+modified_at: 2026-10-26T11:33:34.530031588Z
 req_type: Bug
 comments:
 - id: 01a17250-10a0-76e1-b802-890d5a4ca31b
@@ -640,6 +640,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a177fc-bcc2-7000-9171-869bda398e82
+  author: joe
+  timestamp: 2026-10-26T11:33:34.530046486Z
+  session_id: 01a177fb96e4
+  harness_version: 2.1.310 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 94124569c9b14617a4049909ddbefad5b82a846d
   branch: main
@@ -647,3 +656,9 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 94124569c9
   vendor: codex
+attention_reason:
+  category: other
+  detail: 'Disputing all of findings 1-7 (review of 5f777c654a, PR #2928) as STALE: each is already resolved on origin/main by the squash-landed 98e6823c07, so no new commit is warranted. 1: landed with the (Refs BUG-2221) trailer. 2: the advisor 16:15 ruling is applied, and warm reads run the after S/R re-check (show_negative.rs:355-365). 3: positive and cold keys take no snapshot, and the BUG-1993 deadline is back at 1.2s (bug_1993_show_deadline_tests.rs:212). 4: O_NOFOLLOW, owned namespace dirs, and a uid check before unlink (show_negative.rs:1009,1022,1062,1083). 5: a warm read touches mtime, so eviction is LRU (show_negative.rs:1051). 6: file symlinks outside the root are refused (trace.rs:352-355). 7: the cycle fence uses (dev, ino) and only symlink targets are canonicalized (trace.rs:288,458). The same re-verification is in spec comments 20, 22, 26 and 29. The current lane is the advisor 04:38 ruling (comment 32): DIAGNOSE + SKETCH v3, no code. The rework item that dispatched this round looks stale; please dequeue it or re-route to the SKETCH v3 lane. AC4 is still open.'
+  lean: Close this rework round as already resolved; next work is the SKETCH v3 diagnosis (order consumers, incremental index design, cost estimate)
+  raised_by: implementer
+  raised_at: 2026-10-26T11:33:34.530031588Z
