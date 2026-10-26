@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-2359",
+  "publishes": [
+    {
+      "at": "2026-10-26T14:46:19.512460128Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-25T23:07:00.197470382Z",
+      "spec": "TASK-2359",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-25T23:08:39.893385607Z",
+      "spec": "TASK-2359",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-26T01:14:20.613704165Z",
+      "spec": "TASK-2359",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-2359",
+        "branch": "origin/task-2359",
+        "first_seen": "2026-10-26T01:14:20.613642078+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-26T03:27:43.444458450Z",
+      "spec": "TASK-2359",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-2359",
+        "branch": "task-2359",
+        "first_seen": "2026-10-26T03:27:43.444425833+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-26T06:10:33.935642760Z",
+      "spec": "TASK-2359",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-26T06:10:53.404031710Z",
+      "spec": "TASK-2359",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-26T14:45:15.405397911Z",
+      "spec": "TASK-2359",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2935
+      }
+    },
+    {
+      "ts": "2026-10-26T14:46:19.367020156Z",
+      "spec": "TASK-2359",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "ae7c52aa2c0723cca5b563ffdfb668fdff3cbafc",
+        "pr": 2935,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
