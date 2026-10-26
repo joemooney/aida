@@ -13,6 +13,7 @@
 //!   sources/<key>.json                       one record per source: state + permits
 //!   retained/<key>/<generation>/             preserved bytes + manifest.json
 //!   journal/<op_id>.json                     the retirement journal
+//!   claims/<key>.lock                        one retirement driver per source (flock)
 //! ```
 //!
 //! A writer is *admitted* before it writes: under a short Lifecycle hold it
@@ -39,7 +40,7 @@
 //!
 //! Degraded path: a writer that cannot establish the anchor (no Git, an
 //! unusable or damaged anchor, a busy lock) writes exactly as it did before
-//! C1, with no permit, and its [`RetentionCoverage`] stays `Unestablished`.
+//! C1, with no permit, and its [`AdmissionCoverage`] is `Uncovered`.
 //! Only a source recorded as fenced or retired refuses a write. Retirement
 //! is the side that fails closed: it refuses whatever it cannot prove, and
 //! its final check catches a write that took no permit.
@@ -261,17 +262,51 @@ struct Anchored {
     anchor: PathBuf,
 }
 
-/// Per-process cache of [`Anchored`] by checkout root, so a process that
-/// writes many messages runs `git rev-parse` once. The mailbox identity is
-/// re-read on every call; an entry is dropped on any lifecycle error.
-fn anchored_cache() -> &'static Mutex<HashMap<PathBuf, Anchored>> {
-    static CACHE: OnceLock<Mutex<HashMap<PathBuf, Anchored>>> = OnceLock::new();
+/// Identity of the Git directory a checkout's `.git` names, read without
+/// running Git: its canonical path plus device and inode. A worktree removed
+/// and re-added under another admin name, or a path re-cloned as another
+/// repository, resolves to a different identity.
+type GitDirIdentity = (PathBuf, u64, u64);
+
+/// Per-process cache of [`Anchored`] by [`GitDirIdentity`], so a process that
+/// writes many messages runs `git rev-parse` once per Git directory. The
+/// identity and the mailbox are re-read on every call; an entry is dropped on
+/// any lifecycle error.
+fn anchored_cache() -> &'static Mutex<HashMap<GitDirIdentity, Anchored>> {
+    static CACHE: OnceLock<Mutex<HashMap<GitDirIdentity, Anchored>>> = OnceLock::new();
     CACHE.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
+/// Follow `<checkout>/.git` (a directory, or a `gitdir:` file for a linked
+/// worktree) to the Git directory and stat it. `None` when there is no
+/// `.git` to read; the caller then asks Git and caches nothing.
+fn git_dir_identity(project_root: &Path) -> Option<GitDirIdentity> {
+    let dot_git = project_root.join(".git");
+    let meta = std::fs::symlink_metadata(&dot_git).ok()?;
+    let git_dir = if meta.is_dir() {
+        dot_git
+    } else if meta.is_file() && meta.len() <= 4096 {
+        let text = std::fs::read_to_string(&dot_git).ok()?;
+        let named = PathBuf::from(text.strip_prefix("gitdir:")?.trim());
+        if named.is_absolute() {
+            named
+        } else {
+            project_root.join(named)
+        }
+    } else {
+        return None;
+    };
+    let git_dir = std::fs::canonicalize(git_dir).ok()?;
+    let meta = std::fs::metadata(&git_dir).ok()?;
+    meta.is_dir().then(|| (git_dir, meta.dev(), meta.ino()))
+}
+
 fn forget_anchor(project_root: &Path) {
+    let Some(identity) = git_dir_identity(project_root) else {
+        return;
+    };
     if let Ok(mut cache) = anchored_cache().lock() {
-        cache.remove(project_root);
+        cache.remove(&identity);
     }
 }
 
@@ -281,10 +316,13 @@ fn forget_anchor(project_root: &Path) {
 /// no anchor, takes no permit and cannot be retired. The mailbox directory
 /// must already exist; its device and inode are part of the key.
 pub(crate) fn resolve_source(project_root: &Path) -> Result<Option<Source>> {
-    let cached = anchored_cache()
-        .lock()
-        .ok()
-        .and_then(|cache| cache.get(project_root).cloned());
+    let identity = git_dir_identity(project_root);
+    let cached = identity.as_ref().and_then(|id| {
+        anchored_cache()
+            .lock()
+            .ok()
+            .and_then(|cache| cache.get(id).cloned())
+    });
     let anchored = match cached {
         // The anchor is re-checked (one lstat) so a swapped directory is
         // refused, not trusted from the cache.
@@ -296,8 +334,8 @@ pub(crate) fn resolve_source(project_root: &Path) -> Result<Option<Source>> {
             let Some(anchored) = locate_anchor(project_root)? else {
                 return Ok(None);
             };
-            if let Ok(mut cache) = anchored_cache().lock() {
-                cache.insert(project_root.to_path_buf(), anchored.clone());
+            if let (Some(id), Ok(mut cache)) = (identity, anchored_cache().lock()) {
+                cache.insert(id, anchored.clone());
             }
             anchored
         }
@@ -897,24 +935,26 @@ fn this_process() -> Option<ProcessIdentity> {
     }
 }
 
-/// Whether a local write is covered by the retention barrier.
+/// Whether a local write is covered by the retention barrier. This is the
+/// write side's admission result, not the logical inbox's
+/// `mailbox_logical::RetentionCoverage`.
 #[derive(Debug)]
 #[must_use = "a permit row stays until the permit completes or drops"]
-pub enum RetentionCoverage {
+pub enum AdmissionCoverage {
     /// Admitted: retirement waits for this write.
     Admitted(LocalPermit),
     /// No anchor could be established; the write proceeds as it did before
     /// C1, with no permit. `None` when the checkout has no Git repository.
-    Unestablished(Option<String>),
+    Uncovered(Option<String>),
 }
 
 /// The delivery-side admission policy: refuse only a source recorded as
 /// fenced or retired; on any other lifecycle failure warn once and write
 /// uncovered, exactly as before C1.
-pub fn cover_local_write(project_root: &Path) -> Result<RetentionCoverage> {
+pub fn cover_local_write(project_root: &Path) -> Result<AdmissionCoverage> {
     match admit_local_write(project_root) {
-        Ok(Some(permit)) => Ok(RetentionCoverage::Admitted(permit)),
-        Ok(None) => Ok(RetentionCoverage::Unestablished(None)),
+        Ok(Some(permit)) => Ok(AdmissionCoverage::Admitted(permit)),
+        Ok(None) => Ok(AdmissionCoverage::Uncovered(None)),
         Err(e @ LifecycleError::SourceRetiring { .. }) => Err(e),
         Err(e) => {
             static WARNED: AtomicBool = AtomicBool::new(false);
@@ -924,7 +964,7 @@ pub fn cover_local_write(project_root: &Path) -> Result<RetentionCoverage> {
                     project_root.display()
                 );
             }
-            Ok(RetentionCoverage::Unestablished(Some(e.to_string())))
+            Ok(AdmissionCoverage::Uncovered(Some(e.to_string())))
         }
     }
 }

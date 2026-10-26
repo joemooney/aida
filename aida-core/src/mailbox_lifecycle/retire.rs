@@ -7,6 +7,12 @@
 //! fsync) before its side effect, so a crash at any point replays forward
 //! from the last durable phase and never rolls back over preserved bytes.
 //!
+//! Retirement of one source is exclusive: the driver holds a flock'd claim,
+//! `claims/<key>.lock`, from before it reads the record until it returns. A
+//! second caller that finds the claim held refuses with `RetiringElsewhere`.
+//! The kernel drops the claim when its holder dies, so a replay adopts an
+//! interrupted operation only once its claimant is provably gone.
+//!
 //! A refusal reopens the source, copies any preserved bytes back into the
 //! mailbox and keeps the retained copy: the caller keeps its tree, lease,
 //! claim and manifest. Retirement is retryable; it never blocks.
@@ -29,10 +35,10 @@
 )]
 
 use super::{
-    activated, check_regular, delete_record, ensure_dir, fsync_dir, hex, load_or_create,
-    load_record, lock, mint_generation, open_checked, read_json, resolve_source, store_record,
-    write_json, LifecycleError, Result, SourceState, JOURNAL_DIR, LIFECYCLE_LOCK_TIMEOUT,
-    RETAINED_DIR, SCHEMA,
+    activated, check_regular, delete_record, ensure_dir, enter_lock_class, fsync_dir, hex,
+    load_or_create, load_record, lock, mint_generation, open_checked, read_json, resolve_source,
+    store_record, write_json, LifecycleError, Result, SourceState, JOURNAL_DIR,
+    LIFECYCLE_LOCK_TIMEOUT, RETAINED_DIR, SCHEMA,
 };
 use crate::process_probe::{Probe, ProbeSource};
 use serde::{Deserialize, Serialize};
@@ -75,6 +81,8 @@ pub(crate) enum RefusalReason {
     },
     /// The Lifecycle lock stayed busy; retry.
     LockBusy,
+    /// Another live process is retiring this source; retry.
+    RetiringElsewhere,
     /// Admitted writers were still running when the wait ran out.
     LiveWriters {
         permits: usize,
@@ -112,6 +120,9 @@ impl std::fmt::Display for RefusalReason {
             }
             RefusalReason::UnsafeMailbox { detail } => write!(f, "unsafe mailbox: {detail}"),
             RefusalReason::LockBusy => write!(f, "the mailbox lifecycle lock is busy; retry"),
+            RefusalReason::RetiringElsewhere => {
+                write!(f, "another process is retiring this mailbox; retry")
+            }
             RefusalReason::LiveWriters { permits } => {
                 write!(f, "{permits} mail writer(s) are still writing; retry")
             }
@@ -178,6 +189,8 @@ pub(crate) struct RetireOptions {
     pub probe: ProbeSource,
     /// Copy and verify instead of renaming, as across devices.
     pub force_copy: bool,
+    /// Bounded wait for another driver's retirement claim.
+    pub claim_timeout: Duration,
 }
 
 impl Default for RetireOptions {
@@ -187,6 +200,7 @@ impl Default for RetireOptions {
             quiesce_timeout: Duration::from_secs(5),
             probe: ProbeSource::system(),
             force_copy: false,
+            claim_timeout: LIFECYCLE_LOCK_TIMEOUT,
         }
     }
 }
@@ -262,6 +276,8 @@ pub(crate) enum Point {
 pub(crate) enum CopyFault {
     Corrupt,
     DiskFull,
+    /// The process dies with the staged copy written but not renamed.
+    Crash,
 }
 
 #[cfg(test)]
@@ -341,6 +357,11 @@ pub(crate) fn retire_source(project_root: &Path, opts: &RetireOptions) -> Result
             ))
         }
         Err(e) => return Err(e),
+    };
+    // Held until this call returns, across every replay and the drive.
+    let _claim = match claim(&source.anchor, &source.key, opts.claim_timeout)? {
+        Some(claim) => claim,
+        None => return Ok(refused(RefusalReason::RetiringElsewhere, None)),
     };
     for _ in 0..MAX_REPLAYS {
         let held = match lock(&source.anchor, LIFECYCLE_LOCK_TIMEOUT) {
@@ -722,6 +743,10 @@ fn copy_verified(src: &Path, dst: &Path) -> Result<std::result::Result<(), Refus
         }
         out.sync_all()?;
         drop(out);
+        #[cfg(test)]
+        if COPY_FAULT.with(|f| f.get()) == Some(CopyFault::Crash) {
+            return Err(LifecycleError::InjectedCrash("mid-copy"));
+        }
         if hex(&hasher.finalize()) != sha256_file(&tmp)? {
             return Ok(Err(RefusalReason::ManifestMismatch {
                 path: src.to_path_buf(),
@@ -736,6 +761,9 @@ fn copy_verified(src: &Path, dst: &Path) -> Result<std::result::Result<(), Refus
             let _ = std::fs::remove_file(&tmp);
             Ok(Err(reason))
         }
+        // A dead process cleans nothing up.
+        #[cfg(test)]
+        Err(e @ LifecycleError::InjectedCrash(_)) => Err(e),
         Err(LifecycleError::Io(e)) => {
             let _ = std::fs::remove_file(&tmp);
             Ok(Err(RefusalReason::PreserveFailed {
@@ -754,7 +782,10 @@ fn manifest_files(
     dir: &Path,
     out: &mut Vec<ManifestFile>,
 ) -> Result<std::result::Result<(), RefusalReason>> {
-    for (_, path, meta) in sorted_entries(dir)? {
+    for (name, path, meta) in sorted_entries(dir)? {
+        if stale_staging(&name, &path, &meta)? {
+            continue;
+        }
         if meta.file_type().is_dir() {
             if let Err(reason) = manifest_files(root, &path, out)? {
                 return Ok(Err(reason));
@@ -819,8 +850,27 @@ fn final_check(entry: &mut JournalEntry) -> Result<std::result::Result<(), Refus
     Ok(Ok(()))
 }
 
-/// Journal the refusal, then undo the fence.
-fn abort(mut entry: JournalEntry, reason: RefusalReason) -> Result<RetireOutcome> {
+/// Journal the refusal, then undo the fence. Never aborts an operation that
+/// is past `Preserved` on disk or whose source is no longer fenced by it: a
+/// committed retirement belongs to the caller holding its ticket.
+pub(super) fn abort(mut entry: JournalEntry, reason: RefusalReason) -> Result<RetireOutcome> {
+    let durable = require_journal(&entry.anchor, &entry.op_id)?;
+    if !matches!(
+        durable.phase,
+        Phase::Fenced | Phase::Quiesced | Phase::Preserved
+    ) {
+        return Err(conflict(
+            &entry,
+            &format!("journal phase {:?}", durable.phase),
+        ));
+    }
+    {
+        let held = lock(&entry.anchor, LIFECYCLE_LOCK_TIMEOUT)?;
+        let record = require_record(&entry, &held)?;
+        if !matches!(&record.state, SourceState::Fenced { op_id, .. } if *op_id == entry.op_id) {
+            return Err(conflict(&entry, &format!("{:?}", record.state)));
+        }
+    }
     entry.refusal = Some(reason.clone());
     advance(&mut entry, Phase::Aborted)?;
     finish_abort(&entry)?;
@@ -851,6 +901,9 @@ fn finish_abort(entry: &JournalEntry) -> Result<()> {
 
 fn restore_tree(src: &Path, dst: &Path) -> Result<()> {
     for (name, path, meta) in sorted_entries(src)? {
+        if stale_staging(&name, &path, &meta)? {
+            continue;
+        }
         let target = dst.join(&name);
         if meta.file_type().is_dir() {
             std::fs::create_dir_all(&target)?;
@@ -882,6 +935,74 @@ fn finalize(mut entry: JournalEntry) -> Result<()> {
     }
     drop(held);
     advance(&mut entry, Phase::Finalized)
+}
+
+// ── The retirement claim ────────────────────────────────────────────────────
+
+const CLAIMS_DIR: &str = "claims";
+
+/// A held per-source retirement claim. The flock is released when this drops
+/// or when the holding process dies, whichever comes first.
+#[must_use = "the claim is released when the guard drops"]
+struct RetirementClaim {
+    file: std::fs::File,
+}
+
+impl Drop for RetirementClaim {
+    fn drop(&mut self) {
+        let _ = fs2::FileExt::unlock(&self.file);
+    }
+}
+
+/// Take the exclusive retirement claim for `key` with a bounded try.
+/// `Ok(None)` when another live driver still holds it after `timeout`. Taken
+/// before the Lifecycle lock, never under it.
+fn claim(anchor: &Path, key: &str, timeout: Duration) -> Result<Option<RetirementClaim>> {
+    if super::lifecycle_lock_held() {
+        return Err(LifecycleError::LockOrder(
+            "the retirement claim is never taken under the Lifecycle lock",
+        ));
+    }
+    let dir = anchor.join(CLAIMS_DIR);
+    ensure_dir(&dir, true)?;
+    let path = dir.join(format!("{key}.lock"));
+    let mut file = match OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .mode(0o600)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
+        .open(&path)
+    {
+        Ok(f) => f,
+        Err(e) if e.raw_os_error() == Some(libc::ELOOP) => {
+            return Err(LifecycleError::Unsafe {
+                path,
+                why: "is a symlink".into(),
+            })
+        }
+        Err(e) => return Err(e.into()),
+    };
+    check_regular(&file.metadata()?, &path, 64)?;
+    let start = Instant::now();
+    loop {
+        match fs2::FileExt::try_lock_exclusive(&file) {
+            Ok(()) => break,
+            Err(e) if crate::file_lock::is_lock_contended(&e) => {
+                if start.elapsed() >= timeout {
+                    return Ok(None);
+                }
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            Err(e) => return Err(e.into()),
+        }
+    }
+    enter_lock_class("retirement-claim");
+    // Who drives, for an operator reading the anchor; the flock is the claim.
+    file.set_len(0)?;
+    writeln!(file, "{}", std::process::id())?;
+    Ok(Some(RetirementClaim { file }))
 }
 
 // ── Journal ─────────────────────────────────────────────────────────────────
@@ -944,11 +1065,11 @@ fn require_record(
     })
 }
 
-fn conflict(entry: &JournalEntry, state: &SourceState) -> LifecycleError {
+fn conflict(entry: &JournalEntry, state: &dyn std::fmt::Debug) -> LifecycleError {
     LifecycleError::Corrupt {
         path: super::record_path(&entry.anchor, &entry.key),
         why: format!(
-            "operation {} at {:?} found the source in state {state:?}",
+            "operation {} at {:?} found {state:?}",
             entry.op_id, entry.phase
         ),
     }
@@ -990,12 +1111,43 @@ fn sorted_entries(dir: &Path) -> Result<Vec<Entry>> {
 /// Does `dir` hold anything but directories? Any file counts as mail,
 /// receipt or watermark bytes, even an empty one.
 fn holds_bytes(dir: &Path) -> Result<bool> {
-    for (_, path, meta) in sorted_entries(dir)? {
+    for (name, path, meta) in sorted_entries(dir)? {
+        if stale_staging(&name, &path, &meta)? {
+            continue;
+        }
         if !meta.file_type().is_dir() || holds_bytes(&path)? {
             return Ok(true);
         }
     }
     Ok(false)
+}
+
+/// Is `name` a [`copy_verified`] staging file (`.<name>.copy.<pid>.<seq>`)?
+/// One that a driver sees was left by a copy that died before its rename: the
+/// claim makes this driver the only one copying for the source, so it is
+/// removed and never counted, preserved or restored as mail.
+fn stale_staging(name: &str, path: &Path, meta: &std::fs::Metadata) -> Result<bool> {
+    let staged = meta.file_type().is_file() && is_staging_name(name);
+    if staged {
+        match std::fs::remove_file(path) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(e.into()),
+        }
+    }
+    Ok(staged)
+}
+
+fn is_staging_name(name: &str) -> bool {
+    let Some(rest) = name.strip_prefix('.') else {
+        return false;
+    };
+    let mut tail = rest.rsplitn(3, '.');
+    let (Some(seq), Some(pid), Some(head)) = (tail.next(), tail.next(), tail.next()) else {
+        return false;
+    };
+    let digits = |s: &str| !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit());
+    digits(seq) && digits(pid) && head.len() > ".copy".len() && head.ends_with(".copy")
 }
 
 fn sha256_file(path: &Path) -> Result<String> {

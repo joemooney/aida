@@ -267,7 +267,7 @@ fn a_group_writable_common_git_dir_keeps_local_mail_working() {
     assert_eq!(record_mode & 0o777, 0o600);
     assert!(matches!(
         cover_local_write(dir.path()).unwrap(),
-        RetentionCoverage::Admitted(_)
+        AdmissionCoverage::Admitted(_)
     ));
 }
 
@@ -284,7 +284,7 @@ fn an_unusable_anchor_delivers_uncovered_and_retirement_refuses() {
     assert!(mailbox(dir.path()).join("m2.json").is_file());
     assert!(matches!(
         cover_local_write(dir.path()).unwrap(),
-        RetentionCoverage::Unestablished(Some(_))
+        AdmissionCoverage::Uncovered(Some(_))
     ));
     // Retirement is the side that fails closed.
     assert!(matches!(
@@ -994,4 +994,223 @@ fn generations_are_minted_monotonically_across_a_reused_source() {
     let next = record(dir.path());
     assert!(next.generation > first);
     assert_eq!(next.state, SourceState::Open);
+}
+
+#[test]
+fn the_anchor_cache_follows_a_worktree_re_added_under_another_admin_name() {
+    let dir = repo();
+    let git = |args: &[&str]| {
+        let out = crate::test_git::git_command()
+            .arg("-C")
+            .arg(dir.path())
+            .args(["-c", "user.name=t", "-c", "user.email=t@t"])
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "{out:?}");
+    };
+    git(&["commit", "-q", "--allow-empty", "-m", "init"]);
+    let wt = dir.path().join("wt");
+    git(&["worktree", "add", "-q", "--detach", wt.to_str().unwrap()]);
+    assert_eq!(source(&wt).admin, "wt");
+    // The path comes back under another admin name while this process still
+    // holds the first resolution.
+    git(&["worktree", "remove", "--force", wt.to_str().unwrap()]);
+    let other = dir.path().join("other/wt");
+    git(&["worktree", "add", "-q", "--detach", other.to_str().unwrap()]);
+    git(&["worktree", "add", "-q", "--detach", wt.to_str().unwrap()]);
+    let readded = source(&wt);
+    assert_eq!(readded.admin, "wt1");
+    // Permits go under the key retirement computes for the new checkout.
+    let permit = admit_local_write(&wt).unwrap().unwrap();
+    assert_eq!(record(&wt).key, readded.key);
+    assert_eq!(record(&wt).permits.len(), 1);
+    permit.complete().unwrap();
+}
+
+// ── Exclusive retirement ────────────────────────────────────────────────────
+
+#[test]
+fn a_second_driver_refuses_while_the_first_holds_the_claim() {
+    let dir = repo();
+    seed_mail(dir.path());
+    activate(dir.path());
+    let root = dir.path().to_path_buf();
+    let second = std::rc::Rc::new(std::cell::RefCell::new(None));
+    let seen = second.clone();
+    // A is preserved and about to run its final check when B starts on the
+    // same source.
+    HOOK_AT.with(|h| {
+        *h.borrow_mut() = Some((
+            Point::BeforeFinalCheck,
+            Box::new(move || {
+                let b = std::thread::spawn(move || {
+                    let opts = RetireOptions {
+                        claim_timeout: Duration::from_millis(100),
+                        ..opts()
+                    };
+                    retire_source(&root, &opts).unwrap()
+                });
+                *seen.borrow_mut() = Some(b.join().unwrap());
+            }),
+        ))
+    });
+    let (ticket, retained) = retired(retire_source(dir.path(), &opts()).unwrap());
+    let (reason, kept) = refusal(second.borrow_mut().take().expect("B ran"));
+    assert_eq!(reason, RefusalReason::RetiringElsewhere);
+    assert_eq!(kept, None);
+    // B touched nothing: A's retirement stands and completes.
+    assert_eq!(journal(&ticket).phase, Phase::Committed);
+    assert_eq!(files_under(&retained.join("data")), SEEDED);
+    assert_eq!(files_under(&mailbox(dir.path())), Vec::<String>::new());
+    assert_retiring(dir.path());
+    // A later driver adopts the committed operation instead of aborting it.
+    let (again, _) = retired(retire_source(dir.path(), &opts()).unwrap());
+    assert_eq!(again, ticket);
+    assert_eq!(journal(&ticket).phase, Phase::Committed);
+    std::fs::remove_dir_all(dir.path().join(".aida")).unwrap();
+    complete_retirement(&ticket).unwrap();
+    assert_eq!(journal(&ticket).phase, Phase::Finalized);
+}
+
+#[test]
+fn abort_never_undoes_a_committed_operation() {
+    let dir = repo();
+    seed_mail(dir.path());
+    activate(dir.path());
+    let (ticket, retained) = retired(retire_source(dir.path(), &opts()).unwrap());
+    // A driver still holding the operation at Preserved fails its check.
+    let mut stale = journal(&ticket);
+    stale.phase = Phase::Preserved;
+    let err = super::retire::abort(
+        stale,
+        RefusalReason::StateChanged {
+            detail: "the source is no longer fenced by this operation".into(),
+        },
+    )
+    .unwrap_err();
+    assert!(matches!(err, LifecycleError::Corrupt { .. }), "{err:?}");
+    assert_eq!(journal(&ticket).phase, Phase::Committed);
+    assert!(matches!(
+        record(dir.path()).state,
+        SourceState::Retired { .. }
+    ));
+    assert_eq!(files_under(&mailbox(dir.path())), Vec::<String>::new());
+    assert_eq!(files_under(&retained.join("data")), SEEDED);
+}
+
+// ── Staging files left by a crashed copy ────────────────────────────────────
+
+fn only_journal(root: &Path) -> JournalEntry {
+    let dir = source(root).anchor.join(JOURNAL_DIR);
+    let mut entries: Vec<PathBuf> = std::fs::read_dir(dir)
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .collect();
+    assert_eq!(entries.len(), 1, "{entries:?}");
+    read_json(&entries.pop().unwrap()).unwrap().unwrap()
+}
+
+fn retained_data(entry: &JournalEntry) -> PathBuf {
+    entry
+        .anchor
+        .join(RETAINED_DIR)
+        .join(&entry.key)
+        .join(entry.generation.to_string())
+        .join("data")
+}
+
+fn copy_crash(root: &Path) -> PathBuf {
+    let force = RetireOptions {
+        force_copy: true,
+        ..opts()
+    };
+    COPY_FAULT.with(|f| f.set(Some(CopyFault::Crash)));
+    let crashed = retire_source(root, &force);
+    COPY_FAULT.with(|f| f.set(None));
+    assert!(
+        matches!(crashed, Err(LifecycleError::InjectedCrash(_))),
+        "{crashed:?}"
+    );
+    let data = retained_data(&only_journal(root));
+    let staged: Vec<String> = files_under(&data)
+        .into_iter()
+        .filter(|f| f.contains(".copy."))
+        .collect();
+    assert_eq!(
+        staged.len(),
+        1,
+        "the crash left its staging file: {staged:?}"
+    );
+    data
+}
+
+#[test]
+fn a_crash_mid_copy_leaves_no_staging_file_in_the_retained_copy() {
+    let dir = repo();
+    seed_mail(dir.path());
+    activate(dir.path());
+    copy_crash(dir.path());
+    let force = RetireOptions {
+        force_copy: true,
+        ..opts()
+    };
+    let (_, retained) = retired(retire_source(dir.path(), &force).unwrap());
+    assert_eq!(files_under(&retained.join("data")), SEEDED);
+    let manifest: Manifest = read_json(&retained.join("manifest.json")).unwrap().unwrap();
+    assert_eq!(manifest.count, SEEDED.len());
+}
+
+#[test]
+fn a_staging_file_is_never_restored_into_the_mailbox() {
+    let dir = repo();
+    seed_mail(dir.path());
+    activate(dir.path());
+    let data = copy_crash(dir.path());
+    // Another stale copy lands after preservation, with a late writer.
+    let late = mailbox(dir.path()).join("late.json");
+    let planted = data.join(".m1.json.copy.4242.7");
+    let probe = planted.clone();
+    HOOK_AT.with(|h| {
+        *h.borrow_mut() = Some((
+            Point::BeforeFinalCheck,
+            Box::new(move || {
+                std::fs::write(&late, "{}").unwrap();
+                std::fs::write(&planted, "partial").unwrap();
+            }),
+        ))
+    });
+    let (reason, _) = refusal(retire_source(dir.path(), &opts()).unwrap());
+    assert!(
+        matches!(reason, RefusalReason::LateWriter { .. }),
+        "{reason:?}"
+    );
+    let mut expected: Vec<String> = SEEDED.iter().map(|s| s.to_string()).collect();
+    expected.push("late.json".into());
+    expected.sort();
+    assert_eq!(files_under(&mailbox(dir.path())), expected);
+    assert!(!probe.exists());
+    assert_open(dir.path());
+}
+
+#[test]
+fn a_staging_file_alone_does_not_make_a_source_mail_bearing() {
+    let dir = repo();
+    ensure_mailbox(dir.path());
+    CRASH_AT.with(|c| c.set(Some(Point::Journal(Phase::Quiesced))));
+    let crashed = retire_source(dir.path(), &opts());
+    CRASH_AT.with(|c| c.set(None));
+    assert!(matches!(crashed, Err(LifecycleError::InjectedCrash(_))));
+    let data = retained_data(&only_journal(dir.path()));
+    for dir in [
+        data.parent().unwrap().parent().unwrap(),
+        data.parent().unwrap(),
+        &data,
+    ] {
+        ensure_dir(dir, true).unwrap();
+    }
+    std::fs::write(data.join(".m1.json.copy.4242.0"), "partial").unwrap();
+    // Not activated: only real bytes would refuse.
+    let (_, retained) = retired(retire_source(dir.path(), &opts()).unwrap());
+    assert_eq!(files_under(&retained.join("data")), Vec::<String>::new());
 }

@@ -1169,7 +1169,7 @@ pub fn write_local_message(project_root: &Path, msg: &Message) -> std::io::Resul
     // The message is written; a row left behind is reaped once this process
     // is proven dead, so a failed release must not report the write failed.
     #[cfg(all(unix, feature = "native"))]
-    if let crate::mailbox_lifecycle::RetentionCoverage::Admitted(permit) = coverage {
+    if let crate::mailbox_lifecycle::AdmissionCoverage::Admitted(permit) = coverage {
         let _ = permit.complete();
     }
     Ok(())
