@@ -343,6 +343,10 @@ fn git_run(
     stdin: Option<&[String]>,
     deadline: Instant,
 ) -> Result<String, Stop> {
+    #[cfg(test)]
+    if let Some(stop) = test_stall::check(project_root, args) {
+        return Err(stop);
+    }
     let left = deadline.saturating_duration_since(Instant::now());
     if left.is_zero() {
         return Err(Stop::Timeout);
@@ -379,14 +383,12 @@ fn resolve_ids(message: &str) -> Vec<String> {
     let mut resolved = extract_spec_ids_from_commit(message);
     resolved.extend(extract_referenced_spec_ids_from_commit(message));
     resolved.extend(extract_trace_line_spec_ids(message));
-    let mut out: Vec<String> = Vec::new();
-    for id in resolved {
-        let id = id.to_ascii_uppercase();
-        if !out.contains(&id) {
-            out.push(id);
-        }
-    }
-    out
+    let mut seen = HashSet::new();
+    resolved
+        .into_iter()
+        .map(|id| id.to_ascii_uppercase())
+        .filter(|id| seen.insert(id.clone()))
+        .collect()
 }
 
 /// Walk `revs` (`--date-order`, NUL-separated records) and resolve every
@@ -532,6 +534,11 @@ fn warm(
 
 /// No index yet: one full `--date-order` walk over T0 answers the query and
 /// (when the lock is free) writes a new generation from the same output.
+///
+/// The full-body walk costs more than the original query, so it only runs
+/// when its output can persist: a namespace that cannot be created or a lock
+/// file that cannot be opened (a read-only or foreign-owned `.git`, a
+/// sandboxed seat) runs the original query instead, every show.
 fn cold(
     project_root: &Path,
     ids: &[String],
@@ -539,18 +546,23 @@ fn cold(
     ctx: &Context,
     deadline: Instant,
 ) -> Result<IndexAnswer, Stop> {
+    let ns = match namespace_dir(&ctx.common_dir, true) {
+        Ok(Some(ns)) => ns,
+        _ => return Err(Stop::Disabled),
+    };
+    // Held by a concurrent builder: answer in memory, write nothing.
+    let lock = try_lock(&ns).map_err(|_| Stop::Disabled)?;
     let rows = match walk(project_root, &ctx.tips, 0, deadline) {
         Ok(rows) => rows,
         Err(Stop::Timeout) => return Ok(IndexAnswer::Incomplete),
         Err(e) => return Err(e),
     };
     // Write first: the build is cheap next to the walk, and a write failure
-    // (read-only or contended repo) costs only the next show's speed.
-    if let Ok(Some(ns)) = namespace_dir(&ctx.common_dir, true) {
-        if let Ok(Some(_lock)) = try_lock(&ns) {
-            let _ = build_generation(&ns, ctx, &rows);
-        }
+    // costs only the next show's speed.
+    if lock.is_some() {
+        let _ = build_generation(&ns, ctx, &rows);
     }
+    drop(lock);
     let hits = dedupe(
         rows.into_iter()
             .filter(|r| wanted.contains(&r.id))
@@ -1101,9 +1113,14 @@ fn remove_other_generations(ns: &Path, keep: &str) {
 
 /// Drop `meta` so the next show rebuilds cold. With `generation`, only
 /// while `meta` still names it: a reader that lost a race with a rebuild
-/// never discards the NEW generation. Readers that already resolved a
-/// generation finish against it; a rebuild writes a new directory.
+/// never discards the NEW generation. The check and the removal happen under
+/// the writer lock (skipped when held: a writer is already replacing or
+/// extending the index). Readers that already resolved a generation finish
+/// against it; a rebuild writes a new directory.
 fn invalidate(ns: &Path, generation: Option<&str>) {
+    let Ok(Some(_lock)) = try_lock(ns) else {
+        return;
+    };
     if let Some(generation) = generation {
         if !read_meta(ns).is_ok_and(|m| m.is_some_and(|m| m.generation == generation)) {
             return;
@@ -1112,6 +1129,42 @@ fn invalidate(ns: &Path, generation: Option<&str>) {
     let meta = ns.join("meta");
     if std::fs::symlink_metadata(&meta).is_ok_and(|md| md.is_file() && trusted(&md).is_ok()) {
         let _ = std::fs::remove_file(&meta);
+    }
+}
+
+/// Test-only fault injection: a registered warm step (`reach`, the
+/// reachability check, or `finish`, the final `-F --grep`) for one repo
+/// sleeps, then times out, so the fail-closed timeout paths are driven
+/// deterministically.
+#[cfg(test)]
+pub(crate) mod test_stall {
+    use std::path::{Path, PathBuf};
+    use std::sync::Mutex;
+    use std::time::Duration;
+
+    static STALLS: Mutex<Vec<(PathBuf, &'static str, Duration)>> = Mutex::new(Vec::new());
+
+    pub(crate) fn set(repo: &Path, step: &'static str, sleep: Duration) {
+        STALLS
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .push((repo.to_path_buf(), step, sleep));
+    }
+
+    pub(super) fn check(project_root: &Path, args: &[&str]) -> Option<super::Stop> {
+        let step = match args {
+            ["rev-list", "--stdin"] => "reach",
+            _ if args.contains(&"-F") => "finish",
+            _ => return None,
+        };
+        let sleep = STALLS
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .iter()
+            .find(|(repo, s, _)| repo == project_root && *s == step)
+            .map(|(_, _, sleep)| *sleep)?;
+        std::thread::sleep(sleep);
+        Some(super::Stop::Timeout)
     }
 }
 

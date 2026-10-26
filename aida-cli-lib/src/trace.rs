@@ -1156,8 +1156,11 @@ fn collect_git_linkage_inner(
                     let log_deadline = std::time::Instant::now() + cap(LINKAGE_COMMIT_LOG_TIMEOUT);
                     match crate::linkage_index::query_linkage_index(project_root, ids, log_deadline)
                     {
+                        // Advisor ruling (deviation 6): only the ORIGINAL
+                        // query's complete answer may seed a CLOSED negative;
+                        // an index answer never warms the negative proof.
                         crate::linkage_index::IndexAnswer::Answered(commits) => {
-                            return (LogOutput::Indexed(commits), false, seed);
+                            return (LogOutput::Indexed(commits), false, None);
                         }
                         crate::linkage_index::IndexAnswer::Incomplete => {
                             return (LogOutput::Raw(String::new()), true, None);
@@ -1270,9 +1273,9 @@ fn collect_git_linkage_inner(
     // answer. Only a successful, completely framed run counts as an oracle
     // (a seed only exists when the run completed); a zero-reference answer
     // marks or — pinned to the probe's before-snapshot, re-checked inside —
-    // seeds the key, and a positive answer drops its state. A complete index
-    // answer settles exactly as the original's did: it is the original
-    // query's commit set (SKETCH v3), so the proof keeps warming as before.
+    // seeds the key, and a positive answer drops its state. An index answer
+    // carries no seed (advisor ruling on deviation 6): a mistake there would
+    // persist as a durable wrong "never shipped" proof.
     // trace:BUG-2221 | ai:claude
     if let (Some(seed), Some(d)) = (oracle_seed, deadline) {
         let _seed_phase = crate::usage::phase("linkage.seed");

@@ -1037,8 +1037,9 @@ fn cold_oracle_seed_warms_key_only_on_unchanged_snapshot() {
     assert!(state_on_disk(&repo, &["TASK-8"])
         .is_some_and(|st| st.closed.is_empty() && st.open.is_empty()));
 
-    // Integrated: two cold shows answer COMPLETE (the oracle's own answer),
-    // equal to the unbounded collector; the second seeds the key.
+    // Integrated: cold shows answer COMPLETE, equal to the unbounded
+    // collector. The SKETCH v3 index answers them, and an index answer
+    // never seeds (advisor ruling on deviation 6), so the key stays cold.
     let wanted = ids(&["TASK-9"]);
     let oracle = collect_git_linkage_opts(&repo, &wanted, false);
     for _ in 0..2 {
@@ -1051,8 +1052,43 @@ fn cold_oracle_seed_warms_key_only_on_unchanged_snapshot() {
         );
     }
     assert!(
-        state_on_disk(&repo, &["TASK-9"]).is_some_and(|st| !st.closed.is_empty()),
-        "the seeding show warms the key"
+        state_on_disk(&repo, &["TASK-9"]).is_none(),
+        "an index answer neither marks nor seeds the key"
+    );
+}
+
+/// Advisor ruling on deviation 6 (2026-10-26): only the ORIGINAL query's
+/// complete answer may seed a CLOSED negative. A zero-hit index answer,
+/// cold build or warm read, publishes no negative state and never makes
+/// the probe answer `ProvedEmpty`.
+#[test]
+fn zero_hit_index_answer_seeds_nothing() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let repo = init_repo(tmp.path());
+    commit(&repo, "update TASK-7"); // grep-positive, parser-negative
+    commit(&repo, "feat: tip");
+    let wanted = ids(&["TASK-7"]);
+    for _ in 0..3 {
+        let shown =
+            collect_git_linkage_until(&repo, &wanted, Instant::now() + Duration::from_secs(30));
+        assert!(shown.commits.is_empty(), "zero hits: {:?}", shown.commits);
+        assert!(!shown.commits_scan_incomplete);
+        assert!(
+            state_on_disk(&repo, &["TASK-7"]).is_none(),
+            "an index answer publishes no negative state"
+        );
+    }
+    let common = git(&repo, &["rev-parse", "--git-common-dir"]);
+    assert!(
+        repo.join(common)
+            .join("aida/linkage-index/v1/meta")
+            .exists(),
+        "the index answered these shows"
+    );
+    assert_ne!(
+        probe(&repo, &["TASK-7"], &tuning(1024, 0)),
+        NegativeProbe::ProvedEmpty,
+        "nothing seeded, so nothing proves the key empty"
     );
 }
 

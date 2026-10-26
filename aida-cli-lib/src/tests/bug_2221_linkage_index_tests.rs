@@ -389,6 +389,69 @@ fn show_path_uses_the_index() {
     assert!(ns(&repo).join("meta").exists(), "the show built the index");
 }
 
+/// Signoff (d): a warm step past its share fails closed. A timed-out
+/// reachability check or final `-F --grep` returns `RunOriginal` (the index
+/// stays valid: a timeout is not corruption); the show then runs the
+/// original query with the budget left, and labels the scan incomplete
+/// when none is left.
+#[test]
+fn warm_step_timeouts_run_the_original() {
+    for step in ["reach", "finish"] {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let repo = init_repo(tmp.path());
+        commit_at(&repo, T, "fix: one (TASK-7)");
+        answered(&repo, &["TASK-7"]);
+        test_stall::set(&repo, step, Duration::ZERO);
+        assert_eq!(
+            index(&repo, &["TASK-7"]),
+            IndexAnswer::RunOriginal,
+            "{step}"
+        );
+        assert!(ns(&repo).join("meta").exists(), "{step}: not invalidated");
+
+        // Budget left: the original query answers, complete.
+        let shown = crate::collect_git_linkage_until(
+            &repo,
+            &ids(&["TASK-7"]),
+            Instant::now() + Duration::from_secs(30),
+        );
+        assert_eq!(shown.commits, oracle(&repo, &["TASK-7"]), "{step}");
+        assert!(!shown.commits_scan_incomplete, "{step}");
+    }
+
+    // No budget left after the stalled step: truthfully incomplete, never
+    // an empty "no linkage" answer.
+    let tmp = tempfile::TempDir::new().unwrap();
+    let repo = init_repo(tmp.path());
+    commit_at(&repo, T, "fix: one (TASK-7)");
+    answered(&repo, &["TASK-7"]);
+    test_stall::set(&repo, "reach", Duration::from_millis(2500));
+    let shown = crate::collect_git_linkage_until(
+        &repo,
+        &ids(&["TASK-7"]),
+        Instant::now() + Duration::from_secs(2),
+    );
+    assert!(shown.commits.is_empty());
+    assert!(shown.commits_scan_incomplete, "no budget left: incomplete");
+}
+
+/// A namespace that cannot be created never pays the cold full-body walk:
+/// the original query answers, and nothing is written.
+#[cfg(unix)]
+#[test]
+fn uncreatable_namespace_runs_the_original() {
+    use std::os::unix::fs::PermissionsExt;
+    let tmp = tempfile::TempDir::new().unwrap();
+    let repo = init_repo(tmp.path());
+    commit_at(&repo, T, "fix: one (TASK-7)");
+    let aida_dir = ns(&repo).ancestors().nth(2).unwrap().to_path_buf();
+    std::fs::create_dir(&aida_dir).unwrap();
+    // Read-only and empty: the temp dir still removes it afterwards.
+    std::fs::set_permissions(&aida_dir, std::fs::Permissions::from_mode(0o555)).unwrap();
+    assert_eq!(index(&repo, &["TASK-7"]), IndexAnswer::RunOriginal);
+    assert!(!ns(&repo).exists(), "nothing written");
+}
+
 /// The resolver source the index's rows depend on. Changing ANY of these
 /// functions requires bumping [`PARSER_VERSION`] and re-pinning the hash
 /// below in the same change.
