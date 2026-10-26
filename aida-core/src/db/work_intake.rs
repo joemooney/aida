@@ -25,6 +25,35 @@ fn work_metadata_bytes(metadata: &StoreMetadata) -> Result<Vec<u8>> {
     Ok(serde_yaml::to_string(&value)?.into_bytes())
 }
 
+/// Serialize an appended oplog with `before`'s record list carried
+/// byte-for-byte, so the policy scans only what this write appends. A source
+/// in any other layout is rewritten whole (and scanned whole).
+// trace:STORY-1742 | ai:claude
+fn work_oplog_bytes(
+    before: Option<&[u8]>,
+    log: &crate::oplog::OpLog,
+    carried: usize,
+) -> Result<Vec<u8>> {
+    let Some(prefix) = before.and_then(crate::transport_sanitization::oplog_prefix) else {
+        return Ok(serde_yaml::to_string(log)?.into_bytes());
+    };
+    #[derive(serde::Serialize)]
+    struct Trailer<'a> {
+        clock: crate::oplog::LamportClock,
+        node_id: &'a str,
+    }
+    let mut bytes = prefix.to_vec();
+    bytes.extend(serde_yaml::to_string(&log.operations[carried..])?.into_bytes());
+    bytes.extend(
+        serde_yaml::to_string(&Trailer {
+            clock: log.clock,
+            node_id: &log.node_id,
+        })?
+        .into_bytes(),
+    );
+    Ok(bytes)
+}
+
 impl GitBackend {
     pub(super) fn work_update<F>(
         &self,
@@ -84,7 +113,21 @@ impl GitBackend {
                 store.requirements.iter().all(|row| uuids.insert(row.id)),
                 "WORK mutation left duplicate requirement UUIDs"
             );
-            candidate.admit(&store.requirements, &original)?;
+            // Admit what this write adds or changes against every existing
+            // row, as the ordinary single-row writers do: a historical alias
+            // collision between untouched rows never blocks a new write.
+            // trace:STORY-1742 | ai:claude
+            let touched = store
+                .requirements
+                .iter()
+                .filter(|row| {
+                    baseline.get(&row.id).is_none_or(|old| {
+                        serde_yaml::to_string(row).map_or(true, |new| &new != old)
+                    })
+                })
+                .cloned()
+                .collect::<Vec<_>>();
+            candidate.admit(&touched, &original)?;
             crate::hypothesis::enforce(&original, &mut store.requirements)?;
 
             let context = crate::provenance::WriteContext::capture();
@@ -204,14 +247,16 @@ impl GitBackend {
                     node => node.to_owned(),
                 };
                 log.node_id = candidate.node().to_owned();
+                let carried = log.operations.len();
                 for (id, kind) in operations {
                     log.append(id, "aida".into(), kind);
                 }
                 log.node_id = header;
+                let after = work_oplog_bytes(before.as_deref(), &log, carried)?;
                 effects.push(FileEffect {
                     path: "oplog.yaml".into(),
                     before,
-                    after: Some(serde_yaml::to_string(&log)?.into_bytes()),
+                    after: Some(after),
                 });
             }
             if effects.is_empty() {
@@ -888,6 +933,98 @@ mod tests {
         let accepted = snapshot(&root);
         let error = backend.add_requirement(row("Another failure")).unwrap_err();
         assert!(error.to_string().contains("grammar"), "{error}");
+        assert_eq!(snapshot(&root), accepted);
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn story_1742_policy_scans_what_a_write_adds_never_history() {
+        // trace:STORY-1742 | ai:claude
+        if !isolated("db::git_backend::work_intake::tests::story_1742_policy_scans_what_a_write_adds_never_history") {
+            return;
+        }
+        let (_temp, root, backend) = fixture();
+        // History today's policy would refuse ("R&D" reads as a character
+        // reference), in the oplog's `!`-tagged records and in metadata.
+        let target = uuid::Uuid::new_v4();
+        let mut log = crate::oplog::OpLog::new("1".into());
+        log.append(
+            target,
+            "aida".into(),
+            crate::oplog::OpKind::Create {
+                title: "R&D intake".into(),
+                description: "Seen on private-marker".into(),
+                req_type: "Bug".into(),
+                status: "Draft".into(),
+                priority: "Medium".into(),
+            },
+        );
+        log.append(
+            target,
+            "aida".into(),
+            crate::oplog::OpKind::SetStatus {
+                status: "Completed".into(),
+            },
+        );
+        log.append(target, "aida".into(), crate::oplog::OpKind::Archive);
+        let history = serde_yaml::to_string(&log).unwrap();
+        assert!(history.contains("kind: !Create") && history.contains("kind: !SetStatus"));
+        std::fs::write(root.join("oplog.yaml"), &history).unwrap();
+        let metadata = std::fs::read_to_string(root.join("metadata.yaml"))
+            .unwrap()
+            .replacen("\ndescription: ''\n", "\ndescription: R&D backlog\n", 1);
+        assert!(metadata.contains("R&D backlog"));
+        std::fs::write(root.join("metadata.yaml"), metadata).unwrap();
+        // Two untouched rows whose aliases collide, as real history has.
+        for (n, agreed) in [(1, None), (2, Some("BUG-001"))] {
+            let mut row = row("Generic history");
+            row.spec_id = Some(format!("BUG-{n:03}"));
+            row.agreed_id = agreed.map(Into::into);
+            let path = object_store::relative_object_path(row.spec_id.as_deref().unwrap()).unwrap();
+            std::fs::create_dir_all(root.join(&path).parent().unwrap()).unwrap();
+            std::fs::write(root.join(&path), serde_yaml::to_string(&row).unwrap()).unwrap();
+        }
+        crate::git_ops::add(&root, &["objects", "metadata.yaml", "oplog.yaml"]).unwrap();
+        crate::git_ops::commit(&root, "seed shared history").unwrap();
+        let policy = crate::transport_sanitization::Policy {
+            version: 1,
+            reviewed: true,
+            deny_tokens: vec!["private-marker".into()],
+            git_name: "AIDA Generic".into(),
+            git_identity: "aida".into(),
+        };
+        assert!(policy.artifact("oplog.yaml", history.as_bytes()).is_err());
+
+        // A new WORK add is admitted; the history prefix is carried
+        // byte-for-byte and only the appended records are new.
+        backend.add_requirement(row("Generic failure")).unwrap();
+        let after = std::fs::read_to_string(root.join("oplog.yaml")).unwrap();
+        let prefix = crate::transport_sanitization::oplog_prefix(history.as_bytes()).unwrap();
+        assert!(after.as_bytes().starts_with(prefix));
+        let log: crate::oplog::OpLog = serde_yaml::from_str(&after).unwrap();
+        assert_eq!(log.operations.len(), 4);
+        assert_eq!(log.node_id, "1");
+        assert_eq!(backend.load().unwrap().requirements.len(), 3);
+
+        // A metadata rewrite keeps the historical description unscanned.
+        let mut store = backend.load().unwrap();
+        assert_eq!(store.description, "R&D backlog");
+        store.title = "Generic tracker".into();
+        backend.save(&store).unwrap();
+        assert_eq!(backend.load().unwrap().title, "Generic tracker");
+
+        // What a write itself adds is still refused, before any effect.
+        let accepted = snapshot(&root);
+        assert!(backend.add_requirement(row("R&D failure")).is_err());
+        assert!(backend
+            .add_requirement(Requirement::new(
+                "Generic failure".into(),
+                "Seen on private-marker".into()
+            ))
+            .is_err());
+        let mut store = backend.load().unwrap();
+        store.title = "R&D tracker".into();
+        assert!(backend.save(&store).is_err());
         assert_eq!(snapshot(&root), accepted);
     }
 

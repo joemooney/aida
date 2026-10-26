@@ -176,12 +176,18 @@ impl<'scope> PreparedMutation<'scope> {
                         .context("WORK artifact size overflow")?;
                     anyhow::ensure!(total <= 64 * 1_048_576, "WORK mutation byte limit exceeded");
                 }
-                snapshot
-                    .policy
-                    .artifact(&effect.path, bytes)
-                    .map_err(|category| {
-                        anyhow::anyhow!("WORK prepared artifact refused: {category}")
-                    })?;
+                // Policy covers what this write adds, never history: the
+                // oplog's carried records and unchanged metadata values are
+                // grammar-checked only. trace:STORY-1742 | ai:claude
+                let before = effect.before.as_deref();
+                match effect.path.as_str() {
+                    "oplog.yaml" => snapshot.policy.oplog_append(before, bytes),
+                    "metadata.yaml" => snapshot.policy.yaml_change(before, bytes),
+                    path => snapshot.policy.artifact(path, bytes),
+                }
+                .map_err(|category| {
+                    anyhow::anyhow!("WORK prepared artifact refused: {category}")
+                })?;
             }
         }
         for (name, bytes) in counter.private_artifacts() {
