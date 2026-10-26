@@ -28,7 +28,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T06:38:42.269077518Z
-modified_at: 2026-10-26T08:09:27.834009695Z
+modified_at: 2026-10-26T08:42:41.923632116Z
 req_type: Bug
 comments:
 - id: 01a17250-10a0-76e1-b802-890d5a4ca31b
@@ -331,6 +331,12 @@ comments:
   modified_at: 2026-10-26T08:09:27.834009695Z
   session_id: 01a1772375c0
   harness_version: 2.1.310 (Claude Code)
+- id: 01a17760-4b83-7d63-be26-948384215ea8
+  author: joe
+  content: 'ADVISOR 01:25 MST: P2 is in #2945 (re-review running). Next lane: implement P1 with O1 exactly as signed 23:55, on a NEW branch bug-2221-p1 from origin/main, as its own PR (Refs BUG-2221). Use the clone-safe git helper for every git invocation (no raw Command::new("git") in any file; the ratchet must stay honest). Then run the AC4 measurement plan from the sketch doc against a local build and report before/after in the PR body.'
+  created_at: 2026-10-26T08:42:41.923632116Z
+  modified_at: 2026-10-26T08:42:41.923632116Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
 history:
 - id: 01a173f1-1a2e-7c12-a2a1-e6bdafd814de
   author: joe
