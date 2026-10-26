@@ -12,12 +12,12 @@ description: |-
   4. Behaviour is unchanged. Show it with the existing story_1698/story_1700 mandate tests plus a before/after list of every refusal reason string.
 
   Sequencing: one human-merged refactor PR. Land it after the open PRs touching these files (#2798, #2792, #2789) merge, to avoid conflicts. Architecture change, so it needs a sketch with advisor signoff first.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-21T15:33:51.496539087Z
-modified_at: 2026-10-26T16:35:33.336534345Z
+modified_at: 2026-10-26T16:47:35.044221740Z
 req_type: Story
 tags:
 - architecture
@@ -425,6 +425,15 @@ history:
   timestamp: 2026-10-26T16:35:19.034623185Z
   session_id: be057d71-e396-44b6-9d50-369c7c2fdfcc
   changes: []
+- id: 01a1791c-3884-73b0-ad40-9d08e7efeb59
+  author: aida-orchestrator
+  timestamp: 2026-10-26T16:47:35.044249515Z
+  session_id: 01a179143fe6
+  harness_version: 2.1.310 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 7be4321436b8f93b2daba2bd71b649046818e35f
   branch: main
@@ -437,7 +446,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'Refs slice moves most authority into gate/, and the refusal literals survive verbatim (independent literal diff: 0 production refusal strings removed). But taking mandate.rs and mandate_drive.rs off the floor leaves authority-bearing seams in unprotected code: the mandate start/stop human-TTY binding and the drive tick''s authority inputs. CI at head was still pending when this was recorded.'
+  detail: Moved dispatch authority matches base (execution/claim/run admission diffed line-for-line, 0 refusal literals removed; lib CI shards green). But dispatch.rs comes off the floor while the dispatch gate-policy tests and their mounts stay unprotected (AC2 unmet for a completing PR), and the reap claim transition stays outside gate/.
   recovery_hint: address the review findings, move STORY-1889 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-10-25T21:12:08.710727816Z
+  shelved_at: 2026-10-26T16:47:35.044221740Z
