@@ -479,23 +479,44 @@ fn positive_hit_uses_original_date_order() {
         "a parsed hit must defer to the original positive path"
     );
 
-    // Integrated show path (deadline) vs. the non-show oracle (no probe).
+    // Integrated show path (deadline; the SKETCH v3 index answers it) vs.
+    // the non-show oracle (no probe, no index): the same commit SET, in the
+    // O2 order — committer time desc, then index batch desc, then walk
+    // position asc. Same-second ties follow that contract, never Git's
+    // internal `--date-order` tie-break.
     let wanted = ids(&["TASK-7"]);
     let shown = collect_git_linkage_until(&repo, &wanted, Instant::now() + Duration::from_secs(30));
     let oracle = collect_git_linkage_opts(&repo, &wanted, false);
+    let mut shown_set = shown.commits.clone();
+    let mut oracle_set = oracle.commits.clone();
+    shown_set.sort();
+    oracle_set.sort();
     assert_eq!(
-        shown.commits, oracle.commits,
-        "the probe-fronted show path must keep the oracle's commits and order"
+        shown_set, oracle_set,
+        "the probe-fronted show path must keep the oracle's commits"
     );
     let shas: Vec<&str> = shown
         .commits
         .iter()
         .map(|(full, _, _)| full.as_str())
         .collect();
+    let times: Vec<i64> = shas
+        .iter()
+        .map(|sha| {
+            git(&repo, &["show", "-s", "--format=%ct", sha])
+                .parse()
+                .unwrap()
+        })
+        .collect();
+    assert!(
+        times.windows(2).all(|w| w[0] >= w[1]),
+        "O2: committer time never increases: {times:?}"
+    );
     assert_eq!(
         shas,
         vec![hit_two.as_str(), hit_one.as_str()],
-        "date-order newest-first, bookkeeping bare mentions excluded"
+        "O2 newest-first (a same-second child before its parent), \
+         bookkeeping bare mentions excluded"
     );
     assert!(!shown.commits_scan_incomplete);
 }
@@ -1362,9 +1383,11 @@ fn pure_warm_read_rechecks_snapshot_after_walk() {
 
 /// Ruling 2026-10-25: positive and cold shows pay NO serial snapshot in
 /// front of the original query — structurally, no snapshot-only git read
-/// (`config --list`, the `--no-walk=unsorted` root listing) runs. That holds
-/// for a never-negative key and for a key that turned positive after
-/// holding a negative proof (the hit drops its state).
+/// (the worktree listing and the `for-each-ref` ref evidence R is digested
+/// from) runs. That holds for a never-negative key and for a key that turned
+/// positive after holding a negative proof (the hit drops its state). The
+/// SKETCH v3 index's own reads (its T0 tip listing and config identity) are
+/// the replacement for the original query, not a snapshot in front of it.
 #[cfg(unix)]
 #[test]
 fn positive_show_takes_no_snapshot() {
@@ -1389,7 +1412,10 @@ fn positive_show_takes_no_snapshot() {
         std::fs::read_to_string(&log_path)
             .unwrap_or_default()
             .lines()
-            .filter(|l| l.contains("--no-walk=unsorted") || l.contains("config --list"))
+            .filter(|l| {
+                l.contains("worktree list --porcelain")
+                    || l.contains("for-each-ref --format=%(refname)%00")
+            })
             .map(str::to_string)
             .collect()
     };

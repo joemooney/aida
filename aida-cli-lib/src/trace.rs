@@ -1028,6 +1028,14 @@ pub(crate) fn collect_git_linkage_opts(
     collect_git_linkage_inner(project_root, ids, scan_trace, None)
 }
 
+/// What the referencing-commit scan produced: the original query's raw
+/// output, or the BUG-2221 index's resolved, ordered answer.
+// trace:BUG-2221 | ai:claude
+enum LogOutput {
+    Raw(String),
+    Indexed(Vec<(String, String, String)>),
+}
+
 /// The linkage collector. `deadline` is `Some` only for `aida show`
 /// ([`collect_git_linkage_until`]); with `None` every call keeps its
 /// pre-BUG-1993-rework bound (the shared resolvers and the worktree probe
@@ -1122,20 +1130,44 @@ fn collect_git_linkage_inner(
                 // zero-reference answer warms the key (published below).
                 // trace:BUG-2221 | ai:claude
                 let mut seed = None;
+                // BUG-2221: when the index ran first, the end of the commit
+                // scan's budget it shared with the original query.
+                let mut shared_budget_end = None;
                 if let Some(d) = deadline {
                     let (probe, probe_seed) =
                         crate::show_negative::probe_negative_linkage(project_root, ids, d);
                     match probe {
                         crate::show_negative::NegativeProbe::ProvedEmpty => {
-                            return (String::new(), false, None);
+                            return (LogOutput::Raw(String::new()), false, None);
                         }
                         crate::show_negative::NegativeProbe::Incomplete => {
-                            return (String::new(), true, None);
+                            return (LogOutput::Raw(String::new()), true, None);
                         }
                         crate::show_negative::NegativeProbe::PositiveHit
                         | crate::show_negative::NegativeProbe::RunOriginal => {}
                     }
                     seed = probe_seed;
+                    // BUG-2221 (SKETCH v3): a positive or unproved key reads
+                    // the incremental spec-id index instead of walking all
+                    // history. Its answer is the original query's commit set
+                    // in the O2 order; every fail-closed path runs the
+                    // ORIGINAL query below, unchanged, with the budget left.
+                    // trace:BUG-2221 | ai:claude
+                    let log_deadline = std::time::Instant::now() + cap(LINKAGE_COMMIT_LOG_TIMEOUT);
+                    match crate::linkage_index::query_linkage_index(project_root, ids, log_deadline)
+                    {
+                        crate::linkage_index::IndexAnswer::Answered(commits) => {
+                            return (LogOutput::Indexed(commits), false, seed);
+                        }
+                        crate::linkage_index::IndexAnswer::Incomplete => {
+                            return (LogOutput::Raw(String::new()), true, None);
+                        }
+                        crate::linkage_index::IndexAnswer::RunOriginal => {}
+                    }
+                    if log_deadline <= std::time::Instant::now() {
+                        return (LogOutput::Raw(String::new()), true, None);
+                    }
+                    shared_budget_end = Some(log_deadline);
                 }
                 let mut args: Vec<&str> = vec![
                     "log",
@@ -1150,16 +1182,20 @@ fn collect_git_linkage_inner(
                 }
                 let mut log_cmd = PCmd::new("git");
                 log_cmd.arg("-C").arg(project_root).args(&args);
-                match command_output_with_timeout_detail(log_cmd, cap(LINKAGE_COMMIT_LOG_TIMEOUT)) {
+                let budget = match shared_budget_end {
+                    Some(end) => end.saturating_duration_since(std::time::Instant::now()),
+                    None => cap(LINKAGE_COMMIT_LOG_TIMEOUT),
+                };
+                match command_output_with_timeout_detail(log_cmd, budget) {
                     BoundedCommandOutput::Completed(o) if o.status.success() => (
-                        String::from_utf8_lossy(&o.stdout).trim_end().to_string(),
+                        LogOutput::Raw(String::from_utf8_lossy(&o.stdout).trim_end().to_string()),
                         false,
                         seed,
                     ),
                     // A timeout or a git error (the old silent empty result)
                     // is never evidence: the seed is dropped unsettled.
-                    BoundedCommandOutput::TimedOut => (String::new(), true, None),
-                    _ => (String::new(), false, None),
+                    BoundedCommandOutput::TimedOut => (LogOutput::Raw(String::new()), true, None),
+                    _ => (LogOutput::Raw(String::new()), false, None),
                 }
             });
             let trace_res = if scan_trace {
@@ -1182,14 +1218,23 @@ fn collect_git_linkage_inner(
             };
             let log_res = log_handle
                 .join()
-                .unwrap_or_else(|_| (String::new(), true, None));
+                .unwrap_or_else(|_| (LogOutput::Raw(String::new()), true, None));
             (log_res, trace_res)
         });
 
     // BUG-2221: a record that does not frame is dropped as before, but the
     // answer then is not a COMPLETE oracle for seeding. trace:BUG-2221 | ai:claude
     let mut oracle_framed = true;
-    let commits: Vec<(String, String, String)> = log
+    let mut indexed_commits = None;
+    let log = match log {
+        LogOutput::Raw(raw) => raw,
+        // BUG-2221: the index answer is already resolved and ordered (O2).
+        LogOutput::Indexed(commits) => {
+            indexed_commits = Some(commits);
+            String::new()
+        }
+    };
+    let parsed: Vec<(String, String, String)> = log
         .split('\u{1e}')
         .filter_map(|record| {
             let record = record.trim_start_matches(['\n', '\r']);
@@ -1219,12 +1264,15 @@ fn collect_git_linkage_inner(
             }
         })
         .collect();
+    let commits = indexed_commits.unwrap_or(parsed);
 
     // BUG-2221: settle the probe's deferral with the original collector's
     // answer. Only a successful, completely framed run counts as an oracle
     // (a seed only exists when the run completed); a zero-reference answer
     // marks or — pinned to the probe's before-snapshot, re-checked inside —
-    // seeds the key, and a positive answer drops its state.
+    // seeds the key, and a positive answer drops its state. A complete index
+    // answer settles exactly as the original's did: it is the original
+    // query's commit set (SKETCH v3), so the proof keeps warming as before.
     // trace:BUG-2221 | ai:claude
     if let (Some(seed), Some(d)) = (oracle_seed, deadline) {
         let _seed_phase = crate::usage::phase("linkage.seed");
