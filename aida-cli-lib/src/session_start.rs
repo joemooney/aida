@@ -2053,15 +2053,25 @@ pub(crate) fn session_start_with_receipt(
     // ...and so does any other lease on the scope whose owner is still alive,
     // with or without a live linked worktree: adoption bypasses the BUG-637
     // live-claim gate's claude-process probe, so it checks owners itself.
-    // trace:BUG-2223 | ai:claude
+    // An owner whose liveness cannot be determined (no recorded pid) is
+    // treated as alive, the same rule queue work's conflict sweep applies.
+    // trace:BUG-2223, TASK-b6b1278890774ef993d2ebc327862470-004 | ai:claude
     if let Some(orphan) = &adopted_orphan {
-        if let Some(live) = list_leases(&project_root).into_iter().find(|l| {
-            l.id != orphan.id
-                && l.scope.eq_ignore_ascii_case(owns)
-                && stale_lease_recovery_for_lease(l).base_verdict == StaleLeaseRecovery::Live
-        }) {
+        let held = list_leases(&project_root).into_iter().find_map(|l| {
+            if l.id == orphan.id || !l.scope.eq_ignore_ascii_case(owns) {
+                return None;
+            }
+            match stale_lease_recovery_for_lease(&l).base_verdict {
+                StaleLeaseRecovery::Live => Some((l, "live session")),
+                StaleLeaseRecovery::UnknownLiveness => {
+                    Some((l, "session whose owner cannot be proven gone"))
+                }
+                _ => None,
+            }
+        });
+        if let Some((live, what)) = held {
             anyhow::bail!(
-                "scope `{owns}` is also held by live session {} ({}), so the orphaned lease \
+                "scope `{owns}` is also held by {what} {} ({}), so the orphaned lease \
                  {}'s tree is not re-entered. Nothing was changed in it.",
                 &live.id[..live.id.len().min(8)],
                 live.worktree_path.display(),

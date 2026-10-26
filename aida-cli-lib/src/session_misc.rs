@@ -1805,11 +1805,14 @@ pub(crate) fn resolve_queue_work_launch(
                 );
                 Ok(mint_fresh())
             }
-            // No orphaned tree holds the scope, so a plain pickup is free to
-            // start one: dropping --resume is a command that works.
+            // No adoptable orphaned tree: either none holds the scope, or its
+            // lease cannot be adopted (e.g. it records no pid). Either way
+            // dropping --resume is a command that works.
+            // trace:TASK-b6b1278890774ef993d2ebc327862470-003 | ai:claude
             (None, None) => anyhow::bail!(
                 "no recorded claude session for scope `{}` to resume, and no orphaned session \
-                 tree to re-enter — drop --resume (or pass --fresh) to cold-launch",
+                 tree it can re-enter (none holds the scope, or its lease cannot be adopted) — \
+                 drop --resume (or pass --fresh) to cold-launch",
                 scope
             ),
         },
