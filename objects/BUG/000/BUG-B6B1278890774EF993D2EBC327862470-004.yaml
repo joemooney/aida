@@ -17,15 +17,24 @@ description: |
   Local reproduction attempts all passed: 5/5 sequential runs on the PR branch, 5/5 on origin/main f34fd14323, and 40/40 concurrent runs of the test binary. The failure only shows under CI load: a load-dependent race in concurrent bootstrap or in the dispenser's first-use path.
 
   Next step: capture the inner error. Replace `.unwrap()` with `.expect(&format!("{e:#}"))`, or log it, so the next CI hit names the failing step. Then make bootstrap's first-writer path idempotent under contention.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-26T19:01:40.258047669Z
-modified_at: 2026-10-26T19:01:40.258047669Z
+modified_at: 2026-10-26T21:33:26.168331094Z
 req_type: Bug
 tags:
 - test-flake
+history:
+- id: 01a17a21-ed18-7300-bc11-1565455e60e3
+  author: joe
+  timestamp: 2026-10-26T21:33:26.168327439Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: cd2188e4f7f2e85c2f4332faa82b679ea951c766
   branch: story-1889-dispatch
