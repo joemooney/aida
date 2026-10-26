@@ -22,10 +22,17 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-26T19:01:40.258047669Z
-modified_at: 2026-10-26T21:33:26.168331094Z
+modified_at: 2026-10-26T21:33:29.454567521Z
 req_type: Bug
 tags:
 - test-flake
+comments:
+- id: 01a17a21-f9ee-74b3-ae3c-8d096059a9f6
+  author: joe
+  content: 'ADVISOR: approved and dispatched; it now turns unrelated PRs red (#2938, #2953 at work_binding.rs:373/379). Fix the race in the test (or in the code, if it is a real concurrency bug in the WORK counter); do not just add a retry or skip. Prove it with the test looped 20x under parallel load. LIGHT gate.'
+  created_at: 2026-10-26T21:33:29.454567521Z
+  modified_at: 2026-10-26T21:33:29.454567521Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
 history:
 - id: 01a17a21-ed18-7300-bc11-1565455e60e3
   author: joe
