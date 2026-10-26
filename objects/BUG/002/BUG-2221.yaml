@@ -23,12 +23,12 @@ description: |-
   3. Add a decisive hermetic regression for the identified mechanism using existing load-aware/child-process test idioms; report before/after timings on the same shape/artifact conditions. Do not add an unexplained fragile wall-clock assertion.
   4. Demonstrate the reproduced slow case under1000ms after the fix, and collect fresh lineage-scoped telemetry for the unchanged guard; distinguish old24h samples from new-build evidence. Do not declare an old-window guard green by relabeling binaries or deleting samples.
   Independent review and normal PR gates required. Local verification: one targeted regression run plus check-ci-fast; touched/compile only shared test infra or>10files. No broad Cargo or slot bypass. Implementer first produces narrow diagnosis if the source change remains unclear.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T06:38:42.269077518Z
-modified_at: 2026-10-26T06:45:43.737979239Z
+modified_at: 2026-10-26T07:07:16.499030302Z
 req_type: Bug
 comments:
 - id: 01a17250-10a0-76e1-b802-890d5a4ca31b
@@ -297,6 +297,15 @@ comments:
   created_at: 2026-10-26T06:44:58.137517561Z
   modified_at: 2026-10-26T06:44:58.137517561Z
   session_id: 761a4fea-f388-41d1-93d9-f1386951253c
+- id: 01a17708-bd35-72f3-9f73-90f13028db0b
+  author: joe
+  content: |-
+    P2 implemented: PR #2945 (bad99b1026, Refs BUG-2221). The in-flight branch search moves unchanged into linkage_branch.rs, with a name-matched merge-base --is-ancestor fast path in front of it. A hit equals the --contains scan; a miss falls through to the scan within the same 2 s budget. Equivalence tests: branch-crossing, stacked sibling, local+remote same tip, orphan store, commit cap. NOT run locally: this seat's sandbox cannot write the cargo slot lock dir (/run/user/1000/cargo-slots-1000), so cargo queues forever, and I did not use the slot bypass. CI is the first compile.
+    P1 HELD, needs a ruling. (1) O1 is not exact. --date-order is Kahn's algorithm over the WHOLE --all graph, and grep filters its output, so a skewed non-hit child reorders unrelated hits. Counterexample: base(100)-A(1000,hit)-C(10,non-hit,tip x) and base-B(500,hit,tip y). Git outputs B,A; the O1 subset sort gives A,B. (2) A cached hit can stop being reachable when a ref is deleted (merged branches, pruned origin/*). The CLOSED set keeps no internal edges, so the warm walk cannot tell. A P1' amendment is in docs/plans/2026-10-25-bug-2221-positive-path-sketch.md: store Git's exact seed order; answer only when no old root was lost and every new commit has ct > max old-root ct, with tie checks; otherwise run the original and reseed. Risk: the ref churn here may make the warm-hit rate too low. I propose measuring that first.
+  created_at: 2026-10-26T07:07:03.861537562Z
+  modified_at: 2026-10-26T07:07:03.861537562Z
+  session_id: 01a176f53085
+  harness_version: 2.1.310 (Claude Code)
 history:
 - id: 01a173f1-1a2e-7c12-a2a1-e6bdafd814de
   author: joe
@@ -350,6 +359,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a17708-ee93-7db2-9855-6ad21fad2f2c
+  author: joe
+  timestamp: 2026-10-26T07:07:16.499051184Z
+  session_id: 01a176f53085
+  harness_version: 2.1.310 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 94124569c9b14617a4049909ddbefad5b82a846d
   branch: main
@@ -357,3 +375,9 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 94124569c9
   vendor: codex
+attention_reason:
+  category: design-fork
+  detail: 'SKETCH v2 P1 (signed with O1) is not sound as written: (1) O1, a subset date/ancestry sort of the hits, does not reproduce Git''s whole-graph --date-order under date skew (counterexample in the plan doc and the spec comment); (2) cached hits can become unreachable after a ref is deleted, and the CLOSED set keeps no edges to detect that. P2 is shipped for review as PR #2945. P1 needs a ruling on the P1'' amendment (store Git''s seed order, guard on lost roots, new ct > max old-root ct and ties, reseed on any guard failure), or on measuring the lost-root rate first.'
+  lean: Measure the guard-2 (no lost old root) pass rate on live ref churn between consecutive shows with a read-only probe, then implement P1' only if it passes for most positive keys.
+  raised_by: implementer
+  raised_at: 2026-10-26T07:07:16.499030302Z
