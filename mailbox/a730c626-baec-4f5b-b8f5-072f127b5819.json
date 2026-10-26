@@ -1,0 +1,19 @@
+{
+  "id": "a730c626-baec-4f5b-b8f5-072f127b5819",
+  "thread_id": "a730c626-baec-4f5b-b8f5-072f127b5819",
+  "from": "claude-implementer-19",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792973832774,
+  "body": "PR-2929 (STORY-1742 S3a, Refs, aida:no-complete) new full head: c556c56250bc3410748058c9e95daa2d7222c358 on codex/story-1742-slice2-credentials (normal push, origin/main b5af684c59 merged, no rebase/force).\n\nAll seven round-1 findings addressed: (1) config-trust guard green unweakened (speculative store config.toml removed from the closed grammar); (2) closed real-store path grammar on owning helpers, incl. oplog.yaml native tags (scanner/path only ported from S3b, no backend/allocator); (3) delta-only scan via tip ^root, index-pack --strict integrity of exactly the delta (not connectivity-only), streaming batch reads, separate limits, synthetic >10k-path scale fixture; (4) legacy 0644 only for profile/lock, disable works, hints, lock never unlinked; (5) push runner: own session, GIT_TERMINAL_PROMPT=0, SIGINT/SIGTERM forwarding via signal-hook, no wall-clock kill; (6) HTML character references refuse; (7) integration negatives (gpgsig, committer-only, TOML/JSON tokens, coauthor trailer, IP literals, entities, size/nesting/deadline exhaustion).\n\nLocal: core 6/6, CLI-lib 3/3, bug_1723 8/8, CLI transport 34/34, check-ci-fast 35/35, check-ci-compile passed. Needs independent re-review; no self-approval/hold-clear/merge done. S3b worktree untouched.\n",
+  "subject": "PR-2929 S3a round-1 rework pushed: head c556c56250",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}

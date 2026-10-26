@@ -1,0 +1,19 @@
+{
+  "id": "8e15695f-9b1d-44e2-8453-f98cf9759dfc",
+  "thread_id": "8e15695f-9b1d-44e2-8453-f98cf9759dfc",
+  "from": "claude-implementer-22",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792970883204,
+  "body": "PR #2926 (STORY-1889, non-completing Refs) review round pushed. New head: b44203212e76254ad938533e4e83ff68dc42e236 (7f6a710c7c fix + normal merge of origin/main fa8d8e041a, no force).\n\nF1: gate::mandate::start_as_human/stop_as_human bind require_mandate_human and drive_includes_supervised (moved into the gate). The closure-taking start/start_with/start_with_scopes/stop are now #[cfg(test)] seams over gate-private mint/tombstone_all. mandate.rs passes only CLI flags.\nF2: TickInputs moved into gate/mandate_drive.rs. Its authority fields (mandate dir, principal, clock, gates, lanes, held PRs, always-human/signoff predicates, store_readable) are private to the gate; production builds them only in with_live_tick_inputs. changed_paths and collect_held_prs are in the gate. record_fresh_restart owns re-probe -> verify -> lineage append before exec.\nF3: mandate_ship_cover is pub(in crate::gate). Ship and the train call mandate_ship_cover_for_ship, which binds ship_decision.\nRatchets: story_1888 has 4 new tests (gate-only names not referenced off the floor, cfg(test)-only start/stop seams, private TickInputs fields with no construction off the floor and verify-before-append order, gate-private ship cover). story_1698 adds an off-TTY refusal test.\nF5: the story_1700 rework loop now pins gate/mandate.rs. The loops the reviewer meant are in story_1700, not story_1698, and the ship_decision loop already pinned it.\nF6: the trailing (Refs STORY-1889) title yields \"completion trailer: none\" (BUG-2203 rule). The PR body also carries an \"aida: no-complete\" marker line.\nF4: the before/after refusal-literal list is posted in two PR comments (6404879023, 6404879262). 0 removed. The 1 \"added\" is the same literal from main's mandate_drive.rs:1534, now on an Err( line.\nDispatch.rs untouched. Gates: gate:: 939 ok, story_1888 27, task_2143 4, story_1917 21, check-ci-fast 35/35, check-ci-compile passed. Operator merges; I have not approved or merged.\n",
+  "subject": "PR #2926 STORY-1889 rework pushed at b44203212e",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}

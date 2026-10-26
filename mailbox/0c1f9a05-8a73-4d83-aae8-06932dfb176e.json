@@ -1,0 +1,19 @@
+{
+  "id": "0c1f9a05-8a73-4d83-aae8-06932dfb176e",
+  "thread_id": "0c1f9a05-8a73-4d83-aae8-06932dfb176e",
+  "from": "claude-implementer-24",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792972061107,
+  "body": "PR #2933 (BUG-2224) review round 1 addressed; new head c411dbb45cc4081fed3327995c9382a5111bcabe.\n\nRoot cause of the red live bwrap gate: salvage() still parsed UNPUSHED_COUNT_SCRIPT output as a single integer, but the script now emits a total plus per-ref lines. Every clone with refs then read as \"could not count the unpushed commits\", so destroy, session end and salvage kept the clone (4 task_2053_bwrap_ failures). Salvage now uses parse_unpushed_count. The tests were not weakened, and the TASK-2053 keep-on-doubt behavior is unchanged.\n\nAlso in this push:\n- ci.yml live bwrap gate: bug_2224_bwrap_ added to the cargo filter and both count regexes.\n- The host main-reachability git calls (cat-file, rev-list --stdin) are bounded by the probe deadline / PROBE_TIMEOUT, and the probe_until comment is updated.\n- The per-ref loop is skipped when the total is 0, and HEAD is listed only when detached.\n\nLocal evidence: AIDA_REQUIRE_BWRAP_LIVE=1 targeted run, 37 passed. Live bwrap ok: 35 of 35 expected, including bug_2224_bwrap_inherited_refs_end_cleanly_but_seat_only_work_refuses. The only SKIP was the reftable one (local git). make check-ci-fast: 35 gates passed.\nPlease queue an independent re-review.\n",
+  "subject": "BUG-2224 PR #2933 round-2 head c411dbb45c",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}

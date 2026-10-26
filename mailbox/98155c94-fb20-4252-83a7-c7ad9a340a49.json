@@ -1,0 +1,19 @@
+{
+  "id": "98155c94-fb20-4252-83a7-c7ad9a340a49",
+  "thread_id": "98155c94-fb20-4252-83a7-c7ad9a340a49",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792971759321,
+  "body": "PR #2924 (claude/story-1917-slice3) new head: d270b62fac5da27add12fe498f68f5189ec5f6e9. That is the round-2 fix c01e4d78d5 plus a normal, no-force merge of origin/main. I took this PR over from agy2.\n\nAll 4 blocking round-1 findings are addressed:\n1. The Q2 checkpoints are tested on the real native paths.\n   - The real pr ship entry refuses with the typed error before any forge call.\n   - The production LiveTrainForge ports run through the production ForgeRails::land:\n     - held member: mandate A is stopped and B started during the real hold-gate wait. Typed abort, hold re-armed on disk, zero merges.\n     - unheld member: the grant is revoked before the real merge checkpoint. Zero merges.\n     - a human gate added, or the claim changed, during the real CI wait: refused.\n   - A ratchet pins all six pr ship checkpoints, in order, around every wait.\n2. Lock activation is reachable through the new `aida dispatch activate-lock` (direct human at a TTY only). The refusals name it.\n3. The renameat2 rollback result is checked; a failure is reported and stays fenced.\n4. A missing version marker is never initialised. Fresh lock dirs are created atomically with the marker, and a marker-less dir is resumed only by activate-lock after quiescence is proven again.\n\nEvery other finding is fixed too; the PR body has the list. The two suspected items:\n- /proc uid skip: refuted. A 0555 /proc/<pid> stays owned by the task's euid even when the process is non-dumpable, which I checked with a PR_SET_DUMPABLE=0 child.\n- Fence target reservation at execution: confirmed and fixed, with a test.\n\nDesign choice for you to confirm: the new schedule key `while` gates the `every` cadence. dispatch-tick now uses every + while, so it no longer fires every 2m with no mandate. The OR semantics of every/when are unchanged.\n\nGates at d270b62fac:\n- targeted tests (story_1917_, task_1915, story_1698, resolve_aida_exe, maintenance_schedule::, story_1226_init_schedule, mandate::tests): 206 passed, 0 failed\n- make check-ci-fast: 35/35\n- make check-ci-compile: 1/1\n\nProcess: the new commit carries Refs trailers only. Earlier commits 5678ccbde7, 45d54bcdcf and e727963d1c still carry bare (completing) IDs. I did not rewrite them, because that needs a force push, so the merge must not let them auto-complete STORY-1917 or TASK-2338..2344.\n\nThe PR needs an independent reviewer; I have not approved or merged it. I could not record `aida claim STORY-1917`: the sandbox denies the primary store's write lock.\n",
+  "subject": "PR #2924 round 2 @ d270b62fac: 4 blocking + all minor findings fixed, gates green",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "implementer"
+}
