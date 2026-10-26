@@ -205,6 +205,302 @@ impl GitBackend {
         })
     }
 
+    /// Route an enabled-WORK clone to the prepared path. `None` keeps the
+    /// ordinary writer unchanged. The admission is outer to every store lock.
+    pub(super) fn work_admission(&self) -> Result<Option<Admission>> {
+        let admission = Admission::enter(&self.root)?;
+        Ok(admission.enabled().then_some(admission))
+    }
+
+    /// Batch replacement of existing rows, keyed by UUID. Creation is never
+    /// implied: a row missing from the store refuses the whole batch.
+    pub(super) fn work_bulk_update(
+        &self,
+        admission: &Admission,
+        requirements: &[Requirement],
+        commit_subject: &str,
+    ) -> Result<usize> {
+        let (_, summary) = self.work_update(admission, Some(commit_subject), |store| {
+            for requirement in requirements {
+                let row = store
+                    .requirements
+                    .iter_mut()
+                    .find(|row| row.id == requirement.id)
+                    .context("WORK bulk update target was not found; nothing was written")?;
+                *row = requirement.clone();
+            }
+            Ok(())
+        })?;
+        Ok(summary.written.len())
+    }
+
+    /// The compare-and-swap sweep: every decision is taken on the snapshot
+    /// loaded inside the store lock, then the whole batch is one prepared plan.
+    pub(super) fn work_bulk_update_atomically<F>(
+        &self,
+        admission: &Admission,
+        targets: &[Requirement],
+        commit_subject: &str,
+        mut keep: F,
+    ) -> Result<BulkAtomicReport>
+    where
+        F: FnMut(&mut Requirement) -> bool,
+    {
+        let mut report = BulkAtomicReport::default();
+        let mut accepted = Vec::new();
+        let (stored, _) = self.work_update(admission, Some(commit_subject), |store| {
+            for target in targets {
+                let Some(spec_id) = target.spec_id.as_deref() else {
+                    report.skipped_unreadable += 1;
+                    continue;
+                };
+                let spec_id = object_store::canonical_spec_id(spec_id);
+                let Some(row) = store.requirements.iter_mut().find(|row| {
+                    row.spec_id
+                        .as_deref()
+                        .is_some_and(|id| object_store::canonical_spec_id(id) == spec_id)
+                }) else {
+                    report.skipped_missing += 1;
+                    continue;
+                };
+                if row.id != target.id {
+                    report.skipped_changed += 1;
+                    continue;
+                }
+                let mut next = row.clone();
+                if !keep(&mut next) {
+                    report.skipped_changed += 1;
+                    continue;
+                }
+                anyhow::ensure!(
+                    next.id == row.id && next.spec_id == row.spec_id,
+                    "update of {spec_id} tried to change its id or spec_id; nothing was written"
+                );
+                *row = next;
+                accepted.push(row.id);
+            }
+            Ok(())
+        })?;
+        report.written = stored
+            .requirements
+            .into_iter()
+            .filter(|row| accepted.contains(&row.id))
+            .collect();
+        Ok(report)
+    }
+
+    /// Per-spec compare-and-swap. A missing object is `None`, as ordinary.
+    pub(super) fn work_update_spec<F>(
+        &self,
+        admission: &Admission,
+        target: &Requirement,
+        commit_subject: Option<&str>,
+        update_fn: F,
+    ) -> Result<Option<Requirement>>
+    where
+        F: FnOnce(&mut Requirement),
+    {
+        let spec_id = target
+            .spec_id
+            .as_deref()
+            .map(object_store::canonical_spec_id);
+        let spec_id =
+            spec_id.context("Cannot update a requirement without a spec_id in the git store")?;
+        let mut found = false;
+        let (stored, _) = self.work_update(admission, commit_subject, |store| {
+            let Some(row) = store.requirements.iter_mut().find(|row| {
+                row.spec_id
+                    .as_deref()
+                    .is_some_and(|id| object_store::canonical_spec_id(id) == spec_id)
+            }) else {
+                return Ok(());
+            };
+            found = true;
+            anyhow::ensure!(
+                row.id == target.id,
+                "{spec_id} now names a different requirement; nothing was written"
+            );
+            let mut next = row.clone();
+            update_fn(&mut next);
+            anyhow::ensure!(
+                next.id == row.id && next.spec_id == row.spec_id,
+                "update of {spec_id} tried to change its id or spec_id; nothing was written"
+            );
+            *row = next;
+            Ok(())
+        })?;
+        Ok(found
+            .then(|| {
+                stored
+                    .requirements
+                    .into_iter()
+                    .find(|row| row.id == target.id)
+            })
+            .flatten())
+    }
+
+    /// Whole-store save with the ordinary compare-and-swap rules, planned on
+    /// the snapshot loaded inside the lock and admitted as one prepared plan.
+    /// A conflict refuses before any effect, exactly like the ordinary save.
+    pub(super) fn work_full_save(
+        &self,
+        admission: &Admission,
+        incoming: &RequirementsStore,
+    ) -> Result<SaveReport> {
+        let snapshot = incoming.loaded_objects.as_ref();
+        let mut report = SaveReport {
+            kept_unloaded: Vec::new(),
+            stale_untouched: Vec::new(),
+        };
+        let mine_meta = Self::extract_metadata(incoming);
+        let mut deleted = Vec::new();
+        self.work_update(admission, None, |store| {
+            let fingerprint = |spec_id: &str| -> Result<Option<u64>> {
+                Ok(object_store::read_object_text(&self.objects_root, spec_id)?
+                    .as_deref()
+                    .map(object_store::content_fingerprint))
+            };
+            let disk: Vec<Requirement> = std::mem::take(&mut store.requirements);
+            let by_spec: HashMap<String, &Requirement> = disk
+                .iter()
+                .filter_map(|row| {
+                    row.spec_id
+                        .as_deref()
+                        .map(|id| (object_store::canonical_spec_id(id), row))
+                })
+                .collect();
+            let incoming_uuids: HashSet<_> = incoming.requirements.iter().map(|r| r.id).collect();
+            let mut current = HashSet::new();
+            let mut conflicts = Vec::new();
+            let mut rows = Vec::new();
+            for req in &incoming.requirements {
+                // Identities are allocated only by the prepared add path.
+                let spec_id =
+                    req.spec_id.as_deref().filter(|id| !id.is_empty()).context(
+                        "WORK full save cannot allocate identities; nothing was written",
+                    )?;
+                let canonical = object_store::canonical_spec_id(spec_id);
+                current.insert(canonical.clone());
+                let on_disk = by_spec.get(&canonical).copied();
+                if let Some(snapshot) = snapshot {
+                    let disk_fp = fingerprint(spec_id)?;
+                    let unchanged = match (snapshot.disk(spec_id), disk_fp) {
+                        (Some(loaded), Some(now)) => loaded == now,
+                        (None, None) => true,
+                        _ => false,
+                    };
+                    if !unchanged {
+                        let mine = object_store::content_fingerprint(&serde_yaml::to_string(req)?);
+                        if disk_fp == Some(mine) {
+                            rows.extend(on_disk.cloned());
+                        } else if snapshot.baseline(spec_id) == Some(mine) {
+                            report.stale_untouched.push(spec_id.to_owned());
+                            rows.extend(on_disk.cloned());
+                        } else {
+                            conflicts.push(spec_id.to_owned());
+                        }
+                        continue;
+                    }
+                }
+                let prior = on_disk.or_else(|| disk.iter().find(|row| row.id == req.id));
+                match prior {
+                    Some(prior) if snapshot.is_none() && prior.modified_at > req.modified_at => {
+                        conflicts.push(spec_id.to_owned());
+                    }
+                    Some(prior) => {
+                        rows.push(Self::preserve_full_save_only_fields(req.clone(), prior))
+                    }
+                    None => rows.push(req.clone()),
+                }
+            }
+            for row in &disk {
+                let Some(spec_id) = row.spec_id.as_deref() else {
+                    continue;
+                };
+                if current.contains(&object_store::canonical_spec_id(spec_id))
+                    || incoming_uuids.contains(&row.id)
+                {
+                    continue;
+                }
+                match snapshot.and_then(|s| s.disk(spec_id)) {
+                    None => {
+                        report.kept_unloaded.push(spec_id.to_owned());
+                        rows.push(row.clone());
+                    }
+                    Some(loaded) if fingerprint(spec_id)? != Some(loaded) => {
+                        conflicts.push(spec_id.to_owned());
+                    }
+                    Some(_) => deleted.push(spec_id.to_owned()),
+                }
+            }
+            let disk_meta = Self::extract_metadata(store);
+            let meta_base = snapshot.and_then(|s| s.metadata_baseline());
+            let plan = merge_metadata(
+                meta_base.as_ref(),
+                &mine_meta,
+                Some(&disk_meta),
+                incoming.id_counters_reset.is_set(),
+            )?;
+            if !conflicts.is_empty() || plan.is_err() {
+                conflicts.sort();
+                return Err(StoreConflictError {
+                    specs: conflicts,
+                    metadata_fields: plan.err().unwrap_or_default(),
+                }
+                .into());
+            }
+            if let Ok(MetadataMerge { write: Some(meta) }) = plan {
+                let dispenser = store.dispenser.take();
+                *store = self.assemble_store(meta, Vec::new());
+                store.dispenser = dispenser;
+            }
+            store.requirements = rows;
+            Ok(())
+        })?;
+        // Refresh the caller's load snapshot only after the admitted commit.
+        if let Some(snapshot) = snapshot {
+            snapshot.record_metadata(metadata_value(&mine_meta)?);
+            for spec_id in &deleted {
+                snapshot.remove(spec_id);
+            }
+            for req in &incoming.requirements {
+                let Some(spec_id) = req.spec_id.as_deref() else {
+                    continue;
+                };
+                match object_store::read_object_text(&self.objects_root, spec_id)? {
+                    Some(text) => snapshot.record(
+                        spec_id,
+                        object_store::content_fingerprint(&text),
+                        object_store::content_fingerprint(&serde_yaml::to_string(req)?),
+                    ),
+                    None => snapshot.remove(spec_id),
+                }
+            }
+        }
+        incoming.id_counters_reset.clear();
+        report.kept_unloaded.sort();
+        report.stale_untouched.sort();
+        Ok(report)
+    }
+
+    /// Additive batch: identities are allocated only inside the prepared
+    /// candidate scope at `finish`, never by a live dispenser during `add`.
+    pub(super) fn work_bulk_finish(
+        &self,
+        admission: &Admission,
+        staged: Vec<Requirement>,
+        commit_subject: &str,
+    ) -> Result<usize> {
+        let count = staged.len();
+        self.work_update(admission, Some(commit_subject), |store| {
+            for row in staged {
+                Self::work_add_to_store(store, row)?;
+            }
+            Ok(())
+        })?;
+        Ok(count)
+    }
+
     pub(super) fn work_add_to_store(
         store: &mut RequirementsStore,
         mut row: Requirement,
@@ -346,44 +642,52 @@ mod tests {
         result
     }
 
+    /// Run the calling test body in an exact-test child with an isolated HOME
+    /// and no inherited Git routing: HOME and identity mutations must not
+    /// race unlocked Git readers in the parent suite. Returns true in the
+    /// child (run the body); false in the parent once the child passed.
+    fn isolated(name: &str) -> bool {
+        if std::env::var("AIDA_WORK_NATIVE_FIXTURE").ok().as_deref() == Some(name) {
+            return true;
+        }
+        let home = tempfile::tempdir().unwrap();
+        let mut command = Command::new(std::env::current_exe().unwrap());
+        command.args(["--exact", name, "--nocapture", "--test-threads=1"]);
+        for (key, _) in std::env::vars_os() {
+            if key.to_string_lossy().starts_with("GIT_") {
+                command.env_remove(key);
+            }
+        }
+        command
+            .env("HOME", home.path())
+            .env("XDG_CONFIG_HOME", home.path())
+            .env("AIDA_WORK_NATIVE_FIXTURE", name)
+            .env("AIDA_AUTHOR", "Fixture")
+            .env_remove("AIDA_SESSION_GRANT")
+            .process_group(0);
+        let mut child = command.spawn().unwrap();
+        let deadline = Instant::now() + Duration::from_secs(90);
+        loop {
+            if let Some(status) = child.try_wait().unwrap() {
+                assert!(status.success(), "isolated WORK fixture failed");
+                return false;
+            }
+            if Instant::now() >= deadline {
+                unsafe {
+                    libc::kill(-(child.id() as i32), libc::SIGKILL);
+                }
+                let _ = child.wait();
+                panic!("native WORK boundary fixture exceeded watchdog");
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    }
+
     #[test]
     #[cfg(unix)]
     fn native_work_commits_admitted_bytes_and_never_spends_on_refusal() {
-        const NAME: &str = "db::git_backend::work_intake::tests::native_work_commits_admitted_bytes_and_never_spends_on_refusal";
-        if std::env::var("AIDA_WORK_NATIVE_FIXTURE").ok().as_deref() != Some(NAME) {
-            // HOME and identity mutations must not race unlocked Git readers
-            // in the parent suite. Exact-test child plus watchdog, no PATH swap.
-            let home = tempfile::tempdir().unwrap();
-            let mut command = Command::new(std::env::current_exe().unwrap());
-            command.args(["--exact", NAME, "--nocapture", "--test-threads=1"]);
-            for (key, _) in std::env::vars_os() {
-                if key.to_string_lossy().starts_with("GIT_") {
-                    command.env_remove(key);
-                }
-            }
-            command
-                .env("HOME", home.path())
-                .env("XDG_CONFIG_HOME", home.path())
-                .env("AIDA_WORK_NATIVE_FIXTURE", NAME)
-                .env("AIDA_AUTHOR", "Fixture")
-                .env_remove("AIDA_SESSION_GRANT")
-                .process_group(0);
-            let mut child = command.spawn().unwrap();
-            let deadline = Instant::now() + Duration::from_secs(45);
-            loop {
-                if let Some(status) = child.try_wait().unwrap() {
-                    assert!(status.success());
-                    return;
-                }
-                if Instant::now() >= deadline {
-                    unsafe {
-                        libc::kill(-(child.id() as i32), libc::SIGKILL);
-                    }
-                    let _ = child.wait();
-                    panic!("native WORK boundary fixture exceeded watchdog");
-                }
-                std::thread::sleep(Duration::from_millis(10));
-            }
+        if !isolated("db::git_backend::work_intake::tests::native_work_commits_admitted_bytes_and_never_spends_on_refusal") {
+            return;
         }
         let (_temp, root, backend) = fixture();
         let baseline = snapshot(&root);
@@ -435,5 +739,188 @@ mod tests {
             .join(crate::allocation_authority::CONFIG_FILE)
             .exists());
         assert!(!root.join("registry/nodes.toml").exists());
+    }
+
+    fn row(title: &str) -> Requirement {
+        Requirement::new(title.into(), "Synthetic reproduction".into())
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn story_1742_native_bulk_paths_admit_or_refuse_whole_batches() {
+        // trace:STORY-1742 | ai:claude
+        if !isolated("db::git_backend::work_intake::tests::story_1742_native_bulk_paths_admit_or_refuse_whole_batches") {
+            return;
+        }
+        let (_temp, root, backend) = fixture();
+        let a = backend.add_requirement(row("Generic failure")).unwrap();
+        let b = backend
+            .add_requirement(row("Second generic failure"))
+            .unwrap();
+        let node = crate::work_binding::load(&root).unwrap().unwrap().node_id;
+        assert!(b.spec_id.as_deref().unwrap().contains(&node));
+
+        // Bulk replacement: one unsafe row refuses the whole batch.
+        let accepted = snapshot(&root);
+        let (mut a2, mut b2) = (a.clone(), b.clone());
+        a2.title = "Generic failure, clarified".into();
+        b2.description = "private-marker".into();
+        assert!(backend
+            .bulk_update(&[a2.clone(), b2.clone()], "chore")
+            .is_err());
+        assert_eq!(snapshot(&root), accepted);
+        b2.description = "Generic clarified reproduction".into();
+        assert_eq!(
+            backend
+                .bulk_update(&[a2.clone(), b2.clone()], "chore")
+                .unwrap(),
+            2
+        );
+        let mut missing = row("Never filed");
+        missing.spec_id = Some(format!("BUG-{node}-900"));
+        let accepted = snapshot(&root);
+        assert!(backend.bulk_update(&[missing], "chore").is_err());
+        assert_eq!(snapshot(&root), accepted);
+
+        // Compare-and-swap sweep decides on the locked snapshot.
+        let report = backend
+            .bulk_update_atomically(&[a.clone(), b.clone()], "chore", |r| {
+                if r.id == a.id {
+                    r.description = "Generic swept reproduction".into();
+                    true
+                } else {
+                    false
+                }
+            })
+            .unwrap();
+        assert_eq!(report.written.len(), 1);
+        assert_eq!(report.skipped_changed, 1);
+        let accepted = snapshot(&root);
+        assert!(backend
+            .bulk_update_atomically(&[a.clone()], "chore", |r| {
+                r.description = "private-marker".into();
+                true
+            })
+            .is_err());
+        assert_eq!(snapshot(&root), accepted);
+
+        // Per-spec compare-and-swap.
+        assert!(backend
+            .update_spec_atomically(&a, |r| r.description = "private-marker".into())
+            .is_err());
+        assert_eq!(snapshot(&root), accepted);
+        let updated = backend
+            .update_spec_atomically(&a, |r| r.description = "Generic final reproduction".into())
+            .unwrap()
+            .unwrap();
+        assert_eq!(updated.description, "Generic final reproduction");
+        assert!(updated.filed_at.is_none());
+
+        // Additive batch: identities only inside the prepared scope.
+        let accepted = snapshot(&root);
+        let mut writer = backend.bulk_writer().unwrap();
+        writer.add(row("Batch generic failure")).unwrap();
+        writer.add(row("private-marker")).unwrap();
+        assert!(writer.finish("chore").is_err());
+        assert_eq!(snapshot(&root), accepted);
+        let mut writer = backend.bulk_writer().unwrap();
+        assert!(writer
+            .add(row("Batch generic failure"))
+            .unwrap()
+            .spec_id
+            .is_none());
+        writer.add(row("Another batch failure")).unwrap();
+        assert_eq!(writer.finish("chore").unwrap(), 2);
+        let store = backend.load().unwrap();
+        assert_eq!(store.requirements.len(), 4);
+        assert!(store
+            .requirements
+            .iter()
+            .all(|r| r.spec_id.as_deref().unwrap().contains(&node)));
+
+        // Writers without a prepared plan refuse before any effect.
+        let accepted = snapshot(&root);
+        assert!(backend.save_imported(&store).is_err());
+        let entry = QueueEntry {
+            user_id: "generic".into(),
+            requirement_id: a.id,
+            position: 0,
+            added_by: "generic".into(),
+            note: None,
+            added_at: chrono::Utc::now(),
+            for_role: None,
+            for_scope: None,
+            for_session: None,
+            added_by_machine: None,
+        };
+        assert!(backend.queue_add(entry).is_err());
+        assert_eq!(snapshot(&root), accepted);
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn story_1742_native_full_save_keeps_conflict_rules_and_policy() {
+        // trace:STORY-1742 | ai:claude
+        if !isolated("db::git_backend::work_intake::tests::story_1742_native_full_save_keeps_conflict_rules_and_policy") {
+            return;
+        }
+        let (_temp, root, backend) = fixture();
+        let a = backend.add_requirement(row("Generic failure")).unwrap();
+        let b = backend
+            .add_requirement(row("Second generic failure"))
+            .unwrap();
+
+        let mut store = backend.load().unwrap();
+        store.requirements[0].title = "Generic failure, clarified".into();
+        backend.save(&store).unwrap();
+        // The refreshed snapshot lets the same store save again.
+        store.requirements[0].description = "Generic clarified reproduction".into();
+        backend.save(&store).unwrap();
+        let persisted = backend
+            .get_requirement(&store.requirements[0].id)
+            .unwrap()
+            .unwrap();
+        assert_eq!(persisted.description, "Generic clarified reproduction");
+
+        let accepted = snapshot(&root);
+        let mut unsafe_store = backend.load().unwrap();
+        unsafe_store.requirements[1].description = "private-marker".into();
+        assert!(backend.save(&unsafe_store).is_err());
+        assert_eq!(snapshot(&root), accepted);
+
+        // A concurrent edit wins; the stale editor gets a conflict.
+        let mut first = backend.load().unwrap();
+        let mut second = backend.load().unwrap();
+        first.requirements[1].title = "First editor title".into();
+        backend.save(&first).unwrap();
+        let accepted = snapshot(&root);
+        second.requirements[1].title = "Second editor title".into();
+        let error = backend.save(&second).unwrap_err();
+        assert!(error.downcast_ref::<crate::StoreConflictError>().is_some());
+        assert_eq!(snapshot(&root), accepted);
+
+        // Identities and global counters are never minted by a full save.
+        let mut fresh = backend.load().unwrap();
+        fresh.requirements.push(row("Unallocated generic failure"));
+        assert!(backend.save(&fresh).is_err());
+        let mut fresh = backend.load().unwrap();
+        fresh.next_spec_number += 1;
+        assert!(backend.save(&fresh).is_err());
+        assert_eq!(snapshot(&root), accepted);
+
+        // Store-level metadata and deletions are admitted as one plan.
+        let mut fresh = backend.load().unwrap();
+        fresh.title = "Generic project".into();
+        fresh.requirements.retain(|r| r.id != a.id);
+        backend.save(&fresh).unwrap();
+        let stored = backend.load().unwrap();
+        assert_eq!(stored.title, "Generic project");
+        assert_eq!(stored.requirements.len(), 1);
+        assert_eq!(stored.requirements[0].id, b.id);
+        let mut fresh = backend.load().unwrap();
+        fresh.title = "private-marker".into();
+        let accepted = snapshot(&root);
+        assert!(backend.save(&fresh).is_err());
+        assert_eq!(snapshot(&root), accepted);
     }
 }

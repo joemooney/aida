@@ -212,12 +212,17 @@ pub(super) fn push(root: &Path, profile: &Profile, expected: Option<&str>) -> Re
         &endpoint,
         Some(&endpoint),
     );
-    let (status, stdout) = scan::bounded(push, 65536, std::time::Instant::now()+std::time::Duration::from_secs(60)).map_err(|_| {
+    // Own runner (trace:STORY-1742 | ai:claude): no terminal prompts, Ctrl+C
+    // forwarded to git, and no wall-clock kill of a long first transfer.
+    let (status, stdout, interrupted) = scan::publish(push, 65536).map_err(|_| {
         anyhow::anyhow!("Store push execution or settlement is uncertain; receipt unchanged. Inspect origin before retrying.")
     })?;
+    if interrupted {
+        bail!("Store push was interrupted; remote acceptance is uncertain and the receipt is unchanged. Inspect origin before retrying.");
+    }
     if !status.success() {
         // Hook and remote diagnostics can contain emails, URLs or hostnames.
-        bail!("Store push failed or was refused by a hook/remote; no retry was attempted. Remote acceptance may be uncertain; inspect origin and store policy before retrying.");
+        bail!("Store push failed or was refused by a hook/remote; no retry was attempted. Remote acceptance may be uncertain; inspect origin and store policy before retrying. Terminal prompts are disabled: configure a credential helper or SSH agent (and known host key) for origin.");
     }
     // An exit status alone does not attest which ref was accepted. Require
     // exactly the inspected SHA/ref's successful porcelain status row.

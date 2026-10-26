@@ -22,11 +22,13 @@ fn run(
 ) -> Result<(std::process::ExitStatus, Vec<u8>)> {
     let mut cmd = host_git_command(root);
     cmd.args(redact).args(args);
-    let (status, bytes) =
-        crate::transport_policy::bounded(cmd, 1_048_576, Instant::now() + Duration::from_secs(10))
-            .map_err(|_| {
-                anyhow::anyhow!("WORK Git preparation unavailable or exceeded its bound")
-            })?;
+    let (status, bytes) = crate::transport_policy::bounded(
+        cmd,
+        &[],
+        1_048_576,
+        Instant::now() + Duration::from_secs(10),
+    )
+    .map_err(|_| anyhow::anyhow!("WORK Git preparation unavailable or exceeded its bound"))?;
     Ok((status, bytes))
 }
 
@@ -266,6 +268,7 @@ impl PreparedCommit {
         }
         let (status, _) = crate::transport_policy::bounded(
             command,
+            &[],
             65536,
             Instant::now() + Duration::from_secs(30),
         )

@@ -123,7 +123,21 @@ impl ServerState {
                 }
                 Err(StoreSaveError::Conflict(e.to_string()))
             }
-            Err(e) => Err(StoreSaveError::Failed(format!("Failed to save: {e}"))),
+            Err(e) => {
+                // An enabled-WORK refusal persisted nothing: never keep the
+                // refused rows as authoritative server state.
+                // trace:STORY-1742 | ai:claude
+                #[cfg(unix)]
+                if aida_core::transport_policy::enrolled(self.backend.path()).unwrap_or(true) {
+                    match self.backend.load() {
+                        Ok(fresh) => *store = fresh,
+                        Err(reload_err) => {
+                            tracing::warn!("Reload after refused save failed: {}", reload_err)
+                        }
+                    }
+                }
+                Err(StoreSaveError::Failed(format!("Failed to save: {e}")))
+            }
         }
     }
 

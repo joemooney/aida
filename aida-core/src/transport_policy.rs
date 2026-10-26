@@ -16,7 +16,7 @@ pub use private::Private;
 
 #[path = "transport_process.rs"]
 mod process;
-pub use process::bounded;
+pub use process::{bounded, drain, Group};
 
 #[path = "transport_prepared.rs"]
 mod prepared;
@@ -241,13 +241,49 @@ pub(crate) fn owning_common(root: &Path) -> Result<Option<PathBuf>> {
     Ok(None)
 }
 
+/// Whether the actual owning project has an enabled WORK enrollment. Callers
+/// holding authoritative in-memory state use it to discard refused mutations.
+// trace:STORY-1742 | ai:claude
+pub fn enrolled(root: &Path) -> Result<bool> {
+    match owning_common(root)? {
+        Some(common) => Ok(Profile::load(&common)?.is_some()),
+        None => Ok(false),
+    }
+}
+
+/// A read-only operator preview verdict. Not a permission token.
+#[derive(Debug, PartialEq, Eq)]
+pub enum PreviewVerdict {
+    NotEnrolled,
+    Clean,
+    /// The refusal category only; never the matched value.
+    Refused(String),
+}
+
+/// Check candidate text against the reviewed policy without a lock, an
+/// allocation or any write. The prepared write path rechecks everything.
+// trace:STORY-1742 | ai:claude
+pub fn preview(root: &Path, values: &[&str]) -> Result<PreviewVerdict> {
+    let Some(common) = owning_common(root)? else {
+        return Ok(PreviewVerdict::NotEnrolled);
+    };
+    if Profile::load(&common)?.is_none() {
+        return Ok(PreviewVerdict::NotEnrolled);
+    }
+    let snapshot = Snapshot::load(&Private::open(&common)?)?;
+    for value in values {
+        if let Err(category) = snapshot.policy.text(value) {
+            return Ok(PreviewVerdict::Refused(category.to_string()));
+        }
+    }
+    Ok(PreviewVerdict::Clean)
+}
+
 /// An unsupported mutation must stop before initialization, migration,
 /// allocator opening, in-memory server success or a canonical write.
 pub fn refuse_unsupported(root: &Path) -> Result<()> {
-    if let Some(common) = owning_common(root)? {
-        if Profile::load(&common)?.is_some() {
-            bail!("This enabled-WORK mutation adapter has no complete prepared admission; refused before persistence");
-        }
+    if enrolled(root)? {
+        bail!("This enabled-WORK mutation adapter has no complete prepared admission; refused before persistence");
     }
     Ok(())
 }
@@ -333,6 +369,67 @@ mod tests {
             .unwrap();
         assert!(admission.revalidate().is_err());
         assert!(Admission::enter(root.path()).is_err());
+    }
+
+    #[test]
+    fn story_1742_unwired_writers_refuse_before_any_effect_in_enabled_work() {
+        // trace:STORY-1742 | ai:claude
+        let root = enrolled();
+        let path = root.path();
+        let objects = path.join("objects");
+        let mut row = crate::Requirement::new("Generic".into(), "Generic".into());
+        row.spec_id = Some("BUG-001".into());
+        assert!(crate::object_store::write_object(&objects, &row).is_err());
+        assert!(crate::object_store::write_object_if_changed(&objects, &row).is_err());
+        assert!(crate::object_store::delete_object(&objects, "BUG-001").is_err());
+        assert!(crate::work_binding::bootstrap(path).is_err());
+        assert!(crate::allocation_authority::admit_registry_write(
+            &path.join("registry/nodes.toml")
+        )
+        .is_err());
+        let mode = crate::dispenser::IdMode::Distributed {
+            node_id: "a".repeat(32),
+        };
+        assert!(crate::allocation_authority::admit_file_dispenser(
+            &path.join(".aida/dispenser.toml"),
+            &mode
+        )
+        .is_err());
+        let live = crate::allocation_authority::dispenser(path, None)
+            .expect("a non-authoritative clone attaches its guarded dispenser");
+        assert!(live.next_id("BUG").is_err());
+        let legacy = crate::Storage::new(path.join("requirements.yaml"));
+        assert!(legacy.load().is_err());
+        assert!(legacy.save(&crate::RequirementsStore::new()).is_err());
+        assert!(crate::GitBackend::new(&path.join("store")).is_err());
+        assert!(!preview(path, &["Generic failure"])
+            .unwrap()
+            .eq(&PreviewVerdict::NotEnrolled));
+        assert_eq!(
+            preview(path, &["Generic", "private-marker"]).unwrap(),
+            PreviewVerdict::Refused("reviewed deny token".into())
+        );
+        let common = crate::allocation_authority::common_dir(path).unwrap();
+        for absent in [
+            objects,
+            path.join("registry"),
+            path.join(".aida"),
+            path.join("requirements.yaml"),
+            path.join("store"),
+            common.join(crate::work_binding::COUNTER_FILE),
+            common.join(crate::work_binding::BINDING_FILE),
+        ] {
+            assert!(!absent.exists(), "{}", absent.display());
+        }
+        // An ordinary clone keeps every one of these writers.
+        let ordinary = tempfile::tempdir().unwrap();
+        crate::git_ops::init(ordinary.path()).unwrap();
+        assert!(!super::enrolled(ordinary.path()).unwrap());
+        refuse_unsupported(ordinary.path()).unwrap();
+        assert_eq!(
+            preview(ordinary.path(), &["anything"]).unwrap(),
+            PreviewVerdict::NotEnrolled
+        );
     }
 
     #[test]

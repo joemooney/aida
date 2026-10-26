@@ -1,5 +1,6 @@
 //! Clone-local transport policy, read-only plans, and ref-only store pushes.
-//! Pull execution and intake sanitization remain separate work.
+//! Pull execution remains separate work. Store writes are prepared and
+//! checked in aida-core before persistence.
 // trace:STORY-1742 | ai:codex
 
 use anyhow::{bail, Context, Result};
@@ -29,7 +30,8 @@ const BYPASS_LIMIT: &str =
     "The profile governs aida push/pull only; raw Git bypasses it. No server-side enforcement.";
 const PENDING: &str =
     "Transport pull execution is not available in this slice; use --dry-run to inspect the plan.";
-const SANITIZATION_PENDING: &str = "Intake sanitization is not available in this slice. Outbound scanning requires an explicitly reviewed private policy and trust root; unsafe history refuses.";
+// trace:STORY-1742 | ai:claude
+const SANITIZATION_LIMIT: &str = "Store writes are checked against the reviewed private policy before anything is persisted; use `aida add --sanitized` for generic intake. Outbound scanning requires an explicitly reviewed private policy and trust root; unsafe history refuses.";
 const FORBIDDEN: &str = "Flag forbidden by the work transport profile: code push/pull, commit messages, and automatic rebases are disabled. Inspect `aida config transport show`.";
 
 #[derive(Subcommand, Debug)]
@@ -299,6 +301,9 @@ struct ProfileStatus<'a> {
 }
 
 fn show(root: &Path, profile: Option<&Profile>, json: bool) -> Result<()> {
+    let scan_policy_ready = common_dir(root)?
+        .and_then(|dir| private::Private::open(&dir).ok())
+        .is_some_and(|dir| scan::Scan::load(&dir).is_ok());
     let status = ProfileStatus {
         enabled: profile.is_some(),
         profile,
@@ -322,14 +327,13 @@ fn show(root: &Path, profile: Option<&Profile>, json: bool) -> Result<()> {
             "host-bearing URL",
             "reviewed deny token",
         ],
-        scan_policy_ready: common_dir(root)?
-            .and_then(|dir| private::Private::open(&dir).ok())
-            .is_some_and(|dir| scan::Scan::load(&dir).is_ok()),
-        sanitized_intake_available: false,
+        scan_policy_ready,
+        // trace:STORY-1742 | ai:claude
+        sanitized_intake_available: profile.is_some() && scan_policy_ready,
         origin_matches: profile
             .map(|p| origin_fingerprint(root).map(|hash| hash == p.origin_sha256))
             .transpose()?,
-        limitations: vec![PENDING, SANITIZATION_PENDING, BYPASS_LIMIT],
+        limitations: vec![PENDING, SANITIZATION_LIMIT, BYPASS_LIMIT],
     };
     if json {
         println!("{}", serde_json::to_string_pretty(&status)?);
@@ -375,6 +379,22 @@ fn configure_in(root: &Path, command: &TransportCommand) -> Result<()> {
     if let TransportCommand::Show { json } = command {
         return show(root, load(&common)?.as_ref(), *json);
     }
+    // Disable must clear any safely stored profile, including a corrupt or
+    // legacy one, without parsing it (TASK-2336). Unsafe storage refuses
+    // with a recovery hint rather than following or deleting it.
+    // trace:STORY-1742 | ai:claude
+    if let TransportCommand::Disable { json } = command {
+        if let Err(error) = fs::symlink_metadata(common.join(PROFILE_FILE)) {
+            if error.kind() == std::io::ErrorKind::NotFound {
+                return show(root, None, *json);
+            }
+        }
+        let _lock = configuration_lock(&common)?;
+        let private = private::Private::open(&common)?;
+        private.remove("aida-transport-receipt.json")?;
+        private.remove(PROFILE_FILE)?;
+        return show(root, None, *json);
+    }
     let _lock = configuration_lock(&common)?;
     let previous = load(&common)?;
     match command {
@@ -408,15 +428,7 @@ fn configure_in(root: &Path, command: &TransportCommand) -> Result<()> {
                 .write(PROFILE_FILE, &serde_json::to_vec_pretty(&profile)?)?;
             show(root, Some(&profile), *json)
         }
-        TransportCommand::Disable { json } => {
-            if previous.is_some() {
-                let private = private::Private::open(&common)?;
-                private.remove("aida-transport-receipt.json")?;
-                private.remove(PROFILE_FILE)?;
-            }
-            show(root, None, *json)
-        }
-        TransportCommand::Show { .. } => unreachable!(),
+        TransportCommand::Show { .. } | TransportCommand::Disable { .. } => unreachable!(),
         TransportCommand::Policy { file, reviewed } => {
             if !reviewed || previous.is_none() {
                 bail!("Enable the WORK profile and explicitly review the policy first");
@@ -501,7 +513,7 @@ fn plan(
         execution_available: push,
         executed: false,
         blockers,
-        limitations: vec![BYPASS_LIMIT, SANITIZATION_PENDING, "Plans inspect local metadata only; no network, scanning, cleanliness, or fast-forward validation is performed."],
+        limitations: vec![BYPASS_LIMIT, SANITIZATION_LIMIT, "Plans inspect local metadata only; no network, scanning, cleanliness, or fast-forward validation is performed."],
     })
 }
 

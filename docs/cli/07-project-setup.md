@@ -128,9 +128,10 @@ The profile baseline and local remote-tracking refs are not advanced by this
 slice. Local hook-profile installation/verification is the existing store Git
 policy; it does not change the canonical store.
 
-**Sanitization is still pending.** This slice does not establish a safe WORK
-export path. Only manually sanitized generic AIDA defects may be exported;
-refusal scanning and sanitized intake are the next slice. Plans do not validate
+**Sanitization is refusal-only.** A reviewed policy (below) gates every push
+and every store write; see [sanitized intake](#sanitized-intake-aida-add---sanitized).
+It can only refuse known shapes and listed tokens, so keep work-filed defects
+generic. Plans do not validate
 cleanliness, hook compatibility, fast-forward eligibility, or content safety. The profile governs only
 `aida push/pull`; raw Git and other sync entry points bypass it. There is no
 server-side enforcement. Keep work-filed defects generic and sanitized before
@@ -422,36 +423,57 @@ aida push --store-only
 
 Private profile, policy, receipt and lock files in the common Git directory
 require mode `0600`, current ownership and one link. Symlinks, FIFOs and unsafe
-permissions refuse. Older profiles/lock files with wider permissions require
-operator inspection and correction before use; never delete the permanent lock
-sidecar. Policy changes require the same review and enrollment command. Disable
+permissions refuse, and the error says how to recover (`chmod 600` a file you
+own, or move it aside). The one exception is the profile and lock created by
+older releases with mode `0644`: they remain usable when you own them, they have
+one link and nothing other than you can write to them. Show never changes them, the lock is
+tightened to `0600` in place the next time it is taken, and disable removes the
+profile. The policy and receipt never get this exception. Never delete the
+permanent lock sidecar. Policy changes require the same review and enrollment command. Disable
 removes the profile and successful-push receipt; it retains the private deny
 policy. Re-enabling requires an explicit reviewed baseline for export.
 
 The scanner inspects every new commit through every parent, including deleted
 historical content, commit names/identities/messages, tree paths and new blobs.
-It checks raw and decoded YAML, JSON, JSONL and TOML keys/scalars, and plain
-Markdown/text. Fixed root storage filenames, canonical UUID object filenames and exact
-sharded object paths have structural recognition. Sharded paths must match the
-store path builder exactly, and the entire ID (including node aliases) is still
-scanned. Arbitrary filenames have no suffix exemption. Emails (including redaction placeholders), IP addresses,
+It checks raw and decoded YAML, JSON, JSONL and TOML keys/scalars, the native
+`oplog.yaml` operation tags, and plain Markdown/text. Tree paths follow a closed
+grammar of the real store layout: fixed root and registry files, sharded
+`objects/<TYPE>/<shard>/<ID>.yaml` and `timings/<TYPE>/<shard>/<ID>.json` paths
+that must match the store path builders exactly, canonical UUID object and
+mailbox files, review-watch mailbox digests, and named files under
+`coordination/leases`, `registry/queues` (decoded from the queue filename
+escapes), `schedule`, `.aida/agents` and `.aida/burndown`. Only the structural
+extension is removed; every user-controlled component (IDs, names, type
+directories) is still scanned. Any other path is unsupported and refuses. Emails (including redaction placeholders), IP addresses,
 FQDNs, host-bearing URLs, explicit hostname fields and deny tokens refuse.
 The enrolled non-email Git identity must also pass the owning project's existing
 identity allowlist and mandatory verified store hook; enrollment does not
 change that allowlist or configure Git identities.
 
 This version conservatively refuses non-ASCII text, YAML aliases/tags,
-percent-encoded payloads, declared opaque encoding/compression/signature data,
+percent-encoded payloads, HTML character references (any `&#…` or `&name`
+shape, with or without the semicolon), declared opaque encoding/compression/signature data,
 data URIs, unsupported/binary containers, signature/extension
 commit headers, ambiguous escapes and incomplete/alternate/replaced graphs.
-Documents/objects are capped at 1 MiB, nesting at 64, graph/tree inventories at
-10,000 entries, graph inspection at 60 seconds and each Git reader at 10 seconds.
-Limit exhaustion refuses without publication. These conservative restrictions
+The trusted baseline closure is never enumerated: Git's own `tip ^baseline`
+exclusion identifies the new delta. Every object in that delta is packed
+privately and rehashed by `git index-pack --strict`, which applies fsck's strict
+object and link checks to exactly the objects being published; unrelated
+history in the shared object database is not re-verified. Separate limits apply:
+1 MiB per document or object, nesting 64, 100,000 new commits, 2,000,000 new
+objects, 2 GiB of new uncompressed data, 100,000 entries per tree, 2,000,000
+distinct directory walks, and 30 minutes for the whole scan. Limit or deadline
+exhaustion refuses without publication. These conservative restrictions
 can reject harmless content; they do not prove arbitrary prose free of private
 facts. Operator review remains necessary.
 
 After scanning, exactly the inspected SHA is pushed once, with no force or
 tracking-ref update. The writer lock is released before hooks/network I/O.
+The push has no time limit and runs without a controlling terminal, with Git
+terminal prompts disabled. Credentials must come from a credential helper, the
+enrolled endpoint or an SSH agent with a known host key, so a prompt fails
+immediately instead of hanging. Ctrl+C is forwarded to Git and reported as an
+uncertain result.
 A private receipt binds successful porcelain acceptance to the endpoint,
 store ref, tip, original baseline, policy hash and scanner version. Policy
 changes rescan from the original root; receipts never cache scan results or
@@ -459,8 +481,50 @@ turn tracking refs into trusted evidence. An uncertain push leaves the receipt
 unchanged. If publication succeeds but receipt persistence or policy
 revalidation fails, the command reports that partial result and does not retry.
 
-**Remaining acceptance:** canonical intake enforcement and actual recoverable
-FF pull are not available in this slice. The client guard does not enforce hub
-receiving hooks or PUBLIC forwarding, and raw Git/foreign writers can bypass it.
-No history rewrite, clean export, live hub hook or automatic forwarding is
-provided.
+### Sanitized intake (`aida add --sanitized`)
+
+<!-- trace:STORY-1742 | ai:claude -->
+
+With a reviewed policy enabled, every requirement-store write from this clone is
+checked before anything is persisted. The complete write is prepared first:
+object, metadata and `oplog.yaml` bytes, deletions, the clone-local counter and
+binding update, and the commit message and effective Git author and committer.
+All of it must pass the same scanner as a push, and the effective Git identity
+must equal the policy's `git_name`/`git_identity`. The plan is checked again
+immediately before the first file changes and is applied once. A refusal leaves
+the store, counters, history and refs exactly as they were, and never echoes the
+refused text. The private policy is read before the store write lock is taken.
+
+```bash
+aida add --sanitized --template > defect.md      # generic problem/reproduction/expected/actual scaffold
+aida add --sanitized --preview "Generic failure" --description-from-file defect.md
+aida add --sanitized "Generic failure" --description-from-file defect.md
+```
+
+`--sanitized` files one draft (a bug unless `--type` says otherwise) with only a
+title, description, type and priority. It never adds an owner, tags, feature,
+parent or session context, and refuses flags that would. `--template` and
+`--preview` work in any clone and write nothing: preview reports this clone's
+policy verdict and, when the text passes, shows the candidate. Preview is for
+your review only; it reserves no identifier and is not a permission token. A
+`--sanitized` write requires an enabled profile.
+
+New requirements omit the optional machine and session filing context and say so
+in a `filing_provenance_omission_reason` custom field. Existing filing context
+is never changed. Identifiers come from this clone's own counter, allocated only
+inside the prepared write; a refused write consumes no number. Global metadata
+counters cannot change.
+
+Supported prepared writes: adding, updating and deleting requirements, whole-store
+saves (including their concurrent-edit conflict rules), bulk updates, per-spec
+compare-and-swap updates and additive batches, through the CLI, MCP and the
+server. Writers without a prepared form refuse before any change while a profile
+is enabled: imports, queue edits, direct object, registry and dispenser writes,
+legacy single-file storage and store initialization. A server discards the
+refused change from its in-memory state instead of reporting success.
+
+**Remaining acceptance:** actual recoverable FF pull is not available in this
+slice. The client guard does not enforce hub receiving hooks or PUBLIC
+forwarding, and raw Git, other AIDA writers that do not go through the store
+backend, and foreign writers can bypass it. No history rewrite, clean export,
+live hub hook or automatic forwarding is provided.

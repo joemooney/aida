@@ -648,6 +648,19 @@ Options:
           (comma-separated, e.g. `--gates well-formed`). Advisory: findings are printed, the spec is
           filed regardless. Without this flag `aida add` is unchanged. See `aida gate list`
 
+      --sanitized
+          Sanitized intake for a clone with an enabled WORK transport profile: files one generic
+          draft (bug by default) with no owner, tags or session context. The complete write is
+          checked against the clone's reviewed policy before anything is persisted
+
+      --preview
+          With --sanitized: show the candidate and the policy result without writing, assigning an
+          identifier or committing
+
+      --template
+          With --sanitized: print the generic problem/reproduction/expected/ actual description
+          template and exit
+
   -h, --help
           Print help (see a summary with '-h')
 ===== aida fasttrack
@@ -25295,6 +25308,11 @@ Working on aida itself
         "help": "Custom ID prefix override (uppercase letters only, e.g., SEC, PERF)"
       },
       {
+        "name": "preview",
+        "takes_value": false,
+        "help": "With --sanitized: show the candidate and the policy result without writing, assigning an identifier or committing"
+      },
+      {
         "name": "priority",
         "takes_value": true,
         "help": "Priority of the requirement (high, medium, low)"
@@ -25305,6 +25323,11 @@ Working on aida itself
         "help": "File, approve, AND enqueue in one shot — places the new spec on the queue right after creating it, equivalent to a follow-up `aida backlog groom`. Only an Approved spec is enqueueable: pass with `--status approved` (the new spec must end up Approved, not draft). Refused the same way `aida queue add` is when the session lacks authority to commit work to the pipeline"
       },
       {
+        "name": "sanitized",
+        "takes_value": false,
+        "help": "Sanitized intake for a clone with an enabled WORK transport profile: files one generic draft (bug by default) with no owner, tags or session context. The complete write is checked against the clone's reviewed policy before anything is persisted"
+      },
+      {
         "name": "status",
         "takes_value": true,
         "help": "Status of the requirement (draft, approved, planned, in-progress, done, completed, rejected)"
@@ -25313,6 +25336,11 @@ Working on aida itself
         "name": "tags",
         "takes_value": true,
         "help": "Tags for the requirement (comma-separated). A tag may not contain whitespace: `--tags \"a b\"` is refused, `--tags a,b` is two tags"
+      },
+      {
+        "name": "template",
+        "takes_value": false,
+        "help": "With --sanitized: print the generic problem/reproduction/expected/ actual description template and exit"
       },
       {
         "name": "title",

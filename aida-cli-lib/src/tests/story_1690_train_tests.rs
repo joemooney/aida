@@ -1973,6 +1973,99 @@ fn bug_2220_members_lines_parse_into_the_gate_and_malformed_names_nobody() {
     assert!(train_rider_refusal(12, &malformed, &[]).is_none());
 }
 
+/// TASK-1865 fixture: a private live train lease on PR #2891 that is not an
+/// open `train/*` PR, and a fake `gh` whose `pr list` returns no open train
+/// and whose `pr view 2891` runs `view_script`. Returns what the real
+/// `live_trains` lookup made of it.
+// trace:TASK-1865 | ai:claude
+#[cfg(unix)]
+#[allow(clippy::type_complexity)]
+fn task_1865_leased_lookup(
+    view_script: &str,
+) -> (
+    Vec<(u64, Option<Vec<(u64, String)>>)>,
+    Vec<(u64, Option<Vec<(u64, String)>>)>,
+) {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("main");
+    write_retry_config(&root);
+    let bin = tmp.path().join("bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    crate::test_exec::write_executable(
+        &bin.join("gh"),
+        format!(
+            "#!/bin/sh\n\
+             if [ \"$1\" = pr ] && [ \"$2\" = list ]; then echo '[]'; exit 0; fi\n\
+             if [ \"$1\" = pr ] && [ \"$2\" = view ] && [ \"$3\" = 2891 ]; then\n{view_script}\nfi\n\
+             echo unexpected gh args: \"$@\" >&2\n\
+             exit 1\n"
+        ),
+    );
+    let path = format!(
+        "{}:{}",
+        bin.display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("PATH", Some(path.as_str()))]);
+    let _lease = crate::merge_lock::acquire(
+        &root,
+        "main",
+        Some(2891),
+        TRAIN_LEASE_NOTE,
+        std::time::Duration::ZERO,
+    )
+    .unwrap();
+    live_trains(&root).unwrap()
+}
+
+/// An unreadable leased train body still names nobody (the rider gate fails
+/// open, as before), but the failed probe is said on stderr naming the train.
+// trace:TASK-1865 | ai:claude
+#[cfg(unix)]
+#[test]
+fn task_1865_an_unreadable_leased_train_warns_and_still_fails_open() {
+    if let Some(out) = crate::test_env::run_path_isolated_test_output() {
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(
+            stderr.contains("warning: could not read leased train PR #2891's members"),
+            "{stderr}"
+        );
+        assert!(
+            stderr.contains("gh pr view 2891") && stderr.contains("could not resolve PR 2891"),
+            "the warning must name the failed probe: {stderr}"
+        );
+        return;
+    }
+    let (open, leased) =
+        task_1865_leased_lookup("  echo 'GraphQL: could not resolve PR 2891' >&2; exit 1");
+    assert!(open.is_empty(), "{open:?}");
+    assert_eq!(leased, vec![(2891, None)]);
+    assert!(train_rider_refusal(2864, &open, &leased).is_none());
+}
+
+/// A readable leased train body keeps refusing its known member, with no
+/// failure warning.
+// trace:TASK-1865 | ai:claude
+#[cfg(unix)]
+#[test]
+fn task_1865_a_readable_leased_train_refuses_its_member_without_warning() {
+    if let Some(out) = crate::test_env::run_path_isolated_test_output() {
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(!stderr.contains("could not read leased train"), "{stderr}");
+        return;
+    }
+    let (open, leased) =
+        task_1865_leased_lookup(&format!("  echo '{MEMBERS_LINE} #2864@abc1234'; exit 0"));
+    assert!(open.is_empty(), "{open:?}");
+    assert_eq!(
+        leased,
+        vec![(2891, Some(vec![(2864, "abc1234".to_string())]))]
+    );
+    let why = train_rider_refusal(2864, &open, &leased).unwrap();
+    assert!(why.contains("#2891") && why.contains("lease"), "{why}");
+    assert!(train_rider_refusal(2899, &open, &leased).is_none());
+}
+
 // ── BUG-2219: train network steps retry transient failures ────────────────
 
 /// Fast retry config for the temp repo: 3 attempts, ~1ms backoff.

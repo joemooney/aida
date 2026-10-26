@@ -2646,6 +2646,24 @@ pub(crate) struct AddArgs {
     // trace:STORY-1427 | ai:claude
     #[clap(long, value_name = "NAMES", value_delimiter = ',')]
     pub gates: Vec<String>,
+
+    /// Sanitized intake for a clone with an enabled WORK transport profile:
+    /// files one generic draft (bug by default) with no owner, tags or
+    /// session context. The complete write is checked against the clone's
+    /// reviewed policy before anything is persisted.
+    // trace:STORY-1742 | ai:claude
+    #[clap(long)]
+    pub sanitized: bool,
+
+    /// With --sanitized: show the candidate and the policy result without
+    /// writing, assigning an identifier or committing.
+    #[clap(long, requires = "sanitized", conflicts_with = "template")]
+    pub preview: bool,
+
+    /// With --sanitized: print the generic problem/reproduction/expected/
+    /// actual description template and exit.
+    #[clap(long, requires = "sanitized")]
+    pub template: bool,
 }
 
 /// The `aida add` args the handler files: decoded, with requester intake
@@ -2664,6 +2682,11 @@ fn run_add(
 ) -> anyhow::Result<crate::command_registry::Flow> {
     use crate::*;
     let args = self::add_args_for_dispatch(matches)?;
+    // trace:STORY-1742 | ai:claude
+    #[cfg(unix)]
+    if args.sanitized {
+        return crate::sanitized_intake::run(&args, &ctx.store);
+    }
     match &ctx.store {
         None => Ok(crate::command_registry::Flow::Continue),
         Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
@@ -3730,6 +3753,9 @@ fn run_add(
                     mode: _,
                     // STORY-1427: intake gates run on the git-canonical path only.
                     gates: _,
+                    sanitized: _,
+                    preview: _,
+                    template: _,
                 } => {
                     // TASK-725: positional title (`aida add "do X"`) — --title wins.
                     let title = title.clone().or_else(|| title_positional.clone());
