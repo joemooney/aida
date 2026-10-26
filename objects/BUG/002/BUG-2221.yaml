@@ -28,7 +28,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T06:38:42.269077518Z
-modified_at: 2026-10-26T10:49:23.114742708Z
+modified_at: 2026-10-26T11:02:09.657893968Z
 req_type: Bug
 comments:
 - id: 01a17250-10a0-76e1-b802-890d5a4ca31b
@@ -386,6 +386,13 @@ comments:
   created_at: 2026-10-26T10:49:23.114742708Z
   modified_at: 2026-10-26T10:49:23.114742708Z
   session_id: 761a4fea-f388-41d1-93d9-f1386951253c
+- id: 01a177df-f9f9-7563-a074-efba5b9c6983
+  author: joe
+  content: 'Round 2 on PR #2947 (0a6fa79b53, Refs BUG-2221), per the advisor''s 02:50 MST review. [blocker] Seeding race fixed: PendingSnapshot now captures BEFORE''s R (for-each-ref, worktree list, log --all --no-walk) on the caller''s thread, and the probe returns only after R finishes. The oracle starts after that, so R is pinned ahead of the oracle''s ref read. Only S (config --list, version) still overlaps the original. The cost is serial R on seeding shows only; cold, warm and negative shows are unchanged. New regressions: positive_seed_ignores_ref_move_before_oracle_ref_read (direct; a ref added or deleted after R seeds nothing; passes locally) and positive_seed_roots_pinned_before_original_ref_read (PATH shim, end to end: a ref moves right after the original reads refs; asserts the roots read precedes the original and nothing seeds). Ran: 26 non-isolated bug_2221 tests pass. The 9 PATH-isolated tests fail here only on the read-only hermetic HOME (BUG-1642 install error), so CI at 0a6fa79b53 is their first run. check-ci-fast 35/35. [major] AC4 still unmeasured: host git is refused in this seat clone. It needs an operator run on the primary of the sketch measurement plan, including the warm-hit rate under ref churn. [minor] ADVISOR ACK REQUESTED for the P1'' guards (no lost root, NEW strictly newer than cone roots, tie-safe root replay, no Kahn top-date tie). They only narrow which cached answers are served. The PR body could not be edited from this seat (gh pr edit denied); this comment is the round-2 record. The round-2 task text listed findings 1-7 at 5f777c654a; those remain resolved on main by 98e6823c07 (see the 08:09 comment). BUG-2221 is not complete.'
+  created_at: 2026-10-26T11:02:09.657893968Z
+  modified_at: 2026-10-26T11:02:09.657893968Z
+  session_id: 01a177c73769
+  harness_version: 2.1.310 (Claude Code)
 history:
 - id: 01a173f1-1a2e-7c12-a2a1-e6bdafd814de
   author: joe
