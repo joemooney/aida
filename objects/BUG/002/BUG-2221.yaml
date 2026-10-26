@@ -23,12 +23,12 @@ description: |-
   3. Add a decisive hermetic regression for the identified mechanism using existing load-aware/child-process test idioms; report before/after timings on the same shape/artifact conditions. Do not add an unexplained fragile wall-clock assertion.
   4. Demonstrate the reproduced slow case under1000ms after the fix, and collect fresh lineage-scoped telemetry for the unchanged guard; distinguish old24h samples from new-build evidence. Do not declare an old-window guard green by relabeling binaries or deleting samples.
   Independent review and normal PR gates required. Local verification: one targeted regression run plus check-ci-fast; touched/compile only shared test infra or>10files. No broad Cargo or slot bypass. Implementer first produces narrow diagnosis if the source change remains unclear.
-status: InProgress
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T06:38:42.269077518Z
-modified_at: 2026-10-26T06:43:07.836168038Z
+modified_at: 2026-10-26T06:44:55.627649245Z
 req_type: Bug
 comments:
 - id: 01a17250-10a0-76e1-b802-890d5a4ca31b
@@ -328,6 +328,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a176f4-792c-7c20-8412-7fae16703130
+  author: joe
+  timestamp: 2026-10-26T06:44:55.724390983Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 filed_at:
   code_sha: 94124569c9b14617a4049909ddbefad5b82a846d
   branch: main
