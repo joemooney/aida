@@ -1,0 +1,33 @@
+id: 01a17a7a-ae0e-7142-a1e3-3f073425d62d
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-015
+title: 'Review PR-2956: [AI:claude] fix(review): recognise node-local spec IDs in commit trailers (BUG-b6b1278890774ef993d2ebc327862470-006)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a17a63`) for branch `bug-trailer-node-ids`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2956>
+  - Branch: `bug-trailer-node-ids` → `main`
+
+  ## Covers
+
+  - BUG-b6b1278890774ef993d2ebc327862470-006
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2956` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-26T23:10:22.734107471Z
+modified_at: 2026-10-26T23:10:22.734107471Z
+req_type: Story
+filed_at:
+  code_sha: a3bc7b0b7d4d64f8aa6548fadf32506f0afc478c
+  branch: bug-trailer-node-ids
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 773015b8d2
+  vendor: claude
+  session: f512650a-9655-4540-945f-181058228fbf
