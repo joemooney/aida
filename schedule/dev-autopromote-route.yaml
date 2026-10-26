@@ -4,3 +4,9 @@ last_by:
   seat: advisor
   vendor: codex
 result: done
+due_since: 2026-10-26T06:07:24.907415117Z
+due_reason: on CronJobFailed:dev-autopromote
+due_failure:
+  trip_id: dev-autopromote@2026-10-26T06:04:45.310764467Z
+  job: dev-autopromote
+  error: 'exit 1: build of abc38c78319ae555fd76db8cb668a8dc0c814444 failed; log /home/joe/.aida/dev-autopromote/20261026T054227Z-abc38c78319a.log; tail:     Blocking waiting for file lock on build directory |    Compiling aida-cli-lib v0.16.0 (/home/joe/ai/aida/aida-cli-lib) |    Compiling aida-cli v0.16.0 (/home/joe/ai/aida/aida-cli) |     Finished `agent` profile [optimized] target(s) in 7m 21s | Smoke test passed: /home/joe/.local/share/aida/live/.incoming/aida | error: "the staged build does not match HEAD, so it was not promoted: the staged `aida --version` reports sha abc38c7831, but HEAD is 98e6823c07b9865845817389b9e04bb8b03a6950." | help: aida --version'
