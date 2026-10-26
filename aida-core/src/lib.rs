@@ -132,6 +132,9 @@ pub mod liveness;
 // trace:STORY-711 | ai:claude
 pub mod lock;
 pub mod mailbox;
+// Mail-source permits and the retention barrier. trace:STORY-1843 | ai:claude
+#[cfg(all(unix, feature = "native"))]
+pub mod mailbox_lifecycle;
 pub mod meta;
 pub mod models;
 pub mod node;
