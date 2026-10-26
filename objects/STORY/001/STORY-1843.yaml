@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-26T08:41:41.448980502Z
+modified_at: 2026-10-26T09:23:10.634532559Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -862,6 +862,13 @@ comments:
   created_at: 2026-10-26T08:41:27.577392712Z
   modified_at: 2026-10-26T08:41:27.577392712Z
   session_id: 761a4fea-f388-41d1-93d9-f1386951253c
+- id: 01a17785-5aaa-7c60-8cce-69713d3715cc
+  author: joe
+  content: 'PR-2944 round-2 review (head 9ae539b5fd): APPROVED as a non-completing B1 slice. Four non-blocking follow-ups could not be filed as draft tasks because ID allocation is refused in the reviewer sandbox. Please file them from-review:PR-2944: N1 (minor) mailbox_logical.rs:190: from_identity_policy is dead code outside tests; B2 needs a core-side audience constructor. N2 (minor) :377-383: unread_ids() omits LegacyWatermark records, so caught_up()==Some(false) can come with an empty unread list. N3 (minor) :1150-1163: an archived replica outranks and drops a cross-worktree retraction, so the body is returned. N4 (cosmetic) :1079-1099: fill() merges an explicit default (intent fyi) instead of reporting a conflict. Details: https://github.com/joemooney/aida/pull/2944#issuecomment-6412542556'
+  created_at: 2026-10-26T09:23:10.634532559Z
+  modified_at: 2026-10-26T09:23:10.634532559Z
+  session_id: 01a1777591ca
+  harness_version: 2.1.310 (Claude Code)
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
   author: joe
