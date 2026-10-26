@@ -1795,7 +1795,9 @@ pub fn mirror_sync_hubs(project_root: &Path) -> Result<MirrorSyncReport> {
             .push("no mirror hubs configured ([store.sync] mirror_remotes) — nothing to do".into());
         return Ok(report);
     }
-    if !git_ops::has_remote(project_root, "origin") {
+    // TASK-2356: a failed lookup (host git refuses a seat clone, BUG-2169) is
+    // an error, not "no origin". trace:TASK-2356 | ai:claude
+    if !git_ops::probe_remote(project_root, "origin")? {
         report.skipped.push(
             "no `origin` remote — mirrors follow origin, so there is nothing to mirror".into(),
         );
