@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T17:38:11.351372157Z
-modified_at: 2026-10-26T01:10:35.749255253Z
+modified_at: 2026-10-26T03:50:27.712067668Z
 req_type: Bug
 tags:
 - from-advisor
@@ -88,6 +88,12 @@ history:
   session_id: 01a175bfeeb8
   harness_version: 2.1.310 (Claude Code)
   changes: []
+- id: 01a17654-c2fc-7d33-909a-2f182fa86282
+  author: joe
+  timestamp: 2026-10-26T03:50:28.860188107Z
+  session_id: 01a176399b0a
+  harness_version: 2.1.310 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 54c64e26a58810f213f0a0fa1720a69bcce37ea3
   branch: main
@@ -100,7 +106,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: In-place orphan clone re-entry (Option B) is sound and the binding-5 tests cover it, but the two errors can still point at each other when the dead lease records no owner pid, and adopting an orphan skips any other lease on the same scope and forces force_claim. Those two gaps break binding 3 and the live-lease refusal.
+  detail: 'CI (lib-1) red at head; the PR''s own multiplicity test fails: session start adopts an orphan even while a live lease holds the scope (binding 1). Remaining acceptance met at session-start level; three minor hint/gate gaps plus missing end-to-end coverage.'
   recovery_hint: address the review findings, move BUG-2223 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-10-26T01:10:35.749255253Z
+  shelved_at: 2026-10-26T03:50:27.712067668Z
