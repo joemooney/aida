@@ -6,12 +6,12 @@ description: |
   PR-2932 (TASK-2351) changed aida ship step 1 from `git add -A` to `git add -u` (aida-cli-lib/src/pr_cmd.rs:1352). The new unit tests cover only the probes (tracked_changes_pending, untracked_regular_files, untracked_left_out_note), so reverting the staging flag to -A would still pass every test. Add an end-to-end step-1 test: a repo with a tracked edit and an untracked stray file. After step 1, HEAD should contain the edit and the stray file should still be untracked.
 
   Raised in review of PR-2932: https://github.com/joemooney/aida/pull/2932#issuecomment-6403120664
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T20:53:10.804761312Z
-modified_at: 2026-10-26T05:57:38.454091062Z
+modified_at: 2026-10-26T06:10:30.403455556Z
 req_type: Task
 tags:
 - from-review:PR-2932
@@ -38,6 +38,12 @@ comments:
   modified_at: 2026-10-26T00:13:28.014198439Z
   session_id: 01a17552abaf
   harness_version: 2.1.310 (Claude Code)
+- id: 01a176d4-f583-7850-911e-378669f09517
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Test meets TASK-2359 acceptance (reverting to git add -A fails ls-tree assertion; prod path pr_cmd.rs:1353 calls the same helper), but the refactor launders two raw Command::new("git") builders out of the TASK-2143 ratchet while lowering pr_cmd.rs''s allowance; CI still pending at review time.. Triage reason: PR-2935 round-1 RC: route commit_tracked_changes through the clone-safe git helper'
+  created_at: 2026-10-26T06:10:30.403451833Z
+  modified_at: 2026-10-26T06:10:30.403451833Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
 history:
 - id: 01a17551-2846-7f12-adfe-a404c48cd2da
   author: joe
@@ -83,6 +89,14 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a176d4-f583-7850-911e-3777a549e9b2
+  author: joe
+  timestamp: 2026-10-26T06:10:30.403439476Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 24edd8a0b8f6371a1685f94d02a843c0d4bd9a0a
   branch: pr-2932
@@ -96,11 +110,3 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-26T00:13:34.702841206Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Test meets TASK-2359 acceptance (reverting to git add -A fails ls-tree assertion; prod path pr_cmd.rs:1353 calls the same helper), but the refactor launders two raw Command::new("git") builders out of the TASK-2143 ratchet while lowering pr_cmd.rs's allowance; CI still pending at review time.
-  recovery_hint: address the review findings, move TASK-2359 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-26T05:57:38.454091062Z
