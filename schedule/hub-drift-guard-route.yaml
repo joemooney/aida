@@ -8,6 +8,6 @@ note: 'Matched trip2026-10-25T14:27:06Z. Plan proved no fork: gitlab b39 was anc
 due_since: 2026-10-25T20:40:43.807867243Z
 due_reason: on CronJobFailed:hub-drift-guard
 due_failure:
-  trip_id: hub-drift-guard@2026-10-26T14:44:18.520845539Z
+  trip_id: hub-drift-guard@2026-10-26T20:51:44.005350014Z
   job: hub-drift-guard
   error: 'exit 1: '
