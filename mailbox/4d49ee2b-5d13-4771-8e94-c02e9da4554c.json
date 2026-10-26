@@ -1,0 +1,19 @@
+{
+  "id": "4d49ee2b-5d13-4771-8e94-c02e9da4554c",
+  "thread_id": "4d49ee2b-5d13-4771-8e94-c02e9da4554c",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792975114180,
+  "body": "PR #2924 (STORY-1917 slice 3) new head: 3cf78ef2cf86a4608c407f8a23a48f364c58e74a (pushed, no force).\n\nRoot cause of red lib-1/cli-0: round-2 commit c01e4d78d5 added `aida dispatch activate-lock` without regenerating the two command-surface goldens:\n- lib-1: help_surface_matches_golden_snapshot -> regenerated aida-cli-lib/src/tests/golden/cli_help_snapshot.txt (AIDA_UPDATE_SNAPSHOTS=1)\n- cli-0: checked_in_audit_is_exhaustive_and_every_honoured_probe_parses -> regenerated docs/cli-format-json-audit.md (scripts/generate-format-json-audit.py)\nOnly delta in both is the new activate-lock command. No code or test changes; not a timing flake.\n\nVerified locally: both tests pass via targeted filters; make check-ci-fast 35 gates passed. Ready for round-2 re-review once CI is green.\n",
+  "subject": "PR-2924 new head 3cf78ef2cf (CI red fixed)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}
