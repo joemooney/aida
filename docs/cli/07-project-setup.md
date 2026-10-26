@@ -481,7 +481,7 @@ turn tracking refs into trusted evidence. An uncertain push leaves the receipt
 unchanged. If publication succeeds but receipt persistence or policy
 revalidation fails, the command reports that partial result and does not retry.
 
-### Sanitized intake (`aida add --sanitized`)
+### `aida add --sanitized` (sanitized intake)
 
 <!-- trace:STORY-1742 | ai:claude -->
 
