@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T16:43:58.284814607Z
-modified_at: 2026-10-26T03:23:29.899052257Z
+modified_at: 2026-10-26T03:23:32.196806437Z
 req_type: Task
 tags:
 - from-implementer:TASK-2346
@@ -40,6 +40,12 @@ comments:
   created_at: 2026-10-25T23:39:20.195537919Z
   modified_at: 2026-10-25T23:39:20.195537919Z
   session_id: 29900a9d-2655-43c9-9178-fa5521b0f5ad
+- id: 01a1763c-1759-7a03-ab83-fd48d405c774
+  author: joe
+  content: 'PR-2937 round-1 request-changes (TASK-2345 verdict at 9920144980): rework lane relaunched by the advisor'
+  created_at: 2026-10-26T03:23:32.057415897Z
+  modified_at: 2026-10-26T03:23:32.057415897Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
 history:
 - id: 01a1741d-7377-74b0-812a-7d3622547f76
   author: joe
