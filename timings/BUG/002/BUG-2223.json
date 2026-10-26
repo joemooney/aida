@@ -1,0 +1,138 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2223",
+  "publishes": [
+    {
+      "at": "2026-10-26T14:46:16.866491914Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-25T19:35:09.691763810Z",
+      "spec": "BUG-2223",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-25T19:44:28.201346883Z",
+      "spec": "BUG-2223",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-25T21:06:26.007744669Z",
+      "spec": "BUG-2223",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-25T21:06:26.226514776Z",
+      "spec": "BUG-2223",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-26T01:14:20.613834232Z",
+      "spec": "BUG-2223",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-2223",
+        "branch": "origin/bug-2223",
+        "first_seen": "2026-10-26T01:14:20.613776428+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-26T03:27:43.443330439Z",
+      "spec": "BUG-2223",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-2223",
+        "branch": "bug-2223",
+        "first_seen": "2026-10-26T03:27:43.443255987+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-26T05:55:27.427382318Z",
+      "spec": "BUG-2223",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-26T07:41:39.921014157Z",
+      "spec": "BUG-2223",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-26T07:41:39.984570863Z",
+      "spec": "BUG-2223",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-26T07:41:53.035210069Z",
+      "spec": "BUG-2223",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-26T14:45:13.185077637Z",
+      "spec": "BUG-2223",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2934
+      }
+    },
+    {
+      "ts": "2026-10-26T14:46:16.704181107Z",
+      "spec": "BUG-2223",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "b3bad5b36fafe528c458a604c932c3683d77178e",
+        "pr": 2934,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
