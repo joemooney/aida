@@ -2,12 +2,12 @@ id: 01a1783f-1990-7492-94cf-0d8e4ad59539
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-002
 title: 'STORY-1843 slice C1: mail retention core (anchor, safe IO, source generations, local permit admission, retire_source journal with replay)'
 description: 'Child of STORY-1843. Implements C SKETCH v1 (comment 75) slice C1 exactly as signed 2026-10-26 06:00 MST: core only, no production caller of retire_source yet (expect(dead_code) until C2), RetentionCoverage stays Unestablished in every production path, section 6 crash fixtures required, 2 s bounded try-lock refusing on timeout. STRICT review; PR title (Refs STORY-1843, TASK-<this>).'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-26T12:46:03.664293299Z
-modified_at: 2026-10-26T16:05:40.108647525Z
+modified_at: 2026-10-26T16:10:33.291892165Z
 req_type: Task
 comments:
 - id: 01a1787d-1396-7370-911a-6ce5f30a0ebf
@@ -15,6 +15,12 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: C1 core design and the section 6 fixtures are solid, but C1 changes production mail delivery: a group-writable common .git (umask 002; the operator''s live /home/joe/ai/aida/.git is 0775) makes every local mail write fail (reproduced), and PR CI is red (cli-1 Test time budget).. No triage reason was given.'
   created_at: 2026-10-26T13:53:45.366688210Z
   modified_at: 2026-10-26T13:53:45.366688210Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
+- id: 01a178fa-51cb-7fb3-b909-db304b7a16c7
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Round-1 rework is solid (group-writable .git fixed, degraded delivery path, CI green at ee2f1fc, all section 6 fixtures present), but the barrier core still has a concurrency hole: two retire_source calls on one source drive the same op_id at once, and the loser''s abort can overwrite the winner''s Committed journal. No triage reason was given.'
+  created_at: 2026-10-26T16:10:33.291883033Z
+  modified_at: 2026-10-26T16:10:33.291883033Z
   session_id: 761a4fea-f388-41d1-93d9-f1386951253c
 history:
 - id: 01a1783f-4749-7031-a07c-c8e19f0d19a2
@@ -67,6 +73,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a178fa-51cb-7fb3-b909-db290f25f353
+  author: joe
+  timestamp: 2026-10-26T16:10:33.291874272Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: e4c2dd0575990c64b7b14ee242b02012c22195dd
   branch: main
@@ -75,11 +89,3 @@ filed_at:
   aida_build_sha: e4c2dd0575
   vendor: claude
   session: 761a4fea-f388-41d1-93d9-f1386951253c
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Round-1 rework is solid (group-writable .git fixed, degraded delivery path, CI green at ee2f1fc, all section 6 fixtures present), but the barrier core still has a concurrency hole: two retire_source calls on one source drive the same op_id at once, and the loser''s abort can overwrite the winner''s Committed journal'
-  recovery_hint: address the review findings, move TASK-B6B1278890774EF993D2EBC327862470-002 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-26T16:05:40.108647525Z
