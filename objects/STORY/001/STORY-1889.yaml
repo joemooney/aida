@@ -12,12 +12,12 @@ description: |-
   4. Behaviour is unchanged. Show it with the existing story_1698/story_1700 mandate tests plus a before/after list of every refusal reason string.
 
   Sequencing: one human-merged refactor PR. Land it after the open PRs touching these files (#2798, #2792, #2789) merge, to avoid conflicts. Architecture change, so it needs a sketch with advisor signoff first.
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-21T15:33:51.496539087Z
-modified_at: 2026-10-26T16:49:17.354065156Z
+modified_at: 2026-10-26T16:49:42.421929325Z
 req_type: Story
 tags:
 - architecture
@@ -448,6 +448,14 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1791e-2a15-7fa0-b7e3-382756eb9d1f
+  author: aida-session-start
+  timestamp: 2026-10-26T16:49:42.421926084Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 7be4321436b8f93b2daba2bd71b649046818e35f
   branch: main
