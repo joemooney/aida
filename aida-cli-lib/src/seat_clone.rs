@@ -834,9 +834,14 @@ pub(crate) struct ProbeFacts {
     pub(crate) branch: Option<String>,
     /// `git status --porcelain=v2` entries: changed and untracked files.
     pub(crate) dirty: Vec<String>,
-    /// Commits reachable from HEAD that are on no `origin/*` ref and not in
-    /// the clone's base.
+    /// Commits reachable from any ref or stash entry that are on no
+    /// `origin/*` ref, not in the clone's base and not reachable from a ref of
+    /// the main checkout.
     pub(crate) unpushed: u64,
+    /// The refs those commits are on, as `<count> commit(s) on <ref>` lines
+    /// (seat-written names, escaped for display), for the refusal message.
+    // trace:BUG-2224 | ai:claude
+    pub(crate) unpushed_refs: Vec<String>,
 }
 
 impl ProbeFacts {
@@ -1135,8 +1140,10 @@ pub(crate) fn probe_with_shipped(main: &Path, clone: &Path, shipped: &[String]) 
     probe_until(main, clone, shipped, None)
 }
 
-// One deadline covers all three sandbox calls, rather than a fresh budget per call.
+// One deadline covers all four sandbox calls and the host git that checks the
+// clone's ref tips against main, rather than a fresh budget per call.
 // trace:TASK-2053 | ai:codex
+// trace:BUG-2224 | ai:claude
 pub(crate) fn probe_until(
     main: &Path,
     clone: &Path,
@@ -1191,6 +1198,21 @@ pub(crate) fn probe_until(
     };
     let mut facts = parse_status_v2(&status);
     let base = pinned_base(main, clone).unwrap_or_default();
+    // BUG-2224: a seat clone inherits refs (tags, `wip/*` branches) whose
+    // commits the main checkout already holds; removing the clone loses none
+    // of them. The clone's ref tips main reaches from its own refs (host git,
+    // in main only) are passed on like shipped heads; a seat-only commit on
+    // top of one still counts. trace:BUG-2224 | ai:claude
+    let tips = match probe_run(
+        clone,
+        main,
+        &["-c".as_ref(), REF_TIPS_SCRIPT.as_ref()],
+        "sh",
+    ) {
+        Ok(out) => out,
+        Err(why) => return Probe::Unknown(why),
+    };
+    let in_main = main_reachable_commits(main, tips.lines().map(str::trim), deadline);
     let count = probe_run(
         clone,
         main,
@@ -1204,6 +1226,7 @@ pub(crate) fn probe_until(
         .chain(
             shipped
                 .iter()
+                .chain(in_main.iter())
                 .filter(|oid| is_full_oid(oid))
                 .map(|oid| oid.as_ref()),
         )
@@ -1211,13 +1234,135 @@ pub(crate) fn probe_until(
         "sh",
     );
     match count {
-        Ok(out) => match out.trim().parse() {
-            Ok(n) => facts.unpushed = n,
-            Err(_) => return Probe::Unknown(format!("unreadable commit count `{}`", out.trim())),
+        Ok(out) => match parse_unpushed_count(&out) {
+            Some((n, refs)) => {
+                facts.unpushed = n;
+                facts.unpushed_refs = refs;
+            }
+            None => return Probe::Unknown(format!("unreadable commit count `{}`", out.trim())),
         },
         Err(why) => return Probe::Unknown(why),
     }
     Probe::Known(facts)
+}
+
+/// Why a clone with `facts` is kept: the work origin does not have, by ref.
+// trace:BUG-2224 | ai:claude
+pub(crate) fn unshipped_reason(facts: &ProbeFacts) -> String {
+    let mut parts = Vec::new();
+    if !facts.dirty.is_empty() {
+        parts.push(format!("{} uncommitted change(s)", facts.dirty.len()));
+    }
+    parts.extend(facts.unpushed_refs.iter().cloned());
+    if parts.is_empty() {
+        "it holds work origin does not have".to_string()
+    } else {
+        format!("it holds work origin does not have: {}", parts.join("; "))
+    }
+}
+
+/// Parse [`UNPUSHED_COUNT_SCRIPT`]'s output: the total on the first line,
+/// then `<count> <ref>` per ref holding any of those commits. The ref names
+/// are seat-written, so they are escaped and the list is capped.
+// trace:BUG-2224 | ai:claude
+pub(crate) fn parse_unpushed_count(out: &str) -> Option<(u64, Vec<String>)> {
+    const SHOWN: usize = 50;
+    let mut lines = out.lines().map(str::trim).filter(|line| !line.is_empty());
+    let total = lines.next()?.parse().ok()?;
+    let mut refs = Vec::new();
+    let mut more = 0usize;
+    for line in lines {
+        let (count, name) = line.split_once(' ')?;
+        let count: u64 = count.parse().ok()?;
+        if refs.len() < SHOWN {
+            refs.push(format!("{count} commit(s) on {}", name.escape_debug()));
+        } else {
+            more += 1;
+        }
+    }
+    if more > 0 {
+        refs.push(format!("... and {more} more ref(s)"));
+    }
+    Some((total, refs))
+}
+
+/// The most clone ref tips [`main_reachable_commits`] checks; past it none
+/// are excused, and the count stays conservative.
+const MAIN_TIP_CAP: usize = 20_000;
+
+/// Of the `tips` (commit ids a clone's refs point at, as the probe read them:
+/// untrusted), those that are commits reachable from a ref of `main`. Git runs
+/// in main only, bounded by `deadline` (and [`PROBE_TIMEOUT`]). Anything that
+/// cannot be checked in time is left out, so it counts.
+// trace:BUG-2224 | ai:claude
+pub(crate) fn main_reachable_commits<'a>(
+    main: &Path,
+    tips: impl Iterator<Item = &'a str>,
+    deadline: Option<std::time::Instant>,
+) -> Vec<String> {
+    let mut tips: Vec<&str> = tips.filter(|oid| is_full_oid(oid)).collect();
+    tips.sort_unstable();
+    tips.dedup();
+    if tips.is_empty() || tips.len() > MAIN_TIP_CAP {
+        return Vec::new();
+    }
+    let input: String = tips.iter().map(|oid| format!("{oid}\n")).collect();
+    let mut check = git(main);
+    check.args(["cat-file", "--batch-check=%(objectname) %(objecttype)"]);
+    let Some(present) = run_bounded(check, &input, deadline) else {
+        return Vec::new();
+    };
+    let commits: Vec<&str> = present
+        .lines()
+        .filter_map(|line| line.strip_suffix(" commit"))
+        .filter(|oid| tips.binary_search(oid).is_ok())
+        .collect();
+    if commits.is_empty() {
+        return Vec::new();
+    }
+    // `rev-list <tips> --not --all` lists what main's refs do not reach; a
+    // tip missing from it is reachable.
+    let mut unreached = git(main);
+    unreached.args(["rev-list", "--stdin", "--not", "--all"]);
+    let input: String = commits.iter().map(|oid| format!("{oid}\n")).collect();
+    let Some(out) = run_bounded(unreached, &input, deadline) else {
+        return Vec::new();
+    };
+    let unreached: std::collections::HashSet<&str> = out.lines().map(str::trim).collect();
+    commits
+        .into_iter()
+        .filter(|oid| !unreached.contains(oid))
+        .map(str::to_string)
+        .collect()
+}
+
+/// Run host git `cmd` with `input` on stdin (from a temp file, so a large
+/// reply cannot deadlock it), killed once `deadline` or [`PROBE_TIMEOUT`]
+/// passes; its stdout on success.
+// trace:BUG-2224 | ai:claude
+fn run_bounded(
+    mut cmd: std::process::Command,
+    input: &str,
+    deadline: Option<std::time::Instant>,
+) -> Option<String> {
+    use std::io::{Seek, Write};
+    let timeout = deadline
+        .map(|end| {
+            end.saturating_duration_since(std::time::Instant::now())
+                .min(PROBE_TIMEOUT)
+        })
+        .unwrap_or(PROBE_TIMEOUT);
+    if timeout.is_zero() {
+        return None;
+    }
+    let mut file = tempfile::tempfile().ok()?;
+    file.write_all(input.as_bytes()).ok()?;
+    file.rewind().ok()?;
+    cmd.stdin(file);
+    let out = crate::command_output_with_timeout(cmd, timeout)?;
+    out.status
+        .success()
+        .then(|| String::from_utf8_lossy(&out.stdout).into_owned())
 }
 
 /// Parse `git status --porcelain=v2 --branch`. Only a full 40/64-hex
@@ -1276,18 +1421,42 @@ fi
 exit 0
 "##;
 
+/// Inside the probe sandbox: the commit every ref of the clone points at
+/// (tags peeled), one per line, for [`main_reachable_commits`].
+// trace:BUG-2224 | ai:claude
+const REF_TIPS_SCRIPT: &str =
+    "set -u\nexec git for-each-ref --format='%(if)%(*objectname)%(then)%(*objectname)%(else)%(objectname)%(end)'\n";
+
 /// Inside the probe sandbox: how many commits the clone holds that origin
 /// does not: reachable from ANY ref (every branch, tag, HEAD) or stash entry,
-/// and not from `origin/*`, the pinned base (`$1`, or empty) or a shipped
-/// head (`$2...`, full hex ids; one the clone lacks is skipped). Submodules
-/// are not counted: [`probe`] keeps any clone that has one.
-// trace:TASK-2053 | ai:claude
+/// and not from `origin/*`, the pinned base (`$1`, or empty) or an excused
+/// head (`$2...`, full hex ids: a shipped head, or a tip main reaches; one the
+/// clone lacks is skipped). Submodules are not counted: [`probe`] keeps any
+/// clone that has one. The total is the first line; then, when it is not 0,
+/// `<count> <ref>` for each ref (a detached HEAD, every ref outside
+/// `origin/*`, the stash) holding any.
+// trace:TASK-2053 trace:BUG-2224 | ai:claude
 const UNPUSHED_COUNT_SCRIPT: &str = concat!(
     "set -u\n",
     stash_entries_sh!(),
     "base=$1\nshift\nshipped=''\n",
     "for t in \"$@\"; do\n  if git cat-file -e \"$t^{commit}\" 2>/dev/null; then shipped=\"$shipped $t\"; fi\ndone\n",
-    "git rev-list --count --all $s --not --remotes=origin ${base:+\"$base\"} $shipped\n"
+    "total=$(git rev-list --count --all $s --not --remotes=origin ${base:+\"$base\"} $shipped) || exit 1\n",
+    "printf '%s\\n' \"$total\"\n",
+    "if [ \"$total\" -eq 0 ]; then exit 0; fi\n",
+    "refs=$(git for-each-ref --format='%(refname)') || exit 1\n",
+    "if ! git symbolic-ref -q HEAD >/dev/null && git rev-parse -q --verify HEAD >/dev/null; then\n",
+    "  refs=\"HEAD\n$refs\"\n",
+    "fi\n",
+    "printf '%s\\n' \"$refs\" | while IFS= read -r r; do\n",
+    "  case $r in ''|refs/remotes/origin/*|refs/stash) continue;; esac\n",
+    "  n=$(git rev-list --count \"$r\" --not --remotes=origin ${base:+\"$base\"} $shipped) || exit 1\n",
+    "  if [ \"$n\" -gt 0 ]; then printf '%s %s\\n' \"$n\" \"$r\"; fi\n",
+    "done || exit 1\n",
+    "if [ -n \"$s\" ]; then\n",
+    "  n=$(git rev-list --count $s --not --remotes=origin ${base:+\"$base\"} $shipped) || exit 1\n",
+    "  if [ \"$n\" -gt 0 ]; then printf '%s refs/stash\\n' \"$n\"; fi\n",
+    "fi\n"
 );
 
 /// A full 40- or 64-hex object id.
@@ -1458,7 +1627,8 @@ fn salvage_capped(main: &Path, clone: &Path, cap: u64) -> Result<PathBuf> {
     let count_args: Vec<&std::ffi::OsStr> = count_args.iter().map(|a| a.as_os_str()).collect();
     let unpushed: u64 = probe_run(clone, main, &count_args, "sh")
         .ok()
-        .and_then(|out| out.trim().parse().ok())
+        .and_then(|out| parse_unpushed_count(&out))
+        .map(|(total, _)| total)
         .with_context(|| {
             format!(
                 "could not count the unpushed commits of {}",
@@ -1629,7 +1799,7 @@ pub(crate) fn destroy_with_shipped(
             }
             if mode == DestroyMode::KeepUnshipped {
                 return Ok(Destroyed::Kept {
-                    reason: "it holds work origin does not have".to_string(),
+                    reason: unshipped_reason(&facts),
                     salvage: salvaged,
                 });
             }
