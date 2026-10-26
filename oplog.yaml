@@ -77888,5 +77888,32 @@ operations:
   timestamp: 2026-10-26T18:39:15.523750228Z
   kind: !SetStatus
     status: In Progress
-clock: 6041
+- id: 01a17997-020d-7a82-9c11-1aa308cd478d
+  target_id: 01a17996-fb22-7570-ba08-fecd8f8ce058
+  author: aida
+  node_id: '1'
+  lamport: 6042
+  timestamp: 2026-10-26T19:01:42.029444792Z
+  kind: !Create
+    title: 'Flaky: work_binding linked_worktrees_share_one_opaque_binding_and_concurrent_counter panics under CI load'
+    description: |
+      `aida-core` `work_binding::tests::linked_worktrees_share_one_opaque_binding_and_concurrent_counter` panicked in CI (rest shard), run 40374961047 / job 121755388407, at PR #2953 head cd2188e4f7:
+
+      ```
+      thread '<unnamed>' (64817) panicked at aida-core/src/work_binding.rs:360:60:
+      thread '<unnamed>' (64816) panicked at aida-core/src/work_binding.rs:360:60:
+      thread 'work_binding::tests::linked_worktrees_share_one_opaque_binding_and_concurrent_counter' (64793) panicked at aida-core/src/work_binding.rs:366:68:
+      ```
+
+      Line 360 is `bootstrap(&path).unwrap().unwrap()` inside one of the 8 racing threads (4 on the main worktree, 4 on a linked worktree), and 366 is the `h.join().unwrap()` that re-raises it. So `bootstrap` returned an error, or `None`, under concurrent first-time bootstrap from two linked worktrees.
+
+      PR #2953 does not touch aida-core: `git diff origin/main HEAD -- aida-core Cargo.lock` is empty, so the CI binary was built from the same source as main.
+
+      Local reproduction attempts all passed: 5/5 sequential runs on the PR branch, 5/5 on origin/main f34fd14323, and 40/40 concurrent runs of the test binary. The failure only shows under CI load: a load-dependent race in concurrent bootstrap or in the dispenser's first-use path.
+
+      Next step: capture the inner error. Replace `.unwrap()` with `.expect(&format!("{e:#}"))`, or log it, so the next CI hit names the failing step. Then make bootstrap's first-writer path idempotent under contention.
+    req_type: Bug
+    status: Draft
+    priority: Medium
+clock: 6042
 node_id: '1'
