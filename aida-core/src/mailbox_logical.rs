@@ -187,6 +187,13 @@ impl ResolvedAudience {
     /// people-catalog inboxes; `shared`: role and vendor audiences. Each key
     /// must be a bounded mailbox identity. Crate-private: only the verified
     /// identity path may mint recipient authority.
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "STORY-1843 B2 adds the verified-identity caller; drop this then"
+        )
+    )]
     pub(crate) fn from_identity_policy(
         private: Vec<String>,
         human: Vec<String>,
@@ -375,9 +382,20 @@ impl LogicalSnapshot {
 
     /// Records with no read evidence (archived records excluded).
     pub fn unread_ids(&self) -> Vec<&str> {
+        self.ids_where(|read| *read == ReadEvidence::Unread)
+    }
+
+    /// Records covered only by a legacy watermark (archived records
+    /// excluded): neither unread nor acknowledged. An adapter decides how to
+    /// render them; it must not count them as read.
+    pub fn legacy_watermark_ids(&self) -> Vec<&str> {
+        self.ids_where(|read| matches!(read, ReadEvidence::LegacyWatermark { .. }))
+    }
+
+    fn ids_where(&self, keep: impl Fn(&ReadEvidence) -> bool) -> Vec<&str> {
         self.records
             .iter()
-            .filter(|r| !r.message.archived && r.read == ReadEvidence::Unread)
+            .filter(|r| !r.message.archived && keep(&r.read))
             .map(|r| r.message.id.as_str())
             .collect()
     }
@@ -385,7 +403,10 @@ impl LogicalSnapshot {
     /// `Some(true)` only when coverage is complete and every non-archived
     /// record has an explicit per-ID receipt; `None` when any source is
     /// partial — never "empty means caught up". A legacy watermark alone is
-    /// unread-compatible, not proof of a read, so it keeps this `false`.
+    /// unread-compatible, not proof of a read, so it keeps this `false`:
+    /// on a complete snapshot, `Some(false)` holds exactly when
+    /// [`Self::unread_ids`] or [`Self::legacy_watermark_ids`] is non-empty.
+    // trace:STORY-1843 | ai:claude
     pub fn caught_up(&self) -> Option<bool> {
         self.complete().then(|| {
             self.records
@@ -950,6 +971,7 @@ impl PinnedDir {
 struct ObservedMessage {
     message: Message,
     fingerprint: String,
+    recorded: Recorded,
 }
 
 struct ObservedSource {
@@ -1017,14 +1039,18 @@ fn read_source(
             return Err(SourceErrorCode::SourceChanged);
         };
         budget.take(bytes.len())?;
-        let message: Message =
+        let value: serde_json::Value =
             serde_json::from_slice(&bytes).map_err(|_| SourceErrorCode::CorruptMessage)?;
+        let recorded = Recorded::of(&value);
+        let message: Message =
+            serde_json::from_value(value).map_err(|_| SourceErrorCode::CorruptMessage)?;
         if !safe_id(&message.id) {
             return Err(SourceErrorCode::CorruptMessage);
         }
         messages.push(ObservedMessage {
             fingerprint: fingerprint(&bytes),
             message,
+            recorded,
         });
     }
     // Recheck that the path still names the directory that was read.
@@ -1072,15 +1098,44 @@ fn payload(m: &Message) -> Payload<'_> {
     )
 }
 
-/// Fill one optional, writer-enriched field from another replica. An older
-/// writer drops these fields (they read back as the default), so a default
-/// is "not recorded", never a disagreement; two different recorded values
+/// The optional, writer-enriched metadata keys, in [`Recorded`] order.
+const METADATA_KEYS: [&str; 6] = [
+    "subject",
+    "urgent",
+    "intent",
+    "from_source",
+    "from_role",
+    "relayed_from",
+];
+
+/// Which [`METADATA_KEYS`] a replica's file actually carried (non-null).
+/// An older writer omits them and they read back as the default, so only
+/// the raw key tells an omitted field from an explicitly written default.
+// trace:STORY-1843 | ai:claude
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+struct Recorded([bool; METADATA_KEYS.len()]);
+
+impl Recorded {
+    fn of(value: &serde_json::Value) -> Self {
+        Self(METADATA_KEYS.map(|key| value.get(key).is_some_and(|v| !v.is_null())))
+    }
+}
+
+/// Fill one optional, writer-enriched field from another replica. A field
+/// the other replica did not record is never a disagreement; two different
+/// recorded values — including an explicit default against a non-default —
 /// are a contradiction (`false`).
-fn fill<T: PartialEq + Clone + Default>(into: &mut T, other: &T) -> bool {
-    if *other == T::default() || into == other {
+fn fill<T: PartialEq + Clone>(
+    into: &mut T,
+    into_recorded: &mut bool,
+    other: &T,
+    other_recorded: bool,
+) -> bool {
+    if !other_recorded || (*into_recorded && into == other) {
         true
-    } else if *into == T::default() {
+    } else if !*into_recorded {
         *into = other.clone();
+        *into_recorded = true;
         true
     } else {
         false
@@ -1089,13 +1144,25 @@ fn fill<T: PartialEq + Clone + Default>(into: &mut T, other: &T) -> bool {
 
 /// Merge the optional metadata of `other` into `into` (the superset of what
 /// the replicas recorded). Payload fields are compared separately.
-fn merge_metadata(into: &mut Message, other: &Message) -> bool {
-    fill(&mut into.subject, &other.subject)
-        & fill(&mut into.urgent, &other.urgent)
-        & fill(&mut into.intent, &other.intent)
-        & fill(&mut into.from_source, &other.from_source)
-        & fill(&mut into.from_role, &other.from_role)
-        & fill(&mut into.relayed_from, &other.relayed_from)
+fn merge_metadata(
+    into: &mut Message,
+    into_recorded: &mut Recorded,
+    other: &Message,
+    other_recorded: Recorded,
+) -> bool {
+    let [subject, urgent, intent, from_source, from_role, relayed_from] = &mut into_recorded.0;
+    let o = other_recorded.0;
+    fill(&mut into.subject, subject, &other.subject, o[0])
+        & fill(&mut into.urgent, urgent, &other.urgent, o[1])
+        & fill(&mut into.intent, intent, &other.intent, o[2])
+        & fill(&mut into.from_source, from_source, &other.from_source, o[3])
+        & fill(&mut into.from_role, from_role, &other.from_role, o[4])
+        & fill(
+            &mut into.relayed_from,
+            relayed_from,
+            &other.relayed_from,
+            o[5],
+        )
 }
 
 /// IDs of conflicting records, each with the thread IDs its replicas claim
@@ -1161,11 +1228,12 @@ fn reconcile(
             .find(|(source, _)| *source >= local_count)
             .unwrap_or(&top[0]);
         let mut message = winner.1.message.clone();
+        let mut recorded = winner.1.recorded;
         let payload_conflict = top
             .iter()
             .any(|(_, m)| payload(&m.message) != payload(&message));
         let metadata_conflict = !top.iter().fold(true, |ok, (_, m)| {
-            merge_metadata(&mut message, &m.message) & ok
+            merge_metadata(&mut message, &mut recorded, &m.message, m.recorded) & ok
         });
         if audience_conflict || payload_conflict || metadata_conflict {
             let threads = replicas
@@ -1177,6 +1245,13 @@ fn reconcile(
         }
         if message.deleted || audience.matching_keys(&message).is_empty() {
             continue;
+        }
+        // A retraction is monotone: a higher-rank replica elsewhere (say the
+        // recipient archived its copy in main while the sender retracted in a
+        // sibling) must not resurrect the retracted body.
+        // trace:STORY-1843 | ai:claude
+        if replicas.iter().any(|(_, m)| m.message.retracted) {
+            message.retracted = true;
         }
         let provenance = replicas
             .iter()
