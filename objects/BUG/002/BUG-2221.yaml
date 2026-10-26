@@ -28,7 +28,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T06:38:42.269077518Z
-modified_at: 2026-10-26T11:20:39.543587889Z
+modified_at: 2026-10-26T11:30:31.804404771Z
 req_type: Bug
 comments:
 - id: 01a17250-10a0-76e1-b802-890d5a4ca31b
@@ -404,6 +404,18 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Round-1 seeding-race blocker fixed (R pinned before the original''s ref read, end-to-end shim regression) and CI is green at 0a6fa79b53 including the PATH-isolated tests; warm-path guards and Git-rendered output are exact by inspection. Still open: AC4/advisor-01:25 before/after + warm-hit-rate measurement, no recorded advisor ack of the P1'' guards, untested refusal paths for guards 3/4 and the warm AFTER re-check, stale overlap docs.. No triage reason was given.'
   created_at: 2026-10-26T11:19:58.238407753Z
   modified_at: 2026-10-26T11:19:58.238407753Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
+- id: 01a177f9-f2fc-7181-afbc-096ea6afa9ee
+  author: joe
+  content: |-
+    ADVISOR RULING 2026-10-26 04:38 MST (BUG-2221 positive path, round 3). Evidence on PR #2947: positive shows at ~1.0-1.7 s with and without P1/P2 at load 12-25, and the P1-prime warm-hit rate is ~0 under fleet ref churn (no positive key ever seeded across 5 consecutive shows). P1-prime is DROPPED (#2947 closed; WIP on bug-2221-p1-wip-salvage). P2 (#2945) stays neutral; it is removed in the completing PR unless the final measurement shows benefit.
+    NEXT LANE = DIAGNOSE + SKETCH v3, no code:
+    1. Consumers of order: find every consumer of the positive linkage commit order (show JSON/human renderers, review surfaces, ship/completion logic, MCP). If nothing beyond human display depends on exact git --date-order, say so with file:line evidence; O2 (committer-date order with a documented tie-break) then becomes acceptable and the 23:55 O2 rejection is withdrawn.
+    2. Design: an incremental, append-only spec-id -> commit index in the git common dir, updated by walking only commits not yet indexed (new tips since the last indexed set), so ref churn does not invalidate it. Per-hit reachability via merge-base --is-ancestor against current refs, or a single rev-list --no-walk check. Fail closed to the original query on any doubt, as today.
+    3. Estimate the cost per show (index update when N new commits arrived, plus K hits checked) against the 1000 ms budget at load ~10, using real numbers from this host (run timings on the primary or in a full clone; a seat clone refuses host git).
+    Post SKETCH v3 on BUG-2221, mail advisor, and stop for signoff.
+  created_at: 2026-10-26T11:30:31.804404771Z
+  modified_at: 2026-10-26T11:30:31.804404771Z
   session_id: 761a4fea-f388-41d1-93d9-f1386951253c
 history:
 - id: 01a173f1-1a2e-7c12-a2a1-e6bdafd814de
