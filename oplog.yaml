@@ -77995,5 +77995,31 @@ operations:
   timestamp: 2026-10-26T21:34:54.685899844Z
   kind: !SetOwner
     owner: joe.mooney@gmail.com
-clock: 6052
+- id: 01a17a39-f578-7572-95ef-7a03c37cff87
+  target_id: 01a17a39-ee5d-7c63-b2b8-fc444a4a2661
+  author: aida
+  node_id: '1'
+  lamport: 6053
+  timestamp: 2026-10-26T21:59:41.176750637Z
+  kind: !Create
+    title: 'Review PR-2954: [AI:claude] fix(allocation): accept a WORK counter handle superseded by atomic replacement (BUG-b6b1278890774ef993d2ebc327862470-004)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a17a23`) for branch `bug-workbinding-flake`.
+
+      - PR: <https://github.com/joemooney/aida/pull/2954>
+      - Branch: `bug-workbinding-flake` → `main`
+
+      ## Covers
+
+      - BUG-b6b1278890774ef993d2ebc327862470-004
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 2954` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 6053
 node_id: '1'
