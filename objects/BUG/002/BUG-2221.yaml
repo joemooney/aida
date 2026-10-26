@@ -28,7 +28,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T06:38:42.269077518Z
-modified_at: 2026-10-26T07:31:56.042035443Z
+modified_at: 2026-10-26T07:33:53.886225359Z
 req_type: Bug
 comments:
 - id: 01a17250-10a0-76e1-b802-890d5a4ca31b
@@ -306,6 +306,12 @@ comments:
   modified_at: 2026-10-26T07:07:03.861537562Z
   session_id: 01a176f53085
   harness_version: 2.1.310 (Claude Code)
+- id: 01a17721-4e5e-7e42-92c7-e5455cbf69d4
+  author: joe
+  content: 'ADVISOR 2026-10-26 00:58 MST, PR #2945 (P2) round-1 request-changes: the reviewer judged the fast path exact and correctly scoped. Blocking: CI lib-0 is red on task_2143_no_new_raw_git_where_a_lease_tree_is_read ("trace.rs: 12 raw git builders, allowlist says 13"). Do NOT just lower the number: the two raw PCmd::new("git") builders moved into the new aida-cli-lib/src/linkage_branch.rs (lines ~163 and ~248), which the ratchet does not scan, so lowering trace.rs alone would launder them (same defect as PR-2935 round 1). Fix: build those commands through the clone-safe git helper the ratchet expects (as PR-2935 round 2 did for ship.rs), add linkage_branch.rs to the ratchet''s scanned set with an honest count, then lower trace.rs to 12. Also run the new bug_2221_branch_fast_path_tests locally (the reviewer found they were never run). Push to bug-2221-positive for #2945. Then continue with P1 (signed 23:55) as a separate PR. LIGHT gate.'
+  created_at: 2026-10-26T07:33:53.886225359Z
+  modified_at: 2026-10-26T07:33:53.886225359Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
 history:
 - id: 01a173f1-1a2e-7c12-a2a1-e6bdafd814de
   author: joe
