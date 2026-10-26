@@ -1,0 +1,33 @@
+id: 01a17711-f173-76a0-91c8-10836fe86fdb
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-006
+title: 'Review PR-2934: [AI:claude] fix(queue-work): --resume re-enters an orphaned seat clone in place (BUG-2223)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a176c7`) for branch `bug-2223`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2934>
+  - Branch: `bug-2223` → `main`
+
+  ## Covers
+
+  - BUG-2223
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2934` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-26T07:17:07.059089765Z
+modified_at: 2026-10-26T07:17:07.059089765Z
+req_type: Story
+filed_at:
+  code_sha: e4c2dd0575990c64b7b14ee242b02012c22195dd
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e4c2dd0575
+  vendor: claude
+  session: 761a4fea-f388-41d1-93d9-f1386951253c
