@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a174d6-b614-77b2-a0cf-6db07bb1f8d6
+  position: 285000
+  added_by: role:implementer
+  note: 'PR-2935 round-1 RC: route commit_tracked_changes through the clone-safe git helper'
+  added_at: 2026-10-26T06:10:37.076041304Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a171c8-6a5d-7073-80cf-9dfcd9667c53
   position: 286000
   added_by: role:implementer
