@@ -36,12 +36,21 @@ const RAW_GIT_ALLOWLIST: &[(&str, usize)] = &[
     // every raw site in them runs in the main checkout (`git -C project_root`).
     ("aida-cli-lib/src/status_prs.rs", 12),
     ("aida-cli-lib/src/status_sections.rs", 5),
-    ("aida-cli-lib/src/trace.rs", 13),
+    ("aida-cli-lib/src/trace.rs", 12),
     ("aida-cli-lib/src/worktree_dismiss.rs", 4),
     ("aida-cli-lib/src/worktree_gc.rs", 14),
     ("aida-cli-lib/src/worktree_scope_gate.rs", 1),
     ("aida-core/src/git_ops.rs", 5),
+    ("aida-cli-lib/src/linkage_branch.rs", 0),
 ];
+
+/// Files that run git against a tree handed to them by a caller, so they
+/// never name `worktree_path` themselves; the gate scans them anyway.
+/// `linkage_branch.rs` holds `aida show`'s in-flight branch search, moved out
+/// of `trace.rs` (a lease reader) by BUG-2221 P2; without this entry the move
+/// would take its two git builders out of the gate.
+// trace:BUG-2221 | ai:claude
+const ALWAYS_SCANNED: &[&str] = &["aida-cli-lib/src/linkage_branch.rs"];
 
 /// Lexical state across lines: braces inside Rust literals and comments do
 /// not close a test module. Raw strings close only with their full delimiter.
@@ -199,19 +208,25 @@ fn test_module_lines(lines: &[&str]) -> std::collections::HashSet<usize> {
 /// (`<Type>::new("git")`) without a `raw-git-ok(TASK-2053):` justification
 /// in the three lines above.
 fn raw_git_in_lease_reader(src: &str) -> Option<usize> {
+    raw_git_builders(src, true)
+}
+
+/// [`raw_git_in_lease_reader`], or with `require_field` false the raw-git
+/// count of any file (`Some` always), for [`ALWAYS_SCANNED`].
+fn raw_git_builders(src: &str, require_field: bool) -> Option<usize> {
     static RAW: std::sync::LazyLock<regex::Regex> =
         std::sync::LazyLock::new(|| regex::Regex::new(r#"\b\w+::new\("git"\)"#).unwrap());
     static FIELD: std::sync::LazyLock<regex::Regex> =
         std::sync::LazyLock::new(|| regex::Regex::new(r"\bworktree_path\b").unwrap());
     // Cheap pre-filter: most files never name the field.
-    if !src.contains("worktree_path") {
+    if require_field && !src.contains("worktree_path") {
         return None;
     }
     let (raw, field) = (&*RAW, &*FIELD);
     let lines: Vec<&str> = src.lines().collect();
     let tests = test_module_lines(&lines);
     let code = |i: usize| !tests.contains(&i) && !lines[i].trim_start().starts_with("//");
-    if !(0..lines.len()).any(|i| code(i) && field.is_match(lines[i])) {
+    if require_field && !(0..lines.len()).any(|i| code(i) && field.is_match(lines[i])) {
         return None;
     }
     let count = (0..lines.len())
@@ -369,8 +384,17 @@ fn task_2143_no_new_raw_git_where_a_lease_tree_is_read() {
     }
     let measured: BTreeMap<String, usize> = sources
         .iter()
-        .filter_map(|(file, src)| raw_git_in_lease_reader(src).map(|n| (file.clone(), n)))
+        .filter_map(|(file, src)| {
+            raw_git_builders(src, !ALWAYS_SCANNED.contains(&file.as_str()))
+                .map(|n| (file.clone(), n))
+        })
         .collect();
+    for always in ALWAYS_SCANNED {
+        assert!(
+            measured.contains_key(*always),
+            "the gate must scan {always}"
+        );
+    }
     let violations = ratchet_violations(&measured, RAW_GIT_ALLOWLIST);
     assert!(
         violations.is_empty(),

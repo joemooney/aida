@@ -22,7 +22,6 @@
 // trace:BUG-2221 | ai:claude
 
 use crate::*;
-use std::process::Command as PCmd;
 use std::time::{Duration, Instant};
 
 /// Upper bound on the fast path's share of the branch budget, so a miss
@@ -158,8 +157,10 @@ pub(crate) fn contains_branch_scan(
         if remaining.is_zero() {
             break;
         }
-        let mut cmd = PCmd::new("git");
-        cmd.arg("-C").arg(project_root).args([
+        // Clone-safe builder: host git refuses a seat clone (TASK-2143
+        // ratchet). trace:BUG-2221 | ai:claude
+        let mut cmd = aida_core::git_ops::host_git_command(project_root);
+        cmd.args([
             "branch",
             "--all",
             "--contains",
@@ -243,8 +244,8 @@ pub(crate) fn name_matched_branch_scan(
         if left.is_zero() {
             return None;
         }
-        let mut cmd = PCmd::new("git");
-        cmd.arg("-C").arg(project_root).args(args);
+        let mut cmd = aida_core::git_ops::host_git_command(project_root);
+        cmd.args(args);
         match command_output_with_timeout_detail(cmd, left) {
             BoundedCommandOutput::Completed(o) => Some(o),
             _ => None,
