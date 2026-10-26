@@ -24,7 +24,7 @@ const RAW_GIT_ALLOWLIST: &[(&str, usize)] = &[
     ("aida-cli-lib/src/mcp.rs", 1),
     ("aida-cli-lib/src/orchestrator_leases.rs", 6),
     ("aida-cli-lib/src/phase_driver.rs", 1),
-    ("aida-cli-lib/src/pr_cmd.rs", 53),
+    ("aida-cli-lib/src/pr_cmd.rs", 51),
     ("aida-cli-lib/src/queue_cmd.rs", 4),
     ("aida-cli-lib/src/seat_clone.rs", 2),
     ("aida-cli-lib/src/session_end.rs", 1),
