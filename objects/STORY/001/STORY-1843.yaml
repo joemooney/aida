@@ -23,7 +23,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-25T11:24:00.237731507Z
+modified_at: 2026-10-26T06:48:19.786152206Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -798,6 +798,16 @@ comments:
     Compatibility consequence for signed C3/D/E inventories: actual agy1 reports1.4.7 while agy2 runs a deleted1.4.4 executable. Installed1.4.7 help is not evidence about the older running process. Preserve both live owners/worktrees; do not substitute new resume processes, fake generation identities or guess internal injectors. Supported future ingress still needs a separate bounded consented synthetic capability proof, not UCAMI claims treated as APIs. Current work advances through proven Codex native queues. PR2920 signature correction under review is necessary parser repair, not proof of plugin activation or Agy delivery. This is evidence/boundary clarification within retained full A-E scope, not a deferral, rewrite or permission to narrow acceptance.
   created_at: 2026-10-25T11:24:00.237731507Z
   modified_at: 2026-10-25T11:24:00.237731507Z
+- id: 01a176f7-964a-7fc3-9b8e-482b2eaed146
+  author: joe
+  content: |-
+    ADVISOR 2026-10-26 00:05 MST, dispatch brief for the next STORY-1843 lane. The 2349/2345 prerequisite landed (#2937, e4c2dd0575). Codex/agy owners are retired; this lane is a Claude implementer.
+    1. First read the full spec and ALL comments (aida show STORY-1843 --full --comments), including the signed C design bindings (10:17) and the Agy capability checkpoint (11:24). Post ONE comment that inventories what is DONE on main (cite commits/PRs) versus what REMAINS per acceptance item and per signed slice (A-E).
+    2. Then implement the smallest remaining slice that is fully covered by an existing signoff. Anything not covered by a signoff (e.g. any live Agy session-injection channel, which the 11:24 checkpoint says is unproven): write a sketch on the spec, mail advisor, and stop for a ruling instead of coding it.
+    3. PR title uses (Refs STORY-1843) unless the PR completes every remaining acceptance item. LIGHT gate: one targeted cargo run plus make check-ci-fast.
+  created_at: 2026-10-26T06:48:19.786152206Z
+  modified_at: 2026-10-26T06:48:19.786152206Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
   author: joe
