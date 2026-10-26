@@ -3,10 +3,8 @@
 use super::*;
 use aida_core::transport_sanitization::{Policy, MAX_BYTES, SCANNER_VERSION};
 use std::collections::HashSet;
-use std::io::Read;
 use std::os::unix::process::CommandExt;
 use std::process::{Command, Stdio};
-use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 pub(super) const POLICY_FILE: &str = "aida-transport-policy.json";
@@ -14,9 +12,13 @@ const RECEIPT_FILE: &str = "aida-transport-receipt.json";
 const MAX_OBJECTS: usize = 10000;
 
 pub(super) struct Scan {
-    pub policy: Policy,
-    bytes: Vec<u8>,
-    pub hash: String,
+    snapshot: aida_core::transport_policy::Snapshot,
+}
+impl std::ops::Deref for Scan {
+    type Target = aida_core::transport_policy::Snapshot;
+    fn deref(&self) -> &Self::Target {
+        &self.snapshot
+    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -33,27 +35,13 @@ struct Receipt {
 
 impl Scan {
     pub(super) fn load(private: &private::Private) -> Result<Self> {
-        let bytes = private
-            .read(POLICY_FILE)?
-            .context("Reviewed private transport policy is missing; push refused")?;
-        let policy: Policy = serde_json::from_slice(&bytes)
-            .map_err(|_| anyhow::anyhow!("Invalid transport policy"))?;
-        policy
-            .validate()
-            .map_err(|_| anyhow::anyhow!("Invalid or unreviewed transport policy"))?;
-        let hash = format!("{:x}", Sha256::digest(&bytes));
         Ok(Self {
-            policy,
-            bytes,
-            hash,
+            snapshot: aida_core::transport_policy::Snapshot::load(private)?,
         })
     }
 
     pub(super) fn revalidate(&self, private: &private::Private) -> Result<()> {
-        if private.read(POLICY_FILE)?.as_deref() != Some(self.bytes.as_slice()) {
-            bail!("Transport policy changed; refused");
-        }
-        Ok(())
+        self.snapshot.revalidate(private)
     }
 
     pub(super) fn history(&self, store: &Path, profile: &Profile, tip: &str) -> Result<()> {
@@ -233,136 +221,12 @@ impl Scan {
 
 // Fixed storage shapes only. An arbitrary suffix never grants an exemption.
 fn scan_path<'a>(policy: &Policy, path: &'a str) -> Result<&'a str> {
-    if path.contains('\\') {
-        bail!("Unsupported path escape encoding");
-    }
-    if path.len() > 4096 || path.split('/').count() > 64 {
-        bail!("Transport path limit exceeded");
-    }
-    // Reuse the owning store's exact canonical sharding grammar. Remove only
-    // the validated structural extension; scan the full user-controlled ID,
-    // including node aliases. A random *.yaml name earns no exemption.
-    let store_id = path
-        .rsplit('/')
-        .next()
-        .and_then(|name| name.strip_suffix(".yaml"));
-    let canonical_store = store_id.is_some_and(|id| {
-        aida_core::object_store::relative_object_path(id)
-            .ok()
-            .as_deref()
-            == Some(path)
-    });
-    for component in path.split('/') {
-        if component.is_empty() || matches!(component, "." | "..") {
-            bail!("Unsupported transport path");
-        }
-        let fixed = !path.contains('/')
-            && matches!(
-                component,
-                "metadata.yaml"
-                    | "config.yaml"
-                    | "config.toml"
-                    | "oplog.jsonl"
-                    | "README.md"
-                    | ".gitignore"
-            );
-        let canonical_object = path.starts_with("objects/")
-            && path.split('/').count() == 2
-            && component.strip_suffix(".yaml").is_some_and(|stem| {
-                uuid::Uuid::parse_str(stem).is_ok_and(|id| id.to_string() == stem)
-            });
-        if canonical_store && component.ends_with(".yaml") {
-            policy
-                .text(component.strip_suffix(".yaml").unwrap())
-                .map_err(|category| anyhow::anyhow!("Transport scan refused: path {category}"))?;
-        } else if !fixed && !canonical_object {
-            policy
-                .text(component)
-                .map_err(|category| anyhow::anyhow!("Transport scan refused: path {category}"))?;
-        }
-    }
-    // Even fixed structural names are subject to reviewed literal deny tokens.
-    let lower = path.to_ascii_lowercase();
-    if policy
-        .deny_tokens
-        .iter()
-        .any(|t| lower.contains(&t.to_ascii_lowercase()))
-    {
-        bail!("Transport scan refused: path reviewed deny token");
-    }
-    Ok(path.rsplit_once('.').map(|(_, e)| e).unwrap_or(""))
+    policy
+        .path_format(path)
+        .map_err(|category| anyhow::anyhow!("Transport scan refused: path {category}"))
 }
 
-struct Running(std::process::Child);
-impl Drop for Running {
-    fn drop(&mut self) {
-        // Cover every return, including a parent that exited while one of its
-        // helpers retained stdout. Never leave that helper running after an
-        // incomplete read. The group ID remains reserved while members live.
-        unsafe {
-            libc::kill(-(self.0.id() as i32), libc::SIGKILL);
-        }
-        let _ = self.0.kill();
-        let _ = self.0.wait();
-    }
-}
-
-pub(super) fn bounded(
-    mut cmd: Command,
-    cap: usize,
-    deadline: Instant,
-) -> Result<(std::process::ExitStatus, Vec<u8>)> {
-    cmd.stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .process_group(0);
-    let child = cmd
-        .spawn()
-        .map_err(|_| anyhow::anyhow!("Transport graph reader unavailable"))?;
-    let mut running = Running(child);
-    let child = &mut running.0;
-    let stdout = child.stdout.take().unwrap();
-    let (tx, rx) = mpsc::channel();
-    std::thread::spawn(move || {
-        let mut bytes = Vec::new();
-        let result = stdout
-            .take(cap as u64 + 1)
-            .read_to_end(&mut bytes)
-            .map(|_| bytes);
-        let _ = tx.send(result);
-    });
-    let mut output = None;
-    loop {
-        if let Ok(result) = rx.try_recv() {
-            output = Some(result);
-        }
-        if output
-            .as_ref()
-            .is_some_and(|r| r.as_ref().map_or(true, |b| b.len() > cap))
-            || Instant::now() >= deadline
-        {
-            unsafe {
-                libc::kill(-(child.id() as i32), libc::SIGKILL);
-            }
-            let _ = child.wait();
-            bail!("Transport graph read limit or deadline exceeded");
-        }
-        if let Some(status) = child
-            .try_wait()
-            .map_err(|_| anyhow::anyhow!("Transport graph reader failed"))?
-        {
-            let bytes = output
-                .or_else(|| rx.recv_timeout(Duration::from_millis(100)).ok())
-                .context("Transport graph output incomplete")?
-                .map_err(|_| anyhow::anyhow!("Transport graph output unreadable"))?;
-            if bytes.len() > cap {
-                bail!("Transport graph output limit exceeded");
-            }
-            return Ok((status, bytes));
-        }
-        std::thread::sleep(Duration::from_millis(2));
-    }
-}
+pub(super) use aida_core::transport_policy::bounded;
 
 struct Reader<'a> {
     store: &'a Path,

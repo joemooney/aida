@@ -1492,6 +1492,9 @@ impl CachedGitBackend {
         // trace:BUG-1951 | ai:claude
         let (pre_write_head, n, post_write_head) = {
             self.refuse_store_write_on_read_only_cache()?;
+            #[cfg(unix)]
+            let _transport_admission =
+                crate::transport_policy::Admission::enter(self.inner.path())?;
             let _lock = self.inner.lock_store()?;
             let pre = self.current_head_sha();
             let n = self.inner.bulk_update(requirements, commit_subject)?;
@@ -1545,6 +1548,9 @@ impl CachedGitBackend {
         // trace:BUG-1951 | ai:claude
         let (pre_write_head, report, post_write_head) = {
             self.refuse_store_write_on_read_only_cache()?;
+            #[cfg(unix)]
+            let _transport_admission =
+                crate::transport_policy::Admission::enter(self.inner.path())?;
             let _lock = self.inner.lock_store()?;
             let pre = self.current_head_sha();
             let report = self
@@ -1588,6 +1594,8 @@ impl CachedGitBackend {
         F: FnOnce(&mut Requirement),
     {
         self.refuse_store_write_on_read_only_cache()?;
+        #[cfg(unix)]
+        let _transport_admission = crate::transport_policy::Admission::enter(self.inner.path())?;
         let _lock = self.inner.lock_store()?;
         let pre_write_head = self.current_head_sha();
         let Some(updated) =
@@ -1644,6 +1652,8 @@ impl DatabaseBackend for CachedGitBackend {
         // copies are stale).
         // trace:BUG-1612 | ai:claude
         self.refuse_store_write_on_read_only_cache()?;
+        #[cfg(unix)]
+        let _transport_admission = crate::transport_policy::Admission::enter(self.inner.path())?;
         let _lock = self.inner.lock_store()?;
         let report = self.inner.save_reporting(store)?;
         let head = self.current_head_sha();
@@ -1660,6 +1670,8 @@ impl DatabaseBackend for CachedGitBackend {
     // trace:STORY-1674 | ai:codex
     fn save_imported(&self, store: &RequirementsStore) -> Result<()> {
         self.refuse_store_write_on_read_only_cache()?;
+        #[cfg(unix)]
+        let _transport_admission = crate::transport_policy::Admission::enter(self.inner.path())?;
         let _lock = self.inner.lock_store()?;
         self.inner.save_imported(store)?;
         self.with_cache_schema_retry("rebuild cache after import", || self.full_rebuild(false))
@@ -1673,6 +1685,8 @@ impl DatabaseBackend for CachedGitBackend {
         F: FnOnce(&mut RequirementsStore),
     {
         self.refuse_store_write_on_read_only_cache()?;
+        #[cfg(unix)]
+        let _transport_admission = crate::transport_policy::Admission::enter(self.inner.path())?;
         let _lock = self.inner.lock_store()?;
         let pre_write_head = self.current_head_sha();
         let (store, summary) = self.inner.update_atomically_tracked(update_fn)?;
@@ -1761,6 +1775,8 @@ impl DatabaseBackend for CachedGitBackend {
         // respects it can commit between the capture and our own commit.
         // trace:BUG-1951 | ai:claude
         self.refuse_store_write_on_read_only_cache()?;
+        #[cfg(unix)]
+        let _transport_admission = crate::transport_policy::Admission::enter(self.inner.path())?;
         let _lock = self.inner.lock_store()?;
         let pre_write_head = self.current_head_sha();
         let added = self.inner.add_requirement(requirement)?;
@@ -1783,6 +1799,8 @@ impl DatabaseBackend for CachedGitBackend {
         // respects it can commit between the capture and our own commit.
         // trace:BUG-1951 | ai:claude
         self.refuse_store_write_on_read_only_cache()?;
+        #[cfg(unix)]
+        let _transport_admission = crate::transport_policy::Admission::enter(self.inner.path())?;
         let _lock = self.inner.lock_store()?;
         let pre_write_head = self.current_head_sha();
         self.inner.update_requirement(requirement)?;
@@ -1804,6 +1822,8 @@ impl DatabaseBackend for CachedGitBackend {
         // respects it can commit between the capture and our own commit.
         // trace:BUG-1951 | ai:claude
         self.refuse_store_write_on_read_only_cache()?;
+        #[cfg(unix)]
+        let _transport_admission = crate::transport_policy::Admission::enter(self.inner.path())?;
         let _lock = self.inner.lock_store()?;
         let pre_write_head = self.current_head_sha();
         let result = self.inner.update_requirement_versioned(requirement)?;
@@ -1826,6 +1846,8 @@ impl DatabaseBackend for CachedGitBackend {
         // respects it can commit between the capture and our own commit.
         // trace:BUG-1951 | ai:claude
         self.refuse_store_write_on_read_only_cache()?;
+        #[cfg(unix)]
+        let _transport_admission = crate::transport_policy::Admission::enter(self.inner.path())?;
         let _lock = self.inner.lock_store()?;
         let pre_write_head = self.current_head_sha();
         self.inner.delete_requirement(id)?;

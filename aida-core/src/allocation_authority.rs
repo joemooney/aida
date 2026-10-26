@@ -188,6 +188,25 @@ pub fn admit(
     if resolve(root)?.authoritative {
         return Ok(());
     }
+    admit_with_binding(incoming, existing, || node(root))
+}
+
+// Exactly the same ownership and local-ID admission for an unspent candidate.
+// trace:STORY-1742 | ai:codex
+// trace:BUG-2017 | ai:codex
+pub(crate) fn admit_candidate(
+    node: &str,
+    incoming: &[crate::Requirement],
+    existing: &[crate::Requirement],
+) -> Result<()> {
+    admit_with_binding(incoming, existing, || Ok(node.to_owned()))
+}
+
+fn admit_with_binding(
+    incoming: &[crate::Requirement],
+    existing: &[crate::Requirement],
+    mut resolve_node: impl FnMut() -> Result<String>,
+) -> Result<()> {
     // trace:BUG-2017 | ai:codex — reserve the complete candidate namespace
     // before any row can be persisted. Spec and agreed IDs share ownership;
     // aliases of the same UUID are valid, including canonical case variants.
@@ -239,7 +258,7 @@ pub fn admit(
             if let Some(id) = id {
                 let binding = match &binding {
                     Some(b) => b,
-                    None => binding.insert(node(root)?),
+                    None => binding.insert(resolve_node()?),
                 };
                 if !crate::object_store::valid_spec_id_format(id) || !local_id(id, binding) {
                     bail!("new or changed global display IDs refuse on a non-authoritative clone; nothing was written")
@@ -261,6 +280,22 @@ pub fn admit_meta_ids(
     if resolve(root)?.authoritative {
         return Ok(());
     }
+    admit_meta_with_binding(incoming, existing, || node(root))
+}
+
+pub(crate) fn admit_candidate_meta(
+    node: &str,
+    incoming: &[(uuid::Uuid, Option<String>)],
+    existing: &[(uuid::Uuid, Option<String>)],
+) -> Result<()> {
+    admit_meta_with_binding(incoming, existing, || Ok(node.to_owned()))
+}
+
+fn admit_meta_with_binding(
+    incoming: &[(uuid::Uuid, Option<String>)],
+    existing: &[(uuid::Uuid, Option<String>)],
+    mut resolve_node: impl FnMut() -> Result<String>,
+) -> Result<()> {
     for (uuid, id) in incoming {
         if let Some(id) = id {
             if existing
@@ -269,7 +304,7 @@ pub fn admit_meta_ids(
             {
                 continue;
             }
-            if !local_id(id, &node(root)?) {
+            if !local_id(id, &resolve_node()?) {
                 bail!("new global metadata IDs refuse on a non-authoritative clone")
             }
         }
@@ -279,6 +314,8 @@ pub fn admit_meta_ids(
 
 /// Registry serializers cannot mint claims through alternate paths or aliases.
 pub fn admit_registry_write(path: &Path) -> Result<()> {
+    #[cfg(unix)]
+    crate::transport_policy::refuse_unsupported(path)?;
     let resolved = destination(path)?;
     let parent = resolved.parent().context("invalid registry destination")?;
     if in_git_clone(parent)? {
@@ -307,6 +344,8 @@ pub fn admit_object_file(objects: &Path, req: &crate::Requirement) -> Result<()>
 
 /// Direct file dispensers under a clone cannot spend centralized counters.
 pub fn admit_file_dispenser(path: &Path, mode: &crate::dispenser::IdMode) -> Result<()> {
+    #[cfg(unix)]
+    crate::transport_policy::refuse_unsupported(path)?;
     // trace:BUG-2017 | ai:codex — inspect the original bound path before resolving aliases.
     crate::work_binding::bound_counter_state(path)?;
     let resolved = destination(path)?;
@@ -351,6 +390,8 @@ struct CloneDispenser {
 }
 impl CloneDispenser {
     fn inner(&self) -> Result<crate::models::DispenserHandle> {
+        #[cfg(unix)]
+        crate::transport_policy::refuse_unsupported(&self.root)?;
         let mode = resolve(&self.root)?;
         if mode.authoritative {
             return self

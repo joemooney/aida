@@ -67,6 +67,76 @@ static PERCENT_ESCAPE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"%[0-9a-fA
 static OPAQUE_URI: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)\bdata:[^\s]").unwrap());
 
 impl Policy {
+    /// The same closed path grammar is used for prospective writes and Git
+    /// history. Structural names never exempt user-controlled ID components.
+    pub fn path_format<'a>(&self, path: &'a str) -> Result<&'a str, Refusal> {
+        if path.contains('\\') || path.len() > 4096 || path.split('/').count() > 64 {
+            return Err(Refusal::Unsupported);
+        }
+        let id = path
+            .rsplit('/')
+            .next()
+            .and_then(|n| n.strip_suffix(".yaml"));
+        let canonical = id.is_some_and(|id| {
+            crate::object_store::relative_object_path(id)
+                .ok()
+                .as_deref()
+                == Some(path)
+        });
+        for component in path.split('/') {
+            if component.is_empty() || matches!(component, "." | "..") {
+                return Err(Refusal::Unsupported);
+            }
+            let fixed = !path.contains('/')
+                && matches!(
+                    component,
+                    "metadata.yaml"
+                        | "config.yaml"
+                        | "config.toml"
+                        | "oplog.yaml"
+                        | "oplog.jsonl"
+                        | "README.md"
+                        | ".gitignore"
+                );
+            let uuid_object = path.starts_with("objects/")
+                && path.split('/').count() == 2
+                && component.strip_suffix(".yaml").is_some_and(|stem| {
+                    uuid::Uuid::parse_str(stem).is_ok_and(|id| id.to_string() == stem)
+                });
+            if canonical && component.ends_with(".yaml") {
+                self.text(component.strip_suffix(".yaml").unwrap())?;
+            } else if !fixed && !uuid_object {
+                self.text(component)?;
+            }
+        }
+        let lower = path.to_ascii_lowercase();
+        if self
+            .deny_tokens
+            .iter()
+            .any(|t| lower.contains(&t.to_ascii_lowercase()))
+        {
+            return Err(Refusal::DenyToken);
+        }
+        let format = if path == "oplog.yaml" {
+            "aida-oplog"
+        } else {
+            path.rsplit_once('.')
+                .map(|(_, extension)| extension)
+                .unwrap_or("")
+        };
+        if !matches!(
+            format,
+            "aida-oplog" | "yaml" | "yml" | "json" | "jsonl" | "toml" | "txt" | "md"
+        ) {
+            return Err(Refusal::Unsupported);
+        }
+        Ok(format)
+    }
+
+    pub fn artifact(&self, path: &str, bytes: &[u8]) -> ScanResult {
+        self.document(self.path_format(path)?, bytes)
+    }
+
     pub fn validate(&self) -> ScanResult {
         if self.version != 1 || !self.reviewed || self.deny_tokens.len() > 256 {
             return Err(Refusal::Policy);
@@ -214,6 +284,7 @@ impl Policy {
         }
         let mut nodes = MAX_NODES;
         match extension {
+            "aida-oplog" => self.oplog_document(text, &mut nodes),
             "json" => self.json_document(text, &mut nodes),
             "jsonl" => {
                 for line in text.lines().filter(|line| !line.trim().is_empty()) {
@@ -253,6 +324,81 @@ impl Policy {
         }
         *nodes -= 1;
         Ok(())
+    }
+
+    /// Native oplog enum tags are supported only at the closed operation-kind
+    /// position. Every source byte, tag, key and decoded scalar is still
+    /// inspected; arbitrary YAML tags and aliases remain unsupported.
+    fn oplog_document(&self, text: &str, nodes: &mut usize) -> ScanResult {
+        if text.contains(['&', '*']) {
+            return Err(Refusal::Unsupported);
+        }
+        let _: crate::oplog::OpLog = serde_yaml::from_str(text).map_err(|_| Refusal::Encoding)?;
+        let mut value: serde_yaml::Value =
+            serde_yaml::from_str(text).map_err(|_| Refusal::Encoding)?;
+        let root = value.as_mapping_mut().ok_or(Refusal::Unsupported)?;
+        if root
+            .keys()
+            .any(|key| !matches!(key.as_str(), Some("operations" | "clock" | "node_id")))
+        {
+            return Err(Refusal::Unsupported);
+        }
+        let operations = root
+            .get_mut(serde_yaml::Value::String("operations".into()))
+            .and_then(serde_yaml::Value::as_sequence_mut)
+            .ok_or(Refusal::Unsupported)?;
+        for operation in operations {
+            let operation = operation.as_mapping_mut().ok_or(Refusal::Unsupported)?;
+            if operation.keys().any(|key| {
+                !matches!(
+                    key.as_str(),
+                    Some(
+                        "id" | "target_id"
+                            | "author"
+                            | "node_id"
+                            | "lamport"
+                            | "timestamp"
+                            | "kind"
+                    )
+                )
+            }) {
+                return Err(Refusal::Unsupported);
+            }
+            let kind = operation
+                .get_mut(serde_yaml::Value::String("kind".into()))
+                .ok_or(Refusal::Unsupported)?;
+            if let serde_yaml::Value::Tagged(tagged) = kind {
+                let name = tagged.tag.to_string();
+                let name = name.strip_prefix('!').unwrap_or(&name);
+                let allowed: &[&str] = match name {
+                    "Create" => &["title", "description", "req_type", "status", "priority"],
+                    "SetTitle" => &["title"],
+                    "SetDescription" => &["description"],
+                    "SetStatus" => &["status"],
+                    "SetPriority" => &["priority"],
+                    "SetOwner" => &["owner"],
+                    "AddTag" | "RemoveTag" => &["tag"],
+                    "AddComment" => &["comment_id", "content", "author"],
+                    "AddRelationship" => &["target_id", "rel_type"],
+                    "RemoveRelationship" => &["target_id"],
+                    _ => return Err(Refusal::Unsupported),
+                };
+                self.text(name)?;
+                let fields = tagged.value.as_mapping().ok_or(Refusal::Unsupported)?;
+                if fields
+                    .keys()
+                    .any(|key| key.as_str().is_none_or(|k| !allowed.contains(&k)))
+                {
+                    return Err(Refusal::Unsupported);
+                }
+                let mut plain = serde_yaml::Mapping::new();
+                plain.insert(serde_yaml::Value::String(name.into()), tagged.value.clone());
+                *kind = serde_yaml::Value::Mapping(plain);
+            } else if !matches!(kind.as_str(), Some("Archive" | "Unarchive")) {
+                return Err(Refusal::Unsupported);
+            }
+        }
+        self.yaml(&value, 0, nodes)
     }
 
     fn json_document(&self, text: &str, nodes: &mut usize) -> ScanResult {
@@ -370,6 +516,56 @@ mod tests {
             git_name: "AIDA Generic".into(),
             git_identity: "aida".into(),
         }
+    }
+
+    #[test]
+    fn story_1742_native_oplog_tags_are_closed_and_all_values_are_scanned() {
+        let policy = policy();
+        let mut log = crate::oplog::OpLog::new("a".repeat(32));
+        log.append(
+            uuid::Uuid::new_v4(),
+            "aida".into(),
+            crate::oplog::OpKind::SetTitle {
+                title: "Generic failure".into(),
+            },
+        );
+        let serialized = serde_yaml::to_string(&log).unwrap();
+        policy
+            .artifact("oplog.yaml", serialized.as_bytes())
+            .unwrap();
+        assert!(policy.document("yaml", serialized.as_bytes()).is_err());
+        assert!(policy
+            .artifact(
+                "oplog.yaml",
+                serialized
+                    .replace("Generic failure", "private-marker")
+                    .as_bytes()
+            )
+            .is_err());
+        assert!(policy
+            .artifact(
+                "oplog.yaml",
+                serialized.replace("!SetTitle", "!Unknown").as_bytes()
+            )
+            .is_err());
+        assert!(policy
+            .artifact(
+                "oplog.yaml",
+                serialized
+                    .replace(
+                        "title: Generic failure",
+                        "title: Generic failure\n    encoding: base64"
+                    )
+                    .as_bytes()
+            )
+            .is_err());
+        assert!(policy
+            .artifact(
+                "oplog.yaml",
+                b"operations: []\nclock: 0\nnode_id: safe\nextra: !SetTitle {title: safe}\n"
+            )
+            .is_err());
+        assert!(policy.path_format("oplog-private-marker.yaml").is_err());
     }
 
     #[test]

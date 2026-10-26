@@ -74,32 +74,7 @@ pub enum ProfileName {
     Work,
 }
 
-/// Hash the effective single origin endpoint rather than saving credentials or
-/// endpoint text. Fixed refspecs are code-owned, not an extensible local language.
-// trace:STORY-1742 | ai:codex
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct Profile {
-    version: u32,
-    name: ProfileName,
-    origin_sha256: String,
-    baseline: Option<String>,
-}
-
-impl Profile {
-    fn validate(&self) -> Result<()> {
-        if self.version != 1
-            || !is_hex_id(&self.origin_sha256, &[64])
-            || self
-                .baseline
-                .as_ref()
-                .is_some_and(|sha| !is_hex_id(sha, &[40, 64]))
-        {
-            bail!("Invalid or unsupported clone-local transport profile; push/pull refused.");
-        }
-        Ok(())
-    }
-}
+use aida_core::transport_policy::Profile;
 
 fn is_hex_id(value: &str, lengths: &[usize]) -> bool {
     lengths.contains(&value.len()) && value.bytes().all(|c| c.is_ascii_hexdigit())
@@ -165,23 +140,7 @@ fn common_dir(root: &Path) -> Result<Option<PathBuf>> {
 }
 
 fn load(common: &Path) -> Result<Option<Profile>> {
-    // Ordinary shared/group-writable clones retain their existing behavior
-    // until explicit enrollment. Presence requires the full private trust
-    // checks; disappearance after this probe must never disable enforcement.
-    match fs::symlink_metadata(common.join(PROFILE_FILE)) {
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(_) => bail!("Cannot determine clone-local transport policy; refused"),
-        Ok(_) => {}
-    }
-    let bytes = private::Private::open(common)?
-        .read(PROFILE_FILE)?
-        .context("Transport profile changed during discovery; refused")?;
-    // serde errors can quote values; do not echo a corrupt profile's content.
-    let profile: Profile = serde_json::from_slice(&bytes).map_err(|_| {
-        anyhow::anyhow!("Invalid clone-local transport profile; push/pull refused.")
-    })?;
-    profile.validate()?;
-    Ok(Some(profile))
+    Profile::load(common)
 }
 
 fn origin_endpoint(root: &Path) -> Result<String> {
@@ -439,7 +398,9 @@ fn configure_in(root: &Path, command: &TransportCommand) -> Result<()> {
             }
             let profile = Profile {
                 version: 1,
-                name: *name,
+                name: match name {
+                    ProfileName::Work => "work".into(),
+                },
                 origin_sha256: fingerprint,
                 baseline,
             };
@@ -527,7 +488,7 @@ fn plan(
         });
     }
     Ok(TransportPlan {
-        profile: profile.name,
+        profile: ProfileName::Work,
         operation: if push { "push" } else { "pull" },
         remote: "origin",
         source_ref: STORE_REF,

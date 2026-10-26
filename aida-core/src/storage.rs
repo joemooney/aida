@@ -450,6 +450,10 @@ impl Storage {
     }
 
     pub fn load(&self) -> Result<RequirementsStore> {
+        #[cfg(unix)]
+        if !self.file_path.is_dir() {
+            crate::transport_policy::refuse_unsupported(&self.file_path)?;
+        }
         // Check if this is a SQLite database by extension
         let is_sqlite = matches!(
             self.file_path.extension().and_then(|e| e.to_str()),
@@ -601,6 +605,10 @@ impl Storage {
         origin: crate::provenance::SaveOrigin,
     ) -> Result<()> {
         use crate::provenance::SaveOrigin;
+        #[cfg(unix)]
+        if !self.file_path.is_dir() {
+            crate::transport_policy::refuse_unsupported(&self.file_path)?;
+        }
         // Check if this is a SQLite database by extension
         let is_sqlite = matches!(
             self.file_path.extension().and_then(|e| e.to_str()),

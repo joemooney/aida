@@ -170,6 +170,9 @@ pub mod templates;
 // TOML string quoting for hand-built config files. trace:BUG-1649 | ai:claude
 // trace:BUG-1650 | ai:claude
 pub mod toml_quote;
+// Shared transport admission precedes store/counter locks. trace:STORY-1742 | ai:codex
+#[cfg(all(unix, feature = "native"))]
+pub mod transport_policy;
 // Shared refusal-only content grammar; no intake adapter authority. trace:STORY-1742 | ai:codex
 pub mod transport_sanitization;
 #[cfg(feature = "native")]

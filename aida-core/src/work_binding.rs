@@ -10,7 +10,7 @@ pub const COUNTER_FILE: &str = "aida-work-dispenser.toml";
 
 /// Additive representation: legacy NodeConfig keeps its original meanings.
 /// No host, user, email, friendly name or path can enter this serialization.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct WorkBinding {
     pub version: u32,
@@ -116,6 +116,8 @@ pub fn bound_counter_state(path: &Path) -> Result<Option<DispenserState>> {
 /// Store writer precedes the common dispenser lock. Restart after publishing
 /// the counter but before publishing the binding recovers that same UUID.
 pub fn bootstrap(root: &Path) -> Result<Option<WorkBinding>> {
+    #[cfg(unix)]
+    crate::transport_policy::refuse_unsupported(root)?;
     if crate::allocation_authority::resolve(root)?.authoritative {
         return Ok(None);
     }
@@ -158,25 +160,7 @@ pub fn bootstrap(root: &Path) -> Result<Option<WorkBinding>> {
                 // counters. Require the complete original pair; only absence of
                 // both records is cold bootstrap. Never infer a zero high-water.
                 // trace:BUG-2017 | ai:codex
-                let node = read::<crate::node::NodeConfig>(&root.join(".aida/node.toml"))?;
-                let old = read::<DispenserState>(&legacy)?;
-                match (&node, &old) {
-                    (None, None) => {}
-                    (Some(node), Some(old)) => {
-                        crate::node::validate_node_id(&node.node_id).map_err(anyhow::Error::msg)?;
-                        anyhow::ensure!(
-                            old.mode == node.id_mode(),
-                            "legacy node/provider binding mismatch"
-                        );
-                    }
-                    _ => bail!("incomplete legacy node/provider pair; explicit recovery required"),
-                }
-                if let Some(old) = old {
-                    for (prefix, n) in old.sequences {
-                        let high = state.sequences.entry(prefix).or_default();
-                        *high = (*high).max(n);
-                    }
-                }
+                merge_legacy_state(root, &legacy, &mut state)?;
                 crate::write_atomic(&counter, toml::to_string_pretty(&state)?)?;
                 crate::write_atomic(
                     &common.join(BINDING_FILE),
@@ -188,6 +172,35 @@ pub fn bootstrap(root: &Path) -> Result<Option<WorkBinding>> {
         })
     })
 }
+
+// Shared by ordinary bootstrap and the unspent prepared candidate path.
+// trace:BUG-2017 | ai:codex
+// trace:STORY-1742 | ai:codex
+fn merge_legacy_state(root: &Path, legacy: &Path, state: &mut DispenserState) -> Result<()> {
+    let node = read::<crate::node::NodeConfig>(&root.join(".aida/node.toml"))?;
+    let old = read::<DispenserState>(&legacy)?;
+    match (&node, &old) {
+        (None, None) => {}
+        (Some(node), Some(old)) => {
+            crate::node::validate_node_id(&node.node_id).map_err(anyhow::Error::msg)?;
+            anyhow::ensure!(
+                old.mode == node.id_mode(),
+                "legacy node/provider binding mismatch"
+            );
+        }
+        _ => bail!("incomplete legacy node/provider pair; explicit recovery required"),
+    }
+    if let Some(old) = old {
+        for (prefix, n) in old.sequences {
+            let high = state.sequences.entry(prefix).or_default();
+            *high = (*high).max(n);
+        }
+    }
+    Ok(())
+}
+
+#[path = "work_candidate.rs"]
+pub(crate) mod candidate;
 
 #[cfg(test)]
 mod tests {
