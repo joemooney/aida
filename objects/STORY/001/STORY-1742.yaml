@@ -38,7 +38,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T22:02:03.191649035Z
-modified_at: 2026-10-26T10:39:42.503571848Z
+modified_at: 2026-10-26T11:42:38.098367927Z
 req_type: Story
 tags:
 - docs:impacted
@@ -458,6 +458,14 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-10-26T07:14:02.769959895Z
   modified_at: 2026-10-26T07:14:02.769959895Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
+- id: 01a17805-0812-71c3-a79f-1692963f40c3
+  author: joe
+  content: |-
+    ADVISOR RULING (recorded 2026-10-26 05:05 MST; originally given 02:00 MST in the PR-2938 round-2 brief). WORK content policy scope: the policy applies only to content a write ADDS (new or changed objects, the metadata delta, appended oplog records), never to historical records or unchanged objects. Historical text the current policy would refuse must never block a new write.
+    AMENDMENT after the PR-2938 round-2 review: intake and the S3a push gate must agree. One shared function decides what is scanned. For append-structured store files (oplog.yaml, metadata.yaml), BOTH intake and the push gate scan only the delta against the parent version of that file (appended records / changed values); every other blob is scanned whole, as today. So the push gate must not refuse a blob only because its unchanged prefix holds historical prose that intake correctly skipped. Grammar checks (real YAML anchors/aliases, size bounds per record) still apply to the full file on both sides.
+  created_at: 2026-10-26T11:42:38.098367927Z
+  modified_at: 2026-10-26T11:42:38.098367927Z
   session_id: 761a4fea-f388-41d1-93d9-f1386951253c
 history:
 - id: 01a16ee2-ad7a-7b30-aaeb-ec8f892fbe76
