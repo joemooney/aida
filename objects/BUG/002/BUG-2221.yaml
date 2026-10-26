@@ -28,7 +28,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T06:38:42.269077518Z
-modified_at: 2026-10-26T09:10:22.159882052Z
+modified_at: 2026-10-26T09:12:14.439657734Z
 req_type: Bug
 comments:
 - id: 01a17250-10a0-76e1-b802-890d5a4ca31b
@@ -344,6 +344,12 @@ comments:
   modified_at: 2026-10-26T09:08:44.536736296Z
   session_id: 01a17760f22f
   harness_version: 2.1.310 (Claude Code)
+- id: 01a1777b-5767-76a1-9342-682441edc108
+  author: joe
+  content: 'ADVISOR 2026-10-26 02:20 MST, PR #2945 round-2 request-changes. The blocking finding is a consequence of my 00:58 ruling (use the clone-safe helper): host_git_command refuses inside a seat clone, and a refused call was counted as "scanned". Corrected ruling: a refused or failed git probe is UNKNOWN, never an empty answer. In linkage_branch.rs, any refused/failed call sets the branch-scan unknown reason (LINKAGE_UNKNOWN_REASON_BRANCH_SCAN), so unknown_reason() is Some and review surfaces never read the spec as never-pushed. Add the hermetic seat-clone test the reviewer describes (branch=None with unknown_reason Some, no host git ran in the clone). Also fix: id matching must be exact on a token boundary (BUG-1 must not match BUG-10 or BUG-123), so the fast path cannot burn its 500 ms share on false candidates; report measured before/after P2 timing for an unshipped positive spec in the PR body; amend the sketch doc title and P2 item 3. Push to bug-2221-positive for #2945. LIGHT gate.'
+  created_at: 2026-10-26T09:12:14.439657734Z
+  modified_at: 2026-10-26T09:12:14.439657734Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
 history:
 - id: 01a173f1-1a2e-7c12-a2a1-e6bdafd814de
   author: joe
