@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-26T12:14:40.127741201Z
+modified_at: 2026-10-26T12:19:29.212998638Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -943,6 +943,82 @@ comments:
   modified_at: 2026-10-26T09:50:07.689220847Z
   session_id: 01a17787e4e7
   harness_version: 2.1.310 (Claude Code)
+- id: 01a17826-c53d-7531-a558-c5a53acbd9b9
+  author: joe
+  content: |
+    ## C SKETCH v1: retention barrier, admitted-writer permits, recovery ownership (claude, 2026-10-26). Awaiting an advisor ruling; NOT implemented
+
+    Basis: signoffs 48 (A-E, Q2 mixed writers refuse), 60, 63 (C design bindings #1-#8), the codex2 writer/retirement/lock inventory (comment 61, re-verified: every cited line still matches this branch at 61ebb15cbd), and B2 SKETCH v1 (comment 73).
+
+    ### Why this lane stopped at a sketch
+    - **B2b** (read-only adapters) is the next slice in signed order. It needs the comment-73 ruling on Q1 (core audience constructor), Q2 (passive rendering of LegacyWatermark) and Q3 (B2b before C, with per-ID `record_seen` for displayed IDs). No ruling has been posted on the spec, in mail or on #2948. So no B2b code has been written.
+    - **C** is design-bound by 63, but 63 #2 and #8 require "the doer's concrete permit/failure/recovery plan" and its fixtures before implementation. This comment is that plan.
+    - **#2944 follow-ups N1-N4** are all already in B2a (#2948, approved: N1 `expect(dead_code)`, N2 `legacy_watermark_ids()`, N3 monotone retraction, N4 recorded-default conflict). Nothing is left to fold in.
+
+    ### 1. Anchor and safe IO (48 #1, 63 #4)
+    New core module `aida-core/src/mailbox_lifecycle.rs`. Its anchor is `<verified common-git-dir>/aida/mail-lifecycle/`, mode 0700 and owned by the current uid. Every open is `O_NOFOLLOW` plus `fstat` and must be a regular file under a size cap; the module refuses symlinks, hardlinks (nlink>1) and FIFOs.
+    - `lifecycle.lock`: the Lifecycle flock. Acquisition is a **bounded try** (default 2 s), and it refuses on timeout rather than blocking. There is no thread re-entrancy. Holding it while the code acquires Pool or Seat, or runs a hook, network or Git command, is a bug that a debug assertion catches.
+    - `sources/<key>.json`: one record per mail source. `key` = SHA-256(common-git, worktree admin name from `git rev-parse --git-dir`, dev/ino of `<checkout>/.aida/mailbox`). Fields:
+      - `generation: u64`, a monotonic counter minted under Lifecycle. It is never derived from a path or mtime (63 #2).
+      - `state`: `Open | Fenced{op_id, reason} | Retired{retained_dir}`.
+      - `permits[]`: one entry per admitted writer, as `{permit_id, kind: Local|Canonical, pid, start_ticks, boot_id, generation}`.
+    - `retained/<key>/<generation>/`: preserved message JSON, receipts and watermarks, plus `manifest.json` (SHA-256 per file, counts, original path, evidence origin).
+    - `journal/<op_id>.json`: the retirement journal. Phases are `Fenced → Quiesced → Preserved → Committed → Removed → Finalized`. Each phase is written atomically with fsync before the phase's side effect.
+
+    ### 2. Local writer admission (the core seam for CLI, MCP, REST and system writers; inventory §1/§2)
+    `write_local_message` becomes `admit → write → complete`:
+    1. Resolve the verified common Git dir and the source key with **no lock held**.
+    2. Under Lifecycle (short), refuse with the typed error `SourceRetiring` if the source is `Fenced` or `Retired`. Otherwise append a permit row stamped with the current generation, fsync, and release.
+    3. `write_atomic` the message with no lock held.
+    4. Under Lifecycle (short), remove the row. `Drop` without `complete` does the same on a best-effort basis.
+
+    Existing outer scopes (SeatPermit, dispatcher tick, disk-emergency, the REST handler) never re-enter Lifecycle, because each Lifecycle hold is a leaf with no callbacks. Callers keep their current best-effort warning on `SourceRetiring`. A saved requirement is never rolled back because a mail write was refused (inventory §2).
+
+    ### 3. Canonical publication permit (63 #2, #3)
+    `admit_canonical_publication(source) -> CanonicalPermit` is taken **before** the Store lock. The permit is moved into the existing `with_store_write_lock` closure. `write_message_in` and `write_snapshot_locked` change to take `&CanonicalPermit`, so a canonical write without admission does not compile.
+    - The permit is generation-bound to the local source it reads from. It is a row in that source's `permits[]`, not a held lock, so no Lifecycle lock is held across push or pull networking or hooks.
+    - The permit is released when the store closure returns. Retirement of that source waits for the row to clear, or refuses on a bounded timeout.
+    - Lock order Store→Dispense is unchanged. Lifecycle is never taken inside a Store-held region. The thread-local re-entrant digest path takes no new lock.
+    - 63 #3 coverage: store Git intake, rebase, union, fast-forward and checkout mutate committed canonical mail that Git itself retains. `remove_store_worktree` is the one canonical destructive entry. It refuses while canonical permits are live or while the canonical mailbox holds untracked or uncommitted files. QC4 asks for a ruling on this.
+
+    ### 4. Retirement barrier (`retire_source(op) -> RetireOutcome`)
+    1. **Fence** (Lifecycle): set `state = Fenced{op_id}`, write the journal entry `Fenced`, release. New admissions now refuse.
+    2. **Quiesce**, with no lock held and a bounded wait. Every permit row with a lower generation must clear. A row whose pid, start_ticks and boot_id together prove the writer is dead is reaped. Any row with unobservable liveness (another PID namespace, missing `/proc` start time) **refuses** (48 Q2: PID death alone is not proof for unknown writers, so unknown means refuse).
+    3. **Preserve**, with no lock held. Same filesystem: `rename` the mailbox and receipt files into `retained/<key>/<gen>/`, then fsync the directories. Cross-device: copy, verify the SHA-256 manifest, then remove the source files. Write `manifest.json` and the journal entry `Preserved`.
+    4. **Final fenced check** (Lifecycle): the generation, the `Fenced{op_id}` state, the dev/ino of the mailbox directory and an empty source entry set must all be unchanged. Any new entry means a non-admitting writer wrote during the window, so the operation refuses and **keeps** both the tree and the retained copy. Then set `Retired`, write `Committed`, and release.
+    5. The caller performs the destructive step (remove, reset or destroy), then `Removed`, then `Finalized`.
+
+    On a crash, the next `retire_source` or `aida doctor` replays the journal forward from the last durable phase. It never rolls back over preserved bytes. B's logical snapshot reads `retained/` as a source of kind `Retained`, so retained mail stays readable, unread and unacknowledged. Retention is not ACK, archive or handover (48 #4). `RetentionCoverage` moves from `Unestablished` to `Established{generation}` only for sources this barrier has recorded.
+
+    ### 5. Destructive entries and recovery ownership (63 #1, #5; inventory §4)
+    `RetireOutcome = Retired{generation} | Refused{reason, kept}`. Every entry calls the barrier **before** any irreversible or ownership-releasing step. On `Refused` the entry returns non-success and keeps the tree, lease, claim, pin and manifest. A security grant revocation still proceeds; the lease is recorded as `ending-retained`, never as active and never as cleaned up.
+    - **Pool** (`acquire`/reset, `return_to_pool`, `worktree_pool_destroy::destroy`): under the existing `with_state_lock`, mark the pool entry `Retiring{op_id, generation}` and fence (Pool→Lifecycle, short), then release both. Quiesce, preserve, salvage and hooks then run outside both locks. Re-take Pool→Lifecycle to revalidate and finalize the reset or destroy. Opaque `pre_destroy`/`post_create` hooks run outside every new lock. Their writes are caught by the final fenced check, never trusted.
+    - **`teardown_worktree_path`**: retire, remove, release Lifecycle, and only then take `pool.lock` for deregistration.
+    - **`session_end`**: the barrier moves **before** the lease delete. On refusal the BUG-1988 "warn and continue cleanup" tail does not run.
+    - **The other destructive entries** route through one guarded helper instead of raw `git worktree remove`: `session_start` rollback, `leases::force_cleanup_lease` and its doctor/heal/pickup callers, `session_reap`, `worktree_gc`, `worktree_dismiss`, `compete_cmd` (remove and prune), `phase_driver::teardown_failed_attempt_worktree`, `dispatch::cleanup_dead_reviewer_worktree`, plus the **reuse** paths `integrate_checkout::ensure_integrator_checkout` and `dispatch::prepare_lane_worktree` (`checkout -B` onto an existing tree). A reuse retires the old generation, then mints a new one, so the next occupant never sees the previous occupant's mail.
+    - **Clones** (63 #4): the retention home is main's anchor, resolved only through a verified `seat_clone::host_recorded_clone`/`main_for` binding, and the clone's key is derived from that host record. A missing, unverified or stale binding refuses destruction (`destroy_with_shipped`, `cleanup_failed_clone`, `CloneCleanupGuard::drop`) and keeps the clone. The code never guesses main from a neighbouring directory, the origin remote or the store.
+
+    ### 6. Fixtures (63 #8, inventory "decisive conformance")
+    - A lock-observer test seam records the lock classes entered, using the same test-only hook pattern as `store_write_lock_contended_for`. It covers CLI, MCP and REST writes, and every entry in §5.
+    - Lock-order cases: a Pool-held reset and a Store-held digest each prove they never take Lifecycle in reverse. SeatPermit-held and tick-held senders never re-take Seat or tick.
+    - Crash cases: one crash point per journal phase, with replay. A writer admitted before the fence finishes and is captured. A writer after the fence is refused. A non-admitting late writer is caught by the final check, and the tree and lease are kept.
+    - Other required cases: an unknown-liveness permit refuses; a cross-device copy refuses on a manifest mismatch; a full disk refuses and keeps the source; a canonical permit live across a long publication keeps retirement waiting or refusing; a pool reset with ignored old mail does not reach the next occupant; an unverified clone refuses; a `session_end` refusal keeps the lease, claim and manifest while a revoked grant stays revoked.
+
+    ### 7. Proposed slicing (all `Refs STORY-1843`, each STRICT-reviewed)
+    - **C1, core only:** the anchor and safe IO, source records and generations, the local permit admission in `write_local_message` (production behavior is unchanged because nothing fences yet), and `retire_source` with the journal, replay and §6 crash fixtures. There is no destructive wiring, so no success-shaped claim: `RetentionCoverage` stays `Unestablished` in every production path.
+    - **C2:** wire every §5 destructive and reuse entry with the recovery-ownership ordering, the pool staged state and the clone binding. This is the slice where behavior changes. It touches more than 10 files, so it runs check-ci-compile and test-touched.
+    - **C3x:** the canonical permit, the `write_message_in` signature change and `remove_store_worktree`.
+    - **B2c:** after that, the post-flush ACK and the receipt anchor under Lifecycle→Receipt (63 #6, 63 #8 ordering).
+
+    ### Ruling requested
+    - **QC1, mixed or unknown writers before activation (48 Q2).** Long-lived old MCP and REST hosts cannot hold permits. Lean: a source with **no** mail, receipt or watermark bytes may retire after the fence and the final check. A mail-bearing source refuses until an operator-run activation records that every writer host on the machine is admitting; activation is a C3-style dry-run report first. The alternative, refusing every retirement until activation, would block all session ends.
+    - **QC2:** bounded try-lock with a 2 s default and refusal on timeout, versus blocking.
+    - **QC3:** is C1 acceptable as a core-only slice whose `retire_source` has no production caller yet (`expect(dead_code)` until C2)?
+    - **QC4:** the canonical-store removal rule in §3.
+    - **Still open:** the comment-73 Q1-Q3 ruling for B2b. Lean: rule B2b first, since it is independent of C under Q3, with C1 in parallel.
+  created_at: 2026-10-26T12:19:29.212998638Z
+  modified_at: 2026-10-26T12:19:29.212998638Z
+  session_id: 2cd5df63-81dc-493f-9ae6-c60c1a86d375
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
   author: joe
