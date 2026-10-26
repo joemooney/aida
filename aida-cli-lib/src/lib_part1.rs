@@ -158,6 +158,10 @@ mod bug_1723_config_trust_tests;
 /// `pub(crate)` item stays crate-private.
 // trace:STORY-772 trace:ADR-16 | ai:claude
 pub fn main_entry() {
+    // BUG-2221: anchor the foreground-scheduling window (the show negative
+    // probe derives its batch budget from process entry + the unchanged
+    // 1000 ms objective). trace:BUG-2221 | ai:claude
+    crate::show_negative::note_process_entry();
     // trace:BUG-1960 | ai:claude
     // First, while still single-threaded: take the wrapper's init side-channel
     // path out of the environment so no child process inherits it.
@@ -1611,6 +1615,9 @@ pub(crate) fn parse_help_commands_args(args: &[String]) -> Result<(bool, bool, b
 }
 
 pub(crate) fn run() -> Result<()> {
+    // BUG-2221: anchor for the `argv` phase recorded below once dispatch
+    // knows the command is `show`. trace:BUG-2221 | ai:claude
+    let run_started = std::time::Instant::now();
     crate::gate::seat_authority::ensure_commit_authority_resolver_registered();
     let raw_args: Vec<String> = std::env::args().collect();
     // Intercept --version / -V before clap so we can include the build-time
@@ -1787,6 +1794,17 @@ pub(crate) fn run() -> Result<()> {
         cli = crate::command_registry::parse_from(dispatch_argv);
     }
 
+    // BUG-2221: `show` records per-phase timings (BUG-1993); everything from
+    // process entry to here — alias rewrites, extension-shadowing guards, the
+    // clap parse, the JSON capability gate and its reparse — is the `argv`
+    // phase. Arming here (earlier than the storage-dispatch arm, which
+    // `arm_phases` tolerates re-running) is what lets this pre-dispatch span
+    // be attributed at all. trace:BUG-2221 | ai:claude
+    if cli.command.name() == "show" {
+        crate::usage::arm_phases();
+        crate::usage::record_phase("argv", run_started.elapsed());
+    }
+
     // STORY-708: one-line, non-blocking deprecation hint. Printed to stderr (so
     // it never pollutes machine-readable stdout) only when the operator reached
     // groom via a deprecated alias. trace:STORY-708 | ai:claude
@@ -1872,7 +1890,12 @@ pub(crate) fn run() -> Result<()> {
         // it, so inside a distributed project with no local db they fell to the
         // legacy resolver and wrongly reported there was no `.aida/config.toml`.
         // trace:TASK-1486 | ai:claude
-        if let Some(store_path) = detect_distributed_store() {
+        // BUG-2221: store discovery is its own `show` phase so the walk-up /
+        // config read cost is attributable. trace:BUG-2221 | ai:claude
+        let discovery_phase = crate::usage::phase("discovery");
+        let detected_store = detect_distributed_store();
+        drop(discovery_phase);
+        if let Some(store_path) = detected_store {
             return run_on_distributed_store(&cli.command, &store_path, None);
         }
         // Distributed mode is declared in `.aida/config.toml` but the store
