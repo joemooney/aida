@@ -108,6 +108,13 @@ struct JobConfig {
     /// Typed predicate over the substrate snapshot.
     #[serde(default)]
     when: Option<String>,
+    /// Gate on the `every` cadence: an interval run fires only while this
+    /// predicate holds (checked on every tick, no episode). Unlike `when`,
+    /// which is a separate once-until-cleared trigger, `while` never fires
+    /// a job by itself.
+    // trace:STORY-1917 | ai:claude
+    #[serde(default, rename = "while")]
+    while_: Option<String>,
     #[serde(default, alias = "quiet-hours")]
     quiet_hours: Option<String>,
     #[serde(default)]
@@ -248,6 +255,10 @@ pub(crate) struct Task {
     on: Vec<EventTrigger>,
     when: Option<Expr>,
     when_raw: Option<String>,
+    /// `while` gate on the interval trigger.
+    // trace:STORY-1917 | ai:claude
+    while_: Option<Expr>,
+    while_raw: Option<String>,
     quiet_hours: Option<QuietHours>,
     enabled: bool,
     pub source: JobSource,
@@ -296,7 +307,11 @@ impl Task {
         if let Some(w) = &self.when_raw {
             parts.push(format!("when {w}"));
         }
-        parts.join(" + ")
+        let summary = parts.join(" + ");
+        match &self.while_raw {
+            Some(w) => format!("{summary} while {w}"),
+            None => summary,
+        }
     }
 
     fn what(&self) -> String {
@@ -658,6 +673,20 @@ fn build_task(job: JobConfig, source: JobSource) -> Result<Task> {
                 .with_context(|| format!("scheduled job '{name}': invalid `when` predicate"))
         })
         .transpose()?;
+    // trace:STORY-1917 | ai:claude
+    let while_ = job
+        .while_
+        .as_deref()
+        .map(|w| {
+            schedule_predicate::parse(w)
+                .with_context(|| format!("scheduled job '{name}': invalid `while` predicate"))
+        })
+        .transpose()?;
+    if while_.is_some() && interval.is_none() {
+        anyhow::bail!(
+            "scheduled job '{name}': `while` gates the `every` cadence, so it needs `every = \"...\"`"
+        );
+    }
     if interval.is_none() && job.on.is_empty() && when.is_none() {
         anyhow::bail!(
             "scheduled job '{name}' needs a schedule: `every = \"30m\"`, `on = [\"PrMerged\"]`, \
@@ -679,6 +708,8 @@ fn build_task(job: JobConfig, source: JobSource) -> Result<Task> {
         on,
         when,
         when_raw: job.when,
+        while_,
+        while_raw: job.while_,
         quiet_hours: job
             .quiet_hours
             .as_deref()
@@ -997,6 +1028,36 @@ where
     )
 }
 
+/// STORY-1917 R5 test seam: one tick over the project's real registry with
+/// the real snapshot collector, at a fixed clock, where each substrate job
+/// runs in-process through `run` (given the job's command) instead of a
+/// child `aida`.
+#[cfg(test)]
+pub(crate) fn tick_project_registry_for_test(
+    project_root: &Path,
+    now: DateTime<Utc>,
+    run: &dyn Fn(&str) -> Result<i32>,
+) -> Result<Vec<String>> {
+    let config = load_registry(project_root)?.context("no schedule registry")?;
+    let mut state = load_state(project_root)?;
+    tick_core(
+        project_root,
+        config,
+        &mut state,
+        now,
+        false,
+        |_, command| {
+            Ok(TaskOutcome {
+                status: run(command.display)?,
+                stdout: String::new(),
+                stderr: String::new(),
+            })
+        },
+        |fields| collect_snapshot(project_root, fields, None),
+        &[],
+    )
+}
+
 /// The tick: evaluate every enabled job's triggers (`every`, `on`, `when`),
 /// run substrate jobs through `exec`, and mark seat jobs due — never running
 /// them. Pure over its inputs except for the ledger + local-state writes.
@@ -1027,7 +1088,7 @@ where
         .tasks
         .iter()
         .filter(|t| t.enabled)
-        .filter_map(|t| t.when.as_ref())
+        .flat_map(|t| t.when.iter().chain(t.while_.iter()))
         .flat_map(|e| e.fields())
         .collect();
     let snap = if wanted.is_empty() {
@@ -1062,7 +1123,24 @@ where
         let mut triggers: Vec<Trigger> = Vec::new();
 
         if let Some(interval) = task.interval {
-            if interval_due(last_run, interval, now) {
+            // A `while` gate holds the cadence back while it is false; an
+            // unevaluable gate is false (and reported), never a free run.
+            // trace:STORY-1917 | ai:claude
+            let gate_open = match (&task.while_, snap.as_ref()) {
+                (None, _) => true,
+                (Some(expr), Some(snap)) => match schedule_predicate::eval(expr, snap) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        lines.push(format!(
+                            "schedule tick: {} `while` predicate error: {e}",
+                            task.name
+                        ));
+                        false
+                    }
+                },
+                (Some(_), None) => false,
+            };
+            if gate_open && interval_due(last_run, interval, now) {
                 triggers.push(Trigger::Every(interval));
             }
         }
@@ -1576,6 +1654,8 @@ fn legacy_tasks(project_root: &Path) -> Vec<Task> {
             on: Vec::new(),
             when: None,
             when_raw: None,
+            while_: None,
+            while_raw: None,
             quiet_hours: None,
             enabled: s.enabled,
             source: JobSource::Legacy,
@@ -1715,6 +1795,8 @@ fn builtin_routed_seat_task(name: &str) -> Option<Task> {
         }],
         when: None,
         when_raw: None,
+        while_: None,
+        while_raw: None,
         quiet_hours: None,
         enabled: true,
         source: JobSource::Project,
@@ -1864,7 +1946,9 @@ fn emit_cron(project_root: &Path) -> Result<()> {
         .iter()
         .filter(|task| task.enabled && task.kind == JobKind::Substrate)
     {
-        let Some(interval) = task.interval else {
+        // A `while`-gated job needs the tick to evaluate its gate; a raw cron
+        // line would run it ungated. trace:STORY-1917 | ai:claude
+        let (Some(interval), None) = (task.interval, &task.while_) else {
             continue;
         };
         println!(
@@ -2434,7 +2518,9 @@ pub(crate) fn overdue_substrate_jobs(project_root: &Path) -> Result<Vec<OverdueS
         if !task.enabled || task.kind != JobKind::Substrate {
             continue;
         }
-        let Some(interval) = task.interval else {
+        // A `while`-gated job idles by design while its gate is false.
+        // trace:STORY-1917 | ai:claude
+        let (Some(interval), None) = (task.interval, &task.while_) else {
             continue;
         };
         let Some(last_run) =
@@ -2867,6 +2953,13 @@ pub(crate) fn collect_snapshot(
     if fields.contains(&Field::MandateDriveActive) {
         snap.mandate_drive_active = crate::gate::mandate_drive::drive_record_active(now);
     }
+    // trace:STORY-1917 | ai:agy
+    if fields.contains(&Field::MandateDispatchActive) {
+        snap.mandate_dispatch_active = crate::dispatch::dispatch_record_active(now);
+    }
+    if fields.contains(&Field::DispatchPending) {
+        snap.dispatch_pending = crate::dispatch::pending_request_count(project_root);
+    }
     if fields.contains(&Field::QueueDepth) {
         snap.queue_depth = crate::read_queue_depth(project_root, None).unwrap_or(0) as i64;
     }
@@ -3180,6 +3273,18 @@ fn command_table() -> &'static [(&'static [&'static str], ScheduledCommand)] {
             ScheduledCommand {
                 display: "fleet drive --tick",
                 args: &["fleet", "drive", "--tick"],
+                hook_allowed: false,
+            },
+        ),
+        // STORY-1917: the typed dispatch substrate tick. Executes only `take`
+        // and `impl` requests (leaving `review`, `flow`, and `train` Pending
+        // for `aida dispatch serve`), never on the per-turn hook path.
+        // trace:STORY-1917 | ai:agy
+        (
+            &["dispatch tick"],
+            ScheduledCommand {
+                display: "dispatch tick",
+                args: &["dispatch", "tick"],
                 hook_allowed: false,
             },
         ),
@@ -3546,6 +3651,8 @@ pub(super) fn bug_1745_failure_trip(
         on: Vec::new(),
         when: None,
         when_raw: None,
+        while_: None,
+        while_raw: None,
         quiet_hours: None,
         enabled: true,
         source: JobSource::Project,
@@ -3764,6 +3871,8 @@ mod tests {
             on: Vec::new(),
             when: None,
             when_raw: None,
+            while_: None,
+            while_raw: None,
             quiet_hours: None,
             enabled: true,
             source: JobSource::Project,
@@ -3786,6 +3895,8 @@ mod tests {
                 .collect(),
             when: None,
             when_raw: None,
+            while_: None,
+            while_raw: None,
             quiet_hours: None,
             enabled: true,
             source: JobSource::Project,
@@ -4423,6 +4534,8 @@ mod tests {
             on: Vec::new(),
             when: None,
             when_raw: None,
+            while_: None,
+            while_raw: None,
             quiet_hours: None,
             enabled: true,
             source: JobSource::Project,
