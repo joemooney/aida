@@ -1,0 +1,18 @@
+{
+  "id": "review-watch-b140e9553e2a43e8a08a299246b4a0d6fe144552fd8f66ead0f6d96ffd019180",
+  "thread_id": "review-watch-b140e9553e2a43e8a08a299246b4a0d6fe144552fd8f66ead0f6d96ffd019180",
+  "from": "review-watch",
+  "to": {
+    "kind": "agent",
+    "agent": "joemooney"
+  },
+  "timestamp": 1793028717,
+  "body": "PR-2952 at c1acc33c89bd66c6143603fe55505d2338d36ed7 is behind its base branch `story-1843-b2` with overlapping paths. Merge `story-1843-b2` into the branch and push before review. The watcher did not update the branch.",
+  "subject": "PR-2952: merge `story-1843-b2` before review",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
