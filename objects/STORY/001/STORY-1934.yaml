@@ -29,7 +29,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-25T20:05:53.704885977Z
-modified_at: 2026-10-25T20:07:07.428287683Z
+modified_at: 2026-10-26T01:06:33.195497531Z
 req_type: Story
 relationships:
 - rel_type:
@@ -72,6 +72,13 @@ relationships:
   target_id: 01a1700e-e952-76e2-969e-ffe570c90cbf
   created_at: 2026-10-25T20:07:07.428284259Z
   created_by: joe
+comments:
+- id: 01a175be-ae6b-7f52-8803-ef12bc04e5d8
+  author: joe
+  content: 'ADVISOR ROUTING 2026-10-25 18:12 MST (two-round cap reached): authorized ONE final review round scoped to the delta since the last request-changes verdict, whose only blocker was red CI at that head. CI is now fixed and green; verify the fix doesn''t weaken tests, check exact-head CI, and record an attested verdict.'
+  created_at: 2026-10-26T01:06:33.195497531Z
+  modified_at: 2026-10-26T01:06:33.195497531Z
+  session_id: cde796d3-1750-4745-a8f9-7ab3bc7c3519
 history:
 - id: 01a174ab-b9eb-7bd3-82ef-2ca9cf572b7c
   author: joe
