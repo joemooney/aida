@@ -224,6 +224,23 @@ fn regular_paths_only(root: &std::path::Path, paths: Vec<String>) -> Vec<String>
         .collect()
 }
 
+/// Repository-relative paths the Claude Code bash sandbox masks with
+/// stand-ins (`/dev/null` binds inside the sandbox, empty read-only files on
+/// the host). They are never source: ship refuses to commit one that was
+/// staged.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-003 | ai:claude
+pub(crate) const SANDBOX_PLACEHOLDER_PATHS: &[&str] = &[
+    ".claude/agents",
+    ".claude/launch.json",
+    ".claude/loop.md",
+    ".claude/output-styles",
+    ".claude/routines",
+    ".claude/scheduled_tasks.json",
+    ".gitmodules",
+    ".idea",
+    ".vscode",
+];
+
 /// Whether `path` (repository-relative) on disk at `meta` looks like a sandbox
 /// stand-in: an empty file that is either read-only or sits at one of the
 /// paths the Claude Code sandbox masks. A real empty file a human adds (an
@@ -233,24 +250,32 @@ pub(crate) fn is_sandbox_placeholder(path: &str, meta: &std::fs::Metadata) -> bo
     if !meta.file_type().is_file() || meta.len() != 0 {
         return false;
     }
-    meta.permissions().readonly() || crate::seat_clone::SANDBOX_PLACEHOLDER_PATHS.contains(&path)
+    meta.permissions().readonly() || SANDBOX_PLACEHOLDER_PATHS.contains(&path)
 }
 
 /// Staged additions that are sandbox stand-ins (see [`is_sandbox_placeholder`]).
-/// Step 1 refuses to commit while any is staged: a committed `.gitmodules`
-/// stand-in makes session end and worktree dismiss refuse salvage.
+/// The probe runs the same plain `git` step 1 commits with, so it works in a
+/// seat clone, where host git refuses; a probe that cannot run is an error,
+/// never "no stand-ins".
 // trace:BUG-b6b1278890774ef993d2ebc327862470-003 | ai:claude
-pub(crate) fn staged_sandbox_placeholders(project_root: &std::path::Path) -> Vec<String> {
-    let Ok(out) = aida_core::git_ops::host_git_command(project_root)
+pub(crate) fn staged_sandbox_placeholders(
+    project_root: &std::path::Path,
+) -> anyhow::Result<Vec<String>> {
+    use anyhow::Context as _;
+    let out = std::process::Command::new("git")
+        .current_dir(project_root)
         .args(["diff", "--cached", "--name-only", "--diff-filter=A", "-z"])
         .output()
-    else {
-        return Vec::new();
-    };
+        .context("could not invoke `git diff --cached` to check for staged sandbox stand-ins")?;
     if !out.status.success() {
-        return Vec::new();
+        anyhow::bail!(
+            "could not list staged files to check for sandbox stand-ins: {} — fix the \
+             repository and re-run",
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
     }
-    out.stdout
+    Ok(out
+        .stdout
         .split(|b| *b == 0)
         .filter(|p| !p.is_empty())
         .map(|p| String::from_utf8_lossy(p).into_owned())
@@ -259,7 +284,25 @@ pub(crate) fn staged_sandbox_placeholders(project_root: &std::path::Path) -> Vec
                 .map(|m| is_sandbox_placeholder(p, &m))
                 .unwrap_or(false)
         })
-        .collect()
+        .collect())
+}
+
+/// Step 1's guard: refuses while a sandbox stand-in is staged, or when the
+/// staged files cannot be listed. A committed `.gitmodules` stand-in makes
+/// session end and worktree dismiss refuse salvage.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-003 | ai:claude
+pub(crate) fn refuse_staged_sandbox_placeholders(
+    project_root: &std::path::Path,
+) -> anyhow::Result<()> {
+    let placeholders = staged_sandbox_placeholders(project_root)?;
+    if !placeholders.is_empty() {
+        anyhow::bail!(
+            "staged files are empty sandbox stand-ins, not source: {} — unstage them with \
+             `git rm --cached -- <path>` and re-run",
+            placeholders.join(", ")
+        );
+    }
+    Ok(())
 }
 
 /// Warning printed when step 1 leaves untracked files out of the commit.
@@ -467,7 +510,7 @@ mod tests {
         ro.set_readonly(true);
         std::fs::set_permissions(root.join("masked"), ro).unwrap();
 
-        let mut found = staged_sandbox_placeholders(root);
+        let mut found = staged_sandbox_placeholders(root).unwrap();
         found.sort();
         assert_eq!(found, vec![".gitmodules", "masked"]);
     }
@@ -476,7 +519,17 @@ mod tests {
     fn nothing_staged_names_no_stand_ins() {
         let tmp = repo();
         std::fs::write(tmp.path().join(".idea"), "").unwrap();
-        assert!(staged_sandbox_placeholders(tmp.path()).is_empty());
+        assert!(staged_sandbox_placeholders(tmp.path()).unwrap().is_empty());
+    }
+
+    #[test]
+    fn an_unrunnable_stand_in_probe_refuses() {
+        let tmp = tempfile::tempdir().unwrap();
+        let err = refuse_staged_sandbox_placeholders(tmp.path()).unwrap_err();
+        assert!(
+            err.to_string().contains("could not list staged files"),
+            "{err}"
+        );
     }
 
     #[test]
