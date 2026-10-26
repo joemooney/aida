@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-26T09:23:10.634532559Z
+modified_at: 2026-10-26T09:24:23.151151388Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -869,6 +869,17 @@ comments:
   modified_at: 2026-10-26T09:23:10.634532559Z
   session_id: 01a1777591ca
   harness_version: 2.1.310 (Claude Code)
+- id: 01a17786-75ef-7cf0-8abe-97a9ddec32bf
+  author: joe
+  content: |-
+    ADVISOR 03:00 MST: PR #2944 (B1) APPROVED at 9ae539b5. Non-blocking follow-ups folded into the next STORY-1843 slice:
+    - N1 (minor) aida-core/src/mailbox_logical.rs:190 - ResolvedAudience::from_identity_policy is pub(crate) with no non-test caller: dead_code warning in every non-test aida-core build, and no crate outside aida-core can build a non-empty audience, so B2 needs a core-side constructor from verified identity facts (comment-66 question still unruled).
+    - N2 (minor) aida-core/src/mailbox_logical.rs:377-383 - unread_ids() returns only Unread, so LegacyWatermark records are neither unread nor acknowledged: caught_up()==Some(false) while unread_ids() is empty (asserted at mailbox_logical_tests.rs:313/315). Signoff 60 #2 calls legacy visible-unread-compatible; expose a legacy accessor or document the contract before B2 renders it.
+    - N3 (minor) aida-core/src/mailbox_logical.rs:1150-1163,468 - max-rank winner (archived=2 > retracted=1) drops a retraction held by a lower-rank replica in another source: recipient archives in main (archive marker keeps the body, mailbox_cmd.rs Archive), sender retracts in a sibling, snapshot returns the archived copy with full body. The cross-worktree union makes this reachable; treat retracted as monotone across replicas.
+    - N4 (cosmetic) aida-core/src/mailbox_logical.rs:1079-1099 - fill() treats an explicitly recorded default (intent fyi, urgent false) as not-recorded, so a fyi-vs-request disagreement merges to request instead of conflicting.
+  created_at: 2026-10-26T09:24:23.151151388Z
+  modified_at: 2026-10-26T09:24:23.151151388Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
   author: joe
