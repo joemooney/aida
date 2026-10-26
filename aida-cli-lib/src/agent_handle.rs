@@ -1491,12 +1491,10 @@ mod tests {
         let project = tmp.path();
         let binary = agent_registry::AgentBinaryIdentity::new("0.16.0".into(), "abc".into());
         {
-            let _env = crate::test_env::EnvVarsGuard::apply(&[
+            // trace:TASK-2349 | ai:claude
+            let _env = crate::test_env::AgentSessionIsolation::apply(&[
                 ("AIDA_AGENT_TYPE", Some("antigravity")),
                 ("AIDA_SESSION_ROLE", Some("reviewer")),
-                ("AIDA_SESSION_SCOPE", None),
-                ("AIDA_AGENT_NAME", None),
-                (LAUNCH_TOKEN_ENV, None),
             ]);
             let raw = agent_registry::touch_session_start_agent(
                 project,
@@ -1524,12 +1522,10 @@ mod tests {
                 bound.recipient_id
             );
         }
-        let _env = crate::test_env::EnvVarsGuard::apply(&[
+        let _env = crate::test_env::AgentSessionIsolation::apply(&[
             ("AIDA_AGENT_TYPE", Some("codex")),
             ("AIDA_SESSION_ROLE", Some("implementer")),
-            ("AIDA_SESSION_SCOPE", None),
             ("AIDA_AGENT_NAME", Some("impl-1700")),
-            (LAUNCH_TOKEN_ENV, None),
         ]);
         let launched =
             agent_registry::touch_session_start_agent(project, project, Some("thread-9"), &binary)
@@ -1621,11 +1617,9 @@ mod tests {
         );
         // Codex renders through its title/tmux integration with no payload;
         // its per-session thread id names the session.
-        let _env = crate::test_env::EnvVarsGuard::apply(&[
-            ("AIDA_HOOK_PAYLOAD", None),
-            ("CLAUDE_CODE_SESSION_ID", None),
-            ("CODEX_THREAD_ID", Some("codex-t")),
-        ]);
+        // trace:TASK-2349 | ai:claude
+        let _env =
+            crate::test_env::AgentSessionIsolation::apply(&[("CODEX_THREAD_ID", Some("codex-t"))]);
         assert_eq!(current_native_session_id().as_deref(), Some("codex-t"));
     }
 
@@ -1640,12 +1634,11 @@ mod tests {
             ("codex", "reviewer", "TASK-1", "codex-t"),
             ("antigravity", "advisor", "BUG-2", "agy-c"),
         ] {
-            let _env = crate::test_env::EnvVarsGuard::apply(&[
+            // trace:TASK-2349 | ai:claude
+            let _env = crate::test_env::AgentSessionIsolation::apply(&[
                 ("AIDA_AGENT_TYPE", Some(vendor)),
                 ("AIDA_SESSION_ROLE", Some(role)),
                 ("AIDA_SESSION_SCOPE", Some(spec)),
-                ("AIDA_AGENT_NAME", None),
-                (LAUNCH_TOKEN_ENV, None),
             ]);
             agent_registry::touch_session_start_agent(project, project, Some(sid), &binary)
                 .unwrap();
@@ -2086,7 +2079,8 @@ mod tests {
         assert_eq!(children[1].0, "claude-reviewer-02");
         for (i, (name, token)) in children.iter().enumerate() {
             let sid = format!("child-{i}");
-            let _env = crate::test_env::EnvVarsGuard::apply(&[
+            // trace:TASK-2349 | ai:claude
+            let _env = crate::test_env::AgentSessionIsolation::apply(&[
                 ("AIDA_AGENT_NAME", Some("claude-reviewer")),
                 (HANDLE_ENV, Some(name.as_str())),
                 (LAUNCH_TOKEN_ENV, Some(token.as_str())),

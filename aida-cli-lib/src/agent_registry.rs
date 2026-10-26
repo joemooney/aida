@@ -2795,7 +2795,42 @@ fn process_cmdline(pid: u32) -> Option<String> {
 
 #[cfg(unix)]
 pub(crate) fn session_start_agent_pid(child_pid: u32, agent_type: &str) -> Option<u32> {
+    #[cfg(test)]
+    if hermetic_ancestry_seam::active() {
+        return None;
+    }
     session_start_agent_pid_in(child_pid, agent_type, parent_pid, process_cmdline)
+}
+
+/// Test-only: makes this thread's vendor-ancestor walk see no agent client,
+/// as on a CI runner, so a test run from inside a live agent session cannot
+/// resolve that session's registry binding. Production has no such switch.
+/// Use through [`crate::test_env::AgentSessionIsolation`].
+// trace:TASK-2349 trace:TASK-2345 | ai:claude
+#[cfg(test)]
+pub(crate) mod hermetic_ancestry_seam {
+    use std::cell::Cell;
+
+    thread_local! {
+        static ACTIVE: Cell<bool> = const { Cell::new(false) };
+    }
+
+    pub(crate) fn active() -> bool {
+        ACTIVE.with(Cell::get)
+    }
+
+    /// Active until the guard drops, restoring the previous state.
+    pub(crate) struct Guard(bool);
+
+    pub(crate) fn enter() -> Guard {
+        Guard(ACTIVE.with(|a| a.replace(true)))
+    }
+
+    impl Drop for Guard {
+        fn drop(&mut self) {
+            ACTIVE.with(|a| a.set(self.0));
+        }
+    }
 }
 
 /// The nearest ancestor of `child_pid` whose cmdline is the agent's, over an

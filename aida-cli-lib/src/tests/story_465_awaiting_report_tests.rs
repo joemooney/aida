@@ -36,6 +36,23 @@ fn awaiting_clean_env() -> crate::test_env::EnvVarsGuard {
     ])
 }
 
+/// The full awaiting report with an unbound `operator-under-test` reader's
+/// mail facts (role from `ctx` only), so the mail split never depends on the
+/// session binding of whoever runs the suite.
+// trace:TASK-2345 | ai:claude
+fn awaiting_report_unbound(
+    project_root: &std::path::Path,
+    backend: &CachedGitBackend,
+    ctx: &UserStatusContext,
+) -> awaiting_you::AwaitingReport {
+    collect_awaiting_report_with_mail_facts(project_root, backend, ctx, true, false, || {
+        crate::MailIdentityFacts {
+            user: "operator-under-test".into(),
+            ..Default::default()
+        }
+    })
+}
+
 // STORY-465 acceptance: with no findings, no escalations, no briefs,
 // and `--no-ci` short-circuiting the gh call, the report comes back
 // empty so the section stays hidden. The quiet-day signal. trace:STORY-465
@@ -88,7 +105,7 @@ fn awaiting_report_folds_in_unread_mail_without_a_network_call() {
     let ctx = empty_user_ctx(Some("implementer"));
     // no_ci = true → the gh-backed PR probe is skipped (the network-free
     // path the per-turn notice rides).
-    let report = collect_awaiting_report(dir.path(), &backend, &ctx, true);
+    let report = awaiting_report_unbound(dir.path(), &backend, &ctx);
 
     assert!(
         report.mail.unread >= 1,
@@ -140,13 +157,9 @@ fn role_addressed_mail_does_not_inflate_the_operator_mail_count() {
         crate::mailbox_store::write_message(dir.path(), &msg).unwrap();
     }
 
-    let _env = crate::test_env::EnvVarsGuard::set(&[
-        ("AIDA_USER", "operator-under-test"),
-        ("AIDA_SESSION_ROLE", "advisor"),
-        ("AIDA_AGENT_TYPE", ""),
-    ]);
+    let _env = awaiting_clean_env();
     let ctx = empty_user_ctx(Some("advisor"));
-    let report = collect_awaiting_report(dir.path(), &backend, &ctx, true);
+    let report = awaiting_report_unbound(dir.path(), &backend, &ctx);
 
     assert_eq!(
         report.mail.unread, 0,
@@ -188,13 +201,9 @@ fn ctx_role_includes_shared_role_mail_when_env_role_is_absent() {
     };
     crate::mailbox_store::write_message(dir.path(), &msg).unwrap();
 
-    let _env = crate::test_env::EnvVarsGuard::set(&[
-        ("AIDA_USER", "operator-under-test"),
-        ("AIDA_SESSION_ROLE", ""),
-        ("AIDA_AGENT_TYPE", ""),
-    ]);
+    let _env = awaiting_clean_env();
     let ctx = empty_user_ctx(Some("advisor"));
-    let report = collect_awaiting_report(dir.path(), &backend, &ctx, true);
+    let report = awaiting_report_unbound(dir.path(), &backend, &ctx);
 
     assert_eq!(
         report.mail.unread, 0,
