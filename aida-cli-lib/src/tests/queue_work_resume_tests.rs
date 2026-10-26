@@ -96,7 +96,7 @@ fn queue_work_session_id_override_threads_through() {
     // STORY-132: a caller-minted UUID becomes the Fresh launch id
     // verbatim, instead of the auto-generated `Uuid::now_v7()`.
     let uuid = "019e2cb7-a2cd-7782-a503-f0daf2b8df82";
-    let launch = resolve_queue_work_launch("EPIC-26", None, false, Some(uuid)).unwrap();
+    let launch = resolve_queue_work_launch("EPIC-26", None, false, Some(uuid), None).unwrap();
     assert!(matches!(launch, QueueWorkLaunch::Fresh(_)));
     assert_eq!(launch.session_id(), uuid);
 }
@@ -105,7 +105,8 @@ fn queue_work_session_id_override_threads_through() {
 fn queue_work_rejects_non_uuid_session_id() {
     // STORY-132: a malformed `--session-id` fails clean, before any
     // worktree side effects, with a UUID-flavored message.
-    let err = resolve_queue_work_launch("EPIC-26", None, false, Some("not-a-uuid")).unwrap_err();
+    let err =
+        resolve_queue_work_launch("EPIC-26", None, false, Some("not-a-uuid"), None).unwrap_err();
     assert!(err.to_string().to_lowercase().contains("uuid"));
 }
 

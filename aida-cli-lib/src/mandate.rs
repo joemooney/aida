@@ -517,21 +517,26 @@ pub(crate) fn status_line(state: &MandateState, now: DateTime<Utc>, gates: &str)
     if !m.is_active_at(now) {
         return None;
     }
+    // trace:TASK-2342 | ai:agy
+    let kind_label = if m.is_drive() {
+        KIND_DRIVE.to_string()
+    } else {
+        let scopes = m
+            .effective_scopes()
+            .iter()
+            .map(|s| s.as_str())
+            .collect::<Vec<_>>()
+            .join(", ");
+        // A mandate with no effective scope covers nothing; say so rather
+        // than borrow a scope it does not hold. trace:TASK-2342 | ai:claude
+        if scopes.is_empty() {
+            "(no scopes)".to_string()
+        } else {
+            scopes
+        }
+    };
     let mut parts = vec![
-        format!(
-            "MANDATE {}",
-            if m.is_drive() {
-                KIND_DRIVE
-            } else if m.covers(Scope::ShipHeld) {
-                SCOPE_SHIP_HELD
-            } else {
-                m.effective_scopes()
-                    .iter()
-                    .next()
-                    .map(|s| s.as_str())
-                    .unwrap_or(SCOPE_SHIP_HELD)
-            }
-        ),
+        format!("MANDATE {kind_label}"),
         format!(
             "{} left",
             crate::gate::seat_authority::format_remaining(m.expires_at - now)
