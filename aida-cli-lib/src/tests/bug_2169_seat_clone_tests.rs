@@ -1623,3 +1623,39 @@ fn task_2300_failed_cleanup_refuses_fallback() {
     std::fs::remove_file(lock).unwrap();
     release_pin(&fx.main, &pin).unwrap();
 }
+
+/// TASK-2350: host git refuses to run in a seat clone, and the review
+/// auto-queue used to read that refusal as "no `origin` remote" and skip as a
+/// local-only project. The presence probe answers for a verified clone from
+/// its host main, and reports an unverified clone or a failed lookup as an
+/// error instead of `false`.
+// trace:TASK-2350 | ai:claude
+#[test]
+fn origin_presence_answers_for_a_seat_clone_and_never_guesses_absent() {
+    use crate::review_gates::origin_remote_presence;
+    let fx = fixture();
+    assert!(origin_remote_presence(&fx.main).unwrap());
+
+    let bare = fx.root.join("no-remote");
+    std::fs::create_dir_all(&bare).unwrap();
+    git_ok(&bare, &["init", "-q"]);
+    assert!(!origin_remote_presence(&bare).unwrap());
+
+    let not_a_repo = fx.root.join("not-a-repo");
+    std::fs::create_dir_all(&not_a_repo).unwrap();
+    assert!(origin_remote_presence(&not_a_repo).is_err());
+
+    let clone = fx.root.join("seats").join("aida-seat-aida-t2350");
+    create(&fx.main, &clone, "feat", "origin/main").unwrap();
+    let clone = clone.canonicalize().unwrap();
+    assert!(
+        !aida_core::git_ops::has_remote(&clone, "origin"),
+        "host git is refused in the clone, which is the false negative"
+    );
+    let err = origin_remote_presence(&clone).unwrap_err().to_string();
+    assert!(err.contains("could not be verified"), "{err}");
+
+    write_lease(&fx.main, &clone, "clone");
+    assert!(origin_remote_presence(&clone).unwrap());
+    assert!(origin_remote_presence(&clone.join(".aida")).unwrap());
+}
