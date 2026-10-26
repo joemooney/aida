@@ -6,12 +6,12 @@ description: |
   PR-2931 (TASK-2350) fixed the review auto-queue only. `git_ops::has_remote` still returns false when host git refuses to run in a seat clone (BUG-2169). Callers that can run from a seat clone may still take a "local-only" path by mistake. Examples: aida-cli-lib/src/status_prs.rs:636, which hides the "open a PR" hint when origin is missing, and aida-cli-lib/src/session_start.rs:1857 (CloneLaunch.has_origin). Check each `has_remote(.., "origin")` caller that can run with a seat-clone cwd, and move the ones that can to `review_gates::origin_remote_presence` / `git_ops::probe_remote`.
 
   Raised in review of PR-2931: https://github.com/joemooney/aida/pull/2931
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T20:29:57.091353456Z
-modified_at: 2026-10-26T05:44:46.369890469Z
+modified_at: 2026-10-26T06:38:13.217511072Z
 req_type: Task
 tags:
 - from-review:PR-2931
@@ -59,6 +59,20 @@ history:
   timestamp: 2026-10-26T05:44:51.867366374Z
   session_id: 761a4fea-f388-41d1-93d9-f1386951253c
   changes: []
+- id: 01a176ee-54db-7dd1-8ac1-02687226a508
+  author: aida-auto-bump
+  timestamp: 2026-10-26T06:38:13.211781946Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a176ee-54e1-7ce3-a471-5d88fc5611ed
+  timestamp: 2026-10-26T06:38:13.217507026Z
+  agent: aida
+  commit_sha: d936252f4f32087ad2928c015d6e2ba34a991367
+  summary: 'TASK-2356 met: status_prs awaiting-commit hint now uses origin_remote_presence (refusal keeps PR hint), mirror_sync_hubs uses probe_remote (refusal errors, not skip); session_start:1857 correctly left (project_root is verified host main via find_main_worktree_root); new seat-clone test covers refusal paths; CI green at head.'
+  review_verdict: approved
 filed_at:
   code_sha: 78765dde1e777bcbb11079d580864afaea9f70ea
   branch: main
@@ -72,3 +86,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-26T00:30:07.240399246Z
   implemented_by: joe
+  completed_at: 2026-10-26T06:38:13.211776668Z
+  completion_sha: d936252f4f32087ad2928c015d6e2ba34a991367
