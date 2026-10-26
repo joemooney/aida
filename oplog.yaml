@@ -77301,5 +77301,17 @@ operations:
   timestamp: 2026-10-26T12:14:41.259550247Z
   kind: !SetStatus
     status: In Progress
-clock: 5983
+- id: 01a1783f-241d-7e12-bffe-3d70134c88be
+  target_id: 01a1783f-1990-7492-94cf-0d8e4ad59539
+  author: aida
+  node_id: '1'
+  lamport: 5984
+  timestamp: 2026-10-26T12:46:06.365999061Z
+  kind: !Create
+    title: 'STORY-1843 slice C1: mail retention core (anchor, safe IO, source generations, local permit admission, retire_source journal with replay)'
+    description: 'Child of STORY-1843. Implements C SKETCH v1 (comment 75) slice C1 exactly as signed 2026-10-26 06:00 MST: core only, no production caller of retire_source yet (expect(dead_code) until C2), RetentionCoverage stays Unestablished in every production path, section 6 crash fixtures required, 2 s bounded try-lock refusing on timeout. STRICT review; PR title (Refs STORY-1843, TASK-<this>).'
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 5984
 node_id: '1'
