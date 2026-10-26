@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-2349",
+  "publishes": [
+    {
+      "at": "2026-10-26T06:38:28.005639035Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-25T17:30:53.092129441Z",
+      "spec": "TASK-2349",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-25T20:21:41.394376518Z",
+      "spec": "TASK-2349",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-25T21:11:40.308069947Z",
+      "spec": "TASK-2349",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-2349",
+        "branch": "task-2349-work",
+        "first_seen": "2026-10-25T21:11:40.308006439+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-26T03:23:48.321995737Z",
+      "spec": "TASK-2349",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-26T06:37:51.331874113Z",
+      "spec": "TASK-2349",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2937
+      }
+    },
+    {
+      "ts": "2026-10-26T06:38:27.824524798Z",
+      "spec": "TASK-2349",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "e4c2dd0575990c64b7b14ee242b02012c22195dd",
+        "pr": 2937,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
