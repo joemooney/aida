@@ -4343,6 +4343,31 @@ pub fn has_remote(repo: &Path, remote: &str) -> bool {
         .unwrap_or(false)
 }
 
+/// [`has_remote`] that tells "git answered: no such remote" (`Ok(false)`)
+/// apart from "git could not answer" (`Err`): a spawn failure, a refusal
+/// (host git never runs in a seat clone, BUG-2169), or any other error. A
+/// caller that would take a local-only path on `false` must not take it on a
+/// lookup failure.
+// trace:TASK-2350 | ai:claude
+pub fn probe_remote(repo: &Path, remote: &str) -> Result<bool> {
+    let r = git_with_env(
+        repo,
+        &["remote", "get-url", "--end-of-options", remote],
+        &[("LC_ALL", "C"), ("LANGUAGE", "C")],
+    )?;
+    if r.success {
+        return Ok(true);
+    }
+    if r.stderr.contains("No such remote") {
+        return Ok(false);
+    }
+    anyhow::bail!(
+        "`git remote get-url {remote}` failed in {}: {}",
+        repo.display(),
+        r.stderr.trim()
+    )
+}
+
 /// True when the remote has NO branch heads yet — i.e. a brand-new/empty
 /// remote, the "push-to-create" state. Implemented via `git ls-remote --heads
 /// <remote>`: an empty stdout (with a successful exit) means no heads. Returns
