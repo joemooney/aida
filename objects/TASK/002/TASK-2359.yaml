@@ -6,12 +6,12 @@ description: |
   PR-2932 (TASK-2351) changed aida ship step 1 from `git add -A` to `git add -u` (aida-cli-lib/src/pr_cmd.rs:1352). The new unit tests cover only the probes (tracked_changes_pending, untracked_regular_files, untracked_left_out_note), so reverting the staging flag to -A would still pass every test. Add an end-to-end step-1 test: a repo with a tracked edit and an untracked stray file. After step 1, HEAD should contain the edit and the stray file should still be untracked.
 
   Raised in review of PR-2932: https://github.com/joemooney/aida/pull/2932#issuecomment-6403120664
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T20:53:10.804761312Z
-modified_at: 2026-10-25T23:08:36.298893752Z
+modified_at: 2026-10-26T00:13:34.702841206Z
 req_type: Task
 tags:
 - from-review:PR-2932
@@ -22,6 +22,17 @@ relationships:
   target_id: 01a174ec-84b2-7d70-866b-57bdfb0b7de1
   created_at: 2026-10-25T23:07:18.763145312Z
   created_by: joe
+comments:
+- id: 01a1758e-144e-7741-ae9d-34b965c248f1
+  author: joe
+  content: |-
+    Implementer finding (kind:bug-spotted, severity:minor). I could not file it as a draft TASK because `aida add` fails in this seat with "requirement ID allocation failed".
+
+    `ship::tracked_changes_pending` (aida-cli-lib/src/ship.rs:184) uses `host_git_command`. In a contained seat clone that helper refuses and exits 1 (BUG-2169), and the probe treats the failure as pending work. So `aida ship` step 1 runs on a clean tree, `git commit` fails with "nothing added to commit", and ship aborts. I published PR-2935 manually (git push + gh pr create). Same class as TASK-2350 and TASK-2356. `aida pr auto-queue-review` also failed here (same `aida add` failure), so no review story was queued for PR-2935.
+  created_at: 2026-10-26T00:13:28.014198439Z
+  modified_at: 2026-10-26T00:13:28.014198439Z
+  session_id: 01a17552abaf
+  harness_version: 2.1.310 (Claude Code)
 history:
 - id: 01a17551-2846-7f12-adfe-a404c48cd2da
   author: joe
@@ -44,6 +55,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1758e-2f09-7171-9d9c-7dce79d31925
+  author: joe
+  timestamp: 2026-10-26T00:13:34.857334250Z
+  session_id: 01a17552abaf
+  harness_version: 2.1.310 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 24edd8a0b8f6371a1685f94d02a843c0d4bd9a0a
   branch: pr-2932
@@ -53,3 +73,7 @@ filed_at:
   vendor: claude
   session: 01a174cbed40
   harness_version: 2.1.310 (Claude Code)
+implementation_info:
+  implemented: true
+  implemented_at: 2026-10-26T00:13:34.702841206Z
+  implemented_by: joe
