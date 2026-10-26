@@ -28,7 +28,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T06:38:42.269077518Z
-modified_at: 2026-10-26T10:36:42.025036638Z
+modified_at: 2026-10-26T10:49:23.114742708Z
 req_type: Bug
 comments:
 - id: 01a17250-10a0-76e1-b802-890d5a4ca31b
@@ -379,6 +379,12 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: P1 guards (lost root, NEW strictly newer than cone roots, root tie replay, Kahn top-tie) look sound for the warm read and are oracle-tested, but the overlapped seeding snapshot is not pinned before the oracle''s ref read, so a ref move in that window can seed a stale cone that later warm shows keep returning. AC4 is unmeasured and CI was still pending at review.. No triage reason was given.'
   created_at: 2026-10-26T10:33:11.998663552Z
   modified_at: 2026-10-26T10:33:11.998663552Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
+- id: 01a177d4-47aa-7472-af6a-12c68560ebfb
+  author: joe
+  content: 'ADVISOR 03:52 MST: AC3 measurement for P2 posted on PR #2945 (neutral at load 15-22; no regression). P2 accepted for the Refs slice; BUG-2221 completes only after a quiet-host AC4 measurement, and P2 is removed in the completing PR if it still shows no gain. #2945 still needs its wording fixes (PR body, code comments, sketch doc status): the BUG-2221 lane does them on bug-2221-positive after the #2947 P1 rework.'
+  created_at: 2026-10-26T10:49:23.114742708Z
+  modified_at: 2026-10-26T10:49:23.114742708Z
   session_id: 761a4fea-f388-41d1-93d9-f1386951253c
 history:
 - id: 01a173f1-1a2e-7c12-a2a1-e6bdafd814de
