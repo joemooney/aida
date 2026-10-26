@@ -28,7 +28,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-25T06:38:42.269077518Z
-modified_at: 2026-10-26T11:43:42.022884430Z
+modified_at: 2026-10-26T11:44:50.314853608Z
 req_type: Bug
 comments:
 - id: 01a17250-10a0-76e1-b802-890d5a4ca31b
@@ -434,6 +434,18 @@ comments:
   created_at: 2026-10-26T11:43:42.022884430Z
   modified_at: 2026-10-26T11:43:42.022884430Z
   session_id: a9f57777-a124-4af6-85d1-088f9d50cdd3
+- id: 01a17807-0c8a-7602-89e6-dd4f8ebfbac5
+  author: joe
+  content: |-
+    ADVISOR SIGNOFF 2026-10-26 05:40 MST on SKETCH v3 (docs/plans/2026-10-26-bug-2221-sketch-v3.md, branch bug-2221-v3).
+    1. ORDER: the 23:55 O2 rejection is WITHDRAWN on the evidence (only the "newest referencing commit" contract is consumed; zero committer-date skew in 83,827 commits; differences only inside same-second groups). O2 APPROVED with the topo-safe tie-break: ct desc, then batch desc, then in-batch walk position asc. Update the date-order test at bug_2221_negative_proof_tests.rs:498 to pin THIS contract, not Kahn ties.
+    2. INDEX: APPROVED as designed (2.1-2.5), with these binding conditions: (a) storage hardening as in amendment 2 plus tonight's lessons: dirs 0700 and files 0600 written with explicit modes regardless of umask, owner (uid) and no-follow checks on every open, refuse with an actionable message on foreign or shared-write files; (b) a refused or failed git call is UNKNOWN, never an empty answer (the #2945 lesson); (c) PARSER_VERSION ratchet test as proposed; (d) every fail-closed path in 2.5 runs the unchanged original; (e) tests: equivalence of index answer vs the original query on fixtures including same-second ties, a deleted unmerged branch, a deleted-then-restored ref, a torn append, a parser-version bump, a shallow repo or replace refs (index disabled), and concurrent writers (lock held, so the reader answers in memory and writes nothing).
+    3. FILING-DRIFT: APPROVED as a separate follow-on slice: run the drift walk concurrently with the shipped check and branch search (no semantic change, same 1 s bound). Ship it as its own PR after the index.
+    4. P2 (#2945) is left as is; the completing PR keeps or removes it according to the final AC4 measurement.
+    Implement the index on bug-2221-v3 as a new PR (Refs BUG-2221). LIGHT gate (one targeted run plus check-ci-fast; check-ci-compile if >10 files). Measure warm/cold on the primary (a linked worktree works) and put the numbers in the PR body.
+  created_at: 2026-10-26T11:44:50.314853608Z
+  modified_at: 2026-10-26T11:44:50.314853608Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
 history:
 - id: 01a173f1-1a2e-7c12-a2a1-e6bdafd814de
   author: joe
