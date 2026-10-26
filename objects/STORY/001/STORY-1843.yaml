@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-26T09:24:23.151151388Z
+modified_at: 2026-10-26T09:24:52.627494728Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -879,6 +879,12 @@ comments:
     - N4 (cosmetic) aida-core/src/mailbox_logical.rs:1079-1099 - fill() treats an explicitly recorded default (intent fyi, urgent false) as not-recorded, so a fyi-vs-request disagreement merges to request instead of conflicting.
   created_at: 2026-10-26T09:24:23.151151388Z
   modified_at: 2026-10-26T09:24:23.151151388Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
+- id: 01a17786-e913-79b1-8d11-c295ee6c26f9
+  author: joe
+  content: 'ADVISOR 03:05 MST: next lane = slice B2 (the next signed slice after B1 #2944, approved, awaiting the operator train). Branch from origin/main plus #2944 if it has not landed yet (merge its branch in, so B2 builds on B1). Fold in the #2944 follow-ups N1-N4 (09:23 comment) where B2 touches the same code. Same rules as the 00:05 brief: implement only what a signoff covers; sketch and stop otherwise. Refs STORY-1843. LIGHT gate. Before committing, check git status for zero-byte sandbox placeholder files.'
+  created_at: 2026-10-26T09:24:52.627494728Z
+  modified_at: 2026-10-26T09:24:52.627494728Z
   session_id: 761a4fea-f388-41d1-93d9-f1386951253c
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
