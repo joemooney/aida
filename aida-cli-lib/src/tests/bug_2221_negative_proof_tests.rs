@@ -90,22 +90,70 @@ fn probe(repo: &Path, queries: &[&str], t: &ProbeTuning) -> NegativeProbe {
 
 /// The state file for (repo context, queries) — None when absent.
 fn state_on_disk(repo: &Path, queries: &[&str]) -> Option<NegativeState> {
-    let ContextSnapshot::Supported(ctx) = capture_context(repo, far_deadline())? else {
-        panic!("fixture repo must be a supported context");
-    };
-    let qk = query_key(&ids(queries));
-    let path = cache_dir(&ctx).join(state_file_name(&ctx, &qk));
+    let loc = locate(repo, far_deadline()).expect("fixture repo locates");
+    let path = state_path(&loc, &query_key(&ids(queries)));
     let bytes = std::fs::read(path).ok()?;
     Some(serde_json::from_slice(&bytes).expect("state file parses"))
 }
 
 fn namespace_dir(repo: &Path) -> PathBuf {
-    let ContextSnapshot::Supported(ctx) =
-        capture_context(repo, far_deadline()).expect("context captures")
-    else {
-        panic!("supported context");
+    cache_dir(&locate(repo, far_deadline()).expect("fixture repo locates"))
+}
+
+/// Run the production cold path twice the way two ordinary shows do — the
+/// first marks the key, the second is the snapshot-pinned seeding show —
+/// settling each deferral with a complete zero-reference oracle answer.
+fn seed_key(repo: &Path, queries: &[&str]) {
+    let negative = || OracleAnswer {
+        complete: true,
+        references: 0,
     };
-    cache_dir(&ctx)
+    let (_, mark) = probe_inner(repo, &ids(queries), &oracle_tuning());
+    assert!(
+        matches!(mark, Some(OracleSeed::Mark { .. })),
+        "cold key marks"
+    );
+    assert!(settle_oracle(
+        repo,
+        mark.unwrap(),
+        negative(),
+        far_deadline()
+    ));
+    let (_, seed) = probe_inner(repo, &ids(queries), &oracle_tuning());
+    assert!(
+        matches!(seed, Some(OracleSeed::Seed { .. })),
+        "marked key seeds"
+    );
+    assert!(settle_oracle(
+        repo,
+        seed.unwrap(),
+        negative(),
+        far_deadline()
+    ));
+}
+
+/// A logging git shim on PATH (records every argv line to the returned log
+/// file). Hold the guard for the shim's lifetime.
+#[cfg(unix)]
+fn install_logging_shim(tmp: &Path) -> (PathBuf, crate::test_env::EnvVarGuard) {
+    let real = real_git();
+    let shim_dir = tmp.join("shim");
+    std::fs::create_dir_all(&shim_dir).unwrap();
+    let log_path = tmp.join("git-calls.log");
+    crate::test_exec::write_executable(
+        &shim_dir.join("git"),
+        format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$*\" >> '{}'\nexec '{}' \"$@\"\n",
+            log_path.display(),
+            real.display()
+        ),
+    );
+    let mut paths = vec![shim_dir];
+    paths.extend(std::env::split_paths(
+        &std::env::var_os("PATH").unwrap_or_default(),
+    ));
+    let guard = crate::test_env::EnvVarGuard::set("PATH", std::env::join_paths(paths).unwrap());
+    (log_path, guard)
 }
 
 /// CLOSED requires the commit AND every parent proved; a negative tip alone
@@ -243,23 +291,7 @@ fn warm_negative_skips_all_ref_history() {
         NegativeProbe::ProvedEmpty
     );
     // Install a logging git shim, then re-probe warm.
-    let real = real_git();
-    let shim_dir = tmp.path().join("shim");
-    std::fs::create_dir_all(&shim_dir).unwrap();
-    let log_path = tmp.path().join("git-calls.log");
-    crate::test_exec::write_executable(
-        &shim_dir.join("git"),
-        format!(
-            "#!/bin/sh\nprintf '%s\\n' \"$*\" >> '{}'\nexec '{}' \"$@\"\n",
-            log_path.display(),
-            real.display()
-        ),
-    );
-    let mut paths = vec![shim_dir];
-    paths.extend(std::env::split_paths(
-        &std::env::var_os("PATH").unwrap_or_default(),
-    ));
-    let _path = crate::test_env::EnvVarGuard::set("PATH", std::env::join_paths(paths).unwrap());
+    let (log_path, _path) = install_logging_shim(tmp.path());
 
     assert_eq!(
         probe(&repo, &["TASK-7"], &tuning(1024, usize::MAX)),
@@ -582,15 +614,6 @@ fn shallow_graft_replace_and_config_change_disable_reuse() {
     );
     git(&repo, &["replace", "-d", &c2]);
 
-    // Replace-control override → refuse (never --no-replace-objects around it).
-    {
-        let _guard = crate::test_env::EnvVarGuard::set("GIT_NO_REPLACE_OBJECTS", "1");
-        assert_eq!(
-            probe(&repo, &["TASK-7"], &tuning(1024, usize::MAX)),
-            NegativeProbe::RunOriginal
-        );
-    }
-
     // Grafts file → refuse.
     let grafts = repo.join(".git/info/grafts");
     std::fs::create_dir_all(grafts.parent().unwrap()).unwrap();
@@ -637,6 +660,29 @@ fn shallow_graft_replace_and_config_change_disable_reuse() {
     assert_eq!(
         probe(&repo, &["TASK-7"], &tuning(1024, usize::MAX)),
         NegativeProbe::ProvedEmpty
+    );
+}
+
+/// A replace-control override refuses the fast path (never
+/// `--no-replace-objects` around it). Process-isolated: the variable would
+/// otherwise leak into every concurrently running probe fixture.
+#[cfg(unix)]
+#[test]
+fn replace_control_override_disables_reuse() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let tmp = tempfile::TempDir::new().unwrap();
+    let repo = init_repo(tmp.path());
+    commit(&repo, "feat: one");
+    assert_eq!(
+        probe(&repo, &["TASK-7"], &tuning(1024, usize::MAX)),
+        NegativeProbe::ProvedEmpty
+    );
+    let _guard = crate::test_env::EnvVarGuard::set("GIT_NO_REPLACE_OBJECTS", "1");
+    assert_eq!(
+        probe(&repo, &["TASK-7"], &tuning(1024, usize::MAX)),
+        NegativeProbe::RunOriginal
     );
 }
 
@@ -694,11 +740,12 @@ fn cache_lock_corruption_and_size_limit_degrade() {
         probe(&repo, &["TASK-7"], &tuning(1024, usize::MAX)),
         NegativeProbe::ProvedEmpty
     );
-    let ContextSnapshot::Supported(ctx) = capture_context(&repo, far_deadline()).unwrap() else {
+    let ContextSnapshot::Supported(ctx) = capture_context(&repo, None, far_deadline()).unwrap()
+    else {
         panic!("supported");
     };
     let qk = query_key(&ids(&["TASK-7"]));
-    let state_path = cache_dir(&ctx).join(state_file_name(&ctx, &qk));
+    let state_path = state_path(&ctx.loc, &qk);
     assert!(state_path.is_file());
 
     // Corruption: garbage JSON is ignored (no reuse, no crash) and a fresh
@@ -758,7 +805,7 @@ fn cache_lock_corruption_and_size_limit_degrade() {
 
     // Contended lock: the proof still completes THIS invocation, publication
     // is skipped, and nothing blocks.
-    let lock_path = cache_dir(&ctx).join(".lock");
+    let lock_path = cache_dir(&ctx.loc).join(".lock");
     let lock = std::fs::OpenOptions::new()
         .create(true)
         .truncate(false)
@@ -875,30 +922,64 @@ fn parser_behavior_pin() {
     let _ = extract_referenced_spec_ids_from_commit(referenced); // shape pin only
 }
 
-/// Production cold path: a fully cold key defers to the ORIGINAL collector
-/// (no batching, no incomplete answer) and a complete zero-reference oracle
-/// answer seeds every current root CLOSED — so the next show is a warm read
-/// with no batch at all. A snapshot that moves between the probe and the
-/// seed publishes nothing.
+/// Production cold path: a key with no state file defers to the ORIGINAL
+/// collector with NO snapshot (positive and cold shows pay nothing in front
+/// of the original query) and a complete zero-reference answer only MARKS
+/// it. The next show captures S/R BEFORE the original runs; a complete
+/// zero-reference answer against that unchanged snapshot seeds every
+/// current root CLOSED — so the show after is a warm read with no batch. A
+/// snapshot that moves between the probe and the seed publishes nothing.
 #[test]
 fn cold_oracle_seed_warms_key_only_on_unchanged_snapshot() {
     let tmp = tempfile::TempDir::new().unwrap();
     let repo = init_repo(tmp.path());
     commit(&repo, "update TASK-7"); // grep-positive, parser-negative
     commit(&repo, "feat: tip");
+    let negative = || OracleAnswer {
+        complete: true,
+        references: 0,
+    };
 
-    let (outcome, seed) = probe_inner(&repo, &ids(&["TASK-7"]), &oracle_tuning());
+    let (outcome, mark) = probe_inner(&repo, &ids(&["TASK-7"]), &oracle_tuning());
     assert_eq!(
         outcome,
         NegativeProbe::RunOriginal,
         "cold defers to the original"
     );
-    let seed = seed.expect("a cold supported key hands back a seed");
+    assert!(
+        matches!(mark, Some(OracleSeed::Mark { .. })),
+        "a key with no file takes no snapshot"
+    );
     assert!(
         state_on_disk(&repo, &["TASK-7"]).is_none(),
         "deferral writes nothing"
     );
-    assert!(publish_oracle_negative(&repo, seed, far_deadline()));
+    assert!(settle_oracle(
+        &repo,
+        mark.unwrap(),
+        negative(),
+        far_deadline()
+    ));
+    let marker = state_on_disk(&repo, &["TASK-7"]).expect("marker published");
+    assert!(
+        marker.closed.is_empty() && marker.open.is_empty() && marker.s_digest.is_empty(),
+        "a marker proves nothing"
+    );
+    assert_ne!(
+        probe(&repo, &["TASK-7"], &tuning(1024, 0)),
+        NegativeProbe::ProvedEmpty,
+        "a marker is never read as a proof"
+    );
+
+    let (outcome, seed) = probe_inner(&repo, &ids(&["TASK-7"]), &oracle_tuning());
+    assert_eq!(outcome, NegativeProbe::RunOriginal);
+    assert!(matches!(seed, Some(OracleSeed::Seed { .. })));
+    assert!(settle_oracle(
+        &repo,
+        seed.unwrap(),
+        negative(),
+        far_deadline()
+    ));
     let state = state_on_disk(&repo, &["TASK-7"]).expect("seed published");
     let tips: std::collections::BTreeSet<String> = git(
         &repo,
@@ -917,29 +998,105 @@ fn cold_oracle_seed_warms_key_only_on_unchanged_snapshot() {
         "a seeded key is a warm complete read with zero batches"
     );
 
-    // A ref moving between the deferral and the seed: nothing is published.
+    // A ref moving between the seeding probe and the settle: nothing.
+    let (_, mark) = probe_inner(&repo, &ids(&["TASK-8"]), &oracle_tuning());
+    assert!(settle_oracle(
+        &repo,
+        mark.unwrap(),
+        negative(),
+        far_deadline()
+    ));
     let (_, seed) = probe_inner(&repo, &ids(&["TASK-8"]), &oracle_tuning());
-    let seed = seed.expect("cold TASK-8 key");
+    let seed = seed.expect("marked TASK-8 key");
     commit(&repo, "feat: fleet moved meanwhile");
     assert!(
-        !publish_oracle_negative(&repo, seed, far_deadline()),
+        !settle_oracle(&repo, seed, negative(), far_deadline()),
         "a moved root snapshot must not be seeded as complete"
     );
-    assert!(state_on_disk(&repo, &["TASK-8"]).is_none());
+    assert!(state_on_disk(&repo, &["TASK-8"])
+        .is_some_and(|st| st.closed.is_empty() && st.open.is_empty()));
 
-    // Integrated: the cold show path answers COMPLETE (the oracle's own
-    // answer), equal to the unbounded collector, and warms the key.
+    // Integrated: two cold shows answer COMPLETE (the oracle's own answer),
+    // equal to the unbounded collector; the second seeds the key.
     let wanted = ids(&["TASK-9"]);
-    let shown = collect_git_linkage_until(&repo, &wanted, Instant::now() + Duration::from_secs(30));
     let oracle = collect_git_linkage_opts(&repo, &wanted, false);
-    assert_eq!(shown.commits, oracle.commits);
+    for _ in 0..2 {
+        let shown =
+            collect_git_linkage_until(&repo, &wanted, Instant::now() + Duration::from_secs(30));
+        assert_eq!(shown.commits, oracle.commits);
+        assert!(
+            !shown.commits_scan_incomplete,
+            "cold show keeps the complete answer"
+        );
+    }
     assert!(
-        !shown.commits_scan_incomplete,
-        "cold show keeps the complete answer"
+        state_on_disk(&repo, &["TASK-9"]).is_some_and(|st| !st.closed.is_empty()),
+        "the seeding show warms the key"
     );
+}
+
+/// Ruling 2026-10-25 (a): only an oracle that ran to COMPLETION seeds. A
+/// timed-out / failed / partially framed oracle — on a cold key or on a
+/// seeding show — publishes nothing; a positive answer drops the key.
+#[test]
+fn incomplete_oracle_seeds_nothing() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let repo = init_repo(tmp.path());
+    commit(&repo, "feat: work");
+    let partial = || OracleAnswer {
+        complete: false,
+        references: 0,
+    };
+    let (_, mark) = probe_inner(&repo, &ids(&["TASK-7"]), &oracle_tuning());
+    assert!(!settle_oracle(
+        &repo,
+        mark.unwrap(),
+        partial(),
+        far_deadline()
+    ));
     assert!(
-        state_on_disk(&repo, &["TASK-9"]).is_some(),
-        "and seeds the key"
+        state_on_disk(&repo, &["TASK-7"]).is_none(),
+        "an incomplete oracle does not even mark"
+    );
+
+    seed_key(&repo, &["TASK-8"]);
+    commit(&repo, "feat: newer work");
+    let (_, mark) = probe_inner(&repo, &ids(&["TASK-9"]), &oracle_tuning());
+    assert!(settle_oracle(
+        &repo,
+        mark.unwrap(),
+        OracleAnswer {
+            complete: true,
+            references: 0
+        },
+        far_deadline()
+    ));
+    let (_, seed) = probe_inner(&repo, &ids(&["TASK-9"]), &oracle_tuning());
+    assert!(!settle_oracle(
+        &repo,
+        seed.unwrap(),
+        partial(),
+        far_deadline()
+    ));
+    assert!(
+        state_on_disk(&repo, &["TASK-9"]).is_some_and(|st| st.closed.is_empty()),
+        "a seeding show with an incomplete oracle closes nothing"
+    );
+
+    // A positive oracle answer on a seeding show drops the key's state.
+    let (_, seed) = probe_inner(&repo, &ids(&["TASK-9"]), &oracle_tuning());
+    assert!(!settle_oracle(
+        &repo,
+        seed.unwrap(),
+        OracleAnswer {
+            complete: true,
+            references: 1
+        },
+        far_deadline()
+    ));
+    assert!(
+        state_on_disk(&repo, &["TASK-9"]).is_none(),
+        "a positive key returns to the cheap cold path"
     );
 }
 
@@ -952,12 +1109,7 @@ fn fenced_walk_frames_only_unproved_commits() {
     let tmp = tempfile::TempDir::new().unwrap();
     let repo = init_repo(tmp.path());
     let old_tip = commit(&repo, "feat: old work");
-    let (_, seed) = probe_inner(&repo, &ids(&["TASK-7"]), &oracle_tuning());
-    assert!(publish_oracle_negative(
-        &repo,
-        seed.unwrap(),
-        far_deadline()
-    ));
+    seed_key(&repo, &["TASK-7"]);
     let new: Vec<String> = (0..3)
         .map(|i| commit(&repo, &format!("feat: new {i}")))
         .collect();
@@ -1002,13 +1154,317 @@ fn fenced_walk_frames_only_unproved_commits() {
     );
 }
 
-/// The config digest ignores upstream-tracking/remote records (rewritten by
-/// every `worktree add -b` / `push -u` in a fleet) but keeps everything else.
+/// Ruling 2026-10-25 (d): the S config digest is the WHOLE effective
+/// configuration — remote/branch records change ref resolution, so a change
+/// to them invalidates a proof like any other config change.
 #[test]
-fn semantic_config_ignores_only_branch_and_remote_records() {
-    let z = "core.bare\nfalse\0branch.main.remote\norigin\0Remote.origin.url\nx\0grep.patternType\nperl\0";
-    assert_eq!(
-        semantic_config(z),
-        "core.bare\nfalse\0grep.patternType\nperl\0"
+fn branch_and_remote_config_change_invalidates_proof() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let repo = init_repo(tmp.path());
+    commit(&repo, "feat: work");
+    for (key, value) in [
+        ("branch.main.merge", "refs/heads/other"),
+        ("remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*"),
+    ] {
+        assert_eq!(
+            probe(&repo, &["TASK-7"], &tuning(1024, usize::MAX)),
+            NegativeProbe::ProvedEmpty
+        );
+        git(&repo, &["config", key, value]);
+        assert_ne!(
+            probe(&repo, &["TASK-7"], &tuning(1024, 0)),
+            NegativeProbe::ProvedEmpty,
+            "{key} must be part of the snapshot identity"
+        );
+    }
+}
+
+fn rev_list_all(repo: &Path) -> std::collections::BTreeSet<String> {
+    git(repo, &["rev-list", "--all"])
+        .lines()
+        .map(str::to_string)
+        .collect()
+}
+
+fn merge(repo: &Path, branch: &str, msg: &str) {
+    git(
+        repo,
+        &[
+            "merge",
+            "-q",
+            "--no-ff",
+            "--allow-unrelated-histories",
+            "-m",
+            msg,
+            branch,
+        ],
     );
+}
+
+/// Ruling 2026-10-25 (b): the `^fence` discovery walk plus closure by
+/// inclusion is EQUIVALENT to the full walk. On a merge-heavy, multi-root
+/// DAG grown in stages (side branches, criss-cross merges, an unrelated
+/// history merged in, an unmerged orphan root), a proof extended
+/// incrementally at several batch sizes closes EXACTLY the commits `git
+/// rev-list --all` reaches — none missing, none extra — the same set a
+/// from-scratch proof closes; and a referencing commit introduced behind
+/// the fence (deep in a merged side branch, at an unrelated root, or on a
+/// merge commit itself) is always found, matching the original oracle.
+#[test]
+fn fenced_walk_and_inclusion_match_full_walk_on_merge_heavy_multi_root_dag() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let repo = init_repo(tmp.path());
+    let batch_keys = [
+        (1, "TASK-71"),
+        (2, "TASK-72"),
+        (3, "TASK-73"),
+        (7, "TASK-77"),
+    ];
+    let positive_keys = ["TASK-101", "TASK-102", "TASK-103"];
+    let assert_equivalent = |stage: &str| {
+        let all = rev_list_all(&repo);
+        for (batch, key) in batch_keys {
+            assert_eq!(
+                probe(&repo, &[key], &tuning(batch, usize::MAX)),
+                NegativeProbe::ProvedEmpty,
+                "{stage}: batch {batch}"
+            );
+            let state = state_on_disk(&repo, &[key]).unwrap();
+            assert_eq!(
+                state.closed, all,
+                "{stage}: batch {batch} closes exactly rev-list --all"
+            );
+            assert!(state.open.is_empty(), "{stage}: batch {batch}");
+        }
+    };
+
+    // Stage 0: a linear base, every key proved negative.
+    for i in 0..3 {
+        commit(&repo, &format!("feat: base {i}"));
+    }
+    assert_equivalent("stage 0");
+    for key in positive_keys {
+        assert_eq!(
+            probe(&repo, &[key], &tuning(2, usize::MAX)),
+            NegativeProbe::ProvedEmpty
+        );
+    }
+
+    // Stage 1: side branches forked from proved (CLOSED) history, a hit deep
+    // in one of them, and criss-cross merges — one carrying a hit itself.
+    git(&repo, &["checkout", "-q", "-b", "s1", "main~2"]);
+    commit(&repo, "feat: s1 a");
+    commit(&repo, "fix: s1 deep hit (TASK-101)");
+    commit(&repo, "feat: s1 c");
+    git(&repo, &["checkout", "-q", "-b", "s2", "main~1"]);
+    commit(&repo, "feat: s2 a");
+    git(&repo, &["checkout", "-q", "main"]);
+    merge(&repo, "s1", "merge s1");
+    merge(&repo, "s2", "merge s2");
+    git(&repo, &["checkout", "-q", "-b", "x"]);
+    commit(&repo, "feat: x a");
+    git(&repo, &["checkout", "-q", "main"]);
+    commit(&repo, "feat: main after x fork");
+    git(&repo, &["checkout", "-q", "x"]);
+    merge(&repo, "main", "criss-cross main into x");
+    git(&repo, &["checkout", "-q", "main"]);
+    merge(&repo, "x", "criss-cross x into main (TASK-103)");
+    assert_equivalent("stage 1");
+
+    // Stage 2: an unrelated history merged in (a second parentless root) and
+    // an unmerged orphan branch (a third root), one root carrying a hit.
+    git(&repo, &["checkout", "-q", "--orphan", "other"]);
+    git(&repo, &["rm", "-rfq", "--ignore-unmatch", "."]);
+    commit(&repo, "feat: other root (TASK-102)");
+    commit(&repo, "feat: other b");
+    git(&repo, &["checkout", "-q", "main"]);
+    merge(&repo, "other", "merge unrelated other");
+    git(&repo, &["checkout", "-q", "--orphan", "lone"]);
+    commit(&repo, "feat: lone root");
+    commit(&repo, "feat: lone b");
+    git(&repo, &["checkout", "-q", "main"]);
+    let parentless = git(&repo, &["rev-list", "--all", "--max-parents=0"]);
+    assert_eq!(parentless.lines().count(), 3, "three roots");
+    assert_equivalent("stage 2");
+
+    // From-scratch full proof: the same closed set.
+    assert_eq!(
+        probe(&repo, &["TASK-88"], &tuning(4096, usize::MAX)),
+        NegativeProbe::ProvedEmpty
+    );
+    assert_eq!(
+        state_on_disk(&repo, &["TASK-88"]).unwrap().closed,
+        state_on_disk(&repo, &["TASK-71"]).unwrap().closed
+    );
+
+    // Every hit behind the fence is found, as the original oracle finds it.
+    for key in positive_keys {
+        assert_eq!(
+            probe(&repo, &[key], &tuning(2, usize::MAX)),
+            NegativeProbe::PositiveHit,
+            "{key} must never close by inclusion"
+        );
+        assert!(!collect_git_linkage_opts(&repo, &ids(&[key]), false)
+            .commits
+            .is_empty());
+    }
+}
+
+/// Amendment 1 / ruling 2026-10-25: a PURE warm read (no batch this
+/// invocation) still re-captures S and R after the walk; roots moving in
+/// between are never answered as a complete negative.
+#[cfg(unix)]
+#[test]
+fn pure_warm_read_rechecks_snapshot_after_walk() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let tmp = tempfile::TempDir::new().unwrap();
+    let repo = init_repo(tmp.path());
+    commit(&repo, "feat: base");
+    assert_eq!(
+        probe(&repo, &["TASK-7"], &tuning(1024, usize::MAX)),
+        NegativeProbe::ProvedEmpty
+    );
+    // A shim that moves the fleet just before the SECOND root listing (the
+    // after-capture).
+    let real = real_git();
+    let shim_dir = tmp.path().join("shim");
+    std::fs::create_dir_all(&shim_dir).unwrap();
+    let count_path = tmp.path().join("roots-calls");
+    std::fs::write(&count_path, "").unwrap();
+    crate::test_exec::write_executable(
+        &shim_dir.join("git"),
+        format!(
+            "#!/bin/sh\nall=0; nw=0\nfor a in \"$@\"; do\n  [ \"$a\" = \"--all\" ] && all=1\n  [ \"$a\" = \"--no-walk=unsorted\" ] && nw=1\ndone\nif [ \"$all\" = 1 ] && [ \"$nw\" = 1 ]; then\n  echo x >> '{count}'\n  if [ \"$(wc -l < '{count}')\" -eq 2 ]; then\n    '{real}' -c maintenance.auto=false -c gc.auto=0 -C '{repo}' commit -q --allow-empty -m 'fleet moved' >/dev/null 2>&1\n  fi\nfi\nexec '{real}' \"$@\"\n",
+            count = count_path.display(),
+            real = real.display(),
+            repo = repo.display(),
+        ),
+    );
+    let mut paths = vec![shim_dir];
+    paths.extend(std::env::split_paths(
+        &std::env::var_os("PATH").unwrap_or_default(),
+    ));
+    let _path = crate::test_env::EnvVarGuard::set("PATH", std::env::join_paths(paths).unwrap());
+
+    assert_ne!(
+        probe(&repo, &["TASK-7"], &tuning(1024, 0)),
+        NegativeProbe::ProvedEmpty,
+        "a warm read whose roots moved under it must not answer complete"
+    );
+    let listings = std::fs::read_to_string(&count_path)
+        .unwrap()
+        .lines()
+        .count();
+    assert!(listings >= 2, "the after-capture ran: {listings}");
+}
+
+/// Ruling 2026-10-25: positive and cold shows pay NO serial snapshot in
+/// front of the original query — structurally, no snapshot-only git read
+/// (`config --list`, the `--no-walk=unsorted` root listing) runs. That holds
+/// for a never-negative key and for a key that turned positive after
+/// holding a negative proof (the hit drops its state).
+#[cfg(unix)]
+#[test]
+fn positive_show_takes_no_snapshot() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let tmp = tempfile::TempDir::new().unwrap();
+    let repo = init_repo(tmp.path());
+    commit(&repo, "fix: real work (TASK-7)");
+    commit(&repo, "feat: unrelated");
+    seed_key(&repo, &["TASK-8"]);
+    commit(&repo, "fix: TASK-8 turns positive (TASK-8)");
+    let (log_path, _path) = install_logging_shim(tmp.path());
+    let show = |key: &str| {
+        collect_git_linkage_until(
+            &repo,
+            &ids(&[key]),
+            Instant::now() + Duration::from_secs(30),
+        )
+    };
+    let snapshot_reads = || -> Vec<String> {
+        std::fs::read_to_string(&log_path)
+            .unwrap_or_default()
+            .lines()
+            .filter(|l| l.contains("--no-walk=unsorted") || l.contains("config --list"))
+            .map(str::to_string)
+            .collect()
+    };
+
+    for _ in 0..2 {
+        assert_eq!(show("TASK-7").commits.len(), 1);
+    }
+    assert_eq!(snapshot_reads(), Vec::<String>::new(), "positive key");
+
+    // The first show after TASK-8 turned positive pays one warm snapshot and
+    // finds the hit; the state is dropped, so the next show pays nothing.
+    assert_eq!(show("TASK-8").commits.len(), 1);
+    assert!(state_on_disk(&repo, &["TASK-8"]).is_none());
+    std::fs::write(&log_path, "").unwrap();
+    assert_eq!(show("TASK-8").commits.len(), 1);
+    assert_eq!(
+        snapshot_reads(),
+        Vec::<String>::new(),
+        "turned-positive key"
+    );
+}
+
+/// Amendment 2: a symlinked namespace directory (`aida-cache` or
+/// `show-negative-v1`) is never written through — publication is refused
+/// (the proof answer itself stands) and nothing lands outside the git dir.
+#[cfg(unix)]
+#[test]
+fn symlinked_namespace_dir_is_never_written_through() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let repo = init_repo(tmp.path());
+    commit(&repo, "feat: work");
+    let outside = tmp.path().join("outside");
+    std::fs::create_dir_all(&outside).unwrap();
+    let common = repo.join(".git");
+
+    std::os::unix::fs::symlink(&outside, common.join("aida-cache")).unwrap();
+    assert_eq!(
+        probe(&repo, &["TASK-7"], &tuning(1024, usize::MAX)),
+        NegativeProbe::ProvedEmpty
+    );
+    assert_eq!(std::fs::read_dir(&outside).unwrap().count(), 0);
+    std::fs::remove_file(common.join("aida-cache")).unwrap();
+
+    std::fs::create_dir_all(common.join("aida-cache")).unwrap();
+    std::os::unix::fs::symlink(&outside, common.join("aida-cache/show-negative-v1")).unwrap();
+    assert_eq!(
+        probe(&repo, &["TASK-7"], &tuning(1024, usize::MAX)),
+        NegativeProbe::ProvedEmpty
+    );
+    assert_eq!(std::fs::read_dir(&outside).unwrap().count(), 0);
+}
+
+/// Eviction is least-recently-USED: a warm read touches its state file.
+#[test]
+fn warm_read_touches_state_for_lru_eviction() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let repo = init_repo(tmp.path());
+    commit(&repo, "feat: work");
+    assert_eq!(
+        probe(&repo, &["TASK-7"], &tuning(1024, usize::MAX)),
+        NegativeProbe::ProvedEmpty
+    );
+    let loc = locate(&repo, far_deadline()).unwrap();
+    let path = state_path(&loc, &query_key(&ids(&["TASK-7"])));
+    let old = std::time::SystemTime::UNIX_EPOCH + Duration::from_secs(1_000_000);
+    std::fs::File::options()
+        .write(true)
+        .open(&path)
+        .unwrap()
+        .set_modified(old)
+        .unwrap();
+    assert_eq!(
+        probe(&repo, &["TASK-7"], &tuning(1024, 0)),
+        NegativeProbe::ProvedEmpty
+    );
+    let touched = std::fs::metadata(&path).unwrap().modified().unwrap();
+    assert!(touched > old, "a warm hit must refresh its eviction age");
 }

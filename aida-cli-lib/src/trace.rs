@@ -210,12 +210,13 @@ const TRACE_SCAN_LINE_CHUNK: usize = 256;
 ///   opening/reading files, and per-chunk parsing. Expiry returns the hits
 ///   found so far with `complete = false` — partial truth, never a claimed
 ///   complete empty set.
-/// - Directory symlinks: an IN-ROOT alias is followed and its hits keep the
-///   alias's displayed relative path (dedup stays the caller's `sort`/`dedup`
-///   on final pairs, as before). A symlink whose canonical target is an
-///   ANCESTOR of the walk position is a cycle: skipped, `complete = false`.
-///   A symlink pointing OUTSIDE the project root is not descended (the scan
-///   must not silently widen into another repo): `complete = false`.
+/// - Symlinks: an IN-ROOT alias (directory or source file) is followed and
+///   its hits keep the alias's displayed relative path (dedup stays the
+///   caller's `sort`/`dedup` on final pairs, as before). A directory symlink
+///   whose target is an ANCESTOR of the walk position is a cycle: skipped,
+///   `complete = false`. A symlink — to a directory or a file — pointing
+///   OUTSIDE the project root is not followed (the scan must not silently
+///   widen into another repo): `complete = false`.
 /// - A directory or entry the walk cannot read (refusal, unresolved link)
 ///   marks `complete = false` instead of silently claiming full coverage.
 /// - Regexes compile once per process.
@@ -280,14 +281,19 @@ pub(crate) fn scan_trace_graph_streaming(
     if expired() {
         return finish(out, false, content_spent);
     }
-    // Walk frames: the open directory iterator plus its CANONICAL path (the
-    // cycle fence — a descent whose canonical target equals any open frame's
-    // canonical path would loop forever).
-    let mut stack: Vec<(std::fs::ReadDir, std::path::PathBuf)> =
-        match std::fs::read_dir(project_root) {
-            Ok(rd) => vec![(rd, root_canon.clone())],
-            Err(_) => return finish(out, false, content_spent),
-        };
+    // Walk frames: the open directory iterator plus the directory's
+    // IDENTITY (the cycle fence — a descent whose target is any open frame's
+    // directory would loop forever). Identity is (dev, inode) from the
+    // metadata the walk already has, so a plain directory costs no realpath;
+    // only symlink targets are canonicalized (for the in-root check).
+    let root_id = match std::fs::metadata(project_root) {
+        Ok(md) => dir_identity(&md, &root_canon),
+        Err(_) => return finish(out, false, content_spent),
+    };
+    let mut stack: Vec<(std::fs::ReadDir, DirIdentity)> = match std::fs::read_dir(project_root) {
+        Ok(rd) => vec![(rd, root_id)],
+        Err(_) => return finish(out, false, content_spent),
+    };
 
     'walk: while !stack.is_empty() {
         if expired() || entries_seen >= TRACE_SCAN_MAX_ENTRIES {
@@ -322,42 +328,61 @@ pub(crate) fn scan_trace_graph_streaming(
         let is_symlink = file_type.is_symlink();
         // Same target-kind probe the old `path.is_dir()` made (follows links),
         // but an unresolvable link is now a recorded gap, not a silent skip.
-        let is_dir = if is_symlink {
+        // A plain entry's own (lstat) metadata is only needed for a directory.
+        let (is_dir, target_md) = if is_symlink {
             match std::fs::metadata(&path) {
-                Ok(md) => md.is_dir(),
+                Ok(md) => (md.is_dir(), Some(md)),
                 Err(_) => {
                     complete = false;
                     continue;
                 }
             }
         } else {
-            file_type.is_dir()
+            (file_type.is_dir(), None)
         };
-        if is_dir {
-            let Ok(canon) = std::fs::canonicalize(&path) else {
-                complete = false;
+        if !is_dir {
+            let Some(ext) = path.extension().and_then(|e| e.to_str()) else {
                 continue;
             };
-            if is_symlink && !canon.starts_with(&root_canon) {
-                // External target: never widen the scan into another tree.
-                complete = false;
+            if !exts.contains(&ext) {
                 continue;
             }
-            if stack.iter().any(|(_, ancestor)| *ancestor == canon) {
+        }
+        // Any symlink — to a directory or to a source file — whose canonical
+        // target is outside the project root is never followed: the scan
+        // must not silently widen into another tree.
+        let canon = if is_symlink {
+            match std::fs::canonicalize(&path) {
+                Ok(canon) if canon.starts_with(&root_canon) => Some(canon),
+                _ => {
+                    complete = false;
+                    continue;
+                }
+            }
+        } else {
+            None
+        };
+        if is_dir {
+            let md = match target_md {
+                Some(md) => md,
+                None => match entry.metadata() {
+                    Ok(md) => md,
+                    Err(_) => {
+                        complete = false;
+                        continue;
+                    }
+                },
+            };
+            let id = dir_identity(&md, canon.as_deref().unwrap_or(&path));
+            if stack.iter().any(|(_, ancestor)| *ancestor == id) {
                 // Symlink cycle: the branch is skipped, truthfully partial.
                 complete = false;
                 continue;
             }
             match std::fs::read_dir(&path) {
-                Ok(rd) => stack.push((rd, canon)),
+                Ok(rd) => stack.push((rd, id)),
                 Err(_) => complete = false,
             }
-            continue;
-        }
-        let Some(ext) = path.extension().and_then(|e| e.to_str()) else {
-            continue;
-        };
-        if !exts.contains(&ext) {
             continue;
         }
         if expired() {
@@ -416,6 +441,26 @@ pub(crate) fn scan_trace_graph_streaming(
         }
     }
     finish(out, complete, content_spent)
+}
+
+/// BUG-2221: a directory's identity for the trace walk's cycle fence:
+/// (device, inode) on unix; elsewhere the canonical path (`path` is
+/// canonical for symlink targets; a plain directory is canonicalized here).
+// trace:BUG-2221 | ai:claude
+#[cfg(unix)]
+type DirIdentity = (u64, u64);
+#[cfg(not(unix))]
+type DirIdentity = std::path::PathBuf;
+
+#[cfg(unix)]
+fn dir_identity(md: &std::fs::Metadata, _path: &std::path::Path) -> DirIdentity {
+    use std::os::unix::fs::MetadataExt;
+    (md.dev(), md.ino())
+}
+
+#[cfg(not(unix))]
+fn dir_identity(_md: &std::fs::Metadata, path: &std::path::Path) -> DirIdentity {
+    std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
 }
 
 /// STORY-511: the resolved state of the change-request (PR/MR) line in
@@ -1111,9 +1156,9 @@ fn collect_git_linkage_inner(
                         false,
                         seed,
                     ),
+                    // A timeout or a git error (the old silent empty result)
+                    // is never evidence: the seed is dropped unsettled.
                     BoundedCommandOutput::TimedOut => (String::new(), true, None),
-                    // A git error keeps the old silent empty result — and is
-                    // never evidence for a seed.
                     _ => (String::new(), false, None),
                 }
             });
@@ -1141,6 +1186,9 @@ fn collect_git_linkage_inner(
             (log_res, trace_res)
         });
 
+    // BUG-2221: a record that does not frame is dropped as before, but the
+    // answer then is not a COMPLETE oracle for seeding. trace:BUG-2221 | ai:claude
+    let mut oracle_framed = true;
     let commits: Vec<(String, String, String)> = log
         .split('\u{1e}')
         .filter_map(|record| {
@@ -1149,9 +1197,11 @@ fn collect_git_linkage_inner(
                 return None;
             }
             let mut p = record.splitn(4, '\u{1f}');
-            let full = p.next()?.to_string();
-            let short = p.next()?.to_string();
-            let subject = p.next()?.to_string();
+            let (Some(full), Some(short), Some(subject)) = (p.next(), p.next(), p.next()) else {
+                oracle_framed = false;
+                return None;
+            };
+            let (full, short, subject) = (full.to_string(), short.to_string(), subject.to_string());
             let body = p.next().unwrap_or("");
             // Resolve the commit's full message and keep it only when it
             // actually references one of the wanted ids via a trailer or a
@@ -1170,14 +1220,23 @@ fn collect_git_linkage_inner(
         })
         .collect();
 
-    // BUG-2221: the original complete collector just proved "no commit
-    // reachable from any current root references these ids" for a cold key;
-    // pin that to the probe's before-snapshot (re-checked inside) and warm the
-    // key. Only a successful, complete, zero-reference answer seeds.
+    // BUG-2221: settle the probe's deferral with the original collector's
+    // answer. Only a successful, completely framed run counts as an oracle
+    // (a seed only exists when the run completed); a zero-reference answer
+    // marks or — pinned to the probe's before-snapshot, re-checked inside —
+    // seeds the key, and a positive answer drops its state.
     // trace:BUG-2221 | ai:claude
-    if let (Some(seed), Some(d), true) = (oracle_seed, deadline, commits.is_empty()) {
+    if let (Some(seed), Some(d)) = (oracle_seed, deadline) {
         let _seed_phase = crate::usage::phase("linkage.seed");
-        crate::show_negative::publish_oracle_negative(project_root, seed, d);
+        crate::show_negative::settle_oracle(
+            project_root,
+            seed,
+            crate::show_negative::OracleAnswer {
+                complete: oracle_framed,
+                references: commits.len(),
+            },
+            d,
+        );
     }
 
     // ---- Branch / worktree / shipped state (anchored on newest commit) ----

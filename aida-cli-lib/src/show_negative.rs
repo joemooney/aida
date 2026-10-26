@@ -29,20 +29,31 @@
 //! returns truthfully INCOMPLETE linkage and resumes on later ordinary shows
 //! — no background warmer, no poller, no child outliving the command.
 //!
-//! A fully COLD key (no state, or a reset tombstone) on the production path
-//! does not batch at all: it runs the ORIGINAL complete `--all` collector
-//! (its unchanged bounded opportunity to answer — advisor amendment 4) and,
-//! when that oracle completes with zero parsed references under an unchanged
-//! before/after S and R, seeds the proof with every current root CLOSED.
-//! That is the same CLOSED definition — Git walked every commit reachable
-//! from those roots and its prefilter plus the parsers admitted none — so
-//! the very next show of the same key is a warm read. Measured reason: the
-//! live repository has ~83k reachable commits, so a batch-only cold proof
-//! needs dozens of incomplete shows PER QUERY KEY before it ever answers. A parsed hit stops the proof and defers to the original
-//! complete `--date-order` collector (ordering, branch, shipped and drift
-//! behavior stay Git-owned). Unsupported history semantics (shallow, grafts,
-//! replace refs or replace-control overrides) refuse this fast path entirely
-//! and keep the original bounded query.
+//! A fully COLD key on the production path does not batch at all and does
+//! not even snapshot: one cheap `rev-parse` locates the key's state file
+//! and, when there is none (every positive key, every never-shown key), the
+//! ORIGINAL complete `--all` collector runs at once with its unchanged
+//! bounded opportunity (advisor amendment 4) and no serial snapshot cost in
+//! front of it. When that oracle completes with zero parsed references the
+//! key gets an empty MARKER file (no claim of any kind). The next show of a
+//! marked key is a SEEDING show: S and R are captured BEFORE the original
+//! collector starts and re-captured after it; only an oracle that ran to
+//! completion against that same unchanged snapshot seeds every current root
+//! CLOSED (advisor ruling 2026-10-25 (a)). That is the same CLOSED
+//! definition — Git walked every commit reachable from those roots and its
+//! prefilter plus the parsers admitted none — so the show after it is a
+//! warm read. Measured reason: the live repository has ~83k reachable
+//! commits, so a batch-only cold proof needs dozens of incomplete shows PER
+//! QUERY KEY before it ever answers. A parsed hit stops the proof, drops the
+//! key's state (a positive key goes back to the cheap cold path) and defers
+//! to the original complete `--date-order` collector (ordering, branch,
+//! shipped and drift behavior stay Git-owned). Unsupported history
+//! semantics (shallow, grafts, replace refs or replace-control overrides)
+//! refuse this fast path entirely and keep the original bounded query.
+//!
+//! Every `ProvedEmpty` — a pure warm read included — is re-checked against
+//! an AFTER S/R capture taken once the frontier walk is done (amendment 1;
+//! ruling 2026-10-25 (e)).
 //!
 //! Losing or corrupting the cache changes speed/completeness, never canonical
 //! spec content; contention or an unwritable repo degrades to the original
@@ -62,23 +73,27 @@ use std::time::{Duration, Instant};
 /// The unchanged per-call latency objective (`.aida/config.toml` budget is
 /// 1000 ms / 10% / 5000 ms — this const mirrors the objective for FOREGROUND
 /// SCHEDULING of proof batches; it is not a new budget and changing the
-/// configured guard is out of scope). trace:BUG-2221 | ai:claude
+/// configured guard is out of scope).
+// trace:BUG-2221 | ai:claude
 const SHOW_OBJECTIVE: Duration = Duration::from_millis(1000);
 
 /// Reserve for post-linkage work (relationships/render/queue membership),
 /// chosen from the slice-1 phase measurements on the live shape (render +
 /// relationships measured well under this on a loaded host). The probe stops
 /// batching early enough to leave this much of the objective for the rest of
-/// the command. trace:BUG-2221 | ai:claude
+/// the command.
+// trace:BUG-2221 | ai:claude
 const RENDER_RESERVE: Duration = Duration::from_millis(150);
 
 /// Below this remaining OUTER time the proof cannot even complete its warm
 /// snapshot reads — skip the fast path and keep the original bounded query
 /// (never suppress a formerly useful answer just to avoid going over the
-/// objective; advisor amendment 4). trace:BUG-2221 | ai:claude
+/// objective; advisor amendment 4).
+// trace:BUG-2221 | ai:claude
 const MIN_PROBE_TIME: Duration = Duration::from_millis(50);
 
-/// Maximum OIDs per `--stdin` batch. trace:BUG-2221 | ai:claude
+/// Maximum OIDs per `--stdin` batch.
+// trace:BUG-2221 | ai:claude
 const BATCH_MAX: usize = 1024;
 
 /// Cache record schema. Covers this file format AND the behavior of the
@@ -89,7 +104,7 @@ const BATCH_MAX: usize = 1024;
 /// [`crate::extract_trace_line_spec_ids`], or to how linkage grep queries are
 /// formed — a stale proof made under older predicate semantics must never be
 /// reused (the `parser_behavior_pin` test is the tripwire).
-/// trace:BUG-2221 | ai:claude
+// trace:BUG-2221 | ai:claude
 const SCHEMA_VERSION: u32 = 1;
 
 /// Per-(context, query) state file byte cap — read AND write.
@@ -97,7 +112,8 @@ const MAX_STATE_BYTES: u64 = 8 * 1024 * 1024;
 
 /// Per-(context, query) proved-node cap (closed + open). A DAG that exceeds
 /// it records an `oversize` tombstone: the fast path stays off for that
-/// context/query instead of churning forever. trace:BUG-2221 | ai:claude
+/// context/query instead of churning forever.
+// trace:BUG-2221 | ai:claude
 const MAX_STATE_NODES: usize = 150_000;
 
 /// Aggregate namespace bounds, enforced deterministically at publish time:
@@ -115,7 +131,8 @@ const CACHE_NAMESPACE: &str = "aida-cache/show-negative-v1";
 /// `main_entry`; falls back to first use (tests, embedded callers).
 static PROCESS_ENTRY: std::sync::OnceLock<Instant> = std::sync::OnceLock::new();
 
-/// Record process entry (idempotent). trace:BUG-2221 | ai:claude
+/// Record process entry (idempotent).
+// trace:BUG-2221 | ai:claude
 pub(crate) fn note_process_entry() {
     let _ = PROCESS_ENTRY.set(Instant::now());
 }
@@ -159,21 +176,31 @@ pub(crate) struct ProbeTuning {
     /// deadline expiring (publish progress, report incomplete). Production
     /// passes `usize::MAX` — the wall clock is the real bound.
     pub(crate) max_batches: usize,
-    /// A fully cold key defers to the original collector and returns an
-    /// [`OracleSeed`] instead of batching (production: `true`). Batch-proof
-    /// fixtures pass `false` to exercise cold batching directly.
+    /// Production `true`: a key with no state file defers to the original
+    /// collector with NO snapshot ([`OracleSeed::Mark`]); a marked or reset
+    /// key defers with a before-snapshot ([`OracleSeed::Seed`]) instead of
+    /// batching. Batch-proof fixtures pass `false` to exercise cold
+    /// batching directly.
     pub(crate) cold_oracle: bool,
 }
 
-/// Everything needed to seed a cold key from the original collector's
-/// complete result: the BEFORE snapshot the oracle's answer must be pinned
-/// to. Opaque to the collector. trace:BUG-2221 | ai:claude
-pub(crate) struct OracleSeed {
-    ctx: GitContext,
-    roots: RootsSnapshot,
-    queries: QueryKey,
-    /// The proof state the seed extends (empty for a cold/reset key).
-    state: NegativeState,
+/// What the original collector's answer may settle for this key, handed back
+/// by the probe whenever it defers to the original query. Opaque to the
+/// collector, which passes it to [`settle_oracle`] with the oracle's answer.
+// trace:BUG-2221 | ai:claude
+pub(crate) enum OracleSeed {
+    /// No state file at all: no snapshot was taken, so the answer can only
+    /// MARK the key (zero references) — it proves nothing about any snapshot.
+    Mark { loc: Location, queries: QueryKey },
+    /// A seeding show: the BEFORE snapshot the oracle's answer is pinned to,
+    /// captured before the original collector started.
+    Seed {
+        ctx: GitContext,
+        roots: RootsSnapshot,
+        queries: QueryKey,
+        /// The proof state the seed extends (empty for a marked/reset key).
+        state: NegativeState,
+    },
 }
 
 /// The production probe for `aida show`'s linkage commit scan.
@@ -225,8 +252,27 @@ fn probe_inner(
     tuning: &ProbeTuning,
 ) -> (NegativeProbe, Option<OracleSeed>) {
     let outcome = |o: NegativeProbe| (o, None);
+    let queries = query_key(ids);
+
+    // ---- Cold check: no state file → the original query, with no snapshot
+    // in front of it (ruling 2026-10-25: positive and cold shows must not pay
+    // a serial snapshot that cannot help them). ----
+    let mut located = None;
+    if tuning.cold_oracle {
+        let Some(loc) = locate(project_root, tuning.deadline) else {
+            return outcome(NegativeProbe::RunOriginal);
+        };
+        if !key_file_present(&loc, &queries) {
+            return (
+                NegativeProbe::RunOriginal,
+                Some(OracleSeed::Mark { loc, queries }),
+            );
+        }
+        located = Some(loc);
+    }
+
     // ---- S: bounded context snapshot (or an unsupported-mode refusal) ----
-    let (ctx, roots) = capture_snapshot(project_root, tuning.deadline);
+    let (ctx, roots) = capture_snapshot(project_root, located, tuning.deadline);
     let Some(ctx) = ctx else {
         return outcome(NegativeProbe::RunOriginal);
     };
@@ -244,20 +290,19 @@ fn probe_inner(
         return outcome(NegativeProbe::RunOriginal);
     }
 
-    let queries = query_key(ids);
     let wanted_uc: HashSet<String> = ids.iter().map(|s| s.to_ascii_uppercase()).collect();
     let mut state = load_state(&ctx, &queries);
     if tuning.cold_oracle && (state.oversize || state.is_empty()) {
-        // Fully cold (or reset) key: the original complete collector runs
-        // with its unchanged bounded opportunity, and its zero-reference
-        // answer seeds this key (see the module docs).
+        // Marked (or reset, or made under another S) key: a SEEDING show. The
+        // original complete collector runs with its unchanged bounded
+        // opportunity, pinned to the snapshot captured just above.
         let state = NegativeState {
             oversize: false,
             ..state
         };
         return (
             NegativeProbe::RunOriginal,
-            Some(OracleSeed {
+            Some(OracleSeed::Seed {
                 ctx,
                 roots,
                 queries,
@@ -272,73 +317,71 @@ fn probe_inner(
     let mut batches_ran = 0usize;
     let mut dirty = false;
     let mut retried = false;
+    // No complete negative this invocation. Incomplete is only ever the
+    // answer of an invocation that made (and persisted) progress — that is
+    // what makes cold unknown converge. Otherwise the original bounded query
+    // keeps its full opportunity (never worse than before this fast path),
+    // and its answer may seed the key against the BEFORE snapshot.
+    let yield_unproved = |ctx: GitContext,
+                          roots: RootsSnapshot,
+                          queries: QueryKey,
+                          state: NegativeState,
+                          dirty: bool| {
+        if dirty && publish_state(&ctx.loc, &state) {
+            return outcome(NegativeProbe::Incomplete);
+        }
+        let seed = tuning.cold_oracle.then_some(OracleSeed::Seed {
+            ctx,
+            roots,
+            queries,
+            state,
+        });
+        (NegativeProbe::RunOriginal, seed)
+    };
     loop {
         let frontier = pending_frontier(&state, &roots.roots);
         let Some(frontier) = frontier else {
             // Frontier bookkeeping itself blew the node bound.
             state.mark_oversize();
-            let _ = publish_state(&ctx, &state);
+            let _ = publish_state(&ctx.loc, &state);
             return outcome(NegativeProbe::RunOriginal);
         };
         if frontier.is_empty() {
-            // All current roots CLOSED. A pure warm read (no batches this
-            // invocation) is a point-in-time read — no evidence window to
-            // revalidate. After batches, re-capture S and R with the same
-            // bounded routines; a moved snapshot must not be published as a
-            // complete negative (retry once if time remains).
-            if batches_ran == 0 {
-                return outcome(NegativeProbe::ProvedEmpty);
-            }
-            let (ctx_after, roots_after) = capture_snapshot(project_root, tuning.deadline);
-            let Some(ctx_after) = ctx_after else {
-                return outcome(NegativeProbe::Incomplete);
-            };
-            let s_unchanged = matches!(ctx_after, ContextSnapshot::Supported(ref c) if c.s_digest == ctx.s_digest);
+            // All current roots CLOSED. Re-capture S and R with the same
+            // bounded routines AFTER the walk — mandatory on every
+            // ProvedEmpty, a pure warm read (no batches) included; a moved
+            // snapshot is never answered or published as a complete negative
+            // (retry once if time remains).
+            let (ctx_after, roots_after) = capture_snapshot(project_root, None, tuning.deadline);
+            let s_unchanged = matches!(ctx_after, Some(ContextSnapshot::Supported(ref c)) if c.s_digest == ctx.s_digest);
             if !s_unchanged {
-                // Mixed-semantics evidence: do not persist, do not certify.
-                return outcome(NegativeProbe::Incomplete);
+                // Failed capture or mixed-semantics evidence: do not persist,
+                // do not certify; the original query answers.
+                return outcome(NegativeProbe::RunOriginal);
             }
             let Some(roots_after) = roots_after else {
-                if dirty {
-                    let _ = publish_state(&ctx, &state);
-                }
-                return outcome(NegativeProbe::Incomplete);
+                return yield_unproved(ctx, roots, queries, state, dirty);
             };
             if roots_after.digest == roots.digest {
                 // A failed publication (read-only/contended cache) loses only
                 // speed: THIS invocation's proof is sound and complete.
                 if dirty {
-                    let _ = publish_state(&ctx, &state);
+                    let _ = publish_state(&ctx.loc, &state);
+                } else {
+                    // A warm hit is a USE: keep it off the eviction front.
+                    touch_state(&ctx.loc, &queries);
                 }
                 return outcome(NegativeProbe::ProvedEmpty);
             }
             if retried || expired(tuning.batch_deadline) {
-                if dirty {
-                    let _ = publish_state(&ctx, &state);
-                }
-                return outcome(NegativeProbe::Incomplete);
+                return yield_unproved(ctx, roots, queries, state, dirty);
             }
             retried = true;
             roots = roots_after;
             continue;
         }
         if expired(tuning.batch_deadline) || batches_ran >= tuning.max_batches {
-            // Incomplete is only ever the answer of an invocation that made
-            // (and persisted) progress — that is what makes cold unknown
-            // converge. No progress possible (no batch time left, or the
-            // progress cannot persist): the original bounded query keeps its
-            // full opportunity, never worse than before this fast path, and
-            // a zero-reference answer from it may seed the key.
-            if dirty && publish_state(&ctx, &state) {
-                return outcome(NegativeProbe::Incomplete);
-            }
-            let seed = tuning.cold_oracle.then(|| OracleSeed {
-                ctx,
-                roots,
-                queries,
-                state,
-            });
-            return (NegativeProbe::RunOriginal, seed);
+            return yield_unproved(ctx, roots, queries, state, dirty);
         }
         match run_batch(
             project_root,
@@ -349,13 +392,12 @@ fn probe_inner(
             tuning.batch_max,
             tuning.batch_deadline,
         ) {
-            BatchOutcome::Hit { negatives } => {
-                // The batch framed completely; its non-hit members are proved
-                // negative and reusable. The hit itself is never cached.
-                let changed = state.absorb(negatives);
-                if dirty || changed {
-                    let _ = publish_state(&ctx, &state);
-                }
+            BatchOutcome::Hit => {
+                // The key is POSITIVE: every later show runs the original
+                // collector anyway, so its negative evidence buys nothing and
+                // keeping it would make every positive show re-snapshot and
+                // re-batch. Drop it — the key returns to the cheap cold path.
+                forget_key(&ctx.loc, &queries);
                 return outcome(NegativeProbe::PositiveHit);
             }
             BatchOutcome::Proved { negatives } => {
@@ -364,54 +406,106 @@ fn probe_inner(
                 state.absorb(negatives);
                 if state_nodes(&state).len() > MAX_STATE_NODES {
                     state.mark_oversize();
-                    let _ = publish_state(&ctx, &state);
+                    let _ = publish_state(&ctx.loc, &state);
                     return outcome(NegativeProbe::RunOriginal);
                 }
             }
             BatchOutcome::Failed => {
-                // Truncated / missing / malformed output certifies nothing.
+                // Truncated / missing / malformed output (or the batch
+                // deadline expiring mid-batch) certifies nothing. Progress
+                // already proved is kept; the original query answers, and
+                // settles the key against the BEFORE snapshot (a positive
+                // answer must still drop the key's state).
                 if dirty {
-                    let _ = publish_state(&ctx, &state);
+                    let _ = publish_state(&ctx.loc, &state);
                 }
-                return outcome(NegativeProbe::RunOriginal);
+                let seed = tuning.cold_oracle.then_some(OracleSeed::Seed {
+                    ctx,
+                    roots,
+                    queries,
+                    state,
+                });
+                return (NegativeProbe::RunOriginal, seed);
             }
         }
     }
 }
 
-/// Seed a cold key from the ORIGINAL collector's answer. Call only after the
-/// original `git log --all -F --grep` completed successfully and its parsed
-/// result held ZERO referencing commits for exactly the seed's queries.
-///
-/// Re-captures S and R with the same bounded routines; only when both are
-/// unchanged since the seed's BEFORE snapshot does it publish every current
-/// root as CLOSED (the oracle walked their whole ancestry and admitted no
-/// reference — the CLOSED definition, proved by Git itself). A moved
-/// snapshot, an expired deadline or a failed publication records nothing;
-/// the next show simply stays cold. Returns whether a seed was published.
+/// The original collector's answer, as [`settle_oracle`] needs it.
 // trace:BUG-2221 | ai:claude
-pub(crate) fn publish_oracle_negative(
+pub(crate) struct OracleAnswer {
+    /// The original `git log --all -F --grep` exited successfully inside its
+    /// bound and every output record framed. A timed-out, failed or partial
+    /// run is never evidence (ruling 2026-10-25 (a)).
+    pub(crate) complete: bool,
+    /// Parsed referencing commits it returned.
+    pub(crate) references: usize,
+}
+
+/// Settle a deferral with the ORIGINAL collector's answer. Returns whether
+/// anything was published.
+///
+/// - Incomplete oracle → nothing, ever (ruling 2026-10-25 (a)).
+/// - Parsed references → the key is positive: its state is dropped.
+/// - Zero references on an unsnapshotted ([`OracleSeed::Mark`]) key → an
+///   empty marker only, so the next show captures a snapshot first.
+/// - Zero references on a seeding show ([`OracleSeed::Seed`]) → re-capture
+///   S and R with the same bounded routines; only when both are unchanged
+///   since the BEFORE snapshot (captured before the oracle started) is every
+///   current root published CLOSED (the oracle walked their whole ancestry
+///   and admitted no reference — the CLOSED definition, proved by Git
+///   itself). A moved snapshot, an expired deadline or a failed publication
+///   records nothing; the next show simply seeds again.
+// trace:BUG-2221 | ai:claude
+pub(crate) fn settle_oracle(
     project_root: &Path,
     seed: OracleSeed,
+    answer: OracleAnswer,
     deadline: Instant,
 ) -> bool {
-    let (ctx_after, roots_after) = capture_snapshot(project_root, deadline);
+    if !answer.complete {
+        return false;
+    }
+    if answer.references > 0 {
+        if let OracleSeed::Seed { ctx, queries, .. } = &seed {
+            forget_key(&ctx.loc, queries);
+        }
+        return false;
+    }
+    match seed {
+        OracleSeed::Mark { loc, queries } => publish_state(&loc, &NegativeState::marker(&queries)),
+        OracleSeed::Seed {
+            ctx,
+            roots,
+            queries: _,
+            state,
+        } => publish_seed(project_root, ctx, roots, state, deadline),
+    }
+}
+
+fn publish_seed(
+    project_root: &Path,
+    ctx: GitContext,
+    roots: RootsSnapshot,
+    mut state: NegativeState,
+    deadline: Instant,
+) -> bool {
+    let (ctx_after, roots_after) = capture_snapshot(project_root, None, deadline);
     let Some(ContextSnapshot::Supported(ctx_after)) = ctx_after else {
         return false;
     };
-    if ctx_after.s_digest != seed.ctx.s_digest {
+    if ctx_after.s_digest != ctx.s_digest {
         return false;
     }
     let Some(roots_after) = roots_after else {
         return false;
     };
-    if roots_after.digest != seed.roots.digest || roots_after.replace_refs {
+    if roots_after.digest != roots.digest || roots_after.replace_refs {
         return false;
     }
-    let mut state = seed.state;
     // Every current root is negative with an all-negative ancestry: close
     // them, then let closure propagate to any open evidence they unblock.
-    for root in seed.roots.roots {
+    for root in roots.roots {
         state.open.remove(&root);
         state.closed.insert(root);
     }
@@ -424,7 +518,7 @@ pub(crate) fn publish_oracle_negative(
             return false;
         }
     }
-    publish_state(&seed.ctx, &state)
+    publish_state(&ctx.loc, &state)
 }
 
 fn expired(deadline: Instant) -> bool {
@@ -446,11 +540,55 @@ enum ContextSnapshot {
     Unsupported,
 }
 
-struct GitContext {
-    /// Absolute git COMMON dir (cache namespace anchor).
-    common_dir: PathBuf,
+pub(crate) struct GitContext {
+    /// Where this context's state lives.
+    loc: Location,
     /// Digest binding everything a proof's validity depends on.
     s_digest: String,
+}
+
+/// The git dirs a key's state file is addressed by, from ONE cheap
+/// `rev-parse` — all a cold show pays before the original query.
+pub(crate) struct Location {
+    /// Absolute git COMMON dir (cache namespace anchor).
+    common_dir: PathBuf,
+    /// Absolute per-worktree git dir.
+    git_dir: String,
+    object_format: String,
+}
+
+/// Locate the key's git dirs. `None` = not a usable repo (degrade to the
+/// original query).
+// trace:BUG-2221 | ai:claude
+fn locate(project_root: &Path, deadline: Instant) -> Option<Location> {
+    let ids = git_capture(
+        project_root,
+        &[
+            "rev-parse",
+            "--git-common-dir",
+            "--absolute-git-dir",
+            "--show-object-format",
+        ],
+        deadline,
+    )?;
+    let mut lines = ids.lines();
+    let common_raw = lines.next()?.trim().to_string();
+    let git_dir = lines.next()?.trim().to_string();
+    let object_format = lines.next()?.trim().to_string();
+    let common_dir = {
+        let p = PathBuf::from(&common_raw);
+        if p.is_absolute() {
+            p
+        } else {
+            project_root.join(p)
+        }
+    };
+    let common_dir = std::fs::canonicalize(&common_dir).unwrap_or(common_dir);
+    Some(Location {
+        common_dir,
+        git_dir,
+        object_format,
+    })
 }
 
 fn sha256_hex(parts: &[&[u8]]) -> String {
@@ -507,26 +645,20 @@ fn env_digest() -> String {
     sha256_hex(&[joined.as_bytes()])
 }
 
-/// The effective config records that can affect what `git log --all -F
-/// --grep` admits. `branch.*` and `remote.*` (upstream tracking, fetch/push
-/// specs) are dropped: they never change local history walking or message
-/// matching, and a fleet rewrites them on every `worktree add -b` /
-/// `push -u`, which would otherwise cold-reset every proof. Everything else
-/// is kept verbatim (input is `config --list -z`: `key\nvalue\0` records).
-fn semantic_config(config_z: &str) -> String {
-    config_z
-        .split('\0')
-        .filter(|rec| {
-            let key = rec.split('\n').next().unwrap_or("").to_ascii_lowercase();
-            !(key.starts_with("branch.") || key.starts_with("remote."))
-        })
-        .collect::<Vec<_>>()
-        .join("\0")
-}
-
 /// Capture S. `None` = capture failed (degrade to the original query);
-/// `Unsupported` = semantics this proof refuses to reinterpret.
-fn capture_context(project_root: &Path, deadline: Instant) -> Option<ContextSnapshot> {
+/// `Unsupported` = semantics this proof refuses to reinterpret. A `located`
+/// key (the probe's cold check already ran `rev-parse`) skips that read.
+///
+/// The config digest covers the WHOLE effective `config --list -z`,
+/// `branch.*` and `remote.*` included: remote/branch configuration changes
+/// ref resolution (advisor ruling 2026-10-25 (d)). The churn that costs —
+/// a `push -u` rewriting upstream records resets every proof under this
+/// common dir — is speed only.
+fn capture_context(
+    project_root: &Path,
+    located: Option<Location>,
+    deadline: Instant,
+) -> Option<ContextSnapshot> {
     // Replace-control overrides change which objects Git serves; refuse
     // rather than second-guess (never pass --no-replace-objects ourselves).
     if std::env::var_os("GIT_NO_REPLACE_OBJECTS").is_some()
@@ -535,71 +667,46 @@ fn capture_context(project_root: &Path, deadline: Instant) -> Option<ContextSnap
     {
         return Some(ContextSnapshot::Unsupported);
     }
-    let (version, config, ids) = std::thread::scope(|s| {
+    let (version, config, loc) = std::thread::scope(|s| {
         let version = s.spawn(git_version);
         let config = s.spawn(|| git_capture(project_root, &["config", "--list", "-z"], deadline));
-        let ids = git_capture(
-            project_root,
-            &[
-                "rev-parse",
-                "--git-common-dir",
-                "--absolute-git-dir",
-                "--show-object-format",
-            ],
-            deadline,
-        );
+        let loc = located.or_else(|| locate(project_root, deadline));
         (
             version.join().ok().flatten(),
             config.join().ok().flatten(),
-            ids,
+            loc,
         )
     });
-    let (version, config, ids) = (version?, config?, ids?);
-    let mut lines = ids.lines();
-    let common_raw = lines.next()?.trim().to_string();
-    let git_dir = lines.next()?.trim().to_string();
-    let object_format = lines.next()?.trim().to_string();
-    let common_dir = {
-        let p = PathBuf::from(&common_raw);
-        if p.is_absolute() {
-            p
-        } else {
-            project_root.join(p)
-        }
-    };
-    let common_dir = std::fs::canonicalize(&common_dir).unwrap_or(common_dir);
+    let (version, config, loc) = (version?, config?, loc?);
 
     // Shallow / graft files make ancestry lie to this proof's closure rule.
     let nonempty = |p: PathBuf| std::fs::metadata(&p).map(|m| m.len() > 0).unwrap_or(false);
-    if nonempty(common_dir.join("shallow")) || nonempty(common_dir.join("info/grafts")) {
+    if nonempty(loc.common_dir.join("shallow")) || nonempty(loc.common_dir.join("info/grafts")) {
         return Some(ContextSnapshot::Unsupported);
     }
 
-    let config_digest = sha256_hex(&[semantic_config(&config).as_bytes()]);
+    let config_digest = sha256_hex(&[config.as_bytes()]);
     let alternates =
-        std::fs::read_to_string(common_dir.join("objects/info/alternates")).unwrap_or_default();
+        std::fs::read_to_string(loc.common_dir.join("objects/info/alternates")).unwrap_or_default();
     let s_digest = sha256_hex(&[
         b"show-negative-v1",
         &SCHEMA_VERSION.to_le_bytes(),
         version.as_bytes(),
-        common_dir.as_os_str().as_encoded_bytes(),
-        git_dir.as_bytes(),
-        object_format.as_bytes(),
+        loc.common_dir.as_os_str().as_encoded_bytes(),
+        loc.git_dir.as_bytes(),
+        loc.object_format.as_bytes(),
         config_digest.as_bytes(),
         env_digest().as_bytes(),
         alternates.as_bytes(),
     ]);
-    Some(ContextSnapshot::Supported(GitContext {
-        common_dir,
-        s_digest,
-    }))
+    Some(ContextSnapshot::Supported(GitContext { loc, s_digest }))
 }
 
 // ---------------------------------------------------------------------------
 // R: roots snapshot
 // ---------------------------------------------------------------------------
 
-struct RootsSnapshot {
+pub(crate) struct RootsSnapshot {
     /// The tip OIDs Git itself admits for `log --all` (deduped), INCLUDING
     /// the current and other linked worktrees' detached HEADs and peeled
     /// annotated tags — obtained from Git's own revision machinery, never
@@ -615,14 +722,16 @@ struct RootsSnapshot {
 /// S and R captured concurrently (each is a handful of independent, bounded
 /// git reads; serially they were most of a warm read's cost on a loaded
 /// host). Both are point-in-time reads either way; callers compare a BEFORE
-/// pair with an AFTER pair exactly as before. trace:BUG-2221 | ai:claude
+/// pair with an AFTER pair exactly as before.
+// trace:BUG-2221 | ai:claude
 fn capture_snapshot(
     project_root: &Path,
+    located: Option<Location>,
     deadline: Instant,
 ) -> (Option<ContextSnapshot>, Option<RootsSnapshot>) {
     std::thread::scope(|s| {
         let roots = s.spawn(|| capture_roots(project_root, deadline));
-        let ctx = capture_context(project_root, deadline);
+        let ctx = capture_context(project_root, located, deadline);
         (ctx, roots.join().ok().flatten())
     })
 }
@@ -680,7 +789,7 @@ fn capture_roots(project_root: &Path, deadline: Instant) -> Option<RootsSnapshot
 // Query identity
 // ---------------------------------------------------------------------------
 
-struct QueryKey {
+pub(crate) struct QueryKey {
     /// The exact byte strings passed as `--grep` arguments (sorted, deduped)
     /// — never a substring/case approximation of Git's own prefilter.
     strings: Vec<String>,
@@ -701,7 +810,7 @@ fn query_key(ids: &[String]) -> QueryKey {
 // ---------------------------------------------------------------------------
 
 #[derive(Default, serde::Serialize, serde::Deserialize)]
-struct NegativeState {
+pub(crate) struct NegativeState {
     schema: u32,
     s_digest: String,
     query_digest: String,
@@ -720,6 +829,18 @@ struct NegativeState {
 }
 
 impl NegativeState {
+    /// An empty state for `queries` under no S: the "last complete oracle
+    /// answer was zero references" MARKER — and the base every fresh state
+    /// is built from. It proves nothing and is never read as a proof.
+    fn marker(queries: &QueryKey) -> Self {
+        NegativeState {
+            schema: SCHEMA_VERSION,
+            query_digest: queries.digest.clone(),
+            queries: queries.strings.clone(),
+            ..Default::default()
+        }
+    }
+
     fn is_empty(&self) -> bool {
         self.closed.is_empty() && self.open.is_empty()
     }
@@ -807,27 +928,49 @@ fn pending_frontier(state: &NegativeState, roots: &[String]) -> Option<Vec<Strin
     Some(pending)
 }
 
-fn cache_dir(ctx: &GitContext) -> PathBuf {
-    ctx.common_dir.join(CACHE_NAMESPACE)
+fn cache_dir(loc: &Location) -> PathBuf {
+    loc.common_dir.join(CACHE_NAMESPACE)
 }
 
-fn state_file_name(ctx: &GitContext, queries: &QueryKey) -> String {
-    format!("{}-{}.json", &ctx.s_digest[..16], &queries.digest[..16])
+/// `<16 hex of the worktree's git dirs>-<16 hex of the query>.json`: one file
+/// per (worktree, query) key, found WITHOUT computing S (the cold check runs
+/// before any snapshot). The S the state was proved under lives inside the
+/// file and is validated on load.
+fn state_file_name(loc: &Location, queries: &QueryKey) -> String {
+    let where_ = sha256_hex(&[
+        loc.common_dir.as_os_str().as_encoded_bytes(),
+        loc.git_dir.as_bytes(),
+    ]);
+    format!("{}-{}.json", &where_[..16], &queries.digest[..16])
+}
+
+fn state_path(loc: &Location, queries: &QueryKey) -> PathBuf {
+    cache_dir(loc).join(state_file_name(loc, queries))
+}
+
+/// Whether the key has ANY usable state file (a marker, a proof under any
+/// S, a tombstone) — the cold check. Owned no-follow bounded read; a file
+/// for another query or schema counts as absent.
+fn key_file_present(loc: &Location, queries: &QueryKey) -> bool {
+    read_owned_regular_file(&state_path(loc, queries), MAX_STATE_BYTES)
+        .and_then(|bytes| serde_json::from_slice::<NegativeState>(&bytes).ok())
+        .is_some_and(|st| {
+            st.schema == SCHEMA_VERSION
+                && st.query_digest == queries.digest
+                && st.queries == queries.strings
+        })
 }
 
 /// Load state. Any failure — absent, unreadable, over-size, symlinked,
-/// unowned, malformed, mismatched identity — degrades to empty (bounded
-/// uncached work), never an error or a lock wait.
+/// unowned, malformed, mismatched identity (a marker included) — degrades
+/// to empty (bounded uncached work), never an error or a lock wait.
 fn load_state(ctx: &GitContext, queries: &QueryKey) -> NegativeState {
     let fresh = || NegativeState {
-        schema: SCHEMA_VERSION,
         s_digest: ctx.s_digest.clone(),
-        query_digest: queries.digest.clone(),
-        queries: queries.strings.clone(),
-        ..Default::default()
+        ..NegativeState::marker(queries)
     };
-    let path = cache_dir(ctx).join(state_file_name(ctx, queries));
-    let Some(bytes) = read_owned_regular_file(&path, MAX_STATE_BYTES) else {
+    let Some(bytes) = read_owned_regular_file(&state_path(&ctx.loc, queries), MAX_STATE_BYTES)
+    else {
         return fresh();
     };
     let Ok(state) = serde_json::from_slice::<NegativeState>(&bytes) else {
@@ -855,9 +998,9 @@ fn load_state(ctx: &GitContext, queries: &QueryKey) -> NegativeState {
     state
 }
 
-/// Bounded, no-follow, owned, regular-file read.
-fn read_owned_regular_file(path: &Path, max_bytes: u64) -> Option<Vec<u8>> {
-    use std::io::Read;
+/// Open `path` for reading without following a final symlink; only an
+/// owned regular file is returned.
+fn open_owned_regular_file(path: &Path) -> Option<(std::fs::File, std::fs::Metadata)> {
     let mut opts = std::fs::OpenOptions::new();
     opts.read(true);
     #[cfg(unix)]
@@ -867,15 +1010,30 @@ fn read_owned_regular_file(path: &Path, max_bytes: u64) -> Option<Vec<u8>> {
     }
     let file = opts.open(path).ok()?;
     let md = file.metadata().ok()?;
-    if !md.is_file() || md.len() > max_bytes {
-        return None;
-    }
+    (md.is_file() && owned(&md)).then_some((file, md))
+}
+
+/// The metadata's owner is this process's effective uid (always true off
+/// unix, where no uid exists to compare).
+fn owned(md: &std::fs::Metadata) -> bool {
     #[cfg(unix)]
     {
         use std::os::unix::fs::MetadataExt;
-        if md.uid() != unsafe { libc::geteuid() } {
-            return None;
-        }
+        md.uid() == unsafe { libc::geteuid() }
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = md;
+        true
+    }
+}
+
+/// Bounded, no-follow, owned, regular-file read.
+fn read_owned_regular_file(path: &Path, max_bytes: u64) -> Option<Vec<u8>> {
+    use std::io::Read;
+    let (file, md) = open_owned_regular_file(path)?;
+    if md.len() > max_bytes {
+        return None;
     }
     let mut buf = Vec::with_capacity(md.len() as usize);
     let mut reader = file.take(max_bytes.saturating_add(1));
@@ -886,22 +1044,68 @@ fn read_owned_regular_file(path: &Path, max_bytes: u64) -> Option<Vec<u8>> {
     Some(buf)
 }
 
+/// Mark a warm read as a use, so eviction is least-recently-USED, not
+/// least-recently-written. Best effort: a failure costs only eviction order.
+fn touch_state(loc: &Location, queries: &QueryKey) {
+    if let Some((file, _)) = open_owned_regular_file(&state_path(loc, queries)) {
+        let _ = file.set_modified(std::time::SystemTime::now());
+    }
+}
+
+/// Drop a key's state (it turned positive). Owned regular files only, inside
+/// a verified namespace directory; never follows a link.
+fn forget_key(loc: &Location, queries: &QueryKey) {
+    let Some(dir) = owned_namespace_dir(loc, false) else {
+        return;
+    };
+    let path = dir.join(state_file_name(loc, queries));
+    if std::fs::symlink_metadata(&path).is_ok_and(|md| md.is_file() && owned(&md)) {
+        let _ = std::fs::remove_file(&path);
+    }
+}
+
+/// The namespace directory, every component below the git common dir
+/// (`aida-cache`, `show-negative-v1`) verified a REAL directory owned by
+/// this uid — never a symlink, which would redirect writes and evictions
+/// outside the git dir (amendment 2). `create` makes missing components.
+// trace:BUG-2221 | ai:claude
+fn owned_namespace_dir(loc: &Location, create: bool) -> Option<PathBuf> {
+    let mut dir = loc.common_dir.clone();
+    for component in CACHE_NAMESPACE.split('/') {
+        dir.push(component);
+        if create {
+            match std::fs::create_dir(&dir) {
+                Ok(()) => {}
+                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+                Err(_) => return None,
+            }
+        }
+        let md = std::fs::symlink_metadata(&dir).ok()?;
+        if !md.is_dir() || !owned(&md) {
+            return None;
+        }
+    }
+    Some(dir)
+}
+
 /// Atomic publish under a NONBLOCKING local cache lock, then deterministic
 /// aggregate eviction. Returns `false` when nothing was persisted (contended
-/// lock, unwritable repo, serialization failure) — callers degrade, never
-/// wait. trace:BUG-2221 | ai:claude
-fn publish_state(ctx: &GitContext, state: &NegativeState) -> bool {
-    let dir = cache_dir(ctx);
-    if std::fs::create_dir_all(&dir).is_err() {
+/// lock, unwritable repo, symlinked/unowned namespace, serialization
+/// failure) — callers degrade, never wait.
+// trace:BUG-2221 | ai:claude
+fn publish_state(loc: &Location, state: &NegativeState) -> bool {
+    let Some(dir) = owned_namespace_dir(loc, true) else {
         return false;
-    }
+    };
     let lock_path = dir.join(".lock");
-    let Ok(lock) = std::fs::OpenOptions::new()
-        .create(true)
-        .truncate(false)
-        .write(true)
-        .open(&lock_path)
-    else {
+    let mut lock_opts = std::fs::OpenOptions::new();
+    lock_opts.create(true).truncate(false).write(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        lock_opts.custom_flags(libc::O_NOFOLLOW);
+    }
+    let Ok(lock) = lock_opts.open(&lock_path) else {
         return false;
     };
     if fs2::FileExt::try_lock_exclusive(&lock).is_err() {
@@ -928,7 +1132,7 @@ fn publish_state(ctx: &GitContext, state: &NegativeState) -> bool {
             .ok()?;
         tmp.write_all(&bytes).ok()?;
         tmp.persist(dir.join(state_file_name(
-            ctx,
+            loc,
             &QueryKey {
                 strings: state.queries.clone(),
                 digest: state.query_digest.clone(),
@@ -947,8 +1151,10 @@ fn publish_state(ctx: &GitContext, state: &NegativeState) -> bool {
 
 /// Keep the namespace within [`MAX_CACHE_FILES`] / [`MAX_CACHE_TOTAL_BYTES`]:
 /// evict our own state files only (strict `<16hex>-<16hex>.json` names,
-/// regular files via symlink metadata — never traverses subdirectories or
-/// follows links), oldest (mtime, name) first. trace:BUG-2221 | ai:claude
+/// owned regular files via symlink metadata — never traverses
+/// subdirectories, follows links or unlinks another uid's file), least
+/// recently used (mtime — warm reads touch it — then name) first.
+// trace:BUG-2221 | ai:claude
 fn enforce_aggregate_bounds(dir: &Path) {
     enforce_aggregate_bounds_with(dir, MAX_CACHE_FILES, MAX_CACHE_TOTAL_BYTES);
 }
@@ -979,7 +1185,7 @@ fn enforce_aggregate_bounds_with(dir: &Path, max_files: usize, max_total_bytes: 
         let Ok(md) = std::fs::symlink_metadata(entry.path()) else {
             continue;
         };
-        if !md.is_file() {
+        if !md.is_file() || !owned(&md) {
             continue;
         }
         let mtime = md.modified().unwrap_or(std::time::SystemTime::UNIX_EPOCH);
@@ -1004,11 +1210,8 @@ fn enforce_aggregate_bounds_with(dir: &Path, max_files: usize, max_total_bytes: 
 // ---------------------------------------------------------------------------
 
 enum BatchOutcome {
-    /// A parsed hit exists among the batch; the other members' negative
-    /// evidence is still completely framed and valid.
-    Hit {
-        negatives: Vec<(String, Vec<String>)>,
-    },
+    /// A parsed hit exists among the batch (the key is positive).
+    Hit,
     /// Every member proved negative, with parent framing.
     Proved {
         negatives: Vec<(String, Vec<String>)>,
@@ -1235,7 +1438,7 @@ fn run_batch(
     let Some(grepped) = run(&grep_args, &framed_path) else {
         return BatchOutcome::Failed;
     };
-    let mut hit_oids: HashSet<String> = HashSet::new();
+    let mut hit = false;
     for record in grepped.split('\u{1e}') {
         let record = record.trim_start_matches(['\n', '\r']);
         if record.trim().is_empty() {
@@ -1259,24 +1462,18 @@ fn run_batch(
             .iter()
             .any(|r| wanted_uc.contains(&r.to_ascii_uppercase()))
         {
-            hit_oids.insert(oid.to_string());
+            hit = true;
         }
     }
-    // A hit commit is POSITIVE — it must never enter the negative evidence.
-    let mut negatives: Vec<(String, Vec<String>)> = parents_of
-        .into_iter()
-        .filter(|(oid, _)| !hit_oids.contains(oid))
-        .collect();
+    if hit {
+        // The caller routes to the original positive collector.
+        return BatchOutcome::Hit;
+    }
+    let mut negatives: Vec<(String, Vec<String>)> = parents_of.into_iter().collect();
     // Inclusion-closed boundary commits close immediately: recorded with no
     // pending parents because their entire ancestry is inside a CLOSED cone.
     negatives.extend(boundary.into_iter().map(|oid| (oid, Vec::new())));
-    if hit_oids.is_empty() {
-        BatchOutcome::Proved { negatives }
-    } else {
-        // The non-hit members stay proved negative (completely framed); the
-        // caller routes to the original positive collector.
-        BatchOutcome::Hit { negatives }
-    }
+    BatchOutcome::Proved { negatives }
 }
 
 #[cfg(test)]

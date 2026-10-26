@@ -160,3 +160,34 @@ fn trace_partial_read_is_incomplete() {
         "hits before expiry are kept"
     );
 }
+
+/// FILE symlinks get the same external-target fence as directory links: an
+/// in-root file alias is read under its displayed path, a file link out of
+/// the project root is never read (incomplete, not silently complete).
+#[cfg(unix)]
+#[test]
+fn trace_file_symlink_outside_root_is_refused() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let root = tmp.path().join("proj");
+    write(
+        &root.join("src/a.rs"),
+        "// trace:TASK-7 | ai:test\nfn a() {}\n",
+    );
+    std::os::unix::fs::symlink(root.join("src/a.rs"), root.join("alias.rs")).unwrap();
+    let (hits, complete) = scan_trace_graph_streaming(&root, &wanted(&["TASK-7"]), &mut || false);
+    assert!(complete, "an in-root file alias is ordinary coverage");
+    assert_eq!(
+        files_of(&hits, "TASK-7"),
+        vec!["alias.rs".to_string(), "src/a.rs".to_string()]
+    );
+
+    let outside = tmp.path().join("other-repo/b.rs");
+    write(&outside, "// trace:TASK-7 | ai:test\nfn b() {}\n");
+    std::os::unix::fs::symlink(&outside, root.join("ext.rs")).unwrap();
+    let (hits, complete) = scan_trace_graph_streaming(&root, &wanted(&["TASK-7"]), &mut || false);
+    assert!(!complete, "an external file link is a recorded gap");
+    assert!(
+        !files_of(&hits, "TASK-7").contains(&"ext.rs".to_string()),
+        "the scan must not read a file outside the project"
+    );
+}

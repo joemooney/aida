@@ -175,17 +175,11 @@ fn only_show_linkage_bounds_default_branch_resolution() {
 }
 
 /// Every linkage call is slow but inside its own per-call budget, so the
-/// per-call budgets alone let the phase run for their sum: the negative
-/// probe's snapshot (0.3 s: its concurrent `log --no-walk` and `worktree
-/// list` reads), the log (0.3 s), the shipped check (0.6 s of its 1 s), four
-/// branch searches (1.2 s of their 2 s), and the worktree probe (0.3 s),
-/// 2.7 s in all. The one show deadline stops the phase at 1.5 s, and what it
-/// cut short is labelled unknown.
-///
-/// BUG-2221: the show path runs the negative probe's snapshot before the
-/// log on a cold key, so the deadline sits 0.3 s later than the original
-/// 1.2 s — the shipped check still fits with the same margin, and the
-/// branch search is still what the deadline cuts. trace:BUG-2221 | ai:claude
+/// per-call budgets alone let the phase run for their sum: the log (0.3 s),
+/// the shipped check (0.6 s of its 1 s), four branch searches (1.2 s of
+/// their 2 s), and the worktree probe (0.3 s), 2.4 s in all. The one show
+/// deadline stops the phase at 1.2 s, and what it cut short is labelled
+/// unknown.
 #[cfg(unix)]
 #[test]
 fn show_linkage_phase_runs_under_one_deadline() {
@@ -215,11 +209,11 @@ fn show_linkage_phase_runs_under_one_deadline() {
     );
 
     let started = Instant::now();
-    let show = collect_git_linkage_until(&repo, &ids, Instant::now() + Duration::from_millis(1500));
+    let show = collect_git_linkage_until(&repo, &ids, Instant::now() + Duration::from_millis(1200));
     let elapsed = started.elapsed();
     assert!(
         elapsed < Duration::from_millis(2000),
-        "the phase must stop near its 1.5 s deadline, not run the 2.7 s sum of its budgets: {elapsed:?}"
+        "the phase must stop near its 1.2 s deadline, not run the 2.4 s sum of its budgets: {elapsed:?}"
     );
     assert_eq!(show.commits.len(), 4, "{show:?}");
     assert!(
