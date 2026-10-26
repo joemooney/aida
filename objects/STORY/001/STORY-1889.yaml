@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-21T15:33:51.496539087Z
-modified_at: 2026-10-26T16:35:17.357251482Z
+modified_at: 2026-10-26T16:35:33.336534345Z
 req_type: Story
 tags:
 - architecture
@@ -347,6 +347,12 @@ comments:
   created_at: 2026-10-25T23:28:03.413265465Z
   modified_at: 2026-10-25T23:28:03.413265465Z
   session_id: 80d52344-5c57-4be4-9a3a-d862cbcc1920
+- id: 01a17911-3558-7732-963b-c8e3eb9e89a4
+  author: joe
+  content: 'FINAL slice opened: PR #2953 at f7013abbf6 (branch story-1889-dispatch). Dispatch authority moved to gate/dispatch_authority.rs, gate/dispatch_lock.rs and gate/dispatch_ledger.rs. dispatch.rs and dispatch_flow.rs are off GATE_PROTECTED_PATHS; the floor is now .aida/config.toml + gate/ + the story_1888 ratchet file. The claim/execution admission blocks are now gate calls (pass_admission, run_admission, verify_running_claim, execution_refusal), extracted verbatim in the same order. AuthorizedDispatchCaller fields are private and admitted_request builds the record in the gate. activate_lock_as_human binds the human TTY check. New story_1888 ratchets pin all of this, and a protected story_1889 seam test file was added. Refusal inventory (full list in a PR comment): 0 removed/altered, 3 added (two bail!("{refusal}") re-raises, one test mount). STORY-1917 tests unchanged and passing. Local: 250 targeted tests pass, clippy clean, check-ci-fast 35/35, check-ci-compile ok, test-touched 1496/0. Completes STORY-1889 on merge; operator merges (protected paths). Review story STORY-b6b1278890774ef993d2ebc327862470-011.'
+  created_at: 2026-10-26T16:35:33.336534345Z
+  modified_at: 2026-10-26T16:35:33.336534345Z
+  session_id: be057d71-e396-44b6-9d50-369c7c2fdfcc
 history:
 - id: 01a15f19-1b8d-7a60-bd9c-acf0c42193fc
   author: joe
