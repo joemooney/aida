@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-1865",
+  "publishes": [
+    {
+      "at": "2026-10-26T00:29:44.003580010Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-25T19:42:32.974374314Z",
+      "spec": "TASK-1865",
+      "seat": "reviewer",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2925,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "ef075f33a236b24a46a5c85c69aada21b2074d34"
+      }
+    },
+    {
+      "ts": "2026-10-25T19:42:34.932496807Z",
+      "spec": "TASK-1865",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "codex2 STANDARD: warning/doc change preserves signed rider behavior, but required actual fake-gh leased-body failure fixture is absent. Existing pure rider tests and author69pass do not pin warning/probe path. CI1 rerun pending; no Buildgreen claim. Evidence /tmp/codex2-pr2925-ef075-review.txt.",
+        "recovery_hint": "address the review findings, move TASK-1865 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-10-26T00:29:28.270313912Z",
+      "spec": "TASK-1865",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2925
+      }
+    },
+    {
+      "ts": "2026-10-26T00:29:43.776637314Z",
+      "spec": "TASK-1865",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "881f9a382823cc171c9f6b2d34b7a201d7f5051e",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
