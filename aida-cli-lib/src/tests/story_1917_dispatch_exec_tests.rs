@@ -3515,3 +3515,124 @@ fn task_2344_recovery_index_writer_respects_reader_bounds() {
     assert!(over_count.contains("recovery.json"), "{over_count}");
     assert!(check_recovery_index_bounds(1, MAX_RECOVERY_FILE_BYTES + 1).is_err());
 }
+
+/// Review round 3 (fail-open minor): `/proc` inside its own PID namespace,
+/// or mounted `hidepid`, cannot show another process holding the legacy
+/// lock, so the quiescence proof refuses instead of reporting it unused.
+// trace:STORY-1917 | ai:claude
+#[test]
+fn story_1917_proc_view_refusal_covers_namespaces_and_hidepid() {
+    use crate::agent_registry::PidNamespaceProbe;
+    let host = PidNamespaceProbe {
+        self_ns: Some(4026531836),
+        pid1_ns: Some(4026531836),
+        nspid_levels: 1,
+        pid1_comm: Some("systemd".into()),
+    };
+    let opts = "rw,nosuid,nodev,noexec,relatime,rw";
+    assert_eq!(proc_view_refusal(&host, Some(opts)), None);
+    for options in ["rw,hidepid=0", "rw,relatime,rw,hidepid=off"] {
+        assert_eq!(proc_view_refusal(&host, Some(options)), None, "{options}");
+    }
+    for (v, options) in [
+        ("2", "rw,relatime,rw,hidepid=2"),
+        ("invisible", "rw,rw,hidepid=invisible,subset=pid"),
+        ("1", "rw,hidepid=1"),
+    ] {
+        let why = proc_view_refusal(&host, Some(options)).expect(options);
+        assert!(why.contains(&format!("hidepid={v}")), "{why}");
+    }
+    assert!(proc_view_refusal(&host, None)
+        .unwrap()
+        .contains("could not be read"));
+    let nested = PidNamespaceProbe {
+        nspid_levels: 2,
+        ..host.clone()
+    };
+    let other_ns = PidNamespaceProbe {
+        pid1_ns: Some(4026532001),
+        ..host.clone()
+    };
+    let sandbox_init = PidNamespaceProbe {
+        pid1_ns: None,
+        pid1_comm: Some("bwrap".into()),
+        ..host.clone()
+    };
+    for probe in [nested, other_ns, sandbox_init] {
+        let why = proc_view_refusal(&probe, Some(opts)).expect("isolated");
+        assert!(why.contains("own PID namespace"), "{probe:?}: {why}");
+    }
+
+    let mountinfo = "22 1 0:21 / /sys rw,nosuid - sysfs sysfs rw\n\
+                     23 1 0:22 / /proc rw,nosuid,nodev - proc proc rw\n\
+                     41 23 0:40 / /proc rw,relatime - proc proc rw,hidepid=2\n";
+    assert_eq!(
+        proc_mount_options(mountinfo).as_deref(),
+        Some("rw,relatime,rw,hidepid=2")
+    );
+    assert_eq!(
+        proc_mount_options("22 1 0:21 / /sys rw - sysfs sysfs rw\n"),
+        None
+    );
+}
+
+/// The activation path consults the view: in a PID namespace of its own, or
+/// under `hidepid`, `aida dispatch activate-lock` refuses and the legacy lock
+/// stays a regular file at its path.
+// trace:STORY-1917 | ai:claude
+#[test]
+fn story_1917_activate_lock_refuses_when_proc_cannot_see_other_processes() {
+    use crate::agent_registry::PidNamespaceProbe;
+    use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
+    let _serial = Q1_HOOK_SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    struct Reset;
+    impl Drop for Reset {
+        fn drop(&mut self) {
+            if let Ok(mut g) = TEST_PROC_VIEW.lock() {
+                *g = None;
+            }
+        }
+    }
+    let _reset = Reset;
+
+    let f = ExecFixture::new(&["reviewer", "implementer"]);
+    let disp_dir = dispatch_root(&f.root);
+    let _ = open_pinned_dispatch_subdir(&f.root, None).unwrap();
+    let lock_path = disp_dir.join("tick.lock");
+    let legacy = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .read(true)
+        .write(true)
+        .mode(0o600)
+        .open(&lock_path)
+        .unwrap();
+    let orig_ino = legacy.metadata().unwrap().ino();
+    drop(legacy);
+
+    let host = PidNamespaceProbe {
+        self_ns: Some(4026531836),
+        pid1_ns: Some(4026531836),
+        nspid_levels: 1,
+        pid1_comm: Some("systemd".into()),
+    };
+    let sandboxed = PidNamespaceProbe {
+        nspid_levels: 2,
+        ..host.clone()
+    };
+    for (probe, options, expected) in [
+        (sandboxed, Some("rw"), "own PID namespace"),
+        (host, Some("rw,hidepid=2"), "hidepid=2"),
+    ] {
+        *TEST_PROC_VIEW.lock().unwrap() = Some((probe, options.map(str::to_string)));
+        let err = activate_dispatch_v2_lock_quiescent(&f.root).expect_err("must refuse");
+        let text = format!("{err:#}");
+        assert!(
+            text.contains(expected) && text.contains("fail-closed"),
+            "{text}"
+        );
+        let meta = std::fs::symlink_metadata(&lock_path).unwrap();
+        assert!(meta.is_file(), "the legacy lock stays a regular file");
+        assert_eq!(meta.ino(), orig_ino);
+    }
+}

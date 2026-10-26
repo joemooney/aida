@@ -2209,7 +2209,7 @@ pub(crate) fn pr_train_handler(opts: &TrainOptions<'_>) -> Result<()> {
     pr_train_handler_with_dispatch_ctx(opts, None)
 }
 
-// trace:STORY-1917 trace:TASK-2339 | ai:agy
+// trace:STORY-1917 | ai:agy
 pub(crate) fn pr_train_handler_with_dispatch_ctx(
     opts: &TrainOptions<'_>,
     dispatch_ctx: Option<&crate::gate::dispatch_auth::DispatchExecutionContext>,

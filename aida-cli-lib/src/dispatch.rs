@@ -59,6 +59,15 @@ const RECOVERY_FILE: &str = "recovery.json";
 #[cfg(test)]
 pub(crate) static TEST_PROC_PID_ALLOWLIST: std::sync::Mutex<Option<Vec<u32>>> =
     std::sync::Mutex::new(None);
+/// Stands in for this process's `/proc` view (namespace probe, `/proc`
+/// mount options) in [`verify_sole_open_fd_for_inode`]. Unset, a test that
+/// pins [`TEST_PROC_PID_ALLOWLIST`] scans only the pids it names, so the view
+/// is not consulted.
+// trace:STORY-1917 | ai:claude
+#[cfg(test)]
+pub(crate) static TEST_PROC_VIEW: std::sync::Mutex<
+    Option<(crate::agent_registry::PidNamespaceProbe, Option<String>)>,
+> = std::sync::Mutex::new(None);
 #[cfg(test)]
 pub(crate) static TEST_POST_EXCHANGE_HOOK: std::sync::Mutex<
     Option<Box<dyn FnOnce() + Send + 'static>>,
@@ -384,6 +393,58 @@ fn is_vanished_proc_error(err: &std::io::Error) -> bool {
         || matches!(err.raw_os_error(), Some(libc::ENOENT | libc::ESRCH))
 }
 
+/// The options `/proc` is mounted with (per-mount and superblock), from the
+/// last `/proc` entry in `mountinfo` (the one this process sees). `None` when
+/// there is none.
+// trace:STORY-1917 | ai:claude
+pub(crate) fn proc_mount_options(mountinfo: &str) -> Option<String> {
+    mountinfo.lines().rev().find_map(|line| {
+        let (mount, fs) = line.split_once(" - ")?;
+        let mut fields = mount.split_whitespace();
+        let mount_point = fields.nth(4)?;
+        let mount_opts = fields.next()?;
+        let mut fs = fs.split_whitespace();
+        let (fs_type, _source, super_opts) = (fs.next()?, fs.next()?, fs.next()?);
+        (mount_point == "/proc" && fs_type == "proc").then(|| format!("{mount_opts},{super_opts}"))
+    })
+}
+
+/// Why this process's `/proc` cannot show every process that might hold the
+/// legacy lock, if it cannot: it runs in a PID namespace of its own (a
+/// sandbox, `bwrap --unshare-pid`, a container), or `/proc` is mounted with
+/// `hidepid`. Either way a scan that finds no other holder proves nothing.
+// trace:STORY-1917 | ai:claude
+pub(crate) fn proc_view_refusal(
+    probe: &crate::agent_registry::PidNamespaceProbe,
+    proc_mount_options: Option<&str>,
+) -> Option<String> {
+    if probe.is_isolated() {
+        return Some(
+            "this process runs in its own PID namespace (a sandbox or container), so /proc \
+             cannot show processes outside it"
+                .to_string(),
+        );
+    }
+    let Some(options) = proc_mount_options else {
+        return Some("the /proc mount options could not be read".to_string());
+    };
+    let hidepid = options
+        .split(',')
+        .filter_map(|o| o.strip_prefix("hidepid="))
+        .find(|v| !matches!(*v, "0" | "off"));
+    hidepid.map(|v| {
+        format!("/proc is mounted with hidepid={v}, so other processes' descriptors are hidden")
+    })
+}
+
+fn live_proc_view_refusal() -> Option<String> {
+    let mountinfo = std::fs::read_to_string("/proc/self/mountinfo").ok();
+    proc_view_refusal(
+        &crate::agent_registry::PidNamespaceProbe::read(),
+        mountinfo.as_deref().and_then(proc_mount_options).as_deref(),
+    )
+}
+
 /// Verify via `/proc` that `(dev, ino)` is not open on any file descriptor in
 /// the current process or any other process owned by the current UID other than
 /// `(std::process::id(), own_fd)`.
@@ -392,7 +453,9 @@ fn is_vanished_proc_error(err: &std::io::Error) -> bool {
 /// unreadable `/proc/<pid>/fd` directory for a live same-UID process (e.g.
 /// `EACCES` on a non-dumpable or foreign-user-namespace process), or unreadable
 /// descriptor metadata on a still-open FD is treated as **unknown coverage**
-/// and fails closed (`Err`).
+/// and fails closed (`Err`). So is a `/proc` that cannot see every process
+/// ([`proc_view_refusal`]). Processes of other users are skipped: a
+/// pre-Slice-3 dispatch binary runs as the operator who owns the store.
 // trace:STORY-1917 trace:TASK-2344 | ai:agy
 fn verify_sole_open_fd_for_inode(
     dev: u64,
@@ -405,6 +468,23 @@ fn verify_sole_open_fd_for_inode(
     let uid = unsafe { libc::geteuid() };
     #[cfg(test)]
     let pid_allowlist = TEST_PROC_PID_ALLOWLIST.lock().ok().and_then(|g| g.clone());
+
+    // trace:STORY-1917 | ai:claude
+    #[cfg(not(test))]
+    let view_refusal = live_proc_view_refusal();
+    #[cfg(test)]
+    let view_refusal = match TEST_PROC_VIEW.lock().ok().and_then(|g| g.clone()) {
+        Some((probe, options)) => proc_view_refusal(&probe, options.as_deref()),
+        None if pid_allowlist.is_some() => None,
+        None => live_proc_view_refusal(),
+    };
+    if let Some(why) = view_refusal {
+        bail!(
+            "cannot prove legacy {} is unused: {why} (unknown process coverage; fail-closed). \
+             Run `aida dispatch activate-lock` from the host's own PID namespace",
+            display_path.display()
+        );
+    }
 
     let proc_entries = std::fs::read_dir("/proc")
         .context("cannot read /proc to verify legacy dispatch lock quiescence")?;

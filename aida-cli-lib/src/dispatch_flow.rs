@@ -1,5 +1,5 @@
 //! `aida dispatch flow` and `aida dispatch train` in-process runners
-//! (STORY-1917 Slice 3, TASK-2338, TASK-2339, TASK-2344 Q2).
+//! (STORY-1917 Slice 3, TASK-2344 Q2).
 //!
 //! Both runners run exclusively under `aida dispatch serve` (where the advisor
 //! terminal's bound grant is inherited) and bind a [`DispatchExecutionContext`]
@@ -10,7 +10,7 @@
 //! expired grant, tightened human gate, or invalidated worker claim aborts the
 //! in-flight operation before any hold release or merge.
 // mandate-gate
-// trace:STORY-1917 trace:TASK-2338 trace:TASK-2339 trace:TASK-2344 | ai:agy
+// trace:STORY-1917 trace:TASK-2344 | ai:agy
 
 use anyhow::{bail, Context, Result};
 use chrono::{DateTime, Utc};
@@ -55,7 +55,7 @@ fn bounded_output(
 /// Exclusive flock over `.aida/dispatch/train.lock` (mode 0600, `O_NOFOLLOW`),
 /// explicitly unlocked on Drop so only one `dispatch train` (or `flow` train
 /// fallback) runs at a time.
-// trace:STORY-1917 trace:TASK-2339 | ai:agy
+// trace:STORY-1917 | ai:agy
 pub(crate) struct TrainDispatchLock(std::fs::File);
 
 impl Drop for TrainDispatchLock {
@@ -176,7 +176,7 @@ fn query_flow_pr_view(main_worktree: &Path, pr: u64) -> Result<FlowPrView> {
 }
 
 /// Non-force `gh pr update-branch <pr>` followed by `git fetch origin`.
-// trace:STORY-1917 trace:TASK-2338 trace:TASK-2339 | ai:agy
+// trace:STORY-1917 | ai:agy
 fn update_pr_branch_non_force(
     main_worktree: &Path,
     req_id: &str,
@@ -236,7 +236,7 @@ fn update_pr_branch_non_force(
 
 /// Inspect `.aida/review-verdicts/PR-<pr>.json` (through the pinned, no-follow
 /// verdict reader) against `head_oid`.
-// trace:STORY-1917 trace:TASK-2338 | ai:agy
+// trace:STORY-1917 | ai:agy
 fn verdict_at_head(main_worktree: &Path, pr: u64, head_oid: &str) -> Option<VerdictKind> {
     let key = format!("PR-{pr}");
     let v = review_verdict::read_recorded_verdict(main_worktree, &key)?;
@@ -317,7 +317,7 @@ fn invoke_pr_train_with_ctx(prs: &[u64], ctx: &DispatchExecutionContext) -> Resu
 
 /// Wait for required CI checks on `pr` to settle, re-verifying `ctx` before and
 /// after the wait.
-// trace:STORY-1917 trace:TASK-2338 | ai:agy
+// trace:STORY-1917 | ai:agy
 fn wait_for_pr_ci_with_ctx(
     main_worktree: &Path,
     pr: u64,
@@ -379,7 +379,7 @@ pub(crate) fn ci_state_is_green(pr: u64, state: crate::forge::CiState) -> Result
 }
 
 /// Verify `.aida-store` has no uncommitted changes before starting a train pass.
-// trace:STORY-1917 trace:TASK-2339 | ai:agy
+// trace:STORY-1917 | ai:agy
 pub(crate) fn ensure_clean_aida_store(main_worktree: &Path) -> Result<()> {
     let store_dir = main_worktree.join(".aida-store");
     if !store_dir.exists() {
@@ -412,7 +412,7 @@ pub(crate) fn ensure_clean_aida_store(main_worktree: &Path) -> Result<()> {
 ///   and retries `pr ship` once;
 /// - if still behind base, falls back to `pr_train_handler_with_dispatch_ctx`
 ///   under `.aida/dispatch/train.lock`.
-// trace:STORY-1917 trace:TASK-2338 trace:TASK-2339 | ai:agy
+// trace:STORY-1917 | ai:agy
 fn ship_or_train_single_pr(
     main_worktree: &Path,
     req_id: &str,
@@ -487,9 +487,8 @@ fn ship_or_train_single_pr(
     }
 }
 
-/// Execute `aida dispatch request flow --pr <pr> [--no-ship] [--vendor <v>]`
-/// (TASK-2338).
-// trace:STORY-1917 trace:TASK-2338 | ai:agy
+/// Execute `aida dispatch request flow --pr <pr> [--no-ship] [--vendor <v>]`.
+// trace:STORY-1917 | ai:agy
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn run_flow_verb(
     main_worktree: &Path,
@@ -741,8 +740,8 @@ pub(crate) fn run_flow_verb(
     }
 }
 
-/// Execute `aida dispatch request train <prs...>` (TASK-2339).
-// trace:STORY-1917 trace:TASK-2339 | ai:agy
+/// Execute `aida dispatch request train <prs...>`.
+// trace:STORY-1917 | ai:agy
 pub(crate) fn run_train_verb(
     main_worktree: &Path,
     mandate_dir: &Path,

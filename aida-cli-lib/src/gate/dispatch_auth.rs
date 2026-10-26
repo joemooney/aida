@@ -1,5 +1,5 @@
 //! In-process dispatch authority context (`DispatchExecutionContext`, STORY-1917,
-//! TASK-2338, TASK-2339, TASK-2344 Q2).
+//! TASK-2344 Q2).
 //!
 //! When `aida dispatch serve` runs a `flow` or `train` request in-process,
 //! long-running CI waits, hold-gate waits, and multi-member train waves can
@@ -11,7 +11,7 @@
 //! from disk at every post-wait and pre-side-effect checkpoint inside `flow`,
 //! `pr ship`, and `pr train`.
 // mandate-gate
-// trace:STORY-1917 trace:TASK-2338 trace:TASK-2339 trace:TASK-2344 | ai:agy
+// trace:STORY-1917 trace:TASK-2344 | ai:agy
 
 use anyhow::{bail, Context, Result};
 use chrono::{DateTime, Utc};
@@ -29,7 +29,7 @@ use crate::gate::seat_authority;
 /// Typed error marker returned when [`DispatchExecutionContext::reverify`]
 /// aborts an in-flight dispatch operation due to revoked/expired authority,
 /// human-gate changes, or invalidated claim ownership.
-// trace:STORY-1917 trace:TASK-2338 trace:TASK-2339 trace:TASK-2344 | ai:agy
+// trace:STORY-1917 trace:TASK-2344 | ai:agy
 #[derive(Debug)]
 pub(crate) struct DispatchAuthorityAbortedError(pub String);
 
@@ -51,7 +51,7 @@ pub(crate) fn is_dispatch_authority_aborted(err: &anyhow::Error) -> bool {
 /// construct a context through [`DispatchExecutionContext::establish`], which
 /// validates the canonical on-disk `requests/<id>.json` and `results/<id>.json`
 /// under `tick.lock`.
-// trace:STORY-1917 trace:TASK-2338 trace:TASK-2339 trace:TASK-2344 | ai:agy
+// trace:STORY-1917 trace:TASK-2344 | ai:agy
 #[derive(Debug, Clone)]
 pub(crate) struct DispatchExecutionContext {
     main_worktree: PathBuf,
@@ -71,7 +71,7 @@ impl DispatchExecutionContext {
     /// Establish a bound [`DispatchExecutionContext`] for the current worker
     /// process from canonical on-disk `requests/<id>.json` and `results/<id>.json`,
     /// and immediately run a full [`Self::reverify`] pass at `now`.
-    // trace:STORY-1917 trace:TASK-2338 trace:TASK-2339 trace:TASK-2344 | ai:agy
+    // trace:STORY-1917 trace:TASK-2344 | ai:agy
     pub(crate) fn establish(
         main_worktree: &Path,
         mandate_dir: &Path,
@@ -169,7 +169,7 @@ impl DispatchExecutionContext {
     /// 6. Requester advisor grant `self.requester_grant_id` has `revoked_at.is_none()`,
     ///    passes [`seat_authority::grant_authorized_at`] for `self.matched_binding`,
     ///    and still delegates `"reviewer"` when `self.delegates_reviewer` is true.
-    // trace:STORY-1917 trace:TASK-2338 trace:TASK-2339 trace:TASK-2344 | ai:agy
+    // trace:STORY-1917 trace:TASK-2344 | ai:agy
     pub(crate) fn reverify(&self, now: DateTime<Utc>, requires_ship_held: bool) -> Result<()> {
         self.reverify_inner(now, requires_ship_held)
             .map_err(|e| anyhow::Error::new(DispatchAuthorityAbortedError(format!("{e:#}"))))

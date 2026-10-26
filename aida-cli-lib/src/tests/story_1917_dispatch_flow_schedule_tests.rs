@@ -1,7 +1,7 @@
-//! STORY-1917 Slice 3 tests: `flow` runner (`TASK-2338`), `train` runner
-//! (`TASK-2339`), and `DispatchExecutionContext` in-process authority
+//! STORY-1917 Slice 3 tests: the `flow` and `train` runners, and
+//! `DispatchExecutionContext` in-process authority
 //! re-verification (`TASK-2344` / advisor ruling Q2).
-// trace:STORY-1917 trace:TASK-2338 trace:TASK-2339 trace:TASK-2343 trace:TASK-2344 | ai:agy
+// trace:STORY-1917 trace:TASK-2343 trace:TASK-2344 | ai:agy
 
 use super::dispatch_flow::{
     acquire_train_dispatch_lock, ensure_clean_aida_store, TEST_FLOW_SHIP_HOOK,
@@ -418,9 +418,9 @@ fn task_2344_q2_dispatch_execution_context_establish_and_reverify_all_six_checks
     );
 }
 
-// trace:STORY-1917 trace:TASK-2338 | ai:agy
+// trace:STORY-1917 | ai:agy
 #[test]
-fn task_2338_flow_runner_fast_path_re_review_loop_changes_requested_and_no_ship() {
+fn story_1917_flow_runner_fast_path_re_review_loop_changes_requested_and_no_ship() {
     let mut f = FlowFixture::new(&["reviewer", "implementer"]);
     f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
     let now = Utc::now();
@@ -664,9 +664,9 @@ fn task_2338_flow_runner_fast_path_re_review_loop_changes_requested_and_no_ship(
     );
 }
 
-// trace:STORY-1917 trace:TASK-2339 | ai:agy
+// trace:STORY-1917 | ai:agy
 #[test]
-fn task_2339_train_runner_lock_clean_store_ship_first_update_branch_and_train_fallback() {
+fn story_1917_train_runner_lock_clean_store_ship_first_update_branch_and_train_fallback() {
     let mut f = FlowFixture::new(&["reviewer", "implementer"]);
     f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
     let now = Utc::now();
@@ -2109,4 +2109,422 @@ fn story_1917_r5_dispatch_tick_through_collect_snapshot_and_tick_core() {
     assert!(!mandate::recheck(&f.mandate_dir, &mandate_a.id, &f.principal, Utc::now()).is_ok());
     tick(15);
     assert_eq!(ran.borrow().len(), 2, "no run without a dispatch mandate");
+}
+
+// ---- STORY-1917 Q2: the native `pr ship` checkpoints at run time ----
+// trace:STORY-1917 | ai:claude
+
+fn git_out(dir: &Path, args: &[&str]) -> String {
+    let out = crate::test_git::git_command()
+        .arg("-C")
+        .arg(dir)
+        .args(args)
+        .output()
+        .unwrap();
+    String::from_utf8(out.stdout).unwrap().trim().to_string()
+}
+
+/// A `gh` stand-in for the native ship: `pr view` answers from `view`, CI is
+/// one green check, label and edit calls succeed, a merge succeeds and is
+/// logged. `-q`/`--jq` filters run through the real `jq`, as gh's would.
+/// Every call is appended to `calls`.
+fn native_ship_gh(calls: &Path, view: &Path) -> String {
+    format!(
+        r#"#!/usr/bin/env python3
+import json, subprocess, sys
+a = sys.argv[1:]
+open({calls:?}, "a").write(" ".join(a) + "\n")
+def opt(name):
+    for i, x in enumerate(a):
+        if x == name and i + 1 < len(a):
+            return a[i + 1]
+    return None
+def emit(doc):
+    q = opt("-q") or opt("--jq")
+    text = json.dumps(doc)
+    if q:
+        r = subprocess.run(["jq", "-r", q], input=text, capture_output=True, text=True)
+        sys.stdout.write(r.stdout)
+        sys.exit(r.returncode)
+    print(text)
+    sys.exit(0)
+verb = " ".join(a[:2])
+if verb == "pr view":
+    emit(json.load(open({view:?})))
+if verb == "pr list":
+    emit([])
+if verb == "pr checks":
+    emit([{{"name": "ci", "state": "SUCCESS", "bucket": "pass", "link": "", "workflow": "ci"}}])
+if verb in ("pr merge", "pr edit", "label create"):
+    sys.exit(0)
+sys.exit(1)
+"#
+    )
+}
+
+/// An approval of `head` as `aida review record` stamps it from an
+/// independent reviewer seat: bound to a live reviewer grant that the ship
+/// gate re-validates against the grant store.
+fn write_attested_approval(root: &Path, pr: u64, head: &str) {
+    let grant_id = crate::gate::seat_authority::test_support::mint_grant_for(
+        root,
+        crate::test_env::HERMETIC_TEST_USER,
+        "reviewer",
+        &[],
+    );
+    let grant = crate::gate::seat_authority::read_grant(&grant_id).unwrap();
+    let attestation = crate::gate::review_verdict::RecorderAttestation {
+        sha: head.into(),
+        seat: Some("reviewer".into()),
+        grant_id: Some(grant_id),
+        identity: vec!["session:independent-reviewer".into()],
+        grant_binding: grant.binding.clone(),
+        ..Default::default()
+    };
+    let rec = serde_json::json!({
+        "schema_version": 1,
+        "pr": pr,
+        "verdict": "APPROVED",
+        "head_sha": head,
+        "recorded_by": "reviewer",
+        "recorded_at": (Utc::now() + Duration::seconds(1)).to_rfc3339(),
+        "summary": format!("approved at {head}"),
+        "spec_ids": ["TASK-100"],
+        "findings": [],
+        crate::gate::review_verdict::ATTESTATION_KEY: attestation,
+    });
+    let dir = root.join(".aida").join("review-verdicts");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(
+        dir.join(format!("PR-{pr}.json")),
+        serde_json::to_vec_pretty(&rec).unwrap(),
+    )
+    .unwrap();
+}
+
+/// A dispatch `flow` request for a real PR the native `pr ship` can take all
+/// the way to its merge call: a GitHub forge (the `gh` above), a CI
+/// workflow, a pushed feature branch, an attested independent approval at
+/// its head, and the request's own mandate (`ShipHeld` + `Dispatch`). With
+/// `held`, a supervision merge-hold sits on the PR, which only that mandate
+/// may release.
+struct NativeShip {
+    f: FlowFixture,
+    pr: u64,
+    calls: PathBuf,
+    ctx: DispatchExecutionContext,
+    mandate: Mandate,
+    held: bool,
+}
+
+fn native_ship(pr: u64, held: bool) -> NativeShip {
+    let mut f = native_fixture(true);
+    std::fs::write(
+        f.root.join(".aida/config.toml"),
+        "store_path = \".aida-store\"\n\n[forge]\nprovider = \"github\"\n",
+    )
+    .unwrap();
+    std::fs::create_dir_all(f.root.join(".github/workflows")).unwrap();
+    std::fs::write(f.root.join(".github/workflows/ci.yml"), "name: ci\n").unwrap();
+    git(&f.root, &["add", "-A"]);
+    git(&f.root, &["commit", "-qm", "forge config"]);
+    git(&f.root, &["push", "-q", "origin", "main"]);
+    git(&f.root, &["fetch", "-q", "origin"]);
+    let branch = "claude/task-100";
+    let subject = "feat(x): change (TASK-100)";
+    git(&f.root, &["checkout", "-qb", branch]);
+    std::fs::write(f.root.join("code.rs"), "// trace:TASK-100\nfn x() {}\n").unwrap();
+    git(&f.root, &["add", "code.rs"]);
+    git(&f.root, &["commit", "-qm", subject]);
+    git(&f.root, &["push", "-q", "origin", branch]);
+    let head = git_out(&f.root, &["rev-parse", "HEAD"]);
+    git(&f.root, &["checkout", "-q", "main"]);
+    // The same local bare origin, named with a host so the merge-hold label
+    // calls can pin an owner/repo from it; git still fetches it locally.
+    let origin = format!(
+        "file://localhost{}",
+        f._tmp.path().join("origin.git").display()
+    );
+    git(&f.root, &["remote", "set-url", "origin", &origin]);
+
+    let view = f._tmp.path().join("pr-view.json");
+    let doc = serde_json::json!({
+        "number": pr,
+        "url": format!("https://github.com/fixture/project/pull/{pr}"),
+        "state": "OPEN", "isDraft": false, "mergedAt": null,
+        "headRefOid": head, "headRefName": branch, "baseRefName": "main",
+        "title": subject, "body": "", "labels": [],
+        "mergeable": "MERGEABLE", "mergeStateStatus": "CLEAN",
+        "author": {"login": "implementer"},
+    });
+    std::fs::write(&view, doc.to_string()).unwrap();
+    let calls = f._tmp.path().join("gh-calls");
+    let bin = f._tmp.path().join("fake-bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    let gh = bin.join("gh");
+    crate::test_exec::write_executable(&gh, &native_ship_gh(&calls, &view));
+    let path = format!(
+        "{}:{}",
+        bin.display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+    f.ambient.set_key("PATH", &path);
+    f.ambient
+        .set_key("AIDA_TEST_GH_BINARY", gh.to_str().unwrap());
+    // The shipping advisor session's identity, checked against the PR's
+    // authors and the approval's recorder before a mandate releases a hold.
+    f.ambient
+        .set_key("AIDA_SESSION_ID", "advisor-shipper-session");
+
+    write_attested_approval(&f.root, pr, &head);
+    if held {
+        let mut record = hold_record(pr);
+        record.target_head_sha = Some(head.clone());
+        crate::gate::merge_hold_core::write_typed_hold(&f.root, &record).unwrap();
+    }
+    let mandate = f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
+    let sub = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Flow {
+            pr,
+            no_ship: false,
+            vendor: None,
+        },
+        Utc::now(),
+    )
+    .unwrap();
+    let token = claim_for_this_process(&f.root, &sub.request.id);
+    let ctx = DispatchExecutionContext::establish(
+        &f.root,
+        &f.mandate_dir,
+        &sub.request.id,
+        &token,
+        Utc::now(),
+    )
+    .unwrap();
+    NativeShip {
+        f,
+        pr,
+        calls,
+        ctx,
+        mandate,
+        held,
+    }
+}
+
+const SHIP_CHECKPOINTS: [crate::pr_cmd::ShipCheckpoint; 6] = [
+    crate::pr_cmd::ShipCheckpoint::Entry,
+    crate::pr_cmd::ShipCheckpoint::PreMandateCover,
+    crate::pr_cmd::ShipCheckpoint::PostCiWait,
+    crate::pr_cmd::ShipCheckpoint::UnderMergeLease,
+    crate::pr_cmd::ShipCheckpoint::PreHoldRelease,
+    crate::pr_cmd::ShipCheckpoint::PreMerge,
+];
+
+impl NativeShip {
+    /// Run the real `pr ship` for the request. With `revoke_at`, the request's
+    /// mandate is stopped and a replacement started at that checkpoint, just
+    /// before its authority check. Returns the outcome and the checkpoints
+    /// reached.
+    fn ship(
+        &self,
+        revoke_at: Option<crate::pr_cmd::ShipCheckpoint>,
+    ) -> (anyhow::Result<()>, Vec<crate::pr_cmd::ShipCheckpoint>) {
+        let seen: std::rc::Rc<std::cell::RefCell<Vec<crate::pr_cmd::ShipCheckpoint>>> =
+            Default::default();
+        let seen_in = seen.clone();
+        let mdir = self.f.mandate_dir.clone();
+        let principal = self.f.principal.clone();
+        crate::pr_cmd::TEST_SHIP_CHECKPOINT_OBSERVER.with(|c| {
+            *c.borrow_mut() = Some(Box::new(move |at| {
+                seen_in.borrow_mut().push(at);
+                if Some(at) == revoke_at {
+                    let now = Utc::now();
+                    mandate::stop(&mdir, &|| Ok(()), &principal, now).unwrap();
+                    mandate::start_with_scopes(
+                        &mdir,
+                        &|| Ok(()),
+                        &principal,
+                        Duration::hours(2),
+                        Some("replacement".into()),
+                        false,
+                        false,
+                        [Scope::ShipHeld, Scope::Dispatch].into_iter().collect(),
+                        now,
+                    )
+                    .unwrap();
+                }
+            }))
+        });
+        struct Reset;
+        impl Drop for Reset {
+            fn drop(&mut self) {
+                crate::pr_cmd::TEST_SHIP_CHECKPOINT_OBSERVER.with(|c| *c.borrow_mut() = None);
+            }
+        }
+        let _reset = Reset;
+        let result = crate::with_review_pr_subject(
+            crate::ReviewPrSubject {
+                head_ref: "claude/task-100".into(),
+                commit_subjects: vec!["feat(x): change (TASK-100)".into()],
+            },
+            || {
+                crate::pr_cmd::pr_ship_with_method_and_dispatch_ctx(
+                    Some(self.pr),
+                    true,
+                    true,
+                    false,
+                    false,
+                    None,
+                    None,
+                    true,
+                    false,
+                    false,
+                    Some(60),
+                    false,
+                    crate::forge::MergeMethod::Squash,
+                    false,
+                    Some(&self.ctx),
+                )
+            },
+        );
+        let seen = seen.borrow().clone();
+        (result, seen)
+    }
+
+    fn merges(&self) -> usize {
+        std::fs::read_to_string(&self.calls)
+            .unwrap_or_default()
+            .lines()
+            .filter(|l| l.starts_with("pr merge "))
+            .count()
+    }
+
+    fn refused_rows(&self, mandate_id: &str) -> Vec<crate::mandate_drive::ActionRow> {
+        crate::mandate_drive::ledger_rows(&self.f.root, mandate_id)
+            .into_iter()
+            .map(|(_, _, row)| row)
+            .filter(|row| {
+                row.lane == format!("pr:{}", self.pr)
+                    && row.outcome == crate::mandate_drive::Outcome::Refused
+            })
+            .collect()
+    }
+
+    /// Authority withdrawn at `at` stops the real ship there: the typed
+    /// abort, no merge call, and, before the merge, a refusal that re-arms
+    /// only a hold this ship released and is ledgered under the request's
+    /// own mandate, never the replacement.
+    fn assert_refused_at(&self, at: crate::pr_cmd::ShipCheckpoint) {
+        let (result, seen) = self.ship(Some(at));
+        let err = result.expect_err("authority was withdrawn; the ship must refuse");
+        let text = format!("{err:#}");
+        let case = format!("held={} at {at:?}", self.held);
+        assert!(
+            crate::gate::dispatch_auth::is_dispatch_authority_aborted(&err),
+            "{case}: typed abort expected: {text}"
+        );
+        assert!(text.contains(&self.mandate.id), "{case}: {text}");
+        let upto = SHIP_CHECKPOINTS.iter().position(|c| *c == at).unwrap();
+        assert_eq!(seen, SHIP_CHECKPOINTS[..=upto].to_vec(), "{case}");
+        assert_eq!(self.merges(), 0, "{case}: no merge after the refusal");
+        let hold = crate::gate::merge_hold_core::read_hold_record(&self.f.root, self.pr);
+        assert_eq!(hold.is_some(), self.held, "{case}: hold on disk");
+        let replacement = crate::gate::mandate::current_state();
+        let crate::gate::mandate::MandateState::Active(replacement) = replacement else {
+            panic!("{case}: the replacement mandate is active");
+        };
+        assert_ne!(replacement.id, self.mandate.id, "{case}");
+        assert!(self.refused_rows(&replacement.id).is_empty(), "{case}");
+        if at != crate::pr_cmd::ShipCheckpoint::PreMerge {
+            return;
+        }
+        assert!(text.contains("left OPEN"), "{case}: {text}");
+        let rows = self.refused_rows(&self.mandate.id);
+        assert_eq!(rows.len(), 1, "{case}: ledgered under its own mandate");
+        assert!(
+            rows[0]
+                .why
+                .as_deref()
+                .is_some_and(|w| w.contains("left OPEN")),
+            "{case}: {rows:?}"
+        );
+        if self.held {
+            assert!(
+                text.contains("The merge-hold is re-armed."),
+                "{case}: {text}"
+            );
+            assert!(
+                !text.contains(crate::pr_cmd::NO_HOLD_RELEASED_NOTE),
+                "{case}: {text}"
+            );
+        } else {
+            assert!(
+                text.contains(crate::pr_cmd::NO_HOLD_RELEASED_NOTE),
+                "{case}: {text}"
+            );
+            assert!(!text.contains("re-armed"), "{case}: {text}");
+        }
+    }
+}
+
+/// Clear the per-process mandate store between fixtures of one isolated test.
+fn reset_home_mandates() {
+    let dir = mandate::mandate_dir().unwrap();
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+}
+
+/// The fixture is sound: with authority intact the native ship passes every
+/// checkpoint in order and makes exactly one merge call, releasing the hold
+/// under the request's mandate when the PR is held.
+#[test]
+fn story_1917_native_pr_ship_fixture_reaches_the_merge_through_every_checkpoint() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    for held in [false, true] {
+        reset_home_mandates();
+        let s = native_ship(9710, held);
+        let (result, seen) = s.ship(None);
+        result.unwrap_or_else(|e| panic!("held={held}: {e:#}"));
+        assert_eq!(seen, SHIP_CHECKPOINTS.to_vec(), "held={held}");
+        assert_eq!(s.merges(), 1, "held={held}");
+        assert!(
+            crate::gate::merge_hold_core::read_hold_record(&s.f.root, s.pr).is_none(),
+            "held={held}: the hold was released for the merge"
+        );
+    }
+}
+
+/// UNHELD PR: authority withdrawn at each of the post-entry checkpoints of a
+/// real `pr ship` refuses there, with the typed abort and no merge. At the
+/// pre-merge checkpoint the refusal says no hold was released (nothing to
+/// re-arm) and is ledgered under the request's own mandate.
+#[test]
+fn story_1917_native_pr_ship_unheld_refuses_at_each_checkpoint_without_merging() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    for at in &SHIP_CHECKPOINTS[2..] {
+        reset_home_mandates();
+        native_ship(9711, false).assert_refused_at(*at);
+    }
+}
+
+/// HELD PR: the same, with a supervision hold the request's mandate may
+/// release. Before the release the hold is never touched; at the pre-merge
+/// checkpoint the hold this ship released is re-armed and the refusal is
+/// ledgered under the request's own mandate.
+#[test]
+fn story_1917_native_pr_ship_held_refuses_at_each_checkpoint_and_rearms_only_its_release() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    for at in &SHIP_CHECKPOINTS[2..] {
+        reset_home_mandates();
+        native_ship(9712, true).assert_refused_at(*at);
+    }
 }
