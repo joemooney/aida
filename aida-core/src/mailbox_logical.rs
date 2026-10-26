@@ -23,7 +23,7 @@
 // trace:STORY-1843 | ai:claude
 
 use crate::mailbox::{message_state_rank, Message, Recipient};
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::ffi::{CStr, CString, OsStr};
 use std::fs::File;
 use std::io::Read;
@@ -167,9 +167,14 @@ impl MailboxContext {
 }
 
 /// Recipient keys a reader is authorized for, classified. Built only from
-/// the output of the mailbox identity policy (the CLI's
-/// `inbox_identities_from_facts`), never from a raw `--agent` argument or an
-/// inherited environment value.
+/// the output of the mailbox identity policy, never from a raw `--agent`
+/// argument or an inherited environment value. There is deliberately no
+/// public constructor that turns strings into recipient authority:
+///
+/// ```compile_fail
+/// use aida_core::mailbox_logical::ResolvedAudience;
+/// let _ = ResolvedAudience::from_identity_policy(vec!["someone".into()], vec![], vec![]);
+/// ```
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ResolvedAudience {
     private: Vec<String>,
@@ -180,8 +185,9 @@ pub struct ResolvedAudience {
 impl ResolvedAudience {
     /// `private`: this session's own handle/name; `human`: intentional
     /// people-catalog inboxes; `shared`: role and vendor audiences. Each key
-    /// must be a bounded mailbox identity.
-    pub fn from_identity_policy(
+    /// must be a bounded mailbox identity. Crate-private: only the verified
+    /// identity path may mint recipient authority.
+    pub(crate) fn from_identity_policy(
         private: Vec<String>,
         human: Vec<String>,
         shared: Vec<String>,
@@ -211,19 +217,8 @@ impl ResolvedAudience {
 
     /// Audience keys this message is addressed to: direct or broadcast,
     /// never the key's own sent mail, never a deleted message.
-    fn matching_keys<'a>(&'a self, m: &Message) -> Vec<&'a str> {
-        if m.deleted {
-            return Vec::new();
-        }
-        self.keys()
-            .filter(|key| {
-                m.from != *key
-                    && match &m.to {
-                        Recipient::Agent(a) => a == *key,
-                        Recipient::Broadcast => true,
-                    }
-            })
-            .collect()
+    fn matching_keys(&self, m: &Message) -> Vec<&str> {
+        self.keys().filter(|key| m.addressed_to(key)).collect()
     }
 }
 
@@ -238,8 +233,12 @@ pub enum Query {
     Thread(String),
 }
 
-/// One shared budget for a whole snapshot: inventory, sources and receipts
-/// all draw from the same deadline, root, entry and byte limits.
+/// One shared budget for a whole snapshot: the inventory, every source and
+/// every receipt lookup draw from the same deadline; `max_entries` counts
+/// directory entries across all sources together, and `max_total_bytes`
+/// counts inventory output, message files and receipts together.
+/// [`MailboxContext::resolve`] runs before the budget starts; it is a fixed
+/// number of small-file reads (no listing, no git process).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ReadLimits {
     pub deadline: Instant,
@@ -287,10 +286,24 @@ pub enum SourceStatus {
     Error(SourceErrorCode),
 }
 
+/// The pinned mailbox directory a source was read from, and its observation
+/// cut. This is current-source identity only, not a retention generation
+/// (signed slice C): a later ACK plan can refuse when the directory was
+/// replaced (`dev`/`ino`) or its entries changed (`mtime_ns`) since the cut.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SourceIdentity {
+    pub dev: u64,
+    pub ino: u64,
+    /// Directory mtime in nanoseconds, taken before the listing.
+    pub mtime_ns: i128,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SourceReport {
     pub kind: SourceKind,
     pub status: SourceStatus,
+    /// `Some` when the mailbox directory was pinned and fully read.
+    pub identity: Option<SourceIdentity>,
 }
 
 /// Where one replica of a record was read: the index into
@@ -316,6 +329,8 @@ pub enum ReadEvidence {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SnapshotRecord {
+    /// The reconciled message. A retracted record carries normal redaction:
+    /// its body and subject are cleared before it leaves the snapshot.
     pub message: Message,
     pub provenance: Vec<Provenance>,
     pub read: ReadEvidence,
@@ -336,6 +351,8 @@ pub struct LogicalSnapshot {
     /// IDs of visible messages whose replicas disagree; never projected.
     pub conflicts: Vec<String>,
     pub sources: Vec<SourceReport>,
+    /// Wall-clock epoch millis when the snapshot started.
+    pub observed_at_ms: i64,
     pub inventory_error: Option<SourceErrorCode>,
     pub canonical: CanonicalCoverage,
     pub retention: RetentionCoverage,
@@ -365,10 +382,16 @@ impl LogicalSnapshot {
             .collect()
     }
 
-    /// `Some(true)` only when coverage is complete and nothing is unread;
-    /// `None` when any source is partial — never "empty means caught up".
+    /// `Some(true)` only when coverage is complete and every non-archived
+    /// record has an explicit per-ID receipt; `None` when any source is
+    /// partial — never "empty means caught up". A legacy watermark alone is
+    /// unread-compatible, not proof of a read, so it keeps this `false`.
     pub fn caught_up(&self) -> Option<bool> {
-        self.complete().then(|| self.unread_ids().is_empty())
+        self.complete().then(|| {
+            self.records
+                .iter()
+                .all(|r| r.message.archived || matches!(r.read, ReadEvidence::Acknowledged { .. }))
+        })
     }
 }
 
@@ -379,8 +402,11 @@ pub fn logical_snapshot(
     query: &Query,
     limits: &ReadLimits,
 ) -> LogicalSnapshot {
+    let observed_at_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_millis() as i64);
     let mut budget = Budget::new(limits);
-    let (roots, inventory_error) = inventory(ctx, &budget);
+    let (roots, inventory_error) = inventory(ctx, &mut budget);
     let mut sources = Vec::new();
     let mut observed: Vec<Option<ObservedSource>> = Vec::new();
     for root in roots {
@@ -391,10 +417,11 @@ pub fn logical_snapshot(
                 (path, result)
             }
         };
-        let (status, obs) = observation(result);
+        let (status, identity, obs) = observation(result);
         sources.push(SourceReport {
             kind: SourceKind::Local(path),
             status,
+            identity,
         });
         observed.push(obs);
     }
@@ -402,23 +429,32 @@ pub fn logical_snapshot(
     // The canonical layer is read exactly once, however many worktrees
     // carry a `.aida-store` alias to it.
     if let CanonicalCoverage::Store(store) = &ctx.canonical {
-        let (status, obs) = observation(read_source(store.path(), &["mailbox"], &mut budget));
+        let (status, identity, obs) =
+            observation(read_source(store.path(), &["mailbox"], &mut budget));
         sources.push(SourceReport {
             kind: SourceKind::Canonical(store.path().to_path_buf()),
             status,
+            identity,
         });
         observed.push(obs);
     }
 
-    let (mut records, conflicts) = reconcile(&observed, local_count, audience);
-    records.retain(|(m, _)| match query {
+    let in_query = |id: &str, thread: &str| match query {
         Query::Inbox => true,
-        Query::ExactId(id) => &m.id == id,
-        Query::Thread(thread) => &m.thread_id == thread,
-    });
+        Query::ExactId(want) => id == want,
+        Query::Thread(want) => thread == want,
+    };
+    let (mut records, conflicts) = reconcile(&observed, local_count, audience);
+    records.retain(|(m, _)| in_query(&m.id, &m.thread_id));
+    let conflicts = conflicts
+        .into_iter()
+        .filter(|(id, threads)| threads.iter().any(|t| in_query(id, t)))
+        .map(|(id, _)| id)
+        .collect();
 
+    let mut receipts = ReceiptCache::default();
     let mut out_records = Vec::with_capacity(records.len());
-    for (message, provenance) in records {
+    for (mut message, provenance) in records {
         let read = read_evidence(
             &message,
             &provenance,
@@ -426,8 +462,13 @@ pub fn logical_snapshot(
             local_count,
             audience,
             &mut sources,
+            &mut receipts,
             &mut budget,
         );
+        if message.retracted {
+            message.body.clear();
+            message.subject = None;
+        }
         out_records.push(SnapshotRecord {
             message,
             provenance,
@@ -439,6 +480,7 @@ pub fn logical_snapshot(
         records: out_records,
         conflicts,
         sources,
+        observed_at_ms,
         inventory_error,
         canonical: ctx.canonical.clone(),
         retention: RetentionCoverage::Unestablished,
@@ -454,16 +496,17 @@ pub fn logical_snapshot(
 
 fn observation(
     result: Result<Option<ObservedSource>, SourceErrorCode>,
-) -> (SourceStatus, Option<ObservedSource>) {
+) -> (SourceStatus, Option<SourceIdentity>, Option<ObservedSource>) {
     match result {
         Ok(Some(obs)) => (
             SourceStatus::Observed {
                 messages: obs.messages.len(),
             },
+            Some(obs.identity),
             Some(obs),
         ),
-        Ok(None) => (SourceStatus::Absent, None),
-        Err(code) => (SourceStatus::Error(code), None),
+        Ok(None) => (SourceStatus::Absent, None, None),
+        Err(code) => (SourceStatus::Error(code), None, None),
     }
 }
 
@@ -472,7 +515,7 @@ fn observation(
 struct Budget {
     deadline: Instant,
     max_roots: usize,
-    max_entries: usize,
+    entries_left: usize,
     max_message_bytes: u64,
     bytes_left: u64,
 }
@@ -482,7 +525,7 @@ impl Budget {
         Self {
             deadline: limits.deadline,
             max_roots: limits.max_roots,
-            max_entries: limits.max_entries,
+            entries_left: limits.max_entries,
             max_message_bytes: limits.max_message_bytes,
             bytes_left: limits.max_total_bytes,
         }
@@ -490,6 +533,15 @@ impl Budget {
 
     fn expired(&self) -> bool {
         Instant::now() >= self.deadline
+    }
+
+    /// Draw one directory entry from the snapshot-wide entry budget.
+    fn take_entry(&mut self) -> Result<(), SourceErrorCode> {
+        self.entries_left = self
+            .entries_left
+            .checked_sub(1)
+            .ok_or(SourceErrorCode::OverBudget)?;
+        Ok(())
     }
 
     fn take(&mut self, bytes: usize) -> Result<(), SourceErrorCode> {
@@ -594,7 +646,7 @@ fn parse_worktree_porcelain_z(bytes: &[u8]) -> Result<Vec<WorktreeRecord>, Sourc
 }
 
 /// Bounded `git worktree list --porcelain -z` from `checkout`.
-fn list_worktrees(checkout: &Path, budget: &Budget) -> Result<Vec<u8>, SourceErrorCode> {
+fn list_worktrees(checkout: &Path, budget: &mut Budget) -> Result<Vec<u8>, SourceErrorCode> {
     let mut child = crate::git_ops::host_git_command(checkout)
         .args(["worktree", "list", "--porcelain", "-z"])
         .stdin(std::process::Stdio::null())
@@ -624,7 +676,7 @@ fn list_worktrees(checkout: &Path, budget: &Budget) -> Result<Vec<u8>, SourceErr
                 let out = reader
                     .join()
                     .map_err(|_| SourceErrorCode::InventoryFailed)?;
-                if out.len() > INVENTORY_BYTES {
+                if out.len() > INVENTORY_BYTES || budget.take(out.len()).is_err() {
                     return Err(SourceErrorCode::InventoryOverBudget);
                 }
                 return if status.success() {
@@ -644,7 +696,10 @@ type RootEntry = Result<PathBuf, (PathBuf, SourceErrorCode)>;
 /// The requested checkout first, then every other registered product
 /// worktree of the same common Git directory. The store worktree and bare
 /// entries are not product sources; aliases of one directory appear once.
-fn inventory(ctx: &MailboxContext, budget: &Budget) -> (Vec<RootEntry>, Option<SourceErrorCode>) {
+fn inventory(
+    ctx: &MailboxContext,
+    budget: &mut Budget,
+) -> (Vec<RootEntry>, Option<SourceErrorCode>) {
     let requested = ctx.requested_checkout.path().to_path_buf();
     let mut seen: HashSet<(u64, u64)> = HashSet::new();
     if let Ok(meta) = std::fs::metadata(&requested) {
@@ -720,6 +775,26 @@ fn errno_code(e: &std::io::Error) -> SourceErrorCode {
     }
 }
 
+fn set_errno(value: libc::c_int) {
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    unsafe {
+        *libc::__errno_location() = value
+    };
+    #[cfg(any(target_os = "macos", target_os = "ios", target_os = "freebsd"))]
+    unsafe {
+        *libc::__error() = value
+    };
+}
+
+/// Classify a NULL from `readdir` by the errno it left: zero is the end of
+/// the directory, anything else an incomplete listing (fail closed).
+fn readdir_end(errno: Option<i32>) -> Result<(), SourceErrorCode> {
+    match errno {
+        None | Some(0) => Ok(()),
+        Some(_) => Err(SourceErrorCode::Unreadable),
+    }
+}
+
 fn owned_ok(meta: &std::fs::Metadata) -> bool {
     meta.uid() == unsafe { libc::geteuid() } && meta.mode() & 0o002 == 0
 }
@@ -767,8 +842,29 @@ impl PinnedDir {
                 Ok(Some(dir))
             }
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            // Linux reports a symlink opened O_DIRECTORY|O_NOFOLLOW as
+            // ENOTDIR, not ELOOP; a symlink is unsafe, not a layout file.
+            Err(e) if e.raw_os_error() == Some(libc::ENOTDIR) && self.is_symlink(name) => {
+                Err(SourceErrorCode::UnsafeEntry)
+            }
             Err(e) => Err(errno_code(&e)),
         }
+    }
+
+    fn is_symlink(&self, name: &str) -> bool {
+        let Ok(c) = CString::new(name) else {
+            return false;
+        };
+        let mut st: libc::stat = unsafe { std::mem::zeroed() };
+        let rc = unsafe {
+            libc::fstatat(
+                self.fd.as_raw_fd(),
+                c.as_ptr(),
+                &mut st,
+                libc::AT_SYMLINK_NOFOLLOW,
+            )
+        };
+        rc == 0 && st.st_mode & libc::S_IFMT == libc::S_IFLNK
     }
 
     fn metadata(&self) -> Result<std::fs::Metadata, SourceErrorCode> {
@@ -811,8 +907,9 @@ impl PinnedDir {
         Ok(Some(bytes))
     }
 
-    /// Entry names of this directory, bounded by `max` entries.
-    fn names(&self, max: usize, budget: &Budget) -> Result<Vec<Vec<u8>>, SourceErrorCode> {
+    /// Entry names of this directory, drawn from the snapshot-wide entry
+    /// budget. A listing cut short by an I/O error is never "complete".
+    fn names(&self, budget: &mut Budget) -> Result<Vec<Vec<u8>>, SourceErrorCode> {
         let dup = self
             .fd
             .try_clone()
@@ -827,15 +924,21 @@ impl PinnedDir {
         unsafe { libc::rewinddir(dirp) };
         let mut out = Vec::new();
         let result = loop {
-            if out.len() > max || budget.expired() {
+            if budget.expired() {
                 break Err(SourceErrorCode::OverBudget);
             }
+            // readdir signals both end-of-directory and failure with NULL;
+            // only a cleared errno tells them apart.
+            set_errno(0);
             let entry = unsafe { libc::readdir(dirp) };
             if entry.is_null() {
-                break Ok(());
+                break readdir_end(std::io::Error::last_os_error().raw_os_error());
             }
             let name = unsafe { CStr::from_ptr((*entry).d_name.as_ptr()) }.to_bytes();
             if name != b"." && name != b".." {
+                if let Err(code) = budget.take_entry() {
+                    break Err(code);
+                }
                 out.push(name.to_vec());
             }
         };
@@ -851,6 +954,7 @@ struct ObservedMessage {
 
 struct ObservedSource {
     mailbox: PinnedDir,
+    identity: SourceIdentity,
     messages: Vec<ObservedMessage>,
 }
 
@@ -894,9 +998,14 @@ fn read_source(
             None => return Ok(None),
         }
     }
-    let identity = dir.metadata().map(|m| (m.dev(), m.ino()))?;
+    let meta = dir.metadata()?;
+    let identity = SourceIdentity {
+        dev: meta.dev(),
+        ino: meta.ino(),
+        mtime_ns: i128::from(meta.mtime()) * 1_000_000_000 + i128::from(meta.mtime_nsec()),
+    };
     let mut messages = Vec::new();
-    for name in dir.names(budget.max_entries, budget)? {
+    for name in dir.names(budget)? {
         if !name.ends_with(b".json") || name.starts_with(b".") {
             continue;
         }
@@ -925,11 +1034,12 @@ fn read_source(
             .child_dir(component)?
             .ok_or(SourceErrorCode::SourceChanged)?;
     }
-    if again.metadata().map(|m| (m.dev(), m.ino()))? != identity {
+    if again.metadata().map(|m| (m.dev(), m.ino()))? != (identity.dev, identity.ino) {
         return Err(SourceErrorCode::SourceChanged);
     }
     Ok(Some(ObservedSource {
         mailbox: dir,
+        identity,
         messages,
     }))
 }
@@ -947,16 +1057,63 @@ fn audience_tuple(m: &Message) -> (&str, &str, &Recipient, i64, Option<&str>) {
     )
 }
 
+/// The immutable payload and marker state; equal-rank replicas must agree.
+type Payload<'a> = (
+    (&'a str, &'a str, &'a Recipient, i64, Option<&'a str>),
+    &'a str,
+    (bool, bool, bool),
+);
+
+fn payload(m: &Message) -> Payload<'_> {
+    (
+        audience_tuple(m),
+        &m.body,
+        (m.retracted, m.archived, m.deleted),
+    )
+}
+
+/// Fill one optional, writer-enriched field from another replica. An older
+/// writer drops these fields (they read back as the default), so a default
+/// is "not recorded", never a disagreement; two different recorded values
+/// are a contradiction (`false`).
+fn fill<T: PartialEq + Clone + Default>(into: &mut T, other: &T) -> bool {
+    if *other == T::default() || into == other {
+        true
+    } else if *into == T::default() {
+        *into = other.clone();
+        true
+    } else {
+        false
+    }
+}
+
+/// Merge the optional metadata of `other` into `into` (the superset of what
+/// the replicas recorded). Payload fields are compared separately.
+fn merge_metadata(into: &mut Message, other: &Message) -> bool {
+    fill(&mut into.subject, &other.subject)
+        & fill(&mut into.urgent, &other.urgent)
+        & fill(&mut into.intent, &other.intent)
+        & fill(&mut into.from_source, &other.from_source)
+        & fill(&mut into.from_role, &other.from_role)
+        & fill(&mut into.relayed_from, &other.relayed_from)
+}
+
+/// IDs of conflicting records, each with the thread IDs its replicas claim
+/// (so a query can scope them).
+type Conflicts = Vec<(String, BTreeSet<String>)>;
+
 /// Reconcile all observed replicas by immutable ID, then filter to the
 /// audience. The highest state rank wins (a delete marker suppresses every
-/// replica); on equal rank the canonical copy is preferred. Replicas that
-/// disagree on audience, or on content at equal rank, are a conflict: no
-/// replica is chosen. Only IDs visible to the audience are reported.
+/// replica). Equal-rank replicas must share the immutable payload; optional
+/// writer-enriched metadata merges to the superset, starting from the
+/// canonical copy. Replicas that disagree on audience, on payload at equal
+/// rank, or on a recorded metadata value are a conflict: no replica is
+/// chosen. Only IDs visible to the audience are reported.
 fn reconcile(
     observed: &[Option<ObservedSource>],
     local_count: usize,
     audience: &ResolvedAudience,
-) -> (Vec<(Message, Vec<Provenance>)>, Vec<String>) {
+) -> (Vec<(Message, Vec<Provenance>)>, Conflicts) {
     let mut by_id: BTreeMap<&str, Vec<(usize, &ObservedMessage)>> = BTreeMap::new();
     for (index, source) in observed.iter().enumerate() {
         for m in source.iter().flat_map(|s| &s.messages) {
@@ -999,16 +1156,25 @@ fn reconcile(
             .iter()
             .filter(|(_, m)| message_state_rank(&m.message) == top_rank)
             .collect();
-        let content_conflict = top.iter().any(|(_, m)| m.message != top[0].1.message);
-        if audience_conflict || content_conflict {
-            conflicts.push(id.to_string());
-            continue;
-        }
         let winner = top
             .iter()
             .find(|(source, _)| *source >= local_count)
             .unwrap_or(&top[0]);
-        let message = winner.1.message.clone();
+        let mut message = winner.1.message.clone();
+        let payload_conflict = top
+            .iter()
+            .any(|(_, m)| payload(&m.message) != payload(&message));
+        let metadata_conflict = !top.iter().fold(true, |ok, (_, m)| {
+            merge_metadata(&mut message, &m.message) & ok
+        });
+        if audience_conflict || payload_conflict || metadata_conflict {
+            let threads = replicas
+                .iter()
+                .map(|(_, m)| m.message.thread_id.clone())
+                .collect();
+            conflicts.push((id.to_string(), threads));
+            continue;
+        }
         if message.deleted || audience.matching_keys(&message).is_empty() {
             continue;
         }
@@ -1031,11 +1197,40 @@ fn reconcile(
 
 // ── Read evidence ────────────────────────────────────────────────────────────
 
+/// One local source's receipt directory and watermark for one key, opened
+/// once per snapshot however many records are looked up against it.
+struct KeyEvidence {
+    receipts: Option<PinnedDir>,
+    watermark: Option<i64>,
+}
+
+#[derive(Default)]
+struct ReceiptCache {
+    by_source_key: HashMap<(usize, String), Result<KeyEvidence, SourceErrorCode>>,
+}
+
+fn key_evidence(
+    mailbox: &PinnedDir,
+    key: &str,
+    budget: &mut Budget,
+) -> Result<KeyEvidence, SourceErrorCode> {
+    let receipts = match mailbox.child_dir(".read-receipts")? {
+        Some(dir) => dir.child_dir(&sanitize_key(key))?,
+        None => None,
+    };
+    Ok(KeyEvidence {
+        receipts,
+        watermark: watermark(mailbox, key, budget)?,
+    })
+}
+
 /// Exact per-ID lookups only (no receipt directory scan). An explicit
 /// receipt in any LOCAL source for a key the message is addressed to is
 /// acknowledgement. A LOCAL watermark counts only for IDs physically present
 /// in that same source, and only as legacy compatibility evidence.
-/// Unreadable receipt evidence marks that source as errored.
+/// Unreadable receipt evidence, or a deadline reached mid-lookup, marks that
+/// source as errored.
+#[allow(clippy::too_many_arguments)]
 fn read_evidence(
     message: &Message,
     provenance: &[Provenance],
@@ -1043,6 +1238,7 @@ fn read_evidence(
     local_count: usize,
     audience: &ResolvedAudience,
     sources: &mut [SourceReport],
+    cache: &mut ReceiptCache,
     budget: &mut Budget,
 ) -> ReadEvidence {
     let keys = audience.matching_keys(message);
@@ -1051,28 +1247,44 @@ fn read_evidence(
     for (index, source) in observed.iter().enumerate().take(local_count) {
         let Some(source) = source else { continue };
         for key in &keys {
-            match receipt_at(&source.mailbox, key, &message.id, budget) {
-                Ok(Some(at)) => {
-                    return ReadEvidence::Acknowledged {
-                        source: index,
-                        key: key.to_string(),
-                        at,
-                    }
-                }
-                Ok(None) => {}
-                Err(code) => sources[index].status = SourceStatus::Error(code),
+            if budget.expired() {
+                sources[index].status = SourceStatus::Error(SourceErrorCode::OverBudget);
+                return legacy.unwrap_or(ReadEvidence::Unread);
             }
-            if legacy.is_none() && holders.contains(&index) {
-                match watermark(&source.mailbox, key, budget) {
-                    Ok(Some(mark)) if message.timestamp <= mark => {
-                        legacy = Some(ReadEvidence::LegacyWatermark {
+            let evidence = cache
+                .by_source_key
+                .entry((index, key.to_string()))
+                .or_insert_with(|| key_evidence(&source.mailbox, key, budget));
+            let evidence = match evidence {
+                Ok(evidence) => evidence,
+                Err(code) => {
+                    sources[index].status = SourceStatus::Error(*code);
+                    continue;
+                }
+            };
+            if let Some(dir) = &evidence.receipts {
+                match receipt_at(dir, &message.id, budget) {
+                    Ok(Some(at)) => {
+                        return ReadEvidence::Acknowledged {
                             source: index,
                             key: key.to_string(),
-                        })
+                            at,
+                        }
                     }
-                    Ok(_) => {}
+                    Ok(None) => {}
                     Err(code) => sources[index].status = SourceStatus::Error(code),
                 }
+            }
+            if legacy.is_none()
+                && holders.contains(&index)
+                && evidence
+                    .watermark
+                    .is_some_and(|mark| message.timestamp <= mark)
+            {
+                legacy = Some(ReadEvidence::LegacyWatermark {
+                    source: index,
+                    key: key.to_string(),
+                });
             }
         }
     }
@@ -1087,19 +1299,12 @@ fn parse_millis(bytes: &[u8]) -> Result<i64, SourceErrorCode> {
 }
 
 fn receipt_at(
-    mailbox: &PinnedDir,
-    key: &str,
+    receipts: &PinnedDir,
     id: &str,
     budget: &mut Budget,
 ) -> Result<Option<i64>, SourceErrorCode> {
-    let Some(receipts) = mailbox.child_dir(".read-receipts")? else {
-        return Ok(None);
-    };
-    let Some(dir) = receipts.child_dir(&sanitize_key(key))? else {
-        return Ok(None);
-    };
     let name = format!("{id}.txt");
-    match dir.read_file(OsStr::new(&name), SMALL_FILE)? {
+    match receipts.read_file(OsStr::new(&name), SMALL_FILE)? {
         None => Ok(None),
         Some(bytes) => {
             budget.take(bytes.len())?;

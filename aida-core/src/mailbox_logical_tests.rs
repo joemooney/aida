@@ -13,6 +13,10 @@ fn git(cwd: &Path, args: &[&str]) {
             "commit.gpgsign=false",
             "-c",
             "core.hooksPath=/dev/null",
+            "-c",
+            "maintenance.auto=false",
+            "-c",
+            "gc.auto=0",
         ])
         .args(args)
         .env("GIT_AUTHOR_NAME", "t")
@@ -276,7 +280,7 @@ fn story1843_read_evidence_is_id_scoped_and_watermarks_stay_legacy() {
     put(&r.sib_a, &message("private-unseen", "t", "advisor", 5));
     put_canonical(&r.store, &message("canonical-late", "t", "advisor", 5));
     // Arrived in main after its watermark was set, with an older timestamp.
-    put(&r.main, &message("late-local", "t", "advisor", 7));
+    put(&r.main, &message("late-local", "late", "advisor", 7));
     let read = r.main.join(".aida/mailbox/.read");
     std::fs::create_dir_all(&read).unwrap();
     std::fs::write(read.join("advisor.txt"), "100").unwrap();
@@ -299,7 +303,16 @@ fn story1843_read_evidence_is_id_scoped_and_watermarks_stay_legacy() {
     );
     assert_eq!(evidence["private-unseen"], &ReadEvidence::Unread);
     assert_eq!(evidence["canonical-late"], &ReadEvidence::Unread);
-    assert_eq!(s.unread_ids(), vec!["private-unseen", "canonical-late"]);
+    // Existing inbox order: timestamp, then ID.
+    assert_eq!(s.unread_ids(), vec!["canonical-late", "private-unseen"]);
+    assert_eq!(s.caught_up(), Some(false));
+    // A legacy watermark alone is unread-compatible: the late, old-timestamp
+    // arrival keeps the view from being caught up even with nothing Unread.
+    let late = snap(&r.main, Some(&r.store), Query::Thread("late".into()));
+    assert_eq!(ids(&late), vec!["late-local"]);
+    assert!(late.unread_ids().is_empty());
+    assert!(late.complete());
+    assert_eq!(late.caught_up(), Some(false));
     assert_eq!(
         before,
         tree_listing(r.main.parent().unwrap()),
@@ -329,6 +342,12 @@ fn story1843_read_evidence_is_id_scoped_and_watermarks_stay_legacy() {
             at: 120
         }
     );
+    // Explicit receipts for every visible ID are what make a view caught up.
+    let receipts_main = r.main.join(".aida/mailbox/.read-receipts/advisor");
+    std::fs::create_dir_all(&receipts_main).unwrap();
+    std::fs::write(receipts_main.join("late-local.txt"), "130").unwrap();
+    let late = snap(&r.main, Some(&r.store), Query::Thread("late".into()));
+    assert_eq!(late.caught_up(), Some(true));
 
     // A corrupt receipt is an incomplete source, not "unread" or "read".
     std::fs::write(receipts.join("private-unseen.txt"), "garbage").unwrap();
@@ -407,9 +426,35 @@ fn story1843_budget_layout_and_missing_worktree_are_reported() {
     let r = repo();
     put(&r.sib_a, &message("big", "t", "advisor", 1));
     let ctx = MailboxContext::resolve(&r.main, Some(&r.store)).unwrap();
+    // The inventory output draws from the same byte budget as the mail.
+    let inventory_bytes = list_worktrees(&r.main, &mut Budget::new(&ReadLimits::explicit_read()))
+        .unwrap()
+        .len() as u64;
     let mut limits = ReadLimits::explicit_read();
-    limits.max_total_bytes = 8;
+    limits.max_total_bytes = inventory_bytes - 1;
     let s = logical_snapshot(&ctx, &advisor(), &Query::Inbox, &limits);
+    assert_eq!(
+        s.inventory_error,
+        Some(SourceErrorCode::InventoryOverBudget)
+    );
+    limits.max_total_bytes = inventory_bytes + 8;
+    let s = logical_snapshot(&ctx, &advisor(), &Query::Inbox, &limits);
+    assert_eq!(s.inventory_error, None);
+    assert_eq!(
+        status_of(&s, &r.sib_a),
+        &SourceStatus::Error(SourceErrorCode::OverBudget)
+    );
+    assert_eq!(s.caught_up(), None);
+
+    // The entry budget is aggregate across sources, not per directory.
+    put(&r.main, &message("main-one", "t", "advisor", 2));
+    let mut limits = ReadLimits::explicit_read();
+    limits.max_entries = 1;
+    let s = logical_snapshot(&ctx, &advisor(), &Query::Inbox, &limits);
+    assert_eq!(
+        status_of(&s, &r.main),
+        &SourceStatus::Observed { messages: 1 }
+    );
     assert_eq!(
         status_of(&s, &r.sib_a),
         &SourceStatus::Error(SourceErrorCode::OverBudget)
@@ -497,5 +542,104 @@ fn story1843_worktree_porcelain_z_parser() {
     assert_eq!(
         parse_worktree_porcelain_z(b"HEAD 1\0\0"),
         Err(SourceErrorCode::InventoryFailed)
+    );
+}
+
+#[test]
+fn story1843_older_writer_replica_merges_optional_metadata() {
+    let r = repo();
+    // The canonical copy came from an older writer that dropped the
+    // optional, writer-enriched fields; the local copy carries them.
+    let lean = message("enriched", "t", "advisor", 1);
+    let mut rich = lean.clone();
+    rich["subject"] = "Subject line".into();
+    rich["from_source"] = "agent_name".into();
+    rich["from_role"] = "implementer".into();
+    rich["urgent"] = true.into();
+    put(&r.main, &rich);
+    put_canonical(&r.store, &lean);
+    // Two writers that recorded DIFFERENT values contradict each other.
+    let mut a = message("two-subjects", "t", "advisor", 2);
+    a["subject"] = "one".into();
+    let mut b = a.clone();
+    b["subject"] = "two".into();
+    put(&r.main, &a);
+    put_canonical(&r.store, &b);
+
+    let s = snap(&r.main, Some(&r.store), Query::Inbox);
+    assert_eq!(ids(&s), vec!["enriched"]);
+    let m = &s.records[0].message;
+    assert_eq!(s.records[0].provenance.len(), 2);
+    assert_eq!(m.subject.as_deref(), Some("Subject line"));
+    assert_eq!(m.from_role.as_deref(), Some("implementer"));
+    assert_eq!(m.from_source, crate::mailbox::SenderSource::AgentName);
+    assert!(m.urgent);
+    assert_eq!(s.conflicts, vec!["two-subjects"]);
+}
+
+#[test]
+fn story1843_conflicts_are_scoped_to_the_query() {
+    let r = repo();
+    put(&r.main, &message("healthy", "good", "advisor", 1));
+    put(&r.main, &message("split", "bad", "advisor", 2));
+    let mut other = message("split", "bad", "advisor", 2);
+    other["body"] = "different".into();
+    put(&r.sib_b, &other);
+
+    let thread = snap(&r.main, Some(&r.store), Query::Thread("good".into()));
+    assert_eq!(ids(&thread), vec!["healthy"]);
+    assert!(thread.conflicts.is_empty());
+    assert!(thread.complete());
+    let missing = snap(&r.main, Some(&r.store), Query::ExactId("nope".into()));
+    assert!(missing.conflicts.is_empty());
+    assert_eq!(missing.exact_found, Some(false));
+    let bad = snap(&r.main, Some(&r.store), Query::Thread("bad".into()));
+    assert_eq!(bad.conflicts, vec!["split"]);
+    assert_eq!(bad.caught_up(), None);
+}
+
+#[test]
+fn story1843_retracted_records_are_redacted_and_sources_carry_identity() {
+    let r = repo();
+    let mut withdrawn = message("withdrawn", "t", "advisor", 1);
+    withdrawn["retracted"] = true.into();
+    withdrawn["subject"] = "secret subject".into();
+    put(&r.sib_a, &withdrawn);
+
+    let s = snap(&r.main, Some(&r.store), Query::Inbox);
+    assert_eq!(ids(&s), vec!["withdrawn"]);
+    assert!(s.records[0].message.retracted);
+    assert!(s.records[0].message.body.is_empty());
+    assert_eq!(s.records[0].message.subject, None);
+
+    assert!(s.observed_at_ms > 0);
+    let sib_a = s
+        .sources
+        .iter()
+        .find(|x| x.kind == SourceKind::Local(r.sib_a.clone()))
+        .unwrap();
+    let meta = std::fs::metadata(r.sib_a.join(".aida/mailbox")).unwrap();
+    let identity = sib_a.identity.expect("observed source is pinned");
+    assert_eq!((identity.dev, identity.ino), (meta.dev(), meta.ino()));
+    let main = s
+        .sources
+        .iter()
+        .find(|x| x.kind == SourceKind::Local(r.main.clone()))
+        .unwrap();
+    assert_eq!(main.status, SourceStatus::Absent);
+    assert_eq!(main.identity, None);
+}
+
+#[test]
+fn story1843_readdir_error_is_never_a_complete_listing() {
+    assert_eq!(readdir_end(Some(0)), Ok(()));
+    assert_eq!(readdir_end(None), Ok(()));
+    assert_eq!(
+        readdir_end(Some(libc::EIO)),
+        Err(SourceErrorCode::Unreadable)
+    );
+    assert_eq!(
+        readdir_end(Some(libc::EBADF)),
+        Err(SourceErrorCode::Unreadable)
     );
 }
