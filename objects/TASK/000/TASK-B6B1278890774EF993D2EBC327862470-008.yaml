@@ -1,0 +1,28 @@
+id: 01a17a8f-5461-7593-bbb4-c22d350cd8a2
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-008
+title: 'non-blocking (cosmetic): zen_drive::looks_like_spec_id now inherits the shared …'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-B6B1278890774EF993D2EBC327862470-006, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  non-blocking (cosmetic): zen_drive::looks_like_spec_id now inherits the shared rule, so 'aida do' newly treats single-token hyphenated thoughts ending in digits (e.g. 'follow-up-2') as spec ids, and a 1-letter prefix ('X-1') as a thought; arg containing leading/trailing whitespace is now rejected rather than trimmed (callers trim first, so no live impact). Existing zen tests still pass.
+  Reviewed sha: a3bc7b0b7d4d64f8aa6548fadf32506f0afc478c
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-26T23:32:56.033994896Z
+modified_at: 2026-10-26T23:32:56.033994896Z
+req_type: Task
+tags:
+- carried-from:BUG-B6B1278890774EF993D2EBC327862470-006
+- finding-hash:72dc7905
+- from-review:BUG-B6B1278890774EF993D2EBC327862470-006
+- kind:carried-forward
+filed_at:
+  code_sha: 596fbdfbb71ac7c680bdf0e75abb9702782ccc67
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 773015b8d2
+  vendor: claude
+  session: 761a4fea-f388-41d1-93d9-f1386951253c

@@ -78307,5 +78307,21 @@ operations:
     req_type: Task
     status: Draft
     priority: Medium
-clock: 6084
+- id: 01a17a8f-5cdb-7d43-8a30-31e8596f3449
+  target_id: 01a17a8f-5461-7593-bbb4-c22d350cd8a2
+  author: aida
+  node_id: '1'
+  lamport: 6085
+  timestamp: 2026-10-26T23:32:58.203019371Z
+  kind: !Create
+    title: 'non-blocking (cosmetic): zen_drive::looks_like_spec_id now inherits the shared …'
+    description: |-
+      Non-blocking finding carried forward from an APPROVED review verdict on BUG-B6B1278890774EF993D2EBC327862470-006, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+      non-blocking (cosmetic): zen_drive::looks_like_spec_id now inherits the shared rule, so 'aida do' newly treats single-token hyphenated thoughts ending in digits (e.g. 'follow-up-2') as spec ids, and a 1-letter prefix ('X-1') as a thought; arg containing leading/trailing whitespace is now rejected rather than trimmed (callers trim first, so no live impact). Existing zen tests still pass.
+      Reviewed sha: a3bc7b0b7d4d64f8aa6548fadf32506f0afc478c
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 6085
 node_id: '1'
