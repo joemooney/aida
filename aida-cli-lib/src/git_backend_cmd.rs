@@ -1411,6 +1411,12 @@ pub(crate) fn handle_git_backend_command(
             .args::<crate::report_cmd::ReportArgs>()
             .is_some_and(|args| args.recheck)
     {
+        // BUG-2221: the upstream-recheck notice probes store freshness
+        // (head/upstream reads) on every command; give `show` a named phase
+        // for it rather than leaving it in the unassigned remainder. The
+        // probe itself is unchanged — attribution only.
+        // trace:BUG-2221 | ai:claude
+        let _notice_phase = crate::usage::phase("notice");
         let storage = Storage::new(store_path);
         report_cmd::maybe_print_upstream_recheck_notice(&storage, &backend);
     }
