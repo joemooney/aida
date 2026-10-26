@@ -1,0 +1,26 @@
+id: 01a17604-7775-79c1-a981-b1bf2a25cf16
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-001
+title: 'Primary clone allocation broke: node.toml was group-writable and the node-local counter was re-stamped to unregistered node 2; the allocator hid both behind a generic error'
+description: |-
+  Since ~15:43 MST 2026-10-25 every aida add in the primary clone (and aida pr auto-queue-review review stories) failed with 'requirement ID allocation failed; no metadata or object was written'. doctor saw nothing.
+
+  Two faults found by the advisor, both repaired by hand at ~19:40:
+  1. .aida-store/.aida/node.toml was mode 0664 (since June). The BUG-2017 WORK bootstrap reader (work_binding::read) refuses any group/other-writable file ('unsafe WORK allocation state'), so the lazy legacy->WORK migration in lifecycle_dispenser failed on the first allocation after the new binary went live. Fixed with chmod 644.
+  2. .aida-store/.aida/dispenser.toml had mode node_id rewritten from "1" to "2" at 14:17 (GLOBAL = 499 kept). Node 2 is not registered; node.toml says 1. Bootstrap would then refuse with 'legacy node/provider binding mismatch'. Reset to "1"; sequence 499 equals node 1's highest object ID, so no reuse. Backup: .aida-store/.aida/dispenser.toml.node2-bak-20261025.
+
+  Fix needed: (a) find what wrote node 2 into the primary clone's counter at 14:17 (14:16 was the TASK-2351 ship); (b) surface the underlying dispenser/bootstrap error text instead of the generic message (models.rs add_requirement_with_id poisons spec_id to empty and next_meta_id uses unwrap_or_default, discarding the cause); (c) aida doctor should check node.toml/dispenser.toml permissions and mode-vs-node agreement, and offer the repair; (d) consider whether a group-writable but user-owned node.toml under a 0002 umask should be refused at all, or normalised during migration.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-26T02:22:46.645176120Z
+modified_at: 2026-10-26T02:22:46.645176120Z
+req_type: Bug
+filed_at:
+  code_sha: 194e40346c073dccb33f397d247b63b27c3bf862
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 881f9a3828
+  vendor: claude
+  session: 761a4fea-f388-41d1-93d9-f1386951253c
