@@ -12,12 +12,12 @@ description: |-
   4. Behaviour is unchanged. Show it with the existing story_1698/story_1700 mandate tests plus a before/after list of every refusal reason string.
 
   Sequencing: one human-merged refactor PR. Land it after the open PRs touching these files (#2798, #2792, #2789) merge, to avoid conflicts. Architecture change, so it needs a sketch with advisor signoff first.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-21T15:33:51.496539087Z
-modified_at: 2026-10-26T19:53:29.657290220Z
+modified_at: 2026-10-26T19:55:16.803326113Z
 req_type: Story
 tags:
 - architecture
@@ -365,6 +365,12 @@ comments:
   created_at: 2026-10-26T18:22:07.089470287Z
   modified_at: 2026-10-26T18:22:07.089470287Z
   session_id: 761a4fea-f388-41d1-93d9-f1386951253c
+- id: 01a179c8-0fc3-75a2-ac17-b63546d32288
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Round-2 findings addressed (record transitions + sealed admissions + reviewer-hold preservation moved verbatim into gate/, ratchets pin each call; lib-1 now green). But taking dispatch.rs off the floor leaves gate-trusted primitives (sha256_hex, read_bounded_regular_file, result/request/brief paths, open_pinned_dispatch_subdir, write_private_atomic) unprotected, and 4 new refusal strings are undeclared in the AC4 inventory. CI lib-0/cli-0/rest/gates still running at review time.. No triage reason was given.'
+  created_at: 2026-10-26T19:55:16.803317156Z
+  modified_at: 2026-10-26T19:55:16.803317156Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
 history:
 - id: 01a15f19-1b8d-7a60-bd9c-acf0c42193fc
   author: joe
@@ -496,6 +502,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a179c8-0fc3-75a2-ac17-b6227870583d
+  author: joe
+  timestamp: 2026-10-26T19:55:16.803305473Z
+  session_id: 761a4fea-f388-41d1-93d9-f1386951253c
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 7be4321436b8f93b2daba2bd71b649046818e35f
   branch: main
@@ -504,11 +518,3 @@ filed_at:
   aida_build_sha: 7be4321436
   vendor: claude
   session: 7d71bfbf-a609-42bd-a714-a7d52d81db81
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Round-2 findings addressed (record transitions + sealed admissions + reviewer-hold preservation moved verbatim into gate/, ratchets pin each call; lib-1 now green). But taking dispatch.rs off the floor leaves gate-trusted primitives (sha256_hex, read_bounded_regular_file, result/request/brief paths, open_pinned_dispatch_subdir, write_private_atomic) unprotected, and 4 new refusal strings are undeclared in the AC4 inventory. CI lib-0/cli-0/rest/gates still running at review time.
-  recovery_hint: address the review findings, move STORY-1889 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-26T19:53:29.657290220Z
